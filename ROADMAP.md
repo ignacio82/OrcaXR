@@ -262,11 +262,10 @@ Wired into `XrShell`:
 
 **Pending — entry-criteria for the green flip:**
 - Write paint state into `mmu_segmentation_facets` of an exported 3MF via `nativeSaveAs3mf` so a save-as-3MF opened in desktop OrcaSlicer shows the same painted regions.
-- Surface a "Clear paint cache" / "Cache size" affordance in Settings (today the cap is invisible to the user).
 
-**Tests:** `PaintCacheStoreTest` covers round-trip, tri-count mismatch, missing-file, blank-array prune, null-array prune, LRU eviction at the cap boundary, hash stability, content-divergent hashes, corrupt-file fallback, and `Entry.equals`.
+**Tests:** `PaintCacheStoreTest` covers round-trip, tri-count mismatch, missing-file, blank-array prune, null-array prune, LRU eviction at the cap boundary, hash stability, content-divergent hashes, corrupt-file fallback, `Entry.equals`, and `sizeBytes` growth + clear.
 
-**Shipped:** commit `c913e4e` — `PaintCacheStore` + on-load restore + on-mutate save + 10 tests.
+**Shipped:** commit `c913e4e` — `PaintCacheStore` + on-load restore + on-mutate save + 10 tests. Follow-up commit (this one) — `PaintCacheStore.sizeBytes()`, "Storage" section in `ControllerHelpCard` showing cache size + entry count + Clear button (Toast on clear, helpVersion bump so the row refreshes immediately), `formatBytes` helper + 1 unit test, +1 PaintCacheStore unit test for the new `sizeBytes` method.
 
 ### D2. Custom support point placement ⚪ Deferred — SLA-leaning, FDM-only stack today
 

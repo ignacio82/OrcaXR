@@ -4503,6 +4503,18 @@ private fun XrShell(
                     // Roadmap B5 — controller binding reference card.
                     // Mounted next to the top nav so the user can keep
                     // it open while testing inputs.
+                    //
+                    // Roadmap D1 — paint cache size + clear button
+                    // surfaces here too. Recomputed inside a
+                    // remember(helpVersion) so flipping helpShown
+                    // re-reads the current bytes — avoids the user
+                    // seeing a stale "12 MB" after they paint a new
+                    // model in this session. helpVersion is bumped on
+                    // Clear so the row refreshes immediately without
+                    // re-opening the panel.
+                    var helpVersion by remember { mutableStateOf(0) }
+                    val paintCacheBytes = remember(helpVersion) { paintCache.sizeBytes() }
+                    val paintCacheEntries = remember(helpVersion) { paintCache.size() }
                     MovablePanelWrapper(
                         id = "controller-help",
                         width = 600.dp,
@@ -4510,7 +4522,20 @@ private fun XrShell(
                         initialOffset = androidx.xr.runtime.math.Vector3(0.5f, 0.1f, -0.2f),
                         session = session,
                     ) {
-                        ControllerHelpCard(onClose = { helpShown = false })
+                        ControllerHelpCard(
+                            onClose = { helpShown = false },
+                            paintCacheBytes = paintCacheBytes,
+                            paintCacheEntryCount = paintCacheEntries,
+                            onClearPaintCache = {
+                                paintCache.clear()
+                                helpVersion += 1
+                                android.widget.Toast.makeText(
+                                    ctx,
+                                    "Paint cache cleared",
+                                    android.widget.Toast.LENGTH_SHORT,
+                                ).show()
+                            },
+                        )
                     }
                 }
             }

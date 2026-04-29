@@ -176,6 +176,19 @@ class PaintCacheStore(private val ctx: Context) {
      *  future "Clear paint cache" Settings affordance. */
     fun size(): Int = cacheDir.listFiles { f -> f.isFile && f.name.endsWith(EXT) }?.size ?: 0
 
+    /**
+     * Total bytes currently held by this cache on disk. Sums every
+     * `.bin` entry's size; ignores temp files. Used by the help-card
+     * Storage section so the user can see "Paint Cache: 12.4 MB"
+     * without poking around `${filesDir}` on the command line.
+     */
+    fun sizeBytes(): Long {
+        val files = cacheDir.listFiles { f -> f.isFile && f.name.endsWith(EXT) } ?: return 0L
+        var total = 0L
+        for (f in files) total += f.length()
+        return total
+    }
+
     private fun fileFor(sourceHash: String): File =
         File(cacheDir, "$sourceHash$EXT")
 

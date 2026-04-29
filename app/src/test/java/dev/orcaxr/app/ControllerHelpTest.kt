@@ -53,4 +53,18 @@ class ControllerHelpTest {
         // assertion here, update all three.
         assertEquals(7, ControllerHelp.entries.size)
     }
+
+    @Test fun formatBytes_handles_size_ranges() {
+        // Roadmap D1 — make sure the storage row reads cleanly across
+        // every band the user could reasonably hit (an empty cache
+        // through a multi-GB worst case).
+        assertEquals("0 B", formatBytes(0))
+        assertEquals("0 B", formatBytes(-1))  // negative is treated as empty
+        assertEquals("512 B", formatBytes(512))
+        assertEquals("1 KB", formatBytes(1024))
+        assertEquals("1023 KB", formatBytes(1023L * 1024L))
+        assertEquals("1.0 MB", formatBytes(1024L * 1024L))
+        assertEquals("12.4 MB", formatBytes((12.4 * 1024 * 1024).toLong()))
+        assertEquals("1.50 GB", formatBytes((1.5 * 1024 * 1024 * 1024).toLong()))
+    }
 }

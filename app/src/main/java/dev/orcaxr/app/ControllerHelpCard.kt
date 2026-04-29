@@ -71,11 +71,19 @@ object ControllerHelp {
  * Compact spatial-panel-friendly help card. Renders [ControllerHelp.entries]
  * as a key/value list. Caller decides where to host this — TopNavigationPill
  * launches it as a side panel, AboutPanel embeds it inline.
+ *
+ * Optional [paintCacheBytes] / [onClearPaintCache] hooks (Roadmap D1) add a
+ * "Storage" section so the user can see how much disk the per-mesh paint
+ * cache holds and clear it without rooting around `${filesDir}`. Pass null
+ * when neither value is available (the section is hidden).
  */
 @Composable
 fun ControllerHelpCard(
     onClose: () -> Unit = {},
     showCloseButton: Boolean = true,
+    paintCacheBytes: Long? = null,
+    paintCacheEntryCount: Int? = null,
+    onClearPaintCache: (() -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier
@@ -152,5 +160,73 @@ fun ControllerHelpCard(
             color = Color(0xFFB6BEC8),
             style = MaterialTheme.typography.labelSmall,
         )
+
+        if (paintCacheBytes != null && onClearPaintCache != null) {
+            Spacer(Modifier.height(20.dp))
+            Text(
+                "Storage",
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(8.dp))
+            Surface(
+                color = Color(0xFF1B1F23),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Paint cache",
+                                color = Color.White,
+                                fontWeight = FontWeight.Medium,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            val sizeText = formatBytes(paintCacheBytes)
+                            val countText = paintCacheEntryCount?.let { " · $it model${if (it == 1) "" else "s"}" } ?: ""
+                            Text(
+                                "$sizeText$countText",
+                                color = Color(0xFFB6BEC8),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        TextButton(onClick = onClearPaintCache, enabled = paintCacheBytes > 0) {
+                            Text(
+                                "Clear",
+                                color = if (paintCacheBytes > 0) Color(0xFFFF8A8E) else Color(0xFF555B62),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Painted facets restore automatically when you reload the same file. " +
+                            "Clearing forces a fresh paint pass on next load.",
+                        color = Color(0xFF8E97A2),
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
+        }
     }
+}
+
+/**
+ * Format [bytes] as a human-readable size: "12.4 MB" / "987 KB" / "0 B".
+ * Uses 1024-based units (kibibytes etc.) but labels with the
+ * conventional "KB / MB / GB" suffix the user expects in a help card.
+ */
+internal fun formatBytes(bytes: Long): String {
+    if (bytes <= 0L) return "0 B"
+    val kib = bytes / 1024.0
+    if (kib < 1.0) return "$bytes B"
+    val mib = kib / 1024.0
+    if (mib < 1.0) return "%.0f KB".format(kib)
+    val gib = mib / 1024.0
+    if (gib < 1.0) return "%.1f MB".format(mib)
+    return "%.2f GB".format(gib)
 }

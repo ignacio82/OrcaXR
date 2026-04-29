@@ -130,4 +130,25 @@ class PaintCacheStoreTest {
         assertEquals(a, b)
         assertTrue(a != c)
     }
+
+    @Test fun sizeBytes_grows_with_entries_and_clears_to_zero() {
+        // Empty cache reports 0.
+        assertEquals(0L, store.sizeBytes())
+
+        // One small entry — header (24 bytes) + 4-byte paint array.
+        store.save("h1", triCount = 4, PaintCacheStore.Entry(byteArrayOf(0, 1, 0, 0), null, null))
+        val oneEntryBytes = store.sizeBytes()
+        assertTrue("expected non-zero after one save, got $oneEntryBytes", oneEntryBytes > 0)
+
+        // Add a second, distinct entry — total should strictly grow.
+        store.save("h2", triCount = 4, PaintCacheStore.Entry(byteArrayOf(0, 0, 1, 0), null, null))
+        val twoEntryBytes = store.sizeBytes()
+        assertTrue("expected size to grow after second save: $oneEntryBytes → $twoEntryBytes",
+            twoEntryBytes > oneEntryBytes)
+
+        // Clear drops to zero so the help-card "Clear" button can be
+        // trusted.
+        store.clear()
+        assertEquals(0L, store.sizeBytes())
+    }
 }
