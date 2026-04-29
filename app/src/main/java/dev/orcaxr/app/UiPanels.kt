@@ -2033,6 +2033,17 @@ private fun QualityTab(
     Text("Layer Height", style = MaterialTheme.typography.titleMedium, color = Color.White)
     Spacer(modifier = Modifier.height(8.dp))
 
+    val layerCtx = LocalContext.current
+    val layerRange = NumericValidation.printSettingRanges["layer_height"]
+    val layerIsError = remember(layerHeightOverride, layerRange) {
+        if (layerRange == null || layerHeightOverride.isBlank()) false
+        else NumericValidation.validate(
+            layerHeightOverride,
+            layerRange.start,
+            layerRange.endInclusive,
+        ) is NumericValidation.Result.OutOfRange
+    }
+    var layerLastToastedRange by remember { mutableStateOf<String?>(null) }
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -2042,7 +2053,30 @@ private fun QualityTab(
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextField(
                 value = layerHeightOverride,
-                onValueChange = onLayerHeightChange,
+                isError = layerIsError,
+                onValueChange = { newText ->
+                    onLayerHeightChange(newText)
+                    if (layerRange != null && newText.isNotBlank()) {
+                        val v = NumericValidation.validate(
+                            newText,
+                            layerRange.start,
+                            layerRange.endInclusive,
+                        )
+                        if (v is NumericValidation.Result.OutOfRange) {
+                            val rangeText = "[${formatPrintSettingValue(v.min)}, ${formatPrintSettingValue(v.max)}] mm"
+                            if (layerLastToastedRange != rangeText) {
+                                layerLastToastedRange = rangeText
+                                android.widget.Toast.makeText(
+                                    layerCtx,
+                                    "Layer height out of range $rangeText",
+                                    android.widget.Toast.LENGTH_SHORT,
+                                ).show()
+                            }
+                        } else {
+                            layerLastToastedRange = null
+                        }
+                    }
+                },
                 placeholder = { Text(profile.config["layer_height"] ?: "0.20", color = Color.Gray) },
                 modifier = Modifier.width(100.dp),
                 singleLine = true,
@@ -2285,6 +2319,20 @@ private fun SettingNumericEditor(
 ) {
     val current = overrides[key] ?: ""
     val placeholder = profile.config[key] ?: "—"
+    val ctx = LocalContext.current
+    // Roadmap B8 — pull the per-key allowed range from the curated
+    // table. Keys not in the table behave as before (any parseable
+    // number passes through to libslic3r's silent clamp).
+    val range = NumericValidation.printSettingRanges[key]
+    val isError = remember(current, range) {
+        if (range == null || current.isBlank()) false
+        else NumericValidation.validate(
+            current,
+            range.start,
+            range.endInclusive,
+        ) is NumericValidation.Result.OutOfRange
+    }
+    var lastToastedRange by remember(key) { mutableStateOf<String?>(null) }
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -2294,7 +2342,30 @@ private fun SettingNumericEditor(
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextField(
                 value = current,
-                onValueChange = { onChange(key, it) },
+                isError = isError,
+                onValueChange = { newText ->
+                    onChange(key, newText)
+                    if (range != null && newText.isNotBlank()) {
+                        val v = NumericValidation.validate(
+                            newText,
+                            range.start,
+                            range.endInclusive,
+                        )
+                        if (v is NumericValidation.Result.OutOfRange) {
+                            val rangeText = "[${formatPrintSettingValue(v.min)}, ${formatPrintSettingValue(v.max)}] $unit"
+                            if (lastToastedRange != rangeText) {
+                                lastToastedRange = rangeText
+                                android.widget.Toast.makeText(
+                                    ctx,
+                                    "$label out of range $rangeText",
+                                    android.widget.Toast.LENGTH_SHORT,
+                                ).show()
+                            }
+                        } else {
+                            lastToastedRange = null
+                        }
+                    }
+                },
                 placeholder = { Text(placeholder, color = Color.Gray) },
                 enabled = enabled,
                 modifier = Modifier.width(100.dp),
@@ -2314,6 +2385,9 @@ private fun SettingNumericEditor(
         }
     }
 }
+
+private fun formatPrintSettingValue(v: Float): String =
+    if (v == v.toInt().toFloat()) v.toInt().toString() else "%.2f".format(v)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

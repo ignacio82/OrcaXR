@@ -192,16 +192,17 @@ When `placedModels` is empty, replace the bed with a floating, laser-interactabl
 
 **Implementation outline:** A new SpatialPanel mounted in `XrShell` when `placedModels.isEmpty()` that wraps the existing `FilePickerPanel` invocation with a prominent CTA + recent-files row.
 
-### B8. Numeric input validation 🟡 Partial — TransformPanel covered, print-settings tabs pending
+### B8. Numeric input validation 🟢 Shipped
 
-> **Files:** `NumericValidation.kt`, `NumericValidationTest.kt`, `UiPanels.kt::AxisFieldRow` + `TransformAxisSection`.
+> **Files:** `NumericValidation.kt`, `NumericValidationTest.kt`, `UiPanels.kt::AxisFieldRow` + `TransformAxisSection` + `SettingNumericEditor` + `QualityTab` layer-height field.
 
-`NumericValidation.validate(text, min, max)` returns `Ok(value) | NotANumber | OutOfRange(value, min, max)` — pure, unit-tested (9 tests). Extended `AxisFieldRow` with an optional `range: ClosedFloatingPointRange<Float>?` parameter that drives the TextField's `isError` flag and a one-shot Toast on first out-of-range commit. TransformPanel now passes `Ranges.translateMm` (-500..500), `Ranges.rotateDeg` (-1080..1080), and `Ranges.scalePct` (1..2000) for the Translate / Rotate / Scale axes respectively.
+`NumericValidation.validate(text, min, max)` returns `Ok(value) | NotANumber | OutOfRange(value, min, max)` — pure, unit-tested. TransformPanel pipes `Ranges.translateMm` (-500..500), `Ranges.rotateDeg` (-1080..1080), and `Ranges.scalePct` (1..2000) into Translate / Rotate / Scale via `AxisFieldRow`.
 
-**Pending — entry-criteria for the green flip:**
-- Print-settings tabs (Quality, Strength, Speed, Support) need their `TextField` call sites migrated to use the same validate-and-toast shape. That's a wider refactor of the `printSettingsOverrides`-driven inputs and would benefit from per-key metadata in `OrcaProfileLoader.SAFE_KEYS` (today a flat `Set<String>`; would become a map of `key → AllowedRange`).
+Print-settings tabs (Quality / Speed / Support) consult `NumericValidation.printSettingRanges` — a curated per-libslic3r-key range table (layer_height 0.04..1.5, all `*_speed` 0.1..1000, sparse_infill_density 0..100, support_threshold_angle 0..90, nozzle_temperature 100..400, etc.). `SettingNumericEditor` and the QualityTab layer-height TextField surface invalid input via `isError` red outline + a one-shot Toast on first out-of-range commit; keys absent from the table fall back to libslic3r's silent clamp (the legacy behavior).
 
-**Shipped:** commit `7fa3970` — `NumericValidation.validate` + `Ranges`, `AxisFieldRow` red-outline + Toast, `NumericValidationTest`.
+**Tests:** 12 — parse, trim, blank, NaN/Infinity, both bounds, inclusive, transform-range sanity, print-setting key coverage (every Speed-tab key), layer_height typo guard (20 mm rejected), validate end-to-end on a print-setting range.
+
+**Shipped:** commits `7fa3970` (TransformPanel) + `<pending>` (Print Settings tabs).
 
 ---
 
@@ -262,7 +263,7 @@ Wired into `XrShell`:
 
 **Tests:** `PaintCacheStoreTest` covers round-trip, tri-count mismatch, missing-file, blank-array prune, null-array prune, LRU eviction at the cap boundary, hash stability, content-divergent hashes, corrupt-file fallback, and `Entry.equals`.
 
-**Shipped:** commit `<pending>` — `PaintCacheStore` + on-load restore + on-mutate save + 10 tests.
+**Shipped:** commit `c913e4e` — `PaintCacheStore` + on-load restore + on-mutate save + 10 tests.
 
 ### D2. Custom support point placement ⚪ Deferred — SLA-leaning, FDM-only stack today
 

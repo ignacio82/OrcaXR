@@ -59,4 +59,64 @@ object NumericValidation {
          *  positive minimum silently otherwise. */
         val scalePct: ClosedFloatingPointRange<Float> = 1f..2000f
     }
+
+    /**
+     * Allowed ranges for libslic3r config keys exposed in the Print
+     * Settings tabs. Bounds were picked to:
+     *   1. Reject obvious typos (negative speeds, 9999% infill density,
+     *      a layer height of 100 mm) without
+     *   2. Trapping the user inside artificially-narrow profile-tuned
+     *      windows (no `outer_wall_speed` ceiling at 200 mm/s when
+     *      Voron / Rapido nozzles are happy at 600).
+     *
+     * Keys not present here pass through validation as "any parseable
+     * number is acceptable" — same behavior the legacy [SettingNumericEditor]
+     * had before B8. New keys can be added incrementally without
+     * touching the call sites.
+     */
+    val printSettingRanges: Map<String, ClosedFloatingPointRange<Float>> = mapOf(
+        // ---- layer / shell geometry ----
+        "layer_height" to 0.04f..1.5f,
+        "initial_layer_print_height" to 0.04f..1.5f,
+        "first_layer_height" to 0.04f..1.5f,
+        "wall_loops" to 0f..50f,
+        "top_shell_layers" to 0f..50f,
+        "bottom_shell_layers" to 0f..50f,
+        "top_shell_thickness" to 0f..20f,
+        "bottom_shell_thickness" to 0f..20f,
+        // ---- infill ----
+        "sparse_infill_density" to 0f..100f,
+        // ---- speeds (mm/s) ----
+        "initial_layer_speed" to 0.1f..1000f,
+        "outer_wall_speed" to 0.1f..1000f,
+        "inner_wall_speed" to 0.1f..1000f,
+        "sparse_infill_speed" to 0.1f..1000f,
+        "internal_solid_infill_speed" to 0.1f..1000f,
+        "top_surface_speed" to 0.1f..1000f,
+        "support_speed" to 0.1f..1000f,
+        "support_interface_speed" to 0.1f..1000f,
+        "travel_speed" to 0.1f..1000f,
+        "bridge_speed" to 0.1f..1000f,
+        "internal_bridge_speed" to 0.1f..1000f,
+        "gap_infill_speed" to 0.1f..1000f,
+        "wipe_speed" to 0.1f..1000f,
+        // ---- supports ----
+        "support_threshold_angle" to 0f..90f,
+        "support_top_z_distance" to 0f..2f,
+        "support_bottom_z_distance" to 0f..2f,
+        "support_object_xy_distance" to 0f..10f,
+        "support_interface_top_layers" to 0f..50f,
+        "support_interface_bottom_layers" to 0f..50f,
+        "support_interface_spacing" to 0f..20f,
+        // ---- temperatures (°C) ----
+        "nozzle_temperature" to 100f..400f,
+        "nozzle_temperature_initial_layer" to 100f..400f,
+        "nozzle_temperature_range_low" to 100f..400f,
+        "nozzle_temperature_range_high" to 100f..400f,
+        // ---- nozzle / filament ----
+        "nozzle_diameter" to 0.1f..2.0f,
+        "filament_diameter" to 1.0f..3.5f,
+        "filament_flow_ratio" to 0.5f..1.5f,
+        "filament_max_volumetric_speed" to 0f..50f,
+    )
 }
