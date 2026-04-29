@@ -31,6 +31,22 @@ data class DiscoveredPrinter(
 )
 
 /**
+ * Build a human-friendly label for a discovered printer row in the
+ * scan results panel. Vendor wins over hostname when the firmware
+ * fingerprint matches a known fork (e.g. Snapmaker's Moonraker
+ * `snapmakercloud` component), so the user sees "Snapmaker
+ * (192.168.1.228)" instead of the unhelpful generic Linux hostname
+ * "lava". Falls back to "$hostname ($host)" when no vendor is known
+ * and the hostname differs from the bare IP, then to bare host.
+ */
+fun formatDiscoveryName(hostname: String?, vendor: String?, host: String): String {
+    val v = vendor?.takeIf(String::isNotBlank)
+    val h = hostname?.takeIf { it.isNotBlank() && it != host }
+    val prefix = v ?: h ?: return host
+    return "$prefix ($host)"
+}
+
+/**
  * mDNS / DNS-SD browser for slicer-relevant LAN services. Currently
  * looks for `_snapmaker._tcp` (advertised by Snapmaker firmwares —
  * source: src/slic3r/GUI/BonjourDialog.cpp in Snapmaker's OrcaSlicer

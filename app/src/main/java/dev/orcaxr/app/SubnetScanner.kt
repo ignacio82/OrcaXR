@@ -112,8 +112,23 @@ object SubnetScanner {
                 "validate $host:$port -> ${info::class.simpleName} :: $detail",
             )
             if (info is MoonrakerResult.Ok) {
+                // Vendor fingerprint from /server/info components list.
+                // Best-effort — any failure leaves vendor=null and the
+                // label falls back to hostname. Cheap (one extra GET
+                // per validated host, no auth required).
+                val vendor = (MoonrakerClient(cfg).serverInfo() as? MoonrakerResult.Ok<ServerInfo>)
+                    ?.value?.vendor()
+                val label = formatDiscoveryName(
+                    hostname = info.value.hostname.ifBlank { null },
+                    vendor = vendor,
+                    host = host,
+                )
+                android.util.Log.i(
+                    "OrcaXR/discovery",
+                    "labelled $host:$port as \"$label\" (vendor=${vendor ?: "<unknown>"})",
+                )
                 validated += DiscoveredPrinter(
-                    name = info.value.hostname.ifBlank { host },
+                    name = label,
                     host = host,
                     port = port,
                     sn = null,

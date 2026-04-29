@@ -105,14 +105,32 @@ class MoonrakerClient(
             .build()
         execute(req) { body ->
             val obj = JSONObject(body).optJSONObject("result") ?: JSONObject()
-            MoonrakerResult.Ok(
-                PrinterInfo(
-                    state = obj.optString("state", "unknown"),
-                    klippyState = obj.optString("klippy_state", "unknown"),
-                    hostname = obj.optString("hostname", ""),
-                    softwareVersion = obj.optString("software_version", ""),
-                ),
-            )
+            MoonrakerResult.Ok(PrinterInfo.parse(obj))
+        }
+    }
+
+    /**
+     * GET /server/info — returns the Moonraker version, the Klippy
+     * connection state Moonraker observes, and the loaded components
+     * list. Used at discovery time to fingerprint the firmware:
+     * Snapmaker's OrcaSlicer/Klipper fork loads a `snapmakercloud`
+     * Moonraker component that vanilla MainsailOS / FluiddPi does not,
+     * which lets us label a discovered "lava" host as
+     * "Snapmaker (192.168.1.228)" instead of leaving the user staring
+     * at a hostname they don't recognize. Cheap (no auth required, no
+     * Klippy ready check), so it's safe to call once per validated
+     * subnet-scan candidate.
+     */
+    suspend fun serverInfo(): MoonrakerResult<ServerInfo> = withContext(Dispatchers.IO) {
+        val req = Request.Builder()
+            .url(baseUrl() + "/server/info")
+            .header("Accept", "application/json")
+            .applyApiKey()
+            .get()
+            .build()
+        execute(req) { body ->
+            val obj = JSONObject(body).optJSONObject("result") ?: JSONObject()
+            MoonrakerResult.Ok(ServerInfo.parse(obj))
         }
     }
 
@@ -445,7 +463,70 @@ data class PrinterInfo(
     val klippyState: String,
     val hostname: String,
     val softwareVersion: String,
-)
+) {
+    companion object {
+        /**
+         * Parse the `result` object from /printer/info. Klippy's host
+         * process state lives in `state` ("ready"/"startup"/"shutdown"
+         * /"error") on this endpoint — there is no `klippy_state` key
+         * here (that name only exists on /server/info). Earlier code
+         * read `klippy_state` and resolved to "unknown" on every
+         * printer; map from `state` so the discovery log + printer-
+         * status badge surface the actual Klippy state.
+         */
+        fun parse(obj: JSONObject): PrinterInfo {
+            val state = obj.optString("state", "unknown")
+            return PrinterInfo(
+                state = state,
+                klippyState = state,
+                hostname = obj.optString("hostname", ""),
+                softwareVersion = obj.optString("software_version", ""),
+            )
+        }
+    }
+}
+
+/**
+ * Subset of Moonraker's /server/info payload. `components` is the list
+ * of loaded Moonraker plugin names (`["application", "websockets",
+ * "klippy_apis", …]`); we use it to fingerprint vendor-specific forks.
+ * `klippyState` here is Moonraker's view of the Klippy connection
+ * state ("ready"/"shutdown"/"error"/"disconnected"); generally agrees
+ * with /printer/info's `state`.
+ */
+data class ServerInfo(
+    val components: List<String>,
+    val klippyState: String,
+    val moonrakerVersion: String,
+) {
+    /**
+     * Vendor inferred from loaded Moonraker components. Snapmaker's
+     * Klipper/Moonraker fork ships a `snapmakercloud` plugin that
+     * vanilla MainsailOS / FluiddPi do not; that's a high-confidence
+     * "this is a Snapmaker printer" signal. Returns null if no known
+     * vendor signature matches — caller falls back to the printer's
+     * hostname.
+     */
+    fun vendor(): String? = when {
+        "snapmakercloud" in components -> "Snapmaker"
+        else -> null
+    }
+
+    companion object {
+        fun parse(obj: JSONObject): ServerInfo {
+            val arr = obj.optJSONArray("components")
+            val components = if (arr == null) emptyList() else
+                (0 until arr.length()).mapNotNull {
+                    arr.optString(it, "").takeIf(String::isNotBlank)
+                }
+            return ServerInfo(
+                components = components,
+                klippyState = obj.optString("klippy_state", "unknown"),
+                moonrakerVersion = obj.optString("moonraker_version", ""),
+            )
+        }
+    }
+}
 
 /**
  * One poll's worth of live print state. Fields are nullable when
