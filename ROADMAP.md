@@ -92,7 +92,7 @@ Upstream OrcaSlicer's "Fix Model" depends on the Windows-only 3D Builder API (`F
 **Pending — entry-criterion for the green flip:**
 - Render the offending triangles in red on the preview GLB (today the banner alone tells the user which axes overflow). Touches `StlPreviewGlb` / `GlbBuilder` to emit a vertex-color override array keyed off `BedCollision.Result.Off.offendingTriIndices`.
 
-**Shipped:** commit `e6937e3` — `BedCollision.detect`, banner, Slice gate, `BedCollisionTest` (6 tests). Follow-up commit `<pending>` — bed-collision now also runs on the 3MF preview path via `deriveStlFor` + `StlReader`.
+**Shipped:** commit `e6937e3` — `BedCollision.detect`, banner, Slice gate, `BedCollisionTest` (6 tests). Follow-up commit `61875bb` — bed-collision now also runs on the 3MF preview path via `deriveStlFor` + `StlReader`.
 
 ### A7. Toolpath rendering as triangulated tubes 🔴 Not started
 
