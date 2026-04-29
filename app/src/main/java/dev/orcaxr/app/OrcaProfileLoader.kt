@@ -49,6 +49,37 @@ object OrcaProfileLoader {
     }.getOrDefault(emptyList())
 
     /**
+     * Load all flattened filament configs, keyed by the filament short name
+     * (e.g. "Generic PLA", "Elegoo PLA Matte"). Used to look up the
+     * specific temperature and cooling settings for each slot's material.
+     */
+    fun loadFilaments(ctx: Context): Map<String, Map<String, String>> = runCatching {
+        val out = mutableMapOf<String, Map<String, String>>()
+        val brands = ctx.assets.list(PROFILES_ROOT)?.toList().orEmpty()
+        for (brand in brands) {
+            runCatching {
+                val brandRoot = "$PROFILES_ROOT/$brand"
+                val machines = readDir(ctx, "$brandRoot/machine")
+                val processes = readDir(ctx, "$brandRoot/process")
+                val filaments = readDir(ctx, "$brandRoot/filament")
+
+                val byName = (machines + processes + filaments)
+                    .filter { it.has("name") }
+                    .associateBy { it.getString("name") }
+
+                val filamentLeaves = leavesOf(filaments)
+                for (f in filamentLeaves) {
+                    val name = f.optString("name", "").trim().substringBefore('@').trim()
+                    if (name.isNotBlank()) {
+                        out[name] = flatten(f, byName)
+                    }
+                }
+            }
+        }
+        out
+    }.getOrDefault(emptyMap())
+
+    /**
      * Load every machine × process × filament triple for one brand
      * (e.g. `profiles/Snapmaker` or `profiles/Elegoo`).
      */

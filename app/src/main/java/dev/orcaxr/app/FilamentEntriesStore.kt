@@ -32,7 +32,7 @@ data class FilamentEntry(
      * temp defaults when we eventually wire per-filament temp
      * overrides. Default PLA covers the typical case.
      */
-    val filamentType: String = "PLA",
+    val filamentType: String = "Generic PLA",
     /**
      * Physical printer slot (0-based, T0 = 0) that should print this
      * project filament. Null = identity (project filament index N
@@ -65,8 +65,7 @@ data class FilamentEntry(
     val virtualSlot: Int? = null,
 )
 
-/** Material types Snapmaker's Android fork lets users pick. */
-val FILAMENT_TYPES: List<String> = listOf("PLA", "PETG", "ABS", "TPU", "ASA", "PA", "PVA")
+/** (FILAMENT_TYPES removed, dynamically sourced from OrcaProfileLoader) */
 
 /**
  * DataStore-backed list of [FilamentEntry] per printer. Replaces the
@@ -146,7 +145,18 @@ class FilamentEntriesStore(ctx: Context) {
                     id = o.optString("id", "f_$i"),
                     color = o.optString("color", "#FFFFFF"),
                     slotIndex = if (o.has("slot")) o.optInt("slot", -1).takeIf { it >= 0 } else null,
-                    filamentType = o.optString("type", "PLA").ifBlank { "PLA" },
+                    filamentType = o.optString("type", "Generic PLA").ifBlank { "Generic PLA" }.let {
+                        when (it) {
+                            "PLA" -> "Generic PLA"
+                            "PETG" -> "Generic PETG"
+                            "ABS" -> "Generic ABS"
+                            "TPU" -> "Generic TPU"
+                            "ASA" -> "Generic ASA"
+                            "PA" -> "Generic PA"
+                            "PVA" -> "Generic PVA"
+                            else -> it
+                        }
+                    },
                     physicalSlot = if (o.has("physical_slot")) o.optInt("physical_slot", -1).takeIf { it >= 0 } else null,
                     virtualSlot = if (o.has("virtual_slot")) o.optInt("virtual_slot", -1).takeIf { it >= 1 } else null,
                 )

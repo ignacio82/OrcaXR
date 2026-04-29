@@ -114,6 +114,8 @@ fun LeftProjectPanel(
     /** Refresh the printer-loaded-filaments cache from Moonraker.
      *  Null when no printer is selected. */
     onDetectFilaments: (() -> Unit)? = null,
+    /** Material types to populate the picker dropdown (from OrcaProfileLoader). */
+    filamentTypes: List<String>,
     /** Phase I.1 — copy the printer's loaded slot colors + filament
      *  types into the project palette in one action. Clobbers user
      *  edits intentionally; null when no printer is selected or no
@@ -391,6 +393,7 @@ fun LeftProjectPanel(
             printerLoadedSlots = printerLoadedSlots,
             paletteSuggestions = paletteSuggestions,
             projectFilaments = filaments,
+            filamentTypes = filamentTypes,
             virtualRows = virtualRows,
             onDetectFilaments = onDetectFilaments,
             onSyncFromPrinter = onSyncFromPrinter,
@@ -648,6 +651,7 @@ private fun ColorMappingPanel(
     printerLoadedSlots: List<FilamentSlot>,
     paletteSuggestions: List<String>,
     projectFilaments: List<FilamentEntry>,
+    filamentTypes: List<String>,
     virtualRows: List<MixedFilamentEntry>,
     onDetectFilaments: (() -> Unit)?,
     onSyncFromPrinter: (() -> Unit)?,
@@ -719,6 +723,7 @@ private fun ColorMappingPanel(
             printerPalette = printerPalette,
             virtualRows = virtualRows,
             paletteSuggestions = paletteSuggestions,
+            filamentTypes = filamentTypes,
             openEdit = openModelRow,
             onOpenEdit = { openModelRow = it },
             onChangeColor = onChangeProjectFilamentColor,
@@ -1272,6 +1277,7 @@ private fun ModelColorsSection(
     printerPalette: List<EffectivePrinterSlot>,
     virtualRows: List<MixedFilamentEntry>,
     paletteSuggestions: List<String>,
+    filamentTypes: List<String>,
     openEdit: ModelRowEdit?,
     onOpenEdit: (ModelRowEdit?) -> Unit,
     onChangeColor: (slotIndex: Int, hex: String) -> Unit,
@@ -1300,6 +1306,7 @@ private fun ModelColorsSection(
                 printerPalette = printerPalette,
                 virtualRows = virtualRows,
                 paletteSuggestions = paletteSuggestions,
+                filamentTypes = filamentTypes,
                 openEdit = openEdit,
                 onOpenEdit = onOpenEdit,
                 onChangeColor = onChangeColor,
@@ -1330,6 +1337,7 @@ private fun ModelColorRow(
     printerPalette: List<EffectivePrinterSlot>,
     virtualRows: List<MixedFilamentEntry>,
     paletteSuggestions: List<String>,
+    filamentTypes: List<String>,
     openEdit: ModelRowEdit?,
     onOpenEdit: (ModelRowEdit?) -> Unit,
     onChangeColor: (slotIndex: Int, hex: String) -> Unit,
@@ -1455,6 +1463,7 @@ private fun ModelColorRow(
             if (materialOpen) {
                 MaterialChooser(
                     selected = entry.filamentType,
+                    filamentTypes = filamentTypes,
                     onPick = { t ->
                         onChangeType(slotIndex, t)
                         onOpenEdit(null)
@@ -1749,6 +1758,7 @@ private fun ColorOnlyEditor(
 @Composable
 private fun MaterialChooser(
     selected: String,
+    filamentTypes: List<String>,
     onPick: (String) -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -1764,7 +1774,8 @@ private fun MaterialChooser(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            for (t in FILAMENT_TYPES) {
+            val fallbackTypes = listOf("Generic PLA", "Generic PETG", "Generic ABS", "Generic TPU")
+            for (t in filamentTypes.ifEmpty { fallbackTypes }) {
                 val isSelected = t == selected
                 Surface(
                     color = if (isSelected) Color(0xFF24323D) else Color(0xFF15181B),

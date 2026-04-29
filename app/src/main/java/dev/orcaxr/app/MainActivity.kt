@@ -682,6 +682,7 @@ private fun XrShell(
     }
     // Effective slot palette = filamentList colors in slot order.
     // This is what we send to libslic3r as `extruder_colour`.
+    val filamentsCatalog = remember(ctx) { OrcaProfileLoader.loadFilaments(ctx) }
     val paddedSlots = remember(filamentList) { filamentList.map { it.color } }
     // Per-project-filament override of which physical printer slot
     // emits the T-command for that filament's painted facets. Null at
@@ -1627,6 +1628,8 @@ private fun XrShell(
                     extraOverrides = printSettingsOverrides.value,
                     flushFromProject = loadedFlushSettings,
                     projectOverrides = loadedProjectOverrides,
+                    slotTypes = filamentList.map { it.filamentType },
+                    allFilaments = filamentsCatalog,
                 ),
                 virtualRemap = paddedVirtualRemap,
                 paintFilamentIndex = paintForSlice,
@@ -2018,6 +2021,8 @@ private fun XrShell(
         virtualRemap: IntArray? = paddedVirtualRemap,
         profile: SlicerProfile = selectedProfile.value,
         layerHeight: String = layerHeightOverride.value,
+        slotTypes: List<String> = filamentList.map { it.filamentType },
+        filamentsMap: Map<String, Map<String, String>> = filamentsCatalog,
     ) {
         if (models.isEmpty()) return
         scope.launch {
@@ -2059,6 +2064,8 @@ private fun XrShell(
                 extraOverrides = printSettingsOverrides.value,
                 flushFromProject = loadedFlushSettings,
                 projectOverrides = loadedProjectOverrides,
+                slotTypes = slotTypes,
+                allFilaments = filamentsMap,
             )
             // Phase J: per-model paint state, parallel to `pairs`.
             // null entries skip paint authoring for that input.
@@ -2505,6 +2512,7 @@ private fun XrShell(
     val testStatePaddedSlotRemap by rememberUpdatedState(paddedSlotRemap)
     val testStateProfile by rememberUpdatedState(selectedProfile.value)
     val testStateLayerHeight by rememberUpdatedState(layerHeightOverride.value)
+    val testStateSlotTypes by rememberUpdatedState(filamentList.map { it.filamentType })
     LaunchedEffect(Unit) {
         TestController.commands.collect { cmd ->
             when (cmd) {
@@ -2555,6 +2563,7 @@ private fun XrShell(
                             slotRemap = testStatePaddedSlotRemap,
                             profile = testStateProfile,
                             layerHeight = testStateLayerHeight,
+                            slotTypes = testStateSlotTypes,
                         )
                     } else if (cur != null) {
                         // runSlice() is captured stale by this LE — its closure has
@@ -2579,6 +2588,8 @@ private fun XrShell(
                             extraOverrides = printSettingsOverrides.value,
                             flushFromProject = loadedFlushSettings,
                             projectOverrides = loadedProjectOverrides,
+                            slotTypes = testStateSlotTypes,
+                            allFilaments = filamentsCatalog,
                         )
                         // Phase J: pull paint from the selected
                         // PlacedModel (the test pump's `cur` is the
@@ -3359,6 +3370,7 @@ private fun XrShell(
                             ?.id
                             ?.let(printerLoadedFilaments::get)
                             .orEmpty(),
+                        filamentTypes = filamentsCatalog.keys.sorted().toList(),
                         onChangeFilamentColor = { slotIdx, hex ->
                             val printerId = activePrinter?.id ?: return@LeftProjectPanel
                             // ColorMappingPanel separates color edits from
@@ -5387,6 +5399,24 @@ internal fun mergedConfig(
      * 3MF authoring. Empty map for STL/OBJ loads.
      */
     projectOverrides: Map<String, String> = emptyMap(),
+    /**
+     * B3: per-slot filament-type names (e.g. "Generic PLA",
+     * "Elegoo PLA Matte"), parallel to [slotColors]. When a slot's
+     * material has a flattened config in [allFilaments], its key
+     * values win over the active profile's vector at the per-slot
+     * resize step — this is how the user's "Generic PETG" pick on slot
+     * 2 raises that extruder's nozzle_temperature without rewriting
+     * the profile.
+     */
+    slotTypes: List<String> = emptyList(),
+    /**
+     * B3: catalog of every flattened filament profile
+     * (Material name → key/value config map), produced by
+     * [OrcaProfileLoader.loadFilaments]. Empty map disables the
+     * per-slot override and falls back to the active profile's
+     * vector (legacy behavior).
+     */
+    allFilaments: Map<String, Map<String, String>> = emptyMap(),
 ): Map<String, String> {
     val withLayer = run {
         val parsed = layerHeightInput.trim().toFloatOrNull()
@@ -5426,13 +5456,20 @@ internal fun mergedConfig(
     // snippets, file paths, etc.). Numeric vectors (coFloats, coInts)
     // and point vectors (coPoints) DO split on comma. So separators
     // depend on the option type. Pass `sep` accordingly.
-    fun resize(value: String?, count: Int, fillFromIndex0: Boolean = true, sep: String = ","): String {
+    fun resize(key: String, count: Int, fillFromIndex0: Boolean = true, sep: String = ","): String {
+        val value = withLayer[key]
         val parts = value.orEmpty().split(sep).map { it.trim() }
             .filter { it.isNotEmpty() }
-        if (parts.isEmpty()) return List(count) { "" }.joinToString(sep)
-        val first = parts.first()
+        
+        val first = parts.firstOrNull() ?: ""
         return (0 until count).joinToString(sep) { i ->
-            parts.getOrNull(i) ?: if (fillFromIndex0) first else parts.last()
+            val slotType = slotTypes.getOrNull(i)
+            val slotCfg = slotType?.let { allFilaments[it] }
+            val slotVal = slotCfg?.get(key)?.split(sep)?.firstOrNull()?.trim()
+
+            slotVal?.takeIf { it.isNotEmpty() }
+                ?: parts.getOrNull(i)
+                ?: if (fillFromIndex0) first else parts.lastOrNull() ?: ""
         }
     }
 
@@ -5476,31 +5513,31 @@ internal fun mergedConfig(
         // Numeric vectors (coFloats, coInts) and point vectors (coPoints)
         // use comma as separator — libslic3r's ConfigOptionFloats/Ints/
         // Points parsers split on `,`.
-        ("nozzle_diameter" to resize(withLayer["nozzle_diameter"], n)) +
-        ("filament_diameter" to resize(withLayer["filament_diameter"], n)) +
+        ("nozzle_diameter" to resize("nozzle_diameter", n)) +
+        ("filament_diameter" to resize("filament_diameter", n)) +
         // String vectors (coStrings) use SEMICOLON. See unescape_strings_
         // cstyle in libslic3r/Config.cpp:146 — it splits on `;` because
         // string values may legitimately contain commas. Comma-separated
         // string lists collapse to a single string and break MMU
         // segmentation (filament_colour.size() == 1, num_facets_states
         // == 2, all painted regions get dropped).
-        ("filament_type" to resize(withLayer["filament_type"], n, sep = ";")) +
-        ("filament_density" to resize(withLayer["filament_density"], n)) +
-        ("filament_flow_ratio" to resize(withLayer["filament_flow_ratio"], n)) +
-        ("filament_max_volumetric_speed" to resize(withLayer["filament_max_volumetric_speed"], n)) +
-        ("nozzle_temperature" to resize(withLayer["nozzle_temperature"], n)) +
-        ("nozzle_temperature_initial_layer" to resize(withLayer["nozzle_temperature_initial_layer"], n)) +
-        ("cool_plate_temp" to resize(withLayer["cool_plate_temp"], n)) +
-        ("cool_plate_temp_initial_layer" to resize(withLayer["cool_plate_temp_initial_layer"], n)) +
-        ("eng_plate_temp" to resize(withLayer["eng_plate_temp"], n)) +
-        ("eng_plate_temp_initial_layer" to resize(withLayer["eng_plate_temp_initial_layer"], n)) +
-        ("hot_plate_temp" to resize(withLayer["hot_plate_temp"], n)) +
-        ("hot_plate_temp_initial_layer" to resize(withLayer["hot_plate_temp_initial_layer"], n)) +
-        ("textured_plate_temp" to resize(withLayer["textured_plate_temp"], n)) +
-        ("textured_plate_temp_initial_layer" to resize(withLayer["textured_plate_temp_initial_layer"], n)) +
-        ("retraction_length" to resize(withLayer["retraction_length"], n)) +
-        ("retraction_speed" to resize(withLayer["retraction_speed"], n)) +
-        ("deretraction_speed" to resize(withLayer["deretraction_speed"], n)) +
+        ("filament_type" to resize("filament_type", n, sep = ";")) +
+        ("filament_density" to resize("filament_density", n)) +
+        ("filament_flow_ratio" to resize("filament_flow_ratio", n)) +
+        ("filament_max_volumetric_speed" to resize("filament_max_volumetric_speed", n)) +
+        ("nozzle_temperature" to resize("nozzle_temperature", n)) +
+        ("nozzle_temperature_initial_layer" to resize("nozzle_temperature_initial_layer", n)) +
+        ("cool_plate_temp" to resize("cool_plate_temp", n)) +
+        ("cool_plate_temp_initial_layer" to resize("cool_plate_temp_initial_layer", n)) +
+        ("eng_plate_temp" to resize("eng_plate_temp", n)) +
+        ("eng_plate_temp_initial_layer" to resize("eng_plate_temp_initial_layer", n)) +
+        ("hot_plate_temp" to resize("hot_plate_temp", n)) +
+        ("hot_plate_temp_initial_layer" to resize("hot_plate_temp_initial_layer", n)) +
+        ("textured_plate_temp" to resize("textured_plate_temp", n)) +
+        ("textured_plate_temp_initial_layer" to resize("textured_plate_temp_initial_layer", n)) +
+        ("retraction_length" to resize("retraction_length", n)) +
+        ("retraction_speed" to resize("retraction_speed", n)) +
+        ("deretraction_speed" to resize("deretraction_speed", n)) +
         // Per-extruder filament vectors that newly flow through
         // SAFE_KEYS. coBools / coFloats — comma-separated.
         // filament_minimal_purge_on_wipe_tower governs per-tool purge
@@ -5510,26 +5547,26 @@ internal fun mergedConfig(
         // toggles. All are sized 1-per-filament in Snapmaker leaves
         // and must match the slot count once the toolchanger code
         // path engages.
-        ("filament_minimal_purge_on_wipe_tower" to resize(withLayer["filament_minimal_purge_on_wipe_tower"], n)) +
-        ("filament_multitool_ramming" to resize(withLayer["filament_multitool_ramming"], n)) +
-        ("filament_multitool_ramming_volume" to resize(withLayer["filament_multitool_ramming_volume"], n)) +
-        ("filament_multitool_ramming_flow" to resize(withLayer["filament_multitool_ramming_flow"], n)) +
-        ("enable_pressure_advance" to resize(withLayer["enable_pressure_advance"], n)) +
-        ("pressure_advance" to resize(withLayer["pressure_advance"], n)) +
-        ("reduce_fan_stop_start_freq" to resize(withLayer["reduce_fan_stop_start_freq"], n)) +
+        ("filament_minimal_purge_on_wipe_tower" to resize("filament_minimal_purge_on_wipe_tower", n)) +
+        ("filament_multitool_ramming" to resize("filament_multitool_ramming", n)) +
+        ("filament_multitool_ramming_volume" to resize("filament_multitool_ramming_volume", n)) +
+        ("filament_multitool_ramming_flow" to resize("filament_multitool_ramming_flow", n)) +
+        ("enable_pressure_advance" to resize("enable_pressure_advance", n)) +
+        ("pressure_advance" to resize("pressure_advance", n)) +
+        ("reduce_fan_stop_start_freq" to resize("reduce_fan_stop_start_freq", n)) +
         // Tool-change loading/unloading and cooling vectors. Snapmaker
         // fork's fdm_filament_common.json supplies these per-tool;
         // without resizing, libslic3r's update_values_to_printer_
         // extruders_for_multiple_filaments OOB-reads when slot count
         // exceeds the source array length (gotcha #6).
-        ("filament_loading_speed" to resize(withLayer["filament_loading_speed"], n)) +
-        ("filament_loading_speed_start" to resize(withLayer["filament_loading_speed_start"], n)) +
-        ("filament_unloading_speed" to resize(withLayer["filament_unloading_speed"], n)) +
-        ("filament_unloading_speed_start" to resize(withLayer["filament_unloading_speed_start"], n)) +
-        ("filament_toolchange_delay" to resize(withLayer["filament_toolchange_delay"], n)) +
-        ("filament_cooling_moves" to resize(withLayer["filament_cooling_moves"], n)) +
-        ("filament_cooling_initial_speed" to resize(withLayer["filament_cooling_initial_speed"], n)) +
-        ("filament_cooling_final_speed" to resize(withLayer["filament_cooling_final_speed"], n)) +
+        ("filament_loading_speed" to resize("filament_loading_speed", n)) +
+        ("filament_loading_speed_start" to resize("filament_loading_speed_start", n)) +
+        ("filament_unloading_speed" to resize("filament_unloading_speed", n)) +
+        ("filament_unloading_speed_start" to resize("filament_unloading_speed_start", n)) +
+        ("filament_toolchange_delay" to resize("filament_toolchange_delay", n)) +
+        ("filament_cooling_moves" to resize("filament_cooling_moves", n)) +
+        ("filament_cooling_initial_speed" to resize("filament_cooling_initial_speed", n)) +
+        ("filament_cooling_final_speed" to resize("filament_cooling_final_speed", n)) +
         // coStrings — semicolon-joined.
         ("filament_colour" to slotColors.joinToString(";")) +
         ("extruder_colour" to slotColors.joinToString(";")) +
