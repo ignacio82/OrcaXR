@@ -1221,9 +1221,25 @@ private fun XrShell(
                 return
             }
             android.util.Log.i(tag, "wrote colored preview GLB ${out.absolutePath} (${out.length() / 1024} KB)")
-            // Skip bedFit for now — would need to derive bbox from
-            // the colored GLB or the source 3MF. Slice-time auto-
-            // centering still puts the model on the bed.
+            // Roadmap A6 — derive an STL once for the bed-collision /
+            // bedFit checks. The 3MF preview itself goes through
+            // libslic3r's writeColoredGlb (above) which handles the
+            // multi-volume layout natively; the derived STL collapses
+            // volumes but is fine for a vertex-walked-bbox check
+            // against the printable polygon. deriveStlFor caches the
+            // result under cacheDir so a paint-driven re-bake doesn't
+            // re-derive on every stroke.
+            runCatching {
+                val derived = deriveStlFor(stlFile)
+                if (derived != null) {
+                    val raw3mf = StlReader.read(derived)
+                    val mesh3mf = applyPlacedTransforms(raw3mf, initial)
+                    bedFit = computeBedFit(mesh3mf, bedW, bedH)
+                    bedCollision = BedCollision.detect(mesh3mf, bedW, bedH, recenterToBed = true)
+                }
+            }.onFailure {
+                android.util.Log.w(tag, "3mf bedCollision compute failed: ${it.message}")
+            }
             sweepOldPreviews(out, modelId)
             // Version was already bumped at the top of previewStl so
             // concurrent calls land on distinct files. Just publish the

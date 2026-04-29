@@ -89,11 +89,10 @@ Upstream OrcaSlicer's "Fix Model" depends on the Windows-only 3D Builder API (`F
 
 `BedCollision.detect(mesh, bedXmm, bedYmm, recenterToBed)` walks the transformed mesh's vertices against the bed polygon and returns either `Ok` or `Off(offendingTriCount, offendingTriIndices, overflowX, overflowY, worstOverflowXmm, worstOverflowYmm)`. Wired into the STL preview pipeline alongside the legacy bbox `bedFit` summary; the result drives a red banner in `LeftProjectPanel` and disables the Slice button via the same gating shape as `FilamentRules.Result.Forbidden`. Unit tests cover the cube / slab / empty-mesh / translate-with-recenter cases.
 
-**Pending — entry-criteria for the green flip:**
+**Pending — entry-criterion for the green flip:**
 - Render the offending triangles in red on the preview GLB (today the banner alone tells the user which axes overflow). Touches `StlPreviewGlb` / `GlbBuilder` to emit a vertex-color override array keyed off `BedCollision.Result.Off.offendingTriIndices`.
-- Run the check on the 3MF preview path too — currently bedFit is also skipped there because the bbox is derived through the colored-GLB writer instead of an `StlMesh`.
 
-**Shipped:** commit `e6937e3` — `BedCollision.detect`, banner, Slice gate, `BedCollisionTest` (6 tests).
+**Shipped:** commit `e6937e3` — `BedCollision.detect`, banner, Slice gate, `BedCollisionTest` (6 tests). Follow-up commit `<pending>` — bed-collision now also runs on the 3MF preview path via `deriveStlFor` + `StlReader`.
 
 ### A7. Toolpath rendering as triangulated tubes 🔴 Not started
 
