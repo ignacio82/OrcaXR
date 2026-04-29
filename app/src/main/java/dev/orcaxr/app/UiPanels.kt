@@ -47,6 +47,13 @@ sealed interface BedFit {
 fun LeftProjectPanel(
     sliceState: SliceUiState,
     bedFit: BedFit?,
+    /** Roadmap A6 — full mesh-vs-bed collision result for the selected
+     *  model. `null` = not yet computed (empty state, 3MF preview path,
+     *  multi-model fallback); [BedCollision.Result.Ok] hides the
+     *  banner; [BedCollision.Result.Off] shows a red gating banner and
+     *  the caller is expected to pass the same flag through to
+     *  [BottomRightSummaryPanel] to disable the Slice button. */
+    bedCollision: BedCollision.Result? = null,
     printers: List<PrinterConfig>,
     selectedPrinterId: String?,
     onSelectPrinter: (String?) -> Unit,
@@ -282,6 +289,60 @@ fun LeftProjectPanel(
                             style = MaterialTheme.typography.labelSmall,
                         )
                     }
+                }
+            }
+        }
+
+        // Roadmap A6 — bed-collision (vertex-walked) banner. Forbidden
+        // shape mirrors FilamentRulesBanner.Forbidden so users learn
+        // one visual = one gated reason. Stays silent on Ok so the
+        // common case is quiet.
+        if (bedCollision is BedCollision.Result.Off) {
+            Surface(
+                color = Color(0xFF3A1E1E),
+                shape = RoundedCornerShape(8.dp),
+            ) {
+                Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "⛔",
+                            color = Color(0xFFFF8A8E),
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(end = 8.dp),
+                        )
+                        Text(
+                            "Model extends past the build plate",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    val pct = (100 * bedCollision.offendingTriCount.toFloat()
+                        / bedCollision.totalTriCount.coerceAtLeast(1)).coerceAtMost(100f)
+                    Text(
+                        "${bedCollision.offendingTriCount} of ${bedCollision.totalTriCount} " +
+                            "triangles off-bed (${"%.1f".format(pct)}%)",
+                        color = Color.LightGray,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    val axesText = buildList {
+                        if (bedCollision.overflowX) add("X by %.1f mm".format(
+                            kotlin.math.abs(bedCollision.worstOverflowXmm)))
+                        if (bedCollision.overflowY) add("Y by %.1f mm".format(
+                            kotlin.math.abs(bedCollision.worstOverflowYmm)))
+                    }.joinToString(", ")
+                    if (axesText.isNotEmpty()) {
+                        Text(
+                            "Worst overflow: $axesText",
+                            color = Color(0xFFFF8A8E),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                    Text(
+                        "Reduce scale or rotate to bring the silhouette inside the bed.",
+                        color = Color(0xFFFF8A8E),
+                        style = MaterialTheme.typography.labelSmall,
+                    )
                 }
             }
         }
@@ -2543,6 +2604,11 @@ fun BottomRightSummaryPanel(
      *  Slice button enabled — the caller surfaces the warning state in
      *  the LeftProjectPanel banner instead. */
     filamentRuleResult: FilamentRules.Result = FilamentRules.Result.Ok,
+    /** Roadmap A6 — same gating shape as [filamentRuleResult]. When
+     *  the transformed mesh has any vertex outside the printable
+     *  polygon, block the Slice button until the user resolves it.
+     *  The LeftProjectPanel banner carries the explanation. */
+    bedCollisionForbidden: Boolean = false,
 ) {
     Column(
         modifier = Modifier
@@ -2555,10 +2621,11 @@ fun BottomRightSummaryPanel(
 
         val isSlicing = sliceState is SliceUiState.Slicing
         val isForbidden = filamentRuleResult is FilamentRules.Result.Forbidden
+        val isBedBlocked = bedCollisionForbidden
 
         Button(
             onClick = onSliceClick,
-            enabled = !isSlicing && !isForbidden,
+            enabled = !isSlicing && !isForbidden && !isBedBlocked,
             modifier = Modifier.fillMaxWidth().height(48.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFF00BFA5),
@@ -2572,6 +2639,12 @@ fun BottomRightSummaryPanel(
                 // explanation; this is just the affordance.
                 Text(
                     "Filament not supported",
+                    color = Color(0xFFFF8A8E),
+                    fontWeight = FontWeight.Bold,
+                )
+            } else if (isBedBlocked && !isSlicing) {
+                Text(
+                    "Model off the build plate",
                     color = Color(0xFFFF8A8E),
                     fontWeight = FontWeight.Bold,
                 )

@@ -592,6 +592,11 @@ private fun XrShell(
     var showFilePicker by remember { mutableStateOf(false) }
     var workspaceMode by remember { mutableStateOf(WorkspaceMode.Prepare) }
     var bedFit by remember { mutableStateOf<BedFit?>(null) }
+    // Roadmap A6 — full mesh-vs-bed collision check. Lives alongside
+    // bedFit (which is bbox-only and remains the size summary banner)
+    // and is the gating signal for the Slice button when a vertex
+    // lands outside the printable polygon.
+    var bedCollision by remember { mutableStateOf<BedCollision.Result?>(null) }
 
     // Phase J in-XR painting state. `paintBrush.mode == Off` is the
     // default — paint stays disabled until the user opts in via the
@@ -1255,6 +1260,11 @@ private fun XrShell(
 
         val mesh = applyPlacedTransforms(raw, current)
         bedFit = computeBedFit(mesh, bedW, bedH)
+        // Roadmap A6 — vertex-walked collision check on the same
+        // transformed mesh. recenterToBed=true mirrors the JNI's
+        // pre-slice "auto-center on the printable area" pass for the
+        // single-model path.
+        bedCollision = BedCollision.detect(mesh, bedW, bedH, recenterToBed = true)
         // Phase J §G: pass paint state + palette so painted triangles
         // render in the slot color. applyTransforms preserves triangle
         // order so `current.paintFilamentIndex` remains aligned. Skip
@@ -3185,6 +3195,7 @@ private fun XrShell(
                     LeftProjectPanel(
                         sliceState = sliceState.value,
                         bedFit = bedFit,
+                        bedCollision = bedCollision,
                         printers = printers,
                         selectedPrinterId = selectedPrinterId.value,
                         onSelectPrinter = { selectedPrinterId.value = it },
@@ -3335,6 +3346,7 @@ private fun XrShell(
                             glbPath = null
                             stlPreviewPath = null
                             bedFit = null
+                            bedCollision = null
                             // Phase G: clear EVERY plated model. The
                             // per-row delete in the multi-model UI is
                             // handled by onDeletePlacedModel below;
@@ -3368,6 +3380,7 @@ private fun XrShell(
                                 glbPath = null
                                 stlPreviewPath = null
                                 bedFit = null
+                                bedCollision = null
                                 sliceState.value = SliceUiState.Idle
                                 workspaceMode = WorkspaceMode.Prepare
                             }
@@ -3880,6 +3893,7 @@ private fun XrShell(
                             }
                         },
                         filamentRuleResult = filamentRuleResult,
+                        bedCollisionForbidden = bedCollision is BedCollision.Result.Off,
                     )
                 }
 
@@ -4019,6 +4033,7 @@ private fun XrShell(
                                 glbPath = null
                                 stlPreviewPath = null
                                 bedFit = null
+                                bedCollision = null
                                 sliceState.value = SliceUiState.Idle
                                 workspaceMode = WorkspaceMode.Prepare
                             }

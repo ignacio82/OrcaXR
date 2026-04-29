@@ -83,13 +83,17 @@ Upstream OrcaSlicer's "Fix Model" depends on the Windows-only 3D Builder API (`F
 - Repair on a 1M-tri mesh either succeeds or surfaces an OOM Toast cleanly without crashing the JNI dispatcher.
 - CGAL parallel_for sites respect the TBB serial shim (gotcha #17).
 
-### A6. Bed-collision check (full mesh-vs-bed) 🔴 Not started
+### A6. Bed-collision check (full mesh-vs-bed) 🟡 Partial — gating shipped, GLB highlight pending
 
-> **Files:** `MainActivity.kt` translation gizmo path, `PlacedModel.kt::footprintMm`.
+> **Files:** `BedCollision.kt`, `BedCollisionTest.kt`, `MainActivity.kt::previewStl`, `UiPanels.kt::LeftProjectPanel` + `BottomRightSummaryPanel`.
 
-Today only an axis-aligned bbox warning fires when an STL overflows the bed. After TransformPanel shipped (numeric XYZ rotate), arbitrary X/Y rotations can land mesh vertices off-bed even when the bbox fits. A real check walks the transformed mesh vertices against the bed polygon (printer-frame XY) and the bed bounds.
+`BedCollision.detect(mesh, bedXmm, bedYmm, recenterToBed)` walks the transformed mesh's vertices against the bed polygon and returns either `Ok` or `Off(offendingTriCount, offendingTriIndices, overflowX, overflowY, worstOverflowXmm, worstOverflowYmm)`. Wired into the STL preview pipeline alongside the legacy bbox `bedFit` summary; the result drives a red banner in `LeftProjectPanel` and disables the Slice button via the same gating shape as `FilamentRules.Result.Forbidden`. Unit tests cover the cube / slab / empty-mesh / translate-with-recenter cases.
 
-**Implementation outline:** add a Kotlin `BedCollision.detect(mesh, transform, bedBounds): Set<TriangleIdx>` that returns the offending triangles. Render those triangles in red on the preview GLB. Block Slice when the set is non-empty (matches the existing FilamentRules gating pattern in `BottomRightSummaryPanel`).
+**Pending — entry-criteria for the green flip:**
+- Render the offending triangles in red on the preview GLB (today the banner alone tells the user which axes overflow). Touches `StlPreviewGlb` / `GlbBuilder` to emit a vertex-color override array keyed off `BedCollision.Result.Off.offendingTriIndices`.
+- Run the check on the 3MF preview path too — currently bedFit is also skipped there because the bbox is derived through the colored-GLB writer instead of an `StlMesh`.
+
+**Shipped:** A6.scaffold — `BedCollision.detect`, banner, Slice gate, `BedCollisionTest` (6 tests).
 
 ### A7. Toolpath rendering as triangulated tubes 🔴 Not started
 
@@ -155,20 +159,18 @@ Today the per-slot picker only exposes color (preset palette + hex). Bundled fil
 
 **Exit criteria:** A 4-slot U1 project with slots `{Generic PLA, PLA-CF, ABS, PETG}` slices with each slot's tuned `filament_*` keys (e.g., per-slot `nozzle_temperature`, `pressure_advance`, `fan_max_speed`) reflected in the G-code header.
 
-### B4. Galaxy XR Controller bindings — face buttons 🟡 Partial — input pump shipped, button bindings pending
+### B4. Galaxy XR Controller bindings — face buttons 🟢 Shipped
 
-> **Files:** `MainActivity.kt::onKeyDown`, `ControllerInput.kt::buttons` SharedFlow.
+> **Files:** `MainActivity.kt::onKeyDown`, `MainActivity.kt::XrShell` button collector LE, `ControllerInput.kt::buttons` SharedFlow, `TestController.GamepadButton` test command.
 
-Input pump (commit `dfdd3c5`), Sliced-mode axis layer scrubbing, and Prepare-mode stick X/Y nudge + rotate are shipped (see `MainActivity.kt:470, 2229, 2287`). What's missing: face-button bindings.
+Input pump, Sliced-mode axis layer scrubbing, and Prepare-mode stick X/Y nudge + rotate were shipped earlier. The face-button collector now lives in the XrShell `LaunchedEffect(controllerInput)` block:
 
-**Bindings to land:**
-- **A** → contextual confirm (slice button focus = trigger slice; picker panel = confirm selection).
-- **B** → in-app contextual cancel (NOT system back — the OS already routes back).
-- **X** → toggle `workspaceMode` Prepare ↔ Sliced (only when a slice exists; surface a Toast otherwise).
-- **Y** → toggle `showTravels` (`MainActivity.kt:273`).
-- All bindings gated `repeatCount == 0` (auto-repeat would re-fire toggles).
-
-**Exit criteria:** TestController-driven instrumented test fires each keycode and asserts state mutation; manual on-device confirms every binding works; system back still functions.
+- **A** → contextual confirm (multi-model → `runSliceMulti`, single → `runSlice`, empty → bundled cube).
+- **B** → contextual cancel (Preview → Prepare; otherwise no-op so system back still routes through the OS).
+- **X** → Prepare ↔ Preview toggle, Toast hint when no slice exists yet.
+- **Y** → toggle `showTravels`.
+- All bindings gated `repeatCount == 0` at the Activity layer so holding a button doesn't auto-repeat toggles.
+- `TestController.Command.GamepadButton(button)` shim drives `controllerInput.emitButton(button)` so a workstation harness can exercise every binding without paired hardware.
 
 ### B5. Galaxy XR Controller help card 🔴 Not started
 
