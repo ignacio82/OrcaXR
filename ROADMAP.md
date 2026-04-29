@@ -191,7 +191,7 @@ Input pump, Sliced-mode axis layer scrubbing, and Prepare-mode stick X/Y nudge +
 - Reuse on B1 gizmo handle labels and B2 mixed-filament settings rows. Today the chip is wired into `SettingNumericEditor` only — applying it broadly is gated on those features landing.
 - True laser-hover (vs tap) trigger once XR's pointer-event reliability is good enough to swap out the tap interaction without trading legibility for jitter.
 
-**Shipped:** commit (this one) — `SpatialTooltip` + `SettingDescriptions` + 12 unit tests (5 description coverage / convention / count + 7 TooltipState transitions). Wired into `SettingNumericEditor` so every documented Quality / Speed / Support row grows a `?` chip.
+**Shipped:** commit `2d25680` — `SpatialTooltip` + `SettingDescriptions` + 12 unit tests (5 description coverage / convention / count + 7 TooltipState transitions). Wired into `SettingNumericEditor` so every documented Quality / Speed / Support row grows a `?` chip.
 
 ### B7. Empty-state guidance 🟢 Shipped
 
