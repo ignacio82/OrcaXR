@@ -145,18 +145,13 @@ The current `ColorMappingPanel` and `VirtualColorsSection` (`UiPanels.kt:585-871
 
 **Exit criteria:** A user with 2 physical filaments can author a "blue+yellow=green" virtual mix via Color-Match; the row persists in `MixedFilamentStore`; the apparent-color swatch matches the Kubelka–Munk blend; once A2 lands, slicing emits alternating-layer G-code in painted regions.
 
-### B3. Slot picker filament-type dropdown 🔴 Not started
+### B3. Slot picker filament-type dropdown 🟢 Shipped
 
-> **Files:** `FilamentSlotsStore.kt` (DataStore schema migration), `UiPanels.kt` slot-picker UI, `OrcaProfileLoader.kt` filament list (already discovers all types in `assets/profiles/`).
+> **Files:** `FilamentEntriesStore.kt` (catalog-name default + legacy short-name remap on JSON load), `OrcaProfileLoader.kt::loadFilaments` (Material name → flattened key/value map), `MainActivity.kt::XrShell` (`filamentsCatalog` remembered + threaded into `mergedConfig` calls + `LeftProjectPanel.filamentTypes` from catalog keys), `UiPanels.kt::ColorMappingPanel` + `ModelColorRow` + `MaterialChooser` (dropdown sourced from catalog instead of hardcoded `FILAMENT_TYPES`), `MergedConfigSlotTypesTest`.
 
-Today the per-slot picker only exposes color (preset palette + hex). Bundled filament JSONs (Phase 3.20 work) include type metadata (PLA Matte, PLA-CF, ABS, PETG, etc.). The UX should let the user pick a *type* per slot so slicing config picks the right `filament_*` key set per slot.
+`OrcaProfileLoader.loadFilaments(ctx)` walks every brand under `assets/profiles/<brand>/filament/` and returns a `Map<String, Map<String, String>>` keyed by leaf-filament short name (e.g. `Generic PLA`, `Elegoo PLA Matte`) with the flattened key/value config for that filament. `mergedConfig()` `resize()` now keys by config-name string and prefers the per-slot filament catalog entry's value over the active profile's vector at the per-slot resize step — so picking "Generic PETG" on slot 1 raises that extruder's `nozzle_temperature` to 240 without rewriting the profile, while slot 0's "Generic PLA" stays at 215. Falls back to the profile vector for unknown materials, then to fillFromIndex0/last (legacy behavior preserved when `slotTypes` / `allFilaments` are empty). `MaterialChooser` dropdown is now sourced from `filamentsCatalog.keys.sorted()` so vendoring new branded leaves immediately enriches the picker; default short-name `"PLA"` migrated to catalog name `"Generic PLA"` and the JSON load path remaps the legacy short names to catalog equivalents for back-compat.
 
-**Implementation outline:**
-1. DataStore schema migration from `{color}` → `{color, type}` per slot. Migration default: keep all existing slots as `Generic PLA` for back-compat.
-2. Slot picker UI gains a type dropdown alongside the color square, populated from `OrcaProfileLoader.filamentEntries(activePrinter)`.
-3. `mergedConfig()` reads per-slot type and resolves the matching filament JSON's keys (this already happens for the active filament; extend to per-slot).
-
-**Exit criteria:** A 4-slot U1 project with slots `{Generic PLA, PLA-CF, ABS, PETG}` slices with each slot's tuned `filament_*` keys (e.g., per-slot `nozzle_temperature`, `pressure_advance`, `fan_max_speed`) reflected in the G-code header.
+**Shipped:** commit `2a4b21c` — `OrcaProfileLoader.loadFilaments` + `mergedConfig` per-slot override path + dropdown wiring + `MergedConfigSlotTypesTest` (3 tests covering slot override, unknown-type fallback, empty-slotTypes legacy path).
 
 ### B4. Galaxy XR Controller bindings — face buttons 🟢 Shipped
 
@@ -366,13 +361,20 @@ Snapmaker fork ships 0.2/0.4/0.6/0.8 nozzle variants; OrcaXR has 0.4 + 0.6 (0.6 
 
 **Exit criteria:** picker shows 0.2 / 0.4 / 0.6 / 0.8 nozzle entries; cube slices on each; AFC sync still works.
 
-### F2. Branded U1 filament leaves 🔴 Not started
+### F2. Branded U1 filament leaves 🟡 Partial — PLA family vendored, ABS/PETG/exotic still pending
 
-> Snapmaker fork ships ~58 branded leaves; OrcaXR ships Generic PLA + Generic ABS + Generic PETG + Elegoo PLA Matte + Elegoo PLA-CF.
+> Snapmaker fork ships ~58 branded leaves; OrcaXR now ships Generic PLA + Generic ABS + Generic PETG + Snapmaker PLA + Snapmaker PLA Matte + Snapmaker PLA Eco + Snapmaker PLA Silk + Snapmaker PLA Metal + Snapmaker PLA-CF + Elegoo PLA Matte + Elegoo PLA-CF.
 
 Branded leaves cover PLA HF / PLA Eco / PLA Metal / PLA Silk / PETG HF / PETG-CF / PETG-GF / ASA / PA-CF / PCTG / PVA / BVOH / PC / TPU / TPU 95A HF / Breakaway Support + Polymaker/PolyLite/PolyTerra third-party. APK cost <100 KB; UX cost is picker clutter.
 
-**Implementation:** stage-roll. Land the PLA family (HF/Eco/Metal/Silk) first, ABS/PETG branded second, exotic (PA/PC/TPU) third. Ship a nozzle filter chip in the picker if clutter becomes a complaint.
+**Implementation:** stage-roll. PLA family landed first; ABS/PETG branded next, exotic (PA/PC/TPU) last. Ship a nozzle filter chip in the picker if clutter becomes a complaint.
+
+**Pending — entry-criteria for the green flip:**
+- Snapmaker-branded ABS / PETG / ASA U1 leaves (and the parents in their inheritance chains).
+- Exotic-material leaves (PA-CF, PC, TPU 95A HF) once F5's `filament_is_high_temperature` flag has a real consumer.
+- Snapmaker Breakaway Support For PLA — gated on resolving the Snapmaker J1 PVA parent chain it inherits from.
+
+**Shipped (PLA family slice):** commit `<pending>` — vendored 15 JSONs into `app/src/main/assets/profiles/Snapmaker/filament/`: 6 instantiable U1 leaves (PLA / Matte / Eco / Silk / Metal / PLA-CF) + 6 `@U1 base` parents + 3 root parents (`fdm_filament_common`, `fdm_filament_pla`, `fdm_filament_pla_eco`). NOTICE.md attribution updated. `SnapmakerPlaCatalogTest` (5 tests) covers leaf-instantiability, Matte's tuned 220 °C `nozzle_temperature`, PLA-CF's hotter override, Eco's deep-chain `filament_flow_ratio` resolution, and a tripwire that fails if any vendored leaf's `inherits` points at a missing parent. With B3's `loadFilaments` already shipped, the new leaves auto-discover into the per-slot dropdown.
 
 ### F3. Centauri Carbon profile breadth 🔴 Not started
 

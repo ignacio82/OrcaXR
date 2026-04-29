@@ -28,6 +28,16 @@ What we copy is slicing-relevant scalar data (layer heights, walls,
 infill, temperatures, fan curves, retraction, max accelerations) plus
 factual machine geometry (bed size, nozzle diameter, Z height).
 
+`app/src/main/assets/profiles/Snapmaker/filament/Snapmaker PLA*` are
+byte-identical snapshots of the Snapmaker fork's branded U1 PLA-family
+leaves and their inheritance ancestors (`fdm_filament_common.json`,
+`fdm_filament_pla.json`, `fdm_filament_pla_eco.json`, plus each
+`Snapmaker PLA … @U1 base.json` / `Snapmaker PLA … @U1.json` pair for
+PLA, PLA Matte, PLA Eco, PLA Silk, PLA Metal, PLA-CF). These feed the
+B3 per-slot filament-type override path with material-tuned
+`nozzle_temperature` / `pressure_advance` / `filament_max_volumetric_speed`
+values without rewriting the active machine profile.
+
 License: **GNU AGPL v3.0** — same as the upstream OrcaSlicer fork.
 
 ## Elegoo Centauri Carbon OrcaSlicer profiles
