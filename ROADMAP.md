@@ -93,7 +93,7 @@ Upstream OrcaSlicer's "Fix Model" depends on the Windows-only 3D Builder API (`F
 - Render the offending triangles in red on the preview GLB (today the banner alone tells the user which axes overflow). Touches `StlPreviewGlb` / `GlbBuilder` to emit a vertex-color override array keyed off `BedCollision.Result.Off.offendingTriIndices`.
 - Run the check on the 3MF preview path too — currently bedFit is also skipped there because the bbox is derived through the colored-GLB writer instead of an `StlMesh`.
 
-**Shipped:** A6.scaffold — `BedCollision.detect`, banner, Slice gate, `BedCollisionTest` (6 tests).
+**Shipped:** commit `e6937e3` — `BedCollision.detect`, banner, Slice gate, `BedCollisionTest` (6 tests).
 
 ### A7. Toolpath rendering as triangulated tubes 🔴 Not started
 
@@ -192,11 +192,16 @@ When `placedModels` is empty, replace the bed with a floating, laser-interactabl
 
 **Implementation outline:** A new SpatialPanel mounted in `XrShell` when `placedModels.isEmpty()` that wraps the existing `FilePickerPanel` invocation with a prominent CTA + recent-files row.
 
-### B8. Numeric input validation 🔴 Not started
+### B8. Numeric input validation 🟡 Partial — TransformPanel covered, print-settings tabs pending
 
-Numeric `TextField`s in print-settings tabs (Quality, Strength, Speed, Support) and in TransformPanel must show a red outline + brief Toast on out-of-range values. Today silent clamping happens at the libslic3r boundary, which masks user typos.
+> **Files:** `NumericValidation.kt`, `NumericValidationTest.kt`, `UiPanels.kt::AxisFieldRow` + `TransformAxisSection`.
 
-**Implementation outline:** Per-key allowed ranges live in `OrcaProfileLoader.SAFE_KEYS` metadata. A new `validateConfigKey(key, valueStr) -> ValidationResult.Ok | OutOfRange(min, max)` helper drives an `isError` flag on each TextField + a Toast on first out-of-range commit.
+`NumericValidation.validate(text, min, max)` returns `Ok(value) | NotANumber | OutOfRange(value, min, max)` — pure, unit-tested (9 tests). Extended `AxisFieldRow` with an optional `range: ClosedFloatingPointRange<Float>?` parameter that drives the TextField's `isError` flag and a one-shot Toast on first out-of-range commit. TransformPanel now passes `Ranges.translateMm` (-500..500), `Ranges.rotateDeg` (-1080..1080), and `Ranges.scalePct` (1..2000) for the Translate / Rotate / Scale axes respectively.
+
+**Pending — entry-criteria for the green flip:**
+- Print-settings tabs (Quality, Strength, Speed, Support) need their `TextField` call sites migrated to use the same validate-and-toast shape. That's a wider refactor of the `printSettingsOverrides`-driven inputs and would benefit from per-key metadata in `OrcaProfileLoader.SAFE_KEYS` (today a flat `Set<String>`; would become a map of `key → AllowedRange`).
+
+**Shipped:** commit `<pending>` — `NumericValidation.validate` + `Ranges`, `AxisFieldRow` red-outline + Toast, `NumericValidationTest`.
 
 ---
 

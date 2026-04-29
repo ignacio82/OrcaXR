@@ -4357,6 +4357,7 @@ fun TransformPanel(
                     2 -> onTranslateChange(model.translateXmm, model.translateYmm, 0f)
                 }
             },
+            range = NumericValidation.Ranges.translateMm,
         )
         Spacer(Modifier.height(8.dp))
         TransformAxisSection(
@@ -4373,6 +4374,7 @@ fun TransformPanel(
                     2 -> onRotateChange(model.rotXDeg, model.rotYDeg, 0f)
                 }
             },
+            range = NumericValidation.Ranges.rotateDeg,
         )
         Spacer(Modifier.height(8.dp))
         TransformAxisSection(
@@ -4392,6 +4394,7 @@ fun TransformPanel(
                     2 -> onScaleChange(ex, ey, 100f)
                 }
             },
+            range = NumericValidation.Ranges.scalePct,
         )
         Spacer(Modifier.height(12.dp))
 
@@ -4920,13 +4923,17 @@ private fun TransformAxisSection(
     z: Float,
     onChange: (xVal: Float, yVal: Float, zVal: Float) -> Unit,
     onResetAxis: (axis: Int) -> Unit,
+    /** Roadmap B8 — optional allowed range. When supplied, AxisFieldRow
+     *  paints the TextField red and refuses to commit values outside
+     *  [min, max]; a one-shot Toast surfaces the bound on first miss. */
+    range: ClosedFloatingPointRange<Float>? = null,
 ) {
     Text(label, color = Color.White, style = MaterialTheme.typography.titleMedium)
     Spacer(Modifier.height(4.dp))
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        AxisFieldRow("X", unit, x, { newX -> onChange(newX, y, z) }) { onResetAxis(0) }
-        AxisFieldRow("Y", unit, y, { newY -> onChange(x, newY, z) }) { onResetAxis(1) }
-        AxisFieldRow("Z", unit, z, { newZ -> onChange(x, y, newZ) }) { onResetAxis(2) }
+        AxisFieldRow("X", unit, x, range, { newX -> onChange(newX, y, z) }) { onResetAxis(0) }
+        AxisFieldRow("Y", unit, y, range, { newY -> onChange(x, newY, z) }) { onResetAxis(1) }
+        AxisFieldRow("Z", unit, z, range, { newZ -> onChange(x, y, newZ) }) { onResetAxis(2) }
     }
 }
 
@@ -4944,10 +4951,18 @@ private fun AxisFieldRow(
     axis: String,
     unit: String,
     value: Float,
+    range: ClosedFloatingPointRange<Float>?,
     onChange: (Float) -> Unit,
     onReset: () -> Unit,
 ) {
     var text by remember(value) { mutableStateOf(formatAxisValue(value)) }
+    val ctx = LocalContext.current
+    // Roadmap B8 — track whether the current text is valid, gated on
+    // the optional [range]. Drives `isError` and a one-shot Toast on
+    // the first transition into out-of-range so the user gets feedback
+    // without re-firing on every keystroke.
+    var isError by remember(value) { mutableStateOf(false) }
+    var lastToastedError by remember(value) { mutableStateOf<String?>(null) }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             axis,
@@ -4958,10 +4973,48 @@ private fun AxisFieldRow(
         Spacer(Modifier.width(6.dp))
         TextField(
             value = text,
+            isError = isError,
             onValueChange = { newText ->
                 text = newText
-                val parsed = newText.trim().toFloatOrNull()
-                if (parsed != null) onChange(parsed)
+                if (range == null) {
+                    // Legacy path — accept any parseable value.
+                    val parsed = newText.trim().toFloatOrNull()
+                    if (parsed != null) {
+                        isError = false
+                        onChange(parsed)
+                    } else {
+                        isError = newText.isNotBlank()
+                    }
+                    return@TextField
+                }
+                when (val v = NumericValidation.validate(
+                    newText,
+                    range.start,
+                    range.endInclusive,
+                )) {
+                    is NumericValidation.Result.Ok -> {
+                        isError = false
+                        lastToastedError = null
+                        onChange(v.value)
+                    }
+                    is NumericValidation.Result.NotANumber -> {
+                        // Empty string mid-edit is fine — only flag
+                        // once the user has typed something garbage.
+                        isError = newText.isNotBlank()
+                    }
+                    is NumericValidation.Result.OutOfRange -> {
+                        isError = true
+                        val rangeText = "[${formatAxisValue(v.min)}, ${formatAxisValue(v.max)}] $unit"
+                        if (lastToastedError != rangeText) {
+                            lastToastedError = rangeText
+                            android.widget.Toast.makeText(
+                                ctx,
+                                "$axis out of range $rangeText",
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    }
+                }
             },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
