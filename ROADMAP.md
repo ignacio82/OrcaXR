@@ -102,7 +102,7 @@ Upstream OrcaSlicer's "Fix Model" depends on the Windows-only 3D Builder API (`F
 - Mitered joins between connected segments (today every prism is independent; corners read as a small bevel). Requires a connectivity-graph build over `ParsedToolpath.segments`.
 - Visual verification on Galaxy XR — current verification is geometry-level (vertex / index counts, doubleSided flag, bbox sanity, vertical-segment cross-product guard).
 
-**Shipped:** commit (this one) — `ToolpathGlb.write(tubes = …)` + `TUBES_SEGMENT_CAP` fallback + `UserPreferences.toolpathTubes` + `BottomLayerPreviewPanel` Switch + `ToolpathGlbTest` (6 tests covering lines baseline / tubes counts / tube bbox / cap fallback / travels-as-hairlines / vertical-segment Y-axis fallback).
+**Shipped:** commit `9731320` — `ToolpathGlb.write(tubes = …)` + `TUBES_SEGMENT_CAP` fallback + `UserPreferences.toolpathTubes` + `BottomLayerPreviewPanel` Switch + `ToolpathGlbTest` (6 tests covering lines baseline / tubes counts / tube bbox / cap fallback / travels-as-hairlines / vertical-segment Y-axis fallback).
 
 ---
 
