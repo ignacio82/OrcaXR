@@ -236,6 +236,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var filamentSlots: FilamentSlotsStore
     private lateinit var filamentEntries: FilamentEntriesStore
     private lateinit var mixedFilaments: MixedFilamentStore
+    /** Roadmap D1 — paint state persisted by source-file SHA-256 so a
+     *  reloaded STL/3MF restores its prior paint without the user
+     *  having to redo every stroke. */
+    private lateinit var paintCache: PaintCacheStore
 
     /**
      * Activity-scoped controller event sink. Galaxy XR controller plan
@@ -263,6 +267,7 @@ class MainActivity : ComponentActivity() {
         filamentSlots = FilamentSlotsStore(this)
         filamentEntries = FilamentEntriesStore(this)
         mixedFilaments = MixedFilamentStore(this)
+        paintCache = PaintCacheStore(this)
         enableEdgeToEdge()
 
         // Pre-Compose XR setup: transparent window so passthrough
@@ -441,7 +446,8 @@ class MainActivity : ComponentActivity() {
                             filamentEntriesStore = filamentEntries,
                             filamentEntriesAll = filamentEntriesAll,
                             mixedFilamentsStore = mixedFilaments,
-                            mixedFilamentsAll = mixedFilamentsAll)
+                            mixedFilamentsAll = mixedFilamentsAll,
+                            paintCache = paintCache)
                     } else {
                         FlatShell(sliceState, maxLayer, selectedProfile, layerHeightOverride, showTravels)
                     }
@@ -582,6 +588,10 @@ private fun XrShell(
     filamentEntriesAll: Map<String, List<FilamentEntry>>,
     mixedFilamentsStore: MixedFilamentStore,
     mixedFilamentsAll: Map<String, List<MixedFilamentEntry>>,
+    /** Roadmap D1 — paint state persisted by source-file SHA-256.
+     *  Looked up on model load and written back on every paint
+     *  mutation. */
+    paintCache: PaintCacheStore,
 ) {
     val ctx = LocalContext.current
     var glbPath by remember { mutableStateOf<String?>(null) }
@@ -1258,7 +1268,38 @@ private fun XrShell(
         }
         android.util.Log.i(tag, "StlReader read ${raw.triCount} triangles, bbox=${raw.bboxMin}..${raw.bboxMax}")
 
-        val mesh = applyPlacedTransforms(raw, current)
+        // Roadmap D1 — restore cached paint for this source on first
+        // preview. Only runs when the model has no paint yet (so a
+        // second previewStl call after the user stamped new triangles
+        // doesn't clobber their fresh edits with a stale cache hit).
+        // The triCount guard inside paintCache.restore drops cache
+        // entries whose source mesh got re-tessellated.
+        val needsRestore = !hasAnyPaint(current.paintFilamentIndex) &&
+            !hasAnyPaint(current.supportFlags) &&
+            !hasAnyPaint(current.seamFlags)
+        if (needsRestore) {
+            val restored = runCatching {
+                val hash = paintCache.hashOf(stlFile)
+                paintCache.restore(hash, raw.triCount)
+            }.getOrNull()
+            if (restored != null) {
+                android.util.Log.i(tag,
+                    "paint cache hit for $modelId (paint=${restored.paintFilamentIndex?.size}, " +
+                        "support=${restored.supportFlags?.size}, seam=${restored.seamFlags?.size})")
+                placedModels = placedModels.map {
+                    if (it.id == modelId) it.copy(
+                        paintFilamentIndex = restored.paintFilamentIndex,
+                        supportFlags = restored.supportFlags,
+                        seamFlags = restored.seamFlags,
+                    ) else it
+                }
+            }
+        }
+        // Re-read current — the restore above may have copied cached
+        // arrays into the model.
+        val refreshed = placedModels.firstOrNull { it.id == modelId } ?: current
+
+        val mesh = applyPlacedTransforms(raw, refreshed)
         bedFit = computeBedFit(mesh, bedW, bedH)
         // Roadmap A6 — vertex-walked collision check on the same
         // transformed mesh. recenterToBed=true mirrors the JNI's
@@ -1270,7 +1311,7 @@ private fun XrShell(
         // order so `current.paintFilamentIndex` remains aligned. Skip
         // when paint is empty / mismatched — StlPreviewGlb falls back
         // to single-color for that case.
-        val paintForPreview = current.paintFilamentIndex.takeIf { hasAnyPaint(it) }
+        val paintForPreview = refreshed.paintFilamentIndex.takeIf { hasAnyPaint(it) }
         // Same "as will print" resolution as the 3MF path — STL paint
         // tags are project-filament indices, so feeding the resolved
         // palette renders painted faces in the spool the slice will
@@ -1311,8 +1352,8 @@ private fun XrShell(
         // Stamp previewRot/Scale with the values that produced the
         // baked GLB so the re-preview LE doesn't refire on pure
         // selection changes (gotcha #28).
-        val producedRot = current.rotZDeg
-        val producedScale = current.scalePct
+        val producedRot = refreshed.rotZDeg
+        val producedScale = refreshed.scalePct
         placedModels = placedModels.map {
             if (it.id == modelId) it.copy(
                 previewPath = out.absolutePath,
@@ -2059,6 +2100,53 @@ private fun XrShell(
         // it picks up whatever the brush left at debounce-end.
         glbPath = null
         for (m in painted) previewStl(m.id)
+    }
+
+    // Roadmap D1 — persist paint state to the on-disk cache whenever
+    // any of the three triangle-keyed arrays change. Debounced (300ms)
+    // so a continuous drag-paint stroke writes once at stroke end
+    // rather than per-event. Keyed on the SOURCE file hash, so two
+    // PlacedModels backed by the same source share the same cache
+    // entry (last-write-wins is fine — they have identical paint
+    // surface). Coroutine runs on Dispatchers.IO to keep the
+    // mtime-touch + atomic-rename out of the main thread.
+    LaunchedEffect(placedModels.map {
+        Triple(it.source.absolutePath, it.paintFilamentIndex, it.supportFlags) to it.seamFlags
+    }) {
+        kotlinx.coroutines.delay(300)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            for (m in placedModels) {
+                val anyPaint = hasAnyPaint(m.paintFilamentIndex) ||
+                    hasAnyPaint(m.supportFlags) ||
+                    hasAnyPaint(m.seamFlags)
+                // Tri count is recoverable from any of the three
+                // arrays (they're all sized to mesh.triCount on
+                // first stamp). When every array is null/empty
+                // (anyPaint == false) we still call save so the
+                // cache prunes the prior entry — matches the
+                // "user cleared paint, persist that" expectation.
+                val triCount = m.paintFilamentIndex?.size
+                    ?: m.supportFlags?.size
+                    ?: m.seamFlags?.size
+                    ?: 0
+                if (!anyPaint && triCount == 0) continue
+                runCatching {
+                    val hash = paintCache.hashOf(m.source)
+                    paintCache.save(
+                        hash,
+                        triCount = triCount,
+                        PaintCacheStore.Entry(
+                            paintFilamentIndex = m.paintFilamentIndex,
+                            supportFlags = m.supportFlags,
+                            seamFlags = m.seamFlags,
+                        ),
+                    )
+                }.onFailure {
+                    android.util.Log.w("OrcaXR/paintcache",
+                        "save for ${m.label} failed: ${it.message}")
+                }
+            }
+        }
     }
 
     LaunchedEffect(session) {

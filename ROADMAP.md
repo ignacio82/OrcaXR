@@ -201,7 +201,7 @@ When `placedModels` is empty, replace the bed with a floating, laser-interactabl
 **Pending — entry-criteria for the green flip:**
 - Print-settings tabs (Quality, Strength, Speed, Support) need their `TextField` call sites migrated to use the same validate-and-toast shape. That's a wider refactor of the `printSettingsOverrides`-driven inputs and would benefit from per-key metadata in `OrcaProfileLoader.SAFE_KEYS` (today a flat `Set<String>`; would become a map of `key → AllowedRange`).
 
-**Shipped:** commit `<pending>` — `NumericValidation.validate` + `Ranges`, `AxisFieldRow` red-outline + Toast, `NumericValidationTest`.
+**Shipped:** commit `7fa3970` — `NumericValidation.validate` + `Ranges`, `AxisFieldRow` red-outline + Toast, `NumericValidationTest`.
 
 ---
 
@@ -246,19 +246,23 @@ Render the probed bed-mesh grid as a heatmap GLB on the build plate. Today we'd 
 
 ## D. Painting / object editing extensions
 
-### D1. Paint persistence 🔴 Not started
+### D1. Paint persistence 🟡 Partial — local cache shipped, 3MF round-trip pending
 
-> **Files:** `FilamentSlotsStore.kt` pattern (DataStore-backed) for the new paint cache.
+> **Files:** `PaintCacheStore.kt`, `PaintCacheStoreTest.kt`, `MainActivity.kt::previewStl` restore + `LaunchedEffect(placedModels.map { … paintFilamentIndex/supportFlags/seamFlags })` save.
 
-Persist paint state to DataStore keyed by source-file hash so reloading the same STL/3MF restores its paint. Save into the `mmu_segmentation_facets` of an exported .3mf via `nativeSaveAs3mf`.
+`PaintCacheStore` keys per-triangle paint by source-file SHA-256. Storage is `${filesDir}/paint_cache/<sha>.bin` (raw header + three optional ByteArrays for paintFilamentIndex / supportFlags / seamFlags) instead of DataStore Preferences — base64-encoding 1.4 MB arrays through Preferences would be slower and more memory-thrashing than a direct file-cache mirror of the existing GLB/STL cache pattern. Atomic writes via tmp+rename, mtime-based LRU at `MAX_ENTRIES = 50`.
 
-**Implementation outline:**
-1. **DataStore key:** SHA-256 of source-file bytes → `{paintFilamentIndex: ByteArray, supportFlags: ByteArray, seamFlags: ByteArray}`.
-2. On STL/3MF load, look up by hash; if hit, apply the cached paint to the new `PlacedModel`.
-3. On `nativeSaveAs3mf`, also write the paint state into the 3MF's `mmu_segmentation_facets`.
-4. Cache eviction: LRU bounded at 50 entries × 1.4 MB each ≈ 70 MB. Configurable via UserPreferences.
+Wired into `XrShell`:
+- **Restore:** in `previewStl`, after `StlReader.read` returns `triCount`, hash the source and call `paintCache.restore(hash, triCount)`. On hit, copy the three arrays into the matching PlacedModel via a `placedModels.map { copy(...) }`. Restore only fires when the model has no paint yet so a cache hit can't clobber fresh in-session edits.
+- **Save:** a debounced (300 ms) `LaunchedEffect` keyed on every model's `paintFilamentIndex / supportFlags / seamFlags` writes via `Dispatchers.IO`. A clear-paint round-trips because `PaintCacheStore.save` deletes the entry when every array is null/all-zero.
 
-**Exit criteria:** Paint a dragon, kill app, reload same STL → paint is back. Save-as-3MF, open in desktop OrcaSlicer → painted regions match.
+**Pending — entry-criteria for the green flip:**
+- Write paint state into `mmu_segmentation_facets` of an exported 3MF via `nativeSaveAs3mf` so a save-as-3MF opened in desktop OrcaSlicer shows the same painted regions.
+- Surface a "Clear paint cache" / "Cache size" affordance in Settings (today the cap is invisible to the user).
+
+**Tests:** `PaintCacheStoreTest` covers round-trip, tri-count mismatch, missing-file, blank-array prune, null-array prune, LRU eviction at the cap boundary, hash stability, content-divergent hashes, corrupt-file fallback, and `Entry.equals`.
+
+**Shipped:** commit `<pending>` — `PaintCacheStore` + on-load restore + on-mutate save + 10 tests.
 
 ### D2. Custom support point placement ⚪ Deferred — SLA-leaning, FDM-only stack today
 
