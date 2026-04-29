@@ -2333,12 +2333,25 @@ private fun SettingNumericEditor(
         ) is NumericValidation.Result.OutOfRange
     }
     var lastToastedRange by remember(key) { mutableStateOf<String?>(null) }
+    // Roadmap B6 — per-key description sourced from
+    // SettingDescriptions. Null when the key isn't documented yet so
+    // the chip stays hidden (a `?` chip with an empty plate would be
+    // a worse UX than no chip).
+    val description = SettingDescriptions.forKey(key)
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, color = if (enabled) Color.LightGray else Color.Gray, style = MaterialTheme.typography.bodyMedium)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(label, color = if (enabled) Color.LightGray else Color.Gray, style = MaterialTheme.typography.bodyMedium)
+            if (description != null) {
+                SettingHelpChip(description = description)
+            }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextField(
                 value = current,

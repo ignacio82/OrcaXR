@@ -179,13 +179,19 @@ Input pump, Sliced-mode axis layer scrubbing, and Prepare-mode stick X/Y nudge +
 
 **Shipped:** commit `aac69c2` — `ControllerHelp.entries` data layer, `ControllerHelpCard` Composable, top-nav Help icon, `ControllerHelpTest` (5 tests).
 
-### B6. XR tooltip primitive 🔴 Not started
+### B6. XR tooltip primitive 🟡 Partial — chip + popover shipped, gizmo/B2 reuse pending
 
-> Reused by setting hints, gizmo handle labels (B1), and progressive disclosure for mixed-filament settings (B2).
+> **Files:** `SpatialTooltip.kt` (`SettingHelpChip` + `TooltipState`), `SettingDescriptions.kt`, `SettingDescriptionsTest.kt`, `TooltipStateTest.kt`, `UiPanels.kt::SettingNumericEditor` (chip wired in beside the row label).
 
-Implement once: a small `Surface` + `Text` plate that follows laser hover for ~600 ms and dismisses on hover-out. Same pattern as Compose `Tooltip` but rendered as a child SpatialPanel.
+`SettingHelpChip(description)` renders a 20 dp circular `?` chip; tap toggles a Compose `Popup` showing the description on a `Color(0xFF2A2F33)` plate (max 320 dp wide, ~3 lines of body text). The popover auto-dismisses after 6 s so a stuck-open tooltip doesn't linger when the user's gaze drifts. Tap-to-toggle rather than pure hover because the laser cursor's ~1 cm hand-tracking jitter makes a hover-only trigger feel twitchy in XR; back-press and outside-tap also dismiss.
 
-**Exit criteria:** Hover the `?` chip on any setting and a plate appears within 600 ms with the long-form explanation.
+`SettingDescriptions.byKey` maps libslic3r config keys → 1-line descriptions sourced from OrcaSlicer's `PrintConfig.cpp` `tooltip()` strings (translated where applicable). 18 entries cover every key currently surfaced in Quality / Speed / Support tabs plus a handful pre-populated for adjacent keys (`sparse_infill_density`, `wall_loops`, `nozzle_temperature` …) so a Strength-tab buildout doesn't have to backfill.
+
+**Pending — entry-criteria for the green flip:**
+- Reuse on B1 gizmo handle labels and B2 mixed-filament settings rows. Today the chip is wired into `SettingNumericEditor` only — applying it broadly is gated on those features landing.
+- True laser-hover (vs tap) trigger once XR's pointer-event reliability is good enough to swap out the tap interaction without trading legibility for jitter.
+
+**Shipped:** commit (this one) — `SpatialTooltip` + `SettingDescriptions` + 12 unit tests (5 description coverage / convention / count + 7 TooltipState transitions). Wired into `SettingNumericEditor` so every documented Quality / Speed / Support row grows a `?` chip.
 
 ### B7. Empty-state guidance 🟢 Shipped
 
