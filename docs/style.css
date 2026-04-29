@@ -126,6 +126,7 @@ header {
     z-index: 1000;
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
+    transform: translateZ(0);
     background: rgba(0, 5, 13, 0.62);
     border-bottom: 1px solid var(--line-soft);
 }
@@ -179,16 +180,12 @@ nav a {
     color: var(--text-muted);
     font-weight: 600;
     font-size: 0.95rem;
-    transition: color 0.25s ease, transform 0.25s ease;
+    transition: color 0.25s ease;
 }
 
 nav a:hover,
 nav a.is-active {
     color: var(--text-color);
-}
-
-nav a:hover {
-    transform: translateY(-1px);
 }
 
 .nav-cta {
