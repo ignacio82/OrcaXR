@@ -187,11 +187,13 @@ Implement once: a small `Surface` + `Text` plate that follows laser hover for ~6
 
 **Exit criteria:** Hover the `?` chip on any setting and a plate appears within 600 ms with the long-form explanation.
 
-### B7. Empty-state guidance 🔴 Not started
+### B7. Empty-state guidance 🟢 Shipped
 
-When `placedModels` is empty, replace the bed with a floating, laser-interactable "Import 3MF/STL" panel rather than rendering an empty plate.
+> **Files:** `RecentFilesStore.kt`, `RecentFilesCodecTest.kt`, `UiPanels.kt::EmptyStatePanel` + `RecentFileRow`, `MainActivity.kt::XrShell` (recents collection + empty-state mount + `onFileSelected` recents bump).
 
-**Implementation outline:** A new SpatialPanel mounted in `XrShell` when `placedModels.isEmpty()` that wraps the existing `FilePickerPanel` invocation with a prominent CTA + recent-files row.
+`EmptyStatePanel(recents, onPickFile, onSliceBundledCube, onOpenRecent)` is mounted when `placedModels.isEmpty() && !showFilePicker && !isLoadingModel`, so a fresh-install user lands on a floating CTA card instead of an empty bed. Three affordances: a prominent green "Import 3MF or STL" button, a secondary "Slice the bundled 20 mm cube" path that mirrors the controller-A empty-bed shortcut, and a "Recent" list of the last 12 successful loads tapped to open instantly. `RecentFilesStore` (DataStore Preferences, JSON-encoded) writes a new entry on every successful `onFileSelected` and is filtered through `validRecents` so deleted/unmounted paths don't surface as broken shortcuts. Re-opening the same file bumps it to the top instead of double-listing; the cap drops the oldest entry on overflow.
+
+**Shipped:** commit (this one) — `RecentFilesStore` + `RecentFilesCodec` (8 tests covering encode-decode round-trip / garbage input / blank-path drop / upsert-at-head / de-dupe-by-path / cap eviction / empty-singleton / JSON shape lock) + `EmptyStatePanel` + XrShell mount + `onFileSelected` recents bump.
 
 ### B8. Numeric input validation 🟢 Shipped
 

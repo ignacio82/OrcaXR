@@ -240,6 +240,9 @@ class MainActivity : ComponentActivity() {
      *  reloaded STL/3MF restores its prior paint without the user
      *  having to redo every stroke. */
     private lateinit var paintCache: PaintCacheStore
+    /** Roadmap B7 — most-recently-used model files, surfaced on the
+     *  empty-state panel when [placedModels] is empty. */
+    private lateinit var recentFiles: RecentFilesStore
 
     /**
      * Activity-scoped controller event sink. Galaxy XR controller plan
@@ -268,6 +271,7 @@ class MainActivity : ComponentActivity() {
         filamentEntries = FilamentEntriesStore(this)
         mixedFilaments = MixedFilamentStore(this)
         paintCache = PaintCacheStore(this)
+        recentFiles = RecentFilesStore(this)
         enableEdgeToEdge()
 
         // Pre-Compose XR setup: transparent window so passthrough
@@ -457,7 +461,8 @@ class MainActivity : ComponentActivity() {
                             filamentEntriesAll = filamentEntriesAll,
                             mixedFilamentsStore = mixedFilaments,
                             mixedFilamentsAll = mixedFilamentsAll,
-                            paintCache = paintCache)
+                            paintCache = paintCache,
+                            recentFiles = recentFiles)
                     } else {
                         FlatShell(sliceState, maxLayer, selectedProfile, layerHeightOverride, showTravels)
                     }
@@ -605,6 +610,9 @@ private fun XrShell(
      *  Looked up on model load and written back on every paint
      *  mutation. */
     paintCache: PaintCacheStore,
+    /** Roadmap B7 — most-recently-used model files for the empty-
+     *  state panel. Updated on every successful onFileSelected. */
+    recentFiles: RecentFilesStore,
 ) {
     val ctx = LocalContext.current
     var glbPath by remember { mutableStateOf<String?>(null) }
@@ -786,6 +794,12 @@ private fun XrShell(
     // colored-GLB write takes ~10s) don't look like the app froze.
     var isLoadingModel by remember { mutableStateOf(false) }
     var loadingLabel by remember { mutableStateOf<String?>(null) }
+    // Roadmap B7 — recents flow surfaces on the empty-state panel
+    // when placedModels is empty. validRecents pre-filters entries
+    // whose underlying file no longer exists, so a stale recents
+    // list (deleted file, unmounted SD card) doesn't surface broken
+    // shortcuts the user can't actually open.
+    val recentFilesList by recentFiles.validRecents.collectAsState(initial = emptyList())
 
     val selectedModel: PlacedModel? =
         placedModels.firstOrNull { it.id == selectedModelId }
@@ -1543,6 +1557,13 @@ private fun XrShell(
                 isLoadingModel = false
                 loadingLabel = null
             }
+            // Roadmap B7 — bump the recents list AFTER a successful
+            // load so a corrupt/unparseable file doesn't pollute the
+            // empty-state shortcuts. Best-effort: a failed write to
+            // DataStore (e.g. process killed mid-suspend) shouldn't
+            // surface as a load failure.
+            runCatching { recentFiles.add(file, label = label) }
+                .onFailure { android.util.Log.w("OrcaXR/recents", "recentFiles.add failed: ${it.message}") }
         }
     }
 
@@ -4204,6 +4225,67 @@ private fun XrShell(
                         FilePickerPanel(
                             onFileSelected = { onFileSelected(it) },
                             onClose = { showFilePicker = false }
+                        )
+                    }
+                }
+
+                // Roadmap B7 — empty-state guidance. Drop a CTA panel
+                // over the empty bed when the user hasn't loaded
+                // anything yet so they always have a clear next step.
+                // Hide once the picker is open (it takes over the same
+                // floor space) or while a load is in flight.
+                val showEmptyState = placedModels.isEmpty() &&
+                    !showFilePicker &&
+                    !isLoadingModel
+                if (showEmptyState) {
+                    MovablePanelWrapper(
+                        id = "empty-state",
+                        width = 520.dp,
+                        height = 560.dp,
+                        initialOffset = androidx.xr.runtime.math.Vector3(0f, 0.1f, 0f),
+                        session = session,
+                    ) {
+                        EmptyStatePanel(
+                            recents = recentFilesList,
+                            onPickFile = { launchPicker() },
+                            onSliceBundledCube = {
+                                // Mirrors the controller-A "empty bed
+                                // → slice bundled cube" path in
+                                // onKeyDown: copy the bundled STL,
+                                // create a PlacedModel, preview, then
+                                // slice. The empty-state panel
+                                // disappears once placedModels gains
+                                // an entry.
+                                scope.launch {
+                                    val label = "cube_20mm.stl (bundled)"
+                                    val stl = copyBundledCube(ctx)
+                                    val cubeId = "model_cube_${System.currentTimeMillis().toString(36)}"
+                                    placedModels = listOf(PlacedModel(id = cubeId, source = stl, label = label))
+                                    selectedModelId = cubeId
+                                    previewStl(cubeId)
+                                    runSlice(stl, label)
+                                }
+                            },
+                            onOpenRecent = { path ->
+                                val f = File(path)
+                                if (f.exists()) {
+                                    pickerMode = PickerMode.Replace
+                                    onFileSelected(f)
+                                } else {
+                                    // File vanished between the flow
+                                    // emitting and the user clicking.
+                                    // Drop it silently and let the
+                                    // next emission heal the row.
+                                    scope.launch {
+                                        runCatching { recentFiles.remove(path) }
+                                    }
+                                    android.widget.Toast.makeText(
+                                        ctx,
+                                        "File no longer available",
+                                        android.widget.Toast.LENGTH_SHORT,
+                                    ).show()
+                                }
+                            },
                         )
                     }
                 }

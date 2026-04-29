@@ -5296,3 +5296,157 @@ private fun MirrorToggle(label: String, on: Boolean, onChange: (Boolean) -> Unit
         )
     }
 }
+
+/**
+ * Roadmap B7 — empty-state guidance. Mounted in [XrShell] when
+ * `placedModels.isEmpty()` so the user always has a clear next step
+ * (instead of staring at an empty bed wondering whether the app is
+ * stuck). Two affordances:
+ *   1. **Import** — primary CTA, opens the existing FilePickerPanel.
+ *   2. **Slice the bundled cube** — secondary, gives a no-pick zero-
+ *      effort path so a fresh-install user can prove the slicer works
+ *      end-to-end before they wrestle with All Files Access.
+ *   3. **Recent files** — newest-first list of [recents]; tapping
+ *      any entry calls [onOpenRecent] with the absolute path. Hidden
+ *      when the list is empty so a fresh install doesn't show an
+ *      empty header.
+ */
+@Composable
+fun EmptyStatePanel(
+    recents: List<RecentFile>,
+    onPickFile: () -> Unit,
+    onSliceBundledCube: () -> Unit,
+    onOpenRecent: (String) -> Unit,
+) {
+    Surface(
+        color = Color(0xFF15181B),
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(28.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                "Welcome to OrcaXR",
+                style = MaterialTheme.typography.headlineSmall,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                "Drop a 3MF or STL on the bed to get started.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color(0xFFB6BEC8),
+            )
+
+            Spacer(Modifier.height(4.dp))
+
+            Button(
+                onClick = onPickFile,
+                modifier = Modifier
+                    .fillMaxWidth(0.8f)
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF00BFA5),
+                ),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.FolderOpen,
+                        contentDescription = null,
+                        tint = Color.White,
+                    )
+                    Text(
+                        "Import 3MF or STL",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+
+            OutlinedButton(
+                onClick = onSliceBundledCube,
+                modifier = Modifier
+                    .fillMaxWidth(0.8f)
+                    .height(48.dp),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, Color(0xFF7BC8FF)),
+            ) {
+                Text(
+                    "Slice the bundled 20 mm cube",
+                    color = Color(0xFF7BC8FF),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+
+            if (recents.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Recent",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color(0xFFB6BEC8),
+                    modifier = Modifier.fillMaxWidth(0.8f),
+                )
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth(0.8f)
+                        .weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    items(recents, key = { it.path }) { entry ->
+                        RecentFileRow(entry, onClick = { onOpenRecent(entry.path) })
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentFileRow(entry: RecentFile, onClick: () -> Unit) {
+    Surface(
+        color = Color(0xFF1E2226),
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.InsertDriveFile,
+                contentDescription = null,
+                tint = Color(0xFF7BC8FF),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    entry.label,
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                // Parent directory hint so two files with the same
+                // basename remain distinguishable.
+                val parent = runCatching { File(entry.path).parentFile?.name }.getOrNull()
+                if (!parent.isNullOrBlank()) {
+                    Text(
+                        parent,
+                        color = Color(0xFF7E8896),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
+    }
+}
