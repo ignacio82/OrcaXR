@@ -326,6 +326,12 @@ class MainActivity : ComponentActivity() {
                     // current edits into the persisted SlicerProfile.
                     val printSettingsOverrides = remember { mutableStateOf(mapOf<String, String>()) }
                     val showTravels = remember { mutableStateOf(prefs.showTravels) }
+                    // Roadmap A7 — toolpath rendering mode persisted in
+                    // SharedPreferences. true = 4-sided tubes, false =
+                    // single LINES; defaults to LINES because tubes
+                    // are a follow-up enhancement and the lighter
+                    // primitive ships fine on Galaxy XR.
+                    val toolpathTubes = remember { mutableStateOf(prefs.toolpathTubes) }
                     val selectedPrinterId = remember { mutableStateOf(prefs.lastPrinterId) }
                     LaunchedEffect(selectedPrinterId.value) {
                         prefs.lastPrinterId = selectedPrinterId.value
@@ -348,6 +354,9 @@ class MainActivity : ComponentActivity() {
                     }
                     LaunchedEffect(showTravels.value) {
                         prefs.showTravels = showTravels.value
+                    }
+                    LaunchedEffect(toolpathTubes.value) {
+                        prefs.toolpathTubes = toolpathTubes.value
                     }
                     // Profile selection rules, in order:
                     //  1. If the user previously picked something and it
@@ -433,6 +442,7 @@ class MainActivity : ComponentActivity() {
                         XrShell(s, sliceState, maxLayer, selectedProfile, layerHeightOverride,
                             printSettingsOverrides = printSettingsOverrides,
                             showTravels = showTravels,
+                            toolpathTubes = toolpathTubes,
                             allProfiles = allProfiles,
                             onSaveAsProfile = onSaveAsProfile,
                             onDeleteProfile = onDeleteProfile,
@@ -574,6 +584,9 @@ private fun XrShell(
      *  saved profiles can bake them in. */
     printSettingsOverrides: MutableState<Map<String, String>>,
     showTravels: MutableState<Boolean>,
+    /** Roadmap A7 — toolpath tubes toggle (4-sided prism per segment
+     *  vs single LINES). Persisted via [UserPreferences.toolpathTubes]. */
+    toolpathTubes: MutableState<Boolean>,
     allProfiles: List<SlicerProfile>,
     onSaveAsProfile: (String) -> Unit,
     onDeleteProfile: (String) -> Unit,
@@ -2956,7 +2969,7 @@ private fun XrShell(
     // the SceneCoreEntity composable below tears down + reloads (GLB
     // model caches by path; reusing the path without disposing won't
     // pick up new bytes).
-    LaunchedEffect(sliceState.value, maxLayer.value, showTravels.value, paddedSlots) {
+    LaunchedEffect(sliceState.value, maxLayer.value, showTravels.value, toolpathTubes.value, paddedSlots) {
         val st = sliceState.value
         if (st is SliceUiState.Done && st.parsed != null) {
             // Debounce: dragging the layer slider fires this LaunchedEffect
@@ -2987,6 +3000,7 @@ private fun XrShell(
                     // the user's dragon test) instead of T2's loaded
                     // color (yellow).
                     extruderPalette = physicalSlotPalette,
+                    tubes = toolpathTubes.value,
                 )
             }
                 .onSuccess {
@@ -3856,7 +3870,9 @@ private fun XrShell(
                         maxLayers = parsed?.layerZs?.size ?: 1,
                         onLayerChange = { newIdx ->
                             maxLayer.value = if (newIdx >= maxIdx) null else newIdx
-                        }
+                        },
+                        tubesMode = toolpathTubes.value,
+                        onTubesModeChange = { toolpathTubes.value = it },
                     )
                 }
 

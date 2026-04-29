@@ -41,6 +41,20 @@ class UserPreferences(ctx: Context) {
             prefs.edit().putBoolean(KEY_SHOW_TRAVELS, value).apply()
         }
 
+    /**
+     * Roadmap A7 — when true, [ToolpathGlb.write] emits each extrusion
+     * segment as a 4-sided rectangular prism (8 verts, 12 tris) instead
+     * of a single LINE. Visually closer to desktop OrcaSlicer's GL
+     * viewer at the cost of ~6× triangle count vs LINES; auto-falls
+     * back to LINES above [ToolpathGlb.TUBES_SEGMENT_CAP] segments.
+     * Off by default — LINES still ship and read fine on Galaxy XR.
+     */
+    var toolpathTubes: Boolean
+        get() = prefs.getBoolean(KEY_TOOLPATH_TUBES, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_TOOLPATH_TUBES, value).apply()
+        }
+
     /** Currently-selected printer's id (the destination for "Send to printer" + the Project panel display). */
     var lastPrinterId: String?
         get() = prefs.getString(KEY_LAST_PRINTER_ID, null)
@@ -71,5 +85,6 @@ class UserPreferences(ctx: Context) {
         private const val KEY_LAYER_HEIGHT_OVERRIDE = "layer_height_override"
         private const val KEY_SHOW_TRAVELS = "show_travels"
         private const val KEY_LAST_PRINTER_ID = "last_printer_id"
+        private const val KEY_TOOLPATH_TUBES = "toolpath_tubes"
     }
 }

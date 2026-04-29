@@ -2602,6 +2602,13 @@ fun BottomLayerPreviewPanel(
     currentLayer: Int,
     maxLayers: Int,
     onLayerChange: (Int) -> Unit,
+    /** Roadmap A7 — current toolpath rendering mode. true = tubes
+     *  (4-sided prism per segment), false = LINES. Persisted across
+     *  sessions via [UserPreferences.toolpathTubes]. Null hides the
+     *  toggle entirely (FlatShell hosts its own copy of the same
+     *  toggle for non-XR builds). */
+    tubesMode: Boolean? = null,
+    onTubesModeChange: ((Boolean) -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier
@@ -2613,6 +2620,25 @@ fun BottomLayerPreviewPanel(
         Spacer(modifier = Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
             Text("Layer: ${currentLayer + 1} / $maxLayers", color = Color.LightGray)
+            // A7 — tubes vs lines toggle. Only render when we have a
+            // parsed toolpath (otherwise the user has nothing to apply
+            // it to) and the parent passed a setter. Above
+            // ToolpathGlb.TUBES_SEGMENT_CAP segments tubes mode auto-
+            // falls back to LINES; the chip stays checked so the user
+            // sees their persistent pick, the rendering layer makes
+            // the runtime decision.
+            if (tubesMode != null && onTubesModeChange != null && parsed != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Switch(
+                        checked = tubesMode,
+                        onCheckedChange = onTubesModeChange,
+                    )
+                    Text("Tubes", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                }
+            }
         }
         // Slider valueRange/steps must stay valid even when no slice has
         // happened yet (maxLayers can be 0 or 1). Coerce both ends to a

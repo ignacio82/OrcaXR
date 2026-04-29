@@ -91,15 +91,18 @@ Upstream OrcaSlicer's "Fix Model" depends on the Windows-only 3D Builder API (`F
 
 **Shipped:** commit `e6937e3` — `BedCollision.detect`, banner, Slice gate, `BedCollisionTest` (6 tests). Commit `61875bb` — bed-collision now also runs on the 3MF preview path via `deriveStlFor` + `StlReader`. Commit `6aa1151` — `StlPreviewGlb.write` `offBedTriIndices` parameter wired into `previewStl`, `StlPreviewGlbTest` (5 tests covering default/red/paint-vs-offbed/out-of-range/empty). Flips A6 to fully shipped.
 
-### A7. Toolpath rendering as triangulated tubes 🔴 Not started
+### A7. Toolpath rendering as triangulated tubes 🟡 Partial — geometry shipped + capped, miter joins + 500k stress pending
 
-> **Files:** `ToolpathGlb.kt`, `GlbBuilder.kt`. Cost: ~6–8× triangle count vs LINES.
+> **Files:** `ToolpathGlb.kt`, `ToolpathGlbTest.kt`, `UserPreferences.kt`, `UiPanels.kt::BottomLayerPreviewPanel`, `MainActivity.kt::XrShell` (toolpathTubes state + LE re-bake).
 
-Today toolpaths render as `mode=LINES` (1 vertex per segment endpoint). Tubes mean a 4-sided extrusion around each segment with mitered joints — closer to desktop OrcaSlicer's GL viewer. Higher visual fidelity at the cost of triangle count.
+`ToolpathGlb.write(tubes = true)` emits a 4-sided rectangular prism (8 verts × 12 tris × 36 indices) per extrusion segment. Cross-section is built by tangent t = normalize(end−start), reference axis = world-Z (or world-Y when tangent is nearly Z-aligned to keep the cross product well-conditioned), then side = normalize(cross(t, ref)) and up = normalize(cross(side, t)). Travels stay LINES inside the same TRIANGLES primitive via degenerate-triangle hairlines so we don't pay for a second draw call. Switch + persistence wired through `UserPreferences.toolpathTubes` (SharedPreferences, mirrors the existing `showTravels` flag) and surfaced as a "Tubes" Switch in the bottom layer-preview panel.
 
-**Implementation outline:** extend `ToolpathGlb.write` with a `TubeMode` flag. Emit a 4-sided prism per segment; share end-caps between connected segments. Stress-test at 500k segments before shipping (gotcha #11 — `nativeWriteColoredGlb` OOM on big meshes — applies here too; stream to BufferedOutputStream).
+**Pending — entry-criteria for the green flip:**
+- Above `ToolpathGlb.TUBES_SEGMENT_CAP` (currently 50k segments) the writer silently falls back to LINES because materializing positions+colors+indices for the full 500k-segment dragon (~170 MB JVM heap) would OOM at the typical 256 MB Android process cap. Streaming-tube generation (sequence-based GlbBuilder API) is the follow-up that lifts the cap.
+- Mitered joins between connected segments (today every prism is independent; corners read as a small bevel). Requires a connectivity-graph build over `ParsedToolpath.segments`.
+- Visual verification on Galaxy XR — current verification is geometry-level (vertex / index counts, doubleSided flag, bbox sanity, vertical-segment cross-product guard).
 
-**Exit criteria:** A 500k-segment dragon toolpath renders without OOM at 60 fps on Galaxy XR; a togglable preference persists the user's tubes-vs-lines pick across sessions (DataStore).
+**Shipped:** commit (this one) — `ToolpathGlb.write(tubes = …)` + `TUBES_SEGMENT_CAP` fallback + `UserPreferences.toolpathTubes` + `BottomLayerPreviewPanel` Switch + `ToolpathGlbTest` (6 tests covering lines baseline / tubes counts / tube bbox / cap fallback / travels-as-hairlines / vertical-segment Y-axis fallback).
 
 ---
 

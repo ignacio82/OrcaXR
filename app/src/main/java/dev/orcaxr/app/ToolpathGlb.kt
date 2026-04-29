@@ -1,6 +1,8 @@
 package dev.orcaxr.app
 
 import java.io.File
+import kotlin.math.abs
+import kotlin.math.sqrt
 
 /**
  * Builds a GLB representing a [ParsedToolpath] as a set of line
@@ -19,6 +21,19 @@ import java.io.File
  * by the layer scrubber UI.
  */
 object ToolpathGlb {
+    /** Roadmap A7 — tubes-mode segment cap. Above this we silently
+     *  fall back to LINES because materializing the full tube geometry
+     *  for a 1.4M-tri dragon (gotcha #11 territory) costs ~170 MB of
+     *  JVM heap (positions + colors + indices) before GlbBuilder can
+     *  even start streaming, which OOMs Android at the typical
+     *  256 MB process cap. Streaming-tube geometry is a follow-up. */
+    const val TUBES_SEGMENT_CAP = 50_000
+
+    /** Default tube radius in printer-frame units (mm). Slightly less
+     *  than half a 0.4 mm extrusion so adjacent segments on the same
+     *  layer don't z-fight when they share an endpoint. */
+    const val DEFAULT_TUBE_RADIUS_MM = 0.18f
+
     fun write(
         toolpath: ParsedToolpath,
         out: File,
@@ -34,6 +49,22 @@ object ToolpathGlb {
          * shade).
          */
         extruderPalette: List<String>? = null,
+        /**
+         * Roadmap A7 — when true, every extrusion segment renders as a
+         * 4-sided rectangular prism (8 verts, 12 tris) instead of a
+         * single LINE primitive. Closer to desktop OrcaSlicer's GL
+         * viewer at the cost of ~6× triangle count vs LINES.
+         *
+         * Above [TUBES_SEGMENT_CAP] segments we silently fall back to
+         * LINES; see the constant doc for the OOM rationale.
+         *
+         * Travel segments stay LINES even in tubes mode — they're
+         * meant to read as auxiliary movement, not as deposited
+         * material, so doubling-down on geometry mass is wasted budget.
+         */
+        tubes: Boolean = false,
+        /** Tube cross-section radius in printer-frame mm. Ignored when [tubes] is false. */
+        tubeRadiusMm: Float = DEFAULT_TUBE_RADIUS_MM,
     ) {
         val segs = if (maxLayerInclusive == null || maxLayerInclusive >= toolpath.layerZs.lastIndex) {
             toolpath.segments
@@ -73,11 +104,22 @@ object ToolpathGlb {
         val cy = (toolpath.stats.bboxMin.y + toolpath.stats.bboxMax.y) * 0.5f
         val cz = toolpath.stats.bboxMin.z
 
-        val positions = FloatArray(totalSegs * 6)
-        val colors = FloatArray(totalSegs * 6)
-        val indices = IntArray(totalSegs * 2)
+        // Tubes mode is only viable for moderately-sized slices; above
+        // the cap the JVM-side allocation for positions+colors+indices
+        // would dwarf the typical Android process cap. Fall back to
+        // LINES silently — the user-visible difference at that scale
+        // (e.g. a 1.4M-tri dragon) is small anyway because individual
+        // tubes are sub-pixel from a meter away.
+        val useTubes = tubes && segs.size <= TUBES_SEGMENT_CAP
 
-        // Two coloring strategies:
+        val palette: List<Rgb> = extruderPalette
+            ?.map { hexToRgb(it) ?: Rgb(0.6f, 0.6f, 0.6f) }
+            .orEmpty()
+        val distinctExtruders = segs.asSequence().map { it.extruder }.distinct().take(2).count()
+        val byExtruder = distinctExtruders >= 2 && !extruderPalette.isNullOrEmpty()
+        val zRange = (toolpath.stats.bboxMax.z - toolpath.stats.bboxMin.z).coerceAtLeast(1e-3f)
+
+        // Two coloring strategies, shared by tubes + lines:
         //  - multi-color slice (≥2 distinct extruders in segs): color
         //    each segment by its tool index via [extruderPalette],
         //    matching the slot swatches in LeftProjectPanel.
@@ -86,26 +128,39 @@ object ToolpathGlb {
         //    When role is Unknown (G-code skipped `;TYPE:` tagging) we
         //    fall through to a Z-based gradient so the toolpath still
         //    reads as a height map.
-        val distinctExtruders = segs.asSequence().map { it.extruder }.distinct().take(2).count()
-        val byExtruder = distinctExtruders >= 2 && !extruderPalette.isNullOrEmpty()
-        val palette: List<Rgb> = extruderPalette
-            ?.map { hexToRgb(it) ?: Rgb(0.6f, 0.6f, 0.6f) }
-            .orEmpty()
+        fun colorOf(s: ExtrusionSegment): Rgb = when {
+            byExtruder -> palette.getOrNull(s.extruder.coerceAtLeast(0) % palette.size.coerceAtLeast(1))
+                ?: RoleColors.colorFor(s.role)
+            s.role == ExtrusionRole.Unknown -> {
+                val t = ((s.z - toolpath.stats.bboxMin.z) / zRange).coerceIn(0f, 1f)
+                Rgb(1.0f - t, 1.0f - kotlin.math.abs(t - 0.5f) * 2.0f, t)
+            }
+            else -> RoleColors.colorFor(s.role)
+        }
 
-        val zRange = (toolpath.stats.bboxMax.z - toolpath.stats.bboxMin.z).coerceAtLeast(1e-3f)
+        val travelRgb = Rgb(0.30f, 0.30f, 0.32f)
+
+        if (useTubes) {
+            writeTubes(
+                segs = segs,
+                travels = activeTravels,
+                cx = cx, cy = cy, cz = cz,
+                radius = tubeRadiusMm,
+                colorOf = ::colorOf,
+                travelRgb = travelRgb,
+                out = out,
+            )
+            return
+        }
+
+        val positions = FloatArray(totalSegs * 6)
+        val colors = FloatArray(totalSegs * 6)
+        val indices = IntArray(totalSegs * 2)
 
         var pi = 0; var ci = 0; var ii = 0
         var vertexId = 0
         for (s in segs) {
-            val rgb = when {
-                byExtruder -> palette.getOrNull(s.extruder.coerceAtLeast(0) % palette.size.coerceAtLeast(1))
-                    ?: RoleColors.colorFor(s.role)
-                s.role == ExtrusionRole.Unknown -> {
-                    val t = ((s.z - toolpath.stats.bboxMin.z) / zRange).coerceIn(0f, 1f)
-                    Rgb(1.0f - t, 1.0f - kotlin.math.abs(t - 0.5f) * 2.0f, t)
-                }
-                else -> RoleColors.colorFor(s.role)
-            }
+            val rgb = colorOf(s)
 
             positions[pi++] = s.start.x - cx
             positions[pi++] = s.start.y - cy
@@ -125,7 +180,6 @@ object ToolpathGlb {
         // print-head movement, dim enough not to drown the extrusion
         // colors. They're still drawn as plain LINES; without
         // line-shader support there's no native way to dash them.
-        val travelRgb = Rgb(0.30f, 0.30f, 0.32f)
         for (t in activeTravels) {
             positions[pi++] = t.start.x - cx
             positions[pi++] = t.start.y - cy
@@ -145,6 +199,218 @@ object ToolpathGlb {
             mode = GlbBuilder.MODE_LINES,
             colors = colors,
         ).writeTo(out)
+    }
+
+    /**
+     * Roadmap A7 — emit each extrusion segment as a 4-sided rectangular
+     * prism (8 verts, 12 tris, 36 indices). No mitered joins between
+     * connected segments — each prism is independent — so corner
+     * overlap reads as a small bevel rather than a clean join. That's
+     * an acceptable trade for the simpler memory footprint and skipping
+     * the connectivity-graph build.
+     *
+     * Per-prism cross-section is built by:
+     *   1. tangent t = normalize(end − start);
+     *   2. ref = world-Z (or world-Y if t is nearly Z-aligned);
+     *   3. side = normalize(cross(t, ref)) — points "right" of t;
+     *   4. up   = normalize(cross(side, t)) — points "up" relative to t.
+     * The 4 cross-section corners are start ± r*side ± r*up at each
+     * end. CCW winding for outward-facing normals.
+     *
+     * Travels stay LINES — they're auxiliary, and doubling-down on
+     * geometry mass for them is wasted budget at the scale we're
+     * rendering.
+     */
+    private fun writeTubes(
+        segs: List<ExtrusionSegment>,
+        travels: List<TravelSegment>,
+        cx: Float, cy: Float, cz: Float,
+        radius: Float,
+        colorOf: (ExtrusionSegment) -> Rgb,
+        travelRgb: Rgb,
+        out: File,
+    ) {
+        val tubeVerts = segs.size * 8
+        val tubeTris = segs.size * 12
+        val travelVerts = travels.size * 2
+
+        val positions = FloatArray((tubeVerts + travelVerts) * 3)
+        val colors = FloatArray((tubeVerts + travelVerts) * 3)
+        // Tubes use TRIANGLES (3 indices per tri); travels use LINES
+        // (2 indices per seg). We can't mix primitive modes inside a
+        // single primitive — so emit both in a single TRIANGLES
+        // primitive by representing each travel as a degenerate-thin
+        // triangle (start, end, end). This keeps one draw call without
+        // a multi-primitive mesh, at the cost of a 0-area triangle per
+        // travel. The renderer rasterizes it as a 1-pixel-wide hairline
+        // — close enough to the historical LINES behavior for the
+        // user's purpose.
+        val indices = IntArray(tubeTris * 3 + travels.size * 3)
+
+        var pi = 0; var ci = 0; var ii = 0
+        var vertexId = 0
+
+        for (s in segs) {
+            val rgb = colorOf(s)
+            val sx = s.start.x - cx; val sy = s.start.y - cy; val sz = s.start.z - cz
+            val ex = s.end.x - cx;   val ey = s.end.y - cy;   val ez = s.end.z - cz
+            val tx = ex - sx; val ty = ey - sy; val tz = ez - sz
+            val tlen = sqrt(tx * tx + ty * ty + tz * tz)
+            if (tlen < 1e-5f) {
+                // Degenerate (start ≈ end) — emit a tiny X-aligned box
+                // so the index/vertex counts stay invariant. The user
+                // wouldn't see this segment at any reasonable zoom.
+                appendBox(
+                    positions, colors, indices, vertexId, pi, ci, ii,
+                    sx, sy, sz, sx + 0.001f, sy, sz, radius, rgb,
+                )
+                pi += 24; ci += 24; ii += 36; vertexId += 8
+                continue
+            }
+            val tnx = tx / tlen; val tny = ty / tlen; val tnz = tz / tlen
+            // Reference axis: world-Z, unless tangent is nearly
+            // Z-aligned (vertical extrusion → ill-conditioned cross),
+            // in which case use world-Y. A 0.95-cosine threshold keeps
+            // the cross product well-conditioned (sin>0.31).
+            val useY = abs(tnz) > 0.95f
+            val rx = 0f; val ry = if (useY) 1f else 0f; val rz = if (useY) 0f else 1f
+            // side = normalize(cross(t, ref))
+            var sxn = tny * rz - tnz * ry
+            var syn = tnz * rx - tnx * rz
+            var szn = tnx * ry - tny * rx
+            var slen = sqrt(sxn * sxn + syn * syn + szn * szn)
+            if (slen < 1e-6f) {
+                // Should not happen given the useY guard, but defensively
+                // pick an axis-aligned side.
+                sxn = 1f; syn = 0f; szn = 0f; slen = 1f
+            }
+            sxn /= slen; syn /= slen; szn /= slen
+            // up = normalize(cross(side, t)); already unit since
+            // side ⊥ t are unit vectors but normalize defensively.
+            var uxn = syn * tnz - szn * tny
+            var uyn = szn * tnx - sxn * tnz
+            var uzn = sxn * tny - syn * tnx
+            val ulen = sqrt(uxn * uxn + uyn * uyn + uzn * uzn).coerceAtLeast(1e-9f)
+            uxn /= ulen; uyn /= ulen; uzn /= ulen
+
+            val baseId = vertexId
+
+            // 4 vertices at start (CCW seen from −t):
+            //   v0: start − r*side − r*up  (back-bottom-left)
+            //   v1: start + r*side − r*up  (back-bottom-right)
+            //   v2: start + r*side + r*up  (back-top-right)
+            //   v3: start − r*side + r*up  (back-top-left)
+            // 4 at end:
+            //   v4..v7 same offsets at end.
+            val pts = floatArrayOf(
+                sx - radius * sxn - radius * uxn, sy - radius * syn - radius * uyn, sz - radius * szn - radius * uzn,
+                sx + radius * sxn - radius * uxn, sy + radius * syn - radius * uyn, sz + radius * szn - radius * uzn,
+                sx + radius * sxn + radius * uxn, sy + radius * syn + radius * uyn, sz + radius * szn + radius * uzn,
+                sx - radius * sxn + radius * uxn, sy - radius * syn + radius * uyn, sz - radius * szn + radius * uzn,
+                ex - radius * sxn - radius * uxn, ey - radius * syn - radius * uyn, ez - radius * szn - radius * uzn,
+                ex + radius * sxn - radius * uxn, ey + radius * syn - radius * uyn, ez + radius * szn - radius * uzn,
+                ex + radius * sxn + radius * uxn, ey + radius * syn + radius * uyn, ez + radius * szn + radius * uzn,
+                ex - radius * sxn + radius * uxn, ey - radius * syn + radius * uyn, ez - radius * szn + radius * uzn,
+            )
+            for (v in 0 until 8) {
+                positions[pi++] = pts[v * 3]
+                positions[pi++] = pts[v * 3 + 1]
+                positions[pi++] = pts[v * 3 + 2]
+                colors[ci++] = rgb.r; colors[ci++] = rgb.g; colors[ci++] = rgb.b
+            }
+            // 12 triangles, CCW outward. v0..3 = start ring, v4..7 = end ring.
+            // Back cap (start, looking along −t):  0,2,1 / 0,3,2
+            // Front cap (end, looking along +t):   4,5,6 / 4,6,7
+            // -side face (v0,v3,v7,v4):            0,4,7 / 0,7,3   — wait, careful with winding
+            // Use the same convention as `writeBboxOutlineGlb` where
+            // (xmin,ymin,zmin)=v0 etc. Adapted:
+            val faces = intArrayOf(
+                // back cap (start) — points along −t
+                0, 2, 1, 0, 3, 2,
+                // front cap (end) — points along +t
+                4, 5, 6, 4, 6, 7,
+                // −up face (v0, v1, v5, v4)
+                0, 1, 5, 0, 5, 4,
+                // +up face (v3, v7, v6, v2)
+                3, 7, 6, 3, 6, 2,
+                // −side face (v0, v4, v7, v3)
+                0, 4, 7, 0, 7, 3,
+                // +side face (v1, v2, v6, v5)
+                1, 2, 6, 1, 6, 5,
+            )
+            for (idx in faces) indices[ii++] = baseId + idx
+            vertexId += 8
+        }
+
+        // Travel hairline triangles. Each travel is a degenerate
+        // triangle (start, end, end) — same hairline aesthetic as the
+        // pure-LINES branch.
+        for (t in travels) {
+            val baseId = vertexId
+            positions[pi++] = t.start.x - cx; positions[pi++] = t.start.y - cy; positions[pi++] = t.start.z - cz
+            positions[pi++] = t.end.x - cx;   positions[pi++] = t.end.y - cy;   positions[pi++] = t.end.z - cz
+            colors[ci++] = travelRgb.r; colors[ci++] = travelRgb.g; colors[ci++] = travelRgb.b
+            colors[ci++] = travelRgb.r; colors[ci++] = travelRgb.g; colors[ci++] = travelRgb.b
+            indices[ii++] = baseId; indices[ii++] = baseId + 1; indices[ii++] = baseId + 1
+            vertexId += 2
+        }
+
+        GlbBuilder(
+            positions = positions,
+            indices = indices,
+            mode = GlbBuilder.MODE_TRIANGLES,
+            colors = colors,
+            doubleSided = true,
+        ).writeTo(out)
+    }
+
+    /**
+     * Helper for the tubes degenerate-segment path — emit an axis-
+     * aligned box of [size] cube around the start point so the
+     * vertex/index counts per segment stay 8/36 even when the segment
+     * is zero-length. Caller writes through the same shared
+     * positions/colors/indices arrays via the offsets.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    private fun appendBox(
+        positions: FloatArray,
+        colors: FloatArray,
+        indices: IntArray,
+        baseId: Int,
+        pi0: Int, ci0: Int, ii0: Int,
+        ax: Float, ay: Float, az: Float,
+        bx: Float, by: Float, bz: Float,
+        radius: Float,
+        rgb: Rgb,
+    ) {
+        val r = radius
+        val pts = floatArrayOf(
+            ax - r, ay - r, az - r,
+            ax + r, ay - r, az - r,
+            ax + r, ay + r, az - r,
+            ax - r, ay + r, az - r,
+            bx - r, by - r, bz + r,
+            bx + r, by - r, bz + r,
+            bx + r, by + r, bz + r,
+            bx - r, by + r, bz + r,
+        )
+        var p = pi0; var c = ci0
+        for (v in 0 until 8) {
+            positions[p++] = pts[v * 3]
+            positions[p++] = pts[v * 3 + 1]
+            positions[p++] = pts[v * 3 + 2]
+            colors[c++] = rgb.r; colors[c++] = rgb.g; colors[c++] = rgb.b
+        }
+        val faces = intArrayOf(
+            0, 2, 1, 0, 3, 2,
+            4, 5, 6, 4, 6, 7,
+            0, 1, 5, 0, 5, 4,
+            3, 7, 6, 3, 6, 2,
+            0, 4, 7, 0, 7, 3,
+            1, 2, 6, 1, 6, 5,
+        )
+        var i = ii0
+        for (idx in faces) indices[i++] = baseId + idx
     }
 
     /**
