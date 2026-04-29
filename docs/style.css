@@ -824,7 +824,7 @@ nav a:hover {
 
 .steps-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 2rem;
 }
 
@@ -869,6 +869,10 @@ nav a:hover {
 
 .step .btn {
     align-self: flex-start;
+}
+
+.btn-aside:hover {
+    color: var(--primary);
 }
 
 /* ---------- Footer ---------- */
