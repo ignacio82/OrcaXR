@@ -177,7 +177,7 @@ Input pump, Sliced-mode axis layer scrubbing, and Prepare-mode stick X/Y nudge +
 
 `ControllerHelp.entries` is a curated list of `Entry(input, action, note?)` rows covering every face button (A/B/X/Y) plus stick bindings for both Prepare and Preview modes. `ControllerHelpCard(onClose)` renders that list as a key/value list inside a SpatialPanel-friendly Compose surface; the TopNavigationPill grows a `?` Help button that toggles the panel via the new `helpShown` state in `XrShell`. Tests assert that every face button is documented, both stick modes appear, and a tripwire pins the entry count so a binding addition or removal forces an update to the help data.
 
-**Shipped:** commit `<pending>` — `ControllerHelp.entries` data layer, `ControllerHelpCard` Composable, top-nav Help icon, `ControllerHelpTest` (5 tests).
+**Shipped:** commit `aac69c2` — `ControllerHelp.entries` data layer, `ControllerHelpCard` Composable, top-nav Help icon, `ControllerHelpTest` (5 tests).
 
 ### B6. XR tooltip primitive 🔴 Not started
 
