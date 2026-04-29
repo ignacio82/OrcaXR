@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    DEBUG-ONLY manifest overlay. AGP merges this with src/main/AndroidManifest.xml
+    only for the `debug` build variant; release builds NEVER see these
+    declarations. Used to register TestBroadcastReceiver, which exposes a wide-
+    open `am broadcast` control surface for end-to-end test automation
+    (load 3MF + tap Slice without a human). Any app on the device can target
+    an exported receiver, so this MUST stay debug-only — see
+    src/debug/java/dev/orcaxr/app/TestBroadcastReceiver.kt for details.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <receiver
+            android:name=".TestBroadcastReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="dev.orcaxr.app.test.LOAD_3MF" />
+                <action android:name="dev.orcaxr.app.test.LOAD_ADD" />
+                <action android:name="dev.orcaxr.app.test.SLICE" />
+                <action android:name="dev.orcaxr.app.test.SET_PALETTE" />
+                <action android:name="dev.orcaxr.app.test.GAMEPAD_AXIS" />
+                <action android:name="dev.orcaxr.app.test.GAMEPAD_BUTTON" />
+                <action android:name="dev.orcaxr.app.test.PAINT" />
+                <action android:name="dev.orcaxr.app.test.PAINT_MANY" />
+                <action android:name="dev.orcaxr.app.test.AUTO_ORIENT" />
+                <action android:name="dev.orcaxr.app.test.ARRANGE" />
+                <action android:name="dev.orcaxr.app.test.ADD_PART" />
+                <action android:name="dev.orcaxr.app.test.CUT" />
+                <action android:name="dev.orcaxr.app.test.BOOLEAN" />
+                <action android:name="dev.orcaxr.app.test.SPLIT" />
+                <action android:name="dev.orcaxr.app.test.CLONE_PATTERN" />
+                <action android:name="dev.orcaxr.app.test.SET_OBJECT_CONFIG" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

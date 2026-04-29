@@ -1,0 +1,34 @@
+Skip GMP's texinfo-based docs build
+
+GMP 6.2.1 invokes makeinfo during its default make target to build
+gmp.info (a user manual). The `missing` shim is supposed to paper over
+a missing makeinfo, but fails with:
+    missing: line 81: makeinfo: command not found
+    Error 127
+
+Rather than pin `texinfo` as a build-host dep, pass MAKEINFO=true to
+both the build and install commands so GMP skips info generation. We
+don't ship or need the GMP manual.
+
+This patch is orthogonal to 0001's Android branch for GMP — applies
+against v2.3.2 directly and stacks cleanly with 0001 because the edits
+are in different hunks of the same file.
+
+Retire-if: GMP makes docs an opt-in target, or we decide to mandate
+texinfo in the host setup docs.
+
+---
+diff --git a/deps/GMP/GMP.cmake b/deps/GMP/GMP.cmake
+index b3ba181753..4819dcf497 100644
+--- a/deps/GMP/GMP.cmake
++++ b/deps/GMP/GMP.cmake
+@@ -66,7 +66,7 @@ else ()
+         PATCH_COMMAND git apply ${GMP_DIRECTORY_FLAG} --verbose ${CMAKE_CURRENT_LIST_DIR}/0001-GMP_GCC15.patch
+         BUILD_IN_SOURCE ON
+         CONFIGURE_COMMAND  env "CC=${CMAKE_C_COMPILER}" "CXX=${CMAKE_CXX_COMPILER}" "CFLAGS=${_gmp_ccflags}" "CXXFLAGS=${_gmp_ccflags}" "LDFLAGS=${CMAKE_EXE_LINKER_FLAGS}" ./configure ${_cross_compile_arg} --enable-shared=no --enable-cxx=yes --enable-static=yes "--prefix=${DESTDIR}" ${_gmp_build_tgt}
+-        BUILD_COMMAND     make -j
+-        INSTALL_COMMAND   make install
++        BUILD_COMMAND     make -j MAKEINFO=true
++        INSTALL_COMMAND   make install MAKEINFO=true
+     )
+ endif ()

@@ -1,0 +1,181 @@
+diff --git a/src/libslic3r/GCode/WipeTower2.cpp b/src/libslic3r/GCode/WipeTower2.cpp
+index 160f498c60..a3273873e9 100644
+--- a/src/libslic3r/GCode/WipeTower2.cpp
++++ b/src/libslic3r/GCode/WipeTower2.cpp
+@@ -2318,8 +2318,11 @@ void WipeTower2::save_on_last_wipe()
+         if (m_layer_info->tool_changes.size()==0)   // we have no way to save anything on an empty layer
+             continue;
+ 
+-        // Which toolchange will finish_layer extrusions be subtracted from?
+-        int idx = first_toolchange_to_nonsoluble(m_layer_info->tool_changes);
++        // OrcaXR Phase D.2 (PR #222 port): use the wall-continuity selector
++        // here too so the depth/wipe budget reserved during planning matches
++        // what generate() will actually emit.
++        const WipeTowerInfo* next_layer_info = (m_layer_info + 1 < m_plan.end()) ? &*(m_layer_info + 1) : nullptr;
++        int idx = select_wall_extruder_idx(m_layer_info->tool_changes, next_layer_info);
+ 
+         if (idx == -1) {
+             // In this case, finish_layer will be called at the very beginning.
+@@ -2374,6 +2377,91 @@ int WipeTower2::first_toolchange_to_nonsoluble(
+     return tool_changes.empty() ? -1 : 0;
+ }
+ 
++// OrcaXR Phase D.2 (PR #222 port): pick the toolchange index whose extruder
++// will draw the wipe-tower wall (finish_layer). Three priorities, in order:
++//   1. Same material as the previous layer's wall — preferring the exact
++//      same physical extruder, then falling back to a different extruder
++//      that shares the material.
++//   2. A material that also appears in the next layer — reduces the number
++//      of material switches the next layer will need on its wall.
++//   3. Original behavior: first non-soluble toolchange, else old_tool.
++//
++// Returns idx >= 0 (wall drawn after tool_changes[idx]) or -1 (wall drawn
++// before any toolchange, using m_current_tool).
++int WipeTower2::select_wall_extruder_idx(
++        const std::vector<WipeTowerInfo::ToolChange>& tool_changes,
++        const WipeTowerInfo* next_layer_info) const
++{
++    struct Candidate {
++        int    idx;
++        size_t tool;
++    };
++
++    std::vector<Candidate> candidates;
++    if (m_current_tool < m_filpar.size() && !m_filpar[m_current_tool].is_soluble)
++        candidates.push_back({-1, m_current_tool});
++    for (size_t i = 0; i < tool_changes.size(); ++i) {
++        const size_t t = tool_changes[i].new_tool;
++        if (t < m_filpar.size() && !m_filpar[t].is_soluble)
++            candidates.push_back({int(i), t});
++    }
++
++    if (candidates.empty())
++        return -1;
++
++    // Priority 1: same material as previous layer's wall.
++    if (m_last_wall_extruder >= 0 && size_t(m_last_wall_extruder) < m_filpar.size()) {
++        const std::string& last_material = m_filpar[m_last_wall_extruder].material;
++        int best = -2;
++        for (const Candidate& c : candidates) {
++            if (m_filpar[c.tool].material != last_material)
++                continue;
++            if (c.tool == size_t(m_last_wall_extruder))
++                return c.idx;
++            if (best == -2)
++                best = c.idx;
++        }
++        if (best != -2)
++            return best;
++    }
++
++    // Priority 2: material that also appears in the next layer.
++    if (next_layer_info && !next_layer_info->tool_changes.empty()) {
++        std::vector<std::string> next_materials;
++        std::vector<size_t>      next_extruders;
++        const size_t front_old = next_layer_info->tool_changes.front().old_tool;
++        if (front_old < m_filpar.size()) {
++            next_materials.push_back(m_filpar[front_old].material);
++            next_extruders.push_back(front_old);
++        }
++        for (const auto& tc : next_layer_info->tool_changes) {
++            if (tc.new_tool < m_filpar.size()) {
++                next_materials.push_back(m_filpar[tc.new_tool].material);
++                next_extruders.push_back(tc.new_tool);
++            }
++        }
++
++        int best = -2;
++        for (const Candidate& c : candidates) {
++            const std::string& mat = m_filpar[c.tool].material;
++            if (std::find(next_materials.begin(), next_materials.end(), mat) == next_materials.end())
++                continue;
++            if (std::find(next_extruders.begin(), next_extruders.end(), c.tool) != next_extruders.end())
++                return c.idx;
++            if (best == -2)
++                best = c.idx;
++        }
++        if (best != -2)
++            return best;
++    }
++
++    // Priority 3: fall back to the original heuristic, then to old_tool.
++    const int fallback = first_toolchange_to_nonsoluble(tool_changes);
++    if (fallback >= 0)
++        return fallback;
++    return candidates.front().idx;
++}
++
+ static WipeTower::ToolChangeResult merge_tcr(WipeTower::ToolChangeResult& first,
+                                              WipeTower::ToolChangeResult& second)
+ {
+@@ -2431,9 +2519,10 @@ void WipeTower2::generate(std::vector<std::vector<WipeTower::ToolChangeResult>>
+     m_used_filament_length_until_layer.emplace_back(0.f, m_used_filament_length);
+ 
+     m_old_temperature = -1; // reset last temperature written in the gcode
++    m_last_wall_extruder = -1; // OrcaXR Phase D.2: reset wall-continuity tracker
+ 
+-	for (const WipeTower2::WipeTowerInfo& layer : m_plan)
+-	{
++    for (int layer_idx = 0; layer_idx < int(m_plan.size()); ++layer_idx) {
++        const WipeTower2::WipeTowerInfo& layer = m_plan[layer_idx];
+         std::vector<WipeTower::ToolChangeResult> layer_result;
+         set_layer(layer.z, layer.height, 0, false/*layer.z == m_plan.front().z*/, layer.z == m_plan.back().z);
+         m_internal_rotation += 180.f;
+@@ -2441,7 +2530,11 @@ void WipeTower2::generate(std::vector<std::vector<WipeTower::ToolChangeResult>>
+         if (m_layer_info->depth < m_wipe_tower_depth - m_perimeter_width)
+ 			m_y_shift = (m_wipe_tower_depth-m_layer_info->depth-m_perimeter_width)/2.f;
+ 
+-        int idx = first_toolchange_to_nonsoluble(layer.tool_changes);
++        // OrcaXR Phase D.2 (PR #222 port): pick wall extruder using material
++        // continuity, with a one-layer lookahead.
++        const WipeTowerInfo* next_layer_info = (layer_idx + 1 < int(m_plan.size())) ? &m_plan[layer_idx + 1] : nullptr;
++        int idx = select_wall_extruder_idx(layer.tool_changes, next_layer_info);
++        const size_t old_tool_at_layer_start = m_current_tool;
+         WipeTower::ToolChangeResult finish_layer_tcr;
+ 
+         if (idx == -1) {
+@@ -2470,6 +2563,13 @@ void WipeTower2::generate(std::vector<std::vector<WipeTower::ToolChangeResult>>
+                 layer_result[idx] = merge_tcr(layer_result[idx], finish_layer_tcr);
+         }
+ 
++        // OrcaXR Phase D.2: remember which extruder drew this layer's wall
++        // so the next layer's selector can prefer the same material.
++        if (idx >= 0)
++            m_last_wall_extruder = int(layer.tool_changes[idx].new_tool);
++        else if (old_tool_at_layer_start < m_filpar.size() && !m_filpar[old_tool_at_layer_start].is_soluble)
++            m_last_wall_extruder = int(old_tool_at_layer_start);
++
+ 		result.emplace_back(std::move(layer_result));
+ 
+         if (m_used_filament_length_until_layer.empty() || m_used_filament_length_until_layer.back().first != layer.z)
+diff --git a/src/libslic3r/GCode/WipeTower2.hpp b/src/libslic3r/GCode/WipeTower2.hpp
+index 003b3843a9..9e07e3b894 100644
+--- a/src/libslic3r/GCode/WipeTower2.hpp
++++ b/src/libslic3r/GCode/WipeTower2.hpp
+@@ -331,11 +331,26 @@ private:
+     std::vector<float> m_used_filament_length;
+ 	std::vector<std::pair<float, std::vector<float>>> m_used_filament_length_until_layer;
+ 
++    // OrcaXR Phase D.2 (PR #222 port): tracks the extruder used to draw
++    // the previous layer's wipe-tower wall so that select_wall_extruder_idx
++    // can prefer material continuity. -1 = no previous wall yet.
++    int m_last_wall_extruder = -1;
++
+     // Return index of first toolchange that switches to non-soluble extruder
+     // ot -1 if there is no such toolchange.
+     int first_toolchange_to_nonsoluble(
+             const std::vector<WipeTowerInfo::ToolChange>& tool_changes) const;
+ 
++    // OrcaXR Phase D.2 (PR #222 port): pick which toolchange index gets the
++    // wall (finish_layer) extrusion. Returns idx>=0 to draw the wall after
++    // tool_changes[idx], or -1 to draw before all toolchanges (using old_tool).
++    // Priority order: 1) same material as previous layer's wall (preferring
++    // exact same extruder), 2) material that also appears in next layer,
++    // 3) fallback to first non-soluble toolchange.
++    int select_wall_extruder_idx(
++            const std::vector<WipeTowerInfo::ToolChange>& tool_changes,
++            const WipeTowerInfo* next_layer_info) const;
++
+ 	void toolchange_Unload(
+ 		WipeTowerWriter2 &writer,
+ 		const WipeTower::box_coordinates  &cleaning_box, 

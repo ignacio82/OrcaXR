@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OrcaXR — XR-native 3D printing slicer for Android XR</title>
+    <meta name="description" content="OrcaXR is an XR-native 3D printing slicer for Android XR. Plate models at 1:1 scale in your room, slice with the libslic3r engine on-device, and send to Klipper/Moonraker over your LAN.">
+    <meta name="theme-color" content="#000B1E">
+    <link rel="canonical" href="https://ignacio82.github.io/OrcaXR/">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="images/icon.png">
+    <link rel="apple-touch-icon" href="images/icon.png">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="OrcaXR">
+    <meta property="og:title" content="OrcaXR — XR-native 3D printing slicer">
+    <meta property="og:description" content="Plate at 1:1 in your room, slice on-device with libslic3r, send to Klipper/Moonraker. Open source, AGPL-3.0.">
+    <meta property="og:image" content="https://ignacio82.github.io/OrcaXR/images/feature.png">
+    <meta property="og:url" content="https://ignacio82.github.io/OrcaXR/">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="OrcaXR — XR-native 3D printing slicer">
+    <meta name="twitter:description" content="Plate at 1:1 in your room, slice on-device with libslic3r, send to Klipper/Moonraker. Open source, AGPL-3.0.">
+    <meta name="twitter:image" content="https://ignacio82.github.io/OrcaXR/images/feature.png">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="page-glow page-glow-left" aria-hidden="true"></div>
+    <div class="page-glow page-glow-right" aria-hidden="true"></div>
+
+    <header>
+        <div class="nav-container">
+            <a href="#home" class="logo-link">
+                <img src="images/icon.png" alt="" class="logo">
+                <span class="logo-text">OrcaXR</span>
+                <span class="logo-tag">Alpha</span>
+            </a>
+            <nav>
+                <a href="#features">Features</a>
+                <a href="#slicing">Spatial slicing</a>
+                <a href="#compatibility">Compatibility</a>
+                <a href="https://github.com/ignacio82/OrcaXR" target="_blank" rel="noopener noreferrer">GitHub</a>
+                <a href="#early-access" class="nav-cta">Join beta</a>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero" id="home">
+            <div class="hero-copy">
+                <a href="#disclaimer" class="status-pill" aria-label="Project status: experimental alpha">
+                    <span class="status-dot" aria-hidden="true"></span>
+                    Alpha · experimental
+                </a>
+                <p class="eyebrow">The future of 3D printing is spatial</p>
+                <h1>Slice your models in the space they'll live.</h1>
+                <p class="hero-lead">
+                    OrcaXR is built spatial-first for Android XR: plate at 1:1 in your room, paint
+                    multi-color in mid-air, and ship straight to Klipper over your LAN — powered by
+                    a native arm64-v8a build of <code>libslic3r</code>.
+                </p>
+                <div class="hero-buttons">
+                    <a href="#early-access" class="btn btn-primary">Get early access</a>
+                    <a href="https://github.com/ignacio82/OrcaXR" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">View on GitHub</a>
+                </div>
+                <div class="hero-highlights" aria-label="Key features">
+                    <span>Spatial UI/UX</span>
+                    <span>libslic3r engine</span>
+                    <span>Multi-color paint</span>
+                    <span>Moonraker native</span>
+                    <span>100% on-device</span>
+                    <span>AGPL-3.0</span>
+                </div>
+            </div>
+
+            <div class="hero-visual" aria-label="OrcaXR running on Galaxy XR">
+                <div class="hero-screen">
+                    <img src="images/screenshot.png" alt="OrcaXR running in Full Space mode on Galaxy XR with the project, transform, and slicing panels arranged around a build plate." loading="eager" fetchpriority="high">
+                </div>
+                <div class="hero-float hero-float-top">
+                    <strong>Full Space mode</strong>
+                    <span>Panels float around the build plate, not on a 2D rectangle.</span>
+                </div>
+                <div class="hero-float hero-float-bottom">
+                    <strong>libslic3r on-device</strong>
+                    <span>The same engine you trust, cross-compiled for Android XR.</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="proof-strip reveal" aria-label="OrcaXR strengths">
+            <div class="proof-card">
+                <span class="proof-label">Spatial</span>
+                <h2>Plan at the scale you'll print</h2>
+                <p>See exactly how a model fits on the desk it's destined for. Plate, scale, rotate, and slice without ever leaving your room.</p>
+            </div>
+            <div class="proof-card">
+                <span class="proof-label">Powerful</span>
+                <h2>Desktop-class slicing on a headset</h2>
+                <p>Native arm64-v8a cross-compile of <code>libslic3r</code> v2.3.2 — the same engine OrcaSlicer ships, with no cloud round-trip.</p>
+            </div>
+            <div class="proof-card">
+                <span class="proof-label">Connected</span>
+                <h2>Direct to your printer</h2>
+                <p>Native Moonraker upload and live job monitoring for Snapmaker U1, Elegoo Centauri Carbon, and any Klipper printer on your LAN.</p>
+            </div>
+        </section>
+
+        <section class="features-section" id="features">
+            <div class="container section-shell">
+                <div class="section-heading reveal">
+                    <p class="eyebrow">Why OrcaXR</p>
+                    <h2>A spatial slicer that goes deeper than a skin.</h2>
+                    <p>Every layer — UI, slicing engine, networking — is tuned for the spatial era, not ported from a desktop window.</p>
+                </div>
+
+                <div class="bento-grid reveal">
+                    <div class="bento-item bento-item-large bento-paint">
+                        <div class="bento-paint-art" aria-hidden="true">
+                            <img src="images/icon.png" alt="">
+                        </div>
+                        <div class="bento-copy">
+                            <span class="card-kicker">Multi-color</span>
+                            <h3>Paint your vision in mid-air</h3>
+                            <p>Load painted 3MFs from OrcaSlicer or use the FullSpectrum mixed-filament pipeline. Per-triangle paint, supports paint, and seam paint — all spatial.</p>
+                        </div>
+                    </div>
+                    <div class="bento-item">
+                        <span class="card-kicker">Engine</span>
+                        <h3>Native libslic3r</h3>
+                        <p>arm64-v8a cross-compile. The exact same toolpath generator you trust on the desktop, running locally on your headset.</p>
+                    </div>
+                    <div class="bento-item">
+                        <span class="card-kicker">Networking</span>
+                        <h3>Moonraker ready</h3>
+                        <p>Discover printers on your LAN, upload G-code, and watch the job live. No tablet, no cables, no cloud account.</p>
+                    </div>
+                    <div class="bento-item">
+                        <span class="card-kicker">Privacy</span>
+                        <h3>Stays on your device</h3>
+                        <p>Slicing runs 100% locally. No telemetry, no analytics, no cloud uploads of your models. Ever.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="spatial-section" id="slicing">
+            <div class="container section-shell">
+                <div class="spatial-grid">
+                    <div class="spatial-copy reveal">
+                        <p class="eyebrow">Spatial slicing</p>
+                        <h2>Made for the headset, not retrofitted to it.</h2>
+                        <p>OrcaXR is what happens when you delete the desktop assumptions and start from gaze, hands, and depth.</p>
+
+                        <ul class="spatial-list">
+                            <li>
+                                <span class="spatial-num">01</span>
+                                <div>
+                                    <strong>1:1 build plate in your room</strong>
+                                    <p>Stand next to the printer. The plate matches your hardware to the millimeter, so fit problems are obvious before they're expensive.</p>
+                                </div>
+                            </li>
+                            <li>
+                                <span class="spatial-num">02</span>
+                                <div>
+                                    <strong>Gaze, pinch, and grab</strong>
+                                    <p>Move and rotate models with your hands. Transform gizmos snap to your gaze. Galaxy XR controllers are supported for precision work.</p>
+                                </div>
+                            </li>
+                            <li>
+                                <span class="spatial-num">03</span>
+                                <div>
+                                    <strong>Layer scrubber, suspended</strong>
+                                    <p>Pull the layer slider out of a sidebar and into 3D space. Inspect toolpaths from any angle, painted with real per-extruder colors.</p>
+                                </div>
+                            </li>
+                            <li>
+                                <span class="spatial-num">04</span>
+                                <div>
+                                    <strong>Panels orbit the work</strong>
+                                    <p>Project, transform, settings, slicing summary — all floating where you need them, never blocking the model.</p>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="spatial-visual reveal" aria-hidden="true">
+                        <div class="spatial-screen">
+                            <img src="images/screenshot.png" alt="">
+                        </div>
+                        <div class="spatial-chip spatial-chip-a">
+                            <span class="chip-dot"></span>
+                            Slicing locally · 6.4s
+                        </div>
+                        <div class="spatial-chip spatial-chip-b">
+                            Layer 142 / 318
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="compat-section" id="compatibility">
+            <div class="container section-shell">
+                <div class="section-heading reveal">
+                    <p class="eyebrow">Compatibility</p>
+                    <h2>Headsets and printers OrcaXR talks to.</h2>
+                </div>
+
+                <div class="compat-grid reveal">
+                    <article class="compat-card">
+                        <header>
+                            <span class="compat-kicker">Headsets</span>
+                            <h3>Android XR</h3>
+                        </header>
+                        <ul>
+                            <li><strong>Samsung Galaxy XR</strong> — primary target</li>
+                            <li>Other Google Android XR devices</li>
+                        </ul>
+                        <p class="compat-note">Built on Jetpack XR (SceneCore + ARCore for XR).</p>
+                    </article>
+
+                    <article class="compat-card">
+                        <header>
+                            <span class="compat-kicker">Printers</span>
+                            <h3>Klipper + Moonraker</h3>
+                        </header>
+                        <ul>
+                            <li><strong>Snapmaker U1</strong> — 4-extruder toolchanger profile</li>
+                            <li><strong>Elegoo Centauri Carbon</strong> — 0.2 / 0.4 mm nozzles</li>
+                            <li>Any Klipper printer with Moonraker reachable on your LAN</li>
+                        </ul>
+                        <p class="compat-note">Bring more profiles? PRs welcome.</p>
+                    </article>
+
+                    <article class="compat-card compat-card-warn">
+                        <header>
+                            <span class="compat-kicker">Not supported</span>
+                            <h3>Out of scope</h3>
+                        </header>
+                        <ul>
+                            <li>Direct USB / serial connections</li>
+                            <li>Cloud-only printer accounts (Bambu Cloud, etc.)</li>
+                            <li>Phone or tablet form factors — XR-only</li>
+                        </ul>
+                        <p class="compat-note">By design: keep the surface area focused while the project is young.</p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="acks-section">
+            <div class="container section-shell">
+                <div class="section-heading reveal">
+                    <p class="eyebrow">Built on giants</p>
+                    <h2>OrcaXR stands on a decade of open-source slicing.</h2>
+                    <p>We didn't reinvent the slicer — we wrapped a great one in a spatial body. Credit where it's due:</p>
+                </div>
+
+                <ul class="acks-grid reveal">
+                    <li>
+                        <a href="https://github.com/SoftFever/OrcaSlicer" target="_blank" rel="noopener noreferrer">
+                            <strong>OrcaSlicer</strong>
+                            <span>Core slicing engine (libslic3r v2.3.2). Thanks SoftFever &amp; contributors.</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/prusa3d/PrusaSlicer" target="_blank" rel="noopener noreferrer">
+                            <strong>PrusaSlicer</strong>
+                            <span>The shoulders OrcaSlicer and Slic3r stand on.</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/ratdoux/OrcaSlicer-FullSpectrum" target="_blank" rel="noopener noreferrer">
+                            <strong>FullSpectrum</strong>
+                            <span>Mixed-filament gradient pipeline.</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/Snapmaker/OrcaSlicer" target="_blank" rel="noopener noreferrer">
+                            <strong>Snapmaker</strong>
+                            <span>Toolchanger support and U1 profiles.</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/Klipper3d/klipper" target="_blank" rel="noopener noreferrer">
+                            <strong>Klipper &amp; Moonraker</strong>
+                            <span>The firmware and API that make LAN slicing real.</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://developer.android.com/jetpack/androidx/releases/xr" target="_blank" rel="noopener noreferrer">
+                            <strong>Jetpack XR</strong>
+                            <span>Google + Samsung's spatial computing platform for Android.</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="disclaimer-section" id="disclaimer">
+            <div class="container">
+                <div class="disclaimer-card reveal" role="note">
+                    <span class="disclaimer-tag">⚠ Use at your own risk</span>
+                    <h2>OrcaXR is experimental software.</h2>
+                    <p>3D printing involves high temperatures, moving parts, and fire risk. OrcaXR is in early alpha — slicing errors, unexpected G-code, or printer communication failures can happen.</p>
+                    <ul>
+                        <li>Always verify generated G-code in a desktop viewer before printing.</li>
+                        <li>Never leave your printer unattended on a job sliced by OrcaXR.</li>
+                        <li>The authors and contributors accept no liability for damage to your printer, property, or person.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="early-access-section reveal" id="early-access">
+            <div class="container section-shell">
+                <div class="section-heading">
+                    <p class="eyebrow">Beta access</p>
+                    <h2>Join the spatial making revolution.</h2>
+                    <p>OrcaXR is currently in early alpha. Here's how to start slicing in space.</p>
+                </div>
+
+                <div class="steps-grid">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <h3>Join the community</h3>
+                        <p>Open a GitHub Discussion to share your printer, your headset, and what you want to print first. That's how you get on the early-access list.</p>
+                        <a href="https://github.com/ignacio82/OrcaXR/discussions" target="_blank" rel="noopener noreferrer" class="btn btn-outline">GitHub Discussions</a>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <h3>Grab a build</h3>
+                        <p>Side-load the latest debug APK from GitHub Releases today. The Play Store beta track will follow once the alpha settles.</p>
+                        <div class="button-group">
+                            <a href="https://github.com/ignacio82/OrcaXR/releases" target="_blank" rel="noopener noreferrer" class="btn btn-primary">GitHub Releases</a>
+                            <span class="btn-aside">Play Store beta — coming soon</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="footer-container">
+            <div class="footer-left">
+                <img src="images/icon.png" alt="" class="footer-logo">
+                <div>
+                    <p>&copy; 2026 OrcaXR Contributors. Open-source spatial slicing for the open makers.</p>
+                    <p class="footer-fine">Licensed under <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer">AGPL-3.0</a> — derivative works must stay open.</p>
+                </div>
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/ignacio82/OrcaXR" target="_blank" rel="noopener noreferrer">GitHub</a>
+                <a href="privacy.html">Privacy</a>
+                <a href="https://github.com/ignacio82/OrcaXR/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">Contributing</a>
+                <a href="https://github.com/ignacio82/OrcaXR/issues" target="_blank" rel="noopener noreferrer">Report an issue</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('active');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.12 });
+
+        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+        // Highlight nav link of section currently in view
+        const sections = document.querySelectorAll('main section[id]');
+        const navLinks = document.querySelectorAll('header nav a[href^="#"]');
+        const linkBySection = new Map();
+        navLinks.forEach(a => {
+            const id = a.getAttribute('href').slice(1);
+            linkBySection.set(id, a);
+        });
+        const navObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                const link = linkBySection.get(entry.target.id);
+                if (!link) return;
+                if (entry.isIntersecting) {
+                    navLinks.forEach(l => l.classList.remove('is-active'));
+                    link.classList.add('is-active');
+                }
+            });
+        }, { rootMargin: '-45% 0px -50% 0px' });
+        sections.forEach(s => navObserver.observe(s));
+    </script>
+</body>
+</html>

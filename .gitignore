@@ -1,0 +1,84 @@
+# Gradle
+.gradle/
+build/
+**/build/
+.kotlin/
+
+# Editor / merge leftovers
+*.orig
+*.rej
+*.swp
+*~
+
+# Local configuration
+local.properties
+*.local
+.env
+.env.*
+
+# Logs / OS
+*.log
+.DS_Store
+Thumbs.db
+
+# Android Studio
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.apks
+output.json
+release/
+build_native_work/
+
+# IntelliJ
+*.iml
+.idea/*
+!.idea/dictionaries/
+!.idea/ktfmt.xml
+misc.xml
+deploymentTargetDropDown.xml
+render.experimental.xml
+
+# Claude Code per-user state (shared settings.json/commands/ may be committed)
+.claude/settings.local.json
+.claude/*.lock
+
+# Keystores
+*.jks
+*.keystore
+*.p12
+*.pfx
+
+# Google services
+google-services.json
+
+# Profiling
+*.hprof
+
+# NDK / native build artifacts
+*.o
+*.a
+# Do NOT ignore *.so globally — we ship prebuilt libslic3r_jni.so under
+# app/src/main/jniLibs/. Keep native source trees clean via their own
+# build/ dirs, not a blanket *.so exclude.
+
+# Third-party submodule build outputs (we may build libslic3r deps in-tree)
+third_party/**/build/
+third_party/**/_build/
+
+# Internal planning / session notes — not for publication.
+# (docs/index.html, docs/style.css, docs/images/ are the GitHub Pages site
+# and are intentionally NOT ignored.)
+PLAN.md
+**/*_PLAN.md
+**/*_PROMPT.md
+**/SESSION_SUMMARY*.md
+docs/FULLSPECTRUM_PORT_STATUS.md
+
+# Local marketing / capture artifacts
+playstore/
+nanobanana-output/
+crash_log.txt
+crash_log.txt

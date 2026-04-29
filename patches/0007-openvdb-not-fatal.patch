@@ -1,0 +1,40 @@
+Don't FATAL_ERROR when OpenVDB is absent
+
+libslic3r already treats OpenVDB as optional via
+    if (TARGET openvdb::openvdb)
+in src/libslic3r/CMakeLists.txt:622-624. But the top-level
+CMakeLists.txt aborted configure with FATAL_ERROR when the
+bundled FindOpenVDB.cmake can't locate it.
+
+Our Android build skips the OpenVDB-family deps (Blosc, IlmBase,
+OpenEXR, OpenVDB) in patch 0001 — they don't cross-compile cleanly
+and nothing in libslic3r's core mandates them. Downgrade the missing
+OpenVDB message to STATUS so the configure continues. At runtime the
+library is built without SLA hollowing / volumetric features that
+use OpenVDB.
+
+Retire-if: OpenVDB ever becomes mandatory in libslic3r, or we decide
+to ship SLA volumetric support on Android.
+
+---
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 733d9a333f..0a794e1752 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -791,9 +791,13 @@ if(OpenVDB_FOUND)
+     slic3r_remap_configs(IlmBase::Half RelWithDebInfo Release)
+     slic3r_remap_configs(Blosc::blosc RelWithDebInfo Release)
+ else ()
+-    message(FATAL_ERROR "OpenVDB could not be found with the bundled find module. "
+-                   "You can try to specify the find module location of your "
+-                   "OpenVDB installation with the OPENVDB_FIND_MODULE_PATH cache variable.")
++    # OrcaXR: libslic3r already treats OpenVDB as optional
++    # (src/libslic3r/CMakeLists.txt:622-624 only links it `if (TARGET
++    # openvdb::openvdb)`). Downgrade this from FATAL_ERROR so Android
++    # builds (OpenVDB skipped in deps/) don't abort here. The SLA
++    # hollowing / volumetric features that use OpenVDB degrade rather
++    # than crash when the target is absent.
++    message(STATUS "OpenVDB not found — building without volumetric features.")
+ endif ()
+ 
+ find_path(SPNAV_INCLUDE_DIR spnav.h)

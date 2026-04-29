@@ -1,0 +1,623 @@
+package dev.orcaxr.app
+
+import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
+
+/**
+ * Reads OrcaSlicer-style profile JSONs from the bundled assets and
+ * flattens their `inherits` chains into [SlicerProfile] entries that
+ * map cleanly onto our flat `Map<String, String>` config shape.
+ *
+ * Profile model (mirrors OrcaSlicer's, see Snapmaker/OrcaSlicer's
+ * `resources/profiles/Snapmaker/`):
+ *   - **machine**: bed geometry, nozzle, gcode flavor, retraction.
+ *   - **process**: layer height, walls, infill, supports, speeds.
+ *   - **filament**: temps, fan, density, max volumetric.
+ * Each file optionally `inherits` another by `name`. We resolve the
+ * chain breadth-first (leaf overrides base), strip OrcaSlicer
+ * meta-keys (the `name`/`from`/`type` book-keeping fields and the
+ * Snapmaker-firmware-specific gcode macros that don't apply on
+ * vanilla MainsailOS hosts), and merge `machine + process + filament`
+ * into one [SlicerProfile] per (machine, process, filament) triple.
+ *
+ * License: profile JSONs ship under AGPL-3.0 (same as libslic3r).
+ * NOTICE.md tracks the snapshot.
+ */
+object OrcaProfileLoader {
+
+    private const val PROFILES_ROOT = "profiles"
+
+    /**
+     * Load every bundled profile from every brand subdirectory under
+     * `assets/profiles/`, flatten inheritance, and produce one
+     * [SlicerProfile] per machine × process × filament triple per
+     * brand. If anything fails to parse, skip that triple — never
+     * throw, since a malformed asset must not prevent the app from
+     * booting.
+     *
+     * Brand directories are independent — `inherits` is resolved
+     * within a single brand's tree, so two brands defining a
+     * `fdm_filament_common` don't cross-link.
+     */
+    fun loadCatalog(ctx: Context): List<SlicerProfile> = runCatching {
+        val brands = ctx.assets.list(PROFILES_ROOT)?.toList().orEmpty()
+        brands.flatMap { brand ->
+            runCatching { loadBrand(ctx, "$PROFILES_ROOT/$brand") }
+                .getOrDefault(emptyList())
+        }
+    }.getOrDefault(emptyList())
+
+    /**
+     * Load every machine × process × filament triple for one brand
+     * (e.g. `profiles/Snapmaker` or `profiles/Elegoo`).
+     */
+    private fun loadBrand(ctx: Context, brandRoot: String): List<SlicerProfile> {
+        val machines = readDir(ctx, "$brandRoot/machine")
+        val processes = readDir(ctx, "$brandRoot/process")
+        val filaments = readDir(ctx, "$brandRoot/filament")
+
+        // Index this brand's profiles by `name` so any
+        // `inherits: "<name>"` resolves regardless of which directory
+        // (machine/process/filament) the parent lives in.
+        val byName: Map<String, JSONObject> = (machines + processes + filaments)
+            .filter { it.has("name") }
+            .associateBy { it.getString("name") }
+
+        val machineLeaves = leavesOf(machines)
+        val processLeaves = leavesOf(processes)
+        val filamentLeaves = leavesOf(filaments)
+
+        val combos = mutableListOf<SlicerProfile>()
+        for (machine in machineLeaves) {
+            val machineCfg = flatten(machine, byName)
+            for (process in processLeaves) {
+                val processCfg = flatten(process, byName)
+                for (filament in filamentLeaves) {
+                    val filamentCfg = flatten(filament, byName)
+                    combos += compose(machine, process, filament, machineCfg + processCfg + filamentCfg)
+                }
+            }
+        }
+        return combos
+    }
+
+    /**
+     * A "leaf" is a profile no other profile inherits from. With the
+     * Snapmaker tree this comes out to one machine ("Snapmaker U1 (0.4
+     * nozzle)"), three processes (0.12 Fine / 0.20 Standard / 0.28
+     * Extra Draft), and one filament (Generic PLA).
+     *
+     * Profiles flagged `instantiation: "false"` are explicit
+     * abstract-base markers and we exclude them too.
+     */
+    private fun leavesOf(jsons: List<JSONObject>): List<JSONObject> {
+        val parentNames = jsons.mapNotNullTo(mutableSetOf()) {
+            it.optString("inherits", "").takeIf(String::isNotBlank)
+        }
+        return jsons.filter {
+            val name = it.optString("name", "")
+            name.isNotBlank() &&
+                name !in parentNames &&
+                it.optString("instantiation", "true") != "false"
+        }
+    }
+
+    /**
+     * Walk the [leaf]'s parent chain to the root, then merge from root
+     * to leaf so leaf values win. Returns a flat [Map] suitable for
+     * direct passthrough to libslic3r's `set_deserialize_nothrow`.
+     */
+    fun flatten(leaf: JSONObject, byName: Map<String, JSONObject>): Map<String, String> {
+        val chain = mutableListOf<JSONObject>()
+        var current: JSONObject? = leaf
+        var depth = 0
+        while (current != null && depth < MAX_INHERITANCE_DEPTH) {
+            chain += current
+            val parentName = current.optString("inherits", "").takeIf(String::isNotBlank)
+            current = parentName?.let(byName::get)
+            depth += 1
+        }
+        val out = mutableMapOf<String, String>()
+        for (json in chain.asReversed()) {
+            val keys = json.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                if (key in META_KEYS) continue
+                if (key in DROPPED_GCODE_KEYS) continue
+                // ConfigOptionEnumsGeneric guard. These config options'
+                // enum-name tables are populated at preset-bundle load
+                // time; we don't load a bundle, so calling
+                // set_deserialize_nothrow on them dereferences a null
+                // map and segfaults inside libslic3r (caught in field on
+                // the user's Galaxy XR — backtrace landed in
+                // __tree::find on a never-constructed map). The known
+                // offenders all have the shape "vendor/enum-typed config
+                // that requires the bundle's vendor section." Drop them
+                // here. Hand-rolled values for these keys (e.g. our
+                // bundled Snapmaker U1 ahead of the JSON loader) avoided
+                // the crash because they never set the unsafe options.
+                // Until we either ship a preset-bundle loader or
+                // patch libslic3r's PrintConfig defaults, route through
+                // a known-safe whitelist. Blacklist guessing would let
+                // a Bambu/SoftFever-introduced enum slip through and
+                // segfault the slicer mid-run. The whitelist matches
+                // the keys our hand-rolled Snapmaker_U1_PLA_Standard
+                // profile used (proven stable in field) plus a handful
+                // of obviously-safe additions.
+                if (key !in SAFE_KEYS) continue
+                out[key] = jsonValueToString(json.get(key))
+            }
+        }
+        return out
+    }
+
+    /**
+     * libslic3r's `set_deserialize_nothrow` accepts string scalars only.
+     *  - Per-tool arrays (4-long on U1: nozzle_diameter, retraction_*)
+     *    collapse to a single comma-joined string. libslic3r's parser
+     *    re-vectorizes if the underlying option is a vector type.
+     *  - `printable_area` is structurally a 4-element array of corner
+     *    coordinates ("0.5x1", …). Same comma-joined output works
+     *    because libslic3r's polygon parser splits on commas.
+     *  - Single scalars fall through `.toString()`.
+     */
+    private fun jsonValueToString(value: Any?): String = when (value) {
+        null -> ""
+        is JSONArray -> buildString {
+            for (i in 0 until value.length()) {
+                if (i > 0) append(',')
+                append(value.optString(i, ""))
+            }
+        }
+        is JSONObject -> value.toString()
+        else -> value.toString()
+    }
+
+    private fun compose(
+        machine: JSONObject,
+        process: JSONObject,
+        filament: JSONObject,
+        merged: Map<String, String>,
+    ): SlicerProfile {
+        val machineName = machine.optString("name").trim()
+        val processName = process.optString("name").trim()
+        val filamentName = filament.optString("name").trim()
+
+        // Strip the OrcaSlicer convention "@<context>" suffix from the
+        // process AND filament names for a tighter UI label.
+        // "0.20 Standard @Snapmaker U1 (0.4 nozzle)" → "0.20 Standard".
+        // "Elegoo PLA Matte @ECC" → "Elegoo PLA Matte".
+        // "Elegoo PLA Matte @0.2 nozzle" → "Elegoo PLA Matte"
+        // (nozzle disambiguation already lives in machineName).
+        val processShort = processName.substringBefore('@').trim()
+        val filamentShort = filamentName.substringBefore('@').trim()
+        // Optional brand prefix strip — Snapmaker U1's UI was nicer
+        // without "Snapmaker " on every row (the Devices panel
+        // already says it's a Snapmaker). Generalize: only strip a
+        // brand prefix if the rest of the name remains unique.
+        val machineShort = machineName.removePrefix("Snapmaker ")
+
+        val id = buildString {
+            append("bundled_")
+            append(slug(machineName)); append('.')
+            append(slug(processShort)); append('.')
+            append(slug(filamentName))
+        }
+        val display = "$machineShort · $processShort · $filamentShort"
+        val description = buildString {
+            merged["layer_height"]?.let { append(it).append(" mm") }
+            merged["sparse_infill_density"]?.let { append(", ").append(it).append(" infill") }
+            merged["nozzle_temperature"]?.let { append(", ").append(it).append(" °C") }
+            merged["hot_plate_temp"]?.let { append(" / ").append(it).append(" °C") }
+        }.trim().trimStart(',', ' ')
+
+        return SlicerProfile(
+            id = id,
+            displayName = display,
+            description = description.ifBlank { "Bundled OrcaSlicer profile" },
+            config = merged,
+        )
+    }
+
+    private fun readDir(ctx: Context, path: String): List<JSONObject> {
+        val names = runCatching { ctx.assets.list(path) }.getOrNull() ?: return emptyList()
+        return names
+            .asSequence()
+            .filter { it.endsWith(".json", ignoreCase = true) }
+            .mapNotNull { name ->
+                runCatching {
+                    ctx.assets.open("$path/$name").bufferedReader().use(java.io.BufferedReader::readText)
+                }.getOrNull()?.let { text ->
+                    runCatching { JSONObject(text) }.getOrNull()
+                }
+            }
+            .toList()
+    }
+
+    private fun slug(s: String): String =
+        s.lowercase()
+            .replace(Regex("[^a-z0-9._-]+"), "_")
+            .trim('_', '.')
+
+    /** OrcaSlicer book-keeping fields that aren't slicer config keys. */
+    private val META_KEYS: Set<String> = setOf(
+        "name", "type", "from", "version", "instantiation", "inherits",
+        "setting_id", "filament_id", "model_id", "is_custom_defined",
+        "default_print_profile", "default_filament_profile",
+        "compatible_printers", "compatible_printers_condition",
+        "compatible_prints", "compatible_prints_condition",
+        "printer_notes", "printer_settings_id",
+    )
+
+    /**
+     * G-code macro keys we previously stripped. Now empty: the bundled
+     * Snapmaker U1 profile's `machine_start_gcode` IS Snapmaker's
+     * canonical 2026-01-28 production text, designed for the U1
+     * firmware's PRINT_START + SM_PRINT_AUTO_FEED + BED_MESH_CALIBRATE
+     * + DEFECT_DETECTION_* macro stack. Every U1 owner has these
+     * macros — they ship in Snapmaker's stock Klipper config, not as
+     * optional add-ons. Stripping them and substituting our naive
+     * `GENERIC_KLIPPER_START_GCODE` was the actual cause of the M109
+     * deadlock: bare M104/M109 (no `T{initial_extruder}`) gets
+     * intercepted by the U1 firmware's [gcode_macro M104] override,
+     * routed to a parallel heater controller that doesn't update
+     * Klipper's `extruder.target` field, and M109's wait-on-target
+     * never unblocks even though the nozzle physically heats.
+     *
+     * For non-Snapmaker Klipper hosts: the GENERIC_KLIPPER_*_GCODE
+     * fallback in MainActivity.kt fires only when the profile's
+     * machine_start_gcode is missing or blank.
+     */
+    private val DROPPED_GCODE_KEYS: Set<String> = emptySet()
+
+    /** Hard cap to defend against accidentally-cyclic `inherits` graphs. */
+    private const val MAX_INHERITANCE_DEPTH = 16
+
+    /**
+     * Whitelist of OrcaSlicer config keys we pass to
+     * `set_deserialize_nothrow`. Started life as a defensive guard
+     * against the `ConfigOptionEnumsGeneric` null-`keys_map` crash
+     * (deserialize would dereference a never-set runtime pointer for
+     * any `coEnums` option since `FullPrintConfig::defaults()` builds
+     * those options via the initializer-list ctor that doesn't copy
+     * the def's `enum_keys_map`). slic3r_jni.cpp now patches the
+     * keys_map onto every `coEnums` option at startup, so the
+     * original segfault rationale no longer drives this list.
+     *
+     * Current rationale: keep BBS-only / Snapmaker-fork-only / preset-
+     * bundle-only keys out of the deserialize path, where they'd
+     * either be silently dropped by libslic3r anyway (with our
+     * `ORCAXR_LOGE("rejected config: ...")` line) or — worse —
+     * trigger the gotcha #16 nullable-enum (`*Nullable` template
+     * instantiation) crash in `serialize_single_value` that the
+     * keys_map fixup does NOT cover. The whitelist is the cheap
+     * defense until we either widen the fixup or load a real preset
+     * bundle.
+     *
+     * **Type-check rule before adding a key:** grep
+     * `third_party/OrcaSlicer/src/libslic3r/PrintConfig.cpp` for
+     * `add("<key>"` and confirm the option type is one of:
+     * `coBool`, `coBools`, `coInt`, `coInts`, `coFloat`, `coFloats`,
+     * `coFloatOrPercent`, `coPercent`, `coString`, `coStrings`,
+     * `coPoint`, `coPoints`, or a typed `coEnum<X>` (e.g.,
+     * `ConfigOptionEnum<BedType>`). Reject anything that is `coEnums`
+     * (the Generic variant) unless covered by the keys_map fixup, and
+     * reject any `*Nullable` template instantiation outright. Typed
+     * enums like `top_surface_pattern` carry their own keys_map at
+     * the option-class level and are safe.
+     *
+     * Note for coStrings vectors: `jsonValueToString` flattens JSON
+     * arrays with `,`, but libslic3r's coStrings parser splits on
+     * `;` (gotcha #19). The only coStrings vectors we actively rely
+     * on (`filament_type`, `filament_colour`, `extruder_colour`) are
+     * post-processed by `mergedConfig` with `;` separators. Don't add
+     * a non-empty coStrings key here that bypasses `mergedConfig`.
+     */
+    private val SAFE_KEYS: Set<String> = setOf(
+        // ---- machine geometry / kinematics ----
+        "printable_height",
+        "printable_area",
+        "nozzle_diameter",
+        "single_extruder_multi_material",
+        "gcode_flavor",
+        // ---- retraction / wipe ----
+        "retraction_length",
+        "retraction_speed",
+        "deretraction_speed",
+        "retract_lift_above",
+        "retract_lift_below",
+        "retract_when_changing_layer",
+        "retraction_minimum_travel",
+        "z_hop",
+        "wipe",
+        "wipe_distance",
+        // ---- process: layers / shells ----
+        "layer_height",
+        "initial_layer_print_height",
+        "first_layer_height",
+        "wall_loops",
+        "wall_generator",
+        "top_shell_layers",
+        "top_shell_thickness",
+        "bottom_shell_layers",
+        "bottom_shell_thickness",
+        "line_width",
+        "outer_wall_line_width",
+        "inner_wall_line_width",
+        "top_surface_line_width",
+        "sparse_infill_line_width",
+        // ---- process: infill ----
+        "sparse_infill_density",
+        "sparse_infill_pattern",
+        // ---- process: supports ----
+        "support_type",
+        "enable_support",
+        "support_threshold_angle",
+        "support_top_z_distance",
+        "support_bottom_z_distance",
+        "support_object_xy_distance",
+        "support_interface_top_layers",
+        "support_interface_bottom_layers",
+        "support_interface_spacing",
+        "support_speed",
+        // ---- process: speeds / accelerations ----
+        // Without these keys' Snapmaker-tuned values flowing through,
+        // libslic3r falls back to compiled-in defaults that are far
+        // more conservative — `gap_infill_speed` defaults to 30 mm/s
+        // vs Snapmaker's 250, `bridge_speed` to 25 vs 50,
+        // `top_surface_acceleration` to 500 mm/s² vs 2000, etc. That
+        // delta is the dominant cause of OrcaXR-sliced prints running
+        // 15-30% longer than the same model sliced by Snapmaker's
+        // upstream Orca fork.
+        "outer_wall_speed",
+        "inner_wall_speed",
+        "sparse_infill_speed",
+        "internal_solid_infill_speed",
+        "top_surface_speed",
+        "travel_speed",
+        "initial_layer_speed",
+        "initial_layer_infill_speed",
+        "bridge_speed",
+        "internal_bridge_speed",
+        "gap_infill_speed",
+        "support_interface_speed",
+        "wipe_speed",
+        // overhang_*_speed gate the slowdown-by-overhang-severity
+        // logic. Defaults are 0 ("no override") — without these the
+        // slicer prints overhangs at full wall speed (faster, but
+        // worse quality). Snapmaker's profile sets explicit caps.
+        "overhang_1_4_speed",
+        "overhang_2_4_speed",
+        "overhang_3_4_speed",
+        "overhang_4_4_speed",
+        // accelerations
+        "outer_wall_acceleration",
+        "inner_wall_acceleration",
+        "top_surface_acceleration",
+        "initial_layer_acceleration",
+        "bridge_acceleration",
+        "sparse_infill_acceleration",
+        "travel_acceleration",
+        "default_acceleration",
+        "accel_to_decel_enable",
+        "accel_to_decel_factor",
+        // ---- machine kinematics caps (per-axis ceilings the slicer
+        // uses to clamp the per-feature accel/speed values above).
+        // Snapmaker's U1 toolchanger profile sets these to 20000 mm/s²
+        // on X/Y/extruding/travel — without them passing through, the
+        // slicer falls back to its compiled-in defaults (~1500 mm/s²),
+        // which silently downgrades EVERY accel value above to that
+        // ceiling. That is the root cause of OrcaXR slices taking
+        // significantly longer to print than the same model sliced
+        // through Snapmaker's desktop OrcaSlicer build. Each entry is
+        // a coFloats array sized to extruder_count and gets resized
+        // by mergedConfig before reaching libslic3r. ----
+        "machine_max_acceleration_x",
+        "machine_max_acceleration_y",
+        "machine_max_acceleration_z",
+        "machine_max_acceleration_e",
+        "machine_max_acceleration_extruding",
+        "machine_max_acceleration_retracting",
+        "machine_max_acceleration_travel",
+        "machine_max_speed_x",
+        "machine_max_speed_y",
+        "machine_max_speed_z",
+        "machine_max_speed_e",
+        "machine_max_jerk_x",
+        "machine_max_jerk_y",
+        "machine_max_jerk_z",
+        "machine_max_jerk_e",
+        // ---- filament ----
+        "filament_type",
+        "filament_diameter",
+        "filament_density",
+        "filament_flow_ratio",
+        "filament_max_volumetric_speed",
+        "nozzle_temperature",
+        "nozzle_temperature_initial_layer",
+        "nozzle_temperature_range_low",
+        "nozzle_temperature_range_high",
+        // OrcaSlicer keeps a separate per-plate temperature for each
+        // bed type. `bed_temperature_initial_layer_single` (used by
+        // PRINT_START's `M140 S{...}` substitution) reads from the key
+        // matching `curr_bed_type`: cool/eng/hot/textured. Strip any
+        // one of these and libslic3r silently falls back to its
+        // compiled-in default (~45°C), which is what we observed on
+        // the U1's textured PEI plate (PLA profile says 65°C, output
+        // emitted M140 S45). Whitelist all four.
+        "cool_plate_temp",
+        "cool_plate_temp_initial_layer",
+        "eng_plate_temp",
+        "eng_plate_temp_initial_layer",
+        "hot_plate_temp",
+        "hot_plate_temp_initial_layer",
+        "textured_plate_temp",
+        "textured_plate_temp_initial_layer",
+        "fan_max_speed",
+        "fan_min_speed",
+        "overhang_fan_threshold",       // coEnums — keys_map fixup in slic3r_jni.cpp
+        "close_fan_the_first_x_layers",
+        "additional_cooling_fan_speed",
+        "slow_down_layer_time",
+        "slow_down_min_speed",
+        "fan_cooling_layer_time",
+        "temperature_vitrification",
+        // ---- bed plate ----
+        // curr_bed_type is the typed BedType enum libslic3r consults
+        // for bed-temp resolution (hot_plate vs cool_plate). Setting
+        // this to "Textured PEI Plate" forces the hot_plate_temp path
+        // — matches u1-slicer's `ConfigOptionEnum<BedType>(btPEI)`.
+        "curr_bed_type",
+        "default_bed_type",
+        // ---- multi-color ----
+        "extruder_colour",
+        "filament_colour",
+        // Generic-enum keys needed for the toolchanger code path
+        // (PrintConfig.cpp:9173-9183). Without these the
+        // update_values_to_printer_extruders_for_multiple_filaments
+        // path can't resolve per-extruder variants. Made deserialize-
+        // safe by slic3r_jni.cpp's keys_map fixup.
+        "extruder_type",
+        "nozzle_volume_type",
+        "default_nozzle_volume_type",
+        "filament_map",
+        // filament_map_mode — must be "Manual" for our user-supplied
+        // filament_map to survive Print::process. Default is
+        // "Auto For Flush" which silently recomputes the map at slice
+        // time and discards the user's physical-slot picks. See
+        // GEMINI.md gotcha #34. ConfigOptionEnum<FilamentMapMode>;
+        // typed enum, no keys_map fixup needed.
+        "filament_map_mode",
+        // single_extruder_multi_material — explicitly false for the U1
+        // (4 independent extruders, not Bambu/Prusa MMU). Embedded
+        // Snapmaker profiles set this to 1; mergedConfig() force-
+        // overrides for real multi-tool slicing.
+        // ---- gcode templates (PRINT_START / change tool / end) ----
+        // Pass through to libslic3r. The Snapmaker U1 profile's
+        // machine_start_gcode is the canonical sequence the U1
+        // firmware was designed to receive (PRINT_START + per-extruder
+        // feeds + bed mesh + clean cycle). Suppressing it caused the
+        // M109 deadlock — see DROPPED_GCODE_KEYS comment above.
+        "machine_start_gcode",
+        "machine_end_gcode",
+        "change_filament_gcode",
+        "before_layer_change_gcode",
+        "layer_change_gcode",
+        "filament_start_gcode",
+        "filament_end_gcode",
+        "machine_pause_gcode",
+        "template_custom_gcode",
+        // ---- process: quality / Klipper-aware tweaks ----
+        // Most are coBool toggles that change toolpath shape rather
+        // than speed directly, but they affect total print time
+        // through Klipper's lookahead (longer/straighter segments =
+        // higher achievable velocity). enable_arc_fitting is the big
+        // one — without it the slicer emits long G1 chains instead of
+        // G2/G3 arcs.
+        "enable_arc_fitting",
+        "resolution",
+        "slowdown_for_curled_perimeters",
+        "precise_outer_wall",
+        "only_one_wall_top",
+        "min_width_top_surface",
+        "detect_overhang_wall",
+        "reduce_infill_retraction",
+        "reduce_crossing_wall",
+        "infill_direction",
+        "infill_wall_overlap",
+        "seam_gap",
+        "seam_position",                  // typed coEnum<SeamPosition> — safe
+        "bridge_flow",
+        "bridge_density",
+        "internal_bridge_flow",
+        // ---- process: surface patterns (typed coEnum<X>) ----
+        // Typed enums (not coEnums Generic) — keys_map lives at the
+        // option-class level, no fixup needed. Same shape as
+        // sparse_infill_pattern / support_type already in the list.
+        "top_surface_pattern",
+        "bottom_surface_pattern",
+        "internal_solid_infill_pattern",
+        "gap_fill_target",
+        // ---- process: multi-tool / wipe tower geometry ----
+        // Snapmaker's leaf tunes wipe-tower shape and tool-change
+        // standby behavior; defaults here add print time on
+        // multi-color jobs.
+        "standby_temperature_delta",
+        "preheat_time",
+        "ooze_prevention",
+        "prime_volume",
+        "prime_tower_width",
+        "prime_tower_brim_width",
+        // Phase D.1 (PR #131 port): brim chamfer around the prime tower.
+        "prime_tower_brim_chamfer",
+        "prime_tower_brim_chamfer_max_width",
+        "wipe_tower_extra_spacing",
+        "wipe_tower_extra_rib_length",
+        "wipe_tower_wall_type",            // typed coEnum<WipeTowerWallType>
+        "wipe_tower_cone_angle",
+        "wipe_tower_filament",
+        "wipe_tower_no_sparse_layers",
+        // Multi-color purge sizing. Both are coFloats (non-nullable
+        // vectors) per PrintConfig.cpp:6417-6431. Sizing is load-
+        // bearing: libslic3r's WipeTowerIntegration indexes
+        // flush_volumes_matrix as `n_filaments² × nozzle_count`
+        // (Print.cpp:3240), and flush_multiplier holds one entry per
+        // nozzle (Print.cpp:3272). Without these flowing through, the
+        // compiled-in defaults (280 mm³ off-diagonal × 0.3 multiplier
+        // = 84 mm³ per toolchange) override whatever was authored in
+        // a 3MF or set in a profile, ballooning the wipe tower vs
+        // desktop OrcaSlicer / FullSpectrum. mergedConfig() validates
+        // the active matrix size against the slot count before
+        // forwarding (size mismatch falls back to a synthesized small-
+        // default matrix, never the libslic3r 280-default).
+        "flush_volumes_matrix",
+        "flush_multiplier",
+        "skirt_distance",
+        // ---- filament: per-extruder cooling / pressure / ramming ----
+        // coBools / coFloats per-tool vectors. mergedConfig() resizes
+        // these to the slot count for multi-color slicing.
+        "filament_minimal_purge_on_wipe_tower",
+        "filament_multitool_ramming",
+        "filament_multitool_ramming_volume",
+        "filament_multitool_ramming_flow",
+        "enable_pressure_advance",
+        "pressure_advance",
+        "reduce_fan_stop_start_freq",
+        // Phase H.1 (Snapmaker fork PR #279 port) — per-filament
+        // coBools that the U1 start-gcode reads to pre-condition
+        // heaters for high-temp materials. Default false; profile
+        // leaves that need it set the override per slot. mergedConfig
+        // resizes per-tool just like the other filament_* coBools
+        // above.
+        "filament_is_high_temperature",
+        // Phase H.2 (Snapmaker fork PR #284 port) — per-filament
+        // coBools for materials that need the U1's magnetic top
+        // cover. The Compose shell consumes this for the user-
+        // visible warning banner (see MainActivity.topCoverHint).
+        "requires_top_cover",
+        // ---- filament: tool-change loading/unloading & cooling tuning ----
+        // Snapmaker fork's fdm_filament_common.json sets these per-tool;
+        // without whitelisting, libslic3r falls back to compiled-in defaults
+        // and tool changes run at upstream's 28 mm/s instead of the fork's
+        // tuned 25 mm/s. coFloats / coInts; not nullable, no keys_map.
+        "filament_loading_speed",
+        "filament_loading_speed_start",
+        "filament_unloading_speed",
+        "filament_unloading_speed_start",
+        "filament_toolchange_delay",
+        "filament_cooling_moves",
+        "filament_cooling_initial_speed",
+        "filament_cooling_final_speed",
+        // ---- process: line widths + first-layer geometry ----
+        // These ARE in our shipped 0.4-nozzle process JSONs but were
+        // silently dropped pre-Phase B. Whitelisting per gotcha #2's
+        // type-check rule (all coFloat / coFloatOrPercent).
+        "elefant_foot_compensation",
+        "filter_out_gap_fill",
+        "initial_layer_line_width",
+        "support_line_width",
+        "internal_solid_infill_line_width",
+        "precise_z_height",
+    )
+}

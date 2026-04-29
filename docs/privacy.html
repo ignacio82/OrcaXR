@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy — OrcaXR</title>
+    <meta name="description" content="Privacy Policy for OrcaXR. We do not collect, store, or transmit your personal data.">
+    <meta name="theme-color" content="#000B1E">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="images/icon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <style>
+        .content-section {
+            padding: 8.5rem 0 6rem;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .content-body h1 {
+            margin-bottom: 2rem;
+            font-size: clamp(2.5rem, 5vw, 3.5rem);
+        }
+        .content-body h2 {
+            margin: 2.5rem 0 1rem;
+            font-size: 1.8rem;
+            color: var(--text-color);
+        }
+        .content-body p {
+            margin-bottom: 1.5rem;
+            font-size: 1.1rem;
+            line-height: 1.7;
+        }
+        .content-body ul {
+            margin-bottom: 1.5rem;
+            padding-left: 1.5rem;
+        }
+        .content-body li {
+            margin-bottom: 0.75rem;
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+        .content-body strong {
+            color: var(--text-color);
+        }
+        .last-updated {
+            font-size: 0.9rem;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-glow page-glow-left" aria-hidden="true"></div>
+    <div class="page-glow page-glow-right" aria-hidden="true"></div>
+
+    <header>
+        <div class="nav-container">
+            <a href="index.html" class="logo-link">
+                <img src="images/icon.png" alt="" class="logo">
+                <span class="logo-text">OrcaXR</span>
+            </a>
+            <nav>
+                <a href="index.html#features">Features</a>
+                <a href="index.html#slicing">Spatial slicing</a>
+                <a href="index.html#compatibility">Compatibility</a>
+                <a href="https://github.com/ignacio82/OrcaXR" target="_blank" rel="noopener noreferrer">GitHub</a>
+                <a href="index.html#early-access" class="nav-cta">Join beta</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <article class="content-section">
+            <header class="section-heading">
+                <span class="last-updated">Effective Date: April 28, 2026</span>
+                <h1>Privacy Policy for OrcaXR</h1>
+            </header>
+            
+            <div class="content-body">
+                <p>This Privacy Policy applies to the OrcaXR Android application ("the App").</p>
+
+                <h2>1. Data Collection and Usage</h2>
+                <p>OrcaXR is designed to operate locally on your device and your local area network (LAN). <strong>We do not collect, store, or transmit your personal data, 3D models, or printing history to any external servers.</strong></p>
+                <p>The App requires specific Android permissions to function, which are used strictly locally:</p>
+                <ul>
+                    <li><strong>Storage Access (<code>READ_EXTERNAL_STORAGE</code>, <code>MANAGE_EXTERNAL_STORAGE</code>):</strong> Used exclusively to allow you to select and load 3D models (STL, 3MF, etc.) from your device's file system into the slicer.</li>
+                    <li><strong>Network Access (<code>INTERNET</code>, <code>ACCESS_NETWORK_STATE</code>):</strong> Used exclusively to communicate with your 3D printer's local web interface (e.g., Moonraker/Klipper) over your local network to upload G-code and monitor print status.</li>
+                </ul>
+
+                <h2>2. Telemetry and Analytics</h2>
+                <p>The App does <strong>not</strong> integrate any third-party analytics, crash reporting (like Firebase Crashlytics), or telemetry frameworks. Everything you do in the App stays on your device.</p>
+
+                <h2>3. Third-Party Services</h2>
+                <p>While the App does not send data to us, it does interact directly with your 3D printer via its API (e.g., Moonraker). Please refer to the privacy and security documentation of your printer's firmware for how it handles data locally.</p>
+
+                <h2>4. Changes to This Policy</h2>
+                <p>If we add optional cloud features or opt-in crash reporting in the future, this Privacy Policy will be updated to reflect those changes, and you will be prompted to review them.</p>
+
+                <h2>5. Contact Us</h2>
+                <p>If you have any questions or concerns about this Privacy Policy or how your data is handled, please open an issue on our GitHub repository.</p>
+            </div>
+        </article>
+    </main>
+
+    <footer>
+        <div class="footer-container">
+            <div class="footer-left">
+                <img src="images/icon.png" alt="" class="footer-logo">
+                <div>
+                    <p>&copy; 2026 OrcaXR Contributors. Open-source spatial slicing for the open makers.</p>
+                    <p class="footer-fine">Licensed under <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer">AGPL-3.0</a> — derivative works must stay open.</p>
+                </div>
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/ignacio82/OrcaXR" target="_blank" rel="noopener noreferrer">GitHub</a>
+                <a href="privacy.html">Privacy</a>
+                <a href="https://github.com/ignacio82/OrcaXR/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">Contributing</a>
+                <a href="https://github.com/ignacio82/OrcaXR/issues" target="_blank" rel="noopener noreferrer">Report an issue</a>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

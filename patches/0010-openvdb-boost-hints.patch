@@ -1,0 +1,49 @@
+OpenVDB: point legacy FindBoost at our destdir
+
+OpenVDB 8.2's CMakeLists calls find_package(Boost) without CONFIG
+mode, routing through CMake's legacy FindBoost.cmake. Our Boost 1.84
+install provides only the modern BoostConfig.cmake (+ the component
+sub-configs boost_iostreams-1.84.0/... etc), so the legacy finder
+reports:
+    Could NOT find Boost (missing: Boost_INCLUDE_DIR iostreams system)
+
+Pass explicit BOOST_ROOT + Boost_DIR to OpenVDB's CMAKE_ARGS so both
+the legacy and config-mode code paths work. Also disable system
+search and prefer static linking (matching SLIC3R_STATIC=ON).
+
+Retire-if: OpenVDB bumps to a version that uses BoostConfig natively,
+or OrcaSlicer rolls OpenVDB forward to 10.x which handles modern
+Boost cleanly.
+
+---
+diff --git a/deps/OpenVDB/OpenVDB.cmake b/deps/OpenVDB/OpenVDB.cmake
+index df6ad9c913..e5edc5ff84 100644
+--- a/deps/OpenVDB/OpenVDB.cmake
++++ b/deps/OpenVDB/OpenVDB.cmake
+@@ -17,15 +17,24 @@ orcaslicer_add_cmake_project(OpenVDB
+     PATCH_COMMAND git apply ${OPENVDB_DIRECTORY_FLAG} --verbose --ignore-space-change --whitespace=fix ${CMAKE_CURRENT_LIST_DIR}/0001-clang19.patch
+     DEPENDS dep_TBB dep_Blosc dep_OpenEXR dep_Boost
+     CMAKE_ARGS
+-        -DCMAKE_POSITION_INDEPENDENT_CODE=ON 
++        -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+         -DOPENVDB_BUILD_PYTHON_MODULE=OFF
+         -DUSE_BLOSC=ON
+-        -DOPENVDB_CORE_SHARED=${_build_shared} 
++        -DOPENVDB_CORE_SHARED=${_build_shared}
+         -DOPENVDB_CORE_STATIC=${_build_static}
+         -DOPENVDB_ENABLE_RPATH:BOOL=OFF
+         -DTBB_STATIC=${_build_static}
+         -DOPENVDB_BUILD_VDB_PRINT=ON
+         -DDISABLE_DEPENDENCY_VERSION_CHECKS=ON # Centos6 has old zlib
++        # OrcaXR: OpenVDB 8.2's CMakeLists uses the legacy FindBoost.cmake
++        # module and searches for Boost_INCLUDE_DIR. Our Boost is 1.84
++        # installed with its modern CMake config only. Point both the
++        # legacy finder and the config-mode finder at our destdir.
++        -DBOOST_ROOT=${DESTDIR}
++        -DBoost_DIR=${DESTDIR}/lib/cmake/Boost-1.84.0
++        -DBoost_NO_SYSTEM_PATHS=ON
++        -DBoost_USE_STATIC_LIBS=ON
++        -DBoost_USE_MULTITHREADED=ON
+ )
+ 
+ if (MSVC)
