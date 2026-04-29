@@ -193,7 +193,7 @@ Implement once: a small `Surface` + `Text` plate that follows laser hover for ~6
 
 `EmptyStatePanel(recents, onPickFile, onSliceBundledCube, onOpenRecent)` is mounted when `placedModels.isEmpty() && !showFilePicker && !isLoadingModel`, so a fresh-install user lands on a floating CTA card instead of an empty bed. Three affordances: a prominent green "Import 3MF or STL" button, a secondary "Slice the bundled 20 mm cube" path that mirrors the controller-A empty-bed shortcut, and a "Recent" list of the last 12 successful loads tapped to open instantly. `RecentFilesStore` (DataStore Preferences, JSON-encoded) writes a new entry on every successful `onFileSelected` and is filtered through `validRecents` so deleted/unmounted paths don't surface as broken shortcuts. Re-opening the same file bumps it to the top instead of double-listing; the cap drops the oldest entry on overflow.
 
-**Shipped:** commit (this one) — `RecentFilesStore` + `RecentFilesCodec` (8 tests covering encode-decode round-trip / garbage input / blank-path drop / upsert-at-head / de-dupe-by-path / cap eviction / empty-singleton / JSON shape lock) + `EmptyStatePanel` + XrShell mount + `onFileSelected` recents bump.
+**Shipped:** commit `f00c60e` — `RecentFilesStore` + `RecentFilesCodec` (8 tests covering encode-decode round-trip / garbage input / blank-path drop / upsert-at-head / de-dupe-by-path / cap eviction / empty-singleton / JSON shape lock) + `EmptyStatePanel` + XrShell mount + `onFileSelected` recents bump.
 
 ### B8. Numeric input validation 🟢 Shipped
 
