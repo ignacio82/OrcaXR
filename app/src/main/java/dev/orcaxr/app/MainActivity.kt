@@ -798,6 +798,10 @@ private fun XrShell(
     var bedHandleTx by remember { mutableStateOf(androidx.xr.runtime.math.Vector3(0f, WORKSPACE_Y_OFFSET, 0.20f)) }
     
     var devicesShown by remember { mutableStateOf(false) }
+    // Roadmap B5 — Galaxy XR controller help card visibility. Toggled
+    // via the TopNavigationPill's Help icon; renders as a side
+    // SpatialPanel showing every binding the input pump consumes.
+    var helpShown by remember { mutableStateOf(false) }
     var printerStatuses by remember { mutableStateOf<Map<String, PrinterStatus>>(emptyMap()) }
     var printerSnapshots by remember { mutableStateOf<Map<String, PrintSnapshot>>(emptyMap()) }
     var webcamFrames by remember { mutableStateOf<Map<String, androidx.compose.ui.graphics.ImageBitmap>>(emptyMap()) }
@@ -3245,6 +3249,8 @@ private fun XrShell(
                         },
                         devicesShown = devicesShown,
                         onToggleDevices = { devicesShown = !devicesShown },
+                        helpShown = helpShown,
+                        onToggleHelp = { helpShown = !helpShown },
                         modelRotZDeg = modelRotZDeg,
                         rotateEnabled = selectedModel != null,
                         onRotateModel = {
@@ -4385,6 +4391,21 @@ private fun XrShell(
                             },
                             onClose = { devicesShown = false },
                         )
+                    }
+                }
+
+                if (helpShown) {
+                    // Roadmap B5 — controller binding reference card.
+                    // Mounted next to the top nav so the user can keep
+                    // it open while testing inputs.
+                    MovablePanelWrapper(
+                        id = "controller-help",
+                        width = 600.dp,
+                        height = 700.dp,
+                        initialOffset = androidx.xr.runtime.math.Vector3(0.5f, 0.1f, -0.2f),
+                        session = session,
+                    ) {
+                        ControllerHelpCard(onClose = { helpShown = false })
                     }
                 }
             }

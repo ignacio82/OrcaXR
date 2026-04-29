@@ -2878,6 +2878,10 @@ fun TopNavigationPill(
     onResetWorkspace: () -> Unit,
     devicesShown: Boolean,
     onToggleDevices: () -> Unit,
+    /** Roadmap B5 — open / close the Galaxy XR controller help card.
+     *  Null disables the help button (e.g. flat-shell builds). */
+    onToggleHelp: (() -> Unit)? = null,
+    helpShown: Boolean = false,
     modelRotZDeg: Int,
     rotateEnabled: Boolean,
     onRotateModel: () -> Unit,
@@ -2935,6 +2939,15 @@ fun TopNavigationPill(
                     enabled = true,
                     onClick = onToggleDevices,
                 )
+                if (onToggleHelp != null) {
+                    NavAction(
+                        label = "Help",
+                        icon = androidx.compose.material.icons.Icons.Default.HelpOutline,
+                        isSelected = helpShown,
+                        enabled = true,
+                        onClick = onToggleHelp,
+                    )
+                }
             }
 
             Divider(color = Color.Gray.copy(alpha = 0.3f), thickness = 1.dp, modifier = Modifier.width(600.dp))

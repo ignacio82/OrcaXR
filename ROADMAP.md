@@ -171,11 +171,13 @@ Input pump, Sliced-mode axis layer scrubbing, and Prepare-mode stick X/Y nudge +
 - All bindings gated `repeatCount == 0` at the Activity layer so holding a button doesn't auto-repeat toggles.
 - `TestController.Command.GamepadButton(button)` shim drives `controllerInput.emitButton(button)` so a workstation harness can exercise every binding without paired hardware.
 
-### B5. Galaxy XR Controller help card 🔴 Not started
+### B5. Galaxy XR Controller help card 🟢 Shipped
 
-Quick-reference card for bindings, surfaced via in-app help / about path. Update GEMINI.md only if a non-obvious keycode emerges that future bindings must avoid.
+> **Files:** `ControllerHelpCard.kt` (data + Composable), `ControllerHelpTest.kt`, `UiPanels.kt::TopNavigationPill` (Help button), `MainActivity.kt` (helpShown state + SpatialPanel mount).
 
-**Exit criteria:** A user can open a help panel in XR and see the binding list; the help panel is reachable via a `?` icon on the top nav.
+`ControllerHelp.entries` is a curated list of `Entry(input, action, note?)` rows covering every face button (A/B/X/Y) plus stick bindings for both Prepare and Preview modes. `ControllerHelpCard(onClose)` renders that list as a key/value list inside a SpatialPanel-friendly Compose surface; the TopNavigationPill grows a `?` Help button that toggles the panel via the new `helpShown` state in `XrShell`. Tests assert that every face button is documented, both stick modes appear, and a tripwire pins the entry count so a binding addition or removal forces an update to the help data.
+
+**Shipped:** commit `<pending>` — `ControllerHelp.entries` data layer, `ControllerHelpCard` Composable, top-nav Help icon, `ControllerHelpTest` (5 tests).
 
 ### B6. XR tooltip primitive 🔴 Not started
 
