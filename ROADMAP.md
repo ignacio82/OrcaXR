@@ -202,7 +202,7 @@ Print-settings tabs (Quality / Speed / Support) consult `NumericValidation.print
 
 **Tests:** 12 — parse, trim, blank, NaN/Infinity, both bounds, inclusive, transform-range sanity, print-setting key coverage (every Speed-tab key), layer_height typo guard (20 mm rejected), validate end-to-end on a print-setting range.
 
-**Shipped:** commits `7fa3970` (TransformPanel) + `<pending>` (Print Settings tabs).
+**Shipped:** commits `7fa3970` (TransformPanel) + `5a4328b` (Print Settings tabs).
 
 ---
 
