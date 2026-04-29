@@ -83,16 +83,13 @@ Upstream OrcaSlicer's "Fix Model" depends on the Windows-only 3D Builder API (`F
 - Repair on a 1M-tri mesh either succeeds or surfaces an OOM Toast cleanly without crashing the JNI dispatcher.
 - CGAL parallel_for sites respect the TBB serial shim (gotcha #17).
 
-### A6. Bed-collision check (full mesh-vs-bed) 🟡 Partial — gating shipped, GLB highlight pending
+### A6. Bed-collision check (full mesh-vs-bed) 🟢 Shipped
 
-> **Files:** `BedCollision.kt`, `BedCollisionTest.kt`, `MainActivity.kt::previewStl`, `UiPanels.kt::LeftProjectPanel` + `BottomRightSummaryPanel`.
+> **Files:** `BedCollision.kt`, `BedCollisionTest.kt`, `StlPreviewGlb.kt`, `StlPreviewGlbTest.kt`, `MainActivity.kt::previewStl`, `UiPanels.kt::LeftProjectPanel` + `BottomRightSummaryPanel`.
 
-`BedCollision.detect(mesh, bedXmm, bedYmm, recenterToBed)` walks the transformed mesh's vertices against the bed polygon and returns either `Ok` or `Off(offendingTriCount, offendingTriIndices, overflowX, overflowY, worstOverflowXmm, worstOverflowYmm)`. Wired into the STL preview pipeline alongside the legacy bbox `bedFit` summary; the result drives a red banner in `LeftProjectPanel` and disables the Slice button via the same gating shape as `FilamentRules.Result.Forbidden`. Unit tests cover the cube / slab / empty-mesh / translate-with-recenter cases.
+`BedCollision.detect(mesh, bedXmm, bedYmm, recenterToBed)` walks the transformed mesh's vertices against the bed polygon and returns either `Ok` or `Off(offendingTriCount, offendingTriIndices, overflowX, overflowY, worstOverflowXmm, worstOverflowYmm)`. Wired into the STL preview pipeline alongside the legacy bbox `bedFit` summary; the result drives a red banner in `LeftProjectPanel` and disables the Slice button via the same gating shape as `FilamentRules.Result.Forbidden`. `StlPreviewGlb.write` now also paints the offending triangles in saturated red (overrides paint slot color so the off-bed warning is never hidden by user paint), so the user can read both *which* axes overflow (banner) and *which faces* poke off the bed (preview GLB).
 
-**Pending — entry-criterion for the green flip:**
-- Render the offending triangles in red on the preview GLB (today the banner alone tells the user which axes overflow). Touches `StlPreviewGlb` / `GlbBuilder` to emit a vertex-color override array keyed off `BedCollision.Result.Off.offendingTriIndices`.
-
-**Shipped:** commit `e6937e3` — `BedCollision.detect`, banner, Slice gate, `BedCollisionTest` (6 tests). Follow-up commit `61875bb` — bed-collision now also runs on the 3MF preview path via `deriveStlFor` + `StlReader`.
+**Shipped:** commit `e6937e3` — `BedCollision.detect`, banner, Slice gate, `BedCollisionTest` (6 tests). Commit `61875bb` — bed-collision now also runs on the 3MF preview path via `deriveStlFor` + `StlReader`. Final commit (this one) — `StlPreviewGlb.write` `offBedTriIndices` parameter wired into `previewStl`, `StlPreviewGlbTest` (5 tests covering default/red/paint-vs-offbed/out-of-range/empty).
 
 ### A7. Toolpath rendering as triangulated tubes 🔴 Not started
 

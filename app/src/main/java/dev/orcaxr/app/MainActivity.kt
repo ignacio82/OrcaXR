@@ -1325,7 +1325,8 @@ private fun XrShell(
         // transformed mesh. recenterToBed=true mirrors the JNI's
         // pre-slice "auto-center on the printable area" pass for the
         // single-model path.
-        bedCollision = BedCollision.detect(mesh, bedW, bedH, recenterToBed = true)
+        val collision = BedCollision.detect(mesh, bedW, bedH, recenterToBed = true)
+        bedCollision = collision
         // Phase J §G: pass paint state + palette so painted triangles
         // render in the slot color. applyTransforms preserves triangle
         // order so `current.paintFilamentIndex` remains aligned. Skip
@@ -1349,12 +1350,18 @@ private fun XrShell(
             }
             pal
         } else null
+        // Roadmap A6 — when the just-detected collision flagged any
+        // off-bed triangles, hand the indices to the GLB writer so the
+        // user gets the visual cue ("which faces poke off the bed?")
+        // alongside the existing red banner ("which axes overflow?").
+        val offBedForPreview = (collision as? BedCollision.Result.Off)?.offendingTriIndices
         try {
             StlPreviewGlb.write(
                 mesh,
                 out,
                 paintFilamentIndex = paintForPreview,
                 paletteRgb = paintPaletteRgb,
+                offBedTriIndices = offBedForPreview,
             )
         } catch (e: OutOfMemoryError) {
             android.util.Log.e(tag, "StlPreviewGlb OOM writing GLB", e)

@@ -24,6 +24,13 @@ object StlPreviewGlb {
      *  slicing. Used for unpainted triangles. */
     private val DEFAULT_RGB = floatArrayOf(0.78f, 0.82f, 0.86f)
 
+    /** Roadmap A6 — saturated red used to highlight off-bed triangles
+     *  in the preview GLB. Bright enough to read against the dark XR
+     *  passthrough and against any DEFAULT_RGB / paint slot color so
+     *  the user can immediately see *where* the model overflows the
+     *  printable polygon (the banner only tells them which axes). */
+    private val OFF_BED_RGB = floatArrayOf(0.95f, 0.10f, 0.10f)
+
     fun write(
         mesh: StlMesh,
         out: File,
@@ -36,6 +43,15 @@ object StlPreviewGlb {
         /** Per-slot RGB triples (size = 3 * numSlots). Required when
          *  [paintFilamentIndex] is non-null. */
         paletteRgb: FloatArray? = null,
+        /** Roadmap A6 — triangle indices that overflow the printable
+         *  polygon (per [BedCollision.detect]). When non-null these
+         *  triangles render in [OFF_BED_RGB] instead of their paint
+         *  color, so the user can see exactly which faces of the
+         *  silhouette poke off the bed. Out-of-range indices are
+         *  silently dropped — the bed-collision pass and the GLB bake
+         *  share `mesh.triCount` so this should never trigger in
+         *  practice, but a stale array shouldn't take down preview. */
+        offBedTriIndices: IntArray? = null,
     ) {
         if (mesh.triCount == 0) {
             // Degenerate: emit a single hidden triangle so GLB load doesn't crash.
@@ -62,16 +78,28 @@ object StlPreviewGlb {
         // preview pipeline on a stale paint array.
         val paint = paintFilamentIndex?.takeIf { it.size == mesh.triCount }
         val palette = paletteRgb?.takeIf { it.size >= 3 }
+        // A6: build a BooleanArray once so per-tri lookup is O(1) on
+        // the hot path. Unbounded indices are clamped — see param doc.
+        val offBed: BooleanArray? = offBedTriIndices?.takeIf { it.isNotEmpty() }?.let { src ->
+            val mask = BooleanArray(mesh.triCount)
+            for (idx in src) if (idx in 0 until mesh.triCount) mask[idx] = true
+            mask
+        }
         var pi = 0; var ci = 0
         var src = 0
         for (tri in 0 until mesh.triCount) {
-            val slot = paint?.get(tri)?.toInt()?.and(0xFF) ?: 0
-            val rgb: FloatArray = if (slot in 1..MAX_PAINT_SLOTS && palette != null) {
-                val base = (slot - 1) * 3
-                if (base + 2 < palette.size) {
-                    floatArrayOf(palette[base], palette[base + 1], palette[base + 2])
-                } else DEFAULT_RGB
-            } else DEFAULT_RGB
+            val rgb: FloatArray = when {
+                offBed != null && offBed[tri] -> OFF_BED_RGB
+                else -> {
+                    val slot = paint?.get(tri)?.toInt()?.and(0xFF) ?: 0
+                    if (slot in 1..MAX_PAINT_SLOTS && palette != null) {
+                        val base = (slot - 1) * 3
+                        if (base + 2 < palette.size) {
+                            floatArrayOf(palette[base], palette[base + 1], palette[base + 2])
+                        } else DEFAULT_RGB
+                    } else DEFAULT_RGB
+                }
+            }
             for (v in 0 until 3) {
                 positions[pi++] = mesh.positions[src++] - cx
                 positions[pi++] = mesh.positions[src++] - cy
