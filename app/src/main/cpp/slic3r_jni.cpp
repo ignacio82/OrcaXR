@@ -2635,7 +2635,11 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
             jstring name = env->NewStringUTF(mo->name.c_str());
             
             int extruder = 0;
-            const Slic3r::ConfigOptionInt* opt = mo->config.option<Slic3r::ConfigOptionInt>("extruder");
+            // ModelConfig has a non-template option(opt_key) member that
+            // hides the inherited template option<TYPE>(...) from
+            // ConfigBase. Reach the underlying DynamicPrintConfig via
+            // .get() so the templated lookup resolves.
+            const Slic3r::ConfigOptionInt* opt = mo->config.get().option<Slic3r::ConfigOptionInt>("extruder");
             if (opt) {
                 extruder = opt->value;
             } else if (!mo->volumes.empty()) {
@@ -2843,7 +2847,7 @@ Java_dev_orcaxr_app_SlicerEngine_nativeArrange(
             items[i].print_temp = 200;
             items[i].vitrify_temp = 240;
             const auto& bb = items[i].poly.contour.bounding_box();
-            ORCAXR_LOGI("nativeArrange: poly[%zu] %zu points bbox=(%.1f..%.1f, %.1f..%.1f) mm extrude_ids=%zu inflation=%d",
+            ORCAXR_LOGI("nativeArrange: poly[%zu] %zu points bbox=(%.1f..%.1f, %.1f..%.1f) mm extrude_ids=%zu inflation=%ld",
                         i, items[i].poly.contour.size(),
                         Slic3r::unscale<double>(bb.min.x()), Slic3r::unscale<double>(bb.max.x()),
                         Slic3r::unscale<double>(bb.min.y()), Slic3r::unscale<double>(bb.max.y()),

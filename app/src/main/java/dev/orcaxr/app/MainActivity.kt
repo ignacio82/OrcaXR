@@ -831,6 +831,17 @@ private fun XrShell(
     var workspaceTx by remember { mutableStateOf(androidx.xr.runtime.math.Vector3(0f, WORKSPACE_Y_OFFSET, 0.0f)) }
     var bedHandleTx by remember { mutableStateOf(androidx.xr.runtime.math.Vector3(0f, WORKSPACE_Y_OFFSET, 0.20f)) }
     var isWorkspaceGrabbing by remember { mutableStateOf(false) }
+
+    // Live transform override applied while a gizmo is being dragged. Keys
+    // are the model IDs the override applies to (one for single-select, all
+    // selected ids for multi-select). The renderer (GlbSceneEntity) reads
+    // the override for its model and applies it as setPose+setScale on the
+    // existing GltfModelEntity so the user sees a continuous preview while
+    // dragging — without this, every MOVE event triggered a full GLB re-bake
+    // and the model flickered/disappeared until the bake finished.
+    var liveDragOverride by remember {
+        mutableStateOf<Pair<Set<String>, GizmoDragOverride>?>(null)
+    }
     
     var devicesShown by remember { mutableStateOf(false) }
     // Roadmap B5 — Galaxy XR controller help card visibility. Toggled
@@ -1055,15 +1066,37 @@ private fun XrShell(
     fun sweepOldPreviews(keep: File, modelId: String) {
         runCatching {
             val perModelPrefix = "stl_preview_${modelId}_v"
+            // Parse a version number out of "stl_preview_<id>_v<N>.glb".
+            // Files we can't parse are treated as "unknown version" and
+            // only deleted when keep is empty (model-removal sweep).
+            fun versionOf(name: String): Int? {
+                if (!name.startsWith(perModelPrefix)) return null
+                val tail = name.substringAfter(perModelPrefix)
+                val numStr = tail.substringBefore('.')
+                return numStr.toIntOrNull()
+            }
+            val keepName = keep.name
+            val keepVersion = versionOf(keepName)
+            val explicitDeleteAll = keep.absolutePath.isEmpty() || keepName.isEmpty()
             ctx.cacheDir.listFiles { f ->
-                f.name.endsWith(".glb") &&
-                    f.absolutePath != keep.absolutePath &&
-                    (f.name.startsWith(perModelPrefix) ||
-                        // Legacy filenames from the pre-Phase-G single-
-                        // model preview pipeline. Sweep them on every
-                        // run so an upgrade doesn't carry old GLBs
-                        // forward indefinitely.
-                        f.name.startsWith("stl_preview_v"))
+                if (!f.name.endsWith(".glb")) return@listFiles false
+                if (f.absolutePath == keep.absolutePath) return@listFiles false
+                if (f.name.startsWith("stl_preview_v")) {
+                    // Legacy single-model filenames — always sweep.
+                    return@listFiles true
+                }
+                if (!f.name.startsWith(perModelPrefix)) return@listFiles false
+                if (explicitDeleteAll) return@listFiles true
+                val v = versionOf(f.name) ?: return@listFiles false
+                // Only delete strictly OLDER versions. A concurrent
+                // previewStl can have an in-flight bake at version > keep
+                // (its writeColoredGlb just opened the file for write but
+                // hasn't published the path yet); deleting that file
+                // unlinks the directory entry while the JNI keeps writing
+                // to the open FD, so the bytes vanish at FD close —
+                // exactly the cause of the v2.glb ENOENT race that left
+                // the model invisible after a 3MF load.
+                keepVersion != null && v < keepVersion
             }?.forEach { it.delete() }
         }
     }
@@ -4659,6 +4692,9 @@ private fun XrShell(
             WorkspaceMode.Prepare -> {
                 for (m in placedModelsOnActivePlate) {
                     val path = m.previewPath ?: continue
+                    val liveOv = liveDragOverride?.let { (ids, ov) ->
+                        if (m.id in ids) ov else null
+                    }
                     key(m.id, path) {
                         StlPreviewSceneEntity(
                             session = session,
@@ -4667,6 +4703,7 @@ private fun XrShell(
                             offsetXmm = m.translateXmm,
                             offsetYmm = m.translateYmm,
                             paintHooks = paintHooksFor(m),
+                            liveOverride = liveOv,
                             // Phase XR_OBJ_1: tap a model to select it.
                             // The callbacks no-op when paint mode is on
                             // (paintHooks takes priority inside
@@ -4798,24 +4835,18 @@ private fun XrShell(
                                         parentEntity = workspaceEntity,
                                         selectedModel = groupCenter,
                                         workspaceTx = workspaceTx,
-                                        onUpdateSelected = { transform ->
-                                            val old = groupCenter
-                                            val new = transform(old)
-                                            val dx = new.translateXmm - old.translateXmm
-                                            val dy = new.translateYmm - old.translateYmm
-                                            val dz = new.translateZmm - old.translateZmm
-                                            
-                                            // Apply delta to all selected models
+                                        onLivePreview = { ov ->
+                                            liveDragOverride =
+                                                if (ov == null) null
+                                                else selectedModelIds to ov
+                                        },
+                                        onCommit = { ov ->
+                                            liveDragOverride = null
                                             placedModels = placedModels.map { m ->
-                                                if (m.id in selectedModelIds) {
-                                                    m.copy(
-                                                        translateXmm = m.translateXmm + dx,
-                                                        translateYmm = m.translateYmm + dy,
-                                                        translateZmm = m.translateZmm + dz
-                                                    )
-                                                } else m
+                                                if (m.id in selectedModelIds) applyOverride(m, ov)
+                                                else m
                                             }
-                                        }
+                                        },
                                     )
                                 }
                             }
@@ -4827,7 +4858,17 @@ private fun XrShell(
                                     parentEntity = workspaceEntity,
                                     selectedModel = selected,
                                     workspaceTx = workspaceTx,
-                                    onUpdateSelected = ::updateSelected
+                                    onLivePreview = { ov ->
+                                        liveDragOverride =
+                                            if (ov == null) null
+                                            else setOf(selected.id) to ov
+                                    },
+                                    onCommit = { ov ->
+                                        liveDragOverride = null
+                                        placedModels = placedModels.map { m ->
+                                            if (m.id == selected.id) applyOverride(m, ov) else m
+                                        }
+                                    },
                                 )
                             }
                         }
@@ -4927,6 +4968,22 @@ private fun applyWorkspacePose(ent: androidx.xr.scenecore.Entity, parent: androi
     ent.setScale(WORLD_SCALE)
 }
 
+/** Folds a gizmo drag's final delta into a [PlacedModel] on commit. */
+internal fun applyOverride(m: PlacedModel, ov: GizmoDragOverride): PlacedModel {
+    val newRotZ = (((m.rotZDeg.toFloat() + ov.deltaRotZDeg).toInt() % 360) + 360) % 360
+    return m.copy(
+        translateXmm = m.translateXmm + ov.deltaTxMm,
+        translateYmm = m.translateYmm + ov.deltaTyMm,
+        translateZmm = m.translateZmm + ov.deltaTzMm,
+        rotXDeg = m.rotXDeg + ov.deltaRotXDeg,
+        rotYDeg = m.rotYDeg + ov.deltaRotYDeg,
+        rotZDeg = newRotZ,
+        scaleXPct = (m.scaleXPct * ov.scaleMultX).coerceIn(10f, 1000f),
+        scaleYPct = (m.scaleYPct * ov.scaleMultY).coerceIn(10f, 1000f),
+        scaleZPct = (m.scaleZPct * ov.scaleMultZ).coerceIn(10f, 1000f),
+    )
+}
+
 @Composable
 private fun ToolpathSceneEntity(session: Session, glbPath: String, parentEntity: androidx.xr.scenecore.Entity?) {
     GlbSceneEntity(session, glbPath, parentEntity)
@@ -4950,8 +5007,11 @@ private fun StlPreviewSceneEntity(
     /** Phase XR_OBJ_1: hover state. true on `HOVER_ENTER`, false on
      *  `HOVER_EXIT`. Same paint-mode caveat as [onTap]. */
     onHoverChange: ((Boolean) -> Unit)? = null,
+    /** Live transform override applied to this model while a gizmo is
+     *  being dragged. Null when no drag is active. */
+    liveOverride: GizmoDragOverride? = null,
 ) {
-    GlbSceneEntity(session, glbPath, parentEntity, offsetXmm, offsetYmm, paintHooks, onTap, onHoverChange)
+    GlbSceneEntity(session, glbPath, parentEntity, offsetXmm, offsetYmm, paintHooks, onTap, onHoverChange, liveOverride)
 }
 
 @Composable
@@ -5063,6 +5123,12 @@ private fun GlbSceneEntity(
     paintHooks: PaintInputHooks? = null,
     onTap: (() -> Unit)? = null,
     onHoverChange: ((Boolean) -> Unit)? = null,
+    /** When non-null, the renderer applies these deltas as a live
+     *  setPose+setScale on the existing GltfModelEntity instead of
+     *  letting the gizmo trigger a full preview re-bake. Cleared on
+     *  drag end; the parent then commits to PlacedModel and the
+     *  re-bake LaunchedEffect runs once with the final values. */
+    liveOverride: GizmoDragOverride? = null,
 ) {
     var entity by remember { mutableStateOf<GltfModelEntity?>(null) }
     val ctx = LocalContext.current
@@ -5101,12 +5167,52 @@ private fun GlbSceneEntity(
         entity = ent
     }
 
-    LaunchedEffect(offsetXmm, offsetYmm) {
-        entity?.setPose(androidx.xr.runtime.math.Pose(
+    // Steady-state pose update: position only (rotation/scale are baked
+    // into the GLB by previewStl, so identity is correct here). Re-runs
+    // when the user types a translate value or drags the bed under the
+    // workspace.
+    LaunchedEffect(entity, offsetXmm, offsetYmm) {
+        val ent = entity ?: return@LaunchedEffect
+        if (ent.isDisposed) return@LaunchedEffect
+        ent.setPose(androidx.xr.runtime.math.Pose(
             androidx.xr.runtime.math.Vector3(offsetXmm * WORLD_SCALE, offsetYmm * WORLD_SCALE, 0f),
-            androidx.xr.runtime.math.Quaternion.Identity
+            androidx.xr.runtime.math.Quaternion.Identity,
         ))
     }
+
+    // Live-drag override: only kicks in while a gizmo is being dragged.
+    // Outside drags (liveOverride == null) we leave pose+scale untouched
+    // so the steady-state effect above runs against an entity whose
+    // material instance was bound exactly once at create time. An earlier
+    // attempt re-issued setScale(Vector3, ...) on every recomposition and
+    // tripped Impress's split_engine_bridge with "unknown material
+    // instance id" — Filament rebinds materials when scale changes type
+    // (scalar -> vector), which races the loader on a freshly created
+    // GltfModelEntity.
+    LaunchedEffect(entity, offsetXmm, offsetYmm, liveOverride) {
+        val ent = entity ?: return@LaunchedEffect
+        if (ent.isDisposed) return@LaunchedEffect
+        val ov = liveOverride ?: return@LaunchedEffect
+        ent.setPose(androidx.xr.runtime.math.Pose(
+            androidx.xr.runtime.math.Vector3(
+                (offsetXmm + ov.deltaTxMm) * WORLD_SCALE,
+                (offsetYmm + ov.deltaTyMm) * WORLD_SCALE,
+                ov.deltaTzMm * WORLD_SCALE,
+            ),
+            androidx.xr.runtime.math.Quaternion.fromEulerAngles(
+                ov.deltaRotXDeg, ov.deltaRotYDeg, ov.deltaRotZDeg,
+            ),
+        ))
+        ent.setScale(
+            androidx.xr.runtime.math.Vector3(
+                WORLD_SCALE * ov.scaleMultX,
+                WORLD_SCALE * ov.scaleMultY,
+                WORLD_SCALE * ov.scaleMultZ,
+            ),
+            androidx.xr.scenecore.Space.PARENT,
+        )
+    }
+
 
     // Attach / detach an InteractableComponent based on what the entity
     // needs to react to. Three modes, picked in priority order:
