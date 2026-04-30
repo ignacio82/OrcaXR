@@ -232,7 +232,7 @@ A multi-object 3MF (e.g. `passthroughboth.3mf` — `Inner.stl` + `Outer.stl`) cu
 - A round-trip save-as-3MF reopened in desktop OrcaSlicer shows two objects with the OrcaXR-authored offsets preserved.
 - Single-object .stl / .obj / single-object .3mf imports continue to produce one PlacedModel (no regression in the common case).
 
-**Shipped:** <PENDING_COMMIT_SHA> — Multi-object 3MFs extracted to separate STLs, grouped by groupId with collapsible headers.
+**Shipped:** 3364b9c — Multi-object 3MFs extracted to separate STLs, grouped by groupId with collapsible headers.
 
 **Dependency for E3 multi-plate:** B9 is the prerequisite — without per-part addressability there's nothing to assign to a different plate.
 
@@ -355,7 +355,7 @@ Currently no DI, single-module Compose state. Add Hilt when E1 lands.
 
 > **Files:** `PlacedModel.kt` (add `plateId: Int = 1`), `MainActivity.kt::XrShell` (`activePlateId` state), new `app/src/main/java/dev/orcaxr/app/PlateStore.kt`, `UiPanels.kt` (plate-tab strip + "Move to plate N" context action), `SlicerEngine.kt` (per-plate slice dispatch).
 
-**Shipped:** <PENDING_COMMIT_SHA> — Persistent virtual build plates with switching UI and per-plate slicing/arrangement.
+**Shipped:** 3364b9c — Persistent virtual build plates with switching UI and per-plate slicing/arrangement.
 
 
 User asked on 2026-04-29 to "put parts in different build plates" while working with `passthroughboth.3mf`. Re-scoped from the previous "wait for queue demand" deferral. Snapmaker U1 + Elegoo Centauri Carbon both run **one plate at a time** physically, so we DO NOT need to port upstream's `PartPlate.cpp` / `PartPlate.hpp` (multi-thousand lines, plate-switching mid-print, plate-aware G-code orchestration). What the user actually wants is the OrcaSlicer organization affordance — virtual plates as a workspace partition for slicing several jobs from one project — which is far cheaper.
