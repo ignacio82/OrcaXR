@@ -14,6 +14,15 @@ import kotlin.math.abs
 import kotlin.math.sqrt
 
 /**
+ * Which gizmo tool is currently active. Mirrors OrcaSlicer desktop's
+ * Move / Rotate / Scale toolbar: only one tool's handles are visible at
+ * a time so the user isn't fighting nine concentric arrows/rings/cubes.
+ * Select is the no-gizmo state — the top bar's Move/Rotate/Scale buttons
+ * are toggles, tapping the active one drops back to Select.
+ */
+enum class GizmoTool { Select, Move, Rotate, Scale }
+
+/**
  * Live-drag override emitted by [TransformGizmo] during a drag, applied
  * by the renderer to the model's [GltfModelEntity] via setPose+setScale.
  * Avoids re-baking the colored preview GLB on every drag delta (which
@@ -48,12 +57,55 @@ private fun worldDeltaToPrinterX(delta: Vector3) = delta.x
 private fun worldDeltaToPrinterY(delta: Vector3) = -delta.z
 private fun worldDeltaToPrinterZ(delta: Vector3) = delta.y
 
+// Geometry constants for the GLB primitives generated below. The handle
+// entity's setScale() then linearly resizes them so the visible / hittable
+// size grows with the selected model's bounding box.
+private const val GIZMO_ARROW_LEN_MM = 50f
+private const val GIZMO_ARROW_SHAFT_MM = 3f
+private const val GIZMO_RING_RADIUS_MM = 55f
+private const val GIZMO_RING_THICK_MM = 2f
+private const val GIZMO_SCALE_CUBE_MM = 8f
+private const val GIZMO_SCALE_OFFSET_MM = 60f
+
+/**
+ * Per-instance scale for the gizmo handles. Sized so the arrow tip sits
+ * ~25 mm beyond the model's largest half-extent, with rings just outside
+ * the arrows and scale cubes just outside the rings. Floors at WORLD_SCALE
+ * so very small models still get a reachable handle.
+ *
+ * The arrow geometry's nominal length is [GIZMO_ARROW_LEN_MM]; multiplying
+ * by `(halfMax + 25) / GIZMO_ARROW_LEN_MM` makes the world-space arrow
+ * length equal `halfMax + 25` mm at WORLD_SCALE.
+ */
+private fun computeGizmoScale(selected: PlacedModel): Float {
+    val effX = selected.baseBboxXmm * selected.effectiveScaleX
+    val effY = selected.baseBboxYmm * selected.effectiveScaleY
+    val effZ = selected.baseBboxZmm * selected.effectiveScaleZ
+    val halfMax = maxOf(effX, effY, effZ) / 2f
+    val targetLenMm = (halfMax + 25f).coerceAtLeast(GIZMO_ARROW_LEN_MM)
+    return WORLD_SCALE * (targetLenMm / GIZMO_ARROW_LEN_MM)
+}
+
+// XR input filter: SceneCore delivers DOWN/MOVE/UP/CANCEL from any of
+// CONTROLLER, HANDS, MOUSE, GAZE_AND_GESTURE depending on the device. The
+// previous "CONTROLLER only" filter dropped every event on Galaxy XR
+// (hand pinch only) and made the gizmos look broken. UNKNOWN events have
+// no actionable origin, so we still drop those.
+private fun isInteractiveSource(source: InputEvent.Source): Boolean =
+    source != InputEvent.Source.UNKNOWN
+
 @Composable
 fun TransformGizmo(
     session: Session,
     parentEntity: Entity?,
     selectedModel: PlacedModel,
     workspaceTx: Vector3,
+    /** Active tool — only the matching handles render. Select hides the
+     *  gizmo entirely (the call site can also avoid composing
+     *  TransformGizmo at all in Select mode; the guard here lets a single
+     *  composition survive tool switches without re-creating the
+     *  GroupEntity root). */
+    tool: GizmoTool,
     /** Emitted continuously during drag with the in-progress delta. The
      *  parent should apply it as a live setPose/setScale on the model
      *  entity (no re-bake). null = no drag in progress, drop the override. */
@@ -62,6 +114,7 @@ fun TransformGizmo(
      *  to PlacedModel (which triggers a single re-bake). */
     onCommit: (GizmoDragOverride) -> Unit,
 ) {
+    if (tool == GizmoTool.Select) return
     val ctx = LocalContext.current
     var rootEntity by remember { mutableStateOf<GroupEntity?>(null) }
 
@@ -78,6 +131,8 @@ fun TransformGizmo(
     }
 
     val root = rootEntity ?: return
+
+    val gizmoScale = computeGizmoScale(selectedModel)
 
     LaunchedEffect(root, selectedModel.translateXmm, selectedModel.translateYmm, selectedModel.translateZmm) {
         if (root.isDisposed) return@LaunchedEffect
@@ -97,65 +152,69 @@ fun TransformGizmo(
     // WORKSPACE_ROTATION shows up as world X, -world Z, world Y). The X
     // arrow already used delta.x; Y and Z were reading the wrong world
     // components and translated the model in nonsensical directions.
-    GizmoDragHandle(session, ctx, root, "arrow_x.glb",
-        generate = { f -> GizmoGlb.writeArrow(f, 0, 40f, 1.5f, floatArrayOf(1f, 0.2f, 0.2f)) },
+    if (tool == GizmoTool.Move) {
+    GizmoDragHandle(session, ctx, root, "arrow_x_v2.glb", gizmoScale,
+        generate = { f -> GizmoGlb.writeArrow(f, 0, GIZMO_ARROW_LEN_MM, GIZMO_ARROW_SHAFT_MM, floatArrayOf(1f, 0.2f, 0.2f)) },
         projectDelta = ::worldDeltaToPrinterX,
         buildOverride = { dxMm -> GizmoDragOverride(deltaTxMm = dxMm) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
-    GizmoDragHandle(session, ctx, root, "arrow_y.glb",
-        generate = { f -> GizmoGlb.writeArrow(f, 1, 40f, 1.5f, floatArrayOf(0.2f, 1f, 0.2f)) },
+    GizmoDragHandle(session, ctx, root, "arrow_y_v2.glb", gizmoScale,
+        generate = { f -> GizmoGlb.writeArrow(f, 1, GIZMO_ARROW_LEN_MM, GIZMO_ARROW_SHAFT_MM, floatArrayOf(0.2f, 1f, 0.2f)) },
         projectDelta = ::worldDeltaToPrinterY,
         buildOverride = { dyMm -> GizmoDragOverride(deltaTyMm = dyMm) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
-    GizmoDragHandle(session, ctx, root, "arrow_z.glb",
-        generate = { f -> GizmoGlb.writeArrow(f, 2, 40f, 1.5f, floatArrayOf(0.2f, 0.2f, 1f)) },
+    GizmoDragHandle(session, ctx, root, "arrow_z_v2.glb", gizmoScale,
+        generate = { f -> GizmoGlb.writeArrow(f, 2, GIZMO_ARROW_LEN_MM, GIZMO_ARROW_SHAFT_MM, floatArrayOf(0.2f, 0.2f, 1f)) },
         projectDelta = ::worldDeltaToPrinterZ,
         buildOverride = { dzMm -> GizmoDragOverride(deltaTzMm = dzMm) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
+    }
 
     // Rotation Rings — angle measured in the plane perpendicular to the
     // ring's printer-space normal. Hits arrive in world coords, so we
     // pick atan2 args that match the world plane the ring physically
     // lies in (X ring -> world YZ; Y ring -> world XY; Z ring -> world XZ).
-    val ringRadius = 45f
-    GizmoRotHandle(session, ctx, root, "ring_x.glb", axis = 0, centerWorld = centerWorld,
-        generate = { f -> GizmoGlb.writeRing(f, 0, ringRadius, 1.0f, floatArrayOf(1f, 0.2f, 0.2f)) },
+    if (tool == GizmoTool.Rotate) {
+    GizmoRotHandle(session, ctx, root, "ring_x_v2.glb", axis = 0, centerWorld = centerWorld, gizmoScale = gizmoScale,
+        generate = { f -> GizmoGlb.writeRing(f, 0, GIZMO_RING_RADIUS_MM, GIZMO_RING_THICK_MM, floatArrayOf(1f, 0.2f, 0.2f)) },
         buildOverride = { deg -> GizmoDragOverride(deltaRotXDeg = deg) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
-    GizmoRotHandle(session, ctx, root, "ring_y.glb", axis = 1, centerWorld = centerWorld,
-        generate = { f -> GizmoGlb.writeRing(f, 1, ringRadius, 1.0f, floatArrayOf(0.2f, 1f, 0.2f)) },
+    GizmoRotHandle(session, ctx, root, "ring_y_v2.glb", axis = 1, centerWorld = centerWorld, gizmoScale = gizmoScale,
+        generate = { f -> GizmoGlb.writeRing(f, 1, GIZMO_RING_RADIUS_MM, GIZMO_RING_THICK_MM, floatArrayOf(0.2f, 1f, 0.2f)) },
         buildOverride = { deg -> GizmoDragOverride(deltaRotYDeg = deg) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
-    GizmoRotHandle(session, ctx, root, "ring_z.glb", axis = 2, centerWorld = centerWorld,
-        generate = { f -> GizmoGlb.writeRing(f, 2, ringRadius, 1.0f, floatArrayOf(0.2f, 0.2f, 1f)) },
+    GizmoRotHandle(session, ctx, root, "ring_z_v2.glb", axis = 2, centerWorld = centerWorld, gizmoScale = gizmoScale,
+        generate = { f -> GizmoGlb.writeRing(f, 2, GIZMO_RING_RADIUS_MM, GIZMO_RING_THICK_MM, floatArrayOf(0.2f, 0.2f, 1f)) },
         buildOverride = { deg -> GizmoDragOverride(deltaRotZDeg = deg) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
+    }
 
     // Scale Handles — drag projected onto the cube's printer-space axis
     // direction. Ratio = currentProjection / startProjection, clamped to
     // a sane range so a single drag doesn't blow up by 100x.
-    val scaleOffset = 50f
-    GizmoScaleHandle(session, ctx, root, "scale_x.glb", axis = 0, centerWorld = centerWorld,
-        generate = { f -> GizmoGlb.writeCube(f, 4f, floatArrayOf(scaleOffset, 0f, 0f), floatArrayOf(1f, 0.5f, 0.5f)) },
+    if (tool == GizmoTool.Scale) {
+    GizmoScaleHandle(session, ctx, root, "scale_x_v2.glb", axis = 0, centerWorld = centerWorld, gizmoScale = gizmoScale,
+        generate = { f -> GizmoGlb.writeCube(f, GIZMO_SCALE_CUBE_MM, floatArrayOf(GIZMO_SCALE_OFFSET_MM, 0f, 0f), floatArrayOf(1f, 0.5f, 0.5f)) },
         buildOverride = { ratio -> GizmoDragOverride(scaleMultX = ratio) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
-    GizmoScaleHandle(session, ctx, root, "scale_y.glb", axis = 1, centerWorld = centerWorld,
-        generate = { f -> GizmoGlb.writeCube(f, 4f, floatArrayOf(0f, scaleOffset, 0f), floatArrayOf(0.5f, 1f, 0.5f)) },
+    GizmoScaleHandle(session, ctx, root, "scale_y_v2.glb", axis = 1, centerWorld = centerWorld, gizmoScale = gizmoScale,
+        generate = { f -> GizmoGlb.writeCube(f, GIZMO_SCALE_CUBE_MM, floatArrayOf(0f, GIZMO_SCALE_OFFSET_MM, 0f), floatArrayOf(0.5f, 1f, 0.5f)) },
         buildOverride = { ratio -> GizmoDragOverride(scaleMultY = ratio) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
-    GizmoScaleHandle(session, ctx, root, "scale_z.glb", axis = 2, centerWorld = centerWorld,
-        generate = { f -> GizmoGlb.writeCube(f, 4f, floatArrayOf(0f, 0f, scaleOffset), floatArrayOf(0.5f, 0.5f, 1f)) },
+    GizmoScaleHandle(session, ctx, root, "scale_z_v2.glb", axis = 2, centerWorld = centerWorld, gizmoScale = gizmoScale,
+        generate = { f -> GizmoGlb.writeCube(f, GIZMO_SCALE_CUBE_MM, floatArrayOf(0f, 0f, GIZMO_SCALE_OFFSET_MM), floatArrayOf(0.5f, 0.5f, 1f)) },
         buildOverride = { ratio -> GizmoDragOverride(scaleMultZ = ratio) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
+    }
 }
 
 @Composable
@@ -164,6 +223,7 @@ fun GizmoDragHandle(
     ctx: Context,
     parentEntity: Entity,
     filename: String,
+    gizmoScale: Float,
     generate: (File) -> Unit,
     projectDelta: (Vector3) -> Float,
     buildOverride: (Float) -> GizmoDragOverride,
@@ -175,6 +235,7 @@ fun GizmoDragHandle(
     val buildOverrideLive = rememberUpdatedState(buildOverride)
     val onLivePreviewLive = rememberUpdatedState(onLivePreview)
     val onCommitLive = rememberUpdatedState(onCommit)
+    val gizmoScaleLive = rememberUpdatedState(gizmoScale)
 
     LaunchedEffect(session, filename) {
         val file = File(ctx.cacheDir, filename)
@@ -183,8 +244,13 @@ fun GizmoDragHandle(
         val model = GltfModel.create(session, bytes, filename)
         val ent = GltfModelEntity.create(session, model)
         ent.parent = parentEntity
-        ent.setScale(WORLD_SCALE)
+        ent.setScale(gizmoScaleLive.value)
         entity = ent
+    }
+
+    LaunchedEffect(entity, gizmoScale) {
+        val ent = entity ?: return@LaunchedEffect
+        if (!ent.isDisposed) runCatching { ent.setScale(gizmoScale) }
     }
 
     DisposableEffect(entity) {
@@ -193,7 +259,7 @@ fun GizmoDragHandle(
         var cumulativeMm = 0f
         val executor = androidx.core.content.ContextCompat.getMainExecutor(ctx)
         val listener = java.util.function.Consumer<InputEvent> { event ->
-            if (event.source != InputEvent.Source.CONTROLLER) return@Consumer
+            if (!isInteractiveSource(event.source)) return@Consumer
             val hit = event.hitInfoList.firstOrNull()?.hitPosition ?: return@Consumer
             when (event.action) {
                 InputEvent.Action.DOWN -> {
@@ -245,6 +311,7 @@ fun GizmoRotHandle(
     filename: String,
     axis: Int,
     centerWorld: Vector3,
+    gizmoScale: Float,
     generate: (File) -> Unit,
     buildOverride: (Float) -> GizmoDragOverride,
     onLivePreview: (GizmoDragOverride?) -> Unit,
@@ -255,6 +322,7 @@ fun GizmoRotHandle(
     val onLivePreviewLive = rememberUpdatedState(onLivePreview)
     val onCommitLive = rememberUpdatedState(onCommit)
     val centerLive = rememberUpdatedState(centerWorld)
+    val gizmoScaleLive = rememberUpdatedState(gizmoScale)
 
     LaunchedEffect(session, filename) {
         val file = File(ctx.cacheDir, filename)
@@ -263,8 +331,13 @@ fun GizmoRotHandle(
         val model = GltfModel.create(session, bytes, filename)
         val ent = GltfModelEntity.create(session, model)
         ent.parent = parentEntity
-        ent.setScale(WORLD_SCALE)
+        ent.setScale(gizmoScaleLive.value)
         entity = ent
+    }
+
+    LaunchedEffect(entity, gizmoScale) {
+        val ent = entity ?: return@LaunchedEffect
+        if (!ent.isDisposed) runCatching { ent.setScale(gizmoScale) }
     }
 
     DisposableEffect(entity) {
@@ -273,7 +346,7 @@ fun GizmoRotHandle(
         var cumulativeDeg = 0f
         val executor = androidx.core.content.ContextCompat.getMainExecutor(ctx)
         val listener = java.util.function.Consumer<InputEvent> { event ->
-            if (event.source != InputEvent.Source.CONTROLLER) return@Consumer
+            if (!isInteractiveSource(event.source)) return@Consumer
             val hit = event.hitInfoList.firstOrNull()?.hitPosition ?: return@Consumer
             val c = centerLive.value
             val dx = hit.x - c.x
@@ -342,6 +415,7 @@ fun GizmoScaleHandle(
     filename: String,
     axis: Int,
     centerWorld: Vector3,
+    gizmoScale: Float,
     generate: (File) -> Unit,
     buildOverride: (Float) -> GizmoDragOverride,
     onLivePreview: (GizmoDragOverride?) -> Unit,
@@ -352,6 +426,7 @@ fun GizmoScaleHandle(
     val onLivePreviewLive = rememberUpdatedState(onLivePreview)
     val onCommitLive = rememberUpdatedState(onCommit)
     val centerLive = rememberUpdatedState(centerWorld)
+    val gizmoScaleLive = rememberUpdatedState(gizmoScale)
 
     LaunchedEffect(session, filename) {
         val file = File(ctx.cacheDir, filename)
@@ -360,8 +435,13 @@ fun GizmoScaleHandle(
         val model = GltfModel.create(session, bytes, filename)
         val ent = GltfModelEntity.create(session, model)
         ent.parent = parentEntity
-        ent.setScale(WORLD_SCALE)
+        ent.setScale(gizmoScaleLive.value)
         entity = ent
+    }
+
+    LaunchedEffect(entity, gizmoScale) {
+        val ent = entity ?: return@LaunchedEffect
+        if (!ent.isDisposed) runCatching { ent.setScale(gizmoScale) }
     }
 
     DisposableEffect(entity) {
@@ -370,7 +450,7 @@ fun GizmoScaleHandle(
         var lastRatio = 1f
         val executor = androidx.core.content.ContextCompat.getMainExecutor(ctx)
         val listener = java.util.function.Consumer<InputEvent> { event ->
-            if (event.source != InputEvent.Source.CONTROLLER) return@Consumer
+            if (!isInteractiveSource(event.source)) return@Consumer
             val hit = event.hitInfoList.firstOrNull()?.hitPosition ?: return@Consumer
             val c = centerLive.value
             val dx = hit.x - c.x
