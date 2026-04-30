@@ -830,6 +830,7 @@ private fun XrShell(
     // Track world translation of the workspace and its grab handle
     var workspaceTx by remember { mutableStateOf(androidx.xr.runtime.math.Vector3(0f, WORKSPACE_Y_OFFSET, 0.0f)) }
     var bedHandleTx by remember { mutableStateOf(androidx.xr.runtime.math.Vector3(0f, WORKSPACE_Y_OFFSET, 0.20f)) }
+    var isWorkspaceGrabbing by remember { mutableStateOf(false) }
     
     var devicesShown by remember { mutableStateOf(false) }
     // Roadmap B5 — Galaxy XR controller help card visibility. Toggled
@@ -4746,6 +4747,18 @@ private fun XrShell(
                             )
                         }
                     }
+                    
+                    if (!isWorkspaceGrabbing) {
+                        key(selected.id) {
+                            TransformGizmo(
+                                session = session,
+                                parentEntity = workspaceEntity,
+                                selectedModel = selected,
+                                workspaceTx = workspaceTx,
+                                onUpdateSelected = ::updateSelected
+                            )
+                        }
+                    }
                 }
             }
             WorkspaceMode.Preview -> {
@@ -4792,7 +4805,7 @@ private fun XrShell(
  * panels down again puts the model envelope into the layer-preview
  * panel.
  */
-private const val WORLD_SCALE = 0.0015f
+const val WORLD_SCALE = 0.0015f
 
 /**
  * Profile id we seed the dropdown with on a fresh install. Matches

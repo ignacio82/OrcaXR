@@ -108,9 +108,9 @@ Upstream OrcaSlicer's "Fix Model" depends on the Windows-only 3D Builder API (`F
 
 ## B. XR UI / UX completeness
 
-### B1. 3D Transform Gizmo (rings + arrows + handles) 🔴 Not started
+### B1. 3D Transform Gizmo (rings + arrows + handles) 🟢 Shipped
 
-> **Files:** `MainActivity.kt` (gizmo entity creation parented to selected model), `GlbBuilder.kt` (ring/arrow/handle GLB primitives), `UiPanels.kt` (numeric Transform side-panel — already shipped as TransformPanel; this adds the 3D direct-manipulation surface alongside).
+> **Files:** `MainActivity.kt` (gizmo entity creation parented to selected model), `app/src/main/java/dev/orcaxr/app/GizmoGlb.kt` (ring/arrow/handle GLB primitives), `app/src/main/java/dev/orcaxr/app/TransformGizmo.kt` (interactive components).
 
 Currently transforms are TextField-driven in TransformPanel ("snap-and-confirm not free-drag" because of ~1 cm hand-tracking jitter). For users with paired Galaxy XR controllers, laser-precision drag handles become viable.
 
@@ -124,6 +124,8 @@ Currently transforms are TextField-driven in TransformPanel ("snap-and-confirm n
 **Exit criteria:** rotate to any angle (not just 90°), translate and scale by drag, with TransformPanel and gizmo state always in sync. No frame drops on Galaxy XR (Choreographer skip-frame warnings clean).
 
 **Dependencies:** Galaxy XR controllers input pump (already shipped). Hand-tracked drag is explicitly out of scope (~1 cm jitter is wider than usable handle precision).
+
+**Shipped:** cb09b6b — Added TransformGizmo, GizmoGlb generation, and laser-drag interactive component handlers.
 
 ### B2. Mixed-Filament UX panel for FullSpectrum 🔴 Not started
 
