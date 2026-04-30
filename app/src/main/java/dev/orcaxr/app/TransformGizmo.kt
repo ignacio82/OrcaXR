@@ -61,28 +61,35 @@ private fun worldDeltaToPrinterZ(delta: Vector3) = delta.y
 // entity's setScale() then linearly resizes them so the visible / hittable
 // size grows with the selected model's bounding box.
 private const val GIZMO_ARROW_LEN_MM = 50f
-private const val GIZMO_ARROW_SHAFT_MM = 3f
+private const val GIZMO_ARROW_SHAFT_MM = 10f // Chunky but reasonable
 private const val GIZMO_RING_RADIUS_MM = 55f
-private const val GIZMO_RING_THICK_MM = 2f
-private const val GIZMO_SCALE_CUBE_MM = 8f
+private const val GIZMO_RING_THICK_MM = 4f
+private const val GIZMO_SCALE_CUBE_MM = 12f
 private const val GIZMO_SCALE_OFFSET_MM = 60f
 
 /**
- * Per-instance scale for the gizmo handles. Sized so the arrow tip sits
- * ~40 mm beyond the model's largest half-extent, with rings just outside
- * the arrows and scale cubes just outside the rings. Floors at WORLD_SCALE
- * so very small models still get a reachable handle.
- *
- * The arrow geometry's nominal length is [GIZMO_ARROW_LEN_MM]; multiplying
- * by `(halfMax + 40) / GIZMO_ARROW_LEN_MM` makes the world-space arrow
- * length equal `halfMax + 40` mm at WORLD_SCALE.
+ * Base scale for gizmo handles (thickness/rings). Grows with the model
+ * but slower than length to keep the visual weight balanced.
  */
-private fun computeGizmoScale(selected: PlacedModel): Float {
+private fun computeGizmoBaseScale(selected: PlacedModel): Float {
     val effX = selected.baseBboxXmm * selected.effectiveScaleX
     val effY = selected.baseBboxYmm * selected.effectiveScaleY
     val effZ = selected.baseBboxZmm * selected.effectiveScaleZ
-    val halfMax = maxOf(effX, effY, effZ) / 2f
-    val targetLenMm = (halfMax + 40f).coerceAtLeast(GIZMO_ARROW_LEN_MM)
+    val maxDim = maxOf(effX, effY, effZ)
+    // Sized so that at WORLD_SCALE (1mm), the handle has a reasonable thickness.
+    // Scales up with the model to remain grabable.
+    val targetThickMm = (maxDim * 0.15f + 40f).coerceIn(40f, 150f)
+    return WORLD_SCALE * (targetThickMm / GIZMO_ARROW_LEN_MM)
+}
+
+/**
+ * Axis-specific length scale. Ensures the arrow tip sits 80mm
+ * beyond the model's bounding box face on that axis.
+ */
+private fun computeAxisLengthScale(dimMm: Float): Float {
+    val halfDim = dimMm / 2f
+    // Arrow tip (GIZMO_ARROW_LEN_MM) should be at halfDim + 80mm
+    val targetLenMm = halfDim + 80f
     return WORLD_SCALE * (targetLenMm / GIZMO_ARROW_LEN_MM)
 }
 
@@ -131,6 +138,10 @@ fun TransformGizmo(
     val ctx = LocalContext.current
     var rootEntity by remember { mutableStateOf<GroupEntity?>(null) }
 
+    LaunchedEffect(selectedModel.id, selectedModel.baseBboxXmm, selectedModel.baseBboxYmm, selectedModel.baseBboxZmm) {
+        android.util.Log.i("OrcaXR", "TransformGizmo for model ${selectedModel.id}: dims=[${selectedModel.baseBboxXmm}, ${selectedModel.baseBboxYmm}, ${selectedModel.baseBboxZmm}] scales=[${selectedModel.effectiveScaleX}, ${selectedModel.effectiveScaleY}, ${selectedModel.effectiveScaleZ}]")
+    }
+
     // Single DisposableEffect for the root's lifecycle — see commit history
     // for why splitting create/dispose across two effects was racy.
     DisposableEffect(session, parentEntity) {
@@ -145,7 +156,10 @@ fun TransformGizmo(
 
     val root = rootEntity ?: return
 
-    val gizmoScale = computeGizmoScale(selectedModel)
+    val baseScale = computeGizmoBaseScale(selectedModel)
+    val lenX = computeAxisLengthScale(selectedModel.baseBboxXmm * selectedModel.effectiveScaleX)
+    val lenY = computeAxisLengthScale(selectedModel.baseBboxYmm * selectedModel.effectiveScaleY)
+    val lenZ = computeAxisLengthScale(selectedModel.baseBboxZmm * selectedModel.effectiveScaleZ)
     val halfHeightMm = modelHalfHeightMm(selectedModel)
     val ovTx = liveOverride?.deltaTxMm ?: 0f
     val ovTy = liveOverride?.deltaTyMm ?: 0f
@@ -173,23 +187,22 @@ fun TransformGizmo(
     )
 
     // Translation Arrows — drag projected onto printer axis (which after
-    // WORKSPACE_ROTATION shows up as world X, -world Z, world Y). The X
-    // arrow already used delta.x; Y and Z were reading the wrong world
-    // components and translated the model in nonsensical directions.
+    // WORKSPACE_ROTATION shows up as world X, -world Z, world Y).
+    // Arrows scale their length per-axis to stay outside the model.
     if (tool == GizmoTool.Move) {
-    GizmoDragHandle(session, ctx, root, "arrow_x_v2.glb", gizmoScale,
+    GizmoDragHandle(session, ctx, root, "arrow_x_v3.glb", Vector3(lenX, baseScale, baseScale),
         generate = { f -> GizmoGlb.writeArrow(f, 0, GIZMO_ARROW_LEN_MM, GIZMO_ARROW_SHAFT_MM, floatArrayOf(1f, 0.2f, 0.2f)) },
         projectDelta = ::worldDeltaToPrinterX,
         buildOverride = { dxMm -> GizmoDragOverride(deltaTxMm = dxMm) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
-    GizmoDragHandle(session, ctx, root, "arrow_y_v2.glb", gizmoScale,
+    GizmoDragHandle(session, ctx, root, "arrow_y_v3.glb", Vector3(baseScale, lenY, baseScale),
         generate = { f -> GizmoGlb.writeArrow(f, 1, GIZMO_ARROW_LEN_MM, GIZMO_ARROW_SHAFT_MM, floatArrayOf(0.2f, 1f, 0.2f)) },
         projectDelta = ::worldDeltaToPrinterY,
         buildOverride = { dyMm -> GizmoDragOverride(deltaTyMm = dyMm) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
-    GizmoDragHandle(session, ctx, root, "arrow_z_v2.glb", gizmoScale,
+    GizmoDragHandle(session, ctx, root, "arrow_z_v3.glb", Vector3(baseScale, baseScale, lenZ),
         generate = { f -> GizmoGlb.writeArrow(f, 2, GIZMO_ARROW_LEN_MM, GIZMO_ARROW_SHAFT_MM, floatArrayOf(0.2f, 0.2f, 1f)) },
         projectDelta = ::worldDeltaToPrinterZ,
         buildOverride = { dzMm -> GizmoDragOverride(deltaTzMm = dzMm) },
@@ -201,39 +214,40 @@ fun TransformGizmo(
     // ring's printer-space normal. Hits arrive in world coords, so we
     // pick atan2 args that match the world plane the ring physically
     // lies in (X ring -> world YZ; Y ring -> world XY; Z ring -> world XZ).
+    // Rotation Rings — printer X/Y/Z map to world X / -Z / Y.
     if (tool == GizmoTool.Rotate) {
-    GizmoRotHandle(session, ctx, root, "ring_x_v2.glb", axis = 0, centerWorld = centerWorld, gizmoScale = gizmoScale,
+    val uniScale = Vector3(baseScale, baseScale, baseScale)
+    GizmoRotHandle(session, ctx, root, "ring_x_v2.glb", axis = 0, centerWorld = centerWorld, gizmoScale = uniScale,
         generate = { f -> GizmoGlb.writeRing(f, 0, GIZMO_RING_RADIUS_MM, GIZMO_RING_THICK_MM, floatArrayOf(1f, 0.2f, 0.2f)) },
         buildOverride = { deg -> GizmoDragOverride(deltaRotXDeg = deg) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
-    GizmoRotHandle(session, ctx, root, "ring_y_v2.glb", axis = 1, centerWorld = centerWorld, gizmoScale = gizmoScale,
+    GizmoRotHandle(session, ctx, root, "ring_y_v2.glb", axis = 1, centerWorld = centerWorld, gizmoScale = uniScale,
         generate = { f -> GizmoGlb.writeRing(f, 1, GIZMO_RING_RADIUS_MM, GIZMO_RING_THICK_MM, floatArrayOf(0.2f, 1f, 0.2f)) },
         buildOverride = { deg -> GizmoDragOverride(deltaRotYDeg = deg) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
-    GizmoRotHandle(session, ctx, root, "ring_z_v2.glb", axis = 2, centerWorld = centerWorld, gizmoScale = gizmoScale,
+    GizmoRotHandle(session, ctx, root, "ring_z_v2.glb", axis = 2, centerWorld = centerWorld, gizmoScale = uniScale,
         generate = { f -> GizmoGlb.writeRing(f, 2, GIZMO_RING_RADIUS_MM, GIZMO_RING_THICK_MM, floatArrayOf(0.2f, 0.2f, 1f)) },
         buildOverride = { deg -> GizmoDragOverride(deltaRotZDeg = deg) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
     }
 
-    // Scale Handles — drag projected onto the cube's printer-space axis
-    // direction. Ratio = currentProjection / startProjection, clamped to
-    // a sane range so a single drag doesn't blow up by 100x.
+    // Scale Handles — printer X/Y/Z map to world X / -Z / Y.
     if (tool == GizmoTool.Scale) {
-    GizmoScaleHandle(session, ctx, root, "scale_x_v2.glb", axis = 0, centerWorld = centerWorld, gizmoScale = gizmoScale,
+    val uniScale = Vector3(baseScale, baseScale, baseScale)
+    GizmoScaleHandle(session, ctx, root, "scale_x_v2.glb", axis = 0, centerWorld = centerWorld, gizmoScale = uniScale,
         generate = { f -> GizmoGlb.writeCube(f, GIZMO_SCALE_CUBE_MM, floatArrayOf(GIZMO_SCALE_OFFSET_MM, 0f, 0f), floatArrayOf(1f, 0.5f, 0.5f)) },
         buildOverride = { ratio -> GizmoDragOverride(scaleMultX = ratio) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
-    GizmoScaleHandle(session, ctx, root, "scale_y_v2.glb", axis = 1, centerWorld = centerWorld, gizmoScale = gizmoScale,
+    GizmoScaleHandle(session, ctx, root, "scale_y_v2.glb", axis = 1, centerWorld = centerWorld, gizmoScale = uniScale,
         generate = { f -> GizmoGlb.writeCube(f, GIZMO_SCALE_CUBE_MM, floatArrayOf(0f, GIZMO_SCALE_OFFSET_MM, 0f), floatArrayOf(0.5f, 1f, 0.5f)) },
         buildOverride = { ratio -> GizmoDragOverride(scaleMultY = ratio) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
-    GizmoScaleHandle(session, ctx, root, "scale_z_v2.glb", axis = 2, centerWorld = centerWorld, gizmoScale = gizmoScale,
+    GizmoScaleHandle(session, ctx, root, "scale_z_v2.glb", axis = 2, centerWorld = centerWorld, gizmoScale = uniScale,
         generate = { f -> GizmoGlb.writeCube(f, GIZMO_SCALE_CUBE_MM, floatArrayOf(0f, 0f, GIZMO_SCALE_OFFSET_MM), floatArrayOf(0.5f, 0.5f, 1f)) },
         buildOverride = { ratio -> GizmoDragOverride(scaleMultZ = ratio) },
         onLivePreview = onLivePreview, onCommit = onCommit,
@@ -247,7 +261,7 @@ fun GizmoDragHandle(
     ctx: Context,
     parentEntity: Entity,
     filename: String,
-    gizmoScale: Float,
+    gizmoScale: Vector3,
     generate: (File) -> Unit,
     projectDelta: (Vector3) -> Float,
     buildOverride: (Float) -> GizmoDragOverride,
@@ -335,7 +349,7 @@ fun GizmoRotHandle(
     filename: String,
     axis: Int,
     centerWorld: Vector3,
-    gizmoScale: Float,
+    gizmoScale: Vector3,
     generate: (File) -> Unit,
     buildOverride: (Float) -> GizmoDragOverride,
     onLivePreview: (GizmoDragOverride?) -> Unit,
@@ -439,7 +453,7 @@ fun GizmoScaleHandle(
     filename: String,
     axis: Int,
     centerWorld: Vector3,
-    gizmoScale: Float,
+    gizmoScale: Vector3,
     generate: (File) -> Unit,
     buildOverride: (Float) -> GizmoDragOverride,
     onLivePreview: (GizmoDragOverride?) -> Unit,

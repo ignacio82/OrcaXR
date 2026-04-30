@@ -3163,12 +3163,13 @@ fun TopNavigationPill(
      *  Null disables the help button (e.g. flat-shell builds). */
     onToggleHelp: (() -> Unit)? = null,
     helpShown: Boolean = false,
-    modelRotZDeg: Int,
-    rotateEnabled: Boolean,
-    onRotateModel: () -> Unit,
-    modelScalePct: Int,
-    scaleEnabled: Boolean,
-    onScaleModel: () -> Unit,
+    /** Active transform tool. Move/Rotate/Scale render as toggle
+     *  buttons; tapping the active one returns to [GizmoTool.Select]. */
+    gizmoTool: GizmoTool,
+    onGizmoToolChange: (GizmoTool) -> Unit,
+    /** Disabled state for the per-tool buttons (true = nothing is
+     *  selected on the bed → no-op tap). */
+    transformToolsEnabled: Boolean,
     /** Phase J paint controls. */
     paintBrush: PaintBrush = PaintBrush(),
     paintEnabled: Boolean = false,
@@ -3233,32 +3234,39 @@ fun TopNavigationPill(
 
             Divider(color = Color.Gray.copy(alpha = 0.3f), thickness = 1.dp, modifier = Modifier.width(600.dp))
 
-            // Bottom Row: Transform Tools. "Move" is the implicit default
-            // mode (laser-grab via the model-grab handle); render it as a
-            // status chip so it's visually distinct from the actionable
-            // Rotate / Scale / Paint / Reset buttons.
+            // Bottom Row: Transform Tools. Each button toggles its tool
+            // — tap once to enter that tool (gizmo appears), tap again to
+            // drop back to Select. Paint is its own modal (suppresses
+            // gizmo via TransformGizmo's tool == Select short-circuit).
+            // Reset acts on the workspace pose, not on a tool.
             Row(
                 horizontalArrangement = Arrangement.spacedBy(24.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                NavStatusChip(
+                fun toggleTool(target: GizmoTool) {
+                    onGizmoToolChange(if (gizmoTool == target) GizmoTool.Select else target)
+                }
+                val gizmoSuppressed = paintBrush.mode != PaintMode.Off
+                NavAction(
                     label = "Move",
                     icon = androidx.compose.material.icons.Icons.Default.OpenWith,
-                    active = paintBrush.mode == PaintMode.Off,
+                    isSelected = gizmoTool == GizmoTool.Move && !gizmoSuppressed,
+                    enabled = transformToolsEnabled && !gizmoSuppressed,
+                    onClick = { toggleTool(GizmoTool.Move) },
                 )
                 NavAction(
-                    label = if (modelRotZDeg == 0) "Rotate" else "Rotate ${modelRotZDeg}°",
+                    label = "Rotate",
                     icon = androidx.compose.material.icons.Icons.Default.Refresh,
-                    isSelected = modelRotZDeg != 0,
-                    enabled = rotateEnabled,
-                    onClick = onRotateModel,
+                    isSelected = gizmoTool == GizmoTool.Rotate && !gizmoSuppressed,
+                    enabled = transformToolsEnabled && !gizmoSuppressed,
+                    onClick = { toggleTool(GizmoTool.Rotate) },
                 )
                 NavAction(
-                    label = if (modelScalePct == 100) "Scale" else "Scale ${modelScalePct}%",
+                    label = "Scale",
                     icon = androidx.compose.material.icons.Icons.Default.AspectRatio,
-                    isSelected = modelScalePct != 100,
-                    enabled = scaleEnabled,
-                    onClick = onScaleModel,
+                    isSelected = gizmoTool == GizmoTool.Scale && !gizmoSuppressed,
+                    enabled = transformToolsEnabled && !gizmoSuppressed,
+                    onClick = { toggleTool(GizmoTool.Scale) },
                 )
                 NavAction(
                     label = if (paintBrush.mode == PaintMode.Off) "Paint"
@@ -4575,6 +4583,13 @@ private fun AddPrinterForm(
 @Composable
 fun TransformPanel(
     model: PlacedModel?,
+    /** Active transform tool from the top nav. The panel mirrors the
+     *  gizmo's mode-driven UX: Move shows Translate + Place-on-bed,
+     *  Rotate shows Rotate + Auto-orient + Lay-on-face, Scale shows
+     *  Scale + Mirror + Convert-units, Select shows everything. The
+     *  always-visible bottom block (Reset / Volumes / Cut / Split /
+     *  Boolean / Object Settings) isn't tool-specific and stays put. */
+    tool: GizmoTool,
     onTranslateChange: (xMm: Float, yMm: Float, zMm: Float) -> Unit,
     onRotateChange: (xDeg: Float, yDeg: Float, zDeg: Float) -> Unit,
     onScaleChange: (xPct: Float, yPct: Float, zPct: Float) -> Unit,
@@ -4711,109 +4726,138 @@ fun TransformPanel(
         )
         Spacer(Modifier.height(12.dp))
 
-        TransformAxisSection(
-            label = "Translate",
-            unit = "mm",
-            x = model.translateXmm,
-            y = model.translateYmm,
-            z = model.translateZmm,
-            onChange = onTranslateChange,
-            onResetAxis = { axis ->
-                when (axis) {
-                    0 -> onTranslateChange(0f, model.translateYmm, model.translateZmm)
-                    1 -> onTranslateChange(model.translateXmm, 0f, model.translateZmm)
-                    2 -> onTranslateChange(model.translateXmm, model.translateYmm, 0f)
-                }
-            },
-            range = NumericValidation.Ranges.translateMm,
-        )
-        Spacer(Modifier.height(8.dp))
-        TransformAxisSection(
-            label = "Rotate",
-            unit = "°",
-            x = model.rotXDeg,
-            y = model.rotYDeg,
-            z = model.rotZDeg.toFloat(),
-            onChange = onRotateChange,
-            onResetAxis = { axis ->
-                when (axis) {
-                    0 -> onRotateChange(0f, model.rotYDeg, model.rotZDeg.toFloat())
-                    1 -> onRotateChange(model.rotXDeg, 0f, model.rotZDeg.toFloat())
-                    2 -> onRotateChange(model.rotXDeg, model.rotYDeg, 0f)
-                }
-            },
-            range = NumericValidation.Ranges.rotateDeg,
-        )
-        Spacer(Modifier.height(8.dp))
-        TransformAxisSection(
-            label = "Scale",
-            unit = "%",
-            x = model.effectiveScaleX * 100f,
-            y = model.effectiveScaleY * 100f,
-            z = model.effectiveScaleZ * 100f,
-            onChange = onScaleChange,
-            onResetAxis = { axis ->
-                val ex = model.effectiveScaleX * 100f
-                val ey = model.effectiveScaleY * 100f
-                val ez = model.effectiveScaleZ * 100f
-                when (axis) {
-                    0 -> onScaleChange(100f, ey, ez)
-                    1 -> onScaleChange(ex, 100f, ez)
-                    2 -> onScaleChange(ex, ey, 100f)
-                }
-            },
-            range = NumericValidation.Ranges.scalePct,
-        )
-        Spacer(Modifier.height(12.dp))
+        // Per-tool sections. In Select mode all three axes are visible
+        // (handy for keyboard editing without committing to a tool); in
+        // Move/Rotate/Scale we show only the matching one to cut clutter.
+        val showTranslate = tool == GizmoTool.Move || tool == GizmoTool.Select
+        val showRotate = tool == GizmoTool.Rotate || tool == GizmoTool.Select
+        val showScale = tool == GizmoTool.Scale || tool == GizmoTool.Select
+        // Mirror is dimensional — group it with Scale.
+        val showMirror = tool == GizmoTool.Scale || tool == GizmoTool.Select
+        // Place-on-bed is positional — group it with Move (Reset-all
+        // stays universal, see below).
+        val showPlaceOnBed = tool == GizmoTool.Move || tool == GizmoTool.Select
+        // Auto-orient + Lay-on-face are rotational tools — group them
+        // with Rotate.
+        val showOrient = tool == GizmoTool.Rotate || tool == GizmoTool.Select
 
-        Text("Mirror", color = Color.White, style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(4.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MirrorToggle("X", model.mirrorX) {
-                onMirrorChange(it, model.mirrorY, model.mirrorZ)
-            }
-            MirrorToggle("Y", model.mirrorY) {
-                onMirrorChange(model.mirrorX, it, model.mirrorZ)
-            }
-            MirrorToggle("Z", model.mirrorZ) {
-                onMirrorChange(model.mirrorX, model.mirrorY, it)
-            }
+        if (showTranslate) {
+            TransformAxisSection(
+                label = "Translate",
+                unit = "mm",
+                x = model.translateXmm,
+                y = model.translateYmm,
+                z = model.translateZmm,
+                onChange = onTranslateChange,
+                onResetAxis = { axis ->
+                    when (axis) {
+                        0 -> onTranslateChange(0f, model.translateYmm, model.translateZmm)
+                        1 -> onTranslateChange(model.translateXmm, 0f, model.translateZmm)
+                        2 -> onTranslateChange(model.translateXmm, model.translateYmm, 0f)
+                    }
+                },
+                range = NumericValidation.Ranges.translateMm,
+            )
+            Spacer(Modifier.height(8.dp))
         }
-        Spacer(Modifier.height(12.dp))
+        if (showRotate) {
+            TransformAxisSection(
+                label = "Rotate",
+                unit = "°",
+                x = model.rotXDeg,
+                y = model.rotYDeg,
+                z = model.rotZDeg.toFloat(),
+                onChange = onRotateChange,
+                onResetAxis = { axis ->
+                    when (axis) {
+                        0 -> onRotateChange(0f, model.rotYDeg, model.rotZDeg.toFloat())
+                        1 -> onRotateChange(model.rotXDeg, 0f, model.rotZDeg.toFloat())
+                        2 -> onRotateChange(model.rotXDeg, model.rotYDeg, 0f)
+                    }
+                },
+                range = NumericValidation.Ranges.rotateDeg,
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+        if (showScale) {
+            TransformAxisSection(
+                label = "Scale",
+                unit = "%",
+                x = model.effectiveScaleX * 100f,
+                y = model.effectiveScaleY * 100f,
+                z = model.effectiveScaleZ * 100f,
+                onChange = onScaleChange,
+                onResetAxis = { axis ->
+                    val ex = model.effectiveScaleX * 100f
+                    val ey = model.effectiveScaleY * 100f
+                    val ez = model.effectiveScaleZ * 100f
+                    when (axis) {
+                        0 -> onScaleChange(100f, ey, ez)
+                        1 -> onScaleChange(ex, 100f, ez)
+                        2 -> onScaleChange(ex, ey, 100f)
+                    }
+                },
+                range = NumericValidation.Ranges.scalePct,
+            )
+            Spacer(Modifier.height(12.dp))
+        }
+
+        if (showMirror) {
+            Text("Mirror", color = Color.White, style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MirrorToggle("X", model.mirrorX) {
+                    onMirrorChange(it, model.mirrorY, model.mirrorZ)
+                }
+                MirrorToggle("Y", model.mirrorY) {
+                    onMirrorChange(model.mirrorX, it, model.mirrorZ)
+                }
+                MirrorToggle("Z", model.mirrorZ) {
+                    onMirrorChange(model.mirrorX, model.mirrorY, it)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onPlaceOnBed, modifier = Modifier.weight(1f)) {
-                Text("Place on bed")
+            if (showPlaceOnBed) {
+                OutlinedButton(onClick = onPlaceOnBed, modifier = Modifier.weight(1f)) {
+                    Text("Place on bed")
+                }
             }
+            // Reset-all is always reachable — it's the user's escape
+            // hatch from any tool's edits, not a tool-specific action.
             OutlinedButton(onClick = onResetAll, modifier = Modifier.weight(1f)) {
                 Text("Reset all")
             }
         }
         Spacer(Modifier.height(8.dp))
-        // Phase XR_OBJ_3 — Auto-orient (libslic3r-backed). One button,
-        // because the call is "find the printable orientation for me"
-        // — there's nothing to configure beyond the input mesh.
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = { onAutoOrient?.invoke() },
-                enabled = onAutoOrient != null && !autoOrientBusy,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(if (autoOrientBusy) "Orienting…" else "Auto-orient")
+        if (showOrient) {
+            // Phase XR_OBJ_3 — Auto-orient (libslic3r-backed). One button,
+            // because the call is "find the printable orientation for me"
+            // — there's nothing to configure beyond the input mesh.
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = { onAutoOrient?.invoke() },
+                    enabled = onAutoOrient != null && !autoOrientBusy,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(if (autoOrientBusy) "Orienting…" else "Auto-orient")
+                }
+                // Phase XR_OBJ_3 — Lay on face. Arms the laser pipeline
+                // (PaintMode.LayOnFace); next click on the model picks
+                // a triangle, the model rotates so that face lands flush
+                // on the bed, mode disengages.
+                OutlinedButton(
+                    onClick = { onToggleLayOnFace?.invoke() },
+                    enabled = onToggleLayOnFace != null,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(if (layOnFaceActive) "Cancel pick…" else "Lay on face")
+                }
             }
-            // Phase XR_OBJ_3 — Lay on face. Arms the laser pipeline
-            // (PaintMode.LayOnFace); next click on the model picks
-            // a triangle, the model rotates so that face lands flush
-            // on the bed, mode disengages.
-            OutlinedButton(
-                onClick = { onToggleLayOnFace?.invoke() },
-                enabled = onToggleLayOnFace != null,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(if (layOnFaceActive) "Cancel pick…" else "Lay on face")
-            }
+            Spacer(Modifier.height(8.dp))
         }
-        Spacer(Modifier.height(8.dp))
         // Phase XR_OBJ_4 — Add Part / Modifier / Negative Volume /
         // Support Enforcer / Support Blocker. Each button attaches a
         // child volume of the corresponding libslic3r ModelVolumeType

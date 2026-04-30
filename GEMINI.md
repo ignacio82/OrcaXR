@@ -86,7 +86,7 @@ Currently single `:app` module. The split below is aspirational; do NOT create m
 1. **`SpatialPanel` does not render in Home Space.** A `Subspace { SpatialPanel { Compose UI } }` placed inside an Activity that's still in *Home Space* mode produces a panel frame with system chrome but a **solid black content surface**. Call `session.scene.requestFullSpaceMode()` from a `LaunchedEffect(session)` keyed on the Session before any Subspace work depends on the panel being visible.
 
 2. **Modeless grab via spatially distinct `MovableComponent` handles.** To allow simultaneous workspace movement and model translation without modes or grab-box overlap:
-   - **Workspace Grab:** A 45×2.5×5 cm grab handle (`OrcaXR-bedGrab`) is parented to the root entity and positioned at the bed's front edge. It drives the `OrcaXR-workspace` entity's pose.
+   - **Workspace Grab:** A 5cm cube gizmo (`OrcaXR-workspaceGrab`) is parented to the root entity and positioned at the back-left corner of the build plate. It drives the `OrcaXR-workspace` entity's pose. This replaces the old large front-edge grab handle which often interfered with other interactions.
    - **Model Grab:** A 25×12.5×25 cm grab box (`OrcaXR-modelGrab`) is parented to the workspace and centered on the model. It drives the `modelOffsetXmm/Ymm` state.
    This spatially separates the interaction zones. Discard proposed rotation from `currentPose` in both cases to prevent "accidental tilt."
 

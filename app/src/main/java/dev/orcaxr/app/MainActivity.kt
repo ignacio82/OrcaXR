@@ -1313,10 +1313,16 @@ private fun XrShell(
             // against the printable polygon. deriveStlFor caches the
             // result under cacheDir so a paint-driven re-bake doesn't
             // re-derive on every stroke.
+            var dims: androidx.xr.runtime.math.Vector3? = null
             runCatching {
                 val derived = deriveStlFor(stlFile)
                 if (derived != null) {
                     val raw3mf = StlReader.read(derived)
+                    dims = androidx.xr.runtime.math.Vector3(
+                        raw3mf.bboxMax.x - raw3mf.bboxMin.x,
+                        raw3mf.bboxMax.y - raw3mf.bboxMin.y,
+                        raw3mf.bboxMax.z - raw3mf.bboxMin.z
+                    )
                     val mesh3mf = applyPlacedTransforms(raw3mf, initial)
                     bedFit = computeBedFit(mesh3mf, bedW, bedH)
                     bedCollision = BedCollision.detect(mesh3mf, bedW, bedH, recenterToBed = true)
@@ -1342,6 +1348,9 @@ private fun XrShell(
                     previewPath = out.absolutePath,
                     previewRotZDeg = producedRot,
                     previewScalePct = producedScale,
+                    baseBboxXmm = dims?.x ?: it.baseBboxXmm,
+                    baseBboxYmm = dims?.y ?: it.baseBboxYmm,
+                    baseBboxZmm = dims?.z ?: it.baseBboxZmm,
                 ) else it
             }
             stlPreviewPath = out.absolutePath
@@ -3188,80 +3197,79 @@ private fun XrShell(
         }.getOrNull()
     }
 
-    val bedGrabHandle = remember(session, rootEntity, workspaceEntity) {
-        if (rootEntity == null || workspaceEntity == null) return@remember null
-        runCatching {
-            val handle = GroupEntity.create(session, "OrcaXR-bedGrab")
-            handle.parent = rootEntity
-            handle.setPose(
-                androidx.xr.runtime.math.Pose(
-                    androidx.xr.runtime.math.Vector3(0f, WORKSPACE_Y_OFFSET, 0.20f),
-                    androidx.xr.runtime.math.Quaternion.Identity,
-                )
-            )
-            val executor = androidx.core.content.ContextCompat.getMainExecutor(ctx)
-            val listener = object : androidx.xr.scenecore.EntityMoveListener {
-                override fun onMoveUpdate(
-                    entity: androidx.xr.scenecore.Entity,
-                    currentInputRay: androidx.xr.runtime.math.Ray,
-                    currentPose: androidx.xr.runtime.math.Pose,
-                    currentScale: Float,
-                ) {
-                    val currentTx = currentPose.translation
-                    val prevHandleTx = bedHandleTx
-                    val deltaX = currentTx.x - prevHandleTx.x
-                    val deltaY = currentTx.y - prevHandleTx.y
-                    val deltaZ = currentTx.z - prevHandleTx.z
-                    
-                    val newWsTx = androidx.xr.runtime.math.Vector3(
-                        workspaceTx.x + deltaX,
-                        workspaceTx.y + deltaY,
-                        workspaceTx.z + deltaZ,
-                    )
-                    
-                    workspaceTx = newWsTx
-                    bedHandleTx = currentTx
-                    
-                    workspaceEntity.setPose(
-                        androidx.xr.runtime.math.Pose(
-                            newWsTx,
-                            WORKSPACE_ROTATION,
-                        )
-                    )
-                    entity.setPose(androidx.xr.runtime.math.Pose(currentTx, androidx.xr.runtime.math.Quaternion.Identity))
-                }
-            }
-            val mc = androidx.xr.scenecore.MovableComponent.createCustomMovable(
-                session,
-                /* scaleInZ = */ false,
-                executor,
-                listener,
-            )
-            mc.size = androidx.xr.runtime.math.FloatSize3d(0.45f, 0.025f, 0.05f)
-            handle.addComponent(mc)
-            handle
-        }.getOrNull()
-    }
-
-    // Phase G: the grab handle drives the SELECTED model. When the
-    // user picks a different model in the LeftProjectPanel, an LE
-    // below repositions the handle to that model's translation. The
-    // listener captures `selectedModelIds.firstOrNull()Ref` (a rememberUpdatedState)
-    // so the latest selection is always honored even though the
-    // listener instance was constructed once at remember time.
-    val paintModeOn = paintBrush.mode != PaintMode.Off
-    // Removed: the legacy 25×12.5×25 cm `OrcaXR-modelGrab`
-    // MovableComponent handle. With the per-tool gizmo (Move arrows
-    // for translation), the bulky grab box was the source of false
-    // laser hits — fingertip wiggle would steal a model click and
-    // drag the model into the floor. Selection now happens by tapping
-    // the model's own GltfModelEntity (already wired through
-    // GlbSceneEntity's InteractableComponent), and translation goes
-    // through the Move-tool gizmo. The bed grab handle (workspace-
-    // wide reposition) stays — that's a different affordance.
-
     Subspace {
         rootEntity?.let { root ->
+            // Phase G: Workspace Grab Handle
+            // High-visibility Magenta cube.
+            var bedGrabHandle by remember { mutableStateOf<GltfModelEntity?>(null) }
+            LaunchedEffect(session, root, workspaceEntity, bedW, bedH) {
+                val ws = workspaceEntity ?: return@LaunchedEffect
+                
+                runCatching {
+                    bedGrabHandle?.let { if (!it.isDisposed) it.dispose() }
+                    val out = File(ctx.cacheDir, "workspace_grab_cube_v10.glb")
+                    // 100mm Magenta cube (1, 0, 1)
+                    GizmoGlb.writeCube(out, 100f, floatArrayOf(0f, 0f, 0f), floatArrayOf(1f, 0f, 1f))
+                    val bytes = out.readBytes()
+                    val model = GltfModel.create(session, bytes, "workspace_grab_cube_v10.glb")
+                    val handle = GltfModelEntity.create(session, model)
+                    
+                    // Attach to session.scene instead of root to be absolutely sure it renders.
+                    // root is sometimes hidden or scaled in weird ways.
+                    handle.parent = session.scene.activitySpace
+                    handle.setScale(WORLD_SCALE)
+
+                    val bw = if (bedW > 0) bedW else 256f
+                    val bh = if (bedH > 0) bedH else 256f
+
+                    // BACK-RIGHT: X = +W/2, Z = -H/2
+                    val initialPos = androidx.xr.runtime.math.Vector3(
+                        (bw / 2f * WORLD_SCALE) + 0.10f,
+                        WORKSPACE_Y_OFFSET + 0.30f, // Elevated 30cm
+                        -(bh / 2f * WORLD_SCALE) - 0.10f
+                    )
+                    handle.setPose(androidx.xr.runtime.math.Pose(initialPos, androidx.xr.runtime.math.Quaternion.Identity))
+                    bedHandleTx = initialPos
+
+                    val executor = androidx.core.content.ContextCompat.getMainExecutor(ctx)
+                    val listener = object : androidx.xr.scenecore.EntityMoveListener {
+                        override fun onMoveUpdate(
+                            entity: androidx.xr.scenecore.Entity,
+                            currentInputRay: androidx.xr.runtime.math.Ray,
+                            currentPose: androidx.xr.runtime.math.Pose,
+                            currentScale: Float,
+                        ) {
+                            val currentTx = currentPose.translation
+                            val prevHandleTx = bedHandleTx
+                            val deltaX = currentTx.x - prevHandleTx.x
+                            val deltaY = currentTx.y - prevHandleTx.y
+                            val deltaZ = currentTx.z - prevHandleTx.z
+                            
+                            val newWsTx = androidx.xr.runtime.math.Vector3(
+                                workspaceTx.x + deltaX,
+                                workspaceTx.y + deltaY,
+                                workspaceTx.z + deltaZ,
+                            )
+                            
+                            workspaceTx = newWsTx
+                            bedHandleTx = currentTx
+                            
+                            ws.setPose(androidx.xr.runtime.math.Pose(newWsTx, WORKSPACE_ROTATION))
+                            entity.setPose(androidx.xr.runtime.math.Pose(currentTx, androidx.xr.runtime.math.Quaternion.Identity))
+                        }
+                    }
+                    val mc = androidx.xr.scenecore.MovableComponent.createCustomMovable(session, false, executor, listener)
+                    mc.size = androidx.xr.runtime.math.FloatSize3d(0.2f, 0.2f, 0.2f)
+                    handle.addComponent(mc)
+                    
+                    bedGrabHandle = handle
+                    android.util.Log.i("OrcaXR", "FORCE-ATTACH Workspace grab handle at $initialPos")
+                }
+            }
+            DisposableEffect(bedGrabHandle) {
+                onDispose { bedGrabHandle?.let { if (!it.isDisposed) it.dispose() } }
+            }
+
             SceneCoreEntity(
                 factory = { root },
                 modifier = SubspaceModifier,
@@ -3280,10 +3288,7 @@ private fun XrShell(
                         previewEnabled = glbPath != null,
                         onResetWorkspace = {
                             val newWsTx = androidx.xr.runtime.math.Vector3(0f, WORKSPACE_Y_OFFSET, 0.0f)
-                            val newHandleTx = androidx.xr.runtime.math.Vector3(0f, WORKSPACE_Y_OFFSET, 0.20f)
                             workspaceTx = newWsTx
-                            bedHandleTx = newHandleTx
-
                             // Reset model
                             workspaceEntity?.setPose(
                                 androidx.xr.runtime.math.Pose(
@@ -3291,12 +3296,7 @@ private fun XrShell(
                                     WORKSPACE_ROTATION,
                                 ),
                             )
-                            bedGrabHandle?.setPose(
-                                androidx.xr.runtime.math.Pose(
-                                    newHandleTx,
-                                    androidx.xr.runtime.math.Quaternion.Identity,
-                                ),
-                            )
+
                             // Reset every plated model's XY offset (Phase G:
                             // multi-model state). Reset uses (0, 0) for
                             // every model — the user can re-run auto-arrange
