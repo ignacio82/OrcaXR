@@ -161,9 +161,9 @@ fun LeftProjectPanel(
     placedModels: List<PlacedModel> = emptyList(),
     /** Id of the currently-selected model (the one the rotate / scale
      *  / grab tools target). Highlighted in the list. */
-    selectedPlacedModelId: String? = null,
-    onSelectPlacedModel: (id: String) -> Unit = {},
-    onDeletePlacedModel: (id: String) -> Unit = {},
+    selectedPlacedModelIds: Set<String> = emptySet(),
+    onSelectPlacedModels: (ids: Set<String>) -> Unit = {},
+    onDeletePlacedModels: (ids: Set<String>) -> Unit = {},
     /** Open the file picker in "add another" mode — picks append to
      *  the list rather than replacing it. */
     onAddPlacedModel: () -> Unit = {},
@@ -252,10 +252,10 @@ fun LeftProjectPanel(
         // so the user can discover it without having to open a menu.
         PlacedModelsSection(
             models = placedModels,
-            selectedId = selectedPlacedModelId,
+            selectedIds = selectedPlacedModelIds,
             allPlates = allPlates,
-            onSelect = onSelectPlacedModel,
-            onDelete = onDeletePlacedModel,
+            onSelectIds = onSelectPlacedModels,
+            onDeleteIds = onDeletePlacedModels,
             onAdd = onAddPlacedModel,
             onAutoArrange = onAutoArrangePlacedModels,
             onMoveToPlate = onMoveToPlate,
@@ -518,10 +518,10 @@ private fun TopCoverHintBanner(result: TopCoverRule.Result) {
 @Composable
 private fun PlacedModelsSection(
     models: List<PlacedModel>,
-    selectedId: String?,
+    selectedIds: Set<String>,
     allPlates: List<PlateMetadata>,
-    onSelect: (String) -> Unit,
-    onDelete: (String) -> Unit,
+    onSelectIds: (Set<String>) -> Unit,
+    onDeleteIds: (Set<String>) -> Unit,
     onAdd: () -> Unit,
     onAutoArrange: () -> Unit,
     onMoveToPlate: (String, Int) -> Unit,
@@ -541,8 +541,15 @@ private fun PlacedModelsSection(
                     style = MaterialTheme.typography.titleMedium,
                     color = Color.White,
                 )
-                TextButton(onClick = onAutoArrange) {
-                    Text("Auto-arrange", color = Color(0xFF7BC8FF))
+                Row {
+                    if (selectedIds.isNotEmpty()) {
+                        TextButton(onClick = { onDeleteIds(selectedIds) }) {
+                            Text("Delete Selected", color = Color(0xFFFF5252))
+                        }
+                    }
+                    TextButton(onClick = onAutoArrange) {
+                        Text("Auto-arrange", color = Color(0xFF7BC8FF))
+                    }
                 }
             }
             val groups = models.groupBy { it.groupId }
@@ -579,10 +586,13 @@ private fun PlacedModelsSection(
                         for (m in groupModels) {
                             ModelRow(
                                 m = m,
-                                isSelected = m.id == selectedId,
+                                isSelected = m.id in selectedIds,
                                 allPlates = allPlates,
-                                onSelect = onSelect,
-                                onDelete = onDelete,
+                                onSelectToggle = { selected ->
+                                    if (selected) onSelectIds(selectedIds + m.id)
+                                    else onSelectIds(selectedIds - m.id)
+                                },
+                                onDelete = { onDeleteIds(setOf(m.id)) },
                                 onMoveToPlate = onMoveToPlate,
                                 isGrouped = true,
                             )
@@ -592,10 +602,13 @@ private fun PlacedModelsSection(
                     for (m in groupModels) {
                         ModelRow(
                             m = m,
-                            isSelected = m.id == selectedId,
+                            isSelected = m.id in selectedIds,
                             allPlates = allPlates,
-                            onSelect = onSelect,
-                            onDelete = onDelete,
+                            onSelectToggle = { selected ->
+                                if (selected) onSelectIds(selectedIds + m.id)
+                                else onSelectIds(selectedIds - m.id)
+                            },
+                            onDelete = { onDeleteIds(setOf(m.id)) },
                             onMoveToPlate = onMoveToPlate,
                             isGrouped = false,
                         )
@@ -628,7 +641,7 @@ private fun ModelRow(
     m: PlacedModel,
     isSelected: Boolean,
     allPlates: List<PlateMetadata>,
-    onSelect: (String) -> Unit,
+    onSelectToggle: (Boolean) -> Unit,
     onDelete: (String) -> Unit,
     onMoveToPlate: (String, Int) -> Unit,
     isGrouped: Boolean = false,
@@ -641,14 +654,19 @@ private fun ModelRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = if (isGrouped) 16.dp else 0.dp)
-            .clickable { onSelect(m.id) },
+            .clickable { onSelectToggle(!isSelected) },
     ) {
         Row(
             modifier = Modifier
-                .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+                .padding(start = 8.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            androidx.compose.material3.Checkbox(
+                checked = isSelected,
+                onCheckedChange = onSelectToggle,
+                colors = androidx.compose.material3.CheckboxDefaults.colors(checkedColor = Color(0xFF7BC8FF))
+            )
             Column(modifier = Modifier.weight(1f).padding(vertical = 4.dp)) {
                 Text(
                     if (isGrouped) m.label.substringAfter(" - ") else m.label,

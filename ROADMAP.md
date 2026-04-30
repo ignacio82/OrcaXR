@@ -104,6 +104,20 @@ Upstream OrcaSlicer's "Fix Model" depends on the Windows-only 3D Builder API (`F
 
 **Shipped:** commit `9731320` — `ToolpathGlb.write(tubes = …)` + `TUBES_SEGMENT_CAP` fallback + `UserPreferences.toolpathTubes` + `BottomLayerPreviewPanel` Switch + `ToolpathGlbTest` (6 tests covering lines baseline / tubes counts / tube bbox / cap fallback / travels-as-hairlines / vertical-segment Y-axis fallback).
 
+### A8. G-code thumbnails for Snapmaker/OrcaSlicer parity 🔴 Not started
+
+> **Files:** `libslic3r/GCode.cpp` (`write_thumbnails`), `OrcaProfileLoader.kt` (`SAFE_KEYS`), `SlicerEngine.kt` (`slice` dispatcher), `app/src/main/cpp/slic3r_jni.cpp`.
+
+Snapmaker and Elegoo printers display a model preview on their touchscreens if the G-code contains encoded thumbnail blocks. OrcaSlicer's `thumbnails` and `thumbnails_format` config keys are in our JSON profiles but blocked by `SAFE_KEYS` and currently ignored by the JNI slice dispatcher.
+
+**Implementation outline:**
+1. **Config:** Add `thumbnails` and `thumbnails_format` to `OrcaProfileLoader.SAFE_KEYS`.
+2. **Thumbnail Generation:** In `SlicerEngine.kt`, before slicing, generate a 300×300 PNG snapshot of the model. Since the slice is headless, we can either:
+   - (a) Pass a `ByteArray` of the thumbnail PNG through JNI to `libslic3r::ThumbnailsGenerator`.
+   - (b) Use the existing `StlPreviewGlb` logic to render a simplified offscreen view.
+3. **JNI Bridge:** Update `nativeSlice` to accept thumbnail data. In `slic3r_jni.cpp`, populate a `ThumbnailsList` and pass it to `Print::process()`.
+4. **Verification:** Slice a part for the Snapmaker U1; confirm the `.gcode` file contains `; thumbnail begin` blocks; confirm the image is visible on the printer's job list.
+
 ---
 
 ## B. XR UI / UX completeness
@@ -126,6 +140,22 @@ Currently transforms are TextField-driven in TransformPanel ("snap-and-confirm n
 **Dependencies:** Galaxy XR controllers input pump (already shipped). Hand-tracked drag is explicitly out of scope (~1 cm jitter is wider than usable handle precision).
 
 **Shipped:** cb09b6b — Added TransformGizmo, GizmoGlb generation, and laser-drag interactive component handlers.
+
+### B11. Multi-selection & Batch Actions 🔴 Not started
+
+> **Files:** `MainActivity.kt` (UI state for `selectedModelIds`, modify `TransformGizmo` binding, slice/arrange filters), `PlacedModel.kt` (helper logic), `UiPanels.kt` (checkboxes/multi-select UI in `PlacedModelsSection`).
+
+Currently, users can only select and manipulate one `PlacedModel` at a time. With B9 and E3 adding potentially dozens of parts to a plate, moving or deleting them individually is tedious.
+
+**Implementation outline:**
+1. **State:** Change `selectedModelId: String?` to `selectedModelIds: Set<String>`.
+2. **UI List:** Add a visual indicator (like a checkbox or distinct highlight) to `ModelRow` to support multi-select. Long-press or a dedicated "Select All" button in the section header.
+3. **Gizmo & TransformPanel:** If exactly one model is selected, the TransformGizmo and TransformPanel edit that model. If *multiple* models are selected, the Gizmo wraps the bounding box of the *group* and applies delta translations/rotations to all members. (For MVP, if multi-selected, we can just apply delta translation to all, and disable rotation/scaling if group math is too complex).
+4. **Batch Actions:** "Delete selected", "Move selected to Plate X", "Auto-arrange selected".
+
+**Exit criteria:** User can select three parts, drag them together with the gizmo, and move them all to Plate 2 via the dropdown.
+
+**Shipped:** 30ebd84 — Enabled multi-selection in the project list, gizmo translation for grouped parts, and batch actions (move/delete).
 
 ### B2. Mixed-Filament UX panel for FullSpectrum 🔴 Not started
 
@@ -276,6 +306,47 @@ Render the probed bed-mesh grid as a heatmap GLB on the build plate. Today we'd 
 ### C5. Filament runout badges 🟢 Shipped
 
 `MoonrakerClient.queryStatus` subscribes to `filament_detect`; `LivePrintStatus` renders amber "T_N empty" pills during an active print. Hidden when the printer doesn't expose `filament_detect`.
+
+### C6. MCP Server for OrcaXR (AI Control & Smart Assistant) 🔴 Not started
+
+> **Files:** `app/src/main/java/dev/orcaxr/app/mcp/` (new), `SlicerEngine.kt`, `MoonrakerClient.kt`, `MainActivity.kt`.
+
+To enable AI agents (like Claude or Gemini) to "see" and "control" OrcaXR via the Model Context Protocol (MCP). This unblocks building a native Smart Assistant into the XR UI.
+
+**Implementation outline:**
+1. **Server:** Implement a lightweight MCP server (JSON-RPC over HTTP/WebSockets) hosted within the Android app (using Ktor or a simple `ServerSocket`).
+2. **Tools:**
+   - `get_workspace_state`: returns a JSON summary of models on the bed, their transforms, and active plates.
+   - `slice_active_plate`: triggers the slicing engine and returns the G-code path + metadata.
+   - `print_model(path)`: sends a G-code to the connected Moonraker printer.
+   - `get_printer_status`: returns temperatures, fan speeds, and job progress.
+   - `transform_model(id, x, y, z, rotation, scale)`: applies remote transforms.
+3. **Smart Assistant UI:** Add a "Smart Assistant" panel in the XR shell where the user can see a chat-like interface or suggested actions generated by the AI agent connected via MCP.
+4. **Verification:** Connect an external MCP-capable client (e.g. Claude Desktop) to the app's IP/port; confirm it can list the bed's contents and trigger a slice successfully.
+
+### C7. Spatial "Digital Twin" Monitoring 🔴 Not started
+
+> **Files:** `MoonrakerClient.kt`, `ToolpathGlb.kt`, `MainActivity.kt`.
+
+Renders a real-time 3D "ghost" of the print in progress within the XR workspace, allowing remote monitoring of the job's progress.
+
+**Implementation outline:**
+1. **Telemetry:** Fetch `gcode_file_position` and `print_stats.z_height` from Moonraker via `MoonrakerClient.queryStatus`.
+2. **Dynamic Toolpath:** Update `ToolpathGlb.write` to accept a `maxByteOffset` and render only the extrusion segments whose G-code source lines are below that offset.
+3. **Entity Sync:** Create a "digital twin" entity in `XrShell`. Sync its vertical position with the reported `z_height` and refresh its GLB as the file position advances.
+4. **Verification:** Start a print on the U1; confirm the virtual model in XR "grows" in sync with the physical nozzle's progress.
+
+### C8. Voice-to-Action Integration (Speech-to-MCP) 🔴 Not started
+
+> **Files:** `app/src/main/java/dev/orcaxr/app/voice/` (new), `MainActivity.kt`, C6 MCP Server logic.
+
+Enables hands-free control of the slicer and printer using voice commands, mapping spoken intent to MCP tool calls.
+
+**Implementation outline:**
+1. **Speech API:** Integrate Android `SpeechRecognizer` with a trigger button in the `TopNavigationPill`.
+2. **Intent Mapping:** Use a simple keyword-based or LLM-assisted mapper to translate recognized text (e.g., "Slice for PLA") to MCP tool calls (`slice_active_plate` with `material="PLA"`).
+3. **Feedback:** Show a transcript of the recognized command and a confirmation Toast before executing destructive actions (like "Clear bed").
+4. **Verification:** Say "Orca, slice the current plate"; confirm the slicing progress bar appears without touching the screen.
 
 ---
 
@@ -517,4 +588,6 @@ Brief reference index. Use `git log --oneline --grep=<phase>` for the full commi
 - **Update this file in the same commit** as the code change that flips a status. Don't let it lag the code.
 - **Don't restate GEMINI.md gotchas here.** Cross-reference them by number (e.g., "gotcha #61").
 - **Don't dump deep context into a side file.** This roadmap is intentionally the only forward-looking document — when a feature needs more detail than fits here, expand the entry inline with file paths and exit criteria, not a separate plan doc.
+- **Keep this file under ~600 lines.** If it grows past that, split a subsection out as a sibling roadmap (e.g., `ROADMAP-painting.md`) and link from here.
+ feature needs more detail than fits here, expand the entry inline with file paths and exit criteria, not a separate plan doc.
 - **Keep this file under ~600 lines.** If it grows past that, split a subsection out as a sibling roadmap (e.g., `ROADMAP-painting.md`) and link from here.

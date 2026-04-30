@@ -752,12 +752,12 @@ private fun XrShell(
     // every time they change their mind.
     //
     // Phase G replaces the single `loadedStl` with a list. The
-    // `selectedModelId` picks which model the rotate/scale/grab tools
+    // `selectedModelIds.firstOrNull()` picks which model the rotate/scale/grab tools
     // operate on; backward-compat derived values (loadedStl,
     // modelRotZDeg, etc.) read off the selected model so most consumers
     // didn't have to change.
     var placedModels by remember { mutableStateOf<List<PlacedModel>>(emptyList()) }
-    var selectedModelId by remember { mutableStateOf<String?>(null) }
+    var selectedModelIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     // Phase XR_OBJ_1: tracks which model the laser is currently hovering
     // over. Set by the per-model InteractableComponent's HOVER_ENTER /
     // HOVER_EXIT events. The hover-ghost outline is deferred to a follow-
@@ -809,7 +809,7 @@ private fun XrShell(
     }
 
     val selectedModel: PlacedModel? =
-        placedModels.filter { it.plateId == activePlateId }.firstOrNull { it.id == selectedModelId }
+        placedModels.filter { it.plateId == activePlateId }.firstOrNull { it.id == selectedModelIds.firstOrNull() }
             ?: placedModels.filter { it.plateId == activePlateId }.firstOrNull()
     // Backward-compat: existing read sites (top-nav rotate/scale,
     // SaveAsStl, the test harness, BottomRightSummaryPanel) refer to
@@ -823,7 +823,7 @@ private fun XrShell(
     // selected. Snapshot-state reassignment routes through the
     // `placedModels` setter so Compose recomposes.
     fun updateSelected(transform: (PlacedModel) -> PlacedModel) {
-        val id = selectedModelId ?: return
+        val id = selectedModelIds.firstOrNull() ?: return
         placedModels = placedModels.map { if (it.id == id) transform(it) else it }
     }
     
@@ -1485,7 +1485,7 @@ private fun XrShell(
             // state is preserved (the user is editing the model, not
             // loading a new one).
             if (mode is PickerMode.AddVolume) {
-                val targetId = selectedModelId
+                val targetId = selectedModelIds.firstOrNull()
                 if (targetId == null) {
                     android.widget.Toast.makeText(
                         ctx,
@@ -1555,7 +1555,7 @@ private fun XrShell(
             when (mode) {
                 PickerMode.Replace -> {
                     placedModels = freshList
-                    selectedModelId = freshList.first().id
+                    selectedModelIds = setOfNotNull(freshList.first().id)
                 }
                 PickerMode.Add -> {
                     if (placedModels.size + freshList.size > MAX_PLACED_MODELS) {
@@ -1567,7 +1567,7 @@ private fun XrShell(
                         return@launch
                     }
                     placedModels = placedModels + freshList
-                    selectedModelId = freshList.first().id
+                    selectedModelIds = setOfNotNull(freshList.first().id)
                 }
                 is PickerMode.AddVolume -> {
                     // Already handled above — the early return prevents
@@ -1774,7 +1774,7 @@ private fun XrShell(
             val newId = "model_${System.currentTimeMillis().toString(36)}_cut"
             val fresh = PlacedModel(id = newId, source = out, label = "Cut@${planeZmm.toInt()}mm")
             placedModels = placedModels.filter { it.id != sourceId } + fresh
-            selectedModelId = newId
+            selectedModelIds = setOfNotNull(newId)
             sliceState.value = SliceUiState.Idle
             workspaceMode = WorkspaceMode.Prepare
             isLoadingModel = true
@@ -1834,7 +1834,7 @@ private fun XrShell(
             val fresh = PlacedModel(id = newId, source = out, label = "Bool ${opStr}")
             // Replace BOTH sources with the boolean output.
             placedModels = placedModels.filter { it.id != aId && it.id != bId } + fresh
-            selectedModelId = newId
+            selectedModelIds = setOfNotNull(newId)
             sliceState.value = SliceUiState.Idle
             workspaceMode = WorkspaceMode.Prepare
             isLoadingModel = true
@@ -1956,7 +1956,7 @@ private fun XrShell(
                 )
             }
             placedModels = placedModels.filter { it.id != sourceId } + newModels
-            selectedModelId = newModels.firstOrNull()?.id
+            selectedModelIds = setOfNotNull(newModels.firstOrNull()?.id)
             sliceState.value = SliceUiState.Idle
             workspaceMode = WorkspaceMode.Prepare
             isLoadingModel = true
@@ -2149,7 +2149,7 @@ private fun XrShell(
     // A change also invalidates the prior toolpath — drop it and let
     // the user re-slice.
     LaunchedEffect(
-        selectedModelId,
+        selectedModelIds.firstOrNull(),
         selectedModel?.rotZDeg, selectedModel?.scalePct,
         // Phase XR_OBJ_2: per-axis transform fields drive a re-bake
         // when the user types a new value in TransformPanel.
@@ -2502,7 +2502,7 @@ private fun XrShell(
         var xArmed = true
         var yArmed = true
         while (kotlin.coroutines.coroutineContext[kotlinx.coroutines.Job]?.isActive != false) {
-            val sel = selectedModelId
+            val sel = selectedModelIds.firstOrNull()
             if (sel != null) {
                 val xRaw = controllerInput.leftStickX.value
                 val yRaw = controllerInput.leftStickY.value
@@ -2838,7 +2838,7 @@ private fun XrShell(
                     }
                 }
                 is TestController.Command.SetObjectConfig -> {
-                    val target = testStatePlacedModels.firstOrNull { it.id == selectedModelId }
+                    val target = testStatePlacedModels.firstOrNull { it.id == selectedModelIds.firstOrNull() }
                         ?: testStatePlacedModels.firstOrNull()
                     if (target == null) {
                         android.util.Log.e("OrcaXR/test", "SetObjectConfig: no model loaded")
@@ -2857,7 +2857,7 @@ private fun XrShell(
                     }
                 }
                 is TestController.Command.ClonePattern -> {
-                    val target = testStatePlacedModels.firstOrNull { it.id == selectedModelId }
+                    val target = testStatePlacedModels.firstOrNull { it.id == selectedModelIds.firstOrNull() }
                         ?: testStatePlacedModels.firstOrNull()
                     if (target == null) {
                         android.util.Log.e("OrcaXR/test", "ClonePattern: no model loaded")
@@ -2869,7 +2869,7 @@ private fun XrShell(
                 }
                 TestController.Command.Split -> {
                     val placed = testStatePlacedModels
-                    val target = placed.firstOrNull { it.id == selectedModelId } ?: placed.firstOrNull()
+                    val target = placed.firstOrNull { it.id == selectedModelIds.firstOrNull() } ?: placed.firstOrNull()
                     if (target == null) {
                         android.util.Log.e("OrcaXR/test", "Split: no model loaded")
                     } else {
@@ -2888,7 +2888,7 @@ private fun XrShell(
                     }
                 }
                 is TestController.Command.Cut -> {
-                    val target = testStatePlacedModels.firstOrNull { it.id == selectedModelId }
+                    val target = testStatePlacedModels.firstOrNull { it.id == selectedModelIds.firstOrNull() }
                         ?: testStatePlacedModels.firstOrNull()
                     if (target == null) {
                         android.util.Log.e("OrcaXR/test", "Cut: no model loaded")
@@ -2916,7 +2916,7 @@ private fun XrShell(
                     }
                 }
                 is TestController.Command.AddPart -> {
-                    val targetId = selectedModelId ?: testStatePlacedModels.firstOrNull()?.id
+                    val targetId = selectedModelIds.firstOrNull() ?: testStatePlacedModels.firstOrNull()?.id
                     if (targetId == null) {
                         android.util.Log.e("OrcaXR/test", "AddPart: no model loaded")
                     } else {
@@ -2941,7 +2941,7 @@ private fun XrShell(
                     }
                 }
                 TestController.Command.AutoOrient -> {
-                    val sel = testStatePlacedModels.firstOrNull { it.id == selectedModelId }
+                    val sel = testStatePlacedModels.firstOrNull { it.id == selectedModelIds.firstOrNull() }
                         ?: testStatePlacedModels.firstOrNull()
                     if (sel == null) {
                         android.util.Log.e("OrcaXR/test", "AutoOrient: no model loaded")
@@ -3008,7 +3008,7 @@ private fun XrShell(
                                 val stl = copyBundledCube(ctx)
                                 val cubeId = "model_cube_${System.currentTimeMillis().toString(36)}"
                                 placedModels = listOf(PlacedModel(id = cubeId, source = stl, label = label))
-                                selectedModelId = cubeId
+                                selectedModelIds = setOfNotNull(cubeId)
                                 previewStl(cubeId)
                                 runSlice(stl, label)
                             }
@@ -3206,10 +3206,10 @@ private fun XrShell(
     // Phase G: the grab handle drives the SELECTED model. When the
     // user picks a different model in the LeftProjectPanel, an LE
     // below repositions the handle to that model's translation. The
-    // listener captures `selectedModelIdRef` (a rememberUpdatedState)
+    // listener captures `selectedModelIds.firstOrNull()Ref` (a rememberUpdatedState)
     // so the latest selection is always honored even though the
     // listener instance was constructed once at remember time.
-    val selectedModelIdLive = rememberUpdatedState(selectedModelId)
+    val selectedModelIdsLive = rememberUpdatedState(selectedModelIds)
     // Phase J: when paint mode is on, the model-grab volume gets out
     // of the laser's way so it can hit the model entity directly.
     // Re-keying on the paint flag means flipping paint on/off
@@ -3239,7 +3239,7 @@ private fun XrShell(
                     val rawX = currentPose.translation.x / WORLD_SCALE
                     val rawY = currentPose.translation.y / WORLD_SCALE
                     val snapped = snapAndClampOffset(rawX, rawY)
-                    val targetId = selectedModelIdLive.value
+                    val targetId = selectedModelIdsLive.value.firstOrNull()
                     if (targetId != null) {
                         placedModels = placedModels.map {
                             if (it.id == targetId) it.copy(
@@ -3556,8 +3556,8 @@ private fun XrShell(
                             // Phase E3: only clear models on the ACTIVE plate.
                             val removed = placedModels.filter { it.plateId == activePlateId }
                             placedModels = placedModels.filter { it.plateId != activePlateId }
-                            if (selectedModelId in removed.map { it.id }) {
-                                selectedModelId = placedModels.firstOrNull()?.id
+                            if (selectedModelIds.firstOrNull() in removed.map { it.id }) {
+                                selectedModelIds = setOfNotNull(placedModels.firstOrNull()?.id)
                             }
                             if (placedModelsOnActivePlate.isEmpty()) {
                                 glbPath = null
@@ -3578,42 +3578,30 @@ private fun XrShell(
                             }
                         },
                         placedModels = placedModelsOnActivePlate,
-                        selectedPlacedModelId = selectedModelId,
-                        onSelectPlacedModel = { id ->
-                            // Tap-to-select. Re-running previewStl is
-                            // not necessary — the model already has its
-                            // own previewPath; the grab handle re-
-                            // positions via the LE keyed on selection.
-                            selectedModelId = id
+                        selectedPlacedModelIds = selectedModelIds,
+                        onSelectPlacedModels = { ids ->
+                            selectedModelIds = ids
                         },
-                        onDeletePlacedModel = { id ->
-                            // Drop just this model from the bed. Sweep
-                            // its preview GLBs from the cache and re-
+                        onDeletePlacedModels = { ids ->
+                            // Drop these models from the bed. Sweep
+                            // their preview GLBs from the cache and re-
                             // pick a selection if we removed the
-                            // currently-selected one.
-                            val removed = placedModels.firstOrNull { it.id == id }
-                            placedModels = placedModels.filter { it.id != id }
-                            if (selectedModelId == id) {
-                                selectedModelId = placedModels.firstOrNull()?.id
+                            // active one.
+                            val removed = placedModels.filter { it.id in ids }
+                            placedModels = placedModels.filter { it.id !in ids }
+                            selectedModelIds = selectedModelIds - ids
+                            
+                            ids.forEach { id ->
+                                sweepOldPreviews(File(""), id)
                             }
-                            if (placedModels.isEmpty()) {
+
+                            if (placedModelsOnActivePlate.isEmpty()) {
                                 glbPath = null
                                 stlPreviewPath = null
                                 bedFit = null
                                 bedCollision = null
                                 sliceState.value = SliceUiState.Idle
                                 workspaceMode = WorkspaceMode.Prepare
-                            }
-                            // Best-effort cleanup of the removed model's
-                            // preview GLB cache. Stale files won't break
-                            // anything but they pile up on long sessions.
-                            if (removed != null) {
-                                runCatching {
-                                    ctx.cacheDir.listFiles { f ->
-                                        f.name.startsWith("stl_preview_${removed.id}_v") &&
-                                            f.name.endsWith(".glb")
-                                    }?.forEach { it.delete() }
-                                }
                             }
                         },
                         onAddPlacedModel = launchPickerForAdd,
@@ -4042,7 +4030,7 @@ private fun XrShell(
                                         // Auto-assigned to activePlateId (default)
                                         val fresh = PlacedModel(id = cubeId, source = stl, label = label, plateId = activePlateId)
                                         placedModels = placedModels + fresh
-                                        selectedModelId = cubeId
+                                        selectedModelIds = setOfNotNull(cubeId)
                                         previewStl(cubeId)
                                         runSlice(stl, label)
                                     }
@@ -4282,15 +4270,15 @@ private fun XrShell(
                                 previewScalePct = -1,
                             )
                             placedModels = placedModels + clone
-                            selectedModelId = newId
+                            selectedModelIds = setOfNotNull(newId)
                             scope.launch { previewStl(newId) }
                         },
                         onDelete = {
-                            val id = selectedModelId ?: return@RadialMenuPanel
+                            val id = selectedModelIds.firstOrNull() ?: return@RadialMenuPanel
                             val removed = placedModels.firstOrNull { it.id == id }
                             placedModels = placedModels.filter { it.id != id }
-                            if (selectedModelId == id) {
-                                selectedModelId = placedModels.firstOrNull()?.id
+                            if (selectedModelIds.firstOrNull() == id) {
+                                selectedModelIds = setOfNotNull(placedModels.firstOrNull()?.id)
                             }
                             if (placedModels.isEmpty()) {
                                 glbPath = null
@@ -4312,7 +4300,7 @@ private fun XrShell(
                         onArrange = { runAutoArrange() },
                         duplicateEnabled = selectedModel != null &&
                             placedModels.size < MAX_PLACED_MODELS,
-                        deleteEnabled = selectedModelId != null,
+                        deleteEnabled = selectedModelIds.firstOrNull() != null,
                         arrangeEnabled = placedModels.size >= 2,
                     )
                 }
@@ -4370,7 +4358,7 @@ private fun XrShell(
                                     val stl = copyBundledCube(ctx)
                                     val cubeId = "model_cube_${System.currentTimeMillis().toString(36)}"
                                     placedModels = listOf(PlacedModel(id = cubeId, source = stl, label = label))
-                                    selectedModelId = cubeId
+                                    selectedModelIds = setOfNotNull(cubeId)
                                     previewStl(cubeId)
                                     runSlice(stl, label)
                                 }
@@ -4708,7 +4696,7 @@ private fun XrShell(
                                         runBoolean(srcId, m.id, op)
                                     }
                                 } else {
-                                    selectedModelId = m.id
+                                    selectedModelIds = setOfNotNull(m.id)
                                 }
                             },
                             onHoverChange = { entered ->
@@ -4729,18 +4717,41 @@ private fun XrShell(
                 // pipeline so it can occlude paint hits if it overlaps
                 // the model. Keyed on (id, footprint, height) so the
                 // GLB rebakes when the user rotates / scales.
-                val selected = placedModels.firstOrNull { it.id == selectedModelId }
-                if (selected != null && paintBrush.mode == PaintMode.Off) {
-                    val (fw, fd) = selected.footprintMm()
-                    val fh = selected.baseBboxZmm * (selected.scalePct / 100f)
-                    if (fw > 0f && fd > 0f && fh > 0f) {
-                        key(selected.id, fw, fd, fh) {
+                val selectedList = placedModels.filter { it.id in selectedModelIds }
+                if (selectedList.isNotEmpty() && paintBrush.mode == PaintMode.Off) {
+                    var minX = Float.POSITIVE_INFINITY
+                    var maxX = Float.NEGATIVE_INFINITY
+                    var minY = Float.POSITIVE_INFINITY
+                    var maxY = Float.NEGATIVE_INFINITY
+                    var maxZ = Float.NEGATIVE_INFINITY // Base is 0
+                    
+                    for (m in selectedList) {
+                        val (w, d) = m.footprintMm()
+                        val h = m.baseBboxZmm * (m.scalePct / 100f)
+                        val cx = m.translateXmm
+                        val cy = m.translateYmm
+                        if (cx - w/2 < minX) minX = cx - w/2
+                        if (cx + w/2 > maxX) maxX = cx + w/2
+                        if (cy - d/2 < minY) minY = cy - d/2
+                        if (cy + d/2 > maxY) maxY = cy + d/2
+                        if (h > maxZ) maxZ = h
+                    }
+                    
+                    val fw = maxX - minX
+                    val fd = maxY - minY
+                    val fh = maxZ
+                    
+                    if (fw > 0f && fd > 0f && fh > 0f && !fw.isInfinite()) {
+                        val cx = (minX + maxX) / 2f
+                        val cy = (minY + maxY) / 2f
+                        
+                        key(selectedModelIds.hashCode(), fw, fd, fh) {
                             SelectionBboxEntity(
                                 session = session,
                                 parentEntity = workspaceEntity,
-                                modelId = selected.id,
-                                offsetXmm = selected.translateXmm,
-                                offsetYmm = selected.translateYmm,
+                                modelId = "multi_select_bbox",
+                                offsetXmm = cx,
+                                offsetYmm = cy,
                                 sizeXmm = fw,
                                 sizeYmm = fd,
                                 sizeZmm = fh,
@@ -4749,14 +4760,76 @@ private fun XrShell(
                     }
                     
                     if (!isWorkspaceGrabbing) {
-                        key(selected.id) {
-                            TransformGizmo(
-                                session = session,
-                                parentEntity = workspaceEntity,
-                                selectedModel = selected,
-                                workspaceTx = workspaceTx,
-                                onUpdateSelected = ::updateSelected
-                            )
+                        if (selectedModelIds.size > 1) {
+                            // B11 Multi-select Gizmo: Center on the bounding box of the group.
+                            val groupModels = placedModels.filter { it.id in selectedModelIds }
+                            if (groupModels.isNotEmpty()) {
+                                var minX = Float.POSITIVE_INFINITY
+                                var maxX = Float.NEGATIVE_INFINITY
+                                var minY = Float.POSITIVE_INFINITY
+                                var maxY = Float.NEGATIVE_INFINITY
+                                var maxZ = Float.NEGATIVE_INFINITY // Base is 0
+                                
+                                for (m in groupModels) {
+                                    val (w, d) = m.footprintMm()
+                                    val h = m.baseBboxZmm * (m.scalePct / 100f)
+                                    val cx = m.translateXmm
+                                    val cy = m.translateYmm
+                                    if (cx - w/2 < minX) minX = cx - w/2
+                                    if (cx + w/2 > maxX) maxX = cx + w/2
+                                    if (cy - d/2 < minY) minY = cy - d/2
+                                    if (cy + d/2 > maxY) maxY = cy + d/2
+                                    if (h > maxZ) maxZ = h
+                                }
+                                
+                                val groupCenter = PlacedModel(
+                                    id = "multi_select_gizmo",
+                                    source = groupModels.first().source, // Dummy
+                                    label = "Group",
+                                    translateXmm = (minX + maxX) / 2f,
+                                    translateYmm = (minY + maxY) / 2f,
+                                    // Scale handles aren't fully supported for groups yet, 
+                                    // but we need a valid model to pass down
+                                )
+                                
+                                key(selectedModelIds.hashCode()) {
+                                    TransformGizmo(
+                                        session = session,
+                                        parentEntity = workspaceEntity,
+                                        selectedModel = groupCenter,
+                                        workspaceTx = workspaceTx,
+                                        onUpdateSelected = { transform ->
+                                            val old = groupCenter
+                                            val new = transform(old)
+                                            val dx = new.translateXmm - old.translateXmm
+                                            val dy = new.translateYmm - old.translateYmm
+                                            val dz = new.translateZmm - old.translateZmm
+                                            
+                                            // Apply delta to all selected models
+                                            placedModels = placedModels.map { m ->
+                                                if (m.id in selectedModelIds) {
+                                                    m.copy(
+                                                        translateXmm = m.translateXmm + dx,
+                                                        translateYmm = m.translateYmm + dy,
+                                                        translateZmm = m.translateZmm + dz
+                                                    )
+                                                } else m
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        } else if (selectedList.size == 1) {
+                            val selected = selectedList.first()
+                            key(selected.id) {
+                                TransformGizmo(
+                                    session = session,
+                                    parentEntity = workspaceEntity,
+                                    selectedModel = selected,
+                                    workspaceTx = workspaceTx,
+                                    onUpdateSelected = ::updateSelected
+                                )
+                            }
                         }
                     }
                 }
@@ -5039,7 +5112,7 @@ private fun GlbSceneEntity(
     // needs to react to. Three modes, picked in priority order:
     //   1. `paintHooks` non-null  → paint pipeline (Phase J).
     //   2. `onTap` or `onHoverChange` non-null → selection pipeline
-    //      (Phase XR_OBJ_1: tap to set selectedModelId, hover to set
+    //      (Phase XR_OBJ_1: tap to set selectedModelIds.firstOrNull(), hover to set
     //      hoveredModelId).
     //   3. Neither → no component attached.
     //
