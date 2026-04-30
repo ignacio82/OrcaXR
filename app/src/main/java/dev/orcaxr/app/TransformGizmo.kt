@@ -69,22 +69,29 @@ private const val GIZMO_SCALE_OFFSET_MM = 60f
 
 /**
  * Per-instance scale for the gizmo handles. Sized so the arrow tip sits
- * ~25 mm beyond the model's largest half-extent, with rings just outside
+ * ~40 mm beyond the model's largest half-extent, with rings just outside
  * the arrows and scale cubes just outside the rings. Floors at WORLD_SCALE
  * so very small models still get a reachable handle.
  *
  * The arrow geometry's nominal length is [GIZMO_ARROW_LEN_MM]; multiplying
- * by `(halfMax + 25) / GIZMO_ARROW_LEN_MM` makes the world-space arrow
- * length equal `halfMax + 25` mm at WORLD_SCALE.
+ * by `(halfMax + 40) / GIZMO_ARROW_LEN_MM` makes the world-space arrow
+ * length equal `halfMax + 40` mm at WORLD_SCALE.
  */
 private fun computeGizmoScale(selected: PlacedModel): Float {
     val effX = selected.baseBboxXmm * selected.effectiveScaleX
     val effY = selected.baseBboxYmm * selected.effectiveScaleY
     val effZ = selected.baseBboxZmm * selected.effectiveScaleZ
     val halfMax = maxOf(effX, effY, effZ) / 2f
-    val targetLenMm = (halfMax + 25f).coerceAtLeast(GIZMO_ARROW_LEN_MM)
+    val targetLenMm = (halfMax + 40f).coerceAtLeast(GIZMO_ARROW_LEN_MM)
     return WORLD_SCALE * (targetLenMm / GIZMO_ARROW_LEN_MM)
 }
+
+/** Half the model's effective Z extent — used to lift the gizmo root from
+ *  the bed (where the model's translateZmm is anchored after the bed-snap
+ *  pass) to the model's geometric center, so the +Z arrow has room to poke
+ *  out the top instead of disappearing inside the mesh. */
+private fun modelHalfHeightMm(selected: PlacedModel): Float =
+    selected.baseBboxZmm * selected.effectiveScaleZ / 2f
 
 // XR input filter: SceneCore delivers DOWN/MOVE/UP/CANCEL from any of
 // CONTROLLER, HANDS, MOUSE, GAZE_AND_GESTURE depending on the device. The
@@ -106,6 +113,12 @@ fun TransformGizmo(
      *  composition survive tool switches without re-creating the
      *  GroupEntity root). */
     tool: GizmoTool,
+    /** Live-drag override, sourced from the same `liveDragOverride` slot
+     *  the model preview reads. Applied to the gizmo's root pose so the
+     *  arrows / rings / cubes follow the model in real time during a
+     *  drag (rather than staying anchored at the pre-drag position
+     *  while the model translates away from them). Null = no drag. */
+    liveOverride: GizmoDragOverride? = null,
     /** Emitted continuously during drag with the in-progress delta. The
      *  parent should apply it as a live setPose/setScale on the model
      *  entity (no re-bake). null = no drag in progress, drop the override. */
@@ -133,19 +146,30 @@ fun TransformGizmo(
     val root = rootEntity ?: return
 
     val gizmoScale = computeGizmoScale(selectedModel)
+    val halfHeightMm = modelHalfHeightMm(selectedModel)
+    val ovTx = liveOverride?.deltaTxMm ?: 0f
+    val ovTy = liveOverride?.deltaTyMm ?: 0f
+    val ovTz = liveOverride?.deltaTzMm ?: 0f
 
-    LaunchedEffect(root, selectedModel.translateXmm, selectedModel.translateYmm, selectedModel.translateZmm) {
+    LaunchedEffect(
+        root,
+        selectedModel.translateXmm, selectedModel.translateYmm, selectedModel.translateZmm,
+        halfHeightMm, ovTx, ovTy, ovTz,
+    ) {
         if (root.isDisposed) return@LaunchedEffect
-        root.setPose(Pose(
-            Vector3(selectedModel.translateXmm * WORLD_SCALE, selectedModel.translateYmm * WORLD_SCALE, selectedModel.translateZmm * WORLD_SCALE),
-            Quaternion.Identity
-        ))
+        // Anchor at the model's geometric center (not the bed) so each
+        // axis arrow has room to extend past the corresponding bbox face.
+        // During a drag, the live override slides the root with the model.
+        val cx = (selectedModel.translateXmm + ovTx) * WORLD_SCALE
+        val cy = (selectedModel.translateYmm + ovTy) * WORLD_SCALE
+        val cz = (selectedModel.translateZmm + halfHeightMm + ovTz) * WORLD_SCALE
+        root.setPose(Pose(Vector3(cx, cy, cz), Quaternion.Identity))
     }
 
     val centerWorld = Vector3(
-        workspaceTx.x + selectedModel.translateXmm * WORLD_SCALE,
-        workspaceTx.y + selectedModel.translateYmm * WORLD_SCALE,
-        workspaceTx.z + selectedModel.translateZmm * WORLD_SCALE
+        workspaceTx.x + (selectedModel.translateXmm + ovTx) * WORLD_SCALE,
+        workspaceTx.y + (selectedModel.translateYmm + ovTy) * WORLD_SCALE,
+        workspaceTx.z + (selectedModel.translateZmm + halfHeightMm + ovTz) * WORLD_SCALE,
     )
 
     // Translation Arrows — drag projected onto printer axis (which after

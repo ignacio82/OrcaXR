@@ -842,6 +842,13 @@ private fun XrShell(
     var liveDragOverride by remember {
         mutableStateOf<Pair<Set<String>, GizmoDragOverride>?>(null)
     }
+
+    // Active transform tool (Move / Rotate / Scale) selected from the
+    // top nav. Default Move so loading a model and grabbing it Just
+    // Works without a tool tap. Tapping the active tool's button cycles
+    // back to Select (no gizmo) — handy when the user wants the gizmo
+    // out of the way to inspect the model.
+    var gizmoTool by remember { mutableStateOf(GizmoTool.Move) }
     
     var devicesShown by remember { mutableStateOf(false) }
     // Roadmap B5 — Galaxy XR controller help card visibility. Toggled
@@ -3242,94 +3249,16 @@ private fun XrShell(
     // listener captures `selectedModelIds.firstOrNull()Ref` (a rememberUpdatedState)
     // so the latest selection is always honored even though the
     // listener instance was constructed once at remember time.
-    val selectedModelIdsLive = rememberUpdatedState(selectedModelIds)
-    // Phase J: when paint mode is on, the model-grab volume gets out
-    // of the laser's way so it can hit the model entity directly.
-    // Re-keying on the paint flag means flipping paint on/off
-    // disposes/recreates the handle. The model's translation isn't
-    // lost — it lives on `PlacedModel.translateXmm/Ymm` and the
-    // re-position LaunchedEffect re-poses the handle on creation.
     val paintModeOn = paintBrush.mode != PaintMode.Off
-    val modelGrabHandle = remember(session, workspaceEntity, paintModeOn) {
-        if (workspaceEntity == null || paintModeOn) return@remember null
-        runCatching {
-            val handle = GroupEntity.create(session, "OrcaXR-modelGrab")
-            handle.parent = workspaceEntity
-            handle.setPose(
-                androidx.xr.runtime.math.Pose(
-                    androidx.xr.runtime.math.Vector3(0f, 0f, 0f),
-                    androidx.xr.runtime.math.Quaternion.Identity,
-                )
-            )
-            val executor = androidx.core.content.ContextCompat.getMainExecutor(ctx)
-            val listener = object : androidx.xr.scenecore.EntityMoveListener {
-                override fun onMoveUpdate(
-                    entity: androidx.xr.scenecore.Entity,
-                    currentInputRay: androidx.xr.runtime.math.Ray,
-                    currentPose: androidx.xr.runtime.math.Pose,
-                    currentScale: Float,
-                ) {
-                    val rawX = currentPose.translation.x / WORLD_SCALE
-                    val rawY = currentPose.translation.y / WORLD_SCALE
-                    val snapped = snapAndClampOffset(rawX, rawY)
-                    val targetId = selectedModelIdsLive.value.firstOrNull()
-                    if (targetId != null) {
-                        placedModels = placedModels.map {
-                            if (it.id == targetId) it.copy(
-                                translateXmm = snapped.x,
-                                translateYmm = snapped.y,
-                            ) else it
-                        }
-                    }
-                    entity.setPose(
-                        androidx.xr.runtime.math.Pose(
-                            androidx.xr.runtime.math.Vector3(snapped.x * WORLD_SCALE, snapped.y * WORLD_SCALE, 0f),
-                            androidx.xr.runtime.math.Quaternion.Identity,
-                        )
-                    )
-                }
-            }
-            val mc = androidx.xr.scenecore.MovableComponent.createCustomMovable(
-                session,
-                /* scaleInZ = */ false,
-                executor,
-                listener,
-            )
-            mc.size = androidx.xr.runtime.math.FloatSize3d(0.25f, 0.125f, 0.25f)
-            handle.addComponent(mc)
-            handle
-        }.getOrNull()
-    }
-
-    // Re-position the grab handle whenever the selected model
-    // changes (or its translation is mutated by auto-arrange). The
-    // handle is the user's affordance for "this is the model I'll
-    // move next" — silently leaving it on the previous model
-    // breaks the spatial mapping the workspace relies on.
-    LaunchedEffect(modelGrabHandle, selectedModel?.id, selectedModel?.translateXmm, selectedModel?.translateYmm) {
-        val handle = modelGrabHandle ?: return@LaunchedEffect
-        val sel = selectedModel ?: run {
-            // No selection — park the handle at workspace origin
-            // so it doesn't strand on the previous model's position.
-            handle.setPose(
-                androidx.xr.runtime.math.Pose(
-                    androidx.xr.runtime.math.Vector3(0f, 0f, 0f),
-                    androidx.xr.runtime.math.Quaternion.Identity,
-                ),
-            )
-            return@LaunchedEffect
-        }
-        handle.setPose(
-            androidx.xr.runtime.math.Pose(
-                androidx.xr.runtime.math.Vector3(
-                    sel.translateXmm * WORLD_SCALE,
-                    sel.translateYmm * WORLD_SCALE,
-                    0f,
-                ),
-                androidx.xr.runtime.math.Quaternion.Identity,
-            ),
-        )
-    }
+    // Removed: the legacy 25×12.5×25 cm `OrcaXR-modelGrab`
+    // MovableComponent handle. With the per-tool gizmo (Move arrows
+    // for translation), the bulky grab box was the source of false
+    // laser hits — fingertip wiggle would steal a model click and
+    // drag the model into the floor. Selection now happens by tapping
+    // the model's own GltfModelEntity (already wired through
+    // GlbSceneEntity's InteractableComponent), and translation goes
+    // through the Move-tool gizmo. The bed grab handle (workspace-
+    // wide reposition) stays — that's a different affordance.
 
     Subspace {
         rootEntity?.let { root ->
@@ -3384,19 +3313,9 @@ private fun XrShell(
                         onToggleDevices = { devicesShown = !devicesShown },
                         helpShown = helpShown,
                         onToggleHelp = { helpShown = !helpShown },
-                        modelRotZDeg = modelRotZDeg,
-                        rotateEnabled = selectedModel != null,
-                        onRotateModel = {
-                            updateSelected { it.copy(rotZDeg = (it.rotZDeg + 90) % 360) }
-                        },
-                        modelScalePct = modelScalePct,
-                        scaleEnabled = selectedModel != null,
-                        onScaleModel = {
-                            updateSelected {
-                                val idx = SCALE_PRESETS.indexOf(it.scalePct).coerceAtLeast(0)
-                                it.copy(scalePct = SCALE_PRESETS[(idx + 1) % SCALE_PRESETS.size])
-                            }
-                        },
+                        gizmoTool = gizmoTool,
+                        onGizmoToolChange = { gizmoTool = it },
+                        transformToolsEnabled = selectedModel != null,
                         // Phase J controls: paint enabled iff at least one
                         // model is plated (paint without a model is a no-op
                         // and confuses the affordance). Toggling Paint flips
@@ -3718,6 +3637,7 @@ private fun XrShell(
                 ) {
                     TransformPanel(
                         model = selectedModel,
+                        tool = gizmoTool,
                         onTranslateChange = { x, y, z ->
                             updateSelected {
                                 val snapped = snapAndClampOffset(x, y)
@@ -4825,16 +4745,23 @@ private fun XrShell(
                                     label = "Group",
                                     translateXmm = (minX + maxX) / 2f,
                                     translateYmm = (minY + maxY) / 2f,
-                                    // Scale handles aren't fully supported for groups yet, 
-                                    // but we need a valid model to pass down
+                                    // Group bbox (so the gizmo sizes itself to the
+                                    // whole selection, not a zero-extent point).
+                                    baseBboxXmm = (maxX - minX).coerceAtLeast(0f),
+                                    baseBboxYmm = (maxY - minY).coerceAtLeast(0f),
+                                    baseBboxZmm = maxZ.coerceAtLeast(0f),
                                 )
-                                
+
                                 key(selectedModelIds.hashCode()) {
                                     TransformGizmo(
                                         session = session,
                                         parentEntity = workspaceEntity,
                                         selectedModel = groupCenter,
                                         workspaceTx = workspaceTx,
+                                        tool = if (paintBrush.mode != PaintMode.Off) GizmoTool.Select else gizmoTool,
+                                        liveOverride = liveDragOverride
+                                            ?.takeIf { (ids, _) -> ids == selectedModelIds }
+                                            ?.second,
                                         onLivePreview = { ov ->
                                             liveDragOverride =
                                                 if (ov == null) null
@@ -4858,6 +4785,10 @@ private fun XrShell(
                                     parentEntity = workspaceEntity,
                                     selectedModel = selected,
                                     workspaceTx = workspaceTx,
+                                    tool = if (paintBrush.mode != PaintMode.Off) GizmoTool.Select else gizmoTool,
+                                    liveOverride = liveDragOverride
+                                        ?.takeIf { (ids, _) -> selected.id in ids }
+                                        ?.second,
                                     onLivePreview = { ov ->
                                         liveDragOverride =
                                             if (ov == null) null
