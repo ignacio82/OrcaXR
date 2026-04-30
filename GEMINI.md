@@ -146,6 +146,8 @@ Currently single `:app` module. The split below is aspirational; do NOT create m
 
 20. **FullSpectrum mixed-filament integration is currently scaffolding.** Porting integration is ongoing.
 
+21. **Multi-object 3MFs are decomposed into separate STLs on import.** To allow per-object selection and transform (Phase B9), we extract each `ModelObject::mesh()` to a temporary STL in `cacheDir/extracted/<hash>/`. Each `PlacedModel` points to one of these STLs, sharing a `groupId` (the source 3MF's hash). `nativeSliceMulti` slices the set of STLs.
+
 ## Related docs
 
 - [`ROADMAP.md`](ROADMAP.md) — forward-looking feature roadmap (single source of truth).

@@ -56,6 +56,19 @@ object SlicerEngine {
         System.loadLibrary("slic3r_jni")
     }
 
+    /**
+     * Metadata for a single object within a 3MF archive.
+     */
+    data class ObjectMeta(
+        val name: String,
+        val facetCount: Int,
+        val bboxX: Float,
+        val bboxY: Float,
+        val bboxZ: Float,
+        val defaultExtruder: Int,
+        val instanceCount: Int,
+    )
+
     private val dispatcher: CoroutineDispatcher =
         Executors.newSingleThreadExecutor { r -> Thread(r, "OrcaXR-libslic3r") }
             .asCoroutineDispatcher()
@@ -846,6 +859,22 @@ object SlicerEngine {
     ): Int
     private external fun nativeConvertToStl(
         inputPath: String,
+        outStlPath: String,
+    ): Int
+
+    suspend fun read3mfObjectMetadata(file: File): Array<ObjectMeta>? = withContext(dispatcher) {
+        nativeRead3mfObjectMetadata(file.absolutePath)
+    }
+
+    suspend fun extractObjectAsStl(archive: File, objectIndex: Int, outStl: File): Boolean = withContext(dispatcher) {
+        nativeExtractObjectAsStl(archive.absolutePath, objectIndex, outStl.absolutePath) == 0
+    }
+
+    private external fun nativeRead3mfObjectMetadata(path: String): Array<ObjectMeta>?
+
+    private external fun nativeExtractObjectAsStl(
+        archivePath: String,
+        objectIndex: Int,
         outStlPath: String,
     ): Int
     private external fun nativeWriteColoredGlb(

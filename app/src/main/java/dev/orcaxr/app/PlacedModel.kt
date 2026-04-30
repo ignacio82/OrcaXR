@@ -198,6 +198,15 @@ data class PlacedModel(
      *  re-bake of the colored GLB on each selection change. */
     val previewRotZDeg: Int = -1,
     val previewScalePct: Int = -1,
+    /** Phase B9 — Group ID for multi-object archives. All parts from
+     *  the same 3MF share this ID (often the source file's SHA-256).
+     *  Null = standalone file. */
+    val groupId: String? = null,
+    /** Phase B9 — Index of this object within the multi-object
+     *  container. */
+    val groupOrdinal: Int = 0,
+    /** Phase E3 — Plate ID this model belongs to. Default is plate 1. */
+    val plateId: Int = 1,
     /** Phase J in-XR paint state. Per-triangle filament slot index;
      *  size = source-mesh triangle count. 0 = unpainted (use the
      *  default profile path), 1..32 = filament slot tag that flows
@@ -280,6 +289,9 @@ data class PlacedModel(
             previewVersion == other.previewVersion &&
             previewRotZDeg == other.previewRotZDeg &&
             previewScalePct == other.previewScalePct &&
+            groupId == other.groupId &&
+            groupOrdinal == other.groupOrdinal &&
+            plateId == other.plateId &&
             paintArraysEqual(paintFilamentIndex, other.paintFilamentIndex) &&
             paintArraysEqual(supportFlags, other.supportFlags) &&
             paintArraysEqual(seamFlags, other.seamFlags) &&
@@ -310,6 +322,9 @@ data class PlacedModel(
         r = 31 * r + previewVersion
         r = 31 * r + previewRotZDeg
         r = 31 * r + previewScalePct
+        r = 31 * r + (groupId?.hashCode() ?: 0)
+        r = 31 * r + groupOrdinal
+        r = 31 * r + plateId
         r = 31 * r + (paintFilamentIndex?.contentHashCode() ?: 0)
         r = 31 * r + (supportFlags?.contentHashCode() ?: 0)
         r = 31 * r + (seamFlags?.contentHashCode() ?: 0)

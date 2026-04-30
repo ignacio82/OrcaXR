@@ -137,6 +137,9 @@ fun LeftProjectPanel(
      *  also clear any project filament whose [FilamentEntry.virtualSlot]
      *  pointed at this row to avoid a stale mapping. */
     onRemoveVirtualRow: (MixedFilamentEntry) -> Unit = {},
+    /** Phase E3 — virtual build plates. */
+    allPlates: List<PlateMetadata> = listOf(PlateMetadata(1, "Plate 1")),
+    onMoveToPlate: (String, Int) -> Unit = { _, _ -> },
     /** Pre-flight outcome of the (bed × filament) compatibility rules
      *  (Phase E port of Snapmaker fork's filament_hot_bed_nozzles.json).
      *  [FilamentRules.Result.Ok] hides the banner; Warning shows an
@@ -250,10 +253,12 @@ fun LeftProjectPanel(
         PlacedModelsSection(
             models = placedModels,
             selectedId = selectedPlacedModelId,
+            allPlates = allPlates,
             onSelect = onSelectPlacedModel,
             onDelete = onDeletePlacedModel,
             onAdd = onAddPlacedModel,
             onAutoArrange = onAutoArrangePlacedModels,
+            onMoveToPlate = onMoveToPlate,
         )
 
         // Bed-fit indicator. Only visible once a model is loaded so the
@@ -514,13 +519,16 @@ private fun TopCoverHintBanner(result: TopCoverRule.Result) {
 private fun PlacedModelsSection(
     models: List<PlacedModel>,
     selectedId: String?,
+    allPlates: List<PlateMetadata>,
     onSelect: (String) -> Unit,
     onDelete: (String) -> Unit,
     onAdd: () -> Unit,
     onAutoArrange: () -> Unit,
+    onMoveToPlate: (String, Int) -> Unit,
 ) {
     if (models.isEmpty()) return
     val atCapacity = models.size >= MAX_PLACED_MODELS
+    val collapsedGroups = remember { mutableStateMapOf<String, Boolean>() }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (models.size >= 2) {
             Row(
@@ -537,41 +545,60 @@ private fun PlacedModelsSection(
                     Text("Auto-arrange", color = Color(0xFF7BC8FF))
                 }
             }
-            for (m in models) {
-                val isSelected = m.id == selectedId
-                Surface(
-                    color = if (isSelected) Color(0xFF24323D) else Color(0xFF1B1F23),
-                    shape = RoundedCornerShape(8.dp),
-                    border = if (isSelected) BorderStroke(1.dp, Color(0xFF7BC8FF)) else null,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSelect(m.id) },
-                ) {
-                    Row(
+            val groups = models.groupBy { it.groupId }
+            for ((groupId, groupModels) in groups) {
+                if (groupId != null) {
+                    val isCollapsed = collapsedGroups[groupId] ?: false
+                    Surface(
+                        color = Color(0xFF2D333B),
+                        shape = RoundedCornerShape(8.dp),
                         modifier = Modifier
-                            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
-                            .fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
+                            .fillMaxWidth()
+                            .clickable { collapsedGroups[groupId] = !isCollapsed },
                     ) {
-                        Column(modifier = Modifier.weight(1f).padding(vertical = 4.dp)) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Text(
-                                m.label,
+                                text = if (isCollapsed) "▶" else "▼",
+                                color = Color.Gray,
+                                modifier = Modifier.padding(end = 8.dp),
+                            )
+                            val groupLabel = groupModels.first().label.substringBefore(" - ")
+                            Text(
+                                text = "$groupLabel — ${groupModels.size} parts",
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = Color.White,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                maxLines = 1,
-                            )
-                            val rot = if (m.rotZDeg == 0) "" else " · rot ${m.rotZDeg}°"
-                            val scl = if (m.scalePct == 100) "" else " · ${m.scalePct}%"
-                            val pos = "x=%.0f y=%.0f mm".format(m.translateXmm, m.translateYmm)
-                            Text(
-                                "$pos$rot$scl",
-                                color = Color.LightGray,
-                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f),
                             )
                         }
-                        IconButton(onClick = { onDelete(m.id) }) {
-                            Text("✕", color = Color.Gray, style = MaterialTheme.typography.titleSmall)
+                    }
+                    if (!isCollapsed) {
+                        for (m in groupModels) {
+                            ModelRow(
+                                m = m,
+                                isSelected = m.id == selectedId,
+                                allPlates = allPlates,
+                                onSelect = onSelect,
+                                onDelete = onDelete,
+                                onMoveToPlate = onMoveToPlate,
+                                isGrouped = true,
+                            )
                         }
+                    }
+                } else {
+                    for (m in groupModels) {
+                        ModelRow(
+                            m = m,
+                            isSelected = m.id == selectedId,
+                            allPlates = allPlates,
+                            onSelect = onSelect,
+                            onDelete = onDelete,
+                            onMoveToPlate = onMoveToPlate,
+                            isGrouped = false,
+                        )
                     }
                 }
             }
@@ -592,6 +619,79 @@ private fun PlacedModelsSection(
                 else "+ Add another model",
                 color = if (atCapacity) Color.Gray else Color(0xFF7BC8FF),
             )
+        }
+    }
+}
+
+@Composable
+private fun ModelRow(
+    m: PlacedModel,
+    isSelected: Boolean,
+    allPlates: List<PlateMetadata>,
+    onSelect: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onMoveToPlate: (String, Int) -> Unit,
+    isGrouped: Boolean = false,
+) {
+    var showPlateMenu by remember { mutableStateOf(false) }
+    Surface(
+        color = if (isSelected) Color(0xFF24323D) else Color(0xFF1B1F23),
+        shape = RoundedCornerShape(8.dp),
+        border = if (isSelected) BorderStroke(1.dp, Color(0xFF7BC8FF)) else null,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = if (isGrouped) 16.dp else 0.dp)
+            .clickable { onSelect(m.id) },
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f).padding(vertical = 4.dp)) {
+                Text(
+                    if (isGrouped) m.label.substringAfter(" - ") else m.label,
+                    color = Color.White,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                    maxLines = 1,
+                )
+                val rot = if (m.rotZDeg == 0) "" else " · rot ${m.rotZDeg}°"
+                val scl = if (m.scalePct == 100) "" else " · ${m.scalePct}%"
+                val pos = "x=%.0f y=%.0f mm".format(m.translateXmm, m.translateYmm)
+                Text(
+                    "$pos$rot$scl",
+                    color = Color.LightGray,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+            if (isSelected && allPlates.size > 1) {
+                Box {
+                    IconButton(onClick = { showPlateMenu = true }) {
+                        Text("⇶", color = Color(0xFF7BC8FF), style = MaterialTheme.typography.titleMedium)
+                    }
+                    DropdownMenu(
+                        expanded = showPlateMenu,
+                        onDismissRequest = { showPlateMenu = false },
+                        modifier = Modifier.background(Color(0xFF2D333B))
+                    ) {
+                        allPlates.forEach { plate ->
+                            if (plate.id != m.plateId) {
+                                DropdownMenuItem(
+                                    text = { Text("Move to ${plate.label}", color = Color.White) },
+                                    onClick = {
+                                        onMoveToPlate(m.id, plate.id)
+                                        showPlateMenu = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            IconButton(onClick = { onDelete(m.id) }) {
+                Text("✕", color = Color.Gray, style = MaterialTheme.typography.titleSmall)
+            }
         }
     }
 }
@@ -2701,6 +2801,119 @@ fun BottomLayerPreviewPanel(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun PlateTabPanel(
+    plates: List<PlateMetadata>,
+    activePlateId: Int,
+    onSelectPlate: (Int) -> Unit,
+    onAddPlate: () -> Unit,
+    onRenamePlate: (Int, String) -> Unit,
+    onDeletePlate: (Int) -> Unit,
+) {
+    var showRenameDialog by remember { mutableStateOf<Int?>(null) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF15181B))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("Plates", style = MaterialTheme.typography.titleMedium, color = Color.White)
+
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(plates) { plate ->
+                val isActive = plate.id == activePlateId
+                Surface(
+                    color = if (isActive) Color(0xFF24323D) else Color(0xFF1B1F23),
+                    shape = RoundedCornerShape(8.dp),
+                    border = if (isActive) BorderStroke(1.dp, Color(0xFF7BC8FF)) else null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelectPlate(plate.id) }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = plate.label,
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (isActive) {
+                            IconButton(onClick = { showRenameDialog = plate.id }) {
+                                Icon(
+                                    Icons.Default.Edit,
+                                    contentDescription = "Rename",
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            if (plate.id != 1) {
+                                IconButton(onClick = { onDeletePlate(plate.id) }) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = "Delete",
+                                        tint = Color.Gray,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
+                OutlinedButton(
+                    onClick = onAddPlate,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("+ Add Plate", color = Color(0xFF7BC8FF))
+                }
+            }
+        }
+    }
+
+    showRenameDialog?.let { plateId ->
+        val plate = plates.firstOrNull { it.id == plateId } ?: return@let
+        var newName by remember { mutableStateOf(plate.label) }
+        AlertDialog(
+            onDismissRequest = { showRenameDialog = null },
+            title = { Text("Rename Plate", color = Color.White) },
+            text = {
+                TextField(
+                    value = newName,
+                    onValueChange = { newName = it },
+                    colors = TextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedContainerColor = Color(0xFF1B1F23),
+                        unfocusedContainerColor = Color(0xFF1B1F23),
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onRenamePlate(plateId, newName)
+                    showRenameDialog = null
+                }) {
+                    Text("Rename", color = Color(0xFF7BC8FF))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenameDialog = null }) {
+                    Text("Cancel", color = Color.White)
+                }
+            },
+            containerColor = Color(0xFF1B1F23)
+        )
     }
 }
 

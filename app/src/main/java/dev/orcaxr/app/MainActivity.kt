@@ -41,19 +41,7 @@ import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.key
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -243,6 +231,8 @@ class MainActivity : ComponentActivity() {
     /** Roadmap B7 — most-recently-used model files, surfaced on the
      *  empty-state panel when [placedModels] is empty. */
     private lateinit var recentFiles: RecentFilesStore
+    /** Phase E3 — persistent virtual build plates. */
+    private lateinit var plateStore: PlateStore
 
     /**
      * Activity-scoped controller event sink. Galaxy XR controller plan
@@ -272,6 +262,7 @@ class MainActivity : ComponentActivity() {
         mixedFilaments = MixedFilamentStore(this)
         paintCache = PaintCacheStore(this)
         recentFiles = RecentFilesStore(this)
+        plateStore = PlateStore(this)
         enableEdgeToEdge()
 
         // Pre-Compose XR setup: transparent window so passthrough
@@ -462,7 +453,8 @@ class MainActivity : ComponentActivity() {
                             mixedFilamentsStore = mixedFilaments,
                             mixedFilamentsAll = mixedFilamentsAll,
                             paintCache = paintCache,
-                            recentFiles = recentFiles)
+                            recentFiles = recentFiles,
+                            plateStore = plateStore)
                     } else {
                         FlatShell(sliceState, maxLayer, selectedProfile, layerHeightOverride, showTravels)
                     }
@@ -613,8 +605,16 @@ private fun XrShell(
     /** Roadmap B7 — most-recently-used model files for the empty-
      *  state panel. Updated on every successful onFileSelected. */
     recentFiles: RecentFilesStore,
+    /** Phase E3 — persistent virtual build plates. */
+    plateStore: PlateStore,
 ) {
     val ctx = LocalContext.current
+
+    // Phase E3 — virtual build plates from DataStore. Default to plate 1
+    // being active.
+    val allPlates by plateStore.plates.collectAsState(initial = listOf(PlateMetadata(1, "Plate 1")))
+    var activePlateId by remember { mutableIntStateOf(1) }
+
     var glbPath by remember { mutableStateOf<String?>(null) }
     var glbVersion by remember { mutableStateOf(0) } // bump per regeneration
     var stlPreviewPath by remember { mutableStateOf<String?>(null) }
@@ -802,9 +802,15 @@ private fun XrShell(
     // shortcuts the user can't actually open.
     val recentFilesList by recentFiles.validRecents.collectAsState(initial = emptyList())
 
+    // Phase E3 — Plate-filtered models. Only models on the active plate
+    // are rendered and reachable in the UI.
+    val placedModelsOnActivePlate = remember(placedModels, activePlateId) {
+        placedModels.filter { it.plateId == activePlateId }
+    }
+
     val selectedModel: PlacedModel? =
-        placedModels.firstOrNull { it.id == selectedModelId }
-            ?: placedModels.firstOrNull()
+        placedModels.filter { it.plateId == activePlateId }.firstOrNull { it.id == selectedModelId }
+            ?: placedModels.filter { it.plateId == activePlateId }.firstOrNull()
     // Backward-compat: existing read sites (top-nav rotate/scale,
     // SaveAsStl, the test harness, BottomRightSummaryPanel) refer to
     // these names. They read off the selected model.
@@ -1033,6 +1039,11 @@ private fun XrShell(
         val derived = File(ctx.cacheDir, "${file.nameWithoutExtension}_derived.stl")
         val ok = runCatching { SlicerEngine.convertToStl(file, derived) }.getOrDefault(false)
         return if (ok && derived.exists() && derived.length() > 0) derived else null
+    }
+
+    fun getExtractedStl(groupId: String, index: Int): File {
+        val dir = File(ctx.cacheDir, "extracted/$groupId").also { it.mkdirs() }
+        return File(dir, "part_$index.stl")
     }
 
     /** Delete prior stl_preview*.glb files belonging to [modelId] so
@@ -1515,15 +1526,38 @@ private fun XrShell(
             // (the historical pre-Phase-G behavior). In Add mode, keep
             // the existing list and append a new entry — but cap at
             // MAX_PLACED_MODELS to bound the SceneCore draw-call budget.
-            val newId = "model_${System.currentTimeMillis().toString(36)}_${placedModels.size}"
-            val fresh = PlacedModel(id = newId, source = file, label = label)
+            val meta = SlicerEngine.read3mfObjectMetadata(file)
+            val freshList = if (meta != null && meta.size > 1) {
+                val gid = paintCache.hashOf(file)
+                meta.mapIndexed { index, m ->
+                    val outStl = getExtractedStl(gid, index)
+                    if (!outStl.exists()) {
+                        SlicerEngine.extractObjectAsStl(file, index, outStl)
+                    }
+                    val newId = "model_${System.currentTimeMillis().toString(36)}_${placedModels.size + index}"
+                    PlacedModel(
+                        id = newId,
+                        source = outStl,
+                        label = "${file.name} - ${m.name.ifEmpty { "Part ${index + 1}" }}",
+                        groupId = gid,
+                        groupOrdinal = index,
+                        baseBboxXmm = m.bboxX,
+                        baseBboxYmm = m.bboxY,
+                        baseBboxZmm = m.bboxZ,
+                    )
+                }
+            } else {
+                val newId = "model_${System.currentTimeMillis().toString(36)}_${placedModels.size}"
+                listOf(PlacedModel(id = newId, source = file, label = label))
+            }
+
             when (mode) {
                 PickerMode.Replace -> {
-                    placedModels = listOf(fresh)
-                    selectedModelId = newId
+                    placedModels = freshList
+                    selectedModelId = freshList.first().id
                 }
                 PickerMode.Add -> {
-                    if (placedModels.size >= MAX_PLACED_MODELS) {
+                    if (placedModels.size + freshList.size > MAX_PLACED_MODELS) {
                         android.widget.Toast.makeText(
                             ctx,
                             "Up to $MAX_PLACED_MODELS models per plate. Slice or remove some first.",
@@ -1531,8 +1565,8 @@ private fun XrShell(
                         ).show()
                         return@launch
                     }
-                    placedModels = placedModels + fresh
-                    selectedModelId = newId
+                    placedModels = placedModels + freshList
+                    selectedModelId = freshList.first().id
                 }
                 is PickerMode.AddVolume -> {
                     // Already handled above — the early return prevents
@@ -1553,7 +1587,9 @@ private fun XrShell(
                 android.widget.Toast.LENGTH_SHORT,
             ).show()
             try {
-                previewStl(newId)
+                for (m in freshList) {
+                    previewStl(m.id)
+                }
             } finally {
                 isLoadingModel = false
                 loadingLabel = null
@@ -1939,9 +1975,15 @@ private fun XrShell(
     }
 
     fun runAutoArrange() {
-        val models = placedModels
+        val allModels = placedModels
+        val models = allModels.filter { it.plateId == activePlateId }
+        if (models.isEmpty()) return
         if (models.size < 2) {
-            placedModels = autoArrangeModels(models)
+            placedModels = allModels.map { m ->
+                if (m.plateId == activePlateId) {
+                    m.copy(translateXmm = 0f, translateYmm = 0f)
+                } else m
+            }
             return
         }
         scope.launch {
@@ -1975,7 +2017,7 @@ private fun XrShell(
                 android.util.Log.e("OrcaXR", "arrangeModels threw", it)
             }.getOrNull()
             if (results != null && results.size == models.size * 3) {
-                placedModels = placedModels.mapIndexed { i, m ->
+                val updatedModels = models.mapIndexed { i, m ->
                     val tx = results[i * 3 + 0]
                     val ty = results[i * 3 + 1]
                     val rz = results[i * 3 + 2]
@@ -1990,10 +2032,14 @@ private fun XrShell(
                         rotZDeg = ((rz.toInt() % 360) + 360) % 360,
                     )
                 }
-                android.util.Log.i("OrcaXR", "auto-arrange: libslic3r placed ${models.size} models")
+                val updatedMap = updatedModels.associateBy { it.id }
+                placedModels = allModels.map { m -> updatedMap[m.id] ?: m }
+                android.util.Log.i("OrcaXR", "auto-arrange: libslic3r placed ${models.size} models on plate $activePlateId")
             } else {
                 android.util.Log.w("OrcaXR", "auto-arrange: JNI returned null, falling back to naive layout")
-                placedModels = autoArrangeModels(placedModels)
+                val arranged = autoArrangeModels(models)
+                val updatedMap = arranged.associateBy { it.id }
+                placedModels = allModels.map { m -> updatedMap[m.id] ?: m }
             }
         }
     }
@@ -3506,22 +3552,31 @@ private fun XrShell(
                         },
                         onPickStl = launchPicker,
                         onClearModel = {
-                            sliceState.value = SliceUiState.Idle
-                            glbPath = null
-                            stlPreviewPath = null
-                            bedFit = null
-                            bedCollision = null
-                            // Phase G: clear EVERY plated model. The
-                            // per-row delete in the multi-model UI is
-                            // handled by onDeletePlacedModel below;
-                            // this ✕ button is the "wipe the bed"
-                            // shortcut.
-                            placedModels = emptyList()
-                            selectedModelId = null
-                            maxLayer.value = null
-                            workspaceMode = WorkspaceMode.Prepare
+                            // Phase E3: only clear models on the ACTIVE plate.
+                            val removed = placedModels.filter { it.plateId == activePlateId }
+                            placedModels = placedModels.filter { it.plateId != activePlateId }
+                            if (selectedModelId in removed.map { it.id }) {
+                                selectedModelId = placedModels.firstOrNull()?.id
+                            }
+                            if (placedModelsOnActivePlate.isEmpty()) {
+                                glbPath = null
+                                stlPreviewPath = null
+                                bedFit = null
+                                bedCollision = null
+                                sliceState.value = SliceUiState.Idle
+                                workspaceMode = WorkspaceMode.Prepare
+                            }
+                            // Best-effort cleanup of removed models' preview cache
+                            removed.forEach { m ->
+                                runCatching {
+                                    ctx.cacheDir.listFiles { f ->
+                                        f.name.startsWith("stl_preview_${m.id}_v") &&
+                                            f.name.endsWith(".glb")
+                                    }?.forEach { it.delete() }
+                                }
+                            }
                         },
-                        placedModels = placedModels,
+                        placedModels = placedModelsOnActivePlate,
                         selectedPlacedModelId = selectedModelId,
                         onSelectPlacedModel = { id ->
                             // Tap-to-select. Re-running previewStl is
@@ -3571,6 +3626,12 @@ private fun XrShell(
                             // picks up the new translateXmm/Ymm
                             // automatically.
                             runAutoArrange()
+                        },
+                        allPlates = allPlates,
+                        onMoveToPlate = { modelId, plateId ->
+                            placedModels = placedModels.map {
+                                if (it.id == modelId) it.copy(plateId = plateId) else it
+                            }
                         },
                         isLoadingModel = isLoadingModel,
                         loadingLabel = loadingLabel,
@@ -3855,6 +3916,43 @@ private fun XrShell(
                     )
                 }
 
+                // Plate switching panel
+                MovablePanelWrapper(
+                    id = "plate-tabs",
+                    width = 240.dp,
+                    height = 400.dp,
+                    initialOffset = androidx.xr.runtime.math.Vector3(0.6f, 0.4f, -0.1f),
+                    session = session,
+                ) {
+                    PlateTabPanel(
+                        plates = allPlates,
+                        activePlateId = activePlateId,
+                        onSelectPlate = { activePlateId = it },
+                        onAddPlate = {
+                            val nextId = (allPlates.maxOfOrNull { it.id } ?: 0) + 1
+                            scope.launch {
+                                plateStore.upsert(PlateMetadata(nextId, "Plate $nextId"))
+                                activePlateId = nextId
+                            }
+                        },
+                        onRenamePlate = { id, name ->
+                            allPlates.firstOrNull { it.id == id }?.let { plate ->
+                                scope.launch { plateStore.upsert(plate.copy(label = name)) }
+                            }
+                        },
+                        onDeletePlate = { id ->
+                            scope.launch {
+                                // Move any models on this plate to plate 1 before deleting
+                                placedModels = placedModels.map {
+                                    if (it.plateId == id) it.copy(plateId = 1) else it
+                                }
+                                plateStore.delete(id)
+                                if (activePlateId == id) activePlateId = 1
+                            }
+                        }
+                    )
+                }
+
                 // Right Panel
                 MovablePanelWrapper(
                     id = "right-settings",
@@ -3919,7 +4017,7 @@ private fun XrShell(
                 ) {
                     val activePrinter = printers.firstOrNull { it.id == selectedPrinterId.value }
                     val sliceTargetLabel = when {
-                        placedModels.size >= 2 -> "${placedModels.size} models"
+                        placedModelsOnActivePlate.size >= 2 -> "${placedModelsOnActivePlate.size} models"
                         else -> selectedModel?.label ?: "bundled 20 mm cube"
                     }
                     BottomRightSummaryPanel(
@@ -3928,13 +4026,9 @@ private fun XrShell(
                         activePrinterName = activePrinter?.name,
                         canSaveModel = selectedModel != null,
                         onSliceClick = {
-                            // Phase G: 2+ plated models route through
-                            // sliceMulti; single model takes the
-                            // existing path (preserves painted facets
-                            // for 3MFs); empty bed slices the bundled
-                            // cube as the demo.
-                            if (placedModels.size >= 2) {
-                                runSliceMulti(placedModels)
+                            // Phase E3: only slice models on the ACTIVE plate.
+                            if (placedModelsOnActivePlate.size >= 2) {
+                                runSliceMulti(placedModelsOnActivePlate)
                             } else {
                                 val target = selectedModel
                                 if (target != null) {
@@ -3944,7 +4038,9 @@ private fun XrShell(
                                         val label = "cube_20mm.stl (bundled)"
                                         val stl = copyBundledCube(ctx)
                                         val cubeId = "model_cube_${System.currentTimeMillis().toString(36)}"
-                                        placedModels = listOf(PlacedModel(id = cubeId, source = stl, label = label))
+                                        // Auto-assigned to activePlateId (default)
+                                        val fresh = PlacedModel(id = cubeId, source = stl, label = label, plateId = activePlateId)
+                                        placedModels = placedModels + fresh
                                         selectedModelId = cubeId
                                         previewStl(cubeId)
                                         runSlice(stl, label)
@@ -4572,7 +4668,7 @@ private fun XrShell(
         // others sit at their last-known offset.
         when (workspaceMode) {
             WorkspaceMode.Prepare -> {
-                for (m in placedModels) {
+                for (m in placedModelsOnActivePlate) {
                     val path = m.previewPath ?: continue
                     key(m.id, path) {
                         StlPreviewSceneEntity(
@@ -4659,7 +4755,7 @@ private fun XrShell(
                         ToolpathSceneEntity(session = session, glbPath = toolpath, parentEntity = workspaceEntity)
                     }
                 } else {
-                    for (m in placedModels) {
+                    for (m in placedModelsOnActivePlate) {
                         val path = m.previewPath ?: continue
                         key(m.id, path) {
                             StlPreviewSceneEntity(

@@ -208,6 +208,34 @@ Print-settings tabs (Quality / Speed / Support) consult `NumericValidation.print
 
 **Shipped:** commits `7fa3970` (TransformPanel) + `5a4328b` (Print Settings tabs).
 
+### B9. Per-part selection & transform from multi-object archives 🟢 Shipped
+
+> **Files:** `app/src/main/cpp/slic3r_jni.cpp::nativeConvertToStl` (current single-STL flatten point — see below), new `nativeRead3mfObjectMetadata` + `nativeExtractObjectAsStl`, `app/src/main/java/dev/orcaxr/app/SlicerEngine.kt` (import path), `PlacedModel.kt` (add `groupId: String?`, `groupOrdinal: Int`), `MainActivity.kt` (multi-object onFileSelected branch), `UiPanels.kt::PlacedModelsSection` (group header collapsing).
+
+A multi-object 3MF (e.g. `passthroughboth.3mf` — `Inner.stl` + `Outer.stl`) currently lands as **one** `PlacedModel` because `nativeConvertToStl` (slic3r_jni.cpp:2585-2588) merges every object's mesh into a single STL before the Kotlin import path sees it. As a result the user can only select / transform / paint / assign-extruder the merged whole — exactly the gap reported on 2026-04-29 ("In OrcaSlicer I can select them individually, move them around, put them in different build plates"). `nativeWriteColoredGlb` (line 2043) already iterates the same archive's objects, so the per-object structure exists in libslic3r — it's only the import path that throws it away.
+
+**Implementation outline:**
+1. **JNI — enumerate without merging.** `nativeRead3mfObjectMetadata(path) -> Array<ObjectMeta>` returning per-object `(name, facetCount, bboxXYZ, defaultExtruder, instanceCount)`. Reads via `load_mesh_container` then walks `model.objects` without calling `merge`.
+2. **JNI — per-object STL extraction.** `nativeExtractObjectAsStl(archive, objectIndex, outStlPath)` writes one `ModelObject::mesh()` to its own binary STL. Each PlacedModel gets its own preview/BVH/paint cache pinned to that STL — this keeps the existing per-PlacedModel paint cache (D1) and BedCollision (A6) paths working untouched.
+3. **Kotlin import path.** When the loader sees `>1` object, instead of one PlacedModel from the merged STL it produces **N PlacedModels**, each with `objectIndex = i`, sharing a `groupId: String = sourceArchiveSha256`, and `groupOrdinal = i`. Single-object archives (the common case) still produce one PlacedModel — `groupId = null` — so the existing flat list code path is unchanged.
+4. **PlacedModel data shape.** Add `val groupId: String? = null` and `val groupOrdinal: Int = 0`. No other field changes — selection bbox (commit `efc0430`), TransformPanel (commit `836d270`), paint cache (D1), gizmo (B1), BedCollision (A6) all keep working per-part for free.
+5. **Slice path.** `runSliceMulti` already accepts N inputs with N transforms — just feed it the per-object extracted STLs with the per-PlacedModel transforms composed (group's collective offset + part's individual offset). No new JNI surface for slicing.
+6. **UI grouping.** `PlacedModelsSection` grows a collapsible header per `groupId` (e.g. "passthroughboth.3mf — 2 parts") with a single chevron to expand/collapse the group's rows. A "Move group" affordance bulk-translates every part with the same `groupId`. Selection stays per-row (per-part).
+7. **Save-as-3MF round-trip.** `nativeSaveAs3mf` packs all PlacedModels with the same `groupId` back as a multi-object archive — preserves the original archive structure on save.
+
+**Why flat-with-`groupId` instead of a `PlacedModel { parts: List<PlacedPart> }` tree:** the tree shape is closer to upstream's `ModelObject`/`ModelVolume` hierarchy but every existing path (selection state, TransformPanel, paint cache, gizmo, BedCollision, slice dispatch) is keyed by single-PlacedModel today. Flat with groupId gets the user 90% of multi-part UX (independent selection, transform, paint, plate-assign) on a one-day diff; the tree shape is a v3 refactor we should only do if grouping operations start hurting.
+
+**Exit criteria:**
+- Loading `passthroughboth.3mf` produces 2 PlacedModels (`Inner.stl` and `Outer.stl`), each independently selectable, transformable, and paintable.
+- Each part's TransformPanel edits don't disturb the other.
+- Slicing produces a single G-code that reproduces both parts at their per-part transforms.
+- A round-trip save-as-3MF reopened in desktop OrcaSlicer shows two objects with the OrcaXR-authored offsets preserved.
+- Single-object .stl / .obj / single-object .3mf imports continue to produce one PlacedModel (no regression in the common case).
+
+**Shipped:** <PENDING_COMMIT_SHA> — Multi-object 3MFs extracted to separate STLs, grouped by groupId with collapsible headers.
+
+**Dependency for E3 multi-plate:** B9 is the prerequisite — without per-part addressability there's nothing to assign to a different plate.
+
 ---
 
 ## C. Connectivity & monitoring
@@ -323,9 +351,34 @@ Currently single `:app` module. The aspirational split: `:slicer:xr` (XR present
 
 Currently no DI, single-module Compose state. Add Hilt when E1 lands.
 
-### E3. Multi-plate (`PartPlate`) ⚪ Deferred
+### E3. Multi-plate workspace 🟢 Shipped
 
-Snapmaker U1 + Centauri Carbon both run one plate at a time. Upstream's `PartPlate.cpp` + `PartPlate.hpp` is multi-thousand lines. Re-enters scope only if a user starts queueing prints.
+> **Files:** `PlacedModel.kt` (add `plateId: Int = 1`), `MainActivity.kt::XrShell` (`activePlateId` state), new `app/src/main/java/dev/orcaxr/app/PlateStore.kt`, `UiPanels.kt` (plate-tab strip + "Move to plate N" context action), `SlicerEngine.kt` (per-plate slice dispatch).
+
+**Shipped:** <PENDING_COMMIT_SHA> — Persistent virtual build plates with switching UI and per-plate slicing/arrangement.
+
+
+User asked on 2026-04-29 to "put parts in different build plates" while working with `passthroughboth.3mf`. Re-scoped from the previous "wait for queue demand" deferral. Snapmaker U1 + Elegoo Centauri Carbon both run **one plate at a time** physically, so we DO NOT need to port upstream's `PartPlate.cpp` / `PartPlate.hpp` (multi-thousand lines, plate-switching mid-print, plate-aware G-code orchestration). What the user actually wants is the OrcaSlicer organization affordance — virtual plates as a workspace partition for slicing several jobs from one project — which is far cheaper.
+
+**Implementation outline (cheap virtual-plate path):**
+1. **Data.** `PlacedModel.plateId: Int = 1`. New `PlateStore` (DataStore Preferences) holds plate metadata (`id`, `label`, `createdAt`); plate 1 is auto-created on first launch and is undeletable.
+2. **Active-plate state.** `XrShell` holds `activePlateId: Int`. All renderers (workspace GLB, BedCollision banner, TransformPanel target, gizmo) consume `placedModels.filter { it.plateId == activePlateId }`. Models on inactive plates render NOT AT ALL (no ghosting — keeps the bed visually unambiguous).
+3. **Plate tab strip.** Right-edge SpatialPanel with one chip per plate (label + part count badge) plus a `+` chip that allocates a new plate and switches to it. Long-press a plate chip → rename / delete (delete blocks if plate has parts; user must move them off first).
+4. **"Move to plate" action.** A row-level context action in `PlacedModelsSection` ("Move to ▾" → submenu of plates). For B9-grouped parts, "Move group to plate N" moves all parts sharing the `groupId`.
+5. **Per-plate slice dispatch.** Slice button slices the active plate (current behavior preserved when there's only plate 1). New "Slice all plates" affordance (only visible with `plateCount > 1`) loops over plates running `runSliceMulti` per plate, produces N G-code files surfaced as a list with per-plate filament-usage / time totals.
+6. **Send-to-printer.** Sequential — user picks one plate's G-code at a time and sends. Queueing multiple plates to Moonraker is a follow-up that re-enters C1 (Print queue) scope; until then the multi-plate workflow is "slice all → send plate 1 → wait → send plate 2."
+7. **Save-as-3MF.** Per-PlacedModel `plateId` is written into project metadata so reopened-in-OrcaXR projects keep their plate assignments. Desktop OrcaSlicer ignores OrcaXR's plateId namespace; round-trip lossy on the desktop side (acceptable — desktop has its own PartPlate concept which we're deliberately not modeling).
+
+**Why virtual plates instead of the full upstream `PartPlate`:**
+- Both target printers print one plate at a time. The complex parts of `PartPlate` (plate-aware tool ordering, mid-print plate-change G-code, build-plate thumbnails per plate) buy nothing on this hardware.
+- The user's actual ask is workspace organization — "I'm prepping three different prints from one project," not "I'm queueing a multi-plate job."
+- Cheap to revert if upstream behavior is later needed: `plateId: Int` on PlacedModel is forward-compatible with mapping to `libslic3r::PartPlate` instances later.
+
+**Exit criteria:**
+- A user can create plate 2, move `Outer.stl` from plate 1 to plate 2, and slice both plates independently. Each plate's slice produces a G-code that contains only that plate's parts at their per-part transforms.
+- Switching `activePlateId` between 1 and 2 swaps the rendered models without disturbing transforms or paint state.
+- Re-opening a saved 3MF preserves plate assignments.
+- Single-plate users see no UI change (plate strip stays collapsed when `plateCount == 1`).
 
 ### E4. Companion phone app 📌 Open design question
 

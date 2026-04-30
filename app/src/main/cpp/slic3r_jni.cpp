@@ -2607,6 +2607,103 @@ Java_dev_orcaxr_app_SlicerEngine_nativeConvertToStl(
     }
 }
 
+// nativeRead3mfObjectMetadata — enumerate objects in a 3MF without merging.
+extern "C" JNIEXPORT jobjectArray JNICALL
+Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
+    JNIEnv* env, jclass, jstring jPath)
+{
+    ScopedUtf path(env, jPath);
+    try {
+        Slic3r::Model model = load_mesh_container(path.c);
+        if (model.objects.empty()) return nullptr;
+
+        jclass metaClass = env->FindClass("dev/orcaxr/app/SlicerEngine$ObjectMeta");
+        if (metaClass == nullptr) return nullptr;
+        jmethodID metaCtor = env->GetMethodID(metaClass, "<init>", "(Ljava/lang/String;IFFFII)V");
+        if (metaCtor == nullptr) return nullptr;
+
+        jobjectArray result = env->NewObjectArray(model.objects.size(), metaClass, nullptr);
+
+        for (size_t i = 0; i < model.objects.size(); ++i) {
+            const Slic3r::ModelObject* mo = model.objects[i];
+            
+            // mesh() concatenates all volumes for this object.
+            Slic3r::TriangleMesh mesh = mo->mesh();
+            Slic3r::BoundingBoxf3 bbox = mesh.bounding_box();
+            Slic3r::Vec3f size = bbox.size().cast<float>();
+
+            jstring name = env->NewStringUTF(mo->name.c_str());
+            
+            int extruder = 0;
+            const Slic3r::ConfigOptionInt* opt = mo->config.option<Slic3r::ConfigOptionInt>("extruder");
+            if (opt) {
+                extruder = opt->value;
+            } else if (!mo->volumes.empty()) {
+                extruder = mo->volumes.front()->extruder_id();
+            }
+
+            jobject meta = env->NewObject(metaClass, metaCtor,
+                name,
+                (jint)mesh.facets_count(),
+                (jfloat)size.x(),
+                (jfloat)size.y(),
+                (jfloat)size.z(),
+                (jint)extruder,
+                (jint)mo->instances.size()
+            );
+
+            env->SetObjectArrayElement(result, i, meta);
+            env->DeleteLocalRef(meta);
+            env->DeleteLocalRef(name);
+        }
+
+        env->DeleteLocalRef(metaClass);
+        return result;
+    } catch (const std::exception& e) {
+        ORCAXR_LOGE("nativeRead3mfObjectMetadata: %s", e.what());
+        return nullptr;
+    } catch (...) {
+        ORCAXR_LOGE("nativeRead3mfObjectMetadata: unknown exception");
+        return nullptr;
+    }
+}
+
+// nativeExtractObjectAsStl — pull a single object's mesh from a container.
+extern "C" JNIEXPORT jint JNICALL
+Java_dev_orcaxr_app_SlicerEngine_nativeExtractObjectAsStl(
+    JNIEnv* env, jclass, jstring jArchivePath, jint jObjectIndex, jstring jOutStlPath)
+{
+    ScopedUtf archivePath(env, jArchivePath);
+    ScopedUtf outStlPath(env, jOutStlPath);
+
+    try {
+        Slic3r::Model model = load_mesh_container(archivePath.c);
+        if (jObjectIndex < 0 || (size_t)jObjectIndex >= model.objects.size()) {
+            ORCAXR_LOGE("nativeExtractObjectAsStl: oob index %d (size %zu)", jObjectIndex, model.objects.size());
+            return -1;
+        }
+
+        const Slic3r::ModelObject* mo = model.objects[jObjectIndex];
+        Slic3r::TriangleMesh mesh = mo->mesh();
+        if (mesh.empty()) {
+            ORCAXR_LOGE("nativeExtractObjectAsStl: object %d mesh is empty", jObjectIndex);
+            return -2;
+        }
+
+        if (!mesh.write_binary(outStlPath.c)) {
+            ORCAXR_LOGE("nativeExtractObjectAsStl: write_binary failed for %s", outStlPath.c);
+            return -3;
+        }
+        return 0;
+    } catch (const std::exception& e) {
+        ORCAXR_LOGE("nativeExtractObjectAsStl: exception %s", e.what());
+        return -4;
+    } catch (...) {
+        ORCAXR_LOGE("nativeExtractObjectAsStl: unknown exception");
+        return -4;
+    }
+}
+
 // nativeArrange — Phase XR_OBJ_7. Pack N input meshes onto a
 // rectangular bed using libslic3r's `arrange()` algorithm. Replaces
 // the naive left-to-right row-layout in `PlacedModel.autoArrangeModels`

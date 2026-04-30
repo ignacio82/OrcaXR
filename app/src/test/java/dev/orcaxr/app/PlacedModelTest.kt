@@ -228,4 +228,18 @@ class PlacedModelTest {
         val b = model("a").copy(supportFlags = byteArrayOf(0, 2, 0))
         assertNotEquals(a, b)
     }
+
+    @Test fun modelsWithDifferentGroupIdsAreUnequal() {
+        val a = model("a").copy(groupId = "g1", groupOrdinal = 0)
+        val b = model("a").copy(groupId = "g2", groupOrdinal = 0)
+        assertNotEquals(a, b)
+        assertNotEquals(a.hashCode(), b.hashCode())
+    }
+
+    @Test fun modelsWithDifferentGroupOrdinalsAreUnequal() {
+        val a = model("a").copy(groupId = "g1", groupOrdinal = 0)
+        val b = model("a").copy(groupId = "g1", groupOrdinal = 1)
+        assertNotEquals(a, b)
+        assertNotEquals(a.hashCode(), b.hashCode())
+    }
 }
