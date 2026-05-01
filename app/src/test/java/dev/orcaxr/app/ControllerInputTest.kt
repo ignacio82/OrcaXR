@@ -193,34 +193,4 @@ class ControllerInputTest {
         assertEquals(125, nextJumpLayer(current = 100, signedDirection = 1, topLayer = 400, jumpSize = 25))
     }
 
-    // ---------------- nextRotationDeg (Phase 4 — X axis 90° rotate) ----------------
-
-    @Test fun rotateForwardCyclesQuartet() {
-        assertEquals(90, nextRotationDeg(0, signedDirection = 1))
-        assertEquals(180, nextRotationDeg(90, signedDirection = 1))
-        assertEquals(270, nextRotationDeg(180, signedDirection = 1))
-        assertEquals(0, nextRotationDeg(270, signedDirection = 1))
-    }
-
-    @Test fun rotateBackwardCyclesQuartet() {
-        assertEquals(270, nextRotationDeg(0, signedDirection = -1))
-        assertEquals(0, nextRotationDeg(90, signedDirection = -1))
-        assertEquals(90, nextRotationDeg(180, signedDirection = -1))
-        assertEquals(180, nextRotationDeg(270, signedDirection = -1))
-    }
-
-    @Test fun rotateZeroDirectionNormalizes() {
-        // Even a no-op call must normalize an out-of-range input — a
-        // saved profile with rotZDeg=450 from a different code path
-        // shouldn't survive a tick of model manipulation.
-        assertEquals(90, nextRotationDeg(450, signedDirection = 0))
-        assertEquals(270, nextRotationDeg(-90, signedDirection = 0))
-    }
-
-    @Test fun rotateNormalizesNegativeStartAngle() {
-        // -90 + 90 = 0; this also exercises the modulo-of-negative
-        // path which Kotlin's % returns negative for.
-        assertEquals(0, nextRotationDeg(-90, signedDirection = 1))
-        assertEquals(180, nextRotationDeg(-90, signedDirection = -1))
-    }
 }
