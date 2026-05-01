@@ -1,5 +1,10 @@
 package dev.orcaxr.app
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -106,6 +111,31 @@ class ControllerInputTest {
         bus.setLeftStick(2f, -3f)
         assertEquals(1f, bus.leftStickX.value)
         assertEquals(-1f, bus.leftStickY.value)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test fun controllerInputBusUpdatesStateFlowsWithClampedValues() = runTest {
+        val bus = ControllerInputBus()
+
+        val xValues = mutableListOf<Float>()
+        val yValues = mutableListOf<Float>()
+
+        val jobX = launch(UnconfinedTestDispatcher(testScheduler)) {
+            bus.leftStickX.toList(xValues)
+        }
+        val jobY = launch(UnconfinedTestDispatcher(testScheduler)) {
+            bus.leftStickY.toList(yValues)
+        }
+
+        bus.setLeftStick(0.5f, -0.5f)
+        bus.setLeftStick(2.0f, -3.0f) // Should clamp to 1.0, -1.0
+        bus.setLeftStick(0.0f, 0.0f)
+
+        assertEquals(listOf(0.0f, 0.5f, 1.0f, 0.0f), xValues)
+        assertEquals(listOf(0.0f, -0.5f, -1.0f, 0.0f), yValues)
+
+        jobX.cancel()
+        jobY.cancel()
     }
 
     @Test fun midDeflectionBelowFullValue() {
