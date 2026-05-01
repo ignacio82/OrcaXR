@@ -2782,6 +2782,8 @@ Java_dev_orcaxr_app_SlicerEngine_nativeArrange(
                     ok = false;
                 }
                 if (ok) {
+                    ORCAXR_LOGI("nativeArrange: loaded %zu objects from %s, front has %zu instances",
+                                src.objects.size(), p.c, src.objects.front()->instances.size());
                     Slic3r::TriangleMesh mesh = src.objects.front()->mesh();
                     std::string name = std::string("model_") + std::to_string(i);
                     Slic3r::ModelObject* mo = model.add_object(name.c_str(), p.c, std::move(mesh));
@@ -2833,6 +2835,7 @@ Java_dev_orcaxr_app_SlicerEngine_nativeArrange(
             // with an internal min_obj_distance of 0 as "no fit"
             // when they're packed at origin).
             items[i].inflation = inflation;
+            items[i].bed_idx = 0; // BBS libnest2d integration requires bed_idx != -1 (-1 is BIN_ID_UNFIT)
             // BBS arrange's libnest2d port treats items with
             // bed_temp == print_temp == 0 as "no temperature
             // assigned, place anywhere". The compatibility check
@@ -2847,11 +2850,14 @@ Java_dev_orcaxr_app_SlicerEngine_nativeArrange(
             items[i].print_temp = 200;
             items[i].vitrify_temp = 240;
             const auto& bb = items[i].poly.contour.bounding_box();
-            ORCAXR_LOGI("nativeArrange: poly[%zu] %zu points bbox=(%.1f..%.1f, %.1f..%.1f) mm extrude_ids=%zu inflation=%ld",
+            ORCAXR_LOGI("nativeArrange: poly[%zu] %zu points raw_bbox=(%.1f..%.1f, %.1f..%.1f) mm area=%.1e",
                         i, items[i].poly.contour.size(),
                         Slic3r::unscale<double>(bb.min.x()), Slic3r::unscale<double>(bb.max.x()),
                         Slic3r::unscale<double>(bb.min.y()), Slic3r::unscale<double>(bb.max.y()),
-                        items[i].extrude_ids.size(), inflation);
+                        items[i].poly.contour.area());
+            ORCAXR_LOGI("nativeArrange: poly[%zu] translation=(%.1f, %.1f) mm rot=%.1f deg inflation=%.1f mm",
+                        i, Slic3r::unscale<double>(items[i].translation.x()), Slic3r::unscale<double>(items[i].translation.y()),
+                        items[i].rotation * 180.0 / M_PI, Slic3r::unscale<double>(items[i].inflation));
         }
 
         // Rectangular bed described as 4 corner points (Points).
@@ -2862,54 +2868,37 @@ Java_dev_orcaxr_app_SlicerEngine_nativeArrange(
         // we pass into BoundingBox(bedpts) below is a valid 4-corner
         // rectangle.
         Slic3r::Points bedpts;
-        bedpts.emplace_back(Slic3r::scaled<coord_t>(-jBedWmm / 2.0), Slic3r::scaled<coord_t>(-jBedHmm / 2.0));
-        bedpts.emplace_back(Slic3r::scaled<coord_t>( jBedWmm / 2.0), Slic3r::scaled<coord_t>(-jBedHmm / 2.0));
-        bedpts.emplace_back(Slic3r::scaled<coord_t>( jBedWmm / 2.0), Slic3r::scaled<coord_t>( jBedHmm / 2.0));
-        bedpts.emplace_back(Slic3r::scaled<coord_t>(-jBedWmm / 2.0), Slic3r::scaled<coord_t>( jBedHmm / 2.0));
+        bedpts.emplace_back(Slic3r::scaled<coord_t>(-jBedWmm / 2.0f), Slic3r::scaled<coord_t>(-jBedHmm / 2.0f));
+        bedpts.emplace_back(Slic3r::scaled<coord_t>( jBedWmm / 2.0f), Slic3r::scaled<coord_t>(-jBedHmm / 2.0f));
+        bedpts.emplace_back(Slic3r::scaled<coord_t>( jBedWmm / 2.0f), Slic3r::scaled<coord_t>( jBedHmm / 2.0f));
+        bedpts.emplace_back(Slic3r::scaled<coord_t>(-jBedWmm / 2.0f), Slic3r::scaled<coord_t>( jBedHmm / 2.0f));
 
-        // Bed bbox in scaled coords for diagnostics. process_arrangeable
-        // forces CW; libnest2d's nfpInnerRectBed bails out (returns
-        // empty NFP) when item swidth > bedW or sheight > bedH. With
-        // BoundingBox(bedpts), bedW = scaled(jBedWmm), bedH = scaled(jBedHmm).
-        Slic3r::BoundingBox bedbb_diag(bedpts);
+        // Direct BoundingBox overload
+        Slic3r::BoundingBox bedbb(bedpts);
         ORCAXR_LOGI("nativeArrange: bed bbox scaled (%lld..%lld, %lld..%lld) → %.1f×%.1f mm",
-                    (long long)bedbb_diag.min.x(), (long long)bedbb_diag.max.x(),
-                    (long long)bedbb_diag.min.y(), (long long)bedbb_diag.max.y(),
-                    Slic3r::unscale<double>(bedbb_diag.size().x()),
-                    Slic3r::unscale<double>(bedbb_diag.size().y()));
+                    (long long)bedbb.min.x(), (long long)bedbb.max.x(),
+                    (long long)bedbb.min.y(), (long long)bedbb.max.y(),
+                    Slic3r::unscale<double>(bedbb.size().x()),
+                    Slic3r::unscale<double>(bedbb.size().y()));
 
         Slic3r::arrangement::ArrangeParams params;
         params.min_obj_distance = Slic3r::scaled<coord_t>(jGapMm);
         params.parallel = false;
         params.allow_rotations = false;
-        params.do_final_align = false;
-        params.allow_multi_materials_on_same_plate = true;
+        params.do_final_align = true;
         params.printable_height = 256.0f;
-        // No-op progress / stop callbacks so libnest2d's progressIndicator
-        // path doesn't try to invoke a null function pointer when an item
-        // is packed (line 783 in Arrange.cpp's AutoArranger ctor).
-        // params.on_packed fires per successful placement — log so we
-        // can tell if libnest2d is rejecting at remove_unpackable_items
-        // (no on_packed at all) vs failing somewhere later (some on_packed
-        // before the rejection).
+        params.allow_multi_materials_on_same_plate = true;
+
+        // Use the official inflation helper to set per-item inflation
+        // based on the gap and bed constraints.
+        Slic3r::arrangement::update_selected_items_inflation(items, &cfg, params);
+
         int packed_count = 0;
-        params.progressind = [&packed_count](unsigned n, std::string name) {
-            ORCAXR_LOGI("nativeArrange: progressind n=%u name=%s", n, name.c_str());
-        };
         params.on_packed = [&packed_count](const Slic3r::arrangement::ArrangePolygon& ap) {
             packed_count++;
-            ORCAXR_LOGI("nativeArrange: on_packed bed_idx=%d t=(%.1f,%.1f)",
-                        ap.bed_idx,
-                        Slic3r::unscale<double>(ap.translation.x()),
-                        Slic3r::unscale<double>(ap.translation.y()));
         };
         params.stopcondition = []() { return false; };
 
-        // Try the BoundingBox overload directly. Bypasses call_with_bed's
-        // rectangle-detection dispatch — if Points fails but BoundingBox
-        // works, the bug is in the dispatch (1.0 - parea/area_bb < 1e-3
-        // or the to_circle test). If both fail the bug is deeper.
-        Slic3r::BoundingBox bedbb(bedpts);
         try {
             Slic3r::arrangement::arrange(items, {}, bedbb, params);
         } catch (const std::exception& e) {

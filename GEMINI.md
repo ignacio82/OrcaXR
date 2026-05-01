@@ -1,8 +1,8 @@
 # GEMINI.md
 
-Canonical technical context for OrcaXR. Auto-loaded by Claude Code at the
-start of every session in this repo (CLAUDE.md is a one-line pointer here).
-Read this before any non-trivial work.
+Canonical technical context for OrcaXR. Auto-loaded by Claude Code via
+CLAUDE.md and by Codex via AGENTS.md at the start of every session in
+this repo. Read this before any non-trivial work.
 
 ## Self-update mandate
 
