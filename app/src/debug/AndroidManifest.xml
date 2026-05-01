@@ -9,10 +9,16 @@
     src/debug/java/dev/orcaxr/app/TestBroadcastReceiver.kt for details.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <permission
+        android:name="dev.orcaxr.app.test.permission.TRIGGER_TEST_RECEIVER"
+        android:protectionLevel="signature" />
+
     <application>
         <receiver
             android:name=".TestBroadcastReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="dev.orcaxr.app.test.permission.TRIGGER_TEST_RECEIVER">
             <intent-filter>
                 <action android:name="dev.orcaxr.app.test.LOAD_3MF" />
                 <action android:name="dev.orcaxr.app.test.LOAD_ADD" />
