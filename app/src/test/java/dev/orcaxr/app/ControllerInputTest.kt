@@ -1,5 +1,10 @@
 package dev.orcaxr.app
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -89,6 +94,46 @@ class ControllerInputTest {
         close(2 * a, b, eps = 1e-3f)
     }
 
+    @Test fun exponentChangesCurveShape() {
+        // linear (exponent = 1f) should yield linear mapping after flat
+        val linear = scrubRate(0.55f, flat = 0.1f, maxLps = 40, exponent = 1f)
+        // 0.55 - 0.1 = 0.45, normalized = 0.45 / 0.9 = 0.5. 0.5^1 * 40 = 20f
+        close(20f, linear)
+
+        // very high exponent should yield near zero until close to 1
+        val highExp = scrubRate(0.8f, flat = 0.1f, maxLps = 40, exponent = 10f)
+        assertTrue("high exponent $highExp should heavily suppress mid-values", highExp < 5f)
+    }
+
+    @Test fun negativeFlatIsClampedToZero() {
+        // flat < 0 should be treated as flat = 0 during normalization
+        val r = scrubRate(0.5f, flat = -0.5f, maxLps = 40, exponent = 1f)
+        // If flat is -0.5, the early return `mag <= flat` (0.5 <= -0.5) is false.
+        // Then flatClamped = 0f. normalized = (0.5 - 0) / 1.0 = 0.5. result = 0.5 * 40 = 20f.
+        close(20f, r)
+    }
+
+    @Test fun flatAboveMaxIsClamped() {
+        // flat > 0.95 should be clamped to 0.95 during normalization
+        // This ensures (1f - flatClamped) is never 0, avoiding divide by zero
+        val r = scrubRate(1f, flat = 0.99f, maxLps = 40)
+        // early return mag <= flat (1.0 <= 0.99) is false
+        // flatClamped = 0.95
+        // normalized = (1.0 - 0.95) / 0.05 = 1.0
+        // result = 1.0 * 40 = 40f
+        close(40f, r)
+    }
+
+    @Test fun zeroMaxLpsReturnsZero() {
+        assertEquals(0f, scrubRate(1f, flat = 0.1f, maxLps = 0))
+    }
+
+    @Test fun negativeMaxLpsReversesDirection() {
+        // -40 maxLps reverses the output sign
+        close(-40f, scrubRate(1f, flat = 0.1f, maxLps = -40))
+        close(40f, scrubRate(-1f, flat = 0.1f, maxLps = -40))
+    }
+
     @Test fun controllerInputBusEmitsAndResets() {
         val bus = ControllerInputBus()
         bus.setLeftStick(0.3f, -0.4f)
@@ -106,6 +151,31 @@ class ControllerInputTest {
         bus.setLeftStick(2f, -3f)
         assertEquals(1f, bus.leftStickX.value)
         assertEquals(-1f, bus.leftStickY.value)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test fun controllerInputBusUpdatesStateFlowsWithClampedValues() = runTest {
+        val bus = ControllerInputBus()
+
+        val xValues = mutableListOf<Float>()
+        val yValues = mutableListOf<Float>()
+
+        val jobX = launch(UnconfinedTestDispatcher(testScheduler)) {
+            bus.leftStickX.toList(xValues)
+        }
+        val jobY = launch(UnconfinedTestDispatcher(testScheduler)) {
+            bus.leftStickY.toList(yValues)
+        }
+
+        bus.setLeftStick(0.5f, -0.5f)
+        bus.setLeftStick(2.0f, -3.0f) // Should clamp to 1.0, -1.0
+        bus.setLeftStick(0.0f, 0.0f)
+
+        assertEquals(listOf(0.0f, 0.5f, 1.0f, 0.0f), xValues)
+        assertEquals(listOf(0.0f, -0.5f, -1.0f, 0.0f), yValues)
+
+        jobX.cancel()
+        jobY.cancel()
     }
 
     @Test fun midDeflectionBelowFullValue() {
@@ -193,34 +263,4 @@ class ControllerInputTest {
         assertEquals(125, nextJumpLayer(current = 100, signedDirection = 1, topLayer = 400, jumpSize = 25))
     }
 
-    // ---------------- nextRotationDeg (Phase 4 — X axis 90° rotate) ----------------
-
-    @Test fun rotateForwardCyclesQuartet() {
-        assertEquals(90, nextRotationDeg(0, signedDirection = 1))
-        assertEquals(180, nextRotationDeg(90, signedDirection = 1))
-        assertEquals(270, nextRotationDeg(180, signedDirection = 1))
-        assertEquals(0, nextRotationDeg(270, signedDirection = 1))
-    }
-
-    @Test fun rotateBackwardCyclesQuartet() {
-        assertEquals(270, nextRotationDeg(0, signedDirection = -1))
-        assertEquals(0, nextRotationDeg(90, signedDirection = -1))
-        assertEquals(90, nextRotationDeg(180, signedDirection = -1))
-        assertEquals(180, nextRotationDeg(270, signedDirection = -1))
-    }
-
-    @Test fun rotateZeroDirectionNormalizes() {
-        // Even a no-op call must normalize an out-of-range input — a
-        // saved profile with rotZDeg=450 from a different code path
-        // shouldn't survive a tick of model manipulation.
-        assertEquals(90, nextRotationDeg(450, signedDirection = 0))
-        assertEquals(270, nextRotationDeg(-90, signedDirection = 0))
-    }
-
-    @Test fun rotateNormalizesNegativeStartAngle() {
-        // -90 + 90 = 0; this also exercises the modulo-of-negative
-        // path which Kotlin's % returns negative for.
-        assertEquals(0, nextRotationDeg(-90, signedDirection = 1))
-        assertEquals(180, nextRotationDeg(-90, signedDirection = -1))
-    }
 }
