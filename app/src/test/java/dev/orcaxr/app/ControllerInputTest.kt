@@ -193,6 +193,16 @@ class ControllerInputTest {
         assertEquals(125, nextJumpLayer(current = 100, signedDirection = 1, topLayer = 400, jumpSize = 25))
     }
 
+    @Test fun jumpWithEmptyOrSingleLayerTopIsNoOp() {
+        assertEquals(null, nextJumpLayer(current = null, signedDirection = -1, topLayer = 0))
+        assertEquals(null, nextJumpLayer(current = null, signedDirection = -1, topLayer = -1))
+        assertEquals(10, nextJumpLayer(current = 10, signedDirection = -1, topLayer = 0))
+    }
+
+    @Test fun jumpFromShowAllJumpsForwardStaysShowAll() {
+        assertEquals(null, nextJumpLayer(current = null, signedDirection = 1, topLayer = 400))
+    }
+
     // ---------------- nextRotationDeg (Phase 4 — X axis 90° rotate) ----------------
 
     @Test fun rotateForwardCyclesQuartet() {
