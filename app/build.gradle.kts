@@ -209,6 +209,7 @@ dependencies {
     androidTestImplementation(libs.kotlinx.coroutines.test)
 
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     // org.json.JSONObject is stubbed-only in the android.jar shipped with
     // the Android plugin — JVM unit tests need a real implementation on
     // the classpath. The "json" jar (Apache 2.0) is the canonical drop-in.
