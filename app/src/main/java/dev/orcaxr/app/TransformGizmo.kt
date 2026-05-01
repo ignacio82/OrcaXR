@@ -53,9 +53,6 @@ data class GizmoDragOverride(
 //   printer Y = world -Z
 //   printer Z = world Y
 // So a delta vector in WORLD coords projects onto the printer axes as:
-private fun worldDeltaToPrinterX(delta: Vector3) = delta.x
-private fun worldDeltaToPrinterY(delta: Vector3) = -delta.z
-private fun worldDeltaToPrinterZ(delta: Vector3) = delta.y
 
 // Geometry constants for the GLB primitives generated below. The handle
 // entity's setScale() then linearly resizes them so the visible / hittable
@@ -192,19 +189,19 @@ fun TransformGizmo(
     if (tool == GizmoTool.Move) {
     GizmoDragHandle(session, ctx, root, "arrow_x_v3.glb", Vector3(lenX, baseScale, baseScale),
         generate = { f -> GizmoGlb.writeArrow(f, 0, GIZMO_ARROW_LEN_MM, GIZMO_ARROW_SHAFT_MM, floatArrayOf(1f, 0.2f, 0.2f)) },
-        projectDelta = ::worldDeltaToPrinterX,
+        projectDelta = { delta -> delta.x },
         buildOverride = { dxMm -> GizmoDragOverride(deltaTxMm = dxMm) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
     GizmoDragHandle(session, ctx, root, "arrow_y_v3.glb", Vector3(baseScale, lenY, baseScale),
         generate = { f -> GizmoGlb.writeArrow(f, 1, GIZMO_ARROW_LEN_MM, GIZMO_ARROW_SHAFT_MM, floatArrayOf(0.2f, 1f, 0.2f)) },
-        projectDelta = ::worldDeltaToPrinterY,
+        projectDelta = { delta -> -delta.z },
         buildOverride = { dyMm -> GizmoDragOverride(deltaTyMm = dyMm) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
     GizmoDragHandle(session, ctx, root, "arrow_z_v3.glb", Vector3(baseScale, baseScale, lenZ),
         generate = { f -> GizmoGlb.writeArrow(f, 2, GIZMO_ARROW_LEN_MM, GIZMO_ARROW_SHAFT_MM, floatArrayOf(0.2f, 0.2f, 1f)) },
-        projectDelta = ::worldDeltaToPrinterZ,
+        projectDelta = { delta -> delta.y },
         buildOverride = { dzMm -> GizmoDragOverride(deltaTzMm = dzMm) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
