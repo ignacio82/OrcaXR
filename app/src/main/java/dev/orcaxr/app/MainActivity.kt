@@ -57,14 +57,18 @@ import androidx.xr.compose.subspace.layout.height as subspaceHeight
 // support, and individual SpatialPanels stay at their authored offsets.
 import androidx.xr.compose.subspace.layout.offset
 import androidx.xr.compose.subspace.layout.width as subspaceWidth
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
 import androidx.xr.runtime.Session
 import androidx.xr.runtime.SessionCreateSuccess
+
 import androidx.xr.scenecore.GltfModel
 import androidx.xr.scenecore.GltfModelEntity
 import androidx.xr.scenecore.GroupEntity
 import androidx.xr.scenecore.scene
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
 import java.io.File
 import java.util.zip.ZipFile
 
@@ -4722,7 +4726,12 @@ private fun XrShell(
         // Build plate first so the toolpath/STL render on top of it.
         buildPlatePath?.let { path ->
             key(path) {
-                BuildPlateSceneEntity(session = session, glbPath = path, parentEntity = workspaceEntity)
+                BuildPlateSceneEntity(
+                    session = session,
+                    glbPath = path,
+                    parentEntity = workspaceEntity,
+                    onTap = { selectedModelIds = emptySet() }
+                )
             }
         }
 
@@ -4750,9 +4759,9 @@ private fun XrShell(
                             parentEntity = workspaceEntity,
                             offsetXmm = m.translateXmm,
                             offsetYmm = m.translateYmm,
+                            offsetZmm = m.translateZmm,
                             paintHooks = paintHooksFor(m),
-                            liveOverride = liveOv,
-                            // Phase XR_OBJ_1: tap a model to select it.
+                            liveOverride = liveOv,                            // Phase XR_OBJ_1: tap a model to select it.
                             // The callbacks no-op when paint mode is on
                             // (paintHooks takes priority inside
                             // GlbSceneEntity), so painting still works
@@ -4808,27 +4817,31 @@ private fun XrShell(
                     var maxX = Float.NEGATIVE_INFINITY
                     var minY = Float.POSITIVE_INFINITY
                     var maxY = Float.NEGATIVE_INFINITY
-                    var maxZ = Float.NEGATIVE_INFINITY // Base is 0
+                    var minZ = Float.POSITIVE_INFINITY
+                    var maxZ = Float.NEGATIVE_INFINITY
                     
                     for (m in selectedList) {
                         val (w, d) = m.footprintMm()
-                        val h = m.baseBboxZmm * (m.scalePct / 100f)
+                        val h = m.baseBboxZmm * m.effectiveScaleZ
                         val cx = m.translateXmm
                         val cy = m.translateYmm
+                        val cz = m.translateZmm
                         if (cx - w/2 < minX) minX = cx - w/2
                         if (cx + w/2 > maxX) maxX = cx + w/2
                         if (cy - d/2 < minY) minY = cy - d/2
                         if (cy + d/2 > maxY) maxY = cy + d/2
-                        if (h > maxZ) maxZ = h
+                        if (cz < minZ) minZ = cz
+                        if (cz + h > maxZ) maxZ = cz + h
                     }
                     
                     val fw = maxX - minX
                     val fd = maxY - minY
-                    val fh = maxZ
+                    val fh = maxZ - minZ
                     
                     if (fw > 0f && fd > 0f && fh > 0f && !fw.isInfinite()) {
                         val cx = (minX + maxX) / 2f
                         val cy = (minY + maxY) / 2f
+                        val cz = minZ
                         
                         key(selectedModelIds.hashCode(), fw, fd, fh) {
                             SelectionBboxEntity(
@@ -4837,6 +4850,7 @@ private fun XrShell(
                                 modelId = "multi_select_bbox",
                                 offsetXmm = cx,
                                 offsetYmm = cy,
+                                offsetZmm = cz,
                                 sizeXmm = fw,
                                 sizeYmm = fd,
                                 sizeZmm = fh,
@@ -5099,6 +5113,7 @@ private fun StlPreviewSceneEntity(
     parentEntity: androidx.xr.scenecore.Entity?,
     offsetXmm: Float = 0f,
     offsetYmm: Float = 0f,
+    offsetZmm: Float = 0f,
     /** Phase J: when non-null, attaches an `InteractableComponent`
      *  to the model's GltfModelEntity and forwards `Source.CONTROLLER`
      *  events through the hooks. Null = no paint pipeline (the entity
@@ -5114,12 +5129,17 @@ private fun StlPreviewSceneEntity(
      *  being dragged. Null when no drag is active. */
     liveOverride: GizmoDragOverride? = null,
 ) {
-    GlbSceneEntity(session, glbPath, parentEntity, offsetXmm, offsetYmm, paintHooks, onTap, onHoverChange, liveOverride)
+    GlbSceneEntity(session, glbPath, parentEntity, offsetXmm, offsetYmm, offsetZmm, paintHooks, onTap, onHoverChange, liveOverride)
 }
 
 @Composable
-private fun BuildPlateSceneEntity(session: Session, glbPath: String, parentEntity: androidx.xr.scenecore.Entity?) {
-    GlbSceneEntity(session, glbPath, parentEntity)
+private fun BuildPlateSceneEntity(
+    session: Session,
+    glbPath: String,
+    parentEntity: androidx.xr.scenecore.Entity?,
+    onTap: (() -> Unit)? = null,
+) {
+    GlbSceneEntity(session, glbPath, parentEntity, onTap = onTap)
 }
 
 /**
@@ -5142,6 +5162,7 @@ private fun SelectionBboxEntity(
     modelId: String,
     offsetXmm: Float,
     offsetYmm: Float,
+    offsetZmm: Float,
     sizeXmm: Float,
     sizeYmm: Float,
     sizeZmm: Float,
@@ -5150,12 +5171,14 @@ private fun SelectionBboxEntity(
     var entity by remember { mutableStateOf<GltfModelEntity?>(null) }
 
     LaunchedEffect(modelId, sizeXmm, sizeYmm, sizeZmm, parentEntity) {
-        // Bake on a worker dispatcher so we don't stall the frame.
-        // 144 triangles is trivial but the GLB write touches disk.
+        // Dispose old entity
+        entity?.let { if (!it.isDisposed) runCatching { it.dispose() } }
+        entity = null
+
         val dimsHash = java.util.Objects.hash(sizeXmm, sizeYmm, sizeZmm)
         val out = File(ctx.cacheDir, "sel_bbox_${modelId}_${Integer.toHexString(dimsHash)}.glb")
         if (!out.exists()) {
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            withContext(Dispatchers.IO) {
                 runCatching {
                     writeBboxOutlineGlb(
                         file = out,
@@ -5169,39 +5192,39 @@ private fun SelectionBboxEntity(
             }
         }
         if (!out.exists()) return@LaunchedEffect
-        android.util.Log.i(
-            "OrcaXR",
-            "SelectionBboxEntity loading ${out.name} for $modelId " +
-                "(${sizeXmm}×${sizeYmm}×${sizeZmm} mm)",
-        )
-        val bytes = runCatching { out.readBytes() }
-            .onFailure { android.util.Log.e("OrcaXR", "selection bbox read failed", it) }
-            .getOrNull() ?: return@LaunchedEffect
+
+        android.util.Log.i("OrcaXR", "SelectionBboxEntity loading ${out.name}")
+        val bytes = withContext(Dispatchers.IO) {
+            runCatching { out.readBytes() }.getOrNull()
+        } ?: return@LaunchedEffect
+
         val model = runCatching { GltfModel.create(session, bytes, out.name) }
             .onFailure { android.util.Log.e("OrcaXR", "selection bbox GltfModel.create failed", it) }
             .getOrNull() ?: return@LaunchedEffect
+        
         val ent = GltfModelEntity.create(session, model)
         applyWorkspacePose(ent, parentEntity ?: session.scene.activitySpace)
         ent.setPose(
             androidx.xr.runtime.math.Pose(
                 androidx.xr.runtime.math.Vector3(
-                    offsetXmm * WORLD_SCALE, offsetYmm * WORLD_SCALE, 0f,
+                    offsetXmm * WORLD_SCALE,
+                    offsetYmm * WORLD_SCALE,
+                    offsetZmm * WORLD_SCALE,
                 ),
                 androidx.xr.runtime.math.Quaternion.Identity,
             ),
         )
-        // Replace any prior entity (e.g. footprint changed): dispose first
-        // so SceneCore doesn't keep two stacked bbox glyphs alive.
-        entity?.dispose()
         entity = ent
         android.util.Log.i("OrcaXR", "SelectionBboxEntity attached ${out.name}")
     }
 
-    LaunchedEffect(offsetXmm, offsetYmm) {
+    LaunchedEffect(offsetXmm, offsetYmm, offsetZmm) {
         entity?.setPose(
             androidx.xr.runtime.math.Pose(
                 androidx.xr.runtime.math.Vector3(
-                    offsetXmm * WORLD_SCALE, offsetYmm * WORLD_SCALE, 0f,
+                    offsetXmm * WORLD_SCALE,
+                    offsetYmm * WORLD_SCALE,
+                    offsetZmm * WORLD_SCALE,
                 ),
                 androidx.xr.runtime.math.Quaternion.Identity,
             ),
@@ -5223,6 +5246,7 @@ private fun GlbSceneEntity(
     parentEntity: androidx.xr.scenecore.Entity?,
     offsetXmm: Float = 0f,
     offsetYmm: Float = 0f,
+    offsetZmm: Float = 0f,
     paintHooks: PaintInputHooks? = null,
     onTap: (() -> Unit)? = null,
     onHoverChange: ((Boolean) -> Unit)? = null,
@@ -5248,37 +5272,53 @@ private fun GlbSceneEntity(
     val onHoverLive = rememberUpdatedState(onHoverChange)
 
     LaunchedEffect(glbPath, parentEntity) {
-        // SceneCore's GltfModel.create(Session, Path) expects a path
-        // *relative to assets/* and rejects absolute filesystem paths
-        // with an IllegalArgumentException. Our GLBs are generated into
-        // the app's cache dir at runtime, so we read the bytes ourselves
-        // and use the byte[] overload instead.
-        val bytes = runCatching { File(glbPath).readBytes() }
-            .onFailure { android.util.Log.e("OrcaXR", "GLB read failed for $glbPath", it) }
-            .getOrNull() ?: return@LaunchedEffect
-        android.util.Log.i("OrcaXR", "GlbSceneEntity loading $glbPath (${bytes.size / 1024} KB)")
-        val model = runCatching { GltfModel.create(session, bytes, File(glbPath).name) }
+        // Dispose old entity
+        entity?.let { if (!it.isDisposed) runCatching { it.dispose() } }
+        entity = null
+
+        if (glbPath.isNullOrEmpty()) return@LaunchedEffect
+
+        android.util.Log.i("OrcaXR", "GlbSceneEntity loading $glbPath")
+        val bytes = withContext(Dispatchers.IO) {
+            runCatching { File(glbPath).readBytes() }.getOrNull()
+        } ?: return@LaunchedEffect
+
+        // Use a unique name to avoid session conflicts
+        val uniqueName = "m_${glbPath.hashCode().toString(36)}_${System.currentTimeMillis().toString(36)}.glb"
+        val model = runCatching { GltfModel.create(session, bytes, uniqueName) }
             .onFailure { android.util.Log.e("OrcaXR", "GltfModel.create failed for $glbPath", it) }
             .getOrNull() ?: return@LaunchedEffect
+
         val ent = GltfModelEntity.create(session, model)
         applyWorkspacePose(ent, parentEntity ?: session.scene.activitySpace)
+        
+        // Initial pose
         ent.setPose(androidx.xr.runtime.math.Pose(
-            androidx.xr.runtime.math.Vector3(offsetXmm * WORLD_SCALE, offsetYmm * WORLD_SCALE, 0f),
+            androidx.xr.runtime.math.Vector3(
+                offsetXmm * WORLD_SCALE,
+                offsetYmm * WORLD_SCALE,
+                offsetZmm * WORLD_SCALE,
+            ),
             androidx.xr.runtime.math.Quaternion.Identity
         ))
-        android.util.Log.i("OrcaXR", "GlbSceneEntity attached $glbPath, entity=$ent")
+        
         entity = ent
+        android.util.Log.i("OrcaXR", "GlbSceneEntity attached $glbPath")
     }
 
     // Steady-state pose update: position only (rotation/scale are baked
     // into the GLB by previewStl, so identity is correct here). Re-runs
     // when the user types a translate value or drags the bed under the
     // workspace.
-    LaunchedEffect(entity, offsetXmm, offsetYmm) {
+    LaunchedEffect(entity, offsetXmm, offsetYmm, offsetZmm) {
         val ent = entity ?: return@LaunchedEffect
         if (ent.isDisposed) return@LaunchedEffect
         ent.setPose(androidx.xr.runtime.math.Pose(
-            androidx.xr.runtime.math.Vector3(offsetXmm * WORLD_SCALE, offsetYmm * WORLD_SCALE, 0f),
+            androidx.xr.runtime.math.Vector3(
+                offsetXmm * WORLD_SCALE,
+                offsetYmm * WORLD_SCALE,
+                offsetZmm * WORLD_SCALE,
+            ),
             androidx.xr.runtime.math.Quaternion.Identity,
         ))
     }
@@ -5292,7 +5332,7 @@ private fun GlbSceneEntity(
     // instance id" — Filament rebinds materials when scale changes type
     // (scalar -> vector), which races the loader on a freshly created
     // GltfModelEntity.
-    LaunchedEffect(entity, offsetXmm, offsetYmm, liveOverride) {
+    LaunchedEffect(entity, offsetXmm, offsetYmm, offsetZmm, liveOverride) {
         val ent = entity ?: return@LaunchedEffect
         if (ent.isDisposed) return@LaunchedEffect
         val ov = liveOverride ?: return@LaunchedEffect
@@ -5300,7 +5340,7 @@ private fun GlbSceneEntity(
             androidx.xr.runtime.math.Vector3(
                 (offsetXmm + ov.deltaTxMm) * WORLD_SCALE,
                 (offsetYmm + ov.deltaTyMm) * WORLD_SCALE,
-                ov.deltaTzMm * WORLD_SCALE,
+                (offsetZmm + ov.deltaTzMm) * WORLD_SCALE,
             ),
             androidx.xr.runtime.math.Quaternion.fromEulerAngles(
                 ov.deltaRotXDeg, ov.deltaRotYDeg, ov.deltaRotZDeg,

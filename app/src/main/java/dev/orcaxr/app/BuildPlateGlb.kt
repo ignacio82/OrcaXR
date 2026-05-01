@@ -76,46 +76,79 @@ object BuildPlateGlb {
         val outlineR = 0.45f; val outlineG = 0.85f; val outlineB = 1.0f
         val gridR = 0.20f;    val gridG = 0.40f;    val gridB = 0.55f
 
+        // Phase G: also emit a "floor" quad (2 triangles) at z=-0.1mm.
+        // This gives the laser a solid surface to hit for deselection
+        // (empty space clicks) without Z-fighting with the grid lines
+        // or the model's bottom face.
+        val floorR = 0.05f; val floorG = 0.05f; val floorB = 0.05f
+        val floorZ = -0.1f
+
         var vid = 0
-        fun seg(ax: Float, ay: Float, bx: Float, by: Float, r: Float, g: Float, b: Float) {
-            // Plate sits at z=0 (top surface). Toolpath/STL Z grows upward.
-            positions += ax; positions += ay; positions += 0f
-            positions += bx; positions += by; positions += 0f
+        fun tri(ax: Float, ay: Float, az: Float,
+                 bx: Float, by: Float, bz: Float,
+                 cx: Float, cy: Float, cz: Float,
+                 r: Float, g: Float, b: Float) {
+            positions += ax; positions += ay; positions += az
+            positions += bx; positions += by; positions += bz
+            positions += cx; positions += cy; positions += cz
             colors += r; colors += g; colors += b
             colors += r; colors += g; colors += b
-            indices += vid++; indices += vid++
+            colors += r; colors += g; colors += b
+            indices += vid++; indices += vid++; indices += vid++
         }
 
-        // Interior grid lines first so the outline reads cleanly on top.
-        // Offset the loop start so we don't double-draw the perimeter
-        // (handled by the outline pass).
+        fun quad(ax: Float, ay: Float, az: Float,
+                  bx: Float, by: Float, bz: Float,
+                  cx: Float, cy: Float, cz: Float,
+                  dx: Float, dy: Float, dz: Float,
+                  r: Float, g: Float, b: Float) {
+            tri(ax, ay, az, bx, by, bz, cx, cy, cz, r, g, b)
+            tri(ax, ay, az, cx, cy, cz, dx, dy, dz, r, g, b)
+        }
+
+        fun line(ax: Float, ay: Float, bx: Float, by: Float, thickness: Float, r: Float, g: Float, b: Float) {
+            val h = thickness / 2f
+            if (kotlin.math.abs(ax - bx) < 1e-3f) {
+                // Vertical line (Y-axis)
+                quad(ax - h, ay, 0f, ax + h, ay, 0f, ax + h, by, 0f, ax - h, by, 0f, r, g, b)
+            } else {
+                // Horizontal line (X-axis)
+                quad(ax, ay - h, 0f, bx, ay - h, 0f, bx, ay + h, 0f, ax, ay + h, 0f, r, g, b)
+            }
+        }
+
+        // Floor quad for reliable laser hits.
+        quad(-halfX, -halfY, floorZ, halfX, -halfY, floorZ, halfX, halfY, floorZ, -halfX, halfY, floorZ, floorR, floorG, floorB)
+
+        // Interior grid lines. Use 0.5mm thickness so they read as lines
+        // but are still triangles.
+        val t = 0.5f
         var x = -halfX + gridSpacingMm
         while (x < halfX - 1e-3f) {
-            seg(x, -halfY, x, halfY, gridR, gridG, gridB)
+            line(x, -halfY, x, halfY, t, gridR, gridG, gridB)
             x += gridSpacingMm
         }
         var y = -halfY + gridSpacingMm
         while (y < halfY - 1e-3f) {
-            seg(-halfX, y, halfX, y, gridR, gridG, gridB)
+            line(-halfX, y, halfX, y, t, gridR, gridG, gridB)
             y += gridSpacingMm
         }
 
         // Bed perimeter.
-        seg(-halfX, -halfY,  halfX, -halfY, outlineR, outlineG, outlineB)
-        seg( halfX, -halfY,  halfX,  halfY, outlineR, outlineG, outlineB)
-        seg( halfX,  halfY, -halfX,  halfY, outlineR, outlineG, outlineB)
-        seg(-halfX,  halfY, -halfX, -halfY, outlineR, outlineG, outlineB)
+        line(-halfX, -halfY,  halfX, -halfY, t, outlineR, outlineG, outlineB)
+        line( halfX, -halfY,  halfX,  halfY, t, outlineR, outlineG, outlineB)
+        line( halfX,  halfY, -halfX,  halfY, t, outlineR, outlineG, outlineB)
+        line(-halfX,  halfY, -halfX, -halfY, t, outlineR, outlineG, outlineB)
 
-        // Origin tick: a small "+" at (0,0) so the user can read the bed
-        // center. 4 mm half-length keeps it readable but unobtrusive.
+        // Origin tick.
         val tick = 4.0f
-        seg(-tick, 0f, tick, 0f, 1.0f, 0.6f, 0.4f)
-        seg(0f, -tick, 0f, tick, 1.0f, 0.6f, 0.4f)
+        line(-tick, 0f, tick, 0f, t, 1.0f, 0.6f, 0.4f)
+        line(0f, -tick, 0f, tick, t, 1.0f, 0.6f, 0.4f)
 
         GlbBuilder(
             positions = positions.toFloatArray(),
             indices = indices.toIntArray(),
-            mode = GlbBuilder.MODE_LINES,
+            mode = GlbBuilder.MODE_TRIANGLES,
             colors = colors.toFloatArray(),
         ).writeTo(out)
     }

@@ -156,6 +156,12 @@ Currently single `:app` module. The split below is aspirational; do NOT create m
 
 22. **Loading a 3MF fires *two* `previewStl` calls — sweep must not unlink in-flight bakes.** `LE_2162` fires on the selection change for the new model (call A); inside that bake, the embedded-color sync writes to `filamentEntriesStore`, which propagates to `previewPalette`, which fires the palette `LaunchedEffect` and runs a second bake (call B). `SlicerEngine.writeColoredGlb` opens its output GLB for writing early in the JNI; if call A's `sweepOldPreviews(keep=v1)` runs while B's JNI has `v2.glb` open, the file gets unlinked, JNI keeps writing to the orphan FD, and the bytes vanish at FD close. Symptom: model invisible after a successful 3MF load, `FileNotFoundException` on `_v2.glb`. `sweepOldPreviews` must only delete versions strictly older than `keep`'s version number.
 
+## Build & Play Store
+
+1. **Pre-Bundle Requirement:** Before building a bundle for the Play Store, you MUST run `./gradlew versionCatalogUpdate` to check for library updates. If any updates are found, notify the user, commit the changes to `gradle/libs.versions.toml`, and advise the user to perform regression testing before final bundle generation.
+
+2. **Dependency Update Review:** `./gradlew versionCatalogUpdate` updates `gradle/libs.versions.toml`. Always review `git diff gradle/libs.versions.toml` before committing — XR / Compose / Media3 patch bumps occasionally break the build.
+
 ## Related docs
 
 - [`ROADMAP.md`](ROADMAP.md) — forward-looking feature roadmap (single source of truth).

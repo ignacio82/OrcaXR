@@ -202,6 +202,7 @@ dependencies {
     implementation(libs.androidx.xr.runtime)
     implementation(libs.androidx.xr.scenecore)
     implementation(libs.androidx.xr.compose)
+    implementation(libs.androidx.xr.compose.material3)
 
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.test.ext.junit)

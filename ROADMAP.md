@@ -30,7 +30,7 @@ When you ship a feature: change its status from `🔴` / `🟡` to `🟢` and ad
 
 Highest priority — these are correctness gaps users see directly in printed output.
 
-### A1. Auto-arrange via libnest2d 🟡 Partial — fallback in place
+### A1. Auto-arrange via libnest2d 🟢 Shipped
 
 > **Files:** `app/src/main/cpp/slic3r_jni.cpp` (`nativeArrange`), `app/src/main/java/dev/orcaxr/app/PlacedModel.kt` (`naiveArrangeModels`), `app/src/main/java/dev/orcaxr/app/SlicerEngine.kt` (`arrangeModels`).
 
@@ -39,6 +39,8 @@ JNI surface `nativeArrange(inputPaths, transforms, bedX, bedY, gapMm) -> FloatAr
 **Next investigation step:** run libnest2d's standalone test suite inside our build and diff a known-good setup against ours. The bug is in either `remove_unpackable_items` (`selection_boilerplate.hpp:53` — items marked `BIN_ID_UNFIT` when `p.pack(cpy)` returns falsy or `itm.area() <= 0`) or the Nester rejecting before `firstfit::packItems`.
 
 **Exit criteria:** Arrange produces non-overlapping placements within bed bounds for ≤32 small parts; respects bed margins; the existing radial Arrange button transparently switches from naive to libnest2d.
+
+**Shipped:** commit `13f3c66` — Fixed nativeArrange JNI bridge and libnest2d integration.
 
 ### A2. FullSpectrum engine emission ⚪ Deferred — waiting on Snapmaker upstream merge
 
@@ -139,9 +141,9 @@ Currently transforms are TextField-driven in TransformPanel ("snap-and-confirm n
 
 **Dependencies:** Galaxy XR controllers input pump (already shipped). Hand-tracked drag is explicitly out of scope (~1 cm jitter is wider than usable handle precision).
 
-**Shipped:** cb09b6b — Added TransformGizmo, GizmoGlb generation, and laser-drag interactive component handlers.
+**Shipped:** d81ee20 — Added TransformGizmo, GizmoGlb generation, and laser-drag interactive component handlers.
 
-### B11. Multi-selection & Batch Actions 🔴 Not started
+### B11. Multi-selection & Batch Actions 🟢 Shipped
 
 > **Files:** `MainActivity.kt` (UI state for `selectedModelIds`, modify `TransformGizmo` binding, slice/arrange filters), `PlacedModel.kt` (helper logic), `UiPanels.kt` (checkboxes/multi-select UI in `PlacedModelsSection`).
 
@@ -155,7 +157,7 @@ Currently, users can only select and manipulate one `PlacedModel` at a time. Wit
 
 **Exit criteria:** User can select three parts, drag them together with the gizmo, and move them all to Plate 2 via the dropdown.
 
-**Shipped:** 30ebd84 — Enabled multi-selection in the project list, gizmo translation for grouped parts, and batch actions (move/delete).
+**Shipped:** 27f1b2c — Enabled multi-selection in the project list, gizmo translation for grouped parts, and batch actions (move/delete).
 
 ### B2. Mixed-Filament UX panel for FullSpectrum 🔴 Not started
 
