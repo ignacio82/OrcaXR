@@ -1327,16 +1327,31 @@ private fun XrShell(
             // against the printable polygon. deriveStlFor caches the
             // result under cacheDir so a paint-driven re-bake doesn't
             // re-derive on every stroke.
+            // Derive an STL of the bake source for the bedCollision /
+            // bedFit checks. The collision check uses the FULL 3MF mesh,
+            // which is correct for "does anything overflow the bed."
+            //
+            // For baseBbox sizing we deliberately do NOT use the full
+            // derived STL bbox when this is a per-object render
+            // (bakeIndex >= 0): that bbox spans every object in the
+            // 3MF (a 5-unicorn 3MF would give a 134x108 footprint to
+            // each per-object PlacedModel), which blows up the
+            // selection bbox / gizmo size and makes footprintMm()
+            // useless for layout. Per-object dims set by
+            // nativeRead3mfObjectMetadata at load time are already
+            // accurate and preserved.
             var dims: androidx.xr.runtime.math.Vector3? = null
             runCatching {
                 val derived = deriveStlFor(bakeSource)
                 if (derived != null) {
                     val raw3mf = StlReader.read(derived)
-                    dims = androidx.xr.runtime.math.Vector3(
-                        raw3mf.bboxMax.x - raw3mf.bboxMin.x,
-                        raw3mf.bboxMax.y - raw3mf.bboxMin.y,
-                        raw3mf.bboxMax.z - raw3mf.bboxMin.z
-                    )
+                    if (bakeIndex < 0) {
+                        dims = androidx.xr.runtime.math.Vector3(
+                            raw3mf.bboxMax.x - raw3mf.bboxMin.x,
+                            raw3mf.bboxMax.y - raw3mf.bboxMin.y,
+                            raw3mf.bboxMax.z - raw3mf.bboxMin.z
+                        )
+                    }
                     val mesh3mf = applyPlacedTransforms(raw3mf, initial)
                     bedFit = computeBedFit(mesh3mf, bedW, bedH)
                     bedCollision = BedCollision.detect(mesh3mf, bedW, bedH, recenterToBed = true)
@@ -4757,7 +4772,14 @@ private fun XrShell(
                     val liveOv = liveDragOverride?.let { (ids, ov) ->
                         if (m.id in ids) ov else null
                     }
-                    key(m.id, path) {
+                    // Keyed on m.id only (NOT path) so the composable
+                    // persists across previewPath changes. Re-keying on
+                    // path tears down the GltfModelEntity synchronously
+                    // and races split_engine_bridge with NOT_FOUND
+                    // aborts during gotcha #22's two-bake load. The
+                    // path-swap dispose is handled by GlbSceneEntity's
+                    // load LaunchedEffect with a deferred dispose.
+                    key(m.id) {
                         StlPreviewSceneEntity(
                             session = session,
                             glbPath = path,
@@ -4839,16 +4861,38 @@ private fun XrShell(
                         if (cz + h > maxZ) maxZ = cz + h
                     }
                     
-                    val fw = maxX - minX
-                    val fd = maxY - minY
-                    val fh = maxZ - minZ
-                    
+                    // Pad the selection bbox slightly outside the model's
+                    // own footprint so the wireframe doesn't z-fight with
+                    // the model's surface and the user can clearly see
+                    // it wrapping (vs hugging) the geometry. 4mm on each
+                    // side feels right at typical model scales (~30-100mm).
+                    val pad = SELECTION_BBOX_PADDING_MM
+                    val fw = (maxX - minX) + pad * 2f
+                    val fd = (maxY - minY) + pad * 2f
+                    val fh = (maxZ - minZ) + pad * 2f
+
                     if (fw > 0f && fd > 0f && fh > 0f && !fw.isInfinite()) {
                         val cx = (minX + maxX) / 2f
                         val cy = (minY + maxY) / 2f
-                        val cz = minZ
-                        
-                        key(selectedModelIds.hashCode(), fw, fd, fh) {
+                        // Bottom of bbox sits `pad` BELOW the model's
+                        // lowest point — for a model resting on the bed
+                        // (minZ ≈ 0) this means the bbox just barely
+                        // dips into the bed plane, which is the visual
+                        // cue the user expects ("the box wraps the
+                        // model with a hair of air").
+                        val cz = minZ - pad
+
+                        // Keyed only on the selection identity (NOT
+                        // dims). Including fw/fd/fh would re-mount the
+                        // composable on every dim tweak — and re-mount
+                        // fires DisposableEffect(Unit).onDispose
+                        // synchronously, racing split_engine_bridge with
+                        // the same NOT_FOUND aborts as the path-keyed
+                        // GlbSceneEntity bug. Dim changes are absorbed
+                        // by SelectionBboxEntity's internal
+                        // LaunchedEffect (which uses the deferred
+                        // dispose helper).
+                        key(selectedModelIds.hashCode()) {
                             SelectionBboxEntity(
                                 session = session,
                                 parentEntity = workspaceEntity,
@@ -4962,7 +5006,8 @@ private fun XrShell(
                 } else {
                     for (m in placedModelsOnActivePlate) {
                         val path = m.previewPath ?: continue
-                        key(m.id, path) {
+                        // Keyed on m.id only — see Prepare branch above.
+                        key(m.id) {
                             StlPreviewSceneEntity(
                                 session = session,
                                 glbPath = path,
@@ -5082,12 +5127,31 @@ private fun previewRgbForFilamentIndex(indexOneBased: Int, palette: List<String>
     return floatArrayOf(r / 255f, g / 255f, b / 255f)
 }
 
+/** Margin (mm) added around the selection wireframe so it visibly wraps
+ *  the model rather than z-fighting with its surface. ~4mm reads as a
+ *  hair of breathing room at typical model scales (30-100 mm). */
+internal const val SELECTION_BBOX_PADDING_MM = 4f
+
 private fun applyWorkspacePose(ent: androidx.xr.scenecore.Entity, parent: androidx.xr.scenecore.Entity?) {
     // The workspace parent (a GroupEntity created in XrShell) already
     // carries WORKSPACE_Y_OFFSET + WORKSPACE_ROTATION, so child GLBs
     // only need the unit-conversion scale. Pose stays at identity.
     ent.parent = parent
     ent.setScale(WORLD_SCALE)
+}
+
+/** Dispose [ent] after a two-frame delay so the SceneCore render thread
+ *  flushes any queued ops referencing its node id. Synchronous dispose
+ *  on a freshly-swapped entity races split_engine_bridge.cc:100 with
+ *  NOT_FOUND aborts ("unknown node id" / "unknown material instance
+ *  id"); this helper holds the ref alive until the queue drains. Must
+ *  be called from a coroutine — typically the LaunchedEffect doing the
+ *  entity swap. No-op when [ent] is null or already disposed. */
+private suspend fun disposeEntityDeferred(ent: androidx.xr.scenecore.Entity?) {
+    if (ent == null || ent.isDisposed) return
+    kotlinx.coroutines.android.awaitFrame()
+    kotlinx.coroutines.android.awaitFrame()
+    if (!ent.isDisposed) runCatching { ent.dispose() }
 }
 
 /** Folds a gizmo drag's final delta into a [PlacedModel] on commit. */
@@ -5176,9 +5240,14 @@ private fun SelectionBboxEntity(
     var entity by remember { mutableStateOf<GltfModelEntity?>(null) }
 
     LaunchedEffect(modelId, sizeXmm, sizeYmm, sizeZmm, parentEntity) {
-        // Dispose old entity
-        entity?.let { if (!it.isDisposed) runCatching { it.dispose() } }
-        entity = null
+        // Capture old entity for deferred dispose. Disposing
+        // synchronously here races split_engine_bridge with NOT_FOUND
+        // aborts ("unknown node" / "unknown material instance id")
+        // when the render thread still has queued ops on the old
+        // node — common during 3MF load because gotcha #22 fires
+        // two previewStl bakes within ms, and the bbox dims update
+        // fires a re-bbox bake right alongside the GLB swap.
+        val oldEntity = entity
 
         val dimsHash = java.util.Objects.hash(sizeXmm, sizeYmm, sizeZmm)
         val out = File(ctx.cacheDir, "sel_bbox_${modelId}_${Integer.toHexString(dimsHash)}.glb")
@@ -5196,19 +5265,42 @@ private fun SelectionBboxEntity(
                 }
             }
         }
-        if (!out.exists()) return@LaunchedEffect
+        if (!out.exists()) {
+            entity = null
+            disposeEntityDeferred(oldEntity)
+            return@LaunchedEffect
+        }
 
         android.util.Log.i("OrcaXR", "SelectionBboxEntity loading ${out.name}")
         val bytes = withContext(Dispatchers.IO) {
             runCatching { out.readBytes() }.getOrNull()
-        } ?: return@LaunchedEffect
+        }
+        if (bytes == null) {
+            entity = null
+            disposeEntityDeferred(oldEntity)
+            return@LaunchedEffect
+        }
 
-        val model = runCatching { GltfModel.create(session, bytes, out.name) }
+        val uniqueName = "bbox_${modelId}_${System.currentTimeMillis().toString(36)}.glb"
+        val model = runCatching { GltfModel.create(session, bytes, uniqueName) }
             .onFailure { android.util.Log.e("OrcaXR", "selection bbox GltfModel.create failed", it) }
-            .getOrNull() ?: return@LaunchedEffect
-        
+            .getOrNull()
+        if (model == null) {
+            entity = null
+            disposeEntityDeferred(oldEntity)
+            return@LaunchedEffect
+        }
+
         val ent = GltfModelEntity.create(session, model)
         applyWorkspacePose(ent, parentEntity ?: session.scene.activitySpace)
+        entity = ent
+        android.util.Log.i("OrcaXR", "SelectionBboxEntity attached ${out.name}")
+        disposeEntityDeferred(oldEntity)
+    }
+
+    LaunchedEffect(entity, offsetXmm, offsetYmm, offsetZmm) {
+        val ent = entity ?: return@LaunchedEffect
+        if (ent.isDisposed) return@LaunchedEffect
         ent.setPose(
             androidx.xr.runtime.math.Pose(
                 androidx.xr.runtime.math.Vector3(
@@ -5219,26 +5311,16 @@ private fun SelectionBboxEntity(
                 androidx.xr.runtime.math.Quaternion.Identity,
             ),
         )
-        entity = ent
-        android.util.Log.i("OrcaXR", "SelectionBboxEntity attached ${out.name}")
     }
 
-    LaunchedEffect(offsetXmm, offsetYmm, offsetZmm) {
-        entity?.setPose(
-            androidx.xr.runtime.math.Pose(
-                androidx.xr.runtime.math.Vector3(
-                    offsetXmm * WORLD_SCALE,
-                    offsetYmm * WORLD_SCALE,
-                    offsetZmm * WORLD_SCALE,
-                ),
-                androidx.xr.runtime.math.Quaternion.Identity,
-            ),
-        )
-    }
-
-    DisposableEffect(modelId) {
+    // Composition-leave dispose only — keyed on Unit so it does NOT
+    // fire on every modelId / size change. Those are handled by the
+    // load LaunchedEffect above with a deferred dispose; firing this
+    // onDispose synchronously on a swap would re-introduce the
+    // split_engine_bridge "unknown node id" race.
+    DisposableEffect(Unit) {
         onDispose {
-            entity?.dispose()
+            entity?.let { if (!it.isDisposed) runCatching { it.dispose() } }
             entity = null
         }
     }
@@ -5277,38 +5359,50 @@ private fun GlbSceneEntity(
     val onHoverLive = rememberUpdatedState(onHoverChange)
 
     LaunchedEffect(glbPath, parentEntity) {
-        // Dispose old entity
-        entity?.let { if (!it.isDisposed) runCatching { it.dispose() } }
-        entity = null
+        // Capture old entity for deferred dispose. Synchronous dispose
+        // here races split_engine_bridge with NOT_FOUND aborts
+        // ("unknown node" / "unknown material instance id") when the
+        // render thread still has queued ops on the old node — common
+        // during 3MF load because gotcha #22 fires two previewStl
+        // bakes within milliseconds, and the GLB swap also recomposes
+        // the SelectionBboxEntity / TransformGizmo whose own component
+        // adds get queued to the same render thread. Holding the old
+        // entity ref alive briefly past the swap lets that queue drain.
+        val oldEntity = entity
 
-        if (glbPath.isNullOrEmpty()) return@LaunchedEffect
+        if (glbPath.isNullOrEmpty()) {
+            entity = null
+            disposeEntityDeferred(oldEntity)
+            return@LaunchedEffect
+        }
 
         android.util.Log.i("OrcaXR", "GlbSceneEntity loading $glbPath")
         val bytes = withContext(Dispatchers.IO) {
             runCatching { File(glbPath).readBytes() }.getOrNull()
-        } ?: return@LaunchedEffect
+        }
+        if (bytes == null) {
+            entity = null
+            disposeEntityDeferred(oldEntity)
+            return@LaunchedEffect
+        }
 
         // Use a unique name to avoid session conflicts
         val uniqueName = "m_${glbPath.hashCode().toString(36)}_${System.currentTimeMillis().toString(36)}.glb"
         val model = runCatching { GltfModel.create(session, bytes, uniqueName) }
             .onFailure { android.util.Log.e("OrcaXR", "GltfModel.create failed for $glbPath", it) }
-            .getOrNull() ?: return@LaunchedEffect
+            .getOrNull()
+        if (model == null) {
+            entity = null
+            disposeEntityDeferred(oldEntity)
+            return@LaunchedEffect
+        }
 
         val ent = GltfModelEntity.create(session, model)
         applyWorkspacePose(ent, parentEntity ?: session.scene.activitySpace)
-        
-        // Initial pose
-        ent.setPose(androidx.xr.runtime.math.Pose(
-            androidx.xr.runtime.math.Vector3(
-                offsetXmm * WORLD_SCALE,
-                offsetYmm * WORLD_SCALE,
-                offsetZmm * WORLD_SCALE,
-            ),
-            androidx.xr.runtime.math.Quaternion.Identity
-        ))
-        
+
         entity = ent
         android.util.Log.i("OrcaXR", "GlbSceneEntity attached $glbPath at ($offsetXmm, $offsetYmm, $offsetZmm)")
+        disposeEntityDeferred(oldEntity)
     }
 
     // Steady-state pose update: position only (rotation/scale are baked
@@ -5341,6 +5435,12 @@ private fun GlbSceneEntity(
         val ent = entity ?: return@LaunchedEffect
         if (ent.isDisposed) return@LaunchedEffect
         val ov = liveOverride ?: return@LaunchedEffect
+
+        // Gotcha #10: setScale(Vector3) races material binding on freshly 
+        // created entities. Wait one frame before applying non-uniform scale.
+        kotlinx.coroutines.android.awaitFrame()
+        if (ent.isDisposed) return@LaunchedEffect
+
         ent.setPose(androidx.xr.runtime.math.Pose(
             androidx.xr.runtime.math.Vector3(
                 (offsetXmm + ov.deltaTxMm) * WORLD_SCALE,
@@ -5448,9 +5548,14 @@ private fun GlbSceneEntity(
         }
     }
 
-    DisposableEffect(glbPath) {
+    // Composition-leave dispose only — keyed on Unit so it does NOT
+    // fire on every glbPath change. Path changes are handled by the
+    // load LaunchedEffect above with a deferred dispose; firing this
+    // onDispose synchronously on a path swap would re-introduce the
+    // split_engine_bridge "unknown node id" race.
+    DisposableEffect(Unit) {
         onDispose {
-            android.util.Log.i("OrcaXR", "GlbSceneEntity disposing $glbPath")
+            android.util.Log.i("OrcaXR", "GlbSceneEntity onDispose $glbPath (composition leave)")
             entity?.let { if (!it.isDisposed) runCatching { it.dispose() } }
             entity = null
         }

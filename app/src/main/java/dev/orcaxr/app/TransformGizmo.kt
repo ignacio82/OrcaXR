@@ -275,15 +275,22 @@ fun GizmoDragHandle(
         val file = File(ctx.cacheDir, filename)
         if (!file.exists()) generate(file)
         val bytes = file.readBytes()
-        val model = GltfModel.create(session, bytes, filename)
+        val uniqueName = "${filename.removeSuffix(".glb")}_${System.currentTimeMillis().toString(36)}.glb"
+        val model = GltfModel.create(session, bytes, uniqueName)
         val ent = GltfModelEntity.create(session, model)
         ent.parent = parentEntity
-        ent.setScale(gizmoScaleLive.value)
+        // Use scalar scale initially; the updater effect below handles the 
+        // non-uniform scale after a frame delay to avoid racing Filament.
+        ent.setScale(WORLD_SCALE)
         entity = ent
     }
 
     LaunchedEffect(entity, gizmoScale) {
         val ent = entity ?: return@LaunchedEffect
+        if (ent.isDisposed) return@LaunchedEffect
+        // Gotcha #10: setScale(Vector3) races material binding on freshly 
+        // created entities. Wait one frame before applying non-uniform scale.
+        kotlinx.coroutines.android.awaitFrame()
         if (!ent.isDisposed) runCatching { ent.setScale(gizmoScale) }
     }
 
@@ -362,15 +369,22 @@ fun GizmoRotHandle(
         val file = File(ctx.cacheDir, filename)
         if (!file.exists()) generate(file)
         val bytes = file.readBytes()
-        val model = GltfModel.create(session, bytes, filename)
+        val uniqueName = "${filename.removeSuffix(".glb")}_${System.currentTimeMillis().toString(36)}.glb"
+        val model = GltfModel.create(session, bytes, uniqueName)
         val ent = GltfModelEntity.create(session, model)
         ent.parent = parentEntity
-        ent.setScale(gizmoScaleLive.value)
+        // Use scalar scale initially; the updater effect below handles the 
+        // non-uniform scale after a frame delay to avoid racing Filament.
+        ent.setScale(WORLD_SCALE)
         entity = ent
     }
 
     LaunchedEffect(entity, gizmoScale) {
         val ent = entity ?: return@LaunchedEffect
+        if (ent.isDisposed) return@LaunchedEffect
+        // Gotcha #10: setScale(Vector3) races material binding on freshly 
+        // created entities. Wait one frame before applying non-uniform scale.
+        kotlinx.coroutines.android.awaitFrame()
         if (!ent.isDisposed) runCatching { ent.setScale(gizmoScale) }
     }
 
@@ -466,15 +480,22 @@ fun GizmoScaleHandle(
         val file = File(ctx.cacheDir, filename)
         if (!file.exists()) generate(file)
         val bytes = file.readBytes()
-        val model = GltfModel.create(session, bytes, filename)
+        val uniqueName = "${filename.removeSuffix(".glb")}_${System.currentTimeMillis().toString(36)}.glb"
+        val model = GltfModel.create(session, bytes, uniqueName)
         val ent = GltfModelEntity.create(session, model)
         ent.parent = parentEntity
-        ent.setScale(gizmoScaleLive.value)
+        // Use scalar scale initially; the updater effect below handles the 
+        // non-uniform scale after a frame delay to avoid racing Filament.
+        ent.setScale(WORLD_SCALE)
         entity = ent
     }
 
     LaunchedEffect(entity, gizmoScale) {
         val ent = entity ?: return@LaunchedEffect
+        if (ent.isDisposed) return@LaunchedEffect
+        // Gotcha #10: setScale(Vector3) races material binding on freshly 
+        // created entities. Wait one frame before applying non-uniform scale.
+        kotlinx.coroutines.android.awaitFrame()
         if (!ent.isDisposed) runCatching { ent.setScale(gizmoScale) }
     }
 

@@ -120,11 +120,19 @@ struct ScopedUtf {
 
 /**
  * Transform the 8 corners of [local] through [xform] and return the
- * tight axis-aligned bbox of the result. Needed because
- * `ModelObject::raw_bounding_box()` returns object-local coords and
- * 3MF instance transforms typically carry both a non-uniform scale
- * (e.g. 1.29) and a plate-relative translation — applying the
- * world-space shift requires the world-space bbox, not the local one.
+ * tight axis-aligned bbox of the result. Needed because 3MF instance
+ * transforms typically carry both a non-uniform scale (e.g. 1.29) and
+ * a plate-relative translation — applying the world-space shift
+ * requires the world-space bbox, not the local one.
+ *
+ * IMPORTANT: pair this with `mo->raw_mesh_bounding_box()` (per-volume
+ * transforms only). Do NOT pair with `mo->raw_bounding_box()` — that
+ * one ALREADY applied the instance's rotation+scale via libslic3r's
+ * `get_matrix_no_offset()`. Passing it here re-applies rotation+scale
+ * and gives an inflated bbox; for a 3MF unicorn this manifested as
+ * world_bbox.z = 0..66 vs. the real 0..40, plus a phantom ~13mm of
+ * float between the model's feet and the bed surface. See
+ * libslic3r/Model.cpp `raw_bounding_box()` vs. `raw_mesh_bounding_box()`.
  */
 static Slic3r::BoundingBoxf3 world_bbox_of(
     const Slic3r::BoundingBoxf3& local,
@@ -182,7 +190,7 @@ static std::vector<ObjectPlacement> row_layout(
     for (const Slic3r::ModelObject* mo : objects) {
         Slic3r::Transform3d xf = Slic3r::Transform3d::Identity();
         if (!mo->instances.empty()) xf = mo->instances.front()->get_matrix();
-        Slic3r::BoundingBoxf3 b = world_bbox_of(mo->raw_bounding_box(), xf);
+        Slic3r::BoundingBoxf3 b = world_bbox_of(mo->raw_mesh_bounding_box(), xf);
         total_width += (b.max.x() - b.min.x());
         wbb.push_back(b);
     }
@@ -231,7 +239,7 @@ static std::vector<ObjectPlacement> centered_existing_layout(
     for (const Slic3r::ModelObject* mo : objects) {
         Slic3r::Transform3d xf = Slic3r::Transform3d::Identity();
         if (!mo->instances.empty()) xf = mo->instances.front()->get_matrix();
-        Slic3r::BoundingBoxf3 b = world_bbox_of(mo->raw_bounding_box(), xf);
+        Slic3r::BoundingBoxf3 b = world_bbox_of(mo->raw_mesh_bounding_box(), xf);
         if (first) {
             all = b;
             first = false;
@@ -1803,7 +1811,7 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
         per_inst.reserve(n_inputs);
         for (Slic3r::ModelObject* mo : multi.objects) {
             Slic3r::Transform3d xf = mo->instances.front()->get_matrix();
-            Slic3r::BoundingBoxf3 b = world_bbox_of(mo->raw_bounding_box(), xf);
+            Slic3r::BoundingBoxf3 b = world_bbox_of(mo->raw_mesh_bounding_box(), xf);
             per_inst.push_back(b);
             if (first) { group_bb = b; first = false; } else { group_bb.merge(b); }
         }
@@ -2228,6 +2236,8 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
             if (y < ymin) ymin = y; if (y > ymax) ymax = y;
             if (z < zmin) zmin = z; if (z > zmax) zmax = z;
         }
+        ORCAXR_LOGI("nativeWriteColoredGlb: emitted vertex bbox X(%.2f..%.2f) Y(%.2f..%.2f) Z(%.2f..%.2f)",
+                    xmin, xmax, ymin, ymax, zmin, zmax);
 
         char json_buf[2048];
         int json_len = std::snprintf(
@@ -2748,7 +2758,7 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
         for (const Slic3r::ModelObject* mo : model.objects) {
             Slic3r::Transform3d xf = Slic3r::Transform3d::Identity();
             if (!mo->instances.empty()) xf = mo->instances.front()->get_matrix();
-            Slic3r::BoundingBoxf3 b = world_bbox_of(mo->raw_bounding_box(), xf);
+            Slic3r::BoundingBoxf3 b = world_bbox_of(mo->raw_mesh_bounding_box(), xf);
             if (first_obj) { all = b; first_obj = false; }
             else           { all.merge(b); }
         }
@@ -2757,11 +2767,18 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
 
         for (size_t i = 0; i < model.objects.size(); ++i) {
             const Slic3r::ModelObject* mo = model.objects[i];
-            
-            // mesh() concatenates all volumes for this object.
-            Slic3r::TriangleMesh mesh = mo->mesh();
-            Slic3r::BoundingBoxf3 bbox = mesh.bounding_box();
+
+            // Size must come from the WORLD bbox (raw bbox transformed by the
+            // instance matrix), not the local raw mesh bbox. A unicorn
+            // authored with a 3MF instance rotation has raw extents
+            // 28.7x42.1x40 but world extents 45x62x66 — only the latter
+            // matches what the user sees on the build plate, and it's
+            // what the selection bbox / gizmo / footprintMm() consume.
+            Slic3r::Transform3d mesh_xf = Slic3r::Transform3d::Identity();
+            if (!mo->instances.empty()) mesh_xf = mo->instances.front()->get_matrix();
+            Slic3r::BoundingBoxf3 bbox = world_bbox_of(mo->raw_mesh_bounding_box(), mesh_xf);
             Slic3r::Vec3f size = bbox.size().cast<float>();
+            Slic3r::TriangleMesh mesh = mo->mesh();
 
             jstring name = env->NewStringUTF(mo->name.c_str());
             
@@ -2782,7 +2799,7 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
             if (!mo->instances.empty()) {
                 const auto& inst = *mo->instances.front();
                 Slic3r::Transform3d xf = inst.get_matrix();
-                Slic3r::BoundingBoxf3 b = world_bbox_of(mo->raw_bounding_box(), xf);
+                Slic3r::BoundingBoxf3 b = world_bbox_of(mo->raw_mesh_bounding_box(), xf);
                 double icx = (b.min.x() + b.max.x()) * 0.5;
                 double icy = (b.min.y() + b.max.y()) * 0.5;
                 ox = static_cast<float>(icx - group_cx);
