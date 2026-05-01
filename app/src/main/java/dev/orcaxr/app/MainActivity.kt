@@ -1128,6 +1128,12 @@ private fun XrShell(
         val initial = placedModels.firstOrNull { it.id == modelId } ?: return
         val stlFile = initial.source
         val label = initial.label
+        
+        // Phase B9/J: For extracted 3MF objects, re-load from the
+        // original container to pull per-triangle paint colors.
+        val bakeSource = initial.originalSource ?: stlFile
+        val bakeIndex = if (initial.originalSource != null) initial.groupOrdinal else -1
+
         // Bump the version atomically up front so concurrent previewStl
         // invocations write to DISTINCT files. The 3mf-driven filament
         // sync (below) writes to filamentEntriesStore which fires the
@@ -1142,7 +1148,7 @@ private fun XrShell(
             if (it.id == modelId) it.copy(previewVersion = outVersion) else it
         }
         val out = File(ctx.cacheDir, "stl_preview_${modelId}_v${outVersion}.glb")
-        val ext = stlFile.extension.lowercase()
+        val ext = bakeSource.extension.lowercase()
 
         // 3MF / AMF: bypass the STL roundtrip entirely. The native
         // colored-GLB writer reads per-face MMU segmentation directly
@@ -1175,7 +1181,7 @@ private fun XrShell(
             if (ext == "3mf") {
                 runCatching {
                     val printerId = activePrinter?.id
-                    val serialized = SlicerEngine.read3mfMixedFilamentDefinitions(stlFile)
+                    val serialized = SlicerEngine.read3mfMixedFilamentDefinitions(bakeSource)
                     if (printerId != null && !serialized.isNullOrEmpty()) {
                         val parsed = parseMixedDefinitionsForKotlin(serialized)
                         if (parsed.isNotEmpty()) {
@@ -1200,7 +1206,7 @@ private fun XrShell(
             // falls back to its synthesized 30 mm³ default.
             if (ext == "3mf") {
                 runCatching {
-                    loadedFlushSettings = SlicerEngine.read3mfFlushSettings(stlFile)
+                    loadedFlushSettings = SlicerEngine.read3mfFlushSettings(bakeSource)
                     val fs = loadedFlushSettings
                     if (fs != null) {
                         android.util.Log.i(
@@ -1213,7 +1219,7 @@ private fun XrShell(
                     loadedFlushSettings = null
                 }
                 runCatching {
-                    loadedProjectOverrides = SlicerEngine.read3mfProjectOverrides(stlFile)
+                    loadedProjectOverrides = SlicerEngine.read3mfProjectOverrides(bakeSource)
                     if (loadedProjectOverrides.isNotEmpty()) {
                         android.util.Log.i(
                             tag,
@@ -1236,9 +1242,9 @@ private fun XrShell(
             // we don't capture a return value — the entries store
             // update propagates back through Compose to the panel's
             // left-side authored swatches on the next recomposition.
-            if (ext == "3mf" && lastEmbeddedSyncPath != stlFile.absolutePath) {
+            if (ext == "3mf" && lastEmbeddedSyncPath != bakeSource.absolutePath) {
                 runCatching {
-                    val embedded = SlicerEngine.read3mfFilamentColours(stlFile)
+                    val embedded = SlicerEngine.read3mfFilamentColours(bakeSource)
                     val printerId = activePrinter?.id
                     if (printerId != null && embedded.isNotEmpty() && slotCount > 0) {
                         val updated = (0 until slotCount).map { i ->
@@ -1266,7 +1272,7 @@ private fun XrShell(
                             "applied ${embedded.size} embedded filament colors from 3mf to printer $printerId (slotCount=$slotCount)",
                         )
                     }
-                    lastEmbeddedSyncPath = stlFile.absolutePath
+                    lastEmbeddedSyncPath = bakeSource.absolutePath
                 }.onFailure {
                     android.util.Log.w(tag, "3mf filament-color sync failed: ${it.message}")
                 }
@@ -1297,14 +1303,15 @@ private fun XrShell(
             // unpainted — the existing 3MF preview behavior is
             // preserved.
             val paintForPreview = initial.paintFilamentIndex.takeIf { hasAnyPaint(it) }
+            android.util.Log.i(tag, "writeColoredGlb: source=${bakeSource.name} index=$bakeIndex")
             val ok = try {
-                SlicerEngine.writeColoredGlb(stlFile, out, palette, paintForPreview)
+                SlicerEngine.writeColoredGlb(bakeSource, out, palette, paintForPreview, bakeIndex)
             } catch (t: Throwable) {
                 android.util.Log.e(tag, "writeColoredGlb threw: ${t.message}", t)
                 false
             }
             if (!ok) {
-                android.util.Log.e(tag, "writeColoredGlb failed for ${stlFile.absolutePath}")
+                android.util.Log.e(tag, "writeColoredGlb failed for ${bakeSource.absolutePath}")
                 return
             }
             android.util.Log.i(tag, "wrote colored preview GLB ${out.absolutePath} (${out.length() / 1024} KB)")
@@ -1318,7 +1325,7 @@ private fun XrShell(
             // re-derive on every stroke.
             var dims: androidx.xr.runtime.math.Vector3? = null
             runCatching {
-                val derived = deriveStlFor(stlFile)
+                val derived = deriveStlFor(bakeSource)
                 if (derived != null) {
                     val raw3mf = StlReader.read(derived)
                     dims = androidx.xr.runtime.math.Vector3(
@@ -1363,9 +1370,9 @@ private fun XrShell(
         // STL path: parse mesh, apply rotate/scale, write a single-
         // color GLB. Same as before, but per-model.
         val current = placedModels.firstOrNull { it.id == modelId } ?: return
-        val readable = deriveStlFor(stlFile)
+        val readable = deriveStlFor(bakeSource)
         if (readable == null) {
-            android.util.Log.e(tag, "deriveStlFor returned null for ${stlFile.absolutePath}")
+            android.util.Log.e(tag, "deriveStlFor returned null for ${bakeSource.absolutePath}")
             return
         }
         android.util.Log.i(tag, "deriving preview from ${readable.absolutePath} (${readable.length() / 1024} KB)")
@@ -1391,7 +1398,7 @@ private fun XrShell(
             !hasAnyPaint(current.seamFlags)
         if (needsRestore) {
             val restored = runCatching {
-                val hash = paintCache.hashOf(stlFile)
+                val hash = paintCache.hashOf(bakeSource)
                 paintCache.restore(hash, raw.triCount)
             }.getOrNull()
             if (restored != null) {
@@ -1596,7 +1603,11 @@ private fun XrShell(
                     PlacedModel(
                         id = newId,
                         source = outStl,
+                        originalSource = file,
                         label = "${file.name} - ${m.name.ifEmpty { "Part ${index + 1}" }}",
+                        translateXmm = m.offsetX,
+                        translateYmm = m.offsetY,
+                        translateZmm = m.offsetZ,
                         previewFilamentIndex = m.defaultExtruder.coerceAtLeast(0),
                         groupId = gid,
                         groupOrdinal = index,

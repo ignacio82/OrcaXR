@@ -2025,11 +2025,12 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
     JNIEnv* env, jclass,
     jstring jInputPath, jstring jOutGlbPath,
     jfloatArray jPaletteRgb,
-    jbyteArray jPaintFilamentIndex)
+    jbyteArray jPaintFilamentIndex,
+    jint jObjectIndex)
 {
     ScopedUtf in(env, jInputPath);
     ScopedUtf out(env, jOutGlbPath);
-    ORCAXR_LOGI("nativeWriteColoredGlb: %s -> %s", in.c, out.c);
+    ORCAXR_LOGI("nativeWriteColoredGlb: %s -> %s (index=%d)", in.c, out.c, (int)jObjectIndex);
 
     // Build the user-palette layer first; the 3MF-embedded layer (if
     // any) overlays on top after the load.
@@ -2065,16 +2066,25 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
             return -2;
         }
 
+        if (jObjectIndex >= 0 && (size_t)jObjectIndex >= model.objects.size()) {
+            ORCAXR_LOGE("nativeWriteColoredGlb: oob index %d (size %zu)", (int)jObjectIndex, model.objects.size());
+            return -2;
+        }
+
         // Phase J §G: OrcaXR-authored paint flows into the same
         // mmu_segmentation_facets the loop below reads. Same volume
         // selection rule as nativeSlice (first volume of first
         // object). Overrides any embedded 3MF paint.
-        if (jPaintFilamentIndex != nullptr && !model.objects.front()->volumes.empty()) {
+        //
+        // For multi-object extraction, we apply the paint to the
+        // requested object.
+        const int paintTargetIndex = jObjectIndex >= 0 ? (int)jObjectIndex : 0;
+        if (jPaintFilamentIndex != nullptr && !model.objects[paintTargetIndex]->volumes.empty()) {
             const jsize paint_len = env->GetArrayLength(jPaintFilamentIndex);
             if (paint_len > 0) {
                 jbyte* paint = env->GetByteArrayElements(jPaintFilamentIndex, nullptr);
                 if (paint != nullptr) {
-                    Slic3r::ModelVolume* mv = model.objects.front()->volumes.front();
+                    Slic3r::ModelVolume* mv = model.objects[paintTargetIndex]->volumes.front();
                     const size_t authored = apply_orcaxr_paint(*mv, paint, size_t(paint_len));
                     ORCAXR_LOGI("nativeWriteColoredGlb: authored %zu painted triangles", authored);
                     env->ReleaseByteArrayElements(jPaintFilamentIndex, paint, JNI_ABORT);
@@ -2119,12 +2129,23 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
         // visually on the plate. Multi-object 3MFs (two dragons,
         // calibration sets, etc.) get spaced 5mm apart instead of
         // stacked on top of each other.
-        std::vector<Slic3r::ModelObject*> objs(
-            model.objects.begin(), model.objects.end());
-        auto placements = row_layout(objs, Slic3r::Vec2d(0.0, 0.0));
+        //
+        // If we are extracting a specific object from a container, we
+        // use centered_existing_layout to preserve the object's
+        // internal transforms (relative to its origin) while
+        // grounding its bounding-box bottom at Z=0.
+        std::vector<Slic3r::ModelObject*> objs;
+        if (jObjectIndex >= 0) {
+            objs.push_back(model.objects[jObjectIndex]);
+        } else {
+            objs.assign(model.objects.begin(), model.objects.end());
+        }
+        auto placements = (jObjectIndex >= 0)
+            ? centered_existing_layout(objs, Slic3r::Vec2d(0.0, 0.0))
+            : row_layout(objs, Slic3r::Vec2d(0.0, 0.0));
 
-        for (size_t i = 0; i < model.objects.size(); ++i) {
-            const Slic3r::ModelObject* mo = model.objects[i];
+        for (size_t i = 0; i < objs.size(); ++i) {
+            const Slic3r::ModelObject* mo = objs[i];
             Slic3r::Transform3d inst_xform = Slic3r::Transform3d::Identity();
             if (!mo->instances.empty()) {
                 inst_xform = mo->instances.front()->get_matrix();
@@ -2716,10 +2737,23 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
 
         jclass metaClass = env->FindClass("dev/orcaxr/app/SlicerEngine$ObjectMeta");
         if (metaClass == nullptr) return nullptr;
-        jmethodID metaCtor = env->GetMethodID(metaClass, "<init>", "(Ljava/lang/String;IFFFII)V");
+        jmethodID metaCtor = env->GetMethodID(metaClass, "<init>", "(Ljava/lang/String;IFFFIIFFF)V");
         if (metaCtor == nullptr) return nullptr;
 
         jobjectArray result = env->NewObjectArray(model.objects.size(), metaClass, nullptr);
+
+        // For relative positioning, we need the group bbox to center it on the bed.
+        Slic3r::BoundingBoxf3 all;
+        bool first_obj = true;
+        for (const Slic3r::ModelObject* mo : model.objects) {
+            Slic3r::Transform3d xf = Slic3r::Transform3d::Identity();
+            if (!mo->instances.empty()) xf = mo->instances.front()->get_matrix();
+            Slic3r::BoundingBoxf3 b = world_bbox_of(mo->raw_bounding_box(), xf);
+            if (first_obj) { all = b; first_obj = false; }
+            else           { all.merge(b); }
+        }
+        const double group_cx = (all.min.x() + all.max.x()) * 0.5;
+        const double group_cy = (all.min.y() + all.max.y()) * 0.5;
 
         for (size_t i = 0; i < model.objects.size(); ++i) {
             const Slic3r::ModelObject* mo = model.objects[i];
@@ -2743,6 +2777,19 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
                 extruder = mo->volumes.front()->extruder_id();
             }
 
+            // Instance offset relative to the group center (shifted to bed origin).
+            float ox = 0.f, oy = 0.f, oz = 0.f;
+            if (!mo->instances.empty()) {
+                const auto& inst = *mo->instances.front();
+                Slic3r::Transform3d xf = inst.get_matrix();
+                Slic3r::BoundingBoxf3 b = world_bbox_of(mo->raw_bounding_box(), xf);
+                double icx = (b.min.x() + b.max.x()) * 0.5;
+                double icy = (b.min.y() + b.max.y()) * 0.5;
+                ox = static_cast<float>(icx - group_cx);
+                oy = static_cast<float>(icy - group_cy);
+                oz = static_cast<float>(-b.min.z()); // GROUND the object
+            }
+
             jobject meta = env->NewObject(metaClass, metaCtor,
                 name,
                 (jint)mesh.facets_count(),
@@ -2750,7 +2797,10 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
                 (jfloat)size.y(),
                 (jfloat)size.z(),
                 (jint)extruder,
-                (jint)mo->instances.size()
+                (jint)mo->instances.size(),
+                (jfloat)ox,
+                (jfloat)oy,
+                (jfloat)oz
             );
 
             env->SetObjectArrayElement(result, i, meta);

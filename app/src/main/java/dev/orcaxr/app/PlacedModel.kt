@@ -192,6 +192,9 @@ data class PlacedModel(
     val baseBboxZmm: Float = 0f,
     val previewPath: String? = null,
     val previewVersion: Int = 0,
+    /** Original container path (e.g. the 3MF) when [source] is an
+     *  extracted STL. Null if [source] is the original input. */
+    val originalSource: File? = null,
     /** Rotation that the current [previewPath] was rendered with. The
      *  re-preview LaunchedEffect compares against this so navigating
      *  between two already-rendered models doesn't trigger a 10-second

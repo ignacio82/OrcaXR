@@ -67,6 +67,9 @@ object SlicerEngine {
         val bboxZ: Float,
         val defaultExtruder: Int,
         val instanceCount: Int,
+        val offsetX: Float,
+        val offsetY: Float,
+        val offsetZ: Float,
     )
 
     private val dispatcher: CoroutineDispatcher =
@@ -579,12 +582,13 @@ object SlicerEngine {
          * as authored (existing 3MF / single-color STL behavior).
          */
         paintFilamentIndex: ByteArray? = null,
+        objectIndex: Int = -1,
     ): Boolean = withContext(dispatcher) {
         require(input.exists()) { "input not found: ${input.absolutePath}" }
         require(input.canRead()) { "input not readable: ${input.absolutePath}" }
         outGlb.parentFile?.mkdirs()
         outGlb.delete()
-        nativeWriteColoredGlb(input.absolutePath, outGlb.absolutePath, paletteRgb, paintFilamentIndex) == 0
+        nativeWriteColoredGlb(input.absolutePath, outGlb.absolutePath, paletteRgb, paintFilamentIndex, objectIndex) == 0
     }
 
     /**
@@ -888,6 +892,7 @@ object SlicerEngine {
          * walk. Null = embedded 3MF paint passes through.
          */
         paintFilamentIndex: ByteArray?,
+        objectIndex: Int,
     ): Int
     private external fun nativeRead3mfFilamentColours(inputPath: String): Array<String>?
     private external fun nativeRead3mfMixedFilamentDefinitions(inputPath: String): String?
