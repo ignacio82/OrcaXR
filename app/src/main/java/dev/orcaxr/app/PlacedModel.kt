@@ -198,6 +198,13 @@ data class PlacedModel(
      *  re-bake of the colored GLB on each selection change. */
     val previewRotZDeg: Int = -1,
     val previewScalePct: Int = -1,
+    /** One-based filament/extruder index used to tint STL previews
+     *  that came from a colored multi-object 3MF. Extracting a 3MF
+     *  object as STL preserves geometry for per-object selection, but
+     *  STL has no material metadata; this carries the source object's
+     *  default extruder color into the preview GLB. 0 = generic STL
+     *  preview color. */
+    val previewFilamentIndex: Int = 0,
     /** Phase B9 — Group ID for multi-object archives. All parts from
      *  the same 3MF share this ID (often the source file's SHA-256).
      *  Null = standalone file. */
@@ -289,6 +296,7 @@ data class PlacedModel(
             previewVersion == other.previewVersion &&
             previewRotZDeg == other.previewRotZDeg &&
             previewScalePct == other.previewScalePct &&
+            previewFilamentIndex == other.previewFilamentIndex &&
             groupId == other.groupId &&
             groupOrdinal == other.groupOrdinal &&
             plateId == other.plateId &&
@@ -322,6 +330,7 @@ data class PlacedModel(
         r = 31 * r + previewVersion
         r = 31 * r + previewRotZDeg
         r = 31 * r + previewScalePct
+        r = 31 * r + previewFilamentIndex
         r = 31 * r + (groupId?.hashCode() ?: 0)
         r = 31 * r + groupOrdinal
         r = 31 * r + plateId

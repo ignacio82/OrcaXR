@@ -66,6 +66,7 @@ import androidx.xr.scenecore.scene
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.zip.ZipFile
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.RestartAlt
@@ -827,9 +828,11 @@ private fun XrShell(
         placedModels = placedModels.map { if (it.id == id) transform(it) else it }
     }
     
-    // Track world translation of the workspace and its grab handle
+    // Track world translation of the workspace and its grab orbiters.
     var workspaceTx by remember { mutableStateOf(androidx.xr.runtime.math.Vector3(0f, WORKSPACE_Y_OFFSET, 0.0f)) }
-    var bedHandleTx by remember { mutableStateOf(androidx.xr.runtime.math.Vector3(0f, WORKSPACE_Y_OFFSET, 0.20f)) }
+    var bedHandleTxByCorner by remember {
+        mutableStateOf(emptyMap<WorkspaceGrabCorner, androidx.xr.runtime.math.Vector3>())
+    }
     var isWorkspaceGrabbing by remember { mutableStateOf(false) }
 
     // Live transform override applied while a gizmo is being dragged. Keys
@@ -1439,6 +1442,10 @@ private fun XrShell(
             }
             pal
         } else null
+        val defaultPreviewRgb = previewRgbForFilamentIndex(
+            refreshed.previewFilamentIndex,
+            previewPalette,
+        )
         // Roadmap A6 — when the just-detected collision flagged any
         // off-bed triangles, hand the indices to the GLB writer so the
         // user gets the visual cue ("which faces poke off the bed?")
@@ -1448,6 +1455,7 @@ private fun XrShell(
             StlPreviewGlb.write(
                 mesh,
                 out,
+                defaultRgb = defaultPreviewRgb,
                 paintFilamentIndex = paintForPreview,
                 paletteRgb = paintPaletteRgb,
                 offBedTriIndices = offBedForPreview,
@@ -1577,7 +1585,14 @@ private fun XrShell(
             // the existing list and append a new entry — but cap at
             // MAX_PLACED_MODELS to bound the SceneCore draw-call budget.
             val meta = SlicerEngine.read3mfObjectMetadata(file)
-            val freshList = if (meta != null && meta.size > 1) {
+            val keepContainer = isBambuAssembly3mf(file, meta)
+            if (keepContainer) {
+                android.util.Log.i(
+                    "OrcaXR",
+                    "keeping Bambu/Orca assembly 3MF as one preview container: ${file.name}",
+                )
+            }
+            val freshList = if (meta != null && meta.size > 1 && !keepContainer) {
                 val gid = paintCache.hashOf(file)
                 meta.mapIndexed { index, m ->
                     val outStl = getExtractedStl(gid, index)
@@ -1589,6 +1604,7 @@ private fun XrShell(
                         id = newId,
                         source = outStl,
                         label = "${file.name} - ${m.name.ifEmpty { "Part ${index + 1}" }}",
+                        previewFilamentIndex = m.defaultExtruder.coerceAtLeast(0),
                         groupId = gid,
                         groupOrdinal = index,
                         baseBboxXmm = m.bboxX,
@@ -2232,12 +2248,16 @@ private fun XrShell(
         // user changes a mapping (physicalSlot / virtualSlot) or when
         // a virtual mix gets redefined / reordered — those don't touch
         // authored colors but DO change what the preview should look
-        // like. Unpainted STLs render single-color, so the palette
-        // change doesn't affect them and they stay out of the loop.
+        // like. Unpainted generic STLs render single-color, so the
+        // palette change doesn't affect them; extracted 3MF STL parts
+        // carry previewFilamentIndex and must refresh when the
+        // embedded/project palette changes.
         val ids = placedModels
             .filter {
                 val ext = it.source.extension.lowercase()
-                ext in setOf("3mf", "amf") || hasAnyPaint(it.paintFilamentIndex)
+                ext in setOf("3mf", "amf") ||
+                    hasAnyPaint(it.paintFilamentIndex) ||
+                    it.previewFilamentIndex > 0
             }
             .map { it.id }
         if (ids.isEmpty()) return@LaunchedEffect
@@ -3199,75 +3219,179 @@ private fun XrShell(
 
     Subspace {
         rootEntity?.let { root ->
-            // Phase G: Workspace Grab Handle
-            // High-visibility Magenta cube.
-            var bedGrabHandle by remember { mutableStateOf<GltfModelEntity?>(null) }
+            // Phase G: Workspace grab orbiters. Small cubes sit just
+            // outside the back-left/back-right bed corners so they do
+            // not overlap printable volume or model transform gizmos.
+            var bedGrabHandles by remember {
+                mutableStateOf(emptyMap<WorkspaceGrabCorner, GltfModelEntity>())
+            }
+            val latestBedGrabHandles = rememberUpdatedState(bedGrabHandles)
             LaunchedEffect(session, root, workspaceEntity, bedW, bedH) {
                 val ws = workspaceEntity ?: return@LaunchedEffect
                 
                 runCatching {
-                    bedGrabHandle?.let { if (!it.isDisposed) it.dispose() }
-                    val out = File(ctx.cacheDir, "workspace_grab_cube_v10.glb")
-                    // 100mm Magenta cube (1, 0, 1)
-                    GizmoGlb.writeCube(out, 100f, floatArrayOf(0f, 0f, 0f), floatArrayOf(1f, 0f, 1f))
+                    bedGrabHandles.values.forEach { handle ->
+                        if (!handle.isDisposed) runCatching { handle.dispose() }
+                    }
+                    val out = File(ctx.cacheDir, "workspace_grab_orbiter_cube_v1.glb")
+                    val sourceSizeMm = WORKSPACE_GRAB_ORBITER_SIZE_M / WORLD_SCALE
+                    GizmoGlb.writeCube(
+                        out,
+                        sourceSizeMm,
+                        floatArrayOf(0f, 0f, 0f),
+                        floatArrayOf(1f, 0f, 1f),
+                    )
                     val bytes = out.readBytes()
-                    val model = GltfModel.create(session, bytes, "workspace_grab_cube_v10.glb")
-                    val handle = GltfModelEntity.create(session, model)
-                    
-                    // Attach to session.scene instead of root to be absolutely sure it renders.
-                    // root is sometimes hidden or scaled in weird ways.
-                    handle.parent = session.scene.activitySpace
-                    handle.setScale(WORLD_SCALE)
+                    val model = GltfModel.create(session, bytes, "workspace_grab_orbiter_cube_v1.glb")
 
                     val bw = if (bedW > 0) bedW else 256f
                     val bh = if (bedH > 0) bedH else 256f
-
-                    // BACK-RIGHT: X = +W/2, Z = -H/2
-                    val initialPos = androidx.xr.runtime.math.Vector3(
-                        (bw / 2f * WORLD_SCALE) + 0.10f,
-                        WORKSPACE_Y_OFFSET + 0.30f, // Elevated 30cm
-                        -(bh / 2f * WORLD_SCALE) - 0.10f
-                    )
-                    handle.setPose(androidx.xr.runtime.math.Pose(initialPos, androidx.xr.runtime.math.Quaternion.Identity))
-                    bedHandleTx = initialPos
+                    val nextHandles = linkedMapOf<WorkspaceGrabCorner, GltfModelEntity>()
+                    var nextHandleTx = emptyMap<WorkspaceGrabCorner, androidx.xr.runtime.math.Vector3>()
 
                     val executor = androidx.core.content.ContextCompat.getMainExecutor(ctx)
-                    val listener = object : androidx.xr.scenecore.EntityMoveListener {
-                        override fun onMoveUpdate(
-                            entity: androidx.xr.scenecore.Entity,
-                            currentInputRay: androidx.xr.runtime.math.Ray,
-                            currentPose: androidx.xr.runtime.math.Pose,
-                            currentScale: Float,
-                        ) {
-                            val currentTx = currentPose.translation
-                            val prevHandleTx = bedHandleTx
-                            val deltaX = currentTx.x - prevHandleTx.x
-                            val deltaY = currentTx.y - prevHandleTx.y
-                            val deltaZ = currentTx.z - prevHandleTx.z
-                            
-                            val newWsTx = androidx.xr.runtime.math.Vector3(
-                                workspaceTx.x + deltaX,
-                                workspaceTx.y + deltaY,
-                                workspaceTx.z + deltaZ,
-                            )
-                            
-                            workspaceTx = newWsTx
-                            bedHandleTx = currentTx
-                            
-                            ws.setPose(androidx.xr.runtime.math.Pose(newWsTx, WORKSPACE_ROTATION))
-                            entity.setPose(androidx.xr.runtime.math.Pose(currentTx, androidx.xr.runtime.math.Quaternion.Identity))
+                    for (corner in WorkspaceGrabCorner.values()) {
+                        val handle = GltfModelEntity.create(session, model)
+
+                        // Attach to the root and manually keep these
+                        // orbiters aligned to the workspace. Parenting them
+                        // to the workspace makes SceneCore move the child
+                        // directly during drag, which gives us local-vs-world
+                        // pose ambiguity when applying the same delta to the
+                        // workspace group.
+                        handle.parent = root
+                        handle.setScale(WORLD_SCALE)
+
+                        val initialPos = workspaceGrabOrbiterPosition(corner, workspaceTx, bw, bh)
+                        handle.setPose(
+                            androidx.xr.runtime.math.Pose(
+                                initialPos,
+                                androidx.xr.runtime.math.Quaternion.Identity,
+                            ),
+                        )
+                        nextHandleTx = nextHandleTx + (corner to initialPos)
+
+                        val listener = object : androidx.xr.scenecore.EntityMoveListener {
+                            override fun onMoveStart(
+                                entity: androidx.xr.scenecore.Entity,
+                                initialInputRay: androidx.xr.runtime.math.Ray,
+                                initialPose: androidx.xr.runtime.math.Pose,
+                                initialScale: Float,
+                                initialParent: androidx.xr.scenecore.Entity,
+                            ) {
+                                isWorkspaceGrabbing = true
+                            }
+
+                            override fun onMoveUpdate(
+                                entity: androidx.xr.scenecore.Entity,
+                                currentInputRay: androidx.xr.runtime.math.Ray,
+                                currentPose: androidx.xr.runtime.math.Pose,
+                                currentScale: Float,
+                            ) {
+                                val currentTx = currentPose.translation
+                                val prevHandleTx = bedHandleTxByCorner[corner] ?: currentTx
+                                val deltaX = currentTx.x - prevHandleTx.x
+                                val deltaY = currentTx.y - prevHandleTx.y
+                                val deltaZ = currentTx.z - prevHandleTx.z
+
+                                val newWsTx = androidx.xr.runtime.math.Vector3(
+                                    workspaceTx.x + deltaX,
+                                    workspaceTx.y + deltaY,
+                                    workspaceTx.z + deltaZ,
+                                )
+
+                                workspaceTx = newWsTx
+                                ws.setPose(androidx.xr.runtime.math.Pose(newWsTx, WORKSPACE_ROTATION))
+
+                                val updatedTxByCorner = WorkspaceGrabCorner.values().associateWith { c ->
+                                    if (c == corner) {
+                                        currentTx
+                                    } else {
+                                        workspaceGrabOrbiterPosition(c, newWsTx, bw, bh)
+                                    }
+                                }
+                                bedHandleTxByCorner = updatedTxByCorner
+                                nextHandles.forEach { (c, h) ->
+                                    if (!h.isDisposed) {
+                                        h.setPose(
+                                            androidx.xr.runtime.math.Pose(
+                                                updatedTxByCorner.getValue(c),
+                                                androidx.xr.runtime.math.Quaternion.Identity,
+                                            ),
+                                        )
+                                    }
+                                }
+                            }
+
+                            override fun onMoveEnd(
+                                entity: androidx.xr.scenecore.Entity,
+                                finalInputRay: androidx.xr.runtime.math.Ray,
+                                finalPose: androidx.xr.runtime.math.Pose,
+                                finalScale: Float,
+                                updatedParent: androidx.xr.scenecore.Entity?,
+                            ) {
+                                isWorkspaceGrabbing = false
+                                val snappedTxByCorner = WorkspaceGrabCorner.values().associateWith { c ->
+                                    workspaceGrabOrbiterPosition(c, workspaceTx, bw, bh)
+                                }
+                                bedHandleTxByCorner = snappedTxByCorner
+                                nextHandles.forEach { (c, h) ->
+                                    if (!h.isDisposed) {
+                                        h.setPose(
+                                            androidx.xr.runtime.math.Pose(
+                                                snappedTxByCorner.getValue(c),
+                                                androidx.xr.runtime.math.Quaternion.Identity,
+                                            ),
+                                        )
+                                    }
+                                }
+                            }
                         }
+                        val mc = androidx.xr.scenecore.MovableComponent.createCustomMovable(session, false, executor, listener)
+                        mc.size = androidx.xr.runtime.math.FloatSize3d(
+                            WORKSPACE_GRAB_ORBITER_HIT_SIZE_M,
+                            WORKSPACE_GRAB_ORBITER_HIT_SIZE_M,
+                            WORKSPACE_GRAB_ORBITER_HIT_SIZE_M,
+                        )
+                        handle.addComponent(mc)
+
+                        nextHandles[corner] = handle
                     }
-                    val mc = androidx.xr.scenecore.MovableComponent.createCustomMovable(session, false, executor, listener)
-                    mc.size = androidx.xr.runtime.math.FloatSize3d(0.2f, 0.2f, 0.2f)
-                    handle.addComponent(mc)
-                    
-                    bedGrabHandle = handle
-                    android.util.Log.i("OrcaXR", "FORCE-ATTACH Workspace grab handle at $initialPos")
+
+                    bedHandleTxByCorner = nextHandleTx
+                    bedGrabHandles = nextHandles
+                    android.util.Log.i("OrcaXR", "Attached ${nextHandles.size} workspace grab orbiters")
+                }.onFailure {
+                    android.util.Log.e("OrcaXR", "Workspace grab orbiters failed", it)
                 }
             }
-            DisposableEffect(bedGrabHandle) {
-                onDispose { bedGrabHandle?.let { if (!it.isDisposed) it.dispose() } }
+
+            LaunchedEffect(workspaceTx, bedW, bedH, bedGrabHandles) {
+                if (bedGrabHandles.isEmpty()) return@LaunchedEffect
+                val bw = if (bedW > 0) bedW else 256f
+                val bh = if (bedH > 0) bedH else 256f
+                val nextHandleTx = WorkspaceGrabCorner.values().associateWith { corner ->
+                    workspaceGrabOrbiterPosition(corner, workspaceTx, bw, bh)
+                }
+                bedHandleTxByCorner = nextHandleTx
+                bedGrabHandles.forEach { (corner, handle) ->
+                    if (!handle.isDisposed) {
+                        handle.setPose(
+                            androidx.xr.runtime.math.Pose(
+                                nextHandleTx.getValue(corner),
+                                androidx.xr.runtime.math.Quaternion.Identity,
+                            ),
+                        )
+                    }
+                }
+            }
+
+            DisposableEffect(Unit) {
+                onDispose {
+                    latestBedGrabHandles.value.values.forEach { handle ->
+                        if (!handle.isDisposed) runCatching { handle.dispose() }
+                    }
+                }
             }
 
             SceneCoreEntity(
@@ -4875,6 +4999,20 @@ private const val PREFERRED_DEFAULT_PROFILE_ID =
  */
 private const val WORKSPACE_Y_OFFSET = -0.10f
 
+private enum class WorkspaceGrabCorner(val xSign: Float) {
+    BackLeft(-1f),
+    BackRight(1f),
+}
+
+/** Visible cube size for the buildplate grab orbiters, in world meters. */
+private const val WORKSPACE_GRAB_ORBITER_SIZE_M = 0.05f
+
+/** Empty space between the buildplate edge and the orbiter hit volume. */
+private const val WORKSPACE_GRAB_ORBITER_EDGE_GAP_M = 0.03f
+
+/** Slightly larger than the visible cube so hand/gaze grabs are forgiving. */
+private const val WORKSPACE_GRAB_ORBITER_HIT_SIZE_M = 0.075f
+
 /**
  * Rotation that maps printer space (X right, Y front, Z up) onto
  * SceneCore world space (X right, Y up, Z forward toward user). Without
@@ -4890,6 +5028,50 @@ private const val WORKSPACE_Y_OFFSET = -0.10f
 private val WORKSPACE_ROTATION = androidx.xr.runtime.math.Quaternion(
     -0.70710678f, 0f, 0f, 0.70710678f,
 )
+
+private fun workspaceGrabOrbiterPosition(
+    corner: WorkspaceGrabCorner,
+    workspaceTx: androidx.xr.runtime.math.Vector3,
+    bedWmm: Float,
+    bedHmm: Float,
+): androidx.xr.runtime.math.Vector3 {
+    val halfWm = (bedWmm * 0.5f) * WORLD_SCALE
+    val halfHm = (bedHmm * 0.5f) * WORLD_SCALE
+    val centerOutset = (WORKSPACE_GRAB_ORBITER_HIT_SIZE_M * 0.5f) +
+        WORKSPACE_GRAB_ORBITER_EDGE_GAP_M
+    return androidx.xr.runtime.math.Vector3(
+        workspaceTx.x + corner.xSign * (halfWm + centerOutset),
+        workspaceTx.y + (WORKSPACE_GRAB_ORBITER_SIZE_M * 0.5f),
+        workspaceTx.z - (halfHm + centerOutset),
+    )
+}
+
+private fun previewRgbForFilamentIndex(indexOneBased: Int, palette: List<String>): FloatArray? {
+    if (indexOneBased <= 0) return null
+    val hex = palette.getOrNull(indexOneBased - 1)
+        ?.trimStart('#')
+        ?.padStart(6, '0')
+        ?.take(6)
+        ?: return null
+    val r = hex.substring(0, 2).toIntOrNull(16) ?: return null
+    val g = hex.substring(2, 4).toIntOrNull(16) ?: return null
+    val b = hex.substring(4, 6).toIntOrNull(16) ?: return null
+    return floatArrayOf(r / 255f, g / 255f, b / 255f)
+}
+
+private fun isBambuAssembly3mf(file: File, meta: Array<SlicerEngine.ObjectMeta>?): Boolean {
+    if (!file.extension.equals("3mf", ignoreCase = true)) return false
+    if (meta == null || meta.size <= 1) return false
+    return runCatching {
+        ZipFile(file).use { zip ->
+            val entry = zip.getEntry("Metadata/model_settings.config") ?: return@use false
+            zip.getInputStream(entry).bufferedReader().use { reader ->
+                val text = reader.readText()
+                text.contains("<assemble") && text.contains("<assemble_item")
+            }
+        }
+    }.getOrDefault(false)
+}
 
 private fun applyWorkspacePose(ent: androidx.xr.scenecore.Entity, parent: androidx.xr.scenecore.Entity?) {
     // The workspace parent (a GroupEntity created in XrShell) already

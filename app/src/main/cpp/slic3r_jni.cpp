@@ -210,6 +210,87 @@ static std::vector<ObjectPlacement> row_layout(
 }
 
 /**
+ * Preserve the relative object positions already present in a 3MF,
+ * then shift the complete assembly to the requested bed center. Bambu
+ * / Orca assembly files use this authored layout for multi-color
+ * painted models; row-arranging those objects separates the color
+ * layers and turns the model into a pile of parts.
+ */
+static std::vector<ObjectPlacement> centered_existing_layout(
+    const std::vector<Slic3r::ModelObject*>& objects,
+    const Slic3r::Vec2d& bed_center)
+{
+    std::vector<ObjectPlacement> out;
+    out.reserve(objects.size());
+    if (objects.empty()) return out;
+
+    std::vector<Slic3r::BoundingBoxf3> wbb;
+    wbb.reserve(objects.size());
+    Slic3r::BoundingBoxf3 all;
+    bool first = true;
+    for (const Slic3r::ModelObject* mo : objects) {
+        Slic3r::Transform3d xf = Slic3r::Transform3d::Identity();
+        if (!mo->instances.empty()) xf = mo->instances.front()->get_matrix();
+        Slic3r::BoundingBoxf3 b = world_bbox_of(mo->raw_bounding_box(), xf);
+        if (first) {
+            all = b;
+            first = false;
+        } else {
+            all.merge(b);
+        }
+        wbb.push_back(b);
+    }
+
+    const double current_cx = (all.min.x() + all.max.x()) * 0.5;
+    const double current_cy = (all.min.y() + all.max.y()) * 0.5;
+    const Slic3r::Vec3d translation(
+        bed_center.x() - current_cx,
+        bed_center.y() - current_cy,
+        -all.min.z());
+
+    for (const auto& b : wbb) {
+        out.push_back({translation, b});
+    }
+    return out;
+}
+
+static bool zip_entry_contains_text(
+    const char* zip_path,
+    const char* entry_name,
+    const char* needle)
+{
+    mz_zip_archive zip;
+    std::memset(&zip, 0, sizeof(zip));
+    if (!mz_zip_reader_init_file(&zip, zip_path, 0)) {
+        return false;
+    }
+
+    bool found = false;
+    const int file_index = mz_zip_reader_locate_file(&zip, entry_name, nullptr, 0);
+    if (file_index >= 0) {
+        size_t uncomp_size = 0;
+        void* p = mz_zip_reader_extract_to_heap(
+            &zip, static_cast<mz_uint>(file_index), &uncomp_size, 0);
+        if (p != nullptr && uncomp_size > 0) {
+            const std::string text(static_cast<const char*>(p), uncomp_size);
+            found = text.find(needle) != std::string::npos;
+            mz_free(p);
+        }
+    }
+    mz_zip_reader_end(&zip);
+    return found;
+}
+
+static bool is_bambu_assembly_3mf(const char* path)
+{
+    if (!boost::algorithm::iends_with(path, ".3mf")) return false;
+    return zip_entry_contains_text(
+        path,
+        "Metadata/model_settings.config",
+        "<assemble_item");
+}
+
+/**
  * Phase J in-XR painting authoring path. Per-triangle filament-slot
  * byte array (slot=0 → unpainted, slot=1..32 → tagged) gets serialized
  * onto a [ModelVolume]'s `mmu_segmentation_facets` so libslic3r's
@@ -633,15 +714,13 @@ static bool extract_3mf_string_array(
 /**
  * Read a mesh container (STL/3MF/AMF/OBJ/STEP) into a Slic3r::Model.
  *
- * For .3mf we dispatch through `Model::read_from_archive` rather than
- * `Model::read_from_file`. The latter's .3mf branch only calls
- * `load_bbs_3mf`, which silently returns an empty model for Prusa /
- * MakerWorld / generic 3MF files that don't carry BBS metadata
- * (verified in field with a Bambu-shared 3MF — the load "succeeded"
- * but `model.objects.empty()` triggered a misleading "couldn't be
- * read because it's empty" exception). `read_from_archive` sniffs
- * Prusa-vs-BBS and routes to the correct loader (`load_3mf` for
- * Prusa / standard 3MF, `load_bbs_3mf` for BBS-flavored ones).
+ * For .3mf we choose between OrcaSlicer's standard and BBS loaders
+ * explicitly. `Model::read_from_file` only calls `load_bbs_3mf`,
+ * which silently returns an empty model for Prusa / MakerWorld /
+ * generic 3MF files that don't carry BBS metadata. Generic 3MFs stay
+ * standard-first, while Bambu / Orca assembly archives are BBS-first
+ * because the standard loader drops their Bambu `paint_color`
+ * triangle metadata.
  *
  * Throws std::exception on failure (caller catches).
  */
@@ -666,13 +745,6 @@ static Slic3r::Model load_mesh_container(
         //                    semver_free if the caller passes a null
         //                    file_version pointer — handled below.
         //
-        // OrcaSlicer's Model::read_from_archive uses PrusaFileParser
-        // to pick which loader runs, but its heuristic is
-        // BBS-leaning and misroutes most consumer 3MFs. Try the
-        // standard loader first and only fall back to BBS when it
-        // doesn't extract any objects — that's the inverse of
-        // upstream's order but matches what loaders we actually
-        // hit on real-world files.
         Slic3r::Model model;
         Slic3r::DynamicPrintConfig local_config;
         Slic3r::DynamicPrintConfig& cfg_ref =
@@ -680,56 +752,81 @@ static Slic3r::Model load_mesh_container(
         Slic3r::ConfigSubstitutionContext subs(
             Slic3r::ForwardCompatibilitySubstitutionRule::EnableSilent);
 
-        try {
-            if (Slic3r::load_3mf(path, cfg_ref, subs, &model, /*check_version=*/false)
-                && !model.objects.empty()) {
-                ORCAXR_LOGI("load_mesh_container: load_3mf ok (%zu objects)",
-                            model.objects.size());
-                return model;
+        auto try_standard_3mf = [&]() -> bool {
+            model = Slic3r::Model();
+            try {
+                if (Slic3r::load_3mf(path, cfg_ref, subs, &model, /*check_version=*/false)
+                    && !model.objects.empty()) {
+                    ORCAXR_LOGI("load_mesh_container: load_3mf ok (%zu objects)",
+                                model.objects.size());
+                    return true;
+                }
+            } catch (const std::exception& e) {
+                ORCAXR_LOGI("load_mesh_container: load_3mf threw, falling back: %s", e.what());
             }
-        } catch (const std::exception& e) {
-            ORCAXR_LOGI("load_mesh_container: load_3mf threw, falling back: %s", e.what());
-        }
+            return false;
+        };
 
-        // Fallback: BBS loader. Always pass a real Semver — passing
-        // nullptr crashes inside semver_free at offset 0x10 when the
-        // BBS importer destructs its file_version member.
-        model = Slic3r::Model();
-        Slic3r::PlateDataPtrs plate_data;
-        std::vector<Slic3r::Preset*> project_presets;
-        Slic3r::Semver file_version;
-        bool is_bbl = false;
-        // LoadStrategy is a bitmask. AddDefaultInstances alone is
-        // NOT enough — `LoadModel = 4` is the bit that actually
-        // extracts mesh objects out of the BBS plate containers
-        // (verified in field: a Bambu Studio 3MF returned
-        // `is_bbl=1, objects=0` until we OR'd in LoadModel).
-        // LoadConfig pulls the embedded DynamicPrintConfig.
-        //
-        // DO NOT add LoadAuxiliary (16): the BBS importer treats it
-        // as "extract project resources to disk" and tries to write
-        // to `/orcaslicer_model/<date>/<pid>/Auxiliaries/...` which
-        // is on Android's read-only root filesystem — load fails
-        // with `boost::filesystem::create_directories: Read-only
-        // file system [system:30]`. Painting data
-        // (`mmu_segmentation_facets`) is parsed unconditionally by
-        // `bbs_3mf.cpp:4895` regardless of LoadAuxiliary.
-        const auto strategy = static_cast<Slic3r::LoadStrategy>(
-            static_cast<int>(Slic3r::LoadStrategy::LoadModel)            |
-            static_cast<int>(Slic3r::LoadStrategy::LoadConfig)           |
-            static_cast<int>(Slic3r::LoadStrategy::AddDefaultInstances));
-        if (Slic3r::load_bbs_3mf(path, &cfg_ref, &subs, &model,
-                                  &plate_data, &project_presets,
-                                  &is_bbl, &file_version,
-                                  /*proFn=*/nullptr,
-                                  strategy,
-                                  /*project=*/nullptr,
-                                  /*plate_id=*/0)) {
-            ORCAXR_LOGI("load_mesh_container: load_bbs_3mf ok (%zu objects, is_bbl=%d)",
-                        model.objects.size(), is_bbl);
-        } else {
-            ORCAXR_LOGE("load_mesh_container: both 3MF loaders failed for %s", path);
-        }
+        auto try_bbs_3mf = [&]() -> bool {
+            // BBS loader. Always pass a real Semver — passing nullptr
+            // crashes inside semver_free at offset 0x10 when the BBS
+            // importer destructs its file_version member.
+            model = Slic3r::Model();
+            Slic3r::PlateDataPtrs plate_data;
+            std::vector<Slic3r::Preset*> project_presets;
+            Slic3r::Semver file_version;
+            bool is_bbl = false;
+            // LoadStrategy is a bitmask. AddDefaultInstances alone is
+            // NOT enough — `LoadModel = 4` is the bit that actually
+            // extracts mesh objects out of the BBS plate containers
+            // (verified in field: a Bambu Studio 3MF returned
+            // `is_bbl=1, objects=0` until we OR'd in LoadModel).
+            // LoadConfig pulls the embedded DynamicPrintConfig.
+            //
+            // DO NOT add LoadAuxiliary (16): the BBS importer treats
+            // it as "extract project resources to disk" and tries to
+            // write to `/orcaslicer_model/<date>/<pid>/Auxiliaries/...`
+            // which is on Android's read-only root filesystem — load
+            // fails with `boost::filesystem::create_directories:
+            // Read-only file system [system:30]`. Painting data
+            // (`mmu_segmentation_facets`) is parsed unconditionally by
+            // `bbs_3mf.cpp:4895` regardless of LoadAuxiliary.
+            const auto strategy = static_cast<Slic3r::LoadStrategy>(
+                static_cast<int>(Slic3r::LoadStrategy::LoadModel)            |
+                static_cast<int>(Slic3r::LoadStrategy::LoadConfig)           |
+                static_cast<int>(Slic3r::LoadStrategy::AddDefaultInstances));
+            try {
+                if (Slic3r::load_bbs_3mf(path, &cfg_ref, &subs, &model,
+                                          &plate_data, &project_presets,
+                                          &is_bbl, &file_version,
+                                          /*proFn=*/nullptr,
+                                          strategy,
+                                          /*project=*/nullptr,
+                                          /*plate_id=*/0)
+                    && !model.objects.empty()) {
+                    ORCAXR_LOGI("load_mesh_container: load_bbs_3mf ok (%zu objects, is_bbl=%d)",
+                                model.objects.size(), is_bbl);
+                    return true;
+                }
+            } catch (const std::exception& e) {
+                ORCAXR_LOGI("load_mesh_container: load_bbs_3mf threw: %s", e.what());
+            }
+            ORCAXR_LOGI("load_mesh_container: load_bbs_3mf returned no objects");
+            return false;
+        };
+
+        // OrcaSlicer's Model::read_from_archive uses PrusaFileParser
+        // to pick which loader runs, but its heuristic is
+        // BBS-leaning and misroutes most consumer 3MFs. Keep the
+        // standard-first order for generic 3MFs. For Bambu / Orca
+        // assembly archives, prefer BBS because the standard loader
+        // drops Bambu `paint_color` triangle attributes and the
+        // preview falls back to a flat single-material mesh.
+        const bool prefer_bbs = is_bambu_assembly_3mf(path);
+        if (prefer_bbs && try_bbs_3mf()) return model;
+        if (try_standard_3mf()) return model;
+        if (!prefer_bbs && try_bbs_3mf()) return model;
+        ORCAXR_LOGE("load_mesh_container: both 3MF loaders failed for %s", path);
         return model;
     }
     return Slic3r::Model::read_from_file(path);
@@ -1252,10 +1349,18 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
         }
 
         // Auto-arrange in a row centered on the bed. Single-object
-        // case puts it at bed center; multi-object 3MFs (e.g. two
-        // dragons) get spaced left-to-right with a 5mm gap so they
-        // don't print on top of each other.
-        auto placements = row_layout(model.objects, bed_center);
+        // case puts it at bed center; generic multi-object 3MFs (e.g.
+        // two dragons) get spaced left-to-right with a 5mm gap so
+        // they don't print on top of each other. Bambu / Orca
+        // assemblies keep their embedded relative layout because
+        // painted multi-color models encode color regions as separate
+        // assembled objects.
+        const bool preserve_assembly_layout = is_bambu_assembly_3mf(stl.c);
+        auto placements = preserve_assembly_layout
+            ? centered_existing_layout(model.objects, bed_center)
+            : row_layout(model.objects, bed_center);
+        ORCAXR_LOGI("nativeSlice: layout=%s",
+                    preserve_assembly_layout ? "preserve_3mf_assembly" : "row_arrange");
         for (size_t i = 0; i < model.objects.size(); ++i) {
             Slic3r::ModelObject* mo = model.objects[i];
             const auto& p = placements[i];
@@ -2016,15 +2121,19 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
             }
         };
 
-        // Lay out objects in a row centered on (0, 0). The build
-        // plate GLB lives in the same workspace frame and is
-        // centered at the origin, so this puts the row of objects
-        // visually on the plate. Multi-object 3MFs (two dragons,
-        // calibration sets, etc.) get spaced 5mm apart instead of
-        // stacked on top of each other.
+        // Lay out generic multi-object files in a row centered on
+        // (0, 0). Bambu / Orca assembly 3MFs keep their embedded
+        // relative object positions and are shifted as a group, so a
+        // painted multi-color model stays assembled instead of
+        // splitting into its color layers.
         std::vector<Slic3r::ModelObject*> objs(
             model.objects.begin(), model.objects.end());
-        auto placements = row_layout(objs, Slic3r::Vec2d(0.0, 0.0));
+        const bool preserve_assembly_layout = is_bambu_assembly_3mf(in.c);
+        auto placements = preserve_assembly_layout
+            ? centered_existing_layout(objs, Slic3r::Vec2d(0.0, 0.0))
+            : row_layout(objs, Slic3r::Vec2d(0.0, 0.0));
+        ORCAXR_LOGI("nativeWriteColoredGlb: layout=%s",
+                    preserve_assembly_layout ? "preserve_3mf_assembly" : "row_arrange");
 
         for (size_t i = 0; i < model.objects.size(); ++i) {
             const Slic3r::ModelObject* mo = model.objects[i];
@@ -2577,14 +2686,25 @@ Java_dev_orcaxr_app_SlicerEngine_nativeConvertToStl(
             return -2;
         }
 
-        // Merge every object's mesh into one. Each ModelObject::mesh()
-        // already concatenates its own volumes; we then merge across
-        // objects so a multi-part 3MF lands as a single STL the
-        // preview/transform code can hand-roll without caring about
-        // the source's internal structure.
+        // Merge every object's mesh into one using the same placement
+        // convention as nativeWriteColoredGlb. ModelObject::mesh()
+        // already includes each object's instances; apply only the
+        // final preview placement before merging across objects so
+        // bed-fit checks see the same footprint the user sees in XR.
+        std::vector<Slic3r::ModelObject*> objs(
+            model.objects.begin(), model.objects.end());
+        const bool preserve_assembly_layout = is_bambu_assembly_3mf(in.c);
+        auto placements = preserve_assembly_layout
+            ? centered_existing_layout(objs, Slic3r::Vec2d(0.0, 0.0))
+            : row_layout(objs, Slic3r::Vec2d(0.0, 0.0));
         Slic3r::TriangleMesh merged;
-        for (const Slic3r::ModelObject* mo : model.objects) {
-            merged.merge(mo->mesh());
+        for (size_t i = 0; i < model.objects.size(); ++i) {
+            const Slic3r::ModelObject* mo = model.objects[i];
+            Slic3r::TriangleMesh mesh = mo->mesh();
+            Slic3r::Transform3d placement_xform = Slic3r::Transform3d::Identity();
+            placement_xform.translation() = placements[i].translation;
+            mesh.transform(placement_xform);
+            merged.merge(mesh);
         }
         if (merged.empty()) {
             ORCAXR_LOGE("nativeConvertToStl: merged mesh is empty");

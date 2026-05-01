@@ -12,11 +12,10 @@ import java.io.File
  * means a model authored with its base on z=0 sits flush on the build
  * plate, and the bed center aligns with the model's footprint center.
  *
- * Coloring: solid translucent off-white via vertex colors. We don't
- * compute normals here — the GLB is unlit (KHR_materials_unlit), so
- * shading wouldn't kick in anyway. The user will see a flat silhouette
- * that's enough to confirm "yes, the model loaded and is positioned
- * correctly" before they slice.
+ * Coloring: generic STLs use solid off-white via vertex colors.
+ * Extracted multi-object 3MF parts can pass a default extruder color,
+ * and painted triangles can override per-face. We don't compute
+ * normals here — the GLB is unlit (KHR_materials_unlit).
  */
 object StlPreviewGlb {
     /** Soft off-white — visible against the dark passthrough but not
@@ -34,9 +33,13 @@ object StlPreviewGlb {
     fun write(
         mesh: StlMesh,
         out: File,
+        /** Color for unpainted/default triangles. Multi-object 3MF
+         *  parts extracted as STLs use this to preserve the source
+         *  object's default extruder color in preview. */
+        defaultRgb: FloatArray? = null,
         /** Phase J: per-triangle filament-slot byte array. Length must
          *  match `mesh.triCount` when non-null; entry i = 0 means
-         *  "use [DEFAULT_RGB]"; i = 1..N indexes [paletteRgb] for
+         *  "use [defaultRgb]"; i = 1..N indexes [paletteRgb] for
          *  the paint color (slot N at `paletteRgb[(N-1)*3 ..]`).
          *  Null = unpainted (existing single-color preview). */
         paintFilamentIndex: ByteArray? = null,
@@ -85,6 +88,7 @@ object StlPreviewGlb {
             for (idx in src) if (idx in 0 until mesh.triCount) mask[idx] = true
             mask
         }
+        val baseRgb = defaultRgb?.takeIf { it.size >= 3 } ?: DEFAULT_RGB
         var pi = 0; var ci = 0
         var src = 0
         for (tri in 0 until mesh.triCount) {
@@ -97,7 +101,7 @@ object StlPreviewGlb {
                         if (base + 2 < palette.size) {
                             floatArrayOf(palette[base], palette[base + 1], palette[base + 2])
                         } else DEFAULT_RGB
-                    } else DEFAULT_RGB
+                    } else baseRgb
                 }
             }
             for (v in 0 until 3) {
