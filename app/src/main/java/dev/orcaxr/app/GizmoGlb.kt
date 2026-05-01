@@ -147,18 +147,29 @@ object GizmoGlb {
         val oy = offset[1]
         val oz = offset[2]
 
+        // 24 vertices to allow flat shading per face (4 verts per face * 6 faces)
         val positions = floatArrayOf(
-            ox-s, oy-s, oz-s,  ox+s, oy-s, oz-s,  ox+s, oy+s, oz-s,  ox-s, oy+s, oz-s,
-            ox-s, oy-s, oz+s,  ox+s, oy-s, oz+s,  ox+s, oy+s, oz+s,  ox-s, oy+s, oz+s
+            // -Z face
+            ox-s, oy-s, oz-s,  ox-s, oy+s, oz-s,  ox+s, oy+s, oz-s,  ox+s, oy-s, oz-s,
+            // +Z face
+            ox-s, oy-s, oz+s,  ox+s, oy-s, oz+s,  ox+s, oy+s, oz+s,  ox-s, oy+s, oz+s,
+            // -Y face
+            ox-s, oy-s, oz-s,  ox+s, oy-s, oz-s,  ox+s, oy-s, oz+s,  ox-s, oy-s, oz+s,
+            // +Y face
+            ox-s, oy+s, oz-s,  ox-s, oy+s, oz+s,  ox+s, oy+s, oz+s,  ox+s, oy+s, oz-s,
+            // -X face
+            ox-s, oy-s, oz-s,  ox-s, oy-s, oz+s,  ox-s, oy+s, oz+s,  ox-s, oy+s, oz-s,
+            // +X face
+            ox+s, oy-s, oz-s,  ox+s, oy+s, oz-s,  ox+s, oy+s, oz+s,  ox+s, oy-s, oz+s
         )
 
         val faceTris = intArrayOf(
-            0, 3, 2, 0, 2, 1,   // -Z
-            4, 5, 6, 4, 6, 7,   // +Z
-            0, 1, 5, 0, 5, 4,   // -Y
-            3, 7, 6, 3, 6, 2,   // +Y
-            0, 4, 7, 0, 7, 3,   // -X
-            1, 2, 6, 1, 6, 5    // +X
+            0, 1, 2, 0, 2, 3,     // -Z
+            4, 5, 6, 4, 6, 7,     // +Z
+            8, 9, 10, 8, 10, 11,  // -Y
+            12, 13, 14, 12, 14, 15, // +Y
+            16, 17, 18, 16, 18, 19, // -X
+            20, 21, 22, 20, 22, 23  // +X
         )
 
         val colorArr = FloatArray(positions.size)
