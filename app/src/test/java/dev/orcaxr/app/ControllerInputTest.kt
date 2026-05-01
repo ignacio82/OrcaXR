@@ -89,6 +89,46 @@ class ControllerInputTest {
         close(2 * a, b, eps = 1e-3f)
     }
 
+    @Test fun exponentChangesCurveShape() {
+        // linear (exponent = 1f) should yield linear mapping after flat
+        val linear = scrubRate(0.55f, flat = 0.1f, maxLps = 40, exponent = 1f)
+        // 0.55 - 0.1 = 0.45, normalized = 0.45 / 0.9 = 0.5. 0.5^1 * 40 = 20f
+        close(20f, linear)
+
+        // very high exponent should yield near zero until close to 1
+        val highExp = scrubRate(0.8f, flat = 0.1f, maxLps = 40, exponent = 10f)
+        assertTrue("high exponent $highExp should heavily suppress mid-values", highExp < 5f)
+    }
+
+    @Test fun negativeFlatIsClampedToZero() {
+        // flat < 0 should be treated as flat = 0 during normalization
+        val r = scrubRate(0.5f, flat = -0.5f, maxLps = 40, exponent = 1f)
+        // If flat is -0.5, the early return `mag <= flat` (0.5 <= -0.5) is false.
+        // Then flatClamped = 0f. normalized = (0.5 - 0) / 1.0 = 0.5. result = 0.5 * 40 = 20f.
+        close(20f, r)
+    }
+
+    @Test fun flatAboveMaxIsClamped() {
+        // flat > 0.95 should be clamped to 0.95 during normalization
+        // This ensures (1f - flatClamped) is never 0, avoiding divide by zero
+        val r = scrubRate(1f, flat = 0.99f, maxLps = 40)
+        // early return mag <= flat (1.0 <= 0.99) is false
+        // flatClamped = 0.95
+        // normalized = (1.0 - 0.95) / 0.05 = 1.0
+        // result = 1.0 * 40 = 40f
+        close(40f, r)
+    }
+
+    @Test fun zeroMaxLpsReturnsZero() {
+        assertEquals(0f, scrubRate(1f, flat = 0.1f, maxLps = 0))
+    }
+
+    @Test fun negativeMaxLpsReversesDirection() {
+        // -40 maxLps reverses the output sign
+        close(-40f, scrubRate(1f, flat = 0.1f, maxLps = -40))
+        close(40f, scrubRate(-1f, flat = 0.1f, maxLps = -40))
+    }
+
     @Test fun controllerInputBusEmitsAndResets() {
         val bus = ControllerInputBus()
         bus.setLeftStick(0.3f, -0.4f)
