@@ -1351,16 +1351,8 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
         // Auto-arrange in a row centered on the bed. Single-object
         // case puts it at bed center; generic multi-object 3MFs (e.g.
         // two dragons) get spaced left-to-right with a 5mm gap so
-        // they don't print on top of each other. Bambu / Orca
-        // assemblies keep their embedded relative layout because
-        // painted multi-color models encode color regions as separate
-        // assembled objects.
-        const bool preserve_assembly_layout = is_bambu_assembly_3mf(stl.c);
-        auto placements = preserve_assembly_layout
-            ? centered_existing_layout(model.objects, bed_center)
-            : row_layout(model.objects, bed_center);
-        ORCAXR_LOGI("nativeSlice: layout=%s",
-                    preserve_assembly_layout ? "preserve_3mf_assembly" : "row_arrange");
+        // they don't print on top of each other.
+        auto placements = row_layout(model.objects, bed_center);
         for (size_t i = 0; i < model.objects.size(); ++i) {
             Slic3r::ModelObject* mo = model.objects[i];
             const auto& p = placements[i];
@@ -2121,19 +2113,15 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
             }
         };
 
-        // Lay out generic multi-object files in a row centered on
-        // (0, 0). Bambu / Orca assembly 3MFs keep their embedded
-        // relative object positions and are shifted as a group, so a
-        // painted multi-color model stays assembled instead of
-        // splitting into its color layers.
+        // Lay out objects in a row centered on (0, 0). The build
+        // plate GLB lives in the same workspace frame and is
+        // centered at the origin, so this puts the row of objects
+        // visually on the plate. Multi-object 3MFs (two dragons,
+        // calibration sets, etc.) get spaced 5mm apart instead of
+        // stacked on top of each other.
         std::vector<Slic3r::ModelObject*> objs(
             model.objects.begin(), model.objects.end());
-        const bool preserve_assembly_layout = is_bambu_assembly_3mf(in.c);
-        auto placements = preserve_assembly_layout
-            ? centered_existing_layout(objs, Slic3r::Vec2d(0.0, 0.0))
-            : row_layout(objs, Slic3r::Vec2d(0.0, 0.0));
-        ORCAXR_LOGI("nativeWriteColoredGlb: layout=%s",
-                    preserve_assembly_layout ? "preserve_3mf_assembly" : "row_arrange");
+        auto placements = row_layout(objs, Slic3r::Vec2d(0.0, 0.0));
 
         for (size_t i = 0; i < model.objects.size(); ++i) {
             const Slic3r::ModelObject* mo = model.objects[i];
@@ -2686,25 +2674,14 @@ Java_dev_orcaxr_app_SlicerEngine_nativeConvertToStl(
             return -2;
         }
 
-        // Merge every object's mesh into one using the same placement
-        // convention as nativeWriteColoredGlb. ModelObject::mesh()
-        // already includes each object's instances; apply only the
-        // final preview placement before merging across objects so
-        // bed-fit checks see the same footprint the user sees in XR.
-        std::vector<Slic3r::ModelObject*> objs(
-            model.objects.begin(), model.objects.end());
-        const bool preserve_assembly_layout = is_bambu_assembly_3mf(in.c);
-        auto placements = preserve_assembly_layout
-            ? centered_existing_layout(objs, Slic3r::Vec2d(0.0, 0.0))
-            : row_layout(objs, Slic3r::Vec2d(0.0, 0.0));
+        // Merge every object's mesh into one. Each ModelObject::mesh()
+        // already concatenates its own volumes; we then merge across
+        // objects so a multi-part 3MF lands as a single STL the
+        // preview/transform code can hand-roll without caring about
+        // the source's internal structure.
         Slic3r::TriangleMesh merged;
-        for (size_t i = 0; i < model.objects.size(); ++i) {
-            const Slic3r::ModelObject* mo = model.objects[i];
-            Slic3r::TriangleMesh mesh = mo->mesh();
-            Slic3r::Transform3d placement_xform = Slic3r::Transform3d::Identity();
-            placement_xform.translation() = placements[i].translation;
-            mesh.transform(placement_xform);
-            merged.merge(mesh);
+        for (const Slic3r::ModelObject* mo : model.objects) {
+            merged.merge(mo->mesh());
         }
         if (merged.empty()) {
             ORCAXR_LOGE("nativeConvertToStl: merged mesh is empty");

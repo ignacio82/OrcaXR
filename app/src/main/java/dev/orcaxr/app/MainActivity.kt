@@ -1585,14 +1585,7 @@ private fun XrShell(
             // the existing list and append a new entry — but cap at
             // MAX_PLACED_MODELS to bound the SceneCore draw-call budget.
             val meta = SlicerEngine.read3mfObjectMetadata(file)
-            val keepContainer = isBambuAssembly3mf(file, meta)
-            if (keepContainer) {
-                android.util.Log.i(
-                    "OrcaXR",
-                    "keeping Bambu/Orca assembly 3MF as one preview container: ${file.name}",
-                )
-            }
-            val freshList = if (meta != null && meta.size > 1 && !keepContainer) {
+            val freshList = if (meta != null && meta.size > 1) {
                 val gid = paintCache.hashOf(file)
                 meta.mapIndexed { index, m ->
                     val outStl = getExtractedStl(gid, index)
@@ -3349,9 +3342,9 @@ private fun XrShell(
                         }
                         val mc = androidx.xr.scenecore.MovableComponent.createCustomMovable(session, false, executor, listener)
                         mc.size = androidx.xr.runtime.math.FloatSize3d(
-                            WORKSPACE_GRAB_ORBITER_HIT_SIZE_M,
-                            WORKSPACE_GRAB_ORBITER_HIT_SIZE_M,
-                            WORKSPACE_GRAB_ORBITER_HIT_SIZE_M,
+                            WORKSPACE_GRAB_ORBITER_HIT_SIZE_M / WORLD_SCALE,
+                            WORKSPACE_GRAB_ORBITER_HIT_SIZE_M / WORLD_SCALE,
+                            WORKSPACE_GRAB_ORBITER_HIT_SIZE_M / WORLD_SCALE,
                         )
                         handle.addComponent(mc)
 
@@ -5057,20 +5050,6 @@ private fun previewRgbForFilamentIndex(indexOneBased: Int, palette: List<String>
     val g = hex.substring(2, 4).toIntOrNull(16) ?: return null
     val b = hex.substring(4, 6).toIntOrNull(16) ?: return null
     return floatArrayOf(r / 255f, g / 255f, b / 255f)
-}
-
-private fun isBambuAssembly3mf(file: File, meta: Array<SlicerEngine.ObjectMeta>?): Boolean {
-    if (!file.extension.equals("3mf", ignoreCase = true)) return false
-    if (meta == null || meta.size <= 1) return false
-    return runCatching {
-        ZipFile(file).use { zip ->
-            val entry = zip.getEntry("Metadata/model_settings.config") ?: return@use false
-            zip.getInputStream(entry).bufferedReader().use { reader ->
-                val text = reader.readText()
-                text.contains("<assemble") && text.contains("<assemble_item")
-            }
-        }
-    }.getOrDefault(false)
 }
 
 private fun applyWorkspacePose(ent: androidx.xr.scenecore.Entity, parent: androidx.xr.scenecore.Entity?) {
