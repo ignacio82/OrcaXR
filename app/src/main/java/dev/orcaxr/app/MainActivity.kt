@@ -3211,8 +3211,11 @@ private fun XrShell(
     //     info panels, without the grab box intercepting clicks on the
     //     panels (the workspace box sits below the panel column).
     val workspaceEntity = remember(session, rootEntity) {
-        if (rootEntity == null) return@remember null
-        runCatching {
+        if (rootEntity == null) {
+            android.util.Log.w("OrcaXR", "workspaceEntity: rootEntity is null")
+            return@remember null
+        }
+        val res = runCatching {
             val ws = GroupEntity.create(session, "OrcaXR-workspace")
             ws.parent = rootEntity
             ws.setPose(
@@ -3222,7 +3225,9 @@ private fun XrShell(
                 ),
             )
             ws
-        }.getOrNull()
+        }
+        res.onFailure { android.util.Log.e("OrcaXR", "workspaceEntity creation failed", it) }
+        res.getOrNull()
     }
 
     Subspace {
@@ -4964,8 +4969,8 @@ private fun XrShell(
                                 parentEntity = workspaceEntity,
                                 offsetXmm = m.translateXmm,
                                 offsetYmm = m.translateYmm,
-                            )
-                        }
+                                offsetZmm = m.translateZmm,
+                            )                        }
                     }
                 }
             }
@@ -5303,7 +5308,7 @@ private fun GlbSceneEntity(
         ))
         
         entity = ent
-        android.util.Log.i("OrcaXR", "GlbSceneEntity attached $glbPath")
+        android.util.Log.i("OrcaXR", "GlbSceneEntity attached $glbPath at ($offsetXmm, $offsetYmm, $offsetZmm)")
     }
 
     // Steady-state pose update: position only (rotation/scale are baked
@@ -5424,7 +5429,8 @@ private fun GlbSceneEntity(
             }.onFailure {
                 android.util.Log.e("OrcaXR/paint", "InteractableComponent.create failed", it)
             }.getOrNull()
-            val attached = ic != null && runCatching { ent.addComponent(ic!!) }.getOrDefault(false)
+            
+            val attached = ic != null && !ent.isDisposed && runCatching { ent.addComponent(ic!!) }.getOrDefault(false)
             if (attached) {
                 android.util.Log.i(
                     "OrcaXR/paint",
@@ -5434,7 +5440,7 @@ private fun GlbSceneEntity(
                 )
             }
             onDispose {
-                if (attached) {
+                if (attached && !ent.isDisposed) {
                     runCatching { ent.removeComponent(ic!!) }
                     android.util.Log.i("OrcaXR/paint", "InteractableComponent detached from $glbPath")
                 }
@@ -5445,7 +5451,7 @@ private fun GlbSceneEntity(
     DisposableEffect(glbPath) {
         onDispose {
             android.util.Log.i("OrcaXR", "GlbSceneEntity disposing $glbPath")
-            entity?.dispose()
+            entity?.let { if (!it.isDisposed) runCatching { it.dispose() } }
             entity = null
         }
     }

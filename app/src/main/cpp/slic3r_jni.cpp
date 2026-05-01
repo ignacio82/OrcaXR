@@ -2787,7 +2787,9 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
                 double icy = (b.min.y() + b.max.y()) * 0.5;
                 ox = static_cast<float>(icx - group_cx);
                 oy = static_cast<float>(icy - group_cy);
-                oz = static_cast<float>(-b.min.z()); // GROUND the object
+                oz = static_cast<float>(b.min.z() - all.min.z()); // Preserves relative Z while grounding the group
+                ORCAXR_LOGI("nativeRead3mfObjectMetadata: obj[%zu] '%s' b.min.z=%.3f all.min.z=%.3f -> oz=%.3f",
+                    i, mo->name.c_str(), b.min.z(), all.min.z(), oz);
             }
 
             jobject meta = env->NewObject(metaClass, metaCtor,
