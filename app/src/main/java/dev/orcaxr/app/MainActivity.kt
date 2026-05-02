@@ -2773,6 +2773,16 @@ private fun XrShell(
         var yArmed = true
         while (kotlin.coroutines.coroutineContext[kotlinx.coroutines.Job]?.isActive != false) {
             val sel = selectedModelIds.firstOrNull()
+            // Paint full-feature-parity (radius adjust) — when paint
+            // mode is active, intercept stick Y to nudge brush radius
+            // continuously instead of moving the model. Stick X still
+            // cycles model rotation, just like Prepare's normal pump,
+            // but Y becomes "shrink/grow brush" so the user can fine-
+            // tune brush size without moving their hand to the chip.
+            // The 0..50 mm clamp covers the practical range; smart-
+            // fill mode adjusts the angle gate (1..90°) instead.
+            val brushModeActive = paintBrushLive.value.mode != PaintMode.Off &&
+                paintBrushLive.value.mode != PaintMode.LayOnFace
             if (sel != null) {
                 val xRaw = controllerInput.leftStickX.value
                 val yRaw = controllerInput.leftStickY.value
@@ -2788,20 +2798,37 @@ private fun XrShell(
                 } else if (!xArmed && xMag < 0.3f) {
                     xArmed = true
                 }
-                if (yArmed && yMag > 0.7f) {
-                    val ySign = if (yRaw > 0f) 1f else -1f
-                    placedModels = placedModels.map {
-                        if (it.id == sel) {
-                            val snapped = snapAndClampOffset(
-                                it.translateXmm,
-                                it.translateYmm + ySign * 5f,
-                            )
-                            it.copy(translateXmm = snapped.x, translateYmm = snapped.y)
-                        } else it
+                if (brushModeActive) {
+                    // Continuous nudge — apply a fractional delta per
+                    // tick proportional to stick deflection above the
+                    // 0.3 deadband. ~10 mm/sec at full deflection.
+                    if (yMag > 0.3f) {
+                        val curBrush = paintBrushLive.value
+                        if (curBrush.smartFill) {
+                            val newAngle = (curBrush.smartFillAngleDeg + yRaw * 1.5f)
+                                .coerceIn(1f, 90f)
+                            paintBrush = curBrush.copy(smartFillAngleDeg = newAngle)
+                        } else {
+                            val newR = (curBrush.radiusMm + yRaw * 0.2f).coerceIn(0f, 50f)
+                            paintBrush = curBrush.copy(radiusMm = newR)
+                        }
                     }
-                    yArmed = false
-                } else if (!yArmed && yMag < 0.3f) {
-                    yArmed = true
+                } else {
+                    if (yArmed && yMag > 0.7f) {
+                        val ySign = if (yRaw > 0f) 1f else -1f
+                        placedModels = placedModels.map {
+                            if (it.id == sel) {
+                                val snapped = snapAndClampOffset(
+                                    it.translateXmm,
+                                    it.translateYmm + ySign * 5f,
+                                )
+                                it.copy(translateXmm = snapped.x, translateYmm = snapped.y)
+                            } else it
+                        }
+                        yArmed = false
+                    } else if (!yArmed && yMag < 0.3f) {
+                        yArmed = true
+                    }
                 }
             }
             kotlinx.coroutines.delay(16)

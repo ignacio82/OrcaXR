@@ -64,6 +64,11 @@ object ControllerHelp {
             input = "Stick · Prepare + held",
             action = "Quarter-turn rotate (X-axis flick = ±90°)",
         ),
+        Entry(
+            input = "Stick · Paint mode",
+            action = "Y axis nudges brush radius (or smart-fill angle)",
+            note = "Continuous adjust; X still rotates the selected model.",
+        ),
     )
 }
 

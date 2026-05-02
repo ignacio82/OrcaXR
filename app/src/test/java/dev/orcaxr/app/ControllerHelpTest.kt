@@ -51,7 +51,7 @@ class ControllerHelpTest {
         // touch the test, ControllerHelp.entries, and the actual
         // collector in the same commit. If you're staring at a failing
         // assertion here, update all three.
-        assertEquals(7, ControllerHelp.entries.size)
+        assertEquals(8, ControllerHelp.entries.size)
     }
 
     @Test fun formatBytes_handles_size_ranges() {
