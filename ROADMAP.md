@@ -355,7 +355,7 @@ Render the probed bed-mesh grid as a heatmap GLB on the build plate. Today we'd 
 
 `MoonrakerClient.queryStatus` subscribes to `filament_detect`; `LivePrintStatus` renders amber "T_N empty" pills during an active print. Hidden when the printer doesn't expose `filament_detect`.
 
-### C6. MCP Server for OrcaXR (AI Control & Smart Assistant) 🟡 Phase 1 shipped — server foundation + 24 read/write tools live; in-session workspace tools pending
+### C6. MCP Server for OrcaXR (AI Control & Smart Assistant) 🟡 Phase 1 + 2 shipped — 41 tools live; Tier-B mutators (slice, save, auto-arrange) pending
 
 > **Files:** `app/src/main/java/dev/orcaxr/app/mcp/` (server, settings, tools, UI card), `OrcaXRApplication.kt` (boot), `UiPanels.kt` (Devices-panel card), `app/src/test/java/dev/orcaxr/app/mcp/` (tests). See [`GEMINI.md`](GEMINI.md) §"MCP server (C6) — architecture" for the wiring contract.
 
@@ -374,11 +374,15 @@ Render the probed bed-mesh grid as a heatmap GLB on the build plate. Today we'd 
   - **Preferences** (2): `get_user_preferences`, `set_user_preference`.
 - Tests: 24 unit tests under `app/src/test/java/dev/orcaxr/app/mcp/` — JSON-RPC parser, auth gate, and a full real-socket end-to-end round-trip with OkHttp as client. All green.
 
-**Phase 2 (next, blocked on `WorkspaceModel` singleton):** the in-session state tools — anything that touches `placedModels`, `selectedModelIds`, `gizmoTool`, `paintBrush`, `sliceState`, `workspaceMode`, `activePlateId`, layer scrubber, save-as-3MF/STL/G-code. Needs MainActivity to publish its remember{}s into a process-scoped `WorkspaceModel` so tools can read/write without reaching into Compose. Roughly 30–40 more tools to reach "everything a human can do".
+**Phase 2 shipped:** `WorkspaceModel` process-scoped singleton with `StateFlow` for every tracked in-session field; `BindWorkspaceModel` Composable that XrShell calls once near the top — it both publishes from MainActivity remember{}s into the model AND collects `WorkspaceAction`s back through the same setters the UI uses (so observers/re-bakes/validators fire identically whether the change came from a pinch or a tool call). Phase-2 tools added (17 new, 41 total):
+- **Reads:** `get_workspace_state` (one-shot snapshot of the full workspace), `list_placed_models` (filterable by plate / selection).
+- **Tier-A mutators:** `set_gizmo_tool`, `set_workspace_mode`, `set_active_plate`, `select_models`, `clear_selection`, `set_layer_height_override`, `set_paint_mode`, `set_paint_brush`, `set_max_layer`, `switch_profile`, `select_printer`, `set_show_travels`, `set_toolpath_tubes`, `transform_model`, `delete_models`.
 
-**Phase 3:** Smart-Assistant XR panel — chat-style UI hosted in the workspace, calls the same MCP server locally. Optional once Phase 2 is solid; the on-device server already lets a remote LLM client (Claude Desktop pointing at the device's LAN IP) drive everything.
+**Phase 2.1 (deferred, additive):** Tier-B mutators that need MainActivity-deep pipelines — `slice_active_plate`, `cancel_slice`, `auto_arrange_plate`, `drop_to_bed`, `save_gcode_to_downloads`, `save_project_as_3mf`, `save_model_as_stl`. The `WorkspaceAction` cases are already declared so the surface is stable; handlers route via callbacks the XrShell call site fills in.
 
-**Verification:** instrumented test from a desktop machine — `curl -X POST http://<headset-ip>:7080/mcp -H "Authorization: Bearer <key>" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'` returns the 24-tool catalog. End-to-end against a real Moonraker printer (`get_printer_status` → `pause_print` → `resume_print` cycle) is the next manual smoke test once the user toggles the server on.
+**Phase 3:** Smart-Assistant XR panel — chat-style UI hosted in the workspace, calls the same MCP server locally. Optional once Phase 2.1 is solid; the on-device server already lets a remote LLM client (Claude Desktop pointing at the device's LAN IP) drive everything.
+
+**Verification:** instrumented test from a desktop machine — `curl -X POST http://<headset-ip>:7080/mcp -H "Authorization: Bearer <key>" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'` returns the 41-tool catalog. End-to-end against a real Moonraker printer (`get_printer_status` → `pause_print` → `resume_print` cycle) is the next manual smoke test. Workspace tools require the app foreground (the `attached` flag in `get_workspace_state` is the gate).
 
 ### C7. Spatial "Digital Twin" Monitoring 🔴 Not started
 

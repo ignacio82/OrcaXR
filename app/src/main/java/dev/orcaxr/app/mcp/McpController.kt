@@ -8,6 +8,7 @@ import dev.orcaxr.app.mcp.tools.PrinterTools
 import dev.orcaxr.app.mcp.tools.ProfileTools
 import dev.orcaxr.app.mcp.tools.RecentTools
 import dev.orcaxr.app.mcp.tools.SystemTools
+import dev.orcaxr.app.mcp.tools.WorkspaceTools
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -145,6 +146,7 @@ class McpController private constructor(
             for (t in FilamentTools.all(ctx)) builder.tool(t)
             for (t in RecentTools.all(ctx)) builder.tool(t)
             for (t in PrefsTools.all(ctx)) builder.tool(t)
+            for (t in WorkspaceTools.all(ctx)) builder.tool(t)
         }
     }
 

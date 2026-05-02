@@ -879,6 +879,45 @@ private fun XrShell(
     var isScanning by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
+    // C6 — bind the in-session shell state to the process-scoped
+    // WorkspaceModel so MCP tools can observe it and post mutations.
+    // The binding is unidirectional in both directions: publishers push
+    // remember{} state into the model on change; the action collector
+    // posts back through the same setters the UI uses, so observers
+    // (re-bake, validation, GLB regenerate) fire identically whether
+    // the change came from a user pinch or an LLM tool call.
+    dev.orcaxr.app.mcp.BindWorkspaceModel(
+        placedModels = placedModels,
+        setPlacedModels = { placedModels = it },
+        selectedModelIds = selectedModelIds,
+        setSelectedModelIds = { selectedModelIds = it },
+        gizmoTool = gizmoTool,
+        setGizmoTool = { gizmoTool = it },
+        paintBrush = paintBrush,
+        setPaintBrush = { paintBrush = it },
+        workspaceMode = workspaceMode,
+        setWorkspaceMode = { workspaceMode = it },
+        activePlateId = activePlateId,
+        setActivePlateId = { activePlateId = it },
+        selectedProfile = selectedProfile.value,
+        setSelectedProfile = { selectedProfile.value = it },
+        selectedPrinterId = selectedPrinterId.value,
+        setSelectedPrinterId = { selectedPrinterId.value = it },
+        layerHeightOverride = layerHeightOverride.value,
+        setLayerHeightOverride = { layerHeightOverride.value = it },
+        printSettingsOverrides = printSettingsOverrides.value,
+        sliceState = sliceState.value,
+        maxLayer = maxLayer.value,
+        setMaxLayer = { maxLayer.value = it },
+        bedFit = bedFit,
+        bedCollision = bedCollision,
+        showTravels = showTravels.value,
+        setShowTravels = { showTravels.value = it },
+        toolpathTubes = toolpathTubes.value,
+        setToolpathTubes = { toolpathTubes.value = it },
+        allProfiles = allProfiles,
+    )
+
     // "As will print" palette — what each project filament will actually
     // look like once the user's physical / virtual remap is applied.
     // Drives the in-XR preview GLB: the colored-GLB writer hands native a

@@ -223,17 +223,41 @@ first enable. `initialize` / `tools/list` / `ping` are auth-free for
 client discovery; everything that mutates state requires
 `Authorization: Bearer <token>`. UI offers show / copy / rotate.
 
-**State hoisting (in progress):** stores
-(`PrintersStore`/`UserProfilesStore`/`FilamentEntriesStore`/etc.) are
+**State hoisting:** two layers.
+- *Stores* (`PrintersStore`/`UserProfilesStore`/`FilamentEntriesStore`/etc.) are
 already process-singletons and tools read/write them directly via
-`ToolContext`. **In-session state that lives in `MainActivity`
-remember{}s** (`placedModels`, `selectedModelIds`, `gizmoTool`,
-`paintBrush`, `sliceState`, `workspaceMode`, `activePlateId`,
-`bedFit`/`bedCollision`, layer scrubber position) does NOT yet have an
-MCP tool surface — that's the next commit's `WorkspaceModel`
-singleton. Tools that need it (slice trigger, gizmo transforms, paint
-ops, save-as-3MF, layer scrub, etc.) are blocked on that refactor;
-read-only store tools are not.
+`ToolContext`.
+- *In-session shell state* (`placedModels`, `selectedModelIds`,
+`gizmoTool`, `paintBrush`, `sliceState`, `workspaceMode`,
+`activePlateId`, `selectedProfile.value`, `selectedPrinterId.value`,
+`layerHeightOverride.value`, `bedFit`, `bedCollision`,
+`maxLayer.value`, `showTravels.value`, `toolpathTubes.value`,
+`printSettingsOverrides.value`) is mirrored into the
+process-scoped `WorkspaceModel` singleton (`mcp/WorkspaceModel.kt`)
+via the `BindWorkspaceModel` Composable that XrShell calls once near
+its top. Each tracked piece of state has its own
+`LaunchedEffect(value) { workspace.publishX(value) }`. MCP tools READ
+straight from the model's `StateFlow`s. Mutations are posted as
+`WorkspaceAction` values into a `SharedFlow`; `BindWorkspaceModel`
+collects them and routes back through the same setters the UI uses,
+so every observer (re-bake, validation, save) fires identically
+whether the change came from a pinch or a tool call.
+
+**Adding a new piece of in-session state:** (1) add a
+`MutableStateFlow` + `publishX` setter to `WorkspaceModel`, (2) add
+the corresponding parameter + `LaunchedEffect(value)` to
+`BindWorkspaceModel`, (3) pass it from XrShell's call site, (4) add
+the read tool that snapshots it. Don't reach into the singleton from
+MainActivity directly — go through the publisher API so the
+write-back path stays unidirectional.
+
+**Adding a new mutator action:** (1) declare the case in
+`WorkspaceAction`, (2) handle it in `WorkspaceBinding.handleAction`,
+(3) add the tool that emits it. Tier-B actions (slice, save,
+auto-arrange) need MainActivity-deep pipelines and are *declared but
+not yet wired* — handlers should call out via callback parameters
+that XrShell's call site fills in, instead of reaching into private
+functions.
 
 **Tool naming convention:** `<verb>_<object>` snake_case
 (`list_printers`, `add_plate`, `start_print`,
