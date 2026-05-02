@@ -754,5 +754,17 @@ object OrcaProfileLoader {
         "support_line_width",
         "internal_solid_infill_line_width",
         "precise_z_height",
+        // ---- Roadmap A8 — G-code thumbnails ----
+        // The Snapmaker / Elegoo touchscreens display a model preview
+        // when the gcode contains base64-encoded thumbnail blocks
+        // (`; thumbnail begin WxH bytes`). The bundled Snapmaker U1
+        // machine JSONs author `"thumbnails": "48x48/PNG, 300x300/PNG"`,
+        // which used to be silently dropped here so the firmware
+        // showed a generic-icon job in the print queue. Whitelisting
+        // both keys lets the slice JNI's ThumbnailsGeneratorCallback
+        // (orcaxr::render_isometric_thumbnail) emit blocks at the
+        // sizes / format the printer expects. coString — safe.
+        "thumbnails",
+        "thumbnails_format",
     )
 }

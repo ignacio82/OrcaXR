@@ -109,6 +109,7 @@ include_directories(SYSTEM
 add_library(slic3r_jni SHARED
     slic3r_jni.cpp
     nanosvg_impl.cpp
+    thumbnail_render.cpp
 )
 
 # First-pass link set. libslic3r.a goes inside --whole-archive because we

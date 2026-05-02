@@ -106,19 +106,17 @@ Upstream OrcaSlicer's "Fix Model" depends on the Windows-only 3D Builder API (`F
 
 **Shipped:** commit `9731320` — `ToolpathGlb.write(tubes = …)` + `TUBES_SEGMENT_CAP` fallback + `UserPreferences.toolpathTubes` + `BottomLayerPreviewPanel` Switch + `ToolpathGlbTest` (6 tests covering lines baseline / tubes counts / tube bbox / cap fallback / travels-as-hairlines / vertical-segment Y-axis fallback).
 
-### A8. G-code thumbnails for Snapmaker/OrcaSlicer parity 🔴 Not started
+### A8. G-code thumbnails for Snapmaker/OrcaSlicer parity 🟢 Shipped
 
-> **Files:** `libslic3r/GCode.cpp` (`write_thumbnails`), `OrcaProfileLoader.kt` (`SAFE_KEYS`), `SlicerEngine.kt` (`slice` dispatcher), `app/src/main/cpp/slic3r_jni.cpp`.
+> **Files:** `app/src/main/cpp/thumbnail_render.{hpp,cpp}` (software rasterizer), `app/src/main/cpp/slic3r_jni.cpp` (`make_thumbnail_callback` + the `print.export_gcode` wiring), `OrcaProfileLoader.kt` (`SAFE_KEYS` += `thumbnails`, `thumbnails_format`). Profile JSONs already authored `"thumbnails": "48x48/PNG, 300x300/PNG"` (Snapmaker U1) / `["320x320", "160x160"]` (Elegoo) — those values were just being silently dropped.
 
-Snapmaker and Elegoo printers display a model preview on their touchscreens if the G-code contains encoded thumbnail blocks. OrcaSlicer's `thumbnails` and `thumbnails_format` config keys are in our JSON profiles but blocked by `SAFE_KEYS` and currently ignored by the JNI slice dispatcher.
+Snapmaker and Elegoo touchscreens display a model preview when the G-code contains base64-encoded thumbnail blocks. Pre-A8, the `thumbnails` / `thumbnails_format` config keys flowed in from the profile JSON but `SAFE_KEYS` filtered them out, AND the JNI passed `nullptr` for the thumbnail callback to `print.export_gcode`, so even with the keys whitelisted libslic3r had nothing to call back into.
 
-**Implementation outline:**
-1. **Config:** Add `thumbnails` and `thumbnails_format` to `OrcaProfileLoader.SAFE_KEYS`.
-2. **Thumbnail Generation:** In `SlicerEngine.kt`, before slicing, generate a 300×300 PNG snapshot of the model. Since the slice is headless, we can either:
-   - (a) Pass a `ByteArray` of the thumbnail PNG through JNI to `libslic3r::ThumbnailsGenerator`.
-   - (b) Use the existing `StlPreviewGlb` logic to render a simplified offscreen view.
-3. **JNI Bridge:** Update `nativeSlice` to accept thumbnail data. In `slic3r_jni.cpp`, populate a `ThumbnailsList` and pass it to `Print::process()`.
-4. **Verification:** Slice a part for the Snapmaker U1; confirm the `.gcode` file contains `; thumbnail begin` blocks; confirm the image is visible on the printer's job list.
+**Shipped:**
+1. Whitelisted `thumbnails` + `thumbnails_format` in `SAFE_KEYS`.
+2. Headless software rasterizer (`orcaxr::render_isometric_thumbnail`) — z-buffered Pineda-edge-fn triangle fill from a fixed isometric (+1, -1, +0.7) camera, Lambert + ambient shading, per-volume color from the `filament_colour` palette.
+3. `make_thumbnail_callback(model, cfg)` in the JNI shim builds a `ThumbnailsGeneratorCallback` libslic3r calls once per `(format, size)` pair listed in the `thumbnails` config string. Wired into both `nativeSlice` and `nativeSliceMulti` (the `multi` model var, not `model`).
+4. **Verified end-to-end** with `scripts/autotest_slice.sh` slicing `dragon.3mf` on the Snapmaker U1 0.4 profile: `dragon.3mf.gcode` contains `; thumbnail begin 48x48 2912` and `; thumbnail begin 300x300 77988`, both decode to valid PNGs (`file: PNG image data, 300 x 300, 8-bit/color RGBA, non-interlaced`), and the 300×300 preview shows a recognizable shaded dragon. New gotcha §25 captures the wiring contract.
 
 ### A9. Snapmaker fork profile + engine value sync (U1 print-quality parity) 🔴 Not started — load-bearing for U1 users
 

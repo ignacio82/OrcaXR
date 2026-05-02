@@ -80,6 +80,9 @@ extern "C" {
 #include <libslic3r/Exception.hpp>
 #include <libslic3r/CutUtils.hpp>
 #include <libslic3r/MeshBoolean.hpp>
+#include <libslic3r/GCode/ThumbnailData.hpp>
+
+#include "thumbnail_render.hpp"
 #include <boost/algorithm/string/predicate.hpp>
 #include <tbb/global_control.h>
 
@@ -108,6 +111,54 @@ JNI_OnLoad(JavaVM* vm, void* /*reserved*/) {
 }
 
 namespace {
+
+/**
+ * Build a ThumbnailsGeneratorCallback that renders the supplied
+ * [model] via orcaxr::render_isometric_thumbnail and returns one
+ * ThumbnailData at the size libslic3r asked for.
+ *
+ * libslic3r calls this once per (format, size) pair listed in the
+ * `thumbnails` config string (e.g. "48x48/PNG, 300x300/PNG" → two
+ * invocations). Each invocation receives a single-element
+ * `params.sizes` vector; we render to that exact dimension.
+ *
+ * The model reference is captured by reference and must outlive the
+ * `print.export_gcode` call that uses the returned callback. Both
+ * nativeSlice and nativeSliceMulti hold the model on the stack for
+ * the duration of export_gcode, so this is safe.
+ */
+static Slic3r::ThumbnailsGeneratorCallback make_thumbnail_callback(
+    const Slic3r::Model& model,
+    const Slic3r::DynamicPrintConfig& cfg)
+{
+    // Capture the filament_colour palette out of cfg now (cheap copy)
+    // so the lambda doesn't need to re-read the config every call.
+    std::vector<std::string> filament_colors;
+    if (auto* fc = dynamic_cast<const Slic3r::ConfigOptionStrings*>(cfg.option("filament_colour"))) {
+        filament_colors = fc->values;
+    }
+    return [&model, filament_colors](const Slic3r::ThumbnailsParams& params) -> Slic3r::ThumbnailsList {
+        Slic3r::ThumbnailsList list;
+        if (params.sizes.empty()) return list;
+        for (const Slic3r::Vec2d& sz : params.sizes) {
+            unsigned int w = static_cast<unsigned int>(std::max(1.0, std::round(sz.x())));
+            unsigned int h = static_cast<unsigned int>(std::max(1.0, std::round(sz.y())));
+            // Clamp to a sane upper bound so a malformed config string
+            // can't blow up memory (e.g. "9999x9999/PNG"). 1024 is
+            // already past every Klipper / Snapmaker firmware UI's
+            // displayed thumbnail size.
+            if (w > 1024) w = 1024;
+            if (h > 1024) h = 1024;
+            Slic3r::ThumbnailData data;
+            orcaxr::render_isometric_thumbnail(
+                model, w, h, filament_colors,
+                /*transparent_bg=*/params.transparent_background,
+                data);
+            if (data.is_valid()) list.emplace_back(std::move(data));
+        }
+        return list;
+    };
+}
 
 struct ScopedUtf {
     JNIEnv* env;
@@ -1574,7 +1625,17 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
 
         Slic3r::GCodeProcessorResult result;
         auto t_exp_start = std::chrono::steady_clock::now();
-        std::string written = print.export_gcode(out.c, &result, nullptr);
+        // A8 — pass a thumbnail-rendering callback so libslic3r emits
+        // `; thumbnail begin` blocks matching the `thumbnails` /
+        // `thumbnails_format` config keys (e.g. "48x48/PNG, 300x300/PNG"
+        // on Snapmaker U1). With nullptr the GUI flow's offscreen GL
+        // path was the only producer; headless OrcaXR has no GL
+        // context, so we render via a software rasterizer over the
+        // already-loaded model. Empty / unset thumbnails string is a
+        // no-op in libslic3r — make_and_check_thumbnail_list returns
+        // an empty list and the callback is never invoked.
+        auto thumb_cb = make_thumbnail_callback(model, cfg);
+        std::string written = print.export_gcode(out.c, &result, thumb_cb);
         auto t_exp_end = std::chrono::steady_clock::now();
         auto exp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t_exp_end - t_exp_start).count();
         ORCAXR_LOGI("nativeSlice: TIMING export_gcode = %lld ms", (long long)exp_ms);
@@ -2079,7 +2140,11 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
         print.process();
 
         Slic3r::GCodeProcessorResult result;
-        std::string written = print.export_gcode(out.c, &result, nullptr);
+        // A8 — same thumbnail callback as nativeSlice. See comment there.
+        // The local Model in nativeSliceMulti is `multi` (assembled from
+        // each input mesh), not `model`.
+        auto thumb_cb = make_thumbnail_callback(multi, cfg);
+        std::string written = print.export_gcode(out.c, &result, thumb_cb);
         ORCAXR_LOGI("nativeSliceMulti: G-code written to %s", written.c_str());
 
         // Same Tn → physical-extruder rewrite as nativeSlice. See
