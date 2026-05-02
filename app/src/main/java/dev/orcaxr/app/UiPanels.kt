@@ -3701,9 +3701,15 @@ fun TopNavigationPill(
                     // Smart Fill mode toggle. Always rendered next to
                     // the brush/fill chip so the user can flip between
                     // "radius brush" (mm) and "bucket fill" (angle).
+                    // Label is the FUNCTION ("Bucket"); the button's
+                    // selected state shows whether the mode is active.
+                    // The earlier `if (smartFill) "Bucket" else "Smart"`
+                    // form was confusing — users couldn't tell whether
+                    // tapping a "Smart" button would activate smart
+                    // fill or describe the current state.
                     Spacer(Modifier.width(8.dp))
                     NavAction(
-                        label = if (paintBrush.smartFill) "Bucket" else "Smart",
+                        label = "Bucket",
                         icon = androidx.compose.material.icons.Icons.Default.AutoFixHigh,
                         isSelected = paintBrush.smartFill,
                         enabled = true,
