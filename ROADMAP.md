@@ -423,6 +423,28 @@ Enables hands-free control of the slicer and printer using voice commands, mappi
 3. **Feedback:** Show a transcript of the recognized command and a confirmation Toast before executing destructive actions (like "Clear bed").
 4. **Verification:** Say "Orca, slice the current plate"; confirm the slicing progress bar appears without touching the screen.
 
+### C9. AI-Driven Semantic Paint (LLM-driven natural-language painting) 🔴 Not started
+
+> **Files (planned):** `app/src/main/java/dev/orcaxr/app/Ai{Paint,Render,Introspection}Engine.kt` (new), `app/src/main/java/dev/orcaxr/app/mcp/{AiSessionState,JobRegistry}.kt` (new), `app/src/main/java/dev/orcaxr/app/mcp/tools/Ai{Vision,Introspection}Tools.kt` (new), `app/src/main/cpp/ai_render.{cpp,hpp}` + `ai_segment.{cpp,hpp}` (new), `app/src/main/cpp/third_party_stb_image_write.h` (vendored). Modifies `WorkspaceAction.kt`, `WorkspaceBinding.kt`, `WorkspaceTools.kt`, `Tool.kt`, `McpServer.kt`, `MeshBvh.kt`, `SlicerEngine.kt`, `slic3r_jni.cpp`. Full design doc: [docs/AI_PAINT_DESIGN.md](docs/AI_PAINT_DESIGN.md).
+
+Lets an external LLM (Claude / GPT) execute creative paint tasks like *"paint Benchy as a pirate ship using the colors I have available"* end-to-end with no human in the loop. Three pillars on top of C6's MCP surface — vision (headless multi-view rasterization), spatial paint primitives (sphere / slab / normal-cone / surface-region / connected-component / projected-mask / triangle-list — all server-side, no XR pinch needed), and introspection (geometry summaries, connected components, face-orientation histograms, region-growing semantic clusters). Triangle IDs are the lingua franca: every primitive returns the matched tri-ID set so the LLM can chain reads → narrow → paint. Image transport via file-path resource URIs (the MCP body cap is 1 MB), forward-porting the existing software rasterizer (`thumbnail_render.cpp`) rather than introducing OSMesa/EGL.
+
+**Implementation outline (5 milestones, each shippable on its own):**
+1. **Spatial paint primitives** (pure Kotlin, no JNI, no vendored-libslic3r changes). New `PaintTriangleSet` WorkspaceAction routes through existing `applyPaintMutation` so PaintHistory + paintContentVersion stay correct. Six tools: `paint_sphere`, `paint_slab`, `paint_normal_cone`, `paint_surface_region`, `paint_connected_component`, `paint_triangle_list`.
+2. **Vision pillar — single-view rendering.** New `nativeRenderViews` JNI built on extended `thumbnail_render.cpp` (arbitrary view+proj matrices, RenderMode enum: SolidColor / PaintColor / TriangleId / NormalSphere / Depth / PaintMaskLayer). PNG via `stb_image_write.h`. New `McpServer` route `GET /resources/<token>.png`. Tools: `render_view`, `render_paint_overlay`, `render_triangle_id_map`, `list_camera_presets`, `name_view`, `resolve_image_pixel`.
+3. **Introspection.** Tools: `get_model_geometry`, `get_model_components`, `get_model_face_orientation_summary`, `get_model_semantic_regions` (region-growing in `nativeBuildSemanticRegions`, plus a colored preview render).
+4. **Multi-view + projected mask.** `render_views_grid` (composed PNG with labeled panels) + `paint_projected_mask` (rays from mask pixels through camera into BVH; accepts polygon list / inline base64 / file URI). New `JobRegistry` for long jobs with `cancel_paint_job` + `get_paint_job_status`.
+5. **Multi-volume polish + docs.** Per-`PlacedVolume` paint surfaces, `docs/AI_PAINT_PROTOCOL.md`, reference Anthropic-SDK harness under `scripts/`, nightly E2E "paint Benchy as a pirate ship" eval.
+
+**Architectural decisions worth flagging on the roadmap (full justification in plan):**
+- All spatial paint primitives compile down to `PaintTriangleSet { triangleIndices, tag }`. One MCP call = one undo step, even an 80 K-triangle projected mask. Coexistence with the in-XR brush is handled by committing any in-progress XR stroke as its own `PaintHistory` entry before applying an MCP mutation.
+- Coordinate frame for every public spatial-paint coordinate is `centered_preview_mm` (matches what the LLM sees in rendered images). `get_model_geometry` returns bbox in all three frames (mesh-local, centered-preview, printer-frame) so the LLM can sanity-check.
+- New C++ files live in `app/src/main/cpp/`, NOT inside `third_party/OrcaSlicer/` — no new patches in `patches/`, no upstream-merge friction.
+
+**Verification (per milestone):** new JVM unit tests for each primitive against fixture meshes (cube, sphere, mini-Benchy) + scripted MCP transcripts under `app/src/test/resources/mcp_transcripts/m{1..4}_*.txt`. Milestone 5 nightly E2E asserts the final paint state has at least 4 distinct slots used and that each slot's painted-tri count is in expected ranges (hull > deck, etc.).
+
+**Open questions:** (a) image-output authoring loop — does the LLM emit polygon lists or inline-base64 PNG masks, and how do we steer it via system prompt; (b) whether `nativeRenderViews` should accept the in-memory paint ByteArrays directly (current plan) or read paint state from a persisted intermediate (cheaper for the multi-view-grid path that re-renders the same paint state N times).
+
 ---
 
 ## D. Painting / object editing extensions
