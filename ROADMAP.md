@@ -120,6 +120,49 @@ Snapmaker and Elegoo printers display a model preview on their touchscreens if t
 3. **JNI Bridge:** Update `nativeSlice` to accept thumbnail data. In `slic3r_jni.cpp`, populate a `ThumbnailsList` and pass it to `Print::process()`.
 4. **Verification:** Slice a part for the Snapmaker U1; confirm the `.gcode` file contains `; thumbnail begin` blocks; confirm the image is visible on the printer's job list.
 
+### A9. Snapmaker fork profile + engine value sync (U1 print-quality parity) 🔴 Not started — load-bearing for U1 users
+
+> **Files:** `app/src/main/assets/profiles/Snapmaker/process/*.json`, `app/src/main/assets/profiles/Snapmaker/filament/*.json`, `app/src/main/assets/profiles/Snapmaker/machine/*.json`, `patches/` (any Snapmaker-fork libslic3r diffs that aren't already covered by 0011–0026), `OrcaProfileLoader.SAFE_KEYS`.
+
+OrcaXR ships Snapmaker's bundled profile leaves but compiles them against **upstream OrcaSlicer 2.3.2**, not Snapmaker's downstream fork. The slicing decisions match the desktop slicer for *shape* (layer count, toolchange cadence, paint regions), but a single same-model side-by-side surfaced a real gap on **speed-dependent estimates and per-tool tuning**:
+
+- Reference `Einhorn Knitted_PLA_11h20m_orca.gcode` (Snapmaker Orca 2.3.1, U1, 0.12 Fine) → **11 h 20 m** estimated.
+- OrcaXR (HEAD as of `7efd555`, U1, 0.12 Fine, identical 3MF) → 332 layers / 40.04 mm / 385 toolchanges, all matching desktop exactly, but **7 h 35 m** estimated — **~33 % shorter**.
+
+Same shape, same toolchange cadence, **different speeds**. The gap is in profile-resident speed/acceleration/flow values that differ between Snapmaker's fork and upstream OrcaSlicer (and possibly in fork-side libslic3r logic that nudges per-tool feedrates on the toolchanger). For a U1 user who wants OrcaXR slices to behave identically to what they'd get from Snapmaker Orca on the desktop, this gap shows up as: (a) wrong time estimates on the headset, (b) potentially different print quality if the actual feedrates run hotter than the U1's tuned values.
+
+**Phase 1 — profile value audit (P0 for U1 users):**
+1. **Inventory** the keys that differ between `app/src/main/assets/profiles/Snapmaker/` and the same files in `third_party/OrcaSlicer/resources/profiles/Snapmaker/` after Snapmaker's fork applies its branch. The likely-load-bearing keys:
+   - `filament_max_volumetric_speed` (per-PLA / PLA-CF / PETG / etc.)
+   - `outer_wall_speed`, `inner_wall_speed`, `top_surface_speed`, `bridge_speed`, `support_speed`
+   - `outer_wall_acceleration`, `inner_wall_acceleration`, `default_acceleration`, `travel_acceleration`
+   - `outer_wall_jerk`, `inner_wall_jerk`
+   - `slow_down_layers`, `slow_down_min_speed`
+   - U1-specific toolchange tuning: `filament_loading_speed`, `filament_unloading_speed`, `filament_toolchange_delay`, `filament_cooling_moves`, `filament_multitool_ramming*`
+2. **Source-of-truth pin:** lock to a Snapmaker fork SHA (likely whichever `feature_mix_filament_sm` targets — see A2 §1) so a value sync isn't chasing a moving target.
+3. **Re-vendor** the differing leaves under `app/src/main/assets/profiles/Snapmaker/` with the fork's values. Whitelist any new keys via `OrcaProfileLoader.SAFE_KEYS` (the gate that silently drops unknowns).
+4. **Verify** with an instrumented test that slices a fixed fixture (Einhorn 3MF + 0.12 Fine + 4-color palette) and asserts `; estimated printing time = ~11h XXm` within ±5 % of the desktop reference. Test source: extend `UnicornFineProfileTest.kt` with a `unicornEstimateMatchesDesktopWithinFivePercent` case. The same test pins the layer count (332) and toolchange count (385) so a future profile bump that drifts speeds without breaking shape doesn't sneak through.
+
+**Phase 2 — engine-behavior parity (P1, scoped after A2 lands):**
+
+Snapmaker's fork carries libslic3r diffs beyond the FullSpectrum mixed-filament work tracked in A2. Ones that plausibly affect U1 output even on plain (non-mixed) prints:
+- Per-tool retraction sequencing on the toolchanger (Snapmaker `change_filament_gcode` template assumes specific retract/de-retract order around `M400 + Tn`).
+- Wipe-tower placement heuristics tuned for the U1's parking lanes.
+- Klipper-aware feedrate rounding (the fork emits values that play well with Klipper's `[gcode_macro M104]` overrides — see GEMINI gotcha §5 on `machine_start_gcode`).
+
+Audit each fork commit that touches `libslic3r/{GCode,Print,WipeTower,ToolOrdering}.cpp` after the v2.3.2 base. For each:
+- If it's a U1-correctness fix → port as a new patch under `patches/00NN-snapmaker-...`. Document the symptom it prevents.
+- If it's a Bambu-leaning behavior change → skip (we don't run on Bambu hardware).
+
+**Verification (cross-cutting):**
+- Print one calibration cube from OrcaXR + 0.12 Fine; print the same gcode from Snapmaker desktop. Compare side-by-side — surface finish, dimensional accuracy, toolchange seam quality.
+- Run the multicolor unicorn through both slicers; confirm the U1 prints visibly identical results.
+
+**Out of scope (handled elsewhere):**
+- Adding *more* U1 nozzle profiles (0.2, 0.8) → see F1.
+- Filament family breadth (ABS / PETG-CF / etc.) → see F2.
+- 3MF authored layer-height being silently honored over the picker → fixed in `7efd555`, gotcha #22.
+
 ---
 
 ## B. XR UI / UX completeness
