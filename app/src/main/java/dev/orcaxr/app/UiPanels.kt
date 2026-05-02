@@ -3410,6 +3410,12 @@ fun TopNavigationPill(
     /** Paint full-feature-parity — cycle smart-fill angle gate
      *  through the 15° / 30° / 45° / 60° / 90° presets. Default no-op. */
     onPaintSmartFillAngleCycle: () -> Unit = {},
+    /** Paint full-feature-parity (Undo/Redo) — undo last paint stroke
+     *  on the selected model. Null = no undo available. */
+    onPaintUndo: (() -> Unit)? = null,
+    /** Paint full-feature-parity (Undo/Redo) — redo last undone paint
+     *  stroke on the selected model. Null = no redo available. */
+    onPaintRedo: (() -> Unit)? = null,
     paintMaxSlots: Int = 4,
     /**
      * Resolved "as will print" colors for paint slots 1..[paintMaxSlots]
@@ -3649,6 +3655,26 @@ fun TopNavigationPill(
                         isSelected = paintBrush.smartFill,
                         enabled = true,
                         onClick = onPaintSmartFillToggle,
+                    )
+                    // Paint full-feature-parity (Undo/Redo) — undo/redo
+                    // chips. Always rendered when paint mode is active
+                    // so the user has muscle memory for them; disabled
+                    // (greyed) when there's nothing to undo/redo.
+                    Spacer(Modifier.width(8.dp))
+                    NavAction(
+                        label = "Undo",
+                        icon = androidx.compose.material.icons.Icons.Default.Undo,
+                        isSelected = false,
+                        enabled = onPaintUndo != null,
+                        onClick = { onPaintUndo?.invoke() },
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    NavAction(
+                        label = "Redo",
+                        icon = androidx.compose.material.icons.Icons.Default.Redo,
+                        isSelected = false,
+                        enabled = onPaintRedo != null,
+                        onClick = { onPaintRedo?.invoke() },
                     )
                 }
             }

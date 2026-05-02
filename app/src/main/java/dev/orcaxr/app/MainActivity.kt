@@ -632,6 +632,13 @@ private fun XrShell(
     // order — only the source-mesh swap (replacing
     // `PlacedModel.source`) needs an explicit invalidate.
     val bvhCache = remember { MeshBvhCache() }
+    // Paint full-feature-parity (Undo/Redo) — per-model history of
+    // paint mutations. In-session only (PaintCacheStore is the on-
+    // disk current-state cache; this is the volatile undo log).
+    val paintHistory = remember { PaintHistory() }
+    // Bumped when undo/redo state changes, since PaintHistory is a
+    // mutable object whose changes Compose can't otherwise observe.
+    var paintHistoryVersion by remember { mutableIntStateOf(0) }
 
     // The active printer's slot palette padded to its profile's
     // extruder count, so a U1 always renders 4 swatches and a
@@ -2468,6 +2475,49 @@ private fun XrShell(
                     brush.radiusMm <= 0f -> intArrayOf(seed)
                     else -> bvh.radiusBfs(seed, brush.radiusMm)
                 }
+                // Paint full-feature-parity (Undo) — snapshot the
+                // BEFORE-state of the array(s) this stroke might touch
+                // on DOWN. LayOnFace is excluded (it's a one-shot
+                // rotation pick, not a paint mutation). The end of the
+                // stroke is closed by an UP action, a brush mode
+                // change, or selecting a different model — all routed
+                // via the `endActiveStroke` helper below.
+                if (action == androidx.xr.scenecore.InputEvent.Action.DOWN &&
+                    brush.mode != PaintMode.LayOnFace &&
+                    brush.mode != PaintMode.Off
+                ) {
+                    paintHistory.beginStroke(
+                        modelId = model.id,
+                        currentState = PaintHistory.Snapshot(
+                            paintFilamentIndex = model.paintFilamentIndex,
+                            supportFlags = model.supportFlags,
+                            seamFlags = model.seamFlags,
+                            fuzzySkinFlags = model.fuzzySkinFlags,
+                        ),
+                    )
+                    paintHistoryVersion++
+                }
+                // UP sentinel from PaintInputHooks (hitTri = -1) closes
+                // the open stroke. Read the model's current state from
+                // the live placedModels list — by the time UP fires the
+                // model state has been mutated by every MOVE in the
+                // stroke, so re-look up the latest copy.
+                if (action == androidx.xr.scenecore.InputEvent.Action.UP) {
+                    val latest = placedModels.firstOrNull { it.id == model.id }
+                    if (latest != null) {
+                        paintHistory.endStroke(
+                            modelId = model.id,
+                            endState = PaintHistory.Snapshot(
+                                paintFilamentIndex = latest.paintFilamentIndex,
+                                supportFlags = latest.supportFlags,
+                                seamFlags = latest.seamFlags,
+                                fuzzySkinFlags = latest.fuzzySkinFlags,
+                            ),
+                        )
+                        paintHistoryVersion++
+                    }
+                    return@PaintInputHooks
+                }
                 when (brush.mode) {
                     PaintMode.Color -> {
                         val triIndices = pickTriangles(hitTri)
@@ -3506,6 +3556,58 @@ private fun XrShell(
                             }
                             val next = presets[(idx + 1).coerceAtLeast(0) % presets.size]
                             paintBrush = paintBrush.copy(smartFillAngleDeg = next)
+                        },
+                        // Paint full-feature-parity (Undo/Redo) — read
+                        // paintHistoryVersion to make Compose re-evaluate
+                        // when the history mutates (PaintHistory itself
+                        // is a mutable object the compiler can't observe).
+                        onPaintUndo = run {
+                            paintHistoryVersion  // observe
+                            val sel = selectedModel
+                            if (sel != null && paintHistory.canUndo(sel.id)) {
+                                {
+                                    val snap = paintHistory.undo(sel.id)
+                                    if (snap != null) {
+                                        placedModels = placedModels.map {
+                                            if (it.id == sel.id) it.copy(
+                                                paintFilamentIndex = snap.paintFilamentIndex
+                                                    ?: it.paintFilamentIndex,
+                                                supportFlags = snap.supportFlags
+                                                    ?: it.supportFlags,
+                                                seamFlags = snap.seamFlags
+                                                    ?: it.seamFlags,
+                                                fuzzySkinFlags = snap.fuzzySkinFlags
+                                                    ?: it.fuzzySkinFlags,
+                                            ) else it
+                                        }
+                                        paintHistoryVersion++
+                                    }
+                                }
+                            } else null
+                        },
+                        onPaintRedo = run {
+                            paintHistoryVersion  // observe
+                            val sel = selectedModel
+                            if (sel != null && paintHistory.canRedo(sel.id)) {
+                                {
+                                    val snap = paintHistory.redo(sel.id)
+                                    if (snap != null) {
+                                        placedModels = placedModels.map {
+                                            if (it.id == sel.id) it.copy(
+                                                paintFilamentIndex = snap.paintFilamentIndex
+                                                    ?: it.paintFilamentIndex,
+                                                supportFlags = snap.supportFlags
+                                                    ?: it.supportFlags,
+                                                seamFlags = snap.seamFlags
+                                                    ?: it.seamFlags,
+                                                fuzzySkinFlags = snap.fuzzySkinFlags
+                                                    ?: it.fuzzySkinFlags,
+                                            ) else it
+                                        }
+                                        paintHistoryVersion++
+                                    }
+                                }
+                            } else null
                         },
                         paintMaxSlots = slotCount.coerceAtLeast(1),
                         // Resolved colors per paint slot — what each

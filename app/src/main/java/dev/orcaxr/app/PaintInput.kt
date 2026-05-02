@@ -61,6 +61,15 @@ class PaintInputHooks(
         if (event.source != InputEvent.Source.CONTROLLER) return
         when (event.action) {
             Action.DOWN, Action.MOVE -> { /* paint */ }
+            // Paint full-feature-parity (Undo/Redo) — UP closes the
+            // current stroke. Forward to onPaint with a sentinel
+            // hitTri = -1 so the dispatcher can finalize history
+            // without requiring a successful raycast (the user may
+            // release while pointing off the mesh).
+            Action.UP -> {
+                onPaint(-1, Action.UP)
+                return
+            }
             else -> return
         }
         val hitTri = locateTriangle(event) ?: return
