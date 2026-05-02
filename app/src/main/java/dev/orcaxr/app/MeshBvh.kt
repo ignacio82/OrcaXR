@@ -184,6 +184,10 @@ class MeshBvh private constructor(
      * Centroid of a triangle in mesh-local coords. Used by the
      * adjacency walk to bound the geodesic radius approximation.
      */
+    /** Public mesh-local centroid of triangle [tri]. Used by Brim Ears
+     *  placement to convert a triangle hit into a 3D anchor point. */
+    fun triangleCentroid(tri: Int): Vec3f = centroidOf(tri)
+
     private fun centroidOf(tri: Int): Vec3f {
         val b = tri * 9
         val cx = (mesh.positions[b] + mesh.positions[b + 3] + mesh.positions[b + 6]) / 3f

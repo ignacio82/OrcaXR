@@ -5013,6 +5013,16 @@ fun TransformPanel(
     onClearFuzzySkin: (() -> Unit)? = null,
     /** Paint full-feature-parity — true if any fuzzy-skin paint exists. */
     hasFuzzySkinPaint: Boolean = false,
+    /** Paint full-feature-parity (Brim Ears) — toggle the brim-ear
+     *  point-placement mode. Each click in this mode drops one ear
+     *  anchor at the laser hit. */
+    onToggleBrimEars: (() -> Unit)? = null,
+    /** Paint full-feature-parity — clear all brim-ear points on the
+     *  selected model. */
+    onClearBrimEars: (() -> Unit)? = null,
+    /** Paint full-feature-parity — count of brim-ear points on the
+     *  current model; used to label the section header. */
+    brimEarsCount: Int = 0,
     /** Phase XR_OBJ_8 — clone the selected model into a linear
      *  pattern of [count] copies spaced [spacingMm] apart along
      *  axis ('x' or 'y'). Null disables. */
@@ -5595,6 +5605,35 @@ fun TransformPanel(
                 onClick = { onClearFuzzySkin?.invoke() },
                 enabled = onClearFuzzySkin != null,
             ) { Text("Clear fuzzy paint", color = Color(0xFFFF7070)) }
+        }
+        // Paint full-feature-parity (Brim Ears) — point-placement
+        // tool. Each click while active drops one ear anchor at the
+        // laser hit; the selected model collects them and they flow
+        // into ModelObject::brim_points at slice/save time.
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "Brim ears" + if (brimEarsCount > 0) " ($brimEarsCount)" else "",
+            color = Color.White,
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Spacer(Modifier.height(4.dp))
+        OutlinedButton(
+            onClick = { onToggleBrimEars?.invoke() },
+            enabled = onToggleBrimEars != null,
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+        ) {
+            Text(
+                if (supportPaintMode == PaintMode.BrimEars) "Cancel placement…" else "Place brim ears",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (brimEarsCount > 0) {
+            Spacer(Modifier.height(4.dp))
+            TextButton(
+                onClick = { onClearBrimEars?.invoke() },
+                enabled = onClearBrimEars != null,
+            ) { Text("Clear all brim ears", color = Color(0xFFFF7070)) }
         }
         // Phase XR_OBJ_8 — Clone pattern (linear). Duplicates the
         // selected model [count]× along an axis with mm spacing.

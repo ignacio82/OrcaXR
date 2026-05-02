@@ -21,6 +21,24 @@ import java.io.File
  * `INTERNAL_INFILL = 4`, `MODEL_NEGATIVE = 6` is treated as
  * `NEGATIVE_VOLUME`); we expose only the user-author-able set.
  */
+/**
+ * Paint full-feature-parity (Brim Ears) — one user-placed brim ear
+ * anchor on a [PlacedModel]. Mirrors upstream libslic3r's
+ * `Slic3r::BrimPoint` (`libslic3r/BrimEarsPoint.hpp`).
+ *
+ * - [x], [y], [z] are in mesh-local printer mm. Z is typically near 0
+ *   (the bed plane) but the point survives at any Z so the user can
+ *   place an ear high on a vertical face if they want a side-brim.
+ * - [headRadiusMm] sizes the printed brim ear disc. Default 5 mm
+ *   matches OrcaSlicer's default `brim_ears_max_angle` companion.
+ */
+data class BrimEarPoint(
+    val x: Float,
+    val y: Float,
+    val z: Float = 0f,
+    val headRadiusMm: Float = 5f,
+)
+
 enum class ModelVolumeType(val nativeOrdinal: Int) {
     // Values match `Slic3r::ModelVolumeType` in
     // `third_party/OrcaSlicer/src/libslic3r/Model.hpp:341-348` exactly:
@@ -251,6 +269,13 @@ data class PlacedModel(
      *  region. Useful for steering visible seam placement on
      *  cosmetic prints. Null = never painted. */
     val seamFlags: ByteArray? = null,
+    /** Paint full-feature-parity (Brim Ears) — user-placed brim ear
+     *  anchor points. Each point is a position in mesh-local mm + a
+     *  head radius. Flows into `ModelObject::brim_points` at slice
+     *  / save time so libslic3r emits a brim ear under each point on
+     *  the printed first layer. Empty = no user-placed ears (the
+     *  global brim_type still applies). */
+    val brimEars: List<BrimEarPoint> = emptyList(),
     /** Paint full-feature-parity — in-XR fuzzy-skin paint state. Per-
      *  triangle byte (size = source-mesh triangle count) that flows
      *  into `mv->fuzzy_skin_facets` at slice time. State 1 marks the
@@ -320,6 +345,7 @@ data class PlacedModel(
             paintArraysEqual(supportFlags, other.supportFlags) &&
             paintArraysEqual(seamFlags, other.seamFlags) &&
             paintArraysEqual(fuzzySkinFlags, other.fuzzySkinFlags) &&
+            brimEars == other.brimEars &&
             volumes == other.volumes &&
             configOverrides == other.configOverrides
     }
@@ -355,6 +381,7 @@ data class PlacedModel(
         r = 31 * r + (supportFlags?.contentHashCode() ?: 0)
         r = 31 * r + (seamFlags?.contentHashCode() ?: 0)
         r = 31 * r + (fuzzySkinFlags?.contentHashCode() ?: 0)
+        r = 31 * r + brimEars.hashCode()
         r = 31 * r + volumes.hashCode()
         r = 31 * r + configOverrides.hashCode()
         return r

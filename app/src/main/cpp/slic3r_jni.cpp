@@ -434,6 +434,30 @@ static size_t apply_orcaxr_seam(
     return authored;
 }
 
+// Paint full-feature-parity (Brim Ears) — author OrcaXR-placed brim
+// ear anchor points onto `mo->brim_points`. [points] is a flat float
+// array of (x, y, z, head_radius) quads in mesh-local mm. Returns the
+// number of brim points written. Replaces (not appends to) the
+// object's existing brim_points so the user's edits in XR are
+// authoritative.
+static size_t apply_orcaxr_brim_ears(
+    Slic3r::ModelObject& mo,
+    const jfloat* points,
+    size_t quad_count)
+{
+    mo.brim_points.clear();
+    if (points == nullptr || quad_count == 0) return 0;
+    mo.brim_points.reserve(quad_count);
+    for (size_t i = 0; i < quad_count; ++i) {
+        const float x = points[i * 4 + 0];
+        const float y = points[i * 4 + 1];
+        const float z = points[i * 4 + 2];
+        const float r = points[i * 4 + 3];
+        mo.brim_points.emplace_back(Slic3r::BrimPoint(x, y, z, r));
+    }
+    return mo.brim_points.size();
+}
+
 // Paint full-feature-parity — author per-triangle fuzzy-skin paint onto
 // `mv->fuzzy_skin_facets`. Same shape as apply_orcaxr_seam: state 1 =
 // FUZZY_SKIN (paint roughened texture in this region). Upstream's
@@ -943,6 +967,12 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
      * region). Flows into `mv->fuzzy_skin_facets`. Null = no
      * authored paint. */
     jbyteArray jFuzzySkinFlags,
+    /* Paint full-feature-parity (Brim Ears) — flat float array of
+     * (x, y, z, head_radius) quads in mesh-local mm. Each quad is
+     * one user-placed brim ear anchor on the first ModelObject.
+     * Null / empty = no authored ears (the global brim_type still
+     * applies). */
+    jfloatArray jBrimEars,
     /* Phase XR_OBJ_4 (final) — per-object config overrides applied
      * onto `model.objects.front()->config()` after load and before
      * Print::apply. Same parallel-array shape as jConfigKeys /
@@ -1257,6 +1287,22 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
                     const size_t authored = apply_orcaxr_fuzzy_skin(*mv, fz, size_t(fz_len));
                     ORCAXR_LOGI("nativeSlice: authored %zu fuzzy-skin-painted triangles", authored);
                     env->ReleaseByteArrayElements(jFuzzySkinFlags, fz, JNI_ABORT);
+                }
+            }
+        }
+
+        // Paint full-feature-parity (Brim Ears) — author user-placed
+        // brim ear anchors onto the first ModelObject. Flat float
+        // array of (x, y, z, head_radius) quads.
+        if (jBrimEars != nullptr && !model.objects.empty()) {
+            const jsize n = env->GetArrayLength(jBrimEars);
+            if (n > 0 && (n % 4) == 0) {
+                jfloat* be = env->GetFloatArrayElements(jBrimEars, nullptr);
+                if (be != nullptr) {
+                    const size_t quads = size_t(n) / 4;
+                    const size_t authored = apply_orcaxr_brim_ears(*model.objects.front(), be, quads);
+                    ORCAXR_LOGI("nativeSlice: authored %zu brim ear points", authored);
+                    env->ReleaseFloatArrayElements(jBrimEars, be, JNI_ABORT);
                 }
             }
         }
@@ -2013,7 +2059,12 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSaveAs3mf(
     jbyteArray jPaintFilamentIndex,
     jbyteArray jSupportFlags,
     jbyteArray jSeamFlags,
-    jbyteArray jFuzzySkinFlags)
+    jbyteArray jFuzzySkinFlags,
+    /* Paint full-feature-parity (Brim Ears) — flat float[4N] of
+     * (x, y, z, head_radius) quads. Authored onto
+     * model.objects.front()->brim_points before store_3mf so
+     * desktop OrcaSlicer sees the user's XR-placed ears. */
+    jfloatArray jBrimEars)
 {
     ScopedUtf in(env, jInputPath);
     ScopedUtf out(env, jOutPath);
@@ -2126,6 +2177,21 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSaveAs3mf(
                         ORCAXR_LOGI("nativeSaveAs3mf: applied %zu fuzzy-skin tris", a);
                         env->ReleaseByteArrayElements(jFuzzySkinFlags, p, JNI_ABORT);
                     }
+                }
+            }
+        }
+
+        // Paint full-feature-parity (Brim Ears) — author onto the
+        // first ModelObject's brim_points before store_3mf.
+        if (jBrimEars != nullptr) {
+            const jsize n = env->GetArrayLength(jBrimEars);
+            if (n > 0 && (n % 4) == 0) {
+                jfloat* be = env->GetFloatArrayElements(jBrimEars, nullptr);
+                if (be != nullptr) {
+                    const size_t quads = size_t(n) / 4;
+                    const size_t authored = apply_orcaxr_brim_ears(*model.objects.front(), be, quads);
+                    ORCAXR_LOGI("nativeSaveAs3mf: authored %zu brim ear points", authored);
+                    env->ReleaseFloatArrayElements(jBrimEars, be, JNI_ABORT);
                 }
             }
         }

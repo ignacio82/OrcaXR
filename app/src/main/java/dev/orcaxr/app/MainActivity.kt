@@ -1794,6 +1794,7 @@ private fun XrShell(
             val supportForSlice = selectedModel?.supportFlags
             val seamForSlice = selectedModel?.seamFlags
             val fuzzyForSlice = selectedModel?.fuzzySkinFlags
+            val brimEarsForSlice = selectedModel?.brimEars?.toBrimEarsFloatArray()
             // Phase XR_OBJ_4 — user-authored extra volumes ("Add Part"
             // etc.) ride alongside the primary mesh. Empty for models
             // the user hasn't added parts to.
@@ -1818,6 +1819,7 @@ private fun XrShell(
                 supportFlags = supportForSlice,
                 seamFlags = seamForSlice,
                 fuzzySkinFlags = fuzzyForSlice,
+                brimEars = brimEarsForSlice,
                 objectConfigOverrides = selectedModel?.configOverrides ?: emptyMap(),
             ) { percent, message ->
                 // Fires on a libslic3r worker thread; mutating
@@ -2615,6 +2617,43 @@ private fun XrShell(
                                 "action=$action on ${model.label}",
                         )
                     }
+                    PaintMode.BrimEars -> {
+                        // Paint full-feature-parity (Brim Ears) — each
+                        // DOWN drops one BrimEarPoint at the picked
+                        // triangle's centroid in mesh-local mm.
+                        // Centroid (vs ray-hit point) is enough because
+                        // brim ears are 5 mm discs — triangle
+                        // granularity is finer than the print feature.
+                        // We intentionally ignore MOVE so a drag
+                        // doesn't sprinkle dozens of overlapping
+                        // points; one click = one ear.
+                        if (action != androidx.xr.scenecore.InputEvent.Action.DOWN) return@PaintInputHooks
+                        val c = bvh.triangleCentroid(hitTri)
+                        // Round to 0.1 mm so two clicks at the same
+                        // visual point coalesce in equality checks
+                        // (the de-dup affordance below).
+                        val rx = (kotlin.math.round(c.x * 10f) / 10f)
+                        val ry = (kotlin.math.round(c.y * 10f) / 10f)
+                        val rz = (kotlin.math.round(c.z * 10f) / 10f)
+                        val newPoint = BrimEarPoint(rx, ry, rz, headRadiusMm = 5f)
+                        // Avoid duplicate points within 1 mm of an
+                        // existing one — finger-tap jitter shouldn't
+                        // produce a stack.
+                        val dedup = model.brimEars.none {
+                            kotlin.math.abs(it.x - rx) < 1f &&
+                            kotlin.math.abs(it.y - ry) < 1f &&
+                            kotlin.math.abs(it.z - rz) < 1f
+                        }
+                        if (dedup) {
+                            placedModels = placedModels.map {
+                                if (it.id == model.id) it.copy(brimEars = it.brimEars + newPoint) else it
+                            }
+                            android.util.Log.i(
+                                "OrcaXR/paint",
+                                "brim ear added at ($rx, $ry, $rz)mm on ${model.label}",
+                            )
+                        }
+                    }
                     PaintMode.FuzzySkin -> {
                         // Paint full-feature-parity — fuzzy-skin paint.
                         // Same flood-fill shape as support / seam, but
@@ -2879,6 +2918,8 @@ private fun XrShell(
                         val supportForSlice = testStatePlacedModels.firstOrNull()?.supportFlags
                         val seamForSlice = testStatePlacedModels.firstOrNull()?.seamFlags
                         val fuzzyForSlice = testStatePlacedModels.firstOrNull()?.fuzzySkinFlags
+                        val brimEarsForSlice = testStatePlacedModels.firstOrNull()
+                            ?.brimEars?.toBrimEarsFloatArray()
                         // Phase XR_OBJ_4 — extra volumes attached via
                         // ADD_PART broadcast (or "Add part" UI button)
                         // ride into the slice as MODEL_PART volumes
@@ -2893,6 +2934,7 @@ private fun XrShell(
                             supportFlags = supportForSlice,
                             seamFlags = seamForSlice,
                             fuzzySkinFlags = fuzzyForSlice,
+                            brimEars = brimEarsForSlice,
                             objectConfigOverrides = testStatePlacedModels.firstOrNull()?.configOverrides ?: emptyMap(),
                         ) { percent, message ->
                             val now = sliceState.value
@@ -4136,6 +4178,20 @@ private fun XrShell(
                             }
                         },
                         hasFuzzySkinPaint = hasAnyPaint(selectedModel?.fuzzySkinFlags),
+                        onToggleBrimEars = selectedModel?.let { _ ->
+                            {
+                                paintBrush = paintBrush.copy(
+                                    mode = if (paintBrush.mode == PaintMode.BrimEars)
+                                        PaintMode.Off else PaintMode.BrimEars
+                                )
+                            }
+                        },
+                        onClearBrimEars = selectedModel?.let { _ ->
+                            {
+                                updateSelected { it.copy(brimEars = emptyList()) }
+                            }
+                        },
+                        brimEarsCount = selectedModel?.brimEars?.size ?: 0,
                         onClonePattern = selectedModel?.let { sel ->
                             { count, spacingMm, axis ->
                                 runClonePattern(sel.id, count, spacingMm, axis)
@@ -4383,6 +4439,7 @@ private fun XrShell(
                                     supportFlags = target.supportFlags,
                                     seamFlags = target.seamFlags,
                                     fuzzySkinFlags = target.fuzzySkinFlags,
+                                    brimEars = target.brimEars.toBrimEarsFloatArray(),
                                 )
                                 android.widget.Toast.makeText(
                                     ctx,
@@ -7016,6 +7073,9 @@ private suspend fun saveProjectAs3mfToDownloads(
     supportFlags: ByteArray? = null,
     seamFlags: ByteArray? = null,
     fuzzySkinFlags: ByteArray? = null,
+    /** Paint full-feature-parity (Brim Ears) — flat float[4N] of
+     *  (x, y, z, head_radius) quads. */
+    brimEars: FloatArray? = null,
 ): File? {
     if (!sourceFile.exists()) return null
     val dest = downloadsPathFor(sourceLabel, "3mf")
@@ -7027,6 +7087,7 @@ private suspend fun saveProjectAs3mfToDownloads(
             supportFlags = supportFlags,
             seamFlags = seamFlags,
             fuzzySkinFlags = fuzzySkinFlags,
+            brimEars = brimEars,
         )) dest else null
 }
 
@@ -7080,6 +7141,11 @@ private suspend fun sliceLocalFile(
      */
     fuzzySkinFlags: ByteArray? = null,
     /**
+     * Paint full-feature-parity (Brim Ears) — flat float[4N] of
+     * (x, y, z, head_radius) quads. Null / empty = no ears.
+     */
+    brimEars: FloatArray? = null,
+    /**
      * Phase XR_OBJ_4 (final) — per-object config overrides applied to
      * `mo->config()` after load. Default empty preserves existing
      * behavior.
@@ -7093,6 +7159,7 @@ private suspend fun sliceLocalFile(
     val effectiveSupport = if (supportFlags == null || !hasAnyPaint(supportFlags)) null else supportFlags
     val effectiveSeam = if (seamFlags == null || !hasAnyPaint(seamFlags)) null else seamFlags
     val effectiveFuzzy = if (fuzzySkinFlags == null || !hasAnyPaint(fuzzySkinFlags)) null else fuzzySkinFlags
+    val effectiveBrim = if (brimEars == null || brimEars.isEmpty()) null else brimEars
     return SlicerEngine.slice(
         stl = stl,
         outGcode = gcode,
@@ -7103,9 +7170,28 @@ private suspend fun sliceLocalFile(
         supportFlags = effectiveSupport,
         seamFlags = effectiveSeam,
         fuzzySkinFlags = effectiveFuzzy,
+        brimEars = effectiveBrim,
         objectConfigOverrides = objectConfigOverrides,
         onProgress = onProgress,
     )
+}
+
+/**
+ * Paint full-feature-parity (Brim Ears) — flatten a list of
+ * [BrimEarPoint]s into the JNI's flat float[4N] (x, y, z, head_radius)
+ * format. Empty list returns null (which the JNI side reads as "no
+ * ears authored").
+ */
+private fun List<BrimEarPoint>.toBrimEarsFloatArray(): FloatArray? {
+    if (isEmpty()) return null
+    val out = FloatArray(size * 4)
+    for ((i, p) in withIndex()) {
+        out[i * 4 + 0] = p.x
+        out[i * 4 + 1] = p.y
+        out[i * 4 + 2] = p.z
+        out[i * 4 + 3] = p.headRadiusMm
+    }
+    return out
 }
 
 /** Copies a picker URI into the app cache. Returns null on read failure. */

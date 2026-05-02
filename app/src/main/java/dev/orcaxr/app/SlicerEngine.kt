@@ -168,6 +168,13 @@ object SlicerEngine {
          */
         fuzzySkinFlags: ByteArray? = null,
         /**
+         * Paint full-feature-parity (Brim Ears) — flat float[4N] of
+         * (x, y, z, head_radius) quads in mesh-local mm. Each quad is
+         * one user-placed brim ear anchor. Null / empty = no authored
+         * ears (the global brim_type still applies).
+         */
+        brimEars: FloatArray? = null,
+        /**
          * Phase XR_OBJ_4 (final) — per-object config overrides. Sparse
          * SAFE_KEYS subset applied onto `model.objects.front()->config()`
          * before Print::apply. Mirrors OrcaSlicer's "Object Settings"
@@ -249,6 +256,7 @@ object SlicerEngine {
             supportFlags,
             seamFlags,
             fuzzySkinFlags,
+            brimEars,
             objKeys,
             objValues,
         )
@@ -632,6 +640,11 @@ object SlicerEngine {
         supportFlags: ByteArray? = null,
         seamFlags: ByteArray? = null,
         fuzzySkinFlags: ByteArray? = null,
+        /**
+         * Paint full-feature-parity (Brim Ears) — flat float[4N] of
+         * (x, y, z, head_radius) quads. Null / empty = no ears.
+         */
+        brimEars: FloatArray? = null,
     ): Boolean = withContext(dispatcher) {
         require(input.exists()) { "input not found: ${input.absolutePath}" }
         require(input.canRead()) { "input not readable: ${input.absolutePath}" }
@@ -648,9 +661,10 @@ object SlicerEngine {
         val effSupport = if (supportFlags == null || !supportFlags.any { it != 0.toByte() }) null else supportFlags
         val effSeam = if (seamFlags == null || !seamFlags.any { it != 0.toByte() }) null else seamFlags
         val effFuzzy = if (fuzzySkinFlags == null || !fuzzySkinFlags.any { it != 0.toByte() }) null else fuzzySkinFlags
+        val effBrim = if (brimEars == null || brimEars.isEmpty()) null else brimEars
         nativeSaveAs3mf(
             input.absolutePath, outPath.absolutePath, keys, values,
-            effPaint, effSupport, effSeam, effFuzzy,
+            effPaint, effSupport, effSeam, effFuzzy, effBrim,
         ) == 0
     }
 
@@ -896,6 +910,12 @@ object SlicerEngine {
          */
         fuzzySkinFlags: ByteArray?,
         /**
+         * Paint full-feature-parity (Brim Ears) — flat float[4N] of
+         * (x, y, z, head_radius) quads. Authored onto
+         * `mo->brim_points`. Null = no ears.
+         */
+        brimEars: FloatArray?,
+        /**
          * Phase XR_OBJ_4 (final) — per-object config overrides. Same
          * shape as [configKeys] / [configValues] but applied onto
          * `model.objects.front()->config()` instead of the global
@@ -1004,6 +1024,12 @@ object SlicerEngine {
         supportFlags: ByteArray?,
         seamFlags: ByteArray?,
         fuzzySkinFlags: ByteArray?,
+        /**
+         * Paint full-feature-parity (Brim Ears) — flat float[4N] of
+         * (x, y, z, head_radius) quads, authored onto
+         * `mo->brim_points`. Null = no ears.
+         */
+        brimEars: FloatArray?,
     ): Int
     private external fun nativeSliceMulti(
         inputPaths: Array<String>,

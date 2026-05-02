@@ -58,6 +58,13 @@ enum class PaintMode {
      *  produced by the painter — fuzzy is always additive. Mirrors
      *  upstream OrcaSlicer's `GLGizmoFuzzySkin`. */
     FuzzySkin,
+    /** Paint full-feature-parity — Brim Ears point placement. Each
+     *  click drops a [BrimEarPoint] at the laser hit (in mesh-local
+     *  mm). Not a triangle paint — uses the same raycast pipeline but
+     *  writes to `PlacedModel.brimEars` instead of a per-triangle
+     *  byte array. Flows into `ModelObject::brim_points` at slice /
+     *  saveAs3mf time. Mirrors upstream `GLGizmoBrimEars`. */
+    BrimEars,
 }
 
 /**
