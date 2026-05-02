@@ -4282,6 +4282,13 @@ fun PrinterPanel(
             )
             Spacer(Modifier.height(12.dp))
 
+            // C6 — MCP server toggle. The card is collapsed when
+            // disabled so the printer-discovery flow stays the
+            // dominant affordance for users who don't want LLM-driven
+            // automation.
+            dev.orcaxr.app.mcp.McpServerCard()
+            Spacer(Modifier.height(12.dp))
+
             // Discovery row. Scan toggles _snapmaker._tcp browsing on
             // the LAN; results show up below as tap-to-add cards. The
             // user can still hand-enter addresses below if discovery

@@ -8,6 +8,7 @@ plugins {
 
 val localProperties = Properties()
 val localPropertiesFile = rootProject.file("local.properties")
+
 if (localPropertiesFile.exists()) {
     localPropertiesFile.inputStream().use { localProperties.load(it) }
 }
@@ -20,8 +21,8 @@ android {
         create("release") {
             storeFile =
                 (project.findProperty("ORCAXR_KEYSTORE") as String?
-                    ?: localProperties.getProperty("ORCAXR_KEYSTORE"))?.let { file(it) }
-                    ?: System.getenv("ORCAXR_KEYSTORE")?.let { file(it) }
+                        ?: localProperties.getProperty("ORCAXR_KEYSTORE"))
+                    ?.let { file(it) } ?: System.getenv("ORCAXR_KEYSTORE")?.let { file(it) }
             storePassword =
                 project.findProperty("ORCAXR_KEYSTORE_PASSWORD") as String?
                     ?: localProperties.getProperty("ORCAXR_KEYSTORE_PASSWORD")
@@ -62,9 +63,7 @@ android {
         val isBuildingBundle =
             gradle.startParameter.taskNames.any { it.lowercase().contains("bundle") }
         if (isBuildingBundle) {
-            ndk {
-                abiFilters.add("arm64-v8a")
-            }
+            ndk { abiFilters.add("arm64-v8a") }
         }
 
         externalNativeBuild {
@@ -117,7 +116,7 @@ android {
         }
         release {
             isMinifyEnabled = false // Phase 0/1: R8 disabled during initial
-                                    // development pending androidx.xr stability.
+            // development pending androidx.xr stability.
             signingConfig =
                 if (signingConfigs.getByName("release").storeFile?.exists() == true) {
                     signingConfigs.getByName("release")
@@ -155,6 +154,16 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        // JVM unit tests use the stub android.jar, where every method
+        // throws "not mocked" by default. The MCP server (and any
+        // future code) calls android.util.Log; turning on
+        // returnDefaultValues makes Log.* a no-op in unit tests so we
+        // can verify protocol-level behavior without spinning up
+        // Robolectric or moving to androidTest.
+        unitTests.isReturnDefaultValues = true
+    }
+
     packaging {
         // JNI libs staged by externalNativeBuild end up under jniLibs/
         // automatically.
@@ -169,9 +178,7 @@ android {
         // jniLibs/<abi>/ — that path's .so filter doesn't strip it.
         //
         // Both files are debug-only and should be removed for release.
-        jniLibs {
-            useLegacyPackaging = true
-        }
+        jniLibs { useLegacyPackaging = true }
     }
 }
 

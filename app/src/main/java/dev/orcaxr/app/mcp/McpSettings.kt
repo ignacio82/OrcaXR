@@ -1,0 +1,109 @@
+package dev.orcaxr.app.mcp
+
+import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import java.security.SecureRandom
+
+/**
+ * Persisted MCP server config. Three knobs:
+ * - `enabled` — gates whether [McpServer] starts at all. OFF by
+ *   default; the user has to opt in from the Devices panel.
+ * - `port` — TCP port to bind. 7080 by default (same band as
+ *   Mainsail/Klipper run on, won't collide with common dev tools).
+ * - `apiKey` — bearer token clients must present in
+ *   `Authorization: Bearer <key>`. Generated on first enable so the
+ *   user never has to invent their own; shown in the UI for
+ *   copy-paste into the LLM client config.
+ *
+ * The DataStore file lives at `orcaxr.mcp` (separate from
+ * `orcaxr.printers` etc.) so toggling this won't ever rewrite the
+ * other stores.
+ */
+class McpSettings(ctx: Context) {
+
+    private val store = ctx.applicationContext.mcpDataStore
+
+    val enabled: Flow<Boolean> = store.data.map { it[KEY_ENABLED] ?: false }
+
+    val port: Flow<Int> = store.data.map { it[KEY_PORT] ?: DEFAULT_PORT }
+
+    /**
+     * The persisted bearer token, or null if one has never been
+     * generated. UI calls [ensureApiKey] when the user flips the
+     * server on; this Flow is the read side for displaying it.
+     */
+    val apiKey: Flow<String?> = store.data.map { it[KEY_API_KEY] }
+
+    suspend fun setEnabled(value: Boolean) {
+        store.edit { it[KEY_ENABLED] = value }
+    }
+
+    suspend fun setPort(value: Int) {
+        store.edit { it[KEY_PORT] = value.coerceIn(1024, 65535) }
+    }
+
+    /** Generate-and-persist a fresh token. Returns the new value. */
+    suspend fun rotateApiKey(): String {
+        val fresh = generateApiKey()
+        store.edit { it[KEY_API_KEY] = fresh }
+        return fresh
+    }
+
+    /**
+     * Get-or-create. Used when toggling `enabled` on for the first
+     * time so the UI can show the user a key without a separate
+     * "generate" step.
+     */
+    suspend fun ensureApiKey(): String {
+        val existing = store.data.first()[KEY_API_KEY]
+        if (!existing.isNullOrBlank()) return existing
+        return rotateApiKey()
+    }
+
+    /**
+     * Snapshot suitable for one server start. Resolves all three
+     * knobs in one DataStore read so the server doesn't see torn
+     * state across `enabled` / `port` / `apiKey`.
+     */
+    suspend fun snapshot(): Snapshot {
+        val prefs = store.data.first()
+        return Snapshot(
+            enabled = prefs[KEY_ENABLED] ?: false,
+            port = prefs[KEY_PORT] ?: DEFAULT_PORT,
+            apiKey = prefs[KEY_API_KEY],
+        )
+    }
+
+    data class Snapshot(val enabled: Boolean, val port: Int, val apiKey: String?)
+
+    companion object {
+        const val DEFAULT_PORT: Int = 7080
+        private val KEY_ENABLED = booleanPreferencesKey("mcp_enabled")
+        private val KEY_PORT = intPreferencesKey("mcp_port")
+        private val KEY_API_KEY = stringPreferencesKey("mcp_api_key")
+
+        /**
+         * 32 alphanumeric chars from a CSPRNG. ~190 bits of entropy —
+         * far more than we need for a LAN-only auth gate, but the
+         * cost of generating once per first-enable is nothing and a
+         * future tightening of the security posture (running on a
+         * shared Wi-Fi) is suddenly free.
+         */
+        fun generateApiKey(): String {
+            val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+            val rng = SecureRandom()
+            val sb = StringBuilder(32)
+            repeat(32) { sb.append(alphabet[rng.nextInt(alphabet.length)]) }
+            return sb.toString()
+        }
+    }
+}
+
+private val Context.mcpDataStore by preferencesDataStore("orcaxr.mcp")

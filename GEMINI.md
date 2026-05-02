@@ -192,6 +192,78 @@ Currently single `:app` module. The split below is aspirational; do NOT create m
 
 2. **Dependency Update Review:** `./gradlew versionCatalogUpdate` updates `gradle/libs.versions.toml`. Always review `git diff gradle/libs.versions.toml` before committing — XR / Compose / Media3 patch bumps occasionally break the build.
 
+## MCP server (C6) — architecture
+
+OrcaXR ships an in-process MCP (Model Context Protocol) server so an LLM
+agent (Claude Desktop, the Anthropic SDK's tool router, etc.) can drive
+every action a human can take in the UI. This is the foundation for a
+natural-language interface to the slicer — the plan is "every
+human-facing action gets an MCP tool."
+
+**Lives in:** `app/src/main/java/dev/orcaxr/app/mcp/`. Self-contained
+package — no external server framework, no extra deps. Tools split by
+domain under `mcp/tools/`.
+
+**Transport:** plain HTTP/1.1 + JSON-RPC 2.0, hand-rolled on
+`ServerSocket`. Single endpoint at `POST /mcp`; `GET /` returns a
+human-readable status blurb. The MCP "Streamable HTTP" SSE half is
+**not** implemented yet — request/response is enough for the current
+tool surface and Claude Desktop's HTTP transport speaks it. Add SSE
+when a tool needs to stream progress (e.g. `slice_active_plate` once
+that ships).
+
+**Lifecycle:** `McpController.get(ctx).start()` is called from
+`OrcaXRApplication.onCreate`. It watches `McpSettings`'s `enabled` +
+`port` flows and starts/stops the underlying `McpServer`
+accordingly. Disabled by default — the user opts in from the Devices
+panel (`McpServerCard`).
+
+**Auth:** randomly-generated bearer token, persisted to DataStore on
+first enable. `initialize` / `tools/list` / `ping` are auth-free for
+client discovery; everything that mutates state requires
+`Authorization: Bearer <token>`. UI offers show / copy / rotate.
+
+**State hoisting (in progress):** stores
+(`PrintersStore`/`UserProfilesStore`/`FilamentEntriesStore`/etc.) are
+already process-singletons and tools read/write them directly via
+`ToolContext`. **In-session state that lives in `MainActivity`
+remember{}s** (`placedModels`, `selectedModelIds`, `gizmoTool`,
+`paintBrush`, `sliceState`, `workspaceMode`, `activePlateId`,
+`bedFit`/`bedCollision`, layer scrubber position) does NOT yet have an
+MCP tool surface — that's the next commit's `WorkspaceModel`
+singleton. Tools that need it (slice trigger, gizmo transforms, paint
+ops, save-as-3MF, layer scrub, etc.) are blocked on that refactor;
+read-only store tools are not.
+
+**Tool naming convention:** `<verb>_<object>` snake_case
+(`list_printers`, `add_plate`, `start_print`,
+`get_user_preferences`). The verb is canonical: `list_*`/`get_*` for
+reads, `add_*`/`update_*`/`delete_*` for store mutations,
+`<action>_*` for verbs (`start_print`, `pause_print`).
+
+**Tool result shape:** `text` content for human readability +
+`structuredContent` JSON for machine parsing. Both should be present
+on every tool result. Errors set `isError: true` in the tool result
+(not a JSON-RPC error envelope) for "the tool ran and returned a
+failure" cases; throw exceptions only for unexpected bugs (those get
+promoted to `-32002 TOOL_FAILED`).
+
+**Don't do:** roll your own JSON serializer (use `org.json`), pull in
+Ktor / Netty / NanoHTTPD (we already speak ServerSocket), expose
+transient UI state (hover, animation phase, modal-open booleans —
+they're not actions, they're optical artifacts), or make any tool
+that *isn't* reachable without going through MainActivity-only state
+without first hoisting that state into `WorkspaceModel`. The tool's
+job is not to know how OrcaXR's Compose tree is wired.
+
+**Tests:** unit tests under
+`app/src/test/java/dev/orcaxr/app/mcp/` cover the JSON-RPC parser,
+auth gate, and a real-socket end-to-end round-trip with an in-process
+server. Tests rely on
+`testOptions.unitTests.isReturnDefaultValues = true` so
+`android.util.Log` calls in production code don't blow up the unit
+harness.
+
 ## Related docs
 
 - [`ROADMAP.md`](ROADMAP.md) — forward-looking feature roadmap (single source of truth).
