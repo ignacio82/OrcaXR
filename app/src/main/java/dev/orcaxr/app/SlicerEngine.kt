@@ -660,6 +660,177 @@ object SlicerEngine {
         )
     }
 
+    // ====================================================================
+    // D4 — Embossing / SVG inset / text-on-object.
+    //
+    // Three-step API mirroring upstream OrcaSlicer's GLGizmoEmboss but
+    // re-shaped for OrcaXR's stateless JNI surface:
+    //
+    //   1. [buildTextMesh] — TTF font + text → extruded 3MF (mesh-local
+    //      coords, XY centered on origin, Z = 0..depthMm).
+    //   2. [buildSvgMesh]  — .svg fills → extruded 3MF (same coord
+    //      contract + optional rescale-to-target-size).
+    //   3. [applyEmboss]   — host model + emboss mesh + 4×4 transform +
+    //      ADD/SUB mode → output 3MF with the boolean applied.
+    //
+    // The split is deliberate: the build step is fast (~50–200ms for a
+    // word) and produces a preview-able mesh; only [applyEmboss] runs
+    // the heavy mcut boolean. This lets the UI live-preview the emboss
+    // mesh while the user fine-tunes parameters and only commits to the
+    // boolean on Apply.
+    // ====================================================================
+
+    /**
+     * D4 — build a 3D extruded mesh from TTF font glyph outlines.
+     *
+     * [fontFile] must be a real on-disk .ttf or .otf file (the Kotlin
+     * caller stages bundled fonts from `assets/fonts/` to `cacheDir`
+     * via [stageBundledFont]). [text] is UTF-8; embedded `\n` produces
+     * a multi-line layout.
+     *
+     * [sizeMm] is the line height in millimeters; glyph width follows
+     * from the font's advance metrics. [depthMm] is the Z-extrusion
+     * depth.
+     *
+     * Output is a single-object 3MF at [output] containing the
+     * extruded mesh, centered on (0, 0) in XY with Z = 0..depthMm.
+     * Caller is responsible for any subsequent transform (surface
+     * placement, scaling, etc.) — the file holds raw glyph geometry.
+     *
+     * Returns the [output] file on success, null on:
+     * - font load failure (corrupt or non-TTF/OTF file)
+     * - empty result (text contained only unrenderable glyphs)
+     * - extrusion failure
+     * - write failure
+     */
+    suspend fun buildTextMesh(
+        fontFile: File,
+        text: String,
+        sizeMm: Float,
+        depthMm: Float,
+        output: File,
+    ): File? = withContext(dispatcher) {
+        require(fontFile.exists() && fontFile.canRead()) {
+            "font not readable: ${fontFile.absolutePath}"
+        }
+        require(sizeMm > 0f) { "sizeMm must be positive, got $sizeMm" }
+        require(depthMm > 0f) { "depthMm must be positive, got $depthMm" }
+        require(text.isNotEmpty()) { "text must not be empty" }
+        output.parentFile?.mkdirs()
+        output.delete()
+        val rc = nativeBuildTextMesh(
+            fontFile.absolutePath, text, sizeMm, depthMm, output.absolutePath,
+        )
+        if (rc != 0 || !output.exists() || output.length() == 0L) {
+            android.util.Log.e("OrcaXR", "buildTextMesh rc=$rc, output=${output.absolutePath}")
+            return@withContext null
+        }
+        output
+    }
+
+    /**
+     * D4 — build a 3D extruded mesh from an SVG file.
+     *
+     * [svgFile] must be a real on-disk .svg file. Only filled paths
+     * are extruded — pure-stroke icons return null. SVG sub-paths
+     * inside a single `<path>` element are unioned via Clipper's
+     * Even-Odd rule (matches Inkscape's default fill-rule for
+     * shapes-with-holes like the inside of an "O").
+     *
+     * [targetSizeMm] is the desired max XY dimension of the result in
+     * millimeters; the native side computes the current XY bbox and
+     * rescales uniformly so `max(bboxX, bboxY) == targetSizeMm`.
+     * Pass 0 to skip the rescale and use the SVG's own (mm-parsed)
+     * units. [depthMm] is the Z-extrusion depth.
+     *
+     * Output is a single-object 3MF at [output] centered on (0, 0)
+     * in XY with Z = 0..depthMm.
+     *
+     * Returns the [output] file on success, null on:
+     * - SVG parse failure (malformed file)
+     * - no fillable paths (pure-stroke / empty SVG)
+     * - extrusion failure
+     * - write failure
+     */
+    suspend fun buildSvgMesh(
+        svgFile: File,
+        targetSizeMm: Float,
+        depthMm: Float,
+        output: File,
+    ): File? = withContext(dispatcher) {
+        require(svgFile.exists() && svgFile.canRead()) {
+            "svg not readable: ${svgFile.absolutePath}"
+        }
+        require(targetSizeMm >= 0f) { "targetSizeMm must be non-negative, got $targetSizeMm" }
+        require(depthMm > 0f) { "depthMm must be positive, got $depthMm" }
+        output.parentFile?.mkdirs()
+        output.delete()
+        val rc = nativeBuildSvgMesh(
+            svgFile.absolutePath, targetSizeMm, depthMm, output.absolutePath,
+        )
+        if (rc != 0 || !output.exists() || output.length() == 0L) {
+            android.util.Log.e("OrcaXR", "buildSvgMesh rc=$rc, output=${output.absolutePath}")
+            return@withContext null
+        }
+        output
+    }
+
+    /**
+     * D4 — apply a previously-built emboss/engrave mesh to a [host]
+     * model via mcut::make_boolean.
+     *
+     * [host] is a 3MF / STL containing the target model. [emboss] is
+     * the result of [buildTextMesh] / [buildSvgMesh] (already in
+     * mesh-local printer-mm space, XY-centered).
+     *
+     * [mode] selects the operation:
+     * - [EmbossMode.ADD] (UNION) — emboss-out: raised letters / icon
+     *   on top of the host's surface.
+     * - [EmbossMode.SUB] (A_NOT_B) — engrave-in: cut the emboss
+     *   geometry out of the host (recessed letters / inset icon).
+     *
+     * [transform4x4] is a row-major 16-float 4×4 matrix that
+     * positions the emboss mesh relative to the host's printer-mm
+     * coordinate system before the boolean. Build with the helpers
+     * in [EmbossOp] (e.g. [EmbossOp.transformForTopOfBbox]).
+     *
+     * Output is a single-object 3MF at [output] with the boolean
+     * result. The caller replaces `PlacedModel.source` with [output]
+     * and clears any per-triangle paint state — the topology has
+     * changed, so paint indices are no longer valid.
+     *
+     * Returns true on success, false on host/emboss read failure,
+     * empty boolean result, or write failure (see logs).
+     */
+    suspend fun applyEmboss(
+        host: File,
+        emboss: File,
+        mode: EmbossMode,
+        transform4x4: FloatArray,
+        output: File,
+    ): Boolean = withContext(dispatcher) {
+        require(host.exists() && host.canRead()) {
+            "host not readable: ${host.absolutePath}"
+        }
+        require(emboss.exists() && emboss.canRead()) {
+            "emboss not readable: ${emboss.absolutePath}"
+        }
+        require(transform4x4.size == 16) {
+            "transform4x4 must have 16 floats (4×4 row-major), got ${transform4x4.size}"
+        }
+        output.parentFile?.mkdirs()
+        output.delete()
+        val rc = nativeApplyEmboss(
+            host.absolutePath, emboss.absolutePath,
+            mode.nativeOrdinal, transform4x4, output.absolutePath,
+        )
+        if (rc != 0) {
+            android.util.Log.e("OrcaXR", "applyEmboss rc=$rc, mode=$mode")
+            return@withContext false
+        }
+        output.exists() && output.length() > 0L
+    }
+
     suspend fun arrangeModels(
         inputs: List<File>,
         priorTransforms: FloatArray,
@@ -1121,6 +1292,29 @@ object SlicerEngine {
         inputPath: String,
         outputPath: String,
     ): IntArray?
+    /** D4 — TTF text → extruded 3MF. See [buildTextMesh]. */
+    private external fun nativeBuildTextMesh(
+        fontPath: String,
+        text: String,
+        sizeMm: Float,
+        depthMm: Float,
+        outPath: String,
+    ): Int
+    /** D4 — SVG fills → extruded 3MF. See [buildSvgMesh]. */
+    private external fun nativeBuildSvgMesh(
+        svgPath: String,
+        targetSizeMm: Float,
+        depthMm: Float,
+        outPath: String,
+    ): Int
+    /** D4 — host + emboss + mode → boolean'd 3MF. See [applyEmboss]. */
+    private external fun nativeApplyEmboss(
+        hostPath: String,
+        embossPath: String,
+        mode: Int,
+        xform4x4RowMajor: FloatArray,
+        outPath: String,
+    ): Int
     private external fun nativeArrange(
         inputPaths: Array<String>,
         priorTransforms: FloatArray,

@@ -183,6 +183,9 @@ fun LeftProjectPanel(
     /** Phase A5 ("Fix Model") — run cross-platform mesh repair on
      *  the given model. Called from the per-row wrench icon. */
     onRepairPlacedModel: (id: String) -> Unit = {},
+    /** Phase D4 — open the Emboss / Engrave panel for the given
+     *  model. Called from the per-row Emboss icon. */
+    onEmbossPlacedModel: (id: String) -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -273,6 +276,7 @@ fun LeftProjectPanel(
             onAutoArrange = onAutoArrangePlacedModels,
             onMoveToPlate = onMoveToPlate,
             onRepair = onRepairPlacedModel,
+            onEmboss = onEmbossPlacedModel,
         )
 
         // Bed-fit indicator. Only visible once a model is loaded so the
@@ -540,6 +544,7 @@ private fun PlacedModelsSection(
     onAutoArrange: () -> Unit,
     onMoveToPlate: (String, Int) -> Unit,
     onRepair: (String) -> Unit,
+    onEmboss: (String) -> Unit,
 ) {
     if (models.isEmpty()) return
     val atCapacity = models.size >= MAX_PLACED_MODELS
@@ -610,6 +615,7 @@ private fun PlacedModelsSection(
                                 onDelete = { onDeleteIds(setOf(m.id)) },
                                 onMoveToPlate = onMoveToPlate,
                                 onRepair = onRepair,
+                                onEmboss = onEmboss,
                                 isGrouped = true,
                             )
                         }
@@ -627,6 +633,7 @@ private fun PlacedModelsSection(
                             onDelete = { onDeleteIds(setOf(m.id)) },
                             onMoveToPlate = onMoveToPlate,
                             onRepair = onRepair,
+                            onEmboss = onEmboss,
                             isGrouped = false,
                         )
                     }
@@ -662,6 +669,7 @@ private fun ModelRow(
     onDelete: (String) -> Unit,
     onMoveToPlate: (String, Int) -> Unit,
     onRepair: (String) -> Unit,
+    onEmboss: (String) -> Unit,
     isGrouped: Boolean = false,
 ) {
     var showPlateMenu by remember { mutableStateOf(false) }
@@ -730,6 +738,17 @@ private fun ModelRow(
                     imageVector = Icons.Filled.Build,
                     contentDescription = "Fix model",
                     tint = Color(0xFF7BC8FF),
+                )
+            }
+            IconButton(onClick = { onEmboss(m.id) }) {
+                // D4 — Emboss / Engrave entry point. Glyph 𝐀 is a
+                // bold-math-A, hints "text on model" without depending
+                // on Material's `Icons.Filled.TextFields` which isn't
+                // imported here.
+                Text(
+                    "𝐀",
+                    color = Color(0xFF7BC8FF),
+                    style = MaterialTheme.typography.titleMedium,
                 )
             }
             IconButton(onClick = { onDelete(m.id) }) {
@@ -6233,3 +6252,325 @@ private fun RecentFileRow(entry: RecentFile, onClick: () -> Unit) {
     }
 }
 
+
+// ============================================================================
+// D4 — Emboss / Engrave panel.
+//
+// Hosts inside a SpatialPanel; the user picks Text/SVG, font, size, depth,
+// translation/rotation in XY, and tap Apply to run the boolean. Apply
+// dispatches to MainActivity::runEmboss which builds the emboss mesh and
+// runs mcut::make_boolean — both heavy steps land on the libslic3r
+// dispatcher so this UI stays responsive.
+//
+// State held here:
+// - source kind (Text / SVG) — Text default
+// - text string (default "Hello")
+// - font choice (defaults to EmbossAssets.DEFAULT_FONT; "Pick file…" SAF
+//   path TBD — for MVP only the bundled fonts are exposed)
+// - SVG file (defaults to bundled heart.svg sample; user can pick via SAF)
+// - sizeMm (text line height OR svg target max-XY) with sliders 5..40 mm
+// - depthMm slider 0.5..5 mm
+// - translateX / translateY in mm (sliders -50..50)
+// - rotZ degrees (slider -180..180)
+// - mode toggle (ADD raised / SUB engraved)
+// ============================================================================
+
+@Composable
+fun EmbossPanel(
+    targetModel: PlacedModel,
+    bundledFonts: List<BundledFont>,
+    /** Stage a bundled font into cacheDir and return the on-disk file. */
+    onStageFont: (BundledFont) -> File,
+    /** Stage the bundled sample SVG to cacheDir. */
+    onStageSampleSvg: () -> File,
+    /** Open a system file picker for SVG. The caller resolves the URI to
+     *  an on-disk File and invokes the resume callback with it. Pass
+     *  null to hide the "Pick SVG…" button (MVP can ship with bundled-
+     *  only). */
+    onPickSvg: (() -> Unit)? = null,
+    /** Currently picked custom SVG (or null = use bundled sample). */
+    pickedSvg: File? = null,
+    onApply: (EmbossSpec, EmbossMode, translateX: Float, translateY: Float, rotZ: Float) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var sourceKindIsText by remember { mutableStateOf(true) }
+    var text by remember { mutableStateOf("Hello") }
+    var fontIndex by remember { mutableStateOf(0) }
+    var sizeMm by remember { mutableStateOf(15f) }
+    var depthMm by remember { mutableStateOf(1.5f) }
+    var translateX by remember { mutableStateOf(0f) }
+    var translateY by remember { mutableStateOf(0f) }
+    var rotZ by remember { mutableStateOf(0f) }
+    var mode by remember { mutableStateOf(EmbossMode.ADD) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF15181B))
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Emboss / Engrave",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.White,
+                )
+                Text(
+                    "Target: ${targetModel.label}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.LightGray,
+                )
+            }
+            IconButton(onClick = onDismiss) {
+                Text("✕", color = Color.Gray, style = MaterialTheme.typography.titleMedium)
+            }
+        }
+
+        // Mode (ADD / SUB).
+        Surface(
+            color = Color(0xFF1B1F23),
+            shape = RoundedCornerShape(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Mode", color = Color.White, modifier = Modifier.weight(1f))
+                FilterChip(
+                    selected = mode == EmbossMode.ADD,
+                    onClick = { mode = EmbossMode.ADD },
+                    label = { Text("Raise (Add)") },
+                )
+                FilterChip(
+                    selected = mode == EmbossMode.SUB,
+                    onClick = { mode = EmbossMode.SUB },
+                    label = { Text("Engrave (Cut)") },
+                )
+            }
+        }
+
+        // Source kind toggle.
+        Surface(
+            color = Color(0xFF1B1F23),
+            shape = RoundedCornerShape(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Source", color = Color.White, modifier = Modifier.weight(1f))
+                FilterChip(
+                    selected = sourceKindIsText,
+                    onClick = { sourceKindIsText = true },
+                    label = { Text("Text") },
+                )
+                FilterChip(
+                    selected = !sourceKindIsText,
+                    onClick = { sourceKindIsText = false },
+                    label = { Text("SVG") },
+                )
+            }
+        }
+
+        if (sourceKindIsText) {
+            // Text input + font picker.
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text("Text") },
+                singleLine = false,
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    cursorColor = Color(0xFF7BC8FF),
+                    focusedBorderColor = Color(0xFF7BC8FF),
+                    unfocusedBorderColor = Color.Gray,
+                    focusedLabelColor = Color(0xFF7BC8FF),
+                    unfocusedLabelColor = Color.Gray,
+                ),
+            )
+            Surface(
+                color = Color(0xFF1B1F23),
+                shape = RoundedCornerShape(8.dp),
+            ) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    Text("Font", color = Color.White, style = MaterialTheme.typography.titleSmall)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    bundledFonts.forEachIndexed { idx, f ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { fontIndex = idx }
+                                .padding(vertical = 6.dp),
+                        ) {
+                            RadioButton(
+                                selected = fontIndex == idx,
+                                onClick = { fontIndex = idx },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = Color(0xFF7BC8FF),
+                                ),
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(f.displayName, color = Color.White)
+                        }
+                    }
+                }
+            }
+        } else {
+            // SVG picker — bundled sample by default, optional SAF pick.
+            Surface(
+                color = Color(0xFF1B1F23),
+                shape = RoundedCornerShape(8.dp),
+            ) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    Text(
+                        "SVG",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    val activeSvg = pickedSvg
+                    Text(
+                        activeSvg?.name ?: "heart.svg (bundled)",
+                        color = Color(0xFF7BC8FF),
+                    )
+                    if (onPickSvg != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = onPickSvg,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Pick SVG file…", color = Color(0xFF7BC8FF))
+                        }
+                    }
+                }
+            }
+        }
+
+        // Size + depth + placement sliders.
+        EmbossSlider(
+            label = if (sourceKindIsText) "Line height" else "Max XY",
+            valueMm = sizeMm,
+            onChange = { sizeMm = it },
+            range = 4f..50f,
+        )
+        EmbossSlider(
+            label = "Depth",
+            valueMm = depthMm,
+            onChange = { depthMm = it },
+            range = 0.4f..6f,
+        )
+        EmbossSlider(
+            label = "Offset X",
+            valueMm = translateX,
+            onChange = { translateX = it },
+            range = -60f..60f,
+        )
+        EmbossSlider(
+            label = "Offset Y",
+            valueMm = translateY,
+            onChange = { translateY = it },
+            range = -60f..60f,
+        )
+        // Rotation slider (degrees, not mm — separate composable inline).
+        Surface(
+            color = Color(0xFF1B1F23),
+            shape = RoundedCornerShape(8.dp),
+        ) {
+            Column(modifier = Modifier.padding(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Rotate Z", color = Color.White, modifier = Modifier.weight(1f))
+                    Text("%.0f°".format(rotZ), color = Color(0xFF7BC8FF))
+                }
+                Slider(
+                    value = rotZ,
+                    onValueChange = { rotZ = it },
+                    valueRange = -180f..180f,
+                    steps = 35,  // 10° granularity
+                    colors = SliderDefaults.colors(
+                        thumbColor = Color(0xFF7BC8FF),
+                        activeTrackColor = Color(0xFF7BC8FF),
+                        inactiveTrackColor = Color(0xFF44505C),
+                    ),
+                )
+            }
+        }
+
+        // Apply.
+        Button(
+            onClick = {
+                val spec: EmbossSpec? = if (sourceKindIsText) {
+                    if (text.isNotBlank()) {
+                        val font = bundledFonts.getOrNull(fontIndex) ?: return@Button
+                        EmbossSpec.Text(
+                            fontFile = onStageFont(font),
+                            text = text,
+                            sizeMm = sizeMm,
+                            depthMm = depthMm,
+                        )
+                    } else null
+                } else {
+                    val svg = pickedSvg ?: onStageSampleSvg()
+                    EmbossSpec.Svg(
+                        svgFile = svg,
+                        sizeMm = sizeMm,
+                        depthMm = depthMm,
+                    )
+                }
+                if (spec != null) {
+                    onApply(spec, mode, translateX, translateY, rotZ)
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF7BC8FF),
+                contentColor = Color.Black,
+            ),
+        ) {
+            Text(
+                if (mode == EmbossMode.ADD) "Apply Emboss" else "Apply Engrave",
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmbossSlider(
+    label: String,
+    valueMm: Float,
+    onChange: (Float) -> Unit,
+    range: ClosedFloatingPointRange<Float>,
+) {
+    Surface(
+        color = Color(0xFF1B1F23),
+        shape = RoundedCornerShape(8.dp),
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(label, color = Color.White, modifier = Modifier.weight(1f))
+                Text("%.1f mm".format(valueMm), color = Color(0xFF7BC8FF))
+            }
+            Slider(
+                value = valueMm,
+                onValueChange = onChange,
+                valueRange = range,
+                colors = SliderDefaults.colors(
+                    thumbColor = Color(0xFF7BC8FF),
+                    activeTrackColor = Color(0xFF7BC8FF),
+                    inactiveTrackColor = Color(0xFF44505C),
+                ),
+            )
+        }
+    }
+}

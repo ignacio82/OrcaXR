@@ -81,6 +81,11 @@ extern "C" {
 #include <libslic3r/CutUtils.hpp>
 #include <libslic3r/MeshBoolean.hpp>
 #include <libslic3r/GCode/ThumbnailData.hpp>
+#include <libslic3r/Emboss.hpp>
+#include <libslic3r/NSVGUtils.hpp>
+#include <libslic3r/TextConfiguration.hpp>
+#include <libslic3r/ClipperUtils.hpp>
+#include <libslic3r/BoundingBox.hpp>
 
 #include "thumbnail_render.hpp"
 #include <boost/algorithm/string/predicate.hpp>
@@ -4233,5 +4238,505 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRepairModel(
     } catch (...) {
         ORCAXR_LOGE("nativeRepairModel: unknown exception");
         return nullptr;
+    }
+}
+
+// ============================================================================
+// D4 — Embossing / SVG inset / text-on-object.
+//
+// Three-step pipeline mirroring upstream OrcaSlicer's GLGizmoEmboss but
+// re-wired for OrcaXR's stateless JNI surface:
+//
+//   1. nativeBuildTextMesh   — TTF glyph outlines → ExPolygons (libslic3r
+//                              Emboss::text2shapes via stb_truetype) →
+//                              triangulated extrusion in mesh-local
+//                              printer mm. Output 3MF is centered on
+//                              (0, 0) in XY with Z = 0..depthMm.
+//   2. nativeBuildSvgMesh    — SVG paths → polygons (NSVGUtils::to_polygons,
+//                              fill curves to Even-Odd ExPolygons) → same
+//                              extrusion. Result is rescaled so the larger
+//                              of (bboxX, bboxY) matches targetSizeMm.
+//   3. nativeApplyEmboss     — load host + emboss meshes, apply caller's
+//                              4×4 transform to the emboss in printer
+//                              mm-space, then mcut::make_boolean(host,
+//                              emboss, UNION | A_NOT_B). UNION = emboss-out
+//                              (raised letters), A_NOT_B = engrave-in
+//                              (cut letters).
+//
+// The split keeps the UI fast: the emboss mesh is built once when the
+// user picks text/SVG/font/depth, then dragged + previewed independently
+// (cheap), and the heavy boolean only runs on Apply.
+//
+// Why not a single nativeBuildAndApplyEmboss? (a) the boolean is the slow
+// step (mcut on a 2k-tri host vs a 200-tri letter takes ~1s on Galaxy XR)
+// — keeping the build step separate lets the panel render a preview while
+// the user fine-tunes parameters; (b) the same emboss mesh can be applied
+// to multiple host models without re-rasterizing the glyphs.
+// ============================================================================
+
+namespace {
+
+// Build a TriangleMesh from a list of ExPolygons by Z-extruding from
+// 0 to [depthMm]. Caller chooses the SCALING_FACTOR convention via
+// [shapeScale] — for text glyphs use Emboss::get_text_shape_scale,
+// for SVG polygons use SCALING_FACTOR (== 1e-6, the libslic3r global).
+//
+// Result is in printer-mm coords with the bbox center translated to
+// (0, 0, depthMm/2). The caller can apply any subsequent transform
+// (e.g. surface placement) without having to compensate for an
+// off-origin extrusion.
+//
+// Returns an empty mesh if [shapes] is empty or polygons2model failed.
+Slic3r::TriangleMesh extrude_expolygons_to_mesh(
+    const Slic3r::ExPolygons& shapes,
+    double shape_scale,
+    double depthMm)
+{
+    if (shapes.empty() || depthMm <= 0.0) {
+        return Slic3r::TriangleMesh();
+    }
+    // Per upstream EmbossJob.cpp:940 — scale is already applied via
+    // ProjectScale, so depth is in shape-space units.
+    const double depth_local = depthMm / shape_scale;
+    auto projZ = std::make_unique<Slic3r::Emboss::ProjectZ>(depth_local);
+    Slic3r::Emboss::ProjectScale project(std::move(projZ), shape_scale);
+    indexed_triangle_set its;
+    try {
+        its = Slic3r::Emboss::polygons2model(shapes, project);
+    } catch (const std::exception& e) {
+        ORCAXR_LOGE("extrude_expolygons_to_mesh: polygons2model threw: %s", e.what());
+        return Slic3r::TriangleMesh();
+    }
+    if (its.indices.empty() || its.vertices.empty()) {
+        return Slic3r::TriangleMesh();
+    }
+    Slic3r::TriangleMesh mesh(std::move(its));
+    if (mesh.empty()) return mesh;
+    // Center the mesh on (0, 0) in XY and lift the bottom plane to z = 0.
+    // ProjectZ puts the front face at z=0 and back face at z=depth_local
+    // (in shape-space). After ProjectScale, that's z=0..depthMm. We want
+    // bbox center on origin in XY for predictable placement later.
+    const Slic3r::BoundingBoxf3 bb = mesh.bounding_box();
+    const Slic3r::Vec3d center = bb.center();
+    Slic3r::Transform3d tr = Slic3r::Transform3d::Identity();
+    tr.translate(Slic3r::Vec3d(-center.x(), -center.y(), -bb.min.z()));
+    mesh.transform(tr);
+    return mesh;
+}
+
+// Write [mesh] as a single-object 3MF at [outPath]. Returns true on
+// success. Mirrors the nativeRepairModel / nativeMeshBoolean output
+// shape — caller's PlacedModel.source can swap straight to this path.
+bool write_single_object_3mf(
+    const char* outPath,
+    Slic3r::TriangleMesh&& mesh,
+    const std::string& objectName)
+{
+    Slic3r::Model outModel;
+    Slic3r::ModelObject* mo = outModel.add_object(
+        objectName.c_str(), outPath, std::move(mesh));
+    mo->add_instance();
+    if (!Slic3r::store_3mf(outPath, &outModel, /*config=*/nullptr,
+                           /*fullpath_sources=*/false)) {
+        ORCAXR_LOGE("write_single_object_3mf: store_3mf failed for %s", outPath);
+        return false;
+    }
+    return true;
+}
+
+} // namespace
+
+// nativeBuildTextMesh — Phase D4.1. Build a 3D extruded mesh from TTF
+// font glyph outlines.
+//
+// Parameters:
+//   [jFontPath]  — absolute filesystem path to a .ttf or .otf font file.
+//                  The Kotlin side stages bundled fonts to cacheDir from
+//                  assets/fonts/ and passes the on-disk path; load through
+//                  Emboss::create_font_file (which wraps stb_truetype).
+//   [jText]      — UTF-8 string. Newlines split into multi-line layout
+//                  via FontProp::char_gap / line_gap defaults.
+//   [sizeMm]     — line height in mm (FontProp::size_in_mm). Glyph width
+//                  follows from the font's advance metrics.
+//   [depthMm]    — Z-extrusion depth in mm.
+//   [jOutPath]   — absolute filesystem path for the output 3MF.
+//
+// Returns 0 on success, -1 on font-load failure, -2 on empty text shape
+// (unrenderable string / unknown glyphs only), -3 on extrusion failure,
+// -4 on store_3mf failure, -5 on uncaught C++ exception.
+extern "C" JNIEXPORT jint JNICALL
+Java_dev_orcaxr_app_SlicerEngine_nativeBuildTextMesh(
+    JNIEnv* env, jclass,
+    jstring jFontPath,
+    jstring jText,
+    jfloat  sizeMm,
+    jfloat  depthMm,
+    jstring jOutPath)
+{
+    ScopedUtf fontPath(env, jFontPath);
+    ScopedUtf text(env, jText);
+    ScopedUtf outPath(env, jOutPath);
+    ORCAXR_LOGI("nativeBuildTextMesh: font=%s text=\"%s\" size=%.2fmm depth=%.2fmm -> %s",
+                fontPath.c, text.c, (double)sizeMm, (double)depthMm, outPath.c);
+
+    if (sizeMm <= 0.f || depthMm <= 0.f) {
+        ORCAXR_LOGE("nativeBuildTextMesh: invalid sizeMm=%f depthMm=%f",
+                    (double)sizeMm, (double)depthMm);
+        return -1;
+    }
+    if (text.c == nullptr || text.c[0] == '\0') {
+        ORCAXR_LOGE("nativeBuildTextMesh: empty text");
+        return -2;
+    }
+
+    try {
+        // 1. Load font via Emboss::create_font_file. This reads the file
+        //    into a heap buffer and asks stb_truetype to validate it.
+        std::unique_ptr<Slic3r::Emboss::FontFile> font_file =
+            Slic3r::Emboss::create_font_file(fontPath.c);
+        if (font_file == nullptr) {
+            ORCAXR_LOGE("nativeBuildTextMesh: create_font_file failed for %s",
+                        fontPath.c);
+            return -1;
+        }
+
+        // 2. Wrap into FontFileWithCache (text2shapes mutates the cache
+        //    when it reads a glyph for the first time).
+        Slic3r::Emboss::FontFileWithCache font_with_cache(std::move(font_file));
+        if (!font_with_cache.has_value()) {
+            ORCAXR_LOGE("nativeBuildTextMesh: FontFileWithCache empty");
+            return -1;
+        }
+
+        // 3. Build the FontProp. We restrict the user-tunable surface
+        //    to size_in_mm at this layer; future commits can expose
+        //    char_gap / line_gap / boldness / skew if the UI needs
+        //    them.
+        Slic3r::FontProp fp(static_cast<float>(sizeMm));
+
+        // 4. text2shapes returns HealedExPolygons; the embedded ExPolygons
+        //    are in shape-space integer units (font EMs × stbtt scale).
+        Slic3r::HealedExPolygons healed = Slic3r::Emboss::text2shapes(
+            font_with_cache, text.c, fp);
+        if (healed.expolygons.empty()) {
+            ORCAXR_LOGE("nativeBuildTextMesh: text2shapes produced no shapes");
+            return -2;
+        }
+        if (!healed.is_healed) {
+            ORCAXR_LOGI("nativeBuildTextMesh: text2shapes returned unhealed shapes "
+                        "(self-intersection / dup points); proceeding — "
+                        "polygons2model will tolerate it.");
+        }
+
+        // 5. Compute the shape→mm scale. For a font, this is the
+        //    stb_truetype scale times mm-per-EM ratio.
+        const double shape_scale = Slic3r::Emboss::get_text_shape_scale(
+            fp, *font_with_cache.font_file);
+        if (!(shape_scale > 0.0)) {
+            ORCAXR_LOGE("nativeBuildTextMesh: invalid shape_scale=%g", shape_scale);
+            return -3;
+        }
+
+        // 6. Extrude.
+        Slic3r::TriangleMesh mesh = extrude_expolygons_to_mesh(
+            healed.expolygons, shape_scale, static_cast<double>(depthMm));
+        if (mesh.empty()) {
+            ORCAXR_LOGE("nativeBuildTextMesh: extrusion produced empty mesh");
+            return -3;
+        }
+        ORCAXR_LOGI("nativeBuildTextMesh: %zu shapes → %zu tris, %zu verts",
+                    healed.expolygons.size(),
+                    mesh.its.indices.size(),
+                    mesh.its.vertices.size());
+
+        // 7. Persist as 3MF.
+        if (!write_single_object_3mf(outPath.c, std::move(mesh),
+                                     std::string("emboss_text"))) {
+            return -4;
+        }
+        ORCAXR_LOGI("nativeBuildTextMesh: wrote %s", outPath.c);
+        return 0;
+    } catch (const std::bad_alloc&) {
+        ORCAXR_LOGE("nativeBuildTextMesh: OOM");
+        return -5;
+    } catch (const std::exception& e) {
+        ORCAXR_LOGE("nativeBuildTextMesh: exception %s", e.what());
+        return -5;
+    } catch (...) {
+        ORCAXR_LOGE("nativeBuildTextMesh: unknown exception");
+        return -5;
+    }
+}
+
+// nativeBuildSvgMesh — Phase D4.2. Build a 3D extruded mesh from an SVG
+// vector path file.
+//
+// Parameters:
+//   [jSvgPath]      — absolute filesystem path to a .svg file.
+//   [targetSizeMm]  — desired bbox size for the larger XY dimension.
+//                     Pass 0 to skip the rescale (use the SVG's own units
+//                     after `units="mm"` parsing).
+//   [depthMm]       — Z-extrusion depth in mm.
+//   [jOutPath]      — absolute filesystem path for the output 3MF.
+//
+// Returns 0 on success, -1 on parse failure, -2 on empty / no fillable
+// paths, -3 on extrusion failure, -4 on store_3mf failure, -5 on
+// uncaught C++ exception.
+//
+// SVG fills with multiple sub-paths inside one <path> element are
+// resolved via Clipper's union_ex (NonZero winding-order union). Strokes
+// are NOT extruded — only fills. Pure-stroke icons (no fill) come back
+// as -2; user can convert to fill in their authoring tool.
+extern "C" JNIEXPORT jint JNICALL
+Java_dev_orcaxr_app_SlicerEngine_nativeBuildSvgMesh(
+    JNIEnv* env, jclass,
+    jstring jSvgPath,
+    jfloat  targetSizeMm,
+    jfloat  depthMm,
+    jstring jOutPath)
+{
+    ScopedUtf svgPath(env, jSvgPath);
+    ScopedUtf outPath(env, jOutPath);
+    ORCAXR_LOGI("nativeBuildSvgMesh: svg=%s targetSize=%.2fmm depth=%.2fmm -> %s",
+                svgPath.c, (double)targetSizeMm, (double)depthMm, outPath.c);
+
+    if (depthMm <= 0.f) {
+        ORCAXR_LOGE("nativeBuildSvgMesh: invalid depthMm=%f", (double)depthMm);
+        return -1;
+    }
+
+    try {
+        // 1. Parse via NSVGUtils. units="mm" makes nsvg interpret the
+        //    SVG viewport as millimeter coordinates so a 50mm-wide SVG
+        //    comes out as a 50-unit wide image; downstream NSVGLineParams
+        //    multiplies by 1/SCALING_FACTOR to get to libslic3r's
+        //    integer shape space.
+        Slic3r::NSVGimage_ptr image = Slic3r::nsvgParseFromFile(
+            svgPath.c, "mm", 96.0f);
+        if (image == nullptr || image->shapes == nullptr) {
+            ORCAXR_LOGE("nativeBuildSvgMesh: nsvgParseFromFile failed");
+            return -1;
+        }
+
+        // 2. Convert paths to polygons. Defaults work fine for typical
+        //    icon SVGs; the tesselation_tolerance=10 (in image units)
+        //    keeps cubic-bezier flattening tight enough that letters
+        //    don't ghost on the print.
+        Slic3r::NSVGLineParams params(/*tesselation_tolerance=*/10.);
+        Slic3r::Polygons polys = Slic3r::to_polygons(*image, params);
+        if (polys.empty()) {
+            ORCAXR_LOGE("nativeBuildSvgMesh: SVG has no fillable paths");
+            return -2;
+        }
+
+        // 3. Resolve overlapping sub-paths via Even-Odd union into
+        //    ExPolygons (outer + holes). Even-Odd matches Inkscape's
+        //    default fill-rule for shapes-with-holes (e.g. the inside
+        //    of an "O" letter).
+        Slic3r::ExPolygons shapes = Slic3r::union_ex(polys);
+        if (shapes.empty()) {
+            ORCAXR_LOGE("nativeBuildSvgMesh: union_ex produced no shapes");
+            return -2;
+        }
+
+        // 4. Extrude. NSVGLineParams::scale = 1/SCALING_FACTOR — i.e.
+        //    points are stored as mm × SCALING_FACTOR → integer. So
+        //    shape-space → mm = SCALING_FACTOR.
+        Slic3r::TriangleMesh mesh = extrude_expolygons_to_mesh(
+            shapes, SCALING_FACTOR, static_cast<double>(depthMm));
+        if (mesh.empty()) {
+            ORCAXR_LOGE("nativeBuildSvgMesh: extrusion produced empty mesh");
+            return -3;
+        }
+
+        // 5. Optional rescale-to-target. SVGs come in all sizes; the UI
+        //    asks for "the result should fit in a 50mm box." Compute
+        //    current XY bbox, find scale factor, apply uniformly to X
+        //    and Y (Z stays at depthMm — depth was already in mm).
+        if (targetSizeMm > 0.f) {
+            const Slic3r::BoundingBoxf3 bb = mesh.bounding_box();
+            const double bboxX = bb.size().x();
+            const double bboxY = bb.size().y();
+            const double maxXY = std::max(bboxX, bboxY);
+            if (maxXY > 1e-6) {
+                const double s = static_cast<double>(targetSizeMm) / maxXY;
+                Slic3r::Transform3d tr = Slic3r::Transform3d::Identity();
+                tr.scale(Eigen::Vector3d(s, s, 1.0));
+                mesh.transform(tr);
+                ORCAXR_LOGI("nativeBuildSvgMesh: rescaled by %.4f to target %.2fmm",
+                            s, (double)targetSizeMm);
+            }
+        }
+
+        ORCAXR_LOGI("nativeBuildSvgMesh: %zu shapes → %zu tris, %zu verts",
+                    shapes.size(),
+                    mesh.its.indices.size(),
+                    mesh.its.vertices.size());
+
+        if (!write_single_object_3mf(outPath.c, std::move(mesh),
+                                     std::string("emboss_svg"))) {
+            return -4;
+        }
+        ORCAXR_LOGI("nativeBuildSvgMesh: wrote %s", outPath.c);
+        return 0;
+    } catch (const std::bad_alloc&) {
+        ORCAXR_LOGE("nativeBuildSvgMesh: OOM");
+        return -5;
+    } catch (const std::exception& e) {
+        ORCAXR_LOGE("nativeBuildSvgMesh: exception %s", e.what());
+        return -5;
+    } catch (...) {
+        ORCAXR_LOGE("nativeBuildSvgMesh: unknown exception");
+        return -5;
+    }
+}
+
+// nativeApplyEmboss — Phase D4.3. Apply a previously-built emboss /
+// engrave mesh to a host model via mcut::make_boolean.
+//
+// Parameters:
+//   [jHostPath]   — absolute filesystem path to the host mesh (3MF / STL).
+//                   Read via load_mesh_container; if it's a 3MF, the
+//                   host's first object's instance transform is applied
+//                   so the boolean operates in printer-mm world space.
+//   [jEmbossPath] — absolute filesystem path to the emboss mesh built
+//                   by nativeBuildTextMesh / nativeBuildSvgMesh. Must
+//                   already be in printer-mm space (which both builders
+//                   guarantee).
+//   [jMode]       — 0 = ADD (UNION; raised letters), 1 = SUB (A_NOT_B;
+//                   engraved letters).
+//   [jXform4x4]   — flat 16-float column-major OR row-major 4×4
+//                   transformation matrix to apply to the emboss mesh
+//                   before the boolean. Caller must layout this as
+//                   ROW-major (so xform[0..3] = first row); we
+//                   reconstruct an Eigen Affine3d and apply
+//                   `mesh.transform(matrix)`. Pass identity for
+//                   already-positioned emboss meshes.
+//   [jOutPath]    — absolute filesystem path for the output 3MF.
+//
+// Returns 0 on success, -1 on host read failure, -2 on emboss read
+// failure or empty result, -3 on store_3mf failure, -4 on uncaught
+// C++ exception, -5 on missing/invalid xform array.
+extern "C" JNIEXPORT jint JNICALL
+Java_dev_orcaxr_app_SlicerEngine_nativeApplyEmboss(
+    JNIEnv* env, jclass,
+    jstring jHostPath,
+    jstring jEmbossPath,
+    jint    jMode,
+    jfloatArray jXform4x4,
+    jstring jOutPath)
+{
+    ScopedUtf hostPath(env, jHostPath);
+    ScopedUtf embossPath(env, jEmbossPath);
+    ScopedUtf outPath(env, jOutPath);
+    const char* op_str = (jMode == 0) ? "UNION" :
+                         (jMode == 1) ? "A_NOT_B" : "UNION";
+    ORCAXR_LOGI("nativeApplyEmboss: host=%s emboss=%s mode=%s -> %s",
+                hostPath.c, embossPath.c, op_str, outPath.c);
+
+    // Decode the 4×4 transform from the float array (row-major).
+    if (jXform4x4 == nullptr || env->GetArrayLength(jXform4x4) != 16) {
+        ORCAXR_LOGE("nativeApplyEmboss: xform array missing or not 16 floats");
+        return -5;
+    }
+    jfloat xform_flat[16];
+    env->GetFloatArrayRegion(jXform4x4, 0, 16, xform_flat);
+    Slic3r::Transform3d emboss_tr = Slic3r::Transform3d::Identity();
+    {
+        Eigen::Matrix4d m;
+        for (int row = 0; row < 4; ++row) {
+            for (int col = 0; col < 4; ++col) {
+                m(row, col) = static_cast<double>(xform_flat[row * 4 + col]);
+            }
+        }
+        emboss_tr.matrix() = m;
+    }
+
+    try {
+        Slic3r::Model hostModel, embossModel;
+        try {
+            hostModel = load_mesh_container(hostPath.c);
+        } catch (const std::exception& e) {
+            ORCAXR_LOGE("nativeApplyEmboss: host read failed: %s", e.what());
+            return -1;
+        }
+        if (hostModel.objects.empty()) {
+            ORCAXR_LOGE("nativeApplyEmboss: host model has no objects");
+            return -1;
+        }
+        try {
+            embossModel = load_mesh_container(embossPath.c);
+        } catch (const std::exception& e) {
+            ORCAXR_LOGE("nativeApplyEmboss: emboss read failed: %s", e.what());
+            return -2;
+        }
+        if (embossModel.objects.empty()) {
+            ORCAXR_LOGE("nativeApplyEmboss: emboss model has no objects");
+            return -2;
+        }
+
+        // Bring host into printer-mm world space via its instance pose,
+        // mirroring nativeMeshBoolean's approach. For a fresh-built
+        // emboss 3MF the instance is identity, but we still apply it
+        // for safety. THEN apply the user's caller-provided transform.
+        Slic3r::TriangleMesh hostMesh = hostModel.objects.front()->mesh();
+        if (!hostModel.objects.front()->instances.empty()) {
+            hostMesh.transform(
+                hostModel.objects.front()->instances.front()->get_matrix());
+        }
+        Slic3r::TriangleMesh embossMesh = embossModel.objects.front()->mesh();
+        if (!embossModel.objects.front()->instances.empty()) {
+            embossMesh.transform(
+                embossModel.objects.front()->instances.front()->get_matrix());
+        }
+        embossMesh.transform(emboss_tr);
+
+        if (hostMesh.empty()) {
+            ORCAXR_LOGE("nativeApplyEmboss: host mesh empty after load");
+            return -1;
+        }
+        if (embossMesh.empty()) {
+            ORCAXR_LOGE("nativeApplyEmboss: emboss mesh empty after load+transform");
+            return -2;
+        }
+
+        std::vector<Slic3r::TriangleMesh> result_meshes;
+        try {
+            Slic3r::MeshBoolean::mcut::make_boolean(
+                hostMesh, embossMesh, result_meshes, op_str);
+        } catch (const std::exception& e) {
+            ORCAXR_LOGE("nativeApplyEmboss: make_boolean threw: %s", e.what());
+            return -2;
+        }
+        if (result_meshes.empty()) {
+            ORCAXR_LOGE("nativeApplyEmboss: result is empty (op=%s)", op_str);
+            return -2;
+        }
+        Slic3r::TriangleMesh merged = result_meshes.front();
+        for (size_t i = 1; i < result_meshes.size(); ++i) {
+            merged.merge(result_meshes[i]);
+        }
+        if (merged.empty()) {
+            ORCAXR_LOGE("nativeApplyEmboss: merged result is empty");
+            return -2;
+        }
+        ORCAXR_LOGI("nativeApplyEmboss: %zu pieces, %zu facets total",
+                    result_meshes.size(), merged.facets_count());
+
+        const std::string objName = (jMode == 0) ? "embossed_add" : "embossed_sub";
+        if (!write_single_object_3mf(outPath.c, std::move(merged), objName)) {
+            return -3;
+        }
+        ORCAXR_LOGI("nativeApplyEmboss: wrote %s", outPath.c);
+        return 0;
+    } catch (const std::bad_alloc&) {
+        ORCAXR_LOGE("nativeApplyEmboss: OOM");
+        return -4;
+    } catch (const std::exception& e) {
+        ORCAXR_LOGE("nativeApplyEmboss: exception %s", e.what());
+        return -4;
+    } catch (...) {
+        ORCAXR_LOGE("nativeApplyEmboss: unknown exception");
+        return -4;
     }
 }

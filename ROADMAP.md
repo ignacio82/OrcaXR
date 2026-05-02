@@ -414,9 +414,13 @@ Mirrors upstream OrcaSlicer's `GLGizmoBrimEars`. PaintMode.BrimEars converts a c
 
 **Shipped:** commit `69b783b` — data + JNI write + click-to-add + UI toggle + count badge + clear-all. 3D visual marker spheres deferred (entity-lifecycle work for a later session).
 
-### D4. Embossing / SVG inset / text-on-object ⚪ Deferred
+### D4. Embossing / SVG inset / text-on-object 🟢 Shipped
 
-Upstream's `GLGizmoEmboss` is a separate large feature. Compose-SpatialPanel-native text-on-mesh is conceivable but a multi-session feature. Defer.
+> **Files:** `slic3r_jni.cpp::nativeBuildTextMesh / nativeBuildSvgMesh / nativeApplyEmboss`, `EmbossOp.kt`, `EmbossAssets.kt`, `EmbossPanel` in `UiPanels.kt`, `MainActivity::runEmboss` + `embossTargetModelId`, `app/src/main/assets/fonts/`, `app/src/main/assets/svg/heart.svg`, `EmbossOpTest.kt`.
+
+Compose-SpatialPanel-native text-on-mesh + SVG inset, wired through libslic3r `Emboss::text2shapes` (TTF via stb_truetype), `NSVGUtils::to_polygons`, `Emboss::polygons2model` + `ProjectZ`, and `MeshBoolean::mcut::make_boolean` for the boolean. The per-row 𝐀 icon opens an `EmbossPanel` SpatialPanel; user picks Text/SVG, font (DejaVu Sans Bold or DejaVu Serif bundled), depth/size/offset/rotation/mode (ADD-raise / SUB-engrave); Apply runs the build + boolean on the libslic3r dispatcher and replaces `PlacedModel.source` with the result. Top-of-bbox auto-placement; rotation around Z; ±60mm XY translate. Paint state is dropped on apply (gotcha #28).
+
+**Shipped:** native build + boolean (3 JNI entries), `EmbossOp` data classes + transform helpers, `EmbossAssets` font/SVG staging, `EmbossPanel` Compose UI, `EmbossOpTest` instrumented coverage (text bbox, SVG bbox, ADD grows +Z, SUB preserves bbox + carves volume).
 
 ### D5. SLA hollow + drainage holes ⚪ Deferred — FDM stack only
 

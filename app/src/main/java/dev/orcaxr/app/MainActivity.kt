@@ -857,6 +857,11 @@ private fun XrShell(
     // via the TopNavigationPill's Help icon; renders as a side
     // SpatialPanel showing every binding the input pump consumes.
     var helpShown by remember { mutableStateOf(false) }
+    // Roadmap D4 — emboss panel target. When non-null, the EmbossPanel
+    // SpatialPanel is rendered next to the project list and operates on
+    // the named PlacedModel. Set by the per-row Emboss icon; cleared on
+    // panel dismiss or successful Apply.
+    var embossTargetModelId by remember { mutableStateOf<String?>(null) }
     var printerStatuses by remember { mutableStateOf<Map<String, PrinterStatus>>(emptyMap()) }
     var printerSnapshots by remember { mutableStateOf<Map<String, PrintSnapshot>>(emptyMap()) }
     var webcamFrames by remember { mutableStateOf<Map<String, androidx.compose.ui.graphics.ImageBitmap>>(emptyMap()) }
@@ -1995,6 +2000,152 @@ private fun XrShell(
             android.widget.Toast.makeText(
                 ctx,
                 "Boolean ${opStr} done.",
+                android.widget.Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
+
+    /**
+     * Phase D4 — emboss / engrave a text string or SVG path on the
+     * given PlacedModel.
+     *
+     * Pipeline:
+     * 1. Build the emboss mesh from [spec] (text or SVG) via
+     *    [SlicerEngine.buildTextMesh] / [SlicerEngine.buildSvgMesh].
+     * 2. Compute a placement transform — top-of-bbox by default (the
+     *    emboss block sits on the host's top face, centered in XY).
+     *    For SUB the transform also pushes the emboss down by its
+     *    own depth so the boolean carves a recess of [EmbossSpec.depthMm].
+     * 3. [SlicerEngine.applyEmboss] runs the boolean and emits a 3MF.
+     * 4. PlacedModel.source is swapped to the result, paint state is
+     *    cleared (topology changed → per-triangle indices invalid),
+     *    and the preview is re-baked.
+     *
+     * On any failure step a Toast surfaces the cause and the model is
+     * left untouched. The emboss / boolean is on the libslic3r
+     * dispatcher, so the UI thread doesn't block.
+     */
+    fun runEmboss(
+        modelId: String,
+        spec: EmbossSpec,
+        mode: EmbossMode,
+        translateXmm: Float = 0f,
+        translateYmm: Float = 0f,
+        rotZDeg: Float = 0f,
+    ) {
+        val src = placedModels.firstOrNull { it.id == modelId } ?: return
+        val originalLabel = src.label
+        scope.launch {
+            isLoadingModel = true
+            loadingLabel = "Embossing $originalLabel"
+            val embossOut = File(
+                ctx.cacheDir,
+                "emboss_src_${modelId}_${System.currentTimeMillis()}.3mf",
+            )
+            val builtEmboss = runCatching {
+                when (spec) {
+                    is EmbossSpec.Text -> SlicerEngine.buildTextMesh(
+                        fontFile = spec.fontFile,
+                        text = spec.text,
+                        sizeMm = spec.sizeMm,
+                        depthMm = spec.depthMm,
+                        output = embossOut,
+                    )
+                    is EmbossSpec.Svg -> SlicerEngine.buildSvgMesh(
+                        svgFile = spec.svgFile,
+                        targetSizeMm = spec.sizeMm,
+                        depthMm = spec.depthMm,
+                        output = embossOut,
+                    )
+                }
+            }.onFailure {
+                android.util.Log.e("OrcaXR", "buildEmbossMesh threw", it)
+            }.getOrNull()
+            if (builtEmboss == null) {
+                isLoadingModel = false
+                loadingLabel = null
+                android.widget.Toast.makeText(
+                    ctx,
+                    "Emboss build failed (see logs).",
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+                return@launch
+            }
+
+            // Top-of-bbox placement: bottom of emboss = host-top - sink.
+            // ADD: sink=0 (raised letters sit on top).
+            // SUB: sink=depth (carved letters cut down by depth).
+            val hostTopZmm = src.baseBboxZmm * src.effectiveScaleZ
+            val sinkMm = if (mode == EmbossMode.SUB) spec.depthMm else 0f
+            val placement = EmbossOp.transformForTopOfBbox(
+                hostBboxMaxZmm = hostTopZmm,
+                embossDepthMm = spec.depthMm,
+                sinkDepthMm = sinkMm,
+                translateXmm = translateXmm,
+                translateYmm = translateYmm,
+            )
+            val xform = if (rotZDeg != 0f) {
+                EmbossOp.compose(placement, EmbossOp.rotationZ(rotZDeg))
+            } else placement
+
+            val outBoolean = File(
+                ctx.cacheDir,
+                "emboss_${mode.name.lowercase()}_${modelId}_${System.currentTimeMillis()}.3mf",
+            )
+            val ok = runCatching {
+                SlicerEngine.applyEmboss(
+                    host = src.source,
+                    emboss = builtEmboss,
+                    mode = mode,
+                    transform4x4 = xform,
+                    output = outBoolean,
+                )
+            }.onFailure {
+                android.util.Log.e("OrcaXR", "applyEmboss threw", it)
+            }.getOrDefault(false)
+            if (!ok) {
+                isLoadingModel = false
+                loadingLabel = null
+                android.widget.Toast.makeText(
+                    ctx,
+                    "Emboss apply failed (see logs).",
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+                return@launch
+            }
+
+            // Replace the model in-place. Paint state is dropped — the
+            // CGAL/mcut boolean re-meshes the host so per-triangle
+            // indices won't survive (gotcha #27 lesson). Mirrors the
+            // runRepair sweep.
+            placedModels = placedModels.map {
+                if (it.id != modelId) it else it.copy(
+                    source = outBoolean,
+                    originalSource = null,
+                    groupId = null,
+                    groupOrdinal = 0,
+                    paintFilamentIndex = null,
+                    supportFlags = null,
+                    seamFlags = null,
+                    fuzzySkinFlags = null,
+                    brimEars = emptyList(),
+                    volumes = emptyList(),
+                    previewVersion = it.previewVersion + 1,
+                    previewRotZDeg = -1,
+                    previewScalePct = -1,
+                )
+            }
+            sliceState.value = SliceUiState.Idle
+            try {
+                previewStl(modelId)
+            } finally {
+                isLoadingModel = false
+                loadingLabel = null
+            }
+            val verb = if (mode == EmbossMode.ADD) "Embossed" else "Engraved"
+            android.widget.Toast.makeText(
+                ctx,
+                "$verb $originalLabel.",
                 android.widget.Toast.LENGTH_SHORT,
             ).show()
         }
@@ -4014,6 +4165,7 @@ private fun XrShell(
                             runAutoArrange()
                         },
                         onRepairPlacedModel = ::runRepair,
+                        onEmbossPlacedModel = { id -> embossTargetModelId = id },
                         allPlates = allPlates,
                         onMoveToPlate = { modelId, plateId ->
                             placedModels = placedModels.map {
@@ -5124,6 +5276,45 @@ private fun XrShell(
                                     android.widget.Toast.LENGTH_SHORT,
                                 ).show()
                             },
+                        )
+                    }
+                }
+
+                // Roadmap D4 — Emboss / Engrave panel. Visible whenever
+                // a target model has been picked via the per-row 𝐀
+                // icon. Apply runs through MainActivity::runEmboss; on
+                // both success and dismiss the target id resets so the
+                // panel auto-hides.
+                val embossTarget = embossTargetModelId
+                    ?.let { id -> placedModels.firstOrNull { it.id == id } }
+                if (embossTarget != null) {
+                    MovablePanelWrapper(
+                        id = "emboss-panel",
+                        width = 480.dp,
+                        height = 760.dp,
+                        // Right column, slightly above the print monitor
+                        // slot so it doesn't fight the help card or the
+                        // monitor when both are open.
+                        initialOffset = androidx.xr.runtime.math.Vector3(0.85f, 0.05f, -0.05f),
+                        session = session,
+                    ) {
+                        EmbossPanel(
+                            targetModel = embossTarget,
+                            bundledFonts = EmbossAssets.BUNDLED_FONTS,
+                            onStageFont = { f -> EmbossAssets.stageBundledFont(ctx, f) },
+                            onStageSampleSvg = { EmbossAssets.stageBundledSampleSvg(ctx) },
+                            onApply = { spec, mode, tx, ty, rotZ ->
+                                runEmboss(
+                                    modelId = embossTarget.id,
+                                    spec = spec,
+                                    mode = mode,
+                                    translateXmm = tx,
+                                    translateYmm = ty,
+                                    rotZDeg = rotZ,
+                                )
+                                embossTargetModelId = null
+                            },
+                            onDismiss = { embossTargetModelId = null },
                         )
                     }
                 }
