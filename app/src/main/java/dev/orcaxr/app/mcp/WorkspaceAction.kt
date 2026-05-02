@@ -236,4 +236,41 @@ sealed interface WorkspaceAction {
     ) : WorkspaceAction
 
     data class RemoveVolume(val modelId: String, val volumeId: String) : WorkspaceAction
+
+    /**
+     * Which per-triangle paint state to operate on. Mirrors the four
+     * ByteArray fields on `PlacedModel`:
+     * - `Color`: filament-slot tag (0..32, 0 = unpainted).
+     * - `Support`: enforcer/blocker (0=none, 1=ENFORCER, 2=BLOCKER).
+     * - `Seam`: same encoding as Support.
+     * - `FuzzySkin`: 0=smooth, 1=fuzzy (libslic3r ignores 2).
+     */
+    enum class PaintKind { Color, Support, Seam, FuzzySkin }
+
+    /**
+     * Wipe paint state for one or all kinds on a model. `kind=null`
+     * clears everything (color + support + seam + fuzzy).
+     */
+    data class ClearPaint(val modelId: String, val kind: PaintKind?) : WorkspaceAction
+
+    /**
+     * Find every triangle currently tagged `fromTag` and re-tag it as
+     * `toTag`. Use this for "swap blue (slot 2) for red (slot 3)" or
+     * "convert support enforcers to blockers." `toTag = 0` is
+     * effectively a partial clear ("remove all triangles tagged
+     * `fromTag`"). The action is a pure byte-array transform and
+     * doesn't read or write the mesh itself.
+     */
+    data class ReplacePaintTag(
+        val modelId: String,
+        val kind: PaintKind,
+        val fromTag: Int,
+        val toTag: Int,
+    ) : WorkspaceAction
+
+    /** Undo the most recent paint stroke on a model. No-op if the history is empty. */
+    data class PaintUndo(val modelId: String) : WorkspaceAction
+
+    /** Redo a previously-undone paint stroke. */
+    data class PaintRedo(val modelId: String) : WorkspaceAction
 }

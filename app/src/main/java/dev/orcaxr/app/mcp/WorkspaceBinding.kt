@@ -123,6 +123,16 @@ fun BindWorkspaceModel(
     onAddVolumeToModel: ((modelId: String, sourcePath: String, type: String) -> Unit)? = null,
     /** Drop a previously-attached volume from a PlacedModel. */
     onRemoveVolume: ((modelId: String, volumeId: String) -> Unit)? = null,
+    /**
+     * Paint-state edits — color / support / seam / fuzzy slot remap,
+     * clear, undo, redo. Each sub-action passes through to a
+     * MainActivity-side handler so the existing PaintHistory + paint-
+     * cache persistence pipelines fire identically.
+     */
+    onClearPaint: ((modelId: String, kind: WorkspaceAction.PaintKind?) -> Unit)? = null,
+    onReplacePaintTag: ((modelId: String, kind: WorkspaceAction.PaintKind, fromTag: Int, toTag: Int) -> Unit)? = null,
+    onPaintUndo: ((modelId: String) -> Unit)? = null,
+    onPaintRedo: ((modelId: String) -> Unit)? = null,
 ) {
     val workspace = remember { WorkspaceModel.get() }
 
@@ -193,6 +203,10 @@ fun BindWorkspaceModel(
     val onEmbossLatest = rememberUpdatedState(onEmbossModel)
     val onAddVolumeLatest = rememberUpdatedState(onAddVolumeToModel)
     val onRemoveVolumeLatest = rememberUpdatedState(onRemoveVolume)
+    val onClearPaintLatest = rememberUpdatedState(onClearPaint)
+    val onReplacePaintLatest = rememberUpdatedState(onReplacePaintTag)
+    val onPaintUndoLatest = rememberUpdatedState(onPaintUndo)
+    val onPaintRedoLatest = rememberUpdatedState(onPaintRedo)
 
     LaunchedEffect(workspace) {
         workspace.actions.collect { action -> handleAction(
@@ -228,6 +242,10 @@ fun BindWorkspaceModel(
             onEmbossModel = onEmbossLatest.value,
             onAddVolumeToModel = onAddVolumeLatest.value,
             onRemoveVolume = onRemoveVolumeLatest.value,
+            onClearPaint = onClearPaintLatest.value,
+            onReplacePaintTag = onReplacePaintLatest.value,
+            onPaintUndo = onPaintUndoLatest.value,
+            onPaintRedo = onPaintRedoLatest.value,
         ) }
     }
 }
@@ -265,6 +283,10 @@ private fun handleAction(
     onEmbossModel: ((WorkspaceAction.EmbossModel) -> Unit)?,
     onAddVolumeToModel: ((modelId: String, sourcePath: String, type: String) -> Unit)?,
     onRemoveVolume: ((modelId: String, volumeId: String) -> Unit)?,
+    onClearPaint: ((modelId: String, kind: WorkspaceAction.PaintKind?) -> Unit)?,
+    onReplacePaintTag: ((modelId: String, kind: WorkspaceAction.PaintKind, fromTag: Int, toTag: Int) -> Unit)?,
+    onPaintUndo: ((modelId: String) -> Unit)?,
+    onPaintRedo: ((modelId: String) -> Unit)?,
 ) {
     when (action) {
         is WorkspaceAction.SetGizmoTool -> setGizmoTool(action.tool)
@@ -402,6 +424,22 @@ private fun handleAction(
         is WorkspaceAction.RemoveVolume -> {
             if (onRemoveVolume != null) onRemoveVolume(action.modelId, action.volumeId)
             else Log.w(TAG, "RemoveVolume not wired.")
+        }
+        is WorkspaceAction.ClearPaint -> {
+            if (onClearPaint != null) onClearPaint(action.modelId, action.kind)
+            else Log.w(TAG, "ClearPaint not wired.")
+        }
+        is WorkspaceAction.ReplacePaintTag -> {
+            if (onReplacePaintTag != null) onReplacePaintTag(action.modelId, action.kind, action.fromTag, action.toTag)
+            else Log.w(TAG, "ReplacePaintTag not wired.")
+        }
+        is WorkspaceAction.PaintUndo -> {
+            if (onPaintUndo != null) onPaintUndo(action.modelId)
+            else Log.w(TAG, "PaintUndo not wired.")
+        }
+        is WorkspaceAction.PaintRedo -> {
+            if (onPaintRedo != null) onPaintRedo(action.modelId)
+            else Log.w(TAG, "PaintRedo not wired.")
         }
     }
 }

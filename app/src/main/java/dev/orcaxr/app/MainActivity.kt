@@ -2538,6 +2538,38 @@ private fun XrShell(
         }
     }
 
+    // C6 — paint-mutation helper. Wraps the transform in
+    // PaintHistory.beginStroke / endStroke so an MCP-driven clear /
+    // remap is undoable (and the LE_2819 cache observer + LE_2800
+    // re-bake both fire on the placedModels-list change).
+    fun applyPaintMutation(
+        modelId: String,
+        history: PaintHistory,
+        transform: (PlacedModel) -> PlacedModel,
+    ) {
+        val before = placedModels.firstOrNull { it.id == modelId } ?: return
+        history.beginStroke(
+            modelId,
+            PaintHistory.Snapshot(
+                paintFilamentIndex = before.paintFilamentIndex,
+                supportFlags = before.supportFlags,
+                seamFlags = before.seamFlags,
+                fuzzySkinFlags = before.fuzzySkinFlags,
+            ),
+        )
+        placedModels = placedModels.map { if (it.id == modelId) transform(it) else it }
+        val after = placedModels.firstOrNull { it.id == modelId } ?: return
+        history.endStroke(
+            modelId,
+            PaintHistory.Snapshot(
+                paintFilamentIndex = after.paintFilamentIndex,
+                supportFlags = after.supportFlags,
+                seamFlags = after.seamFlags,
+                fuzzySkinFlags = after.fuzzySkinFlags,
+            ),
+        )
+    }
+
     // C6 — bind the in-session shell state to the process-scoped
     // WorkspaceModel so MCP tools can observe it and post mutations.
     // The binding is unidirectional in both directions: publishers push
@@ -2715,6 +2747,90 @@ private fun XrShell(
             placedModels = placedModels.map { m ->
                 if (m.id == modelId) m.copy(volumes = m.volumes.filterNot { it.id == volumeId })
                 else m
+            }
+        },
+        // Paint state mutations route through PaintHistory so MCP edits
+        // are undoable in XR (and vice versa). The auto-debounced
+        // observers above (LE_2800 paint→GLB rebake, LE_2819 paint→
+        // PaintCacheStore write) fire automatically on placedModels
+        // change.
+        onClearPaint = { id, kind ->
+            applyPaintMutation(id, paintHistory) { m ->
+                when (kind) {
+                    null -> m.copy(
+                        paintFilamentIndex = null,
+                        supportFlags = null,
+                        seamFlags = null,
+                        fuzzySkinFlags = null,
+                    )
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.Color ->
+                        m.copy(paintFilamentIndex = null)
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.Support ->
+                        m.copy(supportFlags = null)
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.Seam ->
+                        m.copy(seamFlags = null)
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.FuzzySkin ->
+                        m.copy(fuzzySkinFlags = null)
+                }
+            }
+            paintHistoryVersion++
+        },
+        onReplacePaintTag = { id, kind, fromTag, toTag ->
+            applyPaintMutation(id, paintHistory) { m ->
+                val from = fromTag.toByte()
+                val to = toTag.toByte()
+                fun remap(arr: ByteArray?): ByteArray? {
+                    if (arr == null) return arr
+                    val out = arr.copyOf()
+                    var anyChange = false
+                    for (i in out.indices) {
+                        if (out[i] == from) { out[i] = to; anyChange = true }
+                    }
+                    return if (anyChange) out else arr
+                }
+                when (kind) {
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.Color ->
+                        m.copy(paintFilamentIndex = remap(m.paintFilamentIndex))
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.Support ->
+                        m.copy(supportFlags = remap(m.supportFlags))
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.Seam ->
+                        m.copy(seamFlags = remap(m.seamFlags))
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.FuzzySkin ->
+                        m.copy(fuzzySkinFlags = remap(m.fuzzySkinFlags))
+                }
+            }
+            paintHistoryVersion++
+        },
+        onPaintUndo = { id ->
+            if (paintHistory.canUndo(id)) {
+                val snap = paintHistory.undo(id)
+                if (snap != null) {
+                    placedModels = placedModels.map { m ->
+                        if (m.id == id) m.copy(
+                            paintFilamentIndex = snap.paintFilamentIndex ?: m.paintFilamentIndex,
+                            supportFlags = snap.supportFlags ?: m.supportFlags,
+                            seamFlags = snap.seamFlags ?: m.seamFlags,
+                            fuzzySkinFlags = snap.fuzzySkinFlags ?: m.fuzzySkinFlags,
+                        ) else m
+                    }
+                    paintHistoryVersion++
+                }
+            }
+        },
+        onPaintRedo = { id ->
+            if (paintHistory.canRedo(id)) {
+                val snap = paintHistory.redo(id)
+                if (snap != null) {
+                    placedModels = placedModels.map { m ->
+                        if (m.id == id) m.copy(
+                            paintFilamentIndex = snap.paintFilamentIndex ?: m.paintFilamentIndex,
+                            supportFlags = snap.supportFlags ?: m.supportFlags,
+                            seamFlags = snap.seamFlags ?: m.seamFlags,
+                            fuzzySkinFlags = snap.fuzzySkinFlags ?: m.fuzzySkinFlags,
+                        ) else m
+                    }
+                    paintHistoryVersion++
+                }
             }
         },
     )

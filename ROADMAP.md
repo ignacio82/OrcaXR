@@ -355,7 +355,7 @@ Render the probed bed-mesh grid as a heatmap GLB on the build plate. Today we'd 
 
 `MoonrakerClient.queryStatus` subscribes to `filament_detect`; `LivePrintStatus` renders amber "T_N empty" pills during an active print. Hidden when the printer doesn't expose `filament_detect`.
 
-### C6. MCP Server for OrcaXR (AI Control & Smart Assistant) 🟡 Phase 1 + 2.x shipped — 62 tools live; libslic3r abort hook + paint-by-triangle pending
+### C6. MCP Server for OrcaXR (AI Control & Smart Assistant) 🟢 Shipped (Phase 1–2.5) — 67 tools live; only libslic3r abort hook + spatial smart-fill remain as nice-to-haves
 
 > **Files:** `app/src/main/java/dev/orcaxr/app/mcp/` (server, settings, tools, UI card), `OrcaXRApplication.kt` (boot), `UiPanels.kt` (Devices-panel card), `app/src/test/java/dev/orcaxr/app/mcp/` (tests). See [`GEMINI.md`](GEMINI.md) §"MCP server (C6) — architecture" for the wiring contract.
 
@@ -382,18 +382,20 @@ Render the probed bed-mesh grid as a heatmap GLB on the build plate. Today we'd 
 
 **Phase 2.2 shipped:** the end-to-end "tell me to slice this and send it to the printer" flow now works without ever touching the file picker. Two new tools (53 total): `load_model_from_path` (STL/3MF/OBJ/AMF/STEP, replace or add modes — routes through the same `onFileSelected` codepath as the picker so paint restore + GLB bake + bedFit run identically) and `set_plate_movable` (toggle the bed-grab affordance from outside the app). `plate_movable` is now in `get_workspace_state`'s output.
 
+**Phase 2.5 shipped:** paint-by-API — the canonical "replace blue with red" use case (and four others). Five new tools (67 total): `get_paint_summary` (per-tag triangle histogram across color / support / seam / fuzzy_skin), `clear_paint` (one or all kinds), `replace_paint_tag` (slot remap — the explicit user request), `paint_undo`, `paint_redo`. Mutations route through a new `applyPaintMutation` helper in `XrShell` that wraps every change in `PaintHistory.beginStroke / endStroke` so an MCP-driven re-color is undoable from XR (and an XR stroke is undoable from MCP). The auto-debounced observers (LE_2800 paint→GLB rebake, LE_2819 paint→`PaintCacheStore` write) fire identically. Tag ranges are validated per kind: color=0..32, support/seam=0..2, fuzzy_skin=0..1.
+
 **Phase 2.4 shipped:** embossing + per-volume editing — closes the model-authoring gap so an LLM can decorate text/SVG onto a part and attach modifier/negative/support volumes without UI input. Five new tools (62 total): `list_emboss_fonts` (bundled DejaVu Sans Bold + Serif), `emboss_model` (kind=text|svg, mode=emboss|engrave, optional XY offset + Z rotation — routes through `runEmboss` + `EmbossAssets.stageBundledFont`), `list_volumes`, `add_volume_to_model` (routes through `PickerMode.AddVolume` + `onFileSelected` so the colored-GLB rebuild fires identically), `remove_volume`.
 
 **Phase 2.3 shipped:** model-editing flows + a real fix to a stale-closure bug in `BindWorkspaceModel`. Four new tools (57 total): `repair_model` (libslic3r `MeshBoolean::self_union` cleanup), `cut_model(model_id, plane_z_mm)` (horizontal cut with auto-bed-drop on the lower half), `mesh_boolean(a, b, op)` (union / difference / intersection), `split_model(model_id)` (one PlacedModel per connected component). Routed through the existing `runRepair` / `runCut` / `runBoolean` / `runSplit` button paths; `runCut` grew an optional `sourceOverride` parameter so MCP doesn't have to clobber `selectedModelIds` to cut a specific model. **Bug fix:** every Tier-B callback inside `BindWorkspaceModel`'s action collector now goes through `rememberUpdatedState` — previously the lambdas froze at first composition, so a slice/save action arriving after the user touched the UI would have dispatched through a stale closure with stale state. Phase 2.0/2.1 tools were affected too; this commit fixes them all.
 
 **Phase 3 (next):** Smart-Assistant XR panel — chat-style UI hosted in the workspace, calls the same MCP server locally. The on-device server already lets a remote LLM client (Claude Desktop pointing at the device's LAN IP) drive everything; Phase 3 is about making it feel native inside the headset.
 
-**Smaller gaps still on the table** (Phase 2.x, additive):
+**Remaining nice-to-haves** (truly optional from here):
 - `cancel_slice` needs a `nativeAbort` hook in libslic3r's JNI shim — declared but no-op today.
-- Painting via API: stamps require a 3D click point, which an LLM doesn't have. Smart-fill from a triangle index, or a "paint everything matching color X" tool, would be the right MCP shape; not yet plumbed.
+- Spatial smart-fill — paint a region starting at a 3D point or face index, using the BVH's flood-fill. Today's paint-by-API does global re-tagging; spatial would let an LLM paint just one face by reference to printer-frame coordinates.
 - Workspace transform reset (`workspaceTx` / "Reset" button) isn't exposed — purely cosmetic so low priority.
 
-**Verification:** instrumented test from a desktop machine — `curl -X POST http://<headset-ip>:7080/mcp -H "Authorization: Bearer <key>" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'` returns the 62-tool catalog. End-to-end smoke test for the "natural-language slicer" loop: `load_model_from_path` → `slice_active_plate` → poll `get_workspace_state` until `slice_state.kind == "done"` → `save_gcode_to_downloads`, then `select_printer` + `start_print` against a Moonraker host. Workspace tools require the app foreground (the `attached` flag in `get_workspace_state` is the gate).
+**Verification:** instrumented test from a desktop machine — `curl -X POST http://<headset-ip>:7080/mcp -H "Authorization: Bearer <key>" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'` returns the 67-tool catalog. End-to-end smoke test for the "natural-language slicer" loop: `load_model_from_path` → `slice_active_plate` → poll `get_workspace_state` until `slice_state.kind == "done"` → `save_gcode_to_downloads`, then `select_printer` + `start_print` against a Moonraker host. Workspace tools require the app foreground (the `attached` flag in `get_workspace_state` is the gate).
 
 ### C7. Spatial "Digital Twin" Monitoring 🔴 Not started
 

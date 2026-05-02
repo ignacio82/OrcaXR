@@ -189,6 +189,39 @@ class WorkspaceModelTest {
         assertEquals("vol_123", removeVol.volumeId)
     }
 
+    @Test fun paintActionsRoundTrip() = runTest {
+        val ws = WorkspaceModel()
+        val gathered = mutableListOf<WorkspaceAction>()
+        val job = launch(start = CoroutineStart.UNDISPATCHED) {
+            ws.actions.collect { gathered += it }
+        }
+        // Canonical "replace blue (slot 2) with red (slot 3)" use case.
+        ws.emit(WorkspaceAction.ReplacePaintTag("m1", WorkspaceAction.PaintKind.Color, fromTag = 2, toTag = 3))
+        ws.emit(WorkspaceAction.ClearPaint("m1", WorkspaceAction.PaintKind.Color))
+        ws.emit(WorkspaceAction.ClearPaint("m1", null)) // all kinds
+        ws.emit(WorkspaceAction.PaintUndo("m1"))
+        ws.emit(WorkspaceAction.PaintRedo("m1"))
+        // Convert support enforcers to blockers (1 → 2).
+        ws.emit(WorkspaceAction.ReplacePaintTag("m1", WorkspaceAction.PaintKind.Support, fromTag = 1, toTag = 2))
+        repeat(7) { yield() }
+        job.cancel()
+        assertEquals(6, gathered.size)
+        val swap = gathered[0] as WorkspaceAction.ReplacePaintTag
+        assertEquals(WorkspaceAction.PaintKind.Color, swap.kind)
+        assertEquals(2, swap.fromTag)
+        assertEquals(3, swap.toTag)
+        val clearColor = gathered[1] as WorkspaceAction.ClearPaint
+        assertEquals(WorkspaceAction.PaintKind.Color, clearColor.kind)
+        val clearAll = gathered[2] as WorkspaceAction.ClearPaint
+        assertEquals(null, clearAll.kind)
+        assertTrue(gathered[3] is WorkspaceAction.PaintUndo)
+        assertTrue(gathered[4] is WorkspaceAction.PaintRedo)
+        val swapSupport = gathered[5] as WorkspaceAction.ReplacePaintTag
+        assertEquals(WorkspaceAction.PaintKind.Support, swapSupport.kind)
+        assertEquals(1, swapSupport.fromTag)
+        assertEquals(2, swapSupport.toTag)
+    }
+
     @Test fun multipleEmissionsAreOrdered() = runTest {
         val ws = WorkspaceModel()
         val gathered = mutableListOf<WorkspaceAction>()

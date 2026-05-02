@@ -85,6 +85,11 @@ internal object WorkspaceTools {
             ListVolumes(workspace),
             AddVolumeToModel(workspace),
             RemoveVolume(workspace),
+            GetPaintSummary(workspace),
+            ClearPaint(workspace),
+            ReplacePaintTag(workspace),
+            PaintUndo(workspace),
+            PaintRedo(workspace),
         )
     }
 
@@ -1277,6 +1282,241 @@ internal object WorkspaceTools {
                     put("volume_id", volumeId)
                 },
             )
+        }
+    }
+
+    // ---- Paint-by-API tools ----
+
+    /** Parse "color"/"support"/"seam"/"fuzzy"/"fuzzy_skin" into the
+     *  matching PaintKind enum, or null on unknown input. */
+    private fun parsePaintKind(raw: String): WorkspaceAction.PaintKind? = when (raw.lowercase()) {
+        "color", "filament", "" -> WorkspaceAction.PaintKind.Color
+        "support" -> WorkspaceAction.PaintKind.Support
+        "seam" -> WorkspaceAction.PaintKind.Seam
+        "fuzzy", "fuzzy_skin", "fuzzyskin" -> WorkspaceAction.PaintKind.FuzzySkin
+        else -> null
+    }
+
+    private fun arrayFor(m: PlacedModel, kind: WorkspaceAction.PaintKind): ByteArray? = when (kind) {
+        WorkspaceAction.PaintKind.Color -> m.paintFilamentIndex
+        WorkspaceAction.PaintKind.Support -> m.supportFlags
+        WorkspaceAction.PaintKind.Seam -> m.seamFlags
+        WorkspaceAction.PaintKind.FuzzySkin -> m.fuzzySkinFlags
+    }
+
+    /** Histogram of tag → triangle count for one paint kind. */
+    private fun histogram(arr: ByteArray?): Map<Int, Int> {
+        if (arr == null) return emptyMap()
+        val out = HashMap<Int, Int>()
+        for (b in arr) {
+            val k = b.toInt() and 0xff
+            out[k] = (out[k] ?: 0) + 1
+        }
+        return out
+    }
+
+    class GetPaintSummary(private val ws: WorkspaceModel) : Tool {
+        override val name = "get_paint_summary"
+        override val description =
+            "Per-tag triangle histogram for a model's paint state. Use this BEFORE replace_paint_tag " +
+                "to know which slot is currently in use (e.g. the LLM sees '142 triangles tagged " +
+                "slot 2' and can decide to remap to slot 3). Returns counts for color, support, " +
+                "seam, and fuzzy-skin paint, plus paint_history (canUndo / canRedo) and " +
+                "total_triangle_count when at least one paint kind has been authored."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id"),
+            properties = mapOf("model_id" to Schemas.string("Model id from list_placed_models")),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            val id = args.optString("model_id").trim()
+            val m = ws.placedModels.value.firstOrNull { it.id == id }
+                ?: return ToolResult.error("No model with id '$id'.")
+
+            fun encode(arr: ByteArray?): JSONObject = JSONObject().apply {
+                put("authored", arr != null)
+                if (arr != null) {
+                    val h = histogram(arr)
+                    val obj = JSONObject()
+                    for ((tag, count) in h.toSortedMap()) obj.put(tag.toString(), count)
+                    put("counts", obj)
+                    put("painted_tris", arr.count { it.toInt() != 0 })
+                    put("total_tris", arr.size)
+                }
+            }
+
+            // Triangle count comes from any non-null paint array
+            // (they're all parallel to the source mesh).
+            val triCount = m.paintFilamentIndex?.size
+                ?: m.supportFlags?.size
+                ?: m.seamFlags?.size
+                ?: m.fuzzySkinFlags?.size
+
+            val body = JSONObject().apply {
+                put("ok", true)
+                put("model_id", id)
+                if (triCount != null) put("total_triangle_count", triCount)
+                put("color", encode(m.paintFilamentIndex))
+                put("support", encode(m.supportFlags))
+                put("seam", encode(m.seamFlags))
+                put("fuzzy_skin", encode(m.fuzzySkinFlags))
+                put("brim_ear_count", m.brimEars.size)
+            }
+
+            val text = buildString {
+                appendLine("Paint summary for ${m.label}:")
+                if (triCount != null) appendLine("  total triangles: $triCount")
+                fun line(label: String, arr: ByteArray?) {
+                    if (arr == null) {
+                        appendLine("  $label: not authored")
+                    } else {
+                        val painted = arr.count { it.toInt() != 0 }
+                        val nonZero = histogram(arr).filterKeys { it != 0 }
+                        appendLine("  $label: $painted / ${arr.size} painted; ${nonZero.toSortedMap()}")
+                    }
+                }
+                line("color", m.paintFilamentIndex)
+                line("support", m.supportFlags)
+                line("seam", m.seamFlags)
+                line("fuzzy_skin", m.fuzzySkinFlags)
+                if (m.brimEars.isNotEmpty()) appendLine("  brim ears: ${m.brimEars.size}")
+            }
+            return ToolResult.ok(text.trim(), body)
+        }
+    }
+
+    class ClearPaint(private val ws: WorkspaceModel) : Tool {
+        override val name = "clear_paint"
+        override val description =
+            "Wipe paint state on a model. kind='color' clears filament-slot tags; 'support', " +
+                "'seam', 'fuzzy_skin' clear those respectively. kind='all' (or omitted) wipes " +
+                "all four kinds. Recorded in paint history so paint_undo restores it."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id from list_placed_models"),
+                "kind" to Schemas.string("'color' | 'support' | 'seam' | 'fuzzy_skin' | 'all' (default 'all')"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            if (ws.placedModels.value.none { it.id == id }) {
+                return ToolResult.error("No model with id '$id'.")
+            }
+            val rawKind = args.optString("kind", "all").lowercase()
+            val kind = if (rawKind == "all") null
+                else parsePaintKind(rawKind)
+                    ?: return ToolResult.error("Unknown kind '$rawKind'. Use color|support|seam|fuzzy_skin|all.")
+            ws.emit(WorkspaceAction.ClearPaint(id, kind))
+            return success(
+                if (kind == null) "Cleared all paint on $id." else "Cleared $rawKind paint on $id.",
+                JSONObject().apply {
+                    put("model_id", id)
+                    put("kind", kind?.name?.lowercase() ?: "all")
+                },
+            )
+        }
+    }
+
+    class ReplacePaintTag(private val ws: WorkspaceModel) : Tool {
+        override val name = "replace_paint_tag"
+        override val description =
+            "Re-tag every triangle currently tagged `from_tag` to `to_tag` on the given paint " +
+                "kind. The canonical 'replace blue with red' use case: get_paint_summary tells " +
+                "the LLM the model has triangles tagged slot 2 (blue) — call replace_paint_tag(" +
+                "kind='color', from_tag=2, to_tag=3) to recolor them all to slot 3. " +
+                "to_tag=0 is a partial clear (drops only triangles matching from_tag). " +
+                "For support/seam, valid tags are 0 (none), 1 (ENFORCER), 2 (BLOCKER); " +
+                "for fuzzy_skin, only 0 / 1. For color, 0..32 (0 = unpainted, 1..32 = filament slot). " +
+                "Recorded in paint history so paint_undo restores it."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id", "from_tag", "to_tag"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id"),
+                "kind" to Schemas.string("'color' (default) | 'support' | 'seam' | 'fuzzy_skin'"),
+                "from_tag" to Schemas.integer("Existing tag to find"),
+                "to_tag" to Schemas.integer("New tag to assign in its place"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            val model = ws.placedModels.value.firstOrNull { it.id == id }
+                ?: return ToolResult.error("No model with id '$id'.")
+            val kind = parsePaintKind(args.optString("kind", "color"))
+                ?: return ToolResult.error("Unknown kind. Use color|support|seam|fuzzy_skin.")
+            val fromTag = args.optInt("from_tag", -1)
+            val toTag = args.optInt("to_tag", -1)
+            if (fromTag !in 0..255 || toTag !in 0..255) {
+                return ToolResult.error("from_tag and to_tag must each be in 0..255.")
+            }
+            // Per-kind range checks so a tool caller doesn't write a
+            // tag the slicer will silently ignore.
+            val maxTag = when (kind) {
+                WorkspaceAction.PaintKind.Color -> dev.orcaxr.app.MAX_PAINT_SLOTS
+                WorkspaceAction.PaintKind.Support -> 2
+                WorkspaceAction.PaintKind.Seam -> 2
+                WorkspaceAction.PaintKind.FuzzySkin -> 1
+            }
+            if (fromTag > maxTag || toTag > maxTag) {
+                return ToolResult.error(
+                    "Tag exceeds max for ${kind.name.lowercase()} (max=$maxTag).",
+                )
+            }
+            val arr = arrayFor(model, kind)
+            if (arr == null) {
+                return ToolResult.error(
+                    "Model '$id' has no ${kind.name.lowercase()} paint authored. Paint at least one face first.",
+                )
+            }
+            val matchCount = arr.count { (it.toInt() and 0xff) == fromTag }
+            ws.emit(WorkspaceAction.ReplacePaintTag(id, kind, fromTag, toTag))
+            return success(
+                "Re-tagging $matchCount triangle(s) on $id: ${kind.name.lowercase()} $fromTag → $toTag.",
+                JSONObject().apply {
+                    put("model_id", id)
+                    put("kind", kind.name.lowercase())
+                    put("from_tag", fromTag)
+                    put("to_tag", toTag)
+                    put("matched_triangle_count", matchCount)
+                },
+            )
+        }
+    }
+
+    class PaintUndo(private val ws: WorkspaceModel) : Tool {
+        override val name = "paint_undo"
+        override val description =
+            "Undo the most recent paint stroke on a model (works for both XR-driven and " +
+                "MCP-driven paint changes — they share the same history)."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id"),
+            properties = mapOf("model_id" to Schemas.string("Model id")),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            ws.emit(WorkspaceAction.PaintUndo(id))
+            return success("Paint undo requested for $id.", JSONObject().apply { put("model_id", id) })
+        }
+    }
+
+    class PaintRedo(private val ws: WorkspaceModel) : Tool {
+        override val name = "paint_redo"
+        override val description = "Redo a previously-undone paint stroke."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id"),
+            properties = mapOf("model_id" to Schemas.string("Model id")),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            ws.emit(WorkspaceAction.PaintRedo(id))
+            return success("Paint redo requested for $id.", JSONObject().apply { put("model_id", id) })
         }
     }
 
