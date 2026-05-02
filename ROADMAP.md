@@ -354,7 +354,7 @@ Enables hands-free control of the slicer and printer using voice commands, mappi
 
 ## D. Painting / object editing extensions
 
-### D1. Paint persistence 🟡 Partial — local cache shipped, 3MF round-trip pending
+### D1. Paint persistence 🟢 Shipped — local cache + 3MF round-trip
 
 > **Files:** `PaintCacheStore.kt`, `PaintCacheStoreTest.kt`, `MainActivity.kt::previewStl` restore + `LaunchedEffect(placedModels.map { … paintFilamentIndex/supportFlags/seamFlags })` save.
 
@@ -364,20 +364,21 @@ Wired into `XrShell`:
 - **Restore:** in `previewStl`, after `StlReader.read` returns `triCount`, hash the source and call `paintCache.restore(hash, triCount)`. On hit, copy the three arrays into the matching PlacedModel via a `placedModels.map { copy(...) }`. Restore only fires when the model has no paint yet so a cache hit can't clobber fresh in-session edits.
 - **Save:** a debounced (300 ms) `LaunchedEffect` keyed on every model's `paintFilamentIndex / supportFlags / seamFlags` writes via `Dispatchers.IO`. A clear-paint round-trips because `PaintCacheStore.save` deletes the entry when every array is null/all-zero.
 
-**Pending — entry-criteria for the green flip:**
-- Write paint state into `mmu_segmentation_facets` of an exported 3MF via `nativeSaveAs3mf` so a save-as-3MF opened in desktop OrcaSlicer shows the same painted regions.
+**Tests:** `PaintCacheStoreTest` covers round-trip, tri-count mismatch, missing-file, blank-array prune, null-array prune, LRU eviction at the cap boundary, hash stability, content-divergent hashes, corrupt-file fallback, `Entry.equals`, `sizeBytes` growth + clear, fuzzy-skin round-trip, fuzzy-only persistence, all-blank fuzzy survival.
 
-**Tests:** `PaintCacheStoreTest` covers round-trip, tri-count mismatch, missing-file, blank-array prune, null-array prune, LRU eviction at the cap boundary, hash stability, content-divergent hashes, corrupt-file fallback, `Entry.equals`, and `sizeBytes` growth + clear.
-
-**Shipped:** commit `c913e4e` — `PaintCacheStore` + on-load restore + on-mutate save + 10 tests. Follow-up commit `e8133db` — `PaintCacheStore.sizeBytes()`, "Storage" section in `ControllerHelpCard` showing cache size + entry count + Clear button (Toast on clear, helpVersion bump so the row refreshes immediately), `formatBytes` helper + 1 unit test, +1 PaintCacheStore unit test for the new `sizeBytes` method.
+**Shipped:** commit `c913e4e` — `PaintCacheStore` + on-load restore + on-mutate save + 10 tests. Follow-up commit `e8133db` — `PaintCacheStore.sizeBytes()`, "Storage" section in `ControllerHelpCard` showing cache size + entry count + Clear button (Toast on clear, helpVersion bump so the row refreshes immediately), `formatBytes` helper + 1 unit test, +1 PaintCacheStore unit test for the new `sizeBytes` method. Follow-up commit `cc75ead` — `PaintCacheStore` v2 adds `fuzzySkinFlags`, v1 entries still load (fuzzy null) and re-save as v2 on next mutation. Final commit `d2d30d2` — `nativeSaveAs3mf` writes all four facet annotations (color/support/seam/fuzzy) onto the source mesh's first volume before `store_3mf`, so a 3MF saved with painted regions reopens in desktop OrcaSlicer with identical paint.
 
 ### D2. Custom support point placement ⚪ Deferred — SLA-leaning, FDM-only stack today
 
 Per-point support placement (vs paint-region enforcer/blocker). Upstream uses `GLGizmoSlaSupports`. Useful for FDM tree-supports tuning but defer until a user requests it; current Support Enforcer paint mode covers the common case.
 
-### D3. Brim ear painting ⚪ Deferred
+### D3. Brim ear painting 🟢 Shipped
 
-Paint per-edge brim ears ("only here"). Profile-side `brim_type=auto` works today. Wait for user request.
+> **Files:** `BrimEarPoint` data class in `PlacedModel.kt`, `PaintMode.BrimEars` in `PaintBrush.kt`, `apply_orcaxr_brim_ears` JNI helper, `nativeSlice` + `nativeSaveAs3mf` jBrimEars parameter, `PlacedModel.brimEars` field, `MeshBvh.triangleCentroid`, `TopNavigationPill` "Place brim ears" toggle.
+
+Mirrors upstream OrcaSlicer's `GLGizmoBrimEars`. PaintMode.BrimEars converts a click to a `BrimEarPoint` at the picked triangle's centroid (mesh-local mm). MOVE is ignored so a drag doesn't sprinkle dozens; 1 mm dedup gate prevents finger-tap jitter stacks. Each PlacedModel collects its ears, which flow into `ModelObject::brim_points` at slice + saveAs3mf time.
+
+**Shipped:** commit `69b783b` — data + JNI write + click-to-add + UI toggle + count badge + clear-all. 3D visual marker spheres deferred (entity-lifecycle work for a later session).
 
 ### D4. Embossing / SVG inset / text-on-object ⚪ Deferred
 
@@ -391,13 +392,37 @@ Upstream's `GLGizmoHollow` is SLA-leaning. U1 + Centauri Carbon are FDM. Out of 
 
 Hand-track distance/angle between picked points/edges/faces (upstream's `GLGizmoMeasure`). Useful but additive; user hasn't requested it.
 
-### D7. Multi-step undo for paint ⚪ Deferred
+### D7. Multi-step undo for paint 🟢 Shipped
 
-Today only single-step "clear paint" exists. Full undo stack (per-stroke ring buffer) is a v3 nicety.
+> **Files:** `PaintHistory.kt`, `PaintHistoryTest.kt`, `PaintInput.kt` (UP forwarding), `MainActivity.kt` (begin/end stroke wiring + Undo/Redo callbacks), `UiPanels.kt::TopNavigationPill` (Undo/Redo chips).
 
-### D8. Smart fill / connected-region paint ⚪ Deferred
+Per-PlacedModel ring buffer of paint strokes, each capturing snapshots of the four paint kinds (color/support/seam/fuzzy) at stroke entry and exit. UP action sentinel (hitTri = -1) closes the stroke. Open-stroke undo rolls back without consuming a slot ("Ctrl-Z mid-word"). Cap MAX_DEPTH=20.
 
-Upstream's "paint connected facets up to a normal-angle threshold." User can drag-paint manually for v1; smart fill is a productivity boost.
+**Shipped:** commit `5cf152e` — `PaintHistory` + 11 tests + UI bindings.
+
+### D8. Smart fill / connected-region paint 🟢 Shipped
+
+> **Files:** `MeshBvh.smartFillBfs`, `PaintBrush` (`smartFill` + `smartFillAngleDeg` fields), `MainActivity.kt::pickTriangles` dispatcher, `UiPanels.kt::TopNavigationPill` Smart toggle + Fill chip.
+
+Upstream's `GLGizmoPainterBase::ToolType::BUCKET_FILL` equivalent. BFS along shared-vertex adjacency (already cached); each edge step accepted iff `dot(curN, nN) >= cos(angle)`. Stepwise comparison lets the fill traverse curved surfaces within angle budget per step. Default 30°, presets 15/30/45/60/90°. Bounded at 65 536 triangles per fill.
+
+**Shipped:** commit `7534f25` — `smartFillBfs` + 6 BVH tests + UI toggle + angle cycle.
+
+### D10. Fuzzy Skin paint 🟢 Shipped
+
+> **Files:** `PaintMode.FuzzySkin` in `PaintBrush.kt`, `PlacedModel.fuzzySkinFlags`, `apply_orcaxr_fuzzy_skin` JNI helper, `nativeSlice` jFuzzySkinFlags parameter, `nativeSaveAs3mf` round-trip, `UiPanels.kt::ModelDetailsPanel` "Apply fuzzy skin" button, `PaintCacheStore` v2 forward-compat loader.
+
+Mirrors upstream OrcaSlicer's `GLGizmoFuzzySkin`. Per-triangle ByteArray on PlacedModel; state 1 = FUZZY_SKIN. Flows into `ModelVolume::fuzzy_skin_facets` at slice and save time so libslic3r's fuzzy-skin texture pass roughens only the painted region. Brush radius / smart fill / undo / 3MF round-trip all apply uniformly.
+
+**Shipped:** commit `cc75ead` — JNI helper + dispatch + UI + cache + 3 PaintCacheStore tests.
+
+### D11. Brush radius / smart-fill stick adjust 🟢 Shipped
+
+> **Files:** `MainActivity.kt` Prepare-mode pump, `ControllerHelpCard.kt` entry list.
+
+When paint mode is active the left stick's Y axis nudges brush radius (0..50 mm at ~10 mm/s) or smart-fill angle (1..90° at ~1.5°/tick), instead of moving the model. X still cycles model rotation.
+
+**Shipped:** commit `f85380c`.
 
 ### D9. 3MF round-trip for per-object Object Settings 🔴 Not started
 
@@ -582,6 +607,12 @@ Brief reference index. Use `git log --oneline --grep=<phase>` for the full commi
 | UI/UX — Speed + Support print-settings tabs | 🟢 |
 | PreviewPalette swatch row ("as-will-print") | 🟢 commit `410e860` |
 | Flush-tower volume fix (3MF-authored matrix) | 🟢 commit `9bf4f55` |
+| Fuzzy Skin paint (mode + JNI + UI + cache) | 🟢 commit `cc75ead` |
+| Smart Fill / bucket brush sub-mode | 🟢 commit `7534f25` |
+| Multi-step paint undo/redo | 🟢 commit `5cf152e` |
+| 3MF paint round-trip (4 facet annotations) | 🟢 commit `d2d30d2` |
+| Brim Ears point-placement tool | 🟢 commit `69b783b` |
+| Paint-mode stick brush/angle adjust | 🟢 commit `f85380c` |
 
 ---
 
