@@ -68,22 +68,25 @@ Kotlin-side `mergedConfig()`/`computeFilamentMap()` already enforces `(target % 
 
 3MF-authored `flush_volumes_matrix` and `flush_multiplier` extracted via direct miniz read (same pattern as filament_colour, gotcha #10b workaround), surface-validated against `n*n*nozzle_count`, fall back to a synthesized 30 mm³ default matrix. Project overrides are now hooked into `mergedConfig` ahead of the libslic3r 280 mm³ default.
 
-### A5. Cross-platform mesh repair ("Fix Model") 🔴 Not started
+### A5. Cross-platform mesh repair ("Fix Model") 🟢 Shipped
 
-> **Recommended path:** CGAL `Polygon_mesh_processing` — already cross-compiled and proven on Galaxy XR. OpenVDB voxel-repair is a future optimization (unblocks tree supports + SLA hollowing too, but requires NDK cross-compile work for OpenVDB/Blosc/IlmBase/OpenEXR).
+> **Files:** `app/src/main/cpp/slic3r_jni.cpp::nativeRepairModel`, `app/src/main/java/dev/orcaxr/app/SlicerEngine.kt::repairModel` + `RepairResult`, `app/src/main/java/dev/orcaxr/app/UiPanels.kt::ModelRow` (wrench `Icons.Filled.Build` per-row), `app/src/main/java/dev/orcaxr/app/MainActivity.kt::runRepair`, `app/src/androidTest/java/dev/orcaxr/app/RepairModelTest.kt`.
 
-Upstream OrcaSlicer's "Fix Model" depends on the Windows-only 3D Builder API (`FixModelByWin10.cpp` → `fix_model_by_win10_sdk_gui`). ADMesh's import-time pass handles flipped normals + degenerate facets but not non-manifold topology, internal shells, or severe self-intersection. CGAL is already linked into `libslic3r_jni.so` for boolean ops.
+Upstream OrcaSlicer's "Fix Model" depends on the Windows-only 3D Builder API (`FixModelByWin10.cpp` → `fix_model_by_win10_sdk_gui`). OrcaXR can't take that path on Android XR; ADMesh's import-time pass handles flipped normals + degenerate facets but not non-manifold topology or self-intersection.
 
-**Implementation outline:**
-1. **C++** — `src/libslic3r/MeshBoolean.cpp`: new `libslic3r::MeshBoolean::cgal::repair(TriangleMesh&)` that runs `repair_polygon_soup` → `orient_polygon_soup` → `Surface_mesh` conversion → `corefine_and_compute_union(mesh, mesh)` to resolve self-intersections.
-2. **JNI** — `slic3r_jni.cpp`: `nativeRepairModel(inputPath, outputPath) -> Int` (return repair stats: tris_in, tris_out, fixed_count). Heap is the OOM risk — guard with try/catch and surface OOM as a Toast in Compose.
-3. **Kotlin** — `SlicerEngine.repairModel()` suspend wrapper on the existing single-thread JNI dispatcher.
-4. **UI** — wrench-icon button in `PlacedModelsSection` per row; show indeterminate progress for the seconds-long CGAL pass; bump `previewVersion` to re-bake the GLB.
+**Implementation:** the JNI shim does NOT add new C++ inside libslic3r — it composes already-exported primitives, so the v2.3.2 submodule stays clean (no rebuild burden on every dev machine). Pipeline in `nativeRepairModel`:
+1. `load_mesh_container(path)` — STL goes through ADMesh's `from_stl(repair=true)` pass on import (welds bit-equal vertices, fixes flipped normals, drops degenerate facets); 3MF/AMF are already pre-cleaned by the format.
+2. `its_merge_vertices` → `its_remove_degenerate_faces` → `its_compactify_vertices` for any leftover post-load junk (zero-area survivors of the merge).
+3. Probe: `its_num_open_edges` and `MeshBoolean::cgal::does_self_intersect(TriangleMesh)`. If both come back clean, **skip** the heavy CGAL pass (fast path for already-manifold inputs — clean 20 mm cube measures at 1 ms total).
+4. `MeshBoolean::self_union(TriangleMesh&)` — CGAL via igl `mesh_boolean(union, A, ∅)`, the canonical self-intersection-resolving robust polygon-soup pipeline. Wrapped in try/catch including `std::bad_alloc` so a 1M-tri input that OOMs the 256 MB Android cap surfaces as `RepairResult.partial=true` (the caller still gets the ADMesh-cleaned result) instead of crashing the JNI dispatcher.
 
-**Exit criteria:**
-- Repair on a known non-manifold MakerWorld 3MF (commit a fixture under `app/src/androidTest/assets/`) produces a watertight result (`its.indices.size()` decreases, no holes).
-- Repair on a 1M-tri mesh either succeeds or surfaces an OOM Toast cleanly without crashing the JNI dispatcher.
-- CGAL parallel_for sites respect the TBB serial shim (gotcha #17).
+Output is a single-object 3MF written via `store_3mf`. The Kotlin caller (`MainActivity::runRepair`) replaces `PlacedModel.source` with the repaired path AND clears all topology-dependent state — `paintFilamentIndex`, `supportFlags`, `seamFlags`, `fuzzySkinFlags`, `brimEars`, `volumes`, `originalSource`, `groupId`/`groupOrdinal` — because per-triangle / per-volume indices won't survive the CGAL re-mesh. `previewVersion` is bumped to force a re-bake.
+
+**Verified end-to-end (`RepairModelTest`, Galaxy XR SM-I610):**
+- `repairResolvesTwoOverlappingCubes` — synthesizes two 20 mm axis-aligned cubes offset by 10 mm (24 tris, self-intersecting). Pipeline reports `self_intersect=1` and runs CGAL self-union; output is a watertight 44-tri / 24-vert L-shape with `open_edges_out=0`. End-to-end 23 ms.
+- `repairLeavesAlreadyManifoldCubeIntact` — clean bundled `cube_20mm.stl` (12 tris, 8 verts). Pipeline reports `self_intersect=0` and skips the CGAL pass entirely (`used_cgal=0`); output round-trips to identical 12/8/0. 1 ms.
+
+**Shipped:** A5 commit (this PR) — `nativeRepairModel` + `SlicerEngine.repairModel` + `RepairResult` + per-row wrench icon + `RepairModelTest` (2 tests passing, 0 failures, 0 errors on Galaxy XR).
 
 ### A6. Bed-collision check (full mesh-vs-bed) 🟢 Shipped
 

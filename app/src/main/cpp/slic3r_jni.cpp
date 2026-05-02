@@ -4041,3 +4041,197 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSplitObject(
         return nullptr;
     }
 }
+
+// nativeRepairModel — Phase A5 ("Fix Model"). Cross-platform mesh repair
+// for non-manifold / self-intersecting input meshes.
+//
+// Pipeline (cheapest pass first; only escalate when needed):
+//   1. load_mesh_container — STL goes through ADMesh's repair on import
+//      (fixes flipped normals, degenerate facets, basic edge stitching).
+//      3MF/AMF skip that pass because the format already encodes
+//      indexed faces.
+//   2. its_merge_vertices       — coalesce bit-equal vertex positions
+//      that distinct STL facets duplicated.
+//   3. its_remove_degenerate_faces — drop zero-area triangles that
+//      survived ADMesh (e.g. collinear after vertex merge).
+//   4. its_compactify_vertices  — drop vertices no surviving face refs.
+//   5. its_num_open_edges + MeshBoolean::cgal::does_self_intersect —
+//      decide whether the cheap pass already produced a watertight,
+//      non-self-intersecting mesh. If yes, skip CGAL.
+//   6. MeshBoolean::self_union(TriangleMesh&) — heavy CGAL repair via
+//      igl's polygon-soup boolean. Resolves self-intersections and
+//      reconstructs a manifold result. Wrapped in try/catch including
+//      std::bad_alloc — large meshes can exhaust the 256MB Android
+//      process cap; on OOM we surface success_flag=2 (partial repair)
+//      and fall through to writing the ADMesh-only result.
+//
+// Output: a single-object 3MF at [outputPath] containing the repaired
+// mesh. The caller replaces PlacedModel.source with this path and
+// bumps previewVersion to re-bake.
+//
+// Returns a jintArray with these slots (-1 entirely on early failure):
+//   [0] success_flag : 0=failed, 1=fully repaired, 2=partial (CGAL bailed)
+//   [1] tris_in
+//   [2] tris_out
+//   [3] verts_in
+//   [4] verts_out
+//   [5] open_edges_in   (0 means already manifold pre-repair)
+//   [6] open_edges_out
+//   [7] used_cgal_path  (0=skipped, 1=ran, 2=ran-and-failed)
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_orcaxr_app_SlicerEngine_nativeRepairModel(
+    JNIEnv* env, jclass,
+    jstring jInputPath,
+    jstring jOutputPath)
+{
+    ScopedUtf in(env, jInputPath);
+    ScopedUtf out(env, jOutputPath);
+    ORCAXR_LOGI("nativeRepairModel: %s -> %s", in.c, out.c);
+
+    auto build_result = [&](jint success, jint tris_in, jint tris_out,
+                            jint verts_in, jint verts_out,
+                            jint open_in, jint open_out,
+                            jint used_cgal) -> jintArray {
+        jint vals[8] = { success, tris_in, tris_out, verts_in, verts_out,
+                         open_in, open_out, used_cgal };
+        jintArray jOut = env->NewIntArray(8);
+        if (jOut == nullptr) return nullptr;
+        env->SetIntArrayRegion(jOut, 0, 8, vals);
+        return jOut;
+    };
+
+    try {
+        Slic3r::Model model;
+        try {
+            model = load_mesh_container(in.c);
+        } catch (const std::exception& e) {
+            ORCAXR_LOGE("nativeRepairModel: read failed: %s", e.what());
+            return nullptr;
+        }
+        if (model.objects.empty()) {
+            ORCAXR_LOGE("nativeRepairModel: empty model");
+            return nullptr;
+        }
+
+        // Aggregate every volume of the first object into one mesh —
+        // ModelObject::mesh() concatenates MODEL_PART volumes (BBS
+        // Studio's lone "user-visible mesh" view). Modifier / negative-
+        // volume volumes drop out, which is what we want here:
+        // repair only applies to the printable surface.
+        Slic3r::ModelObject* mo = model.objects.front();
+        Slic3r::TriangleMesh mesh = mo->mesh();
+        if (mesh.empty()) {
+            ORCAXR_LOGE("nativeRepairModel: mesh empty after aggregation");
+            return nullptr;
+        }
+
+        const jint tris_in  = jint(mesh.its.indices.size());
+        const jint verts_in = jint(mesh.its.vertices.size());
+        const jint open_in  = jint(Slic3r::its_num_open_edges(mesh.its));
+        ORCAXR_LOGI("nativeRepairModel: input %d tris, %d verts, %d open edges",
+                    tris_in, verts_in, open_in);
+
+        // Step 2-4: ADMesh-style cleanup. These mutate the its in-place
+        // and return counts of removed elements. They never throw on
+        // malformed input — degenerate triangles just get dropped.
+        const int merged   = Slic3r::its_merge_vertices(mesh.its);
+        const int dropped  = Slic3r::its_remove_degenerate_faces(mesh.its);
+        const int orphans  = Slic3r::its_compactify_vertices(mesh.its);
+        ORCAXR_LOGI("nativeRepairModel: ADMesh pass merged=%d dropped=%d orphans=%d",
+                    merged, dropped, orphans);
+
+        if (mesh.its.indices.empty()) {
+            ORCAXR_LOGE("nativeRepairModel: mesh consumed by cleanup pass");
+            return build_result(/*success=*/0, tris_in, 0, verts_in, 0,
+                                open_in, 0, /*used_cgal=*/0);
+        }
+
+        const size_t open_after_admesh = Slic3r::its_num_open_edges(mesh.its);
+        bool self_intersect = false;
+        try {
+            self_intersect = Slic3r::MeshBoolean::cgal::does_self_intersect(mesh);
+        } catch (const std::exception& e) {
+            // CGAL's self-intersection probe can throw on absurd input
+            // (NaN coords, etc.). Treat as "yes, looks broken, escalate"
+            // rather than aborting.
+            ORCAXR_LOGI("nativeRepairModel: does_self_intersect threw, "
+                        "assuming yes: %s", e.what());
+            self_intersect = true;
+        }
+        ORCAXR_LOGI("nativeRepairModel: post-cleanup open_edges=%zu self_intersect=%d",
+                    open_after_admesh, (int)self_intersect);
+
+        jint used_cgal = 0;
+        bool cgal_failed = false;
+        if (open_after_admesh > 0 || self_intersect) {
+            // Heavy CGAL pass via igl::copyleft::cgal::mesh_boolean.
+            // Wrapped in try/catch — bad_alloc is the realistic OOM
+            // failure mode at the 256 MB Android process cap. On
+            // failure we keep the ADMesh-only result; the caller still
+            // sees something usable.
+            used_cgal = 1;
+            // ModelObject::mesh() copied; mutate a working clone to
+            // preserve the ADMesh-cleaned mesh as the fallback.
+            Slic3r::TriangleMesh attempt = mesh;
+            try {
+                Slic3r::MeshBoolean::self_union(attempt);
+                if (!attempt.empty()) {
+                    mesh = std::move(attempt);
+                } else {
+                    ORCAXR_LOGE("nativeRepairModel: self_union returned empty mesh");
+                    cgal_failed = true;
+                    used_cgal = 2;
+                }
+            } catch (const std::bad_alloc&) {
+                ORCAXR_LOGE("nativeRepairModel: self_union OOM, keeping ADMesh result");
+                cgal_failed = true;
+                used_cgal = 2;
+            } catch (const std::exception& e) {
+                ORCAXR_LOGE("nativeRepairModel: self_union threw: %s", e.what());
+                cgal_failed = true;
+                used_cgal = 2;
+            } catch (...) {
+                ORCAXR_LOGE("nativeRepairModel: self_union unknown exception");
+                cgal_failed = true;
+                used_cgal = 2;
+            }
+        }
+
+        const jint tris_out = jint(mesh.its.indices.size());
+        const jint verts_out = jint(mesh.its.vertices.size());
+        const jint open_out = jint(Slic3r::its_num_open_edges(mesh.its));
+        ORCAXR_LOGI("nativeRepairModel: output %d tris, %d verts, %d open edges",
+                    tris_out, verts_out, open_out);
+
+        // Build a fresh single-object Model from the repaired mesh and
+        // write it as a 3MF. We deliberately drop paint / per-volume
+        // metadata: repair changes triangle topology, so any preserved
+        // facet annotations would be misaligned (gotcha #21 trap, but
+        // here we own it explicitly).
+        Slic3r::Model outModel;
+        Slic3r::ModelObject* outObj = outModel.add_object(
+            "repaired", out.c, std::move(mesh));
+        outObj->add_instance();
+
+        if (!Slic3r::store_3mf(out.c, &outModel, /*config=*/nullptr,
+                               /*fullpath_sources=*/false)) {
+            ORCAXR_LOGE("nativeRepairModel: store_3mf failed");
+            return build_result(/*success=*/0, tris_in, tris_out,
+                                verts_in, verts_out, open_in, open_out, used_cgal);
+        }
+        ORCAXR_LOGI("nativeRepairModel: wrote %s", out.c);
+
+        const jint success = cgal_failed ? 2 : 1;
+        return build_result(success, tris_in, tris_out, verts_in, verts_out,
+                            open_in, open_out, used_cgal);
+    } catch (const std::bad_alloc&) {
+        ORCAXR_LOGE("nativeRepairModel: outer OOM");
+        return nullptr;
+    } catch (const std::exception& e) {
+        ORCAXR_LOGE("nativeRepairModel: exception %s", e.what());
+        return nullptr;
+    } catch (...) {
+        ORCAXR_LOGE("nativeRepairModel: unknown exception");
+        return nullptr;
+    }
+}

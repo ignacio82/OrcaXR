@@ -2001,6 +2001,85 @@ private fun XrShell(
     }
 
     /**
+     * Phase A5 ("Fix Model") — run cross-platform mesh repair on the
+     * given PlacedModel. Replaces its `source` with the repaired 3MF,
+     * clears all paint state (topology may have changed → per-triangle
+     * indices would misalign), and re-bakes the preview.
+     *
+     * On full failure (read fail / OOM in outer try) surfaces a toast
+     * and leaves the model untouched. On partial repair (CGAL bailed
+     * out, ADMesh-only result returned) the model still gets the
+     * partial fix and the toast says "partial".
+     */
+    fun runRepair(modelId: String) {
+        val src = placedModels.firstOrNull { it.id == modelId } ?: return
+        val originalLabel = src.label
+        scope.launch {
+            isLoadingModel = true
+            loadingLabel = "Fixing $originalLabel"
+            val out = File(ctx.cacheDir, "repair_${modelId}_${System.currentTimeMillis()}.3mf")
+            val result = runCatching {
+                SlicerEngine.repairModel(src.source, out)
+            }.onFailure {
+                android.util.Log.e("OrcaXR", "repairModel threw", it)
+            }.getOrNull()
+            if (result == null) {
+                isLoadingModel = false
+                loadingLabel = null
+                android.widget.Toast.makeText(
+                    ctx,
+                    "Fix Model failed for $originalLabel (see logs).",
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+                return@launch
+            }
+            // Replace the model in-place with a copy whose source is
+            // the repaired 3MF. Drop everything that depended on the
+            // original triangle topology — paint, brim ears, modifier
+            // volumes — because their per-facet indices won't survive
+            // the CGAL re-mesh.
+            placedModels = placedModels.map {
+                if (it.id != modelId) it else it.copy(
+                    source = out,
+                    originalSource = null,
+                    groupId = null,
+                    groupOrdinal = 0,
+                    paintFilamentIndex = null,
+                    supportFlags = null,
+                    seamFlags = null,
+                    fuzzySkinFlags = null,
+                    brimEars = emptyList(),
+                    volumes = emptyList(),
+                    previewVersion = it.previewVersion + 1,
+                    previewRotZDeg = -1,
+                    previewScalePct = -1,
+                )
+            }
+            sliceState.value = SliceUiState.Idle
+            try {
+                previewStl(modelId)
+            } finally {
+                isLoadingModel = false
+                loadingLabel = null
+            }
+            val deltaTris = result.trianglesOut - result.trianglesIn
+            val deltaOpen = result.openEdgesIn - result.openEdgesOut
+            val msg = if (result.partial) {
+                "Partial fix: $deltaOpen open edges closed " +
+                    "(CGAL self-union skipped — too large)."
+            } else {
+                "Fix done: ${result.trianglesIn} → ${result.trianglesOut} tris, " +
+                    "$deltaOpen open edges closed."
+            }
+            android.widget.Toast.makeText(
+                ctx,
+                msg,
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+
+    /**
      * Phase XR_OBJ_8 — linear clone pattern. Duplicates the selected
      * model [count] times along [axis] with [spacingMm] between
      * footprints. Each clone gets a unique id so its preview GLB
@@ -3934,6 +4013,7 @@ private fun XrShell(
                             // automatically.
                             runAutoArrange()
                         },
+                        onRepairPlacedModel = ::runRepair,
                         allPlates = allPlates,
                         onMoveToPlate = { modelId, plateId ->
                             placedModels = placedModels.map {

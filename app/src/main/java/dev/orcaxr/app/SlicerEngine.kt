@@ -575,6 +575,91 @@ object SlicerEngine {
         nativeSplitObject(input.absolutePath, outDir.absolutePath)?.toList()
     }
 
+    /**
+     * Phase A5 ("Fix Model") result — what the repair pass did.
+     *
+     * [success] mirrors the JNI flag: 1=fully repaired, 2=partial
+     * (CGAL pass bailed out, ADMesh-only result returned). 0/-1 cases
+     * surface as `null` from [repairModel] instead.
+     *
+     * [trianglesIn] / [trianglesOut] etc. let the UI surface a "fixed
+     * N triangles" toast without the caller having to re-parse the
+     * output mesh.
+     */
+    data class RepairResult(
+        val output: File,
+        val trianglesIn: Int,
+        val trianglesOut: Int,
+        val verticesIn: Int,
+        val verticesOut: Int,
+        val openEdgesIn: Int,
+        val openEdgesOut: Int,
+        /** 1=fully repaired, 2=partial (CGAL self-union failed). */
+        val successFlag: Int,
+        /** 0=skipped (already manifold), 1=ran, 2=ran-and-failed. */
+        val usedCgal: Int,
+    ) {
+        val partial: Boolean get() = successFlag == 2
+        val trianglesDelta: Int get() = trianglesOut - trianglesIn
+    }
+
+    /**
+     * Phase A5 ("Fix Model") — cross-platform mesh repair on [input].
+     *
+     * Pipeline (cheapest pass first; only escalates to CGAL if needed):
+     * 1. Load via libslic3r's mesh container reader (STL imports go
+     *    through ADMesh's repair pass on the way in).
+     * 2. ADMesh-style cleanup: merge bit-equal vertices, drop
+     *    degenerate (zero-area) triangles, compactify orphan vertices.
+     * 3. Probe `does_self_intersect` and `its_num_open_edges` — if the
+     *    mesh is already manifold and non-self-intersecting, skip step
+     *    4 entirely (the heavy CGAL pass is the OOM risk).
+     * 4. CGAL-via-igl `MeshBoolean::self_union(mesh)` — resolves self-
+     *    intersections and reconstructs a manifold result. Wrapped on
+     *    the native side with `bad_alloc` catch so a 1M-triangle mesh
+     *    that would OOM the 256 MB Android process cap surfaces as
+     *    [RepairResult.partial] (keep the ADMesh-only result) instead
+     *    of crashing the JNI dispatcher.
+     *
+     * Output is a single-object 3MF at [output] containing the
+     * repaired mesh. The caller replaces `PlacedModel.source` with this
+     * path, clears any per-triangle paint state (topology changed →
+     * paint indices would misalign), and bumps `previewVersion` to
+     * trigger a re-bake of the colored GLB.
+     *
+     * Returns null if repair was not even attempted (read failed, mesh
+     * empty, native OOM in the outer try). Caller should surface this
+     * as a Toast.
+     */
+    suspend fun repairModel(
+        input: File,
+        output: File,
+    ): RepairResult? = withContext(dispatcher) {
+        require(input.exists() && input.canRead()) {
+            "input not readable: ${input.absolutePath}"
+        }
+        output.parentFile?.mkdirs()
+        output.delete()
+        val stats = nativeRepairModel(input.absolutePath, output.absolutePath)
+            ?: return@withContext null
+        require(stats.size == 8) {
+            "nativeRepairModel returned ${stats.size} ints, expected 8"
+        }
+        if (stats[0] == 0) return@withContext null
+        if (!output.exists() || output.length() == 0L) return@withContext null
+        RepairResult(
+            output = output,
+            successFlag = stats[0],
+            trianglesIn = stats[1],
+            trianglesOut = stats[2],
+            verticesIn = stats[3],
+            verticesOut = stats[4],
+            openEdgesIn = stats[5],
+            openEdgesOut = stats[6],
+            usedCgal = stats[7],
+        )
+    }
+
     suspend fun arrangeModels(
         inputs: List<File>,
         priorTransforms: FloatArray,
@@ -1032,6 +1117,10 @@ object SlicerEngine {
         inputPath: String,
         outDir: String,
     ): Array<String>?
+    private external fun nativeRepairModel(
+        inputPath: String,
+        outputPath: String,
+    ): IntArray?
     private external fun nativeArrange(
         inputPaths: Array<String>,
         priorTransforms: FloatArray,

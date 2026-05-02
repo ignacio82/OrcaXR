@@ -180,6 +180,9 @@ fun LeftProjectPanel(
     /** Re-arrange the plated models left-to-right with 5 mm gaps
      *  centered on bed origin. */
     onAutoArrangePlacedModels: () -> Unit = {},
+    /** Phase A5 ("Fix Model") — run cross-platform mesh repair on
+     *  the given model. Called from the per-row wrench icon. */
+    onRepairPlacedModel: (id: String) -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -269,6 +272,7 @@ fun LeftProjectPanel(
             onAdd = onAddPlacedModel,
             onAutoArrange = onAutoArrangePlacedModels,
             onMoveToPlate = onMoveToPlate,
+            onRepair = onRepairPlacedModel,
         )
 
         // Bed-fit indicator. Only visible once a model is loaded so the
@@ -535,6 +539,7 @@ private fun PlacedModelsSection(
     onAdd: () -> Unit,
     onAutoArrange: () -> Unit,
     onMoveToPlate: (String, Int) -> Unit,
+    onRepair: (String) -> Unit,
 ) {
     if (models.isEmpty()) return
     val atCapacity = models.size >= MAX_PLACED_MODELS
@@ -604,6 +609,7 @@ private fun PlacedModelsSection(
                                 },
                                 onDelete = { onDeleteIds(setOf(m.id)) },
                                 onMoveToPlate = onMoveToPlate,
+                                onRepair = onRepair,
                                 isGrouped = true,
                             )
                         }
@@ -620,6 +626,7 @@ private fun PlacedModelsSection(
                             },
                             onDelete = { onDeleteIds(setOf(m.id)) },
                             onMoveToPlate = onMoveToPlate,
+                            onRepair = onRepair,
                             isGrouped = false,
                         )
                     }
@@ -654,6 +661,7 @@ private fun ModelRow(
     onSelectToggle: (Boolean) -> Unit,
     onDelete: (String) -> Unit,
     onMoveToPlate: (String, Int) -> Unit,
+    onRepair: (String) -> Unit,
     isGrouped: Boolean = false,
 ) {
     var showPlateMenu by remember { mutableStateOf(false) }
@@ -716,6 +724,13 @@ private fun ModelRow(
                         }
                     }
                 }
+            }
+            IconButton(onClick = { onRepair(m.id) }) {
+                Icon(
+                    imageVector = Icons.Filled.Build,
+                    contentDescription = "Fix model",
+                    tint = Color(0xFF7BC8FF),
+                )
             }
             IconButton(onClick = { onDelete(m.id) }) {
                 Text("✕", color = Color.Gray, style = MaterialTheme.typography.titleSmall)
