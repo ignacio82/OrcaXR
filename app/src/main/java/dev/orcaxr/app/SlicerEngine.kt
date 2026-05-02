@@ -1071,6 +1071,63 @@ object SlicerEngine {
         "support_type",
         "enable_support",
         "support_threshold_angle",
+        // Per-feature speed/accel/jerk + filament tuning. Added 2026-05-02
+        // for A9 Phase 2 — the user's reference Snapmaker-desktop slice
+        // emits values in its CONFIG_BLOCK that came from per-print
+        // customizations (filament_max_volumetric_speed=20 not 22,
+        // filament_flow_ratio=0.966 not 1, nozzle_temperature=220 not 215)
+        // that were never reaching OrcaXR because none of these keys
+        // were in PROJECT_OVERRIDE_KEYS. None of these have a dedicated
+        // OrcaXR UI picker (unlike layer_height), so 3MF-authored values
+        // winning over the profile is the right behavior — desktop's
+        // "save with current settings" expects to round-trip.
+        "filament_max_volumetric_speed",
+        "filament_flow_ratio",
+        "nozzle_temperature",
+        "nozzle_temperature_initial_layer",
+        "pressure_advance",
+        "enable_pressure_advance",
+        "slow_down_layer_time",
+        "slow_down_min_speed",
+        "fan_cooling_layer_time",
+        "fan_min_speed",
+        "fan_max_speed",
+        "overhang_fan_speed",
+        "overhang_fan_threshold",
+        "outer_wall_speed",
+        "inner_wall_speed",
+        "sparse_infill_speed",
+        "internal_solid_infill_speed",
+        "top_surface_speed",
+        "travel_speed",
+        "initial_layer_speed",
+        "initial_layer_infill_speed",
+        "gap_infill_speed",
+        "support_speed",
+        "support_interface_speed",
+        "bridge_speed",
+        "internal_bridge_speed",
+        "overhang_1_4_speed",
+        "overhang_2_4_speed",
+        "overhang_3_4_speed",
+        "overhang_4_4_speed",
+        "small_perimeter_speed",
+        "small_perimeter_threshold",
+        "outer_wall_acceleration",
+        "inner_wall_acceleration",
+        "sparse_infill_acceleration",
+        "travel_acceleration",
+        "initial_layer_acceleration",
+        "top_surface_acceleration",
+        "bridge_acceleration",
+        "default_acceleration",
+        "outer_wall_jerk",
+        "inner_wall_jerk",
+        "infill_jerk",
+        "travel_jerk",
+        "top_surface_jerk",
+        "initial_layer_jerk",
+        "default_jerk",
     )
 
     /**

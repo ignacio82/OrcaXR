@@ -513,6 +513,23 @@ object OrcaProfileLoader {
         "default_acceleration",
         "accel_to_decel_enable",
         "accel_to_decel_factor",
+        // per-feature jerk + small-perimeter knobs. Same reasoning as
+        // accelerations above — without these flowing through, libslic3r
+        // falls back to compiled-in defaults that ignore the U1's
+        // tuned-for-Klipper jerk (9 mm/s on walls, 12 on travel) and the
+        // 0% small-perimeter slowdown trigger. Surfaced 2026-05-02 by
+        // diffing the user's reference Snapmaker-desktop CONFIG_BLOCK
+        // against the resolved-from-profile values.
+        "outer_wall_jerk",
+        "inner_wall_jerk",
+        "infill_jerk",
+        "travel_jerk",
+        "top_surface_jerk",
+        "initial_layer_jerk",
+        "default_jerk",
+        "small_perimeter_speed",
+        "small_perimeter_threshold",
+        "overhang_fan_speed",
         // ---- machine kinematics caps (per-axis ceilings the slicer
         // uses to clamp the per-feature accel/speed values above).
         // Snapmaker's U1 toolchanger profile sets these to 20000 mm/s²

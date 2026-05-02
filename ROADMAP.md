@@ -134,9 +134,9 @@ Same shape, same toolchange cadence, **different speeds**. The gap is in profile
 
 **Phase 1 — profile value audit 🟢 Shipped:** Audited Snapmaker fork **v2.3.1** profiles against the OrcaXR-vendored leaves. Findings: process leaves (`fdm_process_U1_*.json`, `0.NN @Snapmaker U1 (0.4 nozzle).json`) and machine leaves (`fdm_U1.json`, `Snapmaker U1 (0.4/0.6 nozzle).json`, `fdm_klipper.json`, `fdm_toolchanger.json`) are byte-identical. The drift was concentrated in filament leaves — `Snapmaker PLA Matte @U1.json` had 8 load-bearing values different from fork v2.3.1 (`filament_max_volumetric_speed=20→22`, `enable_pressure_advance=1→0`, `filament_flow_ratio=1.01→1`, `nozzle_temperature=220→215`, `hot_plate_temp=55→65`, `additional_cooling_fan_speed=70→80`, `textured_plate_temp=60→65` and the matching `_initial_layer` keys), and `fdm_filament_pla.json` had three more (`nozzle_temperature=210→215`, `temperature_vitrification=154→65` — the orcaxr value was outright wrong for PLA, whose Tg is ~60 °C, `filament_retraction_length=1.2→2`). Synced. New gotcha §26 records the fork-pin and the diff workflow. Instrumented `UnicornFineProfileTest.unicornEstimateMatchesDesktopWithinFivePercent` pins layer count (332), toolchange count (385) AND the `; estimated printing time` ±5 % of 11 h 20 m. **The shape pins PASS post-sync; the time pin still fails** (post-sync OrcaXR estimate: 7 h 38 m — Phase 1 closed less than 1 % of the gap), confirming the bulk of the 33 % delta is engine behavior, not profile values. Phase 2 owns the rest.
 
-**Phase 2 — engine-behavior parity (P1, blocked on a real side-by-side gcode diff):**
+**Phase 2 — engine-behavior parity 🟡 In flight: structural fix shipped, on-device verification pending.**
 
-Audit complete and post-audit verification done — see [`docs/A9_PHASE2_AUDIT.md`](docs/A9_PHASE2_AUDIT.md). Net result: **none of the eight file-level candidates the audit identified actually explain the 32 % gap.**
+Audit complete + on-disk reference gcode analyzed — see [`docs/A9_PHASE2_AUDIT.md`](docs/A9_PHASE2_AUDIT.md). Net result: **none of the eight file-level engine candidates the audit identified actually explain the 32 % gap; the gap is profile-resident, not engine-resident.**
 
 | Candidate | Verified status (2026-05-02) |
 |---|---|
@@ -147,14 +147,17 @@ Audit complete and post-audit verification done — see [`docs/A9_PHASE2_AUDIT.m
 | C5 — first-layer extruder guard | ⚪ Retired — call site sets `reorder_first_layer = true` whenever `first_extruder` is set; matches fork for U1 |
 | C6 / C7 / C8 | 🚫 Skipped at audit time (Bambu-only / wrong-direction / doesn't apply to U1) |
 
-The audit reasoned from raw diff line counts; most of those lines turned out to be upstream's *additions* layered on top of the fork's older base, not fork-only features that are missing from upstream. Diff size ≠ direction of change.
+**Actual cause** (found by diffing the user's reference desktop gcode CONFIG_BLOCK at `~/Downloads/Einhorn Knitted_PLA_11h20m_orca.gcode` against the resolved-from-profile values):
 
-**Real next step (no patches yet):**
-- Build the Snapmaker fork desktop binary from `/tmp/snapmaker-orca` at tag `v2.3.1`.
-- Slice `Einhorn Knitted_PLA` 3MF with both binaries (Snapmaker desktop + OrcaXR `scripts/autotest_slice.sh`).
-- Diff the two `.gcode` files layer block by layer block; map the first material divergence (any line that changes feedrate / motion / dwell) back to a libslic3r site by grepping the divergent lines against `GCode.cpp` and `GCodeProcessor.cpp`. Only THEN write a patch — porting plausible-looking fork code on faith adds patches-to-maintain without closing the gap.
+1. Phase 1 synced the `Snapmaker PLA Matte @U1` filament leaf to **fork v2.3.1's raw bundled defaults**. But the user's desktop reference was sliced from a *customized* profile (or a 3MF with embedded `project_settings.config` overrides). Two of the three Phase 1 changes moved OrcaXR FURTHER from the desktop reference — the right sync target is the user's reference gcode CONFIG_BLOCK, not fork raw defaults. Motion-time-affecting drift: `filament_max_volumetric_speed` 22 vs ref 20 (~10 % flow allowance delta).
+2. **`SlicerEngine.PROJECT_OVERRIDE_KEYS` was a hand-curated list of 11 keys** — none of the per-feature speed / acceleration / jerk / cooling / filament-tuning keys were in it. So even when a desktop-prepared 3MF embedded the user's customized values, OrcaXR silently dropped them and used the bundled profile.
 
-**Verification gate:** when a real fix lands and the gap closes to < 5 %, un-`@Ignore` `UnicornFineProfileTest.unicornEstimateMatchesDesktopWithinFivePercent` and flip A9 to 🟢. Print-quality side-by-side (calibration cube + multicolor unicorn) is the post-merge sanity check.
+**Shipped in this commit:** `PROJECT_OVERRIDE_KEYS` extended from 11 → 56 keys covering every motion-affecting key without a dedicated UI picker. `SAFE_KEYS` extended with seven jerk keys + `small_perimeter_speed/threshold` + `overhang_fan_speed` that were also missing.
+
+**Verification gate (post-merge, requires device):**
+- Re-stage `Einhorn_Knitted.3mf` on the test device, run `UnicornFineProfileTest.unicornEstimateMatchesDesktopWithinFivePercent` (currently `@Ignore`d).
+- If gap < 5 %, flip A9 Phase 2 to 🟢 and un-`@Ignore` the test as the regression guard.
+- If gap still > 5 %, pull the OrcaXR-emitted gcode off the device and diff its CONFIG_BLOCK against `~/Downloads/Einhorn Knitted_PLA_11h20m_orca.gcode` to find what else slipped through. Print-quality side-by-side (calibration cube + multicolor unicorn) is the post-merge sanity check.
 
 **Out of scope (handled elsewhere):**
 - Adding *more* U1 nozzle profiles (0.2, 0.8) → see F1.

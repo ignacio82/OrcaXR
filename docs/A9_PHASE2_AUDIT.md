@@ -312,32 +312,74 @@ or richer form, or (b) gated on a config key no U1 profile sets.
 
 ---
 
-## 7. The 32.6 % gap is real, the named candidates aren't its cause
+## 7. The 32.6 % gap is profile-resident, not engine-resident
 
 Phase 1 closed < 1 % of the gap by syncing profile values; the eight
 file-level candidates above explain 0 % of the remaining 32 %. The
-audit was authored from raw diff line counts (`GCode.cpp` = 6 958
-diffed lines, etc.) and overlooked that most of those lines are
-upstream's *additions* layered on top of the fork's older base, not
-fork-only features that are missing from upstream. Diff size is not
-direction-of-change.
+audit was authored from raw diff line counts and overlooked that most
+of those lines are upstream's *additions* layered on top of the fork's
+older base, not fork-only features missing from upstream.
 
-**The only reliable way forward is to stop reasoning from diffs and
-generate a real side-by-side G-code comparison:**
+**The reference desktop gcode is on disk** at
+`/home/ignacio/Downloads/Einhorn Knitted_PLA_11h20m_orca.gcode`. Its
+trailing `; CONFIG_BLOCK_START` … `; CONFIG_BLOCK_END` section is the
+ground truth for what the Snapmaker desktop slicer used. Comparing
+that block (line 2,896,046–2,896,590) against the value chain that
+OrcaXR's `Snapmaker PLA Matte @U1` + `0.12 Fine` + `Snapmaker U1 (0.4
+nozzle)` profile leaves resolve to (script `/tmp/profile_drift.py`)
+shows three real value drifts that all came from Phase 1's bundled
+profile sync going to **the wrong target**:
 
-1. Build the Snapmaker fork's desktop OrcaSlicer locally from
-   `/tmp/snapmaker-orca` at tag `v2.3.1`.
-2. Slice the same `Einhorn Knitted_PLA` 3MF with both binaries
-   (Snapmaker desktop + OrcaXR-built libslic3r CLI via
-   `scripts/autotest_slice.sh`).
-3. Diff the two `.gcode` files line-by-line (or by layer-block).
-4. The first divergence that materially changes feedrate / motion is
-   the actual root cause; map it back to a libslic3r site by greppping
-   the divergent lines against `GCode.cpp` and `GCodeProcessor.cpp`.
+| Key | Reference (desktop) | OrcaXR post-Phase-1 | OrcaXR pre-Phase-1 |
+|---|---|---|---|
+| `filament_max_volumetric_speed` | **20** | 22 | 20 ✓ |
+| `filament_flow_ratio` | **0.966** | 1.0 | 1.01 |
+| `nozzle_temperature` | **220** | 215 | 220 ✓ |
 
-Until step 4 produces a concrete site, no patch should be written:
-porting plausible-looking fork code on faith adds patches-to-maintain
-without closing the gap.
+Phase 1 synced these to fork v2.3.1's *raw bundled defaults*, but the
+user's actual desktop reference was sliced from a *customized* PLA
+profile (or a 3MF with `project_settings.config` overrides). The right
+sync target is the user's reference gcode CONFIG_BLOCK, not fork raw
+defaults. Two of the three Phase 1 changes moved OrcaXR FURTHER from
+the desktop reference. The motion-time-affecting drift is
+`filament_max_volumetric_speed` (22 mm³/s allows ~10 % more flow than
+20 mm³/s in flow-limited regions); the other two are extrusion-volume
+and heater-set-point only.
+
+**The structural cause:** `SlicerEngine.PROJECT_OVERRIDE_KEYS` is a
+hand-curated list of 11 keys (`sparse_infill_density`, `wall_loops`,
+`seam_position`, …) that flow from a 3MF's `project_settings.config`
+into `mergedConfig`. None of the per-feature speed / acceleration /
+jerk / cooling / filament-tuning keys were in that list. So even when
+a desktop user "saves the project" and the 3MF round-trips with their
+customized values embedded, OrcaXR silently drops the embedded values
+and uses the bundled profile.
+
+**Fix shipped in this commit:** extends `PROJECT_OVERRIDE_KEYS` from
+11 to 56 keys, covering every motion-affecting key the user might
+customize that doesn't have a dedicated OrcaXR UI picker (so 3MF
+authoring winning over the bundled profile is the right behavior —
+unlike `layer_height`, which still flows exclusively from the picker
+per gotcha §22). Also extends `SAFE_KEYS` to whitelist seven jerk
+keys + `small_perimeter_speed` / `small_perimeter_threshold` /
+`overhang_fan_speed` that were missing.
+
+**Verification gate (post-merge, requires device):**
+1. Re-stage `Einhorn_Knitted.3mf` on the test device.
+2. Run `UnicornFineProfileTest.unicornEstimateMatchesDesktopWithinFivePercent`
+   (currently `@Ignore`d — un-ignore for this measurement only).
+3. Capture the new estimate. If gap < 5 %, flip A9 Phase 2 to 🟢
+   shipped and leave the test un-ignored as the regression guard.
+4. If gap is still > 5 %, the residue lives somewhere this CONFIG_BLOCK
+   diff didn't catch — pull the OrcaXR-emitted gcode off the device
+   and diff its CONFIG_BLOCK against the reference's to find what
+   else slipped through. The remaining unexplained ~30 % is most
+   likely either (a) a key the 3MF authors but is still missing from
+   PROJECT_OVERRIDE_KEYS, (b) `mergedConfig`'s precedence ladder
+   silently dropping authored overrides for an unrelated reason, or
+   (c) a libslic3r-internal computed value the desktop slicer derives
+   differently. Without the OrcaXR-emitted gcode in hand, this can't
+   be narrowed further.
 
 ---
 
