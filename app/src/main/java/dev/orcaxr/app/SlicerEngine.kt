@@ -620,6 +620,18 @@ object SlicerEngine {
         input: File,
         outPath: File,
         config: Map<String, String> = emptyMap(),
+        /**
+         * Paint full-feature-parity (3MF round-trip) — per-triangle
+         * paint state arrays sized to the source mesh's first volume's
+         * triangle count. Each authored onto the corresponding facet
+         * annotation BEFORE store_3mf so the saved 3MF can be opened
+         * in desktop OrcaSlicer with paint intact. Null = the source's
+         * existing facet state passes through unchanged.
+         */
+        paintFilamentIndex: ByteArray? = null,
+        supportFlags: ByteArray? = null,
+        seamFlags: ByteArray? = null,
+        fuzzySkinFlags: ByteArray? = null,
     ): Boolean = withContext(dispatcher) {
         require(input.exists()) { "input not found: ${input.absolutePath}" }
         require(input.canRead()) { "input not readable: ${input.absolutePath}" }
@@ -630,7 +642,16 @@ object SlicerEngine {
         } else {
             config.keys.toTypedArray() to config.values.toTypedArray()
         }
-        nativeSaveAs3mf(input.absolutePath, outPath.absolutePath, keys, values) == 0
+        // Filter out empty-paint arrays so the JNI side short-circuits
+        // the application loop on "all zero" as well as "null".
+        val effPaint = if (paintFilamentIndex == null || !paintFilamentIndex.any { it != 0.toByte() }) null else paintFilamentIndex
+        val effSupport = if (supportFlags == null || !supportFlags.any { it != 0.toByte() }) null else supportFlags
+        val effSeam = if (seamFlags == null || !seamFlags.any { it != 0.toByte() }) null else seamFlags
+        val effFuzzy = if (fuzzySkinFlags == null || !fuzzySkinFlags.any { it != 0.toByte() }) null else fuzzySkinFlags
+        nativeSaveAs3mf(
+            input.absolutePath, outPath.absolutePath, keys, values,
+            effPaint, effSupport, effSeam, effFuzzy,
+        ) == 0
     }
 
     /**
@@ -974,6 +995,15 @@ object SlicerEngine {
         outPath: String,
         configKeys: Array<String>,
         configValues: Array<String>,
+        /**
+         * Paint full-feature-parity (3MF round-trip) — optional per-
+         * triangle paint state arrays applied to the first volume of
+         * the first object before store_3mf. Null = pass-through.
+         */
+        paintFilamentIndex: ByteArray?,
+        supportFlags: ByteArray?,
+        seamFlags: ByteArray?,
+        fuzzySkinFlags: ByteArray?,
     ): Int
     private external fun nativeSliceMulti(
         inputPaths: Array<String>,

@@ -2002,7 +2002,18 @@ extern "C" JNIEXPORT jint JNICALL
 Java_dev_orcaxr_app_SlicerEngine_nativeSaveAs3mf(
     JNIEnv* env, jclass,
     jstring jInputPath, jstring jOutPath,
-    jobjectArray jConfigKeys, jobjectArray jConfigValues)
+    jobjectArray jConfigKeys, jobjectArray jConfigValues,
+    /* Paint full-feature-parity (3MF round-trip) — optional per-
+     * triangle paint state arrays, each sized to the first volume of
+     * the first object's triangle count. Authored onto the matching
+     * facet annotation BEFORE store_3mf so a saved 3MF re-opened in
+     * desktop OrcaSlicer (or OrcaXR) shows the same painted regions.
+     * Null = the source's existing facet state passes through
+     * unchanged (no overwrite). */
+    jbyteArray jPaintFilamentIndex,
+    jbyteArray jSupportFlags,
+    jbyteArray jSeamFlags,
+    jbyteArray jFuzzySkinFlags)
 {
     ScopedUtf in(env, jInputPath);
     ScopedUtf out(env, jOutPath);
@@ -2063,6 +2074,59 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSaveAs3mf(
                 }
                 env->DeleteLocalRef(jk);
                 env->DeleteLocalRef(jv);
+            }
+        }
+
+        // Paint full-feature-parity (3MF round-trip) — apply the four
+        // facet annotations onto the first volume of the first object
+        // before serialization. Null arrays leave the source's
+        // existing state alone so an "open + save" round-trip on a
+        // 3MF authored in desktop OrcaSlicer doesn't strip its paint.
+        if (!model.objects.front()->volumes.empty()) {
+            Slic3r::ModelVolume* mv = model.objects.front()->volumes.front();
+            if (jPaintFilamentIndex != nullptr) {
+                const jsize n = env->GetArrayLength(jPaintFilamentIndex);
+                if (n > 0) {
+                    jbyte* p = env->GetByteArrayElements(jPaintFilamentIndex, nullptr);
+                    if (p != nullptr) {
+                        const size_t a = apply_orcaxr_paint(*mv, p, size_t(n));
+                        ORCAXR_LOGI("nativeSaveAs3mf: applied %zu color-paint tris", a);
+                        env->ReleaseByteArrayElements(jPaintFilamentIndex, p, JNI_ABORT);
+                    }
+                }
+            }
+            if (jSupportFlags != nullptr) {
+                const jsize n = env->GetArrayLength(jSupportFlags);
+                if (n > 0) {
+                    jbyte* p = env->GetByteArrayElements(jSupportFlags, nullptr);
+                    if (p != nullptr) {
+                        const size_t a = apply_orcaxr_support(*mv, p, size_t(n));
+                        ORCAXR_LOGI("nativeSaveAs3mf: applied %zu support tris", a);
+                        env->ReleaseByteArrayElements(jSupportFlags, p, JNI_ABORT);
+                    }
+                }
+            }
+            if (jSeamFlags != nullptr) {
+                const jsize n = env->GetArrayLength(jSeamFlags);
+                if (n > 0) {
+                    jbyte* p = env->GetByteArrayElements(jSeamFlags, nullptr);
+                    if (p != nullptr) {
+                        const size_t a = apply_orcaxr_seam(*mv, p, size_t(n));
+                        ORCAXR_LOGI("nativeSaveAs3mf: applied %zu seam tris", a);
+                        env->ReleaseByteArrayElements(jSeamFlags, p, JNI_ABORT);
+                    }
+                }
+            }
+            if (jFuzzySkinFlags != nullptr) {
+                const jsize n = env->GetArrayLength(jFuzzySkinFlags);
+                if (n > 0) {
+                    jbyte* p = env->GetByteArrayElements(jFuzzySkinFlags, nullptr);
+                    if (p != nullptr) {
+                        const size_t a = apply_orcaxr_fuzzy_skin(*mv, p, size_t(n));
+                        ORCAXR_LOGI("nativeSaveAs3mf: applied %zu fuzzy-skin tris", a);
+                        env->ReleaseByteArrayElements(jFuzzySkinFlags, p, JNI_ABORT);
+                    }
+                }
             }
         }
 

@@ -4375,7 +4375,15 @@ private fun XrShell(
                                     emptyList(),
                                     extraOverrides = printSettingsOverrides.value,
                                 )
-                                val dest = saveProjectAs3mfToDownloads(target.source, target.label, cfg)
+                                val dest = saveProjectAs3mfToDownloads(
+                                    sourceFile = target.source,
+                                    sourceLabel = target.label,
+                                    config = cfg,
+                                    paintFilamentIndex = target.paintFilamentIndex,
+                                    supportFlags = target.supportFlags,
+                                    seamFlags = target.seamFlags,
+                                    fuzzySkinFlags = target.fuzzySkinFlags,
+                                )
                                 android.widget.Toast.makeText(
                                     ctx,
                                     if (dest != null) "Saved to ${dest.absolutePath}"
@@ -6997,10 +7005,29 @@ private suspend fun saveProjectAs3mfToDownloads(
     sourceFile: File,
     sourceLabel: String,
     config: Map<String, String>,
+    /**
+     * Paint full-feature-parity (3MF round-trip) — when the user
+     * authored paint in XR, those annotations should ride into the
+     * exported 3MF so opening it in desktop OrcaSlicer or re-opening
+     * here shows the same painted regions. Null arrays = pass-through
+     * (preserves whatever paint the source already had).
+     */
+    paintFilamentIndex: ByteArray? = null,
+    supportFlags: ByteArray? = null,
+    seamFlags: ByteArray? = null,
+    fuzzySkinFlags: ByteArray? = null,
 ): File? {
     if (!sourceFile.exists()) return null
     val dest = downloadsPathFor(sourceLabel, "3mf")
-    return if (SlicerEngine.saveAs3mf(sourceFile, dest, config)) dest else null
+    return if (SlicerEngine.saveAs3mf(
+            input = sourceFile,
+            outPath = dest,
+            config = config,
+            paintFilamentIndex = paintFilamentIndex,
+            supportFlags = supportFlags,
+            seamFlags = seamFlags,
+            fuzzySkinFlags = fuzzySkinFlags,
+        )) dest else null
 }
 
 private fun copyBundledCube(ctx: Context): File =
