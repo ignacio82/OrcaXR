@@ -769,6 +769,21 @@ private fun XrShell(
     // colors back to the file's authored values. Otherwise the
     // user's tap-to-pick-color would be undone within milliseconds.
     var lastEmbeddedSyncPath by remember { mutableStateOf<String?>(null) }
+    // Bake-in-flight gate (gotcha #13/#22). The 3MF load fires two
+    // bakes — the first publishes the v1 entity, the embedded-color
+    // sync inside it propagates to previewPalette, and the palette
+    // LE schedules a second bake whose v1→v2 swap can race against
+    // workspace MovableComponent setPose calls coming from an active
+    // user drag (the v1 GltfModelEntity's Filament material is queued
+    // for deferred dispose, but the render thread may have a setPose
+    // referencing material instance N that the swap freed → SIGABRT
+    // "unknown material instance id"). We track in-flight bakes by
+    // model id and silently drop workspace pose updates while any
+    // bake is mid-swap. Drag stays attached (removing the component
+    // mid-drag would itself trip #13); only the per-frame setPose
+    // is suppressed. The user sees the workspace freeze for the
+    // ~200-500ms swap window, then drag resumes.
+    var bakeInFlight by remember { mutableStateOf(setOf<String>()) }
     // Project-level flush-tower settings extracted from the most-
     // recently-loaded 3MF. Threaded into mergedConfig() at slice time
     // so the wipe tower honors what the file was authored with rather
@@ -1137,6 +1152,12 @@ private fun XrShell(
         val initial = placedModels.firstOrNull { it.id == modelId } ?: return
         val stlFile = initial.source
         val label = initial.label
+        // Mark this bake in-flight before any native work begins so
+        // the workspace move listener sees the gate the moment we
+        // start producing the v1→v2 swap. Cleared in the finally
+        // below regardless of bake outcome.
+        bakeInFlight = bakeInFlight + modelId
+        try {
         
         // Phase B9/J: For extracted 3MF objects, re-load from the
         // original container to pull per-triangle paint colors.
@@ -1523,6 +1544,9 @@ private fun XrShell(
             ) else it
         }
         stlPreviewPath = out.absolutePath
+        } finally {
+            bakeInFlight = bakeInFlight - modelId
+        }
     }
 
     /** Whether the next pick should REPLACE the selected model
@@ -4092,6 +4116,16 @@ private fun XrShell(
                         currentPose: androidx.xr.runtime.math.Pose,
                         currentScale: Float,
                     ) {
+                        // Gotcha #13/#22 — drop pose updates while any
+                        // model bake is mid-swap. The setPose below
+                        // dispatches to the workspace GroupEntity whose
+                        // GltfModelEntity children are being torn down
+                        // and recreated; a queued pose op referencing a
+                        // freed Filament material instance crashes the
+                        // render thread with SIGABRT "unknown material
+                        // instance id". Resumes the moment the bake
+                        // completes (typically <500 ms).
+                        if (bakeInFlight.isNotEmpty()) return
                         // Discard the system-proposed rotation; the
                         // workspace must stay upright (WORKSPACE_ROTATION
                         // maps printer-Z → world-Y so a "leaned"
