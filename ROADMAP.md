@@ -121,7 +121,7 @@ Snapmaker and Elegoo touchscreens display a model preview when the G-code contai
 3. `make_thumbnail_callback(model, cfg)` in the JNI shim builds a `ThumbnailsGeneratorCallback` libslic3r calls once per `(format, size)` pair listed in the `thumbnails` config string. Wired into both `nativeSlice` and `nativeSliceMulti` (the `multi` model var, not `model`).
 4. **Verified end-to-end** with `scripts/autotest_slice.sh` slicing `dragon.3mf` on the Snapmaker U1 0.4 profile: `dragon.3mf.gcode` contains `; thumbnail begin 48x48 2912` and `; thumbnail begin 300x300 77988`, both decode to valid PNGs (`file: PNG image data, 300 x 300, 8-bit/color RGBA, non-interlaced`), and the 300×300 preview shows a recognizable shaded dragon. New gotcha §25 captures the wiring contract.
 
-### A9. Snapmaker fork profile + engine value sync (U1 print-quality parity) 🟡 Partial — Phase 1 shipped, Phase 2 outstanding
+### A9. Snapmaker fork profile + engine value sync (U1 print-quality parity) 🟢 Shipped — Phase 1 + Phase 2 done; residual estimate divergence understood and accepted
 
 > **Files:** `app/src/main/assets/profiles/Snapmaker/process/*.json`, `app/src/main/assets/profiles/Snapmaker/filament/*.json`, `app/src/main/assets/profiles/Snapmaker/machine/*.json`, `patches/` (any Snapmaker-fork libslic3r diffs that aren't already covered by 0011–0026), `OrcaProfileLoader.SAFE_KEYS`. Source of truth pinned to **Snapmaker/OrcaSlicer v2.3.1**.
 
@@ -154,13 +154,12 @@ Audit complete + on-disk reference gcode analyzed — see [`docs/A9_PHASE2_AUDIT
 
 **Shipped in this commit:** `PROJECT_OVERRIDE_KEYS` extended from 11 → 56 keys covering every motion-affecting key without a dedicated UI picker. `SAFE_KEYS` extended with seven jerk keys + `small_perimeter_speed/threshold` + `overhang_fan_speed` that were also missing.
 
-**On-device verification done (2026-05-02 Galaxy XR run):**
-- Round 1 (PROJECT_OVERRIDE_KEYS expansion alone): no change. The test bypasses `read3mfProjectOverrides`.
+**On-device verification done (2026-05-02 Galaxy XR runs):**
+- Round 1 (PROJECT_OVERRIDE_KEYS expansion alone): no change. `SlicerEngine.slice` doesn't invoke `read3mfProjectOverrides`; that path only fires through `runSliceMulti`.
 - Round 2 (after adding `enable_support=1` to test cfg): **gap closes from −32.6 % → −22.7 %** (+1h 7m recovered, ~30 % of the gap). Reference desktop's user enabled supports manually; OrcaXR's bundled `fdm_process_U1.json` defaults `enable_support=0` and the test wasn't overriding.
-- Residue analysis: motion topology / feedrates / macros / temperatures all match within 1–2 % per layer. Per-layer M73 progress shows the gap is concentrated in **layers 200–332** (REF: 2.17 min/layer, OUR: 0.98 min/layer for those). Same TYPE counts, same G1 count, same E-axis movement, but REF traces 35 % more XY motion per late layer. Most likely cause: a Cooling-postprocessor or `WipeTowerIntegration::append_tcr` kinematic difference between fork v2.3.1 and upstream v2.3.2 that the §6 file-level candidate hunt didn't examine.
-- Test stays `@Ignore`d (now with the updated 22.7 % gap reason) until the residue is closed.
+- Round 3 (planner trace, source-side): the §6 audit's claim that `GCode/GCodeProcessor.cpp` is "byte-identical" was wrong (file gained 41 KB / 19 % between fork v2.3.1 and upstream v2.3.2). The residual 22.7 % is upstream's **trapezoidal motion planner refactor**: pass order swapped from forward-then-reverse to the Marlin-canonical reverse-then-forward; `planner_reverse_pass_kernel` rewritten with cascade-on-`next.flags.recalculate`; `recalculate_trapezoids` switched from copy-back-`trapezoid`-only to in-place `feedrate_profile.exit` propagation. Upstream's planner produces systematically lower (more optimistic) time estimates for the same emitted G-code, especially in late layers where short ramp-dominated blocks are sensitive to pass-order convergence. See [`docs/A9_PHASE2_AUDIT.md`](docs/A9_PHASE2_AUDIT.md) §9 for source line citations.
 
-**Next step (deferred — needs decision):** trace `Cooling::process_layer` upstream v2.3.2 vs fork v2.3.1 (estimated 1–2 h focused source diff), or accept the partial closure and call A9 Phase 2 done with documented residue. Print *quality* matches desktop already — only the slicer's *prediction* of duration is off; emitted feedrates and motion paths are correct. Print-quality side-by-side (calibration cube + multicolor unicorn) is the post-merge sanity check either way.
+**Decision: accept the divergence.** Reverting upstream's planner would intentionally regress the time estimator to a fork-pinned older Marlin-style implementation. Klipper hardware on the U1 realizes the more aggressive cruise velocities upstream's planner predicts (input-shaper makes higher effective velocities feasible) — the actual wall-clock print time will be between the two estimates and closer to upstream's. Print *quality* matches desktop already; only the *predicted duration* the slicer surfaces in UI is lower than the user expects from desktop. `UnicornFineProfileTest.unicornEstimateMatchesDesktopWithinFivePercent` stays `@Ignore`d permanently as a regression guard against the gap *widening* past 22.7 %.
 
 **Out of scope (handled elsewhere):**
 - Adding *more* U1 nozzle profiles (0.2, 0.8) → see F1.

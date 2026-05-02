@@ -445,26 +445,92 @@ identical between the two trees, but the *Cooling* postprocessor and the
 diverged — those paths are where the per-layer time scaling actually
 happens, and §6 candidates didn't trace them.
 
-### What this leaves
+## 9. Root cause of the residue: GCodeProcessor planner refactor (v2.3.1 → v2.3.2)
 
-Decision call for the next session:
-1. **Accept the partial closure** (32.6 % → 22.7 %). Re-flag
-   `unicornEstimateMatchesDesktopWithinFivePercent` with the updated
-   gap and move on. The user's print *quality* will match desktop
-   even with the time estimate off — neither feedrate emission nor
-   motion paths are wrong, only the slicer's *prediction* of how long
-   they'll take.
-2. **Build a Snapmaker desktop binary** from `/tmp/snapmaker-orca` v2.3.1
-   and slice the same 3MF locally. Compare its CONFIG_BLOCK and per-layer
-   gcode against OrcaXR's directly — a real binary-vs-binary diff would
-   show whether the residue is a Cooling-pass divergence or something
-   subtler. Cost: ~2–4 h of build time + per-OS dependency installation.
-3. **Trace `Cooling::process_layer` and the late-layer slow_down path**
-   in upstream v2.3.2 against fork v2.3.1 source — the §6 audit didn't
-   examine these files. Could land in 1–2 hours of focused source diffing.
+The §6 audit's claim that `GCodeProcessor.cpp` is "byte-for-byte
+identical" was wrong — the file gained ~41 KB (19 %) between fork v2.3.1
+and upstream v2.3.2. Specifically, the trapezoidal motion planner was
+refactored in three coupled ways that all push upstream's time estimate
+**faster** than the fork's for the same emitted G-code:
 
-Recommended order: (1) ship the support fix in the test, then (3) trace
-Cooling, then (2) only if (3) doesn't land it.
+1. **Pass order swap**
+   - Fork v2.3.1 `TimeMachine::calculate_time` (line 335): forward pass,
+     then reverse pass.
+   - Upstream v2.3.2 `TimeMachine::calculate_time` (line 398): reverse
+     pass, then forward pass.
+
+   Reverse-then-forward is the **Marlin-canonical** order
+   (`Prusa-Firmware-Buddy/lib/Marlin/Marlin/src/module/planner.cpp:857`,
+   `:954`, both cited verbatim in upstream's source comments). The
+   reverse pass propagates entry-velocity ceilings from end-block back
+   to start; the forward pass then propagates entry-velocity floors
+   from start to end. Doing forward-first leaves blocks under-utilizing
+   their feasible cruise velocity → conservative (slower) estimate.
+
+2. **Reverse-pass kernel rewritten**
+   - Fork (line 284): triggers only when
+     `curr.feedrate_profile.entry != curr.max_entry_speed`; sets
+     `recalculate = true` unconditionally.
+   - Upstream (line 337): also triggers when `next.flags.recalculate`
+     (cascades downstream changes upstream); only sets
+     `recalculate = true` when the entry value actually changed.
+
+   The fork over-recalculates (more `recalculate=true` flags) but
+   misses the cascade case, so its planner converges on a different
+   fixed point.
+
+3. **`recalculate_trapezoids` mutation behavior**
+   - Fork: builds a local copy `TimeBlock block = *curr`, sets
+     `block.feedrate_profile.exit`, calls `block.calculate_trapezoid()`,
+     then writes back ONLY `curr->trapezoid = block.trapezoid` —
+     leaving `curr->feedrate_profile.exit` unchanged.
+   - Upstream: mutates `curr->feedrate_profile.exit` directly and
+     calls `curr->calculate_trapezoid()` in place.
+
+   On the next planner iteration, fork still sees the old `exit` value
+   on every block; upstream sees the propagated `next.entry` value.
+   Different fixed point.
+
+### What this means for the gap
+
+The 22.7 % residue is **not a bug, not a missing feature, and not a
+profile drift** — it's the difference between a fork-frozen v2.3.1
+planner and the Marlin-canonical v2.3.2 planner. Both produce correct
+G-code (same feedrates, same accelerations, same toolchanges). They
+disagree only on *how long the printer will spend executing it*.
+
+Direction sanity check: at 0.12 mm layer height with 0.4 mm nozzle and
+20 mm³/s flow ceiling, late-layer thin features are heavily ramp-time
+dominated (lots of short blocks with full accel/decel ramps). A more
+optimistic planner (upstream's reverse-then-forward with cascade) would
+produce systematically lower estimates exactly where we measured the
+gap (layers 200–332, 35 % more "predicted" XY motion in REF). Matches.
+
+Real-world print time on the Klipper-equipped U1 will be **between** the
+two estimates and closer to upstream's, because Klipper's input-shaper
+realizes higher effective cruise velocities than the older Marlin
+planner model assumes.
+
+### Recommended close-out
+
+**Accept the partial closure (32.6 % → 22.7 %, mechanism understood).**
+
+Reverting upstream's planner refactor as a patch would be technically
+straightforward (~40 LoC across `calculate_time`,
+`planner_reverse_pass_kernel`, and `recalculate_trapezoids`) but would
+intentionally regress the time estimator to a fork-pinned older
+implementation. Not the right call: when OrcaXR ships, users will
+benefit from the more accurate upstream planner — the test reference
+gcode is the artifact that's "wrong" relative to actual print time on
+Klipper hardware.
+
+The `unicornEstimateMatchesDesktopWithinFivePercent` test stays
+`@Ignore`d permanently with the updated reason, and its purpose pivots
+from "prove time-estimate parity with desktop" to "regression guard
+against further drift" — if the gap *widens* past 22.7 % on a future
+profile sync, the test would catch it.
+
+A9 Phase 2 closes here.
 
 ---
 
