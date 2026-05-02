@@ -3403,6 +3403,13 @@ fun TopNavigationPill(
     onTogglePaint: () -> Unit = {},
     onPaintSlotChange: (Int) -> Unit = {},
     onPaintRadiusChange: (Float) -> Unit = {},
+    /** Paint full-feature-parity (Smart Fill) — toggle bucket-fill
+     *  brush sub-mode. Default no-op so callers that haven't migrated
+     *  still work. */
+    onPaintSmartFillToggle: () -> Unit = {},
+    /** Paint full-feature-parity — cycle smart-fill angle gate
+     *  through the 15° / 30° / 45° / 60° / 90° presets. Default no-op. */
+    onPaintSmartFillAngleCycle: () -> Unit = {},
     paintMaxSlots: Int = 4,
     /**
      * Resolved "as will print" colors for paint slots 1..[paintMaxSlots]
@@ -3605,19 +3612,43 @@ fun TopNavigationPill(
                         )
                     }
                     Spacer(Modifier.width(12.dp))
+                    if (paintBrush.smartFill) {
+                        // Smart Fill mode: show "Fill <angle>°" chip and
+                        // cycle through angle presets on tap. Bucket
+                        // icon to differentiate from radius brush.
+                        NavAction(
+                            label = "Fill ${paintBrush.smartFillAngleDeg.toInt()}°",
+                            icon = androidx.compose.material.icons.Icons.Default.FormatColorFill,
+                            isSelected = true,
+                            enabled = true,
+                            onClick = onPaintSmartFillAngleCycle,
+                        )
+                    } else {
+                        NavAction(
+                            label = "Brush ${paintBrush.radiusMm.toInt()}mm",
+                            icon = androidx.compose.material.icons.Icons.Default.Adjust,
+                            isSelected = false,
+                            enabled = true,
+                            onClick = {
+                                val presets = BRUSH_RADIUS_PRESETS_MM
+                                val idx = presets.indexOfFirst {
+                                    kotlin.math.abs(it - paintBrush.radiusMm) < 0.01f
+                                }
+                                val next = presets[(idx + 1).coerceAtLeast(0) % presets.size]
+                                onPaintRadiusChange(next)
+                            },
+                        )
+                    }
+                    // Smart Fill mode toggle. Always rendered next to
+                    // the brush/fill chip so the user can flip between
+                    // "radius brush" (mm) and "bucket fill" (angle).
+                    Spacer(Modifier.width(8.dp))
                     NavAction(
-                        label = "Brush ${paintBrush.radiusMm.toInt()}mm",
-                        icon = androidx.compose.material.icons.Icons.Default.Adjust,
-                        isSelected = false,
+                        label = if (paintBrush.smartFill) "Bucket" else "Smart",
+                        icon = androidx.compose.material.icons.Icons.Default.AutoFixHigh,
+                        isSelected = paintBrush.smartFill,
                         enabled = true,
-                        onClick = {
-                            val presets = BRUSH_RADIUS_PRESETS_MM
-                            val idx = presets.indexOfFirst {
-                                kotlin.math.abs(it - paintBrush.radiusMm) < 0.01f
-                            }
-                            val next = presets[(idx + 1).coerceAtLeast(0) % presets.size]
-                            onPaintRadiusChange(next)
-                        },
+                        onClick = onPaintSmartFillToggle,
                     )
                 }
             }

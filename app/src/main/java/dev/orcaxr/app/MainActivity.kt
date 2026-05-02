@@ -2458,10 +2458,19 @@ private fun XrShell(
             bvh = bvh,
             onPaint = { hitTri, action ->
                 val brush = paintBrushLive.value
+                // Paint full-feature-parity (Smart Fill) — when
+                // brush.smartFill is on, the next stamp walks
+                // adjacency by normal-angle gate instead of by mm
+                // radius. Used by every paint mode below so the user's
+                // smart-fill toggle applies uniformly.
+                fun pickTriangles(seed: Int): IntArray = when {
+                    brush.smartFill -> bvh.smartFillBfs(seed, brush.smartFillAngleDeg)
+                    brush.radiusMm <= 0f -> intArrayOf(seed)
+                    else -> bvh.radiusBfs(seed, brush.radiusMm)
+                }
                 when (brush.mode) {
                     PaintMode.Color -> {
-                        val triIndices = if (brush.radiusMm <= 0f) intArrayOf(hitTri)
-                            else bvh.radiusBfs(hitTri, brush.radiusMm)
+                        val triIndices = pickTriangles(hitTri)
                         val updated = stampTriangles(
                             previous = model.paintFilamentIndex,
                             triCount = bvh.triCount,
@@ -2516,8 +2525,7 @@ private fun XrShell(
                         // The user can switch between Enforcer and
                         // Blocker via PaintBrush.mode without
                         // disengaging the brush.
-                        val triIndices = if (brush.radiusMm <= 0f) intArrayOf(hitTri)
-                            else bvh.radiusBfs(hitTri, brush.radiusMm)
+                        val triIndices = pickTriangles(hitTri)
                         val state: Int = if (brush.mode == PaintMode.SupportEnforcer) 1 else 2
                         val updated = stampTriangles(
                             previous = model.supportFlags,
@@ -2539,8 +2547,7 @@ private fun XrShell(
                         // Phase XR_OBJ_8 — same shape as support
                         // paint but writes seamFlags. Layer-start
                         // seam routing.
-                        val triIndices = if (brush.radiusMm <= 0f) intArrayOf(hitTri)
-                            else bvh.radiusBfs(hitTri, brush.radiusMm)
+                        val triIndices = pickTriangles(hitTri)
                         val state: Int = if (brush.mode == PaintMode.SeamEnforcer) 1 else 2
                         val updated = stampTriangles(
                             previous = model.seamFlags,
@@ -2566,8 +2573,7 @@ private fun XrShell(
                         // blocker"; clearing requires an explicit reset
                         // affordance (handled by the slot=0 path the
                         // user can drive via the brush slot picker).
-                        val triIndices = if (brush.radiusMm <= 0f) intArrayOf(hitTri)
-                            else bvh.radiusBfs(hitTri, brush.radiusMm)
+                        val triIndices = pickTriangles(hitTri)
                         // brush.activeSlot != 0 → paint state 1; activeSlot == 0
                         // → clear (state 0). That keeps the existing
                         // "Clear" affordance in the brush UI working
@@ -3486,6 +3492,20 @@ private fun XrShell(
                         },
                         onPaintRadiusChange = { newR ->
                             paintBrush = paintBrush.copy(radiusMm = newR)
+                        },
+                        onPaintSmartFillToggle = {
+                            paintBrush = paintBrush.copy(smartFill = !paintBrush.smartFill)
+                        },
+                        onPaintSmartFillAngleCycle = {
+                            // 15° / 30° / 45° / 60° / 90° presets,
+                            // mirroring upstream OrcaSlicer's smart-
+                            // fill default ladder.
+                            val presets = floatArrayOf(15f, 30f, 45f, 60f, 90f)
+                            val idx = presets.indexOfFirst {
+                                kotlin.math.abs(it - paintBrush.smartFillAngleDeg) < 0.5f
+                            }
+                            val next = presets[(idx + 1).coerceAtLeast(0) % presets.size]
+                            paintBrush = paintBrush.copy(smartFillAngleDeg = next)
                         },
                         paintMaxSlots = slotCount.coerceAtLeast(1),
                         // Resolved colors per paint slot — what each

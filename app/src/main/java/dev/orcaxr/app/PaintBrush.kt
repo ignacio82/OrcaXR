@@ -82,12 +82,28 @@ data class PaintBrush(
     val mode: PaintMode = PaintMode.Off,
     val activeSlot: Int = 1,
     val radiusMm: Float = 6f,
+    /**
+     * Paint full-feature-parity (Smart Fill) — when [smartFill] is
+     * true, the next paint stamp walks adjacency outward across every
+     * edge whose dihedral angle stays within [smartFillAngleDeg],
+     * ignoring [radiusMm]. Mirrors upstream OrcaSlicer's
+     * `GLGizmoPainterBase::ToolType::BUCKET_FILL`. Default false =
+     * the existing radius-flood-fill stamp.
+     */
+    val smartFill: Boolean = false,
+    /** Smart-fill angle gate in degrees, 0..90 typical, 180 = fill
+     *  everything connected. Default 30° matches OrcaSlicer's default
+     *  `m_smart_fill_angle`. Only consulted when [smartFill] is true. */
+    val smartFillAngleDeg: Float = 30f,
 ) {
     init {
         require(activeSlot in 0..MAX_PAINT_SLOTS) {
             "activeSlot=$activeSlot out of [0, $MAX_PAINT_SLOTS]"
         }
         require(radiusMm >= 0f) { "radiusMm=$radiusMm must be non-negative" }
+        require(smartFillAngleDeg in 0f..180f) {
+            "smartFillAngleDeg=$smartFillAngleDeg out of [0, 180]"
+        }
     }
 }
 

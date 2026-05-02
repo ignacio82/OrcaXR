@@ -226,6 +226,67 @@ class MeshBvh private constructor(
      * because they happen to be 6 mm apart through space — the BFS
      * stops at the wing's perimeter.
      */
+    /**
+     * Paint full-feature-parity (Smart Fill) — flood-fill connected
+     * triangles whose adjacent-edge dihedral angle stays within
+     * [maxAngleDeg]. Mirrors upstream OrcaSlicer's
+     * `GLGizmoPainterBase::ToolType::BUCKET_FILL`: paint walks across
+     * an edge iff the angle between the two adjacent triangles'
+     * normals is ≤ [maxAngleDeg]. So a 30° gate paints a flat face up
+     * to its perimeter where a sharp corner exceeds the threshold.
+     *
+     * Bounded by [maxTriangles] so a low-angle gate on a smoothly-
+     * curved mesh can't lock the input thread; default 65536 covers
+     * the largest single connected region on a 1.4M-tri dragon (the
+     * body) without truncating.
+     *
+     * Stepwise comparison (this triangle's normal vs the candidate
+     * neighbor's normal), not against the seed — that's what lets
+     * the fill traverse a curved surface within the angle budget per
+     * step. A flat-against-seed comparison would refuse to leave the
+     * seed's tangent plane on any curved part.
+     */
+    fun smartFillBfs(seed: Int, maxAngleDeg: Float, maxTriangles: Int = 65536): IntArray {
+        require(seed in 0 until mesh.triCount) {
+            "seed=$seed out of [0, ${mesh.triCount})"
+        }
+        ensureAdjacency()
+        val starts = adjStart!!
+        val nbrs = adjNeighbors!!
+        // Precompute cos(maxAngleDeg). Two unit normals' dot product is
+        // cos of the angle between them; "angle ≤ θ" ⇔ "dot ≥ cos θ".
+        // Clamp θ to [0, 180]; θ = 180° means "fill everything connected"
+        // (cos 180° = -1, every dot ≥ -1).
+        val theta = maxAngleDeg.coerceIn(0f, 180f)
+        val cosThreshold = kotlin.math.cos(Math.toRadians(theta.toDouble())).toFloat()
+        val visited = BooleanArray(mesh.triCount)
+        val queue = IntArray(maxTriangles)
+        val out = IntArray(maxTriangles)
+        var qHead = 0
+        var qTail = 0
+        var outCount = 0
+        queue[qTail++] = seed
+        visited[seed] = true
+        while (qHead < qTail && outCount < maxTriangles) {
+            val cur = queue[qHead++]
+            val curN = triangleNormal(cur)
+            out[outCount++] = cur
+            val s = starts[cur]
+            val e = starts[cur + 1]
+            for (k in s until e) {
+                val n = nbrs[k]
+                if (visited[n]) continue
+                val nN = triangleNormal(n)
+                val dot = curN.x * nN.x + curN.y * nN.y + curN.z * nN.z
+                if (dot >= cosThreshold && qTail < maxTriangles) {
+                    visited[n] = true
+                    queue[qTail++] = n
+                }
+            }
+        }
+        return out.copyOf(outCount)
+    }
+
     fun radiusBfs(seed: Int, radiusMm: Float, maxTriangles: Int = 8192): IntArray {
         require(seed in 0 until mesh.triCount) {
             "seed=$seed out of [0, ${mesh.triCount})"

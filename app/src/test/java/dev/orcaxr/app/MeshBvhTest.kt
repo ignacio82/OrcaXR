@@ -259,4 +259,53 @@ class MeshBvhTest {
         assertEquals(12, MeshBvh.build(cube).triCount)
         assertEquals(0, MeshBvh.build(mesh(floatArrayOf())).triCount)
     }
+
+    // ---------------- smartFillBfs ----------------
+
+    @Test fun smartFillBfsCoplanarTrisFillTogether() {
+        // Both unit-square tris lie in the z=0 plane → identical
+        // normals → angle gate of 1° still permits the walk.
+        val bvh = MeshBvh.build(unitSquare)
+        val out = bvh.smartFillBfs(seed = 0, maxAngleDeg = 1f).toSet()
+        assertEquals(setOf(0, 1), out)
+    }
+
+    @Test fun smartFillBfsTightAngleStopsAtSharpEdge() {
+        // Cube tris are pairwise 90° at every edge. A 30° gate must
+        // not leave the seed face — only the seed's two co-planar
+        // neighbors (sharing an edge on the same face) are allowed.
+        val bvh = MeshBvh.build(cube)
+        val out = bvh.smartFillBfs(seed = 0, maxAngleDeg = 30f).toSet()
+        // Cube face 0 is one of the -Z bottom triangles (faces[0/1]).
+        // Smart fill picks the seed + its co-planar partner = 2 tris.
+        assertEquals("expected 2 co-planar tris on a -Z face", 2, out.size)
+    }
+
+    @Test fun smartFillBfsWideAngleFillsConnectedComponent() {
+        // Cube has 12 tris all connected. 180° gate (cos = -1) lets
+        // every step pass → fill should be all 12.
+        val bvh = MeshBvh.build(cube)
+        val out = bvh.smartFillBfs(seed = 0, maxAngleDeg = 180f).toSet()
+        assertEquals(12, out.size)
+    }
+
+    @Test fun smartFillBfsDoesNotJumpDisconnectedComponents() {
+        val bvh = MeshBvh.build(disconnected)
+        val out = bvh.smartFillBfs(seed = 0, maxAngleDeg = 180f).toSet()
+        assertEquals("seed-only — second tri shares no vertices", setOf(0), out)
+    }
+
+    @Test fun smartFillBfsRespectsCap() {
+        val bvh = MeshBvh.build(cube)
+        val out = bvh.smartFillBfs(seed = 0, maxAngleDeg = 180f, maxTriangles = 4)
+        assertEquals(4, out.size)
+        assertTrue("seed must be in the result", out.toSet().contains(0))
+    }
+
+    @Test fun smartFillBfsSeedOutOfRangeIsRejected() {
+        val bvh = MeshBvh.build(unitSquare)
+        runCatching { bvh.smartFillBfs(seed = 999, maxAngleDeg = 30f) }.also {
+            assertTrue(it.isFailure)
+        }
+    }
 }
