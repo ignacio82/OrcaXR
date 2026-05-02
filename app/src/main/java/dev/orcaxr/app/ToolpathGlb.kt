@@ -26,8 +26,15 @@ object ToolpathGlb {
      *  for a 1.4M-tri dragon (gotcha #11 territory) costs ~170 MB of
      *  JVM heap (positions + colors + indices) before GlbBuilder can
      *  even start streaming, which OOMs Android at the typical
-     *  256 MB process cap. Streaming-tube geometry is a follow-up. */
-    const val TUBES_SEGMENT_CAP = 50_000
+     *  256 MB process cap. Streaming-tube geometry is a follow-up.
+     *
+     *  Sized for a 250K-segment slice (≈ 60 MB combined for positions
+     *  + colors + indices: 250K × 8 verts × 6 floats × 4 bytes for
+     *  pos/color, plus 250K × 12 tris × 3 indices × 4 bytes). That
+     *  comfortably covers a typical multi-color dragon (115K segs)
+     *  while leaving headroom for the rest of the app. Above this
+     *  cap we still drop to LINES so the user gets *something*. */
+    const val TUBES_SEGMENT_CAP = 250_000
 
     /** Default tube radius in printer-frame units (mm). Slightly less
      *  than half a 0.4 mm extrusion so adjacent segments on the same
@@ -312,11 +319,41 @@ object ToolpathGlb {
                 ex + radius * sxn + radius * uxn, ey + radius * syn + radius * uyn, ez + radius * szn + radius * uzn,
                 ex - radius * sxn + radius * uxn, ey - radius * syn + radius * uyn, ez - radius * szn + radius * uzn,
             )
+            // Per-corner outward normals — each prism corner sits at the
+            // intersection of three faces (one cap, two side faces), so
+            // the outward direction is the normalized sum of those three
+            // face normals: ±side, ±up, ±t. Pre-baked here as 8 sign
+            // patterns matching the v0..v7 layout above. Lambert(n) is
+            // then multiplied straight into the role/extruder color so
+            // the unlit material (KHR_materials_unlit, set by GlbBuilder)
+            // renders the shading on Galaxy XR — Jetpack XR SceneCore
+            // doesn't ship a default scene light for PBR to sample.
+            val cornerSigns = intArrayOf(
+                -1, -1, -1,  // v0
+                 1, -1, -1,  // v1
+                 1,  1, -1,  // v2
+                -1,  1, -1,  // v3
+                -1, -1,  1,  // v4
+                 1, -1,  1,  // v5
+                 1,  1,  1,  // v6
+                -1,  1,  1,  // v7
+            )
             for (v in 0 until 8) {
                 positions[pi++] = pts[v * 3]
                 positions[pi++] = pts[v * 3 + 1]
                 positions[pi++] = pts[v * 3 + 2]
-                colors[ci++] = rgb.r; colors[ci++] = rgb.g; colors[ci++] = rgb.b
+                val ssgn = cornerSigns[v * 3 + 0]
+                val usgn = cornerSigns[v * 3 + 1]
+                val tsgn = cornerSigns[v * 3 + 2]
+                var nxw = ssgn * sxn + usgn * uxn + tsgn * tnx
+                var nyw = ssgn * syn + usgn * uyn + tsgn * tny
+                var nzw = ssgn * szn + usgn * uzn + tsgn * tnz
+                val nlen = sqrt(nxw * nxw + nyw * nyw + nzw * nzw).coerceAtLeast(1e-9f)
+                nxw /= nlen; nyw /= nlen; nzw /= nlen
+                val shade = lambertFactor(nxw, nyw, nzw)
+                colors[ci++] = rgb.r * shade
+                colors[ci++] = rgb.g * shade
+                colors[ci++] = rgb.b * shade
             }
             // 12 triangles, CCW outward. v0..3 = start ring, v4..7 = end ring.
             // Back cap (start, looking along −t):  0,2,1 / 0,3,2
@@ -362,6 +399,22 @@ object ToolpathGlb {
             colors = colors,
             doubleSided = true,
         ).writeTo(out)
+    }
+
+    /**
+     * Two-light Lambert factor for the unlit-material vertex-color
+     * baking path. Light directions match the model preview baker in
+     * `slic3r_jni.cpp::nativeWriteColoredGlb` so the post-slice
+     * toolpath shading reads as the same scene the prepare-mode
+     * model is lit by. [n] is expected to be unit length.
+     */
+    private fun lambertFactor(nx: Float, ny: Float, nz: Float): Float {
+        val keyDot = nx * 0.40f + ny * 0.30f + nz * 0.866f
+        val fillDot = nx * -0.30f + ny * -0.50f + nz * -0.812f
+        val key = if (keyDot > 0f) keyDot else 0f
+        val fill = if (fillDot > 0f) fillDot else 0f
+        val shade = 0.32f + 0.55f * key + 0.18f * fill
+        return if (shade > 1f) 1f else shade
     }
 
     /**

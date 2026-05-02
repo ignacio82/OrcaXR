@@ -52,9 +52,10 @@ enum class ModelVolumeType(val nativeOrdinal: Int) {
  * - [configOverrides] is a sparse SAFE_KEYS subset that becomes
  *   `mv->config().set_deserialize_nothrow(...)` at slice time.
  *   Only meaningful for [PARAMETER_MODIFIER] volumes today.
- * - [paintFilamentIndex] / [supportFlags] / [seamFlags] are
- *   per-triangle byte arrays paralleling the volume's source mesh
- *   triangle order. Null = no paint authored for this volume.
+ * - [paintFilamentIndex] / [supportFlags] / [seamFlags] /
+ *   [fuzzySkinFlags] are per-triangle byte arrays paralleling the
+ *   volume's source mesh triangle order. Null = no paint authored
+ *   for this volume.
  */
 data class PlacedVolume(
     val id: String,
@@ -76,6 +77,7 @@ data class PlacedVolume(
     val paintFilamentIndex: ByteArray? = null,
     val supportFlags: ByteArray? = null,
     val seamFlags: ByteArray? = null,
+    val fuzzySkinFlags: ByteArray? = null,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -98,7 +100,8 @@ data class PlacedVolume(
             configOverrides == other.configOverrides &&
             byteArraysEqual(paintFilamentIndex, other.paintFilamentIndex) &&
             byteArraysEqual(supportFlags, other.supportFlags) &&
-            byteArraysEqual(seamFlags, other.seamFlags)
+            byteArraysEqual(seamFlags, other.seamFlags) &&
+            byteArraysEqual(fuzzySkinFlags, other.fuzzySkinFlags)
     }
     override fun hashCode(): Int {
         var r = id.hashCode()
@@ -120,6 +123,7 @@ data class PlacedVolume(
         r = 31 * r + (paintFilamentIndex?.contentHashCode() ?: 0)
         r = 31 * r + (supportFlags?.contentHashCode() ?: 0)
         r = 31 * r + (seamFlags?.contentHashCode() ?: 0)
+        r = 31 * r + (fuzzySkinFlags?.contentHashCode() ?: 0)
         return r
     }
 }
@@ -247,6 +251,15 @@ data class PlacedModel(
      *  region. Useful for steering visible seam placement on
      *  cosmetic prints. Null = never painted. */
     val seamFlags: ByteArray? = null,
+    /** Paint full-feature-parity — in-XR fuzzy-skin paint state. Per-
+     *  triangle byte (size = source-mesh triangle count) that flows
+     *  into `mv->fuzzy_skin_facets` at slice time. State 1 marks the
+     *  triangle as part of the fuzzy-skin region; state 0 leaves the
+     *  surface smooth. State 2 is reserved by libslic3r's
+     *  EnforcerBlockerType but unused for fuzzy paint — the upstream
+     *  `GLGizmoFuzzySkin` only writes FUZZY_SKIN (1). Null = never
+     *  painted, short-circuits the JNI write. */
+    val fuzzySkinFlags: ByteArray? = null,
     /** Phase XR_OBJ_4 — additional volumes (modifiers, negative
      *  volumes, support enforcer/blocker) the user has appended to
      *  this model. The primary mesh from [source] always slices as
@@ -306,6 +319,7 @@ data class PlacedModel(
             paintArraysEqual(paintFilamentIndex, other.paintFilamentIndex) &&
             paintArraysEqual(supportFlags, other.supportFlags) &&
             paintArraysEqual(seamFlags, other.seamFlags) &&
+            paintArraysEqual(fuzzySkinFlags, other.fuzzySkinFlags) &&
             volumes == other.volumes &&
             configOverrides == other.configOverrides
     }
@@ -340,6 +354,7 @@ data class PlacedModel(
         r = 31 * r + (paintFilamentIndex?.contentHashCode() ?: 0)
         r = 31 * r + (supportFlags?.contentHashCode() ?: 0)
         r = 31 * r + (seamFlags?.contentHashCode() ?: 0)
+        r = 31 * r + (fuzzySkinFlags?.contentHashCode() ?: 0)
         r = 31 * r + volumes.hashCode()
         r = 31 * r + configOverrides.hashCode()
         return r

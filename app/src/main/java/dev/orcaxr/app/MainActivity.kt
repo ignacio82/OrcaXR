@@ -2550,6 +2550,9 @@ private fun XrShell(
                                 "action=$action on ${model.label}",
                         )
                     }
+                    PaintMode.FuzzySkin -> {
+                        // Placeholder for fuzzy skin painting (unimplemented)
+                    }
                     PaintMode.Off -> { /* paintHooksFor already short-circuits */ }
                 }
             },
@@ -4047,8 +4050,28 @@ private fun XrShell(
                     initialOffset = androidx.xr.runtime.math.Vector3(1.05f, 0.05f, -0.1f),
                     session = session,
                 ) {
+                    // Smart profile filter — narrow the dropdown to rows
+                    // that make sense for the active printer's vendor
+                    // and the project's shared material family. User-
+                    // saved profiles (no machineName/filamentName)
+                    // always pass through. If filtering would empty the
+                    // list, falls back to the full catalog so the user
+                    // never ends up with an empty dropdown. The
+                    // selection-side LaunchedEffect at line ~359 keys on
+                    // the unfiltered `allProfiles`, so a printer swap
+                    // that hides the currently-selected profile leaves
+                    // the selection alone — the dropdown just won't
+                    // surface the row until the user changes filter
+                    // context.
+                    val printerBrand = OrcaProfileLoader.brandOfPrinter(activePrinter?.name)
+                    val sharedMaterial = OrcaProfileLoader.sharedMaterialFamily(
+                        filamentList.map { it.filamentType },
+                    )
+                    val displayedProfiles = remember(allProfiles, printerBrand, sharedMaterial) {
+                        OrcaProfileLoader.filterForContext(allProfiles, printerBrand, sharedMaterial)
+                    }
                     RightSettingsPanel(
-                        allProfiles = allProfiles,
+                        allProfiles = displayedProfiles,
                         selectedProfile = selectedProfile.value,
                         onProfileSelect = { selectedProfile.value = it },
                         onSaveAsProfile = onSaveAsProfile,

@@ -35,7 +35,15 @@ fun resolveAsWillPrintPalette(
 
     val visibleVirtual = virtualRows.filter { !it.deleted && it.enabled }
 
-    return (0 until slotCount).map { i ->
+    // Iterate to whichever is larger so that authored project filaments
+    // beyond the printer's physical slot count (virtual mixtures, manual
+    // physical-swap workflows) still get a resolved color in the GLB
+    // writer. Truncating to slotCount here was the cause of the "extra
+    // colors default to white in the GLB" bug — entries past the bed's
+    // slot count fell off the array and slic3r_jni's nativeWriteColoredGlb
+    // saw the missing slots as #FFFFFF.
+    val resolvedCount = maxOf(filaments.size, slotCount)
+    return (0 until resolvedCount).map { i ->
         val entry = filaments.getOrNull(i)
         val virtualSlot = entry?.virtualSlot
         val physicalSlot = entry?.physicalSlot
@@ -55,7 +63,15 @@ fun resolveAsWillPrintPalette(
                 }
             }
             physicalSlot != null -> physicalColor(physicalSlot)
-            else -> physicalColor(i)
+            // Identity fallback (project filament N → physical T_N).
+            // Beyond the printer's physical slot count there is no T_N
+            // to identity-map onto, so the authored color is the only
+            // meaningful signal — without this, GLB indices 4+ on a 4-
+            // slot printer would all render white. Inside the slot-
+            // count range, keep the historical "use whatever's loaded
+            // at T_N" semantics.
+            i < slotCount -> physicalColor(i)
+            else -> entry?.color ?: "#FFFFFF"
         }
     }
 }

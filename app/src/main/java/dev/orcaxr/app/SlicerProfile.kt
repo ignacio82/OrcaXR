@@ -17,6 +17,29 @@ data class SlicerProfile(
     val displayName: String,
     val description: String,
     val config: Map<String, String>,
+    /**
+     * Original OrcaSlicer machine-profile leaf name this row was
+     * composed from (e.g. "Snapmaker U1 (0.4 nozzle)", "Elegoo Centauri
+     * Carbon (0.4 nozzle)"). null for user-saved profiles, which carry
+     * no upstream provenance — the dropdown filter treats `null` as
+     * "compatible with any printer" so user picks always show up.
+     * Populated by [OrcaProfileLoader.compose].
+     */
+    val machineName: String? = null,
+    /**
+     * Original process-leaf name (e.g. "0.20 Standard @Snapmaker U1
+     * (0.4 nozzle)"). null for user-saved profiles. Currently
+     * informational; the dropdown filter doesn't gate on this field.
+     */
+    val processName: String? = null,
+    /**
+     * Original filament-leaf name (e.g. "Generic PLA", "Elegoo PLA
+     * Matte"). The dropdown filter substring-matches this against the
+     * project's single dominant material family ("PLA", "PETG", …) when
+     * deciding whether to show the row. null for user-saved profiles —
+     * those always pass the filament gate.
+     */
+    val filamentName: String? = null,
 )
 
 object Profiles {

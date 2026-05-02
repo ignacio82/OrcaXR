@@ -118,6 +118,12 @@ Currently single `:app` module. The split below is aspirational; do NOT create m
    - **`key(selectedModelIds.hashCode(), fw, fd, fh) { SelectionBboxEntity(...) }`** — keying any wrapper composable on the model's bbox dims is the same trap. A change to `baseBboxXmm/Y/Z` (e.g. when a re-bake refines per-object dims) flips the key, the wrapper unmounts, and its `DisposableEffect(Unit)` synchronously frees the bbox entity. Drop the dim args from the key; the inner LaunchedEffect on `(modelId, sizeXmm, sizeYmm, sizeZmm)` handles dim changes via `disposeEntityDeferred`.
    This is acutely triggered by gotcha #22's two-bake load: v1→v2 within ms means the v1 dispose can race v2's still-loading addComponent.
 
+14. **`nativeWriteColoredGlb` keeps `KHR_materials_unlit` and bakes Lambert shading into `COLOR_0`; do NOT switch to a PBR material.** Two prior attempts at "make the preview look 3D" tried different approaches that both failed:
+    - **Drop unlit, leave only POSITION + COLOR_0** → Filament rendered black because PBR has no normals, so lighting was undefined.
+    - **Drop unlit, add NORMAL + a `pbrMetallicRoughness` material** → still rendered dark because Jetpack XR SceneCore (alpha13) does NOT install a default IBL skybox or directional light when a `GltfModel` attaches; PBR's diffuse term has nothing to sample, so the result drops to near-black even with correct normals.
+
+    Current approach: keep `KHR_materials_unlit`, compute smooth per-vertex normals from world-space positions (area-weighted face-normal accumulation), and pre-multiply each vertex color by `ambient + key * max(0, dot(n, key_dir)) + fill * max(0, dot(n, fill_dir))` before writing the GLB. The unlit material renders `baseColor * vertexColor` straight to the screen with no scene-light dependency, so the baked shading IS what the user sees. Light directions are mesh-local (printer-frame: +Z = up). Output GLB is positions + colors + indices only — no NORMAL accessor (unlit ignores it).
+
 ## libslic3r gotchas (load-bearing)
 
 1. **Uninitialized POD members in `Print.hpp` / `WipeTower.hpp` silently corrupt slices on Android arm64 Release.** Patches `0011-skip-gcode-append-full-config.patch` and `0012-print-init-uninitialized-members.patch` cover this.

@@ -50,6 +50,14 @@ enum class PaintMode {
     /** Phase XR_OBJ_8 — Seam blocker paint. Stamps BLOCKER (2);
      *  tells the seam picker to avoid the painted region. */
     SeamBlocker,
+    /** Paint full-feature-parity — Fuzzy Skin paint. Clicked triangles
+     *  get tagged with state 1 in `fuzzySkinFlags`, which flows into
+     *  `mv->fuzzy_skin_facets` at slice time so libslic3r's fuzzy-skin
+     *  texture pass roughens the surface in painted regions only. State
+     *  2 (BLOCKER) is reserved by the libslic3r facet enum but not
+     *  produced by the painter — fuzzy is always additive. Mirrors
+     *  upstream OrcaSlicer's `GLGizmoFuzzySkin`. */
+    FuzzySkin,
 }
 
 /**

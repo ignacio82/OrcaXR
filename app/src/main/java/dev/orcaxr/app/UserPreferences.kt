@@ -47,10 +47,17 @@ class UserPreferences(ctx: Context) {
      * of a single LINE. Visually closer to desktop OrcaSlicer's GL
      * viewer at the cost of ~6× triangle count vs LINES; auto-falls
      * back to LINES above [ToolpathGlb.TUBES_SEGMENT_CAP] segments.
-     * Off by default — LINES still ship and read fine on Galaxy XR.
+     *
+     * Default flipped to ON because LINES on Galaxy XR's Filament
+     * render as 1-pixel hairlines — for a typical 100K+ segment slice
+     * (e.g. dragon.3mf) the densely overlapping anti-aliased pixels
+     * blend to a hazy silver-gray and the role / extruder coloring
+     * stops reading. Tubes give visible 3D extrusion shape with the
+     * Lambert shading baked into vertex colors. The toggle in the
+     * Layer Preview panel still lets users opt back to lines.
      */
     var toolpathTubes: Boolean
-        get() = prefs.getBoolean(KEY_TOOLPATH_TUBES, false)
+        get() = prefs.getBoolean(KEY_TOOLPATH_TUBES, true)
         set(value) {
             prefs.edit().putBoolean(KEY_TOOLPATH_TUBES, value).apply()
         }

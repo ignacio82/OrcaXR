@@ -248,6 +248,9 @@ object OrcaProfileLoader {
             displayName = display,
             description = description.ifBlank { "Bundled OrcaSlicer profile" },
             config = merged,
+            machineName = machineName,
+            processName = processName,
+            filamentName = filamentShort.ifBlank { filamentName },
         )
     }
 
@@ -270,6 +273,83 @@ object OrcaProfileLoader {
         s.lowercase()
             .replace(Regex("[^a-z0-9._-]+"), "_")
             .trim('_', '.')
+
+    /**
+     * Brand keywords we recognize when extracting a vendor from a
+     * printer's display name. Substring-matched case-insensitively
+     * against [PrinterConfig.name] and against [SlicerProfile.machineName].
+     * Order doesn't matter — printer names contain at most one brand.
+     */
+    private val PRINTER_BRANDS: List<String> = listOf(
+        "Snapmaker",
+        "Elegoo",
+        "Bambu",
+        "Prusa",
+    )
+
+    /**
+     * Material family tokens, longest-first so "PLA-CF" matches before
+     * "PLA". Substring-matched case-insensitively against the project's
+     * filament-type strings (e.g. "Generic PLA", "Elegoo PLA Matte"
+     * → PLA) and against [SlicerProfile.filamentName] when filtering
+     * the dropdown.
+     */
+    private val MATERIAL_TOKENS: List<String> = listOf(
+        "PLA-CF", "PETG-CF", "PA-CF", "ABS-CF",
+        "PETG", "PCTG",
+        "PLA", "ABS", "ASA", "TPU", "PVA", "HIPS",
+        "PA", "PC", "PEI", "PEEK",
+    )
+
+    /**
+     * Extracts the recognized vendor brand from a printer's display name.
+     * Returns null when no brand keyword matches — callers treat null as
+     * "no brand filter" and show every profile.
+     */
+    fun brandOfPrinter(name: String?): String? {
+        if (name.isNullOrBlank()) return null
+        return PRINTER_BRANDS.firstOrNull { name.contains(it, ignoreCase = true) }
+    }
+
+    /**
+     * Reduces a set of project-filament-type strings to a single shared
+     * material family, or null if the project mixes families. With one
+     * unique family, the dropdown filter narrows to profiles whose
+     * filament leaf advertises that family.
+     */
+    fun sharedMaterialFamily(filamentTypes: Collection<String>): String? {
+        if (filamentTypes.isEmpty()) return null
+        val families = filamentTypes.mapNotNullTo(mutableSetOf()) { type ->
+            MATERIAL_TOKENS.firstOrNull { type.contains(it, ignoreCase = true) }
+        }
+        return families.singleOrNull()
+    }
+
+    /**
+     * Filters the bundled+user catalog down to rows that make sense for
+     * the active printer + project's shared material family. User-saved
+     * profiles (machineName/filamentName both null) always pass — we
+     * don't second-guess what the user explicitly authored. If the
+     * filter would empty the dropdown, returns the full input list so
+     * the user is never stuck without a selectable profile.
+     */
+    fun filterForContext(
+        all: List<SlicerProfile>,
+        printerBrand: String?,
+        sharedMaterial: String?,
+    ): List<SlicerProfile> {
+        if (printerBrand == null && sharedMaterial == null) return all
+        val filtered = all.filter { p ->
+            val brandOk = printerBrand == null
+                || p.machineName == null
+                || p.machineName.contains(printerBrand, ignoreCase = true)
+            val materialOk = sharedMaterial == null
+                || p.filamentName == null
+                || p.filamentName.contains(sharedMaterial, ignoreCase = true)
+            brandOk && materialOk
+        }
+        return if (filtered.isEmpty()) all else filtered
+    }
 
     /** OrcaSlicer book-keeping fields that aren't slicer config keys. */
     private val META_KEYS: Set<String> = setOf(
@@ -578,6 +658,30 @@ object OrcaProfileLoader {
         "preheat_time",
         "ooze_prevention",
         "prime_volume",
+        // Master toggle for the prime/wipe tower. Authored at "1" in
+        // the bundled Snapmaker U1 multi-color and Elegoo ECC process
+        // leaves but was being silently dropped here, so multi-color
+        // slices ran without a tower and dragged old-color filament
+        // onto the part on the first few mm after each toolchange.
+        // mergedConfig() force-sets this to "1" for n>=2 anyway, but
+        // letting the profile's value through means single-tool
+        // profiles that author the tower (e.g. for purge_to_infill
+        // calibration prints) also work as expected. coBool — safe.
+        "enable_prime_tower",
+        // coBool — Bambu/SoftFever extension, controls whether a
+        // sparse "framework" structure replaces the solid tower
+        // body to save filament. Default is false. Listed here so
+        // a profile that opts in actually opts in.
+        "prime_tower_enable_framework",
+        // coBool — when true, normal infill is purged into the
+        // tower instead of being printed as part of the model;
+        // off by default in the bundled profiles. Lets the
+        // authored "0" (don't purge to infill) flow through
+        // instead of being silently dropped, which prevents
+        // libslic3r from falling back to its compiled-in default
+        // and producing a tower different from what the profile
+        // designer intended.
+        "purge_in_prime_tower",
         "prime_tower_width",
         "prime_tower_brim_width",
         // Phase D.1 (PR #131 port): brim chamfer around the prime tower.

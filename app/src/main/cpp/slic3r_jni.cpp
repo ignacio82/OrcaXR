@@ -85,6 +85,7 @@ extern "C" {
 
 #include <miniz.h>
 
+#include <cmath>
 #include <cstring>
 #include <fstream>
 #include <vector>
@@ -1098,10 +1099,20 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
                         if (std::strcmp(k.c, "filament_diameter") == 0) {
                             jstring jv = (jstring) env->GetObjectArrayElement(jConfigValues, i);
                             if (jv != nullptr) {
-                                ScopedUtf v(env, jv);
-                                size_t commas = 0;
-                                for (const char *p = v.c; *p; ++p) if (*p == ',') ++commas;
-                                num_physical_for_remap = commas + 1;
+                                // ScopedUtf v's dtor calls
+                                // ReleaseStringUTFChars, which dereferences
+                                // the jstring local ref. Keep that strictly
+                                // ahead of DeleteLocalRef(jv) — gotcha #3.
+                                // The earlier shape (DeleteLocalRef before
+                                // the inner scope ended) tripped CheckJNI
+                                // with "popped reference" mid-slice on the
+                                // single-object dragon.3mf path.
+                                {
+                                    ScopedUtf v(env, jv);
+                                    size_t commas = 0;
+                                    for (const char *p = v.c; *p; ++p) if (*p == ',') ++commas;
+                                    num_physical_for_remap = commas + 1;
+                                }
                                 env->DeleteLocalRef(jv);
                             }
                             found = true;
@@ -2224,9 +2235,97 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
             return -2;
         }
 
-        // ---- Stream a minimal GLB. Same layout as Kotlin
-        // GlbBuilder, simplified for our specific case (positions +
-        // colors + u32 indices, TRIANGLES, KHR_materials_unlit). ----
+        // ---- Bake Lambert shading into the vertex colors.
+        //
+        // Why bake instead of emitting NORMAL + a PBR material:
+        // Jetpack XR SceneCore (alpha13 on Galaxy XR) does NOT install a
+        // default IBL skybox or directional light when a `GltfModel` is
+        // attached — Filament renders the mesh against a black ambient
+        // term, so a standard `pbrMetallicRoughness` material drops to
+        // near-black regardless of how good the normals are. The fix is
+        // to keep `KHR_materials_unlit` (which renders baseColor *
+        // vertexColor straight to the screen, no light sampling) AND
+        // pre-multiply each vertex color by a Lambert + ambient factor
+        // computed from the smooth normal so the result LOOKS lit.
+        // Two-light setup: a key from front-top-right and a fill from
+        // behind-below-left at half intensity, plus an ambient floor
+        // so back-facing triangles don't go pitch black. Same recipe
+        // a kit-bashed offline lightmap would produce.
+        //
+        // Smooth normals via area-weighted face-normal accumulation
+        // (raw cross product = 2 * area * unit_normal). After accumulation
+        // each vertex gets normalized; degenerate vertices default to
+        // +Z (the build-plate-up axis in mesh coords).
+        // ----
+        std::vector<float> normals(positions.size(), 0.0f);
+        for (size_t i = 0; i + 2 < indices.size(); i += 3) {
+            const int i0 = indices[i + 0];
+            const int i1 = indices[i + 1];
+            const int i2 = indices[i + 2];
+            const float ax = positions[i0 * 3 + 0];
+            const float ay = positions[i0 * 3 + 1];
+            const float az = positions[i0 * 3 + 2];
+            const float bx = positions[i1 * 3 + 0];
+            const float by = positions[i1 * 3 + 1];
+            const float bz = positions[i1 * 3 + 2];
+            const float cx = positions[i2 * 3 + 0];
+            const float cy = positions[i2 * 3 + 1];
+            const float cz = positions[i2 * 3 + 2];
+            const float ex = bx - ax, ey = by - ay, ez = bz - az;
+            const float fx = cx - ax, fy = cy - ay, fz = cz - az;
+            const float nx = ey * fz - ez * fy;
+            const float ny = ez * fx - ex * fz;
+            const float nz = ex * fy - ey * fx;
+            normals[i0 * 3 + 0] += nx; normals[i0 * 3 + 1] += ny; normals[i0 * 3 + 2] += nz;
+            normals[i1 * 3 + 0] += nx; normals[i1 * 3 + 1] += ny; normals[i1 * 3 + 2] += nz;
+            normals[i2 * 3 + 0] += nx; normals[i2 * 3 + 1] += ny; normals[i2 * 3 + 2] += nz;
+        }
+        // Mesh-local light directions (printer-frame: +X = bed-X,
+        // +Y = bed-front, +Z = up). Both pre-normalized to unit length.
+        // Key: above + slightly to the front-right. Fill: behind +
+        // slightly down to brighten back-facing triangles. Numbers
+        // chosen to keep both vectors at length 1.0 — verified
+        // 0.40² + 0.30² + 0.866² ≈ 1.00, (-0.30)² + (-0.50)² + (-0.812)²
+        // ≈ 1.00.
+        constexpr float KEY_DX = 0.40f, KEY_DY = 0.30f, KEY_DZ = 0.866f;
+        constexpr float FILL_DX = -0.30f, FILL_DY = -0.50f, FILL_DZ = -0.812f;
+        constexpr float AMBIENT = 0.32f;
+        constexpr float KEY_INTENSITY = 0.55f;
+        constexpr float FILL_INTENSITY = 0.18f;
+        for (size_t v = 0; v < positions.size() / 3; ++v) {
+            const size_t ni = v * 3;
+            const float l2 = normals[ni] * normals[ni]
+                           + normals[ni + 1] * normals[ni + 1]
+                           + normals[ni + 2] * normals[ni + 2];
+            float nx, ny, nz;
+            if (l2 > 1e-24f) {
+                const float inv = 1.0f / std::sqrt(l2);
+                nx = normals[ni + 0] * inv;
+                ny = normals[ni + 1] * inv;
+                nz = normals[ni + 2] * inv;
+            } else {
+                nx = 0.0f; ny = 0.0f; nz = 1.0f;
+            }
+            const float key_term = std::max(0.0f,
+                nx * KEY_DX + ny * KEY_DY + nz * KEY_DZ);
+            const float fill_term = std::max(0.0f,
+                nx * FILL_DX + ny * FILL_DY + nz * FILL_DZ);
+            const float shade = AMBIENT
+                + KEY_INTENSITY * key_term
+                + FILL_INTENSITY * fill_term;
+            const float clamped = std::min(1.0f, shade);
+            colors[ni + 0] *= clamped;
+            colors[ni + 1] *= clamped;
+            colors[ni + 2] *= clamped;
+        }
+
+        // ---- Stream a minimal GLB.
+        //
+        // Layout: POSITION + COLOR_0 + u32 indices, KHR_materials_unlit.
+        // NORMAL is intentionally NOT emitted — the unlit material
+        // ignores it, and the shading we want is already baked into
+        // COLOR_0 above. Saves ~vertex_count * 12 bytes per preview.
+        // ----
         const size_t vertex_count = positions.size() / 3;
         const size_t index_count = indices.size();
         const uint32_t positions_bytes = static_cast<uint32_t>(positions.size() * 4);
@@ -2310,7 +2409,8 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
         write_u32(0x4E4F534A); // 'JSON'
         os.write(json_buf, json_len);
         for (uint32_t i = 0; i < json_pad; ++i) os.put(' ');
-        // BIN chunk.
+        // BIN chunk. Order MUST match the bufferView byteOffsets
+        // computed above: positions, colors, indices.
         write_u32(bin_chunk_len);
         write_u32(0x004E4942); // 'BIN\0'
         os.write(reinterpret_cast<const char*>(positions.data()), positions_bytes);
