@@ -2840,6 +2840,8 @@ fun PlateTabPanel(
     onAddPlate: () -> Unit,
     onRenamePlate: (Int, String) -> Unit,
     onDeletePlate: (Int) -> Unit,
+    plateMovable: Boolean,
+    onTogglePlateMovable: () -> Unit,
 ) {
     var showRenameDialog by remember { mutableStateOf<Int?>(null) }
 
@@ -2851,6 +2853,51 @@ fun PlateTabPanel(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Plates", style = MaterialTheme.typography.titleMedium, color = Color.White)
+
+        Surface(
+            color = if (plateMovable) Color(0xFF1F3A2A) else Color(0xFF1B1F23),
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(1.dp, if (plateMovable) Color(0xFF7BFFB0) else Color(0xFF2A2F35)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onTogglePlateMovable() },
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = if (plateMovable) Icons.Default.OpenWith else Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = if (plateMovable) Color(0xFF7BFFB0) else Color.Gray,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (plateMovable) "Moving plate" else "Move plate",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = if (plateMovable) "Pinch the bed to drag" else "Tap to enable plate drag",
+                        color = Color.Gray,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Switch(
+                    checked = plateMovable,
+                    onCheckedChange = { onTogglePlateMovable() },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color(0xFF7BFFB0),
+                        checkedTrackColor = Color(0xFF2D4A38),
+                        uncheckedThumbColor = Color.Gray,
+                        uncheckedTrackColor = Color(0xFF2A2F35),
+                    ),
+                )
+            }
+        }
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(plates) { plate ->
