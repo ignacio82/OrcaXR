@@ -734,7 +734,8 @@ static bool extract_3mf_string_array(
  */
 static Slic3r::Model load_mesh_container(
     const char* path,
-    Slic3r::DynamicPrintConfig* out_config = nullptr)
+    Slic3r::DynamicPrintConfig* out_config = nullptr,
+    Slic3r::PlateDataPtrs* out_plate_data = nullptr)
 {
     if (boost::algorithm::iends_with(path, ".3mf") ||
         boost::algorithm::iends_with(path, ".zip.amf"))
@@ -812,8 +813,15 @@ static Slic3r::Model load_mesh_container(
                                           /*project=*/nullptr,
                                           /*plate_id=*/0)
                     && !model.objects.empty()) {
-                    ORCAXR_LOGI("load_mesh_container: load_bbs_3mf ok (%zu objects, is_bbl=%d)",
-                                model.objects.size(), is_bbl);
+                    ORCAXR_LOGI("load_mesh_container: load_bbs_3mf ok (%zu objects, %zu plates, is_bbl=%d)",
+                                model.objects.size(), plate_data.size(), is_bbl);
+                    if (out_plate_data != nullptr) {
+                        // Hand ownership over to the caller. We must
+                        // null the locals so the destructor of `plate_data`
+                        // doesn't free the PlateData* the caller now owns.
+                        *out_plate_data = std::move(plate_data);
+                        plate_data.clear();
+                    }
                     return true;
                 }
             } catch (const std::exception& e) {
@@ -2736,19 +2744,47 @@ Java_dev_orcaxr_app_SlicerEngine_nativeConvertToStl(
 }
 
 // nativeRead3mfObjectMetadata — enumerate objects in a 3MF without merging.
+//
+// For BBS-style 3MFs that embed multi-plate metadata, also resolves each
+// object's 1-based plate index by joining the plate's `obj_inst_map`
+// (XML object_id → identify_id) against `ModelInstance::loaded_id` set
+// by the BBS importer. Standard 3MFs (no plate metadata) return
+// plateIndex=1 for every object.
 extern "C" JNIEXPORT jobjectArray JNICALL
 Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
     JNIEnv* env, jclass, jstring jPath)
 {
     ScopedUtf path(env, jPath);
+    Slic3r::PlateDataPtrs plates;
     try {
-        Slic3r::Model model = load_mesh_container(path.c);
-        if (model.objects.empty()) return nullptr;
+        Slic3r::Model model = load_mesh_container(path.c, /*out_config=*/nullptr, &plates);
+        if (model.objects.empty()) {
+            for (auto* p : plates) delete p;
+            return nullptr;
+        }
+
+        // Build a flat identify_id -> plate_index (1-based) map. Skip
+        // identify_id == 0 (default; means "not set by BBS importer").
+        std::map<size_t, int> identify_to_plate;
+        for (size_t pi = 0; pi < plates.size(); ++pi) {
+            if (plates[pi] == nullptr) continue;
+            for (const auto& kv : plates[pi]->obj_inst_map) {
+                const size_t identify_id = static_cast<size_t>(kv.second.second);
+                if (identify_id == 0) continue;
+                identify_to_plate.emplace(identify_id, static_cast<int>(pi) + 1);
+            }
+        }
 
         jclass metaClass = env->FindClass("dev/orcaxr/app/SlicerEngine$ObjectMeta");
-        if (metaClass == nullptr) return nullptr;
-        jmethodID metaCtor = env->GetMethodID(metaClass, "<init>", "(Ljava/lang/String;IFFFIIFFF)V");
-        if (metaCtor == nullptr) return nullptr;
+        if (metaClass == nullptr) {
+            for (auto* p : plates) delete p;
+            return nullptr;
+        }
+        jmethodID metaCtor = env->GetMethodID(metaClass, "<init>", "(Ljava/lang/String;IFFFIIFFFI)V");
+        if (metaCtor == nullptr) {
+            for (auto* p : plates) delete p;
+            return nullptr;
+        }
 
         jobjectArray result = env->NewObjectArray(model.objects.size(), metaClass, nullptr);
 
@@ -2781,7 +2817,7 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
             Slic3r::TriangleMesh mesh = mo->mesh();
 
             jstring name = env->NewStringUTF(mo->name.c_str());
-            
+
             int extruder = 0;
             // ModelConfig has a non-template option(opt_key) member that
             // hides the inherited template option<TYPE>(...) from
@@ -2809,6 +2845,22 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
                     i, mo->name.c_str(), b.min.z(), all.min.z(), oz);
             }
 
+            // Resolve the plate this object belongs to. Any of the
+            // object's instances may carry a `loaded_id` matching one
+            // of the BBS plate's identify_ids; the first match wins.
+            // Default to plate 1 when the 3MF carries no plate metadata
+            // (standard 3MFs, or BBS files saved before plates).
+            int plate_index = 1;
+            if (!identify_to_plate.empty()) {
+                for (const auto* inst : mo->instances) {
+                    const auto it = identify_to_plate.find(inst->loaded_id);
+                    if (it != identify_to_plate.end()) {
+                        plate_index = it->second;
+                        break;
+                    }
+                }
+            }
+
             jobject meta = env->NewObject(metaClass, metaCtor,
                 name,
                 (jint)mesh.facets_count(),
@@ -2819,7 +2871,8 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
                 (jint)mo->instances.size(),
                 (jfloat)ox,
                 (jfloat)oy,
-                (jfloat)oz
+                (jfloat)oz,
+                (jint)plate_index
             );
 
             env->SetObjectArrayElement(result, i, meta);
@@ -2828,12 +2881,58 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
         }
 
         env->DeleteLocalRef(metaClass);
+        for (auto* p : plates) delete p;
         return result;
     } catch (const std::exception& e) {
         ORCAXR_LOGE("nativeRead3mfObjectMetadata: %s", e.what());
+        for (auto* p : plates) delete p;
         return nullptr;
     } catch (...) {
         ORCAXR_LOGE("nativeRead3mfObjectMetadata: unknown exception");
+        for (auto* p : plates) delete p;
+        return nullptr;
+    }
+}
+
+// nativeRead3mfPlateLabels — return a String[] of plate names from a
+// BBS-style 3MF, indexed by plate_index-1 (so [0] is "Plate 1"). Each
+// entry is the user-set plate name (e.g. "Body", "Lid") or empty when
+// the 3MF didn't carry one. Returns null for non-BBS / standard 3MFs
+// (where there's only one implicit plate).
+extern "C" JNIEXPORT jobjectArray JNICALL
+Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfPlateLabels(
+    JNIEnv* env, jclass, jstring jPath)
+{
+    ScopedUtf path(env, jPath);
+    Slic3r::PlateDataPtrs plates;
+    try {
+        Slic3r::Model model = load_mesh_container(path.c, /*out_config=*/nullptr, &plates);
+        if (plates.empty()) {
+            for (auto* p : plates) delete p;
+            return nullptr;
+        }
+        jclass strClass = env->FindClass("java/lang/String");
+        if (strClass == nullptr) {
+            for (auto* p : plates) delete p;
+            return nullptr;
+        }
+        jobjectArray result = env->NewObjectArray(plates.size(), strClass, nullptr);
+        for (size_t i = 0; i < plates.size(); ++i) {
+            const std::string label = (plates[i] != nullptr) ? plates[i]->plate_name : std::string();
+            jstring s = env->NewStringUTF(label.c_str());
+            env->SetObjectArrayElement(result, i, s);
+            env->DeleteLocalRef(s);
+        }
+        env->DeleteLocalRef(strClass);
+        for (auto* p : plates) delete p;
+        return result;
+    } catch (const std::exception& e) {
+        ORCAXR_LOGE("nativeRead3mfPlateLabels: %s", e.what());
+        for (auto* p : plates) delete p;
+        return nullptr;
+    } catch (...) {
+        ORCAXR_LOGE("nativeRead3mfPlateLabels: unknown exception");
+        for (auto* p : plates) delete p;
         return nullptr;
     }
 }

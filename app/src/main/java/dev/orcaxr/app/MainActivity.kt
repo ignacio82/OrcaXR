@@ -1599,6 +1599,49 @@ private fun XrShell(
             // the existing list and append a new entry — but cap at
             // MAX_PLACED_MODELS to bound the SceneCore draw-call budget.
             val meta = SlicerEngine.read3mfObjectMetadata(file)
+
+            // Multi-plate handling. BBS 3MFs carry a 1-based
+            // `plateIndex` per object; standard 3MFs and STLs return
+            // 1 for everything. We translate the file's plate indices
+            // to app plate ids based on import mode:
+            //   Replace : 1..N from the 3MF map onto plate ids 1..N,
+            //             upsert PlateMetadata with the 3MF's plate
+            //             names, and switch activePlateId to 1 so the
+            //             user sees plate 1's models on landing.
+            //   Add     : plate 1 of the 3MF lands on the current
+            //             activePlateId; 2..N get fresh ids allocated
+            //             above the current max so existing plates
+            //             stay untouched.
+            val maxPlateIndex = meta?.maxOfOrNull { it.plateIndex } ?: 1
+            val plateLabels: Array<String>? = if (maxPlateIndex > 1) {
+                SlicerEngine.read3mfPlateLabels(file)
+            } else null
+            val importPlateToApp: Map<Int, Int> = when {
+                maxPlateIndex <= 1 -> mapOf(
+                    1 to if (mode is PickerMode.Replace) 1 else activePlateId,
+                )
+                mode is PickerMode.Replace -> (1..maxPlateIndex).associateWith { it }
+                else -> buildMap {
+                    put(1, activePlateId)
+                    val baseId = (allPlates.maxOfOrNull { it.id } ?: 0) + 1
+                    for (i in 2..maxPlateIndex) put(i, baseId + i - 2)
+                }
+            }
+            if (maxPlateIndex > 1) {
+                val plateIdsToUpsert = if (mode is PickerMode.Replace) {
+                    (1..maxPlateIndex).toList()
+                } else {
+                    (2..maxPlateIndex).toList()
+                }
+                for (i in plateIdsToUpsert) {
+                    val appId = importPlateToApp.getValue(i)
+                    val label = plateLabels?.getOrNull(i - 1)
+                        ?.takeIf { it.isNotBlank() }
+                        ?: "Plate $appId"
+                    plateStore.upsert(PlateMetadata(id = appId, label = label))
+                }
+            }
+
             val freshList = if (meta != null && meta.size > 1) {
                 val gid = paintCache.hashOf(file)
                 meta.mapIndexed { index, m ->
@@ -1621,17 +1664,31 @@ private fun XrShell(
                         baseBboxXmm = m.bboxX,
                         baseBboxYmm = m.bboxY,
                         baseBboxZmm = m.bboxZ,
+                        plateId = importPlateToApp[m.plateIndex] ?: importPlateToApp.getValue(1),
                     )
                 }
             } else {
                 val newId = "model_${System.currentTimeMillis().toString(36)}_${placedModels.size}"
-                listOf(PlacedModel(id = newId, source = file, label = label))
+                val singlePlate = meta?.firstOrNull()?.plateIndex ?: 1
+                listOf(
+                    PlacedModel(
+                        id = newId,
+                        source = file,
+                        label = label,
+                        plateId = importPlateToApp[singlePlate] ?: importPlateToApp.getValue(1),
+                    ),
+                )
             }
 
             when (mode) {
                 PickerMode.Replace -> {
                     placedModels = freshList
                     selectedModelIds = setOfNotNull(freshList.first().id)
+                    // Land on plate 1 of the import so plate-1 models
+                    // are visible immediately (otherwise they'd be
+                    // filtered out if the user was on a different
+                    // plate before importing).
+                    activePlateId = importPlateToApp.getValue(1)
                 }
                 PickerMode.Add -> {
                     if (placedModels.size + freshList.size > MAX_PLACED_MODELS) {
@@ -3631,6 +3688,9 @@ private fun XrShell(
                             placedModels = placedModels.map {
                                 if (it.id == modelId) it.copy(plateId = plateId) else it
                             }
+                            // Follow the model to the destination plate
+                            // so the user doesn't think it vanished.
+                            activePlateId = plateId
                         },
                         isLoadingModel = isLoadingModel,
                         loadingLabel = loadingLabel,
@@ -3917,6 +3977,17 @@ private fun XrShell(
                                     m.copy(configOverrides = newOverrides)
                                 }
                             }
+                        },
+                        allPlates = allPlates,
+                        // Move the model to the target plate AND switch
+                        // the active plate to follow it, so the user
+                        // doesn't see "the model vanished" when the
+                        // current plate filter excludes it post-move.
+                        onMoveToPlate = { modelId, plateId ->
+                            placedModels = placedModels.map {
+                                if (it.id == modelId) it.copy(plateId = plateId) else it
+                            }
+                            activePlateId = plateId
                         },
                     )
                 }

@@ -4960,6 +4960,12 @@ fun TransformPanel(
      *  override. Empty value removes the key (reverts to global
      *  profile default); non-empty upserts. Null disables editing. */
     onObjectConfigChange: ((key: String, value: String) -> Unit)? = null,
+    /** All known plates, used to render the "Move to plate" picker.
+     *  When fewer than two plates exist, the picker is hidden. */
+    allPlates: List<PlateMetadata> = emptyList(),
+    /** Move the selected model to a different plate. Null disables
+     *  the picker (e.g. when nothing is selected). */
+    onMoveToPlate: ((modelId: String, plateId: Int) -> Unit)? = null,
 ) {
     val scroll = rememberScrollState()
     Column(
@@ -4988,6 +4994,75 @@ fun TransformPanel(
             style = MaterialTheme.typography.bodySmall,
         )
         Spacer(Modifier.height(12.dp))
+
+        if (allPlates.size > 1 && onMoveToPlate != null) {
+            val currentPlate = allPlates.firstOrNull { it.id == model.plateId }
+            var showPlateMenu by remember(model.id) { mutableStateOf(false) }
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Surface(
+                    color = Color(0xFF1B1F23),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, Color(0xFF2A2F35)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showPlateMenu = true },
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Layers,
+                            contentDescription = null,
+                            tint = Color(0xFF7BC8FF),
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Plate",
+                                color = Color.Gray,
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                            Text(
+                                currentPlate?.label ?: "Plate ${model.plateId}",
+                                color = Color.White,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = "Move to plate",
+                            tint = Color.Gray,
+                        )
+                    }
+                }
+                DropdownMenu(
+                    expanded = showPlateMenu,
+                    onDismissRequest = { showPlateMenu = false },
+                    modifier = Modifier.background(Color(0xFF2D333B)),
+                ) {
+                    allPlates.forEach { plate ->
+                        val isCurrent = plate.id == model.plateId
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = if (isCurrent) "${plate.label} (current)" else plate.label,
+                                    color = if (isCurrent) Color(0xFF7BC8FF) else Color.White,
+                                )
+                            },
+                            enabled = !isCurrent,
+                            onClick = {
+                                onMoveToPlate(model.id, plate.id)
+                                showPlateMenu = false
+                            },
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
 
         // Per-tool sections. In Select mode all three axes are visible
         // (handy for keyboard editing without committing to a tool); in

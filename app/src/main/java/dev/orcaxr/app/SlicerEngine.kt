@@ -70,6 +70,10 @@ object SlicerEngine {
         val offsetX: Float,
         val offsetY: Float,
         val offsetZ: Float,
+        /** 1-based plate index from the BBS 3MF metadata. Standard
+         *  (non-BBS) 3MFs and 3MFs without plate metadata return 1
+         *  for every object — caller treats that as "single plate". */
+        val plateIndex: Int,
     )
 
     private val dispatcher: CoroutineDispatcher =
@@ -870,11 +874,21 @@ object SlicerEngine {
         nativeRead3mfObjectMetadata(file.absolutePath)
     }
 
+    /** Returns plate names from a BBS 3MF, indexed by plate_index-1
+     *  (so [0] is "Plate 1"). Empty string when the 3MF doesn't carry
+     *  a name for that plate. Returns null for non-BBS / standard 3MFs
+     *  (which only have one implicit plate). */
+    suspend fun read3mfPlateLabels(file: File): Array<String>? = withContext(dispatcher) {
+        nativeRead3mfPlateLabels(file.absolutePath)
+    }
+
     suspend fun extractObjectAsStl(archive: File, objectIndex: Int, outStl: File): Boolean = withContext(dispatcher) {
         nativeExtractObjectAsStl(archive.absolutePath, objectIndex, outStl.absolutePath) == 0
     }
 
     private external fun nativeRead3mfObjectMetadata(path: String): Array<ObjectMeta>?
+
+    private external fun nativeRead3mfPlateLabels(path: String): Array<String>?
 
     private external fun nativeExtractObjectAsStl(
         archivePath: String,
