@@ -763,7 +763,13 @@ class SlicerEngineTest {
         }
 
         val overrides = SlicerEngine.read3mfProjectOverrides(fixture)
-        assertEquals("0.22", overrides["layer_height"])
+        // layer_height is intentionally NOT in PROJECT_OVERRIDE_KEYS —
+        // it flows from the user's slicer-profile pick + the layer-height
+        // override TextField, NOT from the 3MF. Pre-fix the user picking
+        // "0.12 Fine @Snapmaker U1" got silently overridden by the 3MF's
+        // authored 0.20 mm, producing the "estimated time half what it
+        // should be" symptom.
+        assertEquals(false, overrides.containsKey("layer_height"))
         assertEquals("5%", overrides["sparse_infill_density"])
         assertEquals("gyroid", overrides["sparse_infill_pattern"])
         assertEquals("back", overrides["seam_position"])
@@ -850,9 +856,15 @@ class SlicerEngineTest {
 
         val slots = if (embeddedColours.isNotEmpty()) embeddedColours
                     else listOf("#B366FF", "#000000", "#FFFFFF", "#FFFF00")
+        // layer_height no longer flows from `overrides` (gotcha — the
+        // 3MF's authored 0.22 used to silently win over the user's
+        // profile pick, which hid every "I picked 0.12 Fine and got a
+        // 0.20 slice" UX bug). Pass the dragon's authored layer height
+        // explicitly via `layerHeightInput` so this test stays apples-
+        // to-apples with the desktop reference (which sliced at 0.22).
         val cfg = mergedConfig(
             profile = u1,
-            layerHeightInput = "0.20",
+            layerHeightInput = "0.22",
             slotColors = slots,
             flushFromProject = flush,
             projectOverrides = overrides,

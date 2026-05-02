@@ -774,11 +774,27 @@ object SlicerEngine {
      * in the gcode footer's `; different_settings_to_system =` line —
      * the per-print tuning the user authored away from their preset
      * defaults. Honoring these on load closes a substantial efficiency
-     * gap on the dragon fixture (3MF authored layer_height=0.22 +
-     * sparse_infill_density=5% + sparse_infill_pattern=gyroid; bundled
-     * U1 profile defaults to 0.20 / 15% / grid).
+     * gap on multicolor 3MF imports (sparse_infill_density / pattern /
+     * seam_position / wall_loops are typically tuned per-design).
+     *
+     * Layer-height keys are DELIBERATELY EXCLUDED. They flow exclusively
+     * from the user's slicer-profile pick + the optional layer-height
+     * override TextField in the UI. Pre-fix the user picked
+     * "0.12 Fine @Snapmaker U1" expecting a 0.12 mm slice, but the
+     * 3MF's authored `layer_height=0.20` lived in projectOverrides
+     * (which sits ABOVE the profile in `mergedConfig`'s precedence
+     * ladder, by design — so the import flow could "replace the
+     * preset's values"), and the slice came out at 0.20. The
+     * surfacing UX bug: there's no in-XR way to see that the 3MF
+     * was overriding the picker, and "I picked 0.12 → I get 0.12"
+     * is the only mental model that makes the picker mean anything.
+     * If a user really wants the 3MF's authored layer height, they
+     * type it into the layer-height-override TextField (or pick a
+     * matching profile).
      *
      * Excluded from this list (handled separately, not pass-through):
+     *   - layer_height / initial_layer_print_height / first_layer_height
+     *     — see above; profile + UI-textfield govern.
      *   - flush_volumes_matrix / flush_multiplier / prime_volume /
      *     prime_tower_width / prime_tower_brim_width — special sizing
      *     validation in mergedConfig (read3mfFlushSettings).
@@ -788,9 +804,6 @@ object SlicerEngine {
      *     (read3mfFilamentColours).
      */
     val PROJECT_OVERRIDE_KEYS: List<String> = listOf(
-        "layer_height",
-        "initial_layer_print_height",
-        "first_layer_height",
         "sparse_infill_density",
         "sparse_infill_pattern",
         "seam_position",
