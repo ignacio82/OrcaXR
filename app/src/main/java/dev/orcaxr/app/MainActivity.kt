@@ -2224,8 +2224,19 @@ private fun XrShell(
             maxLayer.value = null
             val multiLabel = "${models.size} models"
             sliceState.value = SliceUiState.Slicing(sourceLabel = multiLabel)
+            // For PlacedModels created by decomposing a multi-object
+            // 3MF (gotcha #21), `source` points at a per-object STL —
+            // STL has no facet annotations, so going through it strips
+            // mmu_segmentation_facets / supported_facets / seam_facets
+            // and the slice prints single-color (the "4 painted unicorns
+            // on one plate, gcode emits 10 toolchanges across 1.6M
+            // lines" symptom). Re-route to `originalSource` whenever
+            // we have one and tell nativeSliceMulti which ordinal to
+            // pick out of the loaded 3MF; the cloned ModelObject then
+            // arrives with its painted volumes intact.
             val pairs = models.map { m ->
-                m.source to SlicerEngine.ModelPlacement(
+                val src = m.originalSource ?: m.source
+                src to SlicerEngine.ModelPlacement(
                     translateXmm = m.translateXmm,
                     translateYmm = m.translateYmm,
                     translateZmm = m.translateZmm,
@@ -2240,6 +2251,9 @@ private fun XrShell(
                     mirrorY = m.mirrorY,
                     mirrorZ = m.mirrorZ,
                 )
+            }
+            val ordinals = IntArray(models.size) { i ->
+                if (models[i].originalSource != null) models[i].groupOrdinal else -1
             }
             val firstStl = models.first().source
             val outFile = File(firstStl.parentFile, "${firstStl.nameWithoutExtension}_multi.gcode")
@@ -2266,7 +2280,13 @@ private fun XrShell(
             val paintsForMulti: List<ByteArray?>? =
                 if (models.none { hasAnyPaint(it.paintFilamentIndex) }) null
                 else models.map { it.paintFilamentIndex }
-            val result = SlicerEngine.sliceMulti(pairs, outFile, cfg, paintsForMulti) { percent, message ->
+            val result = SlicerEngine.sliceMulti(
+                pairs,
+                outFile,
+                cfg,
+                paintFilamentIndices = paintsForMulti,
+                objectOrdinals = ordinals,
+            ) { percent, message ->
                 val cur = sliceState.value
                 if (cur is SliceUiState.Slicing) {
                     sliceState.value = cur.copy(percent = percent, message = message)

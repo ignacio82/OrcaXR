@@ -1660,7 +1660,21 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
     jobjectArray jConfigKeys,
     jobjectArray jConfigValues,
     jobject      jProgressListener,
-    jobjectArray jPaintFilamentIndices)
+    jobjectArray jPaintFilamentIndices,
+    /**
+     * Optional parallel int[] of 0-based ModelObject ordinals into each
+     * source's `Model::objects` vector. Required to correctly slice
+     * decomposed multi-object 3MFs (gotcha #21): each PlacedModel
+     * sourced from a multi-object 3MF gets re-routed to the original
+     * 3MF source path with the per-object ordinal here, so the cloned
+     * ModelObject retains its `mmu_segmentation_facets` /
+     * `supported_facets` / `seam_facets` instead of arriving from a
+     * paint-stripped per-object STL. -1 (or array null entirely) =
+     * legacy behavior (objects.front()), preserving the contract for
+     * the single-3MF + STL plate case where the source has only one
+     * object anyway.
+     */
+    jintArray    jObjectOrdinals)
 {
     ScopedUtf out(env, jOutGcodePath);
     const jsize n_inputs = jInputPaths != nullptr ? env->GetArrayLength(jInputPaths) : 0;
@@ -1705,6 +1719,20 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
     std::vector<float> transforms(tv, tv + (n_inputs * stride));
     env->ReleaseFloatArrayElements(jTransforms, tv, JNI_ABORT);
 
+    // Pull ordinals (or empty when null). When the array is shorter
+    // than n_inputs (or null), missing entries default to -1 = legacy
+    // objects.front() behavior.
+    std::vector<int> object_ordinals;
+    if (jObjectOrdinals != nullptr) {
+        const jsize olen = env->GetArrayLength(jObjectOrdinals);
+        object_ordinals.resize(olen);
+        if (olen > 0) {
+            jint* ov = env->GetIntArrayElements(jObjectOrdinals, nullptr);
+            for (jsize i = 0; i < olen; ++i) object_ordinals[i] = static_cast<int>(ov[i]);
+            env->ReleaseIntArrayElements(jObjectOrdinals, ov, JNI_ABORT);
+        }
+    }
+
     try {
         Slic3r::Model multi;
         for (jsize i = 0; i < n_inputs; ++i) {
@@ -1736,7 +1764,7 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
                     if (listener_global) env->DeleteGlobalRef(listener_global);
                     return -1;
                 }
-                // Phase XR_OBJ_4 — clone the source's first ModelObject
+                // Phase XR_OBJ_4 — clone the source's ModelObject
                 // (preserving every volume, including modifiers /
                 // negative volumes / support enforcers/blockers /
                 // per-volume mmu_segmentation_facets / supported_facets
@@ -1753,10 +1781,28 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
                 // mmu_segmentation_facets and printing single-color
                 // when plated alongside another model. Gotcha #29.
                 //
-                // For 3MFs with N>1 ModelObjects we still take only
-                // objects.front() — multi-object containers' extra
-                // objects need their own plate slot.
-                Slic3r::ModelObject* mo = multi.add_object(*src.objects.front());
+                // Ordinal selection: callers re-route decomposed
+                // multi-object 3MFs (gotcha #21) by passing the
+                // original 3MF source path with the per-object
+                // ordinal in jObjectOrdinals, so each PlacedModel's
+                // painted ModelObject (its facets stripped during
+                // STL extraction) is restored from the source 3MF.
+                // Negative / out-of-range ordinals fall back to
+                // objects.front() so legacy callers (and STL inputs
+                // that have only one object anyway) keep working.
+                int requested_ordinal = (i < jsize(object_ordinals.size()))
+                    ? object_ordinals[i] : -1;
+                size_t pick = 0;
+                if (requested_ordinal >= 0 &&
+                    size_t(requested_ordinal) < src.objects.size())
+                {
+                    pick = size_t(requested_ordinal);
+                } else if (requested_ordinal > 0) {
+                    ORCAXR_LOGI("nativeSliceMulti: model[%d] ordinal=%d out of range "
+                                "(src has %zu objects); falling back to 0",
+                                i, requested_ordinal, src.objects.size());
+                }
+                Slic3r::ModelObject* mo = multi.add_object(*src.objects[pick]);
                 // Reset the cloned source's instances and pose. The
                 // 3MF on disk may carry instance offsets; we apply the
                 // user's per-input transforms below, then ensure_on_bed
@@ -1767,8 +1813,9 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
                 mo->clear_instances();
                 mo->add_instance();
 
-                ORCAXR_LOGI("nativeSliceMulti: model[%d] cloned %zu volumes from %s",
-                            i, mo->volumes.size(), p.c);
+                ORCAXR_LOGI("nativeSliceMulti: model[%d] cloned %zu volumes from %s "
+                            "(ordinal=%zu of %zu)",
+                            i, mo->volumes.size(), p.c, pick, src.objects.size());
                 // Volume-level facet survival diagnostic. Logs which
                 // per-face annotations made the trip through the deep
                 // clone; useful for triaging multi-color regressions.

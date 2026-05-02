@@ -337,6 +337,18 @@ object SlicerEngine {
          * C++ side.
          */
         paintFilamentIndices: List<ByteArray?>? = null,
+        /**
+         * Optional 0-based `Model::objects` ordinal per input, parallel
+         * to [models]. Length must equal `models.size` when non-null.
+         * Used to re-route decomposed multi-object 3MFs (gotcha #21)
+         * back to their original 3MF source: the input path points at
+         * the original .3mf and this ordinal picks the matching
+         * ModelObject so its painted volumes (`mmu_segmentation_facets`
+         * / `supported_facets` / `seam_facets`) survive into the slice.
+         * Pass -1 (or null entirely) for inputs whose source already
+         * has the right object at index 0 (STLs, single-object 3MFs).
+         */
+        objectOrdinals: IntArray? = null,
         onProgress: ((percent: Int, message: String) -> Unit)? = null,
     ): SliceResult = withContext(dispatcher) {
         require(models.isNotEmpty()) { "sliceMulti requires at least one model" }
@@ -346,6 +358,9 @@ object SlicerEngine {
         }
         require(paintFilamentIndices == null || paintFilamentIndices.size == models.size) {
             "paintFilamentIndices size ${paintFilamentIndices?.size} != models size ${models.size}"
+        }
+        require(objectOrdinals == null || objectOrdinals.size == models.size) {
+            "objectOrdinals size ${objectOrdinals?.size} != models size ${models.size}"
         }
         outGcode.parentFile?.mkdirs()
         outGcode.delete()
@@ -399,6 +414,7 @@ object SlicerEngine {
             values,
             listener,
             paintsForJni,
+            objectOrdinals,
         )
         if (rc != 0) {
             return@withContext SliceResult.NativeError(
@@ -1046,5 +1062,12 @@ object SlicerEngine {
          * circuits the per-input paint walk entirely.
          */
         paintFilamentIndices: Array<ByteArray?>?,
+        /**
+         * Optional 0-based ordinal into the source's `Model::objects`
+         * vector per input (parallel to [inputPaths]). -1 (or null
+         * array) → legacy `objects.front()` behavior. See the public
+         * [sliceMulti] doc for why this exists.
+         */
+        objectOrdinals: IntArray?,
     ): Int
 }
