@@ -59,7 +59,17 @@ class PaintInputHooks(
      *   - action is HOVER_* (we don't paint on hover)
      *   - the ray misses every triangle in the mesh
      */
-    fun handle(event: InputEvent) {
+    /** Reset on UP so the next stroke starts a fresh diagnostic dump. */
+    private var diagLoggedThisStroke: Boolean = false
+
+    /**
+     * @param originOverride if non-null, replaces `event.origin` for the
+     *   purposes of BVH raycasting. Used by the IC listener site to
+     *   pre-subtract the entity's world position when that's needed to
+     *   align with `hit.transform` (gotcha #11i — see comment in
+     *   [locateTriangle]).
+     */
+    fun handle(event: InputEvent, originOverride: androidx.xr.runtime.math.Vector3? = null) {
         if (brush.mode == PaintMode.Off) {
             android.util.Log.i(LOG_TAG, "handle: drop — paint mode is Off")
             return
@@ -68,6 +78,40 @@ class PaintInputHooks(
             android.util.Log.i(LOG_TAG, "handle: drop — source=UNKNOWN action=${event.action}")
             return
         }
+        // One-shot per stroke: the FIRST DOWN/MOVE event dumps the
+        // world ray, the SDK-reported entity transform, the resolved
+        // mesh-mm ray, and the BVH bbox in a single Log line. Lets us
+        // see at a glance whether the ray ever enters the bbox; if not,
+        // gotcha #11c-style transform corrections still need work.
+        if (!diagLoggedThisStroke && (event.action == Action.DOWN || event.action == Action.MOVE)) {
+            val hit = event.hitInfoList.firstOrNull()
+            if (hit != null) {
+                val effectiveOrigin = originOverride ?: event.origin
+                val (mO, mD) = worldRayToMeshMm(effectiveOrigin, event.direction, hit.transform)
+                val s = hit.transform.scale
+                val pT = hit.transform.pose.translation
+                val pR = hit.transform.pose.rotation
+                android.util.Log.i(
+                    LOG_TAG,
+                    "diag stroke: action=${event.action} " +
+                        "worldOrigin=(${event.origin.x},${event.origin.y},${event.origin.z}) " +
+                        "effOrigin=(${effectiveOrigin.x},${effectiveOrigin.y},${effectiveOrigin.z}) " +
+                        "worldDir=(${event.direction.x},${event.direction.y},${event.direction.z}) " +
+                        "tf.scale=(${s.x},${s.y},${s.z}) " +
+                        "tf.poseT=(${pT.x},${pT.y},${pT.z}) " +
+                        "tf.poseR=(${pR.x},${pR.y},${pR.z},${pR.w}) " +
+                        "meshOrigin=(${mO.x},${mO.y},${mO.z}) " +
+                        "meshDir=(${mD.x},${mD.y},${mD.z}) " +
+                        "bvhBbox=(${bvh.bboxMin.x}..${bvh.bboxMax.x}, " +
+                        "${bvh.bboxMin.y}..${bvh.bboxMax.y}, " +
+                        "${bvh.bboxMin.z}..${bvh.bboxMax.z})",
+                )
+            } else {
+                android.util.Log.i(LOG_TAG, "diag stroke: action=${event.action} no hitInfo")
+            }
+            diagLoggedThisStroke = true
+        }
+        if (event.action == Action.UP) diagLoggedThisStroke = false
         when (event.action) {
             Action.DOWN, Action.MOVE -> { /* paint */ }
             // Paint full-feature-parity (Undo/Redo) — UP closes the
@@ -82,7 +126,7 @@ class PaintInputHooks(
             }
             else -> return
         }
-        val hitTri = locateTriangle(event)
+        val hitTri = locateTriangle(event, originOverride)
         if (hitTri == null) {
             android.util.Log.i(
                 LOG_TAG,
@@ -104,12 +148,12 @@ class PaintInputHooks(
      * so tests can drive the math without faking an Activity-scoped
      * InputEvent listener.
      */
-    fun locateTriangle(event: InputEvent): Int? {
+    fun locateTriangle(event: InputEvent, originOverride: androidx.xr.runtime.math.Vector3? = null): Int? {
         // Need a HitInfo to know the entity's world transform. The
         // SDK populates hitInfoList for any InteractableComponent
         // event that intersects the entity (or its bounding region).
         val hit = event.hitInfoList.firstOrNull() ?: return null
-        return locateTriangleByRay(event.origin, event.direction, hit.transform)
+        return locateTriangleByRay(originOverride ?: event.origin, event.direction, hit.transform)
     }
 
     /**
