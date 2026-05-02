@@ -1402,7 +1402,8 @@ private fun XrShell(
         // entries whose source mesh got re-tessellated.
         val needsRestore = !hasAnyPaint(current.paintFilamentIndex) &&
             !hasAnyPaint(current.supportFlags) &&
-            !hasAnyPaint(current.seamFlags)
+            !hasAnyPaint(current.seamFlags) &&
+            !hasAnyPaint(current.fuzzySkinFlags)
         if (needsRestore) {
             val restored = runCatching {
                 val hash = paintCache.hashOf(bakeSource)
@@ -1411,12 +1412,14 @@ private fun XrShell(
             if (restored != null) {
                 android.util.Log.i(tag,
                     "paint cache hit for $modelId (paint=${restored.paintFilamentIndex?.size}, " +
-                        "support=${restored.supportFlags?.size}, seam=${restored.seamFlags?.size})")
+                        "support=${restored.supportFlags?.size}, seam=${restored.seamFlags?.size}, " +
+                        "fuzzy=${restored.fuzzySkinFlags?.size})")
                 placedModels = placedModels.map {
                     if (it.id == modelId) it.copy(
                         paintFilamentIndex = restored.paintFilamentIndex,
                         supportFlags = restored.supportFlags,
                         seamFlags = restored.seamFlags,
+                        fuzzySkinFlags = restored.fuzzySkinFlags,
                     ) else it
                 }
             }
@@ -1783,6 +1786,7 @@ private fun XrShell(
             val paintForSlice = selectedModel?.paintFilamentIndex
             val supportForSlice = selectedModel?.supportFlags
             val seamForSlice = selectedModel?.seamFlags
+            val fuzzyForSlice = selectedModel?.fuzzySkinFlags
             // Phase XR_OBJ_4 — user-authored extra volumes ("Add Part"
             // etc.) ride alongside the primary mesh. Empty for models
             // the user hasn't added parts to.
@@ -1806,6 +1810,7 @@ private fun XrShell(
                 extraVolumes = extraVolumesForSlice,
                 supportFlags = supportForSlice,
                 seamFlags = seamForSlice,
+                fuzzySkinFlags = fuzzyForSlice,
                 objectConfigOverrides = selectedModel?.configOverrides ?: emptyMap(),
             ) { percent, message ->
                 // Fires on a libslic3r worker thread; mutating
@@ -2363,15 +2368,16 @@ private fun XrShell(
     // surface). Coroutine runs on Dispatchers.IO to keep the
     // mtime-touch + atomic-rename out of the main thread.
     LaunchedEffect(placedModels.map {
-        Triple(it.source.absolutePath, it.paintFilamentIndex, it.supportFlags) to it.seamFlags
+        listOf(it.source.absolutePath, it.paintFilamentIndex, it.supportFlags, it.seamFlags, it.fuzzySkinFlags)
     }) {
         kotlinx.coroutines.delay(300)
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             for (m in placedModels) {
                 val anyPaint = hasAnyPaint(m.paintFilamentIndex) ||
                     hasAnyPaint(m.supportFlags) ||
-                    hasAnyPaint(m.seamFlags)
-                // Tri count is recoverable from any of the three
+                    hasAnyPaint(m.seamFlags) ||
+                    hasAnyPaint(m.fuzzySkinFlags)
+                // Tri count is recoverable from any of the four
                 // arrays (they're all sized to mesh.triCount on
                 // first stamp). When every array is null/empty
                 // (anyPaint == false) we still call save so the
@@ -2380,6 +2386,7 @@ private fun XrShell(
                 val triCount = m.paintFilamentIndex?.size
                     ?: m.supportFlags?.size
                     ?: m.seamFlags?.size
+                    ?: m.fuzzySkinFlags?.size
                     ?: 0
                 if (!anyPaint && triCount == 0) continue
                 runCatching {
@@ -2391,6 +2398,7 @@ private fun XrShell(
                             paintFilamentIndex = m.paintFilamentIndex,
                             supportFlags = m.supportFlags,
                             seamFlags = m.seamFlags,
+                            fuzzySkinFlags = m.fuzzySkinFlags,
                         ),
                     )
                 }.onFailure {
@@ -2551,7 +2559,34 @@ private fun XrShell(
                         )
                     }
                     PaintMode.FuzzySkin -> {
-                        // Placeholder for fuzzy skin painting (unimplemented)
+                        // Paint full-feature-parity — fuzzy-skin paint.
+                        // Same flood-fill shape as support / seam, but
+                        // stamps fuzzySkinFlags with state 1 (FUZZY_SKIN).
+                        // Single-state painter — there's no "fuzzy
+                        // blocker"; clearing requires an explicit reset
+                        // affordance (handled by the slot=0 path the
+                        // user can drive via the brush slot picker).
+                        val triIndices = if (brush.radiusMm <= 0f) intArrayOf(hitTri)
+                            else bvh.radiusBfs(hitTri, brush.radiusMm)
+                        // brush.activeSlot != 0 → paint state 1; activeSlot == 0
+                        // → clear (state 0). That keeps the existing
+                        // "Clear" affordance in the brush UI working
+                        // for fuzzy paint without a separate blocker.
+                        val state: Int = if (brush.activeSlot == 0) 0 else 1
+                        val updated = stampTriangles(
+                            previous = model.fuzzySkinFlags,
+                            triCount = bvh.triCount,
+                            triangleIndices = triIndices,
+                            slot = state,
+                        )
+                        placedModels = placedModels.map {
+                            if (it.id == model.id) it.copy(fuzzySkinFlags = updated) else it
+                        }
+                        android.util.Log.i(
+                            "OrcaXR/paint",
+                            "stamped ${triIndices.size} fuzzy-skin tris (seed=$hitTri) " +
+                                "state=$state action=$action on ${model.label}",
+                        )
                     }
                     PaintMode.Off -> { /* paintHooksFor already short-circuits */ }
                 }
@@ -2787,6 +2822,7 @@ private fun XrShell(
                         // the same per-PlacedModel ByteArray pattern.
                         val supportForSlice = testStatePlacedModels.firstOrNull()?.supportFlags
                         val seamForSlice = testStatePlacedModels.firstOrNull()?.seamFlags
+                        val fuzzyForSlice = testStatePlacedModels.firstOrNull()?.fuzzySkinFlags
                         // Phase XR_OBJ_4 — extra volumes attached via
                         // ADD_PART broadcast (or "Add part" UI button)
                         // ride into the slice as MODEL_PART volumes
@@ -2800,6 +2836,7 @@ private fun XrShell(
                             extraVolumes = extraVolumesForSlice,
                             supportFlags = supportForSlice,
                             seamFlags = seamForSlice,
+                            fuzzySkinFlags = fuzzyForSlice,
                             objectConfigOverrides = testStatePlacedModels.firstOrNull()?.configOverrides ?: emptyMap(),
                         ) { percent, message ->
                             val now = sliceState.value
@@ -3963,6 +4000,20 @@ private fun XrShell(
                                 updateSelected { it.copy(seamFlags = null) }
                             }
                         },
+                        onToggleFuzzySkin = selectedModel?.let { _ ->
+                            {
+                                paintBrush = paintBrush.copy(
+                                    mode = if (paintBrush.mode == PaintMode.FuzzySkin)
+                                        PaintMode.Off else PaintMode.FuzzySkin
+                                )
+                            }
+                        },
+                        onClearFuzzySkin = selectedModel?.let { _ ->
+                            {
+                                updateSelected { it.copy(fuzzySkinFlags = null) }
+                            }
+                        },
+                        hasFuzzySkinPaint = hasAnyPaint(selectedModel?.fuzzySkinFlags),
                         onClonePattern = selectedModel?.let { sel ->
                             { count, spacingMm, axis ->
                                 runClonePattern(sel.id, count, spacingMm, axis)
@@ -6874,6 +6925,12 @@ private suspend fun sliceLocalFile(
      */
     seamFlags: ByteArray? = null,
     /**
+     * Paint full-feature-parity — per-triangle fuzzy-skin paint state.
+     * Flows into `mv->fuzzy_skin_facets`. State 1 = FUZZY_SKIN. Null
+     * / all-zero = no fuzzy paint authored.
+     */
+    fuzzySkinFlags: ByteArray? = null,
+    /**
      * Phase XR_OBJ_4 (final) — per-object config overrides applied to
      * `mo->config()` after load. Default empty preserves existing
      * behavior.
@@ -6886,9 +6943,19 @@ private suspend fun sliceLocalFile(
     val effectivePaint = if (paintFilamentIndex == null || !hasAnyPaint(paintFilamentIndex)) null else paintFilamentIndex
     val effectiveSupport = if (supportFlags == null || !hasAnyPaint(supportFlags)) null else supportFlags
     val effectiveSeam = if (seamFlags == null || !hasAnyPaint(seamFlags)) null else seamFlags
+    val effectiveFuzzy = if (fuzzySkinFlags == null || !hasAnyPaint(fuzzySkinFlags)) null else fuzzySkinFlags
     return SlicerEngine.slice(
-        stl, gcode, config, effectiveRemap, effectivePaint, extraVolumes,
-        effectiveSupport, effectiveSeam, objectConfigOverrides, onProgress,
+        stl = stl,
+        outGcode = gcode,
+        config = config,
+        virtualRemap = effectiveRemap,
+        paintFilamentIndex = effectivePaint,
+        extraVolumes = extraVolumes,
+        supportFlags = effectiveSupport,
+        seamFlags = effectiveSeam,
+        fuzzySkinFlags = effectiveFuzzy,
+        objectConfigOverrides = objectConfigOverrides,
+        onProgress = onProgress,
     )
 }
 

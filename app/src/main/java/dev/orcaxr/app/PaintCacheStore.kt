@@ -17,29 +17,33 @@ import java.security.MessageDigest
  * the prior paint immediately.
  *
  * Storage layout: `${filesDir}/paint_cache/<sha256>.bin`. Each file
- * holds a tiny header followed by three optional ByteArrays
- * (paintFilamentIndex, supportFlags, seamFlags). DataStore
- * Preferences would force base64 + JSON for 1.4 MB arrays which is
- * both slower and more memory-thrashing — the raw-file path here
- * matches the GLB / STL cache pattern already in `ctx.cacheDir`. We
- * use `filesDir` (not `cacheDir`) so the OS doesn't GC the entries
+ * holds a tiny header followed by four optional ByteArrays
+ * (paintFilamentIndex, supportFlags, seamFlags, fuzzySkinFlags).
+ * DataStore Preferences would force base64 + JSON for 1.4 MB arrays
+ * which is both slower and more memory-thrashing — the raw-file path
+ * here matches the GLB / STL cache pattern already in `ctx.cacheDir`.
+ * We use `filesDir` (not `cacheDir`) so the OS doesn't GC the entries
  * under low-storage pressure.
  *
  * LRU: bounded at [MAX_ENTRIES] files. On every [save] the directory
  * is scanned and the oldest-mtime entries beyond the cap are deleted.
  *
- * File format:
+ * File format (v2):
  * ```
  * u32  magic         ('OXPC' big-endian, "OrcaXR Paint Cache")
- * u32  version       (currently 1)
+ * u32  version       (1 = pre-fuzzy, 2 = fuzzy added)
  * u32  triCount      (source mesh's triangle count at save time)
  * u32  paintLen      (0 if no paintFilamentIndex)
  * u32  supportLen    (0 if no supportFlags)
  * u32  seamLen       (0 if no seamFlags)
+ * u32  fuzzyLen      (0 if no fuzzySkinFlags) — v2 only
  * bytes paintBytes
  * bytes supportBytes
  * bytes seamBytes
+ * bytes fuzzyBytes  — v2 only
  * ```
+ * v1 entries restore as fuzzySkinFlags=null (no fuzzy paint, the
+ * default) and re-save as v2 on the next mutation.
  *
  * On read, [restore] returns null if any of: file missing, header
  * mismatch, magic/version mismatch, or [expectedTriCount] disagrees
@@ -57,18 +61,21 @@ class PaintCacheStore(private val ctx: Context) {
         val paintFilamentIndex: ByteArray?,
         val supportFlags: ByteArray?,
         val seamFlags: ByteArray?,
+        val fuzzySkinFlags: ByteArray? = null,
     ) {
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
             if (other !is Entry) return false
             return byteArrayEq(paintFilamentIndex, other.paintFilamentIndex) &&
                 byteArrayEq(supportFlags, other.supportFlags) &&
-                byteArrayEq(seamFlags, other.seamFlags)
+                byteArrayEq(seamFlags, other.seamFlags) &&
+                byteArrayEq(fuzzySkinFlags, other.fuzzySkinFlags)
         }
         override fun hashCode(): Int {
             var r = paintFilamentIndex?.contentHashCode() ?: 0
             r = 31 * r + (supportFlags?.contentHashCode() ?: 0)
             r = 31 * r + (seamFlags?.contentHashCode() ?: 0)
+            r = 31 * r + (fuzzySkinFlags?.contentHashCode() ?: 0)
             return r
         }
     }
@@ -97,7 +104,8 @@ class PaintCacheStore(private val ctx: Context) {
     fun save(sourceHash: String, triCount: Int, entry: Entry) {
         val anyPaint = hasAnyPaint(entry.paintFilamentIndex) ||
             hasAnyPaint(entry.supportFlags) ||
-            hasAnyPaint(entry.seamFlags)
+            hasAnyPaint(entry.seamFlags) ||
+            hasAnyPaint(entry.fuzzySkinFlags)
         val target = fileFor(sourceHash)
         if (!anyPaint) {
             target.delete()
@@ -112,12 +120,15 @@ class PaintCacheStore(private val ctx: Context) {
                 val paint = entry.paintFilamentIndex ?: ByteArray(0)
                 val support = entry.supportFlags ?: ByteArray(0)
                 val seam = entry.seamFlags ?: ByteArray(0)
+                val fuzzy = entry.fuzzySkinFlags ?: ByteArray(0)
                 out.writeInt(paint.size)
                 out.writeInt(support.size)
                 out.writeInt(seam.size)
+                out.writeInt(fuzzy.size)
                 out.write(paint)
                 out.write(support)
                 out.write(seam)
+                out.write(fuzzy)
             }
             // Atomic move so a partial write doesn't leave a corrupt
             // entry the next restore would have to repeatedly skip.
@@ -138,28 +149,30 @@ class PaintCacheStore(private val ctx: Context) {
      *  different tessellation". */
     fun restore(sourceHash: String, expectedTriCount: Int): Entry? {
         val src = fileFor(sourceHash)
-        if (!src.isFile || src.length() < HEADER_BYTES) return null
+        if (!src.isFile || src.length() < HEADER_BYTES_V1) return null
         return try {
             DataInputStream(src.inputStream().buffered()).use { input ->
                 val magic = input.readInt()
                 if (magic != MAGIC) return@use null
                 val version = input.readInt()
-                if (version != VERSION) return@use null
+                if (version != VERSION_V1 && version != VERSION) return@use null
                 val savedTriCount = input.readInt()
                 if (savedTriCount != expectedTriCount) return@use null
                 val paintLen = input.readInt()
                 val supportLen = input.readInt()
                 val seamLen = input.readInt()
-                if (paintLen < 0 || supportLen < 0 || seamLen < 0) return@use null
+                val fuzzyLen = if (version >= VERSION) input.readInt() else 0
+                if (paintLen < 0 || supportLen < 0 || seamLen < 0 || fuzzyLen < 0) return@use null
                 if (paintLen > MAX_ARRAY_BYTES || supportLen > MAX_ARRAY_BYTES ||
-                    seamLen > MAX_ARRAY_BYTES) return@use null
+                    seamLen > MAX_ARRAY_BYTES || fuzzyLen > MAX_ARRAY_BYTES) return@use null
                 val paint = if (paintLen > 0) ByteArray(paintLen).also { input.readFully(it) } else null
                 val support = if (supportLen > 0) ByteArray(supportLen).also { input.readFully(it) } else null
                 val seam = if (seamLen > 0) ByteArray(seamLen).also { input.readFully(it) } else null
+                val fuzzy = if (fuzzyLen > 0) ByteArray(fuzzyLen).also { input.readFully(it) } else null
                 // Touch the file's lastModified so LRU sees this as
                 // most-recently-accessed — a cache hit is a "use" too.
                 src.setLastModified(System.currentTimeMillis())
-                Entry(paint, support, seam)
+                Entry(paint, support, seam, fuzzy)
             }
         } catch (e: IOException) {
             android.util.Log.w(TAG, "restore($sourceHash) failed: ${e.message}", e)
@@ -208,8 +221,9 @@ class PaintCacheStore(private val ctx: Context) {
         private const val EXT = ".bin"
         // 'O' 'X' 'P' 'C' as a big-endian int.
         private const val MAGIC = 0x4F58_5043
-        private const val VERSION = 1
-        private const val HEADER_BYTES = 24  // 6 ints
+        private const val VERSION_V1 = 1
+        private const val VERSION = 2  // adds fuzzySkinFlags
+        private const val HEADER_BYTES_V1 = 24  // 6 ints — pre-fuzzy entries
         // Sanity cap — refuse to allocate more than 16 MB per array.
         // Even a 5M-tri mesh's paint array is 5 MB, well within.
         private const val MAX_ARRAY_BYTES = 16 * 1024 * 1024

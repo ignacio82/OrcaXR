@@ -157,6 +157,17 @@ object SlicerEngine {
          */
         seamFlags: ByteArray? = null,
         /**
+         * Paint full-feature-parity — per-triangle fuzzy-skin paint.
+         * Sized to the source mesh's first volume's triangle count.
+         * Entry i is:
+         *   0 = unpainted (smooth surface)
+         *   1 = FUZZY_SKIN (roughened texture in this region)
+         * Authored onto `mv->fuzzy_skin_facets` BEFORE Print::apply.
+         * Default null = no authored fuzzy-skin paint; embedded 3MF
+         * facets pass through unchanged.
+         */
+        fuzzySkinFlags: ByteArray? = null,
+        /**
          * Phase XR_OBJ_4 (final) — per-object config overrides. Sparse
          * SAFE_KEYS subset applied onto `model.objects.front()->config()`
          * before Print::apply. Mirrors OrcaSlicer's "Object Settings"
@@ -237,6 +248,7 @@ object SlicerEngine {
             extraTransforms,
             supportFlags,
             seamFlags,
+            fuzzySkinFlags,
             objKeys,
             objValues,
         )
@@ -856,6 +868,12 @@ object SlicerEngine {
          * encoding as [supportFlags] but flows into `mv->seam_facets`.
          */
         seamFlags: ByteArray?,
+        /**
+         * Paint full-feature-parity — per-triangle fuzzy-skin paint.
+         * Flows into `mv->fuzzy_skin_facets`. State 1 = FUZZY_SKIN.
+         * Null = no authored paint.
+         */
+        fuzzySkinFlags: ByteArray?,
         /**
          * Phase XR_OBJ_4 (final) — per-object config overrides. Same
          * shape as [configKeys] / [configValues] but applied onto

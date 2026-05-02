@@ -151,4 +151,46 @@ class PaintCacheStoreTest {
         store.clear()
         assertEquals(0L, store.sizeBytes())
     }
+
+    @Test fun save_then_restore_round_trips_fuzzy_skin() {
+        val paint = byteArrayOf(0, 1, 2, 0, 3)
+        val support = byteArrayOf(0, 0, 1, 2, 0)
+        val seam = byteArrayOf(1, 0, 0, 0, 0)
+        val fuzzy = byteArrayOf(0, 1, 1, 0, 0)
+        store.save("hashFz", triCount = 5, PaintCacheStore.Entry(paint, support, seam, fuzzy))
+        val restored = store.restore("hashFz", expectedTriCount = 5)
+        assertNotNull(restored)
+        assertArrayEquals(paint, restored!!.paintFilamentIndex)
+        assertArrayEquals(support, restored.supportFlags)
+        assertArrayEquals(seam, restored.seamFlags)
+        assertArrayEquals(fuzzy, restored.fuzzySkinFlags)
+    }
+
+    @Test fun fuzzy_only_save_is_persisted() {
+        // No color/support/seam paint, only fuzzy — entry must still
+        // persist (anyPaint check must include fuzzy).
+        store.save("hashFzOnly", triCount = 4,
+            PaintCacheStore.Entry(null, null, null, byteArrayOf(0, 1, 1, 0)))
+        assertEquals(1, store.size())
+        val restored = store.restore("hashFzOnly", expectedTriCount = 4)
+        assertNotNull(restored)
+        assertArrayEquals(byteArrayOf(0, 1, 1, 0), restored!!.fuzzySkinFlags)
+        assertNull(restored.paintFilamentIndex)
+    }
+
+    @Test fun all_blank_fuzzy_with_other_paint_keeps_entry() {
+        store.save("h", triCount = 3,
+            PaintCacheStore.Entry(byteArrayOf(0, 1, 0), null, null, byteArrayOf(0, 0, 0)))
+        val restored = store.restore("h", expectedTriCount = 3)
+        assertNotNull(restored)
+        // All-zero fuzzy survives the round-trip as an empty array
+        // (the on-disk encoding writes zero-length when null vs
+        // length-N when non-null all-zero). Either is acceptable —
+        // hasAnyPaint short-circuits to false either way.
+        assertTrue(
+            "fuzzy should be null or all-zero",
+            restored!!.fuzzySkinFlags == null ||
+                restored.fuzzySkinFlags!!.all { it == 0.toByte() },
+        )
+    }
 }

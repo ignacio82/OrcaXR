@@ -4947,6 +4947,15 @@ fun TransformPanel(
     onClearSeamPaint: (() -> Unit)? = null,
     /** Phase XR_OBJ_8 — true if any seam paint exists. */
     hasSeamPaint: Boolean = false,
+    /** Paint full-feature-parity — toggle Fuzzy Skin paint mode. State
+     *  1 = FUZZY_SKIN (paint roughened texture in this region). Same
+     *  toggle semantics as the Support buttons. */
+    onToggleFuzzySkin: (() -> Unit)? = null,
+    /** Paint full-feature-parity — clear fuzzy-skin paint on the
+     *  selected model (resets [PlacedModel.fuzzySkinFlags] to null). */
+    onClearFuzzySkin: (() -> Unit)? = null,
+    /** Paint full-feature-parity — true if any fuzzy-skin paint exists. */
+    hasFuzzySkinPaint: Boolean = false,
     /** Phase XR_OBJ_8 — clone the selected model into a linear
      *  pattern of [count] copies spaced [spacingMm] apart along
      *  axis ('x' or 'y'). Null disables. */
@@ -5504,6 +5513,31 @@ fun TransformPanel(
                 onClick = { onClearSeamPaint?.invoke() },
                 enabled = onClearSeamPaint != null,
             ) { Text("Clear seam paint", color = Color(0xFFFF7070)) }
+        }
+        // Paint full-feature-parity — Fuzzy Skin paint. Roughens the
+        // surface texture in painted regions (libslic3r's fuzzy-skin
+        // feature, applied per-region instead of globally). Single-
+        // state painter — there's no "fuzzy blocker" upstream.
+        Spacer(Modifier.height(12.dp))
+        Text("Paint fuzzy skin", color = Color.White, style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(4.dp))
+        OutlinedButton(
+            onClick = { onToggleFuzzySkin?.invoke() },
+            enabled = onToggleFuzzySkin != null,
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+        ) {
+            Text(
+                if (supportPaintMode == PaintMode.FuzzySkin) "Cancel paint…" else "Apply fuzzy skin",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (hasFuzzySkinPaint) {
+            Spacer(Modifier.height(4.dp))
+            TextButton(
+                onClick = { onClearFuzzySkin?.invoke() },
+                enabled = onClearFuzzySkin != null,
+            ) { Text("Clear fuzzy paint", color = Color(0xFFFF7070)) }
         }
         // Phase XR_OBJ_8 — Clone pattern (linear). Duplicates the
         // selected model [count]× along an axis with mm spacing.

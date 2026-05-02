@@ -434,6 +434,38 @@ static size_t apply_orcaxr_seam(
     return authored;
 }
 
+// Paint full-feature-parity — author per-triangle fuzzy-skin paint onto
+// `mv->fuzzy_skin_facets`. Same shape as apply_orcaxr_seam: state 1 =
+// FUZZY_SKIN (paint roughened texture in this region). Upstream's
+// `GLGizmoFuzzySkin` is a single-state painter — there's no fuzzy
+// blocker — but we silently drop unknown values so a future "clear
+// paint" extension that uses state 0 round-trips cleanly.
+static size_t apply_orcaxr_fuzzy_skin(
+    Slic3r::ModelVolume& mv,
+    const jbyte* paint,
+    size_t paint_len)
+{
+    const size_t tri_count = mv.mesh().its.indices.size();
+    if (tri_count == 0) return 0;
+    if (paint == nullptr || paint_len == 0) return 0;
+    if (paint_len != tri_count) {
+        ORCAXR_LOGI("apply_orcaxr_fuzzy_skin: size mismatch paint=%zu tris=%zu (using min)",
+                    paint_len, tri_count);
+    }
+    const size_t n = std::min<size_t>(tri_count, paint_len);
+    mv.fuzzy_skin_facets.reset();
+    mv.fuzzy_skin_facets.reserve(int(n));
+    size_t authored = 0;
+    for (size_t i = 0; i < n; ++i) {
+        const unsigned int state = static_cast<unsigned char>(paint[i]);
+        if (state != 1) continue;
+        mv.fuzzy_skin_facets.set_triangle_from_string(int(i), ORCAXR_PAINT_HEX[state]);
+        ++authored;
+    }
+    mv.fuzzy_skin_facets.shrink_to_fit();
+    return authored;
+}
+
 // Rewrite tool-change tokens (`Tn`, `M104 Tn`, `M109 Tn`, …) in `gcode_path`
 // according to `filament_map` (1-based vector — entry i is the 1-based
 // physical extruder for project filament i). The post-processor runs
@@ -906,6 +938,11 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
     /* Phase XR_OBJ_8 — per-triangle seam paint. Same encoding /
      * scope as jSupportFlags but flows into `mv->seam_facets`. */
     jbyteArray jSeamFlags,
+    /* Paint full-feature-parity — per-triangle fuzzy-skin paint.
+     * State 1 = FUZZY_SKIN (paint roughened skin texture in this
+     * region). Flows into `mv->fuzzy_skin_facets`. Null = no
+     * authored paint. */
+    jbyteArray jFuzzySkinFlags,
     /* Phase XR_OBJ_4 (final) — per-object config overrides applied
      * onto `model.objects.front()->config()` after load and before
      * Print::apply. Same parallel-array shape as jConfigKeys /
@@ -1202,6 +1239,24 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
                     const size_t authored = apply_orcaxr_seam(*mv, seam, size_t(seam_len));
                     ORCAXR_LOGI("nativeSlice: authored %zu seam-painted triangles", authored);
                     env->ReleaseByteArrayElements(jSeamFlags, seam, JNI_ABORT);
+                }
+            }
+        }
+
+        // Paint full-feature-parity — OrcaXR-authored fuzzy-skin paint.
+        // Flows into mv->fuzzy_skin_facets so libslic3r's fuzzy-skin
+        // texture pass roughens only the painted region. State 1 =
+        // FUZZY_SKIN. Mirrors the support / seam paths above.
+        if (jFuzzySkinFlags != nullptr && !model.objects.empty() &&
+            !model.objects.front()->volumes.empty()) {
+            const jsize fz_len = env->GetArrayLength(jFuzzySkinFlags);
+            if (fz_len > 0) {
+                jbyte* fz = env->GetByteArrayElements(jFuzzySkinFlags, nullptr);
+                if (fz != nullptr) {
+                    Slic3r::ModelVolume* mv = model.objects.front()->volumes.front();
+                    const size_t authored = apply_orcaxr_fuzzy_skin(*mv, fz, size_t(fz_len));
+                    ORCAXR_LOGI("nativeSlice: authored %zu fuzzy-skin-painted triangles", authored);
+                    env->ReleaseByteArrayElements(jFuzzySkinFlags, fz, JNI_ABORT);
                 }
             }
         }
