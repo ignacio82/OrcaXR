@@ -2631,8 +2631,14 @@ private fun XrShell(
 
     // C6 — paint-mutation helper. Wraps the transform in
     // PaintHistory.beginStroke / endStroke so an MCP-driven clear /
-    // remap is undoable (and the LE_2819 cache observer + LE_2800
-    // re-bake both fire on the placedModels-list change).
+    // remap is undoable, AND bumps `paintContentVersion` so the
+    // LE_3076 colored-GLB rebake LaunchedEffect fires (it keys on the
+    // counter, NOT on placedModels-list identity or
+    // paintFilamentIndex reference, because the in-XR stamp pipeline
+    // mutates the array in place — see comment at LE_3076). Without
+    // the bump, MCP-driven paint changes update in-memory state but
+    // the on-bed preview doesn't refresh until the user restarts the
+    // app or re-selects the model.
     fun applyPaintMutation(
         modelId: String,
         history: PaintHistory,
@@ -2659,6 +2665,70 @@ private fun XrShell(
                 fuzzySkinFlags = after.fuzzySkinFlags,
             ),
         )
+        paintContentVersion++
+    }
+
+    // C7 — bulk plane-split paint. Reads the model's source mesh off
+    // the IO dispatcher, classifies every triangle by which side of an
+    // axis-aligned plane its centroid lies on (in the SAME centered
+    // preview frame `nativeWriteColoredGlb` and the BVH builder use,
+    // see GEMINI.md gotcha #11d), then commits the resulting tag array
+    // through `applyPaintMutation` so PaintHistory + LE_2800 rebake
+    // fire identically to a brush stamp. Used by the
+    // `paint_split_plane` MCP tool to do "left red, right blue" in
+    // one call.
+    fun runPaintPlaneSplit(action: dev.orcaxr.app.mcp.WorkspaceAction.PaintPlaneSplit) {
+        val model = placedModels.firstOrNull { it.id == action.modelId } ?: return
+        scope.launch {
+            val arr = withContext(Dispatchers.IO) {
+                val derived = deriveStlFor(model.source) ?: return@withContext null
+                val mesh = runCatching { StlReader.read(derived) }.getOrNull() ?: return@withContext null
+                val shiftX = -(mesh.bboxMin.x + mesh.bboxMax.x) / 2f
+                val shiftY = -(mesh.bboxMin.y + mesh.bboxMax.y) / 2f
+                val shiftZ = -mesh.bboxMin.z
+                val centered = mesh.translatedXyz(shiftX, shiftY, shiftZ)
+                val pos = centered.positions
+                val out = ByteArray(centered.triCount)
+                val negB = action.negativeTag.toByte()
+                val posB = action.positiveTag.toByte()
+                val plane = action.planeMm
+                var i = 0
+                var t = 0
+                while (t < centered.triCount) {
+                    val a = when (action.axis) {
+                        dev.orcaxr.app.mcp.WorkspaceAction.SplitAxis.X ->
+                            (pos[i] + pos[i + 3] + pos[i + 6]) / 3f
+                        dev.orcaxr.app.mcp.WorkspaceAction.SplitAxis.Y ->
+                            (pos[i + 1] + pos[i + 4] + pos[i + 7]) / 3f
+                        dev.orcaxr.app.mcp.WorkspaceAction.SplitAxis.Z ->
+                            (pos[i + 2] + pos[i + 5] + pos[i + 8]) / 3f
+                    }
+                    out[t] = if (a < plane) negB else posB
+                    t += 1
+                    i += 9
+                }
+                out
+            } ?: run {
+                android.util.Log.w(
+                    "OrcaXR/paint",
+                    "PaintPlaneSplit: failed to read mesh for ${model.id}",
+                )
+                return@launch
+            }
+            applyPaintMutation(action.modelId, paintHistory) { m ->
+                when (action.kind) {
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.Color ->
+                        m.copy(paintFilamentIndex = arr)
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.Support ->
+                        m.copy(supportFlags = arr)
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.Seam ->
+                        m.copy(seamFlags = arr)
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.FuzzySkin ->
+                        m.copy(fuzzySkinFlags = arr)
+                }
+            }
+            paintHistoryVersion++
+        }
     }
 
     // C6 — bind the in-session shell state to the process-scoped
@@ -2892,6 +2962,7 @@ private fun XrShell(
             }
             paintHistoryVersion++
         },
+        onPaintPlaneSplit = { action -> runPaintPlaneSplit(action) },
         onPaintUndo = { id ->
             if (paintHistory.canUndo(id)) {
                 val snap = paintHistory.undo(id)
@@ -2905,6 +2976,7 @@ private fun XrShell(
                         ) else m
                     }
                     paintHistoryVersion++
+                    paintContentVersion++
                 }
             }
         },
@@ -2921,6 +2993,7 @@ private fun XrShell(
                         ) else m
                     }
                     paintHistoryVersion++
+                    paintContentVersion++
                 }
             }
         },
@@ -5845,6 +5918,9 @@ private fun XrShell(
                                 } else {
                                     WorkspaceMode.Prepare
                                 }
+                            },
+                            onRequestHomeSpaceMode = {
+                                runCatching { session.scene.requestHomeSpaceMode() }
                             },
                         )
                     }

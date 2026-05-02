@@ -222,6 +222,36 @@ class WorkspaceModelTest {
         assertEquals(2, swapSupport.toTag)
     }
 
+    @Test fun paintPlaneSplitActionRoundTrips() = runTest {
+        val ws = WorkspaceModel()
+        val gathered = mutableListOf<WorkspaceAction>()
+        val job = launch(start = CoroutineStart.UNDISPATCHED) {
+            ws.actions.collect { gathered += it }
+        }
+        // The canonical "left red, right blue" Benchy split: along bed-X,
+        // through the bbox center, slot 1 negative side, slot 2 positive.
+        ws.emit(
+            WorkspaceAction.PaintPlaneSplit(
+                modelId = "m1",
+                kind = WorkspaceAction.PaintKind.Color,
+                axis = WorkspaceAction.SplitAxis.X,
+                planeMm = 0f,
+                negativeTag = 1,
+                positiveTag = 2,
+            ),
+        )
+        repeat(3) { yield() }
+        job.cancel()
+        assertEquals(1, gathered.size)
+        val split = gathered[0] as WorkspaceAction.PaintPlaneSplit
+        assertEquals("m1", split.modelId)
+        assertEquals(WorkspaceAction.PaintKind.Color, split.kind)
+        assertEquals(WorkspaceAction.SplitAxis.X, split.axis)
+        assertEquals(0f, split.planeMm)
+        assertEquals(1, split.negativeTag)
+        assertEquals(2, split.positiveTag)
+    }
+
     @Test fun multipleEmissionsAreOrdered() = runTest {
         val ws = WorkspaceModel()
         val gathered = mutableListOf<WorkspaceAction>()

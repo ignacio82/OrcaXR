@@ -131,6 +131,7 @@ fun BindWorkspaceModel(
      */
     onClearPaint: ((modelId: String, kind: WorkspaceAction.PaintKind?) -> Unit)? = null,
     onReplacePaintTag: ((modelId: String, kind: WorkspaceAction.PaintKind, fromTag: Int, toTag: Int) -> Unit)? = null,
+    onPaintPlaneSplit: ((WorkspaceAction.PaintPlaneSplit) -> Unit)? = null,
     onPaintUndo: ((modelId: String) -> Unit)? = null,
     onPaintRedo: ((modelId: String) -> Unit)? = null,
 ) {
@@ -205,6 +206,7 @@ fun BindWorkspaceModel(
     val onRemoveVolumeLatest = rememberUpdatedState(onRemoveVolume)
     val onClearPaintLatest = rememberUpdatedState(onClearPaint)
     val onReplacePaintLatest = rememberUpdatedState(onReplacePaintTag)
+    val onPaintPlaneSplitLatest = rememberUpdatedState(onPaintPlaneSplit)
     val onPaintUndoLatest = rememberUpdatedState(onPaintUndo)
     val onPaintRedoLatest = rememberUpdatedState(onPaintRedo)
 
@@ -244,6 +246,7 @@ fun BindWorkspaceModel(
             onRemoveVolume = onRemoveVolumeLatest.value,
             onClearPaint = onClearPaintLatest.value,
             onReplacePaintTag = onReplacePaintLatest.value,
+            onPaintPlaneSplit = onPaintPlaneSplitLatest.value,
             onPaintUndo = onPaintUndoLatest.value,
             onPaintRedo = onPaintRedoLatest.value,
         ) }
@@ -285,6 +288,7 @@ private fun handleAction(
     onRemoveVolume: ((modelId: String, volumeId: String) -> Unit)?,
     onClearPaint: ((modelId: String, kind: WorkspaceAction.PaintKind?) -> Unit)?,
     onReplacePaintTag: ((modelId: String, kind: WorkspaceAction.PaintKind, fromTag: Int, toTag: Int) -> Unit)?,
+    onPaintPlaneSplit: ((WorkspaceAction.PaintPlaneSplit) -> Unit)?,
     onPaintUndo: ((modelId: String) -> Unit)?,
     onPaintRedo: ((modelId: String) -> Unit)?,
 ) {
@@ -432,6 +436,10 @@ private fun handleAction(
         is WorkspaceAction.ReplacePaintTag -> {
             if (onReplacePaintTag != null) onReplacePaintTag(action.modelId, action.kind, action.fromTag, action.toTag)
             else Log.w(TAG, "ReplacePaintTag not wired.")
+        }
+        is WorkspaceAction.PaintPlaneSplit -> {
+            if (onPaintPlaneSplit != null) onPaintPlaneSplit(action)
+            else Log.w(TAG, "PaintPlaneSplit not wired.")
         }
         is WorkspaceAction.PaintUndo -> {
             if (onPaintUndo != null) onPaintUndo(action.modelId)

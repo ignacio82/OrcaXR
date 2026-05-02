@@ -88,6 +88,7 @@ internal object WorkspaceTools {
             GetPaintSummary(workspace),
             ClearPaint(workspace),
             ReplacePaintTag(workspace),
+            PaintSplitPlane(workspace),
             PaintUndo(workspace),
             PaintRedo(workspace),
         )
@@ -1481,6 +1482,87 @@ internal object WorkspaceTools {
                     put("from_tag", fromTag)
                     put("to_tag", toTag)
                     put("matched_triangle_count", matchCount)
+                },
+            )
+        }
+    }
+
+    class PaintSplitPlane(private val ws: WorkspaceModel) : Tool {
+        override val name = "paint_split_plane"
+        override val description =
+            "Bulk-paint every triangle of a model based on which side of an axis-aligned plane " +
+                "its centroid lies on. Plane lives in the model's centered preview frame: bbox " +
+                "XY-center at the origin, Z-min on the bed. Defaults (axis='x', plane_mm=0) split " +
+                "the mesh down the middle along bed-X — pair with negative_tag=1, positive_tag=2 " +
+                "for the canonical 'left red, right blue' two-color paint. axis is one of " +
+                "'x' (bed left/right) | 'y' (bed front/back) | 'z' (height). For color paint the " +
+                "tags are filament slots 1..32 (0 = unpainted); support/seam accept 0..2; " +
+                "fuzzy_skin accepts 0..1. Replaces any prior paint of the same kind on the model. " +
+                "Recorded in paint history so paint_undo restores it."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id", "negative_tag", "positive_tag"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id from list_placed_models"),
+                "kind" to Schemas.string("'color' (default) | 'support' | 'seam' | 'fuzzy_skin'"),
+                "axis" to Schemas.string("'x' (default) | 'y' | 'z'"),
+                "plane_mm" to Schemas.number("Plane offset in mm along the chosen axis. Default 0 = bbox center."),
+                "negative_tag" to Schemas.integer("Tag for triangles whose centroid is on the negative side"),
+                "positive_tag" to Schemas.integer("Tag for triangles on the positive side"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            if (ws.placedModels.value.none { it.id == id }) {
+                return ToolResult.error("No model with id '$id'.")
+            }
+            val kind = parsePaintKind(args.optString("kind", "color"))
+                ?: return ToolResult.error("Unknown kind. Use color|support|seam|fuzzy_skin.")
+            val axisRaw = args.optString("axis", "x").lowercase()
+            val axis = when (axisRaw) {
+                "x" -> WorkspaceAction.SplitAxis.X
+                "y" -> WorkspaceAction.SplitAxis.Y
+                "z" -> WorkspaceAction.SplitAxis.Z
+                else -> return ToolResult.error("Unknown axis '$axisRaw'. Use x|y|z.")
+            }
+            val planeMm = args.optFloat("plane_mm") ?: 0f
+            val negTag = args.optInt("negative_tag", -1)
+            val posTag = args.optInt("positive_tag", -1)
+            if (negTag !in 0..255 || posTag !in 0..255) {
+                return ToolResult.error("negative_tag and positive_tag must each be in 0..255.")
+            }
+            val maxTag = when (kind) {
+                WorkspaceAction.PaintKind.Color -> dev.orcaxr.app.MAX_PAINT_SLOTS
+                WorkspaceAction.PaintKind.Support -> 2
+                WorkspaceAction.PaintKind.Seam -> 2
+                WorkspaceAction.PaintKind.FuzzySkin -> 1
+            }
+            if (negTag > maxTag || posTag > maxTag) {
+                return ToolResult.error(
+                    "Tag exceeds max for ${kind.name.lowercase()} (max=$maxTag).",
+                )
+            }
+            ws.emit(
+                WorkspaceAction.PaintPlaneSplit(
+                    modelId = id,
+                    kind = kind,
+                    axis = axis,
+                    planeMm = planeMm,
+                    negativeTag = negTag,
+                    positiveTag = posTag,
+                ),
+            )
+            return success(
+                "Plane-split paint requested on $id (${kind.name.lowercase()} along ${axis.name} @ ${planeMm}mm; " +
+                    "neg=$negTag, pos=$posTag).",
+                JSONObject().apply {
+                    put("model_id", id)
+                    put("kind", kind.name.lowercase())
+                    put("axis", axis.name.lowercase())
+                    put("plane_mm", planeMm.toDouble())
+                    put("negative_tag", negTag)
+                    put("positive_tag", posTag)
                 },
             )
         }

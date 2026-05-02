@@ -46,6 +46,12 @@ class MeshBvh private constructor(
     /** Total triangles in the underlying mesh. */
     val triCount: Int get() = mesh.triCount
 
+    /** Mesh AABB in mesh-local mm. Exposed so the paint pipeline can
+     *  log "ray missed bbox by N mm" when diagnosing why every paint
+     *  raycast returns null. */
+    val bboxMin: Vec3f get() = mesh.bboxMin
+    val bboxMax: Vec3f get() = mesh.bboxMax
+
     /**
      * Front-most ray-vs-mesh intersection.
      *

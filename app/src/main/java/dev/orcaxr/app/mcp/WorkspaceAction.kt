@@ -273,4 +273,30 @@ sealed interface WorkspaceAction {
 
     /** Redo a previously-undone paint stroke. */
     data class PaintRedo(val modelId: String) : WorkspaceAction
+
+    /** Axis a [PaintPlaneSplit] divides the mesh on, in printer-frame mesh-mm. */
+    enum class SplitAxis { X, Y, Z }
+
+    /**
+     * Bulk paint every triangle of a model based on which side of an
+     * axis-aligned plane its centroid lies on. The plane lives in the
+     * mesh's centered preview frame: bbox XY-center at the origin,
+     * Z-min on the bed (the same frame `nativeWriteColoredGlb` uses,
+     * see GEMINI.md gotcha #11d). With `planeMm = 0` and `axis = X`,
+     * triangles whose centroid X is negative get [negativeTag], the
+     * rest get [positiveTag] — i.e. the canonical "left red, right
+     * blue" split.
+     *
+     * Recorded in PaintHistory so paint_undo restores it. Replaces
+     * any prior paint of the same kind on the model — this is a bulk
+     * authoring op, not a brush stamp.
+     */
+    data class PaintPlaneSplit(
+        val modelId: String,
+        val kind: PaintKind,
+        val axis: SplitAxis,
+        val planeMm: Float,
+        val negativeTag: Int,
+        val positiveTag: Int,
+    ) : WorkspaceAction
 }

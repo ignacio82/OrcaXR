@@ -4278,6 +4278,10 @@ fun PrinterPanel(
     onRenamePrinter: (PrinterConfig, String) -> Unit,
     onDeletePrinter: (PrinterConfig) -> Unit,
     onClose: () -> Unit,
+    /** See [dev.orcaxr.app.mcp.McpServerCard]'s `onRequestHomeSpaceMode`
+     *  parameter — escape hatch for the Share button so the system share
+     *  sheet renders on Galaxy XR. */
+    onRequestHomeSpaceMode: (() -> Unit)? = null,
 ) {
     var editingId by remember { mutableStateOf<String?>(null) }
     var addOpen by remember { mutableStateOf(printers.isEmpty()) }
@@ -4311,7 +4315,7 @@ fun PrinterPanel(
             // disabled so the printer-discovery flow stays the
             // dominant affordance for users who don't want LLM-driven
             // automation.
-            dev.orcaxr.app.mcp.McpServerCard()
+            dev.orcaxr.app.mcp.McpServerCard(onRequestHomeSpaceMode = onRequestHomeSpaceMode)
             Spacer(Modifier.height(12.dp))
 
             // Discovery row. Scan toggles _snapmaker._tcp browsing on
