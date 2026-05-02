@@ -118,9 +118,9 @@ Snapmaker and Elegoo touchscreens display a model preview when the G-code contai
 3. `make_thumbnail_callback(model, cfg)` in the JNI shim builds a `ThumbnailsGeneratorCallback` libslic3r calls once per `(format, size)` pair listed in the `thumbnails` config string. Wired into both `nativeSlice` and `nativeSliceMulti` (the `multi` model var, not `model`).
 4. **Verified end-to-end** with `scripts/autotest_slice.sh` slicing `dragon.3mf` on the Snapmaker U1 0.4 profile: `dragon.3mf.gcode` contains `; thumbnail begin 48x48 2912` and `; thumbnail begin 300x300 77988`, both decode to valid PNGs (`file: PNG image data, 300 x 300, 8-bit/color RGBA, non-interlaced`), and the 300×300 preview shows a recognizable shaded dragon. New gotcha §25 captures the wiring contract.
 
-### A9. Snapmaker fork profile + engine value sync (U1 print-quality parity) 🔴 Not started — load-bearing for U1 users
+### A9. Snapmaker fork profile + engine value sync (U1 print-quality parity) 🟡 Partial — Phase 1 shipped, Phase 2 outstanding
 
-> **Files:** `app/src/main/assets/profiles/Snapmaker/process/*.json`, `app/src/main/assets/profiles/Snapmaker/filament/*.json`, `app/src/main/assets/profiles/Snapmaker/machine/*.json`, `patches/` (any Snapmaker-fork libslic3r diffs that aren't already covered by 0011–0026), `OrcaProfileLoader.SAFE_KEYS`.
+> **Files:** `app/src/main/assets/profiles/Snapmaker/process/*.json`, `app/src/main/assets/profiles/Snapmaker/filament/*.json`, `app/src/main/assets/profiles/Snapmaker/machine/*.json`, `patches/` (any Snapmaker-fork libslic3r diffs that aren't already covered by 0011–0026), `OrcaProfileLoader.SAFE_KEYS`. Source of truth pinned to **Snapmaker/OrcaSlicer v2.3.1**.
 
 OrcaXR ships Snapmaker's bundled profile leaves but compiles them against **upstream OrcaSlicer 2.3.2**, not Snapmaker's downstream fork. The slicing decisions match the desktop slicer for *shape* (layer count, toolchange cadence, paint regions), but a single same-model side-by-side surfaced a real gap on **speed-dependent estimates and per-tool tuning**:
 
@@ -129,17 +129,7 @@ OrcaXR ships Snapmaker's bundled profile leaves but compiles them against **upst
 
 Same shape, same toolchange cadence, **different speeds**. The gap is in profile-resident speed/acceleration/flow values that differ between Snapmaker's fork and upstream OrcaSlicer (and possibly in fork-side libslic3r logic that nudges per-tool feedrates on the toolchanger). For a U1 user who wants OrcaXR slices to behave identically to what they'd get from Snapmaker Orca on the desktop, this gap shows up as: (a) wrong time estimates on the headset, (b) potentially different print quality if the actual feedrates run hotter than the U1's tuned values.
 
-**Phase 1 — profile value audit (P0 for U1 users):**
-1. **Inventory** the keys that differ between `app/src/main/assets/profiles/Snapmaker/` and the same files in `third_party/OrcaSlicer/resources/profiles/Snapmaker/` after Snapmaker's fork applies its branch. The likely-load-bearing keys:
-   - `filament_max_volumetric_speed` (per-PLA / PLA-CF / PETG / etc.)
-   - `outer_wall_speed`, `inner_wall_speed`, `top_surface_speed`, `bridge_speed`, `support_speed`
-   - `outer_wall_acceleration`, `inner_wall_acceleration`, `default_acceleration`, `travel_acceleration`
-   - `outer_wall_jerk`, `inner_wall_jerk`
-   - `slow_down_layers`, `slow_down_min_speed`
-   - U1-specific toolchange tuning: `filament_loading_speed`, `filament_unloading_speed`, `filament_toolchange_delay`, `filament_cooling_moves`, `filament_multitool_ramming*`
-2. **Source-of-truth pin:** lock to a Snapmaker fork SHA (likely whichever `feature_mix_filament_sm` targets — see A2 §1) so a value sync isn't chasing a moving target.
-3. **Re-vendor** the differing leaves under `app/src/main/assets/profiles/Snapmaker/` with the fork's values. Whitelist any new keys via `OrcaProfileLoader.SAFE_KEYS` (the gate that silently drops unknowns).
-4. **Verify** with an instrumented test that slices a fixed fixture (Einhorn 3MF + 0.12 Fine + 4-color palette) and asserts `; estimated printing time = ~11h XXm` within ±5 % of the desktop reference. Test source: extend `UnicornFineProfileTest.kt` with a `unicornEstimateMatchesDesktopWithinFivePercent` case. The same test pins the layer count (332) and toolchange count (385) so a future profile bump that drifts speeds without breaking shape doesn't sneak through.
+**Phase 1 — profile value audit 🟢 Shipped:** Audited Snapmaker fork **v2.3.1** profiles against the OrcaXR-vendored leaves. Findings: process leaves (`fdm_process_U1_*.json`, `0.NN @Snapmaker U1 (0.4 nozzle).json`) and machine leaves (`fdm_U1.json`, `Snapmaker U1 (0.4/0.6 nozzle).json`, `fdm_klipper.json`, `fdm_toolchanger.json`) are byte-identical. The drift was concentrated in filament leaves — `Snapmaker PLA Matte @U1.json` had 8 load-bearing values different from fork v2.3.1 (`filament_max_volumetric_speed=20→22`, `enable_pressure_advance=1→0`, `filament_flow_ratio=1.01→1`, `nozzle_temperature=220→215`, `hot_plate_temp=55→65`, `additional_cooling_fan_speed=70→80`, `textured_plate_temp=60→65` and the matching `_initial_layer` keys), and `fdm_filament_pla.json` had three more (`nozzle_temperature=210→215`, `temperature_vitrification=154→65` — the orcaxr value was outright wrong for PLA, whose Tg is ~60 °C, `filament_retraction_length=1.2→2`). Synced. New gotcha §26 records the fork-pin and the diff workflow. Instrumented `UnicornFineProfileTest.unicornEstimateMatchesDesktopWithinFivePercent` pins layer count (332), toolchange count (385) AND the `; estimated printing time` ±5 % of 11 h 20 m. **The shape pins PASS post-sync; the time pin still fails** (post-sync OrcaXR estimate: 7 h 38 m — Phase 1 closed less than 1 % of the gap), confirming the bulk of the 33 % delta is engine behavior, not profile values. Phase 2 owns the rest.
 
 **Phase 2 — engine-behavior parity (P1, scoped after A2 lands):**
 

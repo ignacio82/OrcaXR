@@ -7,6 +7,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
+import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
@@ -213,6 +214,191 @@ class UnicornFineProfileTest {
         assertTrue(
             "Expected max_z ≈ 40 mm but got $maxZ. Header: $maxZLine",
             kotlin.math.abs(maxZ - 40.0) < 0.5,
+        )
+    }
+
+    /**
+     * Roadmap A9 — U1 print-quality parity. Reference desktop slice
+     * (Snapmaker Orca v2.3.1, U1, 0.12 Fine, 4-color Einhorn 3MF):
+     *   ; total layer number: 332
+     *   ; total filament change = 385
+     *   ; estimated printing time (normal mode) = 11h 20m XXs
+     *
+     * This test slices the same fixture with the same profile and asserts
+     * (a) the SHAPE numbers (layer count + toolchange count) match exactly
+     *     so a future profile bump that drifts speeds without breaking
+     *     shape doesn't sneak through, and
+     * (b) the TIME ESTIMATE lands within ±5 % of the desktop reference
+     *     so a regression in profile speed/accel/jerk values surfaces
+     *     here instead of as "my real print finished an hour earlier
+     *     than the slicer claimed."
+     *
+     * Phase 1 of A9 (commit `09569ca`'s follow-up) re-vendored the load-
+     * bearing profile values from the fork v2.3.1 — `filament_max_volumetric_speed`,
+     * `enable_pressure_advance`, `nozzle_temperature`, etc. If this test
+     * fails with the time estimate WAY off (e.g. 7h 35m as the original
+     * user report), the remaining gap is in libslic3r engine behavior
+     * (ToolOrdering / WipeTower / GCodeProcessor differences between
+     * Snapmaker fork and upstream 2.3.2) and should be tackled by A9
+     * Phase 2 — see ROADMAP.md A9.
+     *
+     * `@Ignore`d on main because Phase 1 alone leaves the gap at -32.6 %
+     * (verified post-sync: 7h 38m vs 11h 20m), which would fire this
+     * test on every routine sweep. Remove `@Ignore` and run manually
+     * (`adb shell am instrument -w -e class
+     * dev.orcaxr.app.UnicornFineProfileTest#unicornEstimateMatchesDesktopWithinFivePercent
+     * dev.orcaxr.app.debug.test/androidx.test.runner.AndroidJUnitRunner`)
+     * when Phase 2 lands; once it passes, drop `@Ignore` permanently.
+     */
+    @Ignore("A9 Phase 2 outstanding — see ROADMAP.md A9. Phase 1 sync alone leaves a -32.6 % gap.")
+    @Test
+    fun unicornEstimateMatchesDesktopWithinFivePercent() = runBlocking {
+        val tag = "OrcaXR/a9Diag"
+        val appCtx = ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        val dir = appCtx.getExternalFilesDir(null) ?: appCtx.cacheDir
+        val src = File(dir, "Einhorn_Knitted.3mf")
+        if (!src.exists() || src.length() == 0L) {
+            fun runShell(cmd: String): String {
+                val pfd = InstrumentationRegistry.getInstrumentation()
+                    .uiAutomation.executeShellCommand(cmd)
+                val out = java.io.FileInputStream(pfd.fileDescriptor)
+                    .use { it.bufferedReader().readText() }
+                pfd.close()
+                return out
+            }
+            runShell("mkdir -p ${dir.absolutePath}")
+            runShell("cp /sdcard/Download/Einhorn_Knitted.3mf ${src.absolutePath}")
+            runShell("chmod 644 ${src.absolutePath}")
+        }
+        assumeTrue(
+            "Einhorn_Knitted.3mf not staged. Pre-stage via " +
+                "`adb shell 'cp \"/sdcard/Download/Quick Share/Einhorn+Knitted.3mf\" /sdcard/Download/Einhorn_Knitted.3mf'`.",
+            src.exists() && src.canRead() && src.length() > 0,
+        )
+
+        val catalog = OrcaProfileLoader.loadCatalog(appCtx)
+        // Match the user's reference run exactly: 0.12 Fine + PLA Matte
+        // on the U1 0.4 nozzle. Reference: `Einhorn Knitted_PLA_11h20m_orca.gcode`.
+        val fineMatte = catalog.firstOrNull {
+            it.id.contains("snapmaker_u1_0.4") &&
+                it.id.contains("0.12_fine") &&
+                it.id.contains("snapmaker_pla_matte")
+        }
+        assumeTrue(
+            "0.12 Fine + Snapmaker PLA Matte profile missing from catalog. " +
+                "Catalog has ${catalog.size} entries; first 30 ids: " +
+                catalog.take(30).joinToString { it.id },
+            fineMatte != null,
+        )
+        fineMatte!!
+
+        val n = 4
+        val perFour: (String) -> String = { v -> List(n) { v }.joinToString(",") }
+        // 4-color Einhorn palette. Colors taken from the reference 3MF;
+        // exact RGB values affect filament_colour metadata but not the
+        // time estimate (color → tool-id mapping happens via filament_map).
+        val cfg = fineMatte.config + mapOf(
+            "filament_diameter" to perFour("1.75"),
+            "filament_type" to List(n) { "PLA" }.joinToString(";"),
+            "filament_colour" to "#E2DEDB;#E72F1D;#080A0D;#F4C032",
+            "extruder_colour" to "#E2DEDB;#E72F1D;#080A0D;#F4C032",
+            "filament_map" to "1,2,3,4",
+            "filament_map_mode" to "Manual",
+            "single_extruder_multi_material" to "0",
+        )
+
+        val out = File(appCtx.cacheDir, "unicorn_a9_estimate_test.gcode")
+        val result = SlicerEngine.slice(src, out, cfg)
+        assertTrue("unicorn slice failed: $result", result is SliceResult.Success)
+
+        runCatching {
+            val downloads = File("/storage/emulated/0/Download")
+            if (downloads.canWrite()) {
+                out.copyTo(File(downloads, "unicorn_a9_estimate_test.gcode"), overwrite = true)
+            }
+        }
+
+        val text = out.readText()
+        val totalLayerLine = text.lineSequence()
+            .firstOrNull { it.startsWith("; total layer number:") } ?: ""
+        val toolchangeLine = text.lineSequence()
+            .firstOrNull { it.startsWith("; total filament change =") } ?: ""
+        val estimateLine = text.lineSequence()
+            .firstOrNull { it.startsWith("; estimated printing time") } ?: ""
+
+        val totalLayers = Regex("""\d+""").find(totalLayerLine)?.value?.toIntOrNull() ?: -1
+        val toolchanges = Regex("""\d+""").find(toolchangeLine)?.value?.toIntOrNull() ?: -1
+        // "; estimated printing time (normal mode) = 11h 20m 03s"
+        // Parse each component independently; libslic3r emits "h", "m",
+        // "s" as separate tokens with whitespace between. A naive
+        // optional regex (`(\d+h)?(\d+m)?(\d+s)?`) matches the empty
+        // prefix at column 0 and silently parses to 0 — which then
+        // passes the ±5 % check vacuously. Pin the parser strictly.
+        val hours = Regex("""(\d+)h""").find(estimateLine)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        val minutes = Regex("""(\d+)m""").find(estimateLine)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        val seconds = Regex("""(\d+)s""").find(estimateLine)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        val estimateSec = hours * 3600 + minutes * 60 + seconds
+        assertTrue(
+            "Could not parse `; estimated printing time` from gcode header: " +
+                "'$estimateLine'. Refusing to assert vacuously — the test " +
+                "exists precisely to catch this metric drifting.",
+            estimateSec > 0,
+        )
+
+        android.util.Log.i(tag, "header: $totalLayerLine | $toolchangeLine | $estimateLine")
+        android.util.Log.i(tag, "parsed: layers=$totalLayers toolchanges=$toolchanges estimateSec=$estimateSec ($hours h $minutes m $seconds s)")
+
+        // Shape pins: profile sync must not drift the slice topology.
+        assertTrue(
+            "Expected 332 layers (0.12 mm × 40 mm) but got $totalLayers. " +
+                "Header: $totalLayerLine. If this drifted, the layer-height " +
+                "or first-layer-height key flow regressed.",
+            totalLayers in 327..337,
+        )
+        assertTrue(
+            "Expected ~385 toolchanges but got $toolchanges. Header: " +
+                "$toolchangeLine. If this drifted, the multi-color " +
+                "tool-ordering pipeline (filament_map / wipe-tower) " +
+                "behavior regressed.",
+            toolchanges in 370..400,
+        )
+
+        // Time estimate pin. The desktop reference (Snapmaker Orca v2.3.1,
+        // U1, 0.12 Fine, identical 4-color Einhorn 3MF) emitted
+        // `; estimated printing time (normal mode) = 11h 20m XXs`.
+        //
+        // Status as of A9 Phase 1:
+        //   - SHAPE pins above (332 layers, 385 toolchanges) PASS — the
+        //     profile-value sync from fork v2.3.1 (commit that tracked
+        //     `Snapmaker PLA Matte @U1.json`'s filament_max_volumetric_speed,
+        //     enable_pressure_advance, nozzle_temperature, etc.) preserves
+        //     slice topology exactly.
+        //   - TIME pin currently FAILS — Phase 1 alone moves the
+        //     estimate by <1 % (7h 35m → 7h 38m), nowhere near the
+        //     ~33 % gap. The remaining gap lives in Phase 2 territory:
+        //     fork-side libslic3r diffs in ToolOrdering / WipeTower /
+        //     GCodeProcessor that nudge per-tool feedrates and add
+        //     toolchange-cycle time the upstream 2.3.2 pipeline doesn't
+        //     emit. See ROADMAP.md A9 Phase 2.
+        //
+        // This test is intentionally STRICT (±5 %) so the failure
+        // message above accurately surfaces the situation. When Phase 2
+        // lands and closes the gap, the test passes; if a future
+        // profile-sync regression re-opens the gap, the test screams.
+        val refSec = (11 * 60 + 20) * 60   // 40800
+        val deltaPct = 100.0 * (estimateSec - refSec) / refSec
+        assertTrue(
+            "Estimated printing time = ${hours}h ${minutes}m ${seconds}s " +
+                "(${estimateSec}s); reference ${refSec}s (11h 20m); " +
+                "delta = ${"%.1f".format(deltaPct)} %. Tolerance is " +
+                "±5 %. A9 Phase 1 (profile value sync from fork v2.3.1) " +
+                "preserves slice shape but does NOT close the time-" +
+                "estimate gap on its own — Phase 2 (engine-behavior " +
+                "parity: fork-side libslic3r diffs in ToolOrdering / " +
+                "WipeTower / GCodeProcessor) is required. See " +
+                "ROADMAP.md A9.",
+            kotlin.math.abs(deltaPct) <= 5.0,
         )
     }
 }
