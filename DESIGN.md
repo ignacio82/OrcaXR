@@ -1,146 +1,120 @@
-# OrcaXR Design Notes
+---
+colors:
+  mint: "#79D0C7"
+  mint-bright: "#94E2D6"
+  mint-deep: "#4DB6AC"
+  warn: "#FFB86B"
+  red: "#F25C5C"
+  bg-deep: "#000814"
+  panel: "rgba(8, 16, 30, 0.80)"
+  panel-strong: "rgba(6, 12, 24, 0.92)"
+  panel-soft: "rgba(20, 30, 48, 0.55)"
+  line: "rgba(180, 200, 230, 0.10)"
+  line-strong: "rgba(180, 200, 230, 0.20)"
+  text: "#EEF2F7"
+  text-muted: "#93A3B8"
+  text-dim: "#5C6A82"
+  role-outer-wall: "#F25959"
+  role-inner-wall: "#40BF73"
+  role-infill: "#F2D959"
+  role-support: "#666673"
 
-Living document. UX spec, architectural decisions with rationale, and
-measurements from real hardware. Grows as we build.
+typography:
+  display-lg:
+    fontFamily: Space Grotesk
+    fontSize: 32sp
+    fontWeight: "700"
+  display-md:
+    fontFamily: Space Grotesk
+    fontSize: 26sp
+    fontWeight: "700"
+  display-sm:
+    fontFamily: Space Grotesk
+    fontSize: 22sp
+    fontWeight: "600"
+  title-lg:
+    fontFamily: Space Grotesk
+    fontSize: 18sp
+    fontWeight: "600"
+  title-md:
+    fontFamily: Space Grotesk
+    fontSize: 14sp
+    fontWeight: "600"
+    letterSpacing: 0.1sp
+  body-lg:
+    fontFamily: Instrument Sans
+    fontSize: 15sp
+    fontWeight: "400"
+  body-md:
+    fontFamily: Instrument Sans
+    fontSize: 13sp
+    fontWeight: "400"
+  label-lg:
+    fontFamily: Instrument Sans
+    fontSize: 13sp
+    fontWeight: "600"
+    letterSpacing: 0.1sp
+  numeric:
+    fontFamily: JetBrains Mono
+    fontSize: 12sp
+    fontWeight: "600"
+  kicker:
+    fontFamily: Instrument Sans
+    fontSize: 10sp
+    fontWeight: "700"
+    letterSpacing: 1.6sp
 
+spacing:
+  sm: 4dp
+  md: 8dp
+  lg: 12dp
+  xl: 16dp
+  xxl: 20dp
+
+rounded:
+  sm: 4dp
+  md: 8dp
+  lg: 12dp
+  xl: 24dp
+
+components:
+  panel-base:
+    backgroundColor: "{colors.panel}"
+    rounded: "{rounded.xl}"
+  panel-surface:
+    backgroundColor: "{colors.panel-soft}"
+    rounded: "{rounded.md}"
+    padding: "{spacing.lg}"
+  panel-chip:
+    backgroundColor: "{colors.panel-strong}"
+    rounded: "{rounded.md}"
+    padding: "{spacing.md}"
 ---
 
-## Phase 1 final blocker + fix (2026-04-25): SpatialPanel needs Full Space
+# OrcaXR Design System
 
-End of Phase 1: app installed and launching cleanly on the Galaxy XR
-but the SpatialPanel rendered as a **solid black rectangle with system
-chrome (window/min/close icons) at the top** — Compose composed,
-activity stayed alive, no exceptions, `openXrFirstFrameSubmitted=false`
-in WindowManager logs.
+## Visual Identity: Deep-Sea Spatial UI
+OrcaXR employs a dark, cool-toned aesthetic tailored for immersive spatial environments. The visual language relies heavily on semi-translucent, frosted-glass panels floating in front of a deep navy void. This dark background minimizes eye strain in Extended Reality (XR) while allowing vibrant 3D models, colorful toolpaths, and vivid interactive elements to command the user's attention.
 
-Root cause turned out to be a Jetpack XR API contract that is
-under-documented at v1.0.0-alpha12: **a `Subspace { SpatialPanel { … } }`
-hierarchy does not render its 2D content surface while the activity
-is still in Home Space mode.** The panel frame appears, system chrome
-is drawn, but content is empty until the activity transitions to Full
-Space.
+## Typography
+The system uses a purposeful, tri-font typographic scale to establish a clear visual hierarchy and technical precision:
 
-Fix is two lines:
+- **Space Grotesk** is utilized for display headers, panel titles, and prominent call-to-action buttons. Its geometric, slightly tech-forward characteristics ground the UI in a modern, engineering-focused feel.
+- **Instrument Sans** serves as the highly legible workhorse for body text, UI labels, and standard form controls. It remains readable even at smaller sizes or lower display resolutions in XR headsets.
+- **JetBrains Mono** is employed strictly for tabular numerics and data (such as slice times, filament usage, geometric coordinates, or G-code lines). This ensures that numbers and technical readouts align perfectly in columns, which is critical for precision slicing.
 
-```kotlin
-LaunchedEffect(session) {
-    runCatching { session.scene.requestFullSpaceMode() }
-}
-```
+## Color and Contrast
+- **Mint** is the primary accent and interaction color. It provides stark, luminous contrast against the dark navy panels, clearly identifying active states, primary buttons, selected tabs, and interactive gizmos.
+- **Text Hierarchy** is stratified into three layers of emphasis: a stark white-blue for primary readouts, a secondary cool gray for descriptions, and a recessed dim blue for section labels and hints.
+- Thin, low-opacity **Line borders** are used to separate structural sections within panels or list items without adding heavy visual clutter.
 
-Plus a `MovableComponent.createSystemMovable(session, true)` on the
-root `GroupEntity` so the panel doesn't spawn off to the side of the
-user's gaze (activity-space origin is wherever the system was facing
-when Full Space was created).
+## Slicer Extrusion Role Colors
+The 3D toolpath visualization intentionally inherits its palette from standard desktop slicer conventions. This ensures immediate familiarity for existing makers transitioning to an XR workflow. For example:
+- **Outer Walls:** Strong Red
+- **Inner Walls:** Green
+- **Infill:** Yellow / Sky Blue
+- **Supports:** Dark Gray
 
-A common pattern to sidestep this is to render regular 2D Compose in Home Space and only spin up the Subspace + SpatialPanel when transitioning into Full Space. We don't need the dual-mode flexibility yet, so we request Full Space at startup.
-
-Documented in `GEMINI.md` "Jetpack XR rendering gotchas" so the next session doesn't re-derive it.
-
-## UX constraints
-
-These are load-bearing for every screen we design.
-
-1. **Dense parameter UIs do not survive a VR port.** OrcaSlicer's desktop
-   settings tree (hundreds of fields) cannot be reproduced on a SpatialPanel.
-   Design around presets and direct manipulation, not forms.
-2. **Sub-mm precision from hand tracking is not available** on Galaxy XR /
-   Quest 3 in 2026 (~1cm jitter at arm's length). Precision comes from
-   software — snap grids, angle constraints, numeric entry via an alternate
-   input path.
-3. **Numeric entry on Galaxy XR is fine.** Galaxy XR's system keyboard uses gaze + pinch (same model as Vision Pro) and Compose `TextField` Just Works. Trade-offs that remain are scale-of-typing concerns (200-field forms are tedious at any speed), not fundamental input blockers. Design rule: profiles-first so users rarely type; standard Compose forms when they do.
-4. **Panels cost attention budget.** A standard panel is approximately 1792×1008 dp at ~1.75 m, 5° below eye level, with interactive content in the central 41° FOV.
-5. **Empty `SpatialPanel` entities still block raycasts.** Remove from
-   composition rather than just hiding.
-
----
-
-## Architectural decisions (with rationale)
-
-Empty until Phase 0 produces decisions. Each entry: what, why, date,
-revisit-if.
-
----
-
-## Dependency build matrix (OrcaSlicer v2.3.2)
-
-Ground truth: `third_party/OrcaSlicer/src/libslic3r/CMakeLists.txt` lines
-576–606 (`target_link_libraries(libslic3r …)`). OrcaSlicer's own
-`deps/` bootstrap builds most of these for desktop — we try that first with
-an NDK toolchain before vendoring anything ourselves.
-
-### Required for libslic3r core (must cross-compile)
-
-| Category | Libs |
-|---|---|
-| Header-only (trivial) | admesh, libigl, libnest2d, cereal, Eigen, qoi, semver |
-| Pure C (trivial) | miniz, glu-libtess, JPEG, PNG, ZLIB, OpenSSL::Crypto, EXPAT, FREETYPE |
-| C++ / CMake (usually fine) | Boost (filesystem/thread/locale/iostreams/regex), Clipper/Clipper2, Draco, TBB, qhull, mcut, libnoise, OpenCV (world), libslic3r's bundled `clipper` + `libnest2d` |
-| Painful on Android | **CGAL** (via GMP/MPFR), **OCCT** (27 TK* libs — STEP import + CAD booleans), **OpenVDB** (conditional — skip for Phase 0) |
-
-### Skippable (GUI / network / OpenGL only, not linked by libslic3r)
-
-wxWidgets, GLEW, GLFW, OpenCSG, WebView2, CURL (with flag). Explicitly
-**drop these from `deps/` when building for Android** to cut compile time
-and avoid their transitive pain.
-
-### Phase 0 compile flag starting point
-
-To be passed through to OrcaSlicer's top-level CMake (some will be
-bounced-through to `deps/`, some apply to `libslic3r` itself — verify as
-errors surface):
-
-```
--DSLIC3R_GUI=OFF
--DSLIC3R_STATIC=ON
--DSLIC3R_BUILD_SANDBOXES=OFF
--DSLIC3R_BUILD_TESTS=OFF
--DBUILD_TESTING=OFF
--DCMAKE_TOOLCHAIN_FILE=$ANDROID_HOME/ndk/29.0.14206865/build/cmake/android.toolchain.cmake
--DANDROID_ABI=arm64-v8a
--DANDROID_PLATFORM=android-31
-```
-
----
-
-## Measured baselines
-
-Populated from Phase 0 onward. On-device numbers only — emulator numbers
-clearly labeled as such. Always record: device, build type, date.
-
-| Metric | Value | Device | Build | Date |
-|---|---|---|---|---|
-| 20mm cube slice p50 | 807 ms | Samsung Galaxy XR (SM-I610), arm64-v8a, API 34 | debug, NDK 29.0.14206865 | 2026-04-26 |
-| 20mm cube slice p95 | 862 ms | "" | "" | "" |
-| 20mm cube slice max | 862 ms | "" | "" | "" |
-| 20mm cube peak RSS | 262 MB | "" | "" | "" |
-| 10× slice thermal delta | 1.1 °C | "" | "" | "" |
-| 10× slice failures | 0 / 10 | "" | "" | "" |
-
-Methodology: `BaselineBenchTest.cubeSliceTenRunsBaseline` —
-sequential `SlicerEngine.slice` calls of `cube_20mm.stl` against
-`minValidConfig` (libslic3r `full_print_config()` defaults plus
-`before_layer_change_gcode = "G92 E0\n"` to satisfy
-`Print::validate()` under forced relative-E). RSS read from
-`/proc/self/statm` after each slice. Thermal delta = max per-zone
-change across all readable `/sys/class/thermal/thermal_zone*/temp`
-between run 1 and run 10. The 20 mm cube is tiny — these numbers
-are a regression-detection floor, not a representative slicing
-workload. Repeat with a Benchy / colored dragon for production
-performance characterization.
-
----
-
-## Open UX explorations (not decisions — sketches)
-
-- **Layer scrubbing as a 3D spatial slider** — user's hand grabs a handle
-  on the toolpath preview, moves up/down through layers. Natural mapping:
-  spatial height ↔ layer height. Potential issue: fatigue for models with
-  hundreds of layers.
-- **Profile cards instead of a settings dialog** — filament × printer ×
-  quality as a visual grid of cards, not a dropdown-heavy form.
-- **Constraint-based placement** — model snaps to bed origin / center /
-  edges; free placement is opt-in, not default.
-- **FullSpectrum mixed-color as the showcase visualization** — the
-  alternating-layer color banding is genuinely more interesting to *see*
-  in 3D than to describe in text. Lean into it in marketing/demo reels.
+## Spatial Depth and Ergonomics
+- **Depth via Opacity:** Instead of utilizing traditional heavy drop shadows (which can conflict with stereoscopic depth in XR environments), depth hierarchy is established through varying panel opacities and hairline borders. The root panel background is the most transparent, while inner elevated nested surfaces and interactive pill-chips use more opaque alpha values to create physical layering.
+- **Ergonomics:** UI elements, form fields, and touch targets are padded generously to accommodate the lack of sub-millimeter precision inherent in XR hand tracking and pinch gestures. Sharp corners are avoided, favoring large radii on parent panels to keep the aesthetic organic and approachable.
