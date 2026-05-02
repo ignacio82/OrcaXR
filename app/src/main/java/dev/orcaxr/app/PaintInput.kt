@@ -52,13 +52,22 @@ class PaintInputHooks(
      * Process one [InputEvent] from a `GltfModelEntity`'s
      * `InteractableComponent` listener. No-op when:
      *   - paint mode is off
-     *   - source isn't `CONTROLLER` (filter out HANDS jitter)
+     *   - source is `UNKNOWN` (no actionable origin — gotcha #11:
+     *     a `Source.CONTROLLER`-only filter swallowed every Galaxy XR
+     *     hand-pinch event because the device has no controller; HANDS
+     *     and GAZE_AND_GESTURE are the actual sources we get there)
      *   - action is HOVER_* (we don't paint on hover)
      *   - the ray misses every triangle in the mesh
      */
     fun handle(event: InputEvent) {
-        if (brush.mode == PaintMode.Off) return
-        if (event.source != InputEvent.Source.CONTROLLER) return
+        if (brush.mode == PaintMode.Off) {
+            android.util.Log.i(LOG_TAG, "handle: drop — paint mode is Off")
+            return
+        }
+        if (event.source == InputEvent.Source.UNKNOWN) {
+            android.util.Log.i(LOG_TAG, "handle: drop — source=UNKNOWN action=${event.action}")
+            return
+        }
         when (event.action) {
             Action.DOWN, Action.MOVE -> { /* paint */ }
             // Paint full-feature-parity (Undo/Redo) — UP closes the
@@ -67,12 +76,26 @@ class PaintInputHooks(
             // without requiring a successful raycast (the user may
             // release while pointing off the mesh).
             Action.UP -> {
+                android.util.Log.i(LOG_TAG, "handle: UP src=${event.source} → close stroke")
                 onPaint(-1, Action.UP)
                 return
             }
             else -> return
         }
-        val hitTri = locateTriangle(event) ?: return
+        val hitTri = locateTriangle(event)
+        if (hitTri == null) {
+            android.util.Log.i(
+                LOG_TAG,
+                "handle: ray miss src=${event.source} action=${event.action} " +
+                    "ptr=${event.pointerType} mode=${brush.mode} slot=${brush.activeSlot}",
+            )
+            return
+        }
+        android.util.Log.i(
+            LOG_TAG,
+            "handle: HIT tri=$hitTri src=${event.source} action=${event.action} " +
+                "ptr=${event.pointerType} mode=${brush.mode} slot=${brush.activeSlot}",
+        )
         onPaint(hitTri, event.action)
     }
 
@@ -86,48 +109,80 @@ class PaintInputHooks(
         // SDK populates hitInfoList for any InteractableComponent
         // event that intersects the entity (or its bounding region).
         val hit = event.hitInfoList.firstOrNull() ?: return null
-        // Decompose the entity's world transform into pose (T, R) and
-        // scale (S). `Matrix4.pose` drops the scale component, so we
-        // have to apply S separately to land in the right coordinate
-        // space. With `setScale(WORLD_SCALE = 0.0015f)` on the
-        // GltfModelEntity the matrix's scale is 0.0015 — pose-only
-        // inverse-transform leaves the result in WORLD METERS, but
-        // the BVH was built from a mesh whose positions are in
-        // PRINTER MILLIMETERS. Without the divide-by-scale here the
-        // ray lands ~667× too far from origin and misses every
-        // triangle.
-        val transform = hit.transform
-        val invPose = transform.pose.inverse
-        val scale = transform.scale
-        val sx = if (scale.x != 0f) scale.x else 1f
-        val sy = if (scale.y != 0f) scale.y else 1f
-        val sz = if (scale.z != 0f) scale.z else 1f
-        val originPoseLocal = invPose.transformPoint(event.origin)
-        val originLocal = Vec3f(
-            originPoseLocal.x / sx,
-            originPoseLocal.y / sy,
-            originPoseLocal.z / sz,
-        )
-        // For directions, the magnitude doesn't matter to
-        // Möller-Trumbore (only the line through origin), so we can
-        // skip the per-axis divide. transformVector skips translation.
-        val dirVec = invPose.transformVector(event.direction)
-        val dirLocal = Vec3f(dirVec.x, dirVec.y, dirVec.z)
-        val tri = bvh.intersect(origin = originLocal, direction = dirLocal)
-        if (android.util.Log.isLoggable(LOG_TAG, android.util.Log.VERBOSE)) {
-            android.util.Log.v(
-                LOG_TAG,
-                "locateTriangle: scale=($sx,$sy,$sz) " +
-                    "originLocal=(${originLocal.x},${originLocal.y},${originLocal.z}) " +
-                    "dirLocal=(${dirLocal.x},${dirLocal.y},${dirLocal.z}) " +
-                    "→ tri=$tri",
-            )
-        }
-        return tri
+        return locateTriangleByRay(event.origin, event.direction, hit.transform)
+    }
+
+    /**
+     * Test-friendly entry point: locate the front-most triangle hit by
+     * the world-space ray (origin + direction) under the given
+     * world→mesh-mm matrix [transform]. Bypasses the SDK's InputEvent
+     * so JVM unit tests can drive the math without device hardware.
+     *
+     * `hit.transform` on alpha13 is the FORWARD world→mesh-mm matrix:
+     * `M·p = T_pose + R · (S·p)` where
+     *   - `S` is the mesh-mm-per-world-meter scale (≈ 1 / WORLD_SCALE
+     *     = 666.67 for entities authored at WORLD_SCALE = 0.0015),
+     *   - `R` is the inverse of WORKSPACE_ROTATION (+90° around X
+     *     given the workspace's -90° X authoring rotation),
+     *   - `T_pose` is the entity origin's location IN MESH-MM (i.e.
+     *     the SDK pre-multiplies the world translation by `S`).
+     *
+     * Matrix4 has no `transformPoint`, so we apply it manually:
+     *   meshPoint = pose.transformPoint(p ⊙ scale)
+     * i.e. component-wise pre-scale, then rotate-and-translate via the
+     * Pose. (`transformVector` is the rotation-only counterpart used
+     * for direction vectors.)
+     *
+     * This replaced an earlier `pose.inverse.transformPoint` form that
+     * assumed the SDK reported a pose-only matrix with scale = 0.0015.
+     * Symptoms (2026-05-02): every raycast missed because `localOrigin`
+     * collapsed to sub-millimeter values for a 60 mm mesh, then later
+     * the pose translation alone (interpreted as world meters) shifted
+     * Y by ~65 m phantom. Empirical DOWN frame dump proved
+     * `transform.scale ≈ 666.67` AND `transform.pose.translation` is in
+     * mesh-mm, not meters. See unit tests in `PaintInputMathTest` for
+     * the canonical reference rays.
+     */
+    fun locateTriangleByRay(
+        worldOrigin: androidx.xr.runtime.math.Vector3,
+        worldDirection: androidx.xr.runtime.math.Vector3,
+        transform: androidx.xr.runtime.math.Matrix4,
+    ): Int? {
+        val (originLocal, dirLocal) = worldRayToMeshMm(worldOrigin, worldDirection, transform)
+        return bvh.intersect(origin = originLocal, direction = dirLocal)
     }
 
     companion object {
         private const val LOG_TAG = "OrcaXR/paint"
+
+        /**
+         * Pure-function math used by [locateTriangleByRay]. Exposed
+         * for unit tests to verify the world→mesh-mm transform
+         * independently of the BVH intersect step.
+         *
+         * Returns `(meshOrigin, meshDirection)` in printer-mm.
+         */
+        fun worldRayToMeshMm(
+            worldOrigin: androidx.xr.runtime.math.Vector3,
+            worldDirection: androidx.xr.runtime.math.Vector3,
+            transform: androidx.xr.runtime.math.Matrix4,
+        ): Pair<Vec3f, Vec3f> {
+            val s = transform.scale
+            val scaledOrigin = androidx.xr.runtime.math.Vector3(
+                worldOrigin.x * s.x,
+                worldOrigin.y * s.y,
+                worldOrigin.z * s.z,
+            )
+            val meshOrigin = transform.pose.transformPoint(scaledOrigin)
+            val scaledDir = androidx.xr.runtime.math.Vector3(
+                worldDirection.x * s.x,
+                worldDirection.y * s.y,
+                worldDirection.z * s.z,
+            )
+            val rotatedDir = transform.pose.transformVector(scaledDir)
+            return Vec3f(meshOrigin.x, meshOrigin.y, meshOrigin.z) to
+                Vec3f(rotatedDir.x, rotatedDir.y, rotatedDir.z)
+        }
     }
 }
 

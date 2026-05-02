@@ -98,6 +98,28 @@ data class StlMesh(
     }
 
     /**
+     * Translate every vertex by [dx], [dy], [dz]. Three-axis variant of
+     * [translated]; used by the paint BVH builder to mirror the
+     * `nativeWriteColoredGlb` centering shift (XY-center + Z-ground)
+     * so BVH-coords match the rendered GLB-coords.
+     */
+    fun translatedXyz(dx: Float, dy: Float, dz: Float): StlMesh {
+        if (dx == 0f && dy == 0f && dz == 0f) return this
+        val out = FloatArray(positions.size)
+        for (i in positions.indices step 3) {
+            out[i] = positions[i] + dx
+            out[i + 1] = positions[i + 1] + dy
+            out[i + 2] = positions[i + 2] + dz
+        }
+        return StlMesh(
+            positions = out,
+            triCount = triCount,
+            bboxMin = Vec3f(bboxMin.x + dx, bboxMin.y + dy, bboxMin.z + dz),
+            bboxMax = Vec3f(bboxMax.x + dx, bboxMax.y + dy, bboxMax.z + dz),
+        )
+    }
+
+    /**
      * Phase XR_OBJ_2 — composite affine transform in a single pass.
      *
      * Applies in fixed order: scale → mirror (sign flip) → rotate

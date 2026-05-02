@@ -626,12 +626,63 @@ private fun XrShell(
     // controller laser hits the model entity directly.
     var paintBrush by remember { mutableStateOf(PaintBrush()) }
     val paintBrushLive = rememberUpdatedState(paintBrush)
+    // Trace brush state changes so we can correlate "I toggled paint
+    // on" / "I picked slot 2" with downstream InputEvent flow on a
+    // headset where there's no DevTools console to dump state to.
+    LaunchedEffect(paintBrush) {
+        android.util.Log.i(
+            "OrcaXR/paint",
+            "PaintBrush change: mode=${paintBrush.mode} slot=${paintBrush.activeSlot} " +
+                "radiusMm=${paintBrush.radiusMm} smartFill=${paintBrush.smartFill} " +
+                "smartFillAngleDeg=${paintBrush.smartFillAngleDeg}",
+        )
+    }
     // Per-`PlacedModel` BVH cache. Built lazily when paint mode goes
     // active for a model that doesn't yet have one. Survives
     // rotation / scale because StlMesh transforms preserve triangle
     // order — only the source-mesh swap (replacing
     // `PlacedModel.source`) needs an explicit invalidate.
+    //
+    // `bvhCacheVersion` is bumped after every successful put so that
+    // `paintHooksFor(m)` (which is read by the GlbSceneEntity
+    // composables and returns null while the BVH is missing)
+    // recomposes when a build finishes. Without this counter the
+    // map mutation is invisible to Compose, paint mode stays armed
+    // but `paintHooks=null`, and the user's pinches keep routing to
+    // the selection branch even after the BVH is cached. Bug
+    // (2026-05-02): `BVH built` log fired and the IC stayed in
+    // route=select for ~1.5 minutes until the user toggled the
+    // brush slot, which was the only thing that triggered a
+    // recomposition.
     val bvhCache = remember { MeshBvhCache() }
+    var bvhCacheVersion by remember { mutableIntStateOf(0) }
+    // Last triangle the active stroke stamped on, per-model. Mutable
+    // IntArray of size 1 so the onPaint lambda can read/write
+    // without triggering recomposition (a `MutableState<Int>` would).
+    // Reset to -1 on DOWN; suppresses redundant `stampTriangles` +
+    // `placedModels.map` allocations when the user holds still on
+    // the same triangle for many MOVE events. Without this guard, a
+    // 1.37M-tri mesh hits OOM after ~1 minute of held pinch
+    // (each MOVE clones a 1.37 MB ByteArray + a 1.37 MB BooleanArray
+    // from radiusBfs, at ~60 Hz). See bug log 2026-05-02 13:42:44.
+    val lastStampedTri = remember { intArrayOf(-1) }
+    // Last wall-clock time (uptimeMillis) we ran a Color/support/seam
+    // stamp. Used to cap the stamp rate at ~30 Hz during MOVE drags
+    // so a 1.4M-tri mesh doesn't OOM the JVM. Each stamp clones
+    // model.paintFilamentIndex (1.4 MB) and a radiusBfs visited
+    // BooleanArray (1.4 MB), and the user's MOVE events arrive at
+    // ~60 Hz; without a time cap, even with the same-tri guard,
+    // dragging across many triangles allocates ~170 MB/s and
+    // exhausts the 512 MB heap in seconds. A 33 ms minimum gap is
+    // imperceptible visually but halves the allocation rate.
+    val lastStampMs = remember { longArrayOf(0L) }
+    // Bumped on every successful in-place stamp so the debounced
+    // GLB-rebake LaunchedEffect (`Phase J §G`) can re-key on this
+    // counter instead of on `placedModels.map { it.paintFilamentIndex }`.
+    // After moving paint to in-place mutation (2026-05-02), the
+    // ByteArray reference no longer changes between MOVE events —
+    // the rebake LE would never fire if it kept its old key.
+    var paintContentVersion by remember { mutableIntStateOf(0) }
     // Paint full-feature-parity (Undo/Redo) — per-model history of
     // paint mutations. In-session only (PaintCacheStore is the on-
     // disk current-state cache; this is the volatile undo log).
@@ -1081,7 +1132,19 @@ private fun XrShell(
      * doesn't pay the STL-roundtrip cost on the actual print pipeline.
      */
     suspend fun deriveStlFor(file: File): File? {
-        if (file.extension.equals("stl", ignoreCase = true)) return file
+        if (file.extension.equals("stl", ignoreCase = true)) {
+            // Probe-read with the binary-only Kotlin parser. If it
+            // succeeds, the source is already binary STL and we can
+            // hand it back unchanged (saves a libslic3r round-trip
+            // on the common case). If it fails — e.g. the bundled
+            // cube_20mm.stl ASCII test asset — fall through to the
+            // libslic3r conversion below, which always emits binary
+            // STL. Without this guard, ASCII-STL inputs hit
+            // `StlReader threw: STL triangle count looks corrupt`
+            // in every consumer (previewStl, BVH builder, paint
+            // BVH).
+            if (runCatching { StlReader.read(file) }.isSuccess) return file
+        }
         val derived = File(ctx.cacheDir, "${file.nameWithoutExtension}_derived.stl")
         val ok = runCatching { SlicerEngine.convertToStl(file, derived) }.getOrDefault(false)
         return if (ok && derived.exists() && derived.length() > 0) derived else null
@@ -2936,12 +2999,17 @@ private fun XrShell(
     // state changes on any model. Debounced (200ms) to coalesce
     // continuous drag-paint strokes into one re-bake at stroke end —
     // baking the dragon takes a couple seconds, so per-event re-
-    // bakes would be unusable. Each `stampTriangle{,s}` returns a
-    // new ByteArray instance, so referential identity over the list
-    // is a cheap stable key — Compose's smart-cast on the LE keys
-    // restarts the effect on identity change without us walking
-    // 1.4M bytes for a contentHashCode.
-    LaunchedEffect(placedModels.map { it.paintFilamentIndex }) {
+    // bakes would be unusable.
+    //
+    // Keyed on `paintContentVersion` (a counter the stamp dispatcher
+    // bumps on every in-place mutation) rather than on
+    // `placedModels.map { it.paintFilamentIndex }` because, after
+    // the 2026-05-02 in-place-stamp refactor, the paintFilamentIndex
+    // ByteArray reference no longer changes between MOVE events.
+    // Reference-equality keys would never re-key, the rebake would
+    // never fire, and the user wouldn't see their paint until the
+    // app restarted.
+    LaunchedEffect(paintContentVersion) {
         val painted = placedModels.filter { hasAnyPaint(it.paintFilamentIndex) }
         if (painted.isEmpty()) return@LaunchedEffect
         kotlinx.coroutines.delay(200)
@@ -3012,6 +3080,16 @@ private fun XrShell(
     // turns on. Keys on (paintBrush.mode != Off, placedModels) so a
     // newly-loaded model gets its BVH on-demand without rebuilding
     // existing entries.
+    //
+    // The STL-read + BVH-build runs on `Dispatchers.Default` because
+    // for million-triangle meshes (e.g. 1.4M tris on the user's
+    // dragon.3mf) it takes 30+ seconds and was blocking the
+    // AndroidUiDispatcher. Symptom that triggered the off-thread move
+    // (2026-05-02): user tapped Paint, headset froze, paint silently
+    // didn't work for 36 s while the BVH built on the UI coroutine,
+    // then started working with no indication that anything had
+    // changed. A Toast announces the wait so the user knows the
+    // headset isn't dead.
     LaunchedEffect(paintBrush.mode != PaintMode.Off, placedModels.map { it.id }) {
         if (paintBrush.mode == PaintMode.Off) return@LaunchedEffect
         for (m in placedModels) {
@@ -3024,15 +3102,63 @@ private fun XrShell(
             // BVH's triangle indices align with what the JNI authors
             // into mmu_segmentation_facets. (Caveat: derived 3MFs
             // collapse all volumes; per-volume paint is deferred.)
-            val readStl = runCatching {
-                if (src.extension.equals("stl", ignoreCase = true)) src
-                else deriveStlFor(src) ?: return@runCatching null
-            }.getOrNull() ?: continue
-            val mesh = runCatching { StlReader.read(readStl) }.getOrNull() ?: continue
-            val bvh = MeshBvh.build(mesh)
-            bvhCache.put(m.id, bvh)
+            // deriveStlFor handles the ASCII-STL fallback (probe-read
+            // first, then libslic3r round-trip) so the BVH path
+            // doesn't need to repeat that logic.
+            val resolved = runCatching { deriveStlFor(src) }.getOrNull() ?: continue
+            android.widget.Toast.makeText(
+                ctx,
+                "Building paint cache for ${m.label}…",
+                android.widget.Toast.LENGTH_SHORT,
+            ).show()
             android.util.Log.i("OrcaXR/paint",
-                "BVH built for ${m.label} (${mesh.triCount} tris)")
+                "BVH build start for ${m.label} (id=${m.id})")
+            val t0 = android.os.SystemClock.uptimeMillis()
+            val built = withContext(Dispatchers.Default) {
+                val mesh = runCatching { StlReader.read(resolved) }.getOrNull()
+                    ?: return@withContext null
+                // Match `nativeWriteColoredGlb`'s centering shift so the
+                // BVH lives in the SAME coordinate frame as the rendered
+                // GLB. The JNI shifts every vertex by
+                //   (-(min_x+max_x)/2, -(min_y+max_y)/2, -min_z)
+                // (XY-center, Z-ground). Without this match the
+                // derived STL keeps original printer-bed coordinates
+                // (e.g. dragon at X≈109..161, Y≈106..165) while the
+                // GLB renders at X(-25.9..25.9) Y(-29.2..29.2). Rays
+                // computed via `hit.transform` are in GLB-coords, so
+                // they miss every BVH triangle by ~135 mm. Fix
+                // (2026-05-02): apply the same shift here.
+                val shiftX = -(mesh.bboxMin.x + mesh.bboxMax.x) / 2f
+                val shiftY = -(mesh.bboxMin.y + mesh.bboxMax.y) / 2f
+                val shiftZ = -mesh.bboxMin.z
+                val centered = mesh.translatedXyz(shiftX, shiftY, shiftZ)
+                android.util.Log.i("OrcaXR/paint",
+                    "BVH centered: shift=($shiftX,$shiftY,$shiftZ) " +
+                        "newBbox=(${centered.bboxMin.x}..${centered.bboxMax.x}, " +
+                        "${centered.bboxMin.y}..${centered.bboxMax.y}, " +
+                        "${centered.bboxMin.z}..${centered.bboxMax.z})")
+                val bvh = runCatching { MeshBvh.build(centered) }.getOrNull()
+                    ?: return@withContext null
+                centered.triCount to bvh
+            }
+            if (built == null) {
+                android.util.Log.w("OrcaXR/paint",
+                    "BVH build failed for ${m.label}")
+                continue
+            }
+            val (triCount, bvh) = built
+            bvhCache.put(m.id, bvh)
+            bvhCacheVersion++
+            val ms = android.os.SystemClock.uptimeMillis() - t0
+            android.util.Log.i("OrcaXR/paint",
+                "BVH built for ${m.label} ($triCount tris in ${ms}ms)")
+            if (ms >= 1000L) {
+                android.widget.Toast.makeText(
+                    ctx,
+                    "Paint ready for ${m.label}",
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+            }
         }
     }
 
@@ -3045,6 +3171,11 @@ private fun XrShell(
      */
     fun paintHooksFor(model: PlacedModel): PaintInputHooks? {
         if (paintBrush.mode == PaintMode.Off) return null
+        // Read bvhCacheVersion so this function recomposes when a
+        // BVH lands. Without this read, the underlying Map mutation
+        // is invisible to Compose and paintHooks stays null.
+        @Suppress("UNUSED_VARIABLE")
+        val cacheGen = bvhCacheVersion
         val bvh = bvhCache.get(model.id) ?: return null
         return PaintInputHooks(
             brush = paintBrushLive.value,
@@ -3072,16 +3203,55 @@ private fun XrShell(
                     brush.mode != PaintMode.LayOnFace &&
                     brush.mode != PaintMode.Off
                 ) {
+                    // PaintHistory keeps the BEFORE/AFTER snapshots
+                    // BY REFERENCE (see PaintHistory.Snapshot). To
+                    // let the active stroke mutate the model's array
+                    // in place during MOVEs (avoiding the 1.4 MB
+                    // clone per event that was OOMing the heap), we
+                    // hand history an immutable CLONE of the current
+                    // state — and only that clone — at stroke begin.
+                    // The model's paintFilamentIndex is replaced by a
+                    // separate stroke buffer below so the history
+                    // snapshot stays untouched no matter how many
+                    // MOVEs land.
                     paintHistory.beginStroke(
                         modelId = model.id,
                         currentState = PaintHistory.Snapshot(
-                            paintFilamentIndex = model.paintFilamentIndex,
-                            supportFlags = model.supportFlags,
-                            seamFlags = model.seamFlags,
-                            fuzzySkinFlags = model.fuzzySkinFlags,
+                            paintFilamentIndex = model.paintFilamentIndex?.copyOf(),
+                            supportFlags = model.supportFlags?.copyOf(),
+                            seamFlags = model.seamFlags?.copyOf(),
+                            fuzzySkinFlags = model.fuzzySkinFlags?.copyOf(),
                         ),
                     )
                     paintHistoryVersion++
+                    lastStampedTri[0] = -1
+                }
+                // Allocation throttle: skip the stamp when the user is
+                // holding still on the same triangle. Without this, a
+                // 1.37M-tri mesh OOMs the JVM after ~1 minute of
+                // held-pinch because each MOVE event clones a fresh
+                // ByteArray (paintFilamentIndex) and BooleanArray
+                // (radiusBfs.visited) — about 3 MB / event at ~60 Hz.
+                // DOWN/UP always pass through (history begin/end
+                // bookkeeping); only redundant MOVE stamps are
+                // dropped. The triangle key isn't perfect for radius
+                // paint (the user might shift slightly within the
+                // brush), but for the common "hold still on a single
+                // facet" case it's the cheapest bypass.
+                if (action == androidx.xr.scenecore.InputEvent.Action.MOVE &&
+                    hitTri == lastStampedTri[0]
+                ) {
+                    return@PaintInputHooks
+                }
+                // Time throttle: cap MOVE stamps at ~30 Hz so even
+                // when the user is dragging across many triangles
+                // (so the same-tri guard above doesn't fire) the
+                // 1.4 MB ByteArray clones don't pile up faster than
+                // GC can reclaim. DOWN/UP always pass through.
+                if (action == androidx.xr.scenecore.InputEvent.Action.MOVE) {
+                    val now = android.os.SystemClock.uptimeMillis()
+                    if (now - lastStampMs[0] < 33L) return@PaintInputHooks
+                    lastStampMs[0] = now
                 }
                 // UP sentinel from PaintInputHooks (hitTri = -1) closes
                 // the open stroke. Read the model's current state from
@@ -3107,15 +3277,38 @@ private fun XrShell(
                 when (brush.mode) {
                     PaintMode.Color -> {
                         val triIndices = pickTriangles(hitTri)
-                        val updated = stampTriangles(
-                            previous = model.paintFilamentIndex,
-                            triCount = bvh.triCount,
-                            triangleIndices = triIndices,
-                            slot = brush.activeSlot,
-                        )
-                        placedModels = placedModels.map {
-                            if (it.id == model.id) it.copy(paintFilamentIndex = updated) else it
+                        // First stamp of the stroke (or model has no
+                        // paint yet): allocate a stroke buffer once,
+                        // copying any existing paint state. Subsequent
+                        // stamps in the same stroke mutate this buffer
+                        // in place — see `stampTrianglesInPlace`.
+                        // The model's paintFilamentIndex now references
+                        // this buffer directly; PaintHistory holds a
+                        // separate clone (see DOWN handler above) so
+                        // undo isn't corrupted.
+                        val existing = model.paintFilamentIndex
+                        val target = if (existing != null && existing.size == bvh.triCount) {
+                            existing
+                        } else {
+                            ByteArray(bvh.triCount).also { fresh ->
+                                existing?.let { System.arraycopy(it, 0, fresh, 0, minOf(it.size, fresh.size)) }
+                            }
                         }
+                        stampTrianglesInPlace(target, triIndices, brush.activeSlot)
+                        // Only swap the placedModels list when the
+                        // ByteArray reference changes (i.e. on the
+                        // first stamp of the stroke or after a model
+                        // re-load). For subsequent in-place stamps
+                        // the reference is stable; bumping
+                        // paintContentVersion is what tells the
+                        // rebake LE that the contents changed.
+                        if (target !== existing) {
+                            placedModels = placedModels.map {
+                                if (it.id == model.id) it.copy(paintFilamentIndex = target) else it
+                            }
+                        }
+                        paintContentVersion++
+                        lastStampedTri[0] = hitTri
                         android.util.Log.i(
                             "OrcaXR/paint",
                             "stamped ${triIndices.size} tris (seed=$hitTri) slot=${brush.activeSlot} " +
@@ -6156,9 +6349,10 @@ private fun StlPreviewSceneEntity(
     offsetYmm: Float = 0f,
     offsetZmm: Float = 0f,
     /** Phase J: when non-null, attaches an `InteractableComponent`
-     *  to the model's GltfModelEntity and forwards `Source.CONTROLLER`
-     *  events through the hooks. Null = no paint pipeline (the entity
-     *  is purely visual; the workspace grab handle owns input). */
+     *  to the model's GltfModelEntity and forwards interactive
+     *  events (CONTROLLER / HANDS / GAZE_AND_GESTURE) through the
+     *  hooks. Null = no paint pipeline (the entity is purely visual;
+     *  the workspace grab handle owns input). */
     paintHooks: PaintInputHooks? = null,
     /** Phase XR_OBJ_1: tap-to-select. Fires on `Action.DOWN`. Ignored
      *  when [paintHooks] is non-null — paint mode owns the laser. */
@@ -6265,6 +6459,16 @@ private fun SelectionBboxEntity(
 
         val ent = GltfModelEntity.create(session, model)
         applyWorkspacePose(ent, parentEntity ?: session.scene.activitySpace)
+        // See GlbSceneEntity for the rationale — give the render
+        // thread time to bind this entity's material before
+        // downstream effects can pose-modify it.
+        kotlinx.coroutines.android.awaitFrame()
+        kotlinx.coroutines.android.awaitFrame()
+        kotlinx.coroutines.android.awaitFrame()
+        if (ent.isDisposed) {
+            disposeEntityDeferred(oldEntity)
+            return@LaunchedEffect
+        }
         entity = ent
         android.util.Log.i("OrcaXR", "SelectionBboxEntity attached ${out.name}")
         disposeEntityDeferred(oldEntity)
@@ -6329,6 +6533,10 @@ private fun GlbSceneEntity(
     // missed events.
     val onTapLive = rememberUpdatedState(onTap)
     val onHoverLive = rememberUpdatedState(onHoverChange)
+    // Throttle hand HOVER_MOVE logs to one per 250 ms per entity so
+    // the actionable lines (DOWN / MOVE / UP / ray miss) aren't
+    // drowned out. Mutable Long so the listener closure can update it.
+    var lastHoverLogMs = 0L
 
     LaunchedEffect(glbPath, parentEntity) {
         // Capture old entity for deferred dispose. Synchronous dispose
@@ -6371,6 +6579,25 @@ private fun GlbSceneEntity(
 
         val ent = GltfModelEntity.create(session, model)
         applyWorkspacePose(ent, parentEntity ?: session.scene.activitySpace)
+
+        // Let Filament's render thread bind the material instance for
+        // this entity before downstream effects (notably the
+        // InteractableComponent attach in the DisposableEffect keyed
+        // on `entity`) queue collider ops that reference it. Without
+        // this gap, a heavy 3MF load can race split_engine_bridge
+        // with `unknown material instance id: N` on `addComponent`
+        // because the IC attach lands on the render queue before the
+        // entity's material is bound. Symptom (2026-05-02): app
+        // aborted with SIGABRT on every dragon.3mf load. Three frames
+        // is a heuristic — empirically 2 wasn't always enough on this
+        // 1.4M-tri mesh.
+        kotlinx.coroutines.android.awaitFrame()
+        kotlinx.coroutines.android.awaitFrame()
+        kotlinx.coroutines.android.awaitFrame()
+        if (ent.isDisposed) {
+            disposeEntityDeferred(oldEntity)
+            return@LaunchedEffect
+        }
 
         entity = ent
         android.util.Log.i("OrcaXR", "GlbSceneEntity attached $glbPath at ($offsetXmm, $offsetYmm, $offsetZmm)")
@@ -6434,52 +6661,42 @@ private fun GlbSceneEntity(
     }
 
 
-    // Attach / detach an InteractableComponent based on what the entity
-    // needs to react to. Three modes, picked in priority order:
-    //   1. `paintHooks` non-null  → paint pipeline (Phase J).
-    //   2. `onTap` or `onHoverChange` non-null → selection pipeline
-    //      (Phase XR_OBJ_1: tap to set selectedModelIds.firstOrNull(), hover to set
-    //      hoveredModelId).
-    //   3. Neither → no component attached.
+    // Persistent InteractableComponent — attached once per entity, kept
+    // for the entity's lifetime. The listener routes each event to
+    // paint hooks vs. selection callbacks at DISPATCH time by reading
+    // the live `hooksLive` / `onTapLive` / `onHoverLive` references —
+    // never swapped on mode change.
     //
-    // The keyed restart on (entity, paintHooksActive, selectionActive)
-    // means flipping paint mode (or toggling selection callbacks)
-    // re-creates the component cleanly. The listener captures
-    // `hooksLive` / `onTapLive` / `onHoverLive` for live edits so we
-    // don't need to restart on every brush radius / slot change or
-    // every selection-id mutation.
-    val paintHooksActive = paintHooks != null
-    val selectionActive = !paintHooksActive && (onTap != null || onHoverChange != null)
-    DisposableEffect(entity, paintHooksActive, selectionActive) {
+    // Why persistent: the previous design re-keyed the DisposableEffect
+    // on `(entity, paintHooksActive, selectionActive)` so flipping paint
+    // mode tore down and recreated the IC. On Galaxy XR / SceneCore
+    // alpha13 that swap is racy: events queued before
+    // `removeComponent(oldIc)` lands kept dispatching to the OLD
+    // listener (with its stale `paintHooksActive=false` capture), so
+    // pinches arriving right after the user tapped Paint were silently
+    // routed through the selection branch instead of the paint hooks.
+    // Symptom in the bug logs (2026-05-02): `InteractableComponent
+    // attached … (mode=paint)` followed 18 ms later by InputEvents
+    // logging `mode=select` from the same entity, with no `handle:`
+    // line ever firing — paint genuinely did nothing for the user.
+    //
+    // Hooking once and routing dynamically removes the swap entirely:
+    // the IC is whatever the model needs as soon as the entity exists,
+    // and a brush-mode flip just changes which `*Live.value` the
+    // listener reads on the next event.
+    DisposableEffect(entity) {
         val ent = entity
-        if (ent == null || (!paintHooksActive && !selectionActive)) {
+        if (ent == null) {
             onDispose { /* nothing attached */ }
         } else {
             val executor = androidx.core.content.ContextCompat.getMainExecutor(ctx)
             val listener = java.util.function.Consumer<androidx.xr.scenecore.InputEvent> { event ->
-                // Phase J.0 hardware-verification log: capture every
-                // event the runtime dispatches to this entity, before
-                // any filter, so we can see the source / action /
-                // pointer / hit shape on real hardware. Drop to V
-                // post-J.0 once the input shape is locked.
-                val firstHit = event.hitInfoList.firstOrNull()
-                if (android.util.Log.isLoggable("OrcaXR/paint", android.util.Log.VERBOSE)) {
-                    val origin = event.origin
-                    val dir = event.direction
-                    android.util.Log.v(
-                        "OrcaXR/paint",
-                        "InputEvent src=${event.source} action=${event.action} " +
-                            "ptr=${event.pointerType} " +
-                            "origin=(${origin?.x},${origin?.y},${origin?.z}) " +
-                            "dir=(${dir?.x},${dir?.y},${dir?.z}) " +
-                            "hits=${event.hitInfoList.size} " +
-                            (firstHit?.let {
-                                val p = it.hitPosition
-                                "hitPos=(${p?.x},${p?.y},${p?.z})"
-                            } ?: "")
-                    )
-                }
-                if (paintHooksActive) {
+                val routedToPaint = hooksLive.value != null
+                // Per-event log removed — string formatting at 60 Hz
+                // produced ~30 KB/s of garbage that worsened the
+                // stamp-pipeline OOM. The downstream `handle:` /
+                // `stamped` lines tell us all we need.
+                if (routedToPaint) {
                     runCatching { hooksLive.value?.handle(event) }
                         .onFailure {
                             android.util.Log.e("OrcaXR/paint", "PaintInputHooks.handle threw", it)
@@ -6501,14 +6718,25 @@ private fun GlbSceneEntity(
             }.onFailure {
                 android.util.Log.e("OrcaXR/paint", "InteractableComponent.create failed", it)
             }.getOrNull()
-            
+
             val attached = ic != null && !ent.isDisposed && runCatching { ent.addComponent(ic!!) }.getOrDefault(false)
             if (attached) {
+                val pose = runCatching { ent.getPose(androidx.xr.scenecore.Space.REAL_WORLD) }.getOrNull()
+                val scale = runCatching { ent.getScale(androidx.xr.scenecore.Space.REAL_WORLD) }.getOrNull()
+                val posStr = pose?.translation?.let {
+                    "(%.3f,%.3f,%.3f)m".format(it.x, it.y, it.z)
+                } ?: "?"
+                val scaleStr = scale?.let { "%.4f".format(it) } ?: "?"
                 android.util.Log.i(
                     "OrcaXR/paint",
-                    "InteractableComponent attached to $glbPath (mode=${
-                        if (paintHooksActive) "paint" else "select"
-                    })",
+                    "InteractableComponent attached to $glbPath (persistent) " +
+                        "worldPos=$posStr worldScale=$scaleStr " +
+                        "offsets=($offsetXmm,$offsetYmm,$offsetZmm)mm",
+                )
+            } else {
+                android.util.Log.w(
+                    "OrcaXR/paint",
+                    "InteractableComponent NOT attached to $glbPath (ic=${ic != null} disposed=${ent.isDisposed})",
                 )
             }
             onDispose {

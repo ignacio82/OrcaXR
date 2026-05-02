@@ -217,6 +217,19 @@ class MeshBvh private constructor(
         }
     }
 
+    // Reusable BFS buffers — allocated once per MeshBvh lifetime and
+    // reset between calls. On a 1.4M-tri mesh the visited
+    // BooleanArray alone is 1.4 MB; allocating it per `radiusBfs`
+    // call (which runs at ~30 Hz during paint drags) burns the
+    // 512 MB heap on its own. Reusing trims paint's allocation rate
+    // dramatically and keeps a long stroke from OOMing the JVM.
+    // Synchronized via the same lock as adjacency since paint runs
+    // on the main thread but BVH build runs on Dispatchers.Default.
+    private var bfsVisited: BooleanArray? = null
+    private var bfsQueue: IntArray? = null
+    private var bfsOut: IntArray? = null
+    private val bfsLock = Any()
+
     /**
      * Flood-fill triangle indices from [seed] outward to neighbors
      * within [radiusMm] (Euclidean centroid distance) using shared-
@@ -301,33 +314,46 @@ class MeshBvh private constructor(
         val nbrs = adjNeighbors!!
         val r2 = radiusMm * radiusMm
         val seedCentroid = centroidOf(seed)
-        val visited = BooleanArray(mesh.triCount)
-        val queue = IntArray(maxTriangles)
-        val out = IntArray(maxTriangles)
-        var qHead = 0
-        var qTail = 0
-        var outCount = 0
-        queue[qTail++] = seed
-        visited[seed] = true
-        while (qHead < qTail && outCount < maxTriangles) {
-            val cur = queue[qHead++]
-            val c = centroidOf(cur)
-            val dx = c.x - seedCentroid.x
-            val dy = c.y - seedCentroid.y
-            val dz = c.z - seedCentroid.z
-            if (cur != seed && (dx * dx + dy * dy + dz * dz) > r2) continue
-            out[outCount++] = cur
-            val s = starts[cur]
-            val e = starts[cur + 1]
-            for (k in s until e) {
-                val n = nbrs[k]
-                if (!visited[n] && qTail < maxTriangles) {
-                    visited[n] = true
-                    queue[qTail++] = n
+        // Lazy-allocate the BFS buffers (1.4 MB on a 1.4M-tri mesh).
+        // Reused across calls — `java.util.Arrays.fill` is much
+        // cheaper than re-allocating a fresh BooleanArray every
+        // event. Lock ensures concurrent paint events don't tread on
+        // each other (paint runs serially on the main thread today,
+        // but the lock costs nothing under no contention and
+        // future-proofs the class).
+        synchronized(bfsLock) {
+            val visited = bfsVisited
+                ?: BooleanArray(mesh.triCount).also { bfsVisited = it }
+            val queue = (bfsQueue?.takeIf { it.size >= maxTriangles }
+                ?: IntArray(maxTriangles)).also { bfsQueue = it }
+            val out = (bfsOut?.takeIf { it.size >= maxTriangles }
+                ?: IntArray(maxTriangles)).also { bfsOut = it }
+            java.util.Arrays.fill(visited, false)
+            var qHead = 0
+            var qTail = 0
+            var outCount = 0
+            queue[qTail++] = seed
+            visited[seed] = true
+            while (qHead < qTail && outCount < maxTriangles) {
+                val cur = queue[qHead++]
+                val c = centroidOf(cur)
+                val dx = c.x - seedCentroid.x
+                val dy = c.y - seedCentroid.y
+                val dz = c.z - seedCentroid.z
+                if (cur != seed && (dx * dx + dy * dy + dz * dz) > r2) continue
+                out[outCount++] = cur
+                val s = starts[cur]
+                val e = starts[cur + 1]
+                for (k in s until e) {
+                    val n = nbrs[k]
+                    if (!visited[n] && qTail < maxTriangles) {
+                        visited[n] = true
+                        queue[qTail++] = n
+                    }
                 }
             }
+            return out.copyOf(outCount)
         }
-        return out.copyOf(outCount)
     }
 
     companion object {

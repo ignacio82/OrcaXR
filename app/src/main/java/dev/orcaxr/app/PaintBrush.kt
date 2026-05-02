@@ -183,6 +183,38 @@ fun stampTriangles(
 }
 
 /**
+ * In-place variant of [stampTriangles]. Mutates [target] directly
+ * instead of allocating a fresh ByteArray. Used by the active-stroke
+ * dispatcher so a long drag-paint stroke on a 1.4M-tri mesh doesn't
+ * OOM the JVM heap by allocating a 1.4 MB clone per MOVE event.
+ *
+ * Caller responsibility: the stroke buffer passed as [target] must
+ * be a clone separate from any history snapshot — `PaintHistory`
+ * keeps before/after Snapshot ByteArrays by reference, so mutating
+ * a snapshot in place would corrupt undo. The MainActivity DOWN
+ * handler enforces this by cloning `paintFilamentIndex` once at
+ * stroke begin and passing the clone here for the duration of the
+ * stroke.
+ */
+fun stampTrianglesInPlace(
+    target: ByteArray,
+    triangleIndices: IntArray,
+    slot: Int,
+) {
+    require(slot in 0..MAX_PAINT_SLOTS) {
+        "slot=$slot out of [0, $MAX_PAINT_SLOTS]"
+    }
+    val s = slot.toByte()
+    val triCount = target.size
+    for (idx in triangleIndices) {
+        require(idx in 0 until triCount) {
+            "triangleIdx=$idx out of [0, $triCount)"
+        }
+        target[idx] = s
+    }
+}
+
+/**
  * Returns true when [paint] has at least one non-zero entry. Empty /
  * null paint maps short-circuit the JNI write at slice time so we
  * don't pay the per-triangle authoring cost on unpainted models.
