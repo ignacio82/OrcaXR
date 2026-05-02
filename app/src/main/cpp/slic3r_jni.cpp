@@ -3216,7 +3216,7 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
             for (auto* p : plates) delete p;
             return nullptr;
         }
-        jmethodID metaCtor = env->GetMethodID(metaClass, "<init>", "(Ljava/lang/String;IFFFIIFFFI)V");
+        jmethodID metaCtor = env->GetMethodID(metaClass, "<init>", "(Ljava/lang/String;IFFFIIFFFII)V");
         if (metaCtor == nullptr) {
             for (auto* p : plates) delete p;
             return nullptr;
@@ -3297,6 +3297,21 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
                 }
             }
 
+            // Open-edge count drives the per-row "Fix Model" wrench
+            // visibility in the UI. Cheap to compute (linear in
+            // triangles) and the mesh is already in memory; saves a
+            // second native load just to gate the icon. ADMesh's
+            // import repair runs as part of load_mesh_container, so
+            // this count is "open edges remaining after auto-repair"
+            // — a non-zero value means manual MeshBoolean::self_union
+            // (Phase A5's nativeRepairModel) is the next escalation.
+            jint open_edges = 0;
+            for (const auto* mv : mo->volumes) {
+                if (mv != nullptr && mv->is_model_part()) {
+                    open_edges += jint(Slic3r::its_num_open_edges(mv->mesh().its));
+                }
+            }
+
             jobject meta = env->NewObject(metaClass, metaCtor,
                 name,
                 (jint)mesh.facets_count(),
@@ -3308,7 +3323,8 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
                 (jfloat)ox,
                 (jfloat)oy,
                 (jfloat)oz,
-                (jint)plate_index
+                (jint)plate_index,
+                open_edges
             );
 
             env->SetObjectArrayElement(result, i, meta);

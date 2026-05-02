@@ -1709,17 +1709,20 @@ private fun XrShell(
                         baseBboxYmm = m.bboxY,
                         baseBboxZmm = m.bboxZ,
                         plateId = importPlateToApp[m.plateIndex] ?: importPlateToApp.getValue(1),
+                        needsRepair = m.openEdgeCount > 0,
                     )
                 }
             } else {
                 val newId = "model_${System.currentTimeMillis().toString(36)}_${placedModels.size}"
                 val singlePlate = meta?.firstOrNull()?.plateIndex ?: 1
+                val singleNeedsRepair = (meta?.firstOrNull()?.openEdgeCount ?: 0) > 0
                 listOf(
                     PlacedModel(
                         id = newId,
                         source = file,
                         label = label,
                         plateId = importPlateToApp[singlePlate] ?: importPlateToApp.getValue(1),
+                        needsRepair = singleNeedsRepair,
                     ),
                 )
             }
@@ -2237,6 +2240,7 @@ private fun XrShell(
                     previewVersion = it.previewVersion + 1,
                     previewRotZDeg = -1,
                     previewScalePct = -1,
+                    needsRepair = result.openEdgesOut > 0,
                 )
             }
             sliceState.value = SliceUiState.Idle

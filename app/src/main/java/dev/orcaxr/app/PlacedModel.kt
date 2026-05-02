@@ -300,6 +300,14 @@ data class PlacedModel(
      *  means "use the global profile / `printSettingsOverrides`
      *  values for everything." */
     val configOverrides: Map<String, String> = emptyMap(),
+    /** True when the source mesh has open edges remaining after
+     *  libslic3r's import-time ADMesh repair — i.e. it is non-manifold
+     *  and the per-row Fix Model wrench should be exposed. Populated
+     *  at load time from `SlicerEngine.ObjectMeta.openEdgeCount`.
+     *  STL imports default to false (ADMesh's import repair tends to
+     *  resolve their issues; a stricter check would require a second
+     *  native load just to gate the icon). */
+    val needsRepair: Boolean = false,
 ) {
     // Custom equality: data-class default uses identity comparison
     // for ByteArray, which would make `placedModels.map { ... }` cycles

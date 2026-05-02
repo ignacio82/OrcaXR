@@ -260,12 +260,13 @@ fun LeftProjectPanel(
             }
         }
 
-        // Phase G: per-model rows + Add another / Auto-arrange. The
-        // single-model UX stays unchanged (no list shown when 0 or 1
-        // model is plated — keeps the panel quiet for the common
-        // case). The list appears the moment the user plates a 2nd
-        // model; the "+ Add another" button appears even at 1 model
-        // so the user can discover it without having to open a menu.
+        // Phase G: per-model rows + Add another / Auto-arrange. Rows
+        // render as soon as one model is plated so per-row affordances
+        // (Fix Model, Emboss/Engrave, Delete) are reachable without
+        // requiring a second model — gating these icons on size>=2
+        // made single-model emboss unreachable from the UI. The
+        // "Plated models (N/MAX)" header strip + Auto-arrange remain
+        // gated on size>=2 since both are noise/no-ops with one model.
         PlacedModelsSection(
             models = placedModels,
             selectedIds = selectedPlacedModelIds,
@@ -572,55 +573,38 @@ private fun PlacedModelsSection(
                     }
                 }
             }
-            val groups = models.groupBy { it.groupId }
-            for ((groupId, groupModels) in groups) {
-                if (groupId != null) {
-                    val isCollapsed = collapsedGroups[groupId] ?: false
-                    Surface(
-                        color = Color(0xFF2D333B),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { collapsedGroups[groupId] = !isCollapsed },
+        }
+        val groups = models.groupBy { it.groupId }
+        for ((groupId, groupModels) in groups) {
+            if (groupId != null) {
+                val isCollapsed = collapsedGroups[groupId] ?: false
+                Surface(
+                    color = Color(0xFF2D333B),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { collapsedGroups[groupId] = !isCollapsed },
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = if (isCollapsed) "▶" else "▼",
-                                color = Color.Gray,
-                                modifier = Modifier.padding(end = 8.dp),
-                            )
-                            val groupLabel = groupModels.first().label.substringBefore(" - ")
-                            Text(
-                                text = "$groupLabel — ${groupModels.size} parts",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
+                        Text(
+                            text = if (isCollapsed) "▶" else "▼",
+                            color = Color.Gray,
+                            modifier = Modifier.padding(end = 8.dp),
+                        )
+                        val groupLabel = groupModels.first().label.substringBefore(" - ")
+                        Text(
+                            text = "$groupLabel — ${groupModels.size} parts",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f),
+                        )
                     }
-                    if (!isCollapsed) {
-                        for (m in groupModels) {
-                            ModelRow(
-                                m = m,
-                                isSelected = m.id in selectedIds,
-                                allPlates = allPlates,
-                                onSelectToggle = { selected ->
-                                    if (selected) onSelectIds(selectedIds + m.id)
-                                    else onSelectIds(selectedIds - m.id)
-                                },
-                                onDelete = { onDeleteIds(setOf(m.id)) },
-                                onMoveToPlate = onMoveToPlate,
-                                onRepair = onRepair,
-                                onEmboss = onEmboss,
-                                isGrouped = true,
-                            )
-                        }
-                    }
-                } else {
+                }
+                if (!isCollapsed) {
                     for (m in groupModels) {
                         ModelRow(
                             m = m,
@@ -634,9 +618,26 @@ private fun PlacedModelsSection(
                             onMoveToPlate = onMoveToPlate,
                             onRepair = onRepair,
                             onEmboss = onEmboss,
-                            isGrouped = false,
+                            isGrouped = true,
                         )
                     }
+                }
+            } else {
+                for (m in groupModels) {
+                    ModelRow(
+                        m = m,
+                        isSelected = m.id in selectedIds,
+                        allPlates = allPlates,
+                        onSelectToggle = { selected ->
+                            if (selected) onSelectIds(selectedIds + m.id)
+                            else onSelectIds(selectedIds - m.id)
+                        },
+                        onDelete = { onDeleteIds(setOf(m.id)) },
+                        onMoveToPlate = onMoveToPlate,
+                        onRepair = onRepair,
+                        onEmboss = onEmboss,
+                        isGrouped = false,
+                    )
                 }
             }
         }
@@ -733,12 +734,14 @@ private fun ModelRow(
                     }
                 }
             }
-            IconButton(onClick = { onRepair(m.id) }) {
-                Icon(
-                    imageVector = Icons.Filled.Build,
-                    contentDescription = "Fix model",
-                    tint = Color(0xFF7BC8FF),
-                )
+            if (m.needsRepair) {
+                IconButton(onClick = { onRepair(m.id) }) {
+                    Icon(
+                        imageVector = Icons.Filled.Build,
+                        contentDescription = "Fix model",
+                        tint = Color(0xFFFFA94A),
+                    )
+                }
             }
             IconButton(onClick = { onEmboss(m.id) }) {
                 // D4 — Emboss / Engrave entry point. Glyph 𝐀 is a

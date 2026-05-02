@@ -74,6 +74,12 @@ object SlicerEngine {
          *  (non-BBS) 3MFs and 3MFs without plate metadata return 1
          *  for every object — caller treats that as "single plate". */
         val plateIndex: Int,
+        /** Open-edge count remaining after libslic3r's import-time
+         *  ADMesh repair. Non-zero means the mesh is non-manifold and
+         *  the per-row Fix Model wrench should be exposed; zero means
+         *  the mesh is manifold and the wrench can be hidden. Summed
+         *  across all model-part volumes of the object. */
+        val openEdgeCount: Int,
     )
 
     private val dispatcher: CoroutineDispatcher =
