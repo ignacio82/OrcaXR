@@ -90,6 +90,36 @@ class WorkspaceModelTest {
         assertTrue(gathered[6] === WorkspaceAction.CancelSlice)
     }
 
+    @Test fun loadAndPlateMovableActionsRoundTrip() = runTest {
+        // Phase 2.2 additions — load_model_from_path + set_plate_movable.
+        val ws = WorkspaceModel()
+        val gathered = mutableListOf<WorkspaceAction>()
+        val job = launch(start = CoroutineStart.UNDISPATCHED) {
+            ws.actions.collect { gathered += it }
+        }
+        ws.emit(WorkspaceAction.LoadModelFromPath("/sdcard/Download/dragon.3mf", WorkspaceAction.LoadMode.Replace))
+        ws.emit(WorkspaceAction.LoadModelFromPath("/sdcard/Download/cube.stl", WorkspaceAction.LoadMode.Add))
+        ws.emit(WorkspaceAction.SetPlateMovable(true))
+        ws.emit(WorkspaceAction.SetPlateMovable(false))
+        repeat(5) { yield() }
+        job.cancel()
+        assertEquals(4, gathered.size)
+        val a0 = gathered[0] as WorkspaceAction.LoadModelFromPath
+        assertEquals("/sdcard/Download/dragon.3mf", a0.path)
+        assertEquals(WorkspaceAction.LoadMode.Replace, a0.mode)
+        val a1 = gathered[1] as WorkspaceAction.LoadModelFromPath
+        assertEquals(WorkspaceAction.LoadMode.Add, a1.mode)
+        assertTrue((gathered[2] as WorkspaceAction.SetPlateMovable).movable)
+        assertTrue(!(gathered[3] as WorkspaceAction.SetPlateMovable).movable)
+    }
+
+    @Test fun plateMovablePublisherRoundTrips() = runTest {
+        val ws = WorkspaceModel()
+        assertEquals(false, ws.plateMovable.value)
+        ws.publishPlateMovable(true)
+        assertEquals(true, ws.plateMovable.value)
+    }
+
     @Test fun multipleEmissionsAreOrdered() = runTest {
         val ws = WorkspaceModel()
         val gathered = mutableListOf<WorkspaceAction>()

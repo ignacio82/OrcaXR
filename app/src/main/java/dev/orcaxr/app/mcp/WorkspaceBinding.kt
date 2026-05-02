@@ -82,6 +82,8 @@ fun BindWorkspaceModel(
     setShowTravels: (Boolean) -> Unit,
     toolpathTubes: Boolean,
     setToolpathTubes: (Boolean) -> Unit,
+    plateMovable: Boolean,
+    setPlateMovable: (Boolean) -> Unit,
     allProfiles: List<SlicerProfile>,
     /**
      * Tier-B callbacks. Each fires when the corresponding
@@ -99,6 +101,14 @@ fun BindWorkspaceModel(
     onSaveGcode: (() -> Unit)? = null,
     onSaveProject3mf: (() -> Unit)? = null,
     onSaveModelStl: (() -> Unit)? = null,
+    /**
+     * Load a file from disk into the bed. The host activity converts
+     * the [WorkspaceAction.LoadMode] into its internal `PickerMode`
+     * (Replace = drop existing, Add = append) and calls the same
+     * `onFileSelected` codepath the file picker uses, so paint
+     * restoration / GLB bake / bedFit / bedCollision run identically.
+     */
+    onLoadModelFromPath: ((java.io.File, WorkspaceAction.LoadMode) -> Unit)? = null,
 ) {
     val workspace = remember { WorkspaceModel.get() }
 
@@ -127,6 +137,7 @@ fun BindWorkspaceModel(
     LaunchedEffect(bedCollision) { workspace.publishBedCollision(bedCollision) }
     LaunchedEffect(showTravels) { workspace.publishShowTravels(showTravels) }
     LaunchedEffect(toolpathTubes) { workspace.publishToolpathTubes(toolpathTubes) }
+    LaunchedEffect(plateMovable) { workspace.publishPlateMovable(plateMovable) }
 
     // ---- Action collector ----
     val placedModelsLatest = rememberUpdatedState(placedModels)
@@ -159,6 +170,8 @@ fun BindWorkspaceModel(
             onSaveGcode = onSaveGcode,
             onSaveProject3mf = onSaveProject3mf,
             onSaveModelStl = onSaveModelStl,
+            onLoadModelFromPath = onLoadModelFromPath,
+            setPlateMovable = setPlateMovable,
         ) }
     }
 }
@@ -187,6 +200,8 @@ private fun handleAction(
     onSaveGcode: (() -> Unit)?,
     onSaveProject3mf: (() -> Unit)?,
     onSaveModelStl: (() -> Unit)?,
+    onLoadModelFromPath: ((java.io.File, WorkspaceAction.LoadMode) -> Unit)?,
+    setPlateMovable: (Boolean) -> Unit,
 ) {
     when (action) {
         is WorkspaceAction.SetGizmoTool -> setGizmoTool(action.tool)
@@ -286,6 +301,17 @@ private fun handleAction(
             // capability so a tool caller knows to wait or kill the
             // app rather than retry.
             Log.w(TAG, "CancelSlice not supported — libslic3r doesn't expose an abort hook.")
+        is WorkspaceAction.LoadModelFromPath -> {
+            val file = java.io.File(action.path)
+            if (!file.exists() || !file.canRead()) {
+                Log.w(TAG, "LoadModelFromPath: '$action.path' is missing or unreadable.")
+            } else if (onLoadModelFromPath != null) {
+                onLoadModelFromPath(file, action.mode)
+            } else {
+                Log.w(TAG, "LoadModelFromPath: no callback wired by host activity.")
+            }
+        }
+        is WorkspaceAction.SetPlateMovable -> setPlateMovable(action.movable)
     }
 }
 

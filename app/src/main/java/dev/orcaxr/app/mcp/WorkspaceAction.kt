@@ -135,4 +135,33 @@ sealed interface WorkspaceAction {
     /** Save the currently-selected model + active config as a 3MF
      *  project into /Downloads. */
     data object SaveProject3mf : WorkspaceAction
+
+    /**
+     * How an incoming file changes the bed.
+     * - `Replace`: clear current models + drop in the new one (the
+     *   default file-picker behavior).
+     * - `Add`: append a new PlacedModel alongside the existing ones
+     *   (the "+ Add another" affordance).
+     */
+    enum class LoadMode { Replace, Add }
+
+    /**
+     * Load a model from a filesystem path. The caller passes an
+     * absolute path that's already readable on-device (e.g.
+     * /sdcard/Download/dragon.3mf or a path returned by
+     * list_recent_files). MainActivity dispatches through the same
+     * `onFileSelected` codepath the file picker uses, so paint
+     * restoration, GLB bake, bedFit, and bedCollision all run
+     * identically. STL, 3MF, OBJ, AMF are accepted; libslic3r decides
+     * the rest at parse time.
+     */
+    data class LoadModelFromPath(val path: String, val mode: LoadMode) : WorkspaceAction
+
+    /**
+     * Toggle the workspace-grab affordance (the bed becomes a single
+     * MovableComponent target in XR). UI default is OFF so model
+     * gizmos stay reachable; flipping ON lets the user grab and
+     * reposition the entire bed in space.
+     */
+    data class SetPlateMovable(val movable: Boolean) : WorkspaceAction
 }

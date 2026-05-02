@@ -71,6 +71,8 @@ internal object WorkspaceTools {
             SaveGcodeToDownloads(workspace),
             SaveProjectAs3mf(workspace),
             SaveModelAsStl(workspace),
+            LoadModelFromPath(workspace),
+            SetPlateMovable(workspace),
         )
     }
 
@@ -223,6 +225,7 @@ internal object WorkspaceTools {
             encodeBedCollision(ws.bedCollision.value)?.let { state.put("bed_collision", it) }
             state.put("show_travels", ws.showTravels.value)
             state.put("toolpath_tubes", ws.toolpathTubes.value)
+            state.put("plate_movable", ws.plateMovable.value)
 
             val plate = ws.activePlateId.value
             val placed = ws.placedModels.value
@@ -828,6 +831,76 @@ internal object WorkspaceTools {
             return success(
                 "Save STL requested for the selected model.",
                 JSONObject().apply { put("selected_count", ws.selectedModelIds.value.size) },
+            )
+        }
+    }
+
+    class LoadModelFromPath(private val ws: WorkspaceModel) : Tool {
+        override val name = "load_model_from_path"
+        override val description =
+            "Load a model file (STL / 3MF / OBJ / AMF) from a filesystem path. " +
+                "Mode 'replace' (default) clears the current bed and drops in the new model; " +
+                "mode 'add' appends a new placed model alongside existing ones. " +
+                "The file must already be readable on-device — typical paths are " +
+                "/sdcard/Download/<file> or anything from list_recent_files. After this " +
+                "completes, the GLB preview, paint restore, bed-fit and bed-collision checks " +
+                "all run automatically — get_workspace_state will reflect the new state."
+        override val inputSchema = Schemas.obj(
+            required = listOf("path"),
+            properties = mapOf(
+                "path" to Schemas.string("Absolute filesystem path to a model file"),
+                "mode" to Schemas.string("'replace' (default) or 'add'"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val rawPath = args.optString("path").trim()
+            if (rawPath.isEmpty()) return ToolResult.error("'path' is required.")
+            val file = java.io.File(rawPath)
+            if (!file.exists()) return ToolResult.error("File not found: $rawPath")
+            if (!file.canRead()) return ToolResult.error("File exists but is unreadable: $rawPath. Check All-Files-Access.")
+            val ext = file.extension.lowercase()
+            val supported = setOf("stl", "3mf", "obj", "amf", "step", "stp")
+            if (ext !in supported) {
+                return ToolResult.error(
+                    "Unsupported extension '.$ext'. Supported: ${supported.joinToString()}",
+                )
+            }
+            val mode = when (args.optString("mode", "replace").lowercase()) {
+                "replace", "" -> WorkspaceAction.LoadMode.Replace
+                "add", "append" -> WorkspaceAction.LoadMode.Add
+                else -> return ToolResult.error("Mode must be 'replace' or 'add'.")
+            }
+            ws.emit(WorkspaceAction.LoadModelFromPath(file.absolutePath, mode))
+            return success(
+                "Loading ${file.name} (mode=${mode.name.lowercase()}). " +
+                    "Poll get_workspace_state to confirm it's on the bed.",
+                JSONObject().apply {
+                    put("path", file.absolutePath)
+                    put("mode", mode.name.lowercase())
+                    put("size_bytes", file.length())
+                },
+            )
+        }
+    }
+
+    class SetPlateMovable(private val ws: WorkspaceModel) : Tool {
+        override val name = "set_plate_movable"
+        override val description =
+            "Toggle the workspace-grab affordance. true = the bed becomes a single grab " +
+                "target (pinching anywhere over it drags the build plate in 3D space). " +
+                "false = pinches go through to the model gizmos. Default is false."
+        override val inputSchema = Schemas.obj(
+            required = listOf("movable"),
+            properties = mapOf("movable" to Schemas.bool("true to enable bed-grab; false to disable")),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val v = args.optBoolean("movable", false)
+            ws.emit(WorkspaceAction.SetPlateMovable(v))
+            return success(
+                "plate_movable = $v",
+                JSONObject().apply { put("plate_movable", v) },
             )
         }
     }

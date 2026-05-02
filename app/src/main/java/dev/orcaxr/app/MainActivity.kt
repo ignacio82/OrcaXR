@@ -2574,6 +2574,8 @@ private fun XrShell(
         setShowTravels = { showTravels.value = it },
         toolpathTubes = toolpathTubes.value,
         setToolpathTubes = { toolpathTubes.value = it },
+        plateMovable = plateMovable,
+        setPlateMovable = { plateMovable = it },
         allProfiles = allProfiles,
         // Tier-B mirrors of the BottomRightSummaryPanel button paths.
         // Routing through the existing onSliceClick logic (multi-vs-
@@ -2632,6 +2634,18 @@ private fun XrShell(
                     target.translateYmm,
                 )
             }
+        },
+        // Route through the same onFileSelected codepath the file
+        // picker triggers — copies the file to cacheDir, bakes the
+        // colored GLB, restores paint state from PaintCacheStore,
+        // updates bedFit / bedCollision. Identical observable result
+        // to a manual pick.
+        onLoadModelFromPath = { file, loadMode ->
+            pickerMode = when (loadMode) {
+                dev.orcaxr.app.mcp.WorkspaceAction.LoadMode.Replace -> PickerMode.Replace
+                dev.orcaxr.app.mcp.WorkspaceAction.LoadMode.Add -> PickerMode.Add
+            }
+            onFileSelected(file)
         },
     )
 

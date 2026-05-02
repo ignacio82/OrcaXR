@@ -88,6 +88,15 @@ class WorkspaceModel internal constructor() {
     val toolpathTubes: StateFlow<Boolean> = _toolpathTubes.asStateFlow()
 
     /**
+     * Workspace-grab toggle. The XR shell's `plateMovable` flag —
+     * exposed so MCP clients can flip the bed between "grab to
+     * reposition" and "model gizmos take pinches" without entering
+     * the bed-only mode by accident.
+     */
+    private val _plateMovable = MutableStateFlow(false)
+    val plateMovable: StateFlow<Boolean> = _plateMovable.asStateFlow()
+
+    /**
      * True iff MainActivity has hooked itself up to this model. MCP
      * tools that mutate state should refuse with a useful error
      * message when this is false (e.g. the user backgrounded the app
@@ -135,6 +144,7 @@ class WorkspaceModel internal constructor() {
     fun publishBedCollision(value: BedCollision.Result?) { _bedCollision.value = value }
     fun publishShowTravels(value: Boolean) { _showTravels.value = value }
     fun publishToolpathTubes(value: Boolean) { _toolpathTubes.value = value }
+    fun publishPlateMovable(value: Boolean) { _plateMovable.value = value }
 
     fun setAttached(value: Boolean) { _attached.value = value }
 
