@@ -222,10 +222,21 @@ class MoonrakerClient(
             // so the post-body server processing window is generous, not
             // gated by the 5 s connect-timeout-style readTimeout the rest
             // of the API uses for short JSON responses.
+            //
+            // NO Call.timeout() (i.e. unlimited total wall-clock). Both
+            // OkHttp's `writeTimeout` and `readTimeout` are per-IO-operation
+            // timers that reset on every chunk write / response read — so
+            // an upload that's genuinely stalled (no socket I/O for
+            // uploadTimeoutMs) still surfaces, while a slow-but-progressing
+            // upload over a weak link is allowed to finish even if the
+            // wall-clock total runs past the per-IO budget. Field bug:
+            // the previous `callTimeout(uploadTimeoutMs * 2)` cap (360 s)
+            // cancelled large multicolor gcode uploads on ~1 Mbps Wi-Fi
+            // even though bytes were flowing the whole time.
             val uploadClient = http.newBuilder()
                 .readTimeout(uploadTimeoutMs, TimeUnit.MILLISECONDS)
                 .writeTimeout(uploadTimeoutMs, TimeUnit.MILLISECONDS)
-                .callTimeout(uploadTimeoutMs * 2, TimeUnit.MILLISECONDS)
+                .callTimeout(0, TimeUnit.MILLISECONDS)
                 .build()
 
             try {
