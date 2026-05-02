@@ -194,6 +194,11 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.runtime)
     implementation(libs.androidx.compose.ui)
+    // Downloadable Google Fonts at runtime — bundles Instrument Sans,
+    // Space Grotesk, and JetBrains Mono into the OrcaXrTheme typography
+    // without shipping TTFs in the APK. First use fetches via the
+    // Play Services font provider; subsequent loads are cached on-device.
+    implementation(libs.androidx.compose.ui.text.google.fonts)
     debugImplementation(libs.androidx.compose.ui.tooling)
     implementation(libs.androidx.compose.ui.tooling.preview)
 

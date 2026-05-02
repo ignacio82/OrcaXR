@@ -5,6 +5,12 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
+import androidx.compose.animation.core.EaseInOutCubic
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,11 +30,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import dev.orcaxr.app.ui.LocalOrcaXrTextStyles
+import dev.orcaxr.app.ui.OrcaXrColors
 import java.io.File
 
 /**
@@ -2943,6 +2953,96 @@ fun LegendItem(color: Color, label: String) {
     }
 }
 
+/**
+ * The hero "Slice <model>" button — gradient mint background, dark
+ * forest-green text, soft mint glow, and a slow shimmer sweep. Mirrors
+ * the design's `.slice-btn` selector. State branches (Forbidden /
+ * BedBlocked / Slicing / Ready) are passed in as [content]; this wrapper
+ * just renders the gradient surface and disables hit-testing when the
+ * caller says it's not actionable.
+ *
+ * Implemented with a clickable [Box] (not a Material [Button]) because
+ * Material's container-color API doesn't accept a [Brush] and layering a
+ * shimmer overlay inside a Button breaks ripple semantics. The trade-off
+ * is no built-in ripple — the design wants the visible feedback to be
+ * the shimmer + glow, not a flat darken.
+ */
+@Composable
+fun SliceButton(
+    enabled: Boolean,
+    onClick: () -> Unit,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val transition = rememberInfiniteTransition(label = "slice-shimmer")
+    // 0..1 across the button's width; offsets start at -1 (off-screen
+    // left) and end at +2 (off-screen right) so the band fully clears
+    // before the next sweep begins. Matches the design's `@keyframes
+    // shimmer` 30%→60% active window.
+    val shimmer by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 3500, easing = EaseInOutCubic),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "slice-shimmer-progress",
+    )
+
+    val gradient = if (enabled) {
+        Brush.verticalGradient(
+            colors = listOf(OrcaXrColors.Mint, OrcaXrColors.MintDeep),
+        )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(Color(0xFF2A2F33), Color(0xFF1F2429)),
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(gradient)
+            .border(
+                width = 1.dp,
+                color = if (enabled) {
+                    OrcaXrColors.MintBright.copy(alpha = 0.4f)
+                } else {
+                    OrcaXrColors.LineStrong
+                },
+                shape = RoundedCornerShape(12.dp),
+            )
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        // Shimmer overlay — a translucent white band sliding across the
+        // button. Drawn ABOVE the gradient and BELOW the content so the
+        // button label/spinner stay legible while the highlight sweeps.
+        if (enabled) {
+            // Map 0..1 to a start fraction in [-1.5..2.5] so the band
+            // sits fully off-screen at both ends of the cycle.
+            val startFraction = -1.5f + shimmer * 4f
+            val bandWidth = 0.55f
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.horizontalGradient(
+                            colorStops = arrayOf(
+                                (startFraction).coerceIn(0f, 1f) to Color.Transparent,
+                                ((startFraction + bandWidth / 2f).coerceIn(0f, 1f)) to
+                                    Color.White.copy(alpha = 0.22f),
+                                ((startFraction + bandWidth).coerceIn(0f, 1f)) to Color.Transparent,
+                            ),
+                        ),
+                    ),
+            )
+        }
+        content()
+    }
+}
+
 @Composable
 fun BottomRightSummaryPanel(
     sliceState: SliceUiState,
@@ -2968,75 +3068,101 @@ fun BottomRightSummaryPanel(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF15181B))
+            .background(OrcaXrColors.Panel)
             .padding(16.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Text("Slicing Summary", style = MaterialTheme.typography.titleMedium, color = Color.White)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Slicing Summary",
+                style = MaterialTheme.typography.titleMedium,
+                color = OrcaXrColors.Text,
+            )
+            // Mint kicker — design's "READY" badge. Switches to "SLICING"
+            // mid-run, "DONE" when complete, "BLOCKED" on a gating banner.
+            val kickerLabel = when {
+                sliceState is SliceUiState.Slicing -> "SLICING"
+                sliceState is SliceUiState.Done -> "DONE"
+                filamentRuleResult is FilamentRules.Result.Forbidden ||
+                    bedCollisionForbidden -> "BLOCKED"
+                else -> "READY"
+            }
+            Text(kickerLabel, style = LocalOrcaXrTextStyles.current.kicker)
+        }
 
         val isSlicing = sliceState is SliceUiState.Slicing
         val isForbidden = filamentRuleResult is FilamentRules.Result.Forbidden
         val isBedBlocked = bedCollisionForbidden
 
-        Button(
-            onClick = onSliceClick,
+        SliceButton(
             enabled = !isSlicing && !isForbidden && !isBedBlocked,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF00BFA5),
-                disabledContainerColor = Color(0xFF2A2F33),
-            ),
+            onClick = onSliceClick,
         ) {
-            if (isForbidden && !isSlicing) {
-                // Compact in-button hint so the user understands WHY the
-                // button is grey without having to track up to the
-                // LeftProjectPanel banner. The banner carries the full
-                // explanation; this is just the affordance.
-                Text(
+            when {
+                isForbidden && !isSlicing -> Text(
+                    // Compact in-button hint so the user understands WHY the
+                    // button is grey without having to track up to the
+                    // LeftProjectPanel banner. The banner carries the full
+                    // explanation; this is just the affordance.
                     "Filament not supported",
-                    color = Color(0xFFFF8A8E),
-                    fontWeight = FontWeight.Bold,
+                    color = OrcaXrColors.Red,
+                    style = LocalOrcaXrTextStyles.current.sliceButton,
                 )
-            } else if (isBedBlocked && !isSlicing) {
-                Text(
+                isBedBlocked && !isSlicing -> Text(
                     "Model off the build plate",
-                    color = Color(0xFFFF8A8E),
-                    fontWeight = FontWeight.Bold,
+                    color = OrcaXrColors.Red,
+                    style = LocalOrcaXrTextStyles.current.sliceButton,
                 )
-            } else if (isSlicing) {
-                val s = sliceState as SliceUiState.Slicing
-                // Tick once a second so the elapsed counter advances
-                // visually even when libslic3r isn't firing percent
-                // updates (e.g. during the long MMU segmentation
-                // phase between 5% "Slicing mesh" and 15% "Generating
-                // walls" — silent on the libslic3r side, can be
-                // many minutes on serial-TBB Android).
-                var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
-                LaunchedEffect(s.startedAtMs) {
-                    while (true) {
-                        nowMs = System.currentTimeMillis()
-                        kotlinx.coroutines.delay(1_000)
+                isSlicing -> {
+                    val s = sliceState as SliceUiState.Slicing
+                    // Tick once a second so the elapsed counter advances
+                    // visually even when libslic3r isn't firing percent
+                    // updates (e.g. during the long MMU segmentation
+                    // phase between 5% "Slicing mesh" and 15% "Generating
+                    // walls" — silent on the libslic3r side, can be
+                    // many minutes on serial-TBB Android).
+                    var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
+                    LaunchedEffect(s.startedAtMs) {
+                        while (true) {
+                            nowMs = System.currentTimeMillis()
+                            kotlinx.coroutines.delay(1_000)
+                        }
+                    }
+                    val elapsed = formatElapsedSeconds((nowMs - s.startedAtMs) / 1000)
+                    val label = if (s.percent in 0..100) {
+                        "Slicing… ${s.percent}% · $elapsed"
+                    } else {
+                        "Slicing… $elapsed"
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        CircularProgressIndicator(
+                            color = Color(0xFF001A18),
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            label,
+                            color = Color(0xFF001A18),
+                            style = LocalOrcaXrTextStyles.current.sliceButton,
+                        )
                     }
                 }
-                val elapsed = formatElapsedSeconds((nowMs - s.startedAtMs) / 1000)
-                val label = if (s.percent in 0..100) {
-                    "Slicing… ${s.percent}% · $elapsed"
-                } else {
-                    "Slicing… $elapsed"
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-                    Text(label, color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            } else {
-                // Show what we're about to slice. Reads as a clear
-                // affirmative action ("Slice <name>") instead of an
-                // ambiguous "Slice Now" that doesn't tell the user
-                // whether the loaded model or the demo cube goes through.
-                Text("Slice $sliceTarget", color = Color.White, fontWeight = FontWeight.Bold)
+                else -> Text(
+                    // Show what we're about to slice. Reads as a clear
+                    // affirmative action ("Slice <name>") instead of an
+                    // ambiguous "Slice Now" that doesn't tell the user
+                    // whether the loaded model or the demo cube goes through.
+                    "Slice $sliceTarget",
+                    color = Color(0xFF001A18),
+                    style = LocalOrcaXrTextStyles.current.sliceButton,
+                )
             }
         }
         if (isSlicing) {
@@ -3050,21 +3176,21 @@ fun BottomRightSummaryPanel(
                 LinearProgressIndicator(
                     progress = { s.percent / 100f },
                     modifier = Modifier.fillMaxWidth(),
-                    color = Color(0xFF00BFA5),
-                    trackColor = Color(0xFF2A2F33),
+                    color = OrcaXrColors.Mint,
+                    trackColor = OrcaXrColors.PanelSoft,
                 )
             } else {
                 LinearProgressIndicator(
                     modifier = Modifier.fillMaxWidth(),
-                    color = Color(0xFF00BFA5),
-                    trackColor = Color(0xFF2A2F33),
+                    color = OrcaXrColors.Mint,
+                    trackColor = OrcaXrColors.PanelSoft,
                 )
             }
             if (s.message.isNotBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     s.message,
-                    color = Color(0xFFB6BEC8),
+                    color = OrcaXrColors.TextMuted,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 2,
                 )
@@ -3142,10 +3268,64 @@ fun BottomRightSummaryPanel(
 
 @Composable
 fun SummaryRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
-        Text(value, color = Color.White, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+    // Design's `.stat-row` selector — muted Instrument Sans label on the
+    // left, JetBrains Mono tabular-nums value on the right, hairline
+    // bottom border. Hairline is rendered via a 1dp Box rather than a
+    // full Divider so adjacent rows stack without gaps.
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                label,
+                color = OrcaXrColors.TextMuted,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                value,
+                color = OrcaXrColors.Text,
+                style = LocalOrcaXrTextStyles.current.numeric,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(OrcaXrColors.Line),
+        )
     }
+}
+
+/**
+ * Uppercase, letter-spaced muted label — design's `.label` selector.
+ * Used as a section heading inside panels (e.g. "PRINTER",
+ * "PRINTER FILAMENTS", "VIRTUAL COLORS").
+ */
+@Composable
+fun SectionLabel(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text.uppercase(),
+        style = LocalOrcaXrTextStyles.current.sectionLabel,
+        modifier = modifier,
+    )
+}
+
+/**
+ * Tiny capitalized mint accent — design's `.kicker` selector.
+ * Used over a section heading or in a panel's top-right ("READY",
+ * "PREVIEW", "DONE").
+ */
+@Composable
+fun KickerLabel(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text.uppercase(),
+        style = LocalOrcaXrTextStyles.current.kicker,
+        modifier = modifier,
+    )
 }
 
 /** What the user is doing with the workspace right now. */
@@ -3187,52 +3367,60 @@ fun TopNavigationPill(
     paintPalette: List<String> = emptyList(),
 ) {
     Surface(
-        color = Color(0xFF1B1F23).copy(alpha = 0.9f),
-        shape = RoundedCornerShape(32.dp),
+        color = OrcaXrColors.Panel,
+        shape = RoundedCornerShape(22.dp),
+        border = BorderStroke(1.dp, OrcaXrColors.LineStrong),
         modifier = Modifier.padding(8.dp)
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Top Row: App Modes
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // Top Row: App Modes — wrapped in a "tab-row" capsule
+            // matching the design's `.tab-row` selector (subtle inner
+            // bg, 14dp radius, hairline border).
+            Surface(
+                color = Color(0xFF000814).copy(alpha = 0.30f),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, OrcaXrColors.Line),
             ) {
-                NavAction(
-                    label = "Prepare",
-                    icon = androidx.compose.material.icons.Icons.Default.Build,
-                    isSelected = mode == WorkspaceMode.Prepare,
-                    onClick = { onModeChange(WorkspaceMode.Prepare) },
-                )
-                NavAction(
-                    label = "Preview",
-                    icon = androidx.compose.material.icons.Icons.Default.Visibility,
-                    isSelected = mode == WorkspaceMode.Preview,
-                    enabled = previewEnabled,
-                    onClick = { if (previewEnabled) onModeChange(WorkspaceMode.Preview) },
-                )
-                NavAction(
-                    label = "Device",
-                    icon = androidx.compose.material.icons.Icons.Default.SettingsInputComponent,
-                    isSelected = devicesShown,
-                    enabled = true,
-                    onClick = onToggleDevices,
-                )
-                if (onToggleHelp != null) {
+                Row(
+                    modifier = Modifier.padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     NavAction(
-                        label = "Help",
-                        icon = androidx.compose.material.icons.Icons.Default.HelpOutline,
-                        isSelected = helpShown,
-                        enabled = true,
-                        onClick = onToggleHelp,
+                        label = "Prepare",
+                        icon = androidx.compose.material.icons.Icons.Default.Build,
+                        isSelected = mode == WorkspaceMode.Prepare,
+                        onClick = { onModeChange(WorkspaceMode.Prepare) },
                     )
+                    NavAction(
+                        label = "Preview",
+                        icon = androidx.compose.material.icons.Icons.Default.Visibility,
+                        isSelected = mode == WorkspaceMode.Preview,
+                        enabled = previewEnabled,
+                        onClick = { if (previewEnabled) onModeChange(WorkspaceMode.Preview) },
+                    )
+                    NavAction(
+                        label = "Device",
+                        icon = androidx.compose.material.icons.Icons.Default.SettingsInputComponent,
+                        isSelected = devicesShown,
+                        enabled = true,
+                        onClick = onToggleDevices,
+                    )
+                    if (onToggleHelp != null) {
+                        NavAction(
+                            label = "Help",
+                            icon = androidx.compose.material.icons.Icons.Default.HelpOutline,
+                            isSelected = helpShown,
+                            enabled = true,
+                            onClick = onToggleHelp,
+                        )
+                    }
                 }
             }
-
-            Divider(color = Color.Gray.copy(alpha = 0.3f), thickness = 1.dp, modifier = Modifier.width(600.dp))
 
             // Bottom Row: Transform Tools. Each button toggles its tool
             // — tap once to enter that tool (gizmo appears), tap again to
@@ -3286,7 +3474,11 @@ fun TopNavigationPill(
             }
 
             if (paintBrush.mode != PaintMode.Off) {
-                Divider(color = Color.Gray.copy(alpha = 0.3f), thickness = 1.dp, modifier = Modifier.width(600.dp))
+                HorizontalDivider(
+                    color = OrcaXrColors.Line,
+                    thickness = 1.dp,
+                    modifier = Modifier.width(600.dp),
+                )
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -3398,7 +3590,7 @@ fun NavStatusChip(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     active: Boolean,
 ) {
-    val tint = if (active) Color(0xFF7BC8FF) else Color.Gray
+    val tint = if (active) OrcaXrColors.MintBright else OrcaXrColors.TextDim
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -3428,18 +3620,42 @@ fun NavAction(
     enabled: Boolean = true,
     onClick: () -> Unit = {},
 ) {
+    // Active = mint-bright (design's `.tab.active` selector); enabled =
+    // muted body text; disabled = dim. Active tab also gets a soft
+    // mint→transparent vertical gradient + an inset hairline that mimics
+    // the design's `box-shadow: inset 0 1px 0 rgba(...mint...0.30)`.
     val tintColor = when {
-        isSelected -> Color(0xFF00FFC2) // Teal accent from mock-up
-        enabled -> Color.White
-        else -> Color.Gray
+        isSelected -> OrcaXrColors.MintBright
+        enabled -> OrcaXrColors.Text
+        else -> OrcaXrColors.TextDim
     }
-    val backgroundColor = if (isSelected) Color(0xFF00FFC2).copy(alpha = 0.15f) else Color.Transparent
+    val backgroundBrush: Brush = if (isSelected) {
+        Brush.verticalGradient(
+            colors = listOf(
+                OrcaXrColors.Mint.copy(alpha = 0.20f),
+                OrcaXrColors.Mint.copy(alpha = 0.06f),
+            ),
+        )
+    } else {
+        Brush.verticalGradient(colors = listOf(Color.Transparent, Color.Transparent))
+    }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(backgroundColor)
+            .clip(RoundedCornerShape(10.dp))
+            .background(backgroundBrush)
+            .then(
+                if (isSelected) {
+                    Modifier.border(
+                        width = 1.dp,
+                        color = OrcaXrColors.Mint.copy(alpha = 0.30f),
+                        shape = RoundedCornerShape(10.dp),
+                    )
+                } else {
+                    Modifier
+                }
+            )
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
@@ -3452,7 +3668,7 @@ fun NavAction(
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = label,
-            color = if (enabled) Color.White else Color.Gray,
+            color = tintColor,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
             maxLines = 1,
@@ -5749,3 +5965,4 @@ private fun RecentFileRow(entry: RecentFile, onClick: () -> Unit) {
         }
     }
 }
+

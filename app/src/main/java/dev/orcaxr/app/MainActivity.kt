@@ -28,7 +28,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
@@ -37,8 +36,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.contentColorFor
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.runtime.*
@@ -89,21 +86,10 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Workspaces
 
-/**
- * Hand-picked Material3 dark scheme that reads cleanly against the
- * Galaxy XR passthrough background. Replaces the empty `MaterialTheme {}`
- * default which left the panel rendering as solid black.
- */
-private val OrcaXrColorScheme = darkColorScheme(
-    primary = Color(0xFF7BC8FF),
-    onPrimary = Color(0xFF002D45),
-    surface = Color(0xFF1B1F23),
-    onSurface = Color(0xFFE6EAEE),
-    surfaceVariant = Color(0xFF2A2F35),
-    onSurfaceVariant = Color(0xFFB6BEC8),
-    background = Color(0xFF15181B),
-    onBackground = Color(0xFFE6EAEE),
-)
+// OrcaXR's dark color scheme + typography moved to dev.orcaxr.app.ui.OrcaXrTheme.
+// The previous inline `darkColorScheme(...)` block here was replaced when the
+// "OrcaXR Spatial UI" design palette (mint-on-dark-navy + Instrument Sans /
+// Space Grotesk / JetBrains Mono via downloadable Google Fonts) shipped.
 
 private val initialPanelPoses = mutableMapOf<String, androidx.xr.runtime.math.Pose>()
 // Use a state-backed map so Compose recomposes when we change poses
@@ -287,14 +273,13 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val session by xrSession.collectAsState()
-            // Explicit colorScheme — empty MaterialTheme {} produced a
-            // panel that read as solid black on XR (light scheme's white
-            // surface was being composited against passthrough oddly).
-            // Dark scheme with high-contrast colors reads cleanly on top
-            // of the headset's passthrough.
-            MaterialTheme(colorScheme = OrcaXrColorScheme) {
+            // OrcaXrTheme provides the mint-on-dark-navy palette, the
+            // SpaceGrotesk / InstrumentSans / JetBrainsMono typography,
+            // and re-asserts LocalContentColor (GEMINI gotcha #4 — a
+            // missing provider lets a SpatialPanel content surface paint
+            // with Color.Unspecified).
+            dev.orcaxr.app.ui.OrcaXrTheme {
                 CompositionLocalProvider(
-                    LocalContentColor provides contentColorFor(MaterialTheme.colorScheme.background),
                     LocalControllerInput provides controllerInput,
                 ) {
                     // One-time past-crash banner. Snapshotted at first
@@ -3431,7 +3416,10 @@ private fun XrShell(
                     id = "top-nav",
                     width = 800.dp,
                     height = 250.dp, // Increased height for two-tier layout
-                    initialOffset = androidx.xr.runtime.math.Vector3(0f, 0.4f, -0.2f),
+                    // Top-center; raised to +0.55 so it sits above the
+                    // build plate area and frees y=0 for the side
+                    // panels.
+                    initialOffset = androidx.xr.runtime.math.Vector3(0f, 0.55f, -0.2f),
                     session = session,
                 ) {
                     TopNavigationPill(
@@ -3503,7 +3491,11 @@ private fun XrShell(
                     id = "left-project",
                     width = 400.dp,
                     height = 800.dp,
-                    initialOffset = androidx.xr.runtime.math.Vector3(-0.6f, 0f, -0.1f),
+                    // Far left at the wide edge of the XR FOV — Galaxy
+                    // XR's ~110° horizontal FOV easily covers ±1.05 m
+                    // at panel-distance and the project panel was
+                    // previously cramped against the build plate.
+                    initialOffset = androidx.xr.runtime.math.Vector3(-1.05f, 0f, -0.1f),
                     session = session,
                 ) {
                     LeftProjectPanel(
@@ -3784,7 +3776,12 @@ private fun XrShell(
                     id = "transform-panel",
                     width = 380.dp,
                     height = 600.dp,
-                    initialOffset = androidx.xr.runtime.math.Vector3(-1.0f, -0.05f, -0.05f),
+                    // Transform panel only appears when a model is
+                    // selected. Park it just to the right of the bed
+                    // (x=+0.50) so it lands near the focused model
+                    // rather than off-screen on the far left, and
+                    // doesn't compete with the left-project panel.
+                    initialOffset = androidx.xr.runtime.math.Vector3(0.50f, -0.05f, -0.1f),
                     session = session,
                 ) {
                     TransformPanel(
@@ -4012,10 +4009,15 @@ private fun XrShell(
 
                 // Plate switching panel
                 MovablePanelWrapper(
+                    // Plate-tabs is a vertical strip of plate
+                    // selectors. Previously parked at (0.6, 0.4) where
+                    // it sat directly on top of right-settings. Move
+                    // to the LEFT of the bed at mid-height — clear of
+                    // both right-settings AND left-project.
                     id = "plate-tabs",
                     width = 240.dp,
                     height = 400.dp,
-                    initialOffset = androidx.xr.runtime.math.Vector3(0.6f, 0.4f, -0.1f),
+                    initialOffset = androidx.xr.runtime.math.Vector3(-0.55f, -0.10f, -0.1f),
                     session = session,
                 ) {
                     PlateTabPanel(
@@ -4052,7 +4054,10 @@ private fun XrShell(
                     id = "right-settings",
                     width = 400.dp,
                     height = 600.dp,
-                    initialOffset = androidx.xr.runtime.math.Vector3(0.6f, 0.15f, -0.1f),
+                    // Far right — was at x=0.6 colliding with both
+                    // plate-tabs and print-monitor. Push out to 1.05 so
+                    // each right-side panel gets its own column.
+                    initialOffset = androidx.xr.runtime.math.Vector3(1.05f, 0.05f, -0.1f),
                     session = session,
                 ) {
                     RightSettingsPanel(
@@ -4282,7 +4287,11 @@ private fun XrShell(
                             id = "print-monitor",
                             width = 420.dp,
                             height = 220.dp,
-                            initialOffset = androidx.xr.runtime.math.Vector3(0.61f, -0.235f, -0.05f),
+                            // Stack directly under right-settings on
+                            // the far-right column. Was at (0.61,
+                            // -0.235) which sat INSIDE right-settings'
+                            // footprint when both were visible.
+                            initialOffset = androidx.xr.runtime.math.Vector3(1.05f, -0.55f, -0.1f),
                             session = session,
                         ) {
                             PrintMonitorPanel(
@@ -4341,7 +4350,10 @@ private fun XrShell(
                     id = "radial-menu",
                     width = 200.dp,
                     height = 200.dp,
-                    initialOffset = androidx.xr.runtime.math.Vector3(-0.4f, -0.2f, 0.05f),
+                    // Bottom-left corner, outboard of left-project so
+                    // the menu's hit-radius doesn't compete with the
+                    // project panel's scrollable interior.
+                    initialOffset = androidx.xr.runtime.math.Vector3(-1.05f, -0.55f, 0.05f),
                     session = session,
                 ) {
                     RadialMenuPanel(
