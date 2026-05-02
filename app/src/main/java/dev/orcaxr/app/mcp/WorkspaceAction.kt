@@ -192,4 +192,48 @@ sealed interface WorkspaceAction {
      * connected component becomes its own PlacedModel.
      */
     data class SplitModel(val modelId: String) : WorkspaceAction
+
+    /**
+     * Apply an embossed text or SVG inset to a model. Sub-types map
+     * onto libslic3r's `Emboss::text2shapes` and `to_polygons`
+     * pipelines respectively. `mode` decides whether the result is
+     * UNION'd onto the host (raised letters) or A-NOT-B'd (engraved).
+     *
+     * Translation/rotation are applied to the emboss mesh BEFORE the
+     * boolean — they let the caller place text off-center, rotate it
+     * to fit a curved face, etc. Defaults all-zero put the text
+     * centered on the host's top face.
+     */
+    sealed interface EmbossSource {
+        data class Text(val text: String, val fontId: String) : EmbossSource
+        data class Svg(val svgPath: String) : EmbossSource
+    }
+
+    enum class EmbossMode { Add, Sub }
+
+    data class EmbossModel(
+        val modelId: String,
+        val source: EmbossSource,
+        val sizeMm: Float,
+        val depthMm: Float,
+        val mode: EmbossMode,
+        val translateXmm: Float = 0f,
+        val translateYmm: Float = 0f,
+        val rotZDeg: Float = 0f,
+    ) : WorkspaceAction
+
+    /**
+     * Multi-volume editing — append a new volume to an existing
+     * PlacedModel. `type` is one of MODEL_PART / NEGATIVE_VOLUME /
+     * PARAMETER_MODIFIER / SUPPORT_BLOCKER / SUPPORT_ENFORCER (matches
+     * `dev.orcaxr.app.ModelVolumeType`'s name() — passed as a string
+     * here so the action surface stays JSON-friendly).
+     */
+    data class AddVolumeToModel(
+        val modelId: String,
+        val sourcePath: String,
+        val type: String,
+    ) : WorkspaceAction
+
+    data class RemoveVolume(val modelId: String, val volumeId: String) : WorkspaceAction
 }

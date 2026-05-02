@@ -2662,6 +2662,61 @@ private fun XrShell(
         },
         onMeshBoolean = { aId, bId, op -> runBoolean(aId, bId, op) },
         onSplitModel = { id -> runSplit(id) },
+        onEmbossModel = { action ->
+            scope.launch {
+                val spec = when (val src = action.source) {
+                    is dev.orcaxr.app.mcp.WorkspaceAction.EmbossSource.Text -> {
+                        val font = EmbossAssets.BUNDLED_FONTS.firstOrNull { it.id == src.fontId }
+                            ?: EmbossAssets.DEFAULT_FONT
+                        val fontFile = EmbossAssets.stageBundledFont(ctx, font)
+                        EmbossSpec.Text(
+                            fontFile = fontFile,
+                            text = src.text,
+                            sizeMm = action.sizeMm,
+                            depthMm = action.depthMm,
+                        )
+                    }
+                    is dev.orcaxr.app.mcp.WorkspaceAction.EmbossSource.Svg -> {
+                        EmbossSpec.Svg(
+                            svgFile = File(src.svgPath),
+                            sizeMm = action.sizeMm,
+                            depthMm = action.depthMm,
+                        )
+                    }
+                }
+                val mode = when (action.mode) {
+                    dev.orcaxr.app.mcp.WorkspaceAction.EmbossMode.Add -> EmbossMode.ADD
+                    dev.orcaxr.app.mcp.WorkspaceAction.EmbossMode.Sub -> EmbossMode.SUB
+                }
+                runEmboss(
+                    modelId = action.modelId,
+                    spec = spec,
+                    mode = mode,
+                    translateXmm = action.translateXmm,
+                    translateYmm = action.translateYmm,
+                    rotZDeg = action.rotZDeg,
+                )
+            }
+        },
+        // Volume operations: AddVolume routes through the same
+        // PickerMode.AddVolume codepath the file picker uses (so the
+        // colored-GLB re-bake / paint propagation runs identically).
+        // RemoveVolume is a direct PlacedModel.copy(volumes = ...).
+        onAddVolumeToModel = { modelId, sourcePath, typeName ->
+            val type = runCatching { ModelVolumeType.valueOf(typeName) }.getOrNull()
+            val src = File(sourcePath)
+            if (type != null && src.exists() && src.canRead()) {
+                selectedModelIds = setOf(modelId)
+                pickerMode = PickerMode.AddVolume(type)
+                onFileSelected(src)
+            }
+        },
+        onRemoveVolume = { modelId, volumeId ->
+            placedModels = placedModels.map { m ->
+                if (m.id == modelId) m.copy(volumes = m.volumes.filterNot { it.id == volumeId })
+                else m
+            }
+        },
     )
 
     // Re-preview when SELECTED model's rotation/scale OR slot palette

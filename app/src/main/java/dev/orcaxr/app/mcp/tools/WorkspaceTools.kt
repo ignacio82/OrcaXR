@@ -2,10 +2,13 @@ package dev.orcaxr.app.mcp.tools
 
 import dev.orcaxr.app.BedCollision
 import dev.orcaxr.app.BedFit
+import dev.orcaxr.app.EmbossAssets
 import dev.orcaxr.app.GizmoTool
+import dev.orcaxr.app.ModelVolumeType
 import dev.orcaxr.app.PaintBrush
 import dev.orcaxr.app.PaintMode
 import dev.orcaxr.app.PlacedModel
+import dev.orcaxr.app.PlacedVolume
 import dev.orcaxr.app.SliceResult
 import dev.orcaxr.app.SliceUiState
 import dev.orcaxr.app.SlicerProfile
@@ -77,6 +80,11 @@ internal object WorkspaceTools {
             CutModel(workspace),
             MeshBoolean(workspace),
             SplitModel(workspace),
+            ListEmbossFonts(),
+            EmbossModel(workspace),
+            ListVolumes(workspace),
+            AddVolumeToModel(workspace),
+            RemoveVolume(workspace),
         )
     }
 
@@ -1036,6 +1044,259 @@ internal object WorkspaceTools {
             ws.emit(WorkspaceAction.SplitModel(id))
             return success("Split started for $id.", JSONObject().apply { put("model_id", id) })
         }
+    }
+
+    // ---- Embossing tools ----
+
+    class ListEmbossFonts : Tool {
+        override val name = "list_emboss_fonts"
+        override val description =
+            "List the bundled fonts available for emboss_model's text variant. Each font has " +
+                "an `id` (pass to emboss_model) and a `display_name`. Users can also pick their " +
+                "own .ttf via Android's storage picker, but that path isn't yet exposed via MCP."
+        override val inputSchema = Schemas.empty()
+        override suspend fun call(args: JSONObject): ToolResult {
+            val arr = JSONArray()
+            for (f in EmbossAssets.BUNDLED_FONTS) {
+                val obj = JSONObject()
+                obj.put("id", f.id)
+                obj.put("display_name", f.displayName)
+                arr.put(obj)
+            }
+            val body = JSONObject().apply {
+                put("ok", true)
+                put("count", EmbossAssets.BUNDLED_FONTS.size)
+                put("default_font_id", EmbossAssets.DEFAULT_FONT.id)
+                put("fonts", arr)
+            }
+            val text = EmbossAssets.BUNDLED_FONTS.joinToString("\n") { "- ${it.id}  ${it.displayName}" }
+            return ToolResult.ok(text, body)
+        }
+    }
+
+    class EmbossModel(private val ws: WorkspaceModel) : Tool {
+        override val name = "emboss_model"
+        override val description =
+            "Apply embossed text or an SVG inset to a model's top face. " +
+                "kind='text' takes `text` + optional `font_id` (defaults to dejavu_sans_bold). " +
+                "kind='svg' takes `svg_path` (absolute path to a .svg with filled paths). " +
+                "size_mm is line height (text) or max XY (svg); depth_mm is Z extrusion. " +
+                "mode='emboss' raises letters above the host (boolean union); mode='engrave' " +
+                "carves them in (A−B). Optional translate_x_mm / translate_y_mm / rot_z_deg " +
+                "offset the emboss before the boolean (default 0,0,0 = centered on top)."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id", "kind", "size_mm", "depth_mm"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id from list_placed_models"),
+                "kind" to Schemas.string("'text' or 'svg'"),
+                "text" to Schemas.string("(text only) the string to emboss"),
+                "font_id" to Schemas.string("(text only) bundled font id from list_emboss_fonts"),
+                "svg_path" to Schemas.string("(svg only) absolute path to a .svg file"),
+                "size_mm" to Schemas.number("Line height (text) or max XY (svg) in mm"),
+                "depth_mm" to Schemas.number("Z extrusion depth in mm"),
+                "mode" to Schemas.string("'emboss' (raise) or 'engrave' (carve)"),
+                "translate_x_mm" to Schemas.number("Optional X offset on the host's top face"),
+                "translate_y_mm" to Schemas.number("Optional Y offset"),
+                "rot_z_deg" to Schemas.number("Optional Z rotation in degrees"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val modelId = args.optString("model_id").trim()
+            if (modelId.isEmpty()) return ToolResult.error("'model_id' is required.")
+            if (ws.placedModels.value.none { it.id == modelId }) {
+                return ToolResult.error("No model with id '$modelId'.")
+            }
+            val kind = args.optString("kind").lowercase()
+            val sizeMm = args.optDouble("size_mm", 0.0).toFloat()
+            val depthMm = args.optDouble("depth_mm", 0.0).toFloat()
+            if (sizeMm <= 0f) return ToolResult.error("'size_mm' must be > 0.")
+            if (depthMm <= 0f) return ToolResult.error("'depth_mm' must be > 0.")
+            val source: WorkspaceAction.EmbossSource = when (kind) {
+                "text" -> {
+                    val text = args.optString("text", "").trim()
+                    if (text.isEmpty()) return ToolResult.error("'text' is required when kind='text'.")
+                    val fontId = args.optString("font_id").ifBlank { EmbossAssets.DEFAULT_FONT.id }
+                    if (EmbossAssets.BUNDLED_FONTS.none { it.id == fontId }) {
+                        return ToolResult.error(
+                            "Unknown font_id '$fontId'. Use list_emboss_fonts.",
+                        )
+                    }
+                    WorkspaceAction.EmbossSource.Text(text, fontId)
+                }
+                "svg" -> {
+                    val path = args.optString("svg_path").trim()
+                    if (path.isEmpty()) return ToolResult.error("'svg_path' is required when kind='svg'.")
+                    val f = java.io.File(path)
+                    if (!f.exists() || !f.canRead()) {
+                        return ToolResult.error("SVG file not readable: $path")
+                    }
+                    WorkspaceAction.EmbossSource.Svg(f.absolutePath)
+                }
+                else -> return ToolResult.error("'kind' must be 'text' or 'svg'.")
+            }
+            val mode = when (args.optString("mode", "emboss").lowercase()) {
+                "emboss", "add", "raise", "" -> WorkspaceAction.EmbossMode.Add
+                "engrave", "sub", "carve", "subtract" -> WorkspaceAction.EmbossMode.Sub
+                else -> return ToolResult.error("'mode' must be 'emboss' or 'engrave'.")
+            }
+            ws.emit(
+                WorkspaceAction.EmbossModel(
+                    modelId = modelId,
+                    source = source,
+                    sizeMm = sizeMm,
+                    depthMm = depthMm,
+                    mode = mode,
+                    translateXmm = args.optDouble("translate_x_mm", 0.0).toFloat(),
+                    translateYmm = args.optDouble("translate_y_mm", 0.0).toFloat(),
+                    rotZDeg = args.optDouble("rot_z_deg", 0.0).toFloat(),
+                ),
+            )
+            return success(
+                "Emboss started on $modelId.",
+                JSONObject().apply {
+                    put("model_id", modelId)
+                    put("kind", kind)
+                    put("mode", mode.name.lowercase())
+                    put("size_mm", sizeMm)
+                    put("depth_mm", depthMm)
+                },
+            )
+        }
+    }
+
+    // ---- Per-volume editing tools ----
+
+    class ListVolumes(private val ws: WorkspaceModel) : Tool {
+        override val name = "list_volumes"
+        override val description =
+            "List the modifier / negative / support volumes attached to a model. The model's " +
+                "primary mesh (`model.source`) is always implicit and not in this list — only " +
+                "extra volumes added via add_volume_to_model show up here."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id"),
+            properties = mapOf("model_id" to Schemas.string("Model id from list_placed_models")),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            val id = args.optString("model_id").trim()
+            val model = ws.placedModels.value.firstOrNull { it.id == id }
+                ?: return ToolResult.error("No model with id '$id'.")
+            val arr = JSONArray()
+            for (v in model.volumes) arr.put(encodeVolume(v))
+            val body = JSONObject().apply {
+                put("ok", true)
+                put("model_id", id)
+                put("count", model.volumes.size)
+                put("volumes", arr)
+            }
+            val text = if (model.volumes.isEmpty()) "(no extra volumes)"
+                else model.volumes.joinToString("\n") { v ->
+                    "- ${v.type.name}  ${v.source.name}  id=${v.id}"
+                }
+            return ToolResult.ok(text, body)
+        }
+    }
+
+    class AddVolumeToModel(private val ws: WorkspaceModel) : Tool {
+        override val name = "add_volume_to_model"
+        override val description =
+            "Append a volume from a file (STL/3MF/OBJ) to an existing model. type is one of: " +
+                "MODEL_PART (extra geometry, prints as part of the same object), NEGATIVE_VOLUME " +
+                "(carve away), PARAMETER_MODIFIER (per-region setting overrides), " +
+                "SUPPORT_ENFORCER (force supports), SUPPORT_BLOCKER (forbid supports). " +
+                "Routes through the same PickerMode.AddVolume codepath the file picker uses, so " +
+                "the colored-GLB rebuild and paint propagation match the manual flow."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id", "source_path", "type"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id to attach the volume to"),
+                "source_path" to Schemas.string("Absolute path to a mesh file"),
+                "type" to Schemas.string(
+                    "MODEL_PART | NEGATIVE_VOLUME | PARAMETER_MODIFIER | SUPPORT_BLOCKER | SUPPORT_ENFORCER",
+                ),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val modelId = args.optString("model_id").trim()
+            if (modelId.isEmpty()) return ToolResult.error("'model_id' is required.")
+            if (ws.placedModels.value.none { it.id == modelId }) {
+                return ToolResult.error("No model with id '$modelId'.")
+            }
+            val sourcePath = args.optString("source_path").trim()
+            if (sourcePath.isEmpty()) return ToolResult.error("'source_path' is required.")
+            val file = java.io.File(sourcePath)
+            if (!file.exists()) return ToolResult.error("File not found: $sourcePath")
+            if (!file.canRead()) return ToolResult.error("File unreadable: $sourcePath")
+            val typeName = args.optString("type").trim()
+            val type = runCatching { ModelVolumeType.valueOf(typeName) }.getOrNull()
+                ?: return ToolResult.error(
+                    "Unknown type '$typeName'. Use one of: ${ModelVolumeType.values().joinToString { it.name }}",
+                )
+            ws.emit(WorkspaceAction.AddVolumeToModel(modelId, file.absolutePath, type.name))
+            return success(
+                "Adding ${type.name} volume from ${file.name} to $modelId.",
+                JSONObject().apply {
+                    put("model_id", modelId)
+                    put("source_path", file.absolutePath)
+                    put("type", type.name)
+                },
+            )
+        }
+    }
+
+    class RemoveVolume(private val ws: WorkspaceModel) : Tool {
+        override val name = "remove_volume"
+        override val description =
+            "Remove a previously-attached volume from a model. Use list_volumes to find " +
+                "the volume id."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id", "volume_id"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id"),
+                "volume_id" to Schemas.string("Volume id from list_volumes"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val modelId = args.optString("model_id").trim()
+            val volumeId = args.optString("volume_id").trim()
+            if (modelId.isEmpty() || volumeId.isEmpty()) {
+                return ToolResult.error("Both 'model_id' and 'volume_id' are required.")
+            }
+            val model = ws.placedModels.value.firstOrNull { it.id == modelId }
+                ?: return ToolResult.error("No model with id '$modelId'.")
+            if (model.volumes.none { it.id == volumeId }) {
+                return ToolResult.error("No volume with id '$volumeId' on model '$modelId'.")
+            }
+            ws.emit(WorkspaceAction.RemoveVolume(modelId, volumeId))
+            return success(
+                "Removed volume $volumeId from $modelId.",
+                JSONObject().apply {
+                    put("model_id", modelId)
+                    put("volume_id", volumeId)
+                },
+            )
+        }
+    }
+
+    private fun encodeVolume(v: PlacedVolume): JSONObject = JSONObject().apply {
+        put("id", v.id)
+        put("type", v.type.name)
+        put("source_path", v.source.absolutePath)
+        put("translate_x_mm", v.translateXmm)
+        put("translate_y_mm", v.translateYmm)
+        put("translate_z_mm", v.translateZmm)
+        put("rot_x_deg", v.rotXDeg)
+        put("rot_y_deg", v.rotYDeg)
+        put("rot_z_deg", v.rotZDeg)
+        put("scale_x_pct", v.scaleXPct)
+        put("scale_y_pct", v.scaleYPct)
+        put("scale_z_pct", v.scaleZPct)
+        put("mirror_x", v.mirrorX)
+        put("mirror_y", v.mirrorY)
+        put("mirror_z", v.mirrorZ)
+        put("config_overrides_count", v.configOverrides.size)
     }
 }
 

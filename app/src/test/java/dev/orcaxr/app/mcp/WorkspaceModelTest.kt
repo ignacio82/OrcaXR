@@ -145,6 +145,50 @@ class WorkspaceModelTest {
         assertEquals("m1", (gathered[3] as WorkspaceAction.SplitModel).modelId)
     }
 
+    @Test fun embossAndVolumeActionsRoundTrip() = runTest {
+        val ws = WorkspaceModel()
+        val gathered = mutableListOf<WorkspaceAction>()
+        val job = launch(start = CoroutineStart.UNDISPATCHED) {
+            ws.actions.collect { gathered += it }
+        }
+        ws.emit(
+            WorkspaceAction.EmbossModel(
+                modelId = "m1",
+                source = WorkspaceAction.EmbossSource.Text("OrcaXR", "dejavu_sans_bold"),
+                sizeMm = 8f,
+                depthMm = 1.5f,
+                mode = WorkspaceAction.EmbossMode.Add,
+            ),
+        )
+        ws.emit(
+            WorkspaceAction.EmbossModel(
+                modelId = "m1",
+                source = WorkspaceAction.EmbossSource.Svg("/sdcard/heart.svg"),
+                sizeMm = 20f,
+                depthMm = 2f,
+                mode = WorkspaceAction.EmbossMode.Sub,
+                rotZDeg = 45f,
+            ),
+        )
+        ws.emit(WorkspaceAction.AddVolumeToModel("m1", "/sdcard/modifier.stl", "PARAMETER_MODIFIER"))
+        ws.emit(WorkspaceAction.RemoveVolume("m1", "vol_123"))
+        repeat(5) { yield() }
+        job.cancel()
+        assertEquals(4, gathered.size)
+        val emboss1 = gathered[0] as WorkspaceAction.EmbossModel
+        assertTrue(emboss1.source is WorkspaceAction.EmbossSource.Text)
+        assertEquals("OrcaXR", (emboss1.source as WorkspaceAction.EmbossSource.Text).text)
+        assertEquals(WorkspaceAction.EmbossMode.Add, emboss1.mode)
+        val emboss2 = gathered[1] as WorkspaceAction.EmbossModel
+        assertTrue(emboss2.source is WorkspaceAction.EmbossSource.Svg)
+        assertEquals(WorkspaceAction.EmbossMode.Sub, emboss2.mode)
+        assertEquals(45f, emboss2.rotZDeg)
+        val addVol = gathered[2] as WorkspaceAction.AddVolumeToModel
+        assertEquals("PARAMETER_MODIFIER", addVol.type)
+        val removeVol = gathered[3] as WorkspaceAction.RemoveVolume
+        assertEquals("vol_123", removeVol.volumeId)
+    }
+
     @Test fun multipleEmissionsAreOrdered() = runTest {
         val ws = WorkspaceModel()
         val gathered = mutableListOf<WorkspaceAction>()

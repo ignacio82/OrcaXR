@@ -117,6 +117,12 @@ fun BindWorkspaceModel(
     onMeshBoolean: ((modelAId: String, modelBId: String, op: Int) -> Unit)? = null,
     /** Split into connected components (`runSplit`). */
     onSplitModel: ((modelId: String) -> Unit)? = null,
+    /** Apply an embossed text or SVG to a model (`runEmboss`). */
+    onEmbossModel: ((WorkspaceAction.EmbossModel) -> Unit)? = null,
+    /** Append a volume of `type` to a PlacedModel (PickerMode.AddVolume codepath). */
+    onAddVolumeToModel: ((modelId: String, sourcePath: String, type: String) -> Unit)? = null,
+    /** Drop a previously-attached volume from a PlacedModel. */
+    onRemoveVolume: ((modelId: String, volumeId: String) -> Unit)? = null,
 ) {
     val workspace = remember { WorkspaceModel.get() }
 
@@ -184,6 +190,9 @@ fun BindWorkspaceModel(
     val onCutLatest = rememberUpdatedState(onCutModel)
     val onBoolLatest = rememberUpdatedState(onMeshBoolean)
     val onSplitLatest = rememberUpdatedState(onSplitModel)
+    val onEmbossLatest = rememberUpdatedState(onEmbossModel)
+    val onAddVolumeLatest = rememberUpdatedState(onAddVolumeToModel)
+    val onRemoveVolumeLatest = rememberUpdatedState(onRemoveVolume)
 
     LaunchedEffect(workspace) {
         workspace.actions.collect { action -> handleAction(
@@ -216,6 +225,9 @@ fun BindWorkspaceModel(
             onCutModel = onCutLatest.value,
             onMeshBoolean = onBoolLatest.value,
             onSplitModel = onSplitLatest.value,
+            onEmbossModel = onEmbossLatest.value,
+            onAddVolumeToModel = onAddVolumeLatest.value,
+            onRemoveVolume = onRemoveVolumeLatest.value,
         ) }
     }
 }
@@ -250,6 +262,9 @@ private fun handleAction(
     onCutModel: ((modelId: String, planeZmm: Float) -> Unit)?,
     onMeshBoolean: ((modelAId: String, modelBId: String, op: Int) -> Unit)?,
     onSplitModel: ((modelId: String) -> Unit)?,
+    onEmbossModel: ((WorkspaceAction.EmbossModel) -> Unit)?,
+    onAddVolumeToModel: ((modelId: String, sourcePath: String, type: String) -> Unit)?,
+    onRemoveVolume: ((modelId: String, volumeId: String) -> Unit)?,
 ) {
     when (action) {
         is WorkspaceAction.SetGizmoTool -> setGizmoTool(action.tool)
@@ -375,6 +390,18 @@ private fun handleAction(
         is WorkspaceAction.SplitModel -> {
             if (onSplitModel != null) onSplitModel(action.modelId)
             else Log.w(TAG, "SplitModel not wired.")
+        }
+        is WorkspaceAction.EmbossModel -> {
+            if (onEmbossModel != null) onEmbossModel(action)
+            else Log.w(TAG, "EmbossModel not wired.")
+        }
+        is WorkspaceAction.AddVolumeToModel -> {
+            if (onAddVolumeToModel != null) onAddVolumeToModel(action.modelId, action.sourcePath, action.type)
+            else Log.w(TAG, "AddVolumeToModel not wired.")
+        }
+        is WorkspaceAction.RemoveVolume -> {
+            if (onRemoveVolume != null) onRemoveVolume(action.modelId, action.volumeId)
+            else Log.w(TAG, "RemoveVolume not wired.")
         }
     }
 }
