@@ -120,6 +120,31 @@ class WorkspaceModelTest {
         assertEquals(true, ws.plateMovable.value)
     }
 
+    @Test fun modelEditingActionsRoundTrip() = runTest {
+        // Phase 2.3 — repair / cut / boolean / split.
+        val ws = WorkspaceModel()
+        val gathered = mutableListOf<WorkspaceAction>()
+        val job = launch(start = CoroutineStart.UNDISPATCHED) {
+            ws.actions.collect { gathered += it }
+        }
+        ws.emit(WorkspaceAction.RepairModel("m1"))
+        ws.emit(WorkspaceAction.CutModel("m1", planeZmm = 10.5f))
+        ws.emit(WorkspaceAction.MeshBoolean("m1", "m2", op = 1))
+        ws.emit(WorkspaceAction.SplitModel("m1"))
+        repeat(5) { yield() }
+        job.cancel()
+        assertEquals(4, gathered.size)
+        assertEquals("m1", (gathered[0] as WorkspaceAction.RepairModel).modelId)
+        val cut = gathered[1] as WorkspaceAction.CutModel
+        assertEquals("m1", cut.modelId)
+        assertEquals(10.5f, cut.planeZmm)
+        val bool = gathered[2] as WorkspaceAction.MeshBoolean
+        assertEquals("m1", bool.modelAId)
+        assertEquals("m2", bool.modelBId)
+        assertEquals(1, bool.op)
+        assertEquals("m1", (gathered[3] as WorkspaceAction.SplitModel).modelId)
+    }
+
     @Test fun multipleEmissionsAreOrdered() = runTest {
         val ws = WorkspaceModel()
         val gathered = mutableListOf<WorkspaceAction>()

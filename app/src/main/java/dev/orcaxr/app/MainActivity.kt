@@ -1895,8 +1895,12 @@ private fun XrShell(
             SlicerEngine.CutAttr.KEEP_LOWER or
             SlicerEngine.CutAttr.PLACE_ON_CUT_UPPER or
             SlicerEngine.CutAttr.PLACE_ON_CUT_LOWER,
+        // C6: MCP route can pass an explicit source instead of relying
+        // on `selectedModel`. The XR-button path leaves it null and
+        // continues to use the currently-selected model.
+        sourceOverride: PlacedModel? = null,
     ) {
-        val source = selectedModel ?: run {
+        val source = sourceOverride ?: selectedModel ?: run {
             android.widget.Toast.makeText(
                 ctx,
                 "Select a model to cut.",
@@ -2647,6 +2651,17 @@ private fun XrShell(
             }
             onFileSelected(file)
         },
+        // Model-editing flows: each maps to the existing Activity-
+        // local function that the per-row context menu / TransformPanel
+        // buttons already drive. runCut/runBoolean read selectedModel
+        // through closure capture, so set selection first.
+        onRepairModel = { id -> runRepair(id) },
+        onCutModel = { id, plane ->
+            val src = placedModels.firstOrNull { it.id == id }
+            if (src != null) runCut(plane, sourceOverride = src)
+        },
+        onMeshBoolean = { aId, bId, op -> runBoolean(aId, bId, op) },
+        onSplitModel = { id -> runSplit(id) },
     )
 
     // Re-preview when SELECTED model's rotation/scale OR slot palette

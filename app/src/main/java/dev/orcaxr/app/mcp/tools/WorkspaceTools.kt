@@ -73,6 +73,10 @@ internal object WorkspaceTools {
             SaveModelAsStl(workspace),
             LoadModelFromPath(workspace),
             SetPlateMovable(workspace),
+            RepairModel(workspace),
+            CutModel(workspace),
+            MeshBoolean(workspace),
+            SplitModel(workspace),
         )
     }
 
@@ -902,6 +906,135 @@ internal object WorkspaceTools {
                 "plate_movable = $v",
                 JSONObject().apply { put("plate_movable", v) },
             )
+        }
+    }
+
+    // ---- Model-editing tools (repair / cut / boolean / split) ----
+
+    class RepairModel(private val ws: WorkspaceModel) : Tool {
+        override val name = "repair_model"
+        override val description =
+            "Run libslic3r's mesh-repair pass on a model (`MeshBoolean::self_union` + " +
+                "ADMesh degenerate-face cleanup). Replaces the model's source with the repaired " +
+                "mesh. Paint state is dropped — per-triangle indices don't survive a re-mesh, " +
+                "and bleeding paint into the wrong faces would be worse than starting fresh."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id"),
+            properties = mapOf("model_id" to Schemas.string("Model id from list_placed_models")),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            if (ws.placedModels.value.none { it.id == id }) {
+                return ToolResult.error("No model with id '$id'.")
+            }
+            ws.emit(WorkspaceAction.RepairModel(id))
+            return success("Repair started for $id.", JSONObject().apply { put("model_id", id) })
+        }
+    }
+
+    class CutModel(private val ws: WorkspaceModel) : Tool {
+        override val name = "cut_model"
+        override val description =
+            "Cut a model with a horizontal plane at z = plane_z_mm (in printer-frame mm above " +
+                "the bed). Replaces the model with the cut output (a single 3MF containing both " +
+                "halves; libslic3r's auto-bed-drop handles re-grounding the lower half at slice " +
+                "time). To cut at, e.g., the midpoint, pass plane_z_mm equal to half the model's " +
+                "base_bbox_z_mm."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id", "plane_z_mm"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id from list_placed_models"),
+                "plane_z_mm" to Schemas.number("Cut plane height above the bed, in mm"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            if (!args.has("plane_z_mm")) return ToolResult.error("'plane_z_mm' is required.")
+            val plane = args.getDouble("plane_z_mm").toFloat()
+            if (!plane.isFinite() || plane <= 0f) {
+                return ToolResult.error("'plane_z_mm' must be a positive finite number.")
+            }
+            if (ws.placedModels.value.none { it.id == id }) {
+                return ToolResult.error("No model with id '$id'.")
+            }
+            ws.emit(WorkspaceAction.CutModel(id, plane))
+            return success(
+                "Cut started for $id at z=${plane}mm.",
+                JSONObject().apply {
+                    put("model_id", id)
+                    put("plane_z_mm", plane)
+                },
+            )
+        }
+    }
+
+    class MeshBoolean(private val ws: WorkspaceModel) : Tool {
+        override val name = "mesh_boolean"
+        override val description =
+            "Compute a boolean op between two models. op='union' merges, op='difference' " +
+                "subtracts B from A, op='intersection' keeps only the overlap. Result " +
+                "replaces model A; model B is unchanged."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_a_id", "model_b_id", "op"),
+            properties = mapOf(
+                "model_a_id" to Schemas.string("First operand model id"),
+                "model_b_id" to Schemas.string("Second operand model id"),
+                "op" to Schemas.string("'union', 'difference', or 'intersection'"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val a = args.optString("model_a_id").trim()
+            val b = args.optString("model_b_id").trim()
+            if (a.isEmpty() || b.isEmpty()) {
+                return ToolResult.error("Both 'model_a_id' and 'model_b_id' are required.")
+            }
+            if (a == b) return ToolResult.error("model_a_id and model_b_id must differ.")
+            val present = ws.placedModels.value.map { it.id }.toSet()
+            if (a !in present || b !in present) {
+                return ToolResult.error("One or both ids don't match a placed model.")
+            }
+            val opCode = when (args.optString("op").lowercase()) {
+                "union", "u", "0" -> 0
+                "difference", "diff", "subtract", "minus", "1" -> 1
+                "intersection", "intersect", "and", "2" -> 2
+                else -> return ToolResult.error("Unknown op. Use 'union' | 'difference' | 'intersection'.")
+            }
+            ws.emit(WorkspaceAction.MeshBoolean(a, b, opCode))
+            return success(
+                "Boolean ${args.optString("op")} started.",
+                JSONObject().apply {
+                    put("model_a_id", a)
+                    put("model_b_id", b)
+                    put("op_code", opCode)
+                },
+            )
+        }
+    }
+
+    class SplitModel(private val ws: WorkspaceModel) : Tool {
+        override val name = "split_model"
+        override val description =
+            "Split a model into its disconnected components (each connected mesh becomes " +
+                "its own PlacedModel on the bed). No-op if the mesh is already a single " +
+                "connected component."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id"),
+            properties = mapOf("model_id" to Schemas.string("Model id from list_placed_models")),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            if (ws.placedModels.value.none { it.id == id }) {
+                return ToolResult.error("No model with id '$id'.")
+            }
+            ws.emit(WorkspaceAction.SplitModel(id))
+            return success("Split started for $id.", JSONObject().apply { put("model_id", id) })
         }
     }
 }

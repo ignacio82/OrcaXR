@@ -264,10 +264,33 @@ the binding file.
 after `runSliceMulti` is declared (just before the re-preview
 LaunchedEffect block at the start of the rendering section). All
 state vars are still in scope at that point, AND the local
-`runSlice`/`runSliceMulti`/`runAutoArrange`/`saveGcodeToDownloads`
-family is now visible so the Tier-B callbacks can close over them.
-Don't move it back up before those funs are declared — the closures
-won't compile.
+`runSlice`/`runSliceMulti`/`runAutoArrange`/`saveGcodeToDownloads`/
+`runRepair`/`runCut`/`runBoolean`/`runSplit` family is now visible so
+the Tier-B callbacks can close over them. Don't move it back up
+before those funs are declared — the closures won't compile.
+
+**Stale-closure trap inside `BindWorkspaceModel`:** the action
+collector lives in a `LaunchedEffect(workspace) { ... }` whose
+coroutine survives recomposition. Every callback / setter / state
+read used inside the collector MUST go through `rememberUpdatedState`
+before being passed to the dispatcher. Without it, the very first
+composition's lambdas freeze in the collector's closure and any
+later UI-driven state change becomes invisible to MCP-triggered
+actions. The "what does the LLM see when it slices right after the
+user added a model" bug fixed in Phase 2.3 was exactly this — keep
+the `rememberUpdatedState` wrappers around every callback when you
+add a new one.
+
+**Function-with-`selectedModel`-closure trap:** local funs in XrShell
+that read `selectedModel` (e.g. `runCut`) capture the value at
+composition time. MCP tools that target a specific model id can't
+just `selectedModelIds = setOf(id); runX()` — `runX` would still see
+the OLD `selectedModel`. Either (a) extend the local fun with a
+`sourceOverride: PlacedModel? = null` param (preferred — minimal
+diff, the XR-button path keeps working) and have the MCP callback
+look the model up in `placedModels` and pass it explicitly, or (b)
+write the logic inline in the MCP callback. `runCut` uses (a) as the
+canonical example.
 
 **Tool naming convention:** `<verb>_<object>` snake_case
 (`list_printers`, `add_plate`, `start_print`,

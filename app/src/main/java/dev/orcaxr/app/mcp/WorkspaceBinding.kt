@@ -109,6 +109,14 @@ fun BindWorkspaceModel(
      * restoration / GLB bake / bedFit / bedCollision run identically.
      */
     onLoadModelFromPath: ((java.io.File, WorkspaceAction.LoadMode) -> Unit)? = null,
+    /** Mesh repair (`runRepair`). */
+    onRepairModel: ((modelId: String) -> Unit)? = null,
+    /** Cut a model along a Z plane (`runCut` after selecting the model). */
+    onCutModel: ((modelId: String, planeZmm: Float) -> Unit)? = null,
+    /** Mesh boolean op (`runBoolean`). */
+    onMeshBoolean: ((modelAId: String, modelBId: String, op: Int) -> Unit)? = null,
+    /** Split into connected components (`runSplit`). */
+    onSplitModel: ((modelId: String) -> Unit)? = null,
 ) {
     val workspace = remember { WorkspaceModel.get() }
 
@@ -140,38 +148,74 @@ fun BindWorkspaceModel(
     LaunchedEffect(plateMovable) { workspace.publishPlateMovable(plateMovable) }
 
     // ---- Action collector ----
+    //
+    // The collector lives inside `LaunchedEffect(workspace)` whose
+    // coroutine survives recomposition. Without `rememberUpdatedState`
+    // wrappers, every captured value (including the callbacks) would
+    // freeze at the first composition's bindings, so an LLM action
+    // arriving after the user changed something in the UI would dispatch
+    // through stale lambdas. Each `Latest` state is .value-read inside
+    // the collector so the most-recent reference is used.
     val placedModelsLatest = rememberUpdatedState(placedModels)
     val selectedIdsLatest = rememberUpdatedState(selectedModelIds)
     val paintBrushLatest = rememberUpdatedState(paintBrush)
     val allProfilesLatest = rememberUpdatedState(allProfiles)
+    val setPlacedModelsLatest = rememberUpdatedState(setPlacedModels)
+    val setSelectedModelIdsLatest = rememberUpdatedState(setSelectedModelIds)
+    val setPaintBrushLatest = rememberUpdatedState(setPaintBrush)
+    val setGizmoToolLatest = rememberUpdatedState(setGizmoTool)
+    val setWorkspaceModeLatest = rememberUpdatedState(setWorkspaceMode)
+    val setActivePlateIdLatest = rememberUpdatedState(setActivePlateId)
+    val setSelectedProfileLatest = rememberUpdatedState(setSelectedProfile)
+    val setSelectedPrinterIdLatest = rememberUpdatedState(setSelectedPrinterId)
+    val setLayerHeightOverrideLatest = rememberUpdatedState(setLayerHeightOverride)
+    val setMaxLayerLatest = rememberUpdatedState(setMaxLayer)
+    val setShowTravelsLatest = rememberUpdatedState(setShowTravels)
+    val setToolpathTubesLatest = rememberUpdatedState(setToolpathTubes)
+    val setPlateMovableLatest = rememberUpdatedState(setPlateMovable)
+    val onSliceLatest = rememberUpdatedState(onSliceActivePlate)
+    val onArrangeLatest = rememberUpdatedState(onAutoArrangePlate)
+    val onDropLatest = rememberUpdatedState(onDropToBed)
+    val onSaveGcodeLatest = rememberUpdatedState(onSaveGcode)
+    val onSave3mfLatest = rememberUpdatedState(onSaveProject3mf)
+    val onSaveStlLatest = rememberUpdatedState(onSaveModelStl)
+    val onLoadLatest = rememberUpdatedState(onLoadModelFromPath)
+    val onRepairLatest = rememberUpdatedState(onRepairModel)
+    val onCutLatest = rememberUpdatedState(onCutModel)
+    val onBoolLatest = rememberUpdatedState(onMeshBoolean)
+    val onSplitLatest = rememberUpdatedState(onSplitModel)
 
     LaunchedEffect(workspace) {
         workspace.actions.collect { action -> handleAction(
             action = action,
             placedModels = placedModelsLatest.value,
-            setPlacedModels = setPlacedModels,
+            setPlacedModels = setPlacedModelsLatest.value,
             selectedModelIds = selectedIdsLatest.value,
-            setSelectedModelIds = setSelectedModelIds,
+            setSelectedModelIds = setSelectedModelIdsLatest.value,
             paintBrush = paintBrushLatest.value,
-            setPaintBrush = setPaintBrush,
+            setPaintBrush = setPaintBrushLatest.value,
             allProfiles = allProfilesLatest.value,
-            setGizmoTool = setGizmoTool,
-            setWorkspaceMode = setWorkspaceMode,
-            setActivePlateId = setActivePlateId,
-            setSelectedProfile = setSelectedProfile,
-            setSelectedPrinterId = setSelectedPrinterId,
-            setLayerHeightOverride = setLayerHeightOverride,
-            setMaxLayer = setMaxLayer,
-            setShowTravels = setShowTravels,
-            setToolpathTubes = setToolpathTubes,
-            onSliceActivePlate = onSliceActivePlate,
-            onAutoArrangePlate = onAutoArrangePlate,
-            onDropToBed = onDropToBed,
-            onSaveGcode = onSaveGcode,
-            onSaveProject3mf = onSaveProject3mf,
-            onSaveModelStl = onSaveModelStl,
-            onLoadModelFromPath = onLoadModelFromPath,
-            setPlateMovable = setPlateMovable,
+            setGizmoTool = setGizmoToolLatest.value,
+            setWorkspaceMode = setWorkspaceModeLatest.value,
+            setActivePlateId = setActivePlateIdLatest.value,
+            setSelectedProfile = setSelectedProfileLatest.value,
+            setSelectedPrinterId = setSelectedPrinterIdLatest.value,
+            setLayerHeightOverride = setLayerHeightOverrideLatest.value,
+            setMaxLayer = setMaxLayerLatest.value,
+            setShowTravels = setShowTravelsLatest.value,
+            setToolpathTubes = setToolpathTubesLatest.value,
+            onSliceActivePlate = onSliceLatest.value,
+            onAutoArrangePlate = onArrangeLatest.value,
+            onDropToBed = onDropLatest.value,
+            onSaveGcode = onSaveGcodeLatest.value,
+            onSaveProject3mf = onSave3mfLatest.value,
+            onSaveModelStl = onSaveStlLatest.value,
+            onLoadModelFromPath = onLoadLatest.value,
+            setPlateMovable = setPlateMovableLatest.value,
+            onRepairModel = onRepairLatest.value,
+            onCutModel = onCutLatest.value,
+            onMeshBoolean = onBoolLatest.value,
+            onSplitModel = onSplitLatest.value,
         ) }
     }
 }
@@ -202,6 +246,10 @@ private fun handleAction(
     onSaveModelStl: (() -> Unit)?,
     onLoadModelFromPath: ((java.io.File, WorkspaceAction.LoadMode) -> Unit)?,
     setPlateMovable: (Boolean) -> Unit,
+    onRepairModel: ((modelId: String) -> Unit)?,
+    onCutModel: ((modelId: String, planeZmm: Float) -> Unit)?,
+    onMeshBoolean: ((modelAId: String, modelBId: String, op: Int) -> Unit)?,
+    onSplitModel: ((modelId: String) -> Unit)?,
 ) {
     when (action) {
         is WorkspaceAction.SetGizmoTool -> setGizmoTool(action.tool)
@@ -312,6 +360,22 @@ private fun handleAction(
             }
         }
         is WorkspaceAction.SetPlateMovable -> setPlateMovable(action.movable)
+        is WorkspaceAction.RepairModel -> {
+            if (onRepairModel != null) onRepairModel(action.modelId)
+            else Log.w(TAG, "RepairModel not wired by host activity.")
+        }
+        is WorkspaceAction.CutModel -> {
+            if (onCutModel != null) onCutModel(action.modelId, action.planeZmm)
+            else Log.w(TAG, "CutModel not wired.")
+        }
+        is WorkspaceAction.MeshBoolean -> {
+            if (onMeshBoolean != null) onMeshBoolean(action.modelAId, action.modelBId, action.op)
+            else Log.w(TAG, "MeshBoolean not wired.")
+        }
+        is WorkspaceAction.SplitModel -> {
+            if (onSplitModel != null) onSplitModel(action.modelId)
+            else Log.w(TAG, "SplitModel not wired.")
+        }
     }
 }
 

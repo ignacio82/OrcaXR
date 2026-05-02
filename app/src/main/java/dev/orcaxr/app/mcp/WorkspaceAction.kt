@@ -164,4 +164,32 @@ sealed interface WorkspaceAction {
      * reposition the entire bed in space.
      */
     data class SetPlateMovable(val movable: Boolean) : WorkspaceAction
+
+    /**
+     * Mesh repair via libslic3r `MeshBoolean::self_union`. Replaces
+     * the model's source with the repaired mesh; paint state is
+     * dropped (per-triangle indices don't survive a re-mesh — see
+     * libslic3r gotcha #27).
+     */
+    data class RepairModel(val modelId: String) : WorkspaceAction
+
+    /**
+     * Cut a model along a Z plane. `planeZmm` is in printer-frame
+     * mm above the bed. Both halves are kept by default; the slicer
+     * handles bed-grounding for the lower half.
+     */
+    data class CutModel(val modelId: String, val planeZmm: Float) : WorkspaceAction
+
+    /**
+     * Mesh boolean op between two models. `op` mirrors
+     * SlicerEngine.BoolOp: 0 = Union, 1 = Difference (A − B), 2 =
+     * Intersection.
+     */
+    data class MeshBoolean(val modelAId: String, val modelBId: String, val op: Int) : WorkspaceAction
+
+    /**
+     * Split a model into its disconnected components. Each
+     * connected component becomes its own PlacedModel.
+     */
+    data class SplitModel(val modelId: String) : WorkspaceAction
 }
