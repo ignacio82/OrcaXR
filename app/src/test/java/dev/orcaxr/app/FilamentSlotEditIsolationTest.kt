@@ -91,11 +91,57 @@ class FilamentSlotEditIsolationTest {
             if (i == 0) f.copy(physicalSlot = 3) else f
         }
         val after = applyMapToPhysical(before, slot = 2, physicalSlot = 1)
-        // Slot 0's pre-existing remap survives.
+        // Slot 0's pre-existing remap survives — different physical
+        // target so no collision-bump is required.
         assertEquals(3, after[0].physicalSlot)
         assertEquals(1, after[2].physicalSlot)
         assertNull(after[1].physicalSlot)
         assertNull(after[3].physicalSlot)
+    }
+
+    @Test fun mapToPhysicalBumpsPriorOccupant() {
+        // Two project filaments must NEVER share a physical extruder.
+        // Pre-fix the picker silently let the user create the collision,
+        // and libslic3r's filament_map collapsed the painted regions of
+        // both rows onto the same Tn — the dragon-3MF body printed in
+        // 2 colors instead of 4 (DragonColorDiagTest covers the JNI half).
+        // Tapping "T0 for slot 1" must clear any prior occupant of T0.
+        val before = baseList().mapIndexed { i, f ->
+            if (i == 0) f.copy(physicalSlot = 0) else f
+        }
+        val after = applyMapToPhysical(before, slot = 1, physicalSlot = 0)
+        assertEquals(0, after[1].physicalSlot)
+        assertNull(after[0].physicalSlot)
+        // Untouched rows stay null.
+        assertNull(after[2].physicalSlot)
+        assertNull(after[3].physicalSlot)
+    }
+
+    @Test fun mapToPhysicalSelfMapDoesNotBumpItself() {
+        // Re-asserting the same physical for the same slot must not
+        // trip the bump branch on the target row — the i == slot match
+        // is the new assignment, not a collision with itself.
+        val before = baseList().mapIndexed { i, f ->
+            if (i == 1) f.copy(physicalSlot = 2) else f
+        }
+        val after = applyMapToPhysical(before, slot = 1, physicalSlot = 2)
+        assertEquals(2, after[1].physicalSlot)
+    }
+
+    @Test fun mapToPhysicalBumpClearsAllCollidingRows() {
+        // Defensive: if the prior state already had two rows colliding
+        // (e.g. via a corrupt DataStore), a fresh assignment to that
+        // physical extruder should leave exactly one row mapped to it.
+        val before = baseList().mapIndexed { i, f ->
+            when (i) {
+                0, 1 -> f.copy(physicalSlot = 0)
+                else -> f
+            }
+        }
+        val after = applyMapToPhysical(before, slot = 2, physicalSlot = 0)
+        assertNull(after[0].physicalSlot)
+        assertNull(after[1].physicalSlot)
+        assertEquals(0, after[2].physicalSlot)
     }
 
     @Test fun mapToVirtualSetsVirtualAndClearsPhysical() {

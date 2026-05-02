@@ -6060,10 +6060,24 @@ private fun ShellContent(
 internal fun applyChangeColor(list: List<FilamentEntry>, slot: Int, hex: String): List<FilamentEntry> =
     list.mapIndexed { i, f -> if (i == slot) f.copy(color = hex) else f }
 
-internal fun applyMapToPhysical(list: List<FilamentEntry>, slot: Int, physicalSlot: Int): List<FilamentEntry> =
-    list.mapIndexed { i, f ->
-        if (i == slot) f.copy(physicalSlot = physicalSlot, virtualSlot = null) else f
+internal fun applyMapToPhysical(list: List<FilamentEntry>, slot: Int, physicalSlot: Int): List<FilamentEntry> {
+    if (slot !in list.indices) return list
+    return list.mapIndexed { i, f ->
+        when {
+            i == slot -> f.copy(physicalSlot = physicalSlot, virtualSlot = null)
+            // Physical-slot uniqueness: any OTHER row that previously
+            // held this physical slot is bumped back to identity
+            // (physicalSlot = null). Without this, two project filaments
+            // can share a physical extruder, and libslic3r's filament_map
+            // collapses both painted regions onto the same Tn — the
+            // dragon-3MF "purple body printed onto T0 alongside white"
+            // regression. The FilamentEntriesStore.kt header documents
+            // this as the intended UX contract.
+            f.physicalSlot == physicalSlot -> f.copy(physicalSlot = null)
+            else -> f
+        }
     }
+}
 
 internal fun applyMapToVirtual(list: List<FilamentEntry>, slot: Int, virtualSlot: Int): List<FilamentEntry> =
     list.mapIndexed { i, f ->

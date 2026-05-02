@@ -20,7 +20,14 @@
 set -uo pipefail
 
 DEVICE="${DEVICE:-adb-R3GYB0AQXWE-nYV2BD._adb-tls-connect._tcp}"
-PKG="${PKG:-dev.orcaxr.app}"
+# Default to the debug variant since release strips the receiver entirely.
+# Override via env when testing a non-default applicationId variant.
+PKG="${PKG:-dev.orcaxr.app.debug}"
+# Activity FQN. Debug builds add ".debug" as an applicationIdSuffix only —
+# the actual class still lives in the dev.orcaxr.app package, so
+# "$PKG/.MainActivity" (relative) resolves to "dev.orcaxr.app.debug.MainActivity"
+# which doesn't exist. Always use the absolute class name.
+ACTIVITY="${ACTIVITY:-dev.orcaxr.app.MainActivity}"
 # NOTE: paths with spaces get mangled by Android's `am` argument parser
 # (it sees "Quick Share/..." as a ComponentName). Always use a no-space
 # path on-device; `adb push` or `cp` from the spaced path before testing.
@@ -62,7 +69,7 @@ fi
 # Restarting the activity with `am start` brings it back to foreground
 # without killing the process if it's already running.
 log "starting MainActivity (no force-stop)"
-$ADB shell am start -n "$PKG/.MainActivity" >/dev/null
+$ADB shell am start -n "$PKG/$ACTIVITY" >/dev/null
 
 # 3. Wait for the activity to compose so the LaunchedEffect collector is
 # subscribed to TestController.commands BEFORE we send broadcasts. The
@@ -83,9 +90,18 @@ sleep 3
 # 4. Clear logcat so we only see this run's events
 $ADB logcat -c
 
-# 5. Broadcast LOAD_3MF and wait for the load to finish
+# 5. Broadcast LOAD_3MF and wait for the load to finish.
+#
+# Sending via `run-as $PKG` so the broadcast originates from the app's
+# UID — the receiver's signature-level TRIGGER_TEST_RECEIVER permission
+# (added in 4d4e49f to keep the wide-open control surface from being
+# triggerable by any sideloaded app on the device) blocks bare
+# `adb shell am broadcast`, which runs as shell uid 2000 and can't
+# satisfy a signature perm. `--user 0` is required because run-as
+# defaults to user -2 (UserHandle.USER_NULL) which AM rejects without
+# INTERACT_ACROSS_USERS_FULL.
 log "broadcasting LOAD_3MF $DRAGON"
-$ADB shell am broadcast -p "$PKG" \
+$ADB shell run-as "$PKG" am broadcast --user 0 -p "$PKG" \
     -a dev.orcaxr.app.test.LOAD_3MF \
     --es path "$DRAGON" >/dev/null
 
@@ -105,9 +121,9 @@ if ! echo "$load_signal" | grep -q "nativeWriteColoredGlb: wrote"; then
 fi
 log "load OK: $load_signal"
 
-# 6. Broadcast SLICE
+# 6. Broadcast SLICE (see #5 for why this routes through run-as).
 log "broadcasting SLICE"
-$ADB shell am broadcast -p "$PKG" \
+$ADB shell run-as "$PKG" am broadcast --user 0 -p "$PKG" \
     -a dev.orcaxr.app.test.SLICE >/dev/null
 
 # 7. Tail logcat until outcome lands. We watch the WHOLE log buffer (not
