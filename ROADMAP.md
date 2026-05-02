@@ -355,7 +355,7 @@ Render the probed bed-mesh grid as a heatmap GLB on the build plate. Today we'd 
 
 `MoonrakerClient.queryStatus` subscribes to `filament_detect`; `LivePrintStatus` renders amber "T_N empty" pills during an active print. Hidden when the printer doesn't expose `filament_detect`.
 
-### C6. MCP Server for OrcaXR (AI Control & Smart Assistant) 🟡 Phase 1 + 2 shipped — 41 tools live; Tier-B mutators (slice, save, auto-arrange) pending
+### C6. MCP Server for OrcaXR (AI Control & Smart Assistant) 🟡 Phase 1 + 2 + 2.1 shipped — 48 tools live; cancel_slice + workspace-grab + multi-volume editing pending
 
 > **Files:** `app/src/main/java/dev/orcaxr/app/mcp/` (server, settings, tools, UI card), `OrcaXRApplication.kt` (boot), `UiPanels.kt` (Devices-panel card), `app/src/test/java/dev/orcaxr/app/mcp/` (tests). See [`GEMINI.md`](GEMINI.md) §"MCP server (C6) — architecture" for the wiring contract.
 
@@ -378,11 +378,17 @@ Render the probed bed-mesh grid as a heatmap GLB on the build plate. Today we'd 
 - **Reads:** `get_workspace_state` (one-shot snapshot of the full workspace), `list_placed_models` (filterable by plate / selection).
 - **Tier-A mutators:** `set_gizmo_tool`, `set_workspace_mode`, `set_active_plate`, `select_models`, `clear_selection`, `set_layer_height_override`, `set_paint_mode`, `set_paint_brush`, `set_max_layer`, `switch_profile`, `select_printer`, `set_show_travels`, `set_toolpath_tubes`, `transform_model`, `delete_models`.
 
-**Phase 2.1 (deferred, additive):** Tier-B mutators that need MainActivity-deep pipelines — `slice_active_plate`, `cancel_slice`, `auto_arrange_plate`, `drop_to_bed`, `save_gcode_to_downloads`, `save_project_as_3mf`, `save_model_as_stl`. The `WorkspaceAction` cases are already declared so the surface is stable; handlers route via callbacks the XrShell call site fills in.
+**Phase 2.1 shipped:** Tier-B mutator tools wired through `BindWorkspaceModel`'s new optional callback parameters (`onSliceActivePlate`, `onAutoArrangePlate`, `onDropToBed`, `onSaveGcode`, `onSaveProject3mf`, `onSaveModelStl`) which the MainActivity call site fills with lambdas that re-use the exact `runSlice`/`runSliceMulti`/`runAutoArrange`/`saveGcodeToDownloads`/`saveProjectAs3mfToDownloads`/`saveModelAsStlToDownloads` paths the BottomRightSummaryPanel buttons already drive — so an LLM-triggered slice is byte-identical to a tap. The `BindWorkspaceModel` call site moved later in `XrShell` (after `runSliceMulti` is declared) so the callbacks can close over those local funs. Phase 2.1 tools added (7 new, 48 total): `slice_active_plate`, `cancel_slice` (declared but unsupported pending a libslic3r abort hook), `auto_arrange_plate`, `drop_to_bed`, `save_gcode_to_downloads`, `save_project_as_3mf`, `save_model_as_stl`.
 
-**Phase 3:** Smart-Assistant XR panel — chat-style UI hosted in the workspace, calls the same MCP server locally. Optional once Phase 2.1 is solid; the on-device server already lets a remote LLM client (Claude Desktop pointing at the device's LAN IP) drive everything.
+**Phase 3 (next):** Smart-Assistant XR panel — chat-style UI hosted in the workspace, calls the same MCP server locally. The on-device server already lets a remote LLM client (Claude Desktop pointing at the device's LAN IP) drive everything; Phase 3 is about making it feel native inside the headset.
 
-**Verification:** instrumented test from a desktop machine — `curl -X POST http://<headset-ip>:7080/mcp -H "Authorization: Bearer <key>" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'` returns the 41-tool catalog. End-to-end against a real Moonraker printer (`get_printer_status` → `pause_print` → `resume_print` cycle) is the next manual smoke test. Workspace tools require the app foreground (the `attached` flag in `get_workspace_state` is the gate).
+**Smaller gaps still on the table** (Phase 2.x, additive):
+- `cancel_slice` needs a `nativeAbort` hook in libslic3r's JNI shim — declared but no-op today.
+- Workspace-grab toggle (`plateMovable`) and workspace transform (`workspaceTx`) aren't yet exposed.
+- Per-model per-volume editing (Phase XR_OBJ_4 multi-volume API) isn't yet exposed.
+- File loading from a path (drag-drop equivalent) — would let an LLM do `load_model_from_path("/sdcard/Downloads/dragon.3mf")` end-to-end.
+
+**Verification:** instrumented test from a desktop machine — `curl -X POST http://<headset-ip>:7080/mcp -H "Authorization: Bearer <key>" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'` returns the 48-tool catalog. End-to-end smoke tests once you toggle the server on: `slice_active_plate` → poll `get_workspace_state` until `slice_state.kind == "done"` → `save_gcode_to_downloads`, then `select_printer` + `start_print` against a Moonraker host. Workspace tools require the app foreground (the `attached` flag in `get_workspace_state` is the gate).
 
 ### C7. Spatial "Digital Twin" Monitoring 🔴 Not started
 

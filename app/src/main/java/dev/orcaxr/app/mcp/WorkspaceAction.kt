@@ -121,6 +121,18 @@ sealed interface WorkspaceAction {
      *  follow up by polling sliceState. */
     data object SliceActivePlate : WorkspaceAction
 
-    /** Cancel the running slice (no-op if not slicing). */
+    /** Cancel the running slice (no-op if not slicing). Currently
+     *  declared but unimplemented — libslic3r doesn't expose an abort
+     *  hook through the JNI shim yet. */
     data object CancelSlice : WorkspaceAction
+
+    /** Save the most-recent successful slice's G-code to /Downloads. */
+    data object SaveGcodeToDownloads : WorkspaceAction
+
+    /** Save the currently-selected model as an STL into /Downloads. */
+    data object SaveModelStl : WorkspaceAction
+
+    /** Save the currently-selected model + active config as a 3MF
+     *  project into /Downloads. */
+    data object SaveProject3mf : WorkspaceAction
 }

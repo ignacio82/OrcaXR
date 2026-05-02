@@ -62,6 +62,15 @@ internal object WorkspaceTools {
             SetToolpathTubes(workspace),
             TransformModel(workspace),
             DeleteModels(workspace),
+            // Tier-B: long-running pipelines that route through the
+            // matching MainActivity buttons (Slice / Save / Auto-arrange).
+            SliceActivePlate(workspace),
+            CancelSlice(workspace),
+            AutoArrangePlate(workspace),
+            DropToBed(workspace),
+            SaveGcodeToDownloads(workspace),
+            SaveProjectAs3mf(workspace),
+            SaveModelAsStl(workspace),
         )
     }
 
@@ -657,6 +666,169 @@ internal object WorkspaceTools {
             if (ids.isEmpty()) return ToolResult.error("'model_ids' must be a non-empty array.")
             ws.emit(WorkspaceAction.DeleteModels(ids))
             return success("Deleted ${ids.size} model(s).", JSONObject().apply { put("deleted_count", ids.size) })
+        }
+    }
+
+    // ---- Tier-B mutator tools ----
+
+    class SliceActivePlate(private val ws: WorkspaceModel) : Tool {
+        override val name = "slice_active_plate"
+        override val description =
+            "Trigger a slice of the models on the active plate. " +
+                "Equivalent to tapping 'Slice' in the bottom-right summary panel. " +
+                "Returns immediately; the slice runs asynchronously — poll get_workspace_state " +
+                "(slice_state.kind=slicing→done) to follow progress. Multi-model plates are " +
+                "sliced together with toolchange segmentation; single-model plates use the " +
+                "fast nativeSlice path."
+        override val inputSchema = Schemas.empty()
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val placed = ws.placedModels.value.filter { it.plateId == ws.activePlateId.value }
+            if (placed.isEmpty()) {
+                return ToolResult.error(
+                    "No models on the active plate (plate ${ws.activePlateId.value}). " +
+                        "Add a model first.",
+                )
+            }
+            ws.emit(WorkspaceAction.SliceActivePlate)
+            return success(
+                "Slice started for plate ${ws.activePlateId.value} (${placed.size} model(s)). " +
+                    "Poll get_workspace_state to follow progress.",
+                JSONObject().apply {
+                    put("plate_id", ws.activePlateId.value)
+                    put("model_count", placed.size)
+                },
+            )
+        }
+    }
+
+    class CancelSlice(private val ws: WorkspaceModel) : Tool {
+        override val name = "cancel_slice"
+        override val description =
+            "Request that the running slice cancel. NOTE: libslic3r doesn't expose an abort " +
+                "hook through the JNI shim today, so this currently logs a warning and is a no-op. " +
+                "Surface kept stable so client code doesn't break when the underlying capability " +
+                "lands."
+        override val inputSchema = Schemas.empty()
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            ws.emit(WorkspaceAction.CancelSlice)
+            return ToolResult.error(
+                "cancel_slice is not yet supported — libslic3r doesn't expose an abort hook. " +
+                    "The action was logged but no slice was cancelled.",
+            )
+        }
+    }
+
+    class AutoArrangePlate(private val ws: WorkspaceModel) : Tool {
+        override val name = "auto_arrange_plate"
+        override val description =
+            "Run libslic3r's libnest2d-backed packer over the models on the active plate. " +
+                "1 model → centers on bed origin. 2+ models → packs tightly within the printer's " +
+                "bed bounds with 5 mm gaps. Updates each model's translateXmm/Ymm; rotation, " +
+                "scale, and paint state are preserved."
+        override val inputSchema = Schemas.empty()
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val placed = ws.placedModels.value.filter { it.plateId == ws.activePlateId.value }
+            if (placed.isEmpty()) return ToolResult.error("No models on the active plate.")
+            ws.emit(WorkspaceAction.AutoArrangePlate)
+            return success(
+                "Auto-arrange started for ${placed.size} model(s) on plate ${ws.activePlateId.value}.",
+                JSONObject().apply {
+                    put("plate_id", ws.activePlateId.value)
+                    put("model_count", placed.size)
+                },
+            )
+        }
+    }
+
+    class DropToBed(private val ws: WorkspaceModel) : Tool {
+        override val name = "drop_to_bed"
+        override val description =
+            "Snap a model's vertical translation back to z=0 so its lowest face sits on the bed. " +
+                "Useful after rotation. The slicer's auto-bed-drop pass also runs at slice time, " +
+                "but this gives the LLM a way to clean up the in-XR preview's floating Z."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id"),
+            properties = mapOf("model_id" to Schemas.string("Model id from list_placed_models")),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            if (ws.placedModels.value.none { it.id == id }) {
+                return ToolResult.error("No model with id '$id'.")
+            }
+            ws.emit(WorkspaceAction.DropToBed(id))
+            return success("Dropped $id to bed.", JSONObject().apply { put("model_id", id) })
+        }
+    }
+
+    class SaveGcodeToDownloads(private val ws: WorkspaceModel) : Tool {
+        override val name = "save_gcode_to_downloads"
+        override val description =
+            "Copy the most-recent successful slice's G-code into /Downloads, named after the " +
+                "source. Requires slice_state.kind=done in get_workspace_state. " +
+                "Requires All-Files-Access on Android (otherwise the host activity logs a permission failure)."
+        override val inputSchema = Schemas.empty()
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val ss = ws.sliceState.value
+            if (ss !is SliceUiState.Done || ss.result !is dev.orcaxr.app.SliceResult.Success) {
+                return ToolResult.error(
+                    "No successful slice to save. " +
+                        "Run slice_active_plate first and wait for slice_state.kind=done.",
+                )
+            }
+            ws.emit(WorkspaceAction.SaveGcodeToDownloads)
+            return success("Save G-code requested.", JSONObject().apply {
+                put("source_label", ss.sourceLabel)
+            })
+        }
+    }
+
+    class SaveProjectAs3mf(private val ws: WorkspaceModel) : Tool {
+        override val name = "save_project_as_3mf"
+        override val description =
+            "Save the currently-selected model + active config (profile, layer-height override, " +
+                "Speed/Support overrides) + paint state as a 3MF project file in /Downloads. " +
+                "Requires exactly one model selected; saves only that model's geometry + " +
+                "paint metadata."
+        override val inputSchema = Schemas.empty()
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            if (ws.selectedModelIds.value.isEmpty()) {
+                return ToolResult.error(
+                    "No model selected. Use select_models with exactly one id, then retry.",
+                )
+            }
+            ws.emit(WorkspaceAction.SaveProject3mf)
+            return success(
+                "Save 3MF requested for the selected model.",
+                JSONObject().apply { put("selected_count", ws.selectedModelIds.value.size) },
+            )
+        }
+    }
+
+    class SaveModelAsStl(private val ws: WorkspaceModel) : Tool {
+        override val name = "save_model_as_stl"
+        override val description =
+            "Save the currently-selected model as an STL into /Downloads. The mesh is " +
+                "exported with current rotation, scale, and translation baked in. " +
+                "Paint state is NOT preserved (STL has no material metadata) — use " +
+                "save_project_as_3mf for that."
+        override val inputSchema = Schemas.empty()
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            if (ws.selectedModelIds.value.isEmpty()) {
+                return ToolResult.error("No model selected.")
+            }
+            ws.emit(WorkspaceAction.SaveModelStl)
+            return success(
+                "Save STL requested for the selected model.",
+                JSONObject().apply { put("selected_count", ws.selectedModelIds.value.size) },
+            )
         }
     }
 }

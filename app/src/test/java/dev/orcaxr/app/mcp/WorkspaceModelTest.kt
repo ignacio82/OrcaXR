@@ -60,6 +60,36 @@ class WorkspaceModelTest {
         assertEquals(true, ws.attached.value)
     }
 
+    @Test fun tierBActionsRoundTripThroughChannel() = runTest {
+        // Verify the new Tier-B sealed-class cases (slice / save /
+        // arrange / drop) can be emitted + observed. The collector
+        // dispatch is exercised at integration time on a real device;
+        // here we only verify the action surface is wired.
+        val ws = WorkspaceModel()
+        val gathered = mutableListOf<WorkspaceAction>()
+        val job = launch(start = CoroutineStart.UNDISPATCHED) {
+            ws.actions.collect { gathered += it }
+        }
+        ws.emit(WorkspaceAction.SliceActivePlate)
+        ws.emit(WorkspaceAction.AutoArrangePlate)
+        ws.emit(WorkspaceAction.DropToBed("model_42"))
+        ws.emit(WorkspaceAction.SaveGcodeToDownloads)
+        ws.emit(WorkspaceAction.SaveProject3mf)
+        ws.emit(WorkspaceAction.SaveModelStl)
+        ws.emit(WorkspaceAction.CancelSlice)
+        repeat(8) { yield() }
+        job.cancel()
+        assertEquals(7, gathered.size)
+        assertTrue(gathered[0] === WorkspaceAction.SliceActivePlate)
+        assertTrue(gathered[1] === WorkspaceAction.AutoArrangePlate)
+        assertTrue(gathered[2] is WorkspaceAction.DropToBed)
+        assertEquals("model_42", (gathered[2] as WorkspaceAction.DropToBed).modelId)
+        assertTrue(gathered[3] === WorkspaceAction.SaveGcodeToDownloads)
+        assertTrue(gathered[4] === WorkspaceAction.SaveProject3mf)
+        assertTrue(gathered[5] === WorkspaceAction.SaveModelStl)
+        assertTrue(gathered[6] === WorkspaceAction.CancelSlice)
+    }
+
     @Test fun multipleEmissionsAreOrdered() = runTest {
         val ws = WorkspaceModel()
         val gathered = mutableListOf<WorkspaceAction>()

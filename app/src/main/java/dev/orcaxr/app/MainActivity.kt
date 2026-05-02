@@ -879,44 +879,10 @@ private fun XrShell(
     var isScanning by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    // C6 — bind the in-session shell state to the process-scoped
-    // WorkspaceModel so MCP tools can observe it and post mutations.
-    // The binding is unidirectional in both directions: publishers push
-    // remember{} state into the model on change; the action collector
-    // posts back through the same setters the UI uses, so observers
-    // (re-bake, validation, GLB regenerate) fire identically whether
-    // the change came from a user pinch or an LLM tool call.
-    dev.orcaxr.app.mcp.BindWorkspaceModel(
-        placedModels = placedModels,
-        setPlacedModels = { placedModels = it },
-        selectedModelIds = selectedModelIds,
-        setSelectedModelIds = { selectedModelIds = it },
-        gizmoTool = gizmoTool,
-        setGizmoTool = { gizmoTool = it },
-        paintBrush = paintBrush,
-        setPaintBrush = { paintBrush = it },
-        workspaceMode = workspaceMode,
-        setWorkspaceMode = { workspaceMode = it },
-        activePlateId = activePlateId,
-        setActivePlateId = { activePlateId = it },
-        selectedProfile = selectedProfile.value,
-        setSelectedProfile = { selectedProfile.value = it },
-        selectedPrinterId = selectedPrinterId.value,
-        setSelectedPrinterId = { selectedPrinterId.value = it },
-        layerHeightOverride = layerHeightOverride.value,
-        setLayerHeightOverride = { layerHeightOverride.value = it },
-        printSettingsOverrides = printSettingsOverrides.value,
-        sliceState = sliceState.value,
-        maxLayer = maxLayer.value,
-        setMaxLayer = { maxLayer.value = it },
-        bedFit = bedFit,
-        bedCollision = bedCollision,
-        showTravels = showTravels.value,
-        setShowTravels = { showTravels.value = it },
-        toolpathTubes = toolpathTubes.value,
-        setToolpathTubes = { toolpathTubes.value = it },
-        allProfiles = allProfiles,
-    )
+    // C6 — moved further down (post-runSliceMulti) so the Tier-B
+    // callbacks can close over the slice / save / arrange functions.
+    // See `dev.orcaxr.app.mcp.BindWorkspaceModel(...)` near the bottom
+    // of XrShell, after all local fun declarations.
 
     // "As will print" palette — what each project filament will actually
     // look like once the user's physical / virtual remap is applied.
@@ -2567,6 +2533,107 @@ private fun XrShell(
             sliceState.value = SliceUiState.Done(multiLabel, result, parsed)
         }
     }
+
+    // C6 — bind the in-session shell state to the process-scoped
+    // WorkspaceModel so MCP tools can observe it and post mutations.
+    // The binding is unidirectional in both directions: publishers push
+    // remember{} state into the model on change; the action collector
+    // posts back through the same setters the UI uses, so observers
+    // (re-bake, validation, GLB regenerate) fire identically whether
+    // the change came from a user pinch or an LLM tool call. Tier-B
+    // callbacks (slice / save / arrange) close over the same `runSlice`
+    // / `runAutoArrange` / `saveGcodeToDownloads` family the buttons
+    // call, so an LLM-driven slice is byte-identical to a tap-driven
+    // one.
+    dev.orcaxr.app.mcp.BindWorkspaceModel(
+        placedModels = placedModels,
+        setPlacedModels = { placedModels = it },
+        selectedModelIds = selectedModelIds,
+        setSelectedModelIds = { selectedModelIds = it },
+        gizmoTool = gizmoTool,
+        setGizmoTool = { gizmoTool = it },
+        paintBrush = paintBrush,
+        setPaintBrush = { paintBrush = it },
+        workspaceMode = workspaceMode,
+        setWorkspaceMode = { workspaceMode = it },
+        activePlateId = activePlateId,
+        setActivePlateId = { activePlateId = it },
+        selectedProfile = selectedProfile.value,
+        setSelectedProfile = { selectedProfile.value = it },
+        selectedPrinterId = selectedPrinterId.value,
+        setSelectedPrinterId = { selectedPrinterId.value = it },
+        layerHeightOverride = layerHeightOverride.value,
+        setLayerHeightOverride = { layerHeightOverride.value = it },
+        printSettingsOverrides = printSettingsOverrides.value,
+        sliceState = sliceState.value,
+        maxLayer = maxLayer.value,
+        setMaxLayer = { maxLayer.value = it },
+        bedFit = bedFit,
+        bedCollision = bedCollision,
+        showTravels = showTravels.value,
+        setShowTravels = { showTravels.value = it },
+        toolpathTubes = toolpathTubes.value,
+        setToolpathTubes = { toolpathTubes.value = it },
+        allProfiles = allProfiles,
+        // Tier-B mirrors of the BottomRightSummaryPanel button paths.
+        // Routing through the existing onSliceClick logic (multi-vs-
+        // single, fallback to bundled cube) keeps the slicer behavior
+        // identical to a manual tap.
+        onSliceActivePlate = {
+            if (placedModelsOnActivePlate.size >= 2) {
+                runSliceMulti(placedModelsOnActivePlate)
+            } else {
+                val target = selectedModel ?: placedModelsOnActivePlate.firstOrNull()
+                if (target != null) runSlice(target.source, target.label)
+            }
+        },
+        onAutoArrangePlate = { runAutoArrange() },
+        onDropToBed = { modelId ->
+            placedModels = placedModels.map { m ->
+                if (m.id == modelId) m.copy(translateZmm = 0f) else m
+            }
+        },
+        onSaveGcode = {
+            val st = sliceState.value
+            val src = (st as? SliceUiState.Done)?.result as? SliceResult.Success
+            src?.let { saveGcodeToDownloads(ctx, File(it.outputPath), st.sourceLabel) }
+        },
+        onSaveProject3mf = {
+            val target = selectedModel ?: return@BindWorkspaceModel
+            scope.launch {
+                val cfg = mergedConfig(
+                    selectedProfile.value,
+                    layerHeightOverride.value,
+                    emptyList(),
+                    extraOverrides = printSettingsOverrides.value,
+                )
+                saveProjectAs3mfToDownloads(
+                    sourceFile = target.source,
+                    sourceLabel = target.label,
+                    config = cfg,
+                    paintFilamentIndex = target.paintFilamentIndex,
+                    supportFlags = target.supportFlags,
+                    seamFlags = target.seamFlags,
+                    fuzzySkinFlags = target.fuzzySkinFlags,
+                    brimEars = target.brimEars.toBrimEarsFloatArray(),
+                )
+            }
+        },
+        onSaveModelStl = {
+            val target = selectedModel ?: return@BindWorkspaceModel
+            scope.launch {
+                saveModelAsStlToDownloads(
+                    ctx,
+                    target.source,
+                    target.label,
+                    target.rotZDeg,
+                    target.scalePct,
+                    target.translateXmm,
+                    target.translateYmm,
+                )
+            }
+        },
+    )
 
     // Re-preview when SELECTED model's rotation/scale OR slot palette
     // changes so the GLB on the bed reflects the latest mesh + colors.

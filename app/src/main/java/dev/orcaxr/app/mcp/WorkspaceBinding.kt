@@ -83,6 +83,22 @@ fun BindWorkspaceModel(
     toolpathTubes: Boolean,
     setToolpathTubes: (Boolean) -> Unit,
     allProfiles: List<SlicerProfile>,
+    /**
+     * Tier-B callbacks. Each fires when the corresponding
+     * [WorkspaceAction] arrives. Default null = "log warning, do
+     * nothing" — useful for tests + the (unlikely) case where MCP
+     * clients hit one of these before MainActivity wires them.
+     * MainActivity passes lambdas that call into the existing
+     * onSliceClick / runAutoArrange / saveGcodeToDownloads /
+     * saveProjectAs3mfToDownloads / saveModelAsStlToDownloads flows
+     * so the result is identical to the user tapping the same buttons.
+     */
+    onSliceActivePlate: (() -> Unit)? = null,
+    onAutoArrangePlate: (() -> Unit)? = null,
+    onDropToBed: ((modelId: String) -> Unit)? = null,
+    onSaveGcode: (() -> Unit)? = null,
+    onSaveProject3mf: (() -> Unit)? = null,
+    onSaveModelStl: (() -> Unit)? = null,
 ) {
     val workspace = remember { WorkspaceModel.get() }
 
@@ -137,6 +153,12 @@ fun BindWorkspaceModel(
             setMaxLayer = setMaxLayer,
             setShowTravels = setShowTravels,
             setToolpathTubes = setToolpathTubes,
+            onSliceActivePlate = onSliceActivePlate,
+            onAutoArrangePlate = onAutoArrangePlate,
+            onDropToBed = onDropToBed,
+            onSaveGcode = onSaveGcode,
+            onSaveProject3mf = onSaveProject3mf,
+            onSaveModelStl = onSaveModelStl,
         ) }
     }
 }
@@ -159,6 +181,12 @@ private fun handleAction(
     setMaxLayer: (Int?) -> Unit,
     setShowTravels: (Boolean) -> Unit,
     setToolpathTubes: (Boolean) -> Unit,
+    onSliceActivePlate: (() -> Unit)?,
+    onAutoArrangePlate: (() -> Unit)?,
+    onDropToBed: ((modelId: String) -> Unit)?,
+    onSaveGcode: (() -> Unit)?,
+    onSaveProject3mf: (() -> Unit)?,
+    onSaveModelStl: (() -> Unit)?,
 ) {
     when (action) {
         is WorkspaceAction.SetGizmoTool -> setGizmoTool(action.tool)
@@ -211,15 +239,53 @@ private fun handleAction(
             setPlacedModels(placedModels.filterNot { it.id in action.ids })
             setSelectedModelIds(selectedModelIds - action.ids)
         }
-        // Tier-B actions need MainActivity-deep pipelines (slice
-        // executor, save-as-3MF flow, libnest2d). Logging here so the
-        // surface is wired even though the implementation lands in a
-        // follow-up commit.
-        WorkspaceAction.AutoArrangePlate,
-        is WorkspaceAction.DropToBed,
-        WorkspaceAction.SliceActivePlate,
+        // Tier-B actions route through callbacks the call site
+        // wires to MainActivity's existing slice / save / arrange
+        // pipelines. Each callback is null-safe so tests + early
+        // bring-up don't NPE; the warning fires once per attempt
+        // so an LLM client gets a clear "this build doesn't wire
+        // it" signal in logcat.
+        WorkspaceAction.SliceActivePlate -> {
+            if (onSliceActivePlate != null) onSliceActivePlate()
+            else Log.w(TAG, "SliceActivePlate not wired by the host activity.")
+        }
+        WorkspaceAction.AutoArrangePlate -> {
+            if (onAutoArrangePlate != null) onAutoArrangePlate()
+            else Log.w(TAG, "AutoArrangePlate not wired.")
+        }
+        is WorkspaceAction.DropToBed -> {
+            if (onDropToBed != null) {
+                onDropToBed(action.modelId)
+            } else {
+                // Fallback: do the drop ourselves (translateZmm = 0)
+                // since it's a pure data-class change. The MainActivity
+                // path is preferred because its updateSelected helper
+                // also bumps preview state, but this keeps the action
+                // useful even when no callback is wired.
+                val updated = placedModels.map { m ->
+                    if (m.id == action.modelId) m.copy(translateZmm = 0f) else m
+                }
+                setPlacedModels(updated)
+            }
+        }
+        WorkspaceAction.SaveGcodeToDownloads -> {
+            if (onSaveGcode != null) onSaveGcode()
+            else Log.w(TAG, "SaveGcodeToDownloads not wired.")
+        }
+        WorkspaceAction.SaveProject3mf -> {
+            if (onSaveProject3mf != null) onSaveProject3mf()
+            else Log.w(TAG, "SaveProject3mf not wired.")
+        }
+        WorkspaceAction.SaveModelStl -> {
+            if (onSaveModelStl != null) onSaveModelStl()
+            else Log.w(TAG, "SaveModelStl not wired.")
+        }
         WorkspaceAction.CancelSlice ->
-            Log.w(TAG, "Action $action is reserved for a follow-up commit (Phase 2.1).")
+            // libslic3r doesn't expose an abort hook through our JNI
+            // shim today (no nativeCancelSlice). Surface the missing
+            // capability so a tool caller knows to wait or kill the
+            // app rather than retry.
+            Log.w(TAG, "CancelSlice not supported — libslic3r doesn't expose an abort hook.")
     }
 }
 

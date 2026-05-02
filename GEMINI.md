@@ -253,11 +253,21 @@ write-back path stays unidirectional.
 
 **Adding a new mutator action:** (1) declare the case in
 `WorkspaceAction`, (2) handle it in `WorkspaceBinding.handleAction`,
-(3) add the tool that emits it. Tier-B actions (slice, save,
-auto-arrange) need MainActivity-deep pipelines and are *declared but
-not yet wired* — handlers should call out via callback parameters
-that XrShell's call site fills in, instead of reaching into private
-functions.
+(3) add the tool that emits it. For mutators that need access to a
+MainActivity-local function (slice, save, auto-arrange), add a
+nullable callback parameter to `BindWorkspaceModel` and route through
+it — XrShell's call site (placed *after* the local funs are declared)
+provides the lambda. Don't try to reach into private functions from
+the binding file.
+
+**Where the `BindWorkspaceModel` call lives:** XrShell calls it once,
+after `runSliceMulti` is declared (just before the re-preview
+LaunchedEffect block at the start of the rendering section). All
+state vars are still in scope at that point, AND the local
+`runSlice`/`runSliceMulti`/`runAutoArrange`/`saveGcodeToDownloads`
+family is now visible so the Tier-B callbacks can close over them.
+Don't move it back up before those funs are declared — the closures
+won't compile.
 
 **Tool naming convention:** `<verb>_<object>` snake_case
 (`list_printers`, `add_plate`, `start_print`,
