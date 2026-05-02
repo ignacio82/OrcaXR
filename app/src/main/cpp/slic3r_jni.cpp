@@ -1803,12 +1803,31 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
                                 i, requested_ordinal, src.objects.size());
                 }
                 Slic3r::ModelObject* mo = multi.add_object(*src.objects[pick]);
-                // Reset the cloned source's instances and pose. The
-                // 3MF on disk may carry instance offsets; we apply the
-                // user's per-input transforms below, then ensure_on_bed
-                // lifts the mesh to z=0 (after user transforms because
-                // X/Y rotation can tilt the mesh and shift its lowest
-                // point).
+                // Capture the source ModelInstance's scale and rotation
+                // BEFORE clearing. BBS / Bambu 3MFs encode per-instance
+                // scale + rotation in their `<build><item transform=...>`
+                // matrices — e.g. the knitted-unicorn 3MF authors a
+                // 1.5697× uniform scale and a -90° X rotation
+                // (Y-up authored mesh stood up onto the printer's
+                // Z-up bed). Discarding those drops the mesh to its
+                // pre-scale extents; symptom is the dragon/unicorn
+                // print arriving at ~63% of the desktop slicer's size
+                // (e.g. 27 mm tall instead of the authored 40 mm).
+                //
+                // User transforms compose ON TOP of the source pose:
+                //   final_scale  = user_scale  * source_scale
+                //   final_rot    = user_rot    + source_rot     (Euler)
+                //   final_offset = user_offset                  (replace)
+                // — same mental model the user already has from
+                // Prepare view, where the model is shown at the
+                // authored scale.
+                Slic3r::Vec3d src_scaling(1.0, 1.0, 1.0);
+                Slic3r::Vec3d src_rotation(0.0, 0.0, 0.0);
+                if (!mo->instances.empty()) {
+                    const auto* src_inst = mo->instances.front();
+                    src_scaling = src_inst->get_scaling_factor();
+                    src_rotation = src_inst->get_rotation();
+                }
                 mo->name = std::string("model_") + std::to_string(i);
                 mo->clear_instances();
                 mo->add_instance();
@@ -1892,8 +1911,17 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
                 const double rxRad = rxDeg * M_PI / 180.0;
                 const double ryRad = ryDeg * M_PI / 180.0;
                 const double rzRad = rzDeg * M_PI / 180.0;
-                inst->set_rotation(Slic3r::Vec3d(rxRad, ryRad, rzRad));
-                inst->set_scaling_factor(Slic3r::Vec3d(sx, sy, sz));
+                // Compose user transforms with the source 3MF instance
+                // pose captured above. Identity src values for STL /
+                // single-object-3MF inputs preserve legacy behavior.
+                inst->set_rotation(Slic3r::Vec3d(
+                    rxRad + src_rotation.x(),
+                    ryRad + src_rotation.y(),
+                    rzRad + src_rotation.z()));
+                inst->set_scaling_factor(Slic3r::Vec3d(
+                    sx * src_scaling.x(),
+                    sy * src_scaling.y(),
+                    sz * src_scaling.z()));
                 inst->set_offset(Slic3r::Vec3d(tx, ty, tz));
                 // Phase XR_OBJ_4 — ensure_on_bed() AFTER the user
                 // transforms because rotation can move the lowest
@@ -1909,8 +1937,14 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
                 // (centered at z=0) gets cloned.
                 mo->ensure_on_bed();
 
-                ORCAXR_LOGI("nativeSliceMulti: model[%d] '%s' t=(%.1f,%.1f,%.1f) r=(%.1f,%.1f,%.1f)° s=(%.2f,%.2f,%.2f) post-bed-z=%.2f",
+                ORCAXR_LOGI("nativeSliceMulti: model[%d] '%s' user_t=(%.1f,%.1f,%.1f) "
+                            "user_r=(%.1f,%.1f,%.1f)° user_s=(%.2f,%.2f,%.2f) "
+                            "src_r=(%.1f,%.1f,%.1f)° src_s=(%.2f,%.2f,%.2f) post-bed-z=%.2f",
                             i, p.c, tx, ty, tz, rxDeg, ryDeg, rzDeg, sx, sy, sz,
+                            src_rotation.x() * 180.0 / M_PI,
+                            src_rotation.y() * 180.0 / M_PI,
+                            src_rotation.z() * 180.0 / M_PI,
+                            src_scaling.x(), src_scaling.y(), src_scaling.z(),
                             mo->instances.front()->get_offset().z());
             }
             env->DeleteLocalRef(jp);
