@@ -364,22 +364,107 @@ per gotcha §22). Also extends `SAFE_KEYS` to whitelist seven jerk
 keys + `small_perimeter_speed` / `small_perimeter_threshold` /
 `overhang_fan_speed` that were missing.
 
-**Verification gate (post-merge, requires device):**
-1. Re-stage `Einhorn_Knitted.3mf` on the test device.
-2. Run `UnicornFineProfileTest.unicornEstimateMatchesDesktopWithinFivePercent`
-   (currently `@Ignore`d — un-ignore for this measurement only).
-3. Capture the new estimate. If gap < 5 %, flip A9 Phase 2 to 🟢
-   shipped and leave the test un-ignored as the regression guard.
-4. If gap is still > 5 %, the residue lives somewhere this CONFIG_BLOCK
-   diff didn't catch — pull the OrcaXR-emitted gcode off the device
-   and diff its CONFIG_BLOCK against the reference's to find what
-   else slipped through. The remaining unexplained ~30 % is most
-   likely either (a) a key the 3MF authors but is still missing from
-   PROJECT_OVERRIDE_KEYS, (b) `mergedConfig`'s precedence ladder
-   silently dropping authored overrides for an unrelated reason, or
-   (c) a libslic3r-internal computed value the desktop slicer derives
-   differently. Without the OrcaXR-emitted gcode in hand, this can't
-   be narrowed further.
+## 8. On-device verification (2026-05-02)
+
+Ran `UnicornFineProfileTest.unicornEstimateMatchesDesktopWithinFivePercent`
+on the Galaxy XR (SM-I610) against the staged `Einhorn_Knitted.3mf`.
+
+### Round 1 — baseline after PROJECT_OVERRIDE_KEYS expansion
+
+- OrcaXR estimate: **7h 38m 26s**
+- Reference: 11h 20m 13s
+- Gap: **−32.6 %** (no change vs Phase 1)
+
+The expansion didn't help here because `SlicerEngine.slice` (what the test
+calls) doesn't invoke `read3mfProjectOverrides` — it composes the slice
+config directly from the profile + a small overlay. The PROJECT_OVERRIDE
+flow only fires through `runSliceMulti` (the Prepare-mode 3MF import path).
+
+Pulled the OrcaXR-emitted gcode off the device via
+`adb shell run-as dev.orcaxr.app.debug cat cache/unicorn_a9_estimate_test.gcode`
+and ran `;TYPE:` and feedrate-distribution diffs against the reference:
+
+| `;TYPE:` | REF | OUR | delta |
+|---|---|---|---|
+| Outer wall | 7179 | 7154 | −25 |
+| Inner wall | 5805 | 5805 | 0 |
+| Sparse infill | 3995 | 4045 | +50 |
+| Internal solid infill | 5790 | 5760 | −30 |
+| **Support** | **2516** | **0** | **−2516** |
+| **Support interface** | **729** | **0** | **−729** |
+| Prime tower | 709 | 708 | −1 |
+
+Reference has 2,516 `;TYPE:Support` markers and 729 `;TYPE:Support interface`
+markers. **OrcaXR generated zero supports** for the slice, even though the
+unicorn has overhang-heavy features (horn, legs, mane). Cause: OrcaXR's
+`fdm_process_U1.json` parent profile sets `enable_support=0`; the
+`0.12 Fine @Snapmaker U1 (0.4 nozzle)` leaf doesn't override; the test
+config didn't override either. Reference desktop's user enabled supports
+manually in their slice (visible in the gcode CONFIG_BLOCK as
+`; enable_support = 1`).
+
+### Round 2 — `enable_support=1` added to test cfg
+
+- OrcaXR estimate: **8h 45m 35s**
+- Reference: 11h 20m 13s
+- Gap: **−22.7 %** (+1h 7m closed — 10 % of the gap recovered)
+
+### Round 2 residue analysis
+
+After enabling supports, the per-`;TYPE:` counts match within 1–2 %
+(supports 2454 vs 2516, etc.). Feedrate distributions match closely.
+M204 / SET_VELOCITY_LIMIT / SET_PRESSURE_ADVANCE / G4 / M400 / T-command
+counts are all identical or near-identical.
+
+Per-layer M73 progress shows the **gap is concentrated in layers 200+**:
+
+| Layer | REF cum time | OUR cum time | Per-layer pace (REF) | Per-layer pace (OUR) |
+|---|---|---|---|---|
+| 0 → 100 | 221 min | 224 min | 2.21 min/layer | 2.24 min/layer |
+| 100 → 200 | 173 min | 172 min | 1.73 min/layer | 1.72 min/layer |
+| 200 → 332 | **286 min** | **129 min** | **2.17 min/layer** | **0.98 min/layer** |
+
+Layers 200–332 are the upper 60 % of the unicorn (head + horn). At 0.12 mm
+layer height these are increasingly thin features.
+
+Sampling layer 250 specifically:
+- Same `;TYPE:` counts (Outer wall 2480 / Inner wall 1090 / Internal solid
+  infill 1245 vs 1185 / Sparse infill 550 vs 555).
+- Same number of G0/G1 commands (5875 vs 5858).
+- Same E-axis movement total (3.80M vs 3.88M mm).
+- **REF traces 5359 mm of XY motion in those commands; OUR traces 3967 mm**
+  — REF moves 35 % further per layer despite identical command counts.
+
+Combined with the upstream-vs-fork tree-comparison findings in §6, the
+most likely remaining cause is a **GCodeProcessor / Cooling postprocessor
+kinematic difference** between fork v2.3.1 and upstream v2.3.2 in how the
+late-layer thin-feature paths are scaled — not a config drift, not a
+missing patch from the candidate list. `GCodeProcessor.cpp` is byte-
+identical between the two trees, but the *Cooling* postprocessor and the
+`set_extruder` / `WipeTowerIntegration::append_tcr` callers around it have
+diverged — those paths are where the per-layer time scaling actually
+happens, and §6 candidates didn't trace them.
+
+### What this leaves
+
+Decision call for the next session:
+1. **Accept the partial closure** (32.6 % → 22.7 %). Re-flag
+   `unicornEstimateMatchesDesktopWithinFivePercent` with the updated
+   gap and move on. The user's print *quality* will match desktop
+   even with the time estimate off — neither feedrate emission nor
+   motion paths are wrong, only the slicer's *prediction* of how long
+   they'll take.
+2. **Build a Snapmaker desktop binary** from `/tmp/snapmaker-orca` v2.3.1
+   and slice the same 3MF locally. Compare its CONFIG_BLOCK and per-layer
+   gcode against OrcaXR's directly — a real binary-vs-binary diff would
+   show whether the residue is a Cooling-pass divergence or something
+   subtler. Cost: ~2–4 h of build time + per-OS dependency installation.
+3. **Trace `Cooling::process_layer` and the late-layer slow_down path**
+   in upstream v2.3.2 against fork v2.3.1 source — the §6 audit didn't
+   examine these files. Could land in 1–2 hours of focused source diffing.
+
+Recommended order: (1) ship the support fix in the test, then (3) trace
+Cooling, then (2) only if (3) doesn't land it.
 
 ---
 

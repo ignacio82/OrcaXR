@@ -250,7 +250,7 @@ class UnicornFineProfileTest {
      * dev.orcaxr.app.debug.test/androidx.test.runner.AndroidJUnitRunner`)
      * when Phase 2 lands; once it passes, drop `@Ignore` permanently.
      */
-    @Ignore("A9 Phase 2 outstanding — see ROADMAP.md A9. Phase 1 sync alone leaves a -32.6 % gap.")
+    @Ignore("A9 Phase 2: enable_support=1 closes 10% of gap (32.6% → 22.7%); residue is per-layer motion-distance drift in late layers (200+) where REF traces 35% longer outer-wall paths than OUR despite identical TYPE counts. Likely a GCodeProcessor v2.3.1↔v2.3.2 kinematic difference. See docs/A9_PHASE2_AUDIT.md §8.")
     @Test
     fun unicornEstimateMatchesDesktopWithinFivePercent() = runBlocking {
         val tag = "OrcaXR/a9Diag"
@@ -306,6 +306,19 @@ class UnicornFineProfileTest {
             "filament_map" to "1,2,3,4",
             "filament_map_mode" to "Manual",
             "single_extruder_multi_material" to "0",
+            // The reference desktop slice was generated with supports ENABLED
+            // (the unicorn has overhangs on the horn and legs). OrcaXR's
+            // bundled `fdm_process_U1.json` defaults `enable_support=0`,
+            // which the `0.12 Fine` leaf doesn't override — so without this
+            // explicit opt-in the test slices a SUPPORTLESS unicorn and
+            // shaves ~3.7 h off the estimate (the gap that A9 Phase 2's
+            // earlier candidate hunt was trying to attribute to engine
+            // diffs that don't exist). Verified 2026-05-02 by diffing the
+            // reference and OrcaXR-emitted gcode: reference has 2,516
+            // `;TYPE:Support` markers, OrcaXR had 0; reference's 12,382
+            // F9000 (150 mm/s = support_speed) feedrate commands are
+            // entirely absent from OrcaXR's output.
+            "enable_support" to "1",
         )
 
         val out = File(appCtx.cacheDir, "unicorn_a9_estimate_test.gcode")

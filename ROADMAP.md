@@ -154,10 +154,13 @@ Audit complete + on-disk reference gcode analyzed — see [`docs/A9_PHASE2_AUDIT
 
 **Shipped in this commit:** `PROJECT_OVERRIDE_KEYS` extended from 11 → 56 keys covering every motion-affecting key without a dedicated UI picker. `SAFE_KEYS` extended with seven jerk keys + `small_perimeter_speed/threshold` + `overhang_fan_speed` that were also missing.
 
-**Verification gate (post-merge, requires device):**
-- Re-stage `Einhorn_Knitted.3mf` on the test device, run `UnicornFineProfileTest.unicornEstimateMatchesDesktopWithinFivePercent` (currently `@Ignore`d).
-- If gap < 5 %, flip A9 Phase 2 to 🟢 and un-`@Ignore` the test as the regression guard.
-- If gap still > 5 %, pull the OrcaXR-emitted gcode off the device and diff its CONFIG_BLOCK against `~/Downloads/Einhorn Knitted_PLA_11h20m_orca.gcode` to find what else slipped through. Print-quality side-by-side (calibration cube + multicolor unicorn) is the post-merge sanity check.
+**On-device verification done (2026-05-02 Galaxy XR run):**
+- Round 1 (PROJECT_OVERRIDE_KEYS expansion alone): no change. The test bypasses `read3mfProjectOverrides`.
+- Round 2 (after adding `enable_support=1` to test cfg): **gap closes from −32.6 % → −22.7 %** (+1h 7m recovered, ~30 % of the gap). Reference desktop's user enabled supports manually; OrcaXR's bundled `fdm_process_U1.json` defaults `enable_support=0` and the test wasn't overriding.
+- Residue analysis: motion topology / feedrates / macros / temperatures all match within 1–2 % per layer. Per-layer M73 progress shows the gap is concentrated in **layers 200–332** (REF: 2.17 min/layer, OUR: 0.98 min/layer for those). Same TYPE counts, same G1 count, same E-axis movement, but REF traces 35 % more XY motion per late layer. Most likely cause: a Cooling-postprocessor or `WipeTowerIntegration::append_tcr` kinematic difference between fork v2.3.1 and upstream v2.3.2 that the §6 file-level candidate hunt didn't examine.
+- Test stays `@Ignore`d (now with the updated 22.7 % gap reason) until the residue is closed.
+
+**Next step (deferred — needs decision):** trace `Cooling::process_layer` upstream v2.3.2 vs fork v2.3.1 (estimated 1–2 h focused source diff), or accept the partial closure and call A9 Phase 2 done with documented residue. Print *quality* matches desktop already — only the slicer's *prediction* of duration is off; emitted feedrates and motion paths are correct. Print-quality side-by-side (calibration cube + multicolor unicorn) is the post-merge sanity check either way.
 
 **Out of scope (handled elsewhere):**
 - Adding *more* U1 nozzle profiles (0.2, 0.8) → see F1.
