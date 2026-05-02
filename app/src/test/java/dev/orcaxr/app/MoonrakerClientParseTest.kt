@@ -15,6 +15,50 @@ import org.junit.Test
  */
 class MoonrakerClientParseTest {
 
+    @Test fun printSnapshotExtractsLiveZmmAndFilePosition() {
+        // C7 — toolhead.position[2] gives the live Z; virtual_sdcard.
+        // file_position + file_size give exact byte progress. Real
+        // Moonraker payload shape from /printer/objects/query.
+        val json = JSONObject(
+            """
+            {
+              "print_stats": {"state": "printing", "filename": "dragon.gcode", "print_duration": 60, "total_duration": 65},
+              "virtual_sdcard": {"progress": 0.05, "file_position": 124000, "file_size": 2480000},
+              "display_status": {"progress": 0.05, "message": ""},
+              "extruder": {"temperature": 215.2, "target": 215.0},
+              "heater_bed": {"temperature": 60.1, "target": 60.0},
+              "toolhead": {"position": [120.5, 90.0, 1.42, 142.7]}
+            }
+            """.trimIndent(),
+        )
+        val s = PrintSnapshot.parse(json)
+        assertEquals("printing", s.state)
+        assertEquals(1.42f, s.liveZmm)
+        assertEquals(124000L, s.gcodeFilePosition)
+        assertEquals(2480000L, s.gcodeFileSize)
+    }
+
+    @Test fun printSnapshotMissingToolheadOrSdcardYieldsNullFields() {
+        // Pre-print or post-cancel: neither toolhead.position nor
+        // virtual_sdcard.file_position is populated. Parser must
+        // surface null rather than crashing or zero-filling.
+        val json = JSONObject(
+            """
+            {
+              "print_stats": {"state": "standby", "filename": ""},
+              "virtual_sdcard": {},
+              "display_status": {},
+              "extruder": {"temperature": 25.0, "target": 0.0},
+              "heater_bed": {"temperature": 24.5, "target": 0.0}
+            }
+            """.trimIndent(),
+        )
+        val s = PrintSnapshot.parse(json)
+        assertNull(s.liveZmm)
+        assertNull(s.gcodeFilePosition)
+        assertNull(s.gcodeFileSize)
+    }
+
     @Test fun printerInfoParseMapsStateToKlippyState() {
         // Real /printer/info response shape (verified via curl on the
         // user's Snapmaker U1 — 1.3.0.168 firmware on 2026-04-29).

@@ -289,8 +289,13 @@ class MoonrakerClient(
         // runout there). Non-Snapmaker Klipper hosts return no
         // filament_detect block — that path falls back to an empty
         // List<Boolean>, badges hide.
+        // C7 — also subscribe to `toolhead` so we can expose the live
+        // Z-height for the digital-twin follower, and read
+        // `virtual_sdcard.file_position` (already in the subscription)
+        // so a tool caller can compute an exact byte-progress for a
+        // gcode file. toolhead.position is `[x, y, z, e]` floats.
         val url = baseUrl() + "/printer/objects/query" +
-            "?print_stats&virtual_sdcard&display_status&extruder&heater_bed&filament_detect"
+            "?print_stats&virtual_sdcard&display_status&extruder&heater_bed&filament_detect&toolhead"
         val req = Request.Builder()
             .url(url)
             .header("Accept", "application/json")
@@ -570,6 +575,28 @@ data class PrintSnapshot(
      * runout badges in that case rather than guessing.
      */
     val slotLoaded: List<Boolean> = emptyList(),
+    /**
+     * C7 — live Z-height of the toolhead, in printer-frame mm. Read
+     * from Klipper's `toolhead.position[2]`. Null when the printer
+     * didn't expose it (e.g. immediately after homing the toolhead
+     * object isn't fully initialized). Used by the digital-twin
+     * follower to drive the toolpath layer scrubber automatically as
+     * the print grows.
+     */
+    val liveZmm: Float? = null,
+    /**
+     * C7 — current byte offset into the active G-code file, from
+     * `virtual_sdcard.file_position`. Null when no print is active.
+     * Useful for a precise byte-progress check that doesn't depend on
+     * toolhead extrapolation; pair with [gcodeFileSize] to compute a
+     * raw fraction.
+     */
+    val gcodeFilePosition: Long? = null,
+    /**
+     * C7 — total size of the active G-code file in bytes
+     * (`virtual_sdcard.file_size`). Null when no print is active.
+     */
+    val gcodeFileSize: Long? = null,
 ) {
     val isActive: Boolean get() = state == "printing" || state == "paused"
 
@@ -622,6 +649,20 @@ data class PrintSnapshot(
                 }
             }
 
+            // C7 — live Z and file position. toolhead.position is a
+            // 4-element array [x, y, z, e]; index 2 is Z. Klipper
+            // reports floats here; cast permissively because Moonraker
+            // sometimes serializes integers when the value happens to
+            // round. file_position / file_size come from virtual_sdcard.
+            val toolhead = status.optJSONObject("toolhead")
+            val liveZmm: Float? = toolhead?.optJSONArray("position")?.let { arr ->
+                if (arr.length() >= 3) arr.opt(2)?.toString()?.toFloatOrNull() else null
+            }
+            val gcodeFilePosition: Long? = sdcard.opt("file_position")
+                ?.toString()?.toLongOrNull()
+            val gcodeFileSize: Long? = sdcard.opt("file_size")
+                ?.toString()?.toLongOrNull()
+
             return PrintSnapshot(
                 state = ps.optString("state", "unknown"),
                 filename = ps.optString("filename", ""),
@@ -636,6 +677,9 @@ data class PrintSnapshot(
                 bedTemp = bed.opt("temperature")?.toString()?.toFloatOrNull() ?: 0f,
                 bedTarget = bed.opt("target")?.toString()?.toFloatOrNull() ?: 0f,
                 slotLoaded = slotLoaded,
+                liveZmm = liveZmm,
+                gcodeFilePosition = gcodeFilePosition,
+                gcodeFileSize = gcodeFileSize,
             )
         }
     }

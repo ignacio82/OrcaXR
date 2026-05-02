@@ -321,6 +321,40 @@ server. Tests rely on
 `android.util.Log` calls in production code don't blow up the unit
 harness.
 
+## C7 — digital-twin monitoring
+
+`WorkspaceMode.Devices` is the third workspace mode (Prepare /
+Preview / Devices). When entered, the four slicing panels
+(`LeftProjectPanel`, `RightSettingsPanel`, `BottomLayerPreviewPanel`,
+`BottomRightSummaryPanel`) hide via `if (workspaceMode !=
+WorkspaceMode.Devices)` guards at their MovablePanelWrapper call
+sites; `PrinterPanel` (the existing `devicesShown` overlay) and
+`PrintMonitorPanel` (the existing active-print pause/resume/cancel +
+webcam panel) become the dominant chrome. Workspace rendering uses
+the Preview branch of the `when (workspaceMode)` block in XrShell —
+the toolpath GLB is what the user sees.
+
+**Live-Z auto-follow.** `MoonrakerClient.PrintSnapshot` carries
+`liveZmm` (parsed from `toolhead.position[2]`) plus
+`gcodeFilePosition` / `gcodeFileSize` (from `virtual_sdcard`). A
+`LaunchedEffect(workspaceMode, selectedPrinterId)` watches the
+selected printer's snapshot at 500ms cadence and binary-searches
+`liveZmm` against `parsedToolpath.layerZs`, writing the result into
+`maxLayer.value`. The existing toolpath-rebake observer
+(`LaunchedEffect(sliceState, maxLayer, ...)`) picks up the change and
+the GLB grows in lockstep with the physical print head. **Don't add
+a separate "twin" entity** — the existing toolpath rendering with
+the layer scrubber driven from telemetry IS the digital twin. A
+duplicate entity would double the GLB bake cost for no UX win.
+
+**Don't add a new ToolpathGlb.write parameter.** The existing
+`maxLayerInclusive: Int?` is the natural progress filter. Telemetry
+maps Z → layer index and reuses it. If you ever do need more
+granularity than per-layer (e.g. live byte-position into the *current*
+layer), that's a follow-up that adds a `maxByteOffset` filter — but
+do it only when the layer-granularity twin proves to be too coarse on
+real hardware. So far it isn't.
+
 ## Related docs
 
 - [`ROADMAP.md`](ROADMAP.md) — forward-looking feature roadmap (single source of truth).

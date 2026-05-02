@@ -3264,6 +3264,41 @@ private fun XrShell(
     //   Debounced — must recenter (|x| < 0.3) before re-firing.
     //   Jump direction matches stick deflection; positive X is right
     //   = forward (+10 layers).
+    // C7 — digital-twin layer auto-follow. When the user is in Devices
+    // mode AND the active printer has reported a live Z height AND
+    // the current slice's parsed toolpath is the one being printed,
+    // map the live Z onto the layer-index space and drive maxLayer
+    // automatically. The result is the toolpath GLB "growing" in
+    // lockstep with the physical print head.
+    //
+    // Keyed on workspaceMode + selectedPrinterId so the effect
+    // cancels when the user leaves Devices mode (no point updating
+    // maxLayer if the toolpath is hidden anyway). The inner polling
+    // is light: just reads printerSnapshots[id] which is already
+    // pumped by the existing 2s status loop. We don't initiate any
+    // additional Moonraker requests.
+    LaunchedEffect(workspaceMode, selectedPrinterId.value) {
+        if (workspaceMode != WorkspaceMode.Devices) return@LaunchedEffect
+        val printerId = selectedPrinterId.value ?: return@LaunchedEffect
+        while (kotlin.coroutines.coroutineContext[kotlinx.coroutines.Job]?.isActive != false) {
+            val snap = printerSnapshots[printerId]
+            val parsed = (sliceState.value as? SliceUiState.Done)?.parsed
+            val liveZ = snap?.liveZmm
+            if (parsed != null && liveZ != null && parsed.layerZs.isNotEmpty()) {
+                // binarySearch returns the matching index, or
+                // -insertionPoint - 1 if the value falls between
+                // layer Zs (which is the common case — the toolhead's
+                // live Z is usually mid-layer-thickness above the
+                // last completed layer's Z).
+                val idx = parsed.layerZs.binarySearch(liveZ).let {
+                    if (it >= 0) it else -(it + 1) - 1
+                }.coerceIn(0, parsed.layerZs.lastIndex)
+                if (maxLayer.value != idx) maxLayer.value = idx
+            }
+            kotlinx.coroutines.delay(500)
+        }
+    }
+
     val sliceStateLive = rememberUpdatedState(sliceState.value)
     LaunchedEffect(workspaceMode, controllerInput) {
         if (workspaceMode != WorkspaceMode.Preview) return@LaunchedEffect
@@ -4142,7 +4177,26 @@ private fun XrShell(
                             }
                         },
                         devicesShown = devicesShown,
-                        onToggleDevices = { devicesShown = !devicesShown },
+                        onToggleDevices = {
+                            // C7 — Devices is now a workspace mode, not
+                            // just an overlay toggle. Entering Devices
+                            // hides the slicing UI and brings up the
+                            // PrinterPanel + PrintMonitorPanel; leaving
+                            // returns to whichever non-Devices mode the
+                            // user was last in (Prepare unless we still
+                            // have a slice baked, in which case stay in
+                            // Preview so the user doesn't lose their
+                            // toolpath view).
+                            val nowOpen = !devicesShown
+                            devicesShown = nowOpen
+                            workspaceMode = if (nowOpen) {
+                                WorkspaceMode.Devices
+                            } else if (glbPath != null) {
+                                WorkspaceMode.Preview
+                            } else {
+                                WorkspaceMode.Prepare
+                            }
+                        },
                         helpShown = helpShown,
                         onToggleHelp = { helpShown = !helpShown },
                         gizmoTool = gizmoTool,
@@ -4244,8 +4298,9 @@ private fun XrShell(
                     )
                 }
 
-                // Left Panel
-                MovablePanelWrapper(
+                // Left Panel — hidden in Devices mode (no project /
+                // slicing affordances when monitoring a live print).
+                if (workspaceMode != WorkspaceMode.Devices) MovablePanelWrapper(
                     id = "left-project",
                     width = 400.dp,
                     height = 800.dp,
@@ -4263,7 +4318,10 @@ private fun XrShell(
                         printers = printers,
                         selectedPrinterId = selectedPrinterId.value,
                         onSelectPrinter = { selectedPrinterId.value = it },
-                        onOpenDevices = { devicesShown = true },
+                        onOpenDevices = {
+                            devicesShown = true
+                            workspaceMode = WorkspaceMode.Devices
+                        },
                         filaments = filamentList,
                         slotCount = slotCount,
                         paletteSuggestions = filamentSlotsStore.defaultPalette,
@@ -4853,8 +4911,8 @@ private fun XrShell(
                     )
                 }
 
-                // Right Panel
-                MovablePanelWrapper(
+                // Right Panel — hidden in Devices mode.
+                if (workspaceMode != WorkspaceMode.Devices) MovablePanelWrapper(
                     id = "right-settings",
                     width = 400.dp,
                     height = 600.dp,
@@ -4907,11 +4965,14 @@ private fun XrShell(
                 }
 
 
-                // Bottom Center Panel (Layer Preview)
+                // Bottom Center Panel (Layer Preview) — hidden in
+                // Devices mode (the layer scrubber is auto-driven from
+                // the printer's reported Z-height; manual override
+                // would just re-trigger the auto-follow).
                 val parsed = (sliceState.value as? SliceUiState.Done)?.parsed
                 val maxIdx = parsed?.layerZs?.lastIndex ?: 0
                 val currentLayer = maxLayer.value ?: maxIdx
-                MovablePanelWrapper(
+                if (workspaceMode != WorkspaceMode.Devices) MovablePanelWrapper(
                     id = "bottom-layer",
                     width = 600.dp,
                     height = 200.dp,
@@ -4930,8 +4991,10 @@ private fun XrShell(
                     )
                 }
 
-                // Bottom Right Summary Panel
-                MovablePanelWrapper(
+                // Bottom Right Summary Panel — hidden in Devices mode
+                // (slice / save buttons aren't relevant when
+                // monitoring an active print).
+                if (workspaceMode != WorkspaceMode.Devices) MovablePanelWrapper(
                     id = "bottom-summary",
                     width = 400.dp,
                     height = 250.dp,
@@ -5039,6 +5102,7 @@ private fun XrShell(
                             val src = (sliceState.value as? SliceUiState.Done)?.result as? SliceResult.Success
                                 ?: return@BottomRightSummaryPanel
                             devicesShown = true
+                            workspaceMode = WorkspaceMode.Devices
                             setStatus(cfg.id, PrinterStatus("Uploading ${File(src.outputPath).name}…", PrinterStatusTone.Info))
                             android.widget.Toast.makeText(
                                 ctx,
@@ -5541,7 +5605,16 @@ private fun XrShell(
                             onDeletePrinter = { p ->
                                 scope.launch { printersStore.delete(p.id) }
                             },
-                            onClose = { devicesShown = false },
+                            onClose = {
+                                devicesShown = false
+                                // Return to whichever non-Devices mode
+                                // makes sense for current state.
+                                workspaceMode = if (glbPath != null) {
+                                    WorkspaceMode.Preview
+                                } else {
+                                    WorkspaceMode.Prepare
+                                }
+                            },
                         )
                     }
                 }
@@ -5881,7 +5954,15 @@ private fun XrShell(
                     }
                 }
             }
-            WorkspaceMode.Preview -> {
+            WorkspaceMode.Preview, WorkspaceMode.Devices -> {
+                // C7 — Devices mode renders the same toolpath GLB as
+                // Preview, but the layer scrubber is auto-driven from
+                // the active printer's reported Z-height (see the
+                // digital-twin LaunchedEffect below). The result is a
+                // virtual model that "grows" in lockstep with the
+                // physical print head. When no toolpath is baked we
+                // fall back to the placed-model previews so the bed
+                // isn't blank during a fresh-print boot.
                 val toolpath = glbPath
                 if (toolpath != null) {
                     key(toolpath) {

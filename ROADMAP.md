@@ -397,17 +397,19 @@ Render the probed bed-mesh grid as a heatmap GLB on the build plate. Today we'd 
 
 **Verification:** instrumented test from a desktop machine — `curl -X POST http://<headset-ip>:7080/mcp -H "Authorization: Bearer <key>" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'` returns the 67-tool catalog. End-to-end smoke test for the "natural-language slicer" loop: `load_model_from_path` → `slice_active_plate` → poll `get_workspace_state` until `slice_state.kind == "done"` → `save_gcode_to_downloads`, then `select_printer` + `start_print` against a Moonraker host. Workspace tools require the app foreground (the `attached` flag in `get_workspace_state` is the gate).
 
-### C7. Spatial "Digital Twin" Monitoring 🔴 Not started
+### C7. Spatial "Digital Twin" Monitoring 🟢 Shipped
 
-> **Files:** `MoonrakerClient.kt`, `ToolpathGlb.kt`, `MainActivity.kt`.
+> **Files:** `MoonrakerClient.kt` (telemetry), `MainActivity.kt` (auto-follow + Devices mode panel routing), `UiPanels.kt` (`WorkspaceMode.Devices`), `mcp/tools/PrinterTools.kt` (`get_print_progress`).
 
-Renders a real-time 3D "ghost" of the print in progress within the XR workspace, allowing remote monitoring of the job's progress.
+A live 3D representation of the print-in-progress lives inside OrcaXR's existing toolpath GLB — the user enters Devices mode (top-nav button) and the slicing UI swaps out for a printer-monitoring view: the toolpath grows in lockstep with the physical print head's reported Z-height.
 
-**Implementation outline:**
-1. **Telemetry:** Fetch `gcode_file_position` and `print_stats.z_height` from Moonraker via `MoonrakerClient.queryStatus`.
-2. **Dynamic Toolpath:** Update `ToolpathGlb.write` to accept a `maxByteOffset` and render only the extrusion segments whose G-code source lines are below that offset.
-3. **Entity Sync:** Create a "digital twin" entity in `XrShell`. Sync its vertical position with the reported `z_height` and refresh its GLB as the file position advances.
-4. **Verification:** Start a print on the U1; confirm the virtual model in XR "grows" in sync with the physical nozzle's progress.
+**Implementation:**
+1. **Telemetry.** `MoonrakerClient.queryStatus` now subscribes to `toolhead` and parses `position[2]` into `PrintSnapshot.liveZmm`, plus `virtual_sdcard.file_position` / `file_size` into `gcodeFilePosition` / `gcodeFileSize`. Two new unit tests cover both the populated and missing-fields paths.
+2. **No new GLB filter needed.** `ToolpathGlb.write` already accepted `maxLayerInclusive: Int?` for the layer scrubber. We reuse it: a new `LaunchedEffect(workspaceMode, selectedPrinterId)` reads `printerSnapshots[id].liveZmm`, binary-searches it against `parsedToolpath.layerZs`, and writes the resulting index into `maxLayer.value` — the existing observer pipeline rebakes the GLB at the right cutoff. 500ms inner poll, no extra Moonraker requests (the snapshot map is already being pumped at ~2s by the existing status loop).
+3. **`WorkspaceMode.Devices` (third value alongside Prepare/Preview).** When entered, the slicing panels — `LeftProjectPanel`, `RightSettingsPanel`, `BottomLayerPreviewPanel`, `BottomRightSummaryPanel` — hide; the `PrinterPanel` overlay + `PrintMonitorPanel` (the one that surfaces during active prints with pause / resume / cancel + webcam frame + temps) stay visible and become the dominant chrome. Workspace rendering uses the same toolpath path as Preview. Closing Devices returns to Preview if a slice is loaded, otherwise Prepare. The existing `devicesShown` boolean still works as a UI overlay flag, but the Devices button now also flips `workspaceMode`.
+4. **MCP exposure.** `get_print_progress(printer_id)` — new tool that snapshots `liveZmm`, byte position, derived layer index (binary-searched against the in-app parsed toolpath when one is loaded), and ETA. Useful for an LLM agent waiting for "is this print 80% done yet?" Plus the `live_z_mm` / `gcode_file_position` / `gcode_file_size` fields landed in the existing `get_printer_status` response.
+
+**Verification:** start a print on the U1, tap Devices in the top nav, watch the workspace strip down to the Devices view — the toolpath GLB starts at layer 0 and grows as the printer reports Z. From an MCP client: `get_print_progress` returns `{progress: 0.42, live_z_mm: 8.4, derived_layer_index: 42, derived_layer_count: 100, eta_sec: 3600}`.
 
 ### C8. Voice-to-Action Integration (Speech-to-MCP) 🔴 Not started
 

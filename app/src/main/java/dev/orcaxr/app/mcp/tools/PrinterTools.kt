@@ -39,6 +39,7 @@ internal object PrinterTools {
         UpdatePrinter(ctx),
         DeletePrinter(ctx),
         GetPrinterStatus(ctx),
+        GetPrintProgress(ctx),
         PingPrinter(ctx),
         StartPrint(ctx),
         PausePrint(ctx),
@@ -80,6 +81,12 @@ internal object PrinterTools {
             put("slot_loaded", arr)
         }
         s.etaSec?.let { put("eta_sec", it) }
+        // C7 — digital-twin telemetry. Live Z and the byte position
+        // into the active G-code file. Both nullable; missing when
+        // Klipper hasn't reported them or no print is active.
+        s.liveZmm?.let { put("live_z_mm", it) }
+        s.gcodeFilePosition?.let { put("gcode_file_position", it) }
+        s.gcodeFileSize?.let { put("gcode_file_size", it) }
     }
 
     /** Map a [MoonrakerResult] into the {ok, data, error} shape tools return. */
@@ -255,6 +262,70 @@ internal object PrinterTools {
                         "bed ${"%.0f".format(s.bedTemp)}/${"%.0f".format(s.bedTarget)}°C)"
                 },
                 successData = ::encodeSnapshot,
+            )
+        }
+    }
+
+    // -------- get_print_progress --------
+
+    class GetPrintProgress(private val ctx: ToolContext) : Tool {
+        override val name = "get_print_progress"
+        override val description =
+            "Live print progress detail — fraction (0..1), live Z-height in mm, byte position " +
+                "into the active gcode file, current vs total layers, ETA seconds, and the " +
+                "derived layer index (binary-searched against the in-app parsed toolpath if a " +
+                "matching slice is loaded). Useful for the digital-twin loop or for an LLM " +
+                "checking whether a print is far enough along to start the next plate."
+        override val inputSchema = Schemas.obj(
+            required = listOf("printer_id"),
+            properties = mapOf("printer_id" to Schemas.string("Printer id (or name)")),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            val id = args.optString("printer_id").trim()
+            val printer = resolve(ctx, id)
+                ?: return ToolResult.error("No printer matches '$id'.")
+            val client = MoonrakerClient(printer)
+            val result = client.queryStatus()
+            return moonrakerOutcome(
+                result,
+                successText = {
+                    val s = (result as MoonrakerResult.Ok).value
+                    val pct = "%.1f".format(s.progress * 100)
+                    val eta = s.etaSec?.let { "%.0fs".format(it) } ?: "—"
+                    val z = s.liveZmm?.let { "z=%.2fmm".format(it) } ?: "z=?"
+                    "${printer.name}: ${s.state} $pct% ($z, eta=$eta)"
+                },
+                successData = { snap ->
+                    JSONObject().apply {
+                        put("state", snap.state)
+                        put("progress", snap.progress)
+                        snap.liveZmm?.let { put("live_z_mm", it) }
+                        snap.gcodeFilePosition?.let { put("gcode_file_position", it) }
+                        snap.gcodeFileSize?.let { put("gcode_file_size", it) }
+                        snap.gcodeFileSize?.let { sz ->
+                            snap.gcodeFilePosition?.let { pos ->
+                                if (sz > 0) put("byte_progress", pos.toDouble() / sz)
+                            }
+                        }
+                        snap.currentLayer?.let { put("current_layer", it) }
+                        snap.totalLayers?.let { put("total_layers", it) }
+                        snap.etaSec?.let { put("eta_sec", it) }
+                        // Map liveZ → layer index against the WORKSPACE
+                        // toolpath (if the user has the matching slice
+                        // loaded). Mirrors what the digital-twin auto-
+                        // follower does in MainActivity.
+                        val ws = dev.orcaxr.app.mcp.WorkspaceModel.get()
+                        val parsed = (ws.sliceState.value as? dev.orcaxr.app.SliceUiState.Done)?.parsed
+                        val z = snap.liveZmm
+                        if (parsed != null && z != null && parsed.layerZs.isNotEmpty()) {
+                            val idx = parsed.layerZs.binarySearch(z).let {
+                                if (it >= 0) it else -(it + 1) - 1
+                            }.coerceIn(0, parsed.layerZs.lastIndex)
+                            put("derived_layer_index", idx)
+                            put("derived_layer_count", parsed.layerZs.size)
+                        }
+                    }
+                },
             )
         }
     }

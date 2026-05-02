@@ -3409,8 +3409,24 @@ fun KickerLabel(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** What the user is doing with the workspace right now. */
-enum class WorkspaceMode { Prepare, Preview }
+/**
+ * What the user is doing with the workspace right now.
+ *
+ * - `Prepare`: model editing — load, transform, paint, slice. The
+ *   default mode after launch.
+ * - `Preview`: toolpath viewer — looks at the slice output (G-code
+ *   parsed into segments), with the layer scrubber and tubes/lines
+ *   toggle.
+ * - `Devices` (C7): printer monitoring — slicing panels go away, the
+ *   PrinterPanel + PrintMonitorPanel take over, and the toolpath GLB
+ *   becomes a "digital twin" that grows in lockstep with the printer's
+ *   reported Z-height (the layer scrubber auto-follows live). Picked
+ *   when the user taps "Devices" in the top nav OR when an active
+ *   print is detected and they want to focus on it. Behaves like
+ *   Preview from the renderer's POV (toolpath GLB visible) but the
+ *   surrounding chrome shifts to the printer-relevant set.
+ */
+enum class WorkspaceMode { Prepare, Preview, Devices }
 
 @Composable
 fun TopNavigationPill(
