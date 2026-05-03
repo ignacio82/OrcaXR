@@ -253,6 +253,46 @@ sealed interface WorkspaceAction {
     ) : WorkspaceAction
 
     /**
+     * D9 / Object Settings — set per-object `configOverrides` on a
+     * PlacedModel. REPLACES the model's existing map; pass empty to
+     * clear. Threads through `nativeSlice.objectConfigKeys/Values`
+     * (slice-time) and `nativeSaveAs3mf.objectConfigKeys/Values`
+     * (3MF round-trip).
+     */
+    data class SetObjectOverrides(
+        val modelId: String,
+        val overrides: Map<String, String>,
+    ) : WorkspaceAction
+
+    /**
+     * A11 — author one custom-gcode tick on a plate. [kind] picks
+     * libslic3r's hook (PausePrint / ColorChange / ToolChange /
+     * Template / Custom). [extruder] is 1-based; 0 means "any".
+     * [color] is `#RRGGBB` for ColorChange or a short pause message
+     * for PausePrint. [extra] is the raw G-code snippet for
+     * Template / Custom.
+     */
+    data class AddCustomGcodeTick(
+        val plateId: Int,
+        val zMm: Float,
+        val kind: String,           // "ColorChange"|"PausePrint"|"ToolChange"|"Template"|"Custom"
+        val extruder: Int = 0,
+        val color: String = "",
+        val extra: String = "",
+    ) : WorkspaceAction
+
+    /** A11 — remove the tick at [index] from the plate's list. */
+    data class RemoveCustomGcodeTick(
+        val plateId: Int,
+        val index: Int,
+    ) : WorkspaceAction
+
+    /** A11 — wipe all ticks on a plate. */
+    data class ClearCustomGcodeTicks(
+        val plateId: Int,
+    ) : WorkspaceAction
+
+    /**
      * Cut a model along a Z plane. `planeZmm` is in printer-frame
      * mm above the bed. Both halves are kept by default; the slicer
      * handles bed-grounding for the lower half.

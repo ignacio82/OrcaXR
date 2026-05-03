@@ -11,6 +11,7 @@ import dev.orcaxr.app.PlacedModel
 import dev.orcaxr.app.PlacedVolume
 import dev.orcaxr.app.SliceResult
 import dev.orcaxr.app.SliceUiState
+import dev.orcaxr.app.SlicerEngine
 import dev.orcaxr.app.SlicerProfile
 import dev.orcaxr.app.WorkspaceMode
 import dev.orcaxr.app.mcp.Schemas
@@ -94,6 +95,14 @@ internal object WorkspaceTools {
             // D16 — per-volume Object Settings
             GetVolumeOverrides(workspace),
             SetVolumeOverrides(workspace),
+            // D9 — per-object Object Settings
+            GetObjectOverrides(workspace),
+            SetObjectOverrides(workspace),
+            // A11 — custom G-code per print Z
+            ListCustomGcodeTicks(workspace),
+            AddCustomGcodeTick(workspace),
+            RemoveCustomGcodeTick(workspace),
+            ClearCustomGcodeTicks(workspace),
             GetPaintSummary(workspace),
             ClearPaint(workspace),
             ReplacePaintTag(workspace),
@@ -1767,6 +1776,289 @@ internal object WorkspaceTools {
                     put("type", volume.type.name)
                     put("override_count", out.size)
                 },
+            )
+        }
+    }
+
+    // ---- D9 / Object Settings — per-object config overrides ----
+
+    /**
+     * D9 — read PlacedModel.configOverrides. Empty `{}` = no overrides
+     * (the model uses the global / profile config for every key).
+     */
+    class GetObjectOverrides(private val ws: WorkspaceModel) : Tool {
+        override val name = "get_object_overrides"
+        override val description =
+            "D9 — read per-object config overrides for one PlacedModel. Returns a " +
+                "string→string map keyed by libslic3r config key. Empty map = no overrides " +
+                "(the model uses the active profile / global config for every key). " +
+                "Per-object overrides apply to the entire model (vs. set_volume_overrides " +
+                "which only applies to one volume)."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id from list_placed_models"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            val model = ws.placedModels.value.firstOrNull { it.id == id }
+                ?: return ToolResult.error("No model with id '$id'.")
+            val out = JSONObject()
+            for ((k, v) in model.configOverrides) out.put(k, v)
+            return ToolResult.ok(
+                if (model.configOverrides.isEmpty())
+                    "Model $id has no per-object overrides."
+                else "Model $id has ${model.configOverrides.size} override(s).",
+                JSONObject().apply {
+                    put("ok", true)
+                    put("model_id", id)
+                    put("override_count", model.configOverrides.size)
+                    put("overrides", out)
+                },
+            )
+        }
+    }
+
+    /**
+     * D9 — write PlacedModel.configOverrides. Replaces the existing
+     * map; partial updates merge client-side via [GetObjectOverrides]
+     * → merge → [SetObjectOverrides]. Empty `{}` clears.
+     */
+    class SetObjectOverrides(private val ws: WorkspaceModel) : Tool {
+        override val name = "set_object_overrides"
+        override val description =
+            "D9 — write a string→string map of libslic3r config overrides onto a PlacedModel. " +
+                "REPLACES the existing map (read with get_object_overrides + merge client-side " +
+                "for partial updates). Pass {} to clear. Per-object overrides apply to the " +
+                "entire model; for region-specific overrides use a PARAMETER_MODIFIER volume " +
+                "via add_volume_to_model + set_volume_overrides. Round-trips through 3MF " +
+                "save/reopen via Metadata/model_settings.config."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id", "overrides"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id"),
+                "overrides" to JSONObject().apply {
+                    put("type", "object")
+                    put("description", "String→string map of libslic3r config keys → values. {} clears.")
+                    put("additionalProperties", JSONObject().apply { put("type", "string") })
+                },
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            if (ws.placedModels.value.none { it.id == id }) {
+                return ToolResult.error("No model with id '$id'.")
+            }
+            val raw = args.optJSONObject("overrides")
+                ?: return ToolResult.error("'overrides' must be an object (use {} to clear).")
+            val out = LinkedHashMap<String, String>()
+            val it = raw.keys()
+            while (it.hasNext()) {
+                val k = it.next()
+                val v = raw.opt(k) ?: continue
+                if (k.isBlank()) continue
+                out[k] = when (v) {
+                    is String -> v
+                    is Boolean -> if (v) "1" else "0"
+                    else -> v.toString()
+                }
+            }
+            ws.emit(WorkspaceAction.SetObjectOverrides(id, out))
+            return success(
+                if (out.isEmpty()) "Cleared overrides on $id."
+                else "Wrote ${out.size} override(s) on $id.",
+                JSONObject().apply {
+                    put("model_id", id)
+                    put("override_count", out.size)
+                },
+            )
+        }
+    }
+
+    // ---- A11 — custom G-code per print Z ----
+
+    private fun parseCustomGcodeKind(raw: String): SlicerEngine.CustomGcodeKind? = when (raw.lowercase()) {
+        "color_change", "colorchange", "color", "m600" -> SlicerEngine.CustomGcodeKind.ColorChange
+        "pause_print", "pauseprint", "pause", "m601", "m0" -> SlicerEngine.CustomGcodeKind.PausePrint
+        "tool_change", "toolchange", "tool" -> SlicerEngine.CustomGcodeKind.ToolChange
+        "template" -> SlicerEngine.CustomGcodeKind.Template
+        "custom" -> SlicerEngine.CustomGcodeKind.Custom
+        else -> null
+    }
+
+    private fun encodeCustomGcodeTick(t: SlicerEngine.CustomGcodeTick): JSONObject =
+        JSONObject().apply {
+            put("z_mm", t.printZmm.toDouble())
+            put("kind", t.kind.name)
+            put("extruder", t.extruder)
+            if (t.color.isNotEmpty()) put("color", t.color)
+            if (t.extra.isNotEmpty()) put("extra", t.extra)
+        }
+
+    /**
+     * A11 — read the tick list for a plate. Defaults to the active
+     * plate when [plate_id] is omitted.
+     */
+    class ListCustomGcodeTicks(private val ws: WorkspaceModel) : Tool {
+        override val name = "list_custom_gcode_ticks"
+        override val description =
+            "A11 — list custom-gcode-per-print-Z ticks for a plate. Each tick fires " +
+                "during gcode export when the printer reaches z_mm: PausePrint emits the " +
+                "printer's pause_print_gcode (M601 / M0 / PAUSE depending on profile), " +
+                "ColorChange emits M600 + an extruder swap, ToolChange forces a T-command, " +
+                "Template / Custom emit user-supplied G-code. Default plate_id = active plate."
+        override val inputSchema = Schemas.obj(
+            required = emptyList(),
+            properties = mapOf(
+                "plate_id" to Schemas.integer("1-based plate id (default = active plate)"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val plateId = if (args.has("plate_id")) args.getInt("plate_id")
+            else ws.activePlateId.value
+            val ticks = ws.customGcodeTicks.value[plateId].orEmpty()
+            val arr = JSONArray()
+            for (t in ticks) arr.put(encodeCustomGcodeTick(t))
+            return ToolResult.ok(
+                "Plate $plateId has ${ticks.size} custom-gcode tick(s).",
+                JSONObject().apply {
+                    put("ok", true)
+                    put("plate_id", plateId)
+                    put("tick_count", ticks.size)
+                    put("ticks", arr)
+                },
+            )
+        }
+    }
+
+    /**
+     * A11 — author one tick. The user's "pause at 5 mm to drop in a
+     * magnet" workflow becomes one MCP call.
+     */
+    class AddCustomGcodeTick(private val ws: WorkspaceModel) : Tool {
+        override val name = "add_custom_gcode_tick"
+        override val description =
+            "A11 — author one custom-gcode tick on a plate. Triggers libslic3r's matching " +
+                "hook at z_mm during gcode export. kind ∈ {pause_print, color_change, " +
+                "tool_change, template, custom}. " +
+                "pause_print: optional message (passed via 'extra' or 'color' field — " +
+                "libslic3r overloads `color` for short pause messages); the printer's " +
+                "configured pause_print_gcode emits at this Z. " +
+                "color_change: pass extruder (1-based) and color (#RRGGBB) for the new " +
+                "filament; libslic3r emits M600. " +
+                "tool_change: pass extruder (1-based); libslic3r forces a T-command. " +
+                "template / custom: pass `extra` with the raw G-code snippet. " +
+                "Default plate_id = active plate."
+        override val inputSchema = Schemas.obj(
+            required = listOf("z_mm", "kind"),
+            properties = mapOf(
+                "z_mm" to Schemas.number("Print Z in mm where the tick fires"),
+                "kind" to Schemas.string("pause_print | color_change | tool_change | template | custom"),
+                "plate_id" to Schemas.integer("1-based plate id (default = active plate)"),
+                "extruder" to Schemas.integer("1-based extruder/filament index (default 0 = any)"),
+                "color" to Schemas.string("#RRGGBB for color_change, or short pause message"),
+                "extra" to Schemas.string("Long pause message, or G-code snippet for template/custom"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val z = args.optDouble("z_mm", Double.NaN)
+            if (z.isNaN() || !z.isFinite() || z <= 0.0) {
+                return ToolResult.error("'z_mm' must be a positive finite number.")
+            }
+            val kindRaw = args.optString("kind", "")
+            val kind = parseCustomGcodeKind(kindRaw)
+                ?: return ToolResult.error("Unknown 'kind' '$kindRaw'. Use pause_print | color_change | tool_change | template | custom.")
+            val plateId = if (args.has("plate_id")) args.getInt("plate_id")
+            else ws.activePlateId.value
+            val extruder = args.optInt("extruder", 0)
+            val color = args.optString("color", "")
+            val extra = args.optString("extra", "")
+            ws.emit(WorkspaceAction.AddCustomGcodeTick(
+                plateId = plateId,
+                zMm = z.toFloat(),
+                kind = kind.name,
+                extruder = extruder,
+                color = color,
+                extra = extra,
+            ))
+            return success(
+                "Authored ${kind.name} tick at Z=${"%.2f".format(z)} mm on plate $plateId.",
+                JSONObject().apply {
+                    put("plate_id", plateId)
+                    put("z_mm", z)
+                    put("kind", kind.name)
+                    put("extruder", extruder)
+                },
+            )
+        }
+    }
+
+    /**
+     * A11 — remove one tick by index (matches the order returned by
+     * [ListCustomGcodeTicks], which is sorted ascending by Z).
+     */
+    class RemoveCustomGcodeTick(private val ws: WorkspaceModel) : Tool {
+        override val name = "remove_custom_gcode_tick"
+        override val description =
+            "A11 — remove one tick from a plate's tick list by 0-based index. List ticks " +
+                "via list_custom_gcode_ticks first to find the index. No-op if index is out " +
+                "of range. Default plate_id = active plate."
+        override val inputSchema = Schemas.obj(
+            required = listOf("index"),
+            properties = mapOf(
+                "index" to Schemas.integer("0-based index into the plate's tick list"),
+                "plate_id" to Schemas.integer("1-based plate id (default = active plate)"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val index = args.optInt("index", -1)
+            if (index < 0) return ToolResult.error("'index' must be >= 0.")
+            val plateId = if (args.has("plate_id")) args.getInt("plate_id")
+            else ws.activePlateId.value
+            val ticks = ws.customGcodeTicks.value[plateId].orEmpty()
+            if (index >= ticks.size) {
+                return ToolResult.error(
+                    "index $index is out of range for plate $plateId (has ${ticks.size} ticks).",
+                )
+            }
+            ws.emit(WorkspaceAction.RemoveCustomGcodeTick(plateId, index))
+            return success(
+                "Removed tick #$index from plate $plateId.",
+                JSONObject().apply {
+                    put("plate_id", plateId)
+                    put("index", index)
+                },
+            )
+        }
+    }
+
+    /** A11 — wipe all ticks on one plate. */
+    class ClearCustomGcodeTicks(private val ws: WorkspaceModel) : Tool {
+        override val name = "clear_custom_gcode_ticks"
+        override val description =
+            "A11 — clear all custom-gcode ticks on a plate. Default plate_id = active plate."
+        override val inputSchema = Schemas.obj(
+            required = emptyList(),
+            properties = mapOf(
+                "plate_id" to Schemas.integer("1-based plate id (default = active plate)"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val plateId = if (args.has("plate_id")) args.getInt("plate_id")
+            else ws.activePlateId.value
+            ws.emit(WorkspaceAction.ClearCustomGcodeTicks(plateId))
+            return success(
+                "Cleared custom-gcode ticks on plate $plateId.",
+                JSONObject().apply { put("plate_id", plateId) },
             )
         }
     }

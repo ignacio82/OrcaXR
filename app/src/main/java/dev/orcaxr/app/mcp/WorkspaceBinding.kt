@@ -13,6 +13,7 @@ import dev.orcaxr.app.PaintBrush
 import dev.orcaxr.app.PaintMode
 import dev.orcaxr.app.PlacedModel
 import dev.orcaxr.app.SliceUiState
+import dev.orcaxr.app.SlicerEngine
 import dev.orcaxr.app.SlicerProfile
 import dev.orcaxr.app.WorkspaceMode
 
@@ -91,6 +92,13 @@ fun BindWorkspaceModel(
      *  instead of the user-configured filament list. */
     previewPalette: List<String> = emptyList(),
     /**
+     * A11 — custom-gcode ticks per plate id. Mirror of
+     * `CustomGcodeStore.ticksByPlate`; surfaced here so MCP
+     * `list_custom_gcode_ticks` reads via `WorkspaceModel` instead of
+     * re-collecting the DataStore Flow on every call.
+     */
+    customGcodeTicksByPlate: Map<Int, List<SlicerEngine.CustomGcodeTick>> = emptyMap(),
+    /**
      * Tier-B callbacks. Each fires when the corresponding
      * [WorkspaceAction] arrives. Default null = "log warning, do
      * nothing" — useful for tests + the (unlikely) case where MCP
@@ -134,6 +142,12 @@ fun BindWorkspaceModel(
      * Pure Compose-state mutation.
      */
     onSetVolumeOverrides: ((WorkspaceAction.SetVolumeOverrides) -> Unit)? = null,
+    /** D9 / Object Settings — replace PlacedModel.configOverrides. */
+    onSetObjectOverrides: ((WorkspaceAction.SetObjectOverrides) -> Unit)? = null,
+    /** A11 — author / remove / clear custom-gcode ticks. */
+    onAddCustomGcodeTick: ((WorkspaceAction.AddCustomGcodeTick) -> Unit)? = null,
+    onRemoveCustomGcodeTick: ((WorkspaceAction.RemoveCustomGcodeTick) -> Unit)? = null,
+    onClearCustomGcodeTicks: ((WorkspaceAction.ClearCustomGcodeTicks) -> Unit)? = null,
     /** Cut a model along a Z plane (`runCut` after selecting the model). */
     onCutModel: ((modelId: String, planeZmm: Float) -> Unit)? = null,
     /** Mesh boolean op (`runBoolean`). */
@@ -198,6 +212,7 @@ fun BindWorkspaceModel(
     LaunchedEffect(toolpathTubes) { workspace.publishToolpathTubes(toolpathTubes) }
     LaunchedEffect(plateMovable) { workspace.publishPlateMovable(plateMovable) }
     LaunchedEffect(previewPalette) { workspace.publishPreviewPalette(previewPalette) }
+    LaunchedEffect(customGcodeTicksByPlate) { workspace.publishCustomGcodeTicks(customGcodeTicksByPlate) }
 
     // ---- Action collector ----
     //
@@ -237,6 +252,10 @@ fun BindWorkspaceModel(
     val onComputeAdaptiveLatest = rememberUpdatedState(onComputeAdaptiveLayerHeights)
     val onSetLayerHeightProfileLatest = rememberUpdatedState(onSetLayerHeightProfile)
     val onSetVolumeOverridesLatest = rememberUpdatedState(onSetVolumeOverrides)
+    val onSetObjectOverridesLatest = rememberUpdatedState(onSetObjectOverrides)
+    val onAddCustomGcodeTickLatest = rememberUpdatedState(onAddCustomGcodeTick)
+    val onRemoveCustomGcodeTickLatest = rememberUpdatedState(onRemoveCustomGcodeTick)
+    val onClearCustomGcodeTicksLatest = rememberUpdatedState(onClearCustomGcodeTicks)
     val onCutLatest = rememberUpdatedState(onCutModel)
     val onBoolLatest = rememberUpdatedState(onMeshBoolean)
     val onSplitLatest = rememberUpdatedState(onSplitModel)
@@ -292,6 +311,10 @@ fun BindWorkspaceModel(
             onComputeAdaptiveLayerHeights = onComputeAdaptiveLatest.value,
             onSetLayerHeightProfile = onSetLayerHeightProfileLatest.value,
             onSetVolumeOverrides = onSetVolumeOverridesLatest.value,
+            onSetObjectOverrides = onSetObjectOverridesLatest.value,
+            onAddCustomGcodeTick = onAddCustomGcodeTickLatest.value,
+            onRemoveCustomGcodeTick = onRemoveCustomGcodeTickLatest.value,
+            onClearCustomGcodeTicks = onClearCustomGcodeTicksLatest.value,
             onCutModel = onCutLatest.value,
             onMeshBoolean = onBoolLatest.value,
             onSplitModel = onSplitLatest.value,
@@ -343,6 +366,10 @@ private fun handleAction(
     onComputeAdaptiveLayerHeights: ((WorkspaceAction.ComputeAdaptiveLayerHeights) -> Unit)?,
     onSetLayerHeightProfile: ((WorkspaceAction.SetLayerHeightProfile) -> Unit)?,
     onSetVolumeOverrides: ((WorkspaceAction.SetVolumeOverrides) -> Unit)?,
+    onSetObjectOverrides: ((WorkspaceAction.SetObjectOverrides) -> Unit)?,
+    onAddCustomGcodeTick: ((WorkspaceAction.AddCustomGcodeTick) -> Unit)?,
+    onRemoveCustomGcodeTick: ((WorkspaceAction.RemoveCustomGcodeTick) -> Unit)?,
+    onClearCustomGcodeTicks: ((WorkspaceAction.ClearCustomGcodeTicks) -> Unit)?,
     onCutModel: ((modelId: String, planeZmm: Float) -> Unit)?,
     onMeshBoolean: ((modelAId: String, modelBId: String, op: Int) -> Unit)?,
     onSplitModel: ((modelId: String) -> Unit)?,
@@ -519,6 +546,28 @@ private fun handleAction(
                 }
                 setPlacedModels(updated)
             }
+        }
+        is WorkspaceAction.SetObjectOverrides -> {
+            if (onSetObjectOverrides != null) onSetObjectOverrides(action)
+            else {
+                val updated = placedModels.map { m ->
+                    if (m.id == action.modelId) m.copy(configOverrides = action.overrides)
+                    else m
+                }
+                setPlacedModels(updated)
+            }
+        }
+        is WorkspaceAction.AddCustomGcodeTick -> {
+            if (onAddCustomGcodeTick != null) onAddCustomGcodeTick(action)
+            else Log.w(TAG, "AddCustomGcodeTick not wired by host activity.")
+        }
+        is WorkspaceAction.RemoveCustomGcodeTick -> {
+            if (onRemoveCustomGcodeTick != null) onRemoveCustomGcodeTick(action)
+            else Log.w(TAG, "RemoveCustomGcodeTick not wired by host activity.")
+        }
+        is WorkspaceAction.ClearCustomGcodeTicks -> {
+            if (onClearCustomGcodeTicks != null) onClearCustomGcodeTicks(action)
+            else Log.w(TAG, "ClearCustomGcodeTicks not wired by host activity.")
         }
         is WorkspaceAction.CutModel -> {
             if (onCutModel != null) onCutModel(action.modelId, action.planeZmm)

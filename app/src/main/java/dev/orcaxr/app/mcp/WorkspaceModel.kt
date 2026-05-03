@@ -6,6 +6,7 @@ import dev.orcaxr.app.GizmoTool
 import dev.orcaxr.app.MeshBvh
 import dev.orcaxr.app.PaintBrush
 import dev.orcaxr.app.PlacedModel
+import dev.orcaxr.app.SlicerEngine
 import dev.orcaxr.app.SlicerProfile
 import dev.orcaxr.app.SliceUiState
 import dev.orcaxr.app.WorkspaceMode
@@ -115,6 +116,15 @@ class WorkspaceModel internal constructor() {
     val previewPalette: StateFlow<List<String>> = _previewPalette.asStateFlow()
 
     /**
+     * A11 — per-plate custom-gcode tick lists. Sourced from
+     * `CustomGcodeStore.ticksByPlate` and republished here so MCP read
+     * tools (`list_custom_gcode_ticks`) can snapshot without touching
+     * DataStore. Keys are 1-based plate ids matching `PlateMetadata.id`.
+     */
+    private val _customGcodeTicks = MutableStateFlow<Map<Int, List<SlicerEngine.CustomGcodeTick>>>(emptyMap())
+    val customGcodeTicks: StateFlow<Map<Int, List<SlicerEngine.CustomGcodeTick>>> = _customGcodeTicks.asStateFlow()
+
+    /**
      * True iff MainActivity has hooked itself up to this model. MCP
      * tools that mutate state should refuse with a useful error
      * message when this is false (e.g. the user backgrounded the app
@@ -202,6 +212,7 @@ class WorkspaceModel internal constructor() {
     fun publishToolpathTubes(value: Boolean) { _toolpathTubes.value = value }
     fun publishPlateMovable(value: Boolean) { _plateMovable.value = value }
     fun publishPreviewPalette(value: List<String>) { _previewPalette.value = value }
+    fun publishCustomGcodeTicks(value: Map<Int, List<SlicerEngine.CustomGcodeTick>>) { _customGcodeTicks.value = value }
 
     fun setAttached(value: Boolean) { _attached.value = value }
 

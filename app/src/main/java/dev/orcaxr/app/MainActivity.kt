@@ -225,6 +225,9 @@ class MainActivity : ComponentActivity() {
     /** Phase E3 — persistent virtual build plates. */
     private lateinit var plateStore: PlateStore
 
+    /** A11 — persistent custom-gcode-per-print-Z ticks per plate. */
+    private lateinit var customGcodeStore: CustomGcodeStore
+
     /**
      * Activity-scoped controller event sink. Galaxy XR controller plan
      * (docs/GALAXY_XR_CONTROLLER_PLAN.md). Lives as long as the Activity;
@@ -254,6 +257,7 @@ class MainActivity : ComponentActivity() {
         paintCache = PaintCacheStore(this)
         recentFiles = RecentFilesStore(this)
         plateStore = PlateStore(this)
+        customGcodeStore = CustomGcodeStore(this)
         enableEdgeToEdge()
 
         // Pre-Compose XR setup: transparent window so passthrough
@@ -444,7 +448,8 @@ class MainActivity : ComponentActivity() {
                             mixedFilamentsAll = mixedFilamentsAll,
                             paintCache = paintCache,
                             recentFiles = recentFiles,
-                            plateStore = plateStore)
+                            plateStore = plateStore,
+                            customGcodeStore = customGcodeStore)
                     } else {
                         FlatShell(sliceState, maxLayer, selectedProfile, layerHeightOverride, showTravels)
                     }
@@ -597,6 +602,8 @@ private fun XrShell(
     recentFiles: RecentFilesStore,
     /** Phase E3 — persistent virtual build plates. */
     plateStore: PlateStore,
+    /** A11 — persistent custom-gcode-per-print-Z ticks per plate. */
+    customGcodeStore: CustomGcodeStore,
 ) {
     val ctx = LocalContext.current
 
@@ -604,6 +611,13 @@ private fun XrShell(
     // being active.
     val allPlates by plateStore.plates.collectAsState(initial = listOf(PlateMetadata(1, "Plate 1")))
     var activePlateId by remember { mutableIntStateOf(1) }
+
+    // A11 — custom G-code ticks per plate, hydrated from the
+    // CustomGcodeStore. The map is keyed by plate id (1-based);
+    // missing keys mean "no ticks on that plate". Persistence happens
+    // on every mutation via the WorkspaceAction handlers below.
+    val customGcodeTicksByPlate by customGcodeStore.ticksByPlate
+        .collectAsState(initial = emptyMap())
 
     var glbPath by remember { mutableStateOf<String?>(null) }
     var glbVersion by remember { mutableStateOf(0) } // bump per regeneration
@@ -1749,6 +1763,21 @@ private fun XrShell(
                 }
             }
 
+            // D9 — read per-object config overrides out of the 3MF
+            // so the load preserves what desktop OrcaSlicer (or a
+            // previous OrcaXR session) authored. Single-object 3MFs +
+            // STLs return an empty list cheaply. We pair these against
+            // the freshList by OBJECT INDEX (which matches `meta`'s
+            // order — one ObjectConfig per ModelObject).
+            val objectConfigs = SlicerEngine.read3mfObjectConfigs(file)
+            // A11 — custom-gcode ticks for the file's active plate
+            // (always plate index 0 for non-BBS 3MFs / STLs). Loaded
+            // only on Replace mode so an "Add another model" import
+            // doesn't silently overwrite the user's existing ticks.
+            val importedTicks = if (mode is PickerMode.Replace) {
+                SlicerEngine.read3mfCustomGcodes(file, plateIndex = 0)
+            } else emptyList()
+
             val freshList = if (meta != null && meta.size > 1) {
                 val gid = paintCache.hashOf(file)
                 meta.mapIndexed { index, m ->
@@ -1773,6 +1802,10 @@ private fun XrShell(
                         baseBboxZmm = m.bboxZ,
                         plateId = importPlateToApp[m.plateIndex] ?: importPlateToApp.getValue(1),
                         needsRepair = m.openEdgeCount > 0,
+                        // D9 — apply per-object config overrides from
+                        // the 3MF, indexed by object position. Empty
+                        // map for objects that didn't author any.
+                        configOverrides = objectConfigs.getOrNull(index)?.objectOverrides ?: emptyMap(),
                     )
                 }
             } else {
@@ -1786,6 +1819,10 @@ private fun XrShell(
                         label = label,
                         plateId = importPlateToApp[singlePlate] ?: importPlateToApp.getValue(1),
                         needsRepair = singleNeedsRepair,
+                        // D9 — single-object 3MFs put their per-object
+                        // overrides at index 0; STLs return [] (empty
+                        // list) so this falls through to no overrides.
+                        configOverrides = objectConfigs.firstOrNull()?.objectOverrides ?: emptyMap(),
                     ),
                 )
             }
@@ -1799,6 +1836,13 @@ private fun XrShell(
                     // filtered out if the user was on a different
                     // plate before importing).
                     activePlateId = importPlateToApp.getValue(1)
+                    // A11 — write imported custom-gcode ticks onto
+                    // plate 1 of the new project so save → reopen
+                    // round-trips. Replace clears any prior ticks the
+                    // user had on plate 1 (matches "Replace clears the
+                    // bed"). Empty list = clear (the imported file had
+                    // no ticks).
+                    customGcodeStore.set(importPlateToApp.getValue(1), importedTicks)
                 }
                 PickerMode.Add -> {
                     if (placedModels.size + freshList.size > MAX_PLACED_MODELS) {
@@ -1922,6 +1966,7 @@ private fun XrShell(
                 brimEars = brimEarsForSlice,
                 objectConfigOverrides = selectedModel?.configOverrides ?: emptyMap(),
                 layerHeightProfile = selectedModel?.layerHeightProfile,
+                customGcodeTicks = customGcodeTicksByPlate[activePlateId] ?: emptyList(),
             ) { percent, message ->
                 // Fires on a libslic3r worker thread; mutating
                 // sliceState directly is fine — Compose's snapshot
@@ -2764,6 +2809,7 @@ private fun XrShell(
                 paintFilamentIndices = paintsForMulti,
                 objectOrdinals = ordinals,
                 layerHeightProfilesPerInput = lhpsForMulti,
+                customGcodeTicks = customGcodeTicksByPlate[activePlateId] ?: emptyList(),
             ) { percent, message ->
                 val cur = sliceState.value
                 if (cur is SliceUiState.Slicing) {
@@ -2923,6 +2969,7 @@ private fun XrShell(
         setPlateMovable = { plateMovable = it },
         allProfiles = allProfiles,
         previewPalette = previewPalette,
+        customGcodeTicksByPlate = customGcodeTicksByPlate,
         // Tier-B mirrors of the BottomRightSummaryPanel button paths.
         // Routing through the existing onSliceClick logic (multi-vs-
         // single, fallback to bundled cube) keeps the slicer behavior
@@ -2955,6 +3002,17 @@ private fun XrShell(
                     emptyList(),
                     extraOverrides = printSettingsOverrides.value,
                 )
+                // D9 / A11 — bundle per-object + per-volume overrides
+                // and the active plate's custom-gcode ticks into the
+                // saved 3MF so a save → reopen round-trip preserves
+                // every authored setting.
+                val volMap = target.volumes.associate { v ->
+                    // Volume index 0 is the primary mesh; user-added
+                    // extras start at 1. PlacedVolume order matches
+                    // declaration order.
+                    val volIdx = target.volumes.indexOfFirst { it.id == v.id } + 1
+                    volIdx to v.configOverrides
+                }.filterValues { it.isNotEmpty() }
                 saveProjectAs3mfToDownloads(
                     sourceFile = target.source,
                     sourceLabel = target.label,
@@ -2964,6 +3022,9 @@ private fun XrShell(
                     seamFlags = target.seamFlags,
                     fuzzySkinFlags = target.fuzzySkinFlags,
                     brimEars = target.brimEars.toBrimEarsFloatArray(),
+                    objectConfigOverrides = target.configOverrides,
+                    volumeConfigOverrides = volMap,
+                    customGcodeTicks = customGcodeTicksByPlate[activePlateId] ?: emptyList(),
                 )
             }
         },
@@ -3032,6 +3093,45 @@ private fun XrShell(
                     if (v.id != action.volumeId) v
                     else v.copy(configOverrides = action.overrides)
                 })
+            }
+        },
+        // D9 — replace PlacedModel.configOverrides; threads through
+        // both nativeSlice and nativeSaveAs3mf at the next slice / save.
+        onSetObjectOverrides = { action ->
+            placedModels = placedModels.map { m ->
+                if (m.id == action.modelId) m.copy(configOverrides = action.overrides) else m
+            }
+        },
+        // A11 — persist tick mutations through CustomGcodeStore. The
+        // store's `ticksByPlate` Flow re-publishes via the
+        // `customGcodeTicksByPlate` collectAsState above, which
+        // propagates back into `WorkspaceModel.customGcodeTicks` via
+        // the LaunchedEffect at the bottom of BindWorkspaceModel's
+        // call site.
+        onAddCustomGcodeTick = { action ->
+            val kind = runCatching { SlicerEngine.CustomGcodeKind.valueOf(action.kind) }
+                .getOrDefault(SlicerEngine.CustomGcodeKind.Custom)
+            scope.launch {
+                customGcodeStore.add(
+                    plateId = action.plateId,
+                    tick = SlicerEngine.CustomGcodeTick(
+                        printZmm = action.zMm,
+                        kind = kind,
+                        extruder = action.extruder,
+                        color = action.color,
+                        extra = action.extra,
+                    ),
+                )
+            }
+        },
+        onRemoveCustomGcodeTick = { action ->
+            scope.launch {
+                customGcodeStore.removeAt(action.plateId, action.index)
+            }
+        },
+        onClearCustomGcodeTicks = { action ->
+            scope.launch {
+                customGcodeStore.clear(action.plateId)
             }
         },
         onCutModel = { id, plane ->
@@ -4195,6 +4295,7 @@ private fun XrShell(
                             brimEars = brimEarsForSlice,
                             objectConfigOverrides = testStatePlacedModels.firstOrNull()?.configOverrides ?: emptyMap(),
                             layerHeightProfile = testStatePlacedModels.firstOrNull()?.layerHeightProfile,
+                            customGcodeTicks = customGcodeTicksByPlate[activePlateId] ?: emptyList(),
                         ) { percent, message ->
                             val now = sliceState.value
                             if (now is SliceUiState.Slicing) {
@@ -8484,6 +8585,19 @@ private suspend fun saveProjectAs3mfToDownloads(
     /** Paint full-feature-parity (Brim Ears) — flat float[4N] of
      *  (x, y, z, head_radius) quads. */
     brimEars: FloatArray? = null,
+    /**
+     * D9 — per-object config overrides applied to `mo->config()` so
+     * libslic3r serializes them into model_settings.config.
+     */
+    objectConfigOverrides: Map<String, String> = emptyMap(),
+    /**
+     * D9 — per-volume config overrides keyed by 0-based volume index.
+     */
+    volumeConfigOverrides: Map<Int, Map<String, String>> = emptyMap(),
+    /**
+     * A11 — custom-gcode ticks for the active plate.
+     */
+    customGcodeTicks: List<SlicerEngine.CustomGcodeTick> = emptyList(),
 ): File? {
     if (!sourceFile.exists()) return null
     val dest = downloadsPathFor(sourceLabel, "3mf")
@@ -8496,6 +8610,9 @@ private suspend fun saveProjectAs3mfToDownloads(
             seamFlags = seamFlags,
             fuzzySkinFlags = fuzzySkinFlags,
             brimEars = brimEars,
+            objectConfigOverrides = objectConfigOverrides,
+            volumeConfigOverrides = volumeConfigOverrides,
+            customGcodeTicks = customGcodeTicks,
         )) dest else null
 }
 
@@ -8565,6 +8682,10 @@ private suspend fun sliceLocalFile(
      * profile (libslic3r's global layer_height governs).
      */
     layerHeightProfile: FloatArray? = null,
+    /**
+     * A11 — custom G-code ticks for the active plate. Empty = no ticks.
+     */
+    customGcodeTicks: List<SlicerEngine.CustomGcodeTick> = emptyList(),
     onProgress: ((percent: Int, message: String) -> Unit)? = null,
 ): SliceResult {
     val gcode = File(stl.parentFile, "${stl.name}.gcode")
@@ -8588,6 +8709,7 @@ private suspend fun sliceLocalFile(
         brimEars = effectiveBrim,
         objectConfigOverrides = objectConfigOverrides,
         layerHeightProfile = effectiveLhp,
+        customGcodeTicks = customGcodeTicks,
         onProgress = onProgress,
     )
 }

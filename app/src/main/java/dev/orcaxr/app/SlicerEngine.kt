@@ -199,6 +199,15 @@ object SlicerEngine {
          * layer.
          */
         layerHeightProfile: FloatArray? = null,
+        /**
+         * A11 — custom G-code ticks for the active plate (sorted by
+         * print_z; libslic3r re-sorts internally so any order is
+         * accepted). Default empty = no ticks; the slicer emits
+         * vanilla G-code with no per-Z hooks fired. The caller filters
+         * for the active plate before calling — multi-plate workflows
+         * keep one tick list per plate.
+         */
+        customGcodeTicks: List<CustomGcodeTick> = emptyList(),
         onProgress: ((percent: Int, message: String) -> Unit)? = null,
     ): SliceResult = withContext(dispatcher) {
         require(stl.exists()) { "STL not found: ${stl.absolutePath}" }
@@ -275,6 +284,8 @@ object SlicerEngine {
             else Triple(idxs.toIntArray(), keysL.toTypedArray(), valsL.toTypedArray())
         }
 
+        // A11 — flatten custom-gcode ticks into 5 parallel arrays.
+        val (cgZ, cgT, cgE, cgC, cgX) = flattenCustomGcodeTicks(customGcodeTicks)
         val rc = nativeSlice(
             stl.absolutePath,
             outGcode.absolutePath,
@@ -296,6 +307,7 @@ object SlicerEngine {
             volKeyArr,
             volValArr,
             layerHeightProfile,
+            cgZ, cgT, cgE, cgC, cgX,
         )
         if (rc != 0) {
             return@withContext SliceResult.NativeError(
@@ -395,6 +407,14 @@ object SlicerEngine {
          * = no per-input profiles.
          */
         layerHeightProfilesPerInput: List<FloatArray?>? = null,
+        /**
+         * A11 — custom G-code ticks for the active plate. Single list
+         * applied to `Model::plates_custom_gcodes[curr_plate_index]`;
+         * ticks are not per-input (they fire at print Z regardless of
+         * which object reaches that height — matches upstream
+         * semantics). Default empty = no ticks.
+         */
+        customGcodeTicks: List<CustomGcodeTick> = emptyList(),
         onProgress: ((percent: Int, message: String) -> Unit)? = null,
     ): SliceResult = withContext(dispatcher) {
         require(models.isNotEmpty()) { "sliceMulti requires at least one model" }
@@ -462,6 +482,8 @@ object SlicerEngine {
             if (layerHeightProfilesPerInput == null ||
                 layerHeightProfilesPerInput.all { it == null }) null
             else Array(models.size) { layerHeightProfilesPerInput[it] }
+        // A11 — flatten ticks for the active plate.
+        val (cgZ, cgT, cgE, cgC, cgX) = flattenCustomGcodeTicks(customGcodeTicks)
         val rc = nativeSliceMulti(
             paths,
             transforms,
@@ -472,6 +494,7 @@ object SlicerEngine {
             paintsForJni,
             objectOrdinals,
             lhpsForJni,
+            cgZ, cgT, cgE, cgC, cgX,
         )
         if (rc != 0) {
             return@withContext SliceResult.NativeError(
@@ -715,6 +738,175 @@ object SlicerEngine {
             openEdgesOut = stats[6],
             usedCgal = stats[7],
         )
+    }
+
+    // ====================================================================
+    // A11 — Custom G-code per print Z (pause / color change / template).
+    //
+    // Mirrors libslic3r's `Slic3r::CustomGCode::Item`. Stored on
+    // `Model::plates_custom_gcodes[plate_index]`; libslic3r's
+    // `ToolOrdering::assign_custom_gcodes` reads the active plate's
+    // ticks at slice time and the GCode generator emits the matching
+    // PrintConfig hooks (`pause_print_gcode`, `M600`, T-commands, or
+    // raw user template).
+    //
+    // The Kotlin caller authors a `List<CustomGcodeTick>` filtered for
+    // the active plate and passes it through [slice] / [sliceMulti] /
+    // [saveAs3mf]; this layer flattens to the JNI's parallel arrays.
+    // ====================================================================
+
+    enum class CustomGcodeKind(val nativeOrdinal: Int) {
+        ColorChange(0), PausePrint(1), ToolChange(2), Template(3), Custom(4);
+        companion object {
+            fun fromOrdinal(o: Int): CustomGcodeKind = when (o) {
+                0 -> ColorChange
+                1 -> PausePrint
+                2 -> ToolChange
+                3 -> Template
+                4 -> Custom
+                else -> Custom
+            }
+        }
+    }
+
+    /**
+     * One custom-gcode tick. Triggers libslic3r's matching hook at
+     * `printZmm` during gcode export.
+     *
+     * - [kind] picks the libslic3r action.
+     * - [extruder] is 1-based filament/extruder index. 0 = "any" /
+     *   informative-only for non-tool-change kinds.
+     * - [color] carries either the new filament hex (`#RRGGBB`) for
+     *   ColorChange or a short pause-print message for PausePrint
+     *   (libslic3r overloads the slot — see CustomGCode.hpp:42).
+     * - [extra] carries the raw G-code snippet for Template / Custom,
+     *   or the long-form pause message for PausePrint, or "" for
+     *   ColorChange / ToolChange.
+     */
+    data class CustomGcodeTick(
+        val printZmm: Float,
+        val kind: CustomGcodeKind,
+        val extruder: Int = 0,
+        val color: String = "",
+        val extra: String = "",
+    )
+
+    /**
+     * D9 — per-volume config overrides extracted from a 3MF.
+     * Volumes are returned in declaration order (matches `mo->volumes`).
+     */
+    data class Read3mfVolumeConfig(
+        val name: String,
+        val type: ModelVolumeType,
+        val overrides: Map<String, String>,
+    )
+
+    /** D9 — per-object config + volume configs extracted from a 3MF. */
+    data class Read3mfObjectConfig(
+        val objectOverrides: Map<String, String>,
+        val volumes: List<Read3mfVolumeConfig>,
+    )
+
+    /**
+     * D9 — extract per-object + per-volume `config` overrides from a
+     * 3MF. Returns one [Read3mfObjectConfig] per object in declaration
+     * order, or empty list if the file isn't a 3MF / has no overrides
+     * authored.
+     *
+     * Used by the load path to populate
+     * [PlacedModel.configOverrides] and [PlacedVolume.configOverrides]
+     * so an "open + close + reopen" round-trip on a 3MF authored in
+     * desktop OrcaSlicer (or via `set_volume_overrides` in OrcaXR)
+     * preserves per-object and per-volume settings.
+     */
+    suspend fun read3mfObjectConfigs(input: File): List<Read3mfObjectConfig> = withContext(dispatcher) {
+        if (!input.exists() || !input.canRead()) return@withContext emptyList()
+        val raw = nativeRead3mfObjectConfigs(input.absolutePath) ?: return@withContext emptyList()
+        runCatching {
+            val arr = org.json.JSONArray(raw)
+            val out = ArrayList<Read3mfObjectConfig>(arr.length())
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val objOver = LinkedHashMap<String, String>()
+                obj.optJSONObject("object_overrides")?.also { ov ->
+                    val keys = ov.keys()
+                    while (keys.hasNext()) {
+                        val k = keys.next()
+                        objOver[k] = ov.optString(k, "")
+                    }
+                }
+                val volsArr = obj.optJSONArray("volumes")
+                val vols = ArrayList<Read3mfVolumeConfig>(volsArr?.length() ?: 0)
+                if (volsArr != null) {
+                    for (vi in 0 until volsArr.length()) {
+                        val v = volsArr.getJSONObject(vi)
+                        val name = v.optString("name", "")
+                        val typeRaw = v.optString("type", "MODEL_PART")
+                        val type = runCatching { ModelVolumeType.valueOf(typeRaw) }
+                            .getOrDefault(ModelVolumeType.MODEL_PART)
+                        val overObj = v.optJSONObject("overrides")
+                        val ov = LinkedHashMap<String, String>()
+                        if (overObj != null) {
+                            val ks = overObj.keys()
+                            while (ks.hasNext()) {
+                                val k = ks.next()
+                                ov[k] = overObj.optString(k, "")
+                            }
+                        }
+                        vols += Read3mfVolumeConfig(name, type, ov)
+                    }
+                }
+                out += Read3mfObjectConfig(objOver, vols)
+            }
+            out
+        }.getOrElse {
+            android.util.Log.e("OrcaXR", "read3mfObjectConfigs parse failed", it)
+            emptyList()
+        }
+    }
+
+    /**
+     * A11 — extract custom-gcode-per-print-Z ticks for a single plate
+     * from a 3MF. Returns an empty list if the file isn't a 3MF, the
+     * plate doesn't exist, or no ticks were authored.
+     *
+     * `plateIndex` is 0-based; pass 0 for the default / single-plate
+     * case. The caller decides which plate to query — typically the
+     * active plate at load time.
+     */
+    suspend fun read3mfCustomGcodes(
+        input: File,
+        plateIndex: Int = 0,
+    ): List<CustomGcodeTick> = withContext(dispatcher) {
+        if (!input.exists() || !input.canRead()) return@withContext emptyList()
+        val raw = nativeRead3mfCustomGcodes(input.absolutePath, plateIndex)
+            ?: return@withContext emptyList()
+        runCatching {
+            val arr = org.json.JSONArray(raw)
+            val out = ArrayList<CustomGcodeTick>(arr.length())
+            for (i in 0 until arr.length()) {
+                val t = arr.getJSONObject(i)
+                val kind = when (t.optString("type", "")) {
+                    "ColorChange" -> CustomGcodeKind.ColorChange
+                    "PausePrint" -> CustomGcodeKind.PausePrint
+                    "ToolChange" -> CustomGcodeKind.ToolChange
+                    "Template" -> CustomGcodeKind.Template
+                    "Custom" -> CustomGcodeKind.Custom
+                    else -> continue
+                }
+                out += CustomGcodeTick(
+                    printZmm = t.optDouble("z_mm", 0.0).toFloat(),
+                    kind = kind,
+                    extruder = t.optInt("extruder", 0),
+                    color = t.optString("color", ""),
+                    extra = t.optString("extra", ""),
+                )
+            }
+            out
+        }.getOrElse {
+            android.util.Log.e("OrcaXR", "read3mfCustomGcodes parse failed", it)
+            emptyList()
+        }
     }
 
     // ====================================================================
@@ -1173,6 +1365,24 @@ object SlicerEngine {
          * (x, y, z, head_radius) quads. Null / empty = no ears.
          */
         brimEars: FloatArray? = null,
+        /**
+         * D9 — per-object config overrides written onto
+         * `mo->config` before store_3mf so libslic3r serializes them
+         * into `Metadata/model_settings.config`. Default empty = no
+         * overrides.
+         */
+        objectConfigOverrides: Map<String, String> = emptyMap(),
+        /**
+         * D9 — per-volume config overrides keyed by 0-based volume
+         * index in `mo->volumes`. Volume index 0 is the primary mesh
+         * (typical use); 1+ are user-added extras. Empty map for a
+         * volume = no overrides for that volume.
+         */
+        volumeConfigOverrides: Map<Int, Map<String, String>> = emptyMap(),
+        /**
+         * A11 — custom G-code ticks for the active plate.
+         */
+        customGcodeTicks: List<CustomGcodeTick> = emptyList(),
     ): Boolean = withContext(dispatcher) {
         require(input.exists()) { "input not found: ${input.absolutePath}" }
         require(input.canRead()) { "input not readable: ${input.absolutePath}" }
@@ -1190,10 +1400,54 @@ object SlicerEngine {
         val effSeam = if (seamFlags == null || !seamFlags.any { it != 0.toByte() }) null else seamFlags
         val effFuzzy = if (fuzzySkinFlags == null || !fuzzySkinFlags.any { it != 0.toByte() }) null else fuzzySkinFlags
         val effBrim = if (brimEars == null || brimEars.isEmpty()) null else brimEars
+
+        val (objKeys, objValues) = if (objectConfigOverrides.isEmpty()) null to null
+        else objectConfigOverrides.keys.toTypedArray() to objectConfigOverrides.values.toTypedArray()
+
+        val (volIdxArr, volKeyArr, volValArr) = run {
+            val idxs = ArrayList<Int>()
+            val ks = ArrayList<String>()
+            val vs = ArrayList<String>()
+            for ((volIdx, map) in volumeConfigOverrides) {
+                for ((k, v) in map) { idxs += volIdx; ks += k; vs += v }
+            }
+            if (idxs.isEmpty()) Triple<IntArray?, Array<String>?, Array<String>?>(null, null, null)
+            else Triple(idxs.toIntArray(), ks.toTypedArray(), vs.toTypedArray())
+        }
+
+        val (cgZ, cgT, cgE, cgC, cgX) = flattenCustomGcodeTicks(customGcodeTicks)
+
         nativeSaveAs3mf(
             input.absolutePath, outPath.absolutePath, keys, values,
             effPaint, effSupport, effSeam, effFuzzy, effBrim,
+            objKeys, objValues,
+            volIdxArr, volKeyArr, volValArr,
+            cgZ, cgT, cgE, cgC, cgX,
         ) == 0
+    }
+
+    /**
+     * A11 — flatten a tick list into the 5 parallel arrays the JNI
+     * expects. Returns all-null on an empty list so the JNI side
+     * short-circuits the apply loop entirely.
+     */
+    private data class CustomGcodeJniArrays(
+        val z: FloatArray?,
+        val type: IntArray?,
+        val extruder: IntArray?,
+        val color: Array<String>?,
+        val extra: Array<String>?,
+    )
+
+    private fun flattenCustomGcodeTicks(ticks: List<CustomGcodeTick>): CustomGcodeJniArrays {
+        if (ticks.isEmpty()) return CustomGcodeJniArrays(null, null, null, null, null)
+        val n = ticks.size
+        val z = FloatArray(n) { ticks[it].printZmm }
+        val t = IntArray(n) { ticks[it].kind.nativeOrdinal }
+        val ex = IntArray(n) { ticks[it].extruder }
+        val cs = Array(n) { ticks[it].color }
+        val xs = Array(n) { ticks[it].extra }
+        return CustomGcodeJniArrays(z, t, ex, cs, xs)
     }
 
     /**
@@ -1577,6 +1831,21 @@ object SlicerEngine {
          * Null / empty = no profile (legacy behavior).
          */
         layerHeightProfile: FloatArray?,
+        /**
+         * A11 — custom G-code per print Z. Five parallel arrays of
+         * the same length (any may be null/empty for no ticks).
+         * `customGcodeTypes` ordinals match
+         * `Slic3r::CustomGCode::Type`:
+         *   0 = ColorChange, 1 = PausePrint, 2 = ToolChange,
+         *   3 = Template,    4 = Custom.
+         * Authored onto `model.plates_custom_gcodes[curr_plate_index]`
+         * BEFORE Print::apply.
+         */
+        customGcodeZmm: FloatArray?,
+        customGcodeTypes: IntArray?,
+        customGcodeExtruders: IntArray?,
+        customGcodeColors: Array<String>?,
+        customGcodeExtras: Array<String>?,
     ): Int
     private external fun nativeConvertToStl(
         inputPath: String,
@@ -1725,6 +1994,33 @@ object SlicerEngine {
          * `mo->brim_points`. Null = no ears.
          */
         brimEars: FloatArray?,
+        /**
+         * D9 — per-object config overrides applied onto
+         * `model.objects.front()->config()` before store_3mf so the
+         * 3MF carries them in `Metadata/model_settings.config`. Same
+         * shape as [configKeys] / [configValues] but keys land on the
+         * OBJECT's local config rather than the global Print config.
+         * Null = no overrides.
+         */
+        objectConfigKeys: Array<String>?,
+        objectConfigValues: Array<String>?,
+        /**
+         * D9 — per-volume config overrides on the first object's
+         * volumes. Sparse `(volIdx, key, value)` triples; volIdx is
+         * 0-based into `mo->volumes`. Null = no overrides.
+         */
+        extraVolumeConfigVolIdx: IntArray?,
+        extraVolumeConfigKeys: Array<String>?,
+        extraVolumeConfigValues: Array<String>?,
+        /**
+         * A11 — custom G-code ticks for the active plate. See
+         * [nativeSlice]. Null = no ticks.
+         */
+        customGcodeZmm: FloatArray?,
+        customGcodeTypes: IntArray?,
+        customGcodeExtruders: IntArray?,
+        customGcodeColors: Array<String>?,
+        customGcodeExtras: Array<String>?,
     ): Int
     private external fun nativeSliceMulti(
         inputPaths: Array<String>,
@@ -1757,5 +2053,30 @@ object SlicerEngine {
          * input.
          */
         layerHeightProfilesPerInput: Array<FloatArray?>?,
+        /**
+         * A11 — custom G-code ticks for the active plate. See
+         * [nativeSlice]. Null = no ticks.
+         */
+        customGcodeZmm: FloatArray?,
+        customGcodeTypes: IntArray?,
+        customGcodeExtruders: IntArray?,
+        customGcodeColors: Array<String>?,
+        customGcodeExtras: Array<String>?,
     ): Int
+
+    /**
+     * D9 — read per-object + per-volume `config` overrides out of a
+     * 3MF and return them as a JSON string. See [read3mfObjectConfigs].
+     */
+    private external fun nativeRead3mfObjectConfigs(path: String): String?
+
+    /**
+     * A11 — read the custom-gcode-per-print-Z ticks for a single plate
+     * out of a 3MF and return them as a JSON string. See
+     * [read3mfCustomGcodes].
+     */
+    private external fun nativeRead3mfCustomGcodes(
+        path: String,
+        plateIndex: Int,
+    ): String?
 }

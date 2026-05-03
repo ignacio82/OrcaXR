@@ -82,6 +82,7 @@ extern "C" {
 #include <libslic3r/MeshBoolean.hpp>
 #include <libslic3r/QuadricEdgeCollapse.hpp>
 #include <libslic3r/Slicing.hpp>
+#include <libslic3r/CustomGCode.hpp>
 #include <libslic3r/GCode/ThumbnailData.hpp>
 #include <libslic3r/Emboss.hpp>
 #include <libslic3r/NSVGUtils.hpp>
@@ -95,6 +96,7 @@ extern "C" {
 
 #include <miniz.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <fstream>
@@ -963,6 +965,85 @@ static Slic3r::Model load_mesh_container(
     return Slic3r::Model::read_from_file(path);
 }
 
+// A11 — apply caller-supplied custom-gcode-per-print-Z items onto
+// `model.plates_custom_gcodes[model.curr_plate_index]`. Five parallel
+// jarray inputs (any may be null/empty for "no ticks"); we pick the
+// shortest length to cover ragged input. Type ordinals match
+// `Slic3r::CustomGCode::Type`:
+//   0 = ColorChange, 1 = PausePrint, 2 = ToolChange,
+//   3 = Template,    4 = Custom,     5+ = Unknown.
+// `extruder` is 1-based (libslic3r's convention; `0` means "any").
+// `color` is the swatch hex for ColorChange; the Pause-print message
+// rides in `color` field per Item's documented overloading
+// (CustomGCode.hpp:42). `extra` carries the Template / Custom G-code
+// snippet.
+static void apply_custom_gcodes(JNIEnv* env, Slic3r::Model& model,
+                                jfloatArray  jZ,
+                                jintArray    jTypes,
+                                jintArray    jExtruders,
+                                jobjectArray jColors,
+                                jobjectArray jExtras)
+{
+    if (jZ == nullptr || jTypes == nullptr) return;
+    const jsize nZ = env->GetArrayLength(jZ);
+    const jsize nT = env->GetArrayLength(jTypes);
+    const jsize nE = jExtruders ? env->GetArrayLength(jExtruders) : 0;
+    const jsize nC = jColors ? env->GetArrayLength(jColors) : 0;
+    const jsize nX = jExtras ? env->GetArrayLength(jExtras) : 0;
+    const jsize n = std::min(nZ, nT);
+    if (n <= 0) return;
+
+    std::vector<jfloat> zs(n, 0.f);
+    env->GetFloatArrayRegion(jZ, 0, n, zs.data());
+    std::vector<jint> types(n, 0);
+    env->GetIntArrayRegion(jTypes, 0, n, types.data());
+    std::vector<jint> extruders(n, 0);
+    if (nE >= n) env->GetIntArrayRegion(jExtruders, 0, n, extruders.data());
+
+    auto& info = model.plates_custom_gcodes[model.curr_plate_index];
+    info.gcodes.clear();
+    info.gcodes.reserve(n);
+    for (jsize i = 0; i < n; ++i) {
+        Slic3r::CustomGCode::Item item;
+        item.print_z = double(zs[i]);
+        switch (types[i]) {
+            case 0: item.type = Slic3r::CustomGCode::ColorChange; break;
+            case 1: item.type = Slic3r::CustomGCode::PausePrint; break;
+            case 2: item.type = Slic3r::CustomGCode::ToolChange; break;
+            case 3: item.type = Slic3r::CustomGCode::Template; break;
+            case 4: item.type = Slic3r::CustomGCode::Custom; break;
+            default: item.type = Slic3r::CustomGCode::Unknown; break;
+        }
+        item.extruder = (i < jsize(extruders.size())) ? int(extruders[i]) : 0;
+        if (jColors != nullptr && i < nC) {
+            jstring jc = (jstring) env->GetObjectArrayElement(jColors, i);
+            if (jc != nullptr) {
+                ScopedUtf c(env, jc);
+                item.color = c.c ? std::string(c.c) : std::string();
+                env->DeleteLocalRef(jc);
+            }
+        }
+        if (jExtras != nullptr && i < nX) {
+            jstring jx = (jstring) env->GetObjectArrayElement(jExtras, i);
+            if (jx != nullptr) {
+                ScopedUtf x(env, jx);
+                item.extra = x.c ? std::string(x.c) : std::string();
+                env->DeleteLocalRef(jx);
+            }
+        }
+        info.gcodes.push_back(std::move(item));
+    }
+    // Sort by print_z so libslic3r's ToolOrdering walks them in order.
+    std::sort(info.gcodes.begin(), info.gcodes.end());
+    // Best-effort mode inference; libslic3r's `assign_custom_gcodes`
+    // re-derives the effective mode from print config + filament
+    // count, but a sane authored mode helps the tool/color-change
+    // dispatcher skip the `mode` mismatch path.
+    Slic3r::CustomGCode::check_mode_for_custom_gcode_per_print_z(info);
+    ORCAXR_LOGI("apply_custom_gcodes: authored %d ticks on plate %d",
+                int(info.gcodes.size()), model.curr_plate_index);
+}
+
 } // namespace
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -1066,7 +1147,28 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
      * back to the global / config-derived layer height. Computed
      * upstream by [nativeAdaptiveLayerHeights] or hand-built by the
      * UI. */
-    jfloatArray  jLayerHeightProfile)
+    jfloatArray  jLayerHeightProfile,
+    /* A11 — custom G-code per print Z. Five parallel jarrays (all
+     * null / shorter-than-N → fallback values; pick min length).
+     *   jCustomGcodeZmm[i]      = print Z in mm where the tick fires
+     *   jCustomGcodeTypes[i]    = Slic3r::CustomGCode::Type ordinal
+     *                              (0=ColorChange, 1=PausePrint,
+     *                               2=ToolChange, 3=Template,
+     *                               4=Custom)
+     *   jCustomGcodeExtruders[i] = 1-based filament/extruder index
+     *                              (0 = "any")
+     *   jCustomGcodeColors[i]   = "#RRGGBB" for ColorChange (or
+     *                              short Pause message — libslic3r
+     *                              overloads this slot)
+     *   jCustomGcodeExtras[i]   = G-code snippet for Template /
+     *                              Custom; pause-print message or
+     *                              extra metadata otherwise
+     * Authored onto `model.plates_custom_gcodes[curr_plate_index]`. */
+    jfloatArray  jCustomGcodeZmm,
+    jintArray    jCustomGcodeTypes,
+    jintArray    jCustomGcodeExtruders,
+    jobjectArray jCustomGcodeColors,
+    jobjectArray jCustomGcodeExtras)
 {
     ScopedUtf stl(env, jStlPath);
     ScopedUtf out(env, jOutGcodePath);
@@ -1294,6 +1396,18 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
                 }
             }
         }
+
+        // A11 — apply caller-supplied custom-gcode-per-print-Z items.
+        // Single-model path slices onto `model.curr_plate_index` (=0)
+        // so we always write the active plate; the caller filters
+        // ticks for the active plate before calling. Done BEFORE
+        // Print::apply so libslic3r's PrintApply diff sees the new
+        // ticks and triggers a tool-ordering refresh
+        // (PrintApply.cpp:1394).
+        apply_custom_gcodes(env, model,
+                            jCustomGcodeZmm, jCustomGcodeTypes,
+                            jCustomGcodeExtruders,
+                            jCustomGcodeColors, jCustomGcodeExtras);
 
         // A10 — apply caller-supplied per-object layer height profile.
         // Setting it on `mo->layer_height_profile` BEFORE Print::apply
@@ -1868,7 +1982,17 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
      * to that input). Whole array null = no per-input profiles for any
      * input, identical to legacy behavior.
      */
-    jobjectArray jLayerHeightProfilesPerInput)
+    jobjectArray jLayerHeightProfilesPerInput,
+    /* A11 — custom G-code per print Z. See nativeSlice for the
+     * parallel-array shape; ticks land on
+     * `multi.plates_custom_gcodes[multi.curr_plate_index]`. The
+     * caller filters ticks for the active plate before calling
+     * (multi-plate authoring is per-plate by design). */
+    jfloatArray  jCustomGcodeZmm,
+    jintArray    jCustomGcodeTypes,
+    jintArray    jCustomGcodeExtruders,
+    jobjectArray jCustomGcodeColors,
+    jobjectArray jCustomGcodeExtras)
 {
     ScopedUtf out(env, jOutGcodePath);
     const jsize n_inputs = jInputPaths != nullptr ? env->GetArrayLength(jInputPaths) : 0;
@@ -2262,6 +2386,14 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
                         group_shift.x(), group_shift.y(), group_shift.z());
         }
 
+        // A11 — apply caller-supplied custom G-code ticks. Active
+        // plate is `multi.curr_plate_index` (= 0 by default); the
+        // caller filters per-plate before calling.
+        apply_custom_gcodes(env, multi,
+                            jCustomGcodeZmm, jCustomGcodeTypes,
+                            jCustomGcodeExtruders,
+                            jCustomGcodeColors, jCustomGcodeExtras);
+
         print.apply(multi, cfg);
         auto err = print.validate();
         if (!err.string.empty()) {
@@ -2377,7 +2509,38 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSaveAs3mf(
      * (x, y, z, head_radius) quads. Authored onto
      * model.objects.front()->brim_points before store_3mf so
      * desktop OrcaSlicer sees the user's XR-placed ears. */
-    jfloatArray jBrimEars)
+    jfloatArray jBrimEars,
+    /* D9 — per-object config overrides applied onto
+     * `model.objects.front()->config()` before store_3mf so libslic3r's
+     * model_settings.config writer (bbs_3mf.cpp:7691-7693) serializes
+     * them. Same parallel-array shape as jConfigKeys/jConfigValues but
+     * the keys land on the OBJECT's local config rather than the global
+     * Print config. Null / empty = no per-object overrides. */
+    jobjectArray jObjectConfigKeys,
+    jobjectArray jObjectConfigValues,
+    /* D9 — per-volume config overrides for the user-authored extra
+     * volumes attached to the first object. Sparse encoding parallel
+     * to jExtraVolumeConfig* in nativeSlice:
+     *   jExtraVolumeConfigVolIdx[i] = which volume index in
+     *                                  `mo->volumes` (0 = primary mesh,
+     *                                  1+ = user-added extras)
+     *   jExtraVolumeConfigKeys[i]   = config key
+     *   jExtraVolumeConfigValues[i] = config value
+     * Null = no per-volume overrides. */
+    jintArray    jExtraVolumeConfigVolIdx,
+    jobjectArray jExtraVolumeConfigKeys,
+    jobjectArray jExtraVolumeConfigValues,
+    /* A11 — custom G-code per print Z. Same parallel-array shape as
+     * nativeSlice; ticks land on
+     * `model.plates_custom_gcodes[curr_plate_index]` and libslic3r's
+     * `_add_custom_gcode_per_print_z_file_to_archive` writer
+     * serializes them into the 3MF. Null = no ticks (legacy
+     * behavior). */
+    jfloatArray  jCustomGcodeZmm,
+    jintArray    jCustomGcodeTypes,
+    jintArray    jCustomGcodeExtruders,
+    jobjectArray jCustomGcodeColors,
+    jobjectArray jCustomGcodeExtras)
 {
     ScopedUtf in(env, jInputPath);
     ScopedUtf out(env, jOutPath);
@@ -2508,6 +2671,96 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSaveAs3mf(
                 }
             }
         }
+
+        // D9 — per-object config overrides. Apply onto the FIRST
+        // object's `config` (matches the slice path's single-model
+        // contract) so libslic3r's model_settings.config writer picks
+        // them up via `obj->config.keys()` (bbs_3mf.cpp:7691-7693).
+        if (jObjectConfigKeys != nullptr && jObjectConfigValues != nullptr &&
+            !model.objects.empty()) {
+            const jsize nk = env->GetArrayLength(jObjectConfigKeys);
+            const jsize nv = env->GetArrayLength(jObjectConfigValues);
+            const jsize n = nk < nv ? nk : nv;
+            Slic3r::ConfigSubstitutionContext substitutions(
+                Slic3r::ForwardCompatibilitySubstitutionRule::EnableSilent);
+            Slic3r::ModelObject* mo = model.objects.front();
+            for (jsize i = 0; i < n; ++i) {
+                jstring jk = (jstring) env->GetObjectArrayElement(jObjectConfigKeys, i);
+                jstring jv = (jstring) env->GetObjectArrayElement(jObjectConfigValues, i);
+                if (jk == nullptr || jv == nullptr) {
+                    if (jk) env->DeleteLocalRef(jk);
+                    if (jv) env->DeleteLocalRef(jv);
+                    continue;
+                }
+                {
+                    ScopedUtf k(env, jk);
+                    ScopedUtf v(env, jv);
+                    try {
+                        mo->config.set_deserialize(k.c, v.c, substitutions);
+                    } catch (const std::exception& e) {
+                        ORCAXR_LOGE("nativeSaveAs3mf: object cfg rejected %s=%s (%s)",
+                                    k.c, v.c, e.what());
+                    }
+                }
+                env->DeleteLocalRef(jk);
+                env->DeleteLocalRef(jv);
+            }
+        }
+
+        // D9 — per-volume config overrides on the first object's
+        // volumes. Sparse (volIdx, key, value) triples flow through
+        // `mv->config.set_deserialize` so libslic3r's per-volume
+        // config writer (bbs_3mf.cpp:7758-7761) emits them.
+        if (jExtraVolumeConfigVolIdx != nullptr &&
+            jExtraVolumeConfigKeys != nullptr &&
+            jExtraVolumeConfigValues != nullptr &&
+            !model.objects.empty()) {
+            const jsize n_idx = env->GetArrayLength(jExtraVolumeConfigVolIdx);
+            const jsize n_k   = env->GetArrayLength(jExtraVolumeConfigKeys);
+            const jsize n_v   = env->GetArrayLength(jExtraVolumeConfigValues);
+            const jsize n_cfg = std::min(n_idx, std::min(n_k, n_v));
+            if (n_cfg > 0) {
+                std::vector<jint> idxs(n_cfg, -1);
+                env->GetIntArrayRegion(jExtraVolumeConfigVolIdx, 0, n_cfg, idxs.data());
+                Slic3r::ModelObject* mo = model.objects.front();
+                Slic3r::ConfigSubstitutionContext substitutions(
+                    Slic3r::ForwardCompatibilitySubstitutionRule::EnableSilent);
+                for (jsize i = 0; i < n_cfg; ++i) {
+                    const int volIdx = int(idxs[i]);
+                    if (volIdx < 0 || volIdx >= int(mo->volumes.size())) {
+                        ORCAXR_LOGE("nativeSaveAs3mf: per-volume cfg volIdx=%d out of range [0,%d)",
+                                    volIdx, int(mo->volumes.size()));
+                        continue;
+                    }
+                    Slic3r::ModelVolume* mv = mo->volumes[volIdx];
+                    jstring jk = (jstring) env->GetObjectArrayElement(jExtraVolumeConfigKeys, i);
+                    jstring jv = (jstring) env->GetObjectArrayElement(jExtraVolumeConfigValues, i);
+                    if (jk == nullptr || jv == nullptr) {
+                        if (jk) env->DeleteLocalRef(jk);
+                        if (jv) env->DeleteLocalRef(jv);
+                        continue;
+                    }
+                    {
+                        ScopedUtf k(env, jk);
+                        ScopedUtf v(env, jv);
+                        try {
+                            mv->config.set_deserialize(k.c, v.c, substitutions);
+                        } catch (const std::exception& e) {
+                            ORCAXR_LOGE("nativeSaveAs3mf: vol[%d] cfg rejected %s=%s (%s)",
+                                        volIdx, k.c, v.c, e.what());
+                        }
+                    }
+                    env->DeleteLocalRef(jk);
+                    env->DeleteLocalRef(jv);
+                }
+            }
+        }
+
+        // A11 — custom G-code per print Z onto the active plate.
+        apply_custom_gcodes(env, model,
+                            jCustomGcodeZmm, jCustomGcodeTypes,
+                            jCustomGcodeExtruders,
+                            jCustomGcodeColors, jCustomGcodeExtras);
 
         if (!Slic3r::store_3mf(out.c, &model, &cfg, /*fullpath_sources=*/false)) {
             ORCAXR_LOGE("nativeSaveAs3mf: store_3mf failed");
@@ -3504,6 +3757,170 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
     } catch (...) {
         ORCAXR_LOGE("nativeRead3mfObjectMetadata: unknown exception");
         for (auto* p : plates) delete p;
+        return nullptr;
+    }
+}
+
+// D9 — read per-object + per-volume `config` overrides out of a 3MF
+// and return them as a JSON string the Kotlin caller can decode. The
+// serializer escapes control chars + " + \ so a key like
+// `slowdown_for_curled_perimeters` round-trips cleanly.
+//
+// Shape (one JSON object per ModelObject in declaration order):
+//   [
+//     {
+//       "object_overrides": {"layer_height": "0.16", ...},
+//       "volumes": [
+//         {"name": "primary", "type": "MODEL_PART", "overrides": {}},
+//         {"name": "modifier", "type": "PARAMETER_MODIFIER",
+//          "overrides": {"sparse_infill_density": "100"}}
+//       ]
+//     }, ...
+//   ]
+//
+// Returns null on read failure / no 3MF / not a BBS 3MF (the upstream
+// 3MF loader populates `mo->config` and `mv->config` from the
+// `Metadata/model_settings.config` file present in BBS-style 3MFs;
+// PrusaSlicer / generic 3MFs don't carry per-object configs).
+namespace {
+std::string json_escape_string(const std::string& s) {
+    std::string out;
+    out.reserve(s.size() + 2);
+    for (char c : s) {
+        switch (c) {
+            case '"':  out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\b': out += "\\b";  break;
+            case '\f': out += "\\f";  break;
+            case '\n': out += "\\n";  break;
+            case '\r': out += "\\r";  break;
+            case '\t': out += "\\t";  break;
+            default:
+                if (static_cast<unsigned char>(c) < 0x20) {
+                    char buf[8];
+                    std::snprintf(buf, sizeof(buf), "\\u%04x", static_cast<int>(c) & 0xff);
+                    out += buf;
+                } else out += c;
+                break;
+        }
+    }
+    return out;
+}
+} // namespace
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectConfigs(
+    JNIEnv* env, jclass, jstring jPath)
+{
+    ScopedUtf path(env, jPath);
+    try {
+        Slic3r::Model model = load_mesh_container(path.c);
+        if (model.objects.empty()) return nullptr;
+
+        std::ostringstream s;
+        s << '[';
+        for (size_t i = 0; i < model.objects.size(); ++i) {
+            const Slic3r::ModelObject* mo = model.objects[i];
+            if (i > 0) s << ',';
+            s << "{\"object_overrides\":{";
+            bool first = true;
+            for (const std::string& key : mo->config.keys()) {
+                if (!first) s << ',';
+                first = false;
+                s << '"' << json_escape_string(key) << "\":\""
+                  << json_escape_string(mo->config.opt_serialize(key)) << '"';
+            }
+            s << "},\"volumes\":[";
+            for (size_t vi = 0; vi < mo->volumes.size(); ++vi) {
+                if (vi > 0) s << ',';
+                const Slic3r::ModelVolume* mv = mo->volumes[vi];
+                s << "{\"name\":\"" << json_escape_string(mv ? mv->name : std::string()) << "\","
+                  << "\"type\":\"";
+                if (mv != nullptr) {
+                    switch (mv->type()) {
+                        case Slic3r::ModelVolumeType::MODEL_PART:         s << "MODEL_PART"; break;
+                        case Slic3r::ModelVolumeType::NEGATIVE_VOLUME:    s << "NEGATIVE_VOLUME"; break;
+                        case Slic3r::ModelVolumeType::PARAMETER_MODIFIER: s << "PARAMETER_MODIFIER"; break;
+                        case Slic3r::ModelVolumeType::SUPPORT_BLOCKER:    s << "SUPPORT_BLOCKER"; break;
+                        case Slic3r::ModelVolumeType::SUPPORT_ENFORCER:   s << "SUPPORT_ENFORCER"; break;
+                        default: s << "MODEL_PART"; break;
+                    }
+                }
+                s << "\",\"overrides\":{";
+                if (mv != nullptr) {
+                    bool first_v = true;
+                    for (const std::string& key : mv->config.keys()) {
+                        if (!first_v) s << ',';
+                        first_v = false;
+                        s << '"' << json_escape_string(key) << "\":\""
+                          << json_escape_string(mv->config.opt_serialize(key)) << '"';
+                    }
+                }
+                s << "}}";
+            }
+            s << "]}";
+        }
+        s << ']';
+        const std::string out = s.str();
+        return env->NewStringUTF(out.c_str());
+    } catch (const std::exception& e) {
+        ORCAXR_LOGE("nativeRead3mfObjectConfigs: %s", e.what());
+        return nullptr;
+    } catch (...) {
+        ORCAXR_LOGE("nativeRead3mfObjectConfigs: unknown exception");
+        return nullptr;
+    }
+}
+
+// A11 — read custom G-code ticks out of a 3MF for a single plate and
+// return them as a JSON array. Shape:
+//   [
+//     {"z_mm": 5.0, "type": "PausePrint", "extruder": 0,
+//      "color": "", "extra": "insert magnet"},
+//     ...
+//   ]
+//
+// `plate_index` is 0-based. Returns "[]" when the plate has no ticks
+// (or doesn't exist); null on read failure / not a 3MF.
+extern "C" JNIEXPORT jstring JNICALL
+Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfCustomGcodes(
+    JNIEnv* env, jclass, jstring jPath, jint jPlateIndex)
+{
+    ScopedUtf path(env, jPath);
+    try {
+        Slic3r::Model model = load_mesh_container(path.c);
+        const int plate = int(jPlateIndex);
+        std::ostringstream s;
+        s << '[';
+        auto it = model.plates_custom_gcodes.find(plate);
+        if (it != model.plates_custom_gcodes.end()) {
+            const auto& items = it->second.gcodes;
+            for (size_t i = 0; i < items.size(); ++i) {
+                if (i > 0) s << ',';
+                const auto& it2 = items[i];
+                s << "{\"z_mm\":" << it2.print_z << ",\"type\":\"";
+                switch (it2.type) {
+                    case Slic3r::CustomGCode::ColorChange: s << "ColorChange"; break;
+                    case Slic3r::CustomGCode::PausePrint:  s << "PausePrint"; break;
+                    case Slic3r::CustomGCode::ToolChange:  s << "ToolChange"; break;
+                    case Slic3r::CustomGCode::Template:    s << "Template"; break;
+                    case Slic3r::CustomGCode::Custom:      s << "Custom"; break;
+                    default: s << "Unknown"; break;
+                }
+                s << "\",\"extruder\":" << it2.extruder
+                  << ",\"color\":\"" << json_escape_string(it2.color) << "\""
+                  << ",\"extra\":\"" << json_escape_string(it2.extra) << "\""
+                  << "}";
+            }
+        }
+        s << ']';
+        const std::string out = s.str();
+        return env->NewStringUTF(out.c_str());
+    } catch (const std::exception& e) {
+        ORCAXR_LOGE("nativeRead3mfCustomGcodes: %s", e.what());
+        return nullptr;
+    } catch (...) {
+        ORCAXR_LOGE("nativeRead3mfCustomGcodes: unknown exception");
         return nullptr;
     }
 }

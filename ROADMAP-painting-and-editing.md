@@ -80,16 +80,15 @@ When paint mode is active the left stick's Y axis nudges brush radius (0..50 mm 
 
 **Shipped:** commit `f85380c`.
 
-### D9. 3MF round-trip for per-object Object Settings 🔴 Not started
+### D9. 3MF round-trip for per-object Object Settings 🟡 Shipped — JNI save+load + MCP; volume-tree round-trip is partial
 
-> **Files:** `nativeSaveAs3mf` (already preserves `ModelVolume::config` via libslic3r `store_3mf`); the gap is whether OrcaXR-authored `PlacedModel.configOverrides` is written to and read from `Metadata/model_settings.config`.
+> **Files:** `app/src/main/cpp/slic3r_jni.cpp::nativeSaveAs3mf` (extended with `objectConfigKeys/Values` + sparse `(volIdx, key, value)` triples + custom-gcode arrays); `nativeRead3mfObjectConfigs` reader (returns JSON of per-object + per-volume overrides); `SlicerEngine.read3mfObjectConfigs` Kotlin wrapper; `MainActivity::onFileSelected` populates `PlacedModel.configOverrides` from the imported 3MF on load; `WorkspaceAction.SetObjectOverrides`; `WorkspaceTools.{GetObjectOverrides, SetObjectOverrides}` MCP tools. `ObjectOverridesToolsTest` covers the JSON ⇄ WorkspaceAction wire shape.
 
-📌 **Open question:** confirm we want per-object `configOverrides` (e.g., `layer_height=0.4` on a single object) to persist into 3MFs. Currently in-memory only.
+**Decision:** persisted. Per-object `configOverrides` (e.g. `layer_height=0.16` or `wall_loops=4` on one object) round-trip through 3MF via libslic3r's `model_settings.config` (`bbs_3mf.cpp:7691-7693` for write, line 2121 for load). Per-volume `configOverrides` round-trip on the SAVE side too via the sparse-encoded volume triples we already shipped for D16. The remaining gap is the LOAD side for user-added VOLUMES — OrcaXR's load path currently extracts each ModelObject as a per-object STL and discards the volume tree (gotcha #21), so a 3MF authored in desktop OrcaSlicer with a PARAMETER_MODIFIER volume + override won't restore the volume on import. Fixing that requires materializing `PlacedVolume` entries from the source 3MF — a bigger scope follow-up tied to gotcha #21's decomposition pipeline.
 
-**Implementation outline (post-decision):**
-1. Native: extend `nativeSaveAs3mf` to also write per-object overrides into the 3MF (libslic3r already serializes `ModelObject::config` if it's set; OrcaXR's overrides must be transferred from `PlacedModel.configOverrides` onto `ModelObject::config` before save).
-2. Native: extend the load path so loaded 3MFs populate `PlacedModel.configOverrides` from `ModelObject::config`.
-3. Round-trip test: load a fixture with overrides, save through `nativeSaveAs3mf`, reload, assert overrides match.
+**Shipped pieces:** save side (object + volume + custom-gcode-ticks all flow into the 3MF); load side for per-OBJECT overrides (single-object and multi-object 3MFs both populate `PlacedModel.configOverrides` from `ModelObject::config`); 2 MCP tools + 5 unit tests. The JSON-encoded reader avoids per-object/per-volume nested-array marshaling complexity at the JNI boundary.
+
+**Exit criteria:** Save a model with per-object `layer_height=0.16` via `set_object_overrides` → `save_project_3mf` → reopen — `get_object_overrides` returns `{"layer_height": "0.16"}`. ✅ Met for per-object overrides; per-VOLUME load (when desktop OrcaSlicer authored a PARAMETER_MODIFIER volume + override) is the remaining piece.
 
 ### D12. Add primitive shapes (cube / cylinder / sphere / cone / disc / torus / slab) 🟡 Shipped — MCP + JNI; SpatialPanel UI deferred
 
