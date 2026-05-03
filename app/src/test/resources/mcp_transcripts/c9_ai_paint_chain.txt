@@ -1,0 +1,37 @@
+# C9 AI paint chain — example MCP transcript.
+#
+# This is a documentation fixture (not currently executed by a
+# transcript runner). It demonstrates the canonical
+# read → narrow → paint → verify chain an LLM follows:
+#
+# 1. Geometry + region map up front so the LLM has coordinates.
+# 2. Render an iso view to see the model.
+# 3. Pick triangle samples from the region map.
+# 4. Paint each region with the appropriate primitive.
+# 5. Render a paint overlay to verify.
+#
+# Format: each line is one JSON-RPC call request body. Comments
+# (lines starting with #) are ignored.
+
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_placed_models","arguments":{}}}
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_model_geometry","arguments":{"model_id":"m_x7k1"}}}
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_model_semantic_regions","arguments":{"model_id":"m_x7k1","max_regions":10}}}
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"render_view","arguments":{"model_id":"m_x7k1","view_name":"iso","width_px":512,"height_px":512,"mode":"paint","inline":true}}}
+
+# Paint the bottom (hull) brown — slot 4. Region 0 is the largest
+# horizontal_bottom region; smart-fill from one of its sample
+# triangles with a 25° dihedral gate.
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"paint_surface_region","arguments":{"model_id":"m_x7k1","seed":{"tri_id":1234},"max_dihedral_deg":25,"tag":4}}}
+
+# Paint a waterline stripe (Z 0..5) black — only_unpainted to leave
+# the freshly-painted hull bottom intact.
+{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"paint_slab","arguments":{"model_id":"m_x7k1","axis":"z","min_mm":-1000,"max_mm":5,"tag":5,"merge":"only_unpainted"}}}
+
+# Render an overlay to verify.
+{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"render_paint_overlay","arguments":{"model_id":"m_x7k1","view_name":"iso","width_px":512,"height_px":512,"inline":true}}}
+
+# Render a 4-up grid for symmetry check.
+{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"render_views_grid","arguments":{"model_id":"m_x7k1","view_names":["front","back","left","right"]}}}
+
+# If something looks wrong, undo and re-do.
+{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"paint_undo","arguments":{"model_id":"m_x7k1"}}}

@@ -374,6 +374,52 @@ layer), that's a follow-up that adds a `maxByteOffset` filter — but
 do it only when the layer-granularity twin proves to be too coarse on
 real hardware. So far it isn't.
 
+## C9 — AI-driven paint pillar
+
+`Ai{Paint,Render,Introspection,MaskProjection}.kt` parallel to the
+existing XR paint surface; both go through `applyPaintMutation` so
+PaintHistory + paintContentVersion stay correct (one MCP call ⇒
+one undo step). Triangle IDs are stable for a session as long as
+no mesh-mutating action runs (`repair_model` / `cut_model` /
+`mesh_boolean` / `split_model` / `emboss_model` invalidate). MCP
+tools share the XR brush's `bvhCache` via
+`WorkspaceModel.BvhProvider` registered from MainActivity, with
+on-demand cold-start build off Dispatchers.Default — an LLM that
+calls `paint_sphere` before the user has touched the brush
+triggers a synchronous build, no separate "warm up" tool needed.
+
+**Pure-Kotlin rasterizer (not JNI).** The shipping pressure was
+"the LLM can SEE the model end-to-end" — `AiRenderEngine` Pineda-
+fills triangles to a row-major RGBA buffer; `PngWriter` is a
+~120-line PNG encoder using `java.util.zip.Deflater`. 768×768
+Benchy renders in ~250 ms host JVM, expected ~600 ms-1 s on
+Galaxy XR arm64. JNI migration is mechanical if profiling shows
+it's a bottleneck. The native files (`ai_render.cpp`,
+`ai_segment.cpp`, vendored `stb_image_write.h`) listed in the
+original `docs/AI_PAINT_DESIGN.md` were NOT shipped — Kotlin
+replaces them.
+
+**Render artifact transport.** `AiSessionState` (process-singleton)
+holds a 50-entry LRU of render artifacts keyed by content hash,
+plus user-named cameras. The MCP server gained a `GET
+/resources/<token>.png` route (auth: same bearer token) that
+streams PNG bytes via `HttpFraming.writeBinaryResponse`. Inline
+base64 image content parts on `ToolResult.imageParts` are also
+shipped for renders ≤ 200 KB.
+
+**Coordinate frame:** every spatial paint primitive consumes
+`centered_preview_mm` (the BVH frame, gotcha #11d). Don't
+mistakenly accept `mesh_local_mm` from an LLM — the doc tool
+description names the frame explicitly so the LLM passes the
+right thing. `get_model_geometry` returns bbox in centered_preview
+so the LLM has a coordinate-frame anchor.
+
+**Tool surface (18 tools):** see [`docs/AI_PAINT_PROTOCOL.md`](docs/AI_PAINT_PROTOCOL.md)
+for the runtime contract; [`docs/AI_PAINT_DESIGN.md`](docs/AI_PAINT_DESIGN.md)
+for the design rationale. New tools register in
+`McpController.registerAllTools` via `AiPaintTools.all`,
+`AiVisionTools.all`, `AiIntrospectionTools.all`.
+
 ## Related docs
 
 - [`ROADMAP.md`](ROADMAP.md) — forward-looking feature roadmap (single source of truth for sections A, B, C, E, F, G).
