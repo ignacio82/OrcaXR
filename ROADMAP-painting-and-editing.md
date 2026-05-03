@@ -162,3 +162,138 @@ Heavy STLs (1M+ triangles — anything from Thingiverse + a typical artistic sca
 4. MCP: `simplify_model(model_id, target_tri_count, max_error)`.
 
 **Exit criteria:** A 1.4M-tri dragon simplifies to 200 K tris in <5 s on Galaxy XR with visible silhouette preservation; paint mode stays under the 256 MB JVM cap on the simplified mesh; round-trip via `save_model_as_stl` produces a valid binary STL.
+
+### D18. AI-paint authoring upgrades (post-C9) 🔴 Not started
+
+Surfaced during the live "paint Pikachu Funko Pop" session against C9 (commits `4df6bf2`..`e44622d`). Painting rounded organic features (cheeks, eyes, ear interiors) via `paint_projected_mask` exposed three architectural gaps: 2D mask projection misses curvature wraparound, paired features need duplicate authoring, and feature anchoring from a render is eyeball-and-guess. Each fix below is an MCP-tool addition on top of the existing C9 surface — pure Kotlin unless noted, no JNI rebuild.
+
+#### D18a. Geodesic surface paint primitive 🔴 Not started — biggest single quality win
+
+> **Files (planned):** new `paint_geodesic_disc` in `AiPaintTools.kt` + helper in `AiPaintEngine.kt`. ~80 lines on top of `MeshBvh.smartFillBfs` (vertex-adjacency BFS already exists; add a per-step accumulating geodesic-distance gate + a cumulative-dihedral gate).
+
+`paint_projected_mask` is the wrong tool for "paint the cheek bump" — rays only hit the front-facing patch of the bump, the curvature wraparound gets back-face-filtered out (Pikachu cheeks landed at 179 tris instead of the ~800 a true round disc on the surface would be). Need a primitive that walks the SURFACE outward from a seed, bounded by geodesic distance + a curvature gate, returning a connected disc that wraps around bulges naturally.
+
+**Algorithm:** seed at `anchor_tri`. BFS via `MeshBvh.directNeighbors`. Per-step add `triangle_centroid → triangle_centroid` distance to running geodesic distance for that branch (Dijkstra-style: keep minimum distance per visited triangle). Stop a branch when `geodesic_dist > radius_mm` OR `cumulative_dihedral > max_dihedral_deg`. Returns a `PaintTriangleSet` like every other primitive.
+
+**Tool:**
+```
+paint_geodesic_disc {
+  model_id, kind, tag, merge,
+  anchor: { tri_id } | { center_mm, ray_dir } | { camera_descriptor, x_px, y_px },
+  radius_mm: float,                   // geodesic radius, NOT euclidean
+  max_dihedral_deg?: float = 60,      // 60° lets it wrap a hemisphere; 30° stays near-planar
+  max_triangles?: int = 65536
+}
+```
+
+**Exit criteria:** Pikachu cheek paint with `radius_mm=8, max_dihedral_deg=60` lands ≥ 600 triangles wrapping smoothly around the cheek bulge (vs M4 projected-mask's 179 front-only). Test fixture: a sphere — geodesic disc with `radius_mm=R, max_dihedral=180°` paints a polar cap of expected area `2πR(1-cos(θ))`.
+
+#### D18b. Symmetry-mirrored paint 🔴 Not started
+
+> **Files (planned):** new `paint_with_mirror` wrapper tool in `AiPaintTools.kt`. ~40 lines. Takes any other `paint_*` action's args, mirrors the seed/center/anchor/polygon coordinates across the chosen axis, and emits two `PaintTriangleSet` actions (or one merged set).
+
+Pikachu has paired features (eyes, cheeks, ears). I duplicated every polygon — error-prone, wastes tokens. One `paint_with_mirror` call replaces N×2 calls.
+
+**Tool:**
+```
+paint_with_mirror {
+  axis: "x" | "y" | "z",              // bbox-center axis to mirror across
+  inner_action: { ... }                // any paint_* tool's args (verbatim)
+}
+```
+
+For `paint_geodesic_disc`: mirror the anchor point's mesh-mm coordinates. For `paint_sphere`: mirror the center. For `paint_projected_mask`: mirror polygon X coords (in pixel space) — works because preset cameras face an axis.
+
+**Exit criteria:** `paint_with_mirror(axis=x, inner=paint_geodesic_disc(anchor=left_cheek, ...))` paints both cheeks symmetrically in one call; tri counts match within 5 % on a near-symmetric mesh.
+
+#### D18c. Vision-LLM feature anchors 🔴 Not started — highest leverage, introduces outbound dep
+
+> **Files (planned):** new `find_feature_anchors` tool in `AiVisionTools.kt`. Internally renders a view, makes a Claude vision-API call (cheapest model — `claude-haiku-4-5`) with the PNG + a hint text, parses the returned bbox/anchor JSON, resolves each pixel to a `tri_id` via the existing `resolve_image_pixel` path. Adds an outbound HTTPS dep (Anthropic API) + an API key in `McpSettings`.
+
+For `find Pikachu's cheek` I eyeballed pixel coords from a normals render. A vision-LLM sub-call would do this faster + more reliably. Once anchors come back as triangle ids, `paint_geodesic_disc` paints by name.
+
+**Tool:**
+```
+find_feature_anchors {
+  model_id,
+  view_name?: "iso",
+  hint: "the cheeks of a Pikachu Funko Pop",       // free-form English
+  expected_count?: int = 2
+}
+→ {
+  anchors: [
+    { name: "left_cheek",  tri_id: 12345, pixel: [x,y], confidence: 0.92 },
+    { name: "right_cheek", tri_id: 67890, pixel: [x,y], confidence: 0.91 },
+  ]
+}
+```
+
+**Risk:** outbound dep (network + API key). Cost gate: bill the user's Anthropic key, not OrcaXR's. Privacy gate: render is anonymized geometry (no scene context, no user ID).
+
+**Exit criteria:** Hit-rate ≥ 80 % on a 10-figure benchmark (Pikachu, Bulbasaur, Mario, Sonic, Stitch, Totoro, Mickey, …) for canonical anchors (eyes, cheeks, mouth, ear-tips).
+
+#### D18d. `paint_projected_mask depth_mode="any_facing"` 🔴 Not started — 5-line addition
+
+Current `front_facing_only` keeps just the front-most ray hit; `all_hits` keeps every triangle along the ray. Add a third mode: `any_facing` — keep any triangle whose normal is within 90° of `-camera_dir` (the lit hemisphere), regardless of ray-hit ordering. Catches curvature wraparound like the cheek bulge without painting the model's back side.
+
+**File:** `AiMaskProjection.kt` adds one enum value + one branch. ~10 lines.
+
+**Exit criteria:** Cheek paint via `any_facing` mode lands within 20 % of the geodesic-disc result (D18a), validating the 2D-driven path remains useful for shapes that aren't rotationally symmetric.
+
+#### D18e. Annotated render (axis triad + bbox dims + scale bar) 🔴 Not started
+
+`render_view(annotate=true)` burns a small RGB axis triad in one corner, the bbox extents on the opposite corner, and a "10 mm" scale bar at the bottom. Lets the LLM read coordinates directly off the render instead of computing them from the camera descriptor.
+
+**File:** `AiRenderEngine.kt` — post-rasterize draw step. ~120 lines (axis lines, font glyphs from a tiny bundled bitmap font; alternative: pre-rendered axis-triad PNGs blitted in).
+
+**Exit criteria:** Render with `annotate=true` shows a clearly-readable axis triad + bbox-mm labels visible at 256 × 256.
+
+#### D18f. Render diff tool 🔴 Not started
+
+`render_diff(token_a, token_b) → PNG` returns the pixel-XOR of two cached render artifacts (already keyed by content hash in `AiSessionState`), with changed pixels in red. Lets the LLM verify a paint action did what it expected in one call instead of comparing two PNGs visually.
+
+**File:** new `AiVisionTools.RenderDiff`. ~40 lines (loop over both pixel buffers, write the delta into a fresh PNG, push to `AiSessionState`).
+
+**Exit criteria:** Paint a cheek → `render_diff` between before/after tokens highlights only the cheek region; total red pixel count correlates with painted_count in the prior tool result.
+
+#### D18g. Action queue flush 🔴 Not started — fixes the only_tagged race
+
+> **Files (planned):** new `flush_actions` tool. Tracks the action queue's drain via a `WorkspaceModel.lastDrainedActionId: StateFlow<Long>` + per-emit ID counter; tool blocks until `lastDrainedActionId >= my_emit_id`.
+
+I hit `replace_paint_tag(3→1)` then `paint_slab(only_tagged where_tag=1)` and got `painted=0` because the `applyMergeFilter` saw the pre-replace state (documented in the Pikachu session transcript). A single `flush_actions` call between mutating + read-after-write paints fixes it deterministically.
+
+**Exit criteria:** scripted MCP transcript with `replace_paint_tag(A→B); flush_actions; paint_slab(only_tagged where_tag=B)` paints the expected count; without `flush_actions` it races; regression test under `app/src/test/resources/mcp_transcripts/`.
+
+#### D18h. Higher-resolution + multi-sample triangle-ID maps 🔴 Not started
+
+`render_triangle_id_map` at 512 × 512 covers a 144 K-tri Pikachu at ~1.8 pixels per tri — many tris occupy <1 pixel and lose to z-fighting. Two upgrades:
+1. Bump the cap from 1024² to 2048² (the rasterizer's already linear in pixel count; 4× cost is fine for one-shot ID maps).
+2. Add `multi_sample_per_pixel` mode that returns the top-3 closest triangle IDs per pixel as separate channels in the response, so `resolve_image_pixel` can return a list when the LLM clicks near a tri boundary.
+
+**Exit criteria:** 1.4 M-tri dragon at 2048² triangle-ID map covers ≥ 90 % of unique tris in ≥ 1 pixel each.
+
+#### D18i. Painted-mesh feature templates 🔴 Not started
+
+> **Files (planned):** `assets/paint_templates/*.json` recipes. New tool `paint_template(model_kind, palette_remap)`.
+
+Bundle named recipes for common models. `paint_template("funko_pop_pikachu", palette={"yellow":2, "black":1, "red":4, "white":3})` runs the canonical 8-call sequence (yellow base → ear tips → eyes → cheeks → mouth → ear interiors → back zigzag → tail tip → base disc). Version-controlled, regression-tested, "good enough by default" without LLM intervention.
+
+Recipes are JSON: a list of paint primitive calls with bound named anchors that resolve via D18c.
+
+**Exit criteria:** A bundled `funko_pop_pikachu.json` recipe paints the canonical Pikachu in <2 s with no LLM round-trips; produces ≥ 8 distinct painted regions; the same recipe scales correctly to a 0.5x or 2x variant of the model (Funko Pop sizes).
+
+#### D18j. Persistent paint sessions 🔴 Not started
+
+`save_paint_recipe(name, model_id) → recipe_path` records the sequence of paint actions applied to a model since session start. `load_paint_recipe(path, model_id)` replays them. Combined with D18i, lets users (and the LLM) iterate on a paint design and snapshot the result for reuse.
+
+**Storage:** `${filesDir}/paint_recipes/<name>.json`. Same LRU + atomic-write pattern as `PaintCacheStore`.
+
+**Exit criteria:** Replay a saved recipe on a fresh load of the same source file; final paint state byte-identical to original.
+
+#### D18k. Bigger-picture authoring direction
+
+The cumulative effect of D18a–D18j is that the LLM authors paint by **named anchors** + **geodesic discs** + **mirroring**, instead of by **pixel polygons** + **2D projection**. The pixel-polygon path (M4 `paint_projected_mask`) stays as the escape hatch for irregular regions an LLM authors visually. The new path is for everything else, which is most things — Pokemon, Funko Pops, anything with paired bilateral features.
+
+For the in-XR brush UI, D18a is also a quality win: a "paint a circle on the surface from where I touched" gesture is more controllable than radius-BFS on shared-vertex adjacency (which mixes geodesic + Euclidean in confusing ways). Hooking the XR brush to the same primitive closes the loop.
+
+**Suggested ship order:** D18a (geodesic disc) → D18b (mirror) → D18d (any_facing mode) → D18g (flush) → D18f (render diff) → D18e (annotated render) → D18h (hi-res tri-ID) → D18c (vision anchors — biggest impact but biggest external dep) → D18i + D18j (templates + recipes — once the lower-level primitives are stable).
