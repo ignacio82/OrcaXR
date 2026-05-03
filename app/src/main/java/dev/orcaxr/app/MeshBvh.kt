@@ -409,6 +409,25 @@ class MeshBvh private constructor(
     }
 
     /**
+     * AI-introspection (C9 §D.1): direct shared-vertex neighbors of
+     * triangle [tri]. Returns only the immediate neighbors (no BFS,
+     * no angle gate) — the building block for region-growing
+     * segmentation in [AiIntrospection.semanticRegions].
+     */
+    fun directNeighbors(tri: Int): IntArray {
+        require(tri in 0 until mesh.triCount) { "tri=$tri out of [0, ${mesh.triCount})" }
+        ensureAdjacency()
+        val starts = adjStart!!
+        val nbrs = adjNeighbors!!
+        val s = starts[tri]
+        val e = starts[tri + 1]
+        val out = IntArray(e - s)
+        var oi = 0
+        for (k in s until e) out[oi++] = nbrs[k]
+        return out
+    }
+
+    /**
      * AI-paint pillar (C9 §C.2 paint_connected_component): collect
      * every triangle reachable from [seed] via shared-vertex
      * adjacency, ignoring dihedral angle. Used to paint a whole
