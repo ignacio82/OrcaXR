@@ -137,6 +137,35 @@ class AiVisionToolsTest {
         assertEquals(map[nonBgIdx], s.getInt("tri_id"))
     }
 
+    @Test fun resolvePixelWithRadiusReturnsNearbyTris() = runTest {
+        val renderTool = AiVisionTools.RenderTriangleIdMap(ws, session)
+        val res = renderTool.call(JSONObject().apply {
+            put("model_id", modelId)
+            put("view_name", "top")
+            put("width_px", 32); put("height_px", 32)
+        })
+        val token = res.structured!!.getString("render_token")
+        val art = session.getArtifact(token)!!
+        // Find a non-background pixel.
+        val nonBgIdx = art.triangleIdMap!!.indexOfFirst { it >= 0 }
+        val px = nonBgIdx % 32
+        val py = nonBgIdx / 32
+        val resolved = AiVisionTools.ResolveImagePixel(session).call(JSONObject().apply {
+            put("render_token", token)
+            put("x_px", px); put("y_px", py)
+            put("radius_px", 4)
+        })
+        assertFalse(resolved.isError)
+        val s = resolved.structured!!
+        assertTrue(s.has("nearby_tri_ids"))
+        val arr = s.getJSONArray("nearby_tri_ids")
+        assertTrue("expected at least 1 nearby tri", arr.length() >= 1)
+        // Each entry has tri_id + pixel_count.
+        val first = arr.getJSONObject(0)
+        assertTrue(first.has("tri_id"))
+        assertTrue(first.has("pixel_count"))
+    }
+
     @Test fun resolvePixelOnBackgroundReturnsHitFalse() = runTest {
         val renderTool = AiVisionTools.RenderTriangleIdMap(ws, session)
         val res = renderTool.call(JSONObject().apply {

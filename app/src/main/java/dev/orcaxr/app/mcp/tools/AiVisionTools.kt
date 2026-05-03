@@ -36,9 +36,12 @@ import java.util.Base64
 internal object AiVisionTools {
 
     /** Maximum render dimension. The Kotlin rasterizer is single-
-     *  threaded; 1024² on a Benchy is ~600 ms on host JVM, expected
-     *  ~2 s on Galaxy XR arm64. Larger renders are clamped down. */
-    private const val MAX_RENDER_DIM = 1024
+     *  threaded; 2048² on a 144 K-tri Pikachu is ~2 s on host JVM,
+     *  expected ~6 s on Galaxy XR arm64. Larger renders are
+     *  clamped. D18h bumped this from 1024 to 2048 so a triangle-ID
+     *  map of a 1.4 M-tri dragon covers ≥ 90 % of unique tris in
+     *  ≥ 1 pixel each (was ~1.8 px/tri at 512 → many tris lost). */
+    private const val MAX_RENDER_DIM = 2048
     private const val DEFAULT_RENDER_DIM = 512
     private const val INLINE_BASE64_BYTE_CAP = 200_000
 
@@ -350,13 +353,19 @@ internal object AiVisionTools {
             "Look up the triangle ID at a pixel in a previously-rendered triangle-ID map. Returns " +
                 "{tri_id, hit:bool}. hit=false means the pixel is background. Use after " +
                 "render_triangle_id_map to translate 'the bow region in the iso view' into a triangle " +
-                "id you can pass to paint_surface_region or paint_triangle_list."
+                "id you can pass to paint_surface_region or paint_triangle_list. " +
+                "D18h: pass radius_px > 0 to ALSO scan a square neighborhood and return the unique " +
+                "triangle ids found there in `nearby_tri_ids` (ordered by occurrence count). Useful " +
+                "when the click lands near a triangle boundary or when the LLM wants candidate " +
+                "anchors close to its target."
         override val inputSchema = Schemas.obj(
             required = listOf("render_token", "x_px", "y_px"),
             properties = mapOf(
                 "render_token" to Schemas.string("Token from render_triangle_id_map"),
                 "x_px" to Schemas.integer("0..width-1"),
                 "y_px" to Schemas.integer("0..height-1 (top-down origin)"),
+                "radius_px" to Schemas.integer("D18h — scan a (2r+1)² neighborhood for nearby tri ids (default 0)"),
+                "max_nearby" to Schemas.integer("Cap on returned nearby_tri_ids (default 16)"),
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
@@ -372,15 +381,48 @@ internal object AiVisionTools {
                 return ToolResult.error("(x=$x, y=$y) out of [0,${art.widthPx})×[0,${art.heightPx})")
             }
             val tri = triMap[y * art.widthPx + x]
+            val radius = args.optInt("radius_px", 0).coerceIn(0, 32)
+            val maxNearby = args.optInt("max_nearby", 16).coerceIn(1, 256)
+            // D18h — count tri occurrences in a (2r+1)² window.
+            val nearby = if (radius > 0) {
+                val counts = LinkedHashMap<Int, Int>()  // ordered by first-seen
+                for (dy in -radius..radius) {
+                    val yy = y + dy
+                    if (yy < 0 || yy >= art.heightPx) continue
+                    for (dx in -radius..radius) {
+                        val xx = x + dx
+                        if (xx < 0 || xx >= art.widthPx) continue
+                        val t = triMap[yy * art.widthPx + xx]
+                        if (t < 0) continue
+                        counts.merge(t, 1) { a, b -> a + b }
+                    }
+                }
+                // Sort by descending count, take top N.
+                counts.entries
+                    .sortedByDescending { it.value }
+                    .take(maxNearby)
+                    .map { it.key to it.value }
+            } else emptyList()
             val body = JSONObject().apply {
                 put("ok", true)
                 put("render_token", token)
                 put("x_px", x); put("y_px", y)
                 put("tri_id", tri)
                 put("hit", tri >= 0)
+                if (radius > 0) {
+                    val arr = JSONArray()
+                    for ((triId, count) in nearby) {
+                        arr.put(JSONObject().apply {
+                            put("tri_id", triId); put("pixel_count", count)
+                        })
+                    }
+                    put("nearby_tri_ids", arr)
+                    put("radius_px", radius)
+                }
             }
             return ToolResult.ok(
-                if (tri >= 0) "tri_id $tri at ($x, $y)" else "no triangle at ($x, $y) — pixel is background",
+                if (tri >= 0) "tri_id $tri at ($x, $y)${if (radius > 0) " + ${nearby.size} nearby" else ""}"
+                else "no triangle at ($x, $y) — pixel is background",
                 body,
             )
         }
