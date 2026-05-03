@@ -69,11 +69,8 @@ data class ToolResult(
         for (img in imageParts) {
             val part = JSONObject()
             part.put("type", "image")
-            val source = JSONObject()
-            source.put("type", "base64")
-            source.put("media_type", img.mediaType)
-            source.put("data", img.base64Data)
-            part.put("source", source)
+            part.put("mimeType", img.mediaType)
+            part.put("data", img.base64Data)
             arr.put(part)
         }
         out.put("content", arr)

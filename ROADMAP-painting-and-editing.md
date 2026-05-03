@@ -309,3 +309,31 @@ The cumulative effect of D18a–D18j is that the LLM authors paint by **named an
 For the in-XR brush UI, D18a is also a quality win: a "paint a circle on the surface from where I touched" gesture is more controllable than radius-BFS on shared-vertex adjacency (which mixes geodesic + Euclidean in confusing ways). Hooking the XR brush to the same primitive closes the loop.
 
 **Suggested ship order:** D18a (geodesic disc) → D18b (mirror) → D18d (any_facing mode) → D18g (flush) → D18f (render diff) → D18e (annotated render) → D18h (hi-res tri-ID) → D18c (vision anchors — biggest impact but biggest external dep) → D18i + D18j (templates + recipes — once the lower-level primitives are stable).
+
+### D19. Advanced AI Paint Authoring (Organic Models) 🔴 Not started
+
+Painting highly organic characters (like Pikachu) perfectly pushes the limits of geometric primitives. The following advanced segmentation and vision techniques are needed to make organic painting entirely hands-free.
+
+#### D19a. On-device 2D Segmentation (SAM)
+
+> **Files (planned):** MobileSAM ONNX/TFLite integration. New `generate_mask_from_point(x, y)` tool.
+
+For organic shapes where curvature doesn't cleanly separate features (e.g., Pikachu's back stripes), the LLM currently struggles to author polygons. Integrating a lightweight "Segment Anything" model on-device allows the LLM to pick a single pixel inside a feature; SAM generates a pixel-perfect 2D mask, which is then fed directly into `paint_projected_mask`.
+
+#### D19b. Advanced 3D Semantic Segmentation (MSDM2)
+
+> **Files (planned):** Upgraded `ai_segment.cpp` to use Multi-Scale Curvature or a neural 3D segmentation algorithm.
+
+The current region-growing segmentation (`get_model_semantic_regions`) produces heuristic clusters ("horizontal_top_medium") because it relies purely on normals and distance. Organic models have continuous curvature, blending the body into accessories (like a pillow). An advanced 3D segmentation algorithm would yield semantically meaningful sub-meshes ("ear", "tail", "body", "accessory") instead of geometry patches.
+
+#### D19c. Decal and Texture Projection
+
+> **Files (planned):** New `paint_decal` tool. 
+
+Detailed features (eyes with pupils, mouths, small logos) require too many exact geometric primitives. A decal tool allows the LLM to provide a 2D image (e.g., Pikachu's face texture) and project it onto the front of the model. OrcaXR maps the decal's pixels to the closest available filament slots and tags the intersected triangles.
+
+#### D19d. Text-to-Mask (Zero-Shot Segmentation)
+
+> **Files (planned):** CLIPSeg or GroundingDINO integration. New `get_mask_for_text(query)` tool.
+
+Even with point-based SAM, the LLM must still query tri-id maps to find a seed coordinate. Integrating a zero-shot text-to-image segmentation model allows the LLM to request `"Pikachu's cheeks"` or `"The pillow"` on a rendered view. The model outputs a 2D mask, eliminating the need for manual coordinate hunting entirely.

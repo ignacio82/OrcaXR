@@ -199,9 +199,32 @@ internal object AiIntrospection {
         val assigned = IntArray(n) { -1 }
         val out = ArrayList<Component>()
         var nextId = 0
+        
+        val regionBuf = IntArray(n)
+        val queue = IntArray(n)
+
         for (i in 0 until n) {
             if (assigned[i] != -1) continue
-            val members = bvh.connectedComponent(i)
+
+            var regionSize = 0
+            var qHead = 0
+            var qTail = 0
+
+            queue[qTail++] = i
+            assigned[i] = nextId
+
+            while (qHead < qTail) {
+                val cur = queue[qHead++]
+                regionBuf[regionSize++] = cur
+
+                for (nbr in neighborsOf(bvh, cur)) {
+                    if (assigned[nbr] != -1) continue
+                    assigned[nbr] = nextId
+                    queue[qTail++] = nbr
+                }
+            }
+            val members = regionBuf.copyOf(regionSize)
+
             // Compute bbox + centroid + area + volume for this set.
             var minX = Float.POSITIVE_INFINITY; var minY = Float.POSITIVE_INFINITY; var minZ = Float.POSITIVE_INFINITY
             var maxX = Float.NEGATIVE_INFINITY; var maxY = Float.NEGATIVE_INFINITY; var maxZ = Float.NEGATIVE_INFINITY
@@ -394,14 +417,33 @@ internal object AiIntrospection {
                 normals[i * 3 + 2] = (cnz / len).toFloat()
             }
         }
-        val seedOrder = (0 until n).sortedWith(
-            compareByDescending<Int> { areas[it] }.thenBy { it },
-        )
+
+        // Pack area and reversed tri_id into a Long to sort primitives without boxing.
+        // float-bits are monotonic for positive floats.
+        val sortKeys = LongArray(n)
+        for (i in 0 until n) {
+            val areaBits = areas[i].toRawBits().toLong()
+            // Invert the tri_id so that sorting ascending by key gives descending tri_id in the lower bits,
+            // which when we iterate backwards gives ascending tri_id for ties.
+            val invId = (0xFFFFFFFFL - i.toLong()) and 0xFFFFFFFFL
+            sortKeys[i] = (areaBits shl 32) or invId
+        }
+        sortKeys.sort()
+
         val assigned = IntArray(n) { -1 }
         val rawRegions = ArrayList<SemanticRegion>()
         var nextId = 0
 
-        for (seed in seedOrder) {
+        // Flat buffers for the BFS to avoid boxing overhead.
+        val regionBuf = IntArray(n)
+        val queue = IntArray(n)
+
+        // Iterate backwards for descending area
+        for (k in n - 1 downTo 0) {
+            val key = sortKeys[k]
+            val invId = (key and 0xFFFFFFFFL).toInt()
+            val seed = 0.inv() - invId
+
             if (assigned[seed] != -1) continue
             val seedNormal = floatArrayOf(
                 normals[seed * 3], normals[seed * 3 + 1], normals[seed * 3 + 2],
@@ -413,24 +455,17 @@ internal object AiIntrospection {
             val seedCy = (seedV0.y + seedV1.y + seedV2.y) / 3f
             val seedCz = (seedV0.z + seedV1.z + seedV2.z) / 3f
 
-            val region = ArrayList<Int>()
-            val queue = ArrayDeque<Int>()
-            queue.addLast(seed)
+            var regionSize = 0
+            var qHead = 0
+            var qTail = 0
+
+            queue[qTail++] = seed
             assigned[seed] = nextId
-            while (queue.isNotEmpty()) {
-                val cur = queue.removeFirst()
-                region.add(cur)
-                // Walk adjacency via the BVH's smartFillBfs precondition:
-                // we only have access to neighbors via that method's
-                // internals, but `connectedComponent` reaches every
-                // triangle. We need a per-step neighbor walk — use the
-                // existing `smartFillBfs` with a tight gate that mirrors
-                // our acceptance rule. Here we re-implement via a single-
-                // step neighbor expansion using `connectedComponent`-style
-                // adjacency: get the immediate neighbors of `cur` by
-                // calling smartFillBfs(cur, 0.001°) — that returns just
-                // {cur} because the angle gate is too tight. Instead, we
-                // expose the adjacency through a helper below.
+
+            while (qHead < qTail) {
+                val cur = queue[qHead++]
+                regionBuf[regionSize++] = cur
+
                 for (nbr in neighborsOf(bvh, cur)) {
                     if (assigned[nbr] != -1) continue
                     val nx = normals[nbr * 3]; val ny = normals[nbr * 3 + 1]; val nz = normals[nbr * 3 + 2]
@@ -445,10 +480,10 @@ internal object AiIntrospection {
                     val dxs = ncx - seedCx; val dys = ncy - seedCy; val dzs = ncz - seedCz
                     if (dxs * dxs + dys * dys + dzs * dzs > distanceCap * distanceCap) continue
                     assigned[nbr] = nextId
-                    queue.addLast(nbr)
+                    queue[qTail++] = nbr
                 }
             }
-            val members = region.toIntArray()
+            val members = regionBuf.copyOf(regionSize)
             // Compute region stats.
             var minX = Float.POSITIVE_INFINITY; var minY = Float.POSITIVE_INFINITY; var minZ = Float.POSITIVE_INFINITY
             var maxX = Float.NEGATIVE_INFINITY; var maxY = Float.NEGATIVE_INFINITY; var maxZ = Float.NEGATIVE_INFINITY

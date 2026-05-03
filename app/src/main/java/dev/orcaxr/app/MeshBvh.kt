@@ -857,52 +857,112 @@ class MeshBvh private constructor(
         private fun buildAdjacency(mesh: StlMesh): Pair<IntArray, IntArray> {
             val n = mesh.triCount
             if (n == 0) return IntArray(1) to IntArray(0)
-            // Map quantized vertex → list of triangle indices that
-            // contain it. The quantization happens at the grid scale
-            // of (1 micron); per Vec3f xyz triple becomes a Long key.
-            val vertexToTris = HashMap<Long, ArrayList<Int>>(n * 2)
+
+            val keys = LongArray(n * 3)
             for (t in 0 until n) {
                 val b = t * 9
+                keys[t * 3] = quantizeVertexKey(mesh.positions[b], mesh.positions[b + 1], mesh.positions[b + 2])
+                keys[t * 3 + 1] = quantizeVertexKey(mesh.positions[b + 3], mesh.positions[b + 4], mesh.positions[b + 5])
+                keys[t * 3 + 2] = quantizeVertexKey(mesh.positions[b + 6], mesh.positions[b + 7], mesh.positions[b + 8])
+            }
+
+            val indices = IntArray(n * 3) { it }
+            
+            // Custom primitive QuickSort to sort indices by keys
+            fun sortIndices(l: Int, r: Int) {
+                if (l >= r) return
+                val pivotIdx = l + (r - l) / 2
+                val pivot = keys[indices[pivotIdx]]
+                var i = l
+                var j = r
+                while (i <= j) {
+                    while (keys[indices[i]] < pivot) i++
+                    while (keys[indices[j]] > pivot) j--
+                    if (i <= j) {
+                        val tmp = indices[i]
+                        indices[i] = indices[j]
+                        indices[j] = tmp
+                        i++
+                        j--
+                    }
+                }
+                sortIndices(l, j)
+                sortIndices(i, r)
+            }
+            sortIndices(0, n * 3 - 1)
+
+            val vertexIds = IntArray(n * 3)
+            var currentVertexId = 0
+            var runStart = 0
+            
+            // First pass to assign dense vertex IDs and count unique vertices
+            while (runStart < n * 3) {
+                val runKey = keys[indices[runStart]]
+                var runEnd = runStart + 1
+                while (runEnd < n * 3 && keys[indices[runEnd]] == runKey) runEnd++
+                for (i in runStart until runEnd) {
+                    vertexIds[indices[i]] = currentVertexId
+                }
+                currentVertexId++
+                runStart = runEnd
+            }
+
+            val vStarts = IntArray(currentVertexId + 1)
+            var vIdx = 0
+            runStart = 0
+            while (runStart < n * 3) {
+                vStarts[vIdx++] = runStart
+                val runKey = keys[indices[runStart]]
+                var runEnd = runStart + 1
+                while (runEnd < n * 3 && keys[indices[runEnd]] == runKey) runEnd++
+                runStart = runEnd
+            }
+            vStarts[vIdx] = n * 3
+
+            val tStarts = IntArray(n + 1)
+            var totalEdges = 0
+            val seen = IntArray(n) { -1 }
+
+            for (t in 0 until n) {
+                seen[t] = t
+                var degree = 0
                 for (v in 0 until 3) {
-                    val k = quantizeVertexKey(
-                        mesh.positions[b + v * 3],
-                        mesh.positions[b + v * 3 + 1],
-                        mesh.positions[b + v * 3 + 2],
-                    )
-                    vertexToTris.getOrPut(k) { ArrayList(4) }.add(t)
+                    val vid = vertexIds[t * 3 + v]
+                    val start = vStarts[vid]
+                    val end = vStarts[vid + 1]
+                    for (i in start until end) {
+                        val otherT = indices[i] / 3
+                        if (seen[otherT] != t) {
+                            seen[otherT] = t
+                            degree++
+                        }
+                    }
+                }
+                tStarts[t] = totalEdges
+                totalEdges += degree
+            }
+            tStarts[n] = totalEdges
+
+            val nbrs = IntArray(totalEdges)
+            seen.fill(-1)
+            var edgeIdx = 0
+            for (t in 0 until n) {
+                seen[t] = t
+                for (v in 0 until 3) {
+                    val vid = vertexIds[t * 3 + v]
+                    val start = vStarts[vid]
+                    val end = vStarts[vid + 1]
+                    for (i in start until end) {
+                        val otherT = indices[i] / 3
+                        if (seen[otherT] != t) {
+                            seen[otherT] = t
+                            nbrs[edgeIdx++] = otherT
+                        }
+                    }
                 }
             }
-            // For each triangle, collect the union of its three
-            // vertex buckets (excluding self), then dedupe.
-            val adjLists = arrayOfNulls<HashSet<Int>>(n)
-            for (t in 0 until n) {
-                val s = HashSet<Int>(8)
-                val b = t * 9
-                for (v in 0 until 3) {
-                    val k = quantizeVertexKey(
-                        mesh.positions[b + v * 3],
-                        mesh.positions[b + v * 3 + 1],
-                        mesh.positions[b + v * 3 + 2],
-                    )
-                    val list = vertexToTris[k] ?: continue
-                    for (other in list) if (other != t) s.add(other)
-                }
-                adjLists[t] = s
-            }
-            val starts = IntArray(n + 1)
-            var total = 0
-            for (t in 0 until n) {
-                starts[t] = total
-                total += adjLists[t]!!.size
-            }
-            starts[n] = total
-            val nbrs = IntArray(total)
-            for (t in 0 until n) {
-                val list = adjLists[t]!!
-                var i = starts[t]
-                for (other in list) nbrs[i++] = other
-            }
-            return starts to nbrs
+
+            return tStarts to nbrs
         }
 
         /**
