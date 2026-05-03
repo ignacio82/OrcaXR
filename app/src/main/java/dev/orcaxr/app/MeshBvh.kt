@@ -282,6 +282,111 @@ class MeshBvh private constructor(
      * step. A flat-against-seed comparison would refuse to leave the
      * seed's tangent plane on any curved part.
      */
+    /**
+     * AI-paint pillar (D18a — `paint_geodesic_disc`): Dijkstra-style
+     * shortest-path BFS from [seed] outward across vertex adjacency,
+     * accumulating geodesic distance (sum of triangle-centroid →
+     * triangle-centroid hops). Bounded by [radiusMm]; a per-step
+     * dihedral gate at [maxDihedralDeg] stops the walk at sharp
+     * curvature breaks (cheek-to-head transition, face-to-face on a
+     * cube, …).
+     *
+     * "Geodesic" here is approximate (centroid hops, not exact
+     * surface walks) but converges to true geodesic as triangle
+     * density increases. For typical 30 K–200 K-tri figures it's
+     * within a few percent — which is well within the precision
+     * needed to paint a "round patch on the surface."
+     *
+     * Use this instead of [smartFillBfs] when you want a BOUNDED
+     * surface disc (e.g. "paint a 8 mm-radius cheek bump"). Use
+     * [smartFillBfs] when you want unbounded fill within an angle
+     * gate (e.g. "fill this whole curved face").
+     *
+     * Returns triangles in geodesic-distance order (closest first).
+     */
+    fun geodesicDisc(
+        seed: Int,
+        radiusMm: Float,
+        maxDihedralDeg: Float = 60f,
+        maxTriangles: Int = 65_536,
+    ): IntArray {
+        require(seed in 0 until mesh.triCount) {
+            "seed=$seed out of [0, ${mesh.triCount})"
+        }
+        if (radiusMm <= 0f || maxTriangles <= 0) return IntArray(0)
+        ensureAdjacency()
+        val starts = adjStart!!
+        val nbrs = adjNeighbors!!
+        val theta = maxDihedralDeg.coerceIn(0f, 180f)
+        // Per-step dihedral gate: angle between THIS triangle's normal
+        // and CANDIDATE neighbor's normal. Same semantics as
+        // smartFillBfs — gradual curvature passes, sharp edges stop
+        // the walk. - 1e-6f to absorb cos(90°) float noise.
+        val cosThreshold = kotlin.math.cos(Math.toRadians(theta.toDouble())).toFloat() - 1e-6f
+        // Dijkstra: best-known geodesic distance per triangle.
+        // Float.POSITIVE_INFINITY = unvisited.
+        val dist = FloatArray(mesh.triCount) { Float.POSITIVE_INFINITY }
+        dist[seed] = 0f
+        // Priority queue keyed on (distance, triIndex). Java's
+        // PriorityQueue<LongArray> avoids per-pop boxing — encode
+        // the float distance into the high 32 bits so
+        // Long-comparison naturally sorts by distance ascending.
+        // Float-bits comparison preserves order for non-negative
+        // finite values, which is all we have here.
+        val pq = java.util.PriorityQueue<LongArray>(64) { a, b ->
+            a[0].compareTo(b[0])
+        }
+        pq.add(longArrayOf(0L, seed.toLong()))
+        val out = IntArray(maxTriangles)
+        var outCount = 0
+        // Tracking the last-pulled distance for early termination
+        // when the queue head exceeds radius (everything else is
+        // farther).
+        while (pq.isNotEmpty() && outCount < maxTriangles) {
+            val top = pq.poll() ?: break
+            val curDist = java.lang.Float.intBitsToFloat((top[0] ushr 32).toInt())
+            val cur = top[1].toInt()
+            // Skip stale queue entries (Dijkstra: a triangle may have
+            // been re-inserted with a shorter distance after this
+            // entry was added).
+            if (curDist > dist[cur]) continue
+            if (curDist > radiusMm) break
+            out[outCount++] = cur
+            val curN = triangleNormal(cur)
+            val curNZero = curN.x == 0f && curN.y == 0f && curN.z == 0f
+            val cc = centroidOf(cur)
+            val s = starts[cur]; val e = starts[cur + 1]
+            for (k in s until e) {
+                val nbr = nbrs[k]
+                val nbrN = triangleNormal(nbr)
+                val nbrNZero = nbrN.x == 0f && nbrN.y == 0f && nbrN.z == 0f
+                if (nbrNZero) continue
+                // Skip the dihedral gate when the current triangle
+                // is degenerate (zero normal) — common for the
+                // collapsed pole-row triangles on a UV sphere or
+                // any STL with sliver triangles. The gate exists
+                // to stop at sharp curvature breaks; a degenerate
+                // tri has no meaningful curvature, so we'd lose
+                // the entire walk if the gate could fire on it.
+                if (!curNZero) {
+                    val dot = curN.x * nbrN.x + curN.y * nbrN.y + curN.z * nbrN.z
+                    if (dot < cosThreshold) continue
+                }
+                val nc = centroidOf(nbr)
+                val dx = nc.x - cc.x; val dy = nc.y - cc.y; val dz = nc.z - cc.z
+                val step = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz)
+                val newDist = curDist + step
+                if (newDist >= dist[nbr]) continue
+                if (newDist > radiusMm) continue
+                dist[nbr] = newDist
+                // Re-encode and push.
+                val bits = java.lang.Float.floatToRawIntBits(newDist)
+                pq.add(longArrayOf((bits.toLong() and 0xFFFFFFFFL) shl 32, nbr.toLong()))
+            }
+        }
+        return out.copyOf(outCount)
+    }
+
     fun smartFillBfs(seed: Int, maxAngleDeg: Float, maxTriangles: Int = 65536): IntArray {
         require(seed in 0 until mesh.triCount) {
             "seed=$seed out of [0, ${mesh.triCount})"

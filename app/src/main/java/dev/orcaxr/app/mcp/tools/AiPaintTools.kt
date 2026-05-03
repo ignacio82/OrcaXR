@@ -49,15 +49,19 @@ internal object AiPaintTools {
      */
     const val MAX_INDICES_RETURNED = 4096
 
-    fun all(ws: WorkspaceModel): List<Tool> = listOf(
-        PaintSphere(ws),
-        PaintSlab(ws),
-        PaintNormalCone(ws),
-        PaintSurfaceRegion(ws),
-        PaintConnectedComponent(ws),
-        PaintTriangleList(ws),
-        PaintProjectedMask(ws),
-    )
+    fun all(ws: WorkspaceModel): List<Tool> {
+        val inner = listOf(
+            PaintSphere(ws),
+            PaintSlab(ws),
+            PaintNormalCone(ws),
+            PaintSurfaceRegion(ws),
+            PaintConnectedComponent(ws),
+            PaintTriangleList(ws),
+            PaintProjectedMask(ws),
+            PaintGeodesicDisc(ws),
+        )
+        return inner + PaintWithMirror(ws, inner)
+    }
 
     // ---- Shared helpers ----
 
@@ -673,13 +677,252 @@ internal object AiPaintTools {
         }
     }
 
-    /** Resolve a seed JSON description (`{tri_id}` OR `{center_mm,
-     *  ray_dir}`) to a triangle index. */
+    class PaintWithMirror(
+        private val ws: WorkspaceModel,
+        private val innerTools: List<Tool>,
+    ) : Tool {
+        override val name = "paint_with_mirror"
+        override val description =
+            "Apply a paint primitive AND its mirror across a bbox-center axis in one call. Axis is " +
+                "'x' | 'y' | 'z'; the mirror plane is the model's bbox center on that axis. Two " +
+                "PaintTriangleSet actions are emitted (one per side) so paint_undo walks back each " +
+                "side independently. Useful for paired bilateral features (Pikachu eyes / cheeks / " +
+                "ears, Funko Pop eyes, eyes on ANY symmetric figure). Inner tool can be: " +
+                "paint_sphere, paint_slab, paint_normal_cone, paint_geodesic_disc, " +
+                "paint_surface_region, paint_connected_component, paint_triangle_list, " +
+                "paint_projected_mask (X-mirror only). Args are passed through verbatim with the " +
+                "spatial fields mirrored: center / direction / anchor / polygon X coords / triangle " +
+                "ids (via centroid-mirror + nearest-tri lookup)."
+        override val inputSchema = Schemas.obj(
+            required = listOf("axis", "inner"),
+            properties = mapOf(
+                "axis" to Schemas.string("'x' | 'y' | 'z' — bbox-center axis to mirror across"),
+                "inner" to Schemas.obj(
+                    required = listOf("tool", "arguments"),
+                    properties = mapOf(
+                        "tool" to Schemas.string("Inner paint tool name"),
+                        "arguments" to Schemas.obj(),
+                    ),
+                ),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            if (!ws.attached.value) return ToolResult.error("OrcaXR not attached.")
+            val axisRaw = args.optString("axis").lowercase()
+            val axisIdx = when (axisRaw) {
+                "x" -> 0; "y" -> 1; "z" -> 2
+                else -> return ToolResult.error("axis must be x|y|z, got '$axisRaw'")
+            }
+            val inner = args.optJSONObject("inner")
+                ?: return ToolResult.error("'inner' object is required")
+            val innerToolName = inner.optString("tool")
+            if (innerToolName.isEmpty()) return ToolResult.error("inner.tool name is required")
+            val innerTool = innerTools.firstOrNull { it.name == innerToolName }
+                ?: return ToolResult.error("Unknown inner tool '$innerToolName'.")
+            val innerArgs = inner.optJSONObject("arguments")
+                ?: return ToolResult.error("inner.arguments object required")
+            val modelId = innerArgs.optString("model_id")
+            if (modelId.isEmpty()) return ToolResult.error("inner.arguments.model_id required")
+            if (ws.placedModels.value.none { it.id == modelId }) {
+                return ToolResult.error("No model with id '$modelId'.")
+            }
+            val bvh = ws.getBvh(modelId)
+                ?: return ToolResult.error("Couldn't build BVH for '$modelId'.")
+            val geom = dev.orcaxr.app.AiIntrospection.geometry(bvh, bins = 1)
+            val centerOnAxis = when (axisIdx) {
+                0 -> geom.bboxCenteredPreview.centerX
+                1 -> geom.bboxCenteredPreview.centerY
+                else -> geom.bboxCenteredPreview.centerZ
+            }
+
+            // Pass 1: original.
+            val r1 = innerTool.call(innerArgs)
+            if (r1.isError) return ToolResult.error("Inner pass 1 failed: ${r1.text}")
+
+            // Pass 2: mirrored.
+            val mirroredArgs = mirrorArgs(innerArgs, axisIdx, centerOnAxis, bvh, innerToolName)
+                ?: return ToolResult.error(
+                    "Couldn't mirror inner args for '$innerToolName' across axis '$axisRaw'.",
+                )
+            val r2 = innerTool.call(mirroredArgs)
+
+            val s1 = r1.structured?.optInt("painted_count", 0) ?: 0
+            val s2 = r2.structured?.optInt("painted_count", 0) ?: 0
+            val body = JSONObject().apply {
+                put("ok", true)
+                put("axis", axisRaw)
+                put("inner_tool", innerToolName)
+                put("painted_count_a", s1)
+                put("painted_count_b", s2)
+                put("painted_count_total", s1 + s2)
+                if (r1.structured != null) put("pass_a", r1.structured)
+                if (r2.structured != null) put("pass_b", r2.structured)
+                if (r2.isError) put("pass_b_error", r2.text)
+            }
+            val text = "paint_with_mirror axis=$axisRaw via $innerToolName " +
+                "(a: $s1 painted, b: $s2 painted${if (r2.isError) " — pass B errored" else ""})"
+            return ToolResult.ok(text, body)
+        }
+
+        /** Deep-clone via JSON serialize+parse (org.json has no
+         *  built-in deep clone). */
+        private fun cloneJson(o: JSONObject): JSONObject = JSONObject(o.toString())
+
+        private fun mirrorArgs(
+            args: JSONObject,
+            axisIdx: Int,
+            c: Float,
+            bvh: MeshBvh,
+            innerName: String,
+        ): JSONObject? {
+            val out = cloneJson(args)
+            val key = arrayOf("x", "y", "z")[axisIdx]
+            when (innerName) {
+                "paint_sphere" -> {
+                    val center = out.optJSONObject("center") ?: return null
+                    val v = center.optDouble(key)
+                    center.put(key, 2.0 * c - v)
+                }
+                "paint_normal_cone" -> {
+                    val dir = out.optJSONObject("direction") ?: return null
+                    val v = dir.optDouble(key)
+                    // Direction is a vector, not a point — flip the
+                    // chosen axis component, no center offset.
+                    dir.put(key, -v)
+                }
+                "paint_slab" -> {
+                    val slabAxis = out.optString("axis", "z").lowercase()
+                    if (slabAxis == key) {
+                        // Axis matches: mirror the [min, max] interval
+                        // around the bbox center.
+                        val lo = out.optDouble("min_mm")
+                        val hi = out.optDouble("max_mm")
+                        out.put("min_mm", 2.0 * c - hi)
+                        out.put("max_mm", 2.0 * c - lo)
+                    }
+                    // Different axis: slab is full-mesh on other
+                    // axes, no spatial change needed.
+                }
+                "paint_geodesic_disc" -> mirrorAnchor(out, "anchor", axisIdx, c, bvh) ?: return null
+                "paint_surface_region", "paint_connected_component" ->
+                    mirrorAnchor(out, "seed", axisIdx, c, bvh) ?: return null
+                "paint_projected_mask" -> {
+                    if (axisIdx != 0) return null  // X-only for v1
+                    val cd = out.optJSONObject("camera_descriptor") ?: return null
+                    val w = cd.optInt("width_px", 0)
+                    if (w <= 0) return null
+                    val polys = out.optJSONArray("polygons") ?: return null
+                    val mirrored = JSONArray()
+                    for (i in 0 until polys.length()) {
+                        val p = polys.optJSONArray(i) ?: continue
+                        val mp = JSONArray()
+                        var j = 0
+                        while (j + 1 < p.length()) {
+                            val x = p.optDouble(j)
+                            val y = p.optDouble(j + 1)
+                            mp.put(w - 1 - x); mp.put(y)
+                            j += 2
+                        }
+                        mirrored.put(mp)
+                    }
+                    out.put("polygons", mirrored)
+                }
+                "paint_triangle_list" -> {
+                    val ids = out.optJSONArray("triangle_ids") ?: return null
+                    val mirrored = JSONArray()
+                    for (i in 0 until ids.length()) {
+                        val mt = mirrorTriangleId(bvh, ids.optInt(i, -1), axisIdx, c) ?: continue
+                        mirrored.put(mt)
+                    }
+                    out.put("triangle_ids", mirrored)
+                }
+                else -> return null
+            }
+            return out
+        }
+
+        /** Mirror an anchor field (`anchor` for geodesic_disc,
+         *  `seed` for surface_region / connected_component). Returns
+         *  Unit on success, null on failure. */
+        private fun mirrorAnchor(
+            out: JSONObject,
+            fieldName: String,
+            axisIdx: Int,
+            c: Float,
+            bvh: MeshBvh,
+        ): Unit? {
+            val anchor = out.optJSONObject(fieldName) ?: return null
+            val key = arrayOf("x", "y", "z")[axisIdx]
+            if (anchor.has("tri_id")) {
+                val tri = anchor.optInt("tri_id", -1)
+                val mt = mirrorTriangleId(bvh, tri, axisIdx, c) ?: return null
+                anchor.put("tri_id", mt)
+            } else if (anchor.has("center_mm")) {
+                val cm = anchor.optJSONObject("center_mm") ?: return null
+                val v = cm.optDouble(key)
+                cm.put(key, 2.0 * c - v)
+                // Mirror ray_dir if present (it's a vector).
+                anchor.optJSONObject("ray_dir")?.let { rd ->
+                    val rv = rd.optDouble(key)
+                    rd.put(key, -rv)
+                }
+            } else {
+                // camera_descriptor + pixel — too many degrees of
+                // freedom (camera basis can be arbitrary). For the v1
+                // shipping cut, the LLM should re-cite a tri_id or
+                // center_mm anchor when using paint_with_mirror.
+                return null
+            }
+            return Unit
+        }
+
+        /** Centroid-mirror + nearest-centroid search. O(triCount) per
+         *  call — fine for one-shot mirror. */
+        private fun mirrorTriangleId(bvh: MeshBvh, tri: Int, axisIdx: Int, c: Float): Int? {
+            if (tri < 0 || tri >= bvh.triCount) return null
+            val centroid = bvh.triangleCentroid(tri)
+            val mx = if (axisIdx == 0) 2 * c - centroid.x else centroid.x
+            val my = if (axisIdx == 1) 2 * c - centroid.y else centroid.y
+            val mz = if (axisIdx == 2) 2 * c - centroid.z else centroid.z
+            var best = -1
+            var bestDist = Float.POSITIVE_INFINITY
+            for (i in 0 until bvh.triCount) {
+                val tc = bvh.triangleCentroid(i)
+                val dx = tc.x - mx; val dy = tc.y - my; val dz = tc.z - mz
+                val d = dx * dx + dy * dy + dz * dz
+                if (d < bestDist) { bestDist = d; best = i }
+            }
+            return if (best >= 0) best else null
+        }
+    }
+
+    /** Resolve a seed JSON description to a triangle index. Accepts:
+     *  - `{tri_id: int}` — exact
+     *  - `{center_mm, ray_dir}` — ray from a 3D point in mesh frame
+     *  - `{camera_descriptor, x_px, y_px}` — pixel pick via the
+     *    same unprojection paint_projected_mask uses (D18a — lets
+     *    the LLM chain render_triangle_id_map → click pixel → paint
+     *    geodesic disc anchored on that pixel). */
     private fun resolveSeed(bvh: MeshBvh, seed: JSONObject): Int? {
         if (seed.has("tri_id")) {
             val t = seed.optInt("tri_id", -1)
             if (t < 0 || t >= bvh.triCount) return null
             return t
+        }
+        if (seed.has("camera_descriptor") && seed.has("x_px") && seed.has("y_px")) {
+            val cd = seed.optJSONObject("camera_descriptor") ?: return null
+            val view = cd.optJSONArray("view_matrix_4x4") ?: return null
+            val proj = cd.optJSONArray("projection_matrix_4x4") ?: return null
+            if (view.length() != 16 || proj.length() != 16) return null
+            val w = cd.optInt("width_px", 0)
+            val h = cd.optInt("height_px", 0)
+            if (w <= 0 || h <= 0) return null
+            val viewArr = FloatArray(16) { view.optDouble(it, 0.0).toFloat() }
+            val projArr = FloatArray(16) { proj.optDouble(it, 0.0).toFloat() }
+            val cam = dev.orcaxr.app.AiRenderEngine.CameraSpec(viewArr, projArr, w, h)
+            val xPx = seed.optInt("x_px", -1)
+            val yPx = seed.optInt("y_px", -1)
+            return dev.orcaxr.app.AiMaskProjection.pickTriangleAtPixel(bvh, cam, xPx, yPx)
         }
         val center = seed.optJSONObject("center_mm") ?: return null
         val dir = seed.optJSONObject("ray_dir")
@@ -695,6 +938,95 @@ internal object AiPaintTools {
             dev.orcaxr.app.Vec3f(ox, oy, oz),
             dev.orcaxr.app.Vec3f(dx, dy, dz),
         )
+    }
+
+    class PaintGeodesicDisc(private val ws: WorkspaceModel) : Tool {
+        override val name = "paint_geodesic_disc"
+        override val description =
+            "Paint a connected disc on the mesh SURFACE outward from a seed triangle, bounded by " +
+                "geodesic distance (centroid-hop sum, NOT euclidean) and stopped at sharp curvature " +
+                "edges via a per-step dihedral gate. The right primitive for 'paint the cheek bump' / " +
+                "'paint the eye / nose / ear-interior' on a curved organic mesh — paint_projected_mask " +
+                "back-face-filters out the wraparound on a bulge, geodesic-disc walks across it. Use " +
+                "max_dihedral_deg≈60° to wrap a hemisphere bulge; ≈30° to stay near-planar (one face " +
+                "of a chamfered solid); 180° to ignore curvature and use radius alone. Returns " +
+                "triangles in geodesic-distance order so the result is robust against the radius " +
+                "barely-clipping a sharp triangle."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id", "anchor", "radius_mm", "tag"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id"),
+                "kind" to Schemas.string("'color' (default) | 'support' | 'seam' | 'fuzzy_skin'"),
+                "anchor" to Schemas.obj(
+                    properties = mapOf(
+                        "tri_id" to Schemas.integer("Exact seed triangle id"),
+                        "center_mm" to Schemas.obj(
+                            properties = mapOf(
+                                "x" to Schemas.number(""),
+                                "y" to Schemas.number(""),
+                                "z" to Schemas.number(""),
+                            ),
+                        ),
+                        "ray_dir" to Schemas.obj(
+                            properties = mapOf(
+                                "x" to Schemas.number(""),
+                                "y" to Schemas.number(""),
+                                "z" to Schemas.number(""),
+                            ),
+                        ),
+                        "camera_descriptor" to Schemas.obj(
+                            properties = mapOf(
+                                "view_matrix_4x4" to JSONObject().apply {
+                                    put("type", "array"); put("items", Schemas.number(""))
+                                },
+                                "projection_matrix_4x4" to JSONObject().apply {
+                                    put("type", "array"); put("items", Schemas.number(""))
+                                },
+                                "width_px" to Schemas.integer(""),
+                                "height_px" to Schemas.integer(""),
+                            ),
+                        ),
+                        "x_px" to Schemas.integer("Pixel x (with camera_descriptor)"),
+                        "y_px" to Schemas.integer("Pixel y (with camera_descriptor)"),
+                    ),
+                ),
+                "radius_mm" to Schemas.number("Geodesic radius in mm (NOT euclidean)"),
+                "max_dihedral_deg" to Schemas.number("Per-step dihedral gate (default 60°)"),
+                "max_triangles" to Schemas.integer("Hard cap on the result size (default 65536)"),
+                "tag" to Schemas.integer("Tag to apply"),
+                "merge" to Schemas.string("'replace' (default) | 'only_unpainted' | 'only_tagged'"),
+                "where_tag" to Schemas.integer("Required when merge='only_tagged'"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            val plan = when (val r = preflight(ws, args)) {
+                is Either.Left -> return r.value
+                is Either.Right -> r.value
+            }
+            val anchor = args.optJSONObject("anchor")
+                ?: return ToolResult.error("'anchor' object is required")
+            val seedTri = resolveSeed(plan.bvh, anchor)
+                ?: return ToolResult.error("Couldn't resolve anchor — provide tri_id, or center_mm + ray_dir, or camera_descriptor + x_px + y_px.")
+            val radius = args.optFloat("radius_mm")
+                ?: return ToolResult.error("'radius_mm' is required")
+            if (radius <= 0f) return ToolResult.error("radius_mm must be > 0")
+            val maxDihedral = args.optFloat("max_dihedral_deg") ?: 60f
+            val maxTriangles = args.optInt("max_triangles", 65_536).coerceIn(1, 1_500_000)
+            val candidates = dev.orcaxr.app.AiPaintEngine.geodesicDisc(
+                plan.bvh, seedTri, radius, maxDihedral, maxTriangles,
+            )
+            val extra = JSONObject().apply {
+                put("seed_tri_id", seedTri)
+                put("radius_mm", radius.toDouble())
+                put("max_dihedral_deg", maxDihedral.toDouble())
+                put("max_triangles", maxTriangles)
+            }
+            return emitAndRespond(
+                ws, plan, candidates,
+                "paint_geodesic_disc seed=$seedTri r=${radius}mm dihedral=${maxDihedral}°",
+                extra,
+            )
+        }
     }
 
     // ---- JSON helpers — duplicated tiny helpers from WorkspaceTools.kt

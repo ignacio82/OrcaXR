@@ -190,6 +190,22 @@ internal object AiPaintEngine {
     ): IntArray = bvh.smartFillBfs(seedTri, maxDihedralDeg, maxTriangles)
 
     /**
+     * paint_geodesic_disc (D18a): Dijkstra-style surface walk from
+     * a seed, bounded by geodesic distance + per-step dihedral
+     * gate. Returns a connected disc that wraps around bulges
+     * (Pikachu cheek bumps, eye sockets, etc.) — the gap that
+     * paint_projected_mask + back_face_filter leaves open because
+     * 2D rays can only hit the front-most patch of a bulge.
+     */
+    fun geodesicDisc(
+        bvh: MeshBvh,
+        seedTri: Int,
+        radiusMm: Float,
+        maxDihedralDeg: Float = 60f,
+        maxTriangles: Int = 65_536,
+    ): IntArray = bvh.geodesicDisc(seedTri, radiusMm, maxDihedralDeg, maxTriangles)
+
+    /**
      * paint_connected_component: vertex-adjacency BFS from a seed
      * (no angle gate — paints the whole connected sub-mesh).
      */

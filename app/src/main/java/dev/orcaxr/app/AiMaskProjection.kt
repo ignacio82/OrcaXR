@@ -104,6 +104,35 @@ internal object AiMaskProjection {
     }
 
     /**
+     * Cast a ray from a screen pixel through the camera into the
+     * mesh; return the front-most hit triangle (or null on miss).
+     * Used by paint tools that take a `{camera_descriptor, x_px,
+     * y_px}` anchor form (D18a paint_geodesic_disc, etc.) so the
+     * LLM can chain `render_triangle_id_map` → click pixel →
+     * `paint_geodesic_disc(anchor=that pixel)` without manually
+     * computing the world ray.
+     */
+    fun pickTriangleAtPixel(
+        bvh: MeshBvh,
+        camera: AiRenderEngine.CameraSpec,
+        xPx: Int,
+        yPx: Int,
+    ): Int? {
+        if (xPx < 0 || xPx >= camera.widthPx || yPx < 0 || yPx >= camera.heightPx) return null
+        val invMVP = invert4x4(matMulRowMajor(camera.projMatrixRowMajor, camera.viewMatrixRowMajor))
+            ?: return null
+        val invView = invert4x4(camera.viewMatrixRowMajor) ?: return null
+        val camOrigin = Vec3f(invView[3], invView[7], invView[11])
+        val ndcX = 2f * (xPx + 0.5f) / camera.widthPx - 1f
+        val ndcY = 1f - 2f * (yPx + 0.5f) / camera.heightPx
+        val far = unprojectNdc(invMVP, ndcX, ndcY, 1f) ?: return null
+        return bvh.intersect(
+            camOrigin,
+            Vec3f(far.x - camOrigin.x, far.y - camOrigin.y, far.z - camOrigin.z),
+        )
+    }
+
+    /**
      * Rasterize a list of polygons into a width × height boolean
      * mask. Pixels strictly inside any polygon (even-odd rule) are
      * marked true. Polygons are closed implicitly (first pt == last
