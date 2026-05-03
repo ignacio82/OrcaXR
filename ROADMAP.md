@@ -357,9 +357,11 @@ A multi-object 3MF (e.g. `passthroughboth.3mf` — `Inner.stl` + `Outer.stl`) cu
 
 **Dependency for E3 multi-plate:** B9 is the prerequisite — without per-part addressability there's nothing to assign to a different plate.
 
-### B12. Calibration print library 🔴 Not started
+### B12. Calibration print library 🟡 Partial — 7 calibration meshes vendored via HandyModelCatalog; A11-dependent variable-ramp generator deferred
 
-> **Files (planned):** new `app/src/main/java/dev/orcaxr/app/calibration/CalibrationCatalog.kt`, vendored assets under `app/src/main/assets/calib/` (mirror of `third_party/OrcaSlicer/resources/calib/`: `pressure_advance/`, `temperature_tower/`, `volumetric_speed/`, `retraction/`, `input_shaping/`, `cornering/`, `vfa/`, `filament_flow/`), new `CalibrationPanel.kt` mounted from a "Calibrate" item in `TopNavigationPill`'s overflow.
+> **Files (shipped):** 7 `assets/handy_models/calib_*.drc` files vendored from `third_party/OrcaSlicer/resources/calib/`, registered as `HandyModelCatalog` entries (`calib_temperature_tower`, `calib_retraction_tower`, `calib_pa_tower`, `calib_ringing_tower`, `calib_vfa`, `calib_cornering`, `calib_volumetric_speed`). Reachable via the existing `add_handy_model(id=...)` MCP tool — same staging + load + bedFit + bedCollision path the rest of D13 uses. NOTICE.md updated.
+
+The shipped slice gives the user every standard calibration test mesh in one MCP call. The proper "parametric variable ramp" wrapper (per-Z temperature / PA value bands authored from a slider, baked into a 3MF + per-Z gcode) lands alongside **A11** (custom G-code per print Z) — that's the libslic3r-correct path, and adding it ahead of A11 would mean writing a parallel implementation we'd then throw away. Until A11 lands, users overlay variable-ramp gcode via the project's `before_layer_change_gcode` override.
 
 Upstream OrcaSlicer ships a "Calibration" menu that auto-generates parameterized test prints (Pressure Advance line / pattern / tower; Temperature Tower; Max Volumetric Speed; Retraction Test; Input Shaping; Cornering; VFA; Filament Flow). Each calibration is a 3MF + a per-print-Z `custom_gcode` script that ramps a single variable (PA value, temp, speed, retraction length, etc.) so the user prints once, picks the best band, and writes the resulting value into the active filament profile.
 

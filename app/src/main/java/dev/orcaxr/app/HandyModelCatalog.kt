@@ -86,6 +86,56 @@ object HandyModelCatalog {
             hint = "Cute speed-printing reference cat.",
             assetPath = "handy_models/calicat.drc",
         ),
+        // ---- B12 partial — calibration prints ----
+        // Vendored from upstream OrcaSlicer's resources/calib/ tree.
+        // The proper "parametric ramp" wrapper (per-Z temperature /
+        // PA value bands via Model::custom_gcode_per_print_z) lands
+        // alongside A11. Until then these print at the active
+        // profile's defaults — useful as static fixtures the user can
+        // overlay manual bands onto via the project's
+        // before_layer_change_gcode override.
+        HandyModel(
+            id = "calib_temperature_tower",
+            displayName = "Temperature Tower (calibration)",
+            hint = "B12 — temperature tower for finding the lowest stable nozzle temp per filament. Pair with manual per-Z gcode bands until A11's variable-ramp generator ships.",
+            assetPath = "handy_models/calib_temperature_tower.drc",
+        ),
+        HandyModel(
+            id = "calib_retraction_tower",
+            displayName = "Retraction Tower (calibration)",
+            hint = "B12 — retraction-length tower for stringing calibration.",
+            assetPath = "handy_models/calib_retraction_tower.drc",
+        ),
+        HandyModel(
+            id = "calib_pa_tower",
+            displayName = "Pressure Advance Tower (calibration)",
+            hint = "B12 — Klipper pressure-advance tuning tower (M572 S<value> bands).",
+            assetPath = "handy_models/calib_pa_tower.drc",
+        ),
+        HandyModel(
+            id = "calib_ringing_tower",
+            displayName = "Input Shaping Tower (calibration)",
+            hint = "B12 — ringing / input-shaping tower (50 Hz sweep target).",
+            assetPath = "handy_models/calib_ringing_tower.drc",
+        ),
+        HandyModel(
+            id = "calib_vfa",
+            displayName = "VFA — Vertical Fine Artifacts (calibration)",
+            hint = "B12 — vertical fine-artifact test for resonance / belt-tension issues.",
+            assetPath = "handy_models/calib_vfa.drc",
+        ),
+        HandyModel(
+            id = "calib_cornering",
+            displayName = "Cornering / SCV (calibration)",
+            hint = "B12 — square-corner-velocity tester for Klipper / Marlin tuning.",
+            assetPath = "handy_models/calib_cornering.drc",
+        ),
+        HandyModel(
+            id = "calib_volumetric_speed",
+            displayName = "Volumetric Speed Test (calibration)",
+            hint = "B12 — max volumetric speed structure for filament max-flow tuning.",
+            assetPath = "handy_models/calib_volumetric_speed.drc",
+        ),
     )
 
     /** Resolve a handy model by [id] (case-insensitive), or null if unknown. */

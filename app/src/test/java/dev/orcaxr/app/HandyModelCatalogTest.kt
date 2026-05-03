@@ -14,11 +14,31 @@ import org.junit.Test
  */
 class HandyModelCatalogTest {
 
-    @Test fun catalogHasEightEntries() {
-        // Mirrors upstream OrcaSlicer's resources/handy_models/
-        // directory — adding a new asset here requires bumping the
-        // assert and adding a new HandyModel entry.
-        assertEquals(8, HandyModelCatalog.ENTRIES.size)
+    @Test fun catalogHasExpectedEntries() {
+        // 8 reference / fun-print models (D13) + 7 calibration meshes
+        // (B12 partial — meshes only; A11-dependent variable-ramp
+        // generator deferred). Adding a new asset here requires
+        // bumping the assert and adding a new HandyModel entry.
+        assertEquals(15, HandyModelCatalog.ENTRIES.size)
+    }
+
+    @Test fun catalogIncludesAllSevenCalibrationMeshes() {
+        // B12 partial — these are the seven calibration prints
+        // bundled from upstream's resources/calib/ tree. The MCP
+        // tool reaches them via add_handy_model(id="calib_<...>").
+        val expected = setOf(
+            "calib_temperature_tower",
+            "calib_retraction_tower",
+            "calib_pa_tower",
+            "calib_ringing_tower",
+            "calib_vfa",
+            "calib_cornering",
+            "calib_volumetric_speed",
+        )
+        val ids = HandyModelCatalog.ENTRIES.map { it.id }.toSet()
+        for (e in expected) {
+            assertTrue("calibration mesh '$e' missing from catalog", e in ids)
+        }
     }
 
     @Test fun idsAreUnique() {

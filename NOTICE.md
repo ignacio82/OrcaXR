@@ -90,6 +90,15 @@ Stanford Computer Graphics Laboratory's reference release, Voron
 Cube v7 is GPL-3.0, the Orca-authored calibration prints follow
 OrcaSlicer's AGPL-3.0). OrcaXR redistributes them unchanged.
 
+`app/src/main/assets/handy_models/calib_*.drc` are the seven core
+calibration meshes from `third_party/OrcaSlicer/resources/calib/`
+(temperature_tower, retraction_tower, pressure_advance_test,
+input_shaping/ringing_tower, vfa, cornering/SCV-V2,
+volumetric_speed/SpeedTestStructure), vendored verbatim from upstream
+v2.3.2. Same AGPL-3.0 license as the rest of OrcaSlicer's calib tree.
+Renamed with a `calib_` prefix on the file system to match the
+HandyModelCatalog id namespace; original mesh data unchanged.
+
 ---
 
 OrcaXR's own first-party code (everything under `app/src/main/java/`
