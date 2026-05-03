@@ -36,6 +36,7 @@ internal object AiIntrospectionTools {
         GetModelComponents(ws),
         GetModelFaceOrientationSummary(ws),
         GetModelSemanticRegions(ws),
+        GetCurvatureSegmentation(ws),
     )
 
     private suspend fun resolveModelAndBvh(
@@ -263,6 +264,93 @@ internal object AiIntrospectionTools {
             }
             val text = "${regions.size} semantic region(s) on ${model.label}: " +
                 regions.joinToString(", ") { "${it.regionId}:${it.label}(${it.triangleIndices.size})" }
+            return ToolResult.ok(text, body)
+        }
+    }
+
+    /**
+     * D19b — multi-scale curvature segmentation. Uses dihedral-angle
+     * curvature aggregated across two scales to find feature
+     * boundaries, then region-grows from low-curvature seeds. The
+     * complementary tool to `get_model_semantic_regions`: where the
+     * legacy normal-based heuristic over-fragments organic models
+     * (Pikachu, Stanford Bunny, anything continuously curved), this
+     * one groups whole feature surfaces (an entire cheek bulge, the
+     * whole top of the bunny head) until a curvature ridge is
+     * crossed.
+     */
+    class GetCurvatureSegmentation(private val ws: WorkspaceModel) : Tool {
+        override val name = "get_curvature_segmentation"
+        override val description =
+            "Multi-scale curvature segmentation: per-triangle dihedral-angle score is computed " +
+                "at two scales (direct neighbors + 1-ring neighborhood) and combined; smooth " +
+                "interiors become seed regions, sharp creases become boundaries. Better than " +
+                "get_model_semantic_regions for organic / continuously-curved models because it " +
+                "doesn't depend on cardinal-axis alignment of the normals — it finds whole " +
+                "smooth feature surfaces (a cheek bulge, the back of an ear) bounded by their " +
+                "curvature ridges. Each segment gets a label like 'smooth_horizontal_top' / " +
+                "'creased_diagonal' / 'gentle_vertical_side' combining curvature level + " +
+                "orientation. Use this BEFORE painting an organic model — call it once, look " +
+                "at the segment list, then issue paint_geodesic_disc(seed=segment.tri_sample[0]) " +
+                "or paint_triangle_list per segment."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id"),
+                "max_segments" to Schemas.integer("Max segments to return (default 24)"),
+                "crease_threshold_deg" to Schemas.number(
+                    "Curvature score above which a triangle is treated as a feature boundary " +
+                        "(default 22°). Higher = larger smooth segments swallow more curvature; " +
+                        "lower = more aggressive splitting along subtle ridges.",
+                ),
+                "seed_dihedral_cap_deg" to Schemas.number(
+                    "Max angle between seed normal and a candidate neighbor normal during " +
+                        "growth (default 35°). Caps how far a single segment can wrap around " +
+                        "a bulge before splitting.",
+                ),
+                "min_segment_tri_count" to Schemas.integer("Drop segments smaller than this (default 8)"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            val (model, bvh) = resolveModelAndBvh(ws, args)
+                ?: return ToolResult.error("Couldn't resolve model + BVH.")
+            val maxSegments = args.optInt("max_segments", 24).coerceIn(1, 128)
+            val crease = (optFloat(args, "crease_threshold_deg") ?: 22f).coerceIn(0f, 180f)
+            val seedCap = (optFloat(args, "seed_dihedral_cap_deg") ?: 35f).coerceIn(0f, 180f)
+            val minTri = args.optInt("min_segment_tri_count", 8).coerceAtLeast(1)
+            val segments = AiIntrospection.curvatureSegmentation(
+                bvh,
+                creaseThresholdDeg = crease,
+                seedDihedralCapDeg = seedCap,
+                maxSegments = maxSegments,
+                minSegmentTriCount = minTri,
+            )
+            val body = JSONObject().apply {
+                put("ok", true)
+                put("model_id", model.id)
+                put("segment_count", segments.size)
+                val arr = JSONArray()
+                for (s in segments) {
+                    arr.put(JSONObject().apply {
+                        put("segment_id", s.segmentId)
+                        put("label", s.label)
+                        put("triangle_count", s.triangleIndices.size)
+                        put("triangle_indices_sample", encodeIndices(s.triangleIndices))
+                        put("bbox_centered_preview", encodeBbox(s.bbox))
+                        put("centroid", encodeVec3(s.centroid))
+                        put("mean_normal", encodeVec3(s.meanNormal))
+                        put("area_mm2", s.areaMm2.toDouble())
+                        put("mean_curvature_deg", s.meanCurvatureScore.toDouble())
+                    })
+                }
+                put("segments", arr)
+                put("crease_threshold_deg", crease.toDouble())
+                put("seed_dihedral_cap_deg", seedCap.toDouble())
+            }
+            val text = "${segments.size} curvature segment(s) on ${model.label}: " +
+                segments.joinToString(", ") {
+                    "${it.segmentId}:${it.label}(${it.triangleIndices.size})"
+                }
             return ToolResult.ok(text, body)
         }
     }

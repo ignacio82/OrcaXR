@@ -573,4 +573,278 @@ internal object AiIntrospection {
      *  below by stamping a private extension. */
     private fun neighborsOf(bvh: MeshBvh, tri: Int): IntArray =
         bvh.directNeighbors(tri)
+
+    // ---- Multi-scale curvature segmentation (D19b) ----
+
+    data class CurvatureSegment(
+        val segmentId: Int,
+        val triangleIndices: IntArray,
+        val bbox: Bbox,
+        val centroid: FloatArray,
+        val meanNormal: FloatArray,
+        val areaMm2: Float,
+        /** Mean per-triangle curvature score (dihedral-sum across the
+         *  k-ring) for triangles in this segment. Low = flat /
+         *  feature-interior; high = creased. */
+        val meanCurvatureScore: Float,
+        /** Heuristic label combining orientation + size + curvature
+         *  level ("smooth_top_large", "creased_diagonal_small", ...). */
+        val label: String,
+    ) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is CurvatureSegment) return false
+            return segmentId == other.segmentId && triangleIndices.contentEquals(other.triangleIndices)
+        }
+        override fun hashCode(): Int = segmentId * 31 + triangleIndices.contentHashCode()
+    }
+
+    /**
+     * Per-triangle "curvature score" = average per-edge dihedral angle
+     * (in degrees) over a k-ring of shared-vertex neighbors. Multi-
+     * scale: the returned score is `max(score@k=1, score@k=2)` so
+     * features with sharp boundaries at one scale but smooth at the
+     * other (a long shallow crease vs a short sharp pinch) both
+     * register.
+     *
+     * This is the building block for [curvatureSegmentation]. Pure
+     * function: same input → same output.
+     */
+    fun perTriangleCurvature(bvh: MeshBvh): FloatArray {
+        val n = bvh.triCount
+        val out = FloatArray(n)
+        if (n == 0) return out
+
+        // Scale 1: per-triangle, average abs(dihedral) over direct neighbors.
+        val s1 = FloatArray(n)
+        for (i in 0 until n) {
+            val nrm = bvh.triangleNormal(i)
+            if (nrm.x == 0f && nrm.y == 0f && nrm.z == 0f) continue
+            val nbrs = bvh.directNeighbors(i)
+            if (nbrs.isEmpty()) continue
+            var sum = 0f
+            var count = 0
+            for (nb in nbrs) {
+                val nN = bvh.triangleNormal(nb)
+                if (nN.x == 0f && nN.y == 0f && nN.z == 0f) continue
+                val dot = (nrm.x * nN.x + nrm.y * nN.y + nrm.z * nN.z).coerceIn(-1f, 1f)
+                val ang = Math.toDegrees(kotlin.math.acos(dot.toDouble())).toFloat()
+                sum += ang
+                count++
+            }
+            if (count > 0) s1[i] = sum / count
+        }
+
+        // Scale 2: per-triangle, average s1 over its 1-ring neighbors —
+        // smooths out single-triangle noise, surfaces broader feature
+        // boundaries.
+        val s2 = FloatArray(n)
+        for (i in 0 until n) {
+            val nbrs = bvh.directNeighbors(i)
+            if (nbrs.isEmpty()) { s2[i] = s1[i]; continue }
+            var sum = s1[i]
+            var count = 1
+            for (nb in nbrs) {
+                sum += s1[nb]; count++
+            }
+            s2[i] = sum / count
+        }
+
+        for (i in 0 until n) out[i] = max(s1[i], s2[i])
+        return out
+    }
+
+    /**
+     * Multi-scale curvature segmentation. Region-grows from low-
+     * curvature seeds (smooth feature interiors), stopping at
+     * triangles whose curvature score crosses [creaseThresholdDeg].
+     * Designed for organic models (Pikachu cheeks, Funko Pop ears,
+     * Stanford Bunny limbs) where the upstream `semanticRegions`
+     * heuristic produces over-fragmented patches because every
+     * curved surface registers as "diagonal" with no obvious
+     * cardinal alignment.
+     *
+     * Algorithm:
+     *  1. Compute per-triangle curvature score [perTriangleCurvature].
+     *  2. Sort seed candidates by ascending curvature score (smoothest
+     *     first), ties broken by ascending tri_id for determinism.
+     *  3. For each unassigned candidate, BFS along shared-vertex
+     *     adjacency. Accept neighbor iff:
+     *       - neighbor's curvature score < creaseThresholdDeg
+     *       - dihedral(seed, neighbor) < seedDihedralCapDeg
+     *  4. Drop segments under [minSegmentTriCount].
+     *  5. The unassigned residue (high-curvature triangles between
+     *     features) gets one final pass — each unassigned triangle
+     *     joins the segment of its lowest-curvature neighbor (if any).
+     *     This stops sharp creases from being lost as noise.
+     */
+    fun curvatureSegmentation(
+        bvh: MeshBvh,
+        creaseThresholdDeg: Float = 22f,
+        seedDihedralCapDeg: Float = 35f,
+        maxSegments: Int = 24,
+        minSegmentTriCount: Int = 8,
+    ): List<CurvatureSegment> {
+        val n = bvh.triCount
+        if (n == 0) return emptyList()
+        val curvature = perTriangleCurvature(bvh)
+        val crease = creaseThresholdDeg.coerceAtLeast(0f)
+        val seedCap = seedDihedralCapDeg.coerceAtLeast(0f)
+
+        // Sort triangles by ascending curvature score for seed order.
+        val order = IntArray(n) { it }
+        // Simple insertion-sort key: stable + bounded — but for n>1k
+        // use a Long-pack sort for perf.
+        val packed = LongArray(n)
+        for (i in 0 until n) {
+            val cBits = curvature[i].toRawBits().toLong() and 0xFFFFFFFFL
+            packed[i] = (cBits shl 32) or i.toLong()
+        }
+        packed.sort()
+        for (i in 0 until n) order[i] = (packed[i] and 0xFFFFFFFFL).toInt()
+
+        val assigned = IntArray(n) { -1 }
+        val regionBuf = IntArray(n)
+        val queue = IntArray(n)
+        var nextId = 0
+        val rawSegments = ArrayList<CurvatureSegment>()
+
+        for (idx in 0 until n) {
+            val seed = order[idx]
+            if (assigned[seed] != -1) continue
+            // Skip seeds that are themselves on a crease — they get
+            // joined to a neighbor in the residual pass.
+            if (curvature[seed] >= crease) continue
+
+            val seedNormal = bvh.triangleNormal(seed)
+            var size = 0
+            var qHead = 0; var qTail = 0
+            queue[qTail++] = seed
+            assigned[seed] = nextId
+            while (qHead < qTail) {
+                val cur = queue[qHead++]
+                regionBuf[size++] = cur
+                for (nb in bvh.directNeighbors(cur)) {
+                    if (assigned[nb] != -1) continue
+                    if (curvature[nb] >= crease) continue
+                    val nN = bvh.triangleNormal(nb)
+                    if (nN.x == 0f && nN.y == 0f && nN.z == 0f) continue
+                    val dot = (seedNormal.x * nN.x + seedNormal.y * nN.y + seedNormal.z * nN.z)
+                        .coerceIn(-1f, 1f)
+                    val ang = Math.toDegrees(kotlin.math.acos(dot.toDouble())).toFloat()
+                    if (ang > seedCap) continue
+                    assigned[nb] = nextId
+                    queue[qTail++] = nb
+                }
+            }
+            if (size < minSegmentTriCount) {
+                // Reset; let the residual pass pick these up.
+                for (k in 0 until size) assigned[regionBuf[k]] = -1
+                continue
+            }
+            val members = regionBuf.copyOf(size)
+            rawSegments.add(buildSegment(bvh, nextId, members, curvature))
+            nextId++
+        }
+
+        // Residual pass: unassigned triangles join the nearest
+        // assigned neighbor (chosen by lowest curvature). Two passes
+        // so neighbor-of-neighbor inheritance works.
+        for (pass in 0 until 2) {
+            for (i in 0 until n) {
+                if (assigned[i] != -1) continue
+                var bestSeg = -1
+                var bestScore = Float.POSITIVE_INFINITY
+                for (nb in bvh.directNeighbors(i)) {
+                    val seg = assigned[nb]
+                    if (seg < 0) continue
+                    val s = curvature[nb]
+                    if (s < bestScore) { bestScore = s; bestSeg = seg }
+                }
+                if (bestSeg >= 0) assigned[i] = bestSeg
+            }
+        }
+
+        // Re-collect membership now that residuals are joined.
+        val membership = HashMap<Int, ArrayList<Int>>(rawSegments.size)
+        for (i in 0 until n) {
+            val seg = assigned[i]
+            if (seg < 0) continue
+            membership.getOrPut(seg) { ArrayList() }.add(i)
+        }
+        val merged = ArrayList<CurvatureSegment>()
+        for (seg in rawSegments) {
+            val members = membership[seg.segmentId]?.toIntArray() ?: continue
+            if (members.size < minSegmentTriCount) continue
+            merged.add(buildSegment(bvh, seg.segmentId, members, curvature))
+        }
+        return merged.sortedByDescending { it.areaMm2 }
+            .take(maxSegments)
+            .mapIndexed { i, s -> s.copy(segmentId = i) }
+    }
+
+    private fun buildSegment(
+        bvh: MeshBvh,
+        segmentId: Int,
+        members: IntArray,
+        curvature: FloatArray,
+    ): CurvatureSegment {
+        var minX = Float.POSITIVE_INFINITY; var minY = Float.POSITIVE_INFINITY; var minZ = Float.POSITIVE_INFINITY
+        var maxX = Float.NEGATIVE_INFINITY; var maxY = Float.NEGATIVE_INFINITY; var maxZ = Float.NEGATIVE_INFINITY
+        var aTotal = 0.0
+        var nx = 0.0; var ny = 0.0; var nz = 0.0
+        var cx = 0.0; var cy = 0.0; var cz = 0.0
+        var curveSum = 0.0
+        for (t in members) {
+            val v0 = bvh.triangleVertex(t, 0)
+            val v1 = bvh.triangleVertex(t, 1)
+            val v2 = bvh.triangleVertex(t, 2)
+            for (v in arrayOf(v0, v1, v2)) {
+                if (v.x < minX) minX = v.x; if (v.y < minY) minY = v.y; if (v.z < minZ) minZ = v.z
+                if (v.x > maxX) maxX = v.x; if (v.y > maxY) maxY = v.y; if (v.z > maxZ) maxZ = v.z
+            }
+            val e1x = v1.x - v0.x; val e1y = v1.y - v0.y; val e1z = v1.z - v0.z
+            val e2x = v2.x - v0.x; val e2y = v2.y - v0.y; val e2z = v2.z - v0.z
+            val cnx = e1y * e2z - e1z * e2y
+            val cny = e1z * e2x - e1x * e2z
+            val cnz = e1x * e2y - e1y * e2x
+            val len = sqrt(cnx.toDouble() * cnx + cny.toDouble() * cny + cnz.toDouble() * cnz)
+            val a = (0.5 * len)
+            aTotal += a
+            if (len > 0) {
+                nx += (cnx / len) * a; ny += (cny / len) * a; nz += (cnz / len) * a
+            }
+            val tcx = (v0.x + v1.x + v2.x) / 3f
+            val tcy = (v0.y + v1.y + v2.y) / 3f
+            val tcz = (v0.z + v1.z + v2.z) / 3f
+            cx += tcx * a; cy += tcy * a; cz += tcz * a
+            curveSum += curvature[t]
+        }
+        val meanN = if (aTotal > 0) {
+            val nLen = sqrt(nx * nx + ny * ny + nz * nz)
+            if (nLen > 0) floatArrayOf((nx / nLen).toFloat(), (ny / nLen).toFloat(), (nz / nLen).toFloat())
+            else floatArrayOf(0f, 0f, 0f)
+        } else floatArrayOf(0f, 0f, 0f)
+        val centroid = if (aTotal > 0)
+            floatArrayOf((cx / aTotal).toFloat(), (cy / aTotal).toFloat(), (cz / aTotal).toFloat())
+        else floatArrayOf(0f, 0f, 0f)
+        val meanCurve = if (members.isNotEmpty()) (curveSum / members.size).toFloat() else 0f
+        val orientation = orientationLabel(meanN)
+        val curveBucket = when {
+            meanCurve < 5f -> "smooth"
+            meanCurve < 15f -> "gentle"
+            else -> "creased"
+        }
+        val label = "${curveBucket}_${orientation}"
+        return CurvatureSegment(
+            segmentId = segmentId,
+            triangleIndices = members,
+            bbox = Bbox(minX, minY, minZ, maxX, maxY, maxZ),
+            centroid = centroid,
+            meanNormal = meanN,
+            areaMm2 = aTotal.toFloat(),
+            meanCurvatureScore = meanCurve,
+            label = label,
+        )
+    }
 }

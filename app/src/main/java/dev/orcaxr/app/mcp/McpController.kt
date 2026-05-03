@@ -5,7 +5,9 @@ import android.util.Log
 import dev.orcaxr.app.mcp.tools.AiIntrospectionTools
 import dev.orcaxr.app.mcp.tools.AiPaintTools
 import dev.orcaxr.app.mcp.tools.AiVisionTools
+import dev.orcaxr.app.mcp.tools.AiVisionMaskTools
 import dev.orcaxr.app.mcp.tools.FindFeatureAnchorsTool
+import dev.orcaxr.app.mcp.tools.PaintDecalTool
 import dev.orcaxr.app.mcp.tools.PaintRecipeTools
 import dev.orcaxr.app.mcp.tools.PaintTemplateTools
 import dev.orcaxr.app.mcp.tools.FilamentTools
@@ -179,6 +181,17 @@ class McpController private constructor(
             // D18c — vision LLM feature anchors. Requires an
             // Anthropic API key set via McpSettings.
             builder.tool(FindFeatureAnchorsTool(WorkspaceModel.get(), AiSessionState.get(), settings.anthropicApiKey))
+            // D19c — decal / texture projection (single undo step
+            // via LoadPaintState). No outbound deps.
+            builder.tool(PaintDecalTool(WorkspaceModel.get(), AiSessionState.get()))
+            // D19a + D19d — vision-LLM driven 2D mask authoring.
+            // Both share the FindFeatureAnchorsTool's API-key flow.
+            builder.tool(AiVisionMaskTools.GenerateMaskFromPoint(
+                WorkspaceModel.get(), AiSessionState.get(), settings.anthropicApiKey,
+            ))
+            builder.tool(AiVisionMaskTools.GetMaskForText(
+                WorkspaceModel.get(), AiSessionState.get(), settings.anthropicApiKey,
+            ))
         }
     }
 

@@ -310,33 +310,40 @@ For the in-XR brush UI, D18a is also a quality win: a "paint a circle on the sur
 
 **Suggested ship order:** D18a (geodesic disc) → D18b (mirror) → D18d (any_facing mode) → D18g (flush) → D18f (render diff) → D18e (annotated render) → D18h (hi-res tri-ID) → D18c (vision anchors — biggest impact but biggest external dep) → D18i + D18j (templates + recipes — once the lower-level primitives are stable).
 
-### D19. Advanced AI Paint Authoring (Organic Models) 🔴 Not started
+### D19. Advanced AI Paint Authoring (Organic Models) 🟢 Shipped — all 4 sub-items live
 
-Painting highly organic characters (like Pikachu) perfectly pushes the limits of geometric primitives. The following advanced segmentation and vision techniques are needed to make organic painting entirely hands-free.
+Painting highly organic characters (like Pikachu) perfectly pushes the limits of geometric primitives. The four sub-items below land the advanced segmentation + vision techniques needed to make organic painting hands-free. Three of the four (D19a, D19c, D19d) ride on the existing FindFeatureAnchors HTTP plumbing — vision-LLM API calls (matching D18c's pattern) replace the originally-planned on-device ONNX models, trading ~1¢/call for skipping a 60+ MB asset bundle and an ONNX runtime dependency. D19b is pure Kotlin (no outbound dep). Total tool surface grows from 29 (D18) to 33.
 
-#### D19a. On-device 2D Segmentation (SAM)
+- D19a `generate_mask_from_point` — Claude Vision API outline-from-pixel + automatic polygon → triangle projection
+- D19b `get_curvature_segmentation` — multi-scale dihedral-curvature 3D segmentation; complement to `get_model_semantic_regions` for organic / continuously-curved meshes
+- D19c `paint_decal` — RGBA image → camera projection → per-pixel filament-slot quantization → single-step LoadPaintState
+- D19d `get_mask_for_text` — Claude Vision API zero-shot text-to-mask + automatic projection
 
-> **Files (planned):** MobileSAM ONNX/TFLite integration. New `generate_mask_from_point(x, y)` tool.
+#### D19a. Vision-LLM 2D Segmentation From Point 🟢 Shipped
 
-For organic shapes where curvature doesn't cleanly separate features (e.g., Pikachu's back stripes), the LLM currently struggles to author polygons. Integrating a lightweight "Segment Anything" model on-device allows the LLM to pick a single pixel inside a feature; SAM generates a pixel-perfect 2D mask, which is then fed directly into `paint_projected_mask`.
+> **Files:** `AiVisionMaskTools.GenerateMaskFromPoint` in `app/src/main/java/dev/orcaxr/app/mcp/tools/AiVisionMaskTools.kt`.
 
-#### D19b. Advanced 3D Semantic Segmentation (MSDM2)
+For organic shapes where curvature doesn't cleanly separate features (Pikachu's back stripes), the LLM struggles to author polygons by eyeballing tri-ID renders. `generate_mask_from_point(x_px, y_px, view_name?)` renders a normal-sphere view, asks Claude to outline the SAME feature the click landed on, and returns `{polygons, camera_descriptor, triangle_indices}` so the caller chains straight into `paint_projected_mask`. Mirrors the upstream "Segment Anything from a point" pattern using the existing FindFeatureAnchors HTTP plumbing — no on-device ONNX runtime, no MobileSAM bundle. Costs ~1¢/call at claude-haiku-4-5 vision rates; charged to the user's Anthropic key via `McpSettings`.
 
-> **Files (planned):** Upgraded `ai_segment.cpp` to use Multi-Scale Curvature or a neural 3D segmentation algorithm.
+#### D19b. Multi-Scale Curvature 3D Segmentation 🟢 Shipped
 
-The current region-growing segmentation (`get_model_semantic_regions`) produces heuristic clusters ("horizontal_top_medium") because it relies purely on normals and distance. Organic models have continuous curvature, blending the body into accessories (like a pillow). An advanced 3D segmentation algorithm would yield semantically meaningful sub-meshes ("ear", "tail", "body", "accessory") instead of geometry patches.
+> **Files:** `AiIntrospection.perTriangleCurvature` + `AiIntrospection.curvatureSegmentation` in `app/src/main/java/dev/orcaxr/app/AiIntrospection.kt`; `AiIntrospectionTools.GetCurvatureSegmentation` in `app/src/main/java/dev/orcaxr/app/mcp/tools/AiIntrospectionTools.kt`.
 
-#### D19c. Decal and Texture Projection
+The legacy region-growing segmentation (`get_model_semantic_regions`) over-fragments organic models because it depends on cardinal-axis alignment of triangle normals — a continuously curved body always reads as "diagonal." `get_curvature_segmentation` computes per-triangle dihedral-curvature scores at two scales (direct neighbors + 1-ring neighborhood, max over both), region-grows from low-curvature seeds, and stops at curvature ridges via a `crease_threshold_deg` parameter. Output segments carry labels like `smooth_horizontal_top` / `gentle_diagonal` / `creased_vertical_side`. Pure Kotlin, no outbound dep — the right tool for "what segments make sense to paint individually" reasoning before the LLM commits to a sequence of `paint_geodesic_disc` / `paint_triangle_list` calls.
 
-> **Files (planned):** New `paint_decal` tool. 
+#### D19c. Decal / Texture Projection 🟢 Shipped
 
-Detailed features (eyes with pupils, mouths, small logos) require too many exact geometric primitives. A decal tool allows the LLM to provide a 2D image (e.g., Pikachu's face texture) and project it onto the front of the model. OrcaXR maps the decal's pixels to the closest available filament slots and tags the intersected triangles.
+> **Files:** `app/src/main/java/dev/orcaxr/app/AiDecalEngine.kt`, `app/src/main/java/dev/orcaxr/app/mcp/tools/PaintDecalTool.kt`.
 
-#### D19d. Text-to-Mask (Zero-Shot Segmentation)
+Detailed features (eyes-with-pupils, mouths, small logos) take too many geometric primitives to author one-at-a-time. `paint_decal(image_base64, camera_descriptor, palette?)` reverse-projects an RGBA image through a camera onto the model and quantizes each touched triangle's sampled pixel to the closest filament-slot color (Euclidean RGB distance). One call paints an entire multi-color decal and emits ONE `LoadPaintState` action, so it's one undo step regardless of how many slots got involved. Per-triangle "majority vote" tally for triangles that catch multiple decal pixels avoids the "first hit wins" jitter that single-tag tools would produce. Optional `target_rect` lets the LLM stamp a small decal inside a sub-rectangle of the camera frame; optional `replace_existing` wipes prior color paint instead of overlaying.
 
-> **Files (planned):** CLIPSeg or GroundingDINO integration. New `get_mask_for_text(query)` tool.
+#### D19d. Vision-LLM Text-to-Mask 🟢 Shipped
 
-Even with point-based SAM, the LLM must still query tri-id maps to find a seed coordinate. Integrating a zero-shot text-to-image segmentation model allows the LLM to request `"Pikachu's cheeks"` or `"The pillow"` on a rendered view. The model outputs a 2D mask, eliminating the need for manual coordinate hunting entirely.
+> **Files:** `AiVisionMaskTools.GetMaskForText` in `app/src/main/java/dev/orcaxr/app/mcp/tools/AiVisionMaskTools.kt`.
+
+`get_mask_for_text(query, view_name?)` is the zero-shot text-to-image-mask companion to D19a. The LLM is shown a normal-sphere render and asked to outline the queried feature ("the cheeks of a Pikachu", "the smokestack", "both ears") as one or more pixel polygons. Same response shape as D19a — `{polygons, camera_descriptor, triangle_indices}` — so the caller chains into `paint_projected_mask`, OR uses `triangle_indices` directly with `paint_triangle_list`. Empty-polygon-list is a valid result ("query didn't match any visible feature"); the tool surfaces ok=true with an empty array instead of erroring. Eliminates the need for manual coordinate hunting in tri-ID maps for the common "name the feature, paint it" workflow.
+
+**Tests:** `AiDecalEngineTest` (10 cases), `CurvatureSegmentationTest` (5 cases), `PaintDecalToolTest` (7 cases), `AiVisionMaskToolsTest` (10 cases) — covers per-engine algorithm, MCP tool surface, fake-vision-API plumbing, and error paths. All pass on host JVM via `runTest`.
 
 ### D20. Full-Color & High-Fidelity Painting (Primed3D Parity) 🔴 Not started
 
@@ -359,3 +366,39 @@ Paint state is currently bound to the source mesh's triangle resolution. Low-pol
 > **Files (planned):** New texture map reader in C++ and UV baking pipeline.
 
 While `libslic3r` operates on vertex/face colors rather than UV maps, many 3D models come with existing UV maps and 2D textures. A baking pipeline would read a 3D model's UV map and associated image texture, and automatically bake those pixel colors down into the per-triangle `paint_color` metadata, allowing imported game assets or Primed3D-authored models to be sliced effortlessly.
+
+### D21. Vision-API-free AI Paint authoring 🔴 Not started
+
+Surfaced during the 2026-05-03 "Sleeping Pikachu on pillow" (MakerWorld `US286aabafd2b978`) session. The driving LLM had to abandon the paint job after the disc-base + pillow pass because (a) `find_feature_anchors` (D18c) needed an Anthropic API key the device didn't have, and (b) the LLM couldn't see any `render_view` output to author anchors manually. Two complementary fixes that make most AI-paint requests work with no paid vision call and no API key — orthogonal to D19's heavier on-device ML route, and shippable first.
+
+#### D21a. Inline image content blocks reach the driving LLM 🔴 Not started — biggest leverage
+
+> **Files (planned):** `AiRenderEngine.kt::renderViewToken` + the MCP response builder feeding `mcp/ToolDispatcher.kt`. Verify the inline base64 PNG content block is actually emitted on the wire when `inline=true` and the encoded PNG is < 200 KB. If emitted, verify the Claude Code stdio MCP transport surfaces `image` content blocks back to the model rather than dropping them.
+
+`render_view(inline=true)` advertises in its tool description that it returns an inline base64 image content part when the PNG is < 200 KB. In the 2026-05-03 session a 51 KB iso render returned only the text part with `image_uri` + `render_token` — the inline image never reached the driving model. Result: the LLM is blind unless `find_feature_anchors` (D18c) burns a separate Haiku call per anchor batch, or unless the user manually fetches the resource off the device. Closing this gap means **the LLM driving the MCP session is itself the vision model** — `find_feature_anchors` can be re-implemented as a thin prompt-and-parse on top of a `render_view(inline=true)` the caller already has, with no outbound HTTPS call, no per-user Anthropic key, and no ~1¢/call charge.
+
+**Implementation outline:**
+1. Instrument `renderViewToken` to log whether the inline content block is added to the MCP `CallToolResult`. If it isn't (likely culprit: the < 200 KB gate vs the actual PNG byte length), fix the emit path.
+2. If the server side is correct, write a minimal repro against Claude Code's MCP transport to confirm `image` content blocks survive the round-trip; file upstream if not.
+3. Fallback path if the transport drops images: bind a tiny LAN HTTP server to the address already reported by `server_info` (`192.168.1.112` in the live session) and include the absolute URL in the tool result so `WebFetch` can pull the PNG. Lock to a randomized token-in-URL + localhost-only-by-default with an explicit opt-in for LAN access.
+4. Re-route `find_feature_anchors` to a "use-driving-LLM" mode by default — renders the view inline, returns a structured slot the driving model fills in on its next turn. Keep the bundled Haiku path as a fallback for non-LLM callers (e.g. UI buttons that need a synchronous answer).
+
+**Exit criteria:** From a Claude Code MCP session with no Anthropic API key configured on the device, `render_view(inline=true)` returns a PNG the driving model reads directly, and the Sleeping Pikachu paint task completes through anchored cheek/eye/ear-tip painting end-to-end.
+
+#### D21b. MakerWorld-keyed bundled paint_template library 🔴 Not started
+
+> **Files (planned):** extend `assets/paint_templates/` (D18i). Add `assets/paint_templates/index.json` mapping `{ makerworld_design_id → recipe_name, sha256:<hex> → recipe_name }`. Extend `paint_template` with an `auto: bool` mode that fingerprints `PlacedModel.source` and resolves the recipe.
+
+D18i ships two recipes (`funko_pop_pikachu`, `benchy_pirate_ship`) but every other popular MakerWorld model still routes through D18c vision anchors. Curating ~50 high-traffic designs (Sleeping Pikachu, low-poly Pokémon, common keychains, planters, the catalogue any "paint this" demo would reach for) lets `paint_template(auto=true)` paint them deterministically — no vision call, no LLM round-trips, no API key. Tradeoff is a one-time author-and-test burden per recipe; pairs with D21a as a deterministic fast-path before falling back to vision.
+
+**Implementation outline:**
+1. `index.json` is a flat map; MakerWorld design ids parse from the 3MF's `Metadata/Slic3r_PE_model.config` block (and from the source filename when MakerWorld embeds it, e.g. `pikachu+2.3mf` → registered alias). SHA-256 of the binary 3MF is the unambiguous secondary key.
+2. `paint_template(auto=true, model_id)` looks up the recipe; if no match, returns a structured "no recipe; consider D18c" hint instead of erroring.
+3. Each new recipe carries: recipe JSON, reference image URL (committed alongside in `assets/paint_templates/refs/`), axis-up convention, default palette, instrumented test that loads the source mesh and asserts per-tag triangle counts within ±5 % of a recorded baseline.
+4. Submission process: a contributor writes the recipe with `save_paint_recipe` (D18j), drops it into `assets/paint_templates/`, adds the index entry + ref image + test fixture; CI runs the per-recipe assertion.
+
+**Exit criteria:** Loading the Sleeping Pikachu auto-resolves to its recipe via `paint_template(auto=true)`; reproduces the reference photo's color regions (yellow body, white pillow + base, black ear tips, red cheeks, dark mouth, dark back stripes); the bundled library reaches ≥ 20 entries with passing per-recipe tests.
+
+#### D21c. On-device 2D landmark detector 🔴 Not started — distant third option
+
+A small bundled ONNX face/feature landmark model could substitute for D21a in the no-LLM-driver case (e.g. UI button "auto-paint a face"). Concretely lower priority than D21a + D21b: D21a removes the vision-API cost entirely for the LLM-driven path, and D21b removes the vision-API cost entirely for the catalogued-model path. A landmark model only earns its keep for uncatalogued models authored by a non-LLM caller, which is the long tail of the long tail. Mention here so it doesn't get re-proposed; defer indefinitely unless a concrete user request lands.
