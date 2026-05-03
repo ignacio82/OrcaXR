@@ -376,6 +376,7 @@ real hardware. So far it isn't.
 
 ## Related docs
 
-- [`ROADMAP.md`](ROADMAP.md) — forward-looking feature roadmap (single source of truth).
+- [`ROADMAP.md`](ROADMAP.md) — forward-looking feature roadmap (single source of truth for sections A, B, C, E, F, G).
+- [`ROADMAP-painting-and-editing.md`](ROADMAP-painting-and-editing.md) — sibling roadmap for section D (painting & object editing). Split out under the parent's "<600 lines" rule.
 - [`DESIGN.md`](DESIGN.md) — XR UX spec and baselines.
 - [`patches/README.md`](patches/README.md) — rules for patches against the OrcaSlicer submodule.

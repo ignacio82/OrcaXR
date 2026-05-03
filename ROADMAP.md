@@ -166,6 +166,47 @@ Audit complete + on-disk reference gcode analyzed — see [`docs/A9_PHASE2_AUDIT
 - Filament family breadth (ABS / PETG-CF / etc.) → see F2.
 - 3MF authored layer-height being silently honored over the picker → fixed in `7efd555`, gotcha #22.
 
+### A10. Variable / adaptive layer height per object 🔴 Not started
+
+> **Files (planned):** `app/src/main/cpp/slic3r_jni.cpp` (new `nativeAdaptiveLayerHeights(path, quality, smoothing)` wrapping libslic3r `LayerHeightProfile::adaptive_layer_height_profile`), `PlacedModel.kt` (add `layerHeightProfile: FloatArray? = null` — sparse `(z, h)` pairs), `SlicerEngine.kt` (set `ModelObject::layer_height_profile` before slice), new `AdaptiveLayerPanel.kt` (Quality slider 0..1 + Smoothing slider, scrollable per-Z height histogram).
+
+Upstream OrcaSlicer ships two related features that share the same `ModelObject::layer_height_profile`: (a) **Adaptive layer height** — auto-computes a per-Z profile that goes finer over curved surfaces and coarser over vertical walls; (b) **Variable layer height tool** — manual painted edits on top of the auto-profile via a vertical bar gizmo. libslic3r already exports `adaptive_layer_height_profile(slicing_params, quality, smoothing)` and serializes the profile through 3MF, so this is a JNI-bridge + UI job, no new patches.
+
+**Implementation outline:**
+1. JNI: `nativeAdaptiveLayerHeights(stl_path, quality_0to1, smoothing_0to1) -> FloatArray` (alternating z/h pairs). Wraps the libslic3r call against a freshly-loaded `Model`.
+2. `PlacedModel.layerHeightProfile: FloatArray?`. When non-null, `runSliceMulti` serializes it onto each `ModelObject::layer_height_profile` before `nativeSliceMulti` runs.
+3. `AdaptiveLayerPanel` SpatialPanel: Quality + Smoothing sliders, "Compute" button (debounced 300 ms), "Reset to fixed" button. Profile preview = a vertical bar chart inside the panel (X = Z, Y = computed h) — manual editing comes in v2 (drag bar tops to override). Single-bar height range sufficient for v1.
+4. Multi-object: per-PlacedModel profile, attached to the per-object STL extracted by B9 — preserves through `nativeSaveAs3mf` via libslic3r's existing serialization.
+5. Toolpath preview already grows in lockstep with `maxLayer` because `parsedToolpath.layerZs` carries actual Z; no rendering change needed.
+
+**Exit criteria:** A 60 mm dragon at quality=0.5 emits ~30 % fewer layers than fixed 0.2 mm but visibly preserves curved-surface detail; round-trips through `save_project_as_3mf` and reopens with the same profile.
+
+### A11. Custom G-code per print Z — pause / color change / template 🔴 Not started
+
+> **Files (planned):** `app/src/main/cpp/slic3r_jni.cpp` (set `Model::custom_gcode_per_print_z` before `print.export_gcode`), `app/src/main/java/dev/orcaxr/app/CustomGcodeStore.kt` (per-PlacedModel ticks, plus a per-project "global" list), new `CustomGcodePanel.kt`, `BottomLayerPreviewPanel.kt` (tick-mark overlay on the layer scrubber), `mcp/tools/CustomGcodeTools.kt` (MCP exposure).
+
+Upstream OrcaSlicer's IMSlider lets the user click anywhere on the layer scrubber and add a tick: **PausePrint** (the user-requested magnet-insert workflow — emits the printer's `pause_print_gcode`, e.g. `M601` / `M0` / `PAUSE`), **ColorChange** (`M600` filament swap), **ToolChange** (force a T-command at this Z), or **Template** (a freeform user G-code snippet from `template_custom_gcode`). Stored on the model as `Model::custom_gcode_per_print_z` and serialized through 3MF. libslic3r already injects the right G-code at the right `before_layer_change_gcode` hook — this is purely an authoring + JNI-pass-through job.
+
+**Implementation outline:**
+1. **Data.** `CustomGcodeStore` (DataStore-backed): `ticks: Map<projectHash, List<CustomGcodeTick>>` where `CustomGcodeTick = (zMm: Float, type: Pause | ColorChange | ToolChange | Template, extruder: Int?, color: String?, message: String?, gcode: String?)`. Per-project, not per-PlacedModel — matches upstream semantics (ticks fire at print-Z regardless of which object reaches that height).
+2. **JNI.** Extend `nativeSliceMulti` with a parallel `(jFloatArray zList, jObjectArray typeList, jObjectArray payloadList)` triple; before `print.export_gcode`, populate `model.custom_gcode_per_print_z.gcodes` with `CustomGCode::Item` entries.
+3. **UI — tick authoring.** `BottomLayerPreviewPanel` grows a `+` button next to the layer slider. Tap opens a small `CustomGcodePopover` at the current scrub-Z: pick type (pills: Pause / Color / Tool / Custom), then per-type fields (Pause: optional message; Color: extruder picker + color swatch; Tool: extruder picker; Custom: TextField for the G-code). Confirm appends a tick.
+4. **UI — tick visualization.** Inside the layer slider track, render colored notches (orange = Pause, swatch color = Color, blue = Tool, gray = Custom). Tap a notch to open the editor / delete.
+5. **MCP.** `add_custom_gcode_tick(z_mm, type, …)`, `list_custom_gcode_ticks()`, `remove_custom_gcode_tick(id)`, `clear_custom_gcode_ticks()`. The user's "pause at 5 mm so I can drop in a magnet" workflow becomes one MCP call.
+6. **3MF round-trip.** `nativeSaveAs3mf` already serializes `Model::custom_gcode_per_print_z` through libslic3r's `store_3mf`; just thread the in-memory list onto `Model` before save and re-load on import.
+
+**Exit criteria:** Author a Pause tick at Z = 5 mm on a 20 mm cube on the U1 profile; emitted G-code contains `; PAUSE_PRINT_BEFORE` + the U1's `pause_print_gcode` block at the right layer. A round-trip save-as-3MF reopens with the tick at the same Z. From MCP: `add_custom_gcode_tick(z_mm=5.0, type="pause", message="insert magnet")` then `slice_active_plate` produces the same gcode.
+
+### A12. Height-range modifiers (per-Z-range per-object settings) 🔴 Not started
+
+> **Files (planned):** `app/src/main/cpp/slic3r_jni.cpp` (apply `ModelObject::layer_config_ranges` before slice), `PlacedModel.kt` (add `heightRanges: List<HeightRange>`), new `HeightRangePanel.kt`, MCP tool `add_height_range`. Depends on **D16** (per-volume Object Settings UI) for the per-range setting editor.
+
+Upstream's "Edit height range" lets the user split an object into Z bands (e.g., 0–5 mm, 5–10 mm, 10+ mm) and override `layer_height`, `sparse_infill_density`, `wall_loops`, and a curated set of process keys per band. Stored as `ModelObject::layer_config_ranges` (`std::map<std::pair<double,double>, ModelConfig>`). Common workflows: 100 % infill in the bottom 5 mm to add weight; coarser layer height above a feature line; different wall count over the top of an embedded magnet pocket.
+
+**Implementation outline:** Per-PlacedModel `List<HeightRange(zMin, zMax, overrides: Map<key, value>)>`. JNI walks the list and writes onto `mo->layer_config_ranges` before `print.process()`. UI: a vertical Z-bar gizmo in `HeightRangePanel` with split / merge / edit affordances; tapping a band opens the existing per-volume settings editor (D16). 3MF round-trip via libslic3r's existing serializer. Range overlap rules match upstream (later range wins).
+
+**Exit criteria:** Author a 0–5 mm range with `sparse_infill_density=100` on a 20 mm cube; sliced gcode shows 100 % infill density in layers 1–25 and the project's default density above.
+
 ---
 
 ## B. XR UI / UX completeness
@@ -316,6 +357,23 @@ A multi-object 3MF (e.g. `passthroughboth.3mf` — `Inner.stl` + `Outer.stl`) cu
 
 **Dependency for E3 multi-plate:** B9 is the prerequisite — without per-part addressability there's nothing to assign to a different plate.
 
+### B12. Calibration print library 🔴 Not started
+
+> **Files (planned):** new `app/src/main/java/dev/orcaxr/app/calibration/CalibrationCatalog.kt`, vendored assets under `app/src/main/assets/calib/` (mirror of `third_party/OrcaSlicer/resources/calib/`: `pressure_advance/`, `temperature_tower/`, `volumetric_speed/`, `retraction/`, `input_shaping/`, `cornering/`, `vfa/`, `filament_flow/`), new `CalibrationPanel.kt` mounted from a "Calibrate" item in `TopNavigationPill`'s overflow.
+
+Upstream OrcaSlicer ships a "Calibration" menu that auto-generates parameterized test prints (Pressure Advance line / pattern / tower; Temperature Tower; Max Volumetric Speed; Retraction Test; Input Shaping; Cornering; VFA; Filament Flow). Each calibration is a 3MF + a per-print-Z `custom_gcode` script that ramps a single variable (PA value, temp, speed, retraction length, etc.) so the user prints once, picks the best band, and writes the resulting value into the active filament profile.
+
+**Implementation outline:**
+1. **Catalog** — `CalibrationCatalog.entries: List<Calibration(id, displayName, kind, defaultParams, generate())`. `generate()` returns a `(stlPath, customGcodeTicks: List<Tick>)` pair.
+2. **Stamp generators** — most calibrations are parametric: PA tower needs `(start, end, step)`; temp tower needs `(start, end, step, layers_per_band)`. Generate the per-Z custom-gcode list at the requested params (depends on **A11**).
+3. **UI** — `CalibrationPanel` with a tile per calibration (icon + 1-line description). Tap → param sheet (sliders for the variables) → "Generate" → loads the STL + ticks into the workspace as a fresh PlacedModel + ticks via the existing import path.
+4. **Result capture** — after the user prints + picks the best value, a "Apply to active filament" affordance writes the value into the user's filament profile via the existing `UserProfilesStore` (e.g., set `filament_pressure_advance` on `Snapmaker PLA Matte @U1`).
+5. **MCP** — `list_calibrations`, `generate_calibration(id, params)` for LLM-driven "calibrate PA on this filament" loops.
+
+**Dependencies:** A11 (custom G-code per print Z) is the primitive most calibrations need. Without A11, the variable ramp can be hardcoded into the generated 3MF as `before_layer_change_gcode` overrides — uglier but possible.
+
+**Exit criteria:** A user picks "Pressure Advance Tower", picks `start=0.02, end=0.06, step=0.005`, taps Generate, slices, and the gcode contains `M572 S<value>` blocks at the right Z heights. The "Apply" button sets `filament_pressure_advance=0.04` on the active filament after the user types in the chosen value.
+
 ---
 
 ## C. Connectivity & monitoring
@@ -449,90 +507,32 @@ Lets an external LLM (Claude / GPT) execute creative paint tasks like *"paint Be
 
 ## D. Painting / object editing extensions
 
-### D1. Paint persistence 🟢 Shipped — local cache + 3MF round-trip
+**Moved to [ROADMAP-painting-and-editing.md](ROADMAP-painting-and-editing.md)** under the "<600 lines" maintenance rule. That sibling file is the single source of truth for D1–D17. Cross-references in this file (e.g., A11 → D14, B12 → A11) still resolve — link targets are the section heading anchors in the sibling.
 
-> **Files:** `PaintCacheStore.kt`, `PaintCacheStoreTest.kt`, `MainActivity.kt::previewStl` restore + `LaunchedEffect(placedModels.map { … paintFilamentIndex/supportFlags/seamFlags })` save.
+<details>
+<summary>Index of D items (status snapshot — see sibling file for full entries)</summary>
 
-`PaintCacheStore` keys per-triangle paint by source-file SHA-256. Storage is `${filesDir}/paint_cache/<sha>.bin` (raw header + three optional ByteArrays for paintFilamentIndex / supportFlags / seamFlags) instead of DataStore Preferences — base64-encoding 1.4 MB arrays through Preferences would be slower and more memory-thrashing than a direct file-cache mirror of the existing GLB/STL cache pattern. Atomic writes via tmp+rename, mtime-based LRU at `MAX_ENTRIES = 50`.
+| # | Title | Status |
+|---|---|---|
+| D1 | Paint persistence | 🟢 |
+| D2 | Custom support point placement | ⚪ |
+| D3 | Brim ear painting | 🟢 |
+| D4 | Embossing / SVG inset / text-on-object | 🟢 |
+| D5 | SLA hollow + drainage holes | ⚪ |
+| D6 | Measure tool | ⚪ |
+| D7 | Multi-step undo for paint | 🟢 |
+| D8 | Smart fill / connected-region paint | 🟢 |
+| D9 | 3MF round-trip for per-object Object Settings | 🔴 |
+| D10 | Fuzzy Skin paint | 🟢 |
+| D11 | Brush radius / smart-fill stick adjust | 🟢 |
+| D12 | Add primitive shapes (cube / cylinder / sphere / cone / disc / torus / slab) | 🔴 |
+| D13 | Handy model library (Benchy, Orca Cube, Voron Cube, Stanford Bunny, …) | 🔴 |
+| D14 | Modifier volume types (negative / parameter modifier / support enforcer / support blocker) | 🔴 |
+| D15 | Standalone text & SVG primitives | 🔴 |
+| D16 | Per-volume Object Settings panel | 🔴 |
+| D17 | Mesh simplify (quadric edge collapse) | 🔴 |
 
-Wired into `XrShell`:
-- **Restore:** in `previewStl`, after `StlReader.read` returns `triCount`, hash the source and call `paintCache.restore(hash, triCount)`. On hit, copy the three arrays into the matching PlacedModel via a `placedModels.map { copy(...) }`. Restore only fires when the model has no paint yet so a cache hit can't clobber fresh in-session edits.
-- **Save:** a debounced (300 ms) `LaunchedEffect` keyed on every model's `paintFilamentIndex / supportFlags / seamFlags` writes via `Dispatchers.IO`. A clear-paint round-trips because `PaintCacheStore.save` deletes the entry when every array is null/all-zero.
-
-**Tests:** `PaintCacheStoreTest` covers round-trip, tri-count mismatch, missing-file, blank-array prune, null-array prune, LRU eviction at the cap boundary, hash stability, content-divergent hashes, corrupt-file fallback, `Entry.equals`, `sizeBytes` growth + clear, fuzzy-skin round-trip, fuzzy-only persistence, all-blank fuzzy survival.
-
-**Shipped:** commit `c913e4e` — `PaintCacheStore` + on-load restore + on-mutate save + 10 tests. Follow-up commit `e8133db` — `PaintCacheStore.sizeBytes()`, "Storage" section in `ControllerHelpCard` showing cache size + entry count + Clear button (Toast on clear, helpVersion bump so the row refreshes immediately), `formatBytes` helper + 1 unit test, +1 PaintCacheStore unit test for the new `sizeBytes` method. Follow-up commit `cc75ead` — `PaintCacheStore` v2 adds `fuzzySkinFlags`, v1 entries still load (fuzzy null) and re-save as v2 on next mutation. Final commit `d2d30d2` — `nativeSaveAs3mf` writes all four facet annotations (color/support/seam/fuzzy) onto the source mesh's first volume before `store_3mf`, so a 3MF saved with painted regions reopens in desktop OrcaSlicer with identical paint.
-
-### D2. Custom support point placement ⚪ Deferred — SLA-leaning, FDM-only stack today
-
-Per-point support placement (vs paint-region enforcer/blocker). Upstream uses `GLGizmoSlaSupports`. Useful for FDM tree-supports tuning but defer until a user requests it; current Support Enforcer paint mode covers the common case.
-
-### D3. Brim ear painting 🟢 Shipped
-
-> **Files:** `BrimEarPoint` data class in `PlacedModel.kt`, `PaintMode.BrimEars` in `PaintBrush.kt`, `apply_orcaxr_brim_ears` JNI helper, `nativeSlice` + `nativeSaveAs3mf` jBrimEars parameter, `PlacedModel.brimEars` field, `MeshBvh.triangleCentroid`, `TopNavigationPill` "Place brim ears" toggle.
-
-Mirrors upstream OrcaSlicer's `GLGizmoBrimEars`. PaintMode.BrimEars converts a click to a `BrimEarPoint` at the picked triangle's centroid (mesh-local mm). MOVE is ignored so a drag doesn't sprinkle dozens; 1 mm dedup gate prevents finger-tap jitter stacks. Each PlacedModel collects its ears, which flow into `ModelObject::brim_points` at slice + saveAs3mf time.
-
-**Shipped:** commit `69b783b` — data + JNI write + click-to-add + UI toggle + count badge + clear-all. 3D visual marker spheres deferred (entity-lifecycle work for a later session).
-
-### D4. Embossing / SVG inset / text-on-object 🟢 Shipped
-
-> **Files:** `slic3r_jni.cpp::nativeBuildTextMesh / nativeBuildSvgMesh / nativeApplyEmboss`, `EmbossOp.kt`, `EmbossAssets.kt`, `EmbossPanel` in `UiPanels.kt`, `MainActivity::runEmboss` + `embossTargetModelId`, `app/src/main/assets/fonts/`, `app/src/main/assets/svg/heart.svg`, `EmbossOpTest.kt`.
-
-Compose-SpatialPanel-native text-on-mesh + SVG inset, wired through libslic3r `Emboss::text2shapes` (TTF via stb_truetype), `NSVGUtils::to_polygons`, `Emboss::polygons2model` + `ProjectZ`, and `MeshBoolean::mcut::make_boolean` for the boolean. The per-row 𝐀 icon opens an `EmbossPanel` SpatialPanel; user picks Text/SVG, font (DejaVu Sans Bold or DejaVu Serif bundled), depth/size/offset/rotation/mode (ADD-raise / SUB-engrave); Apply runs the build + boolean on the libslic3r dispatcher and replaces `PlacedModel.source` with the result. Top-of-bbox auto-placement; rotation around Z; ±60mm XY translate. Paint state is dropped on apply (gotcha #28).
-
-**Shipped:** native build + boolean (3 JNI entries), `EmbossOp` data classes + transform helpers, `EmbossAssets` font/SVG staging, `EmbossPanel` Compose UI, `EmbossOpTest` instrumented coverage (text bbox, SVG bbox, ADD grows +Z, SUB preserves bbox + carves volume).
-
-### D5. SLA hollow + drainage holes ⚪ Deferred — FDM stack only
-
-Upstream's `GLGizmoHollow` is SLA-leaning. U1 + Centauri Carbon are FDM. Out of scope until a resin printer enters target hardware.
-
-### D6. Measure tool ⚪ Deferred
-
-Hand-track distance/angle between picked points/edges/faces (upstream's `GLGizmoMeasure`). Useful but additive; user hasn't requested it.
-
-### D7. Multi-step undo for paint 🟢 Shipped
-
-> **Files:** `PaintHistory.kt`, `PaintHistoryTest.kt`, `PaintInput.kt` (UP forwarding), `MainActivity.kt` (begin/end stroke wiring + Undo/Redo callbacks), `UiPanels.kt::TopNavigationPill` (Undo/Redo chips).
-
-Per-PlacedModel ring buffer of paint strokes, each capturing snapshots of the four paint kinds (color/support/seam/fuzzy) at stroke entry and exit. UP action sentinel (hitTri = -1) closes the stroke. Open-stroke undo rolls back without consuming a slot ("Ctrl-Z mid-word"). Cap MAX_DEPTH=20.
-
-**Shipped:** commit `5cf152e` — `PaintHistory` + 11 tests + UI bindings.
-
-### D8. Smart fill / connected-region paint 🟢 Shipped
-
-> **Files:** `MeshBvh.smartFillBfs`, `PaintBrush` (`smartFill` + `smartFillAngleDeg` fields), `MainActivity.kt::pickTriangles` dispatcher, `UiPanels.kt::TopNavigationPill` Smart toggle + Fill chip.
-
-Upstream's `GLGizmoPainterBase::ToolType::BUCKET_FILL` equivalent. BFS along shared-vertex adjacency (already cached); each edge step accepted iff `dot(curN, nN) >= cos(angle)`. Stepwise comparison lets the fill traverse curved surfaces within angle budget per step. Default 30°, presets 15/30/45/60/90°. Bounded at 65 536 triangles per fill.
-
-**Shipped:** commit `7534f25` — `smartFillBfs` + 6 BVH tests + UI toggle + angle cycle.
-
-### D10. Fuzzy Skin paint 🟢 Shipped
-
-> **Files:** `PaintMode.FuzzySkin` in `PaintBrush.kt`, `PlacedModel.fuzzySkinFlags`, `apply_orcaxr_fuzzy_skin` JNI helper, `nativeSlice` jFuzzySkinFlags parameter, `nativeSaveAs3mf` round-trip, `UiPanels.kt::ModelDetailsPanel` "Apply fuzzy skin" button, `PaintCacheStore` v2 forward-compat loader.
-
-Mirrors upstream OrcaSlicer's `GLGizmoFuzzySkin`. Per-triangle ByteArray on PlacedModel; state 1 = FUZZY_SKIN. Flows into `ModelVolume::fuzzy_skin_facets` at slice and save time so libslic3r's fuzzy-skin texture pass roughens only the painted region. Brush radius / smart fill / undo / 3MF round-trip all apply uniformly.
-
-**Shipped:** commit `cc75ead` — JNI helper + dispatch + UI + cache + 3 PaintCacheStore tests.
-
-### D11. Brush radius / smart-fill stick adjust 🟢 Shipped
-
-> **Files:** `MainActivity.kt` Prepare-mode pump, `ControllerHelpCard.kt` entry list.
-
-When paint mode is active the left stick's Y axis nudges brush radius (0..50 mm at ~10 mm/s) or smart-fill angle (1..90° at ~1.5°/tick), instead of moving the model. X still cycles model rotation.
-
-**Shipped:** commit `f85380c`.
-
-### D9. 3MF round-trip for per-object Object Settings 🔴 Not started
-
-> **Files:** `nativeSaveAs3mf` (already preserves `ModelVolume::config` via libslic3r `store_3mf`); the gap is whether OrcaXR-authored `PlacedModel.configOverrides` is written to and read from `Metadata/model_settings.config`.
-
-📌 **Open question:** confirm we want per-object `configOverrides` (e.g., `layer_height=0.4` on a single object) to persist into 3MFs. Currently in-memory only.
-
-**Implementation outline (post-decision):**
-1. Native: extend `nativeSaveAs3mf` to also write per-object overrides into the 3MF (libslic3r already serializes `ModelObject::config` if it's set; OrcaXR's overrides must be transferred from `PlacedModel.configOverrides` onto `ModelObject::config` before save).
-2. Native: extend the load path so loaded 3MFs populate `PlacedModel.configOverrides` from `ModelObject::config`.
-3. Round-trip test: load a fixture with overrides, save through `nativeSaveAs3mf`, reload, assert overrides match.
+</details>
 
 ---
 
@@ -720,6 +720,4 @@ Brief reference index. Use `git log --oneline --grep=<phase>` for the full commi
 - **Update this file in the same commit** as the code change that flips a status. Don't let it lag the code.
 - **Don't restate GEMINI.md gotchas here.** Cross-reference them by number (e.g., "gotcha #61").
 - **Don't dump deep context into a side file.** This roadmap is intentionally the only forward-looking document — when a feature needs more detail than fits here, expand the entry inline with file paths and exit criteria, not a separate plan doc.
-- **Keep this file under ~600 lines.** If it grows past that, split a subsection out as a sibling roadmap (e.g., `ROADMAP-painting.md`) and link from here.
- feature needs more detail than fits here, expand the entry inline with file paths and exit criteria, not a separate plan doc.
 - **Keep this file under ~600 lines.** If it grows past that, split a subsection out as a sibling roadmap (e.g., `ROADMAP-painting.md`) and link from here.
