@@ -51,6 +51,7 @@ internal object AiVisionTools {
         NameView(ws, session),
         RenderViewsGrid(ws, session),
         ListActivePalette(ws),
+        RenderDiff(session),
     )
 
     // ---- Helpers ----
@@ -434,6 +435,118 @@ internal object AiVisionTools {
                 put("saved", true)
             }
             return ToolResult.ok("Saved camera '$name'", body)
+        }
+    }
+
+    class RenderDiff(private val session: AiSessionState) : Tool {
+        override val name = "render_diff"
+        override val description =
+            "XOR two cached render artifacts (by their render tokens) and return a PNG that " +
+                "highlights changed pixels in red over a faded grayscale of the original. Lets the " +
+                "LLM verify a paint action did what it expected in one call instead of comparing two " +
+                "PNGs visually. Both tokens must come from the SAME view + dimensions — diff against " +
+                "different cameras or sizes returns isError. Returns a new render_token for the diff " +
+                "image (so the LLM can fetch via /resources/<token>.png and pass it to " +
+                "resolve_image_pixel if it wants to know the tri at a changed pixel)."
+        override val inputSchema = Schemas.obj(
+            required = listOf("token_a", "token_b"),
+            properties = mapOf(
+                "token_a" to Schemas.string("Earlier render token (the 'before')"),
+                "token_b" to Schemas.string("Later render token (the 'after')"),
+                "threshold" to Schemas.integer("Per-channel min diff to count as changed (default 8 / 255)"),
+                "inline" to Schemas.bool("Include inline base64 PNG if ≤200 KB (default false)"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            val tokA = args.optString("token_a").trim()
+            val tokB = args.optString("token_b").trim()
+            if (tokA.isEmpty() || tokB.isEmpty()) {
+                return ToolResult.error("token_a and token_b are required")
+            }
+            val artA = session.getArtifact(tokA)
+                ?: return ToolResult.error("Unknown token_a '$tokA' (artifact may have been evicted)")
+            val artB = session.getArtifact(tokB)
+                ?: return ToolResult.error("Unknown token_b '$tokB' (artifact may have been evicted)")
+            if (artA.widthPx != artB.widthPx || artA.heightPx != artB.heightPx) {
+                return ToolResult.error(
+                    "Dimension mismatch: ${artA.widthPx}×${artA.heightPx} vs ${artB.widthPx}×${artB.heightPx}",
+                )
+            }
+            val threshold = args.optInt("threshold", 8).coerceIn(0, 255)
+            val w = artA.widthPx; val h = artA.heightPx
+            val pixA = AiRenderEngine.decodePng(artA.pngBytes)
+                ?: return ToolResult.error("Couldn't decode token_a's PNG")
+            val pixB = AiRenderEngine.decodePng(artB.pngBytes)
+                ?: return ToolResult.error("Couldn't decode token_b's PNG")
+            val out = ByteArray(w * h * 4)
+            var changedPx = 0
+            for (i in 0 until w * h) {
+                val o = i * 4
+                val ar = pixA.rgba[o].toInt() and 0xff
+                val ag = pixA.rgba[o + 1].toInt() and 0xff
+                val ab = pixA.rgba[o + 2].toInt() and 0xff
+                val br = pixB.rgba[o].toInt() and 0xff
+                val bg = pixB.rgba[o + 1].toInt() and 0xff
+                val bb = pixB.rgba[o + 2].toInt() and 0xff
+                val dr = kotlin.math.abs(ar - br)
+                val dg = kotlin.math.abs(ag - bg)
+                val db = kotlin.math.abs(ab - bb)
+                val maxDiff = maxOf(dr, dg, db)
+                if (maxDiff >= threshold) {
+                    // Changed: bright red.
+                    out[o] = 255.toByte()
+                    out[o + 1] = 64.toByte()
+                    out[o + 2] = 64.toByte()
+                    out[o + 3] = 255.toByte()
+                    changedPx++
+                } else {
+                    // Unchanged: faded grayscale of B.
+                    val gray = ((br + bg + bb) / 3 / 2 + 96).coerceIn(96, 200)
+                    out[o] = gray.toByte()
+                    out[o + 1] = gray.toByte()
+                    out[o + 2] = gray.toByte()
+                    out[o + 3] = 255.toByte()
+                }
+            }
+            val png = PngWriter.encodeRgba(out, w, h)
+            // New artifact under a stable hash of (a, b, threshold).
+            val token = AiSessionState.contentToken(
+                modelId = "diff:$tokA:$tokB",
+                mode = "render_diff",
+                camera = artA.camera,
+                paintContentVersion = threshold,
+            )
+            session.saveArtifact(AiSessionState.RenderArtifact(
+                token = token,
+                pngBytes = png,
+                widthPx = w, heightPx = h,
+                camera = artA.camera,
+                triangleIdMap = null,
+                createdAtMs = System.currentTimeMillis(),
+            ))
+            val inline = args.optBoolean("inline", false)
+            val total = w * h
+            val pct = if (total > 0) (100.0 * changedPx / total) else 0.0
+            val body = JSONObject().apply {
+                put("ok", true)
+                put("token_a", tokA); put("token_b", tokB)
+                put("render_token", token)
+                put("image_uri", "mcp://resources/$token.png")
+                put("width_px", w); put("height_px", h)
+                put("bytes", png.size)
+                put("changed_pixels", changedPx)
+                put("total_pixels", total)
+                put("changed_pct", pct)
+                put("threshold", threshold)
+            }
+            val text = "render_diff: $changedPx / $total pixels changed (${"%.2f".format(pct)} %); token=$token"
+            val images = if (inline && png.size <= INLINE_BASE64_BYTE_CAP) {
+                listOf(ToolResult.ImagePart(
+                    mediaType = "image/png",
+                    base64Data = Base64.getEncoder().encodeToString(png),
+                ))
+            } else emptyList()
+            return ToolResult.ok(text, body, images)
         }
     }
 

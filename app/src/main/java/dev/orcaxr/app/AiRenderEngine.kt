@@ -419,6 +419,62 @@ internal object AiRenderEngine {
         return floatArrayOf(v[0] / len, v[1] / len, v[2] / len)
     }
 
+    /**
+     * D18f / D18i — decode a PNG byte array back into RGBA. Used
+     * by tools that need raw pixels (render_diff, multi-view grid
+     * composer). Tries `javax.imageio` (host JVM tests) and falls
+     * back to `android.graphics.BitmapFactory` via reflection on
+     * device — keeps the host-test path pure-JVM without making
+     * BitmapFactory a hard dep at compile time.
+     */
+    data class DecodedPng(val rgba: ByteArray, val widthPx: Int, val heightPx: Int)
+
+    fun decodePng(bytes: ByteArray): DecodedPng? {
+        return try {
+            val img = javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(bytes))
+                ?: return decodePngAndroid(bytes)
+            val w = img.width; val h = img.height
+            val rgba = ByteArray(w * h * 4)
+            for (y in 0 until h) for (x in 0 until w) {
+                val argb = img.getRGB(x, y)
+                val o = (y * w + x) * 4
+                rgba[o] = ((argb shr 16) and 0xff).toByte()
+                rgba[o + 1] = ((argb shr 8) and 0xff).toByte()
+                rgba[o + 2] = (argb and 0xff).toByte()
+                rgba[o + 3] = ((argb shr 24) and 0xff).toByte()
+            }
+            DecodedPng(rgba, w, h)
+        } catch (e: Throwable) {
+            decodePngAndroid(bytes)
+        }
+    }
+
+    private fun decodePngAndroid(bytes: ByteArray): DecodedPng? = try {
+        val bf = Class.forName("android.graphics.BitmapFactory")
+        val decode = bf.getMethod("decodeByteArray", ByteArray::class.java, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+        val bitmap = decode.invoke(null, bytes, 0, bytes.size) ?: return null
+        val bClass = bitmap.javaClass
+        val w = bClass.getMethod("getWidth").invoke(bitmap) as Int
+        val h = bClass.getMethod("getHeight").invoke(bitmap) as Int
+        val pixels = IntArray(w * h)
+        bClass.getMethod(
+            "getPixels", IntArray::class.java,
+            Int::class.javaPrimitiveType, Int::class.javaPrimitiveType,
+            Int::class.javaPrimitiveType, Int::class.javaPrimitiveType,
+            Int::class.javaPrimitiveType, Int::class.javaPrimitiveType,
+        ).invoke(bitmap, pixels, 0, w, 0, 0, w, h)
+        val rgba = ByteArray(w * h * 4)
+        for (i in 0 until w * h) {
+            val argb = pixels[i]
+            val o = i * 4
+            rgba[o] = ((argb shr 16) and 0xff).toByte()
+            rgba[o + 1] = ((argb shr 8) and 0xff).toByte()
+            rgba[o + 2] = (argb and 0xff).toByte()
+            rgba[o + 3] = ((argb shr 24) and 0xff).toByte()
+        }
+        DecodedPng(rgba, w, h)
+    } catch (_: Throwable) { null }
+
     private fun parsePalette(palette: List<String>): List<ByteArray> {
         val out = ArrayList<ByteArray>(palette.size)
         for (hex in palette) {
