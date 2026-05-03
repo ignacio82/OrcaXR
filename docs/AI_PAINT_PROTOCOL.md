@@ -38,7 +38,7 @@ all paint state (see GEMINI.md gotchas #21, #27, #28). Re-fetch
 
 ## Tool surface
 
-### Vision (M2)
+### Vision (M2 + D18 + D19 + D21)
 
 | Tool | Purpose |
 |---|---|
@@ -49,21 +49,32 @@ all paint state (see GEMINI.md gotchas #21, #27, #28). Re-fetch
 | `resolve_image_pixel` | Decode one pixel of a triangle-id map back to a tri ID |
 | `name_view` | Save a custom camera under a session name |
 | `render_views_grid` | Compose N preset views into one side-by-side PNG |
+| `render_diff` (D18f) | Pixel-XOR of two cached render tokens; highlights changes in red |
+| `list_active_palette` | Live "as-will-print" palette (filament tag → hex) |
+| `find_feature_anchors` (D18c) | Vision-LLM feature locator (Anthropic API call) |
+| `generate_mask_from_point` (D19a) | Vision-LLM polygon outline from a click pixel |
+| `get_mask_for_text` (D19d) | Vision-LLM zero-shot text-to-mask (e.g. "the cheeks") |
 
 Built-in presets: `iso`, `iso_back`, `front`, `back`, `left`,
-`right`, `top`, `bottom`. Render dimensions clamped to 1024 × 1024.
+`right`, `top`, `bottom`. Render dimensions clamped to 2048 × 2048
+(D18h bumped from 1024).
 
 Render results include:
-- `image_uri`: `mcp://resources/<token>.png` — fetch via HTTP `GET
-  /resources/<token>.png` against the MCP server (auth: same bearer
-  token).
+- `image_uri`: when the MCP server has a LAN address bound, an
+  absolute `http://<lan-ip>:<port>/resources/<token>.png` URL
+  the driving LLM can `WebFetch` directly — no Authorization
+  header required (the 64-bit token is the capability; D21a).
+  Falls back to `mcp://resources/<token>.png` when no LAN
+  address is available (boot before Wi-Fi associates).
 - `render_token`: pass to `resolve_image_pixel` or
   `paint_projected_mask` so the tool knows which camera you used.
 - `camera_descriptor`: full view+projection matrix metadata.
 - Optional inline base64 image part when `inline=true` and PNG ≤
-  200 KB.
+  200 KB. Best-effort; not every MCP transport surfaces inline
+  images back to the model — the http URL is the load-bearing
+  channel.
 
-### Spatial paint (M1 + M4)
+### Spatial paint (M1 + M4 + D18 + D19)
 
 | Tool | Purpose |
 |---|---|
@@ -73,7 +84,14 @@ Render results include:
 | `paint_surface_region` | Smart-fill from a seed (dihedral-angle gated BFS) |
 | `paint_connected_component` | Paint whole connected sub-mesh from a seed |
 | `paint_triangle_list` | Raw escape hatch: a list of triangle IDs |
-| `paint_projected_mask` | Reverse-project a 2D polygon mask through a camera |
+| `paint_projected_mask` | Reverse-project a 2D polygon mask through a camera (D18d adds `depth_mode='any_facing'`) |
+| `paint_geodesic_disc` (D18a) | Surface-bounded disc; right tool for organic bulges |
+| `paint_with_mirror` (D18b) | Wrap any inner paint tool; emit it + its bbox-axis mirror in one call |
+| `paint_decal` (D19c) | Project an RGBA image; per-pixel quantization to filament slot; one undo step |
+| `paint_template` | Apply a bundled recipe; `auto=true` (D21b) fingerprints the model and resolves automatically |
+| `list_paint_templates` | Enumerate bundled recipes |
+| `save_paint_recipe` / `load_paint_recipe` / `list_paint_recipes` / `delete_paint_recipe` (D18j) | Persistent paint sessions |
+| `flush_actions` (D18g) | Wait for pending paint mutations to drain (fixes only_tagged race) |
 
 Every spatial paint tool accepts the same paint plumbing args:
 
@@ -87,7 +105,7 @@ Each call emits a single `WorkspaceAction.PaintTriangleSet` ⇒ one
 `paint_undo` step regardless of how many triangles got painted (an
 80 K-tri projected-mask paint is one undo).
 
-### Introspection (M3)
+### Introspection (M3 + D19)
 
 | Tool | Purpose |
 |---|---|
@@ -95,12 +113,28 @@ Each call emits a single `WorkspaceAction.PaintTriangleSet` ⇒ one
 | `get_model_components` | Connected-components partition |
 | `get_model_face_orientation_summary` | Six cardinal-cone buckets (up/down/front/back/left/right) + diagonal |
 | `get_model_semantic_regions` | Region-growing clusters with heuristic labels |
+| `get_curvature_segmentation` (D19b) | Multi-scale dihedral curvature; complementary to semantic_regions for organic / continuously-curved meshes |
 
-`get_model_semantic_regions` is the **most important tool for the
-canonical workflow.** It produces ≤ 12 regions (configurable) with
-labels like `vertical_side_large`, `horizontal_top_medium`, plus a
-sample of triangle IDs the LLM can hand to `paint_triangle_list`
-or `paint_surface_region`.
+`get_model_semantic_regions` is the canonical "what regions can I
+paint" tool for prismatic models (cubes, Benchy, anything with
+clear cardinal-axis surfaces). For organic / continuously-curved
+models (Pikachu, Stanford Bunny, Funko Pops) the legacy heuristic
+over-fragments because every curved surface registers as
+`diagonal` — `get_curvature_segmentation` is the right call there;
+it region-grows from low-curvature seeds and stops at curvature
+ridges so an entire cheek bulge or ear surface comes back as one
+segment.
+
+### Mesh editing
+
+| Tool | Purpose |
+|---|---|
+| `repair_model` | libslic3r mesh repair (self_union + ADMesh cleanup) |
+| `simplify_model` (D17) | Quadric edge collapse to target tri count; drops paint state |
+| `cut_model` | Z-plane cut |
+| `mesh_boolean` | Union / Difference / Intersection between two PlacedModels |
+| `split_model` | Split into connected components |
+| `emboss_model` | Text/SVG → boolean against host (`mode='emboss'`/`'engrave'`) OR drop as fresh PlacedModel (`mode='add_object'`, D15) |
 
 ## Workflow: paint Benchy as a pirate ship
 
