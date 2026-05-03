@@ -45,6 +45,14 @@ nozzle_<dia>` parents are byte-identical snapshots of Snapmaker fork
 v2.3.1, vendored under F1 to round out the U1 nozzle picker (alongside
 the previously vendored 0.4 + 0.6 sets).
 
+`app/src/main/assets/profiles/Snapmaker/filament/Snapmaker (ABS|ASA|
+PETG|PETG-CF) @U1{,base}.json` plus their `fdm_filament_(abs|asa|
+petg).json` parents are byte-identical snapshots of Snapmaker fork
+v2.3.1, vendored under F2's "second slice" (PLA family was the first
+slice). Adds non-PLA branded leaves to the per-slot dropdown without
+expanding into exotic materials (PA / PC / TPU 95A) that gate on F5's
+`filament_is_high_temperature` consumer.
+
 License: **GNU AGPL v3.0** — same as the upstream OrcaSlicer fork.
 
 ## Elegoo Centauri Carbon OrcaSlicer profiles

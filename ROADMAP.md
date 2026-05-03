@@ -633,20 +633,21 @@ Shared XR space, multiple users editing the same scene. Speculative.
 
 OrcaXR's U1 picker now spans 0.2 / 0.4 / 0.6 / 0.8 nozzles, matching the Snapmaker fork v2.3.1 lineup. All vendored byte-identical from `https://github.com/Snapmaker/OrcaSlicer` (v2.3.1 tag); `OrcaProfileLoader` auto-discovers them with no code change. `SnapmakerNozzleCatalogTest` (9 tests) covers presence + instantiability of every leaf, the 0.2/0.8 `nozzle_diameter` resolution, the 0.06 / 0.4 `layer_height` resolution, and a tripwire that fails if any vendored leaf's `inherits` points at a missing parent.
 
-### F2. Branded U1 filament leaves 🟡 Partial — PLA family vendored, ABS/PETG/exotic still pending
+### F2. Branded U1 filament leaves 🟡 Partial — PLA + ABS/ASA/PETG/PETG-CF vendored; exotic (PA-CF / PC / TPU) still pending
 
-> Snapmaker fork ships ~58 branded leaves; OrcaXR now ships Generic PLA + Generic ABS + Generic PETG + Snapmaker PLA + Snapmaker PLA Matte + Snapmaker PLA Eco + Snapmaker PLA Silk + Snapmaker PLA Metal + Snapmaker PLA-CF + Elegoo PLA Matte + Elegoo PLA-CF.
+> Snapmaker fork ships ~58 branded leaves; OrcaXR now ships Generic PLA + Generic ABS + Generic PETG + Snapmaker PLA + Snapmaker PLA Matte + Snapmaker PLA Eco + Snapmaker PLA Silk + Snapmaker PLA Metal + Snapmaker PLA-CF + Snapmaker ABS + Snapmaker ASA + Snapmaker PETG + Snapmaker PETG-CF + Elegoo PLA Matte + Elegoo PLA-CF.
 
 Branded leaves cover PLA HF / PLA Eco / PLA Metal / PLA Silk / PETG HF / PETG-CF / PETG-GF / ASA / PA-CF / PCTG / PVA / BVOH / PC / TPU / TPU 95A HF / Breakaway Support + Polymaker/PolyLite/PolyTerra third-party. APK cost <100 KB; UX cost is picker clutter.
 
 **Implementation:** stage-roll. PLA family landed first; ABS/PETG branded next, exotic (PA/PC/TPU) last. Ship a nozzle filter chip in the picker if clutter becomes a complaint.
 
 **Pending — entry-criteria for the green flip:**
-- Snapmaker-branded ABS / PETG / ASA U1 leaves (and the parents in their inheritance chains).
 - Exotic-material leaves (PA-CF, PC, TPU 95A HF) once F5's `filament_is_high_temperature` flag has a real consumer.
 - Snapmaker Breakaway Support For PLA — gated on resolving the Snapmaker J1 PVA parent chain it inherits from.
 
 **Shipped (PLA family slice):** commit `cf54495` — vendored 15 JSONs into `app/src/main/assets/profiles/Snapmaker/filament/`: 6 instantiable U1 leaves (PLA / Matte / Eco / Silk / Metal / PLA-CF) + 6 `@U1 base` parents + 3 root parents (`fdm_filament_common`, `fdm_filament_pla`, `fdm_filament_pla_eco`). NOTICE.md attribution updated. `SnapmakerPlaCatalogTest` (5 tests) covers leaf-instantiability, Matte's tuned 220 °C `nozzle_temperature`, PLA-CF's hotter override, Eco's deep-chain `filament_flow_ratio` resolution, and a tripwire that fails if any vendored leaf's `inherits` points at a missing parent. With B3's `loadFilaments` already shipped, the new leaves auto-discover into the per-slot dropdown.
+
+**Shipped (ABS / ASA / PETG / PETG-CF slice):** vendored 11 additional JSONs from Snapmaker fork v2.3.1: 4 instantiable U1 leaves (ABS / ASA / PETG / PETG-CF) + 4 `@U1 base` parents + 3 family parents (`fdm_filament_abs`, `fdm_filament_asa`, `fdm_filament_petg`). `SnapmakerAbsPetgCatalogTest` (5 tests) covers leaf-instantiability + filament_type resolution per family + PETG-CF nozzle-temperature sanity check + tripwire still passes for the full vendored tree.
 
 ### F3. Centauri Carbon profile breadth 🔴 Not started
 
