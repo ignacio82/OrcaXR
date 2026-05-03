@@ -237,6 +237,25 @@ sealed interface WorkspaceAction {
     ) : WorkspaceAction
 
     /**
+     * D15 — author standalone text or SVG inset as a fresh PlacedModel
+     * on the bed (no host model, no boolean). The Kotlin handler
+     * builds the extruded mesh via the same `Emboss::text2shapes` /
+     * `to_polygons` + `polygons2model` chain D4 uses, then loads the
+     * result via the standard `onFileSelected` path so paint
+     * restoration / GLB bake / bedFit / bedCollision run identically
+     * to a regular file pick.
+     *
+     * `loadMode = Add` keeps existing models on the bed; `Replace`
+     * clears the bed first.
+     */
+    data class AddTextOrSvgObject(
+        val source: EmbossSource,
+        val sizeMm: Float,
+        val depthMm: Float,
+        val loadMode: LoadMode = LoadMode.Add,
+    ) : WorkspaceAction
+
+    /**
      * Multi-volume editing — append a new volume to an existing
      * PlacedModel. `type` is one of MODEL_PART / NEGATIVE_VOLUME /
      * PARAMETER_MODIFIER / SUPPORT_BLOCKER / SUPPORT_ENFORCER (matches

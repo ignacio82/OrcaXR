@@ -1136,35 +1136,46 @@ internal object WorkspaceTools {
     class EmbossModel(private val ws: WorkspaceModel) : Tool {
         override val name = "emboss_model"
         override val description =
-            "Apply embossed text or an SVG inset to a model's top face. " +
+            "Apply embossed text or an SVG inset to a model's top face — OR (D15) author " +
+                "standalone text/SVG as a fresh PlacedModel with no host. " +
                 "kind='text' takes `text` + optional `font_id` (defaults to dejavu_sans_bold). " +
                 "kind='svg' takes `svg_path` (absolute path to a .svg with filled paths). " +
                 "size_mm is line height (text) or max XY (svg); depth_mm is Z extrusion. " +
                 "mode='emboss' raises letters above the host (boolean union); mode='engrave' " +
-                "carves them in (A−B). Optional translate_x_mm / translate_y_mm / rot_z_deg " +
-                "offset the emboss before the boolean (default 0,0,0 = centered on top)."
+                "carves them in (A−B); mode='add_object' (D15) skips the boolean and drops the " +
+                "extruded mesh on the bed as a new PlacedModel — useful for nameplates, signage, " +
+                "labels, or generating a part from an SVG silhouette without a host. " +
+                "model_id is REQUIRED for emboss/engrave, OPTIONAL (and ignored) for add_object. " +
+                "Optional translate_x_mm / translate_y_mm / rot_z_deg offset the emboss before " +
+                "the boolean (emboss/engrave only; add_object lands on the bed at origin). " +
+                "load_mode='add' (default) keeps existing models on the bed; 'replace' clears."
         override val inputSchema = Schemas.obj(
-            required = listOf("model_id", "kind", "size_mm", "depth_mm"),
+            required = listOf("kind", "size_mm", "depth_mm"),
             properties = mapOf(
-                "model_id" to Schemas.string("Model id from list_placed_models"),
+                "model_id" to Schemas.string("Host model id (required for emboss/engrave; ignored for add_object)"),
                 "kind" to Schemas.string("'text' or 'svg'"),
                 "text" to Schemas.string("(text only) the string to emboss"),
                 "font_id" to Schemas.string("(text only) bundled font id from list_emboss_fonts"),
                 "svg_path" to Schemas.string("(svg only) absolute path to a .svg file"),
                 "size_mm" to Schemas.number("Line height (text) or max XY (svg) in mm"),
                 "depth_mm" to Schemas.number("Z extrusion depth in mm"),
-                "mode" to Schemas.string("'emboss' (raise) or 'engrave' (carve)"),
+                "mode" to Schemas.string("'emboss' (raise) | 'engrave' (carve) | 'add_object' (D15: standalone)"),
                 "translate_x_mm" to Schemas.number("Optional X offset on the host's top face"),
                 "translate_y_mm" to Schemas.number("Optional Y offset"),
                 "rot_z_deg" to Schemas.number("Optional Z rotation in degrees"),
+                "load_mode" to Schemas.string("(add_object only) 'add' (default) or 'replace'"),
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
             requireAttached(ws)?.let { return it }
+            val modeRaw = args.optString("mode", "emboss").lowercase()
+            val isAddObject = modeRaw in setOf("add_object", "object", "standalone")
             val modelId = args.optString("model_id").trim()
-            if (modelId.isEmpty()) return ToolResult.error("'model_id' is required.")
-            if (ws.placedModels.value.none { it.id == modelId }) {
-                return ToolResult.error("No model with id '$modelId'.")
+            if (!isAddObject) {
+                if (modelId.isEmpty()) return ToolResult.error("'model_id' is required for emboss/engrave.")
+                if (ws.placedModels.value.none { it.id == modelId }) {
+                    return ToolResult.error("No model with id '$modelId'.")
+                }
             }
             val kind = args.optString("kind").lowercase()
             val sizeMm = args.optDouble("size_mm", 0.0).toFloat()
@@ -1194,10 +1205,33 @@ internal object WorkspaceTools {
                 }
                 else -> return ToolResult.error("'kind' must be 'text' or 'svg'.")
             }
-            val mode = when (args.optString("mode", "emboss").lowercase()) {
+            if (isAddObject) {
+                val loadMode = when (args.optString("load_mode", "add").lowercase()) {
+                    "add", "" -> WorkspaceAction.LoadMode.Add
+                    "replace" -> WorkspaceAction.LoadMode.Replace
+                    else -> return ToolResult.error("'load_mode' must be 'add' or 'replace'.")
+                }
+                ws.emit(
+                    WorkspaceAction.AddTextOrSvgObject(
+                        source = source,
+                        sizeMm = sizeMm,
+                        depthMm = depthMm,
+                        loadMode = loadMode,
+                    ),
+                )
+                return success(
+                    "Add-object started (kind=$kind).",
+                    JSONObject().apply {
+                        put("kind", kind); put("mode", "add_object")
+                        put("size_mm", sizeMm); put("depth_mm", depthMm)
+                        put("load_mode", loadMode.name.lowercase())
+                    },
+                )
+            }
+            val mode = when (modeRaw) {
                 "emboss", "add", "raise", "" -> WorkspaceAction.EmbossMode.Add
                 "engrave", "sub", "carve", "subtract" -> WorkspaceAction.EmbossMode.Sub
-                else -> return ToolResult.error("'mode' must be 'emboss' or 'engrave'.")
+                else -> return ToolResult.error("'mode' must be 'emboss', 'engrave', or 'add_object'.")
             }
             ws.emit(
                 WorkspaceAction.EmbossModel(

@@ -2955,6 +2955,72 @@ private fun XrShell(
                 )
             }
         },
+        // D15 — standalone text/SVG primitive: build the extruded
+        // mesh and feed it into the same onFileSelected codepath the
+        // file picker uses, so the result lands as a fresh
+        // PlacedModel with paint cache restore + bedFit + bedCollision
+        // running identically.
+        onAddTextOrSvgObject = { action ->
+            scope.launch {
+                isLoadingModel = true
+                loadingLabel = when (action.source) {
+                    is dev.orcaxr.app.mcp.WorkspaceAction.EmbossSource.Text ->
+                        "Building text \"${action.source.text.take(24)}\""
+                    is dev.orcaxr.app.mcp.WorkspaceAction.EmbossSource.Svg ->
+                        "Building SVG ${File(action.source.svgPath).name}"
+                }
+                val outFile = File(
+                    ctx.cacheDir,
+                    "emboss_object_${System.currentTimeMillis()}.3mf",
+                )
+                val built = runCatching {
+                    when (val src = action.source) {
+                        is dev.orcaxr.app.mcp.WorkspaceAction.EmbossSource.Text -> {
+                            val font = EmbossAssets.BUNDLED_FONTS.firstOrNull { it.id == src.fontId }
+                                ?: EmbossAssets.DEFAULT_FONT
+                            val fontFile = EmbossAssets.stageBundledFont(ctx, font)
+                            SlicerEngine.buildTextMesh(
+                                fontFile = fontFile,
+                                text = src.text,
+                                sizeMm = action.sizeMm,
+                                depthMm = action.depthMm,
+                                output = outFile,
+                            )
+                        }
+                        is dev.orcaxr.app.mcp.WorkspaceAction.EmbossSource.Svg -> {
+                            SlicerEngine.buildSvgMesh(
+                                svgFile = File(src.svgPath),
+                                targetSizeMm = action.sizeMm,
+                                depthMm = action.depthMm,
+                                output = outFile,
+                            )
+                        }
+                    }
+                }.onFailure {
+                    android.util.Log.e("OrcaXR", "AddTextOrSvgObject build threw", it)
+                }.getOrNull()
+                if (built == null) {
+                    isLoadingModel = false
+                    loadingLabel = null
+                    android.widget.Toast.makeText(
+                        ctx,
+                        "Build failed (see logs).",
+                        android.widget.Toast.LENGTH_LONG,
+                    ).show()
+                    return@launch
+                }
+                pickerMode = when (action.loadMode) {
+                    dev.orcaxr.app.mcp.WorkspaceAction.LoadMode.Replace -> PickerMode.Replace
+                    dev.orcaxr.app.mcp.WorkspaceAction.LoadMode.Add -> PickerMode.Add
+                }
+                onFileSelected(built)
+                // onFileSelected runs async in its own scope and clears
+                // its own loading flags; release ours so the spinner
+                // doesn't double-display.
+                isLoadingModel = false
+                loadingLabel = null
+            }
+        },
         // Volume operations: AddVolume routes through the same
         // PickerMode.AddVolume codepath the file picker uses (so the
         // colored-GLB re-bake / paint propagation runs identically).

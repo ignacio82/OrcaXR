@@ -125,15 +125,15 @@ Upstream's "Add handy model" submenu seeds well-known calibration / tuning model
 
 **Exit criteria:** Drop a Ø6×3 mm cylinder (D12) as a NEGATIVE volume on a 20 mm cube, slice → gcode shows a Ø6 hole. Same with a SUPPORT_ENFORCER on the underside of a Benchy chimney → gcode adds supports inside the enforcer bbox where the default heuristic skipped them. Round-trips through `save_project_as_3mf`. ✅ Met.
 
-### D15. Standalone text & SVG primitives (vs D4's boolean emboss) 🔴 Not started
+### D15. Standalone text & SVG primitives (vs D4's boolean emboss) 🟡 Shipped — add_object via MCP; NEGATIVE/MODIFIER volume variants deferred
 
-> **Files (planned):** new JNI entry `nativeBuildTextStl(font, text, height, depth, outPath)` — same libslic3r call chain as D4's `nativeBuildTextMesh` minus the `MeshBoolean::mcut::make_boolean` step. UI: `EmbossPanel` grows a third mode "Add as object" alongside "Emboss" / "Engrave".
+> **Files:** `WorkspaceAction.AddTextOrSvgObject`, `onAddTextOrSvgObject` binding callback, MainActivity-side handler that builds the extruded mesh via the existing `SlicerEngine.buildTextMesh / buildSvgMesh` and feeds the result through `onFileSelected` (so paint cache restore + bedFit + bedCollision run identically). `emboss_model` MCP tool extended with `mode='add_object'` (and the corresponding `model_id` requirement relaxed for that mode).
 
-D4 ships text/SVG as a boolean op against an existing host model. The complementary path — author standalone text or an SVG inset as a fresh PlacedModel sitting on the bed — has the same backend (`Emboss::text2shapes` + `polygons2model`) but skips the boolean. Useful for nameplates, labels, signage, or generating a part from an SVG silhouette without a host. Each of the three modes (Add part / Add negative / Add modifier) maps to a `ModelVolumeType` so a user can drop "TEXT" as a NEGATIVE volume to deboss letters into a host (subtle UX difference from D4's engrave mode: standalone NEGATIVE composes differently with multiple host volumes).
+D4 ships text/SVG as a boolean op against an existing host model; D15's add_object mode is the complementary path that drops a fresh PlacedModel on the bed without a host. Same backend as D4 — `Emboss::text2shapes` for text, `NSVGUtils::to_polygons` for SVG, `polygons2model` for the extrusion — minus the `MeshBoolean::mcut::make_boolean` step. The result is a normal PlacedModel that can be sliced, painted, scaled, transformed, or used as a host for further emboss / volumes / etc.
 
-**Implementation outline:** Reuse `EmbossOp` data classes; add `EmbossOp.Mode.AddObject`. For NEGATIVE/MODIFIER variants, route through D14's `add_volume_to_model` instead of through `runEmboss`. MCP: `emboss_model` already has a `mode` arg — add `add_object` / `add_negative_volume` / `add_modifier_volume` cases.
+NEGATIVE / MODIFIER volume variants (drop "TEXT" as a `NEGATIVE_VOLUME` on a 20 mm cube to deboss letters) are deferred — they need a per-volume add path different from `add_volume_to_model`'s file-picker route, and the standalone-object case covers most of the asked-for functionality (nameplates, signage, labels, SVG silhouette parts). Follow-up scoped separately.
 
-**Exit criteria:** Author "HELLO" as a 5 mm-tall, 2 mm-deep PlacedModel on the bed and slice it. Author the same text as a NEGATIVE volume on a 20 mm cube → gcode shows a 2 mm-deep recessed text on the cube top.
+**Exit criteria:** Author "HELLO" as a 5 mm-tall, 2 mm-deep PlacedModel on the bed and slice it. ✅ Met via `emboss_model(kind='text', text='HELLO', size_mm=5, depth_mm=2, mode='add_object')`. NEGATIVE/MODIFIER volume variants ⏳ deferred.
 
 ### D16. Per-volume Object Settings panel 🔴 Not started
 

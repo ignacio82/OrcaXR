@@ -126,6 +126,8 @@ fun BindWorkspaceModel(
     onSplitModel: ((modelId: String) -> Unit)? = null,
     /** Apply an embossed text or SVG to a model (`runEmboss`). */
     onEmbossModel: ((WorkspaceAction.EmbossModel) -> Unit)? = null,
+    /** D15 — add standalone text/SVG as a fresh PlacedModel (`runAddTextOrSvgObject`). */
+    onAddTextOrSvgObject: ((WorkspaceAction.AddTextOrSvgObject) -> Unit)? = null,
     /** Append a volume of `type` to a PlacedModel (PickerMode.AddVolume codepath). */
     onAddVolumeToModel: ((modelId: String, sourcePath: String, type: String) -> Unit)? = null,
     /** Drop a previously-attached volume from a PlacedModel. */
@@ -220,6 +222,7 @@ fun BindWorkspaceModel(
     val onBoolLatest = rememberUpdatedState(onMeshBoolean)
     val onSplitLatest = rememberUpdatedState(onSplitModel)
     val onEmbossLatest = rememberUpdatedState(onEmbossModel)
+    val onAddTextOrSvgObjectLatest = rememberUpdatedState(onAddTextOrSvgObject)
     val onAddVolumeLatest = rememberUpdatedState(onAddVolumeToModel)
     val onRemoveVolumeLatest = rememberUpdatedState(onRemoveVolume)
     val onClearPaintLatest = rememberUpdatedState(onClearPaint)
@@ -271,6 +274,7 @@ fun BindWorkspaceModel(
             onMeshBoolean = onBoolLatest.value,
             onSplitModel = onSplitLatest.value,
             onEmbossModel = onEmbossLatest.value,
+            onAddTextOrSvgObject = onAddTextOrSvgObjectLatest.value,
             onAddVolumeToModel = onAddVolumeLatest.value,
             onRemoveVolume = onRemoveVolumeLatest.value,
             onClearPaint = onClearPaintLatest.value,
@@ -318,6 +322,7 @@ private fun handleAction(
     onMeshBoolean: ((modelAId: String, modelBId: String, op: Int) -> Unit)?,
     onSplitModel: ((modelId: String) -> Unit)?,
     onEmbossModel: ((WorkspaceAction.EmbossModel) -> Unit)?,
+    onAddTextOrSvgObject: ((WorkspaceAction.AddTextOrSvgObject) -> Unit)?,
     onAddVolumeToModel: ((modelId: String, sourcePath: String, type: String) -> Unit)?,
     onRemoveVolume: ((modelId: String, volumeId: String) -> Unit)?,
     onClearPaint: ((modelId: String, kind: WorkspaceAction.PaintKind?) -> Unit)?,
@@ -461,6 +466,10 @@ private fun handleAction(
         is WorkspaceAction.EmbossModel -> {
             if (onEmbossModel != null) onEmbossModel(action)
             else Log.w(TAG, "EmbossModel not wired.")
+        }
+        is WorkspaceAction.AddTextOrSvgObject -> {
+            if (onAddTextOrSvgObject != null) onAddTextOrSvgObject(action)
+            else Log.w(TAG, "AddTextOrSvgObject not wired.")
         }
         is WorkspaceAction.AddVolumeToModel -> {
             if (onAddVolumeToModel != null) onAddVolumeToModel(action.modelId, action.sourcePath, action.type)
