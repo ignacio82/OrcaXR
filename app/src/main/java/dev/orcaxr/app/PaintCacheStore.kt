@@ -52,7 +52,18 @@ import java.security.MessageDigest
  * different tessellation, hash matches but the paint indices no
  * longer line up."
  */
-class PaintCacheStore(private val ctx: Context) {
+class PaintCacheStore(
+    private val ctx: Context,
+    /** D18j — directory name under filesDir. Default "paint_cache"
+     *  (the SHA-keyed local cache); pass "paint_recipes" for the
+     *  named-recipe store sibling. Both share the same on-disk
+     *  binary format + LRU semantics. */
+    dirName: String = DIR_NAME,
+    /** D18j — LRU cap. Default matches the cache budget; recipe
+     *  store can pass a higher value if user-curated recipes
+     *  shouldn't evict each other. */
+    private val maxEntries: Int = MAX_ENTRIES,
+) {
 
     /** Tri-keyed paint payload restored from the store. Each ByteArray
      *  matches the source mesh's triangle count exactly; null means
@@ -80,7 +91,7 @@ class PaintCacheStore(private val ctx: Context) {
         }
     }
 
-    private val cacheDir: File = File(ctx.filesDir, DIR_NAME).also { it.mkdirs() }
+    private val cacheDir: File = File(ctx.filesDir, dirName).also { it.mkdirs() }
 
     /** SHA-256 of [source]'s bytes, hex-encoded. Streamed so a large
      *  3MF doesn't pull the whole file into memory. */
@@ -208,11 +219,25 @@ class PaintCacheStore(private val ctx: Context) {
     private fun evictIfFull() {
         val files = cacheDir.listFiles { f -> f.isFile && f.name.endsWith(EXT) }
             ?: return
-        if (files.size <= MAX_ENTRIES) return
+        if (files.size <= maxEntries) return
         // Oldest mtime first → drop until we're under the cap.
         val sorted = files.sortedBy { it.lastModified() }
-        val toDrop = files.size - MAX_ENTRIES
+        val toDrop = files.size - maxEntries
         for (i in 0 until toDrop) sorted[i].delete()
+    }
+
+    /** D18j — list available recipe / cache entry keys (filenames
+     *  without the .bin extension), oldest-mtime first. */
+    fun list(): List<String> {
+        val files = cacheDir.listFiles { f -> f.isFile && f.name.endsWith(EXT) }
+            ?: return emptyList()
+        return files.sortedBy { it.lastModified() }
+            .map { it.nameWithoutExtension }
+    }
+
+    /** D18j — delete a recipe by name. No-op if it doesn't exist. */
+    fun delete(name: String): Boolean {
+        return fileFor(name).delete()
     }
 
     companion object {

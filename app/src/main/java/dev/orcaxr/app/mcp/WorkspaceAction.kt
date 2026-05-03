@@ -334,6 +334,45 @@ sealed interface WorkspaceAction {
      * One MCP call ⇒ one [PaintTriangleSet] ⇒ one undo step (even an
      * 80 K-triangle projected-mask paint).
      */
+    /**
+     * D18j — replace a model's full paint state in one shot
+     * (color / support / seam / fuzzy_skin all at once). Used by
+     * `load_paint_recipe` so a saved paint design replays as a
+     * single undo step instead of N PaintTriangleSet emissions.
+     * Each ByteArray is sized to the model's source-mesh tri
+     * count or null to clear that kind. Routes through
+     * applyPaintMutation in MainActivity.
+     */
+    data class LoadPaintState(
+        val modelId: String,
+        val paintFilamentIndex: ByteArray?,
+        val supportFlags: ByteArray?,
+        val seamFlags: ByteArray?,
+        val fuzzySkinFlags: ByteArray?,
+    ) : WorkspaceAction {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is LoadPaintState) return false
+            return modelId == other.modelId
+                && paintFilamentIndex.contentEqualsOrBothNull(other.paintFilamentIndex)
+                && supportFlags.contentEqualsOrBothNull(other.supportFlags)
+                && seamFlags.contentEqualsOrBothNull(other.seamFlags)
+                && fuzzySkinFlags.contentEqualsOrBothNull(other.fuzzySkinFlags)
+        }
+        override fun hashCode(): Int {
+            var h = modelId.hashCode()
+            h = 31 * h + (paintFilamentIndex?.contentHashCode() ?: 0)
+            h = 31 * h + (supportFlags?.contentHashCode() ?: 0)
+            h = 31 * h + (seamFlags?.contentHashCode() ?: 0)
+            h = 31 * h + (fuzzySkinFlags?.contentHashCode() ?: 0)
+            return h
+        }
+        private fun ByteArray?.contentEqualsOrBothNull(other: ByteArray?): Boolean {
+            if (this == null) return other == null
+            return other != null && this.contentEquals(other)
+        }
+    }
+
     data class PaintTriangleSet(
         val modelId: String,
         val kind: PaintKind,

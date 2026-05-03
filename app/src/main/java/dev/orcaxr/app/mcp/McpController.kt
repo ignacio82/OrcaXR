@@ -5,6 +5,7 @@ import android.util.Log
 import dev.orcaxr.app.mcp.tools.AiIntrospectionTools
 import dev.orcaxr.app.mcp.tools.AiPaintTools
 import dev.orcaxr.app.mcp.tools.AiVisionTools
+import dev.orcaxr.app.mcp.tools.PaintRecipeTools
 import dev.orcaxr.app.mcp.tools.FilamentTools
 import dev.orcaxr.app.mcp.tools.HandyModelTools
 import dev.orcaxr.app.mcp.tools.PrefsTools
@@ -162,6 +163,8 @@ class McpController private constructor(
             for (t in AiIntrospectionTools.all(WorkspaceModel.get())) builder.tool(t)
             // C9 milestone 2 — vision pillar (software rasterizer).
             for (t in AiVisionTools.all(WorkspaceModel.get(), AiSessionState.get())) builder.tool(t)
+            // D18j — persistent paint recipes.
+            for (t in PaintRecipeTools.all(WorkspaceModel.get(), ctx)) builder.tool(t)
         }
     }
 

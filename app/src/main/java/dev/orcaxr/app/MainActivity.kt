@@ -3044,6 +3044,20 @@ private fun XrShell(
             }
             paintHistoryVersion++
         },
+        // D18j — replay a saved paint recipe in one applyPaintMutation
+        // call, so a recipe load is one undo step instead of N
+        // PaintTriangleSet emissions per kind/tag combination.
+        onLoadPaintState = { action ->
+            applyPaintMutation(action.modelId, paintHistory) { m ->
+                m.copy(
+                    paintFilamentIndex = action.paintFilamentIndex,
+                    supportFlags = action.supportFlags,
+                    seamFlags = action.seamFlags,
+                    fuzzySkinFlags = action.fuzzySkinFlags,
+                )
+            }
+            paintHistoryVersion++
+        },
     )
 
     // C9 milestone 1 — register the AI-paint BVH provider so MCP tools

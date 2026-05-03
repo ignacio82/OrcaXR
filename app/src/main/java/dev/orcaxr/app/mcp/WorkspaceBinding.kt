@@ -146,6 +146,8 @@ fun BindWorkspaceModel(
      * through `applyPaintMutation` so PaintHistory stays correct.
      */
     onPaintTriangleSet: ((WorkspaceAction.PaintTriangleSet) -> Unit)? = null,
+    /** D18j — replace full paint state for `load_paint_recipe`. */
+    onLoadPaintState: ((WorkspaceAction.LoadPaintState) -> Unit)? = null,
 ) {
     val workspace = remember { WorkspaceModel.get() }
 
@@ -223,6 +225,7 @@ fun BindWorkspaceModel(
     val onPaintUndoLatest = rememberUpdatedState(onPaintUndo)
     val onPaintRedoLatest = rememberUpdatedState(onPaintRedo)
     val onPaintTriangleSetLatest = rememberUpdatedState(onPaintTriangleSet)
+    val onLoadPaintStateLatest = rememberUpdatedState(onLoadPaintState)
 
     LaunchedEffect(workspace) {
         // D18g — track per-action ids matching WorkspaceModel's
@@ -272,6 +275,7 @@ fun BindWorkspaceModel(
             onPaintUndo = onPaintUndoLatest.value,
             onPaintRedo = onPaintRedoLatest.value,
             onPaintTriangleSet = onPaintTriangleSetLatest.value,
+            onLoadPaintState = onLoadPaintStateLatest.value,
             )
             workspace.markDrained(localId)
         }
@@ -317,6 +321,7 @@ private fun handleAction(
     onPaintUndo: ((modelId: String) -> Unit)?,
     onPaintRedo: ((modelId: String) -> Unit)?,
     onPaintTriangleSet: ((WorkspaceAction.PaintTriangleSet) -> Unit)?,
+    onLoadPaintState: ((WorkspaceAction.LoadPaintState) -> Unit)?,
 ) {
     when (action) {
         is WorkspaceAction.SetGizmoTool -> setGizmoTool(action.tool)
@@ -478,6 +483,10 @@ private fun handleAction(
         is WorkspaceAction.PaintTriangleSet -> {
             if (onPaintTriangleSet != null) onPaintTriangleSet(action)
             else Log.w(TAG, "PaintTriangleSet not wired.")
+        }
+        is WorkspaceAction.LoadPaintState -> {
+            if (onLoadPaintState != null) onLoadPaintState(action)
+            else Log.w(TAG, "LoadPaintState not wired.")
         }
     }
 }
