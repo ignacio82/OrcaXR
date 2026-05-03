@@ -409,6 +409,51 @@ class MeshBvh private constructor(
     }
 
     /**
+     * AI-paint pillar (C9 milestone 4 paint_projected_mask
+     * `all_hits` mode): collect every triangle the ray hits along
+     * its full length, in front-to-back order. Used to paint both
+     * sides of a thin shell from a single mask pixel.
+     */
+    fun intersectAll(origin: Vec3f, direction: Vec3f): IntArray {
+        if (mesh.triCount == 0) return IntArray(0)
+        val ox = origin.x; val oy = origin.y; val oz = origin.z
+        val dx = direction.x; val dy = direction.y; val dz = direction.z
+        val invDx = if (dx != 0f) 1f / dx else Float.POSITIVE_INFINITY
+        val invDy = if (dy != 0f) 1f / dy else Float.POSITIVE_INFINITY
+        val invDz = if (dz != 0f) 1f / dz else Float.POSITIVE_INFINITY
+        val stack = IntArray(64)
+        var sp = 0
+        stack[sp++] = 0
+        // Pair (t, triIndex) — collect all positive t hits.
+        val ts = ArrayList<Float>(8)
+        val tris = ArrayList<Int>(8)
+        while (sp > 0) {
+            val node = stack[--sp]
+            if (!aabbHit(node, ox, oy, oz, invDx, invDy, invDz, Float.POSITIVE_INFINITY)) continue
+            val left = nodeLeft[node]
+            if (left < 0) {
+                val s = nodeLeafStart[node]
+                val e = nodeLeafEnd[node]
+                for (j in s until e) {
+                    val ti = triIdx[j]
+                    val t = triHit(ti, ox, oy, oz, dx, dy, dz)
+                    if (t.isFinite() && t > 0f) {
+                        ts.add(t); tris.add(ti)
+                    }
+                }
+            } else {
+                stack[sp++] = left
+                stack[sp++] = nodeRight[node]
+            }
+        }
+        // Sort by t ascending, return tri indices.
+        val indices = (0 until ts.size).sortedBy { ts[it] }
+        val out = IntArray(indices.size)
+        for ((i, idx) in indices.withIndex()) out[i] = tris[idx]
+        return out
+    }
+
+    /**
      * AI-introspection (C9 §D.1): direct shared-vertex neighbors of
      * triangle [tri]. Returns only the immediate neighbors (no BFS,
      * no angle gate) — the building block for region-growing

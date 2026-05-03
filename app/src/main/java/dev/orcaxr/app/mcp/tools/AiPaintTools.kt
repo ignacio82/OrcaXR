@@ -56,6 +56,7 @@ internal object AiPaintTools {
         PaintSurfaceRegion(ws),
         PaintConnectedComponent(ws),
         PaintTriangleList(ws),
+        PaintProjectedMask(ws),
     )
 
     // ---- Shared helpers ----
@@ -560,6 +561,113 @@ internal object AiPaintTools {
                 ws, plan, result.indices,
                 "paint_triangle_list (${result.indices.size} ids" +
                     if (result.droppedOutOfRange > 0) ", ${result.droppedOutOfRange} dropped)" else ")",
+                extra,
+            )
+        }
+    }
+
+    class PaintProjectedMask(private val ws: WorkspaceModel) : Tool {
+        override val name = "paint_projected_mask"
+        override val description =
+            "Reverse-project a 2D mask through a camera onto the model's surface. The mask is " +
+                "authored as a polygon list in pixel coords matching the camera's width/height — " +
+                "for each 'on' pixel we cast a ray from the camera through it and paint the " +
+                "triangle(s) it hits. depth_mode='front_facing_only' (default) paints only the " +
+                "front-most triangle along each ray; 'all_hits' paints both sides of a thin shell. " +
+                "back_face_filter=true (default) drops triangles whose normal faces away from the " +
+                "camera. The camera_descriptor must come from a render_view tool result so the " +
+                "tool's pixel space matches the rendered image. Recorded as one PaintTriangleSet so " +
+                "the result is undoable in a single paint_undo step."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id", "camera_descriptor", "polygons", "tag"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id"),
+                "kind" to Schemas.string("'color' (default) | 'support' | 'seam' | 'fuzzy_skin'"),
+                "camera_descriptor" to Schemas.obj(
+                    properties = mapOf(
+                        "view_matrix_4x4" to JSONObject().apply {
+                            put("type", "array"); put("items", Schemas.number(""))
+                        },
+                        "projection_matrix_4x4" to JSONObject().apply {
+                            put("type", "array"); put("items", Schemas.number(""))
+                        },
+                        "width_px" to Schemas.integer(""),
+                        "height_px" to Schemas.integer(""),
+                    ),
+                ),
+                "polygons" to JSONObject().apply {
+                    put("type", "array")
+                    put("description", "List of polygons; each polygon is a flat array of pixel coords [x1, y1, x2, y2, ...]")
+                    put("items", JSONObject().apply {
+                        put("type", "array")
+                        put("items", Schemas.number(""))
+                    })
+                },
+                "depth_mode" to Schemas.string("'front_facing_only' (default) | 'all_hits'"),
+                "back_face_filter" to Schemas.bool("Reject hits whose normal faces away from the camera (default true)"),
+                "tag" to Schemas.integer("Tag to apply"),
+                "merge" to Schemas.string("'replace' (default) | 'only_unpainted' | 'only_tagged'"),
+                "where_tag" to Schemas.integer("Required when merge='only_tagged'"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            val plan = when (val r = preflight(ws, args)) {
+                is Either.Left -> return r.value
+                is Either.Right -> r.value
+            }
+            val descriptor = args.optJSONObject("camera_descriptor")
+                ?: return ToolResult.error("'camera_descriptor' is required")
+            val view = descriptor.optJSONArray("view_matrix_4x4")
+                ?: return ToolResult.error("camera_descriptor.view_matrix_4x4 missing")
+            val proj = descriptor.optJSONArray("projection_matrix_4x4")
+                ?: return ToolResult.error("camera_descriptor.projection_matrix_4x4 missing")
+            if (view.length() != 16 || proj.length() != 16) {
+                return ToolResult.error("view + proj matrices must each be 16 floats")
+            }
+            val w = descriptor.optInt("width_px", 0)
+            val h = descriptor.optInt("height_px", 0)
+            if (w <= 0 || h <= 0) return ToolResult.error("camera_descriptor.{width,height}_px > 0 required")
+            if (w > 1024 || h > 1024) return ToolResult.error("camera dims capped at 1024 each")
+            val polysRaw = args.optJSONArray("polygons")
+                ?: return ToolResult.error("'polygons' array required")
+            val polys = ArrayList<FloatArray>(polysRaw.length())
+            for (i in 0 until polysRaw.length()) {
+                val p = polysRaw.optJSONArray(i) ?: continue
+                if (p.length() % 2 != 0 || p.length() < 4) {
+                    return ToolResult.error("polygon $i must have an even number of coords ≥ 4")
+                }
+                val arr = FloatArray(p.length()) { p.optDouble(it, 0.0).toFloat() }
+                polys.add(arr)
+            }
+            if (polys.isEmpty()) return ToolResult.error("at least one non-empty polygon required")
+            val depthRaw = args.optString("depth_mode", "front_facing_only").lowercase()
+            val depth = when (depthRaw) {
+                "", "front_facing_only", "front" -> dev.orcaxr.app.AiMaskProjection.DepthMode.FrontFacingOnly
+                "all_hits", "all" -> dev.orcaxr.app.AiMaskProjection.DepthMode.AllHits
+                else -> return ToolResult.error("depth_mode must be front_facing_only|all_hits")
+            }
+            val backFace = args.optBoolean("back_face_filter", true)
+            val viewArr = FloatArray(16) { view.optDouble(it, 0.0).toFloat() }
+            val projArr = FloatArray(16) { proj.optDouble(it, 0.0).toFloat() }
+            val camera = dev.orcaxr.app.AiRenderEngine.CameraSpec(viewArr, projArr, w, h)
+            val mask = dev.orcaxr.app.AiMaskProjection.rasterizePolygons(polys, w, h)
+            val candidates = dev.orcaxr.app.AiMaskProjection.project(
+                bvh = plan.bvh,
+                camera = camera,
+                mask = mask,
+                depthMode = depth,
+                backFaceFilter = backFace,
+            )
+            val onPixels = mask.count { it }
+            val extra = JSONObject().apply {
+                put("polygon_count", polys.size)
+                put("mask_on_pixels", onPixels)
+                put("depth_mode", depthRaw)
+                put("back_face_filter", backFace)
+            }
+            return emitAndRespond(
+                ws, plan, candidates,
+                "paint_projected_mask (${polys.size} polygons, $onPixels pixels)",
                 extra,
             )
         }

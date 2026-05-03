@@ -4,6 +4,7 @@ import dev.orcaxr.app.AiIntrospection
 import dev.orcaxr.app.AiRenderEngine
 import dev.orcaxr.app.MeshBvh
 import dev.orcaxr.app.PlacedModel
+import dev.orcaxr.app.PngWriter
 import dev.orcaxr.app.mcp.AiSessionState
 import dev.orcaxr.app.mcp.Schemas
 import dev.orcaxr.app.mcp.Tool
@@ -48,6 +49,7 @@ internal object AiVisionTools {
         RenderTriangleIdMap(ws, session),
         ResolveImagePixel(session),
         NameView(ws, session),
+        RenderViewsGrid(ws, session),
     )
 
     // ---- Helpers ----
@@ -431,6 +433,194 @@ internal object AiVisionTools {
                 put("saved", true)
             }
             return ToolResult.ok("Saved camera '$name'", body)
+        }
+    }
+
+    class RenderViewsGrid(
+        private val ws: WorkspaceModel,
+        private val session: AiSessionState,
+    ) : Tool {
+        override val name = "render_views_grid"
+        override val description =
+            "Render multiple named views into a single composed PNG (laid out left-to-right). " +
+                "Useful for orientation checks: pass [\"front\", \"back\", \"left\", \"right\"] to " +
+                "see all four orthographic views in one round-trip. Each panel is the same size; " +
+                "view_names not in the built-in preset list are skipped (with a warning in the " +
+                "response)."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id", "view_names"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id"),
+                "view_names" to Schemas.stringArray("Names of presets to render"),
+                "panel_width_px" to Schemas.integer("Per-panel width (default 256)"),
+                "panel_height_px" to Schemas.integer("Per-panel height (default 256)"),
+                "mode" to Schemas.string("'paint' (default) | 'solid' | 'normals' | 'depth'"),
+                "inline" to Schemas.bool(""),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            if (!ws.attached.value) return ToolResult.error("OrcaXR not attached.")
+            val (model, bvh) = resolveModelAndBvh(ws, args)
+                ?: return ToolResult.error("Couldn't resolve model + BVH.")
+            val viewsRaw = args.optJSONArray("view_names")
+                ?: return ToolResult.error("'view_names' array required")
+            val pw = args.optInt("panel_width_px", 256).coerceIn(16, MAX_RENDER_DIM)
+            val ph = args.optInt("panel_height_px", 256).coerceIn(16, MAX_RENDER_DIM)
+            val modeRaw = args.optString("mode", "paint")
+            val mode = parseMode(modeRaw)
+                ?: return ToolResult.error("Unknown mode '$modeRaw'.")
+            if (mode == AiRenderEngine.RenderMode.TriangleId) {
+                return ToolResult.error("triangle_id mode isn't supported in render_views_grid.")
+            }
+            val geom = AiIntrospection.geometry(bvh, bins = 1)
+            val skipped = ArrayList<String>()
+            val panels = ArrayList<ByteArray>()
+            val panelWs = ArrayList<Int>()
+            val panelHs = ArrayList<Int>()
+            for (i in 0 until viewsRaw.length()) {
+                val name = viewsRaw.optString(i).lowercase()
+                val cam = if (name in AiRenderEngine.NAMED_PRESETS) {
+                    AiRenderEngine.namedPreset(name, geom.bboxCenteredPreview, pw, ph)
+                } else session.getCameraPreset(name)?.copy(widthPx = pw, heightPx = ph)
+                if (cam == null) {
+                    skipped.add(name); continue
+                }
+                val r = AiRenderEngine.render(
+                    bvh = bvh,
+                    camera = cam,
+                    mode = mode,
+                    paintFilamentIndex = if (mode == AiRenderEngine.RenderMode.Paint) model.paintFilamentIndex else null,
+                )
+                panels.add(r.pngBytes); panelWs.add(r.widthPx); panelHs.add(r.heightPx)
+            }
+            if (panels.isEmpty()) return ToolResult.error("No valid view names produced renders.")
+            // Compose by decoding each PNG into RGBA, blitting into a
+            // bigger buffer, and re-encoding. We use the JDK ImageIO
+            // for decode (this code path runs on Android too — JDK
+            // classes available since API 21).
+            val totalW = pw * panels.size
+            val totalH = ph
+            val composed = ByteArray(totalW * totalH * 4)
+            for ((idx, png) in panels.withIndex()) {
+                val img = decodePng(png) ?: continue
+                blit(img, composed, totalW, totalH, idx * pw, 0, pw, ph)
+            }
+            // Fill any uncovered area with the 242,242,242 background.
+            // (decodePng on a missing PNG is unlikely; this is paranoia.)
+            for (off in 0 until composed.size step 4) {
+                if (composed[off + 3] == 0.toByte()) {
+                    composed[off] = 242.toByte()
+                    composed[off + 1] = 242.toByte()
+                    composed[off + 2] = 242.toByte()
+                    composed[off + 3] = 255.toByte()
+                }
+            }
+            val outPng = PngWriter.encodeRgba(composed, totalW, totalH)
+            val token = AiSessionState.contentToken(
+                model.id,
+                "grid:${mode.name}:${(0 until viewsRaw.length()).joinToString { viewsRaw.optString(it) }}",
+                AiRenderEngine.CameraSpec(FloatArray(16), FloatArray(16), totalW, totalH),
+                paintContentVersion(model),
+            )
+            session.saveArtifact(AiSessionState.RenderArtifact(
+                token = token,
+                pngBytes = outPng,
+                widthPx = totalW,
+                heightPx = totalH,
+                camera = AiRenderEngine.CameraSpec(FloatArray(16), FloatArray(16), totalW, totalH),
+                triangleIdMap = null,
+                createdAtMs = System.currentTimeMillis(),
+            ))
+            val inline = args.optBoolean("inline", false)
+            val body = JSONObject().apply {
+                put("ok", true)
+                put("model_id", model.id)
+                put("image_uri", "mcp://resources/$token.png")
+                put("render_token", token)
+                put("bytes", outPng.size)
+                put("width_px", totalW); put("height_px", totalH)
+                put("panel_count", panels.size)
+                put("panel_width_px", pw); put("panel_height_px", ph)
+                if (skipped.isNotEmpty()) put("skipped_views", JSONArray().apply {
+                    for (s in skipped) put(s)
+                })
+            }
+            val text = "Rendered ${panels.size}-panel grid (${totalW}×${totalH})"
+            val images = if (inline && outPng.size <= INLINE_BASE64_BYTE_CAP) {
+                listOf(ToolResult.ImagePart(
+                    mediaType = "image/png",
+                    base64Data = Base64.getEncoder().encodeToString(outPng),
+                ))
+            } else emptyList()
+            return ToolResult.ok(text, body, images)
+        }
+
+        private data class Decoded(val rgba: ByteArray, val w: Int, val h: Int)
+
+        private fun decodePng(bytes: ByteArray): Decoded? {
+            // JDK's ImageIO is available on the host; on Android we
+            // could use BitmapFactory but for the grid composition
+            // path we always have a freshly-encoded PNG, so we
+            // fall back to a pure decode via a separate Bitmap when
+            // ImageIO isn't there.
+            return try {
+                val img = javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(bytes)) ?: return null
+                val w = img.width; val h = img.height
+                val rgba = ByteArray(w * h * 4)
+                for (y in 0 until h) {
+                    for (x in 0 until w) {
+                        val argb = img.getRGB(x, y)
+                        val o = (y * w + x) * 4
+                        rgba[o] = ((argb shr 16) and 0xff).toByte()
+                        rgba[o + 1] = ((argb shr 8) and 0xff).toByte()
+                        rgba[o + 2] = (argb and 0xff).toByte()
+                        rgba[o + 3] = ((argb shr 24) and 0xff).toByte()
+                    }
+                }
+                Decoded(rgba, w, h)
+            } catch (e: Throwable) {
+                // On a real Android device javax.imageio may be absent
+                // (it's not part of the Android API surface). Decode
+                // via android.graphics.BitmapFactory in that case.
+                decodePngAndroidFallback(bytes)
+            }
+        }
+
+        /** Android-only fallback: BitmapFactory.decodeByteArray. We
+         *  reflect to avoid a hard compile dep on android.graphics for
+         *  unit tests running on host JVM. */
+        private fun decodePngAndroidFallback(bytes: ByteArray): Decoded? {
+            return try {
+                val bfClass = Class.forName("android.graphics.BitmapFactory")
+                val decode = bfClass.getMethod("decodeByteArray", ByteArray::class.java, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+                val bitmap = decode.invoke(null, bytes, 0, bytes.size) ?: return null
+                val bClass = bitmap.javaClass
+                val w = bClass.getMethod("getWidth").invoke(bitmap) as Int
+                val h = bClass.getMethod("getHeight").invoke(bitmap) as Int
+                val pixels = IntArray(w * h)
+                bClass.getMethod("getPixels", IntArray::class.java, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+                    .invoke(bitmap, pixels, 0, w, 0, 0, w, h)
+                val rgba = ByteArray(w * h * 4)
+                for (i in 0 until w * h) {
+                    val argb = pixels[i]
+                    val o = i * 4
+                    rgba[o] = ((argb shr 16) and 0xff).toByte()
+                    rgba[o + 1] = ((argb shr 8) and 0xff).toByte()
+                    rgba[o + 2] = (argb and 0xff).toByte()
+                    rgba[o + 3] = ((argb shr 24) and 0xff).toByte()
+                }
+                Decoded(rgba, w, h)
+            } catch (_: Throwable) { null }
+        }
+
+        private fun blit(src: Decoded, dst: ByteArray, dstW: Int, dstH: Int, dstX: Int, dstY: Int, dstWClip: Int, dstHClip: Int) {
+            val cw = kotlin.math.min(src.w, dstWClip)
+            val ch = kotlin.math.min(src.h, dstHClip)
+            for (y in 0 until ch) {
+                val srcRowOff = y * src.w * 4
+                val dstRowOff = ((dstY + y) * dstW + dstX) * 4
+                System.arraycopy(src.rgba, srcRowOff, dst, dstRowOff, cw * 4)
+            }
         }
     }
 
