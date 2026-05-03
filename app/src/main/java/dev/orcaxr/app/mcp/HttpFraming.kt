@@ -116,10 +116,53 @@ internal object HttpFraming {
         body: String,
         extraHeaders: Map<String, String> = emptyMap(),
     ) {
-        val bodyBytes = body.toByteArray(StandardCharsets.UTF_8)
+        writeResponseBytes(
+            out, statusCode, statusText, contentType,
+            body.toByteArray(StandardCharsets.UTF_8),
+            includeCharsetUtf8 = true,
+            extraHeaders = extraHeaders,
+        )
+    }
+
+    /**
+     * Binary response body — used by C9 milestone 2's
+     * `GET /resources/<token>.png` route to stream PNG bytes back to
+     * the LLM client. We omit the `; charset=utf-8` Content-Type
+     * suffix since the body isn't text.
+     */
+    @Throws(IOException::class)
+    fun writeBinaryResponse(
+        out: OutputStream,
+        statusCode: Int,
+        statusText: String,
+        contentType: String,
+        body: ByteArray,
+        extraHeaders: Map<String, String> = emptyMap(),
+    ) {
+        writeResponseBytes(
+            out, statusCode, statusText, contentType, body,
+            includeCharsetUtf8 = false,
+            extraHeaders = extraHeaders,
+        )
+    }
+
+    @Throws(IOException::class)
+    private fun writeResponseBytes(
+        out: OutputStream,
+        statusCode: Int,
+        statusText: String,
+        contentType: String,
+        bodyBytes: ByteArray,
+        includeCharsetUtf8: Boolean,
+        extraHeaders: Map<String, String>,
+    ) {
         val sb = StringBuilder()
         sb.append("HTTP/1.1 ").append(statusCode).append(' ').append(statusText).append("\r\n")
-        sb.append("Content-Type: ").append(contentType).append("; charset=utf-8\r\n")
+        if (includeCharsetUtf8) {
+            sb.append("Content-Type: ").append(contentType).append("; charset=utf-8\r\n")
+        } else {
+            sb.append("Content-Type: ").append(contentType).append("\r\n")
+        }
         sb.append("Content-Length: ").append(bodyBytes.size).append("\r\n")
         sb.append("Connection: close\r\n")
         sb.append("Cache-Control: no-store\r\n")

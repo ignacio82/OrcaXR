@@ -49,23 +49,48 @@ data class ToolResult(
     val text: String,
     val structured: JSONObject? = null,
     val isError: Boolean = false,
+    /**
+     * Optional image content parts (C9 milestone 2 — vision pillar).
+     * Each entry is a base64-encoded PNG; the dispatcher renders it as
+     * an `{type:"image", source:{type:"base64", media_type:"image/png",
+     * data:"..."}}` MCP content part. Keep small (≤200 KB encoded) —
+     * larger images should be served via the `/resources/<token>.png`
+     * route, with the URI surfaced in [structured].
+     */
+    val imageParts: List<ImagePart> = emptyList(),
 ) {
     fun toJson(): JSONObject {
         val out = JSONObject()
         val arr = JSONArray()
-        val part = JSONObject()
-        part.put("type", "text")
-        part.put("text", text)
-        arr.put(part)
+        val textPart = JSONObject()
+        textPart.put("type", "text")
+        textPart.put("text", text)
+        arr.put(textPart)
+        for (img in imageParts) {
+            val part = JSONObject()
+            part.put("type", "image")
+            val source = JSONObject()
+            source.put("type", "base64")
+            source.put("media_type", img.mediaType)
+            source.put("data", img.base64Data)
+            part.put("source", source)
+            arr.put(part)
+        }
         out.put("content", arr)
         if (structured != null) out.put("structuredContent", structured)
         if (isError) out.put("isError", true)
         return out
     }
 
+    /** Single image content part. */
+    data class ImagePart(val mediaType: String, val base64Data: String)
+
     companion object {
         fun ok(text: String, structured: JSONObject? = null): ToolResult =
             ToolResult(text, structured, isError = false)
+
+        fun ok(text: String, structured: JSONObject?, imageParts: List<ImagePart>): ToolResult =
+            ToolResult(text, structured, isError = false, imageParts = imageParts)
 
         fun error(text: String, data: JSONObject? = null): ToolResult =
             ToolResult(text, data, isError = true)

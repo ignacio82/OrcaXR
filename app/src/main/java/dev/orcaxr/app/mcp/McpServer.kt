@@ -130,14 +130,52 @@ class McpServer internal constructor(
             // Route. We only serve POST /mcp (the JSON-RPC entry
             // point); GET / answers a tiny health/discovery payload so
             // the user can curl the URL to verify the server is up.
+            // C9 M2 added GET /resources/<token>.png for streaming
+            // rendered views back to the LLM (see AiSessionState).
             when {
                 request.method == "GET" && request.path == "/" ->
                     handleRoot(sock)
+                request.method == "GET" && request.path.startsWith("/resources/") ->
+                    handleResourceGet(sock, request)
                 request.method == "POST" && (request.path == "/mcp" || request.path == "/") ->
                     handleMcpPost(sock, request, protocol)
                 else ->
                     writeStatus(sock, 404, "Not Found", "{\"error\":\"unknown route\"}")
             }
+        }
+    }
+
+    /**
+     * Serve a render artifact by token. Path is
+     * `/resources/<token>.png`; the token is the content-hash key
+     * AiSessionState used when the rendering tool stored the artifact.
+     * Auth: same bearer-token gate as the JSON-RPC endpoint.
+     */
+    private fun handleResourceGet(sock: Socket, request: HttpFraming.Request) {
+        if (!checkAuth(request)) {
+            writeStatus(sock, 401, "Unauthorized", "{\"error\":\"missing or wrong bearer token\"}")
+            return
+        }
+        // Parse "/resources/<token>.png" — strip the prefix + extension.
+        val rest = request.path.removePrefix("/resources/")
+        val token = rest.substringBeforeLast('.').takeIf { it.isNotEmpty() }
+        if (token == null) {
+            writeStatus(sock, 400, "Bad Request", "{\"error\":\"missing token\"}")
+            return
+        }
+        val art = AiSessionState.get().getArtifact(token)
+        if (art == null) {
+            writeStatus(sock, 404, "Not Found", "{\"error\":\"unknown render token\"}")
+            return
+        }
+        try {
+            HttpFraming.writeBinaryResponse(
+                sock.getOutputStream(),
+                200, "OK", "image/png",
+                art.pngBytes,
+            )
+        } catch (e: IOException) {
+            Log.w(tag, "writeBinaryResponse failed", e)
         }
     }
 
