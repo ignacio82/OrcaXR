@@ -81,4 +81,13 @@ docs/FULLSPECTRUM_PORT_STATUS.md
 playstore/
 nanobanana-output/
 crash_log.txt
-crash_log.txt
+
+# Gemini CLI per-user MCP config — holds a Bearer token + LAN IP
+# pointed at the developer's local OrcaXR MCP server. Never commit.
+.gemini/
+
+# Ad-hoc local probes against the local MCP server with a hardcoded
+# auth token. Useful for one-off exploration, not for the repo.
+/get_regions.py
+/parse.py
+/regions.json
