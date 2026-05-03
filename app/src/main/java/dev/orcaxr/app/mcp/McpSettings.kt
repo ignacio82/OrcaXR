@@ -41,6 +41,24 @@ class McpSettings(ctx: Context) {
      */
     val apiKey: Flow<String?> = store.data.map { it[KEY_API_KEY] }
 
+    /**
+     * D18c — Anthropic API key for `find_feature_anchors` (vision-LLM
+     * subroutine). Stored in DataStore; read by the tool when invoked.
+     * Null/empty means the feature isn't configured; the tool returns
+     * a clear error in that case so the LLM doesn't burn tokens
+     * retrying. The key is for the user's own account — OrcaXR
+     * doesn't own the billing relationship, costs accrue to whoever
+     * provisioned the key.
+     */
+    val anthropicApiKey: Flow<String?> = store.data.map { it[KEY_ANTHROPIC_API_KEY] }
+
+    suspend fun setAnthropicApiKey(value: String?) {
+        store.edit {
+            if (value.isNullOrBlank()) it.remove(KEY_ANTHROPIC_API_KEY)
+            else it[KEY_ANTHROPIC_API_KEY] = value
+        }
+    }
+
     suspend fun setEnabled(value: Boolean) {
         store.edit { it[KEY_ENABLED] = value }
     }
@@ -88,6 +106,7 @@ class McpSettings(ctx: Context) {
         private val KEY_ENABLED = booleanPreferencesKey("mcp_enabled")
         private val KEY_PORT = intPreferencesKey("mcp_port")
         private val KEY_API_KEY = stringPreferencesKey("mcp_api_key")
+        private val KEY_ANTHROPIC_API_KEY = stringPreferencesKey("anthropic_api_key")
 
         /**
          * 32 alphanumeric chars from a CSPRNG. ~190 bits of entropy —

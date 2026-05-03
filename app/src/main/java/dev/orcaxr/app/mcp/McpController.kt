@@ -5,6 +5,7 @@ import android.util.Log
 import dev.orcaxr.app.mcp.tools.AiIntrospectionTools
 import dev.orcaxr.app.mcp.tools.AiPaintTools
 import dev.orcaxr.app.mcp.tools.AiVisionTools
+import dev.orcaxr.app.mcp.tools.FindFeatureAnchorsTool
 import dev.orcaxr.app.mcp.tools.PaintRecipeTools
 import dev.orcaxr.app.mcp.tools.PaintTemplateTools
 import dev.orcaxr.app.mcp.tools.FilamentTools
@@ -110,7 +111,7 @@ class McpController private constructor(
             .authToken(token)
             .serverName(McpServer.DEFAULT_NAME)
             .serverVersion(McpServer.DEFAULT_VERSION)
-            .also { b -> registerAllTools(b, toolContext) }
+            .also { b -> registerAllTools(b, toolContext, settings) }
             .build()
         server = s
         try {
@@ -146,7 +147,11 @@ class McpController private constructor(
          * registered. Tests reuse this so the unit harness sees the
          * exact same surface the production server exposes.
          */
-        internal fun registerAllTools(builder: McpServer.Builder, ctx: ToolContext) {
+        internal fun registerAllTools(
+            builder: McpServer.Builder,
+            ctx: ToolContext,
+            settings: McpSettings,
+        ) {
             for (t in SystemTools.all(ctx)) builder.tool(t)
             for (t in PrinterTools.all(ctx)) builder.tool(t)
             for (t in ProfileTools.all(ctx)) builder.tool(t)
@@ -171,6 +176,9 @@ class McpController private constructor(
             // AI paint primitives. Pass the registered paint tools
             // so paint_template can dispatch by name.
             for (t in PaintTemplateTools.all(WorkspaceModel.get(), ctx, aiPaintTools)) builder.tool(t)
+            // D18c — vision LLM feature anchors. Requires an
+            // Anthropic API key set via McpSettings.
+            builder.tool(FindFeatureAnchorsTool(WorkspaceModel.get(), AiSessionState.get(), settings.anthropicApiKey))
         }
     }
 
