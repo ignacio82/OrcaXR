@@ -145,6 +145,17 @@ class McpController private constructor(
         }
 
         /**
+         * D21a — read the bound port without a Context. Returns 0 when
+         * the controller hasn't started yet (Application.onCreate
+         * hasn't run; tests). AiVisionTools reads this to assemble an
+         * absolute http://… URL for rendered PNGs so the driving LLM
+         * can WebFetch them — the inline base64 image content path
+         * sometimes drops in the Claude Code MCP transport, but a
+         * plain http URL always works.
+         */
+        fun boundPortStatic(): Int = instance?.server?.boundPort ?: 0
+
+        /**
          * Build a configured [McpServer.Builder] with all known tools
          * registered. Tests reuse this so the unit harness sees the
          * exact same surface the production server exposes.

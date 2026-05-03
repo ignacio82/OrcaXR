@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "description": "D21b — auto-resolve a paint template for a loaded model. paint_template(auto=true) reads PlacedModel.source (or originalSource for extracted multi-object 3MFs) and looks up the recipe in this index by, in order: (1) MakerWorld design id parsed from the 3MF metadata, (2) sha256 of the source file, (3) filename alias (lowercased basename without extension; for unbranded STLs / common naming conventions). Add new entries via a PR — keep the index small and curated; recipes themselves live alongside as `<name>.json`.",
+  "by_makerworld_id": {},
+  "by_sha256": {},
+  "by_filename_alias": {
+    "pikachu_funko": "funko_pop_pikachu",
+    "pikachu_funko_pop": "funko_pop_pikachu",
+    "funko_pop_pikachu": "funko_pop_pikachu",
+    "funko_pikachu": "funko_pop_pikachu",
+    "benchy_pirate_ship": "benchy_pirate_ship",
+    "benchy_pirate": "benchy_pirate_ship",
+    "pirate_ship_benchy": "benchy_pirate_ship"
+  }
+}

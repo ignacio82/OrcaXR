@@ -20,10 +20,16 @@ import java.util.Base64
  * [AiRenderEngine]); no JNI, no native rebuild.
  *
  * Image transport: every render result includes `image_uri` in
- * structuredContent (resolves to `/resources/<token>.png` on the MCP
- * server) and, if the PNG is small enough (< 200 KB), also inlines a
- * base64 image content part. The dispatcher streams the binary PNG
- * via the GET route added to [dev.orcaxr.app.mcp.McpServer].
+ * structuredContent. When the MCP server has a LAN address bound,
+ * `image_uri` is an absolute `http://<lan-ip>:<port>/resources/
+ * <token>.png` URL the driving LLM can WebFetch directly — no
+ * Authorization header required (the 64-bit token is the capability;
+ * see McpServer.handleResourceGet). When the PNG is < 200 KB, an
+ * inline base64 `image` content part is also attached as a best-
+ * effort path; not every MCP transport surfaces it back to the
+ * model, so the absolute URL is the load-bearing channel. The
+ * server streams the binary PNG via the GET route added in
+ * [dev.orcaxr.app.mcp.McpServer].
  *
  * Tools shipped here:
  *  - list_camera_presets
@@ -153,6 +159,25 @@ internal object AiVisionTools {
         put("height_px", camera.heightPx)
     }
 
+    /**
+     * D21a: build a real HTTP URL for a rendered token so the driving
+     * LLM can `WebFetch(absolute url)` even when the MCP transport
+     * drops inline image content blocks. Falls back to the legacy
+     * `mcp://` capability URI when the server has no LAN address yet
+     * (boot before Wi-Fi associates) or when callers explicitly want
+     * the protocol-relative form.
+     */
+    internal fun buildResourceUri(token: String): String {
+        val port = dev.orcaxr.app.mcp.McpController.boundPortStatic()
+        if (port <= 0) return "mcp://resources/$token.png"
+        // Prefer the first non-loopback IPv4 — typical home LAN. If no
+        // LAN address (offline build), fall back to the legacy form so
+        // existing callers still see a stable URI shape.
+        val host = dev.orcaxr.app.mcp.McpServer.lanAddresses().firstOrNull()
+            ?: return "mcp://resources/$token.png"
+        return "http://$host:$port/resources/$token.png"
+    }
+
     private fun packResult(
         modelId: String,
         camera: AiRenderEngine.CameraSpec,
@@ -161,10 +186,11 @@ internal object AiVisionTools {
         inlineRequested: Boolean,
         extra: JSONObject = JSONObject(),
     ): ToolResult {
+        val uri = buildResourceUri(token)
         val body = JSONObject().apply {
             put("ok", true)
             put("model_id", modelId)
-            put("image_uri", "mcp://resources/$token.png")
+            put("image_uri", uri)
             put("render_token", token)
             put("bytes", png.size)
             put("width_px", camera.widthPx)
@@ -176,7 +202,11 @@ internal object AiVisionTools {
                 put(k, extra.get(k))
             }
         }
-        val text = "Rendered ${camera.widthPx}×${camera.heightPx} png (${png.size} B); token=$token"
+        val text = if (uri.startsWith("http")) {
+            "Rendered ${camera.widthPx}×${camera.heightPx} png (${png.size} B); fetch via WebFetch($uri); token=$token"
+        } else {
+            "Rendered ${camera.widthPx}×${camera.heightPx} png (${png.size} B); token=$token"
+        }
         val images = if (inlineRequested && png.size <= INLINE_BASE64_BYTE_CAP) {
             listOf(ToolResult.ImagePart(
                 mediaType = "image/png",
@@ -257,8 +287,11 @@ internal object AiVisionTools {
                 "state visible), 'solid' (uniform tint with shading), 'triangle_id' (each triangle's " +
                 "id encoded in RGB; pair with resolve_image_pixel to chain reads → narrow → paint), " +
                 "'normals' (RGB = normal sphere), 'depth' (linear depth grayscale). The result " +
-                "includes image_uri the LLM can fetch via GET /resources/<token>.png; if inline=true " +
-                "and the PNG is < 200 KB, also includes an inline base64 image content part."
+                "includes image_uri — when OrcaXR has a LAN address this is an absolute http:// URL " +
+                "the driving LLM can WebFetch DIRECTLY (no auth header required; the token is the " +
+                "capability). If inline=true and the PNG is < 200 KB, an inline base64 image content " +
+                "part is also attached as a best-effort path; the http URL is the load-bearing one " +
+                "because not every MCP transport propagates inline image blocks back to the model."
         override val inputSchema = Schemas.obj(
             required = listOf("model_id"),
             properties = mapOf(
@@ -574,7 +607,7 @@ internal object AiVisionTools {
                 put("ok", true)
                 put("token_a", tokA); put("token_b", tokB)
                 put("render_token", token)
-                put("image_uri", "mcp://resources/$token.png")
+                put("image_uri", buildResourceUri(token))
                 put("width_px", w); put("height_px", h)
                 put("bytes", png.size)
                 put("changed_pixels", changedPx)
@@ -738,7 +771,7 @@ internal object AiVisionTools {
             val body = JSONObject().apply {
                 put("ok", true)
                 put("model_id", model.id)
-                put("image_uri", "mcp://resources/$token.png")
+                put("image_uri", buildResourceUri(token))
                 put("render_token", token)
                 put("bytes", outPng.size)
                 put("width_px", totalW); put("height_px", totalH)

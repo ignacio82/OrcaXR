@@ -1,6 +1,7 @@
 package dev.orcaxr.app.mcp.tools
 
 import android.content.Context
+import dev.orcaxr.app.PaintTemplateResolver
 import dev.orcaxr.app.mcp.Schemas
 import dev.orcaxr.app.mcp.Tool
 import dev.orcaxr.app.mcp.ToolContext
@@ -87,32 +88,77 @@ internal object PaintTemplateTools {
     ) : Tool {
         override val name = "paint_template"
         override val description =
-            "Apply a bundled paint template (model_kind from list_paint_templates) to a model. The " +
-                "template's named tags (e.g. 'yellow', 'black') resolve via palette_remap (caller-" +
-                "supplied) or the template's default_palette, mapping each name to a numeric paint " +
-                "slot 1..MAX_PAINT_SLOTS. The recipe's paint primitives are dispatched in sequence; " +
-                "step results are reported back so the LLM can verify each landed. NOTE: most " +
-                "templates assume a specific orientation (model_axis_up); the LLM should verify " +
-                "the loaded model matches before applying. Reports per-step painted_count when " +
-                "available."
+            "Apply a bundled paint template to a model. Two ways to pick the recipe: pass " +
+                "model_kind=<name> from list_paint_templates explicitly, OR pass auto=true and " +
+                "OrcaXR fingerprints the model's source file (3MF MakerWorld design id, then " +
+                "SHA-256, then filename alias from the bundled `index.json`). When auto=true " +
+                "doesn't find a match the tool returns a structured 'no recipe — pick manually " +
+                "or try find_feature_anchors / get_curvature_segmentation / get_mask_for_text' " +
+                "hint instead of erroring. The recipe's named tags (e.g. 'yellow', 'black') " +
+                "resolve via palette_remap (caller-supplied) or the recipe's default_palette, " +
+                "mapping each name to a numeric paint slot 1..MAX_PAINT_SLOTS. Most recipes " +
+                "assume a specific orientation (model_axis_up); the LLM should verify the loaded " +
+                "model matches before applying."
         override val inputSchema = Schemas.obj(
-            required = listOf("model_kind", "model_id"),
+            required = listOf("model_id"),
             properties = mapOf(
-                "model_kind" to Schemas.string("Recipe name from list_paint_templates"),
+                "model_kind" to Schemas.string(
+                    "Recipe name from list_paint_templates (omit when auto=true)",
+                ),
                 "model_id" to Schemas.string("Model id"),
                 "palette_remap" to Schemas.obj(),
+                "auto" to Schemas.bool(
+                    "If true and model_kind is omitted, fingerprint the loaded model and look " +
+                        "up the recipe in the bundled index. Default false.",
+                ),
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
             if (!ws.attached.value) return ToolResult.error("OrcaXR not attached.")
-            val kind = args.optString("model_kind").trim()
-            val recipe = readTemplate(ctx.appContext, kind)
-                ?: return ToolResult.error("No paint template named '$kind'. Try list_paint_templates.")
             val modelId = args.optString("model_id").trim()
             if (modelId.isEmpty()) return ToolResult.error("'model_id' is required.")
-            if (ws.placedModels.value.none { it.id == modelId }) {
-                return ToolResult.error("No model with id '$modelId'.")
+            val placed = ws.placedModels.value.firstOrNull { it.id == modelId }
+                ?: return ToolResult.error("No model with id '$modelId'.")
+
+            // Resolve the recipe name. Explicit model_kind always
+            // wins; auto=true falls back to the fingerprint resolver.
+            val explicitKind = args.optString("model_kind").trim().takeIf { it.isNotEmpty() }
+            val auto = args.optBoolean("auto", false)
+            val resolution: PaintTemplateResolver.Resolution? = when {
+                explicitKind != null -> null  // explicit path; no auto-resolution metadata
+                auto -> {
+                    val source = placed.originalSource ?: placed.source
+                    PaintTemplateResolver.resolve(ctx.appContext, source)
+                }
+                else -> null
             }
+            val kind = explicitKind ?: resolution?.recipeName
+            if (kind == null) {
+                val source = placed.originalSource ?: placed.source
+                val body = JSONObject().apply {
+                    put("ok", false)
+                    put("auto", auto)
+                    put("model_id", modelId)
+                    put("source_filename", source.name)
+                    put("hint", "no_recipe")
+                    put("available", JSONArray().apply {
+                        for (n in listTemplateNames(ctx.appContext)) put(n)
+                    })
+                    put("next_steps", JSONArray().apply {
+                        put("Pass model_kind=<name> explicitly from list_paint_templates")
+                        put("Run find_feature_anchors / get_curvature_segmentation to derive a custom paint")
+                        put("Save a recipe via save_paint_recipe after a manual paint pass")
+                    })
+                }
+                val text = if (auto) {
+                    "No bundled recipe matched '${source.name}'. Pick manually via list_paint_templates."
+                } else {
+                    "Pass model_kind=<name> or auto=true."
+                }
+                return ToolResult.error(text, body)
+            }
+            val recipe = readTemplate(ctx.appContext, kind)
+                ?: return ToolResult.error("No paint template named '$kind'. Try list_paint_templates.")
             // Resolve the palette: caller's remap takes precedence,
             // then the recipe's default_palette.
             val palette = HashMap<String, Int>()
@@ -163,9 +209,18 @@ internal object PaintTemplateTools {
                 put("total_painted", totalPainted)
                 put("steps", resultsArr)
                 if (firstError != null) put("first_error", firstError)
+                if (resolution != null) {
+                    put("auto_resolved", true)
+                    put("matched_by", resolution.matchedBy.name.lowercase())
+                    put("matched_key", resolution.key)
+                }
             }
-            val text = "Applied template '$kind' to '$modelId': ${steps.length()} steps, " +
-                "$totalPainted total painted${if (firstError != null) " (first error: $firstError)" else ""}"
+            val resolvedNote = if (resolution != null) {
+                " (auto-resolved via ${resolution.matchedBy.name.lowercase()})"
+            } else ""
+            val text = "Applied template '$kind'$resolvedNote to '$modelId': " +
+                "${steps.length()} steps, $totalPainted total painted" +
+                if (firstError != null) " (first error: $firstError)" else ""
             return if (firstError == null) ToolResult.ok(text, body)
                 else ToolResult.error(text, body)
         }

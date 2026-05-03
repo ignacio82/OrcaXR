@@ -149,13 +149,18 @@ class McpServer internal constructor(
      * Serve a render artifact by token. Path is
      * `/resources/<token>.png`; the token is the content-hash key
      * AiSessionState used when the rendering tool stored the artifact.
-     * Auth: same bearer-token gate as the JSON-RPC endpoint.
+     *
+     * **Auth (D21a):** the token is itself the capability — a 64-bit
+     * SHA-256 prefix the caller can't guess without already having
+     * called a render tool. Skipping the bearer check here lets the
+     * driving LLM fetch the rendered PNG via `WebFetch(absolute url)`
+     * without OrcaXR having to round-trip the bearer token through the
+     * client. The trade-off is that anyone on the LAN who has the
+     * token can fetch the PNG; that's the same blast radius as the
+     * other LAN side-channels (CIFS shares, mDNS) and the rendered
+     * mesh isn't sensitive in the way an API key is.
      */
     private fun handleResourceGet(sock: Socket, request: HttpFraming.Request) {
-        if (!checkAuth(request)) {
-            writeStatus(sock, 401, "Unauthorized", "{\"error\":\"missing or wrong bearer token\"}")
-            return
-        }
         // Parse "/resources/<token>.png" — strip the prefix + extension.
         val rest = request.path.removePrefix("/resources/")
         val token = rest.substringBeforeLast('.').takeIf { it.isNotEmpty() }
