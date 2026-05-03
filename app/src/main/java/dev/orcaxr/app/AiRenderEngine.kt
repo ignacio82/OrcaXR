@@ -30,6 +30,24 @@ import kotlin.math.tan
  */
 internal object AiRenderEngine {
 
+    /** Default palette when no per-printer palette is plumbed. Distinct
+     *  visually-recognizable colors matching the canonical OrcaXR slot
+     *  defaults (yellow/red/brown/black, then blue/green/cyan/magenta…)
+     *  so a render_view in Paint mode shows the paint structure even
+     *  when the tool layer didn't pass a real palette. */
+    private val FALLBACK_PALETTE: List<ByteArray> = listOf(
+        byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0x00),  // 1 yellow
+        byteArrayOf(0xFF.toByte(), 0x00, 0x00),           // 2 red
+        byteArrayOf(0x80.toByte(), 0x40, 0x00),           // 3 brown
+        byteArrayOf(0x20, 0x20, 0x20),                    // 4 black-ish
+        byteArrayOf(0x00, 0x66, 0xFF.toByte()),           // 5 blue
+        byteArrayOf(0x00, 0xC0.toByte(), 0x00),           // 6 green
+        byteArrayOf(0x00, 0xCC.toByte(), 0xCC.toByte()),  // 7 cyan
+        byteArrayOf(0xCC.toByte(), 0x00, 0xCC.toByte()),  // 8 magenta
+        byteArrayOf(0xFF.toByte(), 0x80.toByte(), 0x00),  // 9 orange
+        byteArrayOf(0xC0.toByte(), 0xC0.toByte(), 0xC0.toByte()),  // 10 silver
+    )
+
     enum class RenderMode {
         /** Per-volume tint from [palette], with a soft directional shade. */
         Solid,
@@ -189,7 +207,7 @@ internal object AiRenderEngine {
         val lightDir = normalize3(floatArrayOf(-0.4f, 0.6f, 1.0f))
 
         // Slot palette parsed once (RGB bytes); 0..MAX_PAINT_SLOTS.
-        val slotRgb = parsePalette(palette)
+        val slotRgb = if (palette.isNotEmpty()) parsePalette(palette) else FALLBACK_PALETTE
         val unpaintedRgb = byteArrayOf(180.toByte(), 180.toByte(), 180.toByte())
 
         for (tri in 0 until n) {

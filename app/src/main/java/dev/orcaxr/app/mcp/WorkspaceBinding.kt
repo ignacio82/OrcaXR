@@ -85,6 +85,11 @@ fun BindWorkspaceModel(
     plateMovable: Boolean,
     setPlateMovable: (Boolean) -> Unit,
     allProfiles: List<SlicerProfile>,
+    /** Live "as-will-print" palette for the active printer (one entry
+     *  per slot, hex `#RRGGBB`). MCP tools surface this via
+     *  `list_active_palette` so the LLM knows the real on-bed colors
+     *  instead of the user-configured filament list. */
+    previewPalette: List<String> = emptyList(),
     /**
      * Tier-B callbacks. Each fires when the corresponding
      * [WorkspaceAction] arrives. Default null = "log warning, do
@@ -170,6 +175,7 @@ fun BindWorkspaceModel(
     LaunchedEffect(showTravels) { workspace.publishShowTravels(showTravels) }
     LaunchedEffect(toolpathTubes) { workspace.publishToolpathTubes(toolpathTubes) }
     LaunchedEffect(plateMovable) { workspace.publishPlateMovable(plateMovable) }
+    LaunchedEffect(previewPalette) { workspace.publishPreviewPalette(previewPalette) }
 
     // ---- Action collector ----
     //

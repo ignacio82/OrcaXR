@@ -2774,6 +2774,7 @@ private fun XrShell(
         plateMovable = plateMovable,
         setPlateMovable = { plateMovable = it },
         allProfiles = allProfiles,
+        previewPalette = previewPalette,
         // Tier-B mirrors of the BottomRightSummaryPanel button paths.
         // Routing through the existing onSliceClick logic (multi-vs-
         // single, fallback to bundled cube) keeps the slicer behavior

@@ -98,6 +98,21 @@ class WorkspaceModel internal constructor() {
     val plateMovable: StateFlow<Boolean> = _plateMovable.asStateFlow()
 
     /**
+     * Live "as-will-print" palette. Each entry is a `#RRGGBB` hex
+     * color; index `i` corresponds to filament tag `i+1` in paint
+     * primitives (0 = unpainted). Sourced from
+     * `resolveAsWillPrintPalette` in MainActivity which combines the
+     * configured filaments + Moonraker's reported loaded spools +
+     * virtual mixtures. This is what the on-bed colored-GLB renderer
+     * sees, so MCP tools that need the LLM to know the actual paint
+     * colors should query this rather than `list_filaments` (which
+     * returns the user-configured filament list — different when the
+     * printer has different spools physically loaded).
+     */
+    private val _previewPalette = MutableStateFlow<List<String>>(emptyList())
+    val previewPalette: StateFlow<List<String>> = _previewPalette.asStateFlow()
+
+    /**
      * True iff MainActivity has hooked itself up to this model. MCP
      * tools that mutate state should refuse with a useful error
      * message when this is false (e.g. the user backgrounded the app
@@ -146,6 +161,7 @@ class WorkspaceModel internal constructor() {
     fun publishShowTravels(value: Boolean) { _showTravels.value = value }
     fun publishToolpathTubes(value: Boolean) { _toolpathTubes.value = value }
     fun publishPlateMovable(value: Boolean) { _plateMovable.value = value }
+    fun publishPreviewPalette(value: List<String>) { _previewPalette.value = value }
 
     fun setAttached(value: Boolean) { _attached.value = value }
 

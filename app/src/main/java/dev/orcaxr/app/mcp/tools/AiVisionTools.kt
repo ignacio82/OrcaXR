@@ -50,6 +50,7 @@ internal object AiVisionTools {
         ResolveImagePixel(session),
         NameView(ws, session),
         RenderViewsGrid(ws, session),
+        ListActivePalette(ws),
     )
 
     // ---- Helpers ----
@@ -436,6 +437,51 @@ internal object AiVisionTools {
         }
     }
 
+    class ListActivePalette(private val ws: WorkspaceModel) : Tool {
+        override val name = "list_active_palette"
+        override val description =
+            "Return the live 'as-will-print' filament palette for the active printer — i.e. the colors " +
+                "the on-bed colored-GLB renderer actually uses. This is what the LLM should query before " +
+                "picking paint tags, NOT list_filaments. The two can differ when:\n" +
+                "  - the printer has different physical spools loaded than the user's configured filament list,\n" +
+                "  - virtual mixed-filament rows are active,\n" +
+                "  - the user remapped project filaments to different slots in the picker.\n" +
+                "Each entry is { tag, hex, slot_index } where tag is the value to pass to paint primitives " +
+                "(paint_sphere/slab/etc.) and hex is the actual rendered color (e.g. '#FFFF00'). Tag 0 is " +
+                "always 'unpainted' and is not returned. Returns an empty palette when no printer is selected " +
+                "or the printer hasn't loaded yet."
+        override val inputSchema = Schemas.empty()
+        override suspend fun call(args: JSONObject): ToolResult {
+            val palette = ws.previewPalette.value
+            val arr = JSONArray()
+            for ((i, hex) in palette.withIndex()) {
+                arr.put(JSONObject().apply {
+                    put("tag", i + 1)
+                    put("slot_index", i)
+                    put("hex", hex)
+                })
+            }
+            val text = if (palette.isEmpty()) {
+                "No active palette — no printer selected or palette not yet loaded."
+            } else {
+                buildString {
+                    append("Active palette (${palette.size} slots):\n")
+                    for ((i, h) in palette.withIndex()) {
+                        append("  tag ${i + 1}  $h\n")
+                    }
+                }.trimEnd()
+            }
+            val body = JSONObject().apply {
+                put("ok", true)
+                put("count", palette.size)
+                val pid = ws.selectedPrinterId.value
+                if (pid != null) put("printer_id", pid)
+                put("entries", arr)
+            }
+            return ToolResult.ok(text, body)
+        }
+    }
+
     class RenderViewsGrid(
         private val ws: WorkspaceModel,
         private val session: AiSessionState,
@@ -489,6 +535,7 @@ internal object AiVisionTools {
                     bvh = bvh,
                     camera = cam,
                     mode = mode,
+                    palette = ws.previewPalette.value,
                     paintFilamentIndex = if (mode == AiRenderEngine.RenderMode.Paint) model.paintFilamentIndex else null,
                 )
                 panels.add(r.pngBytes); panelWs.add(r.widthPx); panelHs.add(r.heightPx)
@@ -655,8 +702,14 @@ internal object AiVisionTools {
         val result = AiRenderEngine.render(
             bvh = bvh,
             camera = camera,
+            // The on-bed renderer uses the live "as-will-print" palette
+            // (Moonraker-loaded slots + mixed-filament resolution); we
+            // mirror it here so Paint mode renders match what the user
+            // sees on the headset. Falls back to AiRenderEngine's
+            // FALLBACK_PALETTE if the workspace hasn't published one
+            // yet (e.g. no printer selected).
             mode = mode,
-            palette = emptyList(),  // M2: no palette source plumbed yet — Solid + Paint default to neutral gray for unmatched slots
+            palette = ws.previewPalette.value,
             paintFilamentIndex = if (mode == AiRenderEngine.RenderMode.Paint) model.paintFilamentIndex else null,
         )
         session.saveArtifact(AiSessionState.RenderArtifact(
