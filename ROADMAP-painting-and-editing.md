@@ -337,3 +337,25 @@ Detailed features (eyes with pupils, mouths, small logos) require too many exact
 > **Files (planned):** CLIPSeg or GroundingDINO integration. New `get_mask_for_text(query)` tool.
 
 Even with point-based SAM, the LLM must still query tri-id maps to find a seed coordinate. Integrating a zero-shot text-to-image segmentation model allows the LLM to request `"Pikachu's cheeks"` or `"The pillow"` on a rendered view. The model outputs a 2D mask, eliminating the need for manual coordinate hunting entirely.
+
+### D20. Full-Color & High-Fidelity Painting (Primed3D Parity) 🔴 Not started
+
+To match dedicated full-color painting tools (like Primed3D) and fully support CMYKW 3D printing workflows, OrcaXR needs advanced color blending, decal mapping, and mesh resolution adjustments.
+
+#### D20a. CMYKW Color Dithering (FullSpectrum Integration)
+
+> **Files (planned):** Pending `libslic3r` port in `slic3r_jni.cpp`.
+
+Completing the FullSpectrum mixed-color filament scaffolding. This allows OrcaXR to blend Cyan, Magenta, Yellow, Black, and White filament strands via toolpath dithering to produce a full spectrum of colors, overcoming the physical 4- or 8-toolchanger spool limit.
+
+#### D20b. Mesh Sub-division for High-Res Painting
+
+> **Files (planned):** New JNI helper `nativeSubdivideMesh` wrapping CGAL or libigl subdivision algorithms.
+
+Paint state is currently bound to the source mesh's triangle resolution. Low-poly meshes cannot hold high-resolution paint details or photo decals. A subdivision tool allows users (or the LLM via MCP) to dynamically increase the mesh density in specific areas or globally prior to painting, ensuring crisp edges for projected graphics.
+
+#### D20c. UV-to-Vertex-Color Baking
+
+> **Files (planned):** New texture map reader in C++ and UV baking pipeline.
+
+While `libslic3r` operates on vertex/face colors rather than UV maps, many 3D models come with existing UV maps and 2D textures. A baking pipeline would read a 3D model's UV map and associated image texture, and automatically bake those pixel colors down into the per-triangle `paint_color` metadata, allowing imported game assets or Primed3D-authored models to be sliced effortlessly.
