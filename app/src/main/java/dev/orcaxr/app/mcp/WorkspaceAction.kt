@@ -299,4 +299,68 @@ sealed interface WorkspaceAction {
         val negativeTag: Int,
         val positiveTag: Int,
     ) : WorkspaceAction
+
+    /**
+     * How a [PaintTriangleSet] composes with the model's existing
+     * per-triangle paint of the same kind.
+     */
+    enum class MergeMode {
+        /** Overwrite tag for matched triangles regardless of prior state. */
+        Replace,
+        /** Set tag only for triangles whose current tag is 0 (unpainted). */
+        OnlyUnpainted,
+        /**
+         * Set tag only for triangles whose current tag matches
+         * [PaintTriangleSet.whereTag] (so the LLM can re-tag e.g. only
+         * the triangles currently in slot 2).
+         */
+        OnlyTagged,
+    }
+
+    /**
+     * AI-paint pillar (C9 milestone 1). Apply [tag] to the listed
+     * [triangleIndices] on a paint kind. Every spatial-paint MCP tool
+     * (paint_sphere / paint_slab / paint_normal_cone /
+     * paint_surface_region / paint_connected_component /
+     * paint_triangle_list / paint_projected_mask) eventually compiles
+     * to one of these — single source of truth for PaintHistory +
+     * paintCacheStore + paintContentVersion plumbing.
+     *
+     * Coordinate frame: [triangleIndices] are in the source-of-truth
+     * triangle index space (see GEMINI.md #11d for the centering shift
+     * — the BVH and `nativeWriteColoredGlb` agree on this frame). Index
+     * 0 is the first triangle in the derived STL's binary layout.
+     *
+     * One MCP call ⇒ one [PaintTriangleSet] ⇒ one undo step (even an
+     * 80 K-triangle projected-mask paint).
+     */
+    data class PaintTriangleSet(
+        val modelId: String,
+        val kind: PaintKind,
+        val triangleIndices: IntArray,
+        val tag: Int,
+        val mergeMode: MergeMode = MergeMode.Replace,
+        /** Required when [mergeMode] = OnlyTagged. Ignored otherwise. */
+        val whereTag: Int = 0,
+    ) : WorkspaceAction {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is PaintTriangleSet) return false
+            return modelId == other.modelId
+                && kind == other.kind
+                && tag == other.tag
+                && mergeMode == other.mergeMode
+                && whereTag == other.whereTag
+                && triangleIndices.contentEquals(other.triangleIndices)
+        }
+        override fun hashCode(): Int {
+            var h = modelId.hashCode()
+            h = 31 * h + kind.hashCode()
+            h = 31 * h + tag
+            h = 31 * h + mergeMode.hashCode()
+            h = 31 * h + whereTag
+            h = 31 * h + triangleIndices.contentHashCode()
+            return h
+        }
+    }
 }

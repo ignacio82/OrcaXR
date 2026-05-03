@@ -2997,7 +2997,88 @@ private fun XrShell(
                 }
             }
         },
+        // C9 milestone 1: AI-paint triangle-set application. Walks the
+        // merge mode (Replace / OnlyUnpainted / OnlyTagged) and routes
+        // through `applyPaintMutation` so PaintHistory + paint cache
+        // + paintContentVersion all bump exactly once per MCP call.
+        onPaintTriangleSet = { action ->
+            applyPaintMutation(action.modelId, paintHistory) { m ->
+                val before = when (action.kind) {
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.Color -> m.paintFilamentIndex
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.Support -> m.supportFlags
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.Seam -> m.seamFlags
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.FuzzySkin -> m.fuzzySkinFlags
+                }
+                // Determine the working buffer's size. If the kind has
+                // never been authored we infer it from any other paint
+                // array (they're parallel to the source mesh's tri
+                // count); failing that, fall back to the largest
+                // triangle index in the action + 1.
+                val triCount = before?.size
+                    ?: m.paintFilamentIndex?.size
+                    ?: m.supportFlags?.size
+                    ?: m.seamFlags?.size
+                    ?: m.fuzzySkinFlags?.size
+                    ?: ((action.triangleIndices.maxOrNull() ?: -1) + 1)
+                if (triCount <= 0) return@applyPaintMutation m
+                val out = before?.copyOf(triCount) ?: ByteArray(triCount)
+                val tagB = action.tag.toByte()
+                val whereB = action.whereTag.toByte()
+                for (idx in action.triangleIndices) {
+                    if (idx < 0 || idx >= triCount) continue
+                    val cur = out[idx]
+                    val accept = when (action.mergeMode) {
+                        dev.orcaxr.app.mcp.WorkspaceAction.MergeMode.Replace -> true
+                        dev.orcaxr.app.mcp.WorkspaceAction.MergeMode.OnlyUnpainted -> cur.toInt() == 0
+                        dev.orcaxr.app.mcp.WorkspaceAction.MergeMode.OnlyTagged -> cur == whereB
+                    }
+                    if (accept) out[idx] = tagB
+                }
+                when (action.kind) {
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.Color -> m.copy(paintFilamentIndex = out)
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.Support -> m.copy(supportFlags = out)
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.Seam -> m.copy(seamFlags = out)
+                    dev.orcaxr.app.mcp.WorkspaceAction.PaintKind.FuzzySkin -> m.copy(fuzzySkinFlags = out)
+                }
+            }
+            paintHistoryVersion++
+        },
     )
+
+    // C9 milestone 1 — register the AI-paint BVH provider so MCP tools
+    // can fetch the same BVH the XR brush uses (built lazily by the
+    // LaunchedEffect at LE_3166 on first paint-mode toggle). The
+    // provider also handles cold starts: an LLM that calls
+    // `paint_sphere` before the user has ever touched the brush
+    // triggers a synchronous build off Dispatchers.Default, so no
+    // separate "warm up paint" tool is needed. The provider closes
+    // over the in-Compose `bvhCache` reference; that's fine because
+    // MeshBvhCache is internally synchronized and its identity
+    // doesn't change across recompositions (`remember { … }`).
+    LaunchedEffect(Unit) {
+        val ws = dev.orcaxr.app.mcp.WorkspaceModel.get()
+        ws.setBvhProvider(
+            dev.orcaxr.app.mcp.WorkspaceModel.BvhProvider { modelId ->
+                bvhCache.get(modelId)?.let { return@BvhProvider it }
+                val model = ws.placedModels.value.firstOrNull { it.id == modelId }
+                    ?: return@BvhProvider null
+                val resolved = runCatching { deriveStlFor(model.source) }
+                    .getOrNull() ?: return@BvhProvider null
+                withContext(Dispatchers.Default) {
+                    val mesh = runCatching { StlReader.read(resolved) }
+                        .getOrNull() ?: return@withContext null
+                    val shiftX = -(mesh.bboxMin.x + mesh.bboxMax.x) / 2f
+                    val shiftY = -(mesh.bboxMin.y + mesh.bboxMax.y) / 2f
+                    val shiftZ = -mesh.bboxMin.z
+                    val centered = mesh.translatedXyz(shiftX, shiftY, shiftZ)
+                    val bvh = runCatching { MeshBvh.build(centered) }
+                        .getOrNull() ?: return@withContext null
+                    bvhCache.put(modelId, bvh)
+                    bvh
+                }
+            },
+        )
+    }
 
     // Re-preview when SELECTED model's rotation/scale OR slot palette
     // changes so the GLB on the bed reflects the latest mesh + colors.

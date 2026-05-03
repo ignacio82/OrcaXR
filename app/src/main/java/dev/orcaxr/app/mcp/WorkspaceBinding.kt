@@ -134,6 +134,13 @@ fun BindWorkspaceModel(
     onPaintPlaneSplit: ((WorkspaceAction.PaintPlaneSplit) -> Unit)? = null,
     onPaintUndo: ((modelId: String) -> Unit)? = null,
     onPaintRedo: ((modelId: String) -> Unit)? = null,
+    /**
+     * AI-paint pillar (C9 milestone 1) — apply a precomputed triangle
+     * index set to a paint kind. The MainActivity-side handler walks
+     * the merge mode (Replace / OnlyUnpainted / OnlyTagged) and routes
+     * through `applyPaintMutation` so PaintHistory stays correct.
+     */
+    onPaintTriangleSet: ((WorkspaceAction.PaintTriangleSet) -> Unit)? = null,
 ) {
     val workspace = remember { WorkspaceModel.get() }
 
@@ -209,6 +216,7 @@ fun BindWorkspaceModel(
     val onPaintPlaneSplitLatest = rememberUpdatedState(onPaintPlaneSplit)
     val onPaintUndoLatest = rememberUpdatedState(onPaintUndo)
     val onPaintRedoLatest = rememberUpdatedState(onPaintRedo)
+    val onPaintTriangleSetLatest = rememberUpdatedState(onPaintTriangleSet)
 
     LaunchedEffect(workspace) {
         workspace.actions.collect { action -> handleAction(
@@ -249,6 +257,7 @@ fun BindWorkspaceModel(
             onPaintPlaneSplit = onPaintPlaneSplitLatest.value,
             onPaintUndo = onPaintUndoLatest.value,
             onPaintRedo = onPaintRedoLatest.value,
+            onPaintTriangleSet = onPaintTriangleSetLatest.value,
         ) }
     }
 }
@@ -291,6 +300,7 @@ private fun handleAction(
     onPaintPlaneSplit: ((WorkspaceAction.PaintPlaneSplit) -> Unit)?,
     onPaintUndo: ((modelId: String) -> Unit)?,
     onPaintRedo: ((modelId: String) -> Unit)?,
+    onPaintTriangleSet: ((WorkspaceAction.PaintTriangleSet) -> Unit)?,
 ) {
     when (action) {
         is WorkspaceAction.SetGizmoTool -> setGizmoTool(action.tool)
@@ -448,6 +458,10 @@ private fun handleAction(
         is WorkspaceAction.PaintRedo -> {
             if (onPaintRedo != null) onPaintRedo(action.modelId)
             else Log.w(TAG, "PaintRedo not wired.")
+        }
+        is WorkspaceAction.PaintTriangleSet -> {
+            if (onPaintTriangleSet != null) onPaintTriangleSet(action)
+            else Log.w(TAG, "PaintTriangleSet not wired.")
         }
     }
 }

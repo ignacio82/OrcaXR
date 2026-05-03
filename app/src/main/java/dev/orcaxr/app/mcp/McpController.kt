@@ -2,6 +2,7 @@ package dev.orcaxr.app.mcp
 
 import android.content.Context
 import android.util.Log
+import dev.orcaxr.app.mcp.tools.AiPaintTools
 import dev.orcaxr.app.mcp.tools.FilamentTools
 import dev.orcaxr.app.mcp.tools.PrefsTools
 import dev.orcaxr.app.mcp.tools.PrinterTools
@@ -147,6 +148,8 @@ class McpController private constructor(
             for (t in RecentTools.all(ctx)) builder.tool(t)
             for (t in PrefsTools.all(ctx)) builder.tool(t)
             for (t in WorkspaceTools.all(ctx)) builder.tool(t)
+            // C9 milestone 1 — AI-driven spatial paint primitives.
+            for (t in AiPaintTools.all(WorkspaceModel.get())) builder.tool(t)
         }
     }
 

@@ -194,6 +194,19 @@ class MeshBvh private constructor(
      *  placement to convert a triangle hit into a 3D anchor point. */
     fun triangleCentroid(tri: Int): Vec3f = centroidOf(tri)
 
+    /**
+     * Per-vertex accessor for triangle [tri]. [vertex] is 0..2. Used
+     * by [AiPaintEngine.slab] when the SlabTest is AnyVertex /
+     * AllVertices — centroid alone can't tell whether a triangle
+     * straddles the slab plane.
+     */
+    fun triangleVertex(tri: Int, vertex: Int): Vec3f {
+        require(tri in 0 until mesh.triCount) { "tri=$tri out of [0, ${mesh.triCount})" }
+        require(vertex in 0..2) { "vertex=$vertex out of [0, 3)" }
+        val b = tri * 9 + vertex * 3
+        return Vec3f(mesh.positions[b], mesh.positions[b + 1], mesh.positions[b + 2])
+    }
+
     private fun centroidOf(tri: Int): Vec3f {
         val b = tri * 9
         val cx = (mesh.positions[b] + mesh.positions[b + 3] + mesh.positions[b + 6]) / 3f
@@ -302,6 +315,133 @@ class MeshBvh private constructor(
                 val nN = triangleNormal(n)
                 val dot = curN.x * nN.x + curN.y * nN.y + curN.z * nN.z
                 if (dot >= cosThreshold && qTail < maxTriangles) {
+                    visited[n] = true
+                    queue[qTail++] = n
+                }
+            }
+        }
+        return out.copyOf(outCount)
+    }
+
+    /**
+     * AI-paint pillar (C9 §C.2): collect every triangle whose AABB
+     * intersects the axis-aligned box `[min, max]`. Used as a
+     * pre-filter before per-triangle distance / sphere tests in
+     * `paint_sphere`. Walks the BVH tree, descending only into nodes
+     * whose AABB overlaps the query box. Leaf triangles are returned
+     * if any vertex is inside the box.
+     *
+     * Order is BVH-traversal order (deterministic for a given build)
+     * so callers that want a stable triangle set across runs can
+     * canonicalize by sorting the result. Result is bounded only by
+     * the mesh's triCount.
+     */
+    fun aabbOverlapTriangles(
+        minX: Float, minY: Float, minZ: Float,
+        maxX: Float, maxY: Float, maxZ: Float,
+    ): IntArray {
+        if (mesh.triCount == 0) return IntArray(0)
+        val out = ArrayList<Int>(64)
+        val stack = IntArray(64)
+        var sp = 0
+        stack[sp++] = 0
+        while (sp > 0) {
+            val node = stack[--sp]
+            val b = node * 6
+            val nMinX = nodeAabb[b]; val nMinY = nodeAabb[b + 1]; val nMinZ = nodeAabb[b + 2]
+            val nMaxX = nodeAabb[b + 3]; val nMaxY = nodeAabb[b + 4]; val nMaxZ = nodeAabb[b + 5]
+            // Reject if the node's AABB doesn't overlap the query box.
+            if (nMaxX < minX || nMinX > maxX) continue
+            if (nMaxY < minY || nMinY > maxY) continue
+            if (nMaxZ < minZ || nMinZ > maxZ) continue
+            val left = nodeLeft[node]
+            if (left < 0) {
+                val s = nodeLeafStart[node]
+                val e = nodeLeafEnd[node]
+                for (j in s until e) {
+                    val ti = triIdx[j]
+                    if (triOverlapsBox(ti, minX, minY, minZ, maxX, maxY, maxZ)) {
+                        out.add(ti)
+                    }
+                }
+            } else {
+                if (sp + 2 > stack.size) {
+                    // Shouldn't happen with stack=64 and MAX_DEPTH=32,
+                    // but safe-fall to abort rather than overflow.
+                    return out.toIntArray()
+                }
+                stack[sp++] = left
+                stack[sp++] = nodeRight[node]
+            }
+        }
+        return out.toIntArray()
+    }
+
+    /** Triangle index `i` is "in the box" if any of its three vertices
+     *  lies inside the AABB. Cheap conservative test that's accurate
+     *  enough for the sphere/slab pre-filter — false positives at the
+     *  triangle level are rejected by the per-primitive distance test
+     *  in [AiPaintEngine]. */
+    private fun triOverlapsBox(
+        triIndex: Int,
+        minX: Float, minY: Float, minZ: Float,
+        maxX: Float, maxY: Float, maxZ: Float,
+    ): Boolean {
+        val b = triIndex * 9
+        for (v in 0 until 3) {
+            val x = mesh.positions[b + v * 3]
+            val y = mesh.positions[b + v * 3 + 1]
+            val z = mesh.positions[b + v * 3 + 2]
+            if (x in minX..maxX && y in minY..maxY && z in minZ..maxZ) return true
+        }
+        // Also accept if the triangle's AABB encloses the query box
+        // center — covers the case where a tiny query box is entirely
+        // inside a big triangle. Cheap to compute.
+        val v0x = mesh.positions[b]; val v0y = mesh.positions[b + 1]; val v0z = mesh.positions[b + 2]
+        val v1x = mesh.positions[b + 3]; val v1y = mesh.positions[b + 4]; val v1z = mesh.positions[b + 5]
+        val v2x = mesh.positions[b + 6]; val v2y = mesh.positions[b + 7]; val v2z = mesh.positions[b + 8]
+        val tMinX = minOf(v0x, v1x, v2x); val tMaxX = maxOf(v0x, v1x, v2x)
+        val tMinY = minOf(v0y, v1y, v2y); val tMaxY = maxOf(v0y, v1y, v2y)
+        val tMinZ = minOf(v0z, v1z, v2z); val tMaxZ = maxOf(v0z, v1z, v2z)
+        return !(tMaxX < minX || tMinX > maxX
+            || tMaxY < minY || tMinY > maxY
+            || tMaxZ < minZ || tMinZ > maxZ)
+    }
+
+    /**
+     * AI-paint pillar (C9 §C.2 paint_connected_component): collect
+     * every triangle reachable from [seed] via shared-vertex
+     * adjacency, ignoring dihedral angle. Used to paint a whole
+     * connected sub-mesh (e.g. when a Benchy's smokestack is a
+     * separate component from the hull).
+     *
+     * Result is bounded by [maxTriangles]; the unbounded version on a
+     * 1.4 M-tri dragon would lock the input thread for a few seconds.
+     */
+    fun connectedComponent(seed: Int, maxTriangles: Int = 1_500_000): IntArray {
+        require(seed in 0 until mesh.triCount) {
+            "seed=$seed out of [0, ${mesh.triCount})"
+        }
+        ensureAdjacency()
+        val starts = adjStart!!
+        val nbrs = adjNeighbors!!
+        val cap = maxTriangles.coerceAtMost(mesh.triCount)
+        val visited = BooleanArray(mesh.triCount)
+        val queue = IntArray(cap)
+        val out = IntArray(cap)
+        var qHead = 0
+        var qTail = 0
+        var outCount = 0
+        queue[qTail++] = seed
+        visited[seed] = true
+        while (qHead < qTail && outCount < cap) {
+            val cur = queue[qHead++]
+            out[outCount++] = cur
+            val s = starts[cur]
+            val e = starts[cur + 1]
+            for (k in s until e) {
+                val n = nbrs[k]
+                if (!visited[n] && qTail < cap) {
                     visited[n] = true
                     queue[qTail++] = n
                 }

@@ -3,6 +3,7 @@ package dev.orcaxr.app.mcp
 import dev.orcaxr.app.BedCollision
 import dev.orcaxr.app.BedFit
 import dev.orcaxr.app.GizmoTool
+import dev.orcaxr.app.MeshBvh
 import dev.orcaxr.app.PaintBrush
 import dev.orcaxr.app.PlacedModel
 import dev.orcaxr.app.SlicerProfile
@@ -147,6 +148,36 @@ class WorkspaceModel internal constructor() {
     fun publishPlateMovable(value: Boolean) { _plateMovable.value = value }
 
     fun setAttached(value: Boolean) { _attached.value = value }
+
+    // ---- BVH provider (C9 — AI paint pillar) ----
+    //
+    // The XR brush keeps its own BVH cache (built lazily on first
+    // paint-mode toggle in MainActivity, see comment at LE_3166). MCP
+    // tools also need that BVH so spatial paint primitives (sphere /
+    // slab / normal-cone / surface-region / connected-component /
+    // projected-mask) can compute triangle index sets. We keep them
+    // sharing the SAME cache via this provider — registered by
+    // MainActivity once `bvhCache` is in scope, called from the
+    // suspend tool body. The provider builds on demand if the cache is
+    // cold (XR paint mode never touched), which lets an LLM-driven
+    // session start straight from a cold paint state.
+    fun interface BvhProvider {
+        suspend fun getBvh(modelId: String): MeshBvh?
+    }
+
+    @Volatile private var bvhProvider: BvhProvider? = null
+
+    fun setBvhProvider(provider: BvhProvider?) {
+        bvhProvider = provider
+    }
+
+    /**
+     * Suspend-safe lookup. Returns null if no provider is registered
+     * (tests / app backgrounded) or the model id is unknown / the
+     * source mesh fails to read.
+     */
+    suspend fun getBvh(modelId: String): MeshBvh? =
+        bvhProvider?.getBvh(modelId)
 
     companion object {
         @Volatile private var instance: WorkspaceModel? = null
