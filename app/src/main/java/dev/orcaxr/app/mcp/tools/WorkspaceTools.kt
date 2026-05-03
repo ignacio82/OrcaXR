@@ -77,6 +77,7 @@ internal object WorkspaceTools {
             LoadModelFromPath(workspace),
             SetPlateMovable(workspace),
             RepairModel(workspace),
+            SimplifyModel(workspace),
             CutModel(workspace),
             MeshBoolean(workspace),
             SplitModel(workspace),
@@ -946,6 +947,57 @@ internal object WorkspaceTools {
             }
             ws.emit(WorkspaceAction.RepairModel(id))
             return success("Repair started for $id.", JSONObject().apply { put("model_id", id) })
+        }
+    }
+
+    class SimplifyModel(private val ws: WorkspaceModel) : Tool {
+        override val name = "simplify_model"
+        override val description =
+            "D17 — Run libslic3r's quadric edge collapse to reduce a model's triangle count " +
+                "(`its_quadric_edge_collapse` — Garland-Heckbert metric). Replaces the model's " +
+                "source with the simplified mesh. target_triangle_count is the desired post-" +
+                "simplify tri count; libslic3r usually overshoots by a few when no further " +
+                "edges meet the max_error budget. Heavy meshes (1M+ tris) thrash the paint BVH " +
+                "and toolpath debounce — simplifying to ~200K triangles before authoring is the " +
+                "intended workflow. Paint state is dropped (per-triangle indices don't survive " +
+                "the re-mesh; same convention as repair_model). max_error is the per-collapse " +
+                "Garland-Heckbert error cap; pass a small value (≤ 0.01) to preserve sharp " +
+                "features, larger (≥ 1.0) to collapse aggressively, or 0 to disable the cap."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id", "target_triangle_count"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id from list_placed_models"),
+                "target_triangle_count" to Schemas.integer(
+                    "Desired post-simplify triangle count (must be > 4 and < input tri count)",
+                ),
+                "max_error" to Schemas.number(
+                    "Per-collapse Garland-Heckbert error cap (default 0 = no cap)",
+                ),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            if (ws.placedModels.value.none { it.id == id }) {
+                return ToolResult.error("No model with id '$id'.")
+            }
+            val target = args.optInt("target_triangle_count", -1)
+            if (target <= 4) {
+                return ToolResult.error(
+                    "target_triangle_count must be > 4 (got $target).",
+                )
+            }
+            val maxError = args.optDouble("max_error", 0.0).toFloat()
+            ws.emit(WorkspaceAction.SimplifyModel(id, target, maxError))
+            return success(
+                "Simplify started for $id (target $target tris).",
+                JSONObject().apply {
+                    put("model_id", id)
+                    put("target_triangle_count", target)
+                    put("max_error", maxError.toDouble())
+                },
+            )
         }
     }
 

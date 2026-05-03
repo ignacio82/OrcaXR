@@ -2331,6 +2331,68 @@ private fun XrShell(
     }
 
     /**
+     * D17 — quadric edge collapse mesh simplification. Replaces the
+     * model's source with a simplified version targeting
+     * [targetTriangleCount]. Like runRepair, drops paint state +
+     * brim ears + per-volume metadata because the topology change
+     * invalidates per-triangle indices (gotcha #27).
+     */
+    fun runSimplify(modelId: String, targetTriangleCount: Int, maxError: Float) {
+        val src = placedModels.firstOrNull { it.id == modelId } ?: return
+        val originalLabel = src.label
+        scope.launch {
+            isLoadingModel = true
+            loadingLabel = "Simplifying $originalLabel"
+            val out = File(ctx.cacheDir, "simplify_${modelId}_${System.currentTimeMillis()}.3mf")
+            val result = runCatching {
+                SlicerEngine.simplifyMesh(src.source, out, targetTriangleCount, maxError)
+            }.onFailure {
+                android.util.Log.e("OrcaXR", "simplifyMesh threw", it)
+            }.getOrNull()
+            if (result == null) {
+                isLoadingModel = false
+                loadingLabel = null
+                android.widget.Toast.makeText(
+                    ctx,
+                    "Simplify failed for $originalLabel (see logs).",
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+                return@launch
+            }
+            placedModels = placedModels.map {
+                if (it.id != modelId) it else it.copy(
+                    source = out,
+                    originalSource = null,
+                    groupId = null,
+                    groupOrdinal = 0,
+                    paintFilamentIndex = null,
+                    supportFlags = null,
+                    seamFlags = null,
+                    fuzzySkinFlags = null,
+                    brimEars = emptyList(),
+                    volumes = emptyList(),
+                    previewVersion = it.previewVersion + 1,
+                    previewRotZDeg = -1,
+                    previewScalePct = -1,
+                )
+            }
+            sliceState.value = SliceUiState.Idle
+            try {
+                previewStl(modelId)
+            } finally {
+                isLoadingModel = false
+                loadingLabel = null
+            }
+            android.widget.Toast.makeText(
+                ctx,
+                "Simplified: ${result.trianglesIn} → ${result.trianglesOut} tris " +
+                    "(${"%.1f".format(result.reductionPct)}% reduction).",
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+
+    /**
      * Phase XR_OBJ_8 — linear clone pattern. Duplicates the selected
      * model [count] times along [axis] with [spacingMm] between
      * footprints. Each clone gets a unique id so its preview GLB
@@ -2850,6 +2912,7 @@ private fun XrShell(
         // buttons already drive. runCut/runBoolean read selectedModel
         // through closure capture, so set selection first.
         onRepairModel = { id -> runRepair(id) },
+        onSimplifyModel = { id, target, maxErr -> runSimplify(id, target, maxErr) },
         onCutModel = { id, plane ->
             val src = placedModels.firstOrNull { it.id == id }
             if (src != null) runCut(plane, sourceOverride = src)

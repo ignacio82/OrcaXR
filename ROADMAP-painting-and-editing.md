@@ -149,19 +149,15 @@ Once **D14** lands, a PARAMETER_MODIFIER volume needs an editor — the whole po
 
 **Exit criteria:** Attach a PARAMETER_MODIFIER cube spanning the bottom 5 mm of a 20 mm cube, set its `sparse_infill_density=100`. Sliced gcode shows 100 % infill in the lower 5 mm and the project default everywhere else. Same overrides land via MCP and round-trip through 3MF.
 
-### D17. Mesh simplify (quadric edge collapse) 🔴 Not started
+### D17. Mesh simplify (quadric edge collapse) 🟡 Shipped — JNI + MCP; SimplifyPanel SpatialPanel deferred
 
-> **Files (planned):** `app/src/main/cpp/slic3r_jni.cpp` (new `nativeSimplifyMesh(stlPath, targetTriCount, maxError, outPath) -> SimplifyResult` wrapping libslic3r `its_quadric_edge_collapse` from `QuadricEdgeCollapse.hpp`), `SlicerEngine.kt` (Kotlin wrapper), per-row hammer icon in `ModelRow` next to the existing wrench (D4 / A5), new `SimplifyPanel.kt` with a Target Tri Count slider + Max Error slider + before/after stats.
+> **Files:** `app/src/main/cpp/slic3r_jni.cpp::nativeSimplifyMesh` (wraps libslic3r `its_quadric_edge_collapse`), `SlicerEngine.kt::simplifyMesh` Kotlin wrapper + `SimplifyResult` data class, `WorkspaceAction.SimplifyModel`, `WorkspaceBinding` `onSimplifyModel` callback, `MainActivity::runSimplify` (paint-state sweep mirroring `runRepair`), `WorkspaceTools.SimplifyModel` MCP tool. `SimplifyModelToolTest` covers the MCP tool's arg-parsing + action-emission contract.
+
+JNI calls libslic3r's Garland-Heckbert quadric edge collapse from `QuadricEdgeCollapse.hpp` (already linked into our `liblibslic3r.a` via the existing CMake). The Kotlin caller passes `(input, output, targetTriangleCount, maxError)`; the native side aggregates the first object's MODEL_PART volumes into a single TriangleMesh, runs the in-place collapse, and writes a fresh single-object 3MF. Like repair, simplify mutates topology — `runSimplify` drops paint / supports / seam / fuzzy / brim ears / per-volume metadata when it replaces `PlacedModel.source`. `simplify_model(model_id, target_triangle_count, max_error?)` MCP tool emits the action and routes through the same `applyPaintMutation` sweep + preview re-bake path repair / cut / boolean already use. The dedicated `SimplifyPanel` SpatialPanel (slider + before/after stats) is the remaining UI follow-up — current MCP surface is enough to use the feature end-to-end.
 
 Heavy STLs (1M+ triangles — anything from Thingiverse + a typical artistic scan) thrash both BVH paint (gotcha #11f's allocation budget) and toolpath-rebake debounce. Upstream's `GLGizmoSimplify` invokes `its_quadric_edge_collapse` from `libslic3r/QuadricEdgeCollapse.hpp` — already in our linked libslic3r, no new patches.
 
-**Implementation outline:**
-1. JNI pipeline: load STL → compute current tri count → run `its_quadric_edge_collapse(triangle_count_target, max_error)` → write binary STL via libslic3r STL writer.
-2. UI: hammer icon per row → opens `SimplifyPanel` showing current triangle count, target slider (10 % to 100 % of current), max-error slider (0.0 to 1.0 scale matching upstream defaults), "Preview" button (debounced 500 ms — re-compute and update tri-count label without committing), "Apply" button.
-3. Apply replaces `PlacedModel.source` with the simplified path AND clears all topology-dependent state (paint, supports, seams, fuzzy skin, brim ears, volumes, originalSource, groupId — same sweep as A5 mesh repair, see `MainActivity::runRepair`).
-4. MCP: `simplify_model(model_id, target_tri_count, max_error)`.
-
-**Exit criteria:** A 1.4M-tri dragon simplifies to 200 K tris in <5 s on Galaxy XR with visible silhouette preservation; paint mode stays under the 256 MB JVM cap on the simplified mesh; round-trip via `save_model_as_stl` produces a valid binary STL.
+**Exit criteria:** A 1.4M-tri dragon simplifies to 200 K tris in <5 s on Galaxy XR with visible silhouette preservation; paint mode stays under the 256 MB JVM cap on the simplified mesh; round-trip via `save_model_as_stl` produces a valid binary STL. ✅ MCP path met (`simplify_model`); on-device 1.4M-tri benchmark is the remaining instrumented-test follow-up.
 
 ### D18. AI-paint authoring upgrades (post-C9) 🟢 Shipped — all 10 sub-items live
 

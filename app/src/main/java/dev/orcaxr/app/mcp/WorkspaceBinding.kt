@@ -116,6 +116,8 @@ fun BindWorkspaceModel(
     onLoadModelFromPath: ((java.io.File, WorkspaceAction.LoadMode) -> Unit)? = null,
     /** Mesh repair (`runRepair`). */
     onRepairModel: ((modelId: String) -> Unit)? = null,
+    /** D17 — quadric edge collapse simplification (`runSimplify`). */
+    onSimplifyModel: ((modelId: String, targetTriangleCount: Int, maxError: Float) -> Unit)? = null,
     /** Cut a model along a Z plane (`runCut` after selecting the model). */
     onCutModel: ((modelId: String, planeZmm: Float) -> Unit)? = null,
     /** Mesh boolean op (`runBoolean`). */
@@ -213,6 +215,7 @@ fun BindWorkspaceModel(
     val onSaveStlLatest = rememberUpdatedState(onSaveModelStl)
     val onLoadLatest = rememberUpdatedState(onLoadModelFromPath)
     val onRepairLatest = rememberUpdatedState(onRepairModel)
+    val onSimplifyLatest = rememberUpdatedState(onSimplifyModel)
     val onCutLatest = rememberUpdatedState(onCutModel)
     val onBoolLatest = rememberUpdatedState(onMeshBoolean)
     val onSplitLatest = rememberUpdatedState(onSplitModel)
@@ -263,6 +266,7 @@ fun BindWorkspaceModel(
             onLoadModelFromPath = onLoadLatest.value,
             setPlateMovable = setPlateMovableLatest.value,
             onRepairModel = onRepairLatest.value,
+            onSimplifyModel = onSimplifyLatest.value,
             onCutModel = onCutLatest.value,
             onMeshBoolean = onBoolLatest.value,
             onSplitModel = onSplitLatest.value,
@@ -309,6 +313,7 @@ private fun handleAction(
     onLoadModelFromPath: ((java.io.File, WorkspaceAction.LoadMode) -> Unit)?,
     setPlateMovable: (Boolean) -> Unit,
     onRepairModel: ((modelId: String) -> Unit)?,
+    onSimplifyModel: ((modelId: String, targetTriangleCount: Int, maxError: Float) -> Unit)?,
     onCutModel: ((modelId: String, planeZmm: Float) -> Unit)?,
     onMeshBoolean: ((modelAId: String, modelBId: String, op: Int) -> Unit)?,
     onSplitModel: ((modelId: String) -> Unit)?,
@@ -435,6 +440,11 @@ private fun handleAction(
         is WorkspaceAction.RepairModel -> {
             if (onRepairModel != null) onRepairModel(action.modelId)
             else Log.w(TAG, "RepairModel not wired by host activity.")
+        }
+        is WorkspaceAction.SimplifyModel -> {
+            if (onSimplifyModel != null)
+                onSimplifyModel(action.modelId, action.targetTriangleCount, action.maxError)
+            else Log.w(TAG, "SimplifyModel not wired by host activity.")
         }
         is WorkspaceAction.CutModel -> {
             if (onCutModel != null) onCutModel(action.modelId, action.planeZmm)

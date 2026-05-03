@@ -80,6 +80,7 @@ extern "C" {
 #include <libslic3r/Exception.hpp>
 #include <libslic3r/CutUtils.hpp>
 #include <libslic3r/MeshBoolean.hpp>
+#include <libslic3r/QuadricEdgeCollapse.hpp>
 #include <libslic3r/GCode/ThumbnailData.hpp>
 #include <libslic3r/Emboss.hpp>
 #include <libslic3r/NSVGUtils.hpp>
@@ -4253,6 +4254,134 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRepairModel(
         return nullptr;
     } catch (...) {
         ORCAXR_LOGE("nativeRepairModel: unknown exception");
+        return nullptr;
+    }
+}
+
+// ============================================================================
+// D17 — Mesh simplify (quadric edge collapse).
+//
+// libslic3r ships `its_quadric_edge_collapse` (see QuadricEdgeCollapse.hpp)
+// — Garland-Heckbert quadric metric, in-place mutates the indexed_triangle_set
+// to a target triangle count. We expose it through a single JNI entry that:
+//   1. Loads the mesh container (STL / 3MF / OBJ / AMF — same load_mesh_container
+//      shared with repair / cut / boolean).
+//   2. Aggregates the first object's MODEL_PART volumes into one TriangleMesh
+//      (same convention as nativeRepairModel — non-printable volumes drop out).
+//   3. Calls its_quadric_edge_collapse with the requested triangle target.
+//   4. Writes the result as a single-object 3MF.
+//
+// Like repair, simplify changes triangle topology — the Kotlin caller MUST
+// drop paint / supports / seam / fuzzy / brim ears / per-volume metadata
+// when replacing PlacedModel.source. Silent retention of those would bleed
+// into the wrong faces (see GEMINI.md gotcha #27).
+//
+// Returns a jintArray with these slots (or null on early failure):
+//   [0] success_flag : 0=failed, 1=ok
+//   [1] tris_in
+//   [2] tris_out
+//   [3] verts_in
+//   [4] verts_out
+// ============================================================================
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_orcaxr_app_SlicerEngine_nativeSimplifyMesh(
+    JNIEnv* env, jclass,
+    jstring jInputPath,
+    jstring jOutputPath,
+    jint jTargetTriCount,
+    jfloat jMaxError)
+{
+    ScopedUtf in(env, jInputPath);
+    ScopedUtf out(env, jOutputPath);
+    ORCAXR_LOGI("nativeSimplifyMesh: %s -> %s (target=%d, maxErr=%.4f)",
+                in.c, out.c, (int)jTargetTriCount, (double)jMaxError);
+
+    auto build_result = [&](jint success, jint tris_in, jint tris_out,
+                            jint verts_in, jint verts_out) -> jintArray {
+        jint vals[5] = { success, tris_in, tris_out, verts_in, verts_out };
+        jintArray jOut = env->NewIntArray(5);
+        if (jOut == nullptr) return nullptr;
+        env->SetIntArrayRegion(jOut, 0, 5, vals);
+        return jOut;
+    };
+
+    try {
+        Slic3r::Model model;
+        try {
+            model = load_mesh_container(in.c);
+        } catch (const std::exception& e) {
+            ORCAXR_LOGE("nativeSimplifyMesh: read failed: %s", e.what());
+            return nullptr;
+        }
+        if (model.objects.empty()) {
+            ORCAXR_LOGE("nativeSimplifyMesh: empty model");
+            return nullptr;
+        }
+
+        Slic3r::ModelObject* mo = model.objects.front();
+        Slic3r::TriangleMesh mesh = mo->mesh();
+        if (mesh.empty()) {
+            ORCAXR_LOGE("nativeSimplifyMesh: mesh empty after aggregation");
+            return nullptr;
+        }
+
+        const jint tris_in  = jint(mesh.its.indices.size());
+        const jint verts_in = jint(mesh.its.vertices.size());
+
+        // Sanity: target must be > 4 (a tetrahedron is the smallest
+        // closed mesh) and < tris_in (otherwise a no-op).
+        const uint32_t target = (jTargetTriCount > 4 && jTargetTriCount < tris_in)
+                                ? uint32_t(jTargetTriCount) : 0;
+        if (target == 0) {
+            ORCAXR_LOGE("nativeSimplifyMesh: invalid target %d (input has %d tris)",
+                        (int)jTargetTriCount, tris_in);
+            return build_result(/*success=*/0, tris_in, tris_in, verts_in, verts_in);
+        }
+
+        float max_error = jMaxError > 0.0f ? float(jMaxError) : std::numeric_limits<float>::max();
+
+        try {
+            Slic3r::its_quadric_edge_collapse(
+                mesh.its,
+                target,
+                &max_error,
+                /*throw_on_cancel=*/nullptr,
+                /*statusfn=*/nullptr);
+        } catch (const std::bad_alloc&) {
+            ORCAXR_LOGE("nativeSimplifyMesh: OOM in quadric collapse");
+            return build_result(/*success=*/0, tris_in, tris_in, verts_in, verts_in);
+        } catch (const std::exception& e) {
+            ORCAXR_LOGE("nativeSimplifyMesh: collapse threw: %s", e.what());
+            return build_result(/*success=*/0, tris_in, tris_in, verts_in, verts_in);
+        }
+
+        // Mesh::its mutated in place; refresh the AABB tree etc.
+        mesh = Slic3r::TriangleMesh(mesh.its);
+
+        const jint tris_out = jint(mesh.its.indices.size());
+        const jint verts_out = jint(mesh.its.vertices.size());
+        ORCAXR_LOGI("nativeSimplifyMesh: %d -> %d tris, %d -> %d verts (final maxErr=%.4f)",
+                    tris_in, tris_out, verts_in, verts_out, (double)max_error);
+
+        Slic3r::Model outModel;
+        Slic3r::ModelObject* outObj = outModel.add_object(
+            "simplified", out.c, std::move(mesh));
+        outObj->add_instance();
+        if (!Slic3r::store_3mf(out.c, &outModel, /*config=*/nullptr,
+                               /*fullpath_sources=*/false)) {
+            ORCAXR_LOGE("nativeSimplifyMesh: store_3mf failed");
+            return build_result(/*success=*/0, tris_in, tris_out, verts_in, verts_out);
+        }
+        ORCAXR_LOGI("nativeSimplifyMesh: wrote %s", out.c);
+        return build_result(/*success=*/1, tris_in, tris_out, verts_in, verts_out);
+    } catch (const std::bad_alloc&) {
+        ORCAXR_LOGE("nativeSimplifyMesh: outer OOM");
+        return nullptr;
+    } catch (const std::exception& e) {
+        ORCAXR_LOGE("nativeSimplifyMesh: exception %s", e.what());
+        return nullptr;
+    } catch (...) {
+        ORCAXR_LOGE("nativeSimplifyMesh: unknown exception");
         return nullptr;
     }
 }

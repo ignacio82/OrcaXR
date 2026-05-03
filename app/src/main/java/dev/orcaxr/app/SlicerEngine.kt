@@ -667,6 +667,88 @@ object SlicerEngine {
     }
 
     // ====================================================================
+    // D17 — Mesh simplify (quadric edge collapse).
+    //
+    // Wraps libslic3r's `its_quadric_edge_collapse` (Garland-Heckbert
+    // quadric metric, in-place edge collapse). Input is loaded through
+    // the same mesh-container reader repair / cut / boolean use; output
+    // is a single-object 3MF with the simplified surface.
+    //
+    // Like repair, simplify mutates topology — the caller MUST sweep
+    // paint / supports / seam / fuzzy / brim ears / per-volume metadata
+    // when replacing PlacedModel.source. Reusing those byte arrays
+    // would bleed paint into the wrong faces.
+    // ====================================================================
+
+    /**
+     * D17 — simplification result. `triangles_out` reflects the actual
+     * post-collapse count; libslic3r usually overshoots the target by a
+     * few triangles because edge collapse stops once no further
+     * candidates are below `max_error`.
+     */
+    data class SimplifyResult(
+        val output: File,
+        val trianglesIn: Int,
+        val trianglesOut: Int,
+        val verticesIn: Int,
+        val verticesOut: Int,
+    ) {
+        val trianglesDelta: Int get() = trianglesOut - trianglesIn
+        val reductionPct: Float get() =
+            if (trianglesIn > 0) 100f * (trianglesIn - trianglesOut).toFloat() / trianglesIn else 0f
+    }
+
+    /**
+     * D17 — simplify [input] to ≈[targetTriangleCount] triangles via
+     * quadric edge collapse. [maxError] caps the per-collapse Garland-
+     * Heckbert error; pass a small value (≤ 0.01) to preserve sharp
+     * features, a large value (≥ 1.0) to let the algorithm collapse
+     * aggressively. Pass 0f / negative to disable the cap (uses
+     * std::numeric_limits<float>::max() native-side).
+     *
+     * Output is a single-object 3MF at [output] containing the
+     * simplified mesh. The caller replaces `PlacedModel.source` with
+     * this path, clears any per-triangle paint state, and bumps
+     * `previewVersion` to trigger a re-bake.
+     *
+     * Returns null when simplification couldn't run (read failed,
+     * mesh empty, or target out of range).
+     */
+    suspend fun simplifyMesh(
+        input: File,
+        output: File,
+        targetTriangleCount: Int,
+        maxError: Float = 0f,
+    ): SimplifyResult? = withContext(dispatcher) {
+        require(input.exists() && input.canRead()) {
+            "input not readable: ${input.absolutePath}"
+        }
+        require(targetTriangleCount > 4) {
+            "targetTriangleCount must be > 4 (got $targetTriangleCount)"
+        }
+        output.parentFile?.mkdirs()
+        output.delete()
+        val stats = nativeSimplifyMesh(
+            input.absolutePath,
+            output.absolutePath,
+            targetTriangleCount,
+            maxError,
+        ) ?: return@withContext null
+        require(stats.size == 5) {
+            "nativeSimplifyMesh returned ${stats.size} ints, expected 5"
+        }
+        if (stats[0] == 0) return@withContext null
+        if (!output.exists() || output.length() == 0L) return@withContext null
+        SimplifyResult(
+            output = output,
+            trianglesIn = stats[1],
+            trianglesOut = stats[2],
+            verticesIn = stats[3],
+            verticesOut = stats[4],
+        )
+    }
+
+    // ====================================================================
     // D4 — Embossing / SVG inset / text-on-object.
     //
     // Three-step API mirroring upstream OrcaSlicer's GLGizmoEmboss but
@@ -1391,6 +1473,13 @@ object SlicerEngine {
     private external fun nativeRepairModel(
         inputPath: String,
         outputPath: String,
+    ): IntArray?
+    /** D17 — quadric edge collapse simplification. See [simplifyMesh]. */
+    private external fun nativeSimplifyMesh(
+        inputPath: String,
+        outputPath: String,
+        targetTriCount: Int,
+        maxError: Float,
     ): IntArray?
     /** D4 — TTF text → extruded 3MF. See [buildTextMesh]. */
     private external fun nativeBuildTextMesh(

@@ -174,6 +174,20 @@ sealed interface WorkspaceAction {
     data class RepairModel(val modelId: String) : WorkspaceAction
 
     /**
+     * D17 — quadric edge collapse mesh simplification. Replaces the
+     * model's source with a simplified version targeting
+     * [targetTriangleCount]. Same paint-state sweep as RepairModel
+     * (topology changes invalidate per-triangle indices). [maxError]
+     * caps the per-collapse Garland-Heckbert error; pass 0f to use the
+     * native default (no cap).
+     */
+    data class SimplifyModel(
+        val modelId: String,
+        val targetTriangleCount: Int,
+        val maxError: Float = 0f,
+    ) : WorkspaceAction
+
+    /**
      * Cut a model along a Z plane. `planeZmm` is in printer-frame
      * mm above the bed. Both halves are kept by default; the slicer
      * handles bed-grounding for the lower half.
