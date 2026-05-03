@@ -168,6 +168,11 @@ internal object AiRenderEngine {
         palette: List<String> = emptyList(),
         paintFilamentIndex: ByteArray? = null,
         backgroundRgb: IntArray = intArrayOf(242, 242, 242),
+        /** D18e — burn-in axis triad, bbox dim text, and 10 mm
+         *  scale bar before encoding to PNG. Skipped for
+         *  TriangleId mode (machine-decoded; annotations would
+         *  corrupt the per-pixel ID encoding). */
+        annotate: Boolean = false,
     ): RenderResult {
         val w = camera.widthPx
         val h = camera.heightPx
@@ -309,6 +314,14 @@ internal object AiRenderEngine {
             }
         }
 
+        if (annotate && mode != RenderMode.TriangleId) {
+            // Triangle-ID renders are decoded from per-pixel RGB
+            // values; overlays would corrupt the encoding. For
+            // every other mode we burn the axis triad, dim text,
+            // and scale bar into the buffer pre-PNG-encode.
+            val geom = AiIntrospection.geometry(bvh, bins = 1)
+            RenderAnnotation.annotate(rgba, w, h, camera, geom.bboxCenteredPreview)
+        }
         val pngBytes = PngWriter.encodeRgba(rgba, w, h)
         return RenderResult(pngBytes, w, h, triIdMap)
     }

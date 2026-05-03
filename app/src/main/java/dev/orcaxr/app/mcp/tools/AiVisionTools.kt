@@ -284,6 +284,7 @@ internal object AiVisionTools {
                 "height_px" to Schemas.integer("Default 512, capped at 1024"),
                 "mode" to Schemas.string("'paint' (default) | 'solid' | 'triangle_id' | 'normals' | 'depth'"),
                 "inline" to Schemas.bool("If true and PNG < 200 KB, also include base64 image part"),
+                "annotate" to Schemas.bool("D18e — burn axis triad (R=X G=Y B=Z), bbox dims (e.g. '60 x 31 x 48 mm'), and a 10 mm scale bar into the corners. Default false. Skipped for triangle_id mode (would corrupt the encoding)."),
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult =
@@ -805,8 +806,12 @@ internal object AiVisionTools {
         val camera = buildCamera(ws, session, bvh, args, w, h)
             ?: return ToolResult.error("Couldn't resolve camera (bad view_name / custom?).")
         val inline = args.optBoolean("inline", false)
-        // Cache hit?
-        val token = AiSessionState.contentToken(model.id, mode.name, camera, paintContentVersion(model))
+        val annotate = args.optBoolean("annotate", false)
+        // Cache hit? Annotate flag participates in the token so an
+        // annotated render and a non-annotated render at the same
+        // mode/view/paint state get distinct cache entries.
+        val cacheKey = if (annotate) "${mode.name}:annot" else mode.name
+        val token = AiSessionState.contentToken(model.id, cacheKey, camera, paintContentVersion(model))
         session.getArtifact(token)?.let { hit ->
             return packResult(model.id, camera, hit.pngBytes, token, inline, JSONObject().apply {
                 put("cache_hit", true)
@@ -824,6 +829,7 @@ internal object AiVisionTools {
             mode = mode,
             palette = ws.previewPalette.value,
             paintFilamentIndex = if (mode == AiRenderEngine.RenderMode.Paint) model.paintFilamentIndex else null,
+            annotate = annotate,
         )
         session.saveArtifact(AiSessionState.RenderArtifact(
             token = token,
