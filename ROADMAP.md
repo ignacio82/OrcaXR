@@ -625,13 +625,11 @@ Shared XR space, multiple users editing the same scene. Speculative.
 
 ## F. Profile catalog breadth
 
-### F1. Additional U1 nozzle sizes (0.2, 0.8) 🔴 Not started — APK cost <100 KB
+### F1. Additional U1 nozzle sizes (0.2, 0.8) 🟢 Shipped — full U1 nozzle line vendored
 
-Snapmaker fork ships 0.2/0.4/0.6/0.8 nozzle variants; OrcaXR has 0.4 + 0.6 (0.6 shipped in commit `878fe25`). 0.2 + 0.8 remain.
+> **Files:** `app/src/main/assets/profiles/Snapmaker/machine/Snapmaker U1 (0.{2,8} nozzle).json`, 8 process leaves under `0.2 nozzle`, 5 leaves under `0.8 nozzle`, 10 process parents (`fdm_process_U1_0.{06,08,10,12,14}_nozzle_0.2.json` + `0.{24,32,40,48,56}_nozzle_0.8.json`). NOTICE.md updated.
 
-**Implementation:** vendor `assets/profiles/Snapmaker/machine/Snapmaker U1 (0.2 nozzle).json` + `(0.8 nozzle).json` and the matching `process/0.{08,12,16}` (for 0.2) and `process/0.{40,52,60}` (for 0.8) leaves byte-identical from Snapmaker fork. AGPL attribution stays in NOTICE.md. `OrcaProfileLoader` auto-discovers — no code change.
-
-**Exit criteria:** picker shows 0.2 / 0.4 / 0.6 / 0.8 nozzle entries; cube slices on each; AFC sync still works.
+OrcaXR's U1 picker now spans 0.2 / 0.4 / 0.6 / 0.8 nozzles, matching the Snapmaker fork v2.3.1 lineup. All vendored byte-identical from `https://github.com/Snapmaker/OrcaSlicer` (v2.3.1 tag); `OrcaProfileLoader` auto-discovers them with no code change. `SnapmakerNozzleCatalogTest` (9 tests) covers presence + instantiability of every leaf, the 0.2/0.8 `nozzle_diameter` resolution, the 0.06 / 0.4 `layer_height` resolution, and a tripwire that fails if any vendored leaf's `inherits` points at a missing parent.
 
 ### F2. Branded U1 filament leaves 🟡 Partial — PLA family vendored, ABS/PETG/exotic still pending
 

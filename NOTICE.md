@@ -38,6 +38,13 @@ B3 per-slot filament-type override path with material-tuned
 `nozzle_temperature` / `pressure_advance` / `filament_max_volumetric_speed`
 values without rewriting the active machine profile.
 
+`app/src/main/assets/profiles/Snapmaker/machine/Snapmaker U1 (0.{2,8}
+nozzle).json` plus the matching `process/0.{06..14} … (0.2 nozzle)` /
+`0.{24..56} … (0.8 nozzle)` leaves and their `fdm_process_U1_<height>_
+nozzle_<dia>` parents are byte-identical snapshots of Snapmaker fork
+v2.3.1, vendored under F1 to round out the U1 nozzle picker (alongside
+the previously vendored 0.4 + 0.6 sets).
+
 License: **GNU AGPL v3.0** — same as the upstream OrcaSlicer fork.
 
 ## Elegoo Centauri Carbon OrcaSlicer profiles
