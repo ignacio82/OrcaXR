@@ -14,6 +14,17 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- MCP server foreground service — keeps the local HTTP/JSON-RPC
+         endpoint alive when the user takes off the headset to drive
+         OrcaXR from a phone-side companion app. Without this the server
+         lives only in the Application singleton, which the OS will
+         eventually reap once the Activity is gone. POST_NOTIFICATIONS is
+         needed because Android 13+ requires a runtime grant to display
+         the persistent "MCP server running" notification. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:name=".OrcaXRApplication"
         android:label="@string/app_name"
@@ -32,5 +43,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          Hosts the MCP HTTP server so it survives headset removal. Stays
+          tightly scoped to the user-toggled MCP feature: started only
+          when the Devices → MCP switch is on, stopped immediately when
+          the user flips it off. foregroundServiceType="dataSync" is the
+          canonical pick for "I'm running a long-lived background data
+          channel"; Android 14+ requires the type to be declared.
+          Not exported — only McpController inside our process binds it.
+        -->
+        <service
+            android:name=".mcp.McpForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 </manifest>

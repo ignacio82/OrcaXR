@@ -95,6 +95,182 @@ internal object AiPaintTools {
         WorkspaceAction.PaintKind.FuzzySkin -> m.fuzzySkinFlags
     }
 
+    /**
+     * Outcome of [resolveTag]. Splitting the success/failure path lets
+     * callers emit a tool-specific message context without juggling
+     * nullable Ints.
+     */
+    private sealed interface TagResult {
+        data class Resolved(val tag: Int) : TagResult
+        data class Error(val message: String) : TagResult
+    }
+
+    /** Common color names → canonical hex, used to resolve a name like
+     *  "white" against the active filament palette. Keep small + obvious
+     *  — the palette is the source of truth, this is just the bridge for
+     *  natural-language LLM input. */
+    private val NAMED_COLOR_HEX: Map<String, String> = mapOf(
+        "white" to "#FFFFFF",
+        "black" to "#000000",
+        "red" to "#FF0000",
+        "green" to "#008000",
+        "lime" to "#00FF00",
+        "blue" to "#0000FF",
+        "yellow" to "#FFFF00",
+        "orange" to "#FF8000",
+        "cyan" to "#00FFFF",
+        "magenta" to "#FF00FF",
+        "pink" to "#FFC0CB",
+        "purple" to "#800080",
+        "violet" to "#8A2BE2",
+        "brown" to "#8B4513",
+        "gray" to "#808080",
+        "grey" to "#808080",
+        "silver" to "#C0C0C0",
+        "gold" to "#FFD700",
+    )
+
+    private val NON_COLOR_TAG_NAMES: Map<WorkspaceAction.PaintKind, Map<String, Int>> = mapOf(
+        WorkspaceAction.PaintKind.Support to mapOf(
+            "none" to 0, "unpainted" to 0, "off" to 0,
+            "enforcer" to 1, "force" to 1, "on" to 1,
+            "blocker" to 2, "block" to 2, "off_force" to 2,
+        ),
+        WorkspaceAction.PaintKind.Seam to mapOf(
+            "none" to 0, "unpainted" to 0, "off" to 0,
+            "enforcer" to 1, "force" to 1, "on" to 1,
+            "blocker" to 2, "block" to 2,
+        ),
+        WorkspaceAction.PaintKind.FuzzySkin to mapOf(
+            "none" to 0, "off" to 0, "unpainted" to 0,
+            "fuzzy" to 1, "on" to 1, "enabled" to 1,
+        ),
+    )
+
+    /**
+     * Resolve a `tag` argument from any of the shapes the LLM might emit:
+     *
+     *   - integer in range            → use as-is
+     *   - string of digits            → parsed as int
+     *   - color name ("white")        → matched against the active palette
+     *   - hex literal ("#FFFFFF")     → matched against the active palette
+     *   - named flag ("enforcer")     → only valid for support/seam/fuzzy_skin
+     *
+     * Closest-palette match uses RGB Euclidean distance with a generous
+     * threshold; if the palette has no plausible match (or is empty),
+     * we fail with a message that includes the actual palette so the
+     * model can pick a numeric tag in its retry.
+     */
+    private fun resolveTag(
+        raw: Any?,
+        kind: WorkspaceAction.PaintKind,
+        ws: WorkspaceModel,
+        maxTag: Int,
+        defaultZero: Boolean = false,
+    ): TagResult {
+        // Default for omitted args: tag 0 means "unpainted" / matches the
+        // optInt(..., -1) / 0 historic behavior. where_tag uses 0; tag
+        // requires explicit value.
+        if (raw == null || raw == JSONObject.NULL) {
+            return if (defaultZero) TagResult.Resolved(0)
+            else TagResult.Error(
+                "'tag' is required (integer 0..$maxTag, color name like \"white\", or hex like \"#FFFFFF\").",
+            )
+        }
+
+        // Integer (or numeric string).
+        val asInt =
+            when (raw) {
+                is Int -> raw
+                is Long -> raw.toInt()
+                is Number -> raw.toInt()
+                is String -> raw.trim().toIntOrNull()
+                else -> null
+            }
+        if (asInt != null) {
+            return if (asInt in 0..maxTag) TagResult.Resolved(asInt)
+            else TagResult.Error("tag=$asInt out of range for ${kind.name.lowercase()} (0..$maxTag).")
+        }
+
+        if (raw !is String) {
+            return TagResult.Error("'tag' must be an integer or a color name; got ${raw::class.simpleName}.")
+        }
+
+        val token = raw.trim().lowercase()
+
+        // Non-color kinds: resolve named flags (enforcer / blocker / fuzzy / off …).
+        if (kind != WorkspaceAction.PaintKind.Color) {
+            val map = NON_COLOR_TAG_NAMES[kind] ?: emptyMap()
+            map[token]?.let {
+                return if (it <= maxTag) TagResult.Resolved(it)
+                else TagResult.Error("tag '$token'=$it out of range (0..$maxTag).")
+            }
+            return TagResult.Error(
+                "'$token' isn't a recognised ${kind.name.lowercase()} flag. " +
+                    "Use ${(map.keys.sorted()).joinToString(", ")} or an integer 0..$maxTag.",
+            )
+        }
+
+        // Color kind: name → hex → closest palette slot.
+        val palette = ws.previewPalette.value
+        if (palette.isEmpty()) {
+            return TagResult.Error(
+                "Active palette is empty (no printer selected, or filament list not loaded). " +
+                    "Either select a printer in OrcaXR or pass an integer tag (1..$maxTag).",
+            )
+        }
+        val targetHex = NAMED_COLOR_HEX[token] ?: token.takeIf { it.startsWith("#") || token.length == 6 }
+        if (targetHex == null) {
+            return TagResult.Error(
+                "'$token' isn't a known color name. Try one of: " +
+                    NAMED_COLOR_HEX.keys.sorted().joinToString(", ") +
+                    "; or a hex like \"#FFFFFF\"; or an integer tag 1..$maxTag.",
+            )
+        }
+        val target = parseHex(targetHex)
+            ?: return TagResult.Error("Couldn't parse '$targetHex' as a color.")
+        var bestSlot = -1
+        var bestDist = Int.MAX_VALUE
+        for ((idx, hex) in palette.withIndex()) {
+            val rgb = parseHex(hex) ?: continue
+            val d = colorDistanceSq(target, rgb)
+            if (d < bestDist) {
+                bestDist = d
+                bestSlot = idx
+            }
+        }
+        if (bestSlot < 0) {
+            return TagResult.Error(
+                "Couldn't match '$token' to any palette entry. Active palette: " +
+                    palette.joinToString(", "),
+            )
+        }
+        // Tag = slot_index + 1 (tag 0 reserved for unpainted).
+        val tag = bestSlot + 1
+        return if (tag in 0..maxTag) TagResult.Resolved(tag)
+        else TagResult.Error("Resolved tag $tag is out of range (0..$maxTag).")
+    }
+
+    private fun parseHex(s: String): IntArray? {
+        val h = s.removePrefix("#").trim()
+        if (h.length != 6) return null
+        return runCatching {
+                intArrayOf(
+                    h.substring(0, 2).toInt(16),
+                    h.substring(2, 4).toInt(16),
+                    h.substring(4, 6).toInt(16),
+                )
+            }
+            .getOrNull()
+    }
+
+    private fun colorDistanceSq(a: IntArray, b: IntArray): Int {
+        val dr = a[0] - b[0]
+        val dg = a[1] - b[1]
+        val db = a[2] - b[2]
+        return dr * dr + dg * dg + db * db
+    }
+
     /** Common preflight: model exists, attached, kind / merge / tag valid. */
     private suspend fun preflight(
         ws: WorkspaceModel,
@@ -117,14 +293,17 @@ internal object AiPaintTools {
         val merge = parseMergeMode(args.optString("merge", "replace"))
             ?: return Either.Left(ToolResult.error("Unknown merge. Use replace|only_unpainted|only_tagged."))
 
-        val tag = args.optInt("tag", -1)
         val maxTag = maxTagFor(kind)
-        if (tag < 0 || tag > maxTag) {
-            return Either.Left(ToolResult.error(
-                "tag=$tag out of range for ${kind.name.lowercase()} (0..$maxTag).",
-            ))
-        }
-        val whereTag = args.optInt("where_tag", 0)
+        val tag =
+            when (val resolved = resolveTag(args.opt("tag"), kind, ws, maxTag)) {
+                is TagResult.Resolved -> resolved.tag
+                is TagResult.Error -> return Either.Left(ToolResult.error(resolved.message))
+            }
+        val whereTag =
+            when (val resolved = resolveTag(args.opt("where_tag"), kind, ws, maxTag, defaultZero = true)) {
+                is TagResult.Resolved -> resolved.tag
+                is TagResult.Error -> return Either.Left(ToolResult.error(resolved.message))
+            }
         if (merge == WorkspaceAction.MergeMode.OnlyTagged && whereTag !in 0..maxTag) {
             return Either.Left(ToolResult.error(
                 "where_tag=$whereTag out of range for ${kind.name.lowercase()} (0..$maxTag).",
@@ -682,6 +861,18 @@ internal object AiPaintTools {
         }
     }
 
+    /**
+     * The full schema for `inner` is in [PaintWithMirror.inputSchema], but
+     * a small on-device LLM can't render the schema back into the right
+     * literal under stress. Surface a copy-pasteable example so error
+     * recovery is one retry away.
+     */
+    private const val EXPECTED_INNER_SHAPE: String =
+        "Expected `inner` to be an object: " +
+            "{\"tool\": \"paint_sphere\" (or paint_slab/paint_normal_cone/paint_geodesic_disc/" +
+            "paint_surface_region/paint_connected_component/paint_triangle_list/paint_projected_mask), " +
+            "\"arguments\": { ...args for that inner tool, including model_id and tag... }}"
+
     class PaintWithMirror(
         private val ws: WorkspaceModel,
         private val innerTools: List<Tool>,
@@ -719,15 +910,20 @@ internal object AiPaintTools {
                 else -> return ToolResult.error("axis must be x|y|z, got '$axisRaw'")
             }
             val inner = args.optJSONObject("inner")
-                ?: return ToolResult.error("'inner' object is required")
+                ?: return ToolResult.error(EXPECTED_INNER_SHAPE)
             val innerToolName = inner.optString("tool")
-            if (innerToolName.isEmpty()) return ToolResult.error("inner.tool name is required")
+            if (innerToolName.isEmpty())
+                return ToolResult.error("inner.tool is required. $EXPECTED_INNER_SHAPE")
             val innerTool = innerTools.firstOrNull { it.name == innerToolName }
-                ?: return ToolResult.error("Unknown inner tool '$innerToolName'.")
+                ?: return ToolResult.error(
+                    "Unknown inner tool '$innerToolName'. Allowed: " +
+                        innerTools.joinToString(", ") { it.name },
+                )
             val innerArgs = inner.optJSONObject("arguments")
-                ?: return ToolResult.error("inner.arguments object required")
+                ?: return ToolResult.error("inner.arguments object required. $EXPECTED_INNER_SHAPE")
             val modelId = innerArgs.optString("model_id")
-            if (modelId.isEmpty()) return ToolResult.error("inner.arguments.model_id required")
+            if (modelId.isEmpty())
+                return ToolResult.error("inner.arguments.model_id required. $EXPECTED_INNER_SHAPE")
             if (ws.placedModels.value.none { it.id == modelId }) {
                 return ToolResult.error("No model with id '$modelId'.")
             }

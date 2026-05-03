@@ -2,6 +2,7 @@ package dev.orcaxr.app.mcp
 
 import android.content.Context
 import android.util.Log
+import dev.orcaxr.app.mcp.tools.AiAnchorTools
 import dev.orcaxr.app.mcp.tools.AiIntrospectionTools
 import dev.orcaxr.app.mcp.tools.AiPaintTools
 import dev.orcaxr.app.mcp.tools.AiVisionTools
@@ -67,7 +68,21 @@ class McpController private constructor(
             settings.enabled.combine(settings.port) { e, p -> e to p }
                 .distinctUntilChanged()
                 .collect { (enabled, port) ->
-                    if (enabled) startServer(port) else stopServer()
+                    if (enabled) {
+                        // Hand off to the foreground service so the
+                        // OS doesn't reap the socket once OrcaXR is
+                        // backgrounded (headset removed). The service
+                        // re-enters this controller via
+                        // onForegroundServiceStarted() to actually bind.
+                        // Port lives in DataStore; the service reads
+                        // the latest snapshot so we don't pass it here.
+                        @Suppress("UNUSED_VARIABLE") val unusedPort = port
+                        McpForegroundService.start(appContext)
+                    } else {
+                        // stopService → service.onDestroy →
+                        // onForegroundServiceStopped() → socket close.
+                        McpForegroundService.stop(appContext)
+                    }
                 }
         }
     }
@@ -75,6 +90,9 @@ class McpController private constructor(
     fun shutdown() {
         watcher?.cancel()
         watcher = null
+        // Best-effort: ask the service to stop too. If the process is
+        // already going away the OS will tear it down regardless.
+        McpForegroundService.stop(appContext)
         stopServer()
         scope.cancel("McpController.shutdown")
     }
@@ -95,15 +113,35 @@ class McpController private constructor(
      */
     suspend fun refresh() {
         val snap = settings.snapshot()
-        if (snap.enabled) startServerSnapshot(snap) else stopServer()
+        if (snap.enabled) {
+            // Cycle the foreground service so onForegroundServiceStarted
+            // re-reads the snapshot and rebinds with the new key/port.
+            stopServer()
+            McpForegroundService.stop(appContext)
+            McpForegroundService.start(appContext)
+        } else {
+            McpForegroundService.stop(appContext)
+            stopServer()
+        }
     }
 
-    private suspend fun startServer(port: Int) {
-        val snap = settings.snapshot()
-        if (!snap.enabled) return
-        // Force the snapshot's port to the watcher's current value so
-        // we don't race the DataStore reader.
-        startServerSnapshot(snap.copy(port = port))
+    /**
+     * Called by [McpForegroundService.onStartCommand] once the
+     * foreground notification is up. Reads the current settings
+     * snapshot and binds the socket. Splits the work: the watcher
+     * decides "should the service be running?", the service decides
+     * "I'm running, please bind."
+     */
+    internal fun onForegroundServiceStarted() {
+        scope.launch {
+            val snap = settings.snapshot()
+            if (snap.enabled) startServerSnapshot(snap)
+        }
+    }
+
+    /** Called by the foreground service on its way down. */
+    internal fun onForegroundServiceStopped() {
+        stopServer()
     }
 
     private fun startServerSnapshot(snap: McpSettings.Snapshot) {
@@ -181,6 +219,10 @@ class McpController private constructor(
             for (t in aiPaintTools) builder.tool(t)
             // C9 milestone 3 — geometry / topology introspection.
             for (t in AiIntrospectionTools.all(WorkspaceModel.get())) builder.tool(t)
+            // Anchor + seed + coverage tools — turn spatial reasoning
+            // into name-picking for small on-device LLMs that can't pick
+            // a triangle id off a render.
+            for (t in AiAnchorTools.all(WorkspaceModel.get())) builder.tool(t)
             // C9 milestone 2 — vision pillar (software rasterizer).
             for (t in AiVisionTools.all(WorkspaceModel.get(), AiSessionState.get())) builder.tool(t)
             // D18j — persistent paint recipes.

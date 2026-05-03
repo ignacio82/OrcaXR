@@ -61,19 +61,64 @@ internal object AiVisionTools {
         RenderViewsGrid(ws, session),
         ListActivePalette(ws),
         RenderDiff(session),
+        RenderMontage(ws, session),
     )
 
     // ---- Helpers ----
 
+    /**
+     * Outcome of [resolveModelAndBvh]. Splitting the failure modes lets
+     * callers emit a specific error message for each cause — the LLM
+     * (and humans debugging) need to know whether to add a model_id
+     * argument, look up a different id, or just wait for the BVH to
+     * finish building.
+     */
+    private sealed interface ResolvedModel {
+        data class Found(val model: PlacedModel, val bvh: MeshBvh) : ResolvedModel
+        /** No `model_id` argument was passed at all. */
+        data object MissingId : ResolvedModel
+        /** `model_id` was passed but doesn't match any placed model. */
+        data class UnknownId(val id: String, val knownIds: List<String>) : ResolvedModel
+        /** Model exists but its BVH hasn't finished building. Retry shortly. */
+        data class BvhNotReady(val id: String) : ResolvedModel
+    }
+
     private suspend fun resolveModelAndBvh(
         ws: WorkspaceModel,
         args: JSONObject,
-    ): Pair<PlacedModel, MeshBvh>? {
+    ): ResolvedModel {
         val id = args.optString("model_id").trim()
-        if (id.isEmpty()) return null
-        val model = ws.placedModels.value.firstOrNull { it.id == id } ?: return null
-        val bvh = ws.getBvh(id) ?: return null
-        return model to bvh
+        if (id.isEmpty()) return ResolvedModel.MissingId
+        val placed = ws.placedModels.value
+        val model = placed.firstOrNull { it.id == id }
+            ?: return ResolvedModel.UnknownId(id, placed.map { it.id })
+        val bvh = ws.getBvh(id) ?: return ResolvedModel.BvhNotReady(id)
+        return ResolvedModel.Found(model, bvh)
+    }
+
+    /** Format a [ResolvedModel] failure as the message body of a [ToolResult.error]. */
+    private fun ResolvedModel.toError(): ToolResult = when (this) {
+        is ResolvedModel.Found ->
+            // Caller should never call this on a Found; defend against
+            // a future copy-paste regression with a clear message.
+            ToolResult.error("Internal error: tried to format a Found result.")
+        is ResolvedModel.MissingId ->
+            ToolResult.error(
+                "model_id argument is required. Call list_placed_models first " +
+                    "and pass the `id=...` value of the target model.",
+            )
+        is ResolvedModel.UnknownId ->
+            ToolResult.error(
+                "No model with id=\"$id\" on the active plate. " +
+                    if (knownIds.isEmpty()) "Workspace is empty — load a model first."
+                    else "Known ids: ${knownIds.joinToString(", ")}.",
+            )
+        is ResolvedModel.BvhNotReady ->
+            ToolResult.error(
+                "Model $id is loading but its BVH isn't built yet. " +
+                    "Call get_workspace_state once or twice and retry — " +
+                    "BVH usually finishes within a second of load_model_from_path returning.",
+            )
     }
 
     private fun parseMode(raw: String): AiRenderEngine.RenderMode? = when (raw.lowercase()) {
@@ -229,8 +274,9 @@ internal object AiVisionTools {
             properties = mapOf("model_id" to Schemas.string("Model id")),
         )
         override suspend fun call(args: JSONObject): ToolResult {
-            val (model, bvh) = resolveModelAndBvh(ws, args)
-                ?: return ToolResult.error("Couldn't resolve model + BVH.")
+            val resolved = resolveModelAndBvh(ws, args)
+            if (resolved !is ResolvedModel.Found) return resolved.toError()
+            val (model, bvh) = resolved.model to resolved.bvh
             val geom = AiIntrospection.geometry(bvh, bins = 1)
             val builtin = JSONArray().apply {
                 for (n in AiRenderEngine.NAMED_PRESETS) {
@@ -695,8 +741,9 @@ internal object AiVisionTools {
         )
         override suspend fun call(args: JSONObject): ToolResult {
             if (!ws.attached.value) return ToolResult.error("OrcaXR not attached.")
-            val (model, bvh) = resolveModelAndBvh(ws, args)
-                ?: return ToolResult.error("Couldn't resolve model + BVH.")
+            val resolved = resolveModelAndBvh(ws, args)
+            if (resolved !is ResolvedModel.Found) return resolved.toError()
+            val (model, bvh) = resolved.model to resolved.bvh
             val viewsRaw = args.optJSONArray("view_names")
                 ?: return ToolResult.error("'view_names' array required")
             val pw = args.optInt("panel_width_px", 256).coerceIn(16, MAX_RENDER_DIM)
@@ -860,6 +907,236 @@ internal object AiVisionTools {
         }
     }
 
+    /**
+     * Opinionated 6-view ortho montage. One tool call → one PNG laid
+     * out as a 2×3 grid:
+     *
+     *     ┌────────┬────────┬────────┐
+     *     │ FRONT  │  TOP   │ RIGHT  │
+     *     ├────────┼────────┼────────┤
+     *     │ BACK   │ BOTTOM │ LEFT   │
+     *     └────────┴────────┴────────┘
+     *
+     * Each cell has a 1-pixel grid line; the cell's view name is burned
+     * into the top-left corner so the model can read which face it's
+     * looking at without separate tool calls. Use this as the FIRST
+     * render call for a new model — it gives a small vision model
+     * enough spatial context to pick anchors and seed paint regions
+     * without iterating render_view 6 times.
+     */
+    class RenderMontage(
+        private val ws: WorkspaceModel,
+        private val session: AiSessionState,
+    ) : Tool {
+        override val name = "render_montage"
+        override val description =
+            "Render a 6-view ortho montage of the model in one PNG (2 rows × 3 columns: " +
+                "front/top/right on top, back/bottom/left on bottom). Cheaper and clearer " +
+                "than calling render_view six times — small vision models can read all six " +
+                "faces of a 3D shape from one image. Each cell is labelled with its view " +
+                "name. Pass `panel_size_px` to control per-cell resolution (default 256, " +
+                "max 512). Use this BEFORE picking anchors / seeds for paint operations."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id"),
+                "panel_size_px" to Schemas.integer("Per-cell width=height (default 256, max 512)"),
+                "inline" to Schemas.bool("If true and PNG ≤ 200 KB, also include base64 image part"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            if (!ws.attached.value) return ToolResult.error("OrcaXR not attached.")
+            val resolved = resolveModelAndBvh(ws, args)
+            if (resolved !is ResolvedModel.Found) return resolved.toError()
+            val (model, bvh) = resolved.model to resolved.bvh
+            val cell = args.optInt("panel_size_px", 256).coerceIn(64, 512)
+            // Layout: row-major. Top row reads as "what the user sees if
+            // they walk around the model clockwise"; bottom row is the
+            // opposite faces.
+            val views = listOf("front", "top", "right", "back", "bottom", "left")
+            val cols = 3; val rows = 2
+            val totalW = cell * cols
+            val totalH = cell * rows
+            val composed = ByteArray(totalW * totalH * 4)
+            // Background fill so empty cells (rendering failures) don't
+            // leak alpha=0 into the PNG.
+            run {
+                var i = 0
+                while (i < composed.size) {
+                    composed[i] = 242.toByte()
+                    composed[i + 1] = 242.toByte()
+                    composed[i + 2] = 242.toByte()
+                    composed[i + 3] = 255.toByte()
+                    i += 4
+                }
+            }
+            val geom = AiIntrospection.geometry(bvh, bins = 1)
+            val rendered = ArrayList<String>(views.size)
+            for ((idx, viewName) in views.withIndex()) {
+                val cam = AiRenderEngine.namedPreset(viewName, geom.bboxCenteredPreview, cell, cell)
+                val r = AiRenderEngine.render(
+                    bvh = bvh,
+                    camera = cam,
+                    mode = AiRenderEngine.RenderMode.Paint,
+                    palette = ws.previewPalette.value,
+                    paintFilamentIndex = model.paintFilamentIndex,
+                )
+                val decoded = AiRenderEngine.decodePng(r.pngBytes) ?: continue
+                val col = idx % cols
+                val row = idx / cols
+                blitInto(decoded, composed, totalW, col * cell, row * cell, cell, cell)
+                burnLabel(composed, totalW, totalH, col * cell, row * cell, viewName.uppercase())
+                rendered += viewName
+            }
+            // Cell separators — one-pixel lines on internal edges only.
+            drawGrid(composed, totalW, totalH, cell, rows, cols)
+            val outPng = dev.orcaxr.app.PngWriter.encodeRgba(composed, totalW, totalH)
+            // Cache under a stable token so a re-call with the same paint
+            // state hits the cache.
+            val cacheCam = AiRenderEngine.CameraSpec(FloatArray(16), FloatArray(16), totalW, totalH)
+            val token = AiSessionState.contentToken(
+                model.id, "montage:${cell}", cacheCam, paintContentVersion(model),
+            )
+            session.saveArtifact(AiSessionState.RenderArtifact(
+                token = token,
+                pngBytes = outPng,
+                widthPx = totalW,
+                heightPx = totalH,
+                camera = cacheCam,
+                triangleIdMap = null,
+                createdAtMs = System.currentTimeMillis(),
+            ))
+            val inline = args.optBoolean("inline", false)
+            val body = JSONObject().apply {
+                put("ok", true)
+                put("model_id", model.id)
+                put("image_uri", buildResourceUri(token))
+                put("render_token", token)
+                put("bytes", outPng.size)
+                put("width_px", totalW)
+                put("height_px", totalH)
+                put("panel_size_px", cell)
+                put("layout", "2x3 (rows×cols)")
+                put("views", JSONArray().apply { for (v in views) put(v) })
+                put("rendered_count", rendered.size)
+            }
+            val text = "Rendered 6-view montage (${totalW}×${totalH}, ${outPng.size} B)"
+            val images = if (inline && outPng.size <= INLINE_BASE64_BYTE_CAP) {
+                listOf(ToolResult.ImagePart(
+                    mediaType = "image/png",
+                    base64Data = Base64.getEncoder().encodeToString(outPng),
+                ))
+            } else emptyList()
+            return ToolResult.ok(text, body, images)
+        }
+
+        private fun blitInto(
+            src: AiRenderEngine.DecodedPng,
+            dst: ByteArray, dstW: Int,
+            dstX: Int, dstY: Int, dstWClip: Int, dstHClip: Int,
+        ) {
+            val cw = kotlin.math.min(src.widthPx, dstWClip)
+            val ch = kotlin.math.min(src.heightPx, dstHClip)
+            for (y in 0 until ch) {
+                val srcRowOff = y * src.widthPx * 4
+                val dstRowOff = ((dstY + y) * dstW + dstX) * 4
+                System.arraycopy(src.rgba, srcRowOff, dst, dstRowOff, cw * 4)
+            }
+        }
+
+        /** Draw a 1px black grid between cells. Skips outer border. */
+        private fun drawGrid(buf: ByteArray, w: Int, h: Int, cell: Int, rows: Int, cols: Int) {
+            for (c in 1 until cols) {
+                val x = c * cell
+                for (y in 0 until h) {
+                    val o = (y * w + x) * 4
+                    buf[o] = 32; buf[o + 1] = 32; buf[o + 2] = 32; buf[o + 3] = 255.toByte()
+                }
+            }
+            for (r in 1 until rows) {
+                val y = r * cell
+                for (x in 0 until w) {
+                    val o = (y * w + x) * 4
+                    buf[o] = 32; buf[o + 1] = 32; buf[o + 2] = 32; buf[o + 3] = 255.toByte()
+                }
+            }
+        }
+
+        /**
+         * Burn a 5×7 bitmap-font label into a corner of the cell. We
+         * roll our own glyph table because we only need uppercase
+         * letters and the PNG writer can't accept text. Letters live in
+         * a 5-bit-wide × 7-row pattern; each row's bit pattern is in
+         * [GLYPHS]. Scale=2 → 10×14 pixels per char, fits in a corner
+         * of a 256² cell. White background pad (3 px) for legibility
+         * over dark renders.
+         */
+        private fun burnLabel(buf: ByteArray, totalW: Int, totalH: Int, x0: Int, y0: Int, label: String) {
+            val scale = 2
+            val charW = 5 * scale
+            val charH = 7 * scale
+            val gap = scale
+            val pad = 3
+            val labelW = label.length * (charW + gap) - gap
+            val labelH = charH
+            val bx = x0 + 4
+            val by = y0 + 4
+            // White rounded background.
+            for (yy in 0 until labelH + pad * 2) {
+                for (xx in 0 until labelW + pad * 2) {
+                    val px = bx + xx; val py = by + yy
+                    if (px !in 0 until totalW || py !in 0 until totalH) continue
+                    val o = (py * totalW + px) * 4
+                    buf[o] = 255.toByte(); buf[o + 1] = 255.toByte(); buf[o + 2] = 255.toByte(); buf[o + 3] = 255.toByte()
+                }
+            }
+            // Glyphs.
+            for ((charIdx, ch) in label.withIndex()) {
+                val glyph = GLYPHS[ch] ?: GLYPHS['?']!!
+                val gx0 = bx + pad + charIdx * (charW + gap)
+                val gy0 = by + pad
+                for (row in 0 until 7) {
+                    val bits = glyph[row]
+                    for (col in 0 until 5) {
+                        if ((bits shr (4 - col)) and 1 == 0) continue
+                        for (sy in 0 until scale) for (sx in 0 until scale) {
+                            val px = gx0 + col * scale + sx
+                            val py = gy0 + row * scale + sy
+                            if (px !in 0 until totalW || py !in 0 until totalH) continue
+                            val o = (py * totalW + px) * 4
+                            buf[o] = 16; buf[o + 1] = 16; buf[o + 2] = 16; buf[o + 3] = 255.toByte()
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5×7 bitmap font, only the chars needed for the labels we burn:
+        // FRONT, TOP, RIGHT, BACK, BOTTOM, LEFT, plus '?' as fallback.
+        // Each int is a 5-bit row pattern; 7 rows per glyph, top-down.
+        private companion object {
+            private val GLYPHS: Map<Char, IntArray> = mapOf(
+                'A' to intArrayOf(0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001),
+                'B' to intArrayOf(0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110),
+                'C' to intArrayOf(0b01111, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b01111),
+                'E' to intArrayOf(0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b11111),
+                'F' to intArrayOf(0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000),
+                'G' to intArrayOf(0b01111, 0b10000, 0b10000, 0b10011, 0b10001, 0b10001, 0b01111),
+                'H' to intArrayOf(0b10001, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001),
+                'I' to intArrayOf(0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b11111),
+                'K' to intArrayOf(0b10001, 0b10010, 0b10100, 0b11000, 0b10100, 0b10010, 0b10001),
+                'L' to intArrayOf(0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b11111),
+                'M' to intArrayOf(0b10001, 0b11011, 0b10101, 0b10101, 0b10001, 0b10001, 0b10001),
+                'N' to intArrayOf(0b10001, 0b10001, 0b11001, 0b10101, 0b10011, 0b10001, 0b10001),
+                'O' to intArrayOf(0b01110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110),
+                'P' to intArrayOf(0b11110, 0b10001, 0b10001, 0b11110, 0b10000, 0b10000, 0b10000),
+                'R' to intArrayOf(0b11110, 0b10001, 0b10001, 0b11110, 0b10100, 0b10010, 0b10001),
+                'T' to intArrayOf(0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100),
+                '?' to intArrayOf(0b01110, 0b10001, 0b00010, 0b00100, 0b00100, 0b00000, 0b00100),
+            )
+        }
+    }
+
     // ---- Shared render path ----
 
     private suspend fun renderInternal(
@@ -871,8 +1148,9 @@ internal object AiVisionTools {
         if (!ws.attached.value) {
             return ToolResult.error("OrcaXR's main window isn't currently attached.")
         }
-        val (model, bvh) = resolveModelAndBvh(ws, args)
-            ?: return ToolResult.error("Couldn't resolve model + BVH.")
+        val resolved = resolveModelAndBvh(ws, args)
+        if (resolved !is ResolvedModel.Found) return resolved.toError()
+        val (model, bvh) = resolved.model to resolved.bvh
         val w = args.optInt("width_px", DEFAULT_RENDER_DIM).coerceIn(16, MAX_RENDER_DIM)
         val h = args.optInt("height_px", DEFAULT_RENDER_DIM).coerceIn(16, MAX_RENDER_DIM)
         val modeRaw = args.optString("mode", defaultMode)
