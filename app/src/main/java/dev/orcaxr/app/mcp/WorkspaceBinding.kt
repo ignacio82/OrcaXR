@@ -225,7 +225,15 @@ fun BindWorkspaceModel(
     val onPaintTriangleSetLatest = rememberUpdatedState(onPaintTriangleSet)
 
     LaunchedEffect(workspace) {
-        workspace.actions.collect { action -> handleAction(
+        // D18g — track per-action ids matching WorkspaceModel's
+        // monotonic emit counter. SharedFlow delivery is FIFO so a
+        // local counter that increments per delivered action stays
+        // in sync with the model's emit ids. After dispatch, mark
+        // drained so flush_actions can wake.
+        var localId = 0L
+        workspace.actions.collect { action ->
+            localId++
+            handleAction(
             action = action,
             placedModels = placedModelsLatest.value,
             setPlacedModels = setPlacedModelsLatest.value,
@@ -264,7 +272,9 @@ fun BindWorkspaceModel(
             onPaintUndo = onPaintUndoLatest.value,
             onPaintRedo = onPaintRedoLatest.value,
             onPaintTriangleSet = onPaintTriangleSetLatest.value,
-        ) }
+            )
+            workspace.markDrained(localId)
+        }
     }
 }
 

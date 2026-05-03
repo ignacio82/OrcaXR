@@ -91,6 +91,7 @@ internal object WorkspaceTools {
             PaintSplitPlane(workspace),
             PaintUndo(workspace),
             PaintRedo(workspace),
+            FlushActions(workspace),
         )
     }
 
@@ -1599,6 +1600,50 @@ internal object WorkspaceTools {
             if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
             ws.emit(WorkspaceAction.PaintRedo(id))
             return success("Paint redo requested for $id.", JSONObject().apply { put("model_id", id) })
+        }
+    }
+
+    class FlushActions(private val ws: WorkspaceModel) : Tool {
+        override val name = "flush_actions"
+        override val description =
+            "Block until every action emitted before this call has been processed by the host " +
+                "binding. Use this between a mutating action (replace_paint_tag, transform_model, " +
+                "clear_paint, etc.) and a read-after-write that depends on the post-mutation state " +
+                "(paint_slab with merge='only_tagged', paint_geodesic_disc whose anchor depends on " +
+                "freshly-painted tris, etc.). Without flush_actions the second tool can read pre-" +
+                "mutation state because action dispatch is async — the JSON-RPC handler returns " +
+                "while the action is still in the queue. Times out after [timeout_ms] (default 5 s) " +
+                "if the host isn't draining (rare; typically means the activity backgrounded mid-" +
+                "call). Returns the per-id watermark so callers can verify drain completed."
+        override val inputSchema = Schemas.obj(
+            properties = mapOf(
+                "timeout_ms" to Schemas.integer("Wait timeout in ms (default 5000, max 30000)"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            // Snapshot the watermark BEFORE entering the wait so we
+            // know what id we need the binding to reach. With every
+            // emit incrementing _lastEmittedId atomically (under
+            // emitMutex), this is a stable target.
+            val target = ws.lastEmittedActionId.value
+            val timeoutMs = args.optInt("timeout_ms", 5000).coerceIn(1, 30_000).toLong()
+            val drained = kotlinx.coroutines.withTimeoutOrNull(timeoutMs) {
+                ws.lastDrainedActionId
+                    .first { it >= target }
+            }
+            val body = JSONObject().apply {
+                put("ok", drained != null)
+                put("target_id", target)
+                put("drained_id", ws.lastDrainedActionId.value)
+                put("timed_out", drained == null)
+            }
+            val text = if (drained != null) {
+                "Drained $target action(s)."
+            } else {
+                "flush_actions timed out after ${timeoutMs}ms (target=$target, drained=${ws.lastDrainedActionId.value}). Activity may have backgrounded."
+            }
+            return if (drained != null) ToolResult.ok(text, body)
+                   else ToolResult.error(text, body)
         }
     }
 

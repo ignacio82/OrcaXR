@@ -20,7 +20,25 @@ import kotlin.math.min
  */
 internal object AiMaskProjection {
 
-    enum class DepthMode { FrontFacingOnly, AllHits }
+    enum class DepthMode {
+        /** Front-most ray hit only (default). Misses curvature
+         *  wraparound on convex bulges. */
+        FrontFacingOnly,
+        /** Every triangle along the ray. Paints both sides of a
+         *  thin shell. */
+        AllHits,
+        /**
+         * D18d: keep any triangle whose outward normal is within
+         * 90° of `-camera_dir` (the lit hemisphere from the
+         * camera's viewpoint), regardless of ray-hit ordering.
+         * Catches convex-bulge wraparound (Pikachu cheek bump,
+         * eye socket) without painting the model's hidden back
+         * side. Sweet spot between FrontFacingOnly and AllHits
+         * for organic shapes; for true rotational symmetry
+         * paint_geodesic_disc (D18a) is still the right tool.
+         */
+        AnyFacing,
+    }
 
     /**
      * For each "on" pixel in [mask] (size [width] × [height], row-
@@ -97,6 +115,18 @@ internal object AiMaskProjection {
                         val n = bvh.triangleNormal(t)
                         if (n.x * dx + n.y * dy + n.z * dz >= 0f) continue
                     }
+                    out.add(t)
+                }
+            }
+            DepthMode.AnyFacing -> {
+                // Walk the full ray + accept every front-facing tri
+                // (regardless of ordering) so a curved bulge's
+                // wraparound triangles get included even though
+                // they aren't the front-most hit.
+                val tris = bvh.intersectAll(camOrigin, Vec3f(dx, dy, dz))
+                for (t in tris) {
+                    val n = bvh.triangleNormal(t)
+                    if (n.x * dx + n.y * dy + n.z * dz >= 0f) continue
                     out.add(t)
                 }
             }

@@ -607,7 +607,7 @@ internal object AiPaintTools {
                         put("items", Schemas.number(""))
                     })
                 },
-                "depth_mode" to Schemas.string("'front_facing_only' (default) | 'all_hits'"),
+                "depth_mode" to Schemas.string("'front_facing_only' (default) | 'any_facing' (catches curvature wraparound) | 'all_hits'"),
                 "back_face_filter" to Schemas.bool("Reject hits whose normal faces away from the camera (default true)"),
                 "tag" to Schemas.integer("Tag to apply"),
                 "merge" to Schemas.string("'replace' (default) | 'only_unpainted' | 'only_tagged'"),
@@ -648,7 +648,12 @@ internal object AiPaintTools {
             val depth = when (depthRaw) {
                 "", "front_facing_only", "front" -> dev.orcaxr.app.AiMaskProjection.DepthMode.FrontFacingOnly
                 "all_hits", "all" -> dev.orcaxr.app.AiMaskProjection.DepthMode.AllHits
-                else -> return ToolResult.error("depth_mode must be front_facing_only|all_hits")
+                // D18d — keep all front-facing tris along the ray
+                // (lit hemisphere), catching wraparound on bulges.
+                "any_facing", "any", "lit" -> dev.orcaxr.app.AiMaskProjection.DepthMode.AnyFacing
+                else -> return ToolResult.error(
+                    "depth_mode must be front_facing_only|all_hits|any_facing",
+                )
             }
             val backFace = args.optBoolean("back_face_filter", true)
             val viewArr = FloatArray(16) { view.optDouble(it, 0.0).toFloat() }

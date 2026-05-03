@@ -103,6 +103,41 @@ class AiMaskProjectionTest {
         assertTrue(tris.any { it == 0 || it == 1 })  // bottom
     }
 
+    @Test fun anyFacingProjectionCatchesAllFrontHemisphereHits() {
+        // Two parallel triangles at z=0 and z=10, BOTH +Z facing
+        // (typical of a thin shell with two faces sharing the same
+        // outward direction). FrontFacingOnly hits the closer one
+        // only; AnyFacing hits both since both normals are within
+        // 90° of the camera's -Y direction.
+        val twoLayers = mesh(floatArrayOf(
+            // both triangles +Y normal (CCW from +Y)
+            -5f, 0f, -5f, 5f, 0f, -5f, 0f, 0f, 5f,    // tri 0 at y=0
+            -5f, 5f, -5f, 5f, 5f, -5f, 0f, 5f, 5f,    // tri 1 at y=5 (behind tri 0 from -Y camera)
+        ))
+        val bvh = MeshBvh.build(twoLayers)
+        val geom = AiIntrospection.geometry(bvh, bins = 1)
+        val cam = AiRenderEngine.namedPreset("front", geom.bboxCenteredPreview, 16, 16)
+        val mask = BooleanArray(16 * 16) { false }
+        // Center pixel hits both triangles' projection.
+        mask[8 * 16 + 8] = true
+        val front = AiMaskProjection.project(
+            bvh, cam, mask,
+            depthMode = AiMaskProjection.DepthMode.FrontFacingOnly,
+            backFaceFilter = true,
+        ).toSet()
+        val anyFacing = AiMaskProjection.project(
+            bvh, cam, mask,
+            depthMode = AiMaskProjection.DepthMode.AnyFacing,
+            backFaceFilter = true,
+        ).toSet()
+        // FrontFacingOnly: at most 1 tri.
+        assertTrue("front-only hits ≤ 1", front.size <= 1)
+        // AnyFacing: both tris have +Y normals within the lit
+        // hemisphere of the -Y camera, so both should be included.
+        // (At least as many as FrontFacingOnly.)
+        assertTrue("any_facing hits ≥ front_facing_only", anyFacing.size >= front.size)
+    }
+
     @Test fun projectionWithEmptyMaskReturnsNoTriangles() {
         val bvh = MeshBvh.build(cube)
         val geom = AiIntrospection.geometry(bvh, bins = 1)

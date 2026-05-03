@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Process-scoped mirror of MainActivity's in-session state. The Compose
@@ -137,9 +139,47 @@ class WorkspaceModel internal constructor() {
     )
     val actions: SharedFlow<WorkspaceAction> = _actions.asSharedFlow()
 
-    /** Post an action. Suspends if the buffer is full. Used by MCP tools. */
-    suspend fun emit(action: WorkspaceAction) {
+    /**
+     * D18g — sequence numbers for action drain tracking. Each
+     * `emit` returns a monotonically-increasing id; the binding's
+     * collector calls `markDrained(id)` after handling. The MCP
+     * `flush_actions` tool then suspends until
+     * `lastDrainedActionId.value >= my_id`, so a tool sequence like
+     * `replace_paint_tag → flush_actions → paint_slab(only_tagged)`
+     * sees post-drain state on the second read instead of racing
+     * the queue.
+     */
+    private val _lastEmittedId = MutableStateFlow(0L)
+    val lastEmittedActionId: StateFlow<Long> = _lastEmittedId.asStateFlow()
+
+    private val _lastDrainedId = MutableStateFlow(0L)
+    val lastDrainedActionId: StateFlow<Long> = _lastDrainedId.asStateFlow()
+
+    private val emitMutex = kotlinx.coroutines.sync.Mutex()
+
+    /**
+     * Post an action. Suspends if the buffer is full. Returns the
+     * action's monotonic emit id so callers (the `paint_*` tools)
+     * can pass it to `flush_actions` to wait for the binding to
+     * drain.
+     */
+    suspend fun emit(action: WorkspaceAction): Long {
+        val id = emitMutex.withLock {
+            val next = _lastEmittedId.value + 1
+            _lastEmittedId.value = next
+            next
+        }
         _actions.emit(action)
+        return id
+    }
+
+    /** Called by `WorkspaceBinding`'s collector after each
+     *  action has been dispatched onto the host setters. */
+    fun markDrained(id: Long) {
+        // SharedFlow collection is FIFO so ids arrive in order, but
+        // be defensive against future reordering: only ratchet up.
+        val cur = _lastDrainedId.value
+        if (id > cur) _lastDrainedId.value = id
     }
 
     // ---- Publisher API (called from MainActivity LaunchedEffects) ----
