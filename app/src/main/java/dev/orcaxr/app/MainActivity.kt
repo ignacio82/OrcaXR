@@ -1921,6 +1921,7 @@ private fun XrShell(
                 fuzzySkinFlags = fuzzyForSlice,
                 brimEars = brimEarsForSlice,
                 objectConfigOverrides = selectedModel?.configOverrides ?: emptyMap(),
+                layerHeightProfile = selectedModel?.layerHeightProfile,
             ) { percent, message ->
                 // Fires on a libslic3r worker thread; mutating
                 // sliceState directly is fine — Compose's snapshot
@@ -2393,6 +2394,81 @@ private fun XrShell(
     }
 
     /**
+     * A10 — compute libslic3r's adaptive layer-height profile for one
+     * PlacedModel and write it into `placedModels[modelId].layerHeightProfile`.
+     * Bumps `previewVersion` so any UI that visualizes per-Z layer
+     * thickness rebakes; the actual slice doesn't fire — the profile
+     * threads through `nativeSlice` / `nativeSliceMulti` on the next
+     * Slice button press (or `slice_active_plate` MCP call).
+     *
+     * Sources the profile against the active config so the
+     * SlicingParameters min/max layer-height bounds match what the
+     * upcoming slice will use. Falls back to FullPrintConfig defaults
+     * when no profile is selected (rare — the picker has a default).
+     */
+    fun runComputeAdaptiveLayerHeights(
+        action: dev.orcaxr.app.mcp.WorkspaceAction.ComputeAdaptiveLayerHeights,
+    ) {
+        val src = placedModels.firstOrNull { it.id == action.modelId } ?: run {
+            android.util.Log.w(
+                "OrcaXR/A10",
+                "ComputeAdaptiveLayerHeights: no model id=${action.modelId}",
+            )
+            return
+        }
+        scope.launch {
+            isLoadingModel = true
+            loadingLabel = "Computing adaptive layer heights"
+            val cfg = mergedConfig(
+                selectedProfile.value,
+                layerHeightOverride.value,
+                paddedSlots,
+                mixedFilamentDefinitions,
+                paddedSlotRemap,
+                extraOverrides = printSettingsOverrides.value,
+                flushFromProject = loadedFlushSettings,
+                projectOverrides = loadedProjectOverrides,
+                slotTypes = filamentList.map { it.filamentType },
+                allFilaments = filamentsCatalog,
+            )
+            // The auto-profile only needs the per-object slicing
+            // parameters (min/max layer heights, nozzle, raft, etc.).
+            // Pass the merged config so the bounds match what the
+            // upcoming slice would compute against the same profile.
+            val source = src.originalSource ?: src.source
+            val profile = runCatching {
+                SlicerEngine.computeAdaptiveLayerHeights(
+                    input = source,
+                    config = cfg,
+                    quality = action.quality,
+                    smoothingRadius = action.smoothingRadius,
+                    smoothingKeepMin = action.smoothingKeepMin,
+                )
+            }.onFailure {
+                android.util.Log.e("OrcaXR", "computeAdaptiveLayerHeights threw", it)
+            }.getOrNull()
+            isLoadingModel = false
+            loadingLabel = null
+            if (profile == null || profile.size < 4) {
+                android.widget.Toast.makeText(
+                    ctx,
+                    "Adaptive layer heights failed for ${src.label} (see logs).",
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+                return@launch
+            }
+            placedModels = placedModels.map { m ->
+                if (m.id == action.modelId) m.copy(layerHeightProfile = profile) else m
+            }
+            android.widget.Toast.makeText(
+                ctx,
+                "Computed ${profile.size / 2} layer-height waypoints (Z ${"%.1f".format(profile[0])}..${"%.1f".format(profile[profile.size - 2])}mm).",
+                android.widget.Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
+
+    /**
      * Phase XR_OBJ_8 — linear clone pattern. Duplicates the selected
      * model [count] times along [axis] with [spacingMm] between
      * footprints. Each clone gets a unique id so its preview GLB
@@ -2672,12 +2748,22 @@ private fun XrShell(
             val paintsForMulti: List<ByteArray?>? =
                 if (models.none { hasAnyPaint(it.paintFilamentIndex) }) null
                 else models.map { it.paintFilamentIndex }
+            // A10: per-input variable layer-height profile, parallel
+            // to `pairs`. Null whole-list when no model has authored
+            // a profile so the JNI side short-circuits the per-input
+            // walk; per-entry null when this specific model has none.
+            val lhpsForMulti: List<FloatArray?>? =
+                if (models.none { it.layerHeightProfile != null && it.layerHeightProfile.size >= 4 }) null
+                else models.map { m ->
+                    m.layerHeightProfile?.takeIf { it.size >= 4 && (it.size and 1) == 0 }
+                }
             val result = SlicerEngine.sliceMulti(
                 pairs,
                 outFile,
                 cfg,
                 paintFilamentIndices = paintsForMulti,
                 objectOrdinals = ordinals,
+                layerHeightProfilesPerInput = lhpsForMulti,
             ) { percent, message ->
                 val cur = sliceState.value
                 if (cur is SliceUiState.Slicing) {
@@ -2913,6 +2999,41 @@ private fun XrShell(
         // through closure capture, so set selection first.
         onRepairModel = { id -> runRepair(id) },
         onSimplifyModel = { id, target, maxErr -> runSimplify(id, target, maxErr) },
+        onComputeAdaptiveLayerHeights = { action ->
+            runComputeAdaptiveLayerHeights(action)
+        },
+        onSetLayerHeightProfile = { action ->
+            // Validation matches the JNI: even count >= 4 with monotonic
+            // Z values. Anything else clears the profile rather than
+            // silently corrupting the model.
+            val raw = action.profile
+            val valid = raw == null ||
+                (raw.size >= 4 && (raw.size and 1) == 0 &&
+                    run {
+                        var ok = true
+                        var prev = Float.NEGATIVE_INFINITY
+                        var i = 0
+                        while (i < raw.size && ok) {
+                            if (raw[i] < prev) ok = false
+                            prev = raw[i]
+                            i += 2
+                        }
+                        ok
+                    })
+            val effective = if (valid) raw else null
+            placedModels = placedModels.map { m ->
+                if (m.id == action.modelId) m.copy(layerHeightProfile = effective) else m
+            }
+        },
+        onSetVolumeOverrides = { action ->
+            placedModels = placedModels.map { m ->
+                if (m.id != action.modelId) m
+                else m.copy(volumes = m.volumes.map { v ->
+                    if (v.id != action.volumeId) v
+                    else v.copy(configOverrides = action.overrides)
+                })
+            }
+        },
         onCutModel = { id, plane ->
             val src = placedModels.firstOrNull { it.id == id }
             if (src != null) runCut(plane, sourceOverride = src)
@@ -4073,6 +4194,7 @@ private fun XrShell(
                             fuzzySkinFlags = fuzzyForSlice,
                             brimEars = brimEarsForSlice,
                             objectConfigOverrides = testStatePlacedModels.firstOrNull()?.configOverrides ?: emptyMap(),
+                            layerHeightProfile = testStatePlacedModels.firstOrNull()?.layerHeightProfile,
                         ) { percent, message ->
                             val now = sliceState.value
                             if (now is SliceUiState.Slicing) {
@@ -8437,6 +8559,12 @@ private suspend fun sliceLocalFile(
      * behavior.
      */
     objectConfigOverrides: Map<String, String> = emptyMap(),
+    /**
+     * A10 — per-object adaptive / variable layer-height profile.
+     * Flat float[] of (z, h) pairs. Null / empty / odd-length = no
+     * profile (libslic3r's global layer_height governs).
+     */
+    layerHeightProfile: FloatArray? = null,
     onProgress: ((percent: Int, message: String) -> Unit)? = null,
 ): SliceResult {
     val gcode = File(stl.parentFile, "${stl.name}.gcode")
@@ -8446,6 +8574,7 @@ private suspend fun sliceLocalFile(
     val effectiveSeam = if (seamFlags == null || !hasAnyPaint(seamFlags)) null else seamFlags
     val effectiveFuzzy = if (fuzzySkinFlags == null || !hasAnyPaint(fuzzySkinFlags)) null else fuzzySkinFlags
     val effectiveBrim = if (brimEars == null || brimEars.isEmpty()) null else brimEars
+    val effectiveLhp = layerHeightProfile?.takeIf { it.size >= 4 && (it.size and 1) == 0 }
     return SlicerEngine.slice(
         stl = stl,
         outGcode = gcode,
@@ -8458,6 +8587,7 @@ private suspend fun sliceLocalFile(
         fuzzySkinFlags = effectiveFuzzy,
         brimEars = effectiveBrim,
         objectConfigOverrides = objectConfigOverrides,
+        layerHeightProfile = effectiveLhp,
         onProgress = onProgress,
     )
 }

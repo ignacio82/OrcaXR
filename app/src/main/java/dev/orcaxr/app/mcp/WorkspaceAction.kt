@@ -188,6 +188,71 @@ sealed interface WorkspaceAction {
     ) : WorkspaceAction
 
     /**
+     * A10 — compute an adaptive variable-layer-height profile for a
+     * model and store it on the matching `PlacedModel.layerHeightProfile`
+     * so it flows through the next slice via `nativeSlice` /
+     * `nativeSliceMulti.layerHeightProfilesPerInput`. Wraps libslic3r's
+     * `layer_height_profile_adaptive` + optional `smooth_height_profile`.
+     *
+     * [quality] = 0..1 (higher = finer over curved surfaces, coarser
+     * over vertical walls). [smoothingRadius] = 0..10 (0 = disable).
+     * [smoothingKeepMin] preserves min-h spikes through the smoothing
+     * pass when true.
+     */
+    data class ComputeAdaptiveLayerHeights(
+        val modelId: String,
+        val quality: Float = 0.5f,
+        val smoothingRadius: Int = 0,
+        val smoothingKeepMin: Boolean = false,
+    ) : WorkspaceAction
+
+    /**
+     * A10 — replace a model's `layerHeightProfile` directly with the
+     * provided (z, h) pairs (or null to clear). Used by the future
+     * manual Z-bar gizmo and by `set_layer_height_profile` MCP tool
+     * for callers that want to push a hand-built profile.
+     *
+     * Profile must be either null/empty (clear) or have an even count
+     * >= 4 with monotonically increasing Z values to take effect — the
+     * MainActivity handler validates and clears on a malformed input
+     * rather than corrupting the model.
+     */
+    data class SetLayerHeightProfile(
+        val modelId: String,
+        val profile: FloatArray?,
+    ) : WorkspaceAction {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is SetLayerHeightProfile) return false
+            if (modelId != other.modelId) return false
+            return profile.contentEqualsOrBothNull(other.profile)
+        }
+        override fun hashCode(): Int {
+            var h = modelId.hashCode()
+            h = 31 * h + (profile?.contentHashCode() ?: 0)
+            return h
+        }
+        private fun FloatArray?.contentEqualsOrBothNull(other: FloatArray?): Boolean {
+            if (this == null) return other == null
+            return other != null && this.contentEquals(other)
+        }
+    }
+
+    /**
+     * D16 — set per-volume config overrides on a single volume of a
+     * PlacedModel. [overrides] REPLACES the volume's existing
+     * `configOverrides` map; pass an empty map to clear. Only applies
+     * when the named volume exists; missing model / volume id silently
+     * no-ops with a log warning (the MCP tool layer enforces the
+     * preconditions and returns a structured error to the caller).
+     */
+    data class SetVolumeOverrides(
+        val modelId: String,
+        val volumeId: String,
+        val overrides: Map<String, String>,
+    ) : WorkspaceAction
+
+    /**
      * Cut a model along a Z plane. `planeZmm` is in printer-frame
      * mm above the bed. Both halves are kept by default; the slicer
      * handles bed-grounding for the lower half.

@@ -81,6 +81,7 @@ extern "C" {
 #include <libslic3r/CutUtils.hpp>
 #include <libslic3r/MeshBoolean.hpp>
 #include <libslic3r/QuadricEdgeCollapse.hpp>
+#include <libslic3r/Slicing.hpp>
 #include <libslic3r/GCode/ThumbnailData.hpp>
 #include <libslic3r/Emboss.hpp>
 #include <libslic3r/NSVGUtils.hpp>
@@ -1038,7 +1039,34 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
      * layer_height, wall_loops, sparse_infill_density, etc. Null /
      * empty = no per-object overrides (existing behavior). */
     jobjectArray jObjectConfigKeys,
-    jobjectArray jObjectConfigValues)
+    jobjectArray jObjectConfigValues,
+    /* D16 — per-volume config overrides for the user-authored extra
+     * volumes attached above. Three parallel flat arrays (sparse
+     * encoding so 0..N entries can attach to any 0..M-1 volume index):
+     *   jExtraVolumeConfigVolIdx[i] = which extra-volume index (0-based,
+     *                                  matching jExtraVolumePaths[i]) the
+     *                                  k=v pair below applies to.
+     *   jExtraVolumeConfigKeys[i]   = config key string.
+     *   jExtraVolumeConfigValues[i] = config value string.
+     * Each (k, v) pair lands on the matched ModelVolume's `config`
+     * (a `ModelConfigObject` subclass of `ModelConfig`) via
+     * `set_deserialize`. Null arrays / empty = no per-volume config
+     * (legacy behavior). Sparse so that volume 2 having 3 overrides
+     * and volume 5 having 1 don't waste a Map<String,String> per
+     * volume across the JNI boundary. */
+    jintArray    jExtraVolumeConfigVolIdx,
+    jobjectArray jExtraVolumeConfigKeys,
+    jobjectArray jExtraVolumeConfigValues,
+    /* A10 — per-object adaptive / variable layer-height profile. Flat
+     * jfloatArray of (z, h) pairs:
+     *   profile[2k]   = print Z in mm
+     *   profile[2k+1] = layer thickness in mm at that Z
+     * Authored onto `model.objects.front()->layer_height_profile.set(...)`
+     * BEFORE Print::apply. Null / empty = no profile, libslic3r falls
+     * back to the global / config-derived layer height. Computed
+     * upstream by [nativeAdaptiveLayerHeights] or hand-built by the
+     * UI. */
+    jfloatArray  jLayerHeightProfile)
 {
     ScopedUtf stl(env, jStlPath);
     ScopedUtf out(env, jOutGcodePath);
@@ -1142,6 +1170,14 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
                 if (have_tforms) {
                     env->GetFloatArrayRegion(jExtraVolumeTransforms, 0, n_extras * 12, v_tforms.data());
                 }
+                // D16 — track newly-added ModelVolume pointers in
+                // declaration order so a later sparse (volIdx, k, v)
+                // walk can apply per-volume config without a second
+                // search through `mo->volumes`. The primary mesh is
+                // already at `mo->volumes[0]` (loaded above via
+                // load_mesh_container); extras append after it.
+                std::vector<Slic3r::ModelVolume*> added_volumes;
+                added_volumes.reserve(n_extras);
                 for (jsize i = 0; i < n_extras; ++i) {
                     jstring jp = (jstring) env->GetObjectArrayElement(jExtraVolumePaths, i);
                     if (jp == nullptr) continue;
@@ -1190,12 +1226,94 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
                             }
                             ORCAXR_LOGI("nativeSlice: extra volume[%d] added '%s' type=%d",
                                         i, p.c, int(vtype));
+                            added_volumes.push_back(mv);
                             added = true;
                         }
+                    }
+                    if (!added) {
+                        // Keep added_volumes parallel to v_types/transforms
+                        // even when the read failed so per-volume config
+                        // indices stay aligned with the caller's expected
+                        // volume ordering.
+                        added_volumes.push_back(nullptr);
                     }
                     env->DeleteLocalRef(jp);
                     (void)added;
                 }
+                // D16 — apply per-volume config. Sparse encoding: each
+                // (volIdx, key, value) triple in parallel arrays applies
+                // one override to the volume at extras-index `volIdx`.
+                if (jExtraVolumeConfigVolIdx != nullptr &&
+                    jExtraVolumeConfigKeys != nullptr &&
+                    jExtraVolumeConfigValues != nullptr) {
+                    const jsize n_idx = env->GetArrayLength(jExtraVolumeConfigVolIdx);
+                    const jsize n_k   = env->GetArrayLength(jExtraVolumeConfigKeys);
+                    const jsize n_v   = env->GetArrayLength(jExtraVolumeConfigValues);
+                    const jsize n_cfg = std::min(n_idx, std::min(n_k, n_v));
+                    if (n_cfg > 0) {
+                        std::vector<jint> idxs(n_cfg, -1);
+                        env->GetIntArrayRegion(jExtraVolumeConfigVolIdx, 0, n_cfg, idxs.data());
+                        Slic3r::ConfigSubstitutionContext substitutions(
+                            Slic3r::ForwardCompatibilitySubstitutionRule::EnableSilent);
+                        for (jsize i = 0; i < n_cfg; ++i) {
+                            const int volIdx = int(idxs[i]);
+                            if (volIdx < 0 || volIdx >= int(added_volumes.size())) {
+                                ORCAXR_LOGE("nativeSlice: per-volume cfg volIdx=%d out of range [0,%d)",
+                                            volIdx, int(added_volumes.size()));
+                                continue;
+                            }
+                            Slic3r::ModelVolume* mv = added_volumes[volIdx];
+                            if (mv == nullptr) {
+                                ORCAXR_LOGE("nativeSlice: per-volume cfg volIdx=%d points at a failed-load volume — skipping",
+                                            volIdx);
+                                continue;
+                            }
+                            jstring jk = (jstring) env->GetObjectArrayElement(jExtraVolumeConfigKeys, i);
+                            jstring jv = (jstring) env->GetObjectArrayElement(jExtraVolumeConfigValues, i);
+                            if (jk == nullptr || jv == nullptr) {
+                                if (jk) env->DeleteLocalRef(jk);
+                                if (jv) env->DeleteLocalRef(jv);
+                                continue;
+                            }
+                            {
+                                ScopedUtf k(env, jk);
+                                ScopedUtf v(env, jv);
+                                ORCAXR_LOGI("nativeSlice: vol[%d].cfg %s=%s",
+                                            volIdx, k.c, v.c);
+                                try {
+                                    mv->config.set_deserialize(k.c, v.c, substitutions);
+                                } catch (const std::exception& e) {
+                                    ORCAXR_LOGE("nativeSlice: vol[%d] cfg rejected %s=%s (%s)",
+                                                volIdx, k.c, v.c, e.what());
+                                }
+                            }
+                            env->DeleteLocalRef(jk);
+                            env->DeleteLocalRef(jv);
+                        }
+                    }
+                }
+            }
+        }
+
+        // A10 — apply caller-supplied per-object layer height profile.
+        // Setting it on `mo->layer_height_profile` BEFORE Print::apply
+        // means PrintObject::update_layer_height_profile reads it as
+        // already-populated and skips the from-ranges fallback (see
+        // PrintObject.cpp:3476). Empty / null array leaves the profile
+        // untouched so the global layer_height (from cfg) governs.
+        if (jLayerHeightProfile != nullptr) {
+            const jsize n_lhp = env->GetArrayLength(jLayerHeightProfile);
+            if (n_lhp >= 4 && (n_lhp & 1) == 0) {
+                std::vector<jfloat> raw(n_lhp);
+                env->GetFloatArrayRegion(jLayerHeightProfile, 0, n_lhp, raw.data());
+                std::vector<coordf_t> profile(n_lhp);
+                for (jsize i = 0; i < n_lhp; ++i) profile[i] = coordf_t(raw[i]);
+                model.objects.front()->layer_height_profile.set(profile);
+                ORCAXR_LOGI("nativeSlice: applied layer_height_profile (%d (z,h) pairs, range Z=%.2f..%.2f)",
+                            int(n_lhp / 2), profile.front(), profile[n_lhp - 2]);
+            } else if (n_lhp != 0) {
+                ORCAXR_LOGE("nativeSlice: layerHeightProfile has %d floats — expected even count >= 4; ignoring",
+                            int(n_lhp));
             }
         }
 
@@ -1741,7 +1859,16 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
      * the single-3MF + STL plate case where the source has only one
      * object anyway.
      */
-    jintArray    jObjectOrdinals)
+    jintArray    jObjectOrdinals,
+    /**
+     * A10 — per-input adaptive / variable layer-height profile, parallel
+     * to [jInputPaths]. Entry i is a flat float[] of (z, h) pairs to
+     * author onto the cloned ModelObject's `layer_height_profile`. Null
+     * entries skip the override (libslic3r's global layer_height applies
+     * to that input). Whole array null = no per-input profiles for any
+     * input, identical to legacy behavior.
+     */
+    jobjectArray jLayerHeightProfilesPerInput)
 {
     ScopedUtf out(env, jOutGcodePath);
     const jsize n_inputs = jInputPaths != nullptr ? env->GetArrayLength(jInputPaths) : 0;
@@ -2003,6 +2130,40 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
                 // surfaced when the dragon's natural mesh position
                 // (centered at z=0) gets cloned.
                 mo->ensure_on_bed();
+
+                // A10 — apply caller-supplied per-input layer-height
+                // profile. Same contract as nativeSlice's
+                // jLayerHeightProfile: flat float[] of (z, h) pairs,
+                // even count >= 4. Null entries / whole-array null
+                // skip the override (libslic3r's global layer_height
+                // governs that input). Authored onto the CLONED
+                // ModelObject so embedded 3MF profiles aren't smuggled
+                // through a separate path.
+                if (jLayerHeightProfilesPerInput != nullptr) {
+                    const jsize n_lhp = env->GetArrayLength(jLayerHeightProfilesPerInput);
+                    if (i < n_lhp) {
+                        jfloatArray jp_lhp = (jfloatArray) env->GetObjectArrayElement(
+                            jLayerHeightProfilesPerInput, i);
+                        if (jp_lhp != nullptr) {
+                            const jsize lhp_len = env->GetArrayLength(jp_lhp);
+                            if (lhp_len >= 4 && (lhp_len & 1) == 0) {
+                                std::vector<jfloat> raw(lhp_len);
+                                env->GetFloatArrayRegion(jp_lhp, 0, lhp_len, raw.data());
+                                std::vector<coordf_t> profile(lhp_len);
+                                for (jsize k = 0; k < lhp_len; ++k)
+                                    profile[k] = coordf_t(raw[k]);
+                                mo->layer_height_profile.set(profile);
+                                ORCAXR_LOGI("nativeSliceMulti: model[%d] applied layer_height_profile (%d pairs, Z=%.2f..%.2f)",
+                                            i, int(lhp_len / 2),
+                                            profile.front(), profile[lhp_len - 2]);
+                            } else if (lhp_len != 0) {
+                                ORCAXR_LOGE("nativeSliceMulti: model[%d] layerHeightProfile has %d floats — expected even >= 4; ignoring",
+                                            i, int(lhp_len));
+                            }
+                            env->DeleteLocalRef(jp_lhp);
+                        }
+                    }
+                }
 
                 ORCAXR_LOGI("nativeSliceMulti: model[%d] '%s' user_t=(%.1f,%.1f,%.1f) "
                             "user_r=(%.1f,%.1f,%.1f)° user_s=(%.2f,%.2f,%.2f) "
@@ -4382,6 +4543,180 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSimplifyMesh(
         return nullptr;
     } catch (...) {
         ORCAXR_LOGE("nativeSimplifyMesh: unknown exception");
+        return nullptr;
+    }
+}
+
+// ============================================================================
+// A10 — Adaptive layer height profile.
+//
+// Wraps libslic3r's `layer_height_profile_adaptive` (Slicing.cpp:244) and
+// `smooth_height_profile` (Slicing.cpp:344). The caller picks a quality
+// factor in 0..1 (higher = finer over curved surfaces, coarser over
+// vertical walls) and an optional smoothing radius (0 = no smoothing).
+//
+// Returns a flat float array of (z, h) pairs — `[z0, h0, z1, h1, ...]`
+// — matching libslic3r's `LayerHeightProfile::m_data` shape, suitable
+// for round-tripping back through `ModelObject::layer_height_profile.set(...)`
+// at slice time.
+//
+// Inputs:
+//   jInputPath        — STL/3MF/AMF/OBJ/STEP container the same way every
+//                       other JNI mesh-loading entry point reads input.
+//   jConfigKeys/Values — optional caller config (sets layer_height /
+//                       min_layer_height / max_layer_height / nozzle_diameter
+//                       so SlicingParameters produces meaningful min/max
+//                       bounds for the auto-profile). Empty / null = use
+//                       FullPrintConfig::defaults().
+//   jQuality          — 0..1 (libslic3r clamps internally; 0.5 is a sane
+//                       default).
+//   jSmoothingRadius  — 0..10 (0 = no smoothing, ≥1 enables a gauss blur
+//                       with that radius).
+//   jSmoothingKeepMin — when smoothing, preserve min-h spikes (don't blur
+//                       them into the surrounding average). Matches
+//                       upstream's "Keep min" checkbox.
+//
+// Returns null on failure (read failed, empty mesh, exception). Empty
+// FloatArray is reserved as "no profile produced" — never returned by
+// libslic3r in practice but harmless if the math collapses to a flat
+// profile.
+// ============================================================================
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_dev_orcaxr_app_SlicerEngine_nativeAdaptiveLayerHeights(
+    JNIEnv* env, jclass,
+    jstring jInputPath,
+    jobjectArray jConfigKeys,
+    jobjectArray jConfigValues,
+    jfloat jQuality,
+    jint jSmoothingRadius,
+    jboolean jSmoothingKeepMin)
+{
+    ScopedUtf in(env, jInputPath);
+    ORCAXR_LOGI("nativeAdaptiveLayerHeights: %s quality=%.3f smooth=%d keepMin=%d",
+                in.c, (double)jQuality, (int)jSmoothingRadius, (int)jSmoothingKeepMin);
+
+    try {
+        Slic3r::Model model;
+        try {
+            model = load_mesh_container(in.c);
+        } catch (const std::exception& e) {
+            ORCAXR_LOGE("nativeAdaptiveLayerHeights: read failed: %s", e.what());
+            return nullptr;
+        }
+        if (model.objects.empty()) {
+            ORCAXR_LOGE("nativeAdaptiveLayerHeights: empty model");
+            return nullptr;
+        }
+        // Mirror nativeSlice's invariant — every ModelObject needs at
+        // least one instance for SlicingParameters / object_extruders
+        // logic to walk volumes correctly.
+        for (Slic3r::ModelObject* mo : model.objects) {
+            if (mo->instances.empty()) mo->add_instance();
+        }
+
+        Slic3r::DynamicPrintConfig cfg = Slic3r::DynamicPrintConfig::full_print_config();
+
+        // Re-attach keys_map for ConfigOptionEnumsGeneric instances —
+        // same pattern as nativeSlice / nativeSliceMulti. Without it,
+        // a set_deserialize_nothrow against any enum option would
+        // SIGSEGV. We don't expect enum keys here (caller passes layer-
+        // height bounds), but the cost is one defensive walk.
+        if (const Slic3r::ConfigDef* config_def = cfg.def()) {
+            for (const auto& kv : config_def->options) {
+                const Slic3r::ConfigOptionDef& opt_def = kv.second;
+                if (opt_def.type != Slic3r::coEnums || opt_def.enum_keys_map == nullptr)
+                    continue;
+                Slic3r::ConfigOption* opt = cfg.option(kv.first, false);
+                if (auto* en = dynamic_cast<Slic3r::ConfigOptionEnumsGeneric*>(opt)) {
+                    if (en->keys_map == nullptr) en->keys_map = opt_def.enum_keys_map;
+                }
+            }
+        }
+
+        if (jConfigKeys != nullptr && jConfigValues != nullptr) {
+            const jsize nk = env->GetArrayLength(jConfigKeys);
+            const jsize nv = env->GetArrayLength(jConfigValues);
+            const jsize n = nk < nv ? nk : nv;
+            Slic3r::ConfigSubstitutionContext substitutions(
+                Slic3r::ForwardCompatibilitySubstitutionRule::EnableSilent);
+            for (jsize i = 0; i < n; ++i) {
+                jstring jk = (jstring) env->GetObjectArrayElement(jConfigKeys, i);
+                jstring jv = (jstring) env->GetObjectArrayElement(jConfigValues, i);
+                if (jk == nullptr || jv == nullptr) {
+                    if (jk) env->DeleteLocalRef(jk);
+                    if (jv) env->DeleteLocalRef(jv);
+                    continue;
+                }
+                {
+                    ScopedUtf k(env, jk);
+                    ScopedUtf v(env, jv);
+                    cfg.set_deserialize_nothrow(k.c, v.c, substitutions);
+                }
+                env->DeleteLocalRef(jk);
+                env->DeleteLocalRef(jv);
+            }
+        }
+
+        Slic3r::ModelObject& mo = *model.objects.front();
+        // object_max_z = 0 lets PrintObject::slicing_parameters compute
+        // it from the mesh bbox, mirroring upstream's GLCanvas3D path.
+        Slic3r::SlicingParameters params;
+        try {
+            params = Slic3r::PrintObject::slicing_parameters(
+                cfg, mo, /*object_max_z=*/0.f,
+                /*object_shrinkage_compensation=*/Slic3r::Vec3d::Zero());
+        } catch (const std::exception& e) {
+            ORCAXR_LOGE("nativeAdaptiveLayerHeights: slicing_parameters threw: %s", e.what());
+            return nullptr;
+        }
+
+        // libslic3r clamps internally, but report obvious mistakes.
+        const float quality = (jQuality < 0.f) ? 0.f : (jQuality > 1.f ? 1.f : float(jQuality));
+
+        std::vector<coordf_t> profile;
+        try {
+            profile = Slic3r::layer_height_profile_adaptive(params, mo, quality);
+        } catch (const std::bad_alloc&) {
+            ORCAXR_LOGE("nativeAdaptiveLayerHeights: OOM in layer_height_profile_adaptive");
+            return nullptr;
+        } catch (const std::exception& e) {
+            ORCAXR_LOGE("nativeAdaptiveLayerHeights: layer_height_profile_adaptive threw: %s", e.what());
+            return nullptr;
+        }
+
+        if (jSmoothingRadius > 0) {
+            Slic3r::HeightProfileSmoothingParams sp(
+                static_cast<unsigned int>(jSmoothingRadius),
+                jSmoothingKeepMin == JNI_TRUE);
+            try {
+                profile = Slic3r::smooth_height_profile(profile, params, sp);
+            } catch (const std::exception& e) {
+                ORCAXR_LOGE("nativeAdaptiveLayerHeights: smooth_height_profile threw: %s", e.what());
+                // fall through with the unsmoothed profile.
+            }
+        }
+
+        const jsize len = jsize(profile.size());
+        jfloatArray out = env->NewFloatArray(len);
+        if (out == nullptr) return nullptr;
+        if (len > 0) {
+            std::vector<jfloat> as_float(profile.size());
+            for (size_t i = 0; i < profile.size(); ++i) as_float[i] = jfloat(profile[i]);
+            env->SetFloatArrayRegion(out, 0, len, as_float.data());
+        }
+        ORCAXR_LOGI("nativeAdaptiveLayerHeights: %d (z,h) entries (range Z=%.2f..%.2f)",
+                    int(len / 2),
+                    profile.empty() ? 0.0 : profile.front(),
+                    profile.size() < 2 ? 0.0 : profile[profile.size() - 2]);
+        return out;
+    } catch (const std::bad_alloc&) {
+        ORCAXR_LOGE("nativeAdaptiveLayerHeights: outer OOM");
+        return nullptr;
+    } catch (const std::exception& e) {
+        ORCAXR_LOGE("nativeAdaptiveLayerHeights: exception: %s", e.what());
+        return nullptr;
+    } catch (...) {
+        ORCAXR_LOGE("nativeAdaptiveLayerHeights: unknown exception");
         return nullptr;
     }
 }

@@ -189,6 +189,16 @@ object SlicerEngine {
          * profile / [config] map decides everything.
          */
         objectConfigOverrides: Map<String, String> = emptyMap(),
+        /**
+         * A10 — variable / adaptive layer-height profile applied to
+         * the loaded model's first ModelObject before Print::apply.
+         * Flat float[] of (z, h) pairs (size must be even, >= 4 to
+         * take effect). Pass the result of [computeAdaptiveLayerHeights]
+         * verbatim, or hand-build for manual edits. Default null = no
+         * override; the slicer uses the global layer_height for every
+         * layer.
+         */
+        layerHeightProfile: FloatArray? = null,
         onProgress: ((percent: Int, message: String) -> Unit)? = null,
     ): SliceResult = withContext(dispatcher) {
         require(stl.exists()) { "STL not found: ${stl.absolutePath}" }
@@ -248,6 +258,23 @@ object SlicerEngine {
             objectConfigOverrides.keys.toTypedArray() to objectConfigOverrides.values.toTypedArray()
         }
 
+        // D16 — flatten per-volume config overrides into three parallel
+        // arrays. Sparse so a volume with no overrides costs nothing.
+        // Walk the volumes in declaration order and emit one (idx, k, v)
+        // triple per entry in `configOverrides`.
+        val (volIdxArr, volKeyArr, volValArr) = run {
+            val idxs = ArrayList<Int>()
+            val keysL = ArrayList<String>()
+            val valsL = ArrayList<String>()
+            extraVolumes.forEachIndexed { idx, v ->
+                v.configOverrides.forEach { (k, vv) ->
+                    idxs += idx; keysL += k; valsL += vv
+                }
+            }
+            if (idxs.isEmpty()) Triple<IntArray?, Array<String>?, Array<String>?>(null, null, null)
+            else Triple(idxs.toIntArray(), keysL.toTypedArray(), valsL.toTypedArray())
+        }
+
         val rc = nativeSlice(
             stl.absolutePath,
             outGcode.absolutePath,
@@ -265,6 +292,10 @@ object SlicerEngine {
             brimEars,
             objKeys,
             objValues,
+            volIdxArr,
+            volKeyArr,
+            volValArr,
+            layerHeightProfile,
         )
         if (rc != 0) {
             return@withContext SliceResult.NativeError(
@@ -355,6 +386,15 @@ object SlicerEngine {
          * has the right object at index 0 (STLs, single-object 3MFs).
          */
         objectOrdinals: IntArray? = null,
+        /**
+         * A10 — per-input variable/adaptive layer-height profile,
+         * parallel to [models]. Each entry is a flat float[] of (z, h)
+         * pairs (must be even-length and >= 4 to take effect) authored
+         * onto the cloned ModelObject's `layer_height_profile` BEFORE
+         * Print::apply. Null entries skip the override; whole list null
+         * = no per-input profiles.
+         */
+        layerHeightProfilesPerInput: List<FloatArray?>? = null,
         onProgress: ((percent: Int, message: String) -> Unit)? = null,
     ): SliceResult = withContext(dispatcher) {
         require(models.isNotEmpty()) { "sliceMulti requires at least one model" }
@@ -367,6 +407,9 @@ object SlicerEngine {
         }
         require(objectOrdinals == null || objectOrdinals.size == models.size) {
             "objectOrdinals size ${objectOrdinals?.size} != models size ${models.size}"
+        }
+        require(layerHeightProfilesPerInput == null || layerHeightProfilesPerInput.size == models.size) {
+            "layerHeightProfilesPerInput size ${layerHeightProfilesPerInput?.size} != models size ${models.size}"
         }
         outGcode.parentFile?.mkdirs()
         outGcode.delete()
@@ -412,6 +455,13 @@ object SlicerEngine {
         val paintsForJni: Array<ByteArray?>? =
             if (paintFilamentIndices == null) null
             else Array(models.size) { paintFilamentIndices[it] }
+        // A10 — flatten per-input layer-height profiles; null whole-list
+        // → null array so the JNI side short-circuits the per-input
+        // profile walk entirely.
+        val lhpsForJni: Array<FloatArray?>? =
+            if (layerHeightProfilesPerInput == null ||
+                layerHeightProfilesPerInput.all { it == null }) null
+            else Array(models.size) { layerHeightProfilesPerInput[it] }
         val rc = nativeSliceMulti(
             paths,
             transforms,
@@ -421,6 +471,7 @@ object SlicerEngine {
             listener,
             paintsForJni,
             objectOrdinals,
+            lhpsForJni,
         )
         if (rc != 0) {
             return@withContext SliceResult.NativeError(
@@ -663,6 +714,86 @@ object SlicerEngine {
             openEdgesIn = stats[5],
             openEdgesOut = stats[6],
             usedCgal = stats[7],
+        )
+    }
+
+    // ====================================================================
+    // A10 — Variable / adaptive layer height per object.
+    //
+    // Wraps libslic3r's `layer_height_profile_adaptive` + optional
+    // `smooth_height_profile` from `Slicing.cpp`. Returns the per-Z
+    // step profile callers can hand back to [slice] / [sliceMulti] via
+    // the `layerHeightProfile` parameter to override the global layer
+    // height during slice.
+    //
+    // The profile is a flat float[] of `(z_mm, h_mm)` pairs:
+    //   profile[2k]   = print Z in mm
+    //   profile[2k+1] = layer thickness in mm at that Z
+    // matching libslic3r's `LayerHeightProfile::m_data` layout. Even
+    // length, >= 4 entries (the algorithm always emits at least the
+    // first object layer + one cap entry).
+    //
+    // Both A10's "Adaptive layer height" auto-compute and the manual
+    // "Variable layer height" tool flow through the same data path —
+    // [computeAdaptiveLayerHeights] is the auto path; the manual path
+    // hand-builds an array (Z-bar gizmo edits) and writes it onto
+    // PlacedModel.layerHeightProfile directly.
+    // ====================================================================
+
+    /**
+     * A10 — compute an adaptive layer-height profile for a single
+     * model.
+     *
+     * [input] is any libslic3r-loadable container (STL/3MF/AMF/OBJ/STEP).
+     * Multi-object containers use the FIRST object only — match the
+     * convention every other JNI mesh entry point uses.
+     *
+     * [config] should at minimum carry `layer_height` /
+     * `min_layer_height` / `max_layer_height` / `nozzle_diameter` so
+     * libslic3r's `SlicingParameters` produces meaningful min/max
+     * bounds for the auto-profile. Empty = use FullPrintConfig
+     * defaults (200x200 bed, 0.4 mm nozzle, 0.2 mm layer).
+     *
+     * [quality] = 0..1 (libslic3r clamps internally). Higher = finer
+     * over curved surfaces, coarser over vertical walls. 0.5 is a
+     * sane default.
+     *
+     * [smoothingRadius] = 0..10. 0 disables smoothing entirely. ≥1
+     * applies a Gaussian blur with that radius.
+     *
+     * [smoothingKeepMin] preserves spikes of MIN layer thickness (don't
+     * blur them into the surrounding average) — matches upstream's
+     * "Keep min" checkbox.
+     *
+     * Returns the profile or null on read failure / empty mesh / native
+     * exception.
+     */
+    suspend fun computeAdaptiveLayerHeights(
+        input: File,
+        config: Map<String, String> = emptyMap(),
+        quality: Float = 0.5f,
+        smoothingRadius: Int = 0,
+        smoothingKeepMin: Boolean = false,
+    ): FloatArray? = withContext(dispatcher) {
+        require(input.exists() && input.canRead()) {
+            "input not readable: ${input.absolutePath}"
+        }
+        require(quality in 0f..1f) { "quality must be in [0, 1], got $quality" }
+        require(smoothingRadius in 0..10) {
+            "smoothingRadius must be in [0, 10], got $smoothingRadius"
+        }
+        val (keys, values) = if (config.isEmpty()) {
+            emptyArray<String>() to emptyArray<String>()
+        } else {
+            config.keys.toTypedArray() to config.values.toTypedArray()
+        }
+        nativeAdaptiveLayerHeights(
+            input.absolutePath,
+            keys,
+            values,
+            quality,
+            smoothingRadius,
+            smoothingKeepMin,
         )
     }
 
@@ -1305,6 +1436,39 @@ object SlicerEngine {
     }
 
     private external fun nativeVersionString(): String
+    /**
+     * A10 — compute an adaptive variable layer-height profile for a
+     * single-object model via libslic3r's
+     * `layer_height_profile_adaptive` + optional `smooth_height_profile`.
+     *
+     * [stlPath] is any libslic3r-loadable container (STL/3MF/AMF/OBJ/
+     * STEP). Multi-object inputs use the FIRST object only — match the
+     * convention every other JNI mesh entry point follows.
+     *
+     * [configKeys] / [configValues] are the same parallel-array config
+     * shape `nativeSlice` accepts — at minimum the caller should pass
+     * `layer_height` / `min_layer_height` / `max_layer_height` /
+     * `nozzle_diameter` so the slicer's auto-profile produces sensible
+     * min/max bounds. Empty / null = `FullPrintConfig::defaults()`.
+     *
+     * [quality] = 0..1 (libslic3r clamps internally). 0.5 is a sane
+     * default. Higher = finer over curved surfaces, coarser over
+     * vertical walls.
+     *
+     * [smoothingRadius] = 0..10. 0 disables smoothing entirely.
+     *
+     * Returns a flat `FloatArray` of (z, h) pairs (`[z0, h0, z1, h1, ...]`)
+     * suitable for [setLayerHeightProfile]. Null on read failure / empty
+     * mesh / native exception.
+     */
+    private external fun nativeAdaptiveLayerHeights(
+        stlPath: String,
+        configKeys: Array<String>,
+        configValues: Array<String>,
+        quality: Float,
+        smoothingRadius: Int,
+        smoothingKeepMin: Boolean,
+    ): FloatArray?
     private external fun nativeSlice(
         stlPath: String,
         outGcodePath: String,
@@ -1390,6 +1554,29 @@ object SlicerEngine {
          */
         objectConfigKeys: Array<String>?,
         objectConfigValues: Array<String>?,
+        /**
+         * D16 — per-volume config overrides for the user-authored extra
+         * volumes. Three parallel arrays in sparse encoding so volumes
+         * with no overrides cost nothing across the JNI boundary:
+         *   extraVolumeConfigVolIdx[i] → which extras-index (matching
+         *                                 [extraVolumePaths]) the (k, v)
+         *                                 below applies to.
+         *   extraVolumeConfigKeys[i]   → config key.
+         *   extraVolumeConfigValues[i] → config value.
+         * Null = no per-volume overrides (existing behavior).
+         */
+        extraVolumeConfigVolIdx: IntArray?,
+        extraVolumeConfigKeys: Array<String>?,
+        extraVolumeConfigValues: Array<String>?,
+        /**
+         * A10 — per-object adaptive / variable layer-height profile.
+         * Flat float[] of (z, h) pairs (must have even length >= 4 to
+         * be applied; otherwise ignored with a log line). Authored onto
+         * `mo->layer_height_profile` BEFORE Print::apply so libslic3r
+         * uses it instead of the global / config-derived layer height.
+         * Null / empty = no profile (legacy behavior).
+         */
+        layerHeightProfile: FloatArray?,
     ): Int
     private external fun nativeConvertToStl(
         inputPath: String,
@@ -1561,5 +1748,14 @@ object SlicerEngine {
          * [sliceMulti] doc for why this exists.
          */
         objectOrdinals: IntArray?,
+        /**
+         * A10 — per-input adaptive / variable layer-height profile,
+         * parallel to [inputPaths]. Each entry is a flat float[] of
+         * (z, h) pairs to author onto the cloned ModelObject's
+         * `layer_height_profile`. Null entries skip the override for
+         * that input; whole array null = no per-input profiles for any
+         * input.
+         */
+        layerHeightProfilesPerInput: Array<FloatArray?>?,
     ): Int
 }

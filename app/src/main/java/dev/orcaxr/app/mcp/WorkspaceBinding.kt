@@ -118,6 +118,22 @@ fun BindWorkspaceModel(
     onRepairModel: ((modelId: String) -> Unit)? = null,
     /** D17 — quadric edge collapse simplification (`runSimplify`). */
     onSimplifyModel: ((modelId: String, targetTriangleCount: Int, maxError: Float) -> Unit)? = null,
+    /**
+     * A10 — adaptive layer-height profile compute + apply
+     * (`runComputeAdaptiveLayerHeights`). Computes via libslic3r
+     * and writes onto `PlacedModel.layerHeightProfile`.
+     */
+    onComputeAdaptiveLayerHeights: ((WorkspaceAction.ComputeAdaptiveLayerHeights) -> Unit)? = null,
+    /**
+     * A10 — replace `PlacedModel.layerHeightProfile` directly. Pure
+     * Compose-state mutation; no JNI round-trip.
+     */
+    onSetLayerHeightProfile: ((WorkspaceAction.SetLayerHeightProfile) -> Unit)? = null,
+    /**
+     * D16 — replace a single PlacedVolume's `configOverrides` map.
+     * Pure Compose-state mutation.
+     */
+    onSetVolumeOverrides: ((WorkspaceAction.SetVolumeOverrides) -> Unit)? = null,
     /** Cut a model along a Z plane (`runCut` after selecting the model). */
     onCutModel: ((modelId: String, planeZmm: Float) -> Unit)? = null,
     /** Mesh boolean op (`runBoolean`). */
@@ -218,6 +234,9 @@ fun BindWorkspaceModel(
     val onLoadLatest = rememberUpdatedState(onLoadModelFromPath)
     val onRepairLatest = rememberUpdatedState(onRepairModel)
     val onSimplifyLatest = rememberUpdatedState(onSimplifyModel)
+    val onComputeAdaptiveLatest = rememberUpdatedState(onComputeAdaptiveLayerHeights)
+    val onSetLayerHeightProfileLatest = rememberUpdatedState(onSetLayerHeightProfile)
+    val onSetVolumeOverridesLatest = rememberUpdatedState(onSetVolumeOverrides)
     val onCutLatest = rememberUpdatedState(onCutModel)
     val onBoolLatest = rememberUpdatedState(onMeshBoolean)
     val onSplitLatest = rememberUpdatedState(onSplitModel)
@@ -270,6 +289,9 @@ fun BindWorkspaceModel(
             setPlateMovable = setPlateMovableLatest.value,
             onRepairModel = onRepairLatest.value,
             onSimplifyModel = onSimplifyLatest.value,
+            onComputeAdaptiveLayerHeights = onComputeAdaptiveLatest.value,
+            onSetLayerHeightProfile = onSetLayerHeightProfileLatest.value,
+            onSetVolumeOverrides = onSetVolumeOverridesLatest.value,
             onCutModel = onCutLatest.value,
             onMeshBoolean = onBoolLatest.value,
             onSplitModel = onSplitLatest.value,
@@ -318,6 +340,9 @@ private fun handleAction(
     setPlateMovable: (Boolean) -> Unit,
     onRepairModel: ((modelId: String) -> Unit)?,
     onSimplifyModel: ((modelId: String, targetTriangleCount: Int, maxError: Float) -> Unit)?,
+    onComputeAdaptiveLayerHeights: ((WorkspaceAction.ComputeAdaptiveLayerHeights) -> Unit)?,
+    onSetLayerHeightProfile: ((WorkspaceAction.SetLayerHeightProfile) -> Unit)?,
+    onSetVolumeOverrides: ((WorkspaceAction.SetVolumeOverrides) -> Unit)?,
     onCutModel: ((modelId: String, planeZmm: Float) -> Unit)?,
     onMeshBoolean: ((modelAId: String, modelBId: String, op: Int) -> Unit)?,
     onSplitModel: ((modelId: String) -> Unit)?,
@@ -450,6 +475,50 @@ private fun handleAction(
             if (onSimplifyModel != null)
                 onSimplifyModel(action.modelId, action.targetTriangleCount, action.maxError)
             else Log.w(TAG, "SimplifyModel not wired by host activity.")
+        }
+        is WorkspaceAction.ComputeAdaptiveLayerHeights -> {
+            if (onComputeAdaptiveLayerHeights != null) onComputeAdaptiveLayerHeights(action)
+            else Log.w(TAG, "ComputeAdaptiveLayerHeights not wired by host activity.")
+        }
+        is WorkspaceAction.SetLayerHeightProfile -> {
+            // Pure data-class mutation — handle inline when no host
+            // callback is wired. Validation matches the JNI side: even
+            // length >= 4, monotonic Z, otherwise clear.
+            if (onSetLayerHeightProfile != null) onSetLayerHeightProfile(action)
+            else {
+                val raw = action.profile
+                val valid = raw == null ||
+                    (raw.size >= 4 && (raw.size and 1) == 0 &&
+                        run {
+                            var ok = true
+                            var prev = Float.NEGATIVE_INFINITY
+                            var i = 0
+                            while (i < raw.size && ok) {
+                                if (raw[i] < prev) ok = false
+                                prev = raw[i]
+                                i += 2
+                            }
+                            ok
+                        })
+                val effective = if (valid) raw else null
+                val updated = placedModels.map { m ->
+                    if (m.id == action.modelId) m.copy(layerHeightProfile = effective) else m
+                }
+                setPlacedModels(updated)
+            }
+        }
+        is WorkspaceAction.SetVolumeOverrides -> {
+            if (onSetVolumeOverrides != null) onSetVolumeOverrides(action)
+            else {
+                val updated = placedModels.map { m ->
+                    if (m.id != action.modelId) m
+                    else m.copy(volumes = m.volumes.map { v ->
+                        if (v.id != action.volumeId) v
+                        else v.copy(configOverrides = action.overrides)
+                    })
+                }
+                setPlacedModels(updated)
+            }
         }
         is WorkspaceAction.CutModel -> {
             if (onCutModel != null) onCutModel(action.modelId, action.planeZmm)

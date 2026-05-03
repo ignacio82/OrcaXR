@@ -86,6 +86,14 @@ internal object WorkspaceTools {
             ListVolumes(workspace),
             AddVolumeToModel(workspace),
             RemoveVolume(workspace),
+            // A10 — adaptive / variable layer height
+            ComputeAdaptiveLayerHeights(workspace),
+            GetLayerHeightProfile(workspace),
+            SetLayerHeightProfile(workspace),
+            ClearLayerHeightProfile(workspace),
+            // D16 — per-volume Object Settings
+            GetVolumeOverrides(workspace),
+            SetVolumeOverrides(workspace),
             GetPaintSummary(workspace),
             ClearPaint(workspace),
             ReplacePaintTag(workspace),
@@ -131,6 +139,29 @@ internal object WorkspaceTools {
         paint.put("fuzzy_skin_painted_tris", m.fuzzySkinFlags?.count { it > 0 } ?: 0)
         paint.put("brim_ear_count", m.brimEars.size)
         put("paint", paint)
+        // A10 — surface presence + entry count of the per-object
+        // layer-height profile. Full waypoints are available via
+        // get_layer_height_profile to keep this summary cheap.
+        val lhp = m.layerHeightProfile
+        if (lhp != null && lhp.size >= 4 && (lhp.size and 1) == 0) {
+            put("layer_height_profile_entry_count", lhp.size / 2)
+            put("layer_height_profile_z_min_mm", lhp[0])
+            put("layer_height_profile_z_max_mm", lhp[lhp.size - 2])
+        }
+        // D16 — surface volumes with overrides so the LLM can
+        // discover where to call get_volume_overrides without a
+        // separate list_volumes round trip on every model.
+        if (m.volumes.isNotEmpty()) {
+            val vols = JSONArray()
+            for (v in m.volumes) {
+                vols.put(JSONObject().apply {
+                    put("id", v.id)
+                    put("type", v.type.name)
+                    put("override_count", v.configOverrides.size)
+                })
+            }
+            put("volumes", vols)
+        }
     }
 
     private fun encodeProfile(p: SlicerProfile): JSONObject = JSONObject().apply {
@@ -1368,6 +1399,373 @@ internal object WorkspaceTools {
                 JSONObject().apply {
                     put("model_id", modelId)
                     put("volume_id", volumeId)
+                },
+            )
+        }
+    }
+
+    // ---- A10 — Adaptive / variable layer-height tools ----
+
+    /**
+     * A10 — emit a [WorkspaceAction.ComputeAdaptiveLayerHeights] for a
+     * single model. MainActivity's handler computes the profile via
+     * `SlicerEngine.computeAdaptiveLayerHeights` and writes it onto
+     * `PlacedModel.layerHeightProfile`. The next slice picks it up
+     * automatically.
+     */
+    class ComputeAdaptiveLayerHeights(private val ws: WorkspaceModel) : Tool {
+        override val name = "compute_adaptive_layer_heights"
+        override val description =
+            "A10 — auto-compute an adaptive variable-layer-height profile for a model via " +
+                "libslic3r's `layer_height_profile_adaptive` + optional `smooth_height_profile`. " +
+                "Stores the profile on `PlacedModel.layerHeightProfile`; the next slice " +
+                "applies it automatically. quality is 0..1 (higher = finer over curved " +
+                "surfaces). smoothing_radius is 0..10 (0 = no smoothing). The model's " +
+                "min/max layer-height bounds come from the active profile + " +
+                "layer_height_override (so picking a finer profile produces a finer adaptive " +
+                "profile). Use clear_layer_height_profile to revert."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id from list_placed_models"),
+                "quality" to Schemas.number("0..1, default 0.5 — higher = finer over curves"),
+                "smoothing_radius" to Schemas.integer(
+                    "0..10, default 0 — Gaussian blur radius applied to the profile",
+                ),
+                "smoothing_keep_min" to Schemas.bool(
+                    "When true, preserve min-h spikes through smoothing (default false)",
+                ),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            if (ws.placedModels.value.none { it.id == id }) {
+                return ToolResult.error("No model with id '$id'.")
+            }
+            val q = args.optDouble("quality", 0.5).toFloat()
+            if (!q.isFinite() || q < 0f || q > 1f) {
+                return ToolResult.error("'quality' must be in [0, 1] (got $q).")
+            }
+            val sr = args.optInt("smoothing_radius", 0)
+            if (sr < 0 || sr > 10) {
+                return ToolResult.error("'smoothing_radius' must be in [0, 10] (got $sr).")
+            }
+            val keepMin = args.optBoolean("smoothing_keep_min", false)
+            ws.emit(
+                WorkspaceAction.ComputeAdaptiveLayerHeights(
+                    modelId = id,
+                    quality = q,
+                    smoothingRadius = sr,
+                    smoothingKeepMin = keepMin,
+                ),
+            )
+            return success(
+                "Computing adaptive layer heights for $id (quality=$q, smoothing=$sr).",
+                JSONObject().apply {
+                    put("model_id", id)
+                    put("quality", q.toDouble())
+                    put("smoothing_radius", sr)
+                    put("smoothing_keep_min", keepMin)
+                },
+            )
+        }
+    }
+
+    /**
+     * A10 — read the stored layer-height profile for a model. Returns
+     * `[]` if the model has no profile (uses the global layer_height
+     * for every layer).
+     */
+    class GetLayerHeightProfile(private val ws: WorkspaceModel) : Tool {
+        override val name = "get_layer_height_profile"
+        override val description =
+            "Read the stored adaptive / variable layer-height profile for a model as a list " +
+                "of {z_mm, h_mm} entries. Empty list = no per-object override; libslic3r's " +
+                "global layer_height applies to every layer."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id"),
+            properties = mapOf("model_id" to Schemas.string("Model id from list_placed_models")),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            val model = ws.placedModels.value.firstOrNull { it.id == id }
+                ?: return ToolResult.error("No model with id '$id'.")
+            val arr = model.layerHeightProfile
+            val pairs = JSONArray()
+            if (arr != null && arr.size >= 4 && (arr.size and 1) == 0) {
+                var i = 0
+                while (i < arr.size) {
+                    pairs.put(JSONObject().apply {
+                        put("z_mm", arr[i].toDouble())
+                        put("h_mm", arr[i + 1].toDouble())
+                    })
+                    i += 2
+                }
+            }
+            val body = JSONObject().apply {
+                put("ok", true)
+                put("model_id", id)
+                put("entry_count", pairs.length())
+                put("profile", pairs)
+            }
+            return ToolResult.ok(
+                if (pairs.length() == 0) "$id has no layer-height profile."
+                else "$id has ${pairs.length()} (z, h) entries.",
+                body,
+            )
+        }
+    }
+
+    /**
+     * A10 — write a hand-built profile onto a model. The MCP caller
+     * passes a JSON array of {z_mm, h_mm} objects (or a flat alternating
+     * array of numbers). Empty / missing array clears the profile.
+     */
+    class SetLayerHeightProfile(private val ws: WorkspaceModel) : Tool {
+        override val name = "set_layer_height_profile"
+        override val description =
+            "Write a hand-built variable-layer-height profile onto a model. profile is a " +
+                "JSON array of {z_mm, h_mm} objects in monotonically-increasing Z. Empty / " +
+                "missing array clears any existing profile (model reverts to the global " +
+                "layer_height). Use compute_adaptive_layer_heights for the auto-compute path."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id from list_placed_models"),
+                "profile" to JSONObject().apply {
+                    put("type", "array")
+                    put("description", "[{z_mm: float, h_mm: float}, ...] — empty / missing = clear")
+                    put("items", JSONObject().apply {
+                        put("type", "object")
+                        put("properties", JSONObject().apply {
+                            put("z_mm", Schemas.number("Print Z in mm"))
+                            put("h_mm", Schemas.number("Layer thickness at this Z, in mm"))
+                        })
+                        put("required", JSONArray().apply { put("z_mm"); put("h_mm") })
+                    })
+                },
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            if (ws.placedModels.value.none { it.id == id }) {
+                return ToolResult.error("No model with id '$id'.")
+            }
+            val raw = args.optJSONArray("profile")
+            val profile: FloatArray? = if (raw == null || raw.length() == 0) {
+                null
+            } else {
+                val out = ArrayList<Float>(raw.length() * 2)
+                for (i in 0 until raw.length()) {
+                    val entry = raw.optJSONObject(i)
+                        ?: return ToolResult.error("'profile[$i]' must be {z_mm, h_mm}.")
+                    val z = entry.optDouble("z_mm", Double.NaN)
+                    val h = entry.optDouble("h_mm", Double.NaN)
+                    if (z.isNaN() || h.isNaN()) {
+                        return ToolResult.error("'profile[$i]' missing z_mm or h_mm.")
+                    }
+                    if (h <= 0) {
+                        return ToolResult.error("'profile[$i].h_mm' must be > 0 (got $h).")
+                    }
+                    out += z.toFloat()
+                    out += h.toFloat()
+                }
+                if (out.size < 4) {
+                    return ToolResult.error(
+                        "Profile must have ≥ 2 entries (4 floats). Got ${out.size / 2}.",
+                    )
+                }
+                // Monotonic-Z check.
+                var prev = Float.NEGATIVE_INFINITY
+                var i = 0
+                while (i < out.size) {
+                    if (out[i] < prev) {
+                        return ToolResult.error(
+                            "z_mm must be monotonically non-decreasing " +
+                                "(profile[${i / 2}].z_mm = ${out[i]} < ${prev}).",
+                        )
+                    }
+                    prev = out[i]
+                    i += 2
+                }
+                out.toFloatArray()
+            }
+            ws.emit(WorkspaceAction.SetLayerHeightProfile(id, profile))
+            return success(
+                if (profile == null) "Cleared layer-height profile on $id."
+                else "Wrote ${profile.size / 2} (z, h) entries to $id.",
+                JSONObject().apply {
+                    put("model_id", id)
+                    put("entry_count", (profile?.size ?: 0) / 2)
+                    put("cleared", profile == null)
+                },
+            )
+        }
+    }
+
+    /**
+     * A10 — clear a model's layer-height profile so the global
+     * layer_height applies to every layer. Convenience wrapper around
+     * [SetLayerHeightProfile] with a null profile so the LLM doesn't
+     * need to know the JSON shape just to revert.
+     */
+    class ClearLayerHeightProfile(private val ws: WorkspaceModel) : Tool {
+        override val name = "clear_layer_height_profile"
+        override val description =
+            "Clear a model's variable layer-height profile so libslic3r's global " +
+                "layer_height applies to every layer. No-op if the model has no profile."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id"),
+            properties = mapOf("model_id" to Schemas.string("Model id from list_placed_models")),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            if (ws.placedModels.value.none { it.id == id }) {
+                return ToolResult.error("No model with id '$id'.")
+            }
+            ws.emit(WorkspaceAction.SetLayerHeightProfile(id, null))
+            return success(
+                "Cleared layer-height profile on $id.",
+                JSONObject().apply {
+                    put("model_id", id)
+                    put("cleared", true)
+                },
+            )
+        }
+    }
+
+    // ---- D16 — per-volume Object Settings tools ----
+
+    /**
+     * D16 — read the per-volume `configOverrides` map. Empty `{}` means
+     * the volume uses the parent ModelObject's / global config for
+     * every key (the default).
+     */
+    class GetVolumeOverrides(private val ws: WorkspaceModel) : Tool {
+        override val name = "get_volume_overrides"
+        override val description =
+            "D16 — read the per-volume config overrides for one PlacedVolume. Returns " +
+                "a string→string map keyed by libslic3r config key. Empty map = no overrides " +
+                "(the volume inherits the parent ModelObject's / global config). Use " +
+                "list_volumes to discover volume ids."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id", "volume_id"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id"),
+                "volume_id" to Schemas.string("Volume id from list_volumes"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val modelId = args.optString("model_id").trim()
+            val volumeId = args.optString("volume_id").trim()
+            if (modelId.isEmpty() || volumeId.isEmpty()) {
+                return ToolResult.error("Both 'model_id' and 'volume_id' are required.")
+            }
+            val model = ws.placedModels.value.firstOrNull { it.id == modelId }
+                ?: return ToolResult.error("No model with id '$modelId'.")
+            val volume = model.volumes.firstOrNull { it.id == volumeId }
+                ?: return ToolResult.error("No volume with id '$volumeId' on model '$modelId'.")
+            val overrides = JSONObject()
+            for ((k, v) in volume.configOverrides) overrides.put(k, v)
+            return ToolResult.ok(
+                if (volume.configOverrides.isEmpty())
+                    "Volume $volumeId has no overrides (inherits parent)."
+                else "Volume $volumeId has ${volume.configOverrides.size} override(s).",
+                JSONObject().apply {
+                    put("ok", true)
+                    put("model_id", modelId)
+                    put("volume_id", volumeId)
+                    put("type", volume.type.name)
+                    put("override_count", volume.configOverrides.size)
+                    put("overrides", overrides)
+                },
+            )
+        }
+    }
+
+    /**
+     * D16 — replace a volume's `configOverrides` map. The handler
+     * REPLACES the existing map (so a partial update has to read first
+     * via [GetVolumeOverrides], then merge client-side, then write).
+     * Empty `{}` clears all overrides.
+     *
+     * Per-volume overrides are most useful on PARAMETER_MODIFIER
+     * volumes (e.g. denser infill in a band of the model). libslic3r
+     * accepts overrides on any volume type; SUPPORT_ENFORCER /
+     * SUPPORT_BLOCKER mostly read `support_*` keys, MODEL_PART /
+     * NEGATIVE_VOLUME mostly read perimeter/infill keys.
+     */
+    class SetVolumeOverrides(private val ws: WorkspaceModel) : Tool {
+        override val name = "set_volume_overrides"
+        override val description =
+            "D16 — write a string→string map of libslic3r config overrides onto a single " +
+                "PlacedVolume. REPLACES the existing map (read with get_volume_overrides + " +
+                "merge client-side for partial updates). Pass {} to clear. Most useful on " +
+                "PARAMETER_MODIFIER volumes (e.g. {\"sparse_infill_density\": \"100\"} on a " +
+                "band of the model). Keys flow through libslic3r's `set_deserialize` so any " +
+                "DynamicPrintConfig key is acceptable; unknown keys are silently dropped at " +
+                "slice time with a JNI log line."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id", "volume_id", "overrides"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id"),
+                "volume_id" to Schemas.string("Volume id from list_volumes"),
+                "overrides" to JSONObject().apply {
+                    put("type", "object")
+                    put("description", "String→string map of libslic3r config keys → values. {} clears.")
+                    put("additionalProperties", JSONObject().apply { put("type", "string") })
+                },
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val modelId = args.optString("model_id").trim()
+            val volumeId = args.optString("volume_id").trim()
+            if (modelId.isEmpty() || volumeId.isEmpty()) {
+                return ToolResult.error("Both 'model_id' and 'volume_id' are required.")
+            }
+            val model = ws.placedModels.value.firstOrNull { it.id == modelId }
+                ?: return ToolResult.error("No model with id '$modelId'.")
+            val volume = model.volumes.firstOrNull { it.id == volumeId }
+                ?: return ToolResult.error("No volume with id '$volumeId' on model '$modelId'.")
+            val raw = args.optJSONObject("overrides")
+                ?: return ToolResult.error("'overrides' must be an object (use {} to clear).")
+            val out = LinkedHashMap<String, String>()
+            val it = raw.keys()
+            while (it.hasNext()) {
+                val k = it.next()
+                val v = raw.opt(k)
+                if (v == null) continue
+                // Coerce numbers / bools to their wire-format string.
+                // libslic3r's set_deserialize parses strings.
+                val sv = when (v) {
+                    is String -> v
+                    is Boolean -> if (v) "1" else "0"
+                    is Int, is Long -> v.toString()
+                    is Double, is Float -> v.toString()
+                    else -> v.toString()
+                }
+                if (k.isBlank()) continue
+                out[k] = sv
+            }
+            ws.emit(WorkspaceAction.SetVolumeOverrides(modelId, volumeId, out))
+            return success(
+                if (out.isEmpty()) "Cleared overrides on volume $volumeId of $modelId."
+                else "Wrote ${out.size} override(s) on volume $volumeId of $modelId.",
+                JSONObject().apply {
+                    put("model_id", modelId)
+                    put("volume_id", volumeId)
+                    put("type", volume.type.name)
+                    put("override_count", out.size)
                 },
             )
         }

@@ -308,6 +308,21 @@ data class PlacedModel(
      *  resolve their issues; a stricter check would require a second
      *  native load just to gate the icon). */
     val needsRepair: Boolean = false,
+    /** A10 — per-object adaptive / variable layer-height profile.
+     *  Flat `FloatArray` of `(z, h)` pairs matching libslic3r's
+     *  `LayerHeightProfile::m_data` layout:
+     *    profile[2k]     = print Z in mm
+     *    profile[2k + 1] = layer thickness at that Z, in mm
+     *  Even length, >= 4 entries to take effect. Null = no per-object
+     *  override; libslic3r's global `layer_height` (from the active
+     *  config) governs every layer. Authored by the user via
+     *  [SlicerEngine.computeAdaptiveLayerHeights] (auto-compute) or
+     *  hand-edited via the eventual `AdaptiveLayerPanel` Z-bar gizmo,
+     *  and threaded through `nativeSlice` /
+     *  `nativeSliceMulti.layerHeightProfilesPerInput` at slice time
+     *  so libslic3r writes it onto the cloned ModelObject's
+     *  `layer_height_profile` BEFORE Print::apply. */
+    val layerHeightProfile: FloatArray? = null,
 ) {
     // Custom equality: data-class default uses identity comparison
     // for ByteArray, which would make `placedModels.map { ... }` cycles
@@ -355,7 +370,8 @@ data class PlacedModel(
             paintArraysEqual(fuzzySkinFlags, other.fuzzySkinFlags) &&
             brimEars == other.brimEars &&
             volumes == other.volumes &&
-            configOverrides == other.configOverrides
+            configOverrides == other.configOverrides &&
+            floatArraysEqual(layerHeightProfile, other.layerHeightProfile)
     }
     override fun hashCode(): Int {
         var r = id.hashCode()
@@ -392,6 +408,7 @@ data class PlacedModel(
         r = 31 * r + brimEars.hashCode()
         r = 31 * r + volumes.hashCode()
         r = 31 * r + configOverrides.hashCode()
+        r = 31 * r + (layerHeightProfile?.contentHashCode() ?: 0)
         return r
     }
 
@@ -408,6 +425,12 @@ data class PlacedModel(
 }
 
 private fun paintArraysEqual(a: ByteArray?, b: ByteArray?): Boolean {
+    if (a === b) return true
+    if (a == null || b == null) return false
+    return a.contentEquals(b)
+}
+
+private fun floatArraysEqual(a: FloatArray?, b: FloatArray?): Boolean {
     if (a === b) return true
     if (a == null || b == null) return false
     return a.contentEquals(b)

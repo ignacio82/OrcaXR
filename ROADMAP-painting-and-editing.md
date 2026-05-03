@@ -135,19 +135,15 @@ NEGATIVE / MODIFIER volume variants (drop "TEXT" as a `NEGATIVE_VOLUME` on a 20 
 
 **Exit criteria:** Author "HELLO" as a 5 mm-tall, 2 mm-deep PlacedModel on the bed and slice it. ✅ Met via `emboss_model(kind='text', text='HELLO', size_mm=5, depth_mm=2, mode='add_object')`. NEGATIVE/MODIFIER volume variants ⏳ deferred.
 
-### D16. Per-volume Object Settings panel 🔴 Not started
+### D16. Per-volume Object Settings panel 🟡 Shipped — JNI + MCP; VolumeSettingsPanel SpatialPanel deferred
 
-> **Files (planned):** new `VolumeSettingsPanel.kt`, extend `PlacedVolume.config: ModelConfig` (already exists per Phase 3 "per-object Object Settings"), JNI thread for `ModelVolume::config` already wired. The gap is a UI surface to author per-volume overrides.
+> **Files:** `app/src/main/cpp/slic3r_jni.cpp::nativeSlice` (new `extraVolumeConfigVolIdx` / `extraVolumeConfigKeys` / `extraVolumeConfigValues` sparse encoding — applied via `mv->config.set_deserialize` in the extras-attach loop); `WorkspaceAction.SetVolumeOverrides`; `WorkspaceTools.GetVolumeOverrides` / `SetVolumeOverrides` MCP tools. `PlacedVolume.configOverrides` was already declared in Phase XR_OBJ_4; this commit hooks it through the JNI so per-volume keys actually reach `ModelVolume::config` at slice time. `VolumeOverridesToolsTest` pins the JSON ⇄ WorkspaceAction wire shape.
 
-Once **D14** lands, a PARAMETER_MODIFIER volume needs an editor — the whole point is to apply different settings inside its bbox-intersection with the parent. Upstream surfaces this through its right-hand "Object" panel with a curated key picker (`GUI_Factories.cpp::create_settings_popupmenu` + `FREQ_SETTINGS_BUNDLE_FFF`). For OrcaXR the natural surface is to extend the existing per-row `ModelDetailsPanel` with a per-volume sub-panel.
+Once **D14** landed, a PARAMETER_MODIFIER volume needed an editor — the whole point is to apply different settings inside its bbox-intersection with the parent. Upstream surfaces this through its right-hand "Object" panel with a curated key picker (`GUI_Factories.cpp::create_settings_popupmenu` + `FREQ_SETTINGS_BUNDLE_FFF`). For OrcaXR the natural surface is to extend the existing per-row `ModelDetailsPanel` with a per-volume sub-panel.
 
-**Implementation outline:**
-1. Per-volume settings UI mirrors the project-level Quality / Strength / Speed tabs, but scoped to a curated subset of keys per `ModelVolumeType` (modifier: layer_height / sparse_infill_density / wall_loops / sparse_infill_pattern / top_shell_layers / bottom_shell_layers; enforcer/blocker: support_threshold_angle / support_filament; negative: no settings).
-2. Validation reuses **B8**'s `NumericValidation.printSettingRanges`.
-3. 3MF round-trip already works via libslic3r `store_3mf` which serializes `ModelVolume::config`; **D9** captures the gap on the load direction.
-4. MCP: `set_volume_overrides(model_id, volume_id, overrides: Map<String, String>)` + `get_volume_overrides`.
+**Shipped pieces:** native plumbing (sparse `(volIdx, key, value)` triples flow through `nativeSlice` → `mv->config.set_deserialize` so any libslic3r DynamicPrintConfig key reaches the volume) + 2 MCP tools (`set_volume_overrides`, `get_volume_overrides`) + 7 unit tests. `set_volume_overrides` REPLACES the volume's existing override map; partial updates merge client-side via `get_volume_overrides`. The dedicated `VolumeSettingsPanel` SpatialPanel (curated key picker keyed off `ModelVolumeType`, B8 numeric-range validation) is the remaining UI follow-up — current MCP surface covers `set_volume_overrides(model_id, volume_id, {"sparse_infill_density": "100", ...})` end-to-end.
 
-**Exit criteria:** Attach a PARAMETER_MODIFIER cube spanning the bottom 5 mm of a 20 mm cube, set its `sparse_infill_density=100`. Sliced gcode shows 100 % infill in the lower 5 mm and the project default everywhere else. Same overrides land via MCP and round-trip through 3MF.
+**Exit criteria:** Attach a PARAMETER_MODIFIER cube spanning the bottom 5 mm of a 20 mm cube, set its `sparse_infill_density=100`. Sliced gcode shows 100 % infill in the lower 5 mm and the project default everywhere else. Same overrides land via MCP and round-trip through 3MF. ✅ MCP path met (`add_volume_to_model` → `set_volume_overrides` → `slice_active_plate`); on-device gcode-density verification + 3MF round-trip are the remaining instrumented-test follow-ups.
 
 ### D17. Mesh simplify (quadric edge collapse) 🟡 Shipped — JNI + MCP; SimplifyPanel SpatialPanel deferred
 

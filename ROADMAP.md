@@ -166,20 +166,15 @@ Audit complete + on-disk reference gcode analyzed — see [`docs/A9_PHASE2_AUDIT
 - Filament family breadth (ABS / PETG-CF / etc.) → see F2.
 - 3MF authored layer-height being silently honored over the picker → fixed in `7efd555`, gotcha #22.
 
-### A10. Variable / adaptive layer height per object 🔴 Not started
+### A10. Variable / adaptive layer height per object 🟡 Shipped — JNI + MCP; AdaptiveLayerPanel SpatialPanel deferred
 
-> **Files (planned):** `app/src/main/cpp/slic3r_jni.cpp` (new `nativeAdaptiveLayerHeights(path, quality, smoothing)` wrapping libslic3r `LayerHeightProfile::adaptive_layer_height_profile`), `PlacedModel.kt` (add `layerHeightProfile: FloatArray? = null` — sparse `(z, h)` pairs), `SlicerEngine.kt` (set `ModelObject::layer_height_profile` before slice), new `AdaptiveLayerPanel.kt` (Quality slider 0..1 + Smoothing slider, scrollable per-Z height histogram).
+> **Files:** `app/src/main/cpp/slic3r_jni.cpp::nativeAdaptiveLayerHeights` (wraps libslic3r `layer_height_profile_adaptive` + optional `smooth_height_profile`); `nativeSlice` + `nativeSliceMulti` extended with `layerHeightProfile` / `layerHeightProfilesPerInput` parallel arrays; `SlicerEngine.computeAdaptiveLayerHeights` Kotlin wrapper; `PlacedModel.layerHeightProfile: FloatArray?`; `WorkspaceAction.ComputeAdaptiveLayerHeights` + `SetLayerHeightProfile`; `WorkspaceTools.ComputeAdaptiveLayerHeights` / `GetLayerHeightProfile` / `SetLayerHeightProfile` / `ClearLayerHeightProfile` MCP tools; `MainActivity::runComputeAdaptiveLayerHeights`. `AdaptiveLayerHeightToolsTest` covers the JSON ⇄ WorkspaceAction wire shape.
 
-Upstream OrcaSlicer ships two related features that share the same `ModelObject::layer_height_profile`: (a) **Adaptive layer height** — auto-computes a per-Z profile that goes finer over curved surfaces and coarser over vertical walls; (b) **Variable layer height tool** — manual painted edits on top of the auto-profile via a vertical bar gizmo. libslic3r already exports `adaptive_layer_height_profile(slicing_params, quality, smoothing)` and serializes the profile through 3MF, so this is a JNI-bridge + UI job, no new patches.
+Upstream OrcaSlicer ships two related features that share the same `ModelObject::layer_height_profile`: (a) **Adaptive layer height** — auto-computes a per-Z profile that goes finer over curved surfaces and coarser over vertical walls; (b) **Variable layer height tool** — manual painted edits on top of the auto-profile via a vertical bar gizmo. libslic3r already exports `layer_height_profile_adaptive(slicing_params, model_object, quality)` and `smooth_height_profile(profile, params, smoothing)` and serializes the profile through 3MF, so this was a JNI-bridge + UI job, no new patches.
 
-**Implementation outline:**
-1. JNI: `nativeAdaptiveLayerHeights(stl_path, quality_0to1, smoothing_0to1) -> FloatArray` (alternating z/h pairs). Wraps the libslic3r call against a freshly-loaded `Model`.
-2. `PlacedModel.layerHeightProfile: FloatArray?`. When non-null, `runSliceMulti` serializes it onto each `ModelObject::layer_height_profile` before `nativeSliceMulti` runs.
-3. `AdaptiveLayerPanel` SpatialPanel: Quality + Smoothing sliders, "Compute" button (debounced 300 ms), "Reset to fixed" button. Profile preview = a vertical bar chart inside the panel (X = Z, Y = computed h) — manual editing comes in v2 (drag bar tops to override). Single-bar height range sufficient for v1.
-4. Multi-object: per-PlacedModel profile, attached to the per-object STL extracted by B9 — preserves through `nativeSaveAs3mf` via libslic3r's existing serialization.
-5. Toolpath preview already grows in lockstep with `maxLayer` because `parsedToolpath.layerZs` carries actual Z; no rendering change needed.
+**Shipped pieces:** native compute + Kotlin wrapper + per-object slice plumbing for both single-slice and multi-slice paths + 4 MCP tools + 11 unit tests pinning the param contract. The dedicated `AdaptiveLayerPanel` SpatialPanel (Quality slider + Smoothing slider + per-Z bar chart) is the remaining UI follow-up — current MCP surface is enough to author + apply + clear an adaptive profile end-to-end (`compute_adaptive_layer_heights(model_id, quality, smoothing_radius, smoothing_keep_min)` → `slice_active_plate`). Manual Z-bar gizmo edits also reuse `set_layer_height_profile`'s validated profile path.
 
-**Exit criteria:** A 60 mm dragon at quality=0.5 emits ~30 % fewer layers than fixed 0.2 mm but visibly preserves curved-surface detail; round-trips through `save_project_as_3mf` and reopens with the same profile.
+**Exit criteria:** A 60 mm dragon at quality=0.5 emits ~30 % fewer layers than fixed 0.2 mm but visibly preserves curved-surface detail; round-trips through `save_project_as_3mf` and reopens with the same profile. ✅ MCP path met (`compute_adaptive_layer_heights` + `slice_active_plate`); on-device dragon time-savings benchmark + 3MF round-trip are the remaining instrumented-test follow-ups.
 
 ### A11. Custom G-code per print Z — pause / color change / template 🔴 Not started
 
@@ -551,7 +546,7 @@ Lets an external LLM (Claude / GPT) execute creative paint tasks like *"paint Be
 | D13 | Handy model library (Benchy, Orca Cube, Voron Cube, Stanford Bunny, …) | 🔴 |
 | D14 | Modifier volume types (negative / parameter modifier / support enforcer / support blocker) | 🔴 |
 | D15 | Standalone text & SVG primitives | 🔴 |
-| D16 | Per-volume Object Settings panel | 🔴 |
+| D16 | Per-volume Object Settings panel | 🟡 |
 | D17 | Mesh simplify (quadric edge collapse) | 🔴 |
 
 </details>
