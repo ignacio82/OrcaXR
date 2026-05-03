@@ -163,11 +163,13 @@ Heavy STLs (1M+ triangles — anything from Thingiverse + a typical artistic sca
 
 **Exit criteria:** A 1.4M-tri dragon simplifies to 200 K tris in <5 s on Galaxy XR with visible silhouette preservation; paint mode stays under the 256 MB JVM cap on the simplified mesh; round-trip via `save_model_as_stl` produces a valid binary STL.
 
-### D18. AI-paint authoring upgrades (post-C9) 🔴 Not started
+### D18. AI-paint authoring upgrades (post-C9) 🟡 Partial — D18a/b/d/f/g shipped; D18c/e/h/i/j pending
 
 Surfaced during the live "paint Pikachu Funko Pop" session against C9 (commits `4df6bf2`..`e44622d`). Painting rounded organic features (cheeks, eyes, ear interiors) via `paint_projected_mask` exposed three architectural gaps: 2D mask projection misses curvature wraparound, paired features need duplicate authoring, and feature anchoring from a render is eyeball-and-guess. Each fix below is an MCP-tool addition on top of the existing C9 surface — pure Kotlin unless noted, no JNI rebuild.
 
-#### D18a. Geodesic surface paint primitive 🔴 Not started — biggest single quality win
+**Shipped so far (commits `8d586fc` `819924a` `5b5e7d5`):** geodesic surface paint (D18a), symmetry mirror wrapper (D18b), `any_facing` mask depth mode (D18d), render-diff tool (D18f), action-queue flush (D18g). Tool surface grew from 18 to 22.
+
+#### D18a. Geodesic surface paint primitive 🟢 Shipped (commit `8d586fc`) — biggest single quality win
 
 > **Files (planned):** new `paint_geodesic_disc` in `AiPaintTools.kt` + helper in `AiPaintEngine.kt`. ~80 lines on top of `MeshBvh.smartFillBfs` (vertex-adjacency BFS already exists; add a per-step accumulating geodesic-distance gate + a cumulative-dihedral gate).
 
@@ -188,7 +190,7 @@ paint_geodesic_disc {
 
 **Exit criteria:** Pikachu cheek paint with `radius_mm=8, max_dihedral_deg=60` lands ≥ 600 triangles wrapping smoothly around the cheek bulge (vs M4 projected-mask's 179 front-only). Test fixture: a sphere — geodesic disc with `radius_mm=R, max_dihedral=180°` paints a polar cap of expected area `2πR(1-cos(θ))`.
 
-#### D18b. Symmetry-mirrored paint 🔴 Not started
+#### D18b. Symmetry-mirrored paint 🟢 Shipped (commit `8d586fc`)
 
 > **Files (planned):** new `paint_with_mirror` wrapper tool in `AiPaintTools.kt`. ~40 lines. Takes any other `paint_*` action's args, mirrors the seed/center/anchor/polygon coordinates across the chosen axis, and emits two `PaintTriangleSet` actions (or one merged set).
 
@@ -232,7 +234,7 @@ find_feature_anchors {
 
 **Exit criteria:** Hit-rate ≥ 80 % on a 10-figure benchmark (Pikachu, Bulbasaur, Mario, Sonic, Stitch, Totoro, Mickey, …) for canonical anchors (eyes, cheeks, mouth, ear-tips).
 
-#### D18d. `paint_projected_mask depth_mode="any_facing"` 🔴 Not started — 5-line addition
+#### D18d. `paint_projected_mask depth_mode="any_facing"` 🟢 Shipped (commit `819924a`)
 
 Current `front_facing_only` keeps just the front-most ray hit; `all_hits` keeps every triangle along the ray. Add a third mode: `any_facing` — keep any triangle whose normal is within 90° of `-camera_dir` (the lit hemisphere), regardless of ray-hit ordering. Catches curvature wraparound like the cheek bulge without painting the model's back side.
 
@@ -248,7 +250,7 @@ Current `front_facing_only` keeps just the front-most ray hit; `all_hits` keeps 
 
 **Exit criteria:** Render with `annotate=true` shows a clearly-readable axis triad + bbox-mm labels visible at 256 × 256.
 
-#### D18f. Render diff tool 🔴 Not started
+#### D18f. Render diff tool 🟢 Shipped (commit `5b5e7d5`)
 
 `render_diff(token_a, token_b) → PNG` returns the pixel-XOR of two cached render artifacts (already keyed by content hash in `AiSessionState`), with changed pixels in red. Lets the LLM verify a paint action did what it expected in one call instead of comparing two PNGs visually.
 
@@ -256,7 +258,7 @@ Current `front_facing_only` keeps just the front-most ray hit; `all_hits` keeps 
 
 **Exit criteria:** Paint a cheek → `render_diff` between before/after tokens highlights only the cheek region; total red pixel count correlates with painted_count in the prior tool result.
 
-#### D18g. Action queue flush 🔴 Not started — fixes the only_tagged race
+#### D18g. Action queue flush 🟢 Shipped (commit `819924a`) — fixes the only_tagged race
 
 > **Files (planned):** new `flush_actions` tool. Tracks the action queue's drain via a `WorkspaceModel.lastDrainedActionId: StateFlow<Long>` + per-emit ID counter; tool blocks until `lastDrainedActionId >= my_emit_id`.
 
