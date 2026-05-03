@@ -72,6 +72,17 @@ Phase 3 commit log).
 trivial geometry but for the record it was generated locally in
 April 2026.
 
+`app/src/main/assets/handy_models/` (3DBenchy, Orca Cube v2, Voron
+Design Cube v7, Stanford Bunny, Cali Cat, Orca Tolerance Test, Orca
+String Hell, Autodesk FDM Test) are vendored verbatim from
+`third_party/OrcaSlicer/resources/handy_models/` at upstream tag
+**v2.3.2**. Each model carries the license its original author
+attached upstream — refer to OrcaSlicer's repository for the per-model
+authorship and licensing (3DBenchy is CC-BY-ND, Stanford Bunny is the
+Stanford Computer Graphics Laboratory's reference release, Voron
+Cube v7 is GPL-3.0, the Orca-authored calibration prints follow
+OrcaSlicer's AGPL-3.0). OrcaXR redistributes them unchanged.
+
 ---
 
 OrcaXR's own first-party code (everything under `app/src/main/java/`

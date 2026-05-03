@@ -6,7 +6,9 @@ import dev.orcaxr.app.mcp.tools.AiIntrospectionTools
 import dev.orcaxr.app.mcp.tools.AiPaintTools
 import dev.orcaxr.app.mcp.tools.AiVisionTools
 import dev.orcaxr.app.mcp.tools.FilamentTools
+import dev.orcaxr.app.mcp.tools.HandyModelTools
 import dev.orcaxr.app.mcp.tools.PrefsTools
+import dev.orcaxr.app.mcp.tools.PrimitiveTools
 import dev.orcaxr.app.mcp.tools.PrinterTools
 import dev.orcaxr.app.mcp.tools.ProfileTools
 import dev.orcaxr.app.mcp.tools.RecentTools
@@ -150,6 +152,10 @@ class McpController private constructor(
             for (t in RecentTools.all(ctx)) builder.tool(t)
             for (t in PrefsTools.all(ctx)) builder.tool(t)
             for (t in WorkspaceTools.all(ctx)) builder.tool(t)
+            // D12 — primitive shape authoring (cube / cylinder / sphere / …).
+            for (t in PrimitiveTools.all(ctx)) builder.tool(t)
+            // D13 — handy model library (Benchy / Orca Cube / …).
+            for (t in HandyModelTools.all(ctx)) builder.tool(t)
             // C9 milestone 1 — AI-driven spatial paint primitives.
             for (t in AiPaintTools.all(WorkspaceModel.get())) builder.tool(t)
             // C9 milestone 3 — geometry / topology introspection.

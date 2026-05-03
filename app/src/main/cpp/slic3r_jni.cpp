@@ -4756,3 +4756,173 @@ Java_dev_orcaxr_app_SlicerEngine_nativeApplyEmboss(
         return -4;
     }
 }
+
+// ============================================================================
+// D12 — Add primitive shapes (cube / cylinder / sphere / cone / disc /
+// torus / slab).
+//
+// Thin wrapper around libslic3r's primitive helpers (TriangleMesh.hpp:336):
+//   its_make_cube(x, y, z)
+//   its_make_cylinder(r, h, fa)         — fa is segment angle in radians
+//   its_make_sphere(r, fa)
+//   its_make_cone(r, h, fa)
+//   its_make_torus(r, h, fa)            — r=major radius, h=minor radius
+//
+// The result is centered on the XY origin (libslic3r builds them that
+// way already) and translated so its bbox.min.z == 0, so callers can
+// drop the resulting STL straight onto the bed without an extra
+// grounding shift.
+//
+// kind values mirror Kotlin's PrimitiveKind enum:
+//   0=CUBE, 1=CYLINDER, 2=SPHERE, 3=CONE, 4=TORUS, 5=DISC, 6=SLAB.
+// DISC is just a short cylinder; SLAB is a cube alias kept distinct for
+// future ergonomics (e.g. half-bbox autoseed).
+//
+// Param layout (parallel to PrimitiveKind):
+//   CUBE     : [x_mm,   y_mm,   z_mm]
+//   CYLINDER : [r_mm,   h_mm,   fa_deg]
+//   SPHERE   : [r_mm,   fa_deg]
+//   CONE     : [r_mm,   h_mm,   fa_deg]
+//   TORUS    : [majR_mm,minR_mm,fa_deg]
+//   DISC     : [r_mm,   thickness_mm, fa_deg]
+//   SLAB     : [x_mm,   y_mm,   z_mm]
+//
+// Returns 0 on success, negative on failure (-1 bad params, -2 build,
+// -3 write).
+extern "C" JNIEXPORT jint JNICALL
+Java_dev_orcaxr_app_SlicerEngine_nativeBuildPrimitiveStl(
+    JNIEnv* env, jclass,
+    jint jKind,
+    jfloatArray jParams,
+    jstring jOutPath)
+{
+    ScopedUtf out(env, jOutPath);
+    if (jParams == nullptr) {
+        ORCAXR_LOGE("nativeBuildPrimitiveStl: params null");
+        return -1;
+    }
+    const jsize nParams = env->GetArrayLength(jParams);
+    std::vector<float> params(static_cast<size_t>(nParams));
+    if (nParams > 0) {
+        env->GetFloatArrayRegion(jParams, 0, nParams, params.data());
+    }
+    auto need = [&](int n) -> bool {
+        if (nParams < n) {
+            ORCAXR_LOGE("nativeBuildPrimitiveStl: kind=%d wants %d params, got %d",
+                        (int)jKind, n, (int)nParams);
+            return false;
+        }
+        return true;
+    };
+
+    try {
+        ::indexed_triangle_set its;
+        switch ((int)jKind) {
+            case 0: { // CUBE
+                if (!need(3)) return -1;
+                const double x = std::max(0.001, (double)params[0]);
+                const double y = std::max(0.001, (double)params[1]);
+                const double z = std::max(0.001, (double)params[2]);
+                its = Slic3r::its_make_cube(x, y, z);
+                break;
+            }
+            case 1: { // CYLINDER
+                if (!need(3)) return -1;
+                const double r = std::max(0.001, (double)params[0]);
+                const double h = std::max(0.001, (double)params[1]);
+                const double fa = std::max(0.5, (double)params[2]) * M_PI / 180.0;
+                its = Slic3r::its_make_cylinder(r, h, fa);
+                break;
+            }
+            case 2: { // SPHERE
+                if (!need(2)) return -1;
+                const double r = std::max(0.001, (double)params[0]);
+                const double fa = std::max(0.5, (double)params[1]) * M_PI / 180.0;
+                its = Slic3r::its_make_sphere(r, fa);
+                break;
+            }
+            case 3: { // CONE
+                if (!need(3)) return -1;
+                const double r = std::max(0.001, (double)params[0]);
+                const double h = std::max(0.001, (double)params[1]);
+                const double fa = std::max(0.5, (double)params[2]) * M_PI / 180.0;
+                its = Slic3r::its_make_cone(r, h, fa);
+                break;
+            }
+            case 4: { // TORUS
+                if (!need(3)) return -1;
+                const double majR = std::max(0.01, (double)params[0]);
+                const double minR = std::max(0.001, (double)params[1]);
+                const double fa = std::max(0.5, (double)params[2]) * M_PI / 180.0;
+                its = Slic3r::its_make_torus(majR, minR, fa);
+                break;
+            }
+            case 5: { // DISC = short cylinder
+                if (!need(3)) return -1;
+                const double r = std::max(0.001, (double)params[0]);
+                const double h = std::max(0.001, (double)params[1]);
+                const double fa = std::max(0.5, (double)params[2]) * M_PI / 180.0;
+                its = Slic3r::its_make_cylinder(r, h, fa);
+                break;
+            }
+            case 6: { // SLAB — cube for now
+                if (!need(3)) return -1;
+                const double x = std::max(0.001, (double)params[0]);
+                const double y = std::max(0.001, (double)params[1]);
+                const double z = std::max(0.001, (double)params[2]);
+                its = Slic3r::its_make_cube(x, y, z);
+                break;
+            }
+            default:
+                ORCAXR_LOGE("nativeBuildPrimitiveStl: unknown kind %d", (int)jKind);
+                return -1;
+        }
+        if (its.indices.empty() || its.vertices.empty()) {
+            ORCAXR_LOGE("nativeBuildPrimitiveStl: empty mesh for kind=%d", (int)jKind);
+            return -2;
+        }
+
+        // Ground the mesh so bbox.min.z == 0 — callers paste it straight
+        // onto the bed. its_make_cube already starts at z=0, but
+        // sphere/cone/torus/cylinder are centered on (0,0,0), so the
+        // shift varies per kind. We compute it here so every kind lands
+        // bed-aligned.
+        float minZ = std::numeric_limits<float>::infinity();
+        float minX = std::numeric_limits<float>::infinity();
+        float maxX = -std::numeric_limits<float>::infinity();
+        float minY = std::numeric_limits<float>::infinity();
+        float maxY = -std::numeric_limits<float>::infinity();
+        for (const auto& v : its.vertices) {
+            if (v.z() < minZ) minZ = v.z();
+            if (v.x() < minX) minX = v.x();
+            if (v.x() > maxX) maxX = v.x();
+            if (v.y() < minY) minY = v.y();
+            if (v.y() > maxY) maxY = v.y();
+        }
+        const float cx = 0.5f * (minX + maxX);
+        const float cy = 0.5f * (minY + maxY);
+        for (auto& v : its.vertices) {
+            v.x() -= cx;
+            v.y() -= cy;
+            v.z() -= minZ;
+        }
+
+        Slic3r::TriangleMesh mesh(std::move(its));
+        if (!mesh.write_binary(out.c)) {
+            ORCAXR_LOGE("nativeBuildPrimitiveStl: write_binary failed for %s", out.c);
+            return -3;
+        }
+        ORCAXR_LOGI("nativeBuildPrimitiveStl: wrote kind=%d %zu tris -> %s",
+                    (int)jKind, mesh.facets_count(), out.c);
+        return 0;
+    } catch (const std::bad_alloc&) {
+        ORCAXR_LOGE("nativeBuildPrimitiveStl: OOM");
+        return -2;
+    } catch (const std::exception& e) {
+        ORCAXR_LOGE("nativeBuildPrimitiveStl: exception %s", e.what());
+        return -2;
+    } catch (...) {
+        ORCAXR_LOGE("nativeBuildPrimitiveStl: unknown exception");
+        return -2;
+    }
+}

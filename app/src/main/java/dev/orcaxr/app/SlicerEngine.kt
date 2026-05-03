@@ -837,6 +837,43 @@ object SlicerEngine {
         output.exists() && output.length() > 0L
     }
 
+    /**
+     * D12 — build a stock primitive mesh (cube / cylinder / sphere /
+     * cone / torus / disc / slab) using libslic3r's `its_make_*`
+     * helpers and write it to a binary STL at [output].
+     *
+     * [params] is parallel to [PrimitiveKind.paramNames] — caller can
+     * use [PrimitiveKind.defaults] verbatim or splice overrides via
+     * [PrimitiveKind.paramsFromMap]. The native code clamps each
+     * parameter to a sane minimum (>= 0.001 mm for lengths, >= 0.5°
+     * for facet angle) so a malformed param won't crash the slicer.
+     *
+     * The result is centered on the XY origin with Z-min == 0, ready
+     * to drop straight onto the bed.
+     *
+     * Returns the [output] file on success, null on:
+     * - param-count mismatch
+     * - native build failure (e.g. degenerate dims)
+     * - write failure
+     */
+    suspend fun buildPrimitiveStl(
+        kind: PrimitiveKind,
+        params: FloatArray,
+        output: File,
+    ): File? = withContext(dispatcher) {
+        require(params.size >= kind.defaults.size) {
+            "params for $kind expects ${kind.defaults.size} entries, got ${params.size}"
+        }
+        output.parentFile?.mkdirs()
+        output.delete()
+        val rc = nativeBuildPrimitiveStl(kind.nativeOrdinal, params, output.absolutePath)
+        if (rc != 0 || !output.exists() || output.length() == 0L) {
+            android.util.Log.e("OrcaXR", "buildPrimitiveStl rc=$rc kind=$kind")
+            return@withContext null
+        }
+        output
+    }
+
     suspend fun arrangeModels(
         inputs: List<File>,
         priorTransforms: FloatArray,
@@ -1385,6 +1422,13 @@ object SlicerEngine {
         bedHmm: Float,
         gapMm: Float,
     ): FloatArray?
+    /** D12 — build a stock primitive mesh and write it as a binary STL.
+     *  Returns 0 on success, negative on failure. See [buildPrimitiveStl]. */
+    private external fun nativeBuildPrimitiveStl(
+        kind: Int,
+        params: FloatArray,
+        outPath: String,
+    ): Int
     private external fun nativeSaveAs3mf(
         inputPath: String,
         outPath: String,

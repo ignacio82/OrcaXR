@@ -91,51 +91,39 @@ When paint mode is active the left stick's Y axis nudges brush radius (0..50 mm 
 2. Native: extend the load path so loaded 3MFs populate `PlacedModel.configOverrides` from `ModelObject::config`.
 3. Round-trip test: load a fixture with overrides, save through `nativeSaveAs3mf`, reload, assert overrides match.
 
-### D12. Add primitive shapes (cube / cylinder / sphere / cone / disc / torus / slab) 🔴 Not started
+### D12. Add primitive shapes (cube / cylinder / sphere / cone / disc / torus / slab) 🟡 Shipped — MCP + JNI; SpatialPanel UI deferred
 
-> **Files (planned):** `app/src/main/cpp/slic3r_jni.cpp` (new `nativeBuildPrimitiveStl(kind, params, outPath) -> meta`), `app/src/main/java/dev/orcaxr/app/Primitives.kt` (`PrimitiveKind` enum + default param tables), new `AddPrimitivePanel.kt`, `MainActivity.kt` (mount path), `mcp/tools/PrimitiveTools.kt` (`add_primitive(kind, params, mode)`).
+> **Files:** `app/src/main/cpp/slic3r_jni.cpp::nativeBuildPrimitiveStl`, `app/src/main/java/dev/orcaxr/app/Primitives.kt`, `app/src/main/java/dev/orcaxr/app/SlicerEngine.kt::buildPrimitiveStl`, `app/src/main/java/dev/orcaxr/app/mcp/tools/PrimitiveTools.kt`, `PrimitivesTest.kt`.
 
-Upstream OrcaSlicer's "Add primitive" menu seeds a stock mesh into the workspace either as a new object or as a sub-volume of the selected object. libslic3r already exports every helper we need (`its_make_cube` / `its_make_cylinder` / `its_make_sphere` / `its_make_cone` / `its_make_torus` — see `TriangleMesh.hpp:336-358`); slab is `its_make_cube(1.5w, 1.5d, 0.5h)` from the selected object's bbox. So this is a JNI shim that invokes the helper, writes a binary STL, and routes through the existing `onFileSelected` / volume-attach paths.
+JNI calls libslic3r's `its_make_cube/cylinder/sphere/cone/torus` (TriangleMesh.hpp:336) and writes a binary STL via `TriangleMesh::write_binary`. Output is XY-centered with Z-min == 0 so callers paste it straight onto the bed. Disc = short cylinder; slab = cube alias kept distinct for ergonomic naming. The MCP tool `add_primitive(kind, params, mode, target_model_id?)` routes through the existing `LoadModelFromPath` (mode=object, default) or `AddVolumeToModel` (mode=part/negative/modifier/enforcer/blocker) — every D14 volume kind is reachable in one call. `list_primitives` enumerates the catalog so the LLM can discover param names. Defaults: 20 mm cube, Ø10×20 mm cylinder, Ø10 sphere, Ø10×20 cone, Ø10/3 torus, Ø15×1 disc, 40×40×2 slab; facet angle defaults to 2° (6° for torus).
 
-**Implementation outline:**
-1. **JNI** — `nativeBuildPrimitiveStl(kind, params, outPath)` where `params` is a Float array per kind (cube: x/y/z; cylinder: r/h/segments; sphere: r/segments; cone: r/h/segments; disc: r/thickness; torus: majorR/minorR/segments). Defaults match upstream's `create_mesh` defaults (side = 10 % of max bed dim).
-2. **Kotlin authoring panel** — `AddPrimitivePanel` SpatialPanel: chips for each kind, per-kind param sliders, live mm preview ("20×20×20 cube"), "Add as object" / "Add as part" / "Add as negative" / "Add as modifier" / "Add as support enforcer" / "Add as support blocker" buttons. Mode buttons that aren't "as object" depend on **D14**.
-3. **Routing** — "as object" calls the existing import path with the generated STL → produces a fresh PlacedModel. "as part / negative / modifier / enforcer / blocker" calls the existing **add-volume** path (already wired in commit `36782db`..`dd64382` per the appendix) with the per-volume `ModelVolumeType`.
-4. **MCP** — `add_primitive(kind, params, mode, target_model_id?)`. The "magnet pocket" workflow becomes one call: `add_primitive(kind="cylinder", params={r: 3, h: 5}, mode="negative", target_model_id="...")`.
-5. **Auto-placement** — for "as object", drop on bed center; for "as volume", reuse upstream's offset rule (bbox.max.x, bbox.min.y of the host instance, lifted by half of the new mesh's z-bbox).
+**Shipped pieces:** native builder + Kotlin engine wrapper + 2 MCP tools + 8 unit tests pinning the param contract. The dedicated `AddPrimitivePanel` SpatialPanel is deferred to a follow-up — current MCP surface is enough to use every kind and every mode end-to-end.
 
-**Exit criteria:** From XR or from MCP, a user can drop a 20 mm cube, a Ø10×20 mm cylinder, and a Ø10 sphere onto the bed and slice them as one project. From MCP, attach a Ø6×3 mm cylinder as a negative volume on the selected model and slice — the gcode shows a Ø6 hole at the placement.
+Upstream OrcaSlicer's "Add primitive" menu seeds a stock mesh into the workspace either as a new object or as a sub-volume of the selected object. libslic3r already exports every helper we need (`its_make_cube` / `its_make_cylinder` / `its_make_sphere` / `its_make_cone` / `its_make_torus` — see `TriangleMesh.hpp:336-358`); slab is a cube alias kept distinct for ergonomic naming. So this is a JNI shim that invokes the helper, writes a binary STL, and routes through the existing `onFileSelected` / volume-attach paths.
 
-### D13. Handy model library (Benchy, Orca Cube, Voron Cube, Stanford Bunny, …) 🔴 Not started
+**Exit criteria:** From XR or from MCP, a user can drop a 20 mm cube, a Ø10×20 mm cylinder, and a Ø10 sphere onto the bed and slice them as one project. From MCP, attach a Ø6×3 mm cylinder as a negative volume on the selected model and slice — the gcode shows a Ø6 hole at the placement. ✅ Met via MCP (`add_primitive` + `add_volume_to_model`).
 
-> **Files (planned):** vendored under `app/src/main/assets/handy_models/` mirroring `third_party/OrcaSlicer/resources/handy_models/` (bundle cost ~1.5 MB for all 8 — see `du -h` on those files), new `HandyModelCatalog.kt` + `HandyModelPanel.kt`, MCP tool `add_handy_model(id)`. Draco is already linked into the native build (`CMakeLists.txt:167`) so the `.drc` files load directly via libslic3r; OrcaCube is a bundled `.3mf`.
+### D13. Handy model library (Benchy, Orca Cube, Voron Cube, Stanford Bunny, …) 🟡 Shipped — assets + MCP; in-XR picker UI deferred
+
+> **Files:** `app/src/main/assets/handy_models/` (8 vendored meshes, 1.5 MB total), `app/src/main/java/dev/orcaxr/app/HandyModelCatalog.kt`, `app/src/main/java/dev/orcaxr/app/mcp/tools/HandyModelTools.kt`, `HandyModelCatalogTest.kt`, `NOTICE.md` AGPL attribution. Draco is already linked into the native build (`CMakeLists.txt:167`) so the `.drc` files load directly via libslic3r; OrcaCube is a bundled `.3mf`.
+
+`list_handy_models` enumerates the catalog (id / display name / 1-line hint). `add_handy_model(id, mode?)` stages the asset to `cacheDir/handy/<filename>` (idempotent) and routes through the same `LoadModelFromPath` action a file-picker pick uses, so paint restore / GLB bake / bed fit / bed collision all run identically. `mode='replace'` (default) clears the bed; `mode='add'` appends.
+
+**Shipped pieces:** asset vendoring + catalog + 2 MCP tools + 8 unit tests + NOTICE entry. The `HandyModelPanel` SpatialPanel + Empty State CTA are deferred to a follow-up — the MCP surface already covers the exit criteria and the in-XR catalog browser is layout work, not a slicing milestone.
 
 Upstream's "Add handy model" submenu seeds well-known calibration / tuning models with one tap: 3DBenchy, Orca Cube v2, Voron Design Cube v7, Stanford Bunny, Cali Cat, Orca Tolerance Test, Autodesk FDM Test (`ksr_fdmtest_v4.drc`), Orca String Hell. They're the canonical reference prints — handy when a user wants to dial in a new filament without hunting for an STL on the web.
 
-**Implementation outline:**
-1. **Asset vendoring** — copy all 8 files from `third_party/OrcaSlicer/resources/handy_models/` into `app/src/main/assets/handy_models/`. AGPL attribution lands in `NOTICE.md`. APK cost: ~1.5 MB total (Benchy is the largest at 572 KB).
-2. **Catalog** — `HandyModelCatalog.entries: List<HandyModel(id, displayName, assetPath, hint)`. Hint is a 1-line "what it tests" string for tooltip display.
-3. **UI** — `HandyModelPanel` (mounted from the Empty State `EmptyStatePanel` + from `AddPrimitivePanel`'s "More…" tab): grid of tiles (icon + name + hint chip). Tap → stages the asset to `cacheDir/handy/<id>.<ext>` then routes through `onFileSelected`.
-4. **MCP** — `list_handy_models`, `add_handy_model(id, mode?)`. "Slice a Benchy" = one MCP call.
-5. **Empty state CTA** — `EmptyStatePanel` already has "Slice the bundled 20 mm cube"; add a "Or pick a calibration model…" link that opens `HandyModelPanel`.
+**Exit criteria:** A user can tap "3DBenchy" from a fresh Empty State and end up with the boat sliced + previewable + sendable to a printer in three taps. From MCP: `add_handy_model(id="benchy")` then `slice_active_plate` works from cold install. ✅ MCP path met; in-XR Empty State CTA is the remaining UI follow-up.
 
-**Exit criteria:** A user can tap "3DBenchy" from a fresh Empty State and end up with the boat sliced + previewable + sendable to a printer in three taps. From MCP: `add_handy_model(id="benchy")` then `slice_active_plate` works from cold install.
+### D14. Modifier volume types (negative / parameter modifier / support enforcer / support blocker) 🟢 Shipped
 
-### D14. Modifier volume types (negative / parameter modifier / support enforcer / support blocker) 🔴 Not started
+> **Files:** `PlacedModel.kt::ModelVolumeType` (enum mirrors `Slic3r::ModelVolumeType` ordinals), `PlacedModel.kt::PlacedVolume.type`, `slic3r_jni.cpp::nativeSlice` extra-volumes path (jExtraVolumePaths/jExtraVolumeTypes/jExtraVolumeTransforms), `SlicerEngine.slice` `extraVolumes` parameter, `MainActivity.kt::PickerMode.AddVolume(type)` + `launchPickerForVolume`, `UiPanels.kt::ModelDetailsPanel` 5 chips (Part / Modifier / Negative / Sup. enf. / Sup. blk.), `mcp/tools/WorkspaceTools.AddVolumeToModel` (`type` arg), `ModelVolumeTypeTest`.
 
-> **Files (planned):** `PlacedModel.kt`'s `volumes: List<PlacedVolume>` already exists (per the appendix's Phase 3 "Multi-volume JNI bridge + per-object Object Settings"); extend `PlacedVolume.kind` to cover the five `ModelVolumeType` cases (`MODEL_PART`, `NEGATIVE_VOLUME`, `PARAMETER_MODIFIER`, `SUPPORT_ENFORCER`, `SUPPORT_BLOCKER`); `nativeAddVolumeToModel` (already shipped per Phase 2.4 MCP `add_volume_to_model`) needs a `kind` parameter. UI surface: `ModelDetailsPanel`'s "Add volume" affordance grows kind chips; `mcp/tools/VolumeTools.kt::add_volume_to_model` grows a `kind` arg.
+`add_volume_to_model` attaches a mesh of any of the five `ModelVolumeType` values (`GUI_Factories.cpp:289-296`). The runtime difference is purely how libslic3r treats the volume during slicing: NEGATIVE_VOLUME subtracts geometry (the magnet-pocket use case — paired with **D12** + **A11**); PARAMETER_MODIFIER applies a `ModelConfig` overlay only inside its bbox-intersection with the parent (per-volume settings UI is **D16**); SUPPORT_ENFORCER / SUPPORT_BLOCKER override the `enforcers` / `blockers` field on `ModelObject::supported_facets` for that region.
 
-`add_volume_to_model` already attaches a mesh as a part — but only as `MODEL_PART`. Upstream's full menu offers all five `ModelVolumeType` values (`GUI_Factories.cpp:289-296`). The runtime difference is purely how libslic3r treats the volume during slicing: NEGATIVE_VOLUME subtracts geometry (the magnet-pocket use case the user called out — paired with **D12** + **A11** for the pause-to-insert step); PARAMETER_MODIFIER applies a `ModelConfig` overlay only inside its bbox-intersection with the parent; SUPPORT_ENFORCER / SUPPORT_BLOCKER override the `enforcers` / `blockers` field on `ModelObject::supported_facets` for that region.
+**Shipped pieces:** Kotlin `ModelVolumeType` ordinals match libslic3r's `Model.hpp:341-348` exactly so the int passes straight through the JNI without translation; the `PickerMode.AddVolume(type)` flow + 5 UI chips + the MCP `type` arg all drive the same per-volume `nativeSlice` path. Multi-volume preview rendering (semi-transparent enforcer/blocker overlays, wireframe modifier, NEGATIVE-volume cutaway in `nativeWriteColoredGlb`) is the remaining polish — out-of-scope here because the slice path already honors every kind correctly; the user just doesn't see a visual cue per kind in the in-XR preview yet.
 
-**Implementation outline:**
-1. **JNI** — extend `nativeAddVolumeToModel(modelId, stlPath, kind: Int)` so the kind maps to `ModelVolumeType` exactly. NEGATIVE_VOLUME / SUPPORT_ENFORCER / SUPPORT_BLOCKER need no extra metadata; PARAMETER_MODIFIER needs a `Map<String, String>` overrides arg routed through `ModelVolume::config` (depends on **D16**).
-2. **`PlacedVolume`** — add `kind: VolumeKind` enum + per-kind UI badge (red wireframe for negative, blue for enforcer, gray for blocker, gold for modifier).
-3. **UI** — `ModelDetailsPanel`'s existing "Add volume" affordance grows a row of 5 chips ("Part / Negative / Modifier / Enforcer / Blocker"). Picker flow then matches the existing path. The volume list shows a colored kind badge.
-4. **Preview rendering** — `nativeWriteColoredGlb` skips NEGATIVE volumes from the rendered mesh and renders enforcers/blockers as semi-transparent overlays. Modifier volumes render as wireframe.
-5. **MCP** — `add_volume_to_model(model_id, stl_path, kind, overrides?)` covers all five.
-6. **Slice** — libslic3r already does the right thing per `ModelVolumeType`; just thread the kind through `runSliceMulti` for re-extracted per-object archives.
-
-**Exit criteria:** Drop a Ø6×3 mm cylinder (D12) as a NEGATIVE volume on a 20 mm cube, slice → gcode shows a Ø6 hole. Same with a SUPPORT_ENFORCER on the underside of a Benchy chimney → gcode adds supports inside the enforcer bbox where the default heuristic skipped them. Round-trips through `save_project_as_3mf`.
+**Exit criteria:** Drop a Ø6×3 mm cylinder (D12) as a NEGATIVE volume on a 20 mm cube, slice → gcode shows a Ø6 hole. Same with a SUPPORT_ENFORCER on the underside of a Benchy chimney → gcode adds supports inside the enforcer bbox where the default heuristic skipped them. Round-trips through `save_project_as_3mf`. ✅ Met.
 
 ### D15. Standalone text & SVG primitives (vs D4's boolean emboss) 🔴 Not started
 
