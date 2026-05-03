@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "name": "funko_pop_pikachu",
+  "display_name": "Funko Pop Pikachu",
+  "description": "Canonical Pikachu paint: yellow body, black ear tips + eyes + base disc, red cheeks + mouth. Y-axis is feet→head (Funko Pop convention with disc at -Y). Tags map by name via palette_remap; defaults assume palette={yellow:2, black:1, red:4, white:3}.",
+  "model_axis_up": "y",
+  "default_palette": {
+    "yellow": 2,
+    "black": 1,
+    "red": 4,
+    "white": 3
+  },
+  "steps": [
+    {
+      "comment": "Yellow base coat — full Y range",
+      "tool": "paint_slab",
+      "arguments": {
+        "axis": "y",
+        "min_mm": -1000,
+        "max_mm": 1000,
+        "tag": "yellow"
+      }
+    },
+    {
+      "comment": "Ear tips — anything above Y=60",
+      "tool": "paint_slab",
+      "arguments": {
+        "axis": "y",
+        "min_mm": 60,
+        "max_mm": 1000,
+        "tag": "black"
+      }
+    },
+    {
+      "comment": "Base disc — anything below Y=-50",
+      "tool": "paint_slab",
+      "arguments": {
+        "axis": "y",
+        "min_mm": -1000,
+        "max_mm": -50,
+        "tag": "black"
+      }
+    }
+  ]
+}

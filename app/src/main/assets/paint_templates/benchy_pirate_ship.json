@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "name": "benchy_pirate_ship",
+  "display_name": "Benchy Pirate Ship",
+  "description": "Black Pearl-style pirate Benchy: black hull, red cabin walls, yellow cabin roof, black smokestack, white waterline. Z-axis is bed→top. Tags map by name; defaults assume palette={yellow:2, black:1, red:4, white:3}. Tested on a 3DBenchy.stl with bbox 60x31x48 mm.",
+  "model_axis_up": "z",
+  "default_palette": {
+    "yellow": 2,
+    "black": 1,
+    "red": 4,
+    "white": 3
+  },
+  "steps": [
+    {
+      "comment": "Hull (z 0..10) — black",
+      "tool": "paint_slab",
+      "arguments": {
+        "axis": "z",
+        "min_mm": -1,
+        "max_mm": 10,
+        "tag": "black"
+      }
+    },
+    {
+      "comment": "Cabin walls (z 10..30) — red",
+      "tool": "paint_slab",
+      "arguments": {
+        "axis": "z",
+        "min_mm": 10,
+        "max_mm": 30,
+        "tag": "red"
+      }
+    },
+    {
+      "comment": "Cabin roof (z 30..40) — yellow",
+      "tool": "paint_slab",
+      "arguments": {
+        "axis": "z",
+        "min_mm": 30,
+        "max_mm": 40,
+        "tag": "yellow"
+      }
+    },
+    {
+      "comment": "Smokestack (z 40..50) — black",
+      "tool": "paint_slab",
+      "arguments": {
+        "axis": "z",
+        "min_mm": 40,
+        "max_mm": 50,
+        "tag": "black"
+      }
+    },
+    {
+      "comment": "Waterline stripe (z 0..2.5) — white, only on currently-black hull",
+      "tool": "paint_slab",
+      "arguments": {
+        "axis": "z",
+        "min_mm": -1,
+        "max_mm": 2.5,
+        "tag": "white",
+        "merge": "only_tagged",
+        "where_tag": "black"
+      }
+    }
+  ]
+}

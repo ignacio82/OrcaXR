@@ -6,6 +6,7 @@ import dev.orcaxr.app.mcp.tools.AiIntrospectionTools
 import dev.orcaxr.app.mcp.tools.AiPaintTools
 import dev.orcaxr.app.mcp.tools.AiVisionTools
 import dev.orcaxr.app.mcp.tools.PaintRecipeTools
+import dev.orcaxr.app.mcp.tools.PaintTemplateTools
 import dev.orcaxr.app.mcp.tools.FilamentTools
 import dev.orcaxr.app.mcp.tools.HandyModelTools
 import dev.orcaxr.app.mcp.tools.PrefsTools
@@ -158,13 +159,18 @@ class McpController private constructor(
             // D13 — handy model library (Benchy / Orca Cube / …).
             for (t in HandyModelTools.all(ctx)) builder.tool(t)
             // C9 milestone 1 — AI-driven spatial paint primitives.
-            for (t in AiPaintTools.all(WorkspaceModel.get())) builder.tool(t)
+            val aiPaintTools = AiPaintTools.all(WorkspaceModel.get())
+            for (t in aiPaintTools) builder.tool(t)
             // C9 milestone 3 — geometry / topology introspection.
             for (t in AiIntrospectionTools.all(WorkspaceModel.get())) builder.tool(t)
             // C9 milestone 2 — vision pillar (software rasterizer).
             for (t in AiVisionTools.all(WorkspaceModel.get(), AiSessionState.get())) builder.tool(t)
             // D18j — persistent paint recipes.
             for (t in PaintRecipeTools.all(WorkspaceModel.get(), ctx)) builder.tool(t)
+            // D18i — bundled paint templates that dispatch to the
+            // AI paint primitives. Pass the registered paint tools
+            // so paint_template can dispatch by name.
+            for (t in PaintTemplateTools.all(WorkspaceModel.get(), ctx, aiPaintTools)) builder.tool(t)
         }
     }
 
