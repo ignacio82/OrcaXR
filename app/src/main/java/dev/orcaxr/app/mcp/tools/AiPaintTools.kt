@@ -35,8 +35,11 @@ import org.json.JSONObject
  * Every tool's `structuredContent` includes:
  *   - `painted_count`: matched triangles AFTER the merge filter
  *   - `triangle_count`: matched triangles BEFORE the merge filter
- *   - `triangle_indices`: capped at [MAX_INDICES_RETURNED]
- *   - `truncated_indices`: true iff the cap was hit
+ *   - `total_triangle_count`: total tris on the model
+ *   - `triangle_indices` + `truncated_indices`: ONLY when the caller
+ *     opts in via `return_indices=true`. Default off (since 2026-05)
+ *     to keep tool responses small — most workflows verify with
+ *     `paint_coverage_summary` / `get_paint_summary` instead.
  */
 internal object AiPaintTools {
 
@@ -358,19 +361,23 @@ internal object AiPaintTools {
         }
     }
 
-    /** Build the tool result + emit the action. Returns the response. */
+    /** Build the tool result + emit the action. Returns the response.
+     *  Set [returnIndices] true to include the actual `triangle_indices`
+     *  array (capped at [MAX_INDICES_RETURNED]); when false (the
+     *  default) we omit the array entirely to keep responses small —
+     *  most LLM workflows verify with `paint_coverage_summary` /
+     *  `get_paint_summary` instead of consuming raw indices. */
     private suspend fun emitAndRespond(
         ws: WorkspaceModel,
         plan: Plan,
         candidates: IntArray,
         humanLabel: String,
         extra: JSONObject = JSONObject(),
+        returnIndices: Boolean = false,
     ): ToolResult {
         val matched = candidates.size
         val effective = applyMergeFilter(candidates, plan)
         val painted = effective.size
-        val truncated = effective.size > MAX_INDICES_RETURNED
-        val sample = if (truncated) effective.copyOfRange(0, MAX_INDICES_RETURNED) else effective
         ws.emit(
             WorkspaceAction.PaintTriangleSet(
                 modelId = plan.model.id,
@@ -390,9 +397,13 @@ internal object AiPaintTools {
             if (plan.merge == WorkspaceAction.MergeMode.OnlyTagged) put("where_tag", plan.whereTag)
             put("triangle_count", matched)
             put("painted_count", painted)
-            put("truncated_indices", truncated)
-            put("triangle_indices", JSONArray().apply { for (i in sample) put(i) })
             put("total_triangle_count", plan.bvh.triCount)
+            if (returnIndices) {
+                val truncated = effective.size > MAX_INDICES_RETURNED
+                val sample = if (truncated) effective.copyOfRange(0, MAX_INDICES_RETURNED) else effective
+                put("truncated_indices", truncated)
+                put("triangle_indices", JSONArray().apply { for (i in sample) put(i) })
+            }
             // Merge tool-specific extras (e.g. radius_mm) into the body.
             val keys = extra.keys()
             while (keys.hasNext()) {
@@ -404,6 +415,14 @@ internal object AiPaintTools {
             "(${plan.kind.name.lowercase()} tag=${plan.tag}, merge=${plan.merge.name.lowercase()})"
         return ToolResult.ok(text, body)
     }
+
+    /** Read the optional `return_indices` flag from any paint
+     *  primitive's args. Default false (since the 2026-05 quiet-by-
+     *  default change). LLMs that genuinely consume the indices
+     *  (rare — `paint_triangle_list` chaining is the main case) opt
+     *  in per call. */
+    private fun returnIndicesFlag(args: JSONObject): Boolean =
+        args.optBoolean("return_indices", false)
 
     // ---- Tools ----
 
@@ -434,6 +453,7 @@ internal object AiPaintTools {
                 "tag" to Schemas.integer("Tag to apply"),
                 "merge" to Schemas.string("'replace' (default) | 'only_unpainted' | 'only_tagged'"),
                 "where_tag" to Schemas.integer("Required when merge='only_tagged'"),
+                "return_indices" to Schemas.bool("If true, response includes triangle_indices array (capped at 4096). Default false to keep responses small — verify with paint_coverage_summary instead."),
                 "back_face_filter" to Schemas.bool("Reject triangles whose normal faces the sphere center (default false)"),
             ),
         )
@@ -462,6 +482,7 @@ internal object AiPaintTools {
                 ws, plan, candidates,
                 "paint_sphere @($cx,$cy,$cz) r=${radius}mm",
                 extra,
+                returnIndices = returnIndicesFlag(args),
             )
         }
     }
@@ -486,6 +507,7 @@ internal object AiPaintTools {
                 "tag" to Schemas.integer("Tag to apply"),
                 "merge" to Schemas.string("'replace' (default) | 'only_unpainted' | 'only_tagged'"),
                 "where_tag" to Schemas.integer("Required when merge='only_tagged'"),
+                "return_indices" to Schemas.bool("If true, response includes triangle_indices array (capped at 4096). Default false to keep responses small — verify with paint_coverage_summary instead."),
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
@@ -520,6 +542,7 @@ internal object AiPaintTools {
                 ws, plan, candidates,
                 "paint_slab axis=$axisRaw [$minMm..$maxMm]mm test=$testRaw",
                 extra,
+                returnIndices = returnIndicesFlag(args),
             )
         }
     }
@@ -549,6 +572,7 @@ internal object AiPaintTools {
                 "tag" to Schemas.integer("Tag to apply"),
                 "merge" to Schemas.string("'replace' (default) | 'only_unpainted' | 'only_tagged'"),
                 "where_tag" to Schemas.integer("Required when merge='only_tagged'"),
+                "return_indices" to Schemas.bool("If true, response includes triangle_indices array (capped at 4096). Default false to keep responses small — verify with paint_coverage_summary instead."),
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
@@ -582,6 +606,7 @@ internal object AiPaintTools {
                 ws, plan, candidates,
                 "paint_normal_cone dir=($dx,$dy,$dz) half=${halfAngle}° sign=$signRaw",
                 extra,
+                returnIndices = returnIndicesFlag(args),
             )
         }
     }
@@ -624,6 +649,7 @@ internal object AiPaintTools {
                 "tag" to Schemas.integer("Tag to apply"),
                 "merge" to Schemas.string("'replace' (default) | 'only_unpainted' | 'only_tagged'"),
                 "where_tag" to Schemas.integer("Required when merge='only_tagged'"),
+                "return_indices" to Schemas.bool("If true, response includes triangle_indices array (capped at 4096). Default false to keep responses small — verify with paint_coverage_summary instead."),
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
@@ -649,6 +675,7 @@ internal object AiPaintTools {
                 ws, plan, candidates,
                 "paint_surface_region seed=$seedTri dihedral=${maxDihedral}°",
                 extra,
+                returnIndices = returnIndicesFlag(args),
             )
         }
     }
@@ -675,6 +702,7 @@ internal object AiPaintTools {
                 "tag" to Schemas.integer("Tag to apply"),
                 "merge" to Schemas.string("'replace' (default) | 'only_unpainted' | 'only_tagged'"),
                 "where_tag" to Schemas.integer("Required when merge='only_tagged'"),
+                "return_indices" to Schemas.bool("If true, response includes triangle_indices array (capped at 4096). Default false to keep responses small — verify with paint_coverage_summary instead."),
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
@@ -698,6 +726,7 @@ internal object AiPaintTools {
                 ws, plan, candidates,
                 "paint_connected_component seed=$seedTri",
                 extra,
+                returnIndices = returnIndicesFlag(args),
             )
         }
     }
@@ -722,6 +751,7 @@ internal object AiPaintTools {
                 "tag" to Schemas.integer("Tag to apply"),
                 "merge" to Schemas.string("'replace' (default) | 'only_unpainted' | 'only_tagged'"),
                 "where_tag" to Schemas.integer("Required when merge='only_tagged'"),
+                "return_indices" to Schemas.bool("If true, response includes triangle_indices array (capped at 4096). Default false to keep responses small — verify with paint_coverage_summary instead."),
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
@@ -745,6 +775,7 @@ internal object AiPaintTools {
                 "paint_triangle_list (${result.indices.size} ids" +
                     if (result.droppedOutOfRange > 0) ", ${result.droppedOutOfRange} dropped)" else ")",
                 extra,
+                returnIndices = returnIndicesFlag(args),
             )
         }
     }
@@ -791,6 +822,7 @@ internal object AiPaintTools {
                 "tag" to Schemas.integer("Tag to apply"),
                 "merge" to Schemas.string("'replace' (default) | 'only_unpainted' | 'only_tagged'"),
                 "where_tag" to Schemas.integer("Required when merge='only_tagged'"),
+                "return_indices" to Schemas.bool("If true, response includes triangle_indices array (capped at 4096). Default false to keep responses small — verify with paint_coverage_summary instead."),
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
@@ -857,6 +889,7 @@ internal object AiPaintTools {
                 ws, plan, candidates,
                 "paint_projected_mask (${polys.size} polygons, $onPixels pixels)",
                 extra,
+                returnIndices = returnIndicesFlag(args),
             )
         }
     }
@@ -1197,6 +1230,7 @@ internal object AiPaintTools {
                 "tag" to Schemas.integer("Tag to apply"),
                 "merge" to Schemas.string("'replace' (default) | 'only_unpainted' | 'only_tagged'"),
                 "where_tag" to Schemas.integer("Required when merge='only_tagged'"),
+                "return_indices" to Schemas.bool("If true, response includes triangle_indices array (capped at 4096). Default false to keep responses small — verify with paint_coverage_summary instead."),
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
@@ -1226,6 +1260,7 @@ internal object AiPaintTools {
                 ws, plan, candidates,
                 "paint_geodesic_disc seed=$seedTri r=${radius}mm dihedral=${maxDihedral}°",
                 extra,
+                returnIndices = returnIndicesFlag(args),
             )
         }
     }

@@ -847,4 +847,287 @@ internal object AiIntrospection {
             label = label,
         )
     }
+
+    // ---- Recessed-feature detection (D19c) ----
+
+    data class RecessedFeature(
+        val featureId: Int,
+        /** Triangle indices belonging to the recess interior. */
+        val triangleIndices: IntArray,
+        /** A representative seed triangle near the deepest point (the
+         *  one with the most-negative signed curvature). Use this with
+         *  paint_geodesic_disc.anchor.tri_id. */
+        val seedTriangleId: Int,
+        /** Approximate "depth" of the recess in mm — distance from the
+         *  feature's centroid to the convex hull approximated by its
+         *  bounding box face along the seed triangle's outward normal.
+         *  Helpful for sorting features by prominence. */
+        val depthMm: Float,
+        /** Centroid of the recess (mesh-local mm). */
+        val centroid: FloatArray,
+        /** Mean outward normal of the recess interior (points "out of
+         *  the hole" — useful as a paint-projection direction). */
+        val meanNormal: FloatArray,
+        /** Total surface area of the recess in mm². */
+        val areaMm2: Float,
+        /** Mean signed curvature score (negative; more negative =
+         *  deeper / sharper recess). */
+        val meanSignedCurvature: Float,
+        /** Heuristic label: "recess_top" / "recess_front_pair" / etc.,
+         *  built from the centroid's bbox-relative position +
+         *  orientation of meanNormal. */
+        val label: String,
+    ) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is RecessedFeature) return false
+            return featureId == other.featureId &&
+                triangleIndices.contentEquals(other.triangleIndices)
+        }
+        override fun hashCode(): Int = featureId * 31 + triangleIndices.contentHashCode()
+    }
+
+    /**
+     * Per-triangle **signed** dihedral score. Positive = convex edge
+     * (outward bulge — sphere surface, knuckle); negative = concave
+     * edge (inward groove — eye socket, mouth recess); near zero =
+     * locally flat.
+     *
+     * Sign test: take the cross product of the two outward normals
+     * (`nA × nB`) and dot it against the shared edge's directed
+     * vector (oriented in A's CCW winding). Positive dot ⇒ rotation
+     * from nA to nB is in the same direction as the edge ⇒ the
+     * surfaces "fold outward" away from each other ⇒ convex.
+     * Negative ⇒ concave. This is the textbook signed-dihedral
+     * formula and works regardless of where the centroids land.
+     *
+     * Magnitude is the unsigned dihedral angle in degrees, so the
+     * output is comparable to [perTriangleCurvature].
+     *
+     * Cost: O(triCount × averageNeighborCount × 3) for the shared-
+     * edge identification. On typical 150 K-tri meshes this is a few
+     * hundred ms — same order as [perTriangleCurvature].
+     */
+    fun perTriangleSignedCurvature(bvh: MeshBvh): FloatArray {
+        val n = bvh.triCount
+        val out = FloatArray(n)
+        if (n == 0) return out
+        // Quantization tolerance for vertex matching — same precision
+        // (1 µm) as MeshBvh.buildAdjacency, so two triangles flagged
+        // as neighbors will reliably share quantized vertices.
+        val q = 1e-3f
+        for (i in 0 until n) {
+            val nrm = bvh.triangleNormal(i)
+            if (nrm.x == 0f && nrm.y == 0f && nrm.z == 0f) continue
+            val v0 = bvh.triangleVertex(i, 0)
+            val v1 = bvh.triangleVertex(i, 1)
+            val v2 = bvh.triangleVertex(i, 2)
+            val nbrs = bvh.directNeighbors(i)
+            if (nbrs.isEmpty()) continue
+            var sum = 0f
+            var count = 0
+            for (nb in nbrs) {
+                val nN = bvh.triangleNormal(nb)
+                if (nN.x == 0f && nN.y == 0f && nN.z == 0f) continue
+                // Find which two of A's vertices appear in B (the
+                // shared edge). Use quantized comparison to absorb
+                // float noise.
+                val w0 = bvh.triangleVertex(nb, 0)
+                val w1 = bvh.triangleVertex(nb, 1)
+                val w2 = bvh.triangleVertex(nb, 2)
+                val a0In = vIn(v0, w0, w1, w2, q)
+                val a1In = vIn(v1, w0, w1, w2, q)
+                val a2In = vIn(v2, w0, w1, w2, q)
+                val sharedCount = (if (a0In) 1 else 0) + (if (a1In) 1 else 0) + (if (a2In) 1 else 0)
+                if (sharedCount < 2) continue  // adjacent via single vertex only — can't form an edge
+                // Determine the directed edge in A's winding. Edges of
+                // A are (v0,v1), (v1,v2), (v2,v0). Pick the one whose
+                // both endpoints are shared with B.
+                val edgeFrom: Vec3f
+                val edgeTo: Vec3f
+                when {
+                    a0In && a1In -> { edgeFrom = v0; edgeTo = v1 }
+                    a1In && a2In -> { edgeFrom = v1; edgeTo = v2 }
+                    a2In && a0In -> { edgeFrom = v2; edgeTo = v0 }
+                    else -> continue
+                }
+                val ex = edgeTo.x - edgeFrom.x
+                val ey = edgeTo.y - edgeFrom.y
+                val ez = edgeTo.z - edgeFrom.z
+                // Cross product of normals.
+                val cx = nrm.y * nN.z - nrm.z * nN.y
+                val cy = nrm.z * nN.x - nrm.x * nN.z
+                val cz = nrm.x * nN.y - nrm.y * nN.x
+                // Dot with edge direction.
+                val cross = cx * ex + cy * ey + cz * ez
+                // Magnitude: unsigned dihedral angle.
+                val dot = (nrm.x * nN.x + nrm.y * nN.y + nrm.z * nN.z).coerceIn(-1f, 1f)
+                val ang = Math.toDegrees(kotlin.math.acos(dot.toDouble())).toFloat()
+                val sign = if (cross > 0f) 1f else -1f
+                sum += sign * ang
+                count++
+            }
+            if (count > 0) out[i] = sum / count
+        }
+        return out
+    }
+
+    private fun vIn(v: Vec3f, w0: Vec3f, w1: Vec3f, w2: Vec3f, tol: Float): Boolean {
+        return vEq(v, w0, tol) || vEq(v, w1, tol) || vEq(v, w2, tol)
+    }
+    private fun vEq(a: Vec3f, b: Vec3f, tol: Float): Boolean {
+        return kotlin.math.abs(a.x - b.x) < tol &&
+            kotlin.math.abs(a.y - b.y) < tol &&
+            kotlin.math.abs(a.z - b.z) < tol
+    }
+
+    /**
+     * Find the top recessed features on a mesh — eye sockets, mouth
+     * grooves, ear cavities, between-finger gaps. Designed to be the
+     * deterministic alternative to vision-API anchor finding for the
+     * "where do I paint the eyes?" workflow.
+     *
+     * Algorithm:
+     *  1. Compute signed curvature [perTriangleSignedCurvature].
+     *  2. Find triangles with score < `concaveThresholdDeg` (negative
+     *     side, sufficiently sharp).
+     *  3. BFS from each unassigned concave seed (most-negative first)
+     *     along shared-vertex adjacency, accepting neighbors that
+     *     are also concave (within `growConcaveThresholdDeg`).
+     *  4. Drop segments under `minSegmentTriCount`.
+     *  5. Return the top `maxFeatures` by area, each with a seed
+     *     triangle (the most-concave member) and a label.
+     */
+    fun findRecessedFeatures(
+        bvh: MeshBvh,
+        concaveThresholdDeg: Float = -18f,
+        growConcaveThresholdDeg: Float = -8f,
+        maxFeatures: Int = 12,
+        minSegmentTriCount: Int = 6,
+    ): List<RecessedFeature> {
+        val n = bvh.triCount
+        if (n == 0) return emptyList()
+        val signed = perTriangleSignedCurvature(bvh)
+        // Sort by ascending (most negative first).
+        val order = IntArray(n) { it }
+        run {
+            val packed = LongArray(n)
+            for (i in 0 until n) {
+                // Encode signed float as comparable bits: shift to
+                // positive range so Long sort gives us ascending
+                // score. 1<<31 added to handle negatives correctly.
+                val biased = (signed[i] * 1000f + 1_000_000f).toInt()
+                packed[i] = (biased.toLong() shl 32) or (i.toLong() and 0xFFFFFFFFL)
+            }
+            packed.sort()
+            for (i in 0 until n) order[i] = (packed[i] and 0xFFFFFFFFL).toInt()
+        }
+        val assigned = IntArray(n) { -1 }
+        val regionBuf = IntArray(n)
+        val queue = IntArray(n)
+        val rawSegments = ArrayList<RecessedFeature>()
+        var nextId = 0
+        val growThr = growConcaveThresholdDeg
+        for (idx in 0 until n) {
+            val seed = order[idx]
+            if (assigned[seed] != -1) continue
+            if (signed[seed] >= concaveThresholdDeg) break  // sorted ascending; rest are not concave enough
+            var size = 0
+            var qHead = 0; var qTail = 0
+            queue[qTail++] = seed
+            assigned[seed] = nextId
+            while (qHead < qTail) {
+                val cur = queue[qHead++]
+                regionBuf[size++] = cur
+                for (nb in bvh.directNeighbors(cur)) {
+                    if (assigned[nb] != -1) continue
+                    if (signed[nb] >= growThr) continue
+                    assigned[nb] = nextId
+                    queue[qTail++] = nb
+                }
+            }
+            if (size < minSegmentTriCount) {
+                // Roll back and skip.
+                for (k in 0 until size) assigned[regionBuf[k]] = -1
+                continue
+            }
+            val members = regionBuf.copyOf(size)
+            rawSegments.add(buildRecess(bvh, nextId, members, signed))
+            nextId++
+        }
+        return rawSegments.sortedByDescending { it.areaMm2 }.take(maxFeatures)
+            .mapIndexed { i, f -> f.copy(featureId = i) }
+    }
+
+    private fun buildRecess(
+        bvh: MeshBvh,
+        featureId: Int,
+        members: IntArray,
+        signed: FloatArray,
+    ): RecessedFeature {
+        var minX = Float.POSITIVE_INFINITY; var minY = Float.POSITIVE_INFINITY; var minZ = Float.POSITIVE_INFINITY
+        var maxX = Float.NEGATIVE_INFINITY; var maxY = Float.NEGATIVE_INFINITY; var maxZ = Float.NEGATIVE_INFINITY
+        var aTotal = 0.0
+        var nx = 0.0; var ny = 0.0; var nz = 0.0
+        var cx = 0.0; var cy = 0.0; var cz = 0.0
+        var curveSum = 0.0
+        var seedTri = members[0]
+        var seedScore = signed[seedTri]
+        for (t in members) {
+            val s = signed[t]
+            if (s < seedScore) { seedScore = s; seedTri = t }
+            val v0 = bvh.triangleVertex(t, 0)
+            val v1 = bvh.triangleVertex(t, 1)
+            val v2 = bvh.triangleVertex(t, 2)
+            for (v in arrayOf(v0, v1, v2)) {
+                if (v.x < minX) minX = v.x; if (v.y < minY) minY = v.y; if (v.z < minZ) minZ = v.z
+                if (v.x > maxX) maxX = v.x; if (v.y > maxY) maxY = v.y; if (v.z > maxZ) maxZ = v.z
+            }
+            val e1x = v1.x - v0.x; val e1y = v1.y - v0.y; val e1z = v1.z - v0.z
+            val e2x = v2.x - v0.x; val e2y = v2.y - v0.y; val e2z = v2.z - v0.z
+            val cnx = e1y * e2z - e1z * e2y
+            val cny = e1z * e2x - e1x * e2z
+            val cnz = e1x * e2y - e1y * e2x
+            val len = sqrt(cnx.toDouble() * cnx + cny.toDouble() * cny + cnz.toDouble() * cnz)
+            val a = 0.5 * len
+            aTotal += a
+            if (len > 0) {
+                nx += (cnx / len) * a; ny += (cny / len) * a; nz += (cnz / len) * a
+            }
+            val tcx = (v0.x + v1.x + v2.x) / 3f
+            val tcy = (v0.y + v1.y + v2.y) / 3f
+            val tcz = (v0.z + v1.z + v2.z) / 3f
+            cx += tcx * a; cy += tcy * a; cz += tcz * a
+            curveSum += signed[t]
+        }
+        val meanN = if (aTotal > 0) {
+            val nLen = sqrt(nx * nx + ny * ny + nz * nz)
+            if (nLen > 0) floatArrayOf((nx / nLen).toFloat(), (ny / nLen).toFloat(), (nz / nLen).toFloat())
+            else floatArrayOf(0f, 0f, 0f)
+        } else floatArrayOf(0f, 0f, 0f)
+        val centroid = if (aTotal > 0)
+            floatArrayOf((cx / aTotal).toFloat(), (cy / aTotal).toFloat(), (cz / aTotal).toFloat())
+        else floatArrayOf(0f, 0f, 0f)
+        val meanCurve = if (members.isNotEmpty()) (curveSum / members.size).toFloat() else 0f
+        // Depth: how far the centroid sits along -meanNormal from the
+        // bbox surface in that direction. Coarse but useful for
+        // ordering.
+        val depthMm = run {
+            val bboxExtent = maxOf(maxX - minX, maxY - minY, maxZ - minZ)
+            (kotlin.math.abs(meanCurve) / 90f * bboxExtent).coerceAtMost(bboxExtent)
+        }
+        val orientation = orientationLabel(meanN)
+        val label = "recess_$orientation"
+        return RecessedFeature(
+            featureId = featureId,
+            triangleIndices = members,
+            seedTriangleId = seedTri,
+            depthMm = depthMm,
+            centroid = centroid,
+            meanNormal = meanN,
+            areaMm2 = aTotal.toFloat(),
+            meanSignedCurvature = meanCurve,
+            label = label,
+        )
+    }
 }

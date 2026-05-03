@@ -1,6 +1,7 @@
 package dev.orcaxr.app.mcp.tools
 
 import android.content.Context
+import dev.orcaxr.app.AiIntrospection
 import dev.orcaxr.app.PaintTemplateResolver
 import dev.orcaxr.app.mcp.Schemas
 import dev.orcaxr.app.mcp.Tool
@@ -177,21 +178,45 @@ internal object PaintTemplateTools {
                 val step = steps.optJSONObject(i) ?: continue
                 val toolName = step.optString("tool")
                 val rawArgs = step.optJSONObject("arguments") ?: continue
-                val tool = paintTools.firstOrNull { it.name == toolName }
-                if (tool == null) {
-                    val msg = "Step $i: unknown tool '$toolName'"
-                    if (firstError == null) firstError = msg
-                    resultsArr.put(JSONObject().apply { put("step", i); put("error", msg) })
-                    continue
-                }
-                // Resolve named tags within this step's args.
-                val resolvedArgs = resolveTags(rawArgs, palette, modelId)
-                val r = tool.call(resolvedArgs)
                 val stepObj = JSONObject().apply {
                     put("step", i)
                     put("tool", toolName)
                     if (step.has("comment")) put("comment", step.optString("comment"))
                 }
+
+                // Synthetic step: paint_recessed_features. Computes the
+                // recess list once, filters it, then dispatches one
+                // paint_geodesic_disc per match (optionally mirrored).
+                if (toolName == "paint_recessed_features") {
+                    val r = applyRecessedFeaturesStep(
+                        ws = ws,
+                        modelId = modelId,
+                        rawArgs = rawArgs,
+                        palette = palette,
+                        paintTools = paintTools,
+                    )
+                    stepObj.put("painted_count", r.painted)
+                    if (r.error != null) {
+                        stepObj.put("error", r.error)
+                        if (firstError == null) firstError = "Step $i: ${r.error}"
+                    } else {
+                        totalPainted += r.painted
+                        if (r.detail != null) stepObj.put("detail", r.detail)
+                    }
+                    resultsArr.put(stepObj)
+                    continue
+                }
+
+                val tool = paintTools.firstOrNull { it.name == toolName }
+                if (tool == null) {
+                    val msg = "Step $i: unknown tool '$toolName'"
+                    if (firstError == null) firstError = msg
+                    resultsArr.put(stepObj.apply { put("error", msg) })
+                    continue
+                }
+                // Resolve named tags within this step's args.
+                val resolvedArgs = resolveTags(rawArgs, palette, modelId)
+                val r = tool.call(resolvedArgs)
                 if (r.isError) {
                     stepObj.put("error", r.text)
                     if (firstError == null) firstError = "Step $i: ${r.text}"
@@ -244,6 +269,141 @@ internal object PaintTemplateTools {
                 }
             }
             return out
+        }
+
+        private data class StepOutcome(
+            val painted: Int,
+            val error: String? = null,
+            val detail: JSONObject? = null,
+        )
+
+        /**
+         * Synthetic recipe step that runs [AiIntrospection.findRecessedFeatures],
+         * filters the result, and dispatches a paint_geodesic_disc per
+         * surviving feature (optionally mirrored).
+         *
+         * Recipe shape:
+         * ```
+         * { "tool": "paint_recessed_features", "arguments": {
+         *     "tag": "black",
+         *     "radius_mm": 5.0,
+         *     "max_dihedral_deg": 35,
+         *     "max_count": 2,
+         *     "concave_threshold_deg": -18,        // optional, default -18
+         *     "grow_concave_threshold_deg": -8,    // optional, default -8
+         *     "y_min_centered_preview": 0,         // optional bbox filter
+         *     "y_max_centered_preview": 100,
+         *     "min_area_mm2": 5,                   // skip tiny artifacts
+         *     "mirror_axis": "x"                    // optional — also paint the mirror
+         * } }
+         * ```
+         */
+        private suspend fun applyRecessedFeaturesStep(
+            ws: WorkspaceModel,
+            modelId: String,
+            rawArgs: JSONObject,
+            palette: Map<String, Int>,
+            paintTools: List<Tool>,
+        ): StepOutcome {
+            val bvh = ws.getBvh(modelId)
+                ?: return StepOutcome(0, "Couldn't build paint BVH for '$modelId'.")
+            val concave = rawArgs.optDoubleNullable("concave_threshold_deg")?.toFloat() ?: -18f
+            val growConcave = rawArgs.optDoubleNullable("grow_concave_threshold_deg")?.toFloat() ?: -8f
+            val maxCount = rawArgs.optInt("max_count", 2).coerceIn(1, 32)
+            val minArea = rawArgs.optDoubleNullable("min_area_mm2")?.toFloat() ?: 0f
+            val yMin = rawArgs.optDoubleNullable("y_min_centered_preview")?.toFloat()
+            val yMax = rawArgs.optDoubleNullable("y_max_centered_preview")?.toFloat()
+            val zMin = rawArgs.optDoubleNullable("z_min_centered_preview")?.toFloat()
+            val zMax = rawArgs.optDoubleNullable("z_max_centered_preview")?.toFloat()
+            val xMin = rawArgs.optDoubleNullable("x_min_centered_preview")?.toFloat()
+            val xMax = rawArgs.optDoubleNullable("x_max_centered_preview")?.toFloat()
+            val mirrorAxis = rawArgs.optString("mirror_axis", "").lowercase().takeIf { it in setOf("x", "y", "z") }
+            val radius = rawArgs.optDoubleNullable("radius_mm")?.toFloat() ?: 5f
+            val maxDihedral = rawArgs.optDoubleNullable("max_dihedral_deg")?.toFloat() ?: 60f
+            val tagRaw = rawArgs.opt("tag")
+                ?: return StepOutcome(0, "paint_recessed_features: 'tag' is required")
+            val resolvedTag = if (tagRaw is String) palette[tagRaw]
+                ?: return StepOutcome(0, "paint_recessed_features: tag '$tagRaw' missing from palette") else tagRaw
+            val features = AiIntrospection.findRecessedFeatures(
+                bvh,
+                concaveThresholdDeg = concave,
+                growConcaveThresholdDeg = growConcave,
+                maxFeatures = 32,
+                minSegmentTriCount = 6,
+            )
+            // Apply spatial / area filters.
+            val filtered = features.filter { f ->
+                if (f.areaMm2 < minArea) return@filter false
+                if (yMin != null && f.centroid[1] < yMin) return@filter false
+                if (yMax != null && f.centroid[1] > yMax) return@filter false
+                if (zMin != null && f.centroid[2] < zMin) return@filter false
+                if (zMax != null && f.centroid[2] > zMax) return@filter false
+                if (xMin != null && f.centroid[0] < xMin) return@filter false
+                if (xMax != null && f.centroid[0] > xMax) return@filter false
+                true
+            }.take(maxCount)
+            if (filtered.isEmpty()) {
+                return StepOutcome(0, detail = JSONObject().apply {
+                    put("matched_features", 0)
+                    put("note", "no recessed features matched the filter; skipped")
+                })
+            }
+            val geodesic = paintTools.firstOrNull { it.name == "paint_geodesic_disc" }
+                ?: return StepOutcome(0, "paint_geodesic_disc tool not registered")
+            val mirrorTool = paintTools.firstOrNull { it.name == "paint_with_mirror" }
+            var totalPainted = 0
+            val perFeatureLog = JSONArray()
+            for (f in filtered) {
+                val baseArgs = JSONObject().apply {
+                    put("model_id", modelId)
+                    put("tag", resolvedTag)
+                    put("radius_mm", radius)
+                    put("max_dihedral_deg", maxDihedral)
+                    put("anchor", JSONObject().apply { put("tri_id", f.seedTriangleId) })
+                }
+                val r = if (mirrorAxis != null && mirrorTool != null) {
+                    mirrorTool.call(JSONObject().apply {
+                        put("axis", mirrorAxis)
+                        put("inner", JSONObject().apply {
+                            put("tool", "paint_geodesic_disc")
+                            put("arguments", baseArgs)
+                        })
+                    })
+                } else {
+                    geodesic.call(baseArgs)
+                }
+                val painted = if (mirrorAxis != null) {
+                    (r.structured?.optInt("painted_count_total", 0) ?: 0)
+                } else {
+                    r.structured?.optInt("painted_count", 0) ?: 0
+                }
+                totalPainted += painted
+                perFeatureLog.put(JSONObject().apply {
+                    put("feature_id", f.featureId)
+                    put("label", f.label)
+                    put("seed_triangle_id", f.seedTriangleId)
+                    put("painted", painted)
+                    if (r.isError) put("error", r.text)
+                })
+            }
+            return StepOutcome(
+                painted = totalPainted,
+                detail = JSONObject().apply {
+                    put("matched_features", filtered.size)
+                    put("mirrored", mirrorAxis != null)
+                    put("features", perFeatureLog)
+                },
+            )
+        }
+    }
+
+    private fun JSONObject.optDoubleNullable(key: String): Double? {
+        if (!has(key) || isNull(key)) return null
+        val v = opt(key)
+        return when (v) {
+            is Number -> v.toDouble()
+            is String -> v.toDoubleOrNull()
+            else -> null
         }
     }
 }

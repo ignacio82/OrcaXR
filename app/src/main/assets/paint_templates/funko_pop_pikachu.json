@@ -1,8 +1,8 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "name": "funko_pop_pikachu",
   "display_name": "Funko Pop Pikachu",
-  "description": "Canonical Pikachu paint: yellow body, black ear tips + eyes + base disc, red cheeks + mouth. Y-axis is feet→head (Funko Pop convention with disc at -Y). Tags map by name via palette_remap; defaults assume palette={yellow:2, black:1, red:4, white:3}.",
+  "description": "Canonical Pikachu paint: yellow body, black ear tips + eyes, black base disc (component-aware so feet stay yellow), red cheeks + mouth via signed-curvature recess detection. Y-axis is feet→head in the local mesh frame (Funko Pop convention with disc at -Y). Tags map by name via palette_remap; defaults assume palette={yellow:2, black:1, red:4, white:3}.",
   "model_axis_up": "y",
   "default_palette": {
     "yellow": 2,
@@ -16,8 +16,8 @@
       "tool": "paint_slab",
       "arguments": {
         "axis": "y",
-        "min_mm": -1000,
-        "max_mm": 1000,
+        "min_mm": -100000,
+        "max_mm": 100000,
         "tag": "yellow"
       }
     },
@@ -27,18 +27,61 @@
       "arguments": {
         "axis": "y",
         "min_mm": 60,
-        "max_mm": 1000,
+        "max_mm": 100000,
         "tag": "black"
       }
     },
     {
-      "comment": "Base disc — anything below Y=-50",
-      "tool": "paint_slab",
+      "comment": "Base disc — connected component seeded from below the bbox along +Y. The disc is typically a separate sub-mesh on a Funko Pop, so this paints just the disc and leaves the figure's feet yellow. If the disc isn't its own component (older / single-shell Funkos), nothing else nearby gets painted because BFS stops at the body's distinct vertex set.",
+      "tool": "paint_connected_component",
       "arguments": {
-        "axis": "y",
-        "min_mm": -1000,
-        "max_mm": -50,
+        "seed": {
+          "center_mm": { "x": 0, "y": -1000, "z": 0 },
+          "ray_dir": { "x": 0, "y": 1, "z": 0 }
+        },
         "tag": "black"
+      }
+    },
+    {
+      "comment": "Eyes — the two largest concave recesses in the upper face area (Y > 0). The signed-curvature detector finds the eye sockets deterministically without pixel guesses.",
+      "tool": "paint_recessed_features",
+      "arguments": {
+        "tag": "black",
+        "radius_mm": 4.5,
+        "max_dihedral_deg": 35,
+        "max_count": 2,
+        "y_min_centered_preview": 0,
+        "y_max_centered_preview": 60,
+        "min_area_mm2": 5
+      }
+    },
+    {
+      "comment": "Mouth — the largest concave recess just below the eyes (Y in [-15, 5]). The mirror flag is OFF because the mouth is a single centered feature.",
+      "tool": "paint_recessed_features",
+      "arguments": {
+        "tag": "red",
+        "radius_mm": 3.0,
+        "max_dihedral_deg": 40,
+        "max_count": 1,
+        "y_min_centered_preview": -20,
+        "y_max_centered_preview": 5,
+        "min_area_mm2": 2
+      }
+    },
+    {
+      "comment": "Cheeks — paired red blush on either side of the mouth. Funko cheeks are subtly raised bulges (convex, not concave), so we use paint_with_mirror + paint_sphere instead of paint_recessed_features. Coordinates are heuristic for a standard 150 mm Funko Pikachu; users with custom-scaled models can pass palette_remap to skip this step.",
+      "tool": "paint_with_mirror",
+      "arguments": {
+        "axis": "x",
+        "inner": {
+          "tool": "paint_sphere",
+          "arguments": {
+            "center": { "x": 30, "y": -5, "z": 30 },
+            "radius_mm": 5,
+            "tag": "red",
+            "back_face_filter": true
+          }
+        }
       }
     }
   ]

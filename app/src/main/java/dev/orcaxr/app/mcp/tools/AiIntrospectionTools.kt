@@ -37,6 +37,7 @@ internal object AiIntrospectionTools {
         GetModelFaceOrientationSummary(ws),
         GetModelSemanticRegions(ws),
         GetCurvatureSegmentation(ws),
+        FindRecessedFeatures(ws),
     )
 
     private suspend fun resolveModelAndBvh(
@@ -350,6 +351,79 @@ internal object AiIntrospectionTools {
             val text = "${segments.size} curvature segment(s) on ${model.label}: " +
                 segments.joinToString(", ") {
                     "${it.segmentId}:${it.label}(${it.triangleIndices.size})"
+                }
+            return ToolResult.ok(text, body)
+        }
+    }
+
+    class FindRecessedFeatures(private val ws: WorkspaceModel) : Tool {
+        override val name = "find_recessed_features"
+        override val description =
+            "Locate inward-curving regions on a mesh (eye sockets, mouth grooves, ear cavities, " +
+                "between-finger gaps) using **signed** dihedral curvature. Complements " +
+                "get_curvature_segmentation (which is sign-agnostic) and find_feature_anchors " +
+                "(which needs an Anthropic API key). Each returned feature has a `seed_triangle_id` " +
+                "you can pass directly to paint_geodesic_disc.anchor.tri_id — the deterministic " +
+                "alternative to pixel-picking the eyes from a render. Returns features sorted by " +
+                "surface area; for a Pikachu Funko Pop you'll see the two eye sockets and mouth " +
+                "groove as the top three entries."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id"),
+                "max_features" to Schemas.integer("Max features to return (default 12)"),
+                "concave_threshold_deg" to Schemas.number(
+                    "Signed-curvature seed threshold (default -18°). More negative = stricter; " +
+                        "only triangles below this open a new feature region.",
+                ),
+                "grow_concave_threshold_deg" to Schemas.number(
+                    "Signed-curvature growth threshold (default -8°). The recess can extend " +
+                        "into shallower-but-still-concave neighbors up to this score.",
+                ),
+                "min_segment_tri_count" to Schemas.integer("Drop features smaller than this (default 6)"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            val (model, bvh) = resolveModelAndBvh(ws, args)
+                ?: return ToolResult.error("Couldn't resolve model + BVH.")
+            val maxFeatures = args.optInt("max_features", 12).coerceIn(1, 64)
+            val concave = (optFloat(args, "concave_threshold_deg") ?: -18f).coerceIn(-180f, 0f)
+            val growConcave = (optFloat(args, "grow_concave_threshold_deg") ?: -8f).coerceIn(-180f, 0f)
+            val minTri = args.optInt("min_segment_tri_count", 6).coerceAtLeast(1)
+            val features = AiIntrospection.findRecessedFeatures(
+                bvh,
+                concaveThresholdDeg = concave,
+                growConcaveThresholdDeg = growConcave,
+                maxFeatures = maxFeatures,
+                minSegmentTriCount = minTri,
+            )
+            val body = JSONObject().apply {
+                put("ok", true)
+                put("model_id", model.id)
+                put("feature_count", features.size)
+                val arr = JSONArray()
+                for (f in features) {
+                    arr.put(JSONObject().apply {
+                        put("feature_id", f.featureId)
+                        put("label", f.label)
+                        put("seed_triangle_id", f.seedTriangleId)
+                        put("triangle_count", f.triangleIndices.size)
+                        put("triangle_indices_sample", encodeIndices(f.triangleIndices))
+                        put("centroid", encodeVec3(f.centroid))
+                        put("mean_normal", encodeVec3(f.meanNormal))
+                        put("area_mm2", f.areaMm2.toDouble())
+                        put("depth_mm", f.depthMm.toDouble())
+                        put("mean_signed_curvature_deg", f.meanSignedCurvature.toDouble())
+                    })
+                }
+                put("features", arr)
+                put("concave_threshold_deg", concave.toDouble())
+                put("grow_concave_threshold_deg", growConcave.toDouble())
+            }
+            val text = "${features.size} recessed feature(s) on ${model.label}: " +
+                features.joinToString(", ") {
+                    "${it.featureId}:${it.label}(seed=${it.seedTriangleId}, " +
+                        "area=${"%.1f".format(it.areaMm2)}mm²)"
                 }
             return ToolResult.ok(text, body)
         }

@@ -29,6 +29,21 @@ paths, function signatures, module names) unless they're load-bearing
 *and* easy to get wrong. Keep this file under ~500 lines; split into a
 separate doc if it grows past that.
 
+## User preferences
+
+**Always ship the best version, never the easiest.** When asked for
+improvements or fixes, do not present an "easy vs. best" tradeoff and
+do not ask the user to pick. List the improvements and execute all of
+them in priority order. Only stop to confirm if there's a genuinely
+irreversible action or a specification ambiguity the code cannot
+resolve. The user wants OrcaXR to be the best it can be, period —
+asking for permission to do less work wastes their time.
+
+**For overnight / async work:** ship verified end-to-end commits, not
+plans. Build, run the relevant tests, and iterate until green before
+calling it done. A failing test left for the user to find is a
+half-finished task.
+
 ## Mission
 
 Build an XR-first 3D printing slicer for Android XR. Not a port of

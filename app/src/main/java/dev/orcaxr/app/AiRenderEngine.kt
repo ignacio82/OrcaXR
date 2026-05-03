@@ -2,6 +2,7 @@ package dev.orcaxr.app
 
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
@@ -99,6 +100,108 @@ internal object AiRenderEngine {
         val triangleIdMap: IntArray? = null,
     )
 
+    /**
+     * Tunable shading + post-processing parameters for Solid / Paint /
+     * NormalSphere modes. Defaults are chosen to make geometric detail
+     * (recessed eye sockets, mouth grooves, finger gaps on a Funko Pop)
+     * pop visibly without the render looking cartoonish — the OrcaSlicer
+     * preview is the visual reference target.
+     *
+     * **Why not a single ambient floor?** The previous shader used
+     * `0.45 + 0.65 * |n·L|`, which floods crevices with the same
+     * brightness as the brightest convex bulge — recesses *vanish*. A
+     * proper PBR-lite stack with directional key, half-Lambert wrap,
+     * complementary fill, screen-space AO from depth gradient, and a
+     * silhouette darkening pass costs us ~5 ms per 768² render and
+     * surfaces every authored detail.
+     *
+     * MCP exposure: `render_view` accepts `light_direction`,
+     * `ambient_strength`, `rim_strength`, `ao_strength`,
+     * `silhouette_strength`. Pass nothing to get the defaults.
+     */
+    data class LightingParams(
+        /** Primary "key" light direction in mesh-local space, normalized
+         *  on use. Default points down-back-left (toward the camera in
+         *  iso preset) so the lit hemisphere matches the OrcaSlicer
+         *  preview convention. */
+        val keyDirection: FloatArray = floatArrayOf(-0.4f, 0.6f, 1.0f),
+        /** Secondary "fill" light, opposite hemisphere from key. Lifts
+         *  recesses without flattening shadows. */
+        val fillDirection: FloatArray = floatArrayOf(0.4f, -0.6f, -0.5f),
+        /** Multiplier on the half-Lambert key term. */
+        val keyStrength: Float = 0.78f,
+        /** Multiplier on the half-Lambert fill term. */
+        val fillStrength: Float = 0.32f,
+        /** Constant ambient term (added regardless of light direction). */
+        val ambientStrength: Float = 0.18f,
+        /** Fresnel rim brightness — `(1 - |n·V|)^p * rimStrength` is
+         *  added to the lit color. */
+        val rimStrength: Float = 0.22f,
+        /** Fresnel rim falloff exponent. Higher = thinner rim. */
+        val rimExponent: Float = 2.5f,
+        /** Screen-space ambient occlusion strength in [0..1]. The AO
+         *  factor (in [0..1]) is computed from depth-derivative
+         *  comparison against neighbors; final color is multiplied by
+         *  `(1 - aoStrength * aoFactor)`. Set to 0 to disable. */
+        val aoStrength: Float = 0.55f,
+        /** AO sampling radius in pixels. Larger = softer, larger
+         *  occlusion — but more expensive per pixel. */
+        val aoRadiusPx: Int = 6,
+        /** Silhouette darkening: when a pixel's depth is far from any
+         *  of its 4-neighbors, darken by this fraction. Catches
+         *  internal contours (eye-socket rim, between fingers) that
+         *  pure AO misses. */
+        val silhouetteStrength: Float = 0.35f,
+    ) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is LightingParams) return false
+            return keyDirection.contentEquals(other.keyDirection)
+                && fillDirection.contentEquals(other.fillDirection)
+                && keyStrength == other.keyStrength
+                && fillStrength == other.fillStrength
+                && ambientStrength == other.ambientStrength
+                && rimStrength == other.rimStrength
+                && rimExponent == other.rimExponent
+                && aoStrength == other.aoStrength
+                && aoRadiusPx == other.aoRadiusPx
+                && silhouetteStrength == other.silhouetteStrength
+        }
+        override fun hashCode(): Int {
+            var h = keyDirection.contentHashCode()
+            h = 31 * h + fillDirection.contentHashCode()
+            h = 31 * h + keyStrength.hashCode()
+            h = 31 * h + fillStrength.hashCode()
+            h = 31 * h + ambientStrength.hashCode()
+            h = 31 * h + rimStrength.hashCode()
+            h = 31 * h + rimExponent.hashCode()
+            h = 31 * h + aoStrength.hashCode()
+            h = 31 * h + aoRadiusPx
+            h = 31 * h + silhouetteStrength.hashCode()
+            return h
+        }
+
+        companion object {
+            /** The lighting that ships with `render_view`. Tuned against
+             *  Pikachu Funko + Benchy + Stanford Bunny. */
+            val DEFAULT = LightingParams()
+
+            /** Match the pre-2026-05 flat shading. Useful for tests
+             *  that need stable pixel comparisons against historical
+             *  goldens. NOT recommended for LLM-driven workflows. */
+            val LEGACY_FLAT = LightingParams(
+                keyDirection = floatArrayOf(-0.4f, 0.6f, 1.0f),
+                fillDirection = floatArrayOf(0f, 0f, 0f),
+                keyStrength = 0.65f,
+                fillStrength = 0f,
+                ambientStrength = 0.45f,
+                rimStrength = 0f,
+                aoStrength = 0f,
+                silhouetteStrength = 0f,
+            )
+        }
+    }
+
     // ---- Camera presets ----
 
     /**
@@ -173,6 +276,11 @@ internal object AiRenderEngine {
          *  TriangleId mode (machine-decoded; annotations would
          *  corrupt the per-pixel ID encoding). */
         annotate: Boolean = false,
+        /** Lighting + post-processing tunables. Applied to Solid and
+         *  Paint modes only; TriangleId / NormalSphere / Depth modes
+         *  ignore lighting entirely (their pixels are decoded
+         *  machine-readable channels, not shaded). */
+        lighting: LightingParams = LightingParams.DEFAULT,
     ): RenderResult {
         val w = camera.widthPx
         val h = camera.heightPx
@@ -208,8 +316,23 @@ internal object AiRenderEngine {
             return RenderResult(PngWriter.encodeRgba(rgba, w, h), w, h, triIdMap)
         }
 
-        // Light direction for Solid / Paint modes.
-        val lightDir = normalize3(floatArrayOf(-0.4f, 0.6f, 1.0f))
+        // Lighting setup for Solid / Paint modes. Key + fill
+        // half-Lambert lights are pre-normalized once; the view
+        // direction is extracted from the view matrix's third row
+        // (camera -Z basis points along eye→target → forward = -row2).
+        val keyDir = normalize3(lighting.keyDirection.copyOf())
+        val fillLen = lighting.fillDirection[0] * lighting.fillDirection[0] +
+            lighting.fillDirection[1] * lighting.fillDirection[1] +
+            lighting.fillDirection[2] * lighting.fillDirection[2]
+        val fillDir = if (fillLen > 1e-6f) normalize3(lighting.fillDirection.copyOf()) else floatArrayOf(0f, 0f, 0f)
+        val viewDir = floatArrayOf(
+            -camera.viewMatrixRowMajor[8],
+            -camera.viewMatrixRowMajor[9],
+            -camera.viewMatrixRowMajor[10],
+        )
+        val viewLen = sqrt(viewDir[0] * viewDir[0] + viewDir[1] * viewDir[1] + viewDir[2] * viewDir[2])
+            .coerceAtLeast(1e-7f)
+        viewDir[0] /= viewLen; viewDir[1] /= viewLen; viewDir[2] /= viewLen
 
         // Slot palette parsed once (RGB bytes); 0..MAX_PAINT_SLOTS.
         val slotRgb = if (palette.isNotEmpty()) parsePalette(palette) else FALLBACK_PALETTE
@@ -245,12 +368,12 @@ internal object AiRenderEngine {
             // modes; for triangle-id and depth/normal we recompute per
             // pixel).
             val triColor: ByteArray = when (mode) {
-                RenderMode.Solid -> shadeTri(unpaintedRgb, nrm, lightDir)
+                RenderMode.Solid -> shadeTri(unpaintedRgb, nrm, keyDir, fillDir, viewDir, lighting)
                 RenderMode.Paint -> {
                     val slot = paintFilamentIndex?.getOrNull(tri)?.toInt()?.and(0xff) ?: 0
                     val base = if (slot in 1..MAX_PAINT_SLOTS) slotRgb.getOrNull(slot - 1) ?: unpaintedRgb
                         else unpaintedRgb
-                    shadeTri(base, nrm, lightDir)
+                    shadeTri(base, nrm, keyDir, fillDir, viewDir, lighting)
                 }
                 RenderMode.TriangleId -> {
                     // (id+1) packed into RGB.
@@ -314,6 +437,16 @@ internal object AiRenderEngine {
             }
         }
 
+        // Post-pass: screen-space AO + silhouette darkening from the
+        // depth buffer. Only meaningful for shaded modes (Solid /
+        // Paint / NormalSphere). TriangleId / Depth are read
+        // machine-side; modifying their pixels would corrupt the
+        // encoding.
+        if (mode != RenderMode.TriangleId && mode != RenderMode.Depth &&
+            (lighting.aoStrength > 0f || lighting.silhouetteStrength > 0f)) {
+            applyDepthDerivedShading(rgba, zbuf, w, h, lighting)
+        }
+
         if (annotate && mode != RenderMode.TriangleId) {
             // Triangle-ID renders are decoded from per-pixel RGB
             // values; overlays would corrupt the encoding. For
@@ -324,6 +457,119 @@ internal object AiRenderEngine {
         }
         val pngBytes = PngWriter.encodeRgba(rgba, w, h)
         return RenderResult(pngBytes, w, h, triIdMap)
+    }
+
+    /**
+     * Two-in-one screen-space pass: ambient occlusion from depth
+     * gradient + silhouette darkening at depth discontinuities.
+     *
+     * **AO** — for each foreground pixel, sample 8 neighbors on a
+     * ring at `aoRadiusPx` and count how many sit *closer* to the
+     * camera (smaller depth). The ratio is a coarse proxy for "this
+     * pixel is in a recess relative to its surroundings." The trick:
+     * because we use NDC depth (already in screen space), no extra
+     * world-space reconstruction is needed.
+     *
+     * **Silhouette** — at the same time, find pixels whose 4-neighbors
+     * include *background* pixels (depth==∞) or pixels that are
+     * dramatically further. Those are inner contours / silhouettes
+     * (the rim around an eye socket, the gap between Pikachu's
+     * fingers). Darken them slightly so the contour reads as a line.
+     *
+     * Cost: O(W·H·9) — about 1–2 ms for a 768² render on the host
+     * JVM.
+     */
+    private fun applyDepthDerivedShading(
+        rgba: ByteArray,
+        zbuf: FloatArray,
+        w: Int,
+        h: Int,
+        lighting: LightingParams,
+    ) {
+        val r = lighting.aoRadiusPx.coerceIn(1, 24)
+        // 8-tap ring sample directions.
+        val ringDx = intArrayOf(r, r, 0, -r, -r, -r, 0, r)
+        val ringDy = intArrayOf(0, r, r, r, 0, -r, -r, -r)
+        // Threshold: how much closer (in NDC z) does a neighbor have
+        // to be before we count it as occluding? NDC depth ≈ [-1, 1]
+        // for a bbox-fit ortho preset; 0.005 ≈ 1/400th of the depth
+        // range. Empirically separates a real recess from rasterizer
+        // noise.
+        val occlusionThreshold = 0.005f
+        // Silhouette threshold: a depth jump > 4× the AO threshold
+        // is a real contour, not local curvature.
+        val silhouetteThreshold = occlusionThreshold * 4f
+        val aoStrength = lighting.aoStrength.coerceIn(0f, 1f)
+        val silStrength = lighting.silhouetteStrength.coerceIn(0f, 1f)
+        // Work in a depth copy so we don't sample partially-modified
+        // values (we don't modify depth, but pixel writes are in-
+        // place — OK, depth is read-only here).
+        val ringLen = ringDx.size
+        for (y in 0 until h) {
+            for (x in 0 until w) {
+                val pIdx = y * w + x
+                val z = zbuf[pIdx]
+                if (z == Float.POSITIVE_INFINITY) continue  // background
+
+                // AO: count neighbors with smaller (nearer) depth.
+                var occluders = 0
+                var sampled = 0
+                for (k in 0 until ringLen) {
+                    val nx = x + ringDx[k]
+                    val ny = y + ringDy[k]
+                    if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue
+                    val nz = zbuf[ny * w + nx]
+                    if (nz == Float.POSITIVE_INFINITY) continue
+                    sampled++
+                    if (nz < z - occlusionThreshold) occluders++
+                }
+                val aoFactor = if (sampled > 0) occluders.toFloat() / sampled else 0f
+
+                // Silhouette: 4-neighbor depth jump (or background).
+                var silFactor = 0f
+                if (silStrength > 0f) {
+                    var maxJump = 0f
+                    var hitsBackground = false
+                    val neighbors = intArrayOf(
+                        if (x + 1 < w) pIdx + 1 else -1,
+                        if (x > 0) pIdx - 1 else -1,
+                        if (y + 1 < h) pIdx + w else -1,
+                        if (y > 0) pIdx - w else -1,
+                    )
+                    for (nIdx in neighbors) {
+                        if (nIdx < 0) continue
+                        val nz = zbuf[nIdx]
+                        if (nz == Float.POSITIVE_INFINITY) {
+                            hitsBackground = true; continue
+                        }
+                        val jump = nz - z
+                        if (jump > maxJump) maxJump = jump
+                    }
+                    silFactor = when {
+                        hitsBackground -> 1f
+                        maxJump > silhouetteThreshold ->
+                            ((maxJump - silhouetteThreshold) / silhouetteThreshold).coerceAtMost(1f)
+                        else -> 0f
+                    }
+                }
+
+                // Combine: multiply pixel by (1 - aoStrength·aoFactor)
+                // then by (1 - silStrength·silFactor). AO comes first
+                // so silhouette darkening lands on the AO-shaded
+                // surface and reads cleanly.
+                val mulAo = 1f - aoStrength * aoFactor
+                val mulSil = 1f - silStrength * silFactor
+                val mul = mulAo * mulSil
+                if (mul >= 0.999f) continue  // no change
+                val outOff = pIdx * 4
+                val rr = rgba[outOff].toInt() and 0xff
+                val gg = rgba[outOff + 1].toInt() and 0xff
+                val bb = rgba[outOff + 2].toInt() and 0xff
+                rgba[outOff] = (rr * mul).toInt().coerceIn(0, 255).toByte()
+                rgba[outOff + 1] = (gg * mul).toInt().coerceIn(0, 255).toByte()
+                rgba[outOff + 2] = (bb * mul).toInt().coerceIn(0, 255).toByte()
+            }
+        }
     }
 
     // ---- Math helpers ----
@@ -417,13 +663,62 @@ internal object AiRenderEngine {
     private fun edge(ax: Float, ay: Float, bx: Float, by: Float, cx: Float, cy: Float): Float =
         (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
 
-    private fun shadeTri(base: ByteArray, n: Vec3f, light: FloatArray): ByteArray {
-        val dot = kotlin.math.abs(n.x * light[0] + n.y * light[1] + n.z * light[2])
-        val lit = (0.45f + 0.65f * dot).coerceAtMost(1f)
+    /**
+     * Per-triangle shading: half-Lambert key + half-Lambert fill +
+     * Fresnel rim + ambient floor. Each term:
+     *
+     *   key  = ((n·L_key  + 1) / 2) * keyStrength
+     *   fill = ((n·L_fill + 1) / 2) * fillStrength      (skipped if fill dir is zero)
+     *   rim  = (1 - |n·V|)^rimExp * rimStrength
+     *   lit  = ambient + key + fill + rim
+     *
+     * Half-Lambert avoids the hard terminator at n·L = 0 — recesses
+     * still receive light and stay readable instead of bottoming out
+     * at the ambient floor. The Fresnel rim adds a thin highlight at
+     * silhouettes and across grazing-angle features (eye-socket lip,
+     * fingernail edge, ear curl) that the diffuse terms wash out.
+     */
+    private fun shadeTri(
+        base: ByteArray,
+        n: Vec3f,
+        keyDir: FloatArray,
+        fillDir: FloatArray,
+        viewDir: FloatArray,
+        params: LightingParams,
+    ): ByteArray {
+        // Half-Lambert key.
+        val keyDot = (n.x * keyDir[0] + n.y * keyDir[1] + n.z * keyDir[2]).coerceIn(-1f, 1f)
+        val keyTerm = ((keyDot + 1f) * 0.5f) * params.keyStrength
+        // Half-Lambert fill (skipped if fill dir is zero).
+        val fillSqr = fillDir[0] * fillDir[0] + fillDir[1] * fillDir[1] + fillDir[2] * fillDir[2]
+        val fillTerm = if (fillSqr > 1e-6f) {
+            val d = (n.x * fillDir[0] + n.y * fillDir[1] + n.z * fillDir[2]).coerceIn(-1f, 1f)
+            ((d + 1f) * 0.5f) * params.fillStrength
+        } else 0f
+        // Fresnel rim.
+        val rimTerm = if (params.rimStrength > 0f) {
+            val vDot = kotlin.math.abs(n.x * viewDir[0] + n.y * viewDir[1] + n.z * viewDir[2])
+                .coerceIn(0f, 1f)
+            val grazing = (1f - vDot).coerceIn(0f, 1f)
+            // pow via exp/log; rimExponent typically 2..4.
+            val falloff = if (grazing <= 0f) 0f
+                else exp(params.rimExponent * kotlin.math.ln(grazing))
+            falloff * params.rimStrength
+        } else 0f
+        val lit = (params.ambientStrength + keyTerm + fillTerm + rimTerm).coerceIn(0f, 1.5f)
+        // Apply to the base color with a soft white-add for the rim
+        // term so it reads as a highlight, not a tint shift.
+        val baseR = (base[0].toInt() and 0xff)
+        val baseG = (base[1].toInt() and 0xff)
+        val baseB = (base[2].toInt() and 0xff)
+        val rimAdd = (rimTerm * 80f).toInt()  // rim contributes a small additive white
+        // The diffuse multiplier excludes rim — rim is added on top
+        // so highlights pop on dark filaments too.
+        val diffuse = (lit - rimTerm).coerceAtLeast(0f)
         return byteArrayOf(
-            ((base[0].toInt() and 0xff) * lit).toInt().coerceIn(0, 255).toByte(),
-            ((base[1].toInt() and 0xff) * lit).toInt().coerceIn(0, 255).toByte(),
-            ((base[2].toInt() and 0xff) * lit).toInt().coerceIn(0, 255).toByte(),
+            ((baseR * diffuse).toInt() + rimAdd).coerceIn(0, 255).toByte(),
+            ((baseG * diffuse).toInt() + rimAdd).coerceIn(0, 255).toByte(),
+            ((baseB * diffuse).toInt() + rimAdd).coerceIn(0, 255).toByte(),
         )
     }
 

@@ -223,6 +223,71 @@ internal object AiVisionTools {
         return "http://$host:$port/resources/$token.png"
     }
 
+    /**
+     * Parse the optional `lighting` arg into [AiRenderEngine.LightingParams].
+     * Missing or null returns the engine default. Each individual
+     * field is optional and falls back to the default — the LLM can
+     * tweak just one knob (e.g. ao_strength=0) without restating the
+     * whole struct. The `preset` field is a shorthand override
+     * applied first, then per-field overrides on top.
+     */
+    private fun parseLightingParams(obj: JSONObject?): AiRenderEngine.LightingParams {
+        if (obj == null) return AiRenderEngine.LightingParams.DEFAULT
+        val basis = when (obj.optString("preset", "").lowercase()) {
+            "", "default" -> AiRenderEngine.LightingParams.DEFAULT
+            "flat", "legacy" -> AiRenderEngine.LightingParams.LEGACY_FLAT
+            "matcap_soft", "soft", "studio" -> AiRenderEngine.LightingParams(
+                keyDirection = floatArrayOf(-0.3f, 0.4f, 1.0f),
+                fillDirection = floatArrayOf(0.5f, -0.5f, -0.3f),
+                keyStrength = 0.7f,
+                fillStrength = 0.4f,
+                ambientStrength = 0.22f,
+                rimStrength = 0.3f,
+                rimExponent = 3f,
+                aoStrength = 0.6f,
+                aoRadiusPx = 8,
+                silhouetteStrength = 0.4f,
+            )
+            else -> AiRenderEngine.LightingParams.DEFAULT
+        }
+        val key = obj.optJSONArray("key_direction")?.let { arr ->
+            if (arr.length() == 3) floatArrayOf(
+                arr.optDouble(0).toFloat(),
+                arr.optDouble(1).toFloat(),
+                arr.optDouble(2).toFloat(),
+            ) else basis.keyDirection
+        } ?: basis.keyDirection
+        val fill = obj.optJSONArray("fill_direction")?.let { arr ->
+            if (arr.length() == 3) floatArrayOf(
+                arr.optDouble(0).toFloat(),
+                arr.optDouble(1).toFloat(),
+                arr.optDouble(2).toFloat(),
+            ) else basis.fillDirection
+        } ?: basis.fillDirection
+        return AiRenderEngine.LightingParams(
+            keyDirection = key,
+            fillDirection = fill,
+            keyStrength = obj.optDoubleOrNull("key_strength")?.toFloat() ?: basis.keyStrength,
+            fillStrength = obj.optDoubleOrNull("fill_strength")?.toFloat() ?: basis.fillStrength,
+            ambientStrength = obj.optDoubleOrNull("ambient_strength")?.toFloat() ?: basis.ambientStrength,
+            rimStrength = obj.optDoubleOrNull("rim_strength")?.toFloat() ?: basis.rimStrength,
+            rimExponent = obj.optDoubleOrNull("rim_exponent")?.toFloat() ?: basis.rimExponent,
+            aoStrength = obj.optDoubleOrNull("ao_strength")?.toFloat() ?: basis.aoStrength,
+            aoRadiusPx = if (obj.has("ao_radius_px")) obj.optInt("ao_radius_px", basis.aoRadiusPx) else basis.aoRadiusPx,
+            silhouetteStrength = obj.optDoubleOrNull("silhouette_strength")?.toFloat() ?: basis.silhouetteStrength,
+        )
+    }
+
+    private fun JSONObject.optDoubleOrNull(key: String): Double? {
+        if (!has(key)) return null
+        val v = opt(key)
+        return when (v) {
+            is Number -> v.toDouble()
+            is String -> v.toDoubleOrNull()
+            else -> null
+        }
+    }
+
     private fun packResult(
         modelId: String,
         camera: AiRenderEngine.CameraSpec,
@@ -367,6 +432,29 @@ internal object AiVisionTools {
                 "mode" to Schemas.string("'paint' (default) | 'solid' | 'triangle_id' | 'normals' | 'depth'"),
                 "inline" to Schemas.bool("If true and PNG < 200 KB, also include base64 image part"),
                 "annotate" to Schemas.bool("D18e — burn axis triad (R=X G=Y B=Z), bbox dims (e.g. '60 x 31 x 48 mm'), and a 10 mm scale bar into the corners. Default false. Skipped for triangle_id mode (would corrupt the encoding)."),
+                "lighting" to Schemas.obj(
+                    properties = mapOf(
+                        "key_direction" to JSONObject().apply {
+                            put("type", "array")
+                            put("description", "Key light dir [x, y, z] in mesh-local space")
+                            put("items", Schemas.number(""))
+                        },
+                        "fill_direction" to JSONObject().apply {
+                            put("type", "array")
+                            put("description", "Fill light dir [x, y, z]; pass [0,0,0] to disable")
+                            put("items", Schemas.number(""))
+                        },
+                        "key_strength" to Schemas.number("Half-Lambert key multiplier (default 0.78)"),
+                        "fill_strength" to Schemas.number("Half-Lambert fill multiplier (default 0.32)"),
+                        "ambient_strength" to Schemas.number("Constant ambient floor (default 0.18)"),
+                        "rim_strength" to Schemas.number("Fresnel rim brightness (default 0.22)"),
+                        "rim_exponent" to Schemas.number("Fresnel rim falloff exponent (default 2.5)"),
+                        "ao_strength" to Schemas.number("Screen-space AO strength 0..1 (default 0.55, 0 to disable)"),
+                        "ao_radius_px" to Schemas.integer("AO sampling radius in pixels (default 6)"),
+                        "silhouette_strength" to Schemas.number("Inner-contour darkening 0..1 (default 0.35, 0 to disable)"),
+                        "preset" to Schemas.string("'default' | 'flat' | 'matcap_soft' (overrides individual fields)"),
+                    ),
+                ),
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult =
@@ -737,6 +825,7 @@ internal object AiVisionTools {
                 "panel_height_px" to Schemas.integer("Per-panel height (default 256)"),
                 "mode" to Schemas.string("'paint' (default) | 'solid' | 'normals' | 'depth'"),
                 "inline" to Schemas.bool(""),
+                "lighting" to Schemas.obj(),
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
@@ -754,6 +843,7 @@ internal object AiVisionTools {
             if (mode == AiRenderEngine.RenderMode.TriangleId) {
                 return ToolResult.error("triangle_id mode isn't supported in render_views_grid.")
             }
+            val lighting = parseLightingParams(args.optJSONObject("lighting"))
             val geom = AiIntrospection.geometry(bvh, bins = 1)
             val skipped = ArrayList<String>()
             val panels = ArrayList<ByteArray>()
@@ -773,6 +863,7 @@ internal object AiVisionTools {
                     mode = mode,
                     palette = ws.previewPalette.value,
                     paintFilamentIndex = if (mode == AiRenderEngine.RenderMode.Paint) model.paintFilamentIndex else null,
+                    lighting = lighting,
                 )
                 panels.add(r.pngBytes); panelWs.add(r.widthPx); panelHs.add(r.heightPx)
             }
@@ -1160,10 +1251,20 @@ internal object AiVisionTools {
             ?: return ToolResult.error("Couldn't resolve camera (bad view_name / custom?).")
         val inline = args.optBoolean("inline", false)
         val annotate = args.optBoolean("annotate", false)
-        // Cache hit? Annotate flag participates in the token so an
-        // annotated render and a non-annotated render at the same
-        // mode/view/paint state get distinct cache entries.
-        val cacheKey = if (annotate) "${mode.name}:annot" else mode.name
+        val lighting = parseLightingParams(args.optJSONObject("lighting"))
+        // Cache hit? Annotate flag and lighting hash participate in the
+        // token so a tweaked-lighting render and a default-lighting
+        // render at the same mode/view/paint state get distinct cache
+        // entries.
+        val cacheKey = buildString {
+            append(mode.name)
+            if (annotate) append(":annot")
+            // Only suffix when non-default — default renders share a
+            // cache slot with the historical token shape.
+            if (lighting != AiRenderEngine.LightingParams.DEFAULT) {
+                append(":lit").append(lighting.hashCode().toString(16))
+            }
+        }
         val token = AiSessionState.contentToken(model.id, cacheKey, camera, paintContentVersion(model))
         session.getArtifact(token)?.let { hit ->
             return packResult(model.id, camera, hit.pngBytes, token, inline, JSONObject().apply {
@@ -1183,6 +1284,7 @@ internal object AiVisionTools {
             palette = ws.previewPalette.value,
             paintFilamentIndex = if (mode == AiRenderEngine.RenderMode.Paint) model.paintFilamentIndex else null,
             annotate = annotate,
+            lighting = lighting,
         )
         session.saveArtifact(AiSessionState.RenderArtifact(
             token = token,
