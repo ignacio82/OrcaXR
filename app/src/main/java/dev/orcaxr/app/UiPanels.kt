@@ -3447,6 +3447,13 @@ fun TopNavigationPill(
      *  Null disables the help button (e.g. flat-shell builds). */
     onToggleHelp: (() -> Unit)? = null,
     helpShown: Boolean = false,
+    /** Open / close the Settings SpatialPanel. Null disables the
+     *  Settings button (e.g. flat-shell builds where the panel host
+     *  isn't wired). The Settings panel hosts app-wide preferences
+     *  (in-app LLM assistant, etc.) — distinct from the Devices
+     *  panel which is for printer connections + MCP server config. */
+    onToggleSettings: (() -> Unit)? = null,
+    settingsShown: Boolean = false,
     /** Active transform tool. Move/Rotate/Scale render as toggle
      *  buttons; tapping the active one returns to [GizmoTool.Select]. */
     gizmoTool: GizmoTool,
@@ -3536,6 +3543,15 @@ fun TopNavigationPill(
                         enabled = true,
                         onClick = onToggleDevices,
                     )
+                    if (onToggleSettings != null) {
+                        NavAction(
+                            label = "Settings",
+                            icon = androidx.compose.material.icons.Icons.Default.Settings,
+                            isSelected = settingsShown,
+                            enabled = true,
+                            onClick = onToggleSettings,
+                        )
+                    }
                     if (onToggleHelp != null) {
                         NavAction(
                             label = "Help",
@@ -4309,11 +4325,6 @@ fun PrinterPanel(
      *  parameter — escape hatch for the Share button so the system share
      *  sheet renders on Galaxy XR. */
     onRequestHomeSpaceMode: (() -> Unit)? = null,
-    /** Toggle the in-app LLM assistant SpatialPanel
-     *  ([dev.orcaxr.app.llm.LlmAssistantPanel]). Null disables the
-     *  AI-assistant card entirely (e.g. flat-shell builds where the
-     *  panel host hasn't been wired). */
-    onOpenAssistant: (() -> Unit)? = null,
 ) {
     var editingId by remember { mutableStateOf<String?>(null) }
     var addOpen by remember { mutableStateOf(printers.isEmpty()) }
@@ -4346,22 +4357,11 @@ fun PrinterPanel(
             // C6 — MCP server toggle. The card is collapsed when
             // disabled so the printer-discovery flow stays the
             // dominant affordance for users who don't want LLM-driven
-            // automation.
+            // automation. The in-app LLM assistant card moved to the
+            // Settings panel (separate top-nav icon) — its API keys
+            // are app-wide preferences, not a Devices concern.
             dev.orcaxr.app.mcp.McpServerCard(onRequestHomeSpaceMode = onRequestHomeSpaceMode)
             Spacer(Modifier.height(12.dp))
-
-            // Optional in-app LLM assistant. Lets the user enter an
-            // API key for Claude / Gemini / OpenAI and chat with the
-            // model from inside the headset (text or voice). The
-            // assistant talks to the same MCP tool registry the
-            // McpServerCard exposes externally — adding a key here
-            // also unlocks vision-LLM features (find_feature_anchors,
-            // generate_mask_from_point) that previously required a
-            // separate setAnthropicApiKey call.
-            if (onOpenAssistant != null) {
-                dev.orcaxr.app.llm.LlmAssistantCard(onOpenAssistant = onOpenAssistant)
-                Spacer(Modifier.height(12.dp))
-            }
 
             // Discovery row. Scan toggles _snapmaker._tcp browsing on
             // the LAN; results show up below as tap-to-add cards. The

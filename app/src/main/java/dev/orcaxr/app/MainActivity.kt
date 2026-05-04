@@ -933,12 +933,17 @@ private fun XrShell(
     var gizmoTool by remember { mutableStateOf(GizmoTool.Move) }
     
     var devicesShown by remember { mutableStateOf(false) }
+    // App-wide preferences SpatialPanel (in-app LLM assistant + future
+    // cards). Distinct from Devices, which is for printer connections
+    // and the MCP server toggle. Toggled from the Settings icon on the
+    // TopNavigationPill.
+    var settingsShown by remember { mutableStateOf(false) }
     // Roadmap B5 — Galaxy XR controller help card visibility. Toggled
     // via the TopNavigationPill's Help icon; renders as a side
     // SpatialPanel showing every binding the input pump consumes.
     var helpShown by remember { mutableStateOf(false) }
     // Optional in-app LLM assistant. Toggled from the AI assistant
-    // card in Devices once a provider key is set; renders the chat
+    // card in Settings once a provider key is set; renders the chat
     // SpatialPanel on the right side of the workspace.
     var assistantShown by remember { mutableStateOf(false) }
     // Roadmap D4 — emboss panel target. When non-null, the EmbossPanel
@@ -4988,6 +4993,8 @@ private fun XrShell(
                         },
                         helpShown = helpShown,
                         onToggleHelp = { helpShown = !helpShown },
+                        settingsShown = settingsShown,
+                        onToggleSettings = { settingsShown = !settingsShown },
                         gizmoTool = gizmoTool,
                         onGizmoToolChange = { gizmoTool = it },
                         transformToolsEnabled = selectedModel != null,
@@ -6444,6 +6451,28 @@ private fun XrShell(
                             onRequestHomeSpaceMode = {
                                 runCatching { session.scene.requestHomeSpaceMode() }
                             },
+                        )
+                    }
+                }
+
+                if (settingsShown) {
+                    // App-wide preferences SpatialPanel. Hosts the
+                    // in-app LLM assistant card (provider picker +
+                    // API key + voice toggle + Open Assistant
+                    // button); future cards drop in alongside. Sized
+                    // to match PrinterPanel for visual consistency
+                    // when the user toggles between them, but offset
+                    // to the right so opening both at once doesn't
+                    // overlap.
+                    MovablePanelWrapper(
+                        id = "settings",
+                        width = 600.dp,
+                        height = 600.dp,
+                        initialOffset = androidx.xr.runtime.math.Vector3(0.7f, 0.1f, 0f),
+                        session = session,
+                    ) {
+                        dev.orcaxr.app.ui.SettingsPanel(
+                            onClose = { settingsShown = false },
                             onOpenAssistant = { assistantShown = true },
                         )
                     }
@@ -6452,7 +6481,7 @@ private fun XrShell(
                 if (assistantShown) {
                     // Optional in-app LLM assistant — chat panel that
                     // routes through whichever provider the user
-                    // configured in Devices → AI assistant. Mounted
+                    // configured in Settings → AI assistant. Mounted
                     // as its own SpatialPanel so it floats next to the
                     // workspace and can stay open while the user
                     // continues editing models.
