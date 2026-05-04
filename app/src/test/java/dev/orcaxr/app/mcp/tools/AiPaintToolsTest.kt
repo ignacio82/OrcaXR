@@ -114,6 +114,11 @@ class AiPaintToolsTest {
             put("center", JSONObject().apply { put("x", 0); put("y", 0); put("z", 0) })
             put("radius_mm", 100)
             put("tag", 4)
+            // Truncation reporting only fires when the caller opts in
+            // to indices (since the 2026-05 quiet-by-default change in
+            // AiPaintTools.emitAndRespond). 12 tris fits well under
+            // MAX_INDICES_RETURNED=4096, so truncated_indices is false.
+            put("return_indices", true)
         }
         val res = tool.call(args)
         assertNotNull(res.structured)
@@ -121,6 +126,7 @@ class AiPaintToolsTest {
         assertEquals(12, s.getInt("triangle_count"))
         assertEquals(12, s.getInt("painted_count"))
         assertTrue(!s.getBoolean("truncated_indices"))
+        assertEquals(12, s.getJSONArray("triangle_indices").length())
     }
 
     @Test fun paintSphereRejectsBadTag() = runTest {
