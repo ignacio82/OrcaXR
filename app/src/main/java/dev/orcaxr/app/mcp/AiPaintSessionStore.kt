@@ -183,6 +183,19 @@ internal class AiPaintSession internal constructor(
     @Volatile var fuzzySkinFlags: ByteArray? = null
         private set
 
+    /** Frozen copies of the paint arrays as they were at session-begin.
+     *  Used by `render_paint_session_diff` to render a "before" frame
+     *  without holding the live model's pre-session bytes. Set once in
+     *  [snapshotInitial] and never mutated thereafter. */
+    @Volatile var initialPaintFilamentIndex: ByteArray? = null
+        private set
+    @Volatile var initialSupportFlags: ByteArray? = null
+        private set
+    @Volatile var initialSeamFlags: ByteArray? = null
+        private set
+    @Volatile var initialFuzzySkinFlags: ByteArray? = null
+        private set
+
     @Volatile var lastTouchedAtMs: Long = createdAtMs
         private set
 
@@ -208,6 +221,14 @@ internal class AiPaintSession internal constructor(
         supportFlags = support
         seamFlags = seam
         fuzzySkinFlags = fuzzy
+        // Frozen copy retained for the diff renderer — `paint*` above
+        // gets reassigned by every applyTriangleSet, so we need a
+        // separate snapshot if we want the "before" state for the
+        // session's lifetime.
+        initialPaintFilamentIndex = paint?.copyOf()
+        initialSupportFlags = support?.copyOf()
+        initialSeamFlags = seam?.copyOf()
+        initialFuzzySkinFlags = fuzzy?.copyOf()
     }
 
     fun arrayFor(kind: WorkspaceAction.PaintKind): ByteArray? = when (kind) {

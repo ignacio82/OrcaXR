@@ -10,6 +10,13 @@
     "red": 4,
     "white": 3
   },
+  "fingerprint": {
+    "comment": "Funko Pop Pikachu — bilateral, taller than wide, ≥ 2 recesses (eyes + mouth), single body component. Tuned against the canonical 150 mm Funko mesh with disc.",
+    "aspect_ascending": [0.55, 0.7, 1.0],
+    "shape_factor": 7.5,
+    "log2_component_count": 1.0,
+    "log2_recess_count": 2.0
+  },
   "steps": [
     {
       "comment": "Yellow base coat — full Y range",

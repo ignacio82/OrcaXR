@@ -5,12 +5,14 @@ import android.util.Log
 import dev.orcaxr.app.mcp.tools.AiAnchorTools
 import dev.orcaxr.app.mcp.tools.AiIntrospectionTools
 import dev.orcaxr.app.mcp.tools.AiPaintTools
+import dev.orcaxr.app.mcp.tools.AiSemanticPaintTools
 import dev.orcaxr.app.mcp.tools.AiVisionTools
 import dev.orcaxr.app.mcp.tools.AiVisionMaskTools
 import dev.orcaxr.app.mcp.tools.FindFeatureAnchorsTool
 import dev.orcaxr.app.mcp.tools.PaintDecalTool
 import dev.orcaxr.app.mcp.tools.PaintRecipeTools
 import dev.orcaxr.app.mcp.tools.PaintSessionTools
+import dev.orcaxr.app.mcp.tools.PaintStrokeTool
 import dev.orcaxr.app.mcp.tools.PaintTemplateTools
 import dev.orcaxr.app.mcp.tools.FilamentTools
 import dev.orcaxr.app.mcp.tools.HandyModelTools
@@ -19,6 +21,10 @@ import dev.orcaxr.app.mcp.tools.PrimitiveTools
 import dev.orcaxr.app.mcp.tools.PrinterTools
 import dev.orcaxr.app.mcp.tools.ProfileTools
 import dev.orcaxr.app.mcp.tools.RecentTools
+import dev.orcaxr.app.mcp.tools.RecipeRecommendTools
+import dev.orcaxr.app.mcp.tools.RenderPaintSessionDiffTool
+import dev.orcaxr.app.mcp.tools.ScorePaintAgainstReferenceTool
+import dev.orcaxr.app.mcp.tools.SymmetryTools
 import dev.orcaxr.app.mcp.tools.SystemTools
 import dev.orcaxr.app.mcp.tools.WorkspaceTools
 import kotlinx.coroutines.CoroutineScope
@@ -253,6 +259,26 @@ class McpController private constructor(
                 WorkspaceModel.get(), AiSessionState.get(), claudeKeyFlow,
             ))
             builder.tool(AiVisionMaskTools.GetMaskForText(
+                WorkspaceModel.get(), AiSessionState.get(), claudeKeyFlow,
+            ))
+            // D22 — LLM-painting amplifiers. Eight tools that close the
+            // gap between "the LLM has tools" and "the LLM can drive
+            // a Pikachu-class paint to convergence in one prompt":
+            //   - paint_semantic_region / prime_region_cache: paint by
+            //     segmentation region id rather than triangle list.
+            //   - paint_stroke: polyline brush over the surface.
+            //   - detect_symmetry + paint_with_mirror axis="auto":
+            //     auto-detect bilateral symmetry.
+            //   - render_paint_session_diff: before/after/delta in one PNG.
+            //   - find_similar_recipe + suggest_palette_for_recipe:
+            //     fingerprint-rank + palette auto-remap.
+            //   - score_paint_against_reference: vision-LLM grader loop.
+            for (t in AiSemanticPaintTools.all(WorkspaceModel.get(), aiPaintTools)) builder.tool(t)
+            builder.tool(PaintStrokeTool(WorkspaceModel.get(), aiPaintTools))
+            for (t in SymmetryTools.all(WorkspaceModel.get())) builder.tool(t)
+            builder.tool(RenderPaintSessionDiffTool(WorkspaceModel.get(), AiSessionState.get()))
+            for (t in RecipeRecommendTools.all(WorkspaceModel.get(), ctx)) builder.tool(t)
+            builder.tool(ScorePaintAgainstReferenceTool(
                 WorkspaceModel.get(), AiSessionState.get(), claudeKeyFlow,
             ))
         }

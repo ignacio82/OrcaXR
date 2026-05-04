@@ -430,11 +430,50 @@ description names the frame explicitly so the LLM passes the
 right thing. `get_model_geometry` returns bbox in centered_preview
 so the LLM has a coordinate-frame anchor.
 
-**Tool surface (18 tools):** see [`docs/AI_PAINT_PROTOCOL.md`](docs/AI_PAINT_PROTOCOL.md)
+**Tool surface:** see [`docs/AI_PAINT_PROTOCOL.md`](docs/AI_PAINT_PROTOCOL.md)
 for the runtime contract; [`docs/AI_PAINT_DESIGN.md`](docs/AI_PAINT_DESIGN.md)
 for the design rationale. New tools register in
 `McpController.registerAllTools` via `AiPaintTools.all`,
 `AiVisionTools.all`, `AiIntrospectionTools.all`.
+
+**D22 — LLM-painting amplifier bundle.** Eight tools that compress
+the typical "plan → paint → verify" loop. They're glue over the
+existing surface — see `docs/AI_PAINT_PROTOCOL.md` for full shapes;
+load-bearing notes only here:
+
+- `paint_semantic_region` resolves `region_id` against a
+  per-(model_id, source) segmentation cache on `AiSessionState`.
+  The four introspection tools auto-publish into the cache as a
+  side effect, so the LLM rarely has to call `prime_region_cache`.
+  Triangle index lists never cross the wire — important for huge
+  meshes where one region holds 50 K+ tris.
+- `detect_symmetry` is centroid-pair-based: O(S²) per axis with
+  S ≤ 1024. **Sensitive to triangulation:** a diagonal-split cube
+  fails because each face's diagonal breaks centroid mirror
+  pairing — unit-test fixture is a face-center fan-subdivided
+  cube. Real STL imports (10 K+ tris) are fine because centroid
+  density swamps the triangulation artifact. `paint_with_mirror
+  axis="auto"` reads the cached report and fails closed if no
+  axis crosses 0.65 confidence.
+- `render_paint_session_diff` requires the session's initial
+  paint state. `AiPaintSession` now has separate `initial*`
+  ByteArray fields frozen at begin so they survive
+  `applyTriangleSet` reassigning the working buffer.
+- `find_similar_recipe` ranks bundled recipes (Pikachu, Benchy)
+  by a 6-dim fingerprint (sorted bbox aspect, area/volume^(2/3),
+  log component / recess counts) — recipes carry the fingerprint
+  in their JSON. `suggest_palette_for_recipe` maps recipe tag
+  names → user filament slots by RGB distance.
+- `score_paint_against_reference` reuses `VisionApiClient` from
+  `FindFeatureAnchorsTool` (same Anthropic key flow). Two-image
+  request — current paint + reference. Returns `{score, comment,
+  regions[]}`.
+
+Convergence loop: `render_montage` → `find_similar_recipe` →
+`suggest_palette_for_recipe` → `detect_symmetry` →
+`begin_paint_session` → `paint_template` →
+`render_paint_session_diff` → `score_paint_against_reference` →
+targeted corrections → `commit_paint_session`.
 
 **Headless paint sessions (C9 milestone 4).** Every paint MCP tool
 that emits a `WorkspaceAction.PaintTriangleSet` triggers a full

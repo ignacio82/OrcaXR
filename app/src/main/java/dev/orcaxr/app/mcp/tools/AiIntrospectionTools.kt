@@ -3,6 +3,7 @@ package dev.orcaxr.app.mcp.tools
 import dev.orcaxr.app.AiIntrospection
 import dev.orcaxr.app.MeshBvh
 import dev.orcaxr.app.PlacedModel
+import dev.orcaxr.app.mcp.AiSessionState
 import dev.orcaxr.app.mcp.Schemas
 import dev.orcaxr.app.mcp.Tool
 import dev.orcaxr.app.mcp.ToolResult
@@ -139,6 +140,24 @@ internal object AiIntrospectionTools {
             val (model, bvh) = resolveModelAndBvh(ws, args)
                 ?: return ToolResult.error("Couldn't resolve model + BVH.")
             val components = AiIntrospection.components(bvh)
+            // Publish into the AI session's region cache so
+            // paint_semantic_region(region_source="components", region_id=...) works
+            // without the LLM having to also call prime_region_cache.
+            AiSessionState.get().saveSegmentation(model.id, AiSessionState.SegmentationCacheEntry(
+                source = "components",
+                regions = components.map { c ->
+                    AiSessionState.RegionEntry(
+                        regionId = c.componentId,
+                        label = "component_${c.componentId}",
+                        triangleIndices = c.triangleIndices,
+                        seedTriangleId = c.triangleIndices.firstOrNull() ?: -1,
+                        areaMm2 = c.surfaceAreaMm2,
+                        centroid = c.centroid,
+                    )
+                },
+                createdAtMs = System.currentTimeMillis(),
+                params = "introspection_default",
+            ))
             val body = JSONObject().apply {
                 put("ok", true)
                 put("model_id", model.id)
@@ -244,6 +263,21 @@ internal object AiIntrospectionTools {
                 distanceCapFraction = distFrac,
                 minRegionAreaPct = minAreaPct,
             )
+            AiSessionState.get().saveSegmentation(model.id, AiSessionState.SegmentationCacheEntry(
+                source = "semantic",
+                regions = regions.map { r ->
+                    AiSessionState.RegionEntry(
+                        regionId = r.regionId,
+                        label = r.label,
+                        triangleIndices = r.triangleIndices,
+                        seedTriangleId = r.triangleIndices.firstOrNull() ?: -1,
+                        areaMm2 = r.areaMm2,
+                        centroid = r.centroid,
+                    )
+                },
+                createdAtMs = System.currentTimeMillis(),
+                params = "max=$maxRegions normal_tol=$normalTol dist_frac=$distFrac min_area_pct=$minAreaPct",
+            ))
             val body = JSONObject().apply {
                 put("ok", true)
                 put("model_id", model.id)
@@ -326,6 +360,21 @@ internal object AiIntrospectionTools {
                 maxSegments = maxSegments,
                 minSegmentTriCount = minTri,
             )
+            AiSessionState.get().saveSegmentation(model.id, AiSessionState.SegmentationCacheEntry(
+                source = "curvature",
+                regions = segments.map { s ->
+                    AiSessionState.RegionEntry(
+                        regionId = s.segmentId,
+                        label = s.label,
+                        triangleIndices = s.triangleIndices,
+                        seedTriangleId = s.triangleIndices.firstOrNull() ?: -1,
+                        areaMm2 = s.areaMm2,
+                        centroid = s.centroid,
+                    )
+                },
+                createdAtMs = System.currentTimeMillis(),
+                params = "max=$maxSegments crease=$crease seed_cap=$seedCap min_tri=$minTri",
+            ))
             val body = JSONObject().apply {
                 put("ok", true)
                 put("model_id", model.id)
@@ -397,6 +446,21 @@ internal object AiIntrospectionTools {
                 maxFeatures = maxFeatures,
                 minSegmentTriCount = minTri,
             )
+            AiSessionState.get().saveSegmentation(model.id, AiSessionState.SegmentationCacheEntry(
+                source = "recess",
+                regions = features.map { f ->
+                    AiSessionState.RegionEntry(
+                        regionId = f.featureId,
+                        label = f.label,
+                        triangleIndices = f.triangleIndices,
+                        seedTriangleId = f.seedTriangleId,
+                        areaMm2 = f.areaMm2,
+                        centroid = f.centroid,
+                    )
+                },
+                createdAtMs = System.currentTimeMillis(),
+                params = "max=$maxFeatures concave=$concave grow=$growConcave min_tri=$minTri",
+            ))
             val body = JSONObject().apply {
                 put("ok", true)
                 put("model_id", model.id)

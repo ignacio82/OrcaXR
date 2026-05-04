@@ -1051,12 +1051,22 @@ internal object AiVisionTools {
                 "than calling render_view six times — small vision models can read all six " +
                 "faces of a 3D shape from one image. Each cell is labelled with its view " +
                 "name. Pass `panel_size_px` to control per-cell resolution (default 256, " +
-                "max 512). Use this BEFORE picking anchors / seeds for paint operations."
+                "max 512). `mode` defaults to 'paint' (so the contact sheet shows current " +
+                "paint state); switch to 'solid' for orientation reasoning on an unpainted " +
+                "model, 'normals' to color-by-orientation, or 'depth' for silhouette-style " +
+                "previews. Use this BEFORE picking anchors / seeds for paint operations — " +
+                "and again after each paint pass so the LLM can verify what it did."
         override val inputSchema = Schemas.obj(
             required = listOf("model_id"),
             properties = mapOf(
                 "model_id" to Schemas.string("Model id"),
                 "panel_size_px" to Schemas.integer("Per-cell width=height (default 256, max 512)"),
+                "mode" to Schemas.string(
+                    "'paint' (default — shows current paint state) | 'solid' (half-Lambert " +
+                        "studio lighting on per-volume tint) | 'normals' (color-by-orientation, " +
+                        "useful for shape reasoning) | 'depth' (linear depth grayscale).",
+                ),
+                "lighting" to Schemas.obj(),
                 "inline" to Schemas.bool("If true and PNG ≤ 200 KB, also include base64 image part"),
                 "session_id" to SESSION_ID_SCHEMA,
             ),
@@ -1078,6 +1088,13 @@ internal object AiVisionTools {
                 )
             }
             val cell = args.optInt("panel_size_px", 256).coerceIn(64, 512)
+            val modeRaw = args.optString("mode", "paint")
+            val mode = parseMode(modeRaw)
+                ?: return ToolResult.error("Unknown mode '$modeRaw'.")
+            if (mode == AiRenderEngine.RenderMode.TriangleId) {
+                return ToolResult.error("triangle_id mode isn't supported in render_montage.")
+            }
+            val lighting = parseLightingParams(args.optJSONObject("lighting"))
             // Layout: row-major. Top row reads as "what the user sees if
             // they walk around the model clockwise"; bottom row is the
             // opposite faces.
@@ -1099,16 +1116,19 @@ internal object AiVisionTools {
                 }
             }
             val geom = AiIntrospection.geometry(bvh, bins = 1)
-            val paintForRender = paintSession?.paintFilamentIndex ?: model.paintFilamentIndex
+            val paintForRender = if (mode == AiRenderEngine.RenderMode.Paint) {
+                paintSession?.paintFilamentIndex ?: model.paintFilamentIndex
+            } else null
             val rendered = ArrayList<String>(views.size)
             for ((idx, viewName) in views.withIndex()) {
                 val cam = AiRenderEngine.namedPreset(viewName, geom.bboxCenteredPreview, cell, cell)
                 val r = AiRenderEngine.render(
                     bvh = bvh,
                     camera = cam,
-                    mode = AiRenderEngine.RenderMode.Paint,
+                    mode = mode,
                     palette = ws.previewPalette.value,
                     paintFilamentIndex = paintForRender,
+                    lighting = lighting,
                 )
                 val decoded = AiRenderEngine.decodePng(r.pngBytes) ?: continue
                 val col = idx % cols
@@ -1124,9 +1144,15 @@ internal object AiVisionTools {
             // state hits the cache.
             val cacheCam = AiRenderEngine.CameraSpec(FloatArray(16), FloatArray(16), totalW, totalH)
             val sessionSuffix = if (paintSession != null) ":sess${paintSession.id}" else ""
+            val lightingSuffix = if (lighting != AiRenderEngine.LightingParams.DEFAULT) {
+                ":lit${lighting.hashCode().toString(16)}"
+            } else ""
             val versionForCache = if (paintSession != null) paintContentVersion(paintSession) else paintContentVersion(model)
             val token = AiSessionState.contentToken(
-                model.id, "montage:${cell}$sessionSuffix", cacheCam, versionForCache,
+                model.id,
+                "montage:${cell}:${mode.name}$lightingSuffix$sessionSuffix",
+                cacheCam,
+                versionForCache,
             )
             session.saveArtifact(AiSessionState.RenderArtifact(
                 token = token,
@@ -1147,6 +1173,7 @@ internal object AiVisionTools {
                 put("width_px", totalW)
                 put("height_px", totalH)
                 put("panel_size_px", cell)
+                put("mode", mode.name.lowercase())
                 put("layout", "2x3 (rows×cols)")
                 put("views", JSONArray().apply { for (v in views) put(v) })
                 put("rendered_count", rendered.size)

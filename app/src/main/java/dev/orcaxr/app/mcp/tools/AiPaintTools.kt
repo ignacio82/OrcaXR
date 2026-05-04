@@ -983,7 +983,9 @@ internal object AiPaintTools {
         override val name = "paint_with_mirror"
         override val description =
             "Apply a paint primitive AND its mirror across a bbox-center axis in one call. Axis is " +
-                "'x' | 'y' | 'z'; the mirror plane is the model's bbox center on that axis. Two " +
+                "'x' | 'y' | 'z' (the mirror plane is the model's bbox center on that axis), or " +
+                "'auto' to use the symmetry plane detected by detect_symmetry (errors out if no " +
+                "axis crosses the symmetry threshold; call detect_symmetry first). Two " +
                 "PaintTriangleSet actions are emitted (one per side) so paint_undo walks back each " +
                 "side independently. Useful for paired bilateral features (Pikachu eyes / cheeks / " +
                 "ears, Funko Pop eyes, eyes on ANY symmetric figure). Inner tool can be: " +
@@ -995,7 +997,7 @@ internal object AiPaintTools {
         override val inputSchema = Schemas.obj(
             required = listOf("axis", "inner"),
             properties = mapOf(
-                "axis" to Schemas.string("'x' | 'y' | 'z' — bbox-center axis to mirror across"),
+                "axis" to Schemas.string("'x' | 'y' | 'z' | 'auto' (uses detect_symmetry's cached best axis)"),
                 "inner" to Schemas.obj(
                     required = listOf("tool", "arguments"),
                     properties = mapOf(
@@ -1007,10 +1009,38 @@ internal object AiPaintTools {
         )
         override suspend fun call(args: JSONObject): ToolResult {
             if (!ws.attached.value) return ToolResult.error("OrcaXR not attached.")
-            val axisRaw = args.optString("axis").lowercase()
+            val rawAxis = args.optString("axis").lowercase()
+            // Resolve "auto" before downstream args are mirrored — needs
+            // the model id from inner.arguments to look up the cached
+            // symmetry report.
+            val (axisRaw, autoResolved) = if (rawAxis == "auto") {
+                val innerObj = args.optJSONObject("inner")
+                val innerArgsForLookup = innerObj?.optJSONObject("arguments")
+                val modelIdForLookup = innerArgsForLookup?.optString("model_id")?.trim()
+                if (modelIdForLookup.isNullOrEmpty()) {
+                    return ToolResult.error(
+                        "axis=\"auto\" requires inner.arguments.model_id so the cached symmetry " +
+                            "report can be looked up.",
+                    )
+                }
+                val report = dev.orcaxr.app.mcp.AiSessionState.get().getSymmetry(modelIdForLookup)
+                    ?: return ToolResult.error(
+                        "No symmetry report cached for '$modelIdForLookup'. Call detect_symmetry " +
+                            "first, then retry with axis=\"auto\".",
+                    )
+                val resolved = report.bestAxis
+                    ?: return ToolResult.error(
+                        "detect_symmetry found no symmetric axis above threshold " +
+                            "(best confidence ${"%.2f".format(report.confidence)}). " +
+                            "Pick an explicit axis or paint each side independently.",
+                    )
+                resolved to true
+            } else {
+                rawAxis to false
+            }
             val axisIdx = when (axisRaw) {
                 "x" -> 0; "y" -> 1; "z" -> 2
-                else -> return ToolResult.error("axis must be x|y|z, got '$axisRaw'")
+                else -> return ToolResult.error("axis must be x|y|z|auto, got '$rawAxis'")
             }
             val inner = args.optJSONObject("inner")
                 ?: return ToolResult.error(EXPECTED_INNER_SHAPE)
@@ -1055,6 +1085,7 @@ internal object AiPaintTools {
             val body = JSONObject().apply {
                 put("ok", true)
                 put("axis", axisRaw)
+                if (autoResolved) put("auto_resolved_axis", true)
                 put("inner_tool", innerToolName)
                 put("painted_count_a", s1)
                 put("painted_count_b", s2)

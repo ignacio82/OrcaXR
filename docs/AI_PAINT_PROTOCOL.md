@@ -113,11 +113,14 @@ sessions evict silently if you exceed the cap; check with
 | `resolve_image_pixel` | Decode one pixel of a triangle-id map back to a tri ID |
 | `name_view` | Save a custom camera under a session name |
 | `render_views_grid` | Compose N preset views into one side-by-side PNG |
+| `render_montage` | 6-view ortho contact sheet (2×3, labelled) — D22 adds `mode` for solid/normals/depth |
 | `render_diff` (D18f) | Pixel-XOR of two cached render tokens; highlights changes in red |
+| `render_paint_session_diff` (D22) | 3-panel before/after/delta for a paint session in one PNG |
 | `list_active_palette` | Live "as-will-print" palette (filament tag → hex) |
 | `find_feature_anchors` (D18c) | Vision-LLM feature locator (Anthropic API call) |
 | `generate_mask_from_point` (D19a) | Vision-LLM polygon outline from a click pixel |
 | `get_mask_for_text` (D19d) | Vision-LLM zero-shot text-to-mask (e.g. "the cheeks") |
+| `score_paint_against_reference` (D22) | Vision-LLM grader: 0..1 score + per-region notes vs a reference image |
 
 Built-in presets: `iso`, `iso_back`, `front`, `back`, `left`,
 `right`, `top`, `bottom`. Render dimensions clamped to 2048 × 2048
@@ -150,10 +153,16 @@ Render results include:
 | `paint_triangle_list` | Raw escape hatch: a list of triangle IDs |
 | `paint_projected_mask` | Reverse-project a 2D polygon mask through a camera (D18d adds `depth_mode='any_facing'`) |
 | `paint_geodesic_disc` (D18a) | Surface-bounded disc; right tool for organic bulges |
-| `paint_with_mirror` (D18b) | Wrap any inner paint tool; emit it + its bbox-axis mirror in one call |
+| `paint_stroke` (D22) | Polyline brush: densify → union of geodesic discs → one undo step |
+| `paint_semantic_region` (D22) | Paint by cached segmentation `region_id` instead of triangle list |
+| `prime_region_cache` (D22) | Compute + cache a segmentation (semantic / curvature / components / recess) |
+| `paint_with_mirror` (D18b, D22 axis="auto") | Wrap any inner paint tool; emit it + its bbox-axis mirror in one call. axis="auto" reads the cached `detect_symmetry` report |
+| `detect_symmetry` (D22) | Score bilateral symmetry on X/Y/Z; cached for `paint_with_mirror axis="auto"` |
 | `paint_decal` (D19c) | Project an RGBA image; per-pixel quantization to filament slot; one undo step |
 | `paint_template` | Apply a bundled recipe; `auto=true` (D21b) fingerprints the model and resolves automatically |
 | `list_paint_templates` | Enumerate bundled recipes |
+| `find_similar_recipe` (D22) | Rank bundled recipes by geometric fingerprint similarity |
+| `suggest_palette_for_recipe` (D22) | Auto-remap a recipe's named palette to the user's loaded filaments |
 | `save_paint_recipe` / `load_paint_recipe` / `list_paint_recipes` / `delete_paint_recipe` (D18j) | Persistent paint sessions |
 | `flush_actions` (D18g) | Wait for pending paint mutations to drain (fixes only_tagged race) |
 
@@ -204,6 +213,64 @@ segment.
 | `mesh_boolean` | Union / Difference / Intersection between two PlacedModels |
 | `split_model` | Split into connected components |
 | `emboss_model` | Text/SVG → boolean against host (`mode='emboss'`/`'engrave'`) OR drop as fresh PlacedModel (`mode='add_object'`, D15) |
+
+## D22 — LLM-painting amplifiers
+
+A late-2026 add bundle of eight tools that compress the typical
+"plan → paint → verify" loop:
+
+- **`render_montage`** (now mode-configurable): one PNG with all six
+  ortho views, labelled. Use BEFORE picking anchors so the LLM has
+  spatial context without enumerating views.
+- **`paint_semantic_region`** + **`prime_region_cache`**: paint by
+  segmentation region id rather than triangle list. The
+  introspection tools (`get_model_semantic_regions`,
+  `get_curvature_segmentation`, `get_model_components`,
+  `find_recessed_features`) auto-publish into the cache, so the
+  typical flow is "introspect → paint_semantic_region(region_id, …)".
+  Triangle index lists never cross the wire — important for huge
+  meshes where one region can hold 50K+ tris.
+- **`paint_stroke`**: polyline brush. Densifies the polyline at
+  `radius/2` spacing, finds the nearest mesh triangle to each
+  sample, then unions per-sample geodesic discs. Respects dihedral
+  hard edges (so a cheek stroke doesn't bleed onto the nose).
+- **`detect_symmetry`** + **`paint_with_mirror axis="auto"`**: score
+  X/Y/Z symmetry by random-sampled mirror partner search; cache the
+  best axis on the model. `paint_with_mirror axis="auto"` reads
+  that cache so the LLM never has to guess. Errors closed if no
+  axis crosses the threshold.
+- **`render_paint_session_diff`**: one PNG with three panels —
+  `before` (session start), `after` (current), `delta` (red over
+  faded grayscale). The session's initial paint is frozen at
+  `begin_paint_session` so this works without remembering a token.
+- **`find_similar_recipe`**: rank bundled recipes by geometric
+  fingerprint similarity (sorted bbox aspect, area/volume^(2/3)
+  shape factor, log component count, log recess count). Use BEFORE
+  `paint_template` when the model name doesn't match an alias.
+- **`suggest_palette_for_recipe`**: read a recipe's named
+  `default_palette` (e.g. `{"yellow": 2}`), map each tag name to
+  RGB, find the closest user filament by Lab distance. Returns a
+  `palette_remap` you can pass straight to `paint_template`.
+- **`score_paint_against_reference`**: send the current rendered
+  paint + a reference image to Claude's vision API; receive
+  `{score, comment, regions[]}`. Pair with the session loop —
+  iterate while `score < 0.85`.
+
+The bundle is designed so a small vision LLM can drive a Pikachu-
+class paint to convergence with these tools alone:
+
+1. `render_montage(mode="solid")` → orient.
+2. `find_similar_recipe` → "funko_pop_pikachu, sim=0.91".
+3. `suggest_palette_for_recipe` → palette_remap.
+4. `detect_symmetry` → "best=x".
+5. `begin_paint_session`.
+6. `paint_template(model_kind=..., palette_remap=...)`.
+7. `render_paint_session_diff(view_name="iso")` → check work.
+8. `score_paint_against_reference(reference=…)` → grade 0.78,
+   notes "ears unpainted".
+9. Targeted `paint_semantic_region` / `paint_with_mirror axis=auto`
+   + `paint_stroke` corrections. Loop steps 7-9 until score ≥ 0.85.
+10. `commit_paint_session`.
 
 ## Workflow: paint Benchy as a pirate ship
 
