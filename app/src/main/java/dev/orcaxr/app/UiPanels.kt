@@ -4321,10 +4321,6 @@ fun PrinterPanel(
     onRenamePrinter: (PrinterConfig, String) -> Unit,
     onDeletePrinter: (PrinterConfig) -> Unit,
     onClose: () -> Unit,
-    /** See [dev.orcaxr.app.mcp.McpServerCard]'s `onRequestHomeSpaceMode`
-     *  parameter — escape hatch for the Share button so the system share
-     *  sheet renders on Galaxy XR. */
-    onRequestHomeSpaceMode: (() -> Unit)? = null,
 ) {
     var editingId by remember { mutableStateOf<String?>(null) }
     var addOpen by remember { mutableStateOf(printers.isEmpty()) }
@@ -4354,14 +4350,12 @@ fun PrinterPanel(
             )
             Spacer(Modifier.height(12.dp))
 
-            // C6 — MCP server toggle. The card is collapsed when
-            // disabled so the printer-discovery flow stays the
-            // dominant affordance for users who don't want LLM-driven
-            // automation. The in-app LLM assistant card moved to the
-            // Settings panel (separate top-nav icon) — its API keys
-            // are app-wide preferences, not a Devices concern.
-            dev.orcaxr.app.mcp.McpServerCard(onRequestHomeSpaceMode = onRequestHomeSpaceMode)
-            Spacer(Modifier.height(12.dp))
+            // The MCP server toggle and the in-app LLM assistant
+            // card both moved to the Settings panel (separate top-nav
+            // icon). They're app-wide preferences, not Devices-level
+            // concerns — the Devices panel is now exclusively about
+            // printer connections (discovery + add + per-printer
+            // status / control).
 
             // Discovery row. Scan toggles _snapmaker._tcp browsing on
             // the LAN; results show up below as tap-to-add cards. The

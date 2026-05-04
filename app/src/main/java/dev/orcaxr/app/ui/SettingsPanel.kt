@@ -22,16 +22,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.orcaxr.app.llm.LlmAssistantCard
+import dev.orcaxr.app.mcp.McpServerCard
 
 /**
  * App-wide preferences. Lives next to the workspace as a SpatialPanel,
  * toggled from the Settings icon on the top navigation pill.
  *
- * Distinct from the Devices (Printers) panel: Devices is for printer
- * connections + the MCP server toggle (external-client surface).
- * Settings is for things that affect OrcaXR itself — currently just
- * the optional in-app AI assistant. Future cards (theme, units,
- * default printer, telemetry opt-out) belong here too.
+ * Distinct from the Devices (Printers) panel: Devices is purely about
+ * printer connections (discovery, add, per-printer status / control).
+ * Settings is for things that affect OrcaXR itself — the MCP server
+ * (which exposes OrcaXR to external LLM clients on the LAN) and the
+ * optional in-app LLM assistant. Future cards (theme, units, default
+ * printer, telemetry opt-out) belong here too.
  *
  * Layout mirrors PrinterPanel for consistency: dark surface, rounded
  * corners, header row with title + close, description prose, then a
@@ -48,6 +50,10 @@ fun SettingsPanel(
      *  button (e.g. flat-shell builds where the panel host isn't
      *  wired). */
     onOpenAssistant: (() -> Unit)? = null,
+    /** See [McpServerCard]'s `onRequestHomeSpaceMode` parameter —
+     *  escape hatch so the system share sheet (used by the Share
+     *  button on the MCP card) renders on Galaxy XR. */
+    onRequestHomeSpaceMode: (() -> Unit)? = null,
 ) {
     Surface(
         color = Color(0xFF15181B),
@@ -67,8 +73,7 @@ fun SettingsPanel(
             }
 
             Text(
-                "App-wide preferences. Printer connections and the MCP server " +
-                    "live in Devices.",
+                "App-wide preferences. Printer connections live in Devices.",
                 color = Color(0xFFB6BEC8),
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -80,6 +85,12 @@ fun SettingsPanel(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                // C6 — MCP server toggle. Exposes OrcaXR to external
+                // LLM clients on the LAN (Claude Desktop, the
+                // Anthropic SDK's tool router, etc.). Self-contained
+                // — reads/writes McpController directly.
+                McpServerCard(onRequestHomeSpaceMode = onRequestHomeSpaceMode)
+
                 // In-app LLM assistant — provider picker, per-provider
                 // API key, voice toggle, "Open Assistant" button. The
                 // card is self-contained (reads/writes LlmSettings

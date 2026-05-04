@@ -6448,9 +6448,6 @@ private fun XrShell(
                                     WorkspaceMode.Prepare
                                 }
                             },
-                            onRequestHomeSpaceMode = {
-                                runCatching { session.scene.requestHomeSpaceMode() }
-                            },
                         )
                     }
                 }
@@ -6474,6 +6471,9 @@ private fun XrShell(
                         dev.orcaxr.app.ui.SettingsPanel(
                             onClose = { settingsShown = false },
                             onOpenAssistant = { assistantShown = true },
+                            onRequestHomeSpaceMode = {
+                                runCatching { session.scene.requestHomeSpaceMode() }
+                            },
                         )
                     }
                 }
