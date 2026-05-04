@@ -2986,29 +2986,43 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
             return -2;
         }
 
-        // ---- Bake Lambert shading into the vertex colors.
+        // ---- Bake studio shading + voxel AO into the vertex colors.
         //
-        // Why bake instead of emitting NORMAL + a PBR material:
-        // Jetpack XR SceneCore (alpha13 on Galaxy XR) does NOT install a
-        // default IBL skybox or directional light when a `GltfModel` is
-        // attached — Filament renders the mesh against a black ambient
-        // term, so a standard `pbrMetallicRoughness` material drops to
-        // near-black regardless of how good the normals are. The fix is
-        // to keep `KHR_materials_unlit` (which renders baseColor *
-        // vertexColor straight to the screen, no light sampling) AND
-        // pre-multiply each vertex color by a Lambert + ambient factor
-        // computed from the smooth normal so the result LOOKS lit.
-        // Two-light setup: a key from front-top-right and a fill from
-        // behind-below-left at half intensity, plus an ambient floor
-        // so back-facing triangles don't go pitch black. Same recipe
-        // a kit-bashed offline lightmap would produce.
+        // Why we keep `KHR_materials_unlit` and bake: the May 2026
+        // attempt at `pbrMetallicRoughness` + a runtime IBL skybox
+        // tripped gotcha #13 (PBR widened Filament's per-material
+        // bind window enough to lose the material-instance-id race).
         //
-        // Smooth normals via area-weighted face-normal accumulation
-        // (raw cross product = 2 * area * unit_normal). After accumulation
-        // each vertex gets normalized; degenerate vertices default to
-        // +Z (the build-plate-up axis in mesh coords).
+        // Recipe to surface OrcaSlicer-style detail on a flat
+        // (unlit) preview:
+        //   1. **Smooth normals** via area-weighted face-normal
+        //      accumulation. Degenerate vertices fall back to +Z.
+        //   2. **3 directional lights** with FULL Lambert
+        //      (`max(0, dot(n, L))`). Half-Lambert wrap was tried;
+        //      it crushed contrast and the user reported "no
+        //      visible details at all". Sharp Lambert keeps the
+        //      shading crisp.
+        //   3. **Voxel ambient occlusion** — the only AO that
+        //      actually surfaces eye sockets, mouth grooves, and
+        //      finger gaps on a high-poly smooth mesh. Closed-form
+        //      curvature proxies (`1 − |avg_unit_n|`, mean-curvature
+        //      Laplacian, K-ring iterated Laplacian) all measured
+        //      median ≤ 0.000 / p99 ≤ 0.087 on the 144k-tri Pikachu
+        //      because each vertex's local neighborhood is too tiny
+        //      relative to the eye-socket scale. Voxel AO at a
+        //      96-cell grid (≈ 1.6 mm voxel for a 150 mm Pikachu)
+        //      with 12 cosine-weighted hemisphere rays each marched
+        //      14 voxels gave AO range 0..1, median 0.5, surfacing
+        //      every detail in the host-side verifier
+        //      (`tools/voxel_ao.py`). Cost is O(vertex_count × rays
+        //      × march_steps) — bounded, ~150 ms for the Pikachu in
+        //      C++, well under the dispose-safe window. The earlier
+        //      "AO ray-cast against every triangle" attempt that
+        //      crashed was O(vertex × triangle) = ~10 G ops; voxel
+        //      AO is ~12 M ops, three orders of magnitude cheaper.
         // ----
-        std::vector<float> normals(positions.size(), 0.0f);
+        const size_t v_count = positions.size() / 3;
+        std::vector<float> smooth_normals(positions.size(), 0.0f);
         for (size_t i = 0; i + 2 < indices.size(); i += 3) {
             const int i0 = indices[i + 0];
             const int i1 = indices[i + 1];
@@ -3027,48 +3041,196 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
             const float nx = ey * fz - ez * fy;
             const float ny = ez * fx - ex * fz;
             const float nz = ex * fy - ey * fx;
-            normals[i0 * 3 + 0] += nx; normals[i0 * 3 + 1] += ny; normals[i0 * 3 + 2] += nz;
-            normals[i1 * 3 + 0] += nx; normals[i1 * 3 + 1] += ny; normals[i1 * 3 + 2] += nz;
-            normals[i2 * 3 + 0] += nx; normals[i2 * 3 + 1] += ny; normals[i2 * 3 + 2] += nz;
+            smooth_normals[i0 * 3 + 0] += nx; smooth_normals[i0 * 3 + 1] += ny; smooth_normals[i0 * 3 + 2] += nz;
+            smooth_normals[i1 * 3 + 0] += nx; smooth_normals[i1 * 3 + 1] += ny; smooth_normals[i1 * 3 + 2] += nz;
+            smooth_normals[i2 * 3 + 0] += nx; smooth_normals[i2 * 3 + 1] += ny; smooth_normals[i2 * 3 + 2] += nz;
         }
-        // Mesh-local light directions (printer-frame: +X = bed-X,
-        // +Y = bed-front, +Z = up). Both pre-normalized to unit length.
-        // Key: above + slightly to the front-right. Fill: behind +
-        // slightly down to brighten back-facing triangles. Numbers
-        // chosen to keep both vectors at length 1.0 — verified
-        // 0.40² + 0.30² + 0.866² ≈ 1.00, (-0.30)² + (-0.50)² + (-0.812)²
-        // ≈ 1.00.
-        constexpr float KEY_DX = 0.40f, KEY_DY = 0.30f, KEY_DZ = 0.866f;
-        constexpr float FILL_DX = -0.30f, FILL_DY = -0.50f, FILL_DZ = -0.812f;
-        constexpr float AMBIENT = 0.32f;
-        constexpr float KEY_INTENSITY = 0.55f;
-        constexpr float FILL_INTENSITY = 0.18f;
-        for (size_t v = 0; v < positions.size() / 3; ++v) {
+        std::vector<float> unit_normals(positions.size(), 0.0f);
+        for (size_t v = 0; v < v_count; ++v) {
             const size_t ni = v * 3;
-            const float l2 = normals[ni] * normals[ni]
-                           + normals[ni + 1] * normals[ni + 1]
-                           + normals[ni + 2] * normals[ni + 2];
-            float nx, ny, nz;
+            const float l2 = smooth_normals[ni] * smooth_normals[ni]
+                           + smooth_normals[ni + 1] * smooth_normals[ni + 1]
+                           + smooth_normals[ni + 2] * smooth_normals[ni + 2];
             if (l2 > 1e-24f) {
                 const float inv = 1.0f / std::sqrt(l2);
-                nx = normals[ni + 0] * inv;
-                ny = normals[ni + 1] * inv;
-                nz = normals[ni + 2] * inv;
+                unit_normals[ni + 0] = smooth_normals[ni + 0] * inv;
+                unit_normals[ni + 1] = smooth_normals[ni + 1] * inv;
+                unit_normals[ni + 2] = smooth_normals[ni + 2] * inv;
             } else {
-                nx = 0.0f; ny = 0.0f; nz = 1.0f;
+                unit_normals[ni + 0] = 0.0f;
+                unit_normals[ni + 1] = 0.0f;
+                unit_normals[ni + 2] = 1.0f;
             }
-            const float key_term = std::max(0.0f,
-                nx * KEY_DX + ny * KEY_DY + nz * KEY_DZ);
-            const float fill_term = std::max(0.0f,
-                nx * FILL_DX + ny * FILL_DY + nz * FILL_DZ);
-            const float shade = AMBIENT
-                + KEY_INTENSITY * key_term
-                + FILL_INTENSITY * fill_term;
-            const float clamped = std::min(1.0f, shade);
+        }
+
+        // ---- Voxel AO bake.
+        //
+        // Voxelize the mesh into a fixed-grid binary occupancy
+        // array, then for each vertex hemisphere-cast a small
+        // bundle of rays through the grid and count hits. Voxel
+        // marking is conservative (every voxel in each triangle's
+        // axis-aligned bbox is marked) — slightly over-occludes but
+        // close enough for the AO darkening signal we want.
+        // ----
+        constexpr int   AO_GRID         = 96;
+        constexpr int   AO_RAYS         = 12;
+        constexpr int   AO_MARCH_STEPS  = 14;
+        constexpr float AO_STRENGTH     = 0.85f;
+        // Precomputed cosine-weighted hemisphere directions in tangent
+        // space (z = up). 12 stratified samples — generated by the
+        // host-side verifier and pasted in for determinism.
+        constexpr float AO_DIRS[AO_RAYS][3] = {
+            { 0.5739f,  0.4232f,  0.7016f},
+            {-0.4192f,  0.6421f,  0.6418f},
+            {-0.7521f, -0.0617f,  0.6562f},
+            { 0.1937f, -0.9116f,  0.3621f},
+            { 0.7853f, -0.1842f,  0.5908f},
+            {-0.0432f,  0.7642f,  0.6435f},
+            { 0.3216f,  0.1271f,  0.9382f},
+            {-0.5126f, -0.4731f,  0.7166f},
+            { 0.8623f,  0.3914f,  0.3214f},
+            {-0.2241f,  0.2014f,  0.9536f},
+            { 0.6421f, -0.6837f,  0.3469f},
+            {-0.7036f,  0.4218f,  0.5728f},
+        };
+        // World bbox padded by 2 % so the voxel grid fully contains
+        // the mesh. Computed up front because the POSITION accessor
+        // bbox pass below also needs it.
+        float vminx = INFINITY, vminy = INFINITY, vminz = INFINITY;
+        float vmaxx = -INFINITY, vmaxy = -INFINITY, vmaxz = -INFINITY;
+        for (size_t i = 0; i + 2 < positions.size(); i += 3) {
+            const float x = positions[i], y = positions[i + 1], z = positions[i + 2];
+            if (x < vminx) vminx = x; if (x > vmaxx) vmaxx = x;
+            if (y < vminy) vminy = y; if (y > vmaxy) vmaxy = y;
+            if (z < vminz) vminz = z; if (z > vmaxz) vmaxz = z;
+        }
+        const float gex = vmaxx - vminx;
+        const float gey = vmaxy - vminy;
+        const float gez = vmaxz - vminz;
+        const float pad = 0.02f * std::max(gex, std::max(gey, gez));
+        vminx -= pad; vminy -= pad; vminz -= pad;
+        vmaxx += pad; vmaxy += pad; vmaxz += pad;
+        const float gext = std::max(vmaxx - vminx, std::max(vmaxy - vminy, vmaxz - vminz));
+        const float voxel_size = gext / static_cast<float>(AO_GRID);
+        const int nx_g = std::min(AO_GRID, std::max(1, static_cast<int>(std::ceil((vmaxx - vminx) / voxel_size))));
+        const int ny_g = std::min(AO_GRID, std::max(1, static_cast<int>(std::ceil((vmaxy - vminy) / voxel_size))));
+        const int nz_g = std::min(AO_GRID, std::max(1, static_cast<int>(std::ceil((vmaxz - vminz) / voxel_size))));
+        const float inv_voxel = 1.0f / voxel_size;
+        ORCAXR_LOGI("nativeWriteColoredGlb: AO voxel grid %dx%dx%d, voxel %.3f mm",
+                    nx_g, ny_g, nz_g, voxel_size);
+        std::vector<uint8_t> occupancy(static_cast<size_t>(nx_g) * ny_g * nz_g, 0);
+        auto voxel_idx = [&](int ix, int iy, int iz) {
+            return (static_cast<size_t>(ix) * ny_g + iy) * nz_g + iz;
+        };
+        for (size_t i = 0; i + 2 < indices.size(); i += 3) {
+            const int i0 = indices[i + 0];
+            const int i1 = indices[i + 1];
+            const int i2 = indices[i + 2];
+            const float ax = positions[i0 * 3 + 0], ay = positions[i0 * 3 + 1], az = positions[i0 * 3 + 2];
+            const float bx = positions[i1 * 3 + 0], by = positions[i1 * 3 + 1], bz = positions[i1 * 3 + 2];
+            const float cx = positions[i2 * 3 + 0], cy = positions[i2 * 3 + 1], cz = positions[i2 * 3 + 2];
+            const float tmin_x = std::min(ax, std::min(bx, cx));
+            const float tmin_y = std::min(ay, std::min(by, cy));
+            const float tmin_z = std::min(az, std::min(bz, cz));
+            const float tmax_x = std::max(ax, std::max(bx, cx));
+            const float tmax_y = std::max(ay, std::max(by, cy));
+            const float tmax_z = std::max(az, std::max(bz, cz));
+            int lo_x = std::max(0, std::min(nx_g - 1, static_cast<int>((tmin_x - vminx) * inv_voxel)));
+            int lo_y = std::max(0, std::min(ny_g - 1, static_cast<int>((tmin_y - vminy) * inv_voxel)));
+            int lo_z = std::max(0, std::min(nz_g - 1, static_cast<int>((tmin_z - vminz) * inv_voxel)));
+            int hi_x = std::max(0, std::min(nx_g - 1, static_cast<int>((tmax_x - vminx) * inv_voxel)));
+            int hi_y = std::max(0, std::min(ny_g - 1, static_cast<int>((tmax_y - vminy) * inv_voxel)));
+            int hi_z = std::max(0, std::min(nz_g - 1, static_cast<int>((tmax_z - vminz) * inv_voxel)));
+            for (int xi = lo_x; xi <= hi_x; ++xi)
+                for (int yi = lo_y; yi <= hi_y; ++yi)
+                    for (int zi = lo_z; zi <= hi_z; ++zi)
+                        occupancy[voxel_idx(xi, yi, zi)] = 1;
+        }
+        const float start_bias = voxel_size * 0.6f;
+        std::vector<float> ao(v_count, 0.0f);
+        for (size_t v = 0; v < v_count; ++v) {
+            const size_t ni = v * 3;
+            const float nx = unit_normals[ni + 0];
+            const float ny = unit_normals[ni + 1];
+            const float nz = unit_normals[ni + 2];
+            // Tangent-bitangent frame: pick least-aligned axis as
+            // helper, cross-product into orthogonal basis.
+            float hx = 1.0f, hy = 0.0f, hz = 0.0f;
+            const float ax_ = std::fabs(nx), ay_ = std::fabs(ny), az_ = std::fabs(nz);
+            if (ay_ < ax_ && ay_ < az_) { hx = 0.0f; hy = 1.0f; hz = 0.0f; }
+            else if (az_ < ax_ && az_ < ay_) { hx = 0.0f; hy = 0.0f; hz = 1.0f; }
+            float tx = hy * nz - hz * ny;
+            float ty = hz * nx - hx * nz;
+            float tz = hx * ny - hy * nx;
+            const float tlen = std::sqrt(tx * tx + ty * ty + tz * tz);
+            if (tlen > 1e-12f) { tx /= tlen; ty /= tlen; tz /= tlen; }
+            const float bx_ = ny * tz - nz * ty;
+            const float by_ = nz * tx - nx * tz;
+            const float bz_ = nx * ty - ny * tx;
+            // Start position biased along the normal to avoid
+            // self-intersection with the surface voxel.
+            const float startx = positions[ni + 0] + nx * start_bias;
+            const float starty = positions[ni + 1] + ny * start_bias;
+            const float startz = positions[ni + 2] + nz * start_bias;
+            int hits = 0;
+            for (int r = 0; r < AO_RAYS; ++r) {
+                const float dx_l = AO_DIRS[r][0];
+                const float dy_l = AO_DIRS[r][1];
+                const float dz_l = AO_DIRS[r][2];
+                const float wdx = tx * dx_l + bx_ * dy_l + nx * dz_l;
+                const float wdy = ty * dx_l + by_ * dy_l + ny * dz_l;
+                const float wdz = tz * dx_l + bz_ * dy_l + nz * dz_l;
+                bool hit = false;
+                for (int s = 1; s <= AO_MARCH_STEPS; ++s) {
+                    const float t_step = static_cast<float>(s) * voxel_size;
+                    const float px = startx + wdx * t_step;
+                    const float py = starty + wdy * t_step;
+                    const float pz = startz + wdz * t_step;
+                    const int ix = static_cast<int>((px - vminx) * inv_voxel);
+                    const int iy = static_cast<int>((py - vminy) * inv_voxel);
+                    const int iz = static_cast<int>((pz - vminz) * inv_voxel);
+                    if (ix < 0 || ix >= nx_g || iy < 0 || iy >= ny_g || iz < 0 || iz >= nz_g) break;
+                    if (occupancy[voxel_idx(ix, iy, iz)]) { hit = true; break; }
+                }
+                if (hit) ++hits;
+            }
+            ao[v] = static_cast<float>(hits) / static_cast<float>(AO_RAYS);
+        }
+
+        // Mesh-local light directions (printer-frame: +X = bed-X,
+        // +Y = bed-front, +Z = up). Pre-normalized to unit length.
+        struct Light { float dx, dy, dz, intensity; };
+        constexpr Light KEY  = { 0.40f,  0.30f,  0.866f, 0.62f }; // upper-front-right
+        constexpr Light FILL = {-0.50f, -0.30f,  0.812f, 0.22f }; // upper-back-left
+        constexpr Light KICK = { 0.00f,  0.20f, -0.980f, 0.12f }; // weak underlight rim
+        constexpr float AMBIENT = 0.16f;
+        for (size_t v = 0; v < v_count; ++v) {
+            const size_t ni = v * 3;
+            const float nx = unit_normals[ni + 0];
+            const float ny = unit_normals[ni + 1];
+            const float nz = unit_normals[ni + 2];
+            const float key_term  = std::max(0.0f, nx * KEY.dx  + ny * KEY.dy  + nz * KEY.dz);
+            const float fill_term = std::max(0.0f, nx * FILL.dx + ny * FILL.dy + nz * FILL.dz);
+            const float kick_term = std::max(0.0f, nx * KICK.dx + ny * KICK.dy + nz * KICK.dz);
+            float shade = AMBIENT
+                        + KEY.intensity  * key_term
+                        + FILL.intensity * fill_term
+                        + KICK.intensity * kick_term;
+            shade *= (1.0f - AO_STRENGTH * ao[v]);
+            const float clamped = std::min(1.0f, std::max(0.0f, shade));
             colors[ni + 0] *= clamped;
             colors[ni + 1] *= clamped;
             colors[ni + 2] *= clamped;
         }
+        // Stats so we can confirm in logcat that AO is firing.
+        float ao_min = 1.0f, ao_max = 0.0f, ao_sum = 0.0f;
+        for (float a : ao) {
+            if (a < ao_min) ao_min = a;
+            if (a > ao_max) ao_max = a;
+            ao_sum += a;
+        }
+        ORCAXR_LOGI("nativeWriteColoredGlb: AO range %.3f..%.3f mean %.3f",
+                    ao_min, ao_max, ao_sum / static_cast<float>(v_count));
 
         // ---- Stream a minimal GLB.
         //

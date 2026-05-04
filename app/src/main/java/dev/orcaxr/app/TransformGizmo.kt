@@ -272,6 +272,19 @@ fun GizmoDragHandle(
     val gizmoScaleLive = rememberUpdatedState(gizmoScale)
 
     LaunchedEffect(session, filename) {
+        // Gotcha #11e/#22: when this handle is first composed during a
+        // 3MF load, the StlPreviewSceneEntity is still rebaking (gotcha
+        // #22 fires writeColoredGlb twice) and the SelectionBboxEntity
+        // is also attaching. Three GltfModelEntity.create calls (one
+        // per handle) racing in at the same time saturate Filament's
+        // material-instance binding queue and crash with
+        // `split_engine_bridge.cc:100 NOT_FOUND: unknown material
+        // instance id`. A 250 ms pre-create delay lets the heavier
+        // bake/attach traffic clear before the gizmo handles try to
+        // claim their own material slots. Keyed only on
+        // (session, filename), so this delay is paid once per handle
+        // per session, not on every recomposition.
+        kotlinx.coroutines.delay(250)
         val file = File(ctx.cacheDir, filename)
         if (!file.exists()) generate(file)
         val bytes = file.readBytes()
@@ -279,10 +292,20 @@ fun GizmoDragHandle(
         val model = GltfModel.create(session, bytes, uniqueName)
         val ent = GltfModelEntity.create(session, model)
         ent.parent = parentEntity
-        // Use scalar scale initially; the updater effect below handles the 
-        // non-uniform scale after a frame delay to avoid racing Filament.
+        // Use scalar scale initially; the updater effect below handles
+        // the non-uniform scale after a frame delay to avoid racing
+        // Filament.
         ent.setScale(WORLD_SCALE)
-        entity = ent
+        // Gotcha #11e: assigning `entity = ent` here triggers
+        // DisposableEffect(entity)'s ent.addComponent(ic) on the next
+        // recomposition — but Filament hasn't bound the freshly-created
+        // entity's material yet. Three awaitFrame() lets Filament
+        // settle before the IC attach, mirroring the fix in
+        // SelectionBboxEntity / GlbSceneEntity.
+        kotlinx.coroutines.android.awaitFrame()
+        kotlinx.coroutines.android.awaitFrame()
+        kotlinx.coroutines.android.awaitFrame()
+        if (!ent.isDisposed) entity = ent
     }
 
     LaunchedEffect(entity, gizmoScale) {
@@ -366,6 +389,19 @@ fun GizmoRotHandle(
     val gizmoScaleLive = rememberUpdatedState(gizmoScale)
 
     LaunchedEffect(session, filename) {
+        // Gotcha #11e/#22: when this handle is first composed during a
+        // 3MF load, the StlPreviewSceneEntity is still rebaking (gotcha
+        // #22 fires writeColoredGlb twice) and the SelectionBboxEntity
+        // is also attaching. Three GltfModelEntity.create calls (one
+        // per handle) racing in at the same time saturate Filament's
+        // material-instance binding queue and crash with
+        // `split_engine_bridge.cc:100 NOT_FOUND: unknown material
+        // instance id`. A 250 ms pre-create delay lets the heavier
+        // bake/attach traffic clear before the gizmo handles try to
+        // claim their own material slots. Keyed only on
+        // (session, filename), so this delay is paid once per handle
+        // per session, not on every recomposition.
+        kotlinx.coroutines.delay(250)
         val file = File(ctx.cacheDir, filename)
         if (!file.exists()) generate(file)
         val bytes = file.readBytes()
@@ -373,10 +409,20 @@ fun GizmoRotHandle(
         val model = GltfModel.create(session, bytes, uniqueName)
         val ent = GltfModelEntity.create(session, model)
         ent.parent = parentEntity
-        // Use scalar scale initially; the updater effect below handles the 
-        // non-uniform scale after a frame delay to avoid racing Filament.
+        // Use scalar scale initially; the updater effect below handles
+        // the non-uniform scale after a frame delay to avoid racing
+        // Filament.
         ent.setScale(WORLD_SCALE)
-        entity = ent
+        // Gotcha #11e: assigning `entity = ent` here triggers
+        // DisposableEffect(entity)'s ent.addComponent(ic) on the next
+        // recomposition — but Filament hasn't bound the freshly-created
+        // entity's material yet. Three awaitFrame() lets Filament
+        // settle before the IC attach, mirroring the fix in
+        // SelectionBboxEntity / GlbSceneEntity.
+        kotlinx.coroutines.android.awaitFrame()
+        kotlinx.coroutines.android.awaitFrame()
+        kotlinx.coroutines.android.awaitFrame()
+        if (!ent.isDisposed) entity = ent
     }
 
     LaunchedEffect(entity, gizmoScale) {
@@ -477,6 +523,19 @@ fun GizmoScaleHandle(
     val gizmoScaleLive = rememberUpdatedState(gizmoScale)
 
     LaunchedEffect(session, filename) {
+        // Gotcha #11e/#22: when this handle is first composed during a
+        // 3MF load, the StlPreviewSceneEntity is still rebaking (gotcha
+        // #22 fires writeColoredGlb twice) and the SelectionBboxEntity
+        // is also attaching. Three GltfModelEntity.create calls (one
+        // per handle) racing in at the same time saturate Filament's
+        // material-instance binding queue and crash with
+        // `split_engine_bridge.cc:100 NOT_FOUND: unknown material
+        // instance id`. A 250 ms pre-create delay lets the heavier
+        // bake/attach traffic clear before the gizmo handles try to
+        // claim their own material slots. Keyed only on
+        // (session, filename), so this delay is paid once per handle
+        // per session, not on every recomposition.
+        kotlinx.coroutines.delay(250)
         val file = File(ctx.cacheDir, filename)
         if (!file.exists()) generate(file)
         val bytes = file.readBytes()
@@ -484,10 +543,20 @@ fun GizmoScaleHandle(
         val model = GltfModel.create(session, bytes, uniqueName)
         val ent = GltfModelEntity.create(session, model)
         ent.parent = parentEntity
-        // Use scalar scale initially; the updater effect below handles the 
-        // non-uniform scale after a frame delay to avoid racing Filament.
+        // Use scalar scale initially; the updater effect below handles
+        // the non-uniform scale after a frame delay to avoid racing
+        // Filament.
         ent.setScale(WORLD_SCALE)
-        entity = ent
+        // Gotcha #11e: assigning `entity = ent` here triggers
+        // DisposableEffect(entity)'s ent.addComponent(ic) on the next
+        // recomposition — but Filament hasn't bound the freshly-created
+        // entity's material yet. Three awaitFrame() lets Filament
+        // settle before the IC attach, mirroring the fix in
+        // SelectionBboxEntity / GlbSceneEntity.
+        kotlinx.coroutines.android.awaitFrame()
+        kotlinx.coroutines.android.awaitFrame()
+        kotlinx.coroutines.android.awaitFrame()
+        if (!ent.isDisposed) entity = ent
     }
 
     LaunchedEffect(entity, gizmoScale) {

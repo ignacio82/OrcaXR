@@ -113,6 +113,16 @@ object StlPreviewGlb {
             }
         }
 
+        // Multiply the flat per-corner colors by a Lambert + voxel-AO
+        // shade. Without this the preview is a flat-yellow silhouette
+        // and the user can't see eye sockets / mouth grooves / finger
+        // gaps. See `BakedShading` for the recipe and gotcha #14 for
+        // why we bake into vertex colors instead of running runtime
+        // PBR + IBL.
+        val (aoMin, aoMax, aoMean) = BakedShading.bakeStlPreview(positions, colors)
+        android.util.Log.i("OrcaXR/preview", "shade bake: AO min=%.3f max=%.3f mean=%.3f"
+            .format(aoMin, aoMax, aoMean))
+
         GlbBuilder(
             positions = positions,
             indices = indices,
