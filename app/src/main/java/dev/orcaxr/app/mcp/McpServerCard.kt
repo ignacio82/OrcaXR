@@ -28,10 +28,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.ClipboardManager
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.Clipboard
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -76,7 +76,15 @@ fun McpServerCard(
     val controller = remember { McpController.get(context) }
     val settings = remember { controller.settings() }
     val scope = rememberCoroutineScope()
-    val clipboard: ClipboardManager = LocalClipboardManager.current
+    val clipboard: Clipboard = LocalClipboard.current
+
+    fun copyToClipboard(text: String) {
+        scope.launch {
+            clipboard.setClipEntry(
+                ClipEntry(android.content.ClipData.newPlainText("OrcaXR", text)),
+            )
+        }
+    }
 
     val enabled by settings.enabled.collectAsState(initial = false)
     val port by settings.port.collectAsState(initial = McpSettings.DEFAULT_PORT)
@@ -165,7 +173,7 @@ fun McpServerCard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 2.dp)
-                                .clickable { clipboard.setText(AnnotatedString(url)) },
+                                .clickable { copyToClipboard(url) },
                         ) {
                             Text(
                                 url,
@@ -218,7 +226,7 @@ fun McpServerCard(
                     ) { Text(if (showKey) "Hide" else "Show") }
                     OutlinedButton(
                         onClick = {
-                            keyValue?.let { clipboard.setText(AnnotatedString(it)) }
+                            keyValue?.let { copyToClipboard(it) }
                         },
                         enabled = keyValue != null,
                         shape = RoundedCornerShape(8.dp),
@@ -239,7 +247,7 @@ fun McpServerCard(
                             // handles ACTION_SEND, weird OEM gap, etc.),
                             // the toast tells the user the snippet is
                             // already on the clipboard.
-                            clipboard.setText(AnnotatedString(snippet))
+                            copyToClipboard(snippet)
                             onRequestHomeSpaceMode?.invoke()
                             val send = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"

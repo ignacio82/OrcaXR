@@ -238,18 +238,22 @@ class McpController private constructor(
             // so paint_template can dispatch by name.
             for (t in PaintTemplateTools.all(WorkspaceModel.get(), ctx, aiPaintTools)) builder.tool(t)
             // D18c — vision LLM feature anchors. Requires an
-            // Anthropic API key set via McpSettings.
-            builder.tool(FindFeatureAnchorsTool(WorkspaceModel.get(), AiSessionState.get(), settings.anthropicApiKey))
+            // Anthropic key from EITHER McpSettings (legacy) or the
+            // user's in-app LlmSettings card. The LlmSettings flow
+            // unifies both stores so a key entered in either UI works.
+            val claudeKeyFlow = dev.orcaxr.app.llm.LlmSettings
+                .get(ctx.appContext).unifiedClaudeKey
+            builder.tool(FindFeatureAnchorsTool(WorkspaceModel.get(), AiSessionState.get(), claudeKeyFlow))
             // D19c — decal / texture projection (single undo step
             // via LoadPaintState). No outbound deps.
             builder.tool(PaintDecalTool(WorkspaceModel.get(), AiSessionState.get()))
             // D19a + D19d — vision-LLM driven 2D mask authoring.
             // Both share the FindFeatureAnchorsTool's API-key flow.
             builder.tool(AiVisionMaskTools.GenerateMaskFromPoint(
-                WorkspaceModel.get(), AiSessionState.get(), settings.anthropicApiKey,
+                WorkspaceModel.get(), AiSessionState.get(), claudeKeyFlow,
             ))
             builder.tool(AiVisionMaskTools.GetMaskForText(
-                WorkspaceModel.get(), AiSessionState.get(), settings.anthropicApiKey,
+                WorkspaceModel.get(), AiSessionState.get(), claudeKeyFlow,
             ))
         }
     }

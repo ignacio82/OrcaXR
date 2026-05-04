@@ -937,6 +937,10 @@ private fun XrShell(
     // via the TopNavigationPill's Help icon; renders as a side
     // SpatialPanel showing every binding the input pump consumes.
     var helpShown by remember { mutableStateOf(false) }
+    // Optional in-app LLM assistant. Toggled from the AI assistant
+    // card in Devices once a provider key is set; renders the chat
+    // SpatialPanel on the right side of the workspace.
+    var assistantShown by remember { mutableStateOf(false) }
     // Roadmap D4 — emboss panel target. When non-null, the EmbossPanel
     // SpatialPanel is rendered next to the project list and operates on
     // the named PlacedModel. Set by the per-row Emboss icon; cleared on
@@ -1667,7 +1671,34 @@ private fun XrShell(
     fun onFileSelected(file: File) {
         val mode = pickerMode
         showFilePicker = false
+        // Guard against re-entry. Without this, tapping a recent file
+        // multiple times before the loading panel appears (the first
+        // tap kicks off ~5 s of read3mfObjectMetadata before the panel
+        // shows) launches a coroutine PER TAP — each doing the full
+        // expensive 3MF parse, fighting over placedModels assignment,
+        // and eventually crashing the SceneCore material binder when
+        // both finish near-simultaneously. The same guard covers
+        // accidental long-press / multi-finger pinches.
+        if (isLoadingModel) {
+            android.util.Log.i(
+                "OrcaXR/recents",
+                "onFileSelected ignored — already loading: ${file.name}",
+            )
+            return
+        }
+        // Flip the loading flag SYNCHRONOUSLY (before scope.launch) so
+        // the on-bed loading panel + project-row spinner appear on the
+        // very next composition, not 5 s later after the first 3MF
+        // parse fires read3mfObjectMetadata. The whole scope.launch
+        // body sits inside a try/finally below so every return path
+        // (AddVolume early-return, error paths, normal completion)
+        // clears the flag — keeping the re-entry guard's invariant
+        // tight: isLoadingModel is true from the moment a tap is
+        // registered until the load fully resolves.
+        isLoadingModel = true
+        loadingLabel = file.name
         scope.launch {
+            try {
             val label = file.name
             // Phase XR_OBJ_4 — AddVolume mode attaches the picked
             // file to the SELECTED PlacedModel as a new volume of
@@ -1864,23 +1895,19 @@ private fun XrShell(
             }
             sliceState.value = SliceUiState.Idle
             workspaceMode = WorkspaceMode.Prepare
-            // Spinner in the Project panel's model row + a transient
-            // toast so the user has feedback the moment they pick a
-            // file. Both clear once the preview GLB lands on disk.
-            isLoadingModel = true
-            loadingLabel = label
+            // Toast still fires here so the user gets a transient
+            // confirmation; the persistent on-bed loading panel +
+            // project-row spinner driven by `isLoadingModel` were
+            // already raised at the top of `onFileSelected` (before
+            // the coroutine even started) so there's no panel-delay
+            // gap to bridge anymore.
             android.widget.Toast.makeText(
                 ctx,
                 "Loading $label…",
                 android.widget.Toast.LENGTH_SHORT,
             ).show()
-            try {
-                for (m in freshList) {
-                    previewStl(m.id)
-                }
-            } finally {
-                isLoadingModel = false
-                loadingLabel = null
+            for (m in freshList) {
+                previewStl(m.id)
             }
             // Roadmap B7 — bump the recents list AFTER a successful
             // load so a corrupt/unparseable file doesn't pollute the
@@ -1889,6 +1916,16 @@ private fun XrShell(
             // surface as a load failure.
             runCatching { recentFiles.add(file, label = label) }
                 .onFailure { android.util.Log.w("OrcaXR/recents", "recentFiles.add failed: ${it.message}") }
+            } finally {
+                // Always clear the flag — covers the AddVolume early
+                // returns above, exception paths, and the normal
+                // completion path. The re-entry guard at the top of
+                // onFileSelected reads this flag, so leaving it stuck
+                // would lock the user out of every subsequent file
+                // load until app restart.
+                isLoadingModel = false
+                loadingLabel = null
+            }
         }
     }
 
@@ -5040,6 +5077,26 @@ private fun XrShell(
                                 }
                             } else null
                         },
+                        // One-tap "remove all color paint". Mirrors the
+                        // MCP `clear_paint kind=color` so an LLM saying
+                        // "unpaint" / "paint white" lands the same state
+                        // as the in-XR button. Routes through
+                        // applyPaintMutation so PaintHistory captures it
+                        // (paint_undo restores) and the colored-GLB
+                        // rebake fires via paintContentVersion.
+                        hasColorPaint = hasAnyPaint(selectedModel?.paintFilamentIndex),
+                        onClearColorPaint = run {
+                            paintHistoryVersion  // observe
+                            val sel = selectedModel
+                            if (sel != null && hasAnyPaint(sel.paintFilamentIndex)) {
+                                {
+                                    applyPaintMutation(sel.id, paintHistory) { m ->
+                                        m.copy(paintFilamentIndex = null)
+                                    }
+                                    paintHistoryVersion++
+                                }
+                            } else null
+                        },
                         paintMaxSlots = slotCount.coerceAtLeast(1),
                         // Resolved colors per paint slot — what each
                         // tagged region will physically print as,
@@ -5618,6 +5675,23 @@ private fun XrShell(
                         },
                     )
                 }
+
+                // (Reverted 2026-05-04: an on-bed loading SpatialPanel
+                // gated on `isLoadingModel` lived here briefly, but its
+                // mount/unmount on the loading-flag flip created a
+                // SceneCoreEntity that competed with Filament's
+                // material-instance binder during the
+                // model-preview rebake — gotcha #13. Three colored-GLB
+                // bakes plus the loading panel's on/off cycle pushed
+                // material-id allocations into races
+                // (`split_engine_bridge.cc:100 NOT_FOUND: unknown
+                // material instance id`). Loading feedback now ships
+                // via the existing transient toast + the project-row
+                // spinner ONLY; both are 2D Compose surfaces and don't
+                // touch Filament's scene graph. If we want on-bed
+                // feedback later, the safe path is a static
+                // GltfModelEntity that's authored once and toggled
+                // via setHidden, not a SpatialPanel that disposes.)
 
                 // Plate switching panel
                 MovablePanelWrapper(
@@ -6370,6 +6444,30 @@ private fun XrShell(
                             onRequestHomeSpaceMode = {
                                 runCatching { session.scene.requestHomeSpaceMode() }
                             },
+                            onOpenAssistant = { assistantShown = true },
+                        )
+                    }
+                }
+
+                if (assistantShown) {
+                    // Optional in-app LLM assistant — chat panel that
+                    // routes through whichever provider the user
+                    // configured in Devices → AI assistant. Mounted
+                    // as its own SpatialPanel so it floats next to the
+                    // workspace and can stay open while the user
+                    // continues editing models.
+                    MovablePanelWrapper(
+                        id = "llm-assistant",
+                        width = 540.dp,
+                        height = 720.dp,
+                        initialOffset = androidx.xr.runtime.math.Vector3(-0.85f, 0.05f, -0.05f),
+                        session = session,
+                    ) {
+                        dev.orcaxr.app.llm.LlmAssistantPanel(
+                            onClose = { assistantShown = false },
+                            onRequestHomeSpaceMode = {
+                                runCatching { session.scene.requestHomeSpaceMode() }
+                            },
                         )
                     }
                 }
@@ -6682,28 +6780,44 @@ private fun XrShell(
                             }
                         } else if (selectedList.size == 1) {
                             val selected = selectedList.first()
-                            key(selected.id) {
-                                TransformGizmo(
-                                    session = session,
-                                    parentEntity = workspaceEntity,
-                                    selectedModel = selected,
-                                    workspaceTx = workspaceTx,
-                                    tool = if (paintBrush.mode != PaintMode.Off) GizmoTool.Select else gizmoTool,
-                                    liveOverride = liveDragOverride
-                                        ?.takeIf { (ids, _) -> selected.id in ids }
-                                        ?.second,
-                                    onLivePreview = { ov ->
-                                        liveDragOverride =
-                                            if (ov == null) null
-                                            else setOf(selected.id) to ov
-                                    },
-                                    onCommit = { ov ->
-                                        liveDragOverride = null
-                                        placedModels = placedModels.map { m ->
-                                            if (m.id == selected.id) applyOverride(m, ov) else m
-                                        }
-                                    },
-                                )
+                            // Defer composing the gizmo until the model has
+                            // a preview GLB on disk. While a 3MF is loading,
+                            // the StlPreview rebake (gotcha #22 fires it
+                            // twice) + SelectionBbox attach already saturate
+                            // Filament's material-instance binding queue
+                            // (gotcha #11e). Three GizmoDragHandle entities
+                            // racing in on top of that crashed
+                            // `split_engine_bridge.cc:100 NOT_FOUND: unknown
+                            // material instance id` even with the per-handle
+                            // 3-awaitFrame gate. Withholding the gizmo
+                            // composition until previewPath is non-null
+                            // lets the heavier loads settle first; the user
+                            // can't usefully drag a gizmo on an invisible
+                            // model anyway.
+                            if (selected.previewPath != null) {
+                                key(selected.id) {
+                                    TransformGizmo(
+                                        session = session,
+                                        parentEntity = workspaceEntity,
+                                        selectedModel = selected,
+                                        workspaceTx = workspaceTx,
+                                        tool = if (paintBrush.mode != PaintMode.Off) GizmoTool.Select else gizmoTool,
+                                        liveOverride = liveDragOverride
+                                            ?.takeIf { (ids, _) -> selected.id in ids }
+                                            ?.second,
+                                        onLivePreview = { ov ->
+                                            liveDragOverride =
+                                                if (ov == null) null
+                                                else setOf(selected.id) to ov
+                                        },
+                                        onCommit = { ov ->
+                                            liveDragOverride = null
+                                            placedModels = placedModels.map { m ->
+                                                if (m.id == selected.id) applyOverride(m, ov) else m
+                                            }
+                                        },
+                                    )
+                                }
                             }
                         }
                     }

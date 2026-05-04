@@ -357,5 +357,14 @@ class McpServer internal constructor(
         fun serverVersion(v: String): Builder { version = v; return this }
 
         fun build(): McpServer = McpServer(registry, token, name, version)
+
+        /**
+         * Read-only view of the tools registered so far. Used by the
+         * in-app LLM assistant (see `LlmToolBridge`) so it can reuse
+         * `McpController.registerAllTools` without ever booting an
+         * actual server. Returns a snapshot — mutating the builder
+         * after this call won't be reflected.
+         */
+        fun peekRegisteredTools(): List<Tool> = registry.list()
     }
 }

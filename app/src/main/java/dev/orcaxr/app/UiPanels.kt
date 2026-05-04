@@ -23,6 +23,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.CircleShape
@@ -3469,6 +3473,15 @@ fun TopNavigationPill(
     /** Paint full-feature-parity (Undo/Redo) — redo last undone paint
      *  stroke on the selected model. Null = no redo available. */
     onPaintRedo: (() -> Unit)? = null,
+    /** Wipe ALL color paint on the selected model in one tap, returning
+     *  it to the unpainted state. Different from the eraser swatch
+     *  (which clears triangles touched by the brush) — this nukes the
+     *  whole paintFilamentIndex. Routes through PaintHistory so it's
+     *  undoable. Null = no model selected / nothing to clear. */
+    onClearColorPaint: (() -> Unit)? = null,
+    /** True when the selected model has any color paint authored. Used
+     *  to grey out the Clear-all button when there's nothing to wipe. */
+    hasColorPaint: Boolean = false,
     paintMaxSlots: Int = 4,
     /**
      * Resolved "as will print" colors for paint slots 1..[paintMaxSlots]
@@ -3526,7 +3539,7 @@ fun TopNavigationPill(
                     if (onToggleHelp != null) {
                         NavAction(
                             label = "Help",
-                            icon = androidx.compose.material.icons.Icons.Default.HelpOutline,
+                            icon = androidx.compose.material.icons.Icons.AutoMirrored.Filled.HelpOutline,
                             isSelected = helpShown,
                             enabled = true,
                             onClick = onToggleHelp,
@@ -3722,7 +3735,7 @@ fun TopNavigationPill(
                     Spacer(Modifier.width(8.dp))
                     NavAction(
                         label = "Undo",
-                        icon = androidx.compose.material.icons.Icons.Default.Undo,
+                        icon = androidx.compose.material.icons.Icons.AutoMirrored.Filled.Undo,
                         isSelected = false,
                         enabled = onPaintUndo != null,
                         onClick = { onPaintUndo?.invoke() },
@@ -3730,10 +3743,24 @@ fun TopNavigationPill(
                     Spacer(Modifier.width(4.dp))
                     NavAction(
                         label = "Redo",
-                        icon = androidx.compose.material.icons.Icons.Default.Redo,
+                        icon = androidx.compose.material.icons.Icons.AutoMirrored.Filled.Redo,
                         isSelected = false,
                         enabled = onPaintRedo != null,
                         onClick = { onPaintRedo?.invoke() },
+                    )
+                    // One-tap "remove all color paint" — different from
+                    // the eraser swatch (which clears triangles touched
+                    // by the brush). This wipes the whole `paintFilamentIndex`
+                    // for the selected model so the body comes out as
+                    // its default extruder again. Greyed out when nothing
+                    // is painted.
+                    Spacer(Modifier.width(4.dp))
+                    NavAction(
+                        label = "Clear all",
+                        icon = androidx.compose.material.icons.Icons.Default.DeleteOutline,
+                        isSelected = false,
+                        enabled = onClearColorPaint != null && hasColorPaint,
+                        onClick = { onClearColorPaint?.invoke() },
                     )
                 }
             }
@@ -4282,6 +4309,11 @@ fun PrinterPanel(
      *  parameter — escape hatch for the Share button so the system share
      *  sheet renders on Galaxy XR. */
     onRequestHomeSpaceMode: (() -> Unit)? = null,
+    /** Toggle the in-app LLM assistant SpatialPanel
+     *  ([dev.orcaxr.app.llm.LlmAssistantPanel]). Null disables the
+     *  AI-assistant card entirely (e.g. flat-shell builds where the
+     *  panel host hasn't been wired). */
+    onOpenAssistant: (() -> Unit)? = null,
 ) {
     var editingId by remember { mutableStateOf<String?>(null) }
     var addOpen by remember { mutableStateOf(printers.isEmpty()) }
@@ -4317,6 +4349,19 @@ fun PrinterPanel(
             // automation.
             dev.orcaxr.app.mcp.McpServerCard(onRequestHomeSpaceMode = onRequestHomeSpaceMode)
             Spacer(Modifier.height(12.dp))
+
+            // Optional in-app LLM assistant. Lets the user enter an
+            // API key for Claude / Gemini / OpenAI and chat with the
+            // model from inside the headset (text or voice). The
+            // assistant talks to the same MCP tool registry the
+            // McpServerCard exposes externally — adding a key here
+            // also unlocks vision-LLM features (find_feature_anchors,
+            // generate_mask_from_point) that previously required a
+            // separate setAnthropicApiKey call.
+            if (onOpenAssistant != null) {
+                dev.orcaxr.app.llm.LlmAssistantCard(onOpenAssistant = onOpenAssistant)
+                Spacer(Modifier.height(12.dp))
+            }
 
             // Discovery row. Scan toggles _snapmaker._tcp browsing on
             // the LAN; results show up below as tap-to-add cards. The
@@ -6262,7 +6307,7 @@ private fun RecentFileRow(entry: RecentFile, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = Icons.Filled.InsertDriveFile,
+                imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
                 contentDescription = null,
                 tint = Color(0xFF7BC8FF),
             )
