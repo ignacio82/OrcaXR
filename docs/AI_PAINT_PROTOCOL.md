@@ -36,6 +36,70 @@ no mesh-mutating action runs**. The mutating actions are:
 all paint state (see GEMINI.md gotchas #21, #27, #28). Re-fetch
 `get_model_geometry` after any of them.
 
+## Headless paint sessions (C9 M4)
+
+Every live-path paint call triggers a colored-GLB rebake + scene
+entity swap in OrcaXR. Fine for one brush stamp, prohibitive for a
+30-step LLM refinement loop (each rebake interrupts the user's XR
+view and fills its own undo step).
+
+**A paint session is a private scratch buffer** owning a copy of
+the model's paint arrays. Paint primitives with `session_id`
+mutate the session in-place (no scene rebake, no undo emission);
+render tools with `session_id` read paint from the session.
+`commit_paint_session` atomically replaces live paint in ONE
+rebake = ONE undo step regardless of how many primitives ran;
+`discard_paint_session` drops the session, live model untouched.
+
+Open a session whenever you expect more than ~3 paint primitives
+on the same model. Live path is fine for one-shot edits.
+
+**Tool surface:**
+
+| Tool | Purpose |
+|---|---|
+| `begin_paint_session` | Open a session over a model; returns `session_id` |
+| `commit_paint_session` | Replace live paint with session paint in one rebake / one undo |
+| `discard_paint_session` | Drop a session without committing |
+| `list_paint_sessions` | Enumerate open sessions (LRU cap = 8) |
+| `get_paint_session_diff` | Per-kind tag histogram + base/current fingerprint |
+
+**Routing the optional `session_id` arg:**
+
+- All eight spatial paint tools (`paint_sphere`, `paint_slab`,
+  `paint_normal_cone`, `paint_surface_region`,
+  `paint_connected_component`, `paint_triangle_list`,
+  `paint_projected_mask`, `paint_geodesic_disc`) accept
+  `session_id`. With it set: in-process mutation, `painted_count`
+  is reported but no `WorkspaceAction` is emitted.
+- `paint_with_mirror` passes `session_id` through verbatim — pass
+  it inside `inner.arguments` and both the original and the
+  mirrored pass land in the same session.
+- Render tools (`render_view`, `render_paint_overlay`,
+  `render_views_grid`, `render_montage`) accept `session_id`. The
+  render reads paint from the session's scratch buffer; the
+  artifact cache key incorporates `(session_id, version)` so
+  re-rendering after any session paint mutation always misses
+  cache. (`render_triangle_id_map` doesn't depend on paint state
+  so it ignores `session_id`.)
+- `merge='only_unpainted'` and `merge='only_tagged'` evaluate
+  against the **session's** current state — chained refinement
+  inside one session composes correctly without `flush_actions`.
+
+**Triangle ID stability inside a session:** sessions assume the
+mesh is unchanged. Calling `repair_model` / `cut_model` /
+`mesh_boolean` / `split_model` / `emboss_model` / `simplify_model`
+/ `add_volume` / `remove_volume` mid-session invalidates triangle
+indices; subsequent session paint and `commit_paint_session`
+return `isError: true` reporting the tri-count drift. On error,
+discard the session and start a new one.
+
+**Memory budget:** each session owns a copy of all four paint
+arrays (color / support / seam / fuzzy). On a 1.4 M-tri mesh that's
+~5.6 MB per session; the LRU caps at 8 (≈ 45 MB total). Older
+sessions evict silently if you exceed the cap; check with
+`list_paint_sessions`.
+
 ## Tool surface
 
 ### Vision (M2 + D18 + D19 + D21)
@@ -100,10 +164,15 @@ Every spatial paint tool accepts the same paint plumbing args:
   0..1 for fuzzy skin)
 - `merge`: `"replace"` (default) | `"only_unpainted"` |
   `"only_tagged"` (with `where_tag`)
+- `session_id` (optional): route the paint into a headless session
+  instead of the live model. See "Headless paint sessions" above.
 
-Each call emits a single `WorkspaceAction.PaintTriangleSet` ⇒ one
-`paint_undo` step regardless of how many triangles got painted (an
-80 K-tri projected-mask paint is one undo).
+Each live-path call emits a single
+`WorkspaceAction.PaintTriangleSet` ⇒ one `paint_undo` step
+regardless of how many triangles got painted (an 80 K-tri
+projected-mask paint is one undo). Session-routed calls don't
+emit `paint_undo` events at all — `commit_paint_session` produces
+exactly one undo step covering the whole session.
 
 ### Introspection (M3 + D19)
 
@@ -164,6 +233,34 @@ segment.
 9. `render_views_grid { view_names: ["front","back","left","right"] }`
    → confirm symmetry.
 
+## Workflow: iterative refinement with sessions
+
+For multi-step LLM work (5+ paint primitives per model), wrap the
+loop in a session so the user's spatial scene only updates once:
+
+1. `begin_paint_session { model_id }` → grab `session_id`.
+2. Plan + execute paint primitives, **all passing `session_id`**.
+   Renders also pass `session_id` so verification reflects the
+   in-progress session state, not the live model.
+3. After each step: `render_view { session_id, view_name }` (or
+   `render_views_grid`) to verify. If wrong, paint again with
+   different args — there's no `paint_undo` inside a session, but
+   `merge='replace'` over the same triangles is the equivalent.
+4. Optional sanity check: `get_paint_session_diff { session_id }`
+   for a coverage histogram (how many tris on each tag, broken
+   down by kind).
+5. When happy: `commit_paint_session { session_id }` →
+   atomically replaces live paint, fires one rebake, one undo
+   step. The session is auto-discarded on success.
+6. If the iteration went off the rails:
+   `discard_paint_session { session_id }` → live model untouched.
+
+Triangle IDs from `get_model_geometry` are stable for the
+session's lifetime as long as no mesh-mutating action runs (see
+the stability section above). If you need to repair / cut /
+boolean / split / emboss / simplify / edit volumes mid-session,
+discard first.
+
 ## Hard rules for the LLM
 
 - Do not call `slice_active_plate` or `save_*` unless the user
@@ -174,6 +271,12 @@ segment.
   triangle IDs are invalidated.
 - Tools return `isError: true` for "the tool ran and failed"
   cases; respect that and re-plan.
+- When you expect to paint more than ~3 primitives on the same
+  model, open a `begin_paint_session` first. Always close
+  sessions with `commit_paint_session` or
+  `discard_paint_session` — leaving them open wastes the LRU
+  slot (cap = 8). Don't run mesh-mutating actions while a session
+  is open against the same model.
 
 ## Recovery patterns
 
@@ -183,6 +286,9 @@ segment.
 | `paint_*` returns isError "Couldn't build a paint BVH" | Source mesh missing or unreadable | `get_model_geometry` should also fail — check `list_placed_models` |
 | `tri_id` invalid after a mesh edit | Mesh-mutating action ran | Re-fetch `get_model_geometry`, re-issue `get_model_semantic_regions` |
 | `paint_projected_mask` paints both sides of a thin wall | `depth_mode: "all_hits"` was used | Re-do with `front_facing_only` |
+| `paint_*` (with `session_id`) errors "Session ... tri_count=N" | Mesh-mutating action ran mid-session | `discard_paint_session`, `get_model_geometry`, `begin_paint_session` again |
+| `commit_paint_session` reports `noop: true` | Session never mutated | Expected when you discard before painting; otherwise something silently rejected the mutations — re-check args |
+| `begin_paint_session` returns "Couldn't build a paint BVH" | Same as live path; BVH not ready | Wait one tool call, retry — the LLM rarely hits this on a model that's been on the bed |
 
 ## Reference
 

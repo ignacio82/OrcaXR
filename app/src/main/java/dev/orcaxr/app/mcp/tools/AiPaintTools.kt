@@ -4,6 +4,7 @@ import dev.orcaxr.app.AiPaintEngine
 import dev.orcaxr.app.MAX_PAINT_SLOTS
 import dev.orcaxr.app.MeshBvh
 import dev.orcaxr.app.PlacedModel
+import dev.orcaxr.app.mcp.AiPaintSession
 import dev.orcaxr.app.mcp.Schemas
 import dev.orcaxr.app.mcp.Tool
 import dev.orcaxr.app.mcp.ToolResult
@@ -317,7 +318,25 @@ internal object AiPaintTools {
             ?: return Either.Left(ToolResult.error(
                 "Couldn't build a paint BVH for '$id'. Make sure the model has loaded successfully.",
             ))
-        return Either.Right(Plan(model, kind, merge, tag, whereTag, bvh))
+
+        // C9 milestone 4 — optional session_id routes the paint into a
+        // headless scratch buffer instead of the live model. Mismatched
+        // session/model fails closed (the LLM probably has the wrong
+        // session id).
+        val session = when (val r = PaintSessionTools.resolveSession(args, id)) {
+            PaintSessionTools.SessionResolution.NotRequested -> null
+            is PaintSessionTools.SessionResolution.Found -> r.session
+            is PaintSessionTools.SessionResolution.Error ->
+                return Either.Left(ToolResult.error(r.message))
+        }
+        if (session != null && session.triCount != bvh.triCount) {
+            return Either.Left(ToolResult.error(
+                "Session ${session.id} was opened with tri_count=${session.triCount} but the live " +
+                    "model now has tri_count=${bvh.triCount}. A mesh-mutating action invalidated " +
+                    "this session — call discard_paint_session and start a new one.",
+            ))
+        }
+        return Either.Right(Plan(model, kind, merge, tag, whereTag, bvh, session))
     }
 
     private data class Plan(
@@ -327,6 +346,9 @@ internal object AiPaintTools {
         val tag: Int,
         val whereTag: Int,
         val bvh: MeshBvh,
+        /** When non-null, paint flows into the session's scratch
+         *  ByteArray and no [WorkspaceAction] is emitted. */
+        val session: AiPaintSession?,
     )
 
     private sealed interface Either<out L, out R> {
@@ -337,12 +359,17 @@ internal object AiPaintTools {
     /** Apply the merge filter without mutating: returns the indices
      *  that would actually be painted (i.e. those whose current tag
      *  matches the merge predicate). Used to compute `painted_count`
-     *  for the tool response. */
+     *  for the tool response.
+     *
+     *  When the plan targets a session, the filter reads the session's
+     *  scratch buffer instead of the live model so chained
+     *  only_unpainted / only_tagged calls inside a session compose
+     *  correctly. */
     private fun applyMergeFilter(
         candidates: IntArray,
         plan: Plan,
     ): IntArray {
-        val arr = arrayFor(plan.model, plan.kind)
+        val arr = plan.session?.arrayFor(plan.kind) ?: arrayFor(plan.model, plan.kind)
         if (arr == null) {
             // No prior paint of this kind. OnlyTagged with where_tag=0
             // matches everything; OnlyUnpainted matches everything;
@@ -366,7 +393,12 @@ internal object AiPaintTools {
      *  array (capped at [MAX_INDICES_RETURNED]); when false (the
      *  default) we omit the array entirely to keep responses small —
      *  most LLM workflows verify with `paint_coverage_summary` /
-     *  `get_paint_summary` instead of consuming raw indices. */
+     *  `get_paint_summary` instead of consuming raw indices.
+     *
+     *  Session-aware: when [Plan.session] is non-null the merge +
+     *  apply happens against the session's scratch buffer in-process
+     *  (no [WorkspaceAction] emitted, no scene rebake). The response
+     *  body's [`session_id`] field signals the headless path. */
     private suspend fun emitAndRespond(
         ws: WorkspaceModel,
         plan: Plan,
@@ -377,17 +409,30 @@ internal object AiPaintTools {
     ): ToolResult {
         val matched = candidates.size
         val effective = applyMergeFilter(candidates, plan)
-        val painted = effective.size
-        ws.emit(
-            WorkspaceAction.PaintTriangleSet(
-                modelId = plan.model.id,
+        val painted: Int
+        val session = plan.session
+        if (session != null) {
+            // Headless path: mutate session in place.
+            painted = session.applyTriangleSet(
                 kind = plan.kind,
-                triangleIndices = effective,
+                indices = effective,
                 tag = plan.tag,
                 mergeMode = plan.merge,
                 whereTag = plan.whereTag,
-            ),
-        )
+            )
+        } else {
+            painted = effective.size
+            ws.emit(
+                WorkspaceAction.PaintTriangleSet(
+                    modelId = plan.model.id,
+                    kind = plan.kind,
+                    triangleIndices = effective,
+                    tag = plan.tag,
+                    mergeMode = plan.merge,
+                    whereTag = plan.whereTag,
+                ),
+            )
+        }
         val body = JSONObject().apply {
             put("ok", true)
             put("model_id", plan.model.id)
@@ -398,6 +443,11 @@ internal object AiPaintTools {
             put("triangle_count", matched)
             put("painted_count", painted)
             put("total_triangle_count", plan.bvh.triCount)
+            if (session != null) {
+                put("session_id", session.id)
+                put("session_version", session.version)
+                put("session_total_actions", session.totalActions)
+            }
             if (returnIndices) {
                 val truncated = effective.size > MAX_INDICES_RETURNED
                 val sample = if (truncated) effective.copyOfRange(0, MAX_INDICES_RETURNED) else effective
@@ -411,7 +461,8 @@ internal object AiPaintTools {
                 put(k, extra.get(k))
             }
         }
-        val text = "$humanLabel — matched $matched tris, painting $painted on ${plan.model.label} " +
+        val sessionTag = if (session != null) " [session=${session.id}]" else ""
+        val text = "$humanLabel$sessionTag — matched $matched tris, painting $painted on ${plan.model.label} " +
             "(${plan.kind.name.lowercase()} tag=${plan.tag}, merge=${plan.merge.name.lowercase()})"
         return ToolResult.ok(text, body)
     }
@@ -423,6 +474,18 @@ internal object AiPaintTools {
      *  in per call. */
     private fun returnIndicesFlag(args: JSONObject): Boolean =
         args.optBoolean("return_indices", false)
+
+    /** Shared schema fragment for the session_id arg. Added to every
+     *  paint primitive: when present, the paint mutates the named
+     *  session's scratch buffer instead of the live model (no
+     *  WorkspaceAction emit, no scene rebake). See
+     *  [PaintSessionTools] / [AiPaintSessionStore]. */
+    internal val SESSION_ID_SCHEMA: JSONObject = Schemas.string(
+        "Optional headless paint session id (from begin_paint_session). " +
+            "When present, this paint mutates the session's scratch buffer instead of the live " +
+            "model — no GLB rebake, no scene-entity swap. Commit with commit_paint_session for " +
+            "an atomic one-rebake apply, or discard_paint_session to drop.",
+    )
 
     // ---- Tools ----
 
@@ -455,6 +518,7 @@ internal object AiPaintTools {
                 "where_tag" to Schemas.integer("Required when merge='only_tagged'"),
                 "return_indices" to Schemas.bool("If true, response includes triangle_indices array (capped at 4096). Default false to keep responses small — verify with paint_coverage_summary instead."),
                 "back_face_filter" to Schemas.bool("Reject triangles whose normal faces the sphere center (default false)"),
+                "session_id" to SESSION_ID_SCHEMA,
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
@@ -508,6 +572,7 @@ internal object AiPaintTools {
                 "merge" to Schemas.string("'replace' (default) | 'only_unpainted' | 'only_tagged'"),
                 "where_tag" to Schemas.integer("Required when merge='only_tagged'"),
                 "return_indices" to Schemas.bool("If true, response includes triangle_indices array (capped at 4096). Default false to keep responses small — verify with paint_coverage_summary instead."),
+                "session_id" to SESSION_ID_SCHEMA,
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
@@ -573,6 +638,7 @@ internal object AiPaintTools {
                 "merge" to Schemas.string("'replace' (default) | 'only_unpainted' | 'only_tagged'"),
                 "where_tag" to Schemas.integer("Required when merge='only_tagged'"),
                 "return_indices" to Schemas.bool("If true, response includes triangle_indices array (capped at 4096). Default false to keep responses small — verify with paint_coverage_summary instead."),
+                "session_id" to SESSION_ID_SCHEMA,
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
@@ -650,6 +716,7 @@ internal object AiPaintTools {
                 "merge" to Schemas.string("'replace' (default) | 'only_unpainted' | 'only_tagged'"),
                 "where_tag" to Schemas.integer("Required when merge='only_tagged'"),
                 "return_indices" to Schemas.bool("If true, response includes triangle_indices array (capped at 4096). Default false to keep responses small — verify with paint_coverage_summary instead."),
+                "session_id" to SESSION_ID_SCHEMA,
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
@@ -703,6 +770,7 @@ internal object AiPaintTools {
                 "merge" to Schemas.string("'replace' (default) | 'only_unpainted' | 'only_tagged'"),
                 "where_tag" to Schemas.integer("Required when merge='only_tagged'"),
                 "return_indices" to Schemas.bool("If true, response includes triangle_indices array (capped at 4096). Default false to keep responses small — verify with paint_coverage_summary instead."),
+                "session_id" to SESSION_ID_SCHEMA,
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
@@ -752,6 +820,7 @@ internal object AiPaintTools {
                 "merge" to Schemas.string("'replace' (default) | 'only_unpainted' | 'only_tagged'"),
                 "where_tag" to Schemas.integer("Required when merge='only_tagged'"),
                 "return_indices" to Schemas.bool("If true, response includes triangle_indices array (capped at 4096). Default false to keep responses small — verify with paint_coverage_summary instead."),
+                "session_id" to SESSION_ID_SCHEMA,
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
@@ -823,6 +892,7 @@ internal object AiPaintTools {
                 "merge" to Schemas.string("'replace' (default) | 'only_unpainted' | 'only_tagged'"),
                 "where_tag" to Schemas.integer("Required when merge='only_tagged'"),
                 "return_indices" to Schemas.bool("If true, response includes triangle_indices array (capped at 4096). Default false to keep responses small — verify with paint_coverage_summary instead."),
+                "session_id" to SESSION_ID_SCHEMA,
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
@@ -1231,6 +1301,7 @@ internal object AiPaintTools {
                 "merge" to Schemas.string("'replace' (default) | 'only_unpainted' | 'only_tagged'"),
                 "where_tag" to Schemas.integer("Required when merge='only_tagged'"),
                 "return_indices" to Schemas.bool("If true, response includes triangle_indices array (capped at 4096). Default false to keep responses small — verify with paint_coverage_summary instead."),
+                "session_id" to SESSION_ID_SCHEMA,
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {

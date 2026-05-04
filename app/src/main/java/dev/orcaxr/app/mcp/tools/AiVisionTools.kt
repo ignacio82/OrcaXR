@@ -5,6 +5,8 @@ import dev.orcaxr.app.AiRenderEngine
 import dev.orcaxr.app.MeshBvh
 import dev.orcaxr.app.PlacedModel
 import dev.orcaxr.app.PngWriter
+import dev.orcaxr.app.mcp.AiPaintSession
+import dev.orcaxr.app.mcp.AiPaintSessionStore
 import dev.orcaxr.app.mcp.AiSessionState
 import dev.orcaxr.app.mcp.Schemas
 import dev.orcaxr.app.mcp.Tool
@@ -455,6 +457,7 @@ internal object AiVisionTools {
                         "preset" to Schemas.string("'default' | 'flat' | 'matcap_soft' (overrides individual fields)"),
                     ),
                 ),
+                "session_id" to SESSION_ID_SCHEMA,
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult =
@@ -477,6 +480,7 @@ internal object AiVisionTools {
                 "width_px" to Schemas.integer(""),
                 "height_px" to Schemas.integer(""),
                 "inline" to Schemas.bool(""),
+                "session_id" to SESSION_ID_SCHEMA,
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
@@ -826,6 +830,7 @@ internal object AiVisionTools {
                 "mode" to Schemas.string("'paint' (default) | 'solid' | 'normals' | 'depth'"),
                 "inline" to Schemas.bool(""),
                 "lighting" to Schemas.obj(),
+                "session_id" to SESSION_ID_SCHEMA,
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
@@ -833,6 +838,17 @@ internal object AiVisionTools {
             val resolved = resolveModelAndBvh(ws, args)
             if (resolved !is ResolvedModel.Found) return resolved.toError()
             val (model, bvh) = resolved.model to resolved.bvh
+            val paintSession = when (val r = resolveRenderSession(args, model.id)) {
+                RenderSession.NotRequested -> null
+                is RenderSession.Found -> r.session
+                is RenderSession.Error -> return ToolResult.error(r.message)
+            }
+            if (paintSession != null && paintSession.triCount != bvh.triCount) {
+                return ToolResult.error(
+                    "Session ${paintSession.id} tri_count=${paintSession.triCount} no longer " +
+                        "matches the live model (${bvh.triCount}). Discard and re-open.",
+                )
+            }
             val viewsRaw = args.optJSONArray("view_names")
                 ?: return ToolResult.error("'view_names' array required")
             val pw = args.optInt("panel_width_px", 256).coerceIn(16, MAX_RENDER_DIM)
@@ -845,6 +861,9 @@ internal object AiVisionTools {
             }
             val lighting = parseLightingParams(args.optJSONObject("lighting"))
             val geom = AiIntrospection.geometry(bvh, bins = 1)
+            val paintForRender = if (mode == AiRenderEngine.RenderMode.Paint) {
+                paintSession?.paintFilamentIndex ?: model.paintFilamentIndex
+            } else null
             val skipped = ArrayList<String>()
             val panels = ArrayList<ByteArray>()
             val panelWs = ArrayList<Int>()
@@ -862,7 +881,7 @@ internal object AiVisionTools {
                     camera = cam,
                     mode = mode,
                     palette = ws.previewPalette.value,
-                    paintFilamentIndex = if (mode == AiRenderEngine.RenderMode.Paint) model.paintFilamentIndex else null,
+                    paintFilamentIndex = paintForRender,
                     lighting = lighting,
                 )
                 panels.add(r.pngBytes); panelWs.add(r.widthPx); panelHs.add(r.heightPx)
@@ -890,11 +909,13 @@ internal object AiVisionTools {
                 }
             }
             val outPng = PngWriter.encodeRgba(composed, totalW, totalH)
+            val cacheKeySuffix = if (paintSession != null) ":sess${paintSession.id}" else ""
+            val versionForCache = if (paintSession != null) paintContentVersion(paintSession) else paintContentVersion(model)
             val token = AiSessionState.contentToken(
                 model.id,
-                "grid:${mode.name}:${(0 until viewsRaw.length()).joinToString { viewsRaw.optString(it) }}",
+                "grid:${mode.name}:${(0 until viewsRaw.length()).joinToString { viewsRaw.optString(it) }}$cacheKeySuffix",
                 AiRenderEngine.CameraSpec(FloatArray(16), FloatArray(16), totalW, totalH),
-                paintContentVersion(model),
+                versionForCache,
             )
             session.saveArtifact(AiSessionState.RenderArtifact(
                 token = token,
@@ -915,6 +936,10 @@ internal object AiVisionTools {
                 put("width_px", totalW); put("height_px", totalH)
                 put("panel_count", panels.size)
                 put("panel_width_px", pw); put("panel_height_px", ph)
+                if (paintSession != null) {
+                    put("session_id", paintSession.id)
+                    put("session_version", paintSession.version)
+                }
                 if (skipped.isNotEmpty()) put("skipped_views", JSONArray().apply {
                     for (s in skipped) put(s)
                 })
@@ -1033,6 +1058,7 @@ internal object AiVisionTools {
                 "model_id" to Schemas.string("Model id"),
                 "panel_size_px" to Schemas.integer("Per-cell width=height (default 256, max 512)"),
                 "inline" to Schemas.bool("If true and PNG ≤ 200 KB, also include base64 image part"),
+                "session_id" to SESSION_ID_SCHEMA,
             ),
         )
         override suspend fun call(args: JSONObject): ToolResult {
@@ -1040,6 +1066,17 @@ internal object AiVisionTools {
             val resolved = resolveModelAndBvh(ws, args)
             if (resolved !is ResolvedModel.Found) return resolved.toError()
             val (model, bvh) = resolved.model to resolved.bvh
+            val paintSession = when (val r = resolveRenderSession(args, model.id)) {
+                RenderSession.NotRequested -> null
+                is RenderSession.Found -> r.session
+                is RenderSession.Error -> return ToolResult.error(r.message)
+            }
+            if (paintSession != null && paintSession.triCount != bvh.triCount) {
+                return ToolResult.error(
+                    "Session ${paintSession.id} tri_count=${paintSession.triCount} no longer " +
+                        "matches the live model (${bvh.triCount}). Discard and re-open.",
+                )
+            }
             val cell = args.optInt("panel_size_px", 256).coerceIn(64, 512)
             // Layout: row-major. Top row reads as "what the user sees if
             // they walk around the model clockwise"; bottom row is the
@@ -1062,6 +1099,7 @@ internal object AiVisionTools {
                 }
             }
             val geom = AiIntrospection.geometry(bvh, bins = 1)
+            val paintForRender = paintSession?.paintFilamentIndex ?: model.paintFilamentIndex
             val rendered = ArrayList<String>(views.size)
             for ((idx, viewName) in views.withIndex()) {
                 val cam = AiRenderEngine.namedPreset(viewName, geom.bboxCenteredPreview, cell, cell)
@@ -1070,7 +1108,7 @@ internal object AiVisionTools {
                     camera = cam,
                     mode = AiRenderEngine.RenderMode.Paint,
                     palette = ws.previewPalette.value,
-                    paintFilamentIndex = model.paintFilamentIndex,
+                    paintFilamentIndex = paintForRender,
                 )
                 val decoded = AiRenderEngine.decodePng(r.pngBytes) ?: continue
                 val col = idx % cols
@@ -1085,8 +1123,10 @@ internal object AiVisionTools {
             // Cache under a stable token so a re-call with the same paint
             // state hits the cache.
             val cacheCam = AiRenderEngine.CameraSpec(FloatArray(16), FloatArray(16), totalW, totalH)
+            val sessionSuffix = if (paintSession != null) ":sess${paintSession.id}" else ""
+            val versionForCache = if (paintSession != null) paintContentVersion(paintSession) else paintContentVersion(model)
             val token = AiSessionState.contentToken(
-                model.id, "montage:${cell}", cacheCam, paintContentVersion(model),
+                model.id, "montage:${cell}$sessionSuffix", cacheCam, versionForCache,
             )
             session.saveArtifact(AiSessionState.RenderArtifact(
                 token = token,
@@ -1110,8 +1150,13 @@ internal object AiVisionTools {
                 put("layout", "2x3 (rows×cols)")
                 put("views", JSONArray().apply { for (v in views) put(v) })
                 put("rendered_count", rendered.size)
+                if (paintSession != null) {
+                    put("session_id", paintSession.id)
+                    put("session_version", paintSession.version)
+                }
             }
-            val text = "Rendered 6-view montage (${totalW}×${totalH}, ${outPng.size} B)"
+            val text = "Rendered 6-view montage (${totalW}×${totalH}, ${outPng.size} B)" +
+                if (paintSession != null) " [session=${paintSession.id}]" else ""
             val images = if (inline && outPng.size <= INLINE_BASE64_BYTE_CAP) {
                 listOf(ToolResult.ImagePart(
                     mediaType = "image/png",
@@ -1242,6 +1287,21 @@ internal object AiVisionTools {
         val resolved = resolveModelAndBvh(ws, args)
         if (resolved !is ResolvedModel.Found) return resolved.toError()
         val (model, bvh) = resolved.model to resolved.bvh
+        // C9 milestone 4 — optional headless paint session. When
+        // present, the render reads paint from the session's scratch
+        // buffer; the live model isn't touched.
+        val paintSession = when (val r = resolveRenderSession(args, model.id)) {
+            RenderSession.NotRequested -> null
+            is RenderSession.Found -> r.session
+            is RenderSession.Error -> return ToolResult.error(r.message)
+        }
+        if (paintSession != null && paintSession.triCount != bvh.triCount) {
+            return ToolResult.error(
+                "Session ${paintSession.id} was opened with tri_count=${paintSession.triCount} " +
+                    "but the live model now has tri_count=${bvh.triCount}. A mesh-mutating action " +
+                    "invalidated this session — call discard_paint_session and start a new one.",
+            )
+        }
         val w = args.optInt("width_px", DEFAULT_RENDER_DIM).coerceIn(16, MAX_RENDER_DIM)
         val h = args.optInt("height_px", DEFAULT_RENDER_DIM).coerceIn(16, MAX_RENDER_DIM)
         val modeRaw = args.optString("mode", defaultMode)
@@ -1259,18 +1319,26 @@ internal object AiVisionTools {
         val cacheKey = buildString {
             append(mode.name)
             if (annotate) append(":annot")
+            if (paintSession != null) append(":sess").append(paintSession.id)
             // Only suffix when non-default — default renders share a
             // cache slot with the historical token shape.
             if (lighting != AiRenderEngine.LightingParams.DEFAULT) {
                 append(":lit").append(lighting.hashCode().toString(16))
             }
         }
-        val token = AiSessionState.contentToken(model.id, cacheKey, camera, paintContentVersion(model))
+        val versionForCache = if (paintSession != null) paintContentVersion(paintSession) else paintContentVersion(model)
+        val token = AiSessionState.contentToken(model.id, cacheKey, camera, versionForCache)
         session.getArtifact(token)?.let { hit ->
             return packResult(model.id, camera, hit.pngBytes, token, inline, JSONObject().apply {
                 put("cache_hit", true)
+                if (paintSession != null) put("session_id", paintSession.id)
             })
         }
+        // Pick the paint source: session takes precedence when supplied.
+        val paintForRender =
+            if (mode == AiRenderEngine.RenderMode.Paint) {
+                paintSession?.paintFilamentIndex ?: model.paintFilamentIndex
+            } else null
         val result = AiRenderEngine.render(
             bvh = bvh,
             camera = camera,
@@ -1282,7 +1350,7 @@ internal object AiVisionTools {
             // yet (e.g. no printer selected).
             mode = mode,
             palette = ws.previewPalette.value,
-            paintFilamentIndex = if (mode == AiRenderEngine.RenderMode.Paint) model.paintFilamentIndex else null,
+            paintFilamentIndex = paintForRender,
             annotate = annotate,
             lighting = lighting,
         )
@@ -1297,6 +1365,10 @@ internal object AiVisionTools {
         ))
         val extra = JSONObject().apply {
             put("cache_hit", false)
+            if (paintSession != null) {
+                put("session_id", paintSession.id)
+                put("session_version", paintSession.version)
+            }
             if (mode == AiRenderEngine.RenderMode.TriangleId) {
                 put("encoding", JSONObject().apply {
                     put("red_shift", 16); put("green_shift", 8); put("blue_shift", 0)
@@ -1318,5 +1390,49 @@ internal object AiVisionTools {
         h = 31 * h + (model.seamFlags?.contentHashCode() ?: 0)
         h = 31 * h + (model.fuzzySkinFlags?.contentHashCode() ?: 0)
         return h
+    }
+
+    /** Hash the session's paint state so the artifact cache key
+     *  reflects the session's current scratch buffer. */
+    private fun paintContentVersion(session: AiPaintSession): Int {
+        var h = 0
+        h = 31 * h + (session.paintFilamentIndex?.contentHashCode() ?: 0)
+        h = 31 * h + (session.supportFlags?.contentHashCode() ?: 0)
+        h = 31 * h + (session.seamFlags?.contentHashCode() ?: 0)
+        h = 31 * h + (session.fuzzySkinFlags?.contentHashCode() ?: 0)
+        return h
+    }
+
+    /** Shared schema for the optional session_id render arg. */
+    internal val SESSION_ID_SCHEMA: JSONObject = Schemas.string(
+        "Optional headless paint session id (from begin_paint_session). When present, the render " +
+            "reads paint state from the session's scratch buffer instead of the live model — so the " +
+            "LLM can verify in-progress work without committing it. Triangle ids are stable for the " +
+            "session's lifetime; the artifact cache keys on (session_id, version) so a re-render " +
+            "after any session paint mutation always misses cache.",
+    )
+
+    /** Resolve a session_id arg paired with a model id. Returns
+     *  null when the arg is absent (live-path semantics). Throws a
+     *  ToolResult.error via the caller's flow on mismatch / unknown. */
+    internal sealed interface RenderSession {
+        data object NotRequested : RenderSession
+        data class Found(val session: AiPaintSession) : RenderSession
+        data class Error(val message: String) : RenderSession
+    }
+
+    internal fun resolveRenderSession(args: JSONObject, modelId: String): RenderSession {
+        val raw = args.optString("session_id").trim()
+        if (raw.isEmpty()) return RenderSession.NotRequested
+        val s = AiPaintSessionStore.get().get(raw)
+            ?: return RenderSession.Error(
+                "Unknown session_id '$raw'. Call begin_paint_session first.",
+            )
+        if (s.modelId != modelId) {
+            return RenderSession.Error(
+                "session_id '$raw' targets model '${s.modelId}' but you passed model_id='$modelId'.",
+            )
+        }
+        return RenderSession.Found(s)
     }
 }

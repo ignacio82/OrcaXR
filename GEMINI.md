@@ -131,7 +131,7 @@ Currently single `:app` module. The split below is aspirational; do NOT create m
 
 11d. **The BVH for paint must live in the SAME coordinate frame as the rendered GLB — match `nativeWriteColoredGlb`'s centering shift.** The JNI's `row_layout` (single-object STL) and `centered_existing_layout` (3MF) both apply `(-cx, -cy, -minZ)` to every vertex so the rendered GLB sits centered at the workspace origin with its Z-min on the bed. The BVH builder reads from `dragon_derived.stl` (output of `nativeConvertToStl`) which preserves the **original** printer-bed coords, so without the matching shift, BVH coords (e.g. X≈109..161) and GLB coords (X≈-26..+26) differ by ~135 mm and every raycast misses. Fix (2026-05-02): apply `mesh.translatedXyz(-cx, -cy, -minZ)` after `StlReader.read` and before `MeshBvh.build`. Symptom: `handle: HIT` never fires; `locateTriangle` returns null even though the ray clearly enters the entity bbox. See `PaintInputMathTest` (`BVH centering shift puts an off-center mesh under the world origin`).
 
-11e. **`addComponent` queues an op against the entity's material instance — give Filament a few frames to bind it before triggering the IC attach.** Synchronous `entity = ent` immediately after `GltfModelEntity.create` + `applyWorkspacePose` lands the IC's collider attach on the render queue before the entity's material is bound, racing `split_engine_bridge.cc:100 NOT_FOUND: unknown material instance id: N`. Two `awaitFrame()` (gotcha #13's deferred dispose) is enough for the dispose direction but not for the create direction on heavy 3MF loads. Fix (2026-05-02): three `awaitFrame()` between create+pose and the Compose state assignment that triggers the DisposableEffect's IC attach. Applies to both `GlbSceneEntity` and `SelectionBboxEntity`.
+11e. **`addComponent` queues an op against the entity's material instance — give Filament a few frames to bind it before triggering the IC attach.** Synchronous `entity = ent` immediately after `GltfModelEntity.create` + `applyWorkspacePose` lands the IC's collider attach on the render queue before the entity's material is bound, racing `split_engine_bridge.cc:100 NOT_FOUND: unknown material instance id: N`. Two `awaitFrame()` (gotcha #13's deferred dispose) is enough for the dispose direction but not for the create direction on heavy 3MF loads. Fix (2026-05-02): three `awaitFrame()` between create+pose and the Compose state assignment that triggers the DisposableEffect's IC attach. Applies to `GlbSceneEntity` and `SelectionBboxEntity`. **TransformGizmo handles (Translate/Rotate/Scale, three call sites) need MORE than three awaitFrame** — when a 3MF first lands, gotcha #22's twin `writeColoredGlb` calls + the SelectionBbox attach already saturate Filament's bind queue; three more handles racing in saturate it past the breaking point. Fix (2026-05-04): (a) gate the TransformGizmo composable on `selectedModel.previewPath != null` at the call site so the gizmo doesn't compose at all until the model preview GLB has hit disk, and (b) inside each handle's `LaunchedEffect(session, filename)`, prefix a `delay(250)` BEFORE the `GltfModelEntity.create` so even a re-composition during a heavy load gives Filament a clear runway. The original 3-awaitFrame post-create gate stays. The first 3MF load post-fix on 2026-05-04 stopped crashing at `material instance id: 25` / `27`.
 
 11f. **Paint stamp pipeline must mutate `paintFilamentIndex` in place during a stroke, not clone per event.** Each `stampTriangles` call clones the previous ByteArray (1.4 MB on a 1.4M-tri dragon) and `radiusBfs` allocates a 1.4 MB visited BooleanArray. At a 30 Hz throttle that's still ~85 MB/sec of allocation; the JVM's 512 MB heap fills in ~30 seconds of dragging and OOMs. Fix (2026-05-02): a stroke-buffer pattern. On DOWN, clone `paintFilamentIndex` once into the stroke buffer and hand `PaintHistory.beginStroke` a SEPARATE clone (so undo isn't corrupted by in-place mutation); on every MOVE, call `stampTrianglesInPlace(target, triIndices, slot)` which mutates the buffer directly. Bump a `paintContentVersion: Int` Compose state so the rebake LE re-keys without needing a fresh ByteArray reference. Also reuse `MeshBvh`'s BFS buffers (visited, queue, out) across calls — cuts another 1.4 MB per stamp. Two extra throttles: skip MOVEs to the same triangle as the last stamp (`lastStampedTri`); cap MOVE stamp rate at ~30 Hz (`lastStampMs`). See `PaintStampAllocationTest` for the contract.
 
@@ -152,11 +152,12 @@ Currently single `:app` module. The split below is aspirational; do NOT create m
    - **`key(selectedModelIds.hashCode(), fw, fd, fh) { SelectionBboxEntity(...) }`** — keying any wrapper composable on the model's bbox dims is the same trap. A change to `baseBboxXmm/Y/Z` (e.g. when a re-bake refines per-object dims) flips the key, the wrapper unmounts, and its `DisposableEffect(Unit)` synchronously frees the bbox entity. Drop the dim args from the key; the inner LaunchedEffect on `(modelId, sizeXmm, sizeYmm, sizeZmm)` handles dim changes via `disposeEntityDeferred`.
    This is acutely triggered by gotcha #22's two-bake load: v1→v2 within ms means the v1 dispose can race v2's still-loading addComponent.
 
-14. **`nativeWriteColoredGlb` keeps `KHR_materials_unlit` and bakes Lambert shading into `COLOR_0`; do NOT switch to a PBR material.** Two prior attempts at "make the preview look 3D" tried different approaches that both failed:
-    - **Drop unlit, leave only POSITION + COLOR_0** → Filament rendered black because PBR has no normals, so lighting was undefined.
-    - **Drop unlit, add NORMAL + a `pbrMetallicRoughness` material** → still rendered dark because Jetpack XR SceneCore (alpha13) does NOT install a default IBL skybox or directional light when a `GltfModel` attaches; PBR's diffuse term has nothing to sample, so the result drops to near-black even with correct normals.
+14. **`nativeWriteColoredGlb` keeps `KHR_materials_unlit` and bakes shading into `COLOR_0`; do NOT switch to a PBR material.** Three prior approaches all failed:
+    - **Drop unlit, leave only POSITION + COLOR_0** → Filament rendered black (PBR needs normals).
+    - **Drop unlit, add NORMAL + a `pbrMetallicRoughness` material with no IBL** → still rendered near-black because Jetpack XR SceneCore (alpha13) does NOT install a default IBL when a `GltfModel` attaches.
+    - **Drop unlit, add NORMAL + PBR + a bundled studio EXR via `SpatialEnvironment.preferredSpatialEnvironment.skybox`** (May 2026) → tripped gotcha #13. The PBR material widened Filament's per-bind window enough that the InteractableComponent attach lost the material-instance-id race: `split_engine_bridge.cc:100 NOT_FOUND: Attempt to use unknown material instance id: N`. Reproduces every launch with 2-3 placed models. Even keeping IBL + reverting the material widened the bind window slightly because Filament has more probes to resolve at material instantiation time.
 
-    Current approach: keep `KHR_materials_unlit`, compute smooth per-vertex normals from world-space positions (area-weighted face-normal accumulation), and pre-multiply each vertex color by `ambient + key * max(0, dot(n, key_dir)) + fill * max(0, dot(n, fill_dir))` before writing the GLB. The unlit material renders `baseColor * vertexColor` straight to the screen with no scene-light dependency, so the baked shading IS what the user sees. Light directions are mesh-local (printer-frame: +Z = up). Output GLB is positions + colors + indices only — no NORMAL accessor (unlit ignores it).
+    Current approach: keep `KHR_materials_unlit` (cheap material bind, safe against gotcha #13) AND bake an 8-direction half-Lambert hemisphere PLUS a curvature/cavity term into `COLOR_0` before writing the GLB. The 8 lights cover a soft-box studio rig (zenith key, NESW fills, two diagonals, one weak underlight); each contributes `intensity * (0.5 + 0.5 * dot(n, L))` so back-facing triangles aren't pitch black. The cavity term reads `dot(smooth_normal, mean(unit_face_normals))` — that dot product approaches 1.0 on flat regions and collapses on creases, which we use as an O(vertex_count) proxy for AO. `CAVITY_STRENGTH=0.55` picks out eye sockets / mouth grooves / finger gaps without crushing back-facing triangles. Output GLB is positions + colors + indices only — no NORMAL accessor (unlit ignores it). The full bake is O(vertex_count + 8 * vertex_count) — well under the dispose-safe window. Don't try to add a real ray-cast AO pass, that's the O(vertex × triangle) trap that was originally reverted.
 
 ## libslic3r gotchas (load-bearing)
 
@@ -434,6 +435,57 @@ for the runtime contract; [`docs/AI_PAINT_DESIGN.md`](docs/AI_PAINT_DESIGN.md)
 for the design rationale. New tools register in
 `McpController.registerAllTools` via `AiPaintTools.all`,
 `AiVisionTools.all`, `AiIntrospectionTools.all`.
+
+**Headless paint sessions (C9 milestone 4).** Every paint MCP tool
+that emits a `WorkspaceAction.PaintTriangleSet` triggers a full
+colored-GLB rebake + GltfModelEntity swap, which is fine for one
+brush stamp but prohibitive when an LLM iterates 30+ small
+refinements (each rebake interrupts the user's XR view *and* fills
+its own undo step). Sessions decouple iteration from the scene:
+
+```
+begin_paint_session(model_id) → session_id
+  paint_sphere(session_id=…)        ← scratch buffer, no rebake
+  render_view(session_id=…)         ← reads session paint
+  paint_geodesic_disc(session_id=…) ← scratch buffer
+  render_view(session_id=…)
+  commit_paint_session(session_id)  ← ONE LoadPaintState ⇒ ONE rebake
+```
+
+Implementation:
+
+- `mcp/AiPaintSessionStore.kt` — process-singleton, LRU bounded at
+  8 sessions (each holds 4 ByteArrays sized to tri count; ~5.6 MB
+  per 1.4 M-tri dragon = ~45 MB worst case).
+- `mcp/tools/PaintSessionTools.kt` — begin / commit / discard /
+  list / get_diff. `commit_paint_session` emits exactly one
+  `WorkspaceAction.LoadPaintState` (which already exists for D18j
+  paint-recipe replay), so the on-host handler at
+  `MainActivity.onLoadPaintState` calls `applyPaintMutation` once,
+  bumping `paintContentVersion` once and creating exactly one
+  `PaintHistory` step that undoes the entire session.
+- All eight `AiPaintTools` (sphere / slab / normal_cone /
+  surface_region / connected_component / triangle_list /
+  projected_mask / geodesic_disc) plus the five render tools
+  (`render_view` / `render_paint_overlay` / `render_views_grid` /
+  `render_montage`; `render_triangle_id_map` doesn't depend on
+  paint state so it skips the session) accept an optional
+  `session_id`. When present, paint primitives mutate the session
+  in-process (no `WorkspaceAction` emit) and renders read paint
+  from the session.
+- Triangle-id stability: sessions assume mesh topology is stable.
+  `paint_*` and `commit_paint_session` reject when the live BVH's
+  tri count diverges from the session's recorded `triCount` (i.e.
+  the user / another tool ran repair / cut / boolean / split /
+  emboss / simplify / volume edit between begin and commit). The
+  session is auto-discarded on commit failure unless the caller
+  passes `discard_on_failure=false`.
+- Why the renderer is unchanged: `AiRenderEngine` is already pure
+  Kotlin with no XR-runtime coupling — sessions don't change render
+  fidelity, they just stop the *commit-time* rebake from firing on
+  every paint primitive. The render quality knobs already exposed
+  via `lighting` + `annotate` flags work identically inside a
+  session.
 
 ## Related docs
 

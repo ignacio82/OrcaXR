@@ -10,6 +10,7 @@ import dev.orcaxr.app.mcp.tools.AiVisionMaskTools
 import dev.orcaxr.app.mcp.tools.FindFeatureAnchorsTool
 import dev.orcaxr.app.mcp.tools.PaintDecalTool
 import dev.orcaxr.app.mcp.tools.PaintRecipeTools
+import dev.orcaxr.app.mcp.tools.PaintSessionTools
 import dev.orcaxr.app.mcp.tools.PaintTemplateTools
 import dev.orcaxr.app.mcp.tools.FilamentTools
 import dev.orcaxr.app.mcp.tools.HandyModelTools
@@ -217,6 +218,11 @@ class McpController private constructor(
             // C9 milestone 1 — AI-driven spatial paint primitives.
             val aiPaintTools = AiPaintTools.all(WorkspaceModel.get())
             for (t in aiPaintTools) builder.tool(t)
+            // C9 milestone 4 — headless paint sessions. Lets an LLM
+            // iterate paint+render without each refinement triggering a
+            // colored-GLB rebake / scene-entity swap. Commit emits one
+            // LoadPaintState ⇒ one applyPaintMutation ⇒ one undo step.
+            for (t in PaintSessionTools.all(WorkspaceModel.get())) builder.tool(t)
             // C9 milestone 3 — geometry / topology introspection.
             for (t in AiIntrospectionTools.all(WorkspaceModel.get())) builder.tool(t)
             // Anchor + seed + coverage tools — turn spatial reasoning
