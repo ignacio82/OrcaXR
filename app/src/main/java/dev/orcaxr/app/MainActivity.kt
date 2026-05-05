@@ -942,6 +942,16 @@ private fun XrShell(
     // via the TopNavigationPill's Help icon; renders as a side
     // SpatialPanel showing every binding the input pump consumes.
     var helpShown by remember { mutableStateOf(false) }
+    // Roadmap D12 — AddPrimitivePanel SpatialPanel visibility. Toggled
+    // from the top nav; UI mirror of the add_primitive MCP tool so
+    // dropping a stock cube/cylinder/sphere/etc. doesn't require an
+    // LLM round-trip.
+    var addPrimitiveShown by remember { mutableStateOf(false) }
+    // Roadmap A11 — CustomGcodePanel SpatialPanel visibility. Toggled
+    // from the top nav; UI mirror of the add_custom_gcode_tick MCP
+    // surface so authoring a pause-at-Z (the magnet-insert workflow)
+    // doesn't require an LLM round-trip.
+    var customGcodeShown by remember { mutableStateOf(false) }
     // Optional in-app LLM assistant. Toggled from the AI assistant
     // card in Settings once a provider key is set; renders the chat
     // SpatialPanel on the right side of the workspace.
@@ -4995,6 +5005,10 @@ private fun XrShell(
                         onToggleHelp = { helpShown = !helpShown },
                         settingsShown = settingsShown,
                         onToggleSettings = { settingsShown = !settingsShown },
+                        addPrimitiveShown = addPrimitiveShown,
+                        onToggleAddPrimitive = { addPrimitiveShown = !addPrimitiveShown },
+                        customGcodeShown = customGcodeShown,
+                        onToggleCustomGcode = { customGcodeShown = !customGcodeShown },
                         gizmoTool = gizmoTool,
                         onGizmoToolChange = { gizmoTool = it },
                         transformToolsEnabled = selectedModel != null,
@@ -5821,6 +5835,15 @@ private fun XrShell(
                         },
                         tubesMode = toolpathTubes.value,
                         onTubesModeChange = { toolpathTubes.value = it },
+                        // A11 — render colored dots on the strip beneath
+                        // the slider for every authored tick on the
+                        // active plate. Tap to jump the scrubber to the
+                        // tick's nearest layer; jumping into Preview is
+                        // handled by the existing onLayerChange path.
+                        customGcodeTicks = customGcodeTicksByPlate[activePlateId].orEmpty(),
+                        onTickTapped = { layerIdx ->
+                            maxLayer.value = if (layerIdx >= maxIdx) null else layerIdx
+                        },
                     )
                 }
 
@@ -6536,6 +6559,141 @@ private fun XrShell(
                                     "Paint cache cleared",
                                     android.widget.Toast.LENGTH_SHORT,
                                 ).show()
+                            },
+                        )
+                    }
+                }
+
+                if (addPrimitiveShown) {
+                    // Roadmap D12 — primitive shape authoring SpatialPanel.
+                    // Mirrors the `add_primitive` MCP tool: builds an STL
+                    // via SlicerEngine.buildPrimitiveStl and emits either
+                    // LoadModelFromPath (object mode) or AddVolumeToModel
+                    // (the four volume kinds). The MCP tool's handler
+                    // doubles as the spec — we re-use its WorkspaceModel
+                    // emit path so the panel and the tool stay in lockstep.
+                    MovablePanelWrapper(
+                        id = "add-primitive",
+                        width = 540.dp,
+                        height = 760.dp,
+                        initialOffset = androidx.xr.runtime.math.Vector3(0.6f, 0.2f, -0.15f),
+                        session = session,
+                    ) {
+                        AddPrimitivePanel(
+                            placedModels = placedModels,
+                            selectedModelId = selectedModelIds.firstOrNull(),
+                            onClose = { addPrimitiveShown = false },
+                            onAdd = { req ->
+                                scope.launch {
+                                    val outDir = java.io.File(ctx.cacheDir, "primitives").apply {
+                                        if (!exists()) mkdirs()
+                                    }
+                                    val outFile = java.io.File(
+                                        outDir,
+                                        "${req.kind.name.lowercase()}_${
+                                            System.currentTimeMillis().toString(36)
+                                        }.stl",
+                                    )
+                                    val built = SlicerEngine.buildPrimitiveStl(
+                                        kind = req.kind,
+                                        params = req.params,
+                                        output = outFile,
+                                    )
+                                    if (built == null) {
+                                        android.widget.Toast.makeText(
+                                            ctx,
+                                            "Failed to build ${req.kind.displayName}",
+                                            android.widget.Toast.LENGTH_SHORT,
+                                        ).show()
+                                        return@launch
+                                    }
+                                    val ws = dev.orcaxr.app.mcp.WorkspaceModel.get()
+                                    when (val m = req.mode) {
+                                        PrimitivePanelData.Mode.AsObject -> {
+                                            ws.emit(
+                                                dev.orcaxr.app.mcp.WorkspaceAction.LoadModelFromPath(
+                                                    built.absolutePath,
+                                                    dev.orcaxr.app.mcp.WorkspaceAction.LoadMode.Add,
+                                                ),
+                                            )
+                                        }
+                                        is PrimitivePanelData.Mode.AsVolume -> {
+                                            ws.emit(
+                                                dev.orcaxr.app.mcp.WorkspaceAction.AddVolumeToModel(
+                                                    modelId = m.targetModelId,
+                                                    sourcePath = built.absolutePath,
+                                                    type = m.type.name,
+                                                ),
+                                            )
+                                        }
+                                    }
+                                    addPrimitiveShown = false
+                                }
+                            },
+                        )
+                    }
+                }
+
+                if (customGcodeShown) {
+                    // Roadmap A11 — custom-G-code-per-print-Z SpatialPanel.
+                    // Reads the active plate's ticks from the
+                    // collectAsState'd `customGcodeTicksByPlate` map and
+                    // dispatches add / remove / clear through the existing
+                    // WorkspaceModel emit path so the persistence + 3MF
+                    // round-trip + MCP listing all see the same state.
+                    val activePlateLabel = allPlates.firstOrNull {
+                        it.id == activePlateId
+                    }?.label ?: "Plate $activePlateId"
+                    val plateTicks = customGcodeTicksByPlate[activePlateId].orEmpty()
+                    val maxZ = (sliceState.value as? SliceUiState.Done)
+                        ?.parsed
+                        ?.layerZs
+                        ?.lastOrNull()
+                    MovablePanelWrapper(
+                        id = "custom-gcode",
+                        width = 540.dp,
+                        height = 760.dp,
+                        initialOffset = androidx.xr.runtime.math.Vector3(0.6f, -0.05f, -0.15f),
+                        session = session,
+                    ) {
+                        CustomGcodePanel(
+                            activePlateId = activePlateId,
+                            activePlateLabel = activePlateLabel,
+                            ticks = plateTicks,
+                            maxZmm = maxZ,
+                            onClose = { customGcodeShown = false },
+                            onAdd = { tick ->
+                                scope.launch {
+                                    dev.orcaxr.app.mcp.WorkspaceModel.get().emit(
+                                        dev.orcaxr.app.mcp.WorkspaceAction.AddCustomGcodeTick(
+                                            plateId = activePlateId,
+                                            zMm = tick.printZmm,
+                                            kind = tick.kind.name,
+                                            extruder = tick.extruder,
+                                            color = tick.color,
+                                            extra = tick.extra,
+                                        ),
+                                    )
+                                }
+                            },
+                            onRemove = { idx ->
+                                scope.launch {
+                                    dev.orcaxr.app.mcp.WorkspaceModel.get().emit(
+                                        dev.orcaxr.app.mcp.WorkspaceAction.RemoveCustomGcodeTick(
+                                            plateId = activePlateId,
+                                            index = idx,
+                                        ),
+                                    )
+                                }
+                            },
+                            onClear = {
+                                scope.launch {
+                                    dev.orcaxr.app.mcp.WorkspaceModel.get().emit(
+                                        dev.orcaxr.app.mcp.WorkspaceAction.ClearCustomGcodeTicks(
+                                            plateId = activePlateId,
+                                        ),
+                                    )
+                                }
                             },
                         )
                     }

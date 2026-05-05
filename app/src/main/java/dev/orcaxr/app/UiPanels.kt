@@ -2804,6 +2804,12 @@ fun BottomLayerPreviewPanel(
      *  toggle for non-XR builds). */
     tubesMode: Boolean? = null,
     onTubesModeChange: ((Boolean) -> Unit)? = null,
+    /** Roadmap A11 — custom-G-code-per-Z ticks on the active plate.
+     *  Rendered as colored dots beneath the layer slider so the user
+     *  can see at-a-glance where pause / color-change / template hooks
+     *  fire. Empty list hides the strip entirely. */
+    customGcodeTicks: List<SlicerEngine.CustomGcodeTick> = emptyList(),
+    onTickTapped: (layerIndex: Int) -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -2846,6 +2852,18 @@ fun BottomLayerPreviewPanel(
             valueRange = 0f..sliderMax.toFloat().coerceAtLeast(1f),
             steps = (sliderMax - 1).coerceAtLeast(0),
         )
+
+        // A11 — tick-mark overlay. The strip lays out colored dots at
+        // the relative print-Z of each authored tick. Useful both as a
+        // visual cue (so the user sees there's a pause at 5 mm) and as
+        // a navigation affordance (tap → jump scrubber to that layer).
+        if (parsed != null && customGcodeTicks.isNotEmpty()) {
+            CustomGcodeTickStrip(
+                ticks = customGcodeTicks,
+                layerZs = parsed.layerZs,
+                onSelectTick = onTickTapped,
+            )
+        }
 
         // Legend reflects the roles actually present in the parsed
         // toolpath, colored from the same RoleColors table the GLB
@@ -3456,6 +3474,13 @@ fun TopNavigationPill(
      *  panel which is for printer connections + MCP server config. */
     onToggleSettings: (() -> Unit)? = null,
     settingsShown: Boolean = false,
+    /** Roadmap D12 — open / close the Add-Primitive SpatialPanel. Null
+     *  disables the chip (e.g. flat-shell builds). */
+    onToggleAddPrimitive: (() -> Unit)? = null,
+    addPrimitiveShown: Boolean = false,
+    /** Roadmap A11 — open / close the Custom-G-code-per-Z SpatialPanel. */
+    onToggleCustomGcode: (() -> Unit)? = null,
+    customGcodeShown: Boolean = false,
     /** Active transform tool. Move/Rotate/Scale render as toggle
      *  buttons; tapping the active one returns to [GizmoTool.Select]. */
     gizmoTool: GizmoTool,
@@ -3552,6 +3577,24 @@ fun TopNavigationPill(
                             isSelected = settingsShown,
                             enabled = true,
                             onClick = onToggleSettings,
+                        )
+                    }
+                    if (onToggleAddPrimitive != null) {
+                        NavAction(
+                            label = "Add",
+                            icon = androidx.compose.material.icons.Icons.Default.Add,
+                            isSelected = addPrimitiveShown,
+                            enabled = true,
+                            onClick = onToggleAddPrimitive,
+                        )
+                    }
+                    if (onToggleCustomGcode != null) {
+                        NavAction(
+                            label = "G-code",
+                            icon = androidx.compose.material.icons.Icons.Default.Layers,
+                            isSelected = customGcodeShown,
+                            enabled = true,
+                            onClick = onToggleCustomGcode,
                         )
                     }
                     if (onToggleHelp != null) {

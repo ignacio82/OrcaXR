@@ -90,13 +90,13 @@ When paint mode is active the left stick's Y axis nudges brush radius (0..50 mm 
 
 **Exit criteria:** Save a model with per-object `layer_height=0.16` via `set_object_overrides` → `save_project_3mf` → reopen — `get_object_overrides` returns `{"layer_height": "0.16"}`. ✅ Met for per-object overrides; per-VOLUME load (when desktop OrcaSlicer authored a PARAMETER_MODIFIER volume + override) is the remaining piece.
 
-### D12. Add primitive shapes (cube / cylinder / sphere / cone / disc / torus / slab) 🟡 Shipped — MCP + JNI; SpatialPanel UI deferred
+### D12. Add primitive shapes (cube / cylinder / sphere / cone / disc / torus / slab) 🟢 Shipped
 
 > **Files:** `app/src/main/cpp/slic3r_jni.cpp::nativeBuildPrimitiveStl`, `app/src/main/java/dev/orcaxr/app/Primitives.kt`, `app/src/main/java/dev/orcaxr/app/SlicerEngine.kt::buildPrimitiveStl`, `app/src/main/java/dev/orcaxr/app/mcp/tools/PrimitiveTools.kt`, `PrimitivesTest.kt`.
 
 JNI calls libslic3r's `its_make_cube/cylinder/sphere/cone/torus` (TriangleMesh.hpp:336) and writes a binary STL via `TriangleMesh::write_binary`. Output is XY-centered with Z-min == 0 so callers paste it straight onto the bed. Disc = short cylinder; slab = cube alias kept distinct for ergonomic naming. The MCP tool `add_primitive(kind, params, mode, target_model_id?)` routes through the existing `LoadModelFromPath` (mode=object, default) or `AddVolumeToModel` (mode=part/negative/modifier/enforcer/blocker) — every D14 volume kind is reachable in one call. `list_primitives` enumerates the catalog so the LLM can discover param names. Defaults: 20 mm cube, Ø10×20 mm cylinder, Ø10 sphere, Ø10×20 cone, Ø10/3 torus, Ø15×1 disc, 40×40×2 slab; facet angle defaults to 2° (6° for torus).
 
-**Shipped pieces:** native builder + Kotlin engine wrapper + 2 MCP tools + 8 unit tests pinning the param contract. The dedicated `AddPrimitivePanel` SpatialPanel is deferred to a follow-up — current MCP surface is enough to use every kind and every mode end-to-end.
+**Shipped pieces:** native builder + Kotlin engine wrapper + 2 MCP tools + 8 unit tests pinning the param contract. `AddPrimitivePanel` SpatialPanel (shape chips + per-kind sliders / 6 mode chips / target dropdown) mounts from the top-nav `Add` chip and emits the same `LoadModelFromPath` / `AddVolumeToModel` actions the MCP tool emits, so MCP and in-XR paths are observably equivalent.
 
 Upstream OrcaSlicer's "Add primitive" menu seeds a stock mesh into the workspace either as a new object or as a sub-volume of the selected object. libslic3r already exports every helper we need (`its_make_cube` / `its_make_cylinder` / `its_make_sphere` / `its_make_cone` / `its_make_torus` — see `TriangleMesh.hpp:336-358`); slab is a cube alias kept distinct for ergonomic naming. So this is a JNI shim that invokes the helper, writes a binary STL, and routes through the existing `onFileSelected` / volume-attach paths.
 
