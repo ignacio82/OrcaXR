@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -65,6 +66,7 @@ fun LlmAssistantCard(
     val context = LocalContext.current
     val settings = remember { LlmSettings.get(context) }
     val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboard.current
 
     val selected by settings.selectedProvider.collectAsState(initial = LlmProvider.Claude)
     val claudeKey by settings.claudeApiKey.collectAsState(initial = null)
@@ -199,6 +201,17 @@ fun LlmAssistantCard(
                     onClick = { showKey = !showKey },
                     shape = RoundedCornerShape(8.dp),
                 ) { Text(if (showKey) "Hide" else "Show") }
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            val text = clipboard.getClipEntry()?.clipData?.getItemAt(0)?.text
+                            if (!text.isNullOrBlank()) {
+                                draftKey = text.toString().trim()
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                ) { Text("Paste") }
                 Button(
                     onClick = {
                         scope.launch {

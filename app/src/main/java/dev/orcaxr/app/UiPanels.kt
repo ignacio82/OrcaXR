@@ -37,12 +37,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import dev.orcaxr.app.ui.LocalOrcaXrTextStyles
 import dev.orcaxr.app.ui.OrcaXrColors
+import kotlinx.coroutines.launch
 import java.io.File
 
 /**
@@ -4931,6 +4933,8 @@ fun PrintMonitorPanel(
 private fun AddPrinterForm(
     onAdd: (name: String, host: String, port: Int, apiKey: String?) -> Unit,
 ) {
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
     var host by remember { mutableStateOf("") }
     // Default 80 — most Klipper installs front Moonraker with nginx
@@ -4973,6 +4977,18 @@ private fun AddPrinterForm(
                 label = { Text("API key (optional)") },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
+                trailingIcon = {
+                    IconButton(onClick = {
+                        scope.launch {
+                            val text = clipboard.getClipEntry()?.clipData?.getItemAt(0)?.text
+                            if (!text.isNullOrBlank()) {
+                                apiKey = text.toString().trim()
+                            }
+                        }
+                    }) {
+                        Icon(Icons.Default.ContentPaste, contentDescription = "Paste")
+                    }
+                }
             )
         }
         Text(
