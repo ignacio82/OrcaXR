@@ -477,6 +477,12 @@ private fun SliceProgressCard(state: SliceUi, onContinue: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { SlicerEngine.abort() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Cancel slice")
+                }
             }
         }
         is SliceUi.Done -> MobileCard {
@@ -574,6 +580,12 @@ private fun TransformSheet(
                         scaleZPct = it,
                     ),
                 )
+            }
+            TransformSlider("Translate X", transform.translateXmm, -150f, 150f, " mm") {
+                onSet(transform.copy(translateXmm = it))
+            }
+            TransformSlider("Translate Y", transform.translateYmm, -150f, 150f, " mm") {
+                onSet(transform.copy(translateYmm = it))
             }
             if (transform != SlicerEngine.ModelPlacement()) {
                 androidx.compose.material3.OutlinedButton(
