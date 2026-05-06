@@ -96,6 +96,7 @@ fun MobileShell(
     appState: MobileAppState,
     forceDark: Boolean?,
     onSetForceDark: (Boolean?) -> Unit,
+    pendingSlicerFile: kotlinx.coroutines.flow.MutableStateFlow<String?>? = null,
 ) {
     OrcaXrMobileTheme(forceDark = forceDark) {
         CompositionLocalProvider(LocalMobileAppState provides appState) {
@@ -121,6 +122,27 @@ fun MobileShell(
                     initial = emptyList<dev.orcaxr.app.PrinterConfig>(),
                 )
                 var onboardingComplete by rememberSaveable { mutableStateOf(false) }
+
+                // When MobileActivity stages a shared file, route it
+                // directly into the Slicer screen so a share-to-OrcaXR
+                // from the browser / MakerWorld lands the user on the
+                // file ready to slice — not on Files asking them to
+                // pick which one. The flow drains a single value per
+                // intent so subsequent recompositions don't re-route.
+                if (pendingSlicerFile != null) {
+                    androidx.compose.runtime.LaunchedEffect(Unit) {
+                        pendingSlicerFile.collect { p ->
+                            if (p != null) {
+                                slicerFilePath = p
+                                slicerOutputPath = null
+                                slicerPaintIndex = null
+                                onboardingComplete = true
+                                dest = MobileDestination.Slicer
+                                pendingSlicerFile.value = null
+                            }
+                        }
+                    }
+                }
                 if (printersList.isEmpty() && !onboardingComplete) {
                     OnboardingScreen(
                         onSkip = { onboardingComplete = true },

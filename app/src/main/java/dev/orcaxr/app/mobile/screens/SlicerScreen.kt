@@ -24,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Brush
+import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -530,7 +531,8 @@ private fun ToolsCard(
 ) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var repairing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    var lastRepairResult by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    var orienting by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var lastToolResult by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
 
     MobileCard {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -547,35 +549,62 @@ private fun ToolsCard(
                             }
                             repairing = false
                             if (r != null) {
-                                lastRepairResult = "Repaired: ${r.openEdgesIn} → ${r.openEdgesOut} open edges, ${if (r.partial) "partial (CGAL skipped)" else "OK"}"
+                                lastToolResult = "Repaired: ${r.openEdgesIn} → ${r.openEdgesOut} open edges, ${if (r.partial) "partial (CGAL skipped)" else "OK"}"
                                 onSetFile(r.output.absolutePath)
                             } else {
-                                lastRepairResult = "Repair skipped — mesh already manifold or load failed."
+                                lastToolResult = "Repair skipped — mesh already manifold or load failed."
                             }
                         }
                     },
-                    enabled = !repairing,
+                    enabled = !repairing && !orienting,
                     modifier = Modifier.weight(1f),
                 ) {
                     Icon(Icons.Filled.AutoFixHigh, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
                     Text(if (repairing) "Repairing…" else "Repair")
                 }
-                if (onOpenPaint != null) {
-                    androidx.compose.material3.OutlinedButton(
-                        onClick = { onOpenPaint(filePath) },
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(Icons.Filled.Brush, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text(if (paintApplied) "Edit paint" else "Paint")
-                    }
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            orienting = true
+                            val euler = withContext(Dispatchers.IO) {
+                                runCatching { SlicerEngine.autoOrient(File(filePath)) }.getOrNull()
+                            }
+                            orienting = false
+                            lastToolResult = if (euler == null || euler.size < 3) {
+                                "Auto-orient: no rotation needed (already optimal)."
+                            } else {
+                                val (rx, ry, rz) = Triple(euler[0], euler[1], euler[2])
+                                if (kotlin.math.abs(rx) + kotlin.math.abs(ry) + kotlin.math.abs(rz) < 0.5f) {
+                                    "Auto-orient: already near-optimal."
+                                } else {
+                                    "Auto-orient suggests X %.1f° / Y %.1f° / Z %.1f°".format(rx, ry, rz)
+                                }
+                            }
+                        }
+                    },
+                    enabled = !repairing && !orienting,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(Icons.Filled.Compress, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (orienting) "Analyzing…" else "Orient")
                 }
             }
-            val repaired = lastRepairResult
-            if (repaired != null) {
+            if (onOpenPaint != null) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { onOpenPaint(filePath) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Filled.Brush, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (paintApplied) "Edit paint" else "Paint by slot")
+                }
+            }
+            val msg = lastToolResult
+            if (msg != null) {
                 Text(
-                    repaired,
+                    msg,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

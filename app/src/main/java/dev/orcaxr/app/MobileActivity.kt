@@ -38,6 +38,15 @@ class MobileActivity : ComponentActivity() {
      *  and offered as "import this" CTAs. */
     val pendingSharedUris = MutableStateFlow<List<Uri>>(emptyList())
 
+    /**
+     * Most-recently-staged shared file's absolute path. The shell
+     * watches this and, when non-null, routes the user directly into
+     * the Slicer screen with the file pre-loaded — closes the
+     * share-to-OrcaXR UX loop without a manual "go to Files, tap
+     * the new entry" step.
+     */
+    val pendingSlicerFile = MutableStateFlow<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -64,6 +73,7 @@ class MobileActivity : ComponentActivity() {
                     SharedIntentHandler.resolveAll(this@MobileActivity, intent)
                 }
                 files.forEach { f -> appState.recentFiles.add(f) }
+                files.firstOrNull()?.let { pendingSlicerFile.value = it.absolutePath }
                 pendingSharedUris.value = emptyList()
             }
         }
@@ -93,6 +103,7 @@ class MobileActivity : ComponentActivity() {
                     forceDarkRaw = raw
                     appState.prefs.mobileTheme = raw
                 },
+                pendingSlicerFile = pendingSlicerFile,
             )
         }
     }
