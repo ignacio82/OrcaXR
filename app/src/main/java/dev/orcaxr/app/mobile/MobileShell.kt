@@ -115,6 +115,7 @@ fun MobileShell(
                 // explicitly committed to a slice.
                 var slicerPaintIndex by remember { mutableStateOf<ByteArray?>(null) }
                 var paintModeFile by rememberSaveable { mutableStateOf<String?>(null) }
+                var slicerTransform by remember { mutableStateOf(dev.orcaxr.app.SlicerEngine.ModelPlacement()) }
 
                 // Onboarding gating: until at least one printer exists,
                 // route to the Onboarding flow regardless of `dest`.
@@ -185,8 +186,9 @@ fun MobileShell(
                             slicerFilePath = slicerFilePath,
                             onSetSlicerFile = {
                                 if (it != slicerFilePath) {
-                                    // New file → discard stale paint
+                                    // New file → discard stale paint + transform
                                     slicerPaintIndex = null
+                                    slicerTransform = dev.orcaxr.app.SlicerEngine.ModelPlacement()
                                 }
                                 slicerFilePath = it
                             },
@@ -194,6 +196,8 @@ fun MobileShell(
                             onSetSlicerOutput = { slicerOutputPath = it },
                             slicerPaintIndex = slicerPaintIndex,
                             onOpenPaint = openPaintCallback,
+                            transform = slicerTransform,
+                            onSetTransform = { slicerTransform = it },
                             onNavigate = { dest = it },
                             forceDark = forceDark,
                             onSetForceDark = onSetForceDark,
@@ -216,6 +220,8 @@ fun MobileShell(
                             onSetSlicerOutput = { slicerOutputPath = it },
                             slicerPaintIndex = slicerPaintIndex,
                             onOpenPaint = openPaintCallback,
+                            transform = slicerTransform,
+                            onSetTransform = { slicerTransform = it },
                             onNavigate = { dest = it },
                             forceDark = forceDark,
                             onSetForceDark = onSetForceDark,
@@ -242,6 +248,8 @@ private fun ScreenContent(
     onSetSlicerOutput: (String?) -> Unit,
     slicerPaintIndex: ByteArray?,
     onOpenPaint: (String) -> Unit,
+    transform: dev.orcaxr.app.SlicerEngine.ModelPlacement,
+    onSetTransform: (dev.orcaxr.app.SlicerEngine.ModelPlacement) -> Unit,
     onNavigate: (MobileDestination) -> Unit,
     forceDark: Boolean?,
     onSetForceDark: (Boolean?) -> Unit,
@@ -259,6 +267,8 @@ private fun ScreenContent(
                 onNavigate = onNavigate,
                 paintFilamentIndex = slicerPaintIndex,
                 onOpenPaint = onOpenPaint,
+                transform = transform,
+                onSetTransform = onSetTransform,
             )
             MobileDestination.Files -> FilesScreen(
                 isTablet = isTablet,

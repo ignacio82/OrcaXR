@@ -105,6 +105,8 @@ fun SlicerScreen(
     onNavigate: (MobileDestination) -> Unit,
     paintFilamentIndex: ByteArray? = null,
     onOpenPaint: ((String) -> Unit)? = null,
+    transform: SlicerEngine.ModelPlacement = SlicerEngine.ModelPlacement(),
+    onSetTransform: (SlicerEngine.ModelPlacement) -> Unit = {},
 ) {
     val app = LocalMobileAppState.current
     val ctx = LocalContext.current
@@ -164,7 +166,10 @@ fun SlicerScreen(
                         onSetFile = onSetFile,
                         onOpenPaint = onOpenPaint,
                         paintApplied = paintFilamentIndex != null,
+                        transform = transform,
+                        onSetTransform = onSetTransform,
                     )
+                    TransformSheet(transform, onSetTransform)
                     SliceButton(
                         enabled = sliceState !is SliceUi.Slicing,
                         sliceState = sliceState,
@@ -177,6 +182,7 @@ fun SlicerScreen(
                                     layerHeightOverride = layerHeightOverride,
                                     cacheDir = ctx.cacheDir,
                                     paintFilamentIndex = paintFilamentIndex,
+                                    transform = transform,
                                     onProgress = { p, m ->
                                         if (sliceState is SliceUi.Slicing) sliceState = SliceUi.Slicing(p, m)
                                     },
@@ -210,7 +216,10 @@ fun SlicerScreen(
                     onSetFile = onSetFile,
                     onOpenPaint = onOpenPaint,
                     paintApplied = paintFilamentIndex != null,
+                    transform = transform,
+                    onSetTransform = onSetTransform,
                 )
+                TransformSheet(transform, onSetTransform)
                 SliceButton(
                     enabled = sliceState !is SliceUi.Slicing,
                     sliceState = sliceState,
@@ -223,6 +232,7 @@ fun SlicerScreen(
                                 layerHeightOverride = layerHeightOverride,
                                 cacheDir = ctx.cacheDir,
                                 paintFilamentIndex = paintFilamentIndex,
+                                transform = transform,
                                 onProgress = { p, m ->
                                     if (sliceState is SliceUi.Slicing) sliceState = SliceUi.Slicing(p, m)
                                 },
@@ -500,6 +510,7 @@ private suspend fun runSlice(
     layerHeightOverride: String,
     cacheDir: File,
     paintFilamentIndex: ByteArray?,
+    transform: SlicerEngine.ModelPlacement,
     onProgress: (Int, String) -> Unit,
     onResult: (SliceResult) -> Unit,
 ) {
@@ -511,14 +522,100 @@ private suspend fun runSlice(
         effectiveConfig["layer_height"] = lh.toString()
         effectiveConfig["initial_layer_print_height"] = lh.toString()
     }
-    val result = SlicerEngine.slice(
-        stl = source,
-        outGcode = out,
-        config = effectiveConfig,
-        paintFilamentIndex = paintFilamentIndex,
-        onProgress = { percent, message -> onProgress(percent, message) },
-    )
+    // Route through sliceMulti so the user's translate / rotate /
+    // scale knobs are honored even for the single-model flow. When
+    // the transform is identity, sliceMulti behaves identically to
+    // the single-model `slice()` path.
+    val isIdentity = transform == SlicerEngine.ModelPlacement()
+    val result = if (isIdentity && paintFilamentIndex == null) {
+        SlicerEngine.slice(
+            stl = source,
+            outGcode = out,
+            config = effectiveConfig,
+            paintFilamentIndex = paintFilamentIndex,
+            onProgress = { percent, message -> onProgress(percent, message) },
+        )
+    } else {
+        SlicerEngine.sliceMulti(
+            models = listOf(source to transform),
+            outGcode = out,
+            config = effectiveConfig,
+            paintFilamentIndices = listOf(paintFilamentIndex),
+            onProgress = { percent, message -> onProgress(percent, message) },
+        )
+    }
     onResult(result)
+}
+
+@Composable
+private fun TransformSheet(
+    transform: SlicerEngine.ModelPlacement,
+    onSet: (SlicerEngine.ModelPlacement) -> Unit,
+) {
+    MobileCard {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SectionKicker("Transform")
+            TransformSlider("Rotate X", transform.rotXdeg, -180f, 180f, "°") {
+                onSet(transform.copy(rotXdeg = it))
+            }
+            TransformSlider("Rotate Y", transform.rotYdeg, -180f, 180f, "°") {
+                onSet(transform.copy(rotYdeg = it))
+            }
+            TransformSlider("Rotate Z", transform.rotZdeg, -180f, 180f, "°") {
+                onSet(transform.copy(rotZdeg = it))
+            }
+            val uniformScale = transform.scaleXPct
+            TransformSlider("Scale", uniformScale, 10f, 400f, "%") {
+                onSet(
+                    transform.copy(
+                        scalePct = it,
+                        scaleXPct = it,
+                        scaleYPct = it,
+                        scaleZPct = it,
+                    ),
+                )
+            }
+            if (transform != SlicerEngine.ModelPlacement()) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { onSet(SlicerEngine.ModelPlacement()) },
+                    modifier = Modifier.align(androidx.compose.ui.Alignment.End),
+                ) {
+                    Text("Reset")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TransformSlider(
+    label: String,
+    value: Float,
+    min: Float,
+    max: Float,
+    unit: String,
+    onChange: (Float) -> Unit,
+) {
+    Column {
+        Row {
+            Text(
+                label,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                "%.1f$unit".format(value),
+                style = LocalMobileTextStyles.current.numeric,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        androidx.compose.material3.Slider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = min..max,
+        )
+    }
 }
 
 @Composable
@@ -528,6 +625,8 @@ private fun ToolsCard(
     onSetFile: (String?) -> Unit,
     onOpenPaint: ((String) -> Unit)?,
     paintApplied: Boolean,
+    transform: SlicerEngine.ModelPlacement,
+    onSetTransform: (SlicerEngine.ModelPlacement) -> Unit,
 ) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var repairing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -571,14 +670,21 @@ private fun ToolsCard(
                                 runCatching { SlicerEngine.autoOrient(File(filePath)) }.getOrNull()
                             }
                             orienting = false
-                            lastToolResult = if (euler == null || euler.size < 3) {
-                                "Auto-orient: no rotation needed (already optimal)."
+                            if (euler == null || euler.size < 3) {
+                                lastToolResult = "Auto-orient: no rotation needed (already optimal)."
                             } else {
                                 val (rx, ry, rz) = Triple(euler[0], euler[1], euler[2])
                                 if (kotlin.math.abs(rx) + kotlin.math.abs(ry) + kotlin.math.abs(rz) < 0.5f) {
-                                    "Auto-orient: already near-optimal."
+                                    lastToolResult = "Auto-orient: already near-optimal."
                                 } else {
-                                    "Auto-orient suggests X %.1f° / Y %.1f° / Z %.1f°".format(rx, ry, rz)
+                                    onSetTransform(
+                                        transform.copy(
+                                            rotXdeg = rx,
+                                            rotYdeg = ry,
+                                            rotZdeg = rz,
+                                        ),
+                                    )
+                                    lastToolResult = "Auto-orient applied: X %.1f° / Y %.1f° / Z %.1f°".format(rx, ry, rz)
                                 }
                             }
                         }
