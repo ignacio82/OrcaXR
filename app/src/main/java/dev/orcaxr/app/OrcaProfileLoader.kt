@@ -429,9 +429,37 @@ object OrcaProfileLoader {
         // ---- machine geometry / kinematics ----
         "printable_height",
         "printable_area",
+        "bed_exclude_area",
         "nozzle_diameter",
+        "nozzle_type",                  // coEnums — keys_map fixup in slic3r_jni.cpp
+        "extruder_offset",
+        "auxiliary_fan",
+        "fan_speedup_time",
+        "scan_first_layer",
+        "machine_load_filament_time",
+        "machine_unload_filament_time",
+        "manual_filament_change",
         "single_extruder_multi_material",
         "gcode_flavor",
+        // host_type sentinel for routing to a vendor-specific
+        // Moonraker driver. ElegooSlicer's CC machine profile authors
+        // "elegoolink"; libslic3r's PrintHostType enum doesn't include
+        // it, so deserialize silently drops the value — but having
+        // the key in SAFE_KEYS means the Kotlin-side PrinterRepository
+        // (which reads the raw JSON, not the resolved config) can
+        // detect a CC and route to a Centauri-aware Moonraker dialect
+        // when one ships. coEnum<PrintHostType> on the libslic3r side.
+        "host_type",
+        // Centauri-style filename templates ("ECC_{nozzle_diameter[0]}_{...}.gcode")
+        // so prints uploaded by OrcaXR group correctly in the CC's
+        // on-printer file browser. coString — safe.
+        "filename_format",
+        // Identifying metadata that ends up in the gcode header
+        // (`;printer_model:[printer_model]`) and is consumed by the
+        // CC firmware UI. coString — safe.
+        "printer_model",
+        "printer_variant",
+        "default_bed_type",
         // ---- retraction / wipe ----
         "retraction_length",
         "retraction_speed",

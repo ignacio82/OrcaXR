@@ -27,7 +27,7 @@
     "ironing_speed": "30",
     "ironing_type": "no ironing",
     "layer_height": "0.2",
-    "filename_format": "{input_filename_base}_{filament_type[0]}{layer_height}_{print_time}.gcode",
+    "filename_format": "{input_filename_base}_{filament_name}_{layer_height}_{print_time}.gcode",
     "detect_overhang_wall": "1",
     "overhang_1_4_speed": "0",
     "overhang_2_4_speed": "50",
@@ -88,6 +88,7 @@
     "wipe_before_external_loop": "0",
     "exclude_object": "1",
     "wipe_speed": "100%",
-    "print_flow_ratio": "1.0",
-    "wall_sequence": "inner wall/outer wall"
+    "print_flow_ratio": "0.97",
+    "wall_sequence": "inner wall/outer wall",
+    "wipe_tower_wall_type": "rib"
 }
