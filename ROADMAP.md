@@ -96,18 +96,22 @@ Output is a single-object 3MF written via `store_3mf`. The Kotlin caller (`MainA
 
 **Shipped:** commit `e6937e3` — `BedCollision.detect`, banner, Slice gate, `BedCollisionTest` (6 tests). Commit `61875bb` — bed-collision now also runs on the 3MF preview path via `deriveStlFor` + `StlReader`. Commit `6aa1151` — `StlPreviewGlb.write` `offBedTriIndices` parameter wired into `previewStl`, `StlPreviewGlbTest` (5 tests covering default/red/paint-vs-offbed/out-of-range/empty). Flips A6 to fully shipped.
 
-### A7. Toolpath rendering as triangulated tubes 🟡 Partial — geometry shipped + capped, miter joins + 500k stress pending
+### A7. Toolpath rendering as triangulated tubes 🟢 Shipped
 
 > **Files:** `ToolpathGlb.kt`, `ToolpathGlbTest.kt`, `UserPreferences.kt`, `UiPanels.kt::BottomLayerPreviewPanel`, `MainActivity.kt::XrShell` (toolpathTubes state + LE re-bake).
 
 `ToolpathGlb.write(tubes = true)` emits a 4-sided rectangular prism (8 verts × 12 tris × 36 indices) per extrusion segment. Cross-section is built by tangent t = normalize(end−start), reference axis = world-Z (or world-Y when tangent is nearly Z-aligned to keep the cross product well-conditioned), then side = normalize(cross(t, ref)) and up = normalize(cross(side, t)). Travels stay LINES inside the same TRIANGLES primitive via degenerate-triangle hairlines so we don't pay for a second draw call. Switch + persistence wired through `UserPreferences.toolpathTubes` (SharedPreferences, mirrors the existing `showTravels` flag) and surfaced as a "Tubes" Switch in the bottom layer-preview panel.
 
-**Pending — entry-criteria for the green flip:**
-- Above `ToolpathGlb.TUBES_SEGMENT_CAP` (currently 50k segments) the writer silently falls back to LINES because materializing positions+colors+indices for the full 500k-segment dragon (~170 MB JVM heap) would OOM at the typical 256 MB Android process cap. Streaming-tube generation (sequence-based GlbBuilder API) is the follow-up that lifts the cap.
-- Mitered joins between connected segments (today every prism is independent; corners read as a small bevel). Requires a connectivity-graph build over `ParsedToolpath.segments`.
-- Visual verification on Galaxy XR — current verification is geometry-level (vertex / index counts, doubleSided flag, bbox sanity, vertical-segment cross-product guard).
-
 **Shipped:** commit `9731320` — `ToolpathGlb.write(tubes = …)` + `TUBES_SEGMENT_CAP` fallback + `UserPreferences.toolpathTubes` + `BottomLayerPreviewPanel` Switch + `ToolpathGlbTest` (6 tests covering lines baseline / tubes counts / tube bbox / cap fallback / travels-as-hairlines / vertical-segment Y-axis fallback).
+
+**Streaming + miter close-out (this commit):**
+- New `GlbBuilder.streamGlb(out, vertexCount, indexCount, mode, bboxMin, bboxMax, hasColors, …)` — three callback writers (positions / colors / indices) feeding through 64 KB scratch buffers (`FloatSink`, `IntSink`). Caller pre-computes counts + bbox in a single linear scan; peak memory while writing is ~64 KB scratch + the per-segment frame cache, regardless of segment count. The legacy array-based `GlbBuilder` constructor stays in place as a wrapper for the small-mesh callers (selection bbox outline, etc.).
+- `ToolpathGlb.writeTubes` rewritten to stream. Pre-pass computes per-segment natural side/up axes and unit tangents into two pre-sized arrays (`frames: FloatArray(N*6)`, `tangents: FloatArray(N*3)`) — 12 MB at 500k segments, vs the pre-streaming 170 MB cliff for positions+colors+indices. Three streaming passes emit positions, colors (with on-the-fly Lambert shading per corner), and indices.
+- **Mitered joins** — when `seg[i].end ≈ seg[i+1].start` (1e-3 mm tolerance), the join's cross-section uses the average of the two segments' natural side/up axes plus a `1/cos(angle/2)` width compensation (capped at 4× to prevent near-180° reversal spikes). Result: `seg[i]`'s end-corners (v4..v7) land at the same world positions as `seg[i+1]`'s start-corners (v0..v3) — pinned by `mitered_join_corners_align_at_shared_endpoint`. Chain breaks (different layers, retracts, tool changes) automatically fall back to per-segment perpendicular cross-sections — pinned by `chain_break_falls_back_to_per_segment_cross_section`.
+- `TUBES_SEGMENT_CAP` lifted from 250k to **1.5M**. The old `LINES` fallback path stays in place as a safety valve for pathological multi-million-segment slices that would still pressure the per-segment cache.
+- `ToolpathGlbStreamingTest` (5 tests) — miter alignment, chain-break fallback, bbox accessor includes radius padding, 1500-segment streaming round-trip without OOM or LINES fallback, cap-floor tripwire.
+
+On-device visual verification on Galaxy XR with the 4-color dragon stays as the remaining instrumented-test follow-up (the geometry contract is fully pinned at unit-test layer).
 
 ### A8. G-code thumbnails for Snapmaker/OrcaSlicer parity 🟢 Shipped
 
