@@ -263,7 +263,9 @@ private fun PreviewCard(filePath: String, fillRemaining: Boolean) {
     val ctx = LocalContext.current
     var renderBitmap by remember(filePath) { mutableStateOf<android.graphics.Bitmap?>(null) }
     var summary by remember(filePath) { mutableStateOf<AiIntrospection.GeometrySummary?>(null) }
+    var bvhCache by remember(filePath) { mutableStateOf<MeshBvh?>(null) }
     var rendering by remember(filePath) { mutableStateOf(true) }
+    var cameraName by remember(filePath) { mutableStateOf("iso") }
 
     LaunchedEffect(filePath) {
         rendering = true
@@ -279,8 +281,17 @@ private fun PreviewCard(filePath: String, fillRemaining: Boolean) {
             }
             val mesh = withContext(Dispatchers.IO) { StlReader.read(stl) }
             val bvh = withContext(Dispatchers.Default) { MeshBvh.build(mesh) }
-            val geom = withContext(Dispatchers.Default) { AiIntrospection.geometry(bvh) }
-            val cam = AiRenderEngine.namedPreset("iso", geom.bboxCenteredPreview, 720, 720)
+            bvhCache = bvh
+            summary = withContext(Dispatchers.Default) { AiIntrospection.geometry(bvh) }
+        }.onFailure { it.printStackTrace() }
+    }
+
+    LaunchedEffect(bvhCache, cameraName) {
+        val bvh = bvhCache ?: return@LaunchedEffect
+        val geom = summary ?: return@LaunchedEffect
+        rendering = true
+        runCatching {
+            val cam = AiRenderEngine.namedPreset(cameraName, geom.bboxCenteredPreview, 720, 720)
             val res = withContext(Dispatchers.Default) {
                 AiRenderEngine.render(
                     bvh = bvh,
@@ -290,10 +301,8 @@ private fun PreviewCard(filePath: String, fillRemaining: Boolean) {
                     backgroundRgb = intArrayOf(15, 29, 48),
                 )
             }
-            val bmp = android.graphics.BitmapFactory.decodeByteArray(res.pngBytes, 0, res.pngBytes.size)
-            renderBitmap = bmp
-            summary = geom
-        }.onFailure { it.printStackTrace() }
+            renderBitmap = android.graphics.BitmapFactory.decodeByteArray(res.pngBytes, 0, res.pngBytes.size)
+        }
         rendering = false
     }
 
@@ -323,6 +332,28 @@ private fun PreviewCard(filePath: String, fillRemaining: Boolean) {
                     }
                 } else {
                     Text("Preview unavailable", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            // Camera preset chips — let the user spin the still preview.
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(listOf("iso", "front", "right", "back", "left", "top", "bottom")) { p ->
+                    val sel = p == cameraName
+                    Surface(
+                        color = if (sel) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = RoundedCornerShape(50),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                        ),
+                        onClick = { cameraName = p },
+                    ) {
+                        Text(
+                            p,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (sel) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
+                    }
                 }
             }
             // Geometry stats
