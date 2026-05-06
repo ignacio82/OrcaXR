@@ -105,6 +105,15 @@ fun MobileShell(
                 var dest by rememberSaveable { mutableStateOf(MobileDestination.Home) }
                 var slicerFilePath by rememberSaveable { mutableStateOf<String?>(null) }
                 var slicerOutputPath by rememberSaveable { mutableStateOf<String?>(null) }
+                // Paint state — ByteArrays don't go through rememberSaveable
+                // out of the box (Bundle.putByteArray works, but the
+                // Compose Saver isn't auto-installed for them). They
+                // live in MutableState across recompositions; on
+                // process-death we lose the paint, which matches the
+                // XR shell's behavior — paint is per-session unless
+                // explicitly committed to a slice.
+                var slicerPaintIndex by remember { mutableStateOf<ByteArray?>(null) }
+                var paintModeFile by rememberSaveable { mutableStateOf<String?>(null) }
 
                 // Onboarding gating: until at least one printer exists,
                 // route to the Onboarding flow regardless of `dest`.
@@ -120,6 +129,28 @@ fun MobileShell(
                     return@BoxWithConstraints
                 }
 
+                // Paint mode is a full-screen takeover (no nav chrome)
+                // since the user's only meaningful interaction is the
+                // canvas, brush size, and slot picker.
+                val activePaintFile = paintModeFile
+                if (activePaintFile != null) {
+                    dev.orcaxr.app.mobile.screens.PaintScreen(
+                        filePath = activePaintFile,
+                        initialPaint = slicerPaintIndex,
+                        onApply = { applied ->
+                            slicerPaintIndex = applied
+                            paintModeFile = null
+                            dest = MobileDestination.Slicer
+                        },
+                        onCancel = {
+                            paintModeFile = null
+                            dest = MobileDestination.Slicer
+                        },
+                    )
+                    return@BoxWithConstraints
+                }
+
+                val openPaintCallback: (String) -> Unit = { fp -> paintModeFile = fp }
                 if (isTablet) {
                     Row(Modifier.fillMaxSize()) {
                         TabletNavRail(
@@ -130,9 +161,17 @@ fun MobileShell(
                             dest = dest,
                             isTablet = true,
                             slicerFilePath = slicerFilePath,
-                            onSetSlicerFile = { slicerFilePath = it },
+                            onSetSlicerFile = {
+                                if (it != slicerFilePath) {
+                                    // New file → discard stale paint
+                                    slicerPaintIndex = null
+                                }
+                                slicerFilePath = it
+                            },
                             slicerOutputPath = slicerOutputPath,
                             onSetSlicerOutput = { slicerOutputPath = it },
+                            slicerPaintIndex = slicerPaintIndex,
+                            onOpenPaint = openPaintCallback,
                             onNavigate = { dest = it },
                             forceDark = forceDark,
                             onSetForceDark = onSetForceDark,
@@ -145,9 +184,16 @@ fun MobileShell(
                             dest = dest,
                             isTablet = false,
                             slicerFilePath = slicerFilePath,
-                            onSetSlicerFile = { slicerFilePath = it },
+                            onSetSlicerFile = {
+                                if (it != slicerFilePath) {
+                                    slicerPaintIndex = null
+                                }
+                                slicerFilePath = it
+                            },
                             slicerOutputPath = slicerOutputPath,
                             onSetSlicerOutput = { slicerOutputPath = it },
+                            slicerPaintIndex = slicerPaintIndex,
+                            onOpenPaint = openPaintCallback,
                             onNavigate = { dest = it },
                             forceDark = forceDark,
                             onSetForceDark = onSetForceDark,
@@ -172,6 +218,8 @@ private fun ScreenContent(
     onSetSlicerFile: (String?) -> Unit,
     slicerOutputPath: String?,
     onSetSlicerOutput: (String?) -> Unit,
+    slicerPaintIndex: ByteArray?,
+    onOpenPaint: (String) -> Unit,
     onNavigate: (MobileDestination) -> Unit,
     forceDark: Boolean?,
     onSetForceDark: (Boolean?) -> Unit,
@@ -187,6 +235,8 @@ private fun ScreenContent(
                 outputPath = slicerOutputPath,
                 onSetOutput = onSetSlicerOutput,
                 onNavigate = onNavigate,
+                paintFilamentIndex = slicerPaintIndex,
+                onOpenPaint = onOpenPaint,
             )
             MobileDestination.Files -> FilesScreen(
                 isTablet = isTablet,

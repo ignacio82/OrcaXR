@@ -22,6 +22,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -64,6 +66,7 @@ import dev.orcaxr.app.mobile.MobileDestination
 import dev.orcaxr.app.mobile.MobileMetric
 import dev.orcaxr.app.mobile.MobileTopBar
 import dev.orcaxr.app.mobile.SectionKicker
+import dev.orcaxr.app.mobile.StatusPill
 import dev.orcaxr.app.mobile.formatBytes
 import dev.orcaxr.app.mobile.formatDurationCompact
 import kotlinx.coroutines.Dispatchers
@@ -99,6 +102,8 @@ fun SlicerScreen(
     outputPath: String?,
     onSetOutput: (String?) -> Unit,
     onNavigate: (MobileDestination) -> Unit,
+    paintFilamentIndex: ByteArray? = null,
+    onOpenPaint: ((String) -> Unit)? = null,
 ) {
     val app = LocalMobileAppState.current
     val ctx = LocalContext.current
@@ -152,6 +157,13 @@ fun SlicerScreen(
                 Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     ProfileCard(allProfiles, selectedProfile, onSelect = { selectedProfile = it })
                     QuickOverridesCard(layerHeightOverride, onChange = { layerHeightOverride = it })
+                    ToolsCard(
+                        filePath = filePath,
+                        cacheDir = ctx.cacheDir,
+                        onSetFile = onSetFile,
+                        onOpenPaint = onOpenPaint,
+                        paintApplied = paintFilamentIndex != null,
+                    )
                     SliceButton(
                         enabled = sliceState !is SliceUi.Slicing,
                         sliceState = sliceState,
@@ -163,6 +175,7 @@ fun SlicerScreen(
                                     profile = selectedProfile,
                                     layerHeightOverride = layerHeightOverride,
                                     cacheDir = ctx.cacheDir,
+                                    paintFilamentIndex = paintFilamentIndex,
                                     onProgress = { p, m ->
                                         if (sliceState is SliceUi.Slicing) sliceState = SliceUi.Slicing(p, m)
                                     },
@@ -190,6 +203,13 @@ fun SlicerScreen(
                 PreviewCard(filePath, fillRemaining = false)
                 ProfileCard(allProfiles, selectedProfile, onSelect = { selectedProfile = it })
                 QuickOverridesCard(layerHeightOverride, onChange = { layerHeightOverride = it })
+                ToolsCard(
+                    filePath = filePath,
+                    cacheDir = ctx.cacheDir,
+                    onSetFile = onSetFile,
+                    onOpenPaint = onOpenPaint,
+                    paintApplied = paintFilamentIndex != null,
+                )
                 SliceButton(
                     enabled = sliceState !is SliceUi.Slicing,
                     sliceState = sliceState,
@@ -201,6 +221,7 @@ fun SlicerScreen(
                                 profile = selectedProfile,
                                 layerHeightOverride = layerHeightOverride,
                                 cacheDir = ctx.cacheDir,
+                                paintFilamentIndex = paintFilamentIndex,
                                 onProgress = { p, m ->
                                     if (sliceState is SliceUi.Slicing) sliceState = SliceUi.Slicing(p, m)
                                 },
@@ -477,6 +498,7 @@ private suspend fun runSlice(
     profile: SlicerProfile,
     layerHeightOverride: String,
     cacheDir: File,
+    paintFilamentIndex: ByteArray?,
     onProgress: (Int, String) -> Unit,
     onResult: (SliceResult) -> Unit,
 ) {
@@ -492,7 +514,75 @@ private suspend fun runSlice(
         stl = source,
         outGcode = out,
         config = effectiveConfig,
+        paintFilamentIndex = paintFilamentIndex,
         onProgress = { percent, message -> onProgress(percent, message) },
     )
     onResult(result)
+}
+
+@Composable
+private fun ToolsCard(
+    filePath: String,
+    cacheDir: File,
+    onSetFile: (String?) -> Unit,
+    onOpenPaint: ((String) -> Unit)?,
+    paintApplied: Boolean,
+) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var repairing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var lastRepairResult by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+
+    MobileCard {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SectionKicker("Tools")
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            repairing = true
+                            val source = File(filePath)
+                            val out = File(cacheDir, "repaired_${source.nameWithoutExtension}.3mf")
+                            val r = withContext(Dispatchers.IO) {
+                                runCatching { SlicerEngine.repairModel(source, out) }.getOrNull()
+                            }
+                            repairing = false
+                            if (r != null) {
+                                lastRepairResult = "Repaired: ${r.openEdgesIn} → ${r.openEdgesOut} open edges, ${if (r.partial) "partial (CGAL skipped)" else "OK"}"
+                                onSetFile(r.output.absolutePath)
+                            } else {
+                                lastRepairResult = "Repair skipped — mesh already manifold or load failed."
+                            }
+                        }
+                    },
+                    enabled = !repairing,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(Icons.Filled.AutoFixHigh, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (repairing) "Repairing…" else "Repair")
+                }
+                if (onOpenPaint != null) {
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = { onOpenPaint(filePath) },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(Icons.Filled.Brush, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (paintApplied) "Edit paint" else "Paint")
+                    }
+                }
+            }
+            val repaired = lastRepairResult
+            if (repaired != null) {
+                Text(
+                    repaired,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (paintApplied) {
+                StatusPill("Paint applied", MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
 }
