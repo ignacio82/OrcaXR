@@ -1,16 +1,20 @@
 package dev.orcaxr.app.mobile.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -33,8 +37,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import dev.orcaxr.app.ExtrusionRole
 import dev.orcaxr.app.GcodeParser
 import dev.orcaxr.app.MoonrakerClient
+import dev.orcaxr.app.ParsedToolpath
+import dev.orcaxr.app.mobile.GcodeThumbnailReader
+import dev.orcaxr.app.mobile.ToolpathLayerView
+import dev.orcaxr.app.mobile.ToolpathRolesLegend
 import dev.orcaxr.app.MoonrakerResult
 import dev.orcaxr.app.PrinterConfig
 import dev.orcaxr.app.mobile.EmptyStateCard
@@ -76,9 +87,23 @@ fun PreviewScreen(isTablet: Boolean) {
     }
 
     var meta by remember(gcodeFile?.absolutePath) { mutableStateOf<GcodeMeta?>(null) }
+    var thumbnail by remember(gcodeFile?.absolutePath) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var toolpath by remember(gcodeFile?.absolutePath) { mutableStateOf<ParsedToolpath?>(null) }
+    var parsing by remember(gcodeFile?.absolutePath) { mutableStateOf(false) }
     LaunchedEffect(gcodeFile?.absolutePath) {
         val f = gcodeFile ?: return@LaunchedEffect
         meta = withContext(Dispatchers.IO) { parseGcodeMeta(f) }
+        thumbnail = withContext(Dispatchers.IO) { GcodeThumbnailReader.extractLargest(f) }
+        parsing = true
+        // Toolpath parse is the heavyweight bit (segments + travels for
+        // a multi-million-line G-code can run a few seconds). Do it on
+        // the IO dispatcher so the rest of the screen renders in the
+        // meantime and the user sees the metadata + thumbnail
+        // immediately.
+        toolpath = withContext(Dispatchers.IO) {
+            runCatching { GcodeParser.parse(f) }.getOrNull()
+        }
+        parsing = false
     }
 
     var uploadingId by remember { mutableStateOf<String?>(null) }
@@ -140,6 +165,60 @@ fun PreviewScreen(isTablet: Boolean) {
                         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                             MobileMetric("Layers", meta?.layerCount?.toString() ?: "—")
                             MobileMetric("Bed area", "—")
+                        }
+                    }
+                }
+
+                val bmp = thumbnail
+                if (bmp != null) {
+                    MobileCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SectionKicker("Slicer thumbnail")
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(1f)
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(16.dp)),
+                                contentAlignment = androidx.compose.ui.Alignment.Center,
+                            ) {
+                                Image(
+                                    bitmap = bmp.asImageBitmap(),
+                                    contentDescription = "Slicer-embedded thumbnail",
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier.fillMaxSize().padding(8.dp),
+                                )
+                            }
+                            Text(
+                                "Embedded ${bmp.width}×${bmp.height} preview from libslic3r",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+
+                val tp = toolpath
+                if (tp != null && tp.layerZs.isNotEmpty()) {
+                    MobileCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            SectionKicker("Toolpath")
+                            ToolpathLayerView(parsed = tp)
+                            val activeRoles = remember(tp) { tp.segments.map { it.role }.toSet() }
+                            ToolpathRolesLegend(activeRoles)
+                        }
+                    }
+                } else if (parsing) {
+                    MobileCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SectionKicker("Toolpath")
+                            Text(
+                                "Parsing G-code…",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            androidx.compose.material3.LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth(),
+                            )
                         }
                     }
                 }

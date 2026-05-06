@@ -11,9 +11,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import dev.orcaxr.app.mobile.MobileAppState
 import dev.orcaxr.app.mobile.MobileShell
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Phone / tablet entry point. Hosts the Material 3 navigation shell
@@ -46,10 +50,32 @@ class MobileActivity : ComponentActivity() {
 
         val appState = MobileAppState(this)
 
+        // Roadmap B14 — drain any VIEW / SEND attached files into the
+        // recents list before the shell renders, so a share-to-OrcaXR
+        // lands the user on a Files screen with the new file already at
+        // the top of the list. Routing into Slicer is a follow-up
+        // (would require either a process-singleton "pending file" or
+        // an explicit deep-link argument; both are bigger than the
+        // current "land in Files" UX warrants).
+        lifecycleScope.launch {
+            val uris = pendingSharedUris.value
+            if (uris.isNotEmpty()) {
+                val files = withContext(Dispatchers.IO) {
+                    SharedIntentHandler.resolveAll(this@MobileActivity, intent)
+                }
+                files.forEach { f -> appState.recentFiles.add(f) }
+                pendingSharedUris.value = emptyList()
+            }
+        }
+
         setContent {
-            // Persist user's theme override across config changes so a
-            // rotation doesn't snap from dark back to system-default.
-            var forceDarkRaw by rememberSaveable { mutableStateOf<Int>(THEME_FOLLOW_SYSTEM) }
+            // Persist user's theme override across config changes AND
+            // process death via UserPreferences. A rotation doesn't
+            // snap from dark back to system-default, and a kill-and-
+            // relaunch keeps the same surface family.
+            var forceDarkRaw by rememberSaveable {
+                mutableStateOf(appState.prefs.mobileTheme)
+            }
             val forceDark: Boolean? = when (forceDarkRaw) {
                 THEME_DARK -> true
                 THEME_LIGHT -> false
@@ -59,11 +85,13 @@ class MobileActivity : ComponentActivity() {
                 appState = appState,
                 forceDark = forceDark,
                 onSetForceDark = { v ->
-                    forceDarkRaw = when (v) {
+                    val raw = when (v) {
                         true -> THEME_DARK
                         false -> THEME_LIGHT
                         null -> THEME_FOLLOW_SYSTEM
                     }
+                    forceDarkRaw = raw
+                    appState.prefs.mobileTheme = raw
                 },
             )
         }

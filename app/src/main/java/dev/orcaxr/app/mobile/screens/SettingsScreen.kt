@@ -65,15 +65,26 @@ fun SettingsScreen(
             MobileCard {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     SectionKicker("Appearance")
-                    val dark = forceDark ?: true
-                    SwitchRow(
-                        label = "Dark theme",
-                        sub = "Inherits the orcaxr.dev midnight palette. Light mode uses M3 surfaces with the same teal accent.",
-                        checked = dark,
-                        onChange = { onSetForceDark(it) },
+                    Text(
+                        when (forceDark) {
+                            true -> "Dark theme"
+                            false -> "Light theme"
+                            null -> "Following system"
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
-                    OutlinedButton(onClick = { onSetForceDark(null) }) {
-                        Text(if (forceDark == null) "Following system" else "Follow system")
+                    Text(
+                        "Persisted across app restarts. Light mode uses M3 surfaces with the same teal accent; dark inherits the orcaxr.dev midnight palette.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    androidx.compose.foundation.layout.Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        ThemePill("System", forceDark == null) { onSetForceDark(null) }
+                        ThemePill("Light", forceDark == false) { onSetForceDark(false) }
+                        ThemePill("Dark", forceDark == true) { onSetForceDark(true) }
                     }
                 }
             }
@@ -179,4 +190,24 @@ private fun SwitchRow(
 private fun copyToClipboard(ctx: Context, label: String, text: String) {
     val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
     cm.setPrimaryClip(ClipData.newPlainText(label, text))
+}
+
+@Composable
+private fun ThemePill(label: String, selected: Boolean, onClick: () -> Unit) {
+    androidx.compose.material3.Surface(
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(50),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+        ),
+        onClick = onClick,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+            modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+        )
+    }
 }

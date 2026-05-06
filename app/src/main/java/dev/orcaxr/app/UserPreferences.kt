@@ -109,6 +109,19 @@ class UserPreferences(ctx: Context) {
             prefs.edit().putString(KEY_TOOLPATH_COLOR_MODE, sanitized).apply()
         }
 
+    /**
+     * Mobile shell (phone / tablet) theme override. 0 = follow system,
+     * 1 = force dark, 2 = force light. Persisted across process death
+     * so a user who flipped to dark on a phone with a light system
+     * theme keeps dark on next launch. The XR shell ignores this —
+     * it's always dark.
+     */
+    var mobileTheme: Int
+        get() = prefs.getInt(KEY_MOBILE_THEME, 0)
+        set(value) {
+            prefs.edit().putInt(KEY_MOBILE_THEME, value.coerceIn(0, 2)).apply()
+        }
+
     /** Currently-selected printer's id (the destination for "Send to printer" + the Project panel display). */
     var lastPrinterId: String?
         get() = prefs.getString(KEY_LAST_PRINTER_ID, null)
@@ -144,5 +157,6 @@ class UserPreferences(ctx: Context) {
         private const val KEY_WIPE_TOWER_AUTO = "wipe_tower_auto"
         private const val KEY_WIPE_TOWER_X = "wipe_tower_x_override"
         private const val KEY_WIPE_TOWER_Y = "wipe_tower_y_override"
+        private const val KEY_MOBILE_THEME = "mobile_theme"
     }
 }

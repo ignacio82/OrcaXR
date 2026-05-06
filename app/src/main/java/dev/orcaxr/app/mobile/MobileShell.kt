@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.outlined.Architecture
 import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material.icons.outlined.Tune
@@ -213,6 +214,18 @@ private fun PhoneBottomNav(
     selected: MobileDestination,
     onSelect: (MobileDestination) -> Unit,
 ) {
+    var moreOpen by remember { mutableStateOf(false) }
+    val primary = listOf(
+        MobileDestination.Home,
+        MobileDestination.Slicer,
+        MobileDestination.Files,
+        MobileDestination.Monitor,
+    )
+    val overflow = listOf(
+        MobileDestination.Profiles,
+        MobileDestination.Filament,
+        MobileDestination.Settings,
+    )
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
         modifier = Modifier
@@ -227,16 +240,7 @@ private fun PhoneBottomNav(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Phone bottom nav: 5 most-used destinations + a "More"
-            // affordance via the Settings rail entry doubles as overflow.
-            // Profiles / Filament accessible via Slicer & Home navigations.
-            for (d in listOf(
-                MobileDestination.Home,
-                MobileDestination.Slicer,
-                MobileDestination.Files,
-                MobileDestination.Monitor,
-                MobileDestination.Settings,
-            )) {
+            for (d in primary) {
                 NavCell(
                     label = d.label,
                     icon = d.icon,
@@ -244,6 +248,80 @@ private fun PhoneBottomNav(
                     onClick = { onSelect(d) },
                     modifier = Modifier.weight(1f),
                 )
+            }
+            // "More" entry surfaces Profiles / Filament / Settings via a
+            // bottom sheet — keeps the bar at 5 visible cells while
+            // every destination is reachable in one tap.
+            NavCell(
+                label = "More",
+                icon = Icons.Filled.MoreHoriz,
+                selected = selected in overflow,
+                onClick = { moreOpen = true },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+    if (moreOpen) {
+        MoreSheet(
+            destinations = overflow,
+            selected = selected,
+            onSelect = {
+                moreOpen = false
+                onSelect(it)
+            },
+            onDismiss = { moreOpen = false },
+        )
+    }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun MoreSheet(
+    destinations: List<MobileDestination>,
+    selected: MobileDestination,
+    onSelect: (MobileDestination) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                "More",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(start = 8.dp, bottom = 8.dp),
+            )
+            for (d in destinations) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (selected == d) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    onClick = { onSelect(d) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            d.icon,
+                            contentDescription = d.label,
+                            tint = if (selected == d) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                        )
+                        Spacer(Modifier.width(16.dp))
+                        Text(
+                            d.label,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = if (selected == d) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
             }
         }
     }
