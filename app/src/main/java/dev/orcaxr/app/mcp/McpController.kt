@@ -17,6 +17,7 @@ import dev.orcaxr.app.mcp.tools.PaintTemplateTools
 import dev.orcaxr.app.mcp.tools.FilamentTools
 import dev.orcaxr.app.mcp.tools.HandyModelTools
 import dev.orcaxr.app.mcp.tools.PrefsTools
+import dev.orcaxr.app.mcp.tools.CalibrationTools
 import dev.orcaxr.app.mcp.tools.SettingsBackupTools
 import dev.orcaxr.app.mcp.tools.WipeTowerTools
 import dev.orcaxr.app.mcp.tools.PrimitiveTools
@@ -222,6 +223,9 @@ class McpController private constructor(
             for (t in SettingsBackupTools.all(ctx)) builder.tool(t)
             // Roadmap A13 — auto-position wipe tower over the active plate.
             for (t in WipeTowerTools.all(WorkspaceModel.get(), ctx)) builder.tool(t)
+            // Roadmap B12 — generate per-Z calibration ramps as
+            // batches of A11 custom-gcode ticks.
+            for (t in CalibrationTools.all(WorkspaceModel.get())) builder.tool(t)
             for (t in WorkspaceTools.all(ctx)) builder.tool(t)
             // D12 — primitive shape authoring (cube / cylinder / sphere / …).
             for (t in PrimitiveTools.all(ctx)) builder.tool(t)
