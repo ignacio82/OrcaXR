@@ -3590,6 +3590,9 @@ fun TopNavigationPill(
     /** Roadmap D17 — open / close the Mesh Simplify SpatialPanel. */
     onToggleSimplify: (() -> Unit)? = null,
     simplifyShown: Boolean = false,
+    /** Roadmap C8 — open / close the Voice Command SpatialPanel. */
+    onToggleVoice: (() -> Unit)? = null,
+    voiceShown: Boolean = false,
     /** Active transform tool. Move/Rotate/Scale render as toggle
      *  buttons; tapping the active one returns to [GizmoTool.Select]. */
     gizmoTool: GizmoTool,
@@ -3724,6 +3727,16 @@ fun TopNavigationPill(
                             isSelected = simplifyShown,
                             enabled = true,
                             onClick = onToggleSimplify,
+                        )
+                    }
+                    // Roadmap C8 — Voice command panel.
+                    if (onToggleVoice != null) {
+                        NavAction(
+                            label = "Voice",
+                            icon = androidx.compose.material.icons.Icons.Default.Mic,
+                            isSelected = voiceShown,
+                            enabled = true,
+                            onClick = onToggleVoice,
                         )
                     }
                     if (onToggleHelp != null) {

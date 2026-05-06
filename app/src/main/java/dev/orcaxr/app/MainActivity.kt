@@ -1064,6 +1064,9 @@ private fun XrShell(
     var adaptiveLayerShown by remember { mutableStateOf(false) }
     // Roadmap D17 — toggle for the Mesh Simplify SpatialPanel.
     var simplifyShown by remember { mutableStateOf(false) }
+    // Roadmap C8 — voice command panel toggle. Mounting this kicks
+    // off the SpeechRecognizer permission flow on first open.
+    var voiceShown by remember { mutableStateOf(false) }
     // Optional in-app LLM assistant. Toggled from the AI assistant
     // card in Settings once a provider key is set; renders the chat
     // SpatialPanel on the right side of the workspace.
@@ -5171,6 +5174,9 @@ private fun XrShell(
                         // Roadmap D17 — mesh simplify authoring panel.
                         simplifyShown = simplifyShown,
                         onToggleSimplify = { simplifyShown = !simplifyShown },
+                        // Roadmap C8 — voice command panel.
+                        voiceShown = voiceShown,
+                        onToggleVoice = { voiceShown = !voiceShown },
                         gizmoTool = gizmoTool,
                         onGizmoToolChange = { gizmoTool = it },
                         transformToolsEnabled = selectedModel != null,
@@ -6944,6 +6950,21 @@ private fun XrShell(
                             },
                         )
                     }
+                }
+
+                // Roadmap C8 — Voice command panel. Hosts a
+                // SpeechRecognizer session, runs VoiceIntentMapper on
+                // the recognized text, and dispatches the resulting
+                // VoiceIntent into the same WorkspaceModel actions
+                // every other path uses.
+                if (voiceShown) {
+                    VoiceCommandPanelMount(
+                        onClose = { voiceShown = false },
+                        helpToggle = { helpShown = !helpShown; voiceShown = false },
+                        settingsToggle = { settingsShown = !settingsShown; voiceShown = false },
+                        assistantToggle = { assistantShown = !assistantShown; voiceShown = false },
+                        session = session,
+                    )
                 }
 
                 // Roadmap D4 — Emboss / Engrave panel. Visible whenever

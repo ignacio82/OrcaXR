@@ -534,17 +534,20 @@ A live 3D representation of the print-in-progress lives inside OrcaXR's existing
 
 **Verification:** start a print on the U1, tap Devices in the top nav, watch the workspace strip down to the Devices view — the toolpath GLB starts at layer 0 and grows as the printer reports Z. From an MCP client: `get_print_progress` returns `{progress: 0.42, live_z_mm: 8.4, derived_layer_index: 42, derived_layer_count: 100, eta_sec: 3600}`.
 
-### C8. Voice-to-Action Integration (Speech-to-MCP) 🔴 Not started
+### C8. Voice-to-Action Integration (Speech-to-MCP) 🟢 Shipped
 
-> **Files:** `app/src/main/java/dev/orcaxr/app/voice/` (new), `MainActivity.kt`, C6 MCP Server logic.
+> **Files:** `app/src/main/java/dev/orcaxr/app/voice/VoiceIntentMapper.kt` + `VoiceCommandPanel.kt`, `app/src/main/java/dev/orcaxr/app/VoiceCommandPanelMount.kt`, `app/src/main/java/dev/orcaxr/app/llm/VoiceInput.kt` (reused), `MainActivity.kt` (mount + state), `UiPanels.kt::TopNavigationPill` (Voice mic chip).
 
-Enables hands-free control of the slicer and printer using voice commands, mapping spoken intent to MCP tool calls.
+Hands-free control of OrcaXR's slicer + printer + view via spoken commands. Reuses Android's on-device `SpeechRecognizer` (already wired for the in-app LLM assistant); the load-bearing addition is a regex-based keyword mapper that translates recognized utterances into structured `VoiceIntent`s, each of which routes onto an existing `WorkspaceAction` emission, prefs flip, panel toggle, or `SlicerEngine.abort()` call.
 
-**Implementation outline:**
-1. **Speech API:** Integrate Android `SpeechRecognizer` with a trigger button in the `TopNavigationPill`.
-2. **Intent Mapping:** Use a simple keyword-based or LLM-assisted mapper to translate recognized text (e.g., "Slice for PLA") to MCP tool calls (`slice_active_plate` with `material="PLA"`).
-3. **Feedback:** Show a transcript of the recognized command and a confirmation Toast before executing destructive actions (like "Clear bed").
-4. **Verification:** Say "Orca, slice the current plate"; confirm the slicing progress bar appears without touching the screen.
+**Shipped:**
+- `VoiceIntentMapper` — pure-Kotlin regex matcher, ~25 patterns, all case-insensitive + tolerant of trailing punctuation, polite preamble ("please"), and filler ("now"). Sealed `VoiceIntent` covers slicing (`slice`, `cancel slice`), saving (`save gcode` / `save as 3MF` / `save as STL`), workspace mode (`prepare` / `preview` / `devices`), preference toggles (`show/hide travels`, `enable/disable tubes`), plate switching (`plate N`), arrange (`auto arrange`), drop-to-bed, selection (`delete selected` / `clear selection`), wipe-tower (`auto position the tower`), settings export, handy-model load (`load benchy` / `load the cube` / etc.), help, settings, and undo/redo. Destructive intents (delete-selected, cancel-slice) carry `requiresConfirmation = true` so the panel renders a Confirm button instead of auto-firing.
+- `VoiceCommandPanel` SpatialPanel — mic toggle, live partial transcript, final transcript + matched intent display, auto-fire for non-destructive intents, Confirm/Cancel for destructive intents, "Send to Assistant" fallback for unrecognized utterances. Empty-state hint footer with example phrases.
+- `VoiceCommandPanelMount` — Activity-side host that owns `VoiceInput` lifecycle, RECORD_AUDIO permission flow via `ActivityResultContracts.RequestPermission`, and the 20-branch dispatcher mapping each `VoiceIntent` to its `WorkspaceAction` / prefs flip / direct call.
+- TopNavigationPill grows a `Mic` chip (Material `Icons.Default.Mic`) wired via `onToggleVoice` / `voiceShown`.
+- `VoiceIntentMapperTest` (12 tests) covers slicing variants, cancel-slice + delete-selected confirmation flag, mode aliases, plate-N integer extraction, auto-arrange + drop-to-bed phrasings, wipe-tower phrasings, preference toggles, save shortcuts, handy-model id normalization, unrecognized utterances → null, case-insensitive + trailing-period tolerance, undo/redo.
+
+**Verification:** ✅ Compile-clean end-to-end. Say "Slice the active plate"; recognizer endpoints, mapper resolves to `VoiceIntent.SliceActivePlate`, panel auto-fires `WorkspaceAction.SliceActivePlate`, BottomRightSummaryPanel slice progress bar appears identically to a Slice-button tap. On-device verification with Galaxy XR's built-in recognizer is the remaining instrumented-test follow-up.
 
 ### C9. AI-Driven Semantic Paint (LLM-driven natural-language painting) 🟢 Shipped (M1–M4) — multi-volume polish + nightly E2E pirate-Benchy eval still pending
 
