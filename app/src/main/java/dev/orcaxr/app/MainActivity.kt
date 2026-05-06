@@ -2160,6 +2160,10 @@ private fun XrShell(
                 if (cur is SliceUiState.Slicing) {
                     sliceState.value = cur.copy(percent = percent, message = message)
                 }
+                // Roadmap E8 — mirror the percent into the foreground-
+                // service notification so the user sees progress on
+                // the lock screen / shade with the headset off.
+                SliceLifecycle.updateProgress(percent, message)
             }
             val parsed = (result as? SliceResult.Success)?.let {
                 runCatching { GcodeParser.parse(File(it.outputPath)) }.getOrNull()
@@ -3005,6 +3009,10 @@ private fun XrShell(
                 if (cur is SliceUiState.Slicing) {
                     sliceState.value = cur.copy(percent = percent, message = message)
                 }
+                // Roadmap E8 — mirror the percent into the foreground-
+                // service notification so the user sees progress on
+                // the lock screen / shade with the headset off.
+                SliceLifecycle.updateProgress(percent, message)
             }
             val parsed = (result as? SliceResult.Success)?.let {
                 runCatching { GcodeParser.parse(File(it.outputPath)) }.getOrNull()
@@ -8839,6 +8847,13 @@ private fun SliceStateView(state: SliceUiState) {
                 "Slicing ${state.sourceLabel} failed (${r.code}): ${r.message}",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.error,
+            )
+            // Roadmap E8 — slice cancelled mid-flight via the
+            // foreground notification or MCP cancel_slice. Show as
+            // a neutral message rather than an error.
+            SliceResult.Cancelled -> Text(
+                "Slicing ${state.sourceLabel} was cancelled.",
+                style = MaterialTheme.typography.bodyLarge,
             )
         }
     }

@@ -160,5 +160,23 @@
             android:name=".SliceForegroundService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!--
+          Roadmap E8 — fielded by the Cancel action on the slicing
+          foreground-service notification. Manifest-registered (not
+          dynamic) so a tap from the lock screen / notification shade
+          works even when the Activity has been torn down — the user-
+          take-off-the-headset scenario the foreground service exists
+          for. android:exported="false" because the only sender is
+          OrcaXR itself; nothing else in the device-wide intent space
+          should be able to fire it.
+        -->
+        <receiver
+            android:name=".SliceCancelReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="dev.orcaxr.app.action.SLICE_CANCEL" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

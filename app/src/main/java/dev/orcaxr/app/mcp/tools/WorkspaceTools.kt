@@ -247,6 +247,9 @@ internal object WorkspaceTools {
                         put("code", r.code)
                         put("message", r.message)
                     }
+                    SliceResult.Cancelled -> {
+                        put("status", "cancelled")
+                    }
                 }
             }
         }
@@ -768,18 +771,30 @@ internal object WorkspaceTools {
     class CancelSlice(private val ws: WorkspaceModel) : Tool {
         override val name = "cancel_slice"
         override val description =
-            "Request that the running slice cancel. NOTE: libslic3r doesn't expose an abort " +
-                "hook through the JNI shim today, so this currently logs a warning and is a no-op. " +
-                "Surface kept stable so client code doesn't break when the underlying capability " +
-                "lands."
+            "Cancel the running slice. Routes through the libslic3r abort hook " +
+                "(SlicerEngine.abort → JNI nativeAbort → Print::cancel) so the in-flight " +
+                "slicing pipeline unwinds cleanly on the next cancellation poll. The pending " +
+                "slice resolves to SliceResult.Cancelled and the foreground notification " +
+                "drops. No-op when no slice is running."
         override val inputSchema = Schemas.empty()
         override suspend fun call(args: JSONObject): ToolResult {
-            requireAttached(ws)?.let { return it }
+            // No requireAttached — the abort hook is process-global so
+            // it works whether or not the Activity is foreground.
             ws.emit(WorkspaceAction.CancelSlice)
-            return ToolResult.error(
-                "cancel_slice is not yet supported — libslic3r doesn't expose an abort hook. " +
-                    "The action was logged but no slice was cancelled.",
-            )
+            // Roadmap E8 — SlicerEngine.abort flips libslic3r's atomic
+            // CancelStatus; the next poll throws CanceledException and
+            // the slice JNI returns -5, which Kotlin maps to Cancelled.
+            val cancelled = dev.orcaxr.app.SlicerEngine.abort()
+            val body = org.json.JSONObject().apply {
+                put("ok", true)
+                put("aborted", cancelled)
+                put(
+                    "note",
+                    if (cancelled) "Abort signal sent. The slice will resolve to Cancelled on the next libslic3r cancellation poll."
+                    else "No slice was in flight.",
+                )
+            }
+            return ToolResult.ok(body.toString(), body)
         }
     }
 

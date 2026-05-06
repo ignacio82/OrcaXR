@@ -15,6 +15,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <exception>
+#include <mutex>
 #include <sstream>
 #include <string>
 
@@ -118,6 +119,27 @@ JNI_OnLoad(JavaVM* vm, void* /*reserved*/) {
     g_jvm = vm;
     return JNI_VERSION_1_6;
 }
+
+// Roadmap E8 — abort hook for the in-flight slice. When non-null,
+// nativeAbort()'s call to ->cancel() flips libslic3r's atomic
+// CancelStatus, which Print::throw_if_canceled() polls at every
+// cancellation point inside the slicing pipeline. The pointer is set
+// to &print at the top of nativeSlice / nativeSliceMulti and cleared
+// before those functions return, all under g_active_print_mutex.
+//
+// Pointer is non-owning — the Print itself lives on the slicing thread's
+// stack. Lifetime safety hinges on the convention that the slicing
+// thread always clears the pointer in its scope-exit guard before the
+// Print's destructor fires.
+//
+// Concurrent slices are possible but rare (one inside another via the
+// adaptive-layer-height preview path); the global pointer is overwritten
+// for the duration of the inner slice and restored to the outer's
+// pointer when the inner returns. nativeAbort() cancels whichever Print
+// is currently top-of-stack; that's the correct semantic for "user hit
+// Cancel" because the inner slice is what the UI is showing progress for.
+static std::mutex g_active_print_mutex;
+static Slic3r::Print* g_active_print = nullptr;
 
 namespace {
 
@@ -1055,6 +1077,30 @@ Java_dev_orcaxr_app_SlicerEngine_nativeVersionString(JNIEnv* env, jclass) {
     return env->NewStringUTF(oss.str().c_str());
 }
 
+// Roadmap E8 — abort the in-flight slice (if any).
+// Returns true if there was a slice to cancel, false if no slice was
+// running. Thread-safe — can be called from the UI thread, the MCP
+// server's coroutine, or a notification-action BroadcastReceiver
+// without further synchronization.
+//
+// Mechanism: holds g_active_print_mutex briefly, calls
+// Slic3r::Print::cancel() on the registered active Print. cancel()
+// flips an atomic CancelStatus that libslic3r's
+// PrintBase::throw_if_canceled() polls at every cancellation point
+// inside the slicing pipeline (PrintObjectSlice, ToolOrdering,
+// MultiMaterialSegmentation, GCode export). The first poll after the
+// flip throws CanceledException which the JNI catches at the
+// nativeSlice / nativeSliceMulti top level and returns -3 / "canceled
+// by user" (same surface as a slice failure).
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_orcaxr_app_SlicerEngine_nativeAbort(JNIEnv*, jclass) {
+    std::lock_guard<std::mutex> lock(g_active_print_mutex);
+    if (g_active_print == nullptr) return JNI_FALSE;
+    g_active_print->cancel();
+    ORCAXR_LOGI("nativeAbort: cancel() flagged on active Print");
+    return JNI_TRUE;
+}
+
 // nativeSlice — slice a single STL into a single G-code file. Optional
 // (configKeys, configValues) arrays apply key/value overrides on top of
 // libslic3r's full default print config (set_deserialize_nothrow per
@@ -1660,6 +1706,23 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
         // to false to take the non-BBL G-code path.
         print.is_BBL_printer() = false;
 
+        // Roadmap E8 — register this Print as the cancellable-on-abort
+        // active slice. Restored on scope exit so nested inner slices
+        // re-arm the outer's pointer when they finish.
+        Slic3r::Print* prev_active = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(g_active_print_mutex);
+            prev_active = g_active_print;
+            g_active_print = &print;
+        }
+        struct ScopedActivePrint {
+            Slic3r::Print* prev;
+            ~ScopedActivePrint() {
+                std::lock_guard<std::mutex> lock(g_active_print_mutex);
+                g_active_print = prev;
+            }
+        } _active_print_guard{prev_active};
+
         Slic3r::DynamicPrintConfig cfg = Slic3r::DynamicPrintConfig::full_print_config();
 
         // -- Patch up ConfigOptionEnumsGeneric instances. ----------------
@@ -1897,6 +1960,14 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
 
         if (listener_global) env->DeleteGlobalRef(listener_global);
         return 0;
+    } catch (const Slic3r::CanceledException& e) {
+        // Roadmap E8 — nativeAbort() flipped CancelStatus and the
+        // pipeline unwound cleanly. Distinguish from a real error
+        // with a dedicated return code so the Kotlin caller can map
+        // to a SliceResult.Cancelled instead of a SliceResult.Failed.
+        ORCAXR_LOGI("nativeSlice: canceled by user");
+        if (listener_global) env->DeleteGlobalRef(listener_global);
+        return -5;
     } catch (const std::exception& e) {
         ORCAXR_LOGE("nativeSlice: exception %s", e.what());
         if (listener_global) env->DeleteGlobalRef(listener_global);
@@ -2304,6 +2375,22 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
 
         Slic3r::Print print;
         print.is_BBL_printer() = false;
+        // Roadmap E8 — register as active for nativeAbort. Restore on
+        // scope exit (mirrors the nativeSlice site above).
+        Slic3r::Print* prev_active2 = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(g_active_print_mutex);
+            prev_active2 = g_active_print;
+            g_active_print = &print;
+        }
+        struct ScopedActivePrintMulti {
+            Slic3r::Print* prev;
+            ~ScopedActivePrintMulti() {
+                std::lock_guard<std::mutex> lock(g_active_print_mutex);
+                g_active_print = prev;
+            }
+        } _active_print_guard2{prev_active2};
+
         Slic3r::DynamicPrintConfig cfg = Slic3r::DynamicPrintConfig::full_print_config();
         if (const Slic3r::ConfigDef* config_def = cfg.def()) {
             for (const auto& kv : config_def->options) {
@@ -2466,6 +2553,11 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
         }
         if (listener_global) env->DeleteGlobalRef(listener_global);
         return -3;
+    } catch (const Slic3r::CanceledException& e) {
+        // Roadmap E8 — see nativeSlice's matching handler.
+        ORCAXR_LOGI("nativeSliceMulti: canceled by user");
+        if (listener_global) env->DeleteGlobalRef(listener_global);
+        return -5;
     } catch (const std::exception& e) {
         ORCAXR_LOGE("nativeSliceMulti: exception %s", e.what());
         if (listener_global) env->DeleteGlobalRef(listener_global);

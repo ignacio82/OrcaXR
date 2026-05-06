@@ -99,6 +99,9 @@ fun SettingsPanel(
                 if (onOpenAssistant != null) {
                     LlmAssistantCard(onOpenAssistant = onOpenAssistant)
                 }
+                // Roadmap B13 — settings export / import (one JSON
+                // bundle covering every persistent store).
+                SettingsBackupCard()
                 // Future settings cards (theme, default printer,
                 // telemetry, etc.) drop in here without further wiring.
             }

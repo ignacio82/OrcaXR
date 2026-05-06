@@ -20,6 +20,14 @@ sealed interface SliceResult {
 
     /** libslic3r reported a known failure mode. [code] is the raw JNI rc. */
     data class NativeError(val code: Int, val message: String) : SliceResult
+
+    /**
+     * Roadmap E8 — slice was canceled mid-flight via [SlicerEngine.abort]
+     * (typically from the foreground-service notification's Cancel
+     * action or from MCP's `cancel_slice` tool). The output path may or
+     * may not exist; callers should treat it as missing.
+     */
+    object Cancelled : SliceResult
 }
 
 /**
@@ -309,6 +317,12 @@ object SlicerEngine {
             layerHeightProfile,
             cgZ, cgT, cgE, cgC, cgX,
         )
+        if (rc == -5) {
+            // Roadmap E8 — nativeAbort() flipped CancelStatus and the
+            // pipeline unwound cleanly. Surface as Cancelled so UI /
+            // MCP can distinguish "user canceled" from "slicer error".
+            return@withContext SliceResult.Cancelled
+        }
         if (rc != 0) {
             return@withContext SliceResult.NativeError(
                 code = rc,
@@ -1723,6 +1737,26 @@ object SlicerEngine {
         smoothingRadius: Int,
         smoothingKeepMin: Boolean,
     ): FloatArray?
+    /**
+     * Roadmap E8 — abort the in-flight slice if any. Returns true if
+     * there was a slice to cancel, false if no slice was running. The
+     * JNI flips libslic3r's atomic CancelStatus; the next call to
+     * `Print::throw_if_canceled()` inside the slicing pipeline throws
+     * `CanceledException` which the slice JNI catches at top level
+     * and surfaces as a -3 / "canceled" return.
+     *
+     * Thread-safe — can be called from any thread (UI, MCP coroutine,
+     * a notification-action BroadcastReceiver). No-op when no slice
+     * is in flight.
+     */
+    private external fun nativeAbort(): Boolean
+
+    /** Kotlin-side wrapper for [nativeAbort]. Renamed for clarity at
+     *  the call site (`SlicerEngine.abort()` reads better than
+     *  `SlicerEngine.nativeAbort()` for non-JNI callers). Returns
+     *  false if no slice is in flight. */
+    fun abort(): Boolean = runCatching { nativeAbort() }.getOrElse { false }
+
     private external fun nativeSlice(
         stlPath: String,
         outGcodePath: String,

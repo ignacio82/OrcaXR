@@ -58,6 +58,33 @@ class SliceLifecycleTest {
         assertEquals(0, SliceLifecycle.activeCount())
     }
 
+    @Test fun updateProgress_publishes_to_flows_and_clamps_range() {
+        val ctx = nullContext()
+        runCatching { SliceLifecycle.beginSlice(ctx, "dragon") }
+        SliceLifecycle.updateProgress(42, "Generating support material")
+        assertEquals(42, SliceLifecycle.progressPercent.value)
+        assertEquals("Generating support material", SliceLifecycle.progressMessage.value)
+        // Negative percent clamps to 0; >100 clamps to 100.
+        SliceLifecycle.updateProgress(-5, null)
+        assertEquals(0, SliceLifecycle.progressPercent.value)
+        SliceLifecycle.updateProgress(150, null)
+        assertEquals(100, SliceLifecycle.progressPercent.value)
+        runCatching { SliceLifecycle.endSlice(ctx) }
+        // endSlice resets percent + message so the next slice starts clean.
+        assertEquals(0, SliceLifecycle.progressPercent.value)
+        assertNull(SliceLifecycle.progressMessage.value)
+    }
+
+    @Test fun updateProgress_no_op_when_inactive() {
+        // Without an in-flight slice, updateProgress should not push
+        // values into the flows — otherwise a stale callback firing
+        // post-endSlice could repaint a notification that's already
+        // gone and confuse the user.
+        SliceLifecycle.updateProgress(50, "stale")
+        assertEquals(0, SliceLifecycle.progressPercent.value)
+        assertNull(SliceLifecycle.progressMessage.value)
+    }
+
     @Test fun over_decrement_clamps_to_zero() {
         val ctx = nullContext()
         runCatching { SliceLifecycle.endSlice(ctx) }

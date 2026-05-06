@@ -917,6 +917,74 @@ private fun ColorMappingPanel(
             virtualRows = virtualRows,
             slotCount = slotCount,
         )
+
+        // Roadmap A13 — wipe-tower auto-position toggle. Visible only
+        // for multi-filament projects (single-filament slices skip the
+        // tower entirely so the toggle would be useless surface area).
+        // Self-contained — reads / writes UserPreferences directly so
+        // we don't have to thread state through LeftProjectPanel's
+        // already-dense parameter list.
+        if (slotCount >= 2) {
+            WipeTowerAutoPositionRow()
+        }
+    }
+}
+
+/**
+ * Roadmap A13 — multi-filament-only Switch that flips
+ * `UserPreferences.wipeTowerAutoPosition`. The slice path consults
+ * the toggle via `wipeTowerExtraOverrides(ctx)` at every mergedConfig
+ * call site (MainActivity.kt) — flipping it here is the user-facing
+ * affordance for the auto-positioning logic.
+ *
+ * Stateful (self-contained) so the row drops into LeftProjectPanel
+ * without further wiring. The MCP `auto_position_wipe_tower` tool
+ * also writes the same SharedPreferences key so an LLM-driven flip is
+ * observable here on the next composition (re-mounted on each
+ * recomposition; the SharedPreferences read is cheap).
+ */
+@Composable
+private fun WipeTowerAutoPositionRow() {
+    val ctx = LocalContext.current
+    val prefs = remember { dev.orcaxr.app.UserPreferences(ctx) }
+    var on by remember { mutableStateOf(prefs.wipeTowerAutoPosition) }
+    Surface(color = Color(0xFF1B1F23), shape = RoundedCornerShape(8.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    "Auto-position wipe tower",
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Switch(
+                    checked = on,
+                    onCheckedChange = {
+                        on = it
+                        prefs.wipeTowerAutoPosition = it
+                    },
+                )
+            }
+            Text(
+                if (on) {
+                    val x = prefs.wipeTowerXOverride
+                    val y = prefs.wipeTowerYOverride
+                    if (x.isNaN() || y.isNaN()) {
+                        "On — call `auto_position_wipe_tower` (MCP) to compute X/Y."
+                    } else {
+                        "On — tower at (%.1f, %.1f) mm. Re-runs on each slice.".format(x, y)
+                    }
+                } else {
+                    "Off — slicer uses the profile's bundled wipe-tower position."
+                },
+                color = Color(0xFF9AA3AB),
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
     }
 }
 
