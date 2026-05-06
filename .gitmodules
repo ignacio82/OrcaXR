@@ -1,3 +1,4 @@
 [submodule "third_party/OrcaSlicer"]
 	path = third_party/OrcaSlicer
 	url = https://github.com/OrcaSlicer/OrcaSlicer.git
+	ignore = dirty
