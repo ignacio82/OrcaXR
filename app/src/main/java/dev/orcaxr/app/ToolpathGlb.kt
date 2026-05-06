@@ -41,6 +41,30 @@ object ToolpathGlb {
      *  layer don't z-fight when they share an endpoint. */
     const val DEFAULT_TUBE_RADIUS_MM = 0.18f
 
+    /**
+     * Roadmap A14 — color-mode selector for [write]. The default
+     * [Auto] is the pre-A14 behavior (per-extruder when ≥2 tools, per-
+     * role otherwise). [Extruder] forces the per-tool palette even on
+     * single-tool slices (uniform-color rendering). [Feature] forces
+     * the per-[ExtrusionRole] palette (outer wall = red, infill =
+     * yellow, support = gray, …) even on multi-color slices — useful
+     * for inspecting feature decomposition on a multi-tool job.
+     *
+     * The mode is consulted by `colorOf` inside [write]; tests pin the
+     * three modes against a fixture toolpath in `ToolpathGlbColorModeTest`.
+     */
+    enum class ColorMode {
+        Auto, Extruder, Feature;
+
+        companion object {
+            fun parse(name: String?): ColorMode = when (name?.lowercase()) {
+                "extruder", "tool", "filament" -> Extruder
+                "feature", "role", "type" -> Feature
+                else -> Auto
+            }
+        }
+    }
+
     fun write(
         toolpath: ParsedToolpath,
         out: File,
@@ -56,6 +80,10 @@ object ToolpathGlb {
          * shade).
          */
         extruderPalette: List<String>? = null,
+        /** Roadmap A14 — see [ColorMode]. Default [ColorMode.Auto]
+         *  preserves the pre-A14 behavior so existing call sites
+         *  don't change. */
+        colorMode: ColorMode = ColorMode.Auto,
         /**
          * Roadmap A7 — when true, every extrusion segment renders as a
          * 4-sided rectangular prism (8 verts, 12 tris) instead of a
@@ -123,18 +151,30 @@ object ToolpathGlb {
             ?.map { hexToRgb(it) ?: Rgb(0.6f, 0.6f, 0.6f) }
             .orEmpty()
         val distinctExtruders = segs.asSequence().map { it.extruder }.distinct().take(2).count()
-        val byExtruder = distinctExtruders >= 2 && !extruderPalette.isNullOrEmpty()
+        // Roadmap A14 — colorMode picks between three strategies:
+        //   Auto     — per-extruder if ≥2 distinct tools AND a palette
+        //              was supplied; otherwise per-role.
+        //   Extruder — force per-tool. Falls back to role only if no
+        //              palette / single-tool slice (otherwise every
+        //              segment would render mid-gray).
+        //   Feature  — force per-role. Useful for inspecting feature
+        //              decomposition on a multi-color slice.
+        val byExtruder: Boolean = when (colorMode) {
+            ColorMode.Feature -> false
+            ColorMode.Extruder -> !extruderPalette.isNullOrEmpty()
+            ColorMode.Auto -> distinctExtruders >= 2 && !extruderPalette.isNullOrEmpty()
+        }
         val zRange = (toolpath.stats.bboxMax.z - toolpath.stats.bboxMin.z).coerceAtLeast(1e-3f)
 
         // Two coloring strategies, shared by tubes + lines:
-        //  - multi-color slice (≥2 distinct extruders in segs): color
-        //    each segment by its tool index via [extruderPalette],
-        //    matching the slot swatches in LeftProjectPanel.
-        //  - single-tool slice: color by extrusion role (outer wall =
-        //    red, infill = blue, support = gray — see RoleColors).
-        //    When role is Unknown (G-code skipped `;TYPE:` tagging) we
-        //    fall through to a Z-based gradient so the toolpath still
-        //    reads as a height map.
+        //  - byExtruder: color each segment by its tool index via
+        //    [extruderPalette], matching the slot swatches in
+        //    LeftProjectPanel.
+        //  - else: color by extrusion role (outer wall = red, infill =
+        //    yellow, support = gray — see RoleColors). When role is
+        //    Unknown (G-code skipped `;TYPE:` tagging) we fall through
+        //    to a Z-based gradient so the toolpath still reads as a
+        //    height map.
         fun colorOf(s: ExtrusionSegment): Rgb = when {
             byExtruder -> palette.getOrNull(s.extruder.coerceAtLeast(0) % palette.size.coerceAtLeast(1))
                 ?: RoleColors.colorFor(s.role)

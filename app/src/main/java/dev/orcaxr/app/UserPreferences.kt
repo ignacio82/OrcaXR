@@ -62,6 +62,53 @@ class UserPreferences(ctx: Context) {
             prefs.edit().putBoolean(KEY_TOOLPATH_TUBES, value).apply()
         }
 
+    /**
+     * Roadmap A13 — auto-position wipe tower toggle. When true,
+     * `runSliceMulti` consults [WipeTowerPlacement.score] before
+     * slicing and threads the picked X/Y into the slice config via
+     * [wipeTowerXOverride] / [wipeTowerYOverride]. Off by default so
+     * existing slices stay byte-identical to pre-A13.
+     */
+    var wipeTowerAutoPosition: Boolean
+        get() = prefs.getBoolean(KEY_WIPE_TOWER_AUTO, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_WIPE_TOWER_AUTO, value).apply()
+        }
+
+    /**
+     * Roadmap A13 — explicit override of `wipe_tower_x` (mm). Set by
+     * the [WipeTowerPlacement.score]-driven path or by an MCP tool
+     * call. NaN means "no override" (use the profile default).
+     */
+    var wipeTowerXOverride: Float
+        get() = prefs.getFloat(KEY_WIPE_TOWER_X, Float.NaN)
+        set(value) {
+            prefs.edit().putFloat(KEY_WIPE_TOWER_X, value).apply()
+        }
+
+    /** Roadmap A13 — see [wipeTowerXOverride]. */
+    var wipeTowerYOverride: Float
+        get() = prefs.getFloat(KEY_WIPE_TOWER_Y, Float.NaN)
+        set(value) {
+            prefs.edit().putFloat(KEY_WIPE_TOWER_Y, value).apply()
+        }
+
+    /** Roadmap A14 — toolpath color mode. One of `auto` (default —
+     * per-extruder if multi-tool, per-role otherwise), `extruder` (always
+     * per-tool), or `feature` (always per-extrusion-role: outer wall vs
+     * infill vs support, regardless of how many tools the slice used).
+     * Persisted as a string so future modes don't break the schema.
+     */
+    var toolpathColorMode: String
+        get() = prefs.getString(KEY_TOOLPATH_COLOR_MODE, "auto") ?: "auto"
+        set(value) {
+            val sanitized = when (value.lowercase()) {
+                "extruder", "feature", "auto" -> value.lowercase()
+                else -> "auto"
+            }
+            prefs.edit().putString(KEY_TOOLPATH_COLOR_MODE, sanitized).apply()
+        }
+
     /** Currently-selected printer's id (the destination for "Send to printer" + the Project panel display). */
     var lastPrinterId: String?
         get() = prefs.getString(KEY_LAST_PRINTER_ID, null)
@@ -93,5 +140,9 @@ class UserPreferences(ctx: Context) {
         private const val KEY_SHOW_TRAVELS = "show_travels"
         private const val KEY_LAST_PRINTER_ID = "last_printer_id"
         private const val KEY_TOOLPATH_TUBES = "toolpath_tubes"
+        private const val KEY_TOOLPATH_COLOR_MODE = "toolpath_color_mode"
+        private const val KEY_WIPE_TOWER_AUTO = "wipe_tower_auto"
+        private const val KEY_WIPE_TOWER_X = "wipe_tower_x_override"
+        private const val KEY_WIPE_TOWER_Y = "wipe_tower_y_override"
     }
 }

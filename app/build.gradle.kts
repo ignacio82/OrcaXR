@@ -86,6 +86,12 @@ android {
         }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Roadmap E10 — run every instrumented test in its own process so
+        // libslic3r's per-process C++ allocations (Print / Model / Layer
+        // graphs) can't leak across slicing tests. Without this, a 5-test
+        // slicing sequence OOMs the test process well before it finishes.
+        // See GEMINI.md gotcha §30 for the full rationale.
+        testInstrumentationRunnerArguments["clearPackageData"] = "true"
     }
 
     compileOptions {
@@ -162,6 +168,10 @@ android {
         // can verify protocol-level behavior without spinning up
         // Robolectric or moving to androidTest.
         unitTests.isReturnDefaultValues = true
+        // Roadmap E10 — instrumented tests run in their own process so
+        // libslic3r's per-process C++ allocations can't leak across
+        // slicing tests. See GEMINI.md gotcha §30.
+        execution = "ANDROIDX_TEST_ORCHESTRATOR"
     }
 
     packaging {
@@ -220,6 +230,12 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.kotlinx.coroutines.test)
+    // Roadmap E10 — Android Test Orchestrator is staged as a separate APK
+    // alongside the app under test; the runner shells out to it to start
+    // each instrumented test in its own process. `androidTestUtil`
+    // (instead of `androidTestImplementation`) is the AGP-supported
+    // configuration for that staging.
+    androidTestUtil(libs.androidx.test.orchestrator)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

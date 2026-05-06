@@ -44,10 +44,92 @@
 
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!--
+              Roadmap B14 — register OrcaXR as a system-wide opener for
+              3MF / STL / OBJ / AMF / STEP files. A tap on a `.3mf` in
+              a file manager / browser, a "share to" from MakerWorld or
+              Bambu Handy, and Android's "Open with..." picker all flow
+              through here. SharedIntentHandler drains the URI list out
+              of the Intent and stages each one to cacheDir/shared/
+              before MainActivity routes them through the same
+              onFileSelected codepath the in-app picker uses. See
+              ROADMAP.md B14 for the rationale (XR users genuinely live
+              in the headset; making the slicer a registered share-
+              target removes the only "leave the headset to import"
+              friction in the AI-paint flow).
+
+              launchMode="singleTask" so a share into an
+              already-running OrcaXR routes through onNewIntent instead
+              of spawning a second Activity instance — the latter would
+              lose the user's current workspace state.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="model/3mf" />
+                <data android:mimeType="application/x-3mf" />
+                <data android:mimeType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml" />
+                <data android:mimeType="model/x-stl" />
+                <data android:mimeType="model/stl" />
+                <data android:mimeType="application/sla" />
+                <data android:mimeType="model/obj" />
+                <data android:mimeType="model/x-obj" />
+                <data android:mimeType="model/amf" />
+                <data android:mimeType="application/x-amf" />
+                <data android:mimeType="model/step" />
+                <data android:mimeType="application/step" />
+            </intent-filter>
+            <!--
+              Some senders (Bambu Handy, the Pixel "Files" app on
+              certain MIME types) hand us application/octet-stream and
+              rely on the receiver to pattern-match the path. Combined
+              host="*" + mimeType + pathPattern is the canonical Android
+              shape for "I accept any path with this extension".
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:pathPattern=".*\\.3mf" />
+                <data android:pathPattern=".*\\.stl" />
+                <data android:pathPattern=".*\\.STL" />
+                <data android:pathPattern=".*\\.obj" />
+                <data android:pathPattern=".*\\.amf" />
+                <data android:pathPattern=".*\\.step" />
+                <data android:pathPattern=".*\\.stp" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="model/3mf" />
+                <data android:mimeType="application/x-3mf" />
+                <data android:mimeType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml" />
+                <data android:mimeType="model/x-stl" />
+                <data android:mimeType="model/stl" />
+                <data android:mimeType="application/sla" />
+                <data android:mimeType="model/obj" />
+                <data android:mimeType="model/x-obj" />
+                <data android:mimeType="model/amf" />
+                <data android:mimeType="application/x-amf" />
+                <data android:mimeType="model/step" />
+                <data android:mimeType="application/step" />
+                <data android:mimeType="application/octet-stream" />
             </intent-filter>
         </activity>
 
@@ -62,6 +144,20 @@
         -->
         <service
             android:name=".mcp.McpForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!--
+          Roadmap E8 — keeps OrcaXR's process alive during a slice so
+          the user can take off the XR headset mid-slice and have the
+          result waiting when they return. SliceLifecycle starts/stops
+          this service per slice (re-entrant counter under nested
+          inner slices). Same dataSync foregroundServiceType as MCP —
+          long-running networked / compute work the user explicitly
+          opted into. Not exported.
+        -->
+        <service
+            android:name=".SliceForegroundService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
     </application>

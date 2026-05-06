@@ -2804,6 +2804,11 @@ fun BottomLayerPreviewPanel(
      *  toggle for non-XR builds). */
     tubesMode: Boolean? = null,
     onTubesModeChange: ((Boolean) -> Unit)? = null,
+    /** Roadmap A14 — toolpath color mode. One of `auto` (default),
+     *  `extruder` (force per-tool), or `feature` (force per-extrusion-
+     *  role). Null hides the picker (e.g. on FlatShell). */
+    colorMode: String? = null,
+    onColorModeChange: ((String) -> Unit)? = null,
     /** Roadmap A11 — custom-G-code-per-Z ticks on the active plate.
      *  Rendered as colored dots beneath the layer slider so the user
      *  can see at-a-glance where pause / color-change / template hooks
@@ -2839,6 +2844,36 @@ fun BottomLayerPreviewPanel(
                     )
                     Text("Tubes", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
                 }
+            }
+        }
+
+        // A14 — toolpath color mode picker. Three discrete modes; render
+        // as a row of compact text buttons so the entire control fits
+        // alongside the existing Layer / Tubes row without claiming
+        // another full row at non-trivial heights.
+        if (colorMode != null && onColorModeChange != null && parsed != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(top = 4.dp),
+            ) {
+                Text("Color:", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                listOf("auto" to "Auto", "extruder" to "Extruder", "feature" to "Feature")
+                    .forEach { (id, label) ->
+                        val selected = colorMode.equals(id, ignoreCase = true)
+                        TextButton(
+                            onClick = { onColorModeChange(id) },
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = if (selected) Color(0xFF80E0C8) else Color(0xFF9AA3AB),
+                            ),
+                        ) {
+                            Text(
+                                label,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (selected) Color(0xFF80E0C8) else Color(0xFF9AA3AB),
+                            )
+                        }
+                    }
             }
         }
         // Slider valueRange/steps must stay valid even when no slice has

@@ -710,6 +710,12 @@ object OrcaProfileLoader {
         "wipe_tower_cone_angle",
         "wipe_tower_filament",
         "wipe_tower_no_sparse_layers",
+        // Roadmap A13 — wipe-tower position. Both are coFloats (one
+        // entry per plate). PrintConfig.cpp:6442-6456. Default 15/220
+        // for plate 1; the auto-position scorer in WipeTowerPlacement
+        // overrides these via mergedConfig() when the user opts in.
+        "wipe_tower_x",
+        "wipe_tower_y",
         // Multi-color purge sizing. Both are coFloats (non-nullable
         // vectors) per PrintConfig.cpp:6417-6431. Sizing is load-
         // bearing: libslic3r's WipeTowerIntegration indexes

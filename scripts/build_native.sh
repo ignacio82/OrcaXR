@@ -53,6 +53,24 @@ if [[ ! -f "$TOOLCHAIN_FILE" ]]; then
     exit 1
 fi
 
+# Roadmap E9 — assert Clang ≥ 17 (i.e. NDK ≥ 26). Older toolchains
+# miscompile libslic3r's paint segmentation code in subtle ways that
+# only surface as degraded multi-color boundaries in printed output —
+# u1-slicer's B62 incident is the canonical reference. We pin via
+# NDK_VERSION above, but if a user overrides $ANDROID_NDK to a
+# locally-installed older NDK we want to fail fast, not 90 minutes
+# into a libslic3r rebuild.
+NDK_CLANG_BIN="${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+if [[ -x "$NDK_CLANG_BIN" ]]; then
+    NDK_CLANG_MAJOR=$("$NDK_CLANG_BIN" --version 2>/dev/null | head -1 | grep -oE 'clang version [0-9]+' | grep -oE '[0-9]+' | head -1 || echo 0)
+    if (( NDK_CLANG_MAJOR < 17 )); then
+        echo "error: NDK toolchain Clang version $NDK_CLANG_MAJOR < 17 — refusing to build." >&2
+        echo "       libslic3r's paint segmentation miscompiles on Clang < 17 (u1-slicer B62)." >&2
+        echo "       Use NDK ≥ r26b. See GEMINI.md gotcha on the toolchain pin." >&2
+        exit 1
+    fi
+fi
+
 echo "=== OrcaXR native build ==="
 echo "  NDK         : $ANDROID_NDK"
 echo "  ABI         : $ANDROID_ABI"

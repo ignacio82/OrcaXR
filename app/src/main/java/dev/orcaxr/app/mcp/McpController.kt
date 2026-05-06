@@ -17,6 +17,8 @@ import dev.orcaxr.app.mcp.tools.PaintTemplateTools
 import dev.orcaxr.app.mcp.tools.FilamentTools
 import dev.orcaxr.app.mcp.tools.HandyModelTools
 import dev.orcaxr.app.mcp.tools.PrefsTools
+import dev.orcaxr.app.mcp.tools.SettingsBackupTools
+import dev.orcaxr.app.mcp.tools.WipeTowerTools
 import dev.orcaxr.app.mcp.tools.PrimitiveTools
 import dev.orcaxr.app.mcp.tools.PrinterTools
 import dev.orcaxr.app.mcp.tools.ProfileTools
@@ -216,6 +218,10 @@ class McpController private constructor(
             for (t in FilamentTools.all(ctx)) builder.tool(t)
             for (t in RecentTools.all(ctx)) builder.tool(t)
             for (t in PrefsTools.all(ctx)) builder.tool(t)
+            // Roadmap B13 — settings backup / restore as JSON.
+            for (t in SettingsBackupTools.all(ctx)) builder.tool(t)
+            // Roadmap A13 — auto-position wipe tower over the active plate.
+            for (t in WipeTowerTools.all(WorkspaceModel.get(), ctx)) builder.tool(t)
             for (t in WorkspaceTools.all(ctx)) builder.tool(t)
             // D12 — primitive shape authoring (cube / cylinder / sphere / …).
             for (t in PrimitiveTools.all(ctx)) builder.tool(t)

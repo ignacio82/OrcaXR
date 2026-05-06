@@ -190,6 +190,43 @@ Upstream OrcaSlicer's IMSlider lets the user click anywhere on the layer scrubbe
 
 > **Files (planned):** `app/src/main/cpp/slic3r_jni.cpp` (apply `ModelObject::layer_config_ranges` before slice), `PlacedModel.kt` (add `heightRanges: List<HeightRange>`), new `HeightRangePanel.kt`, MCP tool `add_height_range`. Depends on **D16** (per-volume Object Settings UI) for the per-range setting editor.
 
+### A13. Wipe-tower auto-positioning 🟡 Partial — scorer + MCP tool + slice-path override shipped, UI toggle pending
+
+> **Files (planned):** `app/src/main/java/dev/orcaxr/app/WipeTowerPlacement.kt` (new — Kotlin AABB sweep over plate corners + cardinal mid-edges), `SlicerEngine.kt` (`mergedConfig` writes `wipe_tower_x` / `wipe_tower_y` from the picked candidate), `MainActivity.kt::runSliceMulti` (call before slicing if user opted-in), new MCP tool `auto_position_wipe_tower(plate_id?, prefer="back-left"|"back-right"|"largest-clearance")` in `WorkspaceTools.kt`, new `app/src/main/java/dev/orcaxr/app/UserPreferences.kt::wipeTowerAutoPosition` toggle.
+
+OrcaXR vendors libslic3r's wipe tower (positioned via `wipe_tower_x` / `wipe_tower_y` config keys, default 165/220 from the U1 process leaf — `app/src/main/assets/profiles/Snapmaker/process/fdm_process_U1.json`). The current behavior is "the bundled profile picks the position" — fine for a one-part plate, broken when the user fills the bed and the tower lands inside a part's footprint. The user has to manually nudge the values or move parts.
+
+u1-slicer (`taylormadearmy/u1-slicer-for-android`) evaluates 8 candidate positions for the tower (4 corners + 4 cardinal mid-edges of the bed) and picks the one with the highest minimum L∞ distance to every PlacedModel's XY bbox plus a small "prefer back-left" bias so the user's gaze isn't blocked. Gives a one-button "the slicer figured out where the tower goes" affordance that's especially valuable on XR where typing in `wipe_tower_x=120` is painful.
+
+**Implementation outline:**
+1. **Pure Kotlin scoring** — `WipeTowerPlacement.score(parts: List<AabbXY>, towerSize: Pair<Float,Float>, bed: Pair<Float,Float>, prefer: Bias)` returns `(x, y, clearance_mm)` for the best of 8 candidates. `towerSize` derived from `prime_tower_width` (default 60 mm) + a 5 mm rectangular safety margin.
+2. **Kotlin-only, no JNI** — libslic3r already accepts `wipe_tower_x` / `wipe_tower_y` overrides through `mergedConfig`; we just need to write them. No new patches in `patches/`.
+3. **Opt-in, opt-out reversibly** — `UserPreferences.wipeTowerAutoPosition: Boolean = false` (default off so existing slices stay byte-identical). When on, `runSliceMulti` calls `WipeTowerPlacement.score` and threads the result into `mergedConfig`. When off, profile defaults win.
+4. **MCP surface** — `auto_position_wipe_tower(plate_id?, prefer?)` returns the picked `(x, y, clearance_mm)` and writes it to a per-plate `WipeTowerStore` (DataStore, mirrors `PlateStore`). Re-running auto-position after moving a part bumps the store. `slice_active_plate` consults the store before falling back to profile defaults — so an LLM can `auto_position_wipe_tower` then `slice_active_plate` and the picked position lands in G-code.
+5. **UI** — One Switch in `LeftProjectPanel`'s slot/wipe-tower section (collapsed by default; visible when `numFilamentsActive > 1` because the tower only runs in multi-filament jobs). Toggling on triggers a one-shot recompute; subsequent slices re-evaluate.
+
+**Exit criteria:** A 4-color dragon plate where the bundled `wipe_tower_x=165, wipe_tower_y=220` would put the tower inside the part's footprint (collision detected by AABB-vs-tower box overlap). With the toggle on, slice produces a G-code where the tower coordinates are non-overlapping and the picked clearance value is ≥ 5 mm. Disabling the toggle returns to the byte-identical pre-A13 G-code. `WipeTowerPlacementTest` (≥ 5 unit tests covering: no parts → back-left, single corner part → opposite corner, full bed → highest-clearance edge, prefer-bias respected, towerSize > bed → graceful fallback to current profile values).
+
+**Shipped:** Pure-Kotlin `WipeTowerPlacement.score(parts, bedW, bedD, …)` scorer (8 candidates, L∞ clearance, configurable bias). `wipe_tower_x` / `wipe_tower_y` added to `OrcaProfileLoader.SAFE_KEYS`. `UserPreferences.wipeTowerAutoPosition` + `wipeTowerXOverride` + `wipeTowerYOverride` persistence. `wipeTowerExtraOverrides(ctx)` helper threaded into 6 `mergedConfig(...)` slice call sites — every real slice picks up the auto-position override when the toggle is on. MCP tool `auto_position_wipe_tower(plate_id?, prefer?, tower_width_mm?, tower_depth_mm?, safety_mm?, persist?)` walks the active plate's `PlacedModels.footprintMm()`, computes the AABBs, scores, persists. `WipeTowerPlacementTest` (7 unit tests covering empty plate → back-left, part-blocks-back-left → other corner wins, bias tie-break, largest-clearance, L∞ on overlap+separation, parse aliases, oversized part → still returns a Pick). Pending: in-XR `LeftProjectPanel` Switch (UI affordance — MCP path is fully usable today). On-device verification on Galaxy XR with a 4-color dragon plate is the remaining instrumented-test follow-up.
+
+### A14. G-code feature-type color mode for toolpath viewer 🟢 Shipped
+
+> **Files (planned):** `ToolpathGlb.kt` (`ColorMode` enum + parameter), `UserPreferences.kt::toolpathColorMode`, `UiPanels.kt::BottomLayerPreviewPanel` (mode dropdown alongside the Tubes / Travels switches), `MainActivity.kt::XrShell` (state + LE re-bake on change), `ToolpathGlbColorModeTest`.
+
+A7 already shipped tube geometry + the `RoleColors` palette (one color per `ExtrusionRole`: outer wall = red, inner wall = green, infill = yellow, support = gray, etc. — see `RoleColors.kt`). What's missing is the *user-facing toggle* — today the writer prefers the per-extruder palette whenever `≥ 2` distinct tools are present, so a multi-color slice always reads as "tool A vs tool B" and the user can never see the "outer wall vs infill vs support" decomposition that desktop OrcaSlicer shows by default.
+
+u1-slicer (`taylormadearmy/u1-slicer-for-android`) ships a feature-type color mode as a top-level toolpath-viewer option. Same per-feature palette OrcaXR already has — just exposed as a mode the user can pick.
+
+**Implementation outline:**
+1. **`ToolpathGlb.ColorMode` enum** — `Auto` (current default: per-extruder if ≥2 tools, else per-role), `Extruder` (force per-tool), `Feature` (force per-`ExtrusionRole`). The `colorOf(seg)` lambda inside `write` consults the mode instead of the implicit `byExtruder` boolean.
+2. **`UserPreferences.toolpathColorMode: String`** — `"auto" | "extruder" | "feature"`, default `"auto"` so existing users see no behavior change.
+3. **UI** — `BottomLayerPreviewPanel` already hosts the Tubes + Travels switches (`UiPanels.kt:5829-5841`); add a 3-segment SegmentedButton row underneath labeled "Color: Auto / Extruder / Feature".
+4. **Re-bake on change** — the existing `LaunchedEffect(sliceState, maxLayer, showTravels, toolpathTubes, paddedSlots)` block at `MainActivity.kt:4738` adds `colorMode` to its key tuple so flipping the toggle triggers a one-shot re-bake.
+
+**Exit criteria:** A 4-color slice in Feature mode shows red outer walls / yellow infill / gray support regardless of which tool deposited each region. Switching to Extruder shows the per-tool palette. Switching back to Auto preserves prior behavior (per-tool when ≥2 tools, per-role otherwise). `ToolpathGlbColorModeTest` covers all three modes against a fixture toolpath with 2 tools and 4 roles — verifies the chosen palette wins over the alternative.
+
+**Shipped:** `ToolpathGlb.ColorMode` enum + `colorMode` parameter on `write(...)`; `UserPreferences.toolpathColorMode` SharedPreferences-backed string; `BottomLayerPreviewPanel` now hosts a 3-button Auto / Extruder / Feature picker beside the existing Tubes switch; `MainActivity` LE re-bake keys on the new mode so flipping triggers a one-shot rebuild. `ToolpathGlbColorModeTest` (4 tests: parse-aliases, auto-mode-with-two-tools, feature-mode-overrides-extruder-palette, extruder-mode-forces-palette-on-single-tool).
+
 Upstream's "Edit height range" lets the user split an object into Z bands (e.g., 0–5 mm, 5–10 mm, 10+ mm) and override `layer_height`, `sparse_infill_density`, `wall_loops`, and a curated set of process keys per band. Stored as `ModelObject::layer_config_ranges` (`std::map<std::pair<double,double>, ModelConfig>`). Common workflows: 100 % infill in the bottom 5 mm to add weight; coarser layer height above a feature line; different wall count over the top of an embedded magnet pocket.
 
 **Implementation outline:** Per-PlacedModel `List<HeightRange(zMin, zMax, overrides: Map<key, value>)>`. JNI walks the list and writes onto `mo->layer_config_ranges` before `print.process()`. UI: a vertical Z-bar gizmo in `HeightRangePanel` with split / merge / edit affordances; tapping a band opens the existing per-volume settings editor (D16). 3MF round-trip via libslic3r's existing serializer. Range overlap rules match upstream (later range wins).
@@ -345,6 +382,43 @@ A multi-object 3MF (e.g. `passthroughboth.3mf` — `Inner.stl` + `Outer.stl`) cu
 **Shipped:** 3364b9c — Multi-object 3MFs extracted to separate STLs, grouped by groupId with collapsible headers.
 
 **Dependency for E3 multi-plate:** B9 is the prerequisite — without per-part addressability there's nothing to assign to a different plate.
+
+### B13. Settings backup / restore as JSON 🟡 Partial — JSON envelope + MCP tools shipped, in-app Settings panel button pending
+
+> **Files (planned):** `app/src/main/java/dev/orcaxr/app/SettingsBackup.kt` (new — aggregate every DataStore + SharedPreferences-backed store into one JSON), `MainActivity.kt::saveBackupToDownloads` + `loadBackupFromUri`, settings panel buttons inside the existing AI/MCP settings card, MCP tools `export_settings(out_path?)` / `import_settings(path, mode="merge"|"replace")` in a new `tools/SettingsBackupTools.kt`.
+
+OrcaXR already persists ~10 DataStore / SharedPreferences-backed stores (`UserPreferences`, `McpSettings`, `FilamentEntriesStore`, `RecentFilesStore`, `MixedFilamentStore`, `CustomGcodeStore`, `PlateStore`, `PrintersStore`, `PaintCacheStore`'s key-only entries, `AiPaintSessionStore`). What's missing is a single export/import that survives device wipes, copies settings between two Galaxy XR headsets, and gives the user a debug bundle for bug reports.
+
+u1-slicer (`taylormadearmy/u1-slicer-for-android`) ships the same affordance as a top-level setting: one button writes everything out as JSON, one button reads it back. Useful for cross-device parity (the user owns multiple headsets / shares profiles with a co-worker), painless bug reports, and as a hidden MCP capability — an LLM can snapshot the user's current state, mutate, and revert.
+
+**Implementation outline:**
+1. **`SettingsBackup.collect(ctx) -> JSONObject`** — explicit list of stores, each with a `version` field so future schema changes can migrate without losing the import. Schema-pinning matters: a v1 export should never silently restore as v2 with a new field at a default value.
+2. **`SettingsBackup.apply(ctx, json, mode)`** — `mode = "merge"` keeps the user's current state, only overwriting keys present in the JSON; `mode = "replace"` clears each store and rewrites from scratch. Default is `merge` because that's the safer cross-device-sync workflow.
+3. **UI** — settings panel grows two buttons at the bottom: "Export settings…" (writes `orcaxr-settings-<timestamp>.json` to Downloads via the existing MediaStore path used by `saveGcodeToDownloads`) and "Import settings…" (file picker → `JSONObject` → `apply(merge=true)`).
+4. **MCP** — `export_settings(out_path?)` returns the JSON inline (or writes to a path if given) so an LLM can `export_settings` → mutate → `import_settings` to revert. Both tools sit alongside the existing `set_user_preference` tool in PrefsTools.
+
+**Exit criteria:** Export, factory-reset the test device, install OrcaXR fresh, import the JSON; printer list / filament catalog / recent files / paint sessions / plates / wipe-tower auto-position toggle (A13) all return. `SettingsBackupTest` covers round-trip for every registered store with at least one non-default key set per store, plus a v1→v1 backwards-compat tripwire that fails if a new store is added without a versioned migration path.
+
+**Shipped:** `SettingsBackup.exportJson(ctx)` / `importJson(ctx, json, mode)` aggregator covering 1 SharedPreferences blob + 10 DataStore Preferences files (orcaxr.plates, orcaxr.printers, orcaxr.filament_slots, orcaxr.filament_entries, orcaxr.user_profiles, orcaxr.mixed_filament, orcaxr.custom_gcode, orcaxr.recent_files, orcaxr.llm, orcaxr.mcp). DataStore blobs are base64-encoded `.preferences_pb` for byte-perfect round-trip. SP values use a typed `{type, value}` envelope so 6 SharedPreferences-supported types (Boolean / Int / Long / Float / String / Set<String>) all round-trip. `mode='merge'` (default) vs `mode='replace'`. `restart_required=true` always returned (in-process DataStore caches need a fresh boot). MCP tools `export_settings(out_path?)` + `import_settings(envelope|path, mode?)` registered. Path-allowlist sanitizer rejects writes outside filesDir / cacheDir / Downloads. `SettingsBackupTest` (4 tests including a source-tree grep tripwire that fails if a new DataStore lands without being added to `DATASTORE_NAMES`). Pending: settings-panel button in-app (the MCP path is fully usable today).
+
+### B14. Android share-target for STL / 3MF / OBJ 🟢 Shipped
+
+> **Files (planned):** `app/src/main/AndroidManifest.xml` (add `<intent-filter>` for `ACTION_VIEW` + `ACTION_SEND` of `model/*` MIME types and the relevant file extensions), `MainActivity.kt::onNewIntent` + `handleSharedIntent` (route `Intent.ACTION_VIEW` / `ACTION_SEND` through the existing `onFileSelected` path with a `content://` → cache-file copy), `app/src/main/java/dev/orcaxr/app/SharedIntentHandler.kt` (new — pure helper that writes a `ContentResolver` `InputStream` to a temp file and returns the path), `SharedIntentHandlerTest`.
+
+OrcaXR's only entry point today is the in-app file picker. To open a model the user has to leave the headset workflow (browser / file manager) and tap into OrcaXR, which is a clunkier path than necessary on a headset where switching apps means swapping focus.
+
+u1-slicer (`taylormadearmy/u1-slicer-for-android`) registers as a share-target so a tap on a `.3mf` in Bambu Handy / MakerWorld / a browser / a file manager goes straight into the slicer. Companions D21a/D21b (the MakerWorld paint-recipe matcher already shipped) — once the model is in OrcaXR, the existing recipe auto-resolution kicks in. Adding the share-target plumbing makes the AI-paint pillar (C9 / D21a / D21b) usable end-to-end without touching the headset's file manager.
+
+**Implementation outline:**
+1. **Manifest intent-filters** — `MainActivity` grows two intent-filters: one for `ACTION_VIEW` of `model/x-stl`, `model/3mf`, `application/x-3mf`, `application/sla`, `application/octet-stream` filtered by extension via `pathPattern`; one for `ACTION_SEND` / `ACTION_SEND_MULTIPLE` of the same MIME types so MakerWorld's "share to" dialog includes us.
+2. **`onNewIntent` routing** — `MainActivity.onNewIntent(intent)` calls into `handleSharedIntent` which: (a) extracts the URI (`Intent.getData()` for VIEW, `EXTRA_STREAM` for SEND), (b) opens the `ContentResolver` `InputStream`, (c) copies bytes to `cacheDir/shared/<sha256>.<ext>` (deterministic so Bambu Handy → OrcaXR is idempotent), (d) routes through the same `onFileSelected` codepath the picker uses (paint restore + GLB bake + bedFit + recents bump fire identically to a manual import).
+3. **Permission story** — share-target receives a `content://` URI with read permission already granted by the sender; we don't need any new app-level storage permission.
+4. **Multi-file** — `ACTION_SEND_MULTIPLE` (MakerWorld occasionally sends `.3mf` + a thumbnail) drops the non-3D entries and imports the rest in order.
+5. **Recents bump** — every shared file becomes a `RecentFilesStore` entry just like the picker path.
+
+**Exit criteria:** From a phone running Bambu Handy, share a MakerWorld 3MF to the OrcaXR-installed Galaxy XR; OrcaXR comes to the foreground with the model already loaded on the active plate, the existing D21b paint-recipe auto-resolution fires identically to a manual import, and the file appears at the top of `RecentFilesStore`. `SharedIntentHandlerTest` covers `content://` → cache-file copy round-trip for STL, 3MF, OBJ + a pure-extension URI when the MIME type is `application/octet-stream`.
+
+**Shipped:** Three intent-filters on `MainActivity` covering `ACTION_VIEW` (typed MIME), `ACTION_VIEW` (pathPattern fallback for `application/octet-stream`), and `ACTION_SEND` / `ACTION_SEND_MULTIPLE`. `launchMode="singleTask"` so a share into a running OrcaXR routes through `onNewIntent`. `SharedIntentHandler.resolveAll(ctx, intent)` extracts URIs, copies to `cacheDir/shared/<basename>-<sha16>.<ext>` (deterministic naming for idempotent imports of the same bytes), and emits each File on `pendingSharedFiles: SharedFlow<File>`. `XrShell` `LaunchedEffect` collects from the flow and routes through the existing `onFileSelected` path (paint restore + GLB bake + bedFit + recents bump fire identically to a manual import). Path-traversal sanitizer reduces basename to `[A-Za-z0-9._-]+`. `SharedIntentHandlerTest` (8 tests covering happy-path STL stage, idempotent dedupe, unrecognized-extension rejection, empty-payload rejection, basename sanitization, ACCEPTED_EXTENSIONS coverage, case-insensitive `.STL`, distinct-content distinct-files).
 
 ### B12. Calibration print library 🟡 Partial — 7 calibration meshes vendored via HandyModelCatalog; A11-dependent variable-ramp generator deferred
 
@@ -611,6 +685,59 @@ Full Metal + RealityKit rewrite — essentially a separate product, not a port.
 ### E7. Multi-user collaborative slicing ⚪ Deferred
 
 Shared XR space, multiple users editing the same scene. Speculative.
+
+### E8. Foreground-service background slicing 🟡 Partial — service + lifecycle shipped, libslic3r abort hook + percent-progress notification pending
+
+> **Files (planned):** `app/src/main/java/dev/orcaxr/app/SliceForegroundService.kt` (new — mirrors `mcp/McpForegroundService.kt`), `SlicerEngine.kt` (route `runSlice` / `runSliceMulti` through the service when the user opts-in or when the slice is expected > N seconds), `MainActivity.kt::XrShell` (bind to ongoing slice on resume), `AndroidManifest.xml` (declare second foreground service with `foregroundServiceType="dataSync"` — the MCP server already declares one), `app/src/test/java/dev/orcaxr/app/SliceForegroundServiceTest.kt`.
+
+Slicing a complex multi-color print on the U1 takes 30–120 s on Galaxy XR (gotcha #23 — 20 mm cube p50 = 807 ms; a 4-color dragon is in the tens of seconds). Today, if the user takes off the headset mid-slice, Android eventually reaps the Activity and the slice loses progress. The MCP server already lives in a foreground service (`McpForegroundService`) so the pattern is established; `nativeSlice` / `nativeSliceMulti` should follow the same path.
+
+u1-slicer (`taylormadearmy/u1-slicer-for-android`) does this. On a headset it's load-bearing — XR users genuinely take off the headset mid-task in a way phone users don't. Without it, "slice this then walk away" is broken.
+
+**Implementation outline:**
+1. **`SliceForegroundService.start(ctx, jobId, slicerArgs)`** — kicks off the foreground notification + posts the slicer args into a process-singleton job table. The actual JNI call happens on the service's IO scope so it survives Activity teardown.
+2. **Notification** — "OrcaXR is slicing — N% complete (M of K layers)" with a Cancel action. Updated periodically; final state is "Slice complete — tap to view" linking back to MainActivity.
+3. **State surface** — the existing `WorkspaceModel.sliceState` already publishes `SliceState.{Idle, Running(progress), Done(path), Failed(msg)}`; the service writes to the same singleton so the Compose UI surfaces match whether the user is in-app or returning from the launcher.
+4. **Cancel hook** — `SliceForegroundService` calls `nativeAbort` (a real JNI hook this time — currently the `cancel_slice` MCP tool is a no-op pending this) which sets `g_abort_requested` polled inside libslic3r's slicing loop. C6 nice-to-have "libslic3r abort hook" finally gets shipped here.
+5. **Auto-enable threshold** — slices estimated > 15 s (heuristic: more than the bundled cube + any 3MF with > 50K triangles or > 1 PlacedModel) auto-enable the service; smaller slices stay in-process. User can force-enable via a settings toggle.
+
+**Exit criteria:** Start a 30 s slice on Galaxy XR, take off the headset, put it back on after 60 s — the slice completed, the toolpath GLB is rendered, and the persistent notification went away on completion. Cancel from the notification works. `SliceForegroundServiceTest` covers the lifecycle (start/stop/cancel) using a Robolectric-mocked Service + a stubbed `nativeSliceMulti` that sleeps. The `nativeAbort` JNI hook lands as a separate commit unblocking C6's `cancel_slice`.
+
+**Shipped:** `SliceForegroundService` (mirrors `McpForegroundService` shape — same `dataSync` foregroundServiceType, same notification + open-app intent pattern). `SliceLifecycle` process-singleton with re-entrant counter so nested inner slices don't tear down the service prematurely; `activeLabel: StateFlow<String?>` for the notification text. Manifest declares the second foreground service. `runSlice` and `runSliceMulti` wrap their `scope.launch` body in `SliceLifecycle.beginSlice(ctx, label)` … `try { … } finally { SliceLifecycle.endSlice(ctx) }` so every return path (success / exception / coroutine cancel) releases the hold. `SliceLifecycleTest` (3 unit tests covering happy-path, nested begin/end, over-decrement clamping). Pending: (a) the `nativeAbort` JNI hook in libslic3r so a Cancel notification action can actually halt the native slicer (still unblocked from C6's `cancel_slice` no-op); (b) routing `Print::set_status_callback` percent ticks into the notification text so the user sees "Slicing dragon — 42%" instead of just "Slicing dragon"; (c) on-device verification that a 30 s slice survives Activity teardown.
+
+### E9. Native build toolchain pin (NDK 26+ / Clang 17+) 🟡 Partial — gotcha + bash assert shipped, gradle CI tripwire pending
+
+> **Files (planned):** `GEMINI.md` (new gotcha #27 documenting the NDK pin requirement + the verification command), `scripts/build_native.sh` (assert `clang --version` ≥ 17 before building libslic3r.a), `app/src/main/jniLibs/.gitkeep` README cross-reference. `app/build.gradle.kts:46` already pins `ndkVersion = "29.0.14206865"` for the JNI shim — this entry codifies the ≥ 26 floor as a project invariant.
+
+u1-slicer (`taylormadearmy/u1-slicer-for-android`) ran into a hard incident (their B62) where NDK 25's Clang 14 produced miscompiled SEMM (multi-color paint segmentation) output — the generated G-code looked plausible but multi-colour boundaries were degraded relative to NDK 26's Clang 17. They pinned NDK 26 with a `llvm-readelf -p .comment libprusaslicer-jni.so` verification command in their build instructions.
+
+OrcaXR is not currently exposed to that bug (we build with NDK 29 / Clang 19, well above the floor — `app/build.gradle.kts:46`). But the pin is **implicit** today — buried in a build-comment about libc++ weak symbols, not in GEMINI.md's gotcha list. Future contributors who see "NDK 25 builds fine on my machine, why is the project pinned to 29?" might lower the pin and silently break the AI-paint pillar (C9) for users who don't notice multi-color boundary regressions until they print.
+
+**Implementation outline:**
+1. **GEMINI.md gotcha** — new entry cross-referencing `app/build.gradle.kts:46` + the u1-slicer B62 incident. Body: "NDK ≥ 26 is required for libslic3r's paint segmentation to compile correctly. Older NDK toolchains miscompile the per-tri tag propagation. Verify shipped `.so` with `llvm-readelf -p .comment app/build/intermediates/cxx/.../libslic3r_jni.so` — must show `clang version 17` or higher."
+2. **`scripts/build_native.sh` guard** — assert `clang --version | grep -oE 'clang version ([0-9]+)'` resolves to ≥ 17 before invoking CMake. Fails fast with a one-line error pointing at the gotcha.
+3. **CI tripwire** — add a Gradle task `verifyNdkClangFloor` that runs `llvm-readelf` on the staged `.so` and fails the build if Clang < 17. Wired into `assembleDebug` so a stale toolchain misconfiguration surfaces in the build output instead of silently shipping a degraded slicer.
+
+**Exit criteria:** GEMINI.md gotcha #27 documents the pin + verification command. `scripts/build_native.sh` exits 1 on Clang < 17. `verifyNdkClangFloor` runs as part of `assembleDebug` and asserts the staged `.so` was built with Clang ≥ 17. Lowering `ndkVersion` to 25 in `app/build.gradle.kts` triggers a build-time failure.
+
+**Shipped:** GEMINI.md gotcha §29 documents the NDK ≥ 26 / Clang ≥ 17 pin with the u1-slicer B62 cross-reference and the `llvm-readelf -p .comment` verification command. `scripts/build_native.sh` now asserts `clang --version` is ≥ 17 before invoking CMake (fails fast with an explicit "u1-slicer B62" error message). The gradle CI tripwire (`verifyNdkClangFloor` task wired into `assembleDebug`) is the remaining piece; the pin is currently enforced at three layers (gradle `ndkVersion = "29.0.14206865"` + bash assert + GEMINI gotcha) so removing one still fails loudly.
+
+### E10. Android Test Orchestrator for instrumented slicing tests 🟢 Shipped
+
+> **Files (planned):** `app/build.gradle.kts` (`androidTestUtil androidx.test:orchestrator`, `testInstrumentationRunnerArguments["clearPackageData"] = "true"`, `execution = "ANDROIDX_TEST_ORCHESTRATOR"`), `gradle/libs.versions.toml` (add `androidx-test-orchestrator` entry).
+
+Today every instrumented test (`./gradlew connectedDebugAndroidTest`) runs in the same process. libslic3r's `Print` / `Model` / `Layer` C++ allocations leak into the next test's heap because the JNI shim doesn't free them on test-method boundaries (it's not designed to — the lifecycle is per-process). Several `SliceMultiInstrumentedTest` runs in a row OOM the test process well before they finish.
+
+u1-slicer (`taylormadearmy/u1-slicer-for-android`) hit the same wall and resolved it with [Android Test Orchestrator](https://developer.android.com/training/testing/instrumented-tests/androidx-test-libraries/runner#use-android), which runs each test in its own process, so native memory accumulation can't cross test boundaries.
+
+**Implementation outline:**
+1. **Gradle wiring** — `androidTestUtil("androidx.test:orchestrator:1.7.0")` + `testInstrumentationRunnerArguments["clearPackageData"] = "true"` so DataStore + SharedPreferences also reset between tests; the runner arg `execution = "ANDROIDX_TEST_ORCHESTRATOR"` flips the per-test process model on.
+2. **Verify** — re-run `./gradlew connectedDebugAndroidTest` against `RepairModelTest` + `SliceMultiInstrumentedTest` in the same task. Pre-Orchestrator the second test OOMs; post-Orchestrator both pass independently.
+3. **Doc** — GEMINI.md gotcha #28 cross-referencing the new Gradle config + the symptom ("native OOM crashes during the second slicing test").
+
+**Exit criteria:** `./gradlew connectedDebugAndroidTest` runs all instrumented tests cleanly; per-test process boundary visible in `adb logcat` between methods. Removing the Orchestrator arg makes a 5-slice test sequence OOM (regression guard).
+
+**Shipped:** `androidx-test-orchestrator = "1.5.1"` in the version catalog, `androidTestUtil(libs.androidx.test.orchestrator)` artifact, `testInstrumentationRunnerArguments["clearPackageData"] = "true"` + `testOptions { execution = "ANDROIDX_TEST_ORCHESTRATOR" }` in `app/build.gradle.kts`. GEMINI.md gotcha §30 documents the rationale (libslic3r per-process C++ allocations leak across slicing test methods otherwise). On-device confirmation that 5+ slicing tests in series no longer OOM is the remaining `connectedDebugAndroidTest` follow-up.
 
 ---
 

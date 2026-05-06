@@ -55,6 +55,7 @@ import androidx.xr.compose.subspace.layout.height as subspaceHeight
 import androidx.xr.compose.subspace.layout.offset
 import androidx.xr.compose.subspace.layout.width as subspaceWidth
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -237,6 +238,39 @@ class MainActivity : ComponentActivity() {
      */
     private val controllerInput = ControllerInputBus()
 
+    /**
+     * Roadmap B14 — share-target file ingestion.
+     *
+     * `onCreate` and `onNewIntent` extract URIs from the launching
+     * Intent (ACTION_VIEW / ACTION_SEND / ACTION_SEND_MULTIPLE),
+     * stage each one to cacheDir/shared/ via [SharedIntentHandler],
+     * and emit the resulting File on this flow. The `setContent`
+     * body collects from this flow and routes each File through the
+     * same `onFileSelected` codepath the in-app picker uses — paint
+     * restore + GLB bake + bedFit + recents bump fire identically.
+     *
+     * `extraBufferCapacity = 8` is enough headroom for an
+     * ACTION_SEND_MULTIPLE that happens to hand us 8 sibling files at
+     * once (rare in practice; MakerWorld's "share" tops out at 1).
+     */
+    private val pendingSharedFiles =
+        kotlinx.coroutines.flow.MutableSharedFlow<java.io.File>(
+            replay = 0,
+            extraBufferCapacity = 8,
+            onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST,
+        )
+
+    /**
+     * Activity-scoped scope used by the share-intent ingestion path
+     * — the file copy off `content://` URIs is IO-bound and must not
+     * block the main thread inside onCreate / onNewIntent. Cancelled
+     * automatically when the Activity is destroyed.
+     */
+    private val activityIoScope =
+        kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()
+        )
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -274,6 +308,13 @@ class MainActivity : ComponentActivity() {
         } catch (e: Throwable) {
             null
         }
+
+        // Roadmap B14 — if the Activity launched from a VIEW / SEND
+        // intent (a share-to-OrcaXR), drain the URI list now so the
+        // first thing the user sees is "your model is loading" not
+        // an empty bed. The collector inside setContent picks up the
+        // emitted Files and routes them through onFileSelected.
+        ingestSharedIntent(intent)
 
         setContent {
             val session by xrSession.collectAsState()
@@ -321,6 +362,11 @@ class MainActivity : ComponentActivity() {
                     // are a follow-up enhancement and the lighter
                     // primitive ships fine on Galaxy XR.
                     val toolpathTubes = remember { mutableStateOf(prefs.toolpathTubes) }
+                    // Roadmap A14 — toolpath color mode (auto / extruder /
+                    // feature). Persisted in SharedPreferences alongside
+                    // the tubes toggle; the bake LE keys on this so a
+                    // mode flip triggers a one-shot re-bake.
+                    val toolpathColorMode = remember { mutableStateOf(prefs.toolpathColorMode) }
                     val selectedPrinterId = remember { mutableStateOf(prefs.lastPrinterId) }
                     LaunchedEffect(selectedPrinterId.value) {
                         prefs.lastPrinterId = selectedPrinterId.value
@@ -346,6 +392,9 @@ class MainActivity : ComponentActivity() {
                     }
                     LaunchedEffect(toolpathTubes.value) {
                         prefs.toolpathTubes = toolpathTubes.value
+                    }
+                    LaunchedEffect(toolpathColorMode.value) {
+                        prefs.toolpathColorMode = toolpathColorMode.value
                     }
                     // Profile selection rules, in order:
                     //  1. If the user previously picked something and it
@@ -432,6 +481,7 @@ class MainActivity : ComponentActivity() {
                             printSettingsOverrides = printSettingsOverrides,
                             showTravels = showTravels,
                             toolpathTubes = toolpathTubes,
+                            toolpathColorMode = toolpathColorMode,
                             allProfiles = allProfiles,
                             onSaveAsProfile = onSaveAsProfile,
                             onDeleteProfile = onDeleteProfile,
@@ -449,7 +499,8 @@ class MainActivity : ComponentActivity() {
                             paintCache = paintCache,
                             recentFiles = recentFiles,
                             plateStore = plateStore,
-                            customGcodeStore = customGcodeStore)
+                            customGcodeStore = customGcodeStore,
+                            pendingSharedFiles = pendingSharedFiles)
                     } else {
                         FlatShell(sliceState, maxLayer, selectedProfile, layerHeightOverride, showTravels)
                     }
@@ -562,6 +613,53 @@ class MainActivity : ComponentActivity() {
         controllerInput.resetAxes()
         super.onPause()
     }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        // launchMode="singleTask" routes a second VIEW / SEND through
+        // here instead of spawning a fresh MainActivity instance — see
+        // AndroidManifest.xml. We update setIntent so getIntent()
+        // reflects the latest payload (some Android-internal callsites
+        // assume that), then drain.
+        setIntent(intent)
+        ingestSharedIntent(intent)
+    }
+
+    override fun onDestroy() {
+        activityIoScope.cancel()
+        super.onDestroy()
+    }
+
+    /**
+     * Roadmap B14 — turn an inbound share/view Intent into staged
+     * `cacheDir/shared/` files and emit them on [pendingSharedFiles].
+     * Pure dispatch on the main thread; the actual byte copy runs on
+     * [activityIoScope]'s IO dispatcher because content:// URIs are
+     * file-system-backed and the MIME query alone touches a Cursor.
+     *
+     * Idempotent: an Intent we don't recognize (e.g. Android's MAIN +
+     * LAUNCHER on cold start) returns an empty URI list and this is
+     * a no-op. That's why it's safe to call from both onCreate and
+     * onNewIntent — the cold-start cost on a normal launch is one
+     * `intent.action` read.
+     */
+    private fun ingestSharedIntent(intent: android.content.Intent?) {
+        if (intent == null) return
+        val action = intent.action ?: return
+        if (action != android.content.Intent.ACTION_VIEW &&
+            action != android.content.Intent.ACTION_SEND &&
+            action != android.content.Intent.ACTION_SEND_MULTIPLE
+        ) return
+        // Mark the Intent as consumed so a configuration change (e.g.
+        // headset orientation flip) doesn't re-ingest the same URI.
+        intent.action = android.content.Intent.ACTION_MAIN
+        activityIoScope.launch {
+            val files = SharedIntentHandler.resolveAll(this@MainActivity, intent)
+            files.forEach { f ->
+                pendingSharedFiles.tryEmit(f)
+            }
+        }
+    }
 }
 
 @Composable
@@ -579,6 +677,10 @@ private fun XrShell(
     /** Roadmap A7 — toolpath tubes toggle (4-sided prism per segment
      *  vs single LINES). Persisted via [UserPreferences.toolpathTubes]. */
     toolpathTubes: MutableState<Boolean>,
+    /** Roadmap A14 — toolpath color mode picker. One of `auto`
+     *  (per-extruder when multi-tool, per-role otherwise), `extruder`,
+     *  `feature`. Persisted via [UserPreferences.toolpathColorMode]. */
+    toolpathColorMode: MutableState<String>,
     allProfiles: List<SlicerProfile>,
     onSaveAsProfile: (String) -> Unit,
     onDeleteProfile: (String) -> Unit,
@@ -604,6 +706,11 @@ private fun XrShell(
     plateStore: PlateStore,
     /** A11 — persistent custom-gcode-per-print-Z ticks per plate. */
     customGcodeStore: CustomGcodeStore,
+    /** Roadmap B14 — Activity-side share-target ingestion flow.
+     *  XrShell collects from this and routes each File through the
+     *  same `onFileSelected` codepath the in-app picker uses. */
+    pendingSharedFiles: kotlinx.coroutines.flow.SharedFlow<java.io.File> =
+        kotlinx.coroutines.flow.MutableSharedFlow(),
 ) {
     val ctx = LocalContext.current
 
@@ -1944,8 +2051,32 @@ private fun XrShell(
         }
     }
 
+    // Roadmap B14 — collect share-target staged files and route each
+    // one through the same onFileSelected codepath the in-app picker
+    // uses. This sits AFTER the onFileSelected definition so the lambda
+    // captures it directly (no rememberUpdatedState needed; XrShell
+    // recomposes if the parameter list changes, which it doesn't for
+    // the share flow). pickerMode is reset to Add explicitly because
+    // a stale AddVolume mode left over from an in-flight UI flow would
+    // otherwise interpret the shared file as "attach this as a new
+    // volume to the selected model" — wrong intent for an external
+    // share, which always means "open this".
+    LaunchedEffect(pendingSharedFiles) {
+        pendingSharedFiles.collect { file ->
+            pickerMode = PickerMode.Add
+            onFileSelected(file)
+        }
+    }
+
     fun runSlice(file: File, label: String) {
         scope.launch {
+            // Roadmap E8 — register with the slice-lifetime foreground
+            // service so the OS doesn't kill the process if the user
+            // takes off the XR headset mid-slice. The try/finally below
+            // makes sure the service is released on every return path
+            // including exceptions.
+            SliceLifecycle.beginSlice(ctx, label)
+            try {
             glbPath = null
             maxLayer.value = null
             sliceState.value = SliceUiState.Slicing(sourceLabel = label)
@@ -2003,7 +2134,7 @@ private fun XrShell(
                     paddedSlots,
                     mixedFilamentDefinitions,
                     paddedSlotRemap,
-                    extraOverrides = printSettingsOverrides.value,
+                    extraOverrides = printSettingsOverrides.value + wipeTowerExtraOverrides(ctx),
                     flushFromProject = loadedFlushSettings,
                     projectOverrides = loadedProjectOverrides,
                     slotTypes = filamentList.map { it.filamentType },
@@ -2034,6 +2165,10 @@ private fun XrShell(
                 runCatching { GcodeParser.parse(File(it.outputPath)) }.getOrNull()
             }
             sliceState.value = SliceUiState.Done(label, result, parsed)
+            } finally {
+                // Roadmap E8 — release the foreground-service hold.
+                SliceLifecycle.endSlice(ctx)
+            }
         }
     }
 
@@ -2522,7 +2657,7 @@ private fun XrShell(
                 paddedSlots,
                 mixedFilamentDefinitions,
                 paddedSlotRemap,
-                extraOverrides = printSettingsOverrides.value,
+                extraOverrides = printSettingsOverrides.value + wipeTowerExtraOverrides(ctx),
                 flushFromProject = loadedFlushSettings,
                 projectOverrides = loadedProjectOverrides,
                 slotTypes = filamentList.map { it.filamentType },
@@ -2785,9 +2920,12 @@ private fun XrShell(
     ) {
         if (models.isEmpty()) return
         scope.launch {
+            val multiLabel = "${models.size} models"
+            // Roadmap E8 — see runSlice; same lifecycle pattern.
+            SliceLifecycle.beginSlice(ctx, multiLabel)
+            try {
             glbPath = null
             maxLayer.value = null
-            val multiLabel = "${models.size} models"
             sliceState.value = SliceUiState.Slicing(sourceLabel = multiLabel)
             // For PlacedModels created by decomposing a multi-object
             // 3MF (gotcha #21), `source` points at a per-object STL —
@@ -2834,7 +2972,7 @@ private fun XrShell(
                 slots,
                 mixedFilamentDefinitions,
                 slotRemap,
-                extraOverrides = printSettingsOverrides.value,
+                extraOverrides = printSettingsOverrides.value + wipeTowerExtraOverrides(ctx),
                 flushFromProject = loadedFlushSettings,
                 projectOverrides = loadedProjectOverrides,
                 slotTypes = slotTypes,
@@ -2872,6 +3010,10 @@ private fun XrShell(
                 runCatching { GcodeParser.parse(File(it.outputPath)) }.getOrNull()
             }
             sliceState.value = SliceUiState.Done(multiLabel, result, parsed)
+            } finally {
+                // Roadmap E8 — release the foreground-service hold.
+                SliceLifecycle.endSlice(ctx)
+            }
         }
     }
 
@@ -3052,7 +3194,7 @@ private fun XrShell(
                     selectedProfile.value,
                     layerHeightOverride.value,
                     emptyList(),
-                    extraOverrides = printSettingsOverrides.value,
+                    extraOverrides = printSettingsOverrides.value + wipeTowerExtraOverrides(ctx),
                 )
                 // D9 / A11 — bundle per-object + per-volume overrides
                 // and the active plate's custom-gcode ticks into the
@@ -4312,7 +4454,7 @@ private fun XrShell(
                             testStatePaddedSlots,
                             mixedFilamentDefinitions,
                             testStatePaddedSlotRemap,
-                            extraOverrides = printSettingsOverrides.value,
+                            extraOverrides = printSettingsOverrides.value + wipeTowerExtraOverrides(ctx),
                             flushFromProject = loadedFlushSettings,
                             projectOverrides = loadedProjectOverrides,
                             slotTypes = testStateSlotTypes,
@@ -4735,7 +4877,7 @@ private fun XrShell(
     // the SceneCoreEntity composable below tears down + reloads (GLB
     // model caches by path; reusing the path without disposing won't
     // pick up new bytes).
-    LaunchedEffect(sliceState.value, maxLayer.value, showTravels.value, toolpathTubes.value, paddedSlots) {
+    LaunchedEffect(sliceState.value, maxLayer.value, showTravels.value, toolpathTubes.value, toolpathColorMode.value, paddedSlots) {
         val st = sliceState.value
         if (st is SliceUiState.Done && st.parsed != null) {
             // Debounce: dragging the layer slider fires this LaunchedEffect
@@ -4767,6 +4909,7 @@ private fun XrShell(
                     // color (yellow).
                     extruderPalette = physicalSlotPalette,
                     tubes = toolpathTubes.value,
+                    colorMode = ToolpathGlb.ColorMode.parse(toolpathColorMode.value),
                 )
             }
                 .onSuccess {
@@ -5835,6 +5978,8 @@ private fun XrShell(
                         },
                         tubesMode = toolpathTubes.value,
                         onTubesModeChange = { toolpathTubes.value = it },
+                        colorMode = toolpathColorMode.value,
+                        onColorModeChange = { toolpathColorMode.value = it },
                         // A11 — render colored dots on the strip beneath
                         // the slider for every authored tick on the
                         // active plate. Tap to jump the scrubber to the
@@ -5933,7 +6078,7 @@ private fun XrShell(
                                     selectedProfile.value,
                                     layerHeightOverride.value,
                                     emptyList(),
-                                    extraOverrides = printSettingsOverrides.value,
+                                    extraOverrides = printSettingsOverrides.value + wipeTowerExtraOverrides(ctx),
                                 )
                                 val dest = saveProjectAs3mfToDownloads(
                                     sourceFile = target.source,
@@ -7929,6 +8074,28 @@ internal fun synthesizeFlushMatrix(
         }
     }
     return sb.toString()
+}
+
+/**
+ * Roadmap A13 — produce the `wipe_tower_x` / `wipe_tower_y` extras
+ * map when the user has opted into auto-positioning. Empty map when
+ * the toggle is off OR the persisted X/Y are NaN (set-once invariant
+ * — the auto-position MCP tool writes both atomically).
+ *
+ * Call from every `mergedConfig(...)` site that drives a real slice;
+ * the result is `+`'d onto the user's `extraOverrides` map so it wins
+ * cleanly over the profile's bundled defaults.
+ */
+internal fun wipeTowerExtraOverrides(ctx: android.content.Context): Map<String, String> {
+    val prefs = UserPreferences(ctx)
+    if (!prefs.wipeTowerAutoPosition) return emptyMap()
+    val x = prefs.wipeTowerXOverride
+    val y = prefs.wipeTowerYOverride
+    if (x.isNaN() || y.isNaN()) return emptyMap()
+    return mapOf(
+        "wipe_tower_x" to "%.3f".format(x),
+        "wipe_tower_y" to "%.3f".format(y),
+    )
 }
 
 internal fun mergedConfig(
