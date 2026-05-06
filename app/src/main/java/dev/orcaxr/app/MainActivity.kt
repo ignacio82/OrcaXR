@@ -1,6 +1,7 @@
 package dev.orcaxr.app
 
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
@@ -307,6 +308,30 @@ class MainActivity : ComponentActivity() {
             (Session.create(this) as? SessionCreateSuccess)?.session
         } catch (e: Throwable) {
             null
+        }
+
+        // Phone / tablet fallback — if the device isn't XR-capable
+        // (Session.create failed or returned null) AND we don't have
+        // a runtime override forcing the XR shell, hand off to the
+        // dedicated MobileActivity. The mobile shell ships the full
+        // Material 3 phone/tablet experience (nav rail / bottom nav,
+        // 9 destinations) while reusing the same stores + MoonrakerClient
+        // + libslic3r + AiRenderEngine that the XR shell uses.
+        //
+        // We forward via an explicit Intent so any VIEW/SEND data
+        // (file shares) ride along — MobileActivity drains the URI
+        // list into its `pendingSharedUris` Flow on receipt.
+        if (xrSession.value == null && !intent.getBooleanExtra(EXTRA_FORCE_FLAT_SHELL, false)) {
+            val forward = Intent(this, MobileActivity::class.java).apply {
+                if (intent.action != null) action = intent.action
+                if (intent.data != null) data = intent.data
+                if (intent.type != null) type = intent.type
+                if (intent.extras != null) putExtras(intent.extras!!)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            }
+            startActivity(forward)
+            finish()
+            return
         }
 
         // Roadmap B14 — if the Activity launched from a VIEW / SEND
@@ -659,6 +684,15 @@ class MainActivity : ComponentActivity() {
                 pendingSharedFiles.tryEmit(f)
             }
         }
+    }
+
+    companion object {
+        /** Set to `true` on the launching Intent to keep MainActivity
+         *  alive even when no XR session is available — used by the
+         *  in-app debug menu to verify the FlatShell still works on
+         *  Android XR devices. The phone / tablet fallback otherwise
+         *  routes the user to [MobileActivity]. */
+        const val EXTRA_FORCE_FLAT_SHELL = "dev.orcaxr.app.FORCE_FLAT_SHELL"
     }
 }
 

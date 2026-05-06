@@ -134,6 +134,20 @@
         </activity>
 
         <!--
+          Phone / tablet entry point. NOT exported as a launcher — the
+          system shows a single OrcaXR icon driven by MainActivity, and
+          MainActivity.onCreate forwards here when Session.create
+          returns null (i.e. the device isn't XR-capable). Forwarded
+          intents may carry VIEW / SEND data so the file-share flow
+          works on phones too.
+        -->
+        <activity
+            android:name=".MobileActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.App.Starting" />
+
+        <!--
           Hosts the MCP HTTP server so it survives headset removal. Stays
           tightly scoped to the user-toggled MCP feature: started only
           when the Devices → MCP switch is on, stopped immediately when
