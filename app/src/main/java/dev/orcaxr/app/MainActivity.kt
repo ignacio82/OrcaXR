@@ -3452,6 +3452,81 @@ private fun XrShell(
                 loadingLabel = null
             }
         },
+        // D15 (deferred piece) — text/SVG as a volume on an existing
+        // PlacedModel. Composes the AddTextOrSvgObject mesh-build with
+        // the AddVolumeToModel attach codepath so a single MCP call
+        // can deboss letters into a host model.
+        onAddTextOrSvgVolume = { action ->
+            scope.launch {
+                val host = placedModels.firstOrNull { it.id == action.modelId }
+                val volType = runCatching { ModelVolumeType.valueOf(action.volumeType) }.getOrNull()
+                if (host == null) {
+                    android.util.Log.w("OrcaXR/D15", "AddTextOrSvgVolume: no model id=${action.modelId}")
+                    return@launch
+                }
+                if (volType == null) {
+                    android.util.Log.w("OrcaXR/D15", "AddTextOrSvgVolume: bad volumeType=${action.volumeType}")
+                    return@launch
+                }
+                isLoadingModel = true
+                loadingLabel = when (action.source) {
+                    is dev.orcaxr.app.mcp.WorkspaceAction.EmbossSource.Text ->
+                        "Building text \"${action.source.text.take(24)}\" volume"
+                    is dev.orcaxr.app.mcp.WorkspaceAction.EmbossSource.Svg ->
+                        "Building SVG ${File(action.source.svgPath).name} volume"
+                }
+                val outFile = File(
+                    ctx.cacheDir,
+                    "emboss_volume_${System.currentTimeMillis()}.3mf",
+                )
+                val built = runCatching {
+                    when (val src = action.source) {
+                        is dev.orcaxr.app.mcp.WorkspaceAction.EmbossSource.Text -> {
+                            val font = EmbossAssets.BUNDLED_FONTS.firstOrNull { it.id == src.fontId }
+                                ?: EmbossAssets.DEFAULT_FONT
+                            val fontFile = EmbossAssets.stageBundledFont(ctx, font)
+                            SlicerEngine.buildTextMesh(
+                                fontFile = fontFile,
+                                text = src.text,
+                                sizeMm = action.sizeMm,
+                                depthMm = action.depthMm,
+                                output = outFile,
+                            )
+                        }
+                        is dev.orcaxr.app.mcp.WorkspaceAction.EmbossSource.Svg -> {
+                            SlicerEngine.buildSvgMesh(
+                                svgFile = File(src.svgPath),
+                                targetSizeMm = action.sizeMm,
+                                depthMm = action.depthMm,
+                                output = outFile,
+                            )
+                        }
+                    }
+                }.onFailure {
+                    android.util.Log.e("OrcaXR", "AddTextOrSvgVolume build threw", it)
+                }.getOrNull()
+                if (built == null) {
+                    isLoadingModel = false
+                    loadingLabel = null
+                    android.widget.Toast.makeText(
+                        ctx,
+                        "Build failed (see logs).",
+                        android.widget.Toast.LENGTH_LONG,
+                    ).show()
+                    return@launch
+                }
+                // Route through the AddVolume codepath — selects the
+                // host, sets pickerMode, then calls onFileSelected
+                // which runs the colored-GLB re-bake + paint
+                // propagation just like a manual file-picker volume
+                // attach. Same shape as `onAddVolumeToModel` below.
+                selectedModelIds = setOf(action.modelId)
+                pickerMode = PickerMode.AddVolume(volType)
+                onFileSelected(built)
+                isLoadingModel = false
+                loadingLabel = null
+            }
+        },
         // Volume operations: AddVolume routes through the same
         // PickerMode.AddVolume codepath the file picker uses (so the
         // colored-GLB re-bake / paint propagation runs identically).

@@ -1191,24 +1191,27 @@ internal object WorkspaceTools {
     class EmbossModel(private val ws: WorkspaceModel) : Tool {
         override val name = "emboss_model"
         override val description =
-            "Apply embossed text or an SVG inset to a model's top face — OR (D15) author " +
-                "standalone text/SVG as a fresh PlacedModel with no host. " +
+            "Apply embossed text or an SVG inset to a model — supports four modes: " +
+                "'emboss' (raise letters above the host, boolean union); 'engrave' (carve them " +
+                "in, A−B); 'add_object' (D15) drops the extruded mesh on the bed as a new " +
+                "PlacedModel with no host; 'add_volume' (D15) attaches the extruded mesh as a " +
+                "volume on a host PlacedModel — useful for `add_volume` + `volume_kind=" +
+                "NEGATIVE_VOLUME` to deboss letters into a 20 mm cube. " +
                 "kind='text' takes `text` + optional `font_id` (defaults to dejavu_sans_bold). " +
                 "kind='svg' takes `svg_path` (absolute path to a .svg with filled paths). " +
                 "size_mm is line height (text) or max XY (svg); depth_mm is Z extrusion. " +
-                "mode='emboss' raises letters above the host (boolean union); mode='engrave' " +
-                "carves them in (A−B); mode='add_object' (D15) skips the boolean and drops the " +
-                "extruded mesh on the bed as a new PlacedModel — useful for nameplates, signage, " +
-                "labels, or generating a part from an SVG silhouette without a host. " +
-                "model_id is REQUIRED for emboss/engrave, OPTIONAL (and ignored) for add_object. " +
+                "model_id is REQUIRED for emboss/engrave/add_volume; OPTIONAL (and ignored) for " +
+                "add_object. volume_kind is REQUIRED for add_volume (one of MODEL_PART, " +
+                "NEGATIVE_VOLUME, PARAMETER_MODIFIER, SUPPORT_ENFORCER, SUPPORT_BLOCKER). " +
                 "Optional translate_x_mm / translate_y_mm / rot_z_deg offset the emboss before " +
-                "the boolean (emboss/engrave only; add_object lands on the bed at origin). " +
-                "load_mode='add' (default) keeps existing models on the bed; 'replace' clears."
+                "the boolean (emboss/engrave only). load_mode='add' (default) keeps existing " +
+                "models on the bed; 'replace' clears (add_object only)."
         override val inputSchema = Schemas.obj(
             required = listOf("kind", "size_mm", "depth_mm"),
             properties = mapOf(
-                "model_id" to Schemas.string("Host model id (required for emboss/engrave; ignored for add_object)"),
+                "model_id" to Schemas.string("Host model id (required for emboss/engrave/add_volume; ignored for add_object)"),
                 "kind" to Schemas.string("'text' or 'svg'"),
+                "volume_kind" to Schemas.string("(add_volume only) MODEL_PART | NEGATIVE_VOLUME | PARAMETER_MODIFIER | SUPPORT_ENFORCER | SUPPORT_BLOCKER"),
                 "text" to Schemas.string("(text only) the string to emboss"),
                 "font_id" to Schemas.string("(text only) bundled font id from list_emboss_fonts"),
                 "svg_path" to Schemas.string("(svg only) absolute path to a .svg file"),
@@ -1225,9 +1228,10 @@ internal object WorkspaceTools {
             requireAttached(ws)?.let { return it }
             val modeRaw = args.optString("mode", "emboss").lowercase()
             val isAddObject = modeRaw in setOf("add_object", "object", "standalone")
+            val isAddVolume = modeRaw in setOf("add_volume", "volume", "attach_volume")
             val modelId = args.optString("model_id").trim()
             if (!isAddObject) {
-                if (modelId.isEmpty()) return ToolResult.error("'model_id' is required for emboss/engrave.")
+                if (modelId.isEmpty()) return ToolResult.error("'model_id' is required for emboss/engrave/add_volume.")
                 if (ws.placedModels.value.none { it.id == modelId }) {
                     return ToolResult.error("No model with id '$modelId'.")
                 }
@@ -1283,10 +1287,46 @@ internal object WorkspaceTools {
                     },
                 )
             }
+            if (isAddVolume) {
+                val volumeKind = args.optString("volume_kind", "").trim()
+                if (volumeKind.isEmpty()) {
+                    return ToolResult.error(
+                        "'volume_kind' is required for mode='add_volume'. " +
+                            "One of: MODEL_PART, NEGATIVE_VOLUME, PARAMETER_MODIFIER, " +
+                            "SUPPORT_ENFORCER, SUPPORT_BLOCKER.",
+                    )
+                }
+                val validKinds = setOf(
+                    "MODEL_PART", "NEGATIVE_VOLUME", "PARAMETER_MODIFIER",
+                    "SUPPORT_ENFORCER", "SUPPORT_BLOCKER",
+                )
+                if (volumeKind !in validKinds) {
+                    return ToolResult.error("Unknown volume_kind '$volumeKind'. Valid: $validKinds.")
+                }
+                ws.emit(
+                    WorkspaceAction.AddTextOrSvgVolume(
+                        modelId = modelId,
+                        source = source,
+                        sizeMm = sizeMm,
+                        depthMm = depthMm,
+                        volumeType = volumeKind,
+                    ),
+                )
+                return success(
+                    "Add-volume started (kind=$kind, volume=$volumeKind) on $modelId.",
+                    JSONObject().apply {
+                        put("model_id", modelId)
+                        put("kind", kind)
+                        put("mode", "add_volume")
+                        put("volume_kind", volumeKind)
+                        put("size_mm", sizeMm); put("depth_mm", depthMm)
+                    },
+                )
+            }
             val mode = when (modeRaw) {
                 "emboss", "add", "raise", "" -> WorkspaceAction.EmbossMode.Add
                 "engrave", "sub", "carve", "subtract" -> WorkspaceAction.EmbossMode.Sub
-                else -> return ToolResult.error("'mode' must be 'emboss', 'engrave', or 'add_object'.")
+                else -> return ToolResult.error("'mode' must be 'emboss', 'engrave', 'add_object', or 'add_volume'.")
             }
             ws.emit(
                 WorkspaceAction.EmbossModel(

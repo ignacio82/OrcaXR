@@ -361,6 +361,30 @@ sealed interface WorkspaceAction {
     ) : WorkspaceAction
 
     /**
+     * D15 (deferred-piece) — author text/SVG and attach the resulting
+     * extruded mesh as a volume on an existing PlacedModel. The
+     * canonical "deboss letters into a 20 mm cube" workflow lives
+     * here: build the text mesh, route through the same AddVolume
+     * codepath the file picker uses, with `volumeType =
+     * NEGATIVE_VOLUME` (or any other ModelVolumeType).
+     *
+     * Sibling of [AddTextOrSvgObject] (standalone fresh PlacedModel)
+     * and [AddVolumeToModel] (file-picker path with an arbitrary
+     * STL). This action composes the two flows for the case where
+     * the volume-content is text or SVG.
+     */
+    data class AddTextOrSvgVolume(
+        val modelId: String,
+        val source: EmbossSource,
+        val sizeMm: Float,
+        val depthMm: Float,
+        /** ModelVolumeType.name() — one of MODEL_PART /
+         *  NEGATIVE_VOLUME / PARAMETER_MODIFIER / SUPPORT_ENFORCER /
+         *  SUPPORT_BLOCKER. */
+        val volumeType: String,
+    ) : WorkspaceAction
+
+    /**
      * Multi-volume editing — append a new volume to an existing
      * PlacedModel. `type` is one of MODEL_PART / NEGATIVE_VOLUME /
      * PARAMETER_MODIFIER / SUPPORT_BLOCKER / SUPPORT_ENFORCER (matches

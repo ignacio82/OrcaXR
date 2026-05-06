@@ -124,15 +124,15 @@ Upstream's "Add handy model" submenu seeds well-known calibration / tuning model
 
 **Exit criteria:** Drop a Ø6×3 mm cylinder (D12) as a NEGATIVE volume on a 20 mm cube, slice → gcode shows a Ø6 hole. Same with a SUPPORT_ENFORCER on the underside of a Benchy chimney → gcode adds supports inside the enforcer bbox where the default heuristic skipped them. Round-trips through `save_project_as_3mf`. ✅ Met.
 
-### D15. Standalone text & SVG primitives (vs D4's boolean emboss) 🟡 Shipped — add_object via MCP; NEGATIVE/MODIFIER volume variants deferred
+### D15. Standalone text & SVG primitives (vs D4's boolean emboss) 🟢 Shipped
 
 > **Files:** `WorkspaceAction.AddTextOrSvgObject`, `onAddTextOrSvgObject` binding callback, MainActivity-side handler that builds the extruded mesh via the existing `SlicerEngine.buildTextMesh / buildSvgMesh` and feeds the result through `onFileSelected` (so paint cache restore + bedFit + bedCollision run identically). `emboss_model` MCP tool extended with `mode='add_object'` (and the corresponding `model_id` requirement relaxed for that mode).
 
 D4 ships text/SVG as a boolean op against an existing host model; D15's add_object mode is the complementary path that drops a fresh PlacedModel on the bed without a host. Same backend as D4 — `Emboss::text2shapes` for text, `NSVGUtils::to_polygons` for SVG, `polygons2model` for the extrusion — minus the `MeshBoolean::mcut::make_boolean` step. The result is a normal PlacedModel that can be sliced, painted, scaled, transformed, or used as a host for further emboss / volumes / etc.
 
-NEGATIVE / MODIFIER volume variants (drop "TEXT" as a `NEGATIVE_VOLUME` on a 20 mm cube to deboss letters) are deferred — they need a per-volume add path different from `add_volume_to_model`'s file-picker route, and the standalone-object case covers most of the asked-for functionality (nameplates, signage, labels, SVG silhouette parts). Follow-up scoped separately.
+**NEGATIVE / MODIFIER volume variants (the deferred piece):** `emboss_model` now accepts `mode='add_volume'` + `volume_kind=…`. Composes the existing `AddTextOrSvgObject` mesh-build (text → `Emboss::text2shapes` + extrusion via `polygons2model`; SVG → `NSVGUtils::to_polygons` + extrusion) with the `AddVolumeToModel` attach codepath — the result is a temp 3MF that flows through the same `PickerMode.AddVolume(type)` + `onFileSelected` route the file-picker volume-attach path uses, so paint cache restore + colored-GLB rebake + bedFit run identically. New `WorkspaceAction.AddTextOrSvgVolume(modelId, source, sizeMm, depthMm, volumeType)` action + `WorkspaceBinding.onAddTextOrSvgVolume` callback + MainActivity handler. `volume_kind` accepts MODEL_PART / NEGATIVE_VOLUME / PARAMETER_MODIFIER / SUPPORT_ENFORCER / SUPPORT_BLOCKER. `EmbossModelAddVolumeTest` (6 tests covering: emit-shape, missing-model_id error, missing-volume_kind error, unknown-kind rejection, missing-host-model rejection, every-valid-kind round-trip).
 
-**Exit criteria:** Author "HELLO" as a 5 mm-tall, 2 mm-deep PlacedModel on the bed and slice it. ✅ Met via `emboss_model(kind='text', text='HELLO', size_mm=5, depth_mm=2, mode='add_object')`. NEGATIVE/MODIFIER volume variants ⏳ deferred.
+**Exit criteria:** Author "HELLO" as a 5 mm-tall, 2 mm-deep PlacedModel on the bed and slice it. ✅ Met via `emboss_model(kind='text', text='HELLO', size_mm=5, depth_mm=2, mode='add_object')`. **NEGATIVE/MODIFIER volume variants:** Deboss "EAT ME" 1.5 mm into a 20 mm cube via `emboss_model(model_id='cube', kind='text', text='EAT ME', size_mm=5, depth_mm=1.5, mode='add_volume', volume_kind='NEGATIVE_VOLUME')`. ✅ Met.
 
 ### D16. Per-volume Object Settings panel 🟡 Shipped — JNI + MCP; VolumeSettingsPanel SpatialPanel deferred
 
