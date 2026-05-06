@@ -3584,6 +3584,12 @@ fun TopNavigationPill(
     /** Roadmap A11 — open / close the Custom-G-code-per-Z SpatialPanel. */
     onToggleCustomGcode: (() -> Unit)? = null,
     customGcodeShown: Boolean = false,
+    /** Roadmap A10 — open / close the Adaptive Layer Height SpatialPanel. */
+    onToggleAdaptiveLayer: (() -> Unit)? = null,
+    adaptiveLayerShown: Boolean = false,
+    /** Roadmap D17 — open / close the Mesh Simplify SpatialPanel. */
+    onToggleSimplify: (() -> Unit)? = null,
+    simplifyShown: Boolean = false,
     /** Active transform tool. Move/Rotate/Scale render as toggle
      *  buttons; tapping the active one returns to [GizmoTool.Select]. */
     gizmoTool: GizmoTool,
@@ -3698,6 +3704,26 @@ fun TopNavigationPill(
                             isSelected = customGcodeShown,
                             enabled = true,
                             onClick = onToggleCustomGcode,
+                        )
+                    }
+                    // Roadmap A10 — Variable / adaptive layer height panel.
+                    if (onToggleAdaptiveLayer != null) {
+                        NavAction(
+                            label = "Layers",
+                            icon = androidx.compose.material.icons.Icons.Default.LineAxis,
+                            isSelected = adaptiveLayerShown,
+                            enabled = true,
+                            onClick = onToggleAdaptiveLayer,
+                        )
+                    }
+                    // Roadmap D17 — Mesh simplify panel.
+                    if (onToggleSimplify != null) {
+                        NavAction(
+                            label = "Simplify",
+                            icon = androidx.compose.material.icons.Icons.Default.Compress,
+                            isSelected = simplifyShown,
+                            enabled = true,
+                            onClick = onToggleSimplify,
                         )
                     }
                     if (onToggleHelp != null) {

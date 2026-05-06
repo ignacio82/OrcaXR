@@ -1059,6 +1059,11 @@ private fun XrShell(
     // surface so authoring a pause-at-Z (the magnet-insert workflow)
     // doesn't require an LLM round-trip.
     var customGcodeShown by remember { mutableStateOf(false) }
+    // Roadmap A10 — toggle for the Adaptive Layer Height SpatialPanel.
+    // Mirrors the customGcodeShown pattern; mounted from the top nav.
+    var adaptiveLayerShown by remember { mutableStateOf(false) }
+    // Roadmap D17 — toggle for the Mesh Simplify SpatialPanel.
+    var simplifyShown by remember { mutableStateOf(false) }
     // Optional in-app LLM assistant. Toggled from the AI assistant
     // card in Settings once a provider key is set; renders the chat
     // SpatialPanel on the right side of the workspace.
@@ -5160,6 +5165,12 @@ private fun XrShell(
                         onToggleAddPrimitive = { addPrimitiveShown = !addPrimitiveShown },
                         customGcodeShown = customGcodeShown,
                         onToggleCustomGcode = { customGcodeShown = !customGcodeShown },
+                        // Roadmap A10 — adaptive layer height authoring panel.
+                        adaptiveLayerShown = adaptiveLayerShown,
+                        onToggleAdaptiveLayer = { adaptiveLayerShown = !adaptiveLayerShown },
+                        // Roadmap D17 — mesh simplify authoring panel.
+                        simplifyShown = simplifyShown,
+                        onToggleSimplify = { simplifyShown = !simplifyShown },
                         gizmoTool = gizmoTool,
                         onGizmoToolChange = { gizmoTool = it },
                         transformToolsEnabled = selectedModel != null,
@@ -6846,6 +6857,89 @@ private fun XrShell(
                                             plateId = activePlateId,
                                         ),
                                     )
+                                }
+                            },
+                        )
+                    }
+                }
+
+                // Roadmap A10 — Adaptive layer height panel. Topnav
+                // toggle drives `adaptiveLayerShown`. Acts on the
+                // currently-selected PlacedModel; Compute disabled when
+                // nothing is selected. Routes through the existing
+                // ComputeAdaptiveLayerHeights / SetLayerHeightProfile
+                // WorkspaceActions so the on-disk profile flows into
+                // every subsequent slice via `nativeSliceMulti.layer
+                // HeightProfilesPerInput` (see runComputeAdaptiveLayer
+                // Heights for the JNI bridge).
+                if (adaptiveLayerShown) {
+                    val sel = placedModels.firstOrNull { it.id in selectedModelIds }
+                    MovablePanelWrapper(
+                        id = "adaptive-layer-panel",
+                        width = 540.dp,
+                        height = 760.dp,
+                        initialOffset = androidx.xr.runtime.math.Vector3(0.6f, -0.05f, -0.15f),
+                        session = session,
+                    ) {
+                        AdaptiveLayerPanel(
+                            selected = sel,
+                            onClose = { adaptiveLayerShown = false },
+                            onCompute = { id, q, sr, km ->
+                                scope.launch {
+                                    dev.orcaxr.app.mcp.WorkspaceModel.get().emit(
+                                        dev.orcaxr.app.mcp.WorkspaceAction.ComputeAdaptiveLayerHeights(
+                                            modelId = id,
+                                            quality = q,
+                                            smoothingRadius = sr,
+                                            smoothingKeepMin = km,
+                                        ),
+                                    )
+                                }
+                            },
+                            onClear = { id ->
+                                scope.launch {
+                                    dev.orcaxr.app.mcp.WorkspaceModel.get().emit(
+                                        dev.orcaxr.app.mcp.WorkspaceAction.SetLayerHeightProfile(
+                                            modelId = id,
+                                            profile = null,
+                                        ),
+                                    )
+                                }
+                            },
+                        )
+                    }
+                }
+
+                // Roadmap D17 — Mesh simplify panel. Topnav toggle
+                // drives `simplifyShown`. Routes through the existing
+                // SimplifyModel WorkspaceAction → runSimplify path so
+                // the simplified mesh replaces the original on the bed
+                // and paint state is dropped (gotcha #28-style sweep).
+                if (simplifyShown) {
+                    val sel = placedModels.firstOrNull { it.id in selectedModelIds }
+                    MovablePanelWrapper(
+                        id = "simplify-panel",
+                        width = 480.dp,
+                        height = 540.dp,
+                        initialOffset = androidx.xr.runtime.math.Vector3(0.6f, -0.05f, -0.15f),
+                        session = session,
+                    ) {
+                        SimplifyPanel(
+                            selected = sel,
+                            onClose = { simplifyShown = false },
+                            onSimplify = { id, target, maxErr ->
+                                scope.launch {
+                                    dev.orcaxr.app.mcp.WorkspaceModel.get().emit(
+                                        dev.orcaxr.app.mcp.WorkspaceAction.SimplifyModel(
+                                            modelId = id,
+                                            targetTriangleCount = target,
+                                            maxError = maxErr,
+                                        ),
+                                    )
+                                    // Auto-hide on apply — the user
+                                    // wants to see the result on the
+                                    // bed, not stay in the panel.
+                                    simplifyShown = false
                                 }
                             },
                         )
