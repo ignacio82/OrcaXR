@@ -276,47 +276,49 @@ All three bare catches now log exception class + message at WARN. Subsumed by th
 
 Both eviction paths now hold `synchronized(map)` across the size-check + remove pair. Renamed to `evictOldestLocked` / `evictIfNeededLocked` so the lock contract is visible at the call site.
 
-### H10. IMPORTANT — Tier-B `WorkspaceAction` handlers log a warning and silently succeed 🔴
+### H10. IMPORTANT — Tier-B `WorkspaceAction` handlers log a warning and silently succeed 🟢 SHIPPED
 
-> **File:** `app/src/main/java/dev/orcaxr/app/mcp/WorkspaceBinding.kt:48-54, 455-639`.
+> **Files:** `app/src/main/java/dev/orcaxr/app/mcp/TierBCapability.kt` (new), `WorkspaceModel.kt`, `WorkspaceBinding.kt`, `tools/WorkspaceTools.kt`.
 
-~28 actions where MCP tools think they ran but nothing happened. Each handler should return `isError: true` (or the action itself should fail and surface back) so the LLM knows to retry / pick another path. This violates the GEMINI.md principle that tools must reflect ground truth.
+Fixed via a wired-capability mechanism: `TierBCapability` enum names each Tier-B callback; `WorkspaceModel.wiredTierBCapabilities` is a `StateFlow<Set<TierBCapability>>`; `BindWorkspaceModel` computes the set from non-null callbacks and publishes; tools call `requireCapability(...)` before emitting and fail-fast with `isError` when the matching callback isn't wired. Gated 10 high-traffic tools (slice / auto_arrange / save_* / load / repair / simplify / cut / mesh_boolean / split). The remaining ~18 either have a Compose-state fallback (DropToBed, SetLayerHeightProfile, etc.) or are paint mutators routed through the unconditionally-wired `applyPaintMutation` pipeline.
 
-### H11. IMPORTANT — `load_paint_recipe` requires the model to have *some* paint state first 🔴
+### H11. IMPORTANT — `load_paint_recipe` requires the model to have *some* paint state first 🟢 SHIPPED
 
-> **File:** `app/src/main/java/dev/orcaxr/app/mcp/tools/PaintRecipeTools.kt:165`.
+> **File:** `app/src/main/java/dev/orcaxr/app/mcp/tools/PaintRecipeTools.kt`.
 
-Gross UX: paint-one-stroke, then load. Initialize `paintFilamentIndex` to a zeroed buffer of size `bvh.triCount` lazily on first recipe load. Same fix shape for the `D18i` paint-template path.
+Falls back to `ws.getBvh(modelId)?.triCount` when no paint arrays are present (the BVH is the ground truth for tri count). Updated the no-fallback error message to point at the actual root cause ("re-select the model in paint mode to build the BVH"). The companion D18i paint-template path doesn't have the same gate (no preconditions to relax).
 
-### H12. IMPORTANT — 3MF layer-height override is invisible in the UI 🔴
+### H12. IMPORTANT — 3MF layer-height override is invisible in the UI 🟢 SHIPPED
 
-> **File:** `app/src/main/java/dev/orcaxr/app/SlicerEngine.kt:1568`.
+> **Files:** `app/src/main/java/dev/orcaxr/app/SlicerEngine.kt`, `MainActivity.kt`, `UiPanels.kt`.
 
-Picker shows 0.12, the loaded 3MF silently overrides to 0.20, no in-XR cue. Surface in `LeftProjectPanel` (`Layer height (3MF override: 0.20)`). Comment in the code documents the UX gap.
+The override doesn't actually apply to the slice (layer-height keys are excluded from `PROJECT_OVERRIDE_KEYS`), but the audit's deeper concern — "the user has no way to know what the 3MF wanted" — is fixed by surfacing the authored value as an amber chip in the Quality tab of `RightSettingsPanel` ("3MF authored 0.20 mm — tap to apply"). Tap applies the value to the override TextField. Only renders when the authored value differs from the effective (override-or-profile) value by ≥ 0.005 mm.
 
-### H13. IMPORTANT — Release builds are not minified, no baseline profile 🔴
+### H13. IMPORTANT — Release builds are not minified, no baseline profile 🟡 BLOCKED on upstream
 
-> **File:** `app/build.gradle.kts:124` (`isMinifyEnabled = false`).
+> **File:** `app/build.gradle.kts:124`.
 
-Per the `configuring-r8-for-compose` skill, R8 full mode + resource shrinking is ~75 % startup / ~60 % frame-render gain on Compose. Worth re-enabling now that alpha13 has stabilized; verify against the existing `BaselineBenchTest`. Generate + ship a baseline profile in the same change for ~30 % cold-start.
+Attempted in this audit sweep — `proguard-rules.pro` is ready (narrow keeps for native methods, `SlicerEngine` nested classes, androidx.xr alpha13). Hit an upstream blocker: Kotlin 2.3.21's Compose compiler (2.2.10) tries to download `org.jetbrains.kotlin:compose-group-mapping:2.2.10` to feed R8 a Compose-aware optimization hint; that artifact isn't published on dl.google.com or maven central as of 2026-05-07, so `produceReleaseComposeMapping` fails before R8 even runs. Two workarounds tried (late `tasks.matching {}.disable`, clearing the configuration's dependencies in `afterEvaluate`) both fire too late — the configuration cache fails at evaluation time. Real fix: wait for upstream artifact OR pin Compose compiler to 2.0.x. The `proguard-rules.pro` keep file is committed and ready to wire in once the blocker resolves; the inline comment in `app/build.gradle.kts` records the trace so a future contributor doesn't re-tread.
 
 ### H14. IMPORTANT — `MainActivity.kt` is 9 478 lines and contains the entire XR shell + paint dispatch + slice coordinator + crash UI 🔴
 
 Not a bug today, but a sustained risk: the stale-closure trap inside `BindWorkspaceModel` (per GEMINI.md) is exactly the kind of bug that hides in a 10 K-line file. Carve out `XrPaintCoordinator`, `XrSliceCoordinator`, and `XrCrashSurface` as the next refactor. Pre-condition for E1 (module split) becoming worthwhile.
 
-### H15. IMPORTANT — `slic3r_jni.cpp` lacks hardening flags 🔴
+### H15. IMPORTANT — `slic3r_jni.cpp` lacks hardening flags 🟢 SHIPPED
 
-> **File:** `app/CMakeLists.txt:49-58`.
+> **File:** `app/src/main/cpp/CMakeLists.txt`.
 
-Missing `-Wformat=2 -Wformat-security`, `-fstack-protector-strong`, `-D_FORTIFY_SOURCE=2`, `-fstack-clash-protection`. Add to release build options. The wrap-trampolines for `tbb::scalable_malloc` are correct (gotcha #18) but a future `lld` change could break them silently — add a one-line CMake assertion that the `__wrap_*` symbols resolve (compile-time test via `nm`).
+Added `-Wformat=2 -Wformat-security`, `-fstack-protector-strong`, `-D_FORTIFY_SOURCE=2`, `-fstack-clash-protection` to the in-tree JNI shim (slic3r_jni.cpp / nanosvg_impl.cpp / thumbnail_render.cpp). Plus a CMake POST_BUILD assertion (`assert_wrap_symbols.cmake`) that checks all 8 `__wrap_scalable_*` trampolines (gotcha #18) landed in the linked .so. Verified with `nm -D --defined-only`: 8/8 present.
 
 ### H16. IMPORTANT — `crash_log.txt` (38 MB) committed to repo root 🟢 SHIPPED
 
 Deleted from disk. Was never tracked in git (already covered by `.gitignore` lines 20 + 83), so no history rewrite needed. Confirmed `local.properties`, `regions.json`, `parse.py`, `get_regions.py`, `playstore/`, `nanobanana-output/` are still ignored.
 
-### H17. IMPORTANT — No CI / pre-commit hooks 🔴
+### H17. IMPORTANT — No CI / pre-commit hooks 🟢 SHIPPED
 
-`.github/workflows/` doesn't exist. With 100+ unit tests already wired, a single `gradlew test` job + a `secrets-scan` would catch the regressions GEMINI.md warns about, and would have caught most of the bugs in this audit before they shipped. Add a minimal GitHub Actions workflow gating PRs on `gradlew test` + ktfmt + a TruffleHog scan.
+> **File:** `.github/workflows/ci.yml` (new).
+
+Three parallel jobs on PRs and `main` pushes: `:app:testDebugUnitTest`, `:app:ktfmtCheck`, gitleaks scan with full history. Test report uploads as an artifact on failure. Deliberately skips androidTest (needs emulator) and the JNI rebuild (30 min submodule build) — the unit-test corpus already covers the slicer / paint / MCP / HTTP framing surfaces that the audit findings exercised.
 
 ### H18. NICE-TO-HAVE — JSON marshalling everywhere uses `org.json` with string-literal keys 🔴
 
@@ -326,29 +328,29 @@ Deleted from disk. Was never tracked in git (already covered by `.gitignore` lin
 
 Lifted to `SCAN_CHUNK_SIZE = 32`, `DEFAULT_CONNECT_TIMEOUT_MS = 800`, `SUBNET_HOST_RANGE_END = 254`, each with a comment recording the empirical rationale (Android's connect-pool contention at higher fan-out, real-LAN miss at 250 ms timeout, /24 sweep range).
 
-### H20. NICE-TO-HAVE — `RecessedFeaturesTest` is `@Ignore`d 🔴
+### H20. NICE-TO-HAVE — `RecessedFeaturesTest` is `@Ignore`d 🟢 SHIPPED
 
-Synthetic fixture has winding inconsistencies. Either fix the fixture or delete the test; ignored tests rot.
+Dropped the `pitInABox` case (synthetic fixture had winding inconsistencies that confused the manifold-edge sign test; the detector itself works on real meshes — verified with Pikachu eye sockets via MCP). Remaining cube + empty-mesh cases still pin the curvature sign convention. 3 tests + 1 skipped → 2 tests + 0 skipped.
 
-### H21. NICE-TO-HAVE — Several tests use `Thread.sleep` 🔴
+### H21. NICE-TO-HAVE — Several tests use `Thread.sleep` 🟢 SHIPPED
 
-`ControllerInputTest`, `AiPaintSessionStoreTest`, `FlushActionsTest`. Flake risk. Replace with `runTest` / virtual time / `CountDownLatch`.
+`AiPaintSessionStoreTest::lruEvictsOldestWhenAtCap` was the only outstanding instance (audit's mention of `ControllerInputTest` and `FlushActionsTest` was inaccurate — neither contains a `Thread.sleep` today). Replaced with explicit `setLastTouchedAtMsForTest` injection — runtime drops from ~20 ms to <1 ms; ordering is now deterministic.
 
-### H22. NICE-TO-HAVE — `PaintInput.kt:34` documents an optimization opportunity but no benchmark 🔴
+### H22. NICE-TO-HAVE — `PaintInput.kt:34` documents an optimization opportunity but no benchmark 🟢 SHIPPED
 
-Closest-triangle-lookup vs BVH path. Add a microbench under `app/src/test/java/dev/orcaxr/app/PaintInputBenchTest.kt` before optimizing.
+`PaintInputBenchTest` builds a 50K-tri UV sphere, fires 200 random rays, and times BVH raycast (1.7 µs) vs naïve linear closest-tri (86 µs) — BVH is 50× faster. Verdict: the "skip the BVH" optimization only pays off if the closest-tri lookup is also BVH-accelerated. Updated the `PaintInput.kt` comment so future readers don't chase a phantom optimization.
 
-### H23. NICE-TO-HAVE — `slic3r_jni.cpp:4780` mesh-boolean output is single-mesh 🔴
+### H23. NICE-TO-HAVE — `slic3r_jni.cpp:4780` mesh-boolean output is single-mesh 🟢 SHIPPED
 
-Even when the operation produces disjoint pieces. Quick win: split with the existing connected-components helper and emit N `PlacedModel`s.
+`runBoolean` now composes `meshBoolean` → `splitObject` so a Difference that splits A into two parts (or a Union of two non-touching meshes) emits N `PlacedModel`s. No JNI signature change — reuses the existing Phase XR_OBJ_6 split path. Toast surfaces piece count when >1.
 
-### H24. NICE-TO-HAVE — `slic3r_jni.cpp:6003` slab/chamber primitive is a placeholder cube 🔴
+### H24. NICE-TO-HAVE — `slic3r_jni.cpp:6003` slab/chamber primitive is a placeholder cube 🟢 SHIPPED
 
-Either implement the real shape or remove the option from `Primitives.kt`.
+The "// SLAB — cube for now" comment misled the audit. A SLAB is intentionally a rectangular prism with non-uniform dimensions (default 40×40×2 mm = a flat tile); `its_make_cube(x,y,z)` with three different values IS the right shape. Updated the comment in both `slic3r_jni.cpp` and `Primitives.kt` so the next reader doesn't re-flag this.
 
-### H25. NICE-TO-HAVE — Vision tools have no rate limit 🔴
+### H25. NICE-TO-HAVE — Vision tools have no rate limit 🟢 SHIPPED
 
-`FindFeatureAnchorsTool`, `ScorePaintAgainstReferenceTool`, `GenerateMaskFromPoint`, `GetMaskForText` — a runaway LLM client can burn through Anthropic quota in seconds. Add a leaky-bucket (~2 req/s) shared between the tools.
+`VisionRateLimiter` (token bucket: 2 req/s refill, 4-call burst capacity) shared as a process singleton across the four vision tools via `OkHttpVisionApiClient.send`. Cooperative cancellation flows through `delay`. Test uses an injectable clock so behavior is deterministic without sleeping.
 
 ### H26. NICE-TO-HAVE — Capabilities have inconsistent threat models 🔴
 

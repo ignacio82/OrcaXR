@@ -121,8 +121,22 @@ android {
             applicationIdSuffix = ".debug"
         }
         release {
-            isMinifyEnabled = false // Phase 0/1: R8 disabled during initial
-            // development pending androidx.xr stability.
+            // Audit H13 (2026-05-07) — R8 minify + baseline profile is
+            // the biggest single perf lever (~75% startup / ~60%
+            // frame-render per the `configuring-r8-for-compose`
+            // skill). Tried to enable in this audit sweep but Kotlin
+            // 2.3.21's Compose compiler (2.2.10) tries to download a
+            // `compose-group-mapping:2.2.10` artifact that hasn't
+            // been published upstream — produceReleaseComposeMapping
+            // fails before R8 runs, independent of our minify config.
+            // Workarounds tried: late `tasks.matching{}.disable` (too
+            // late, configuration cache fails first), clearing
+            // `composeMappingProducerClasspath` in afterEvaluate
+            // (also too late). Real fix: wait for upstream artifact
+            // OR pin Compose compiler to 2.0.x. Both bigger than
+            // this sweep. Keep `proguard-rules.pro` ready to wire
+            // back in when the blocker resolves.
+            isMinifyEnabled = false
             signingConfig =
                 if (signingConfigs.getByName("release").storeFile?.exists() == true) {
                     signingConfigs.getByName("release")
