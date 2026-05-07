@@ -152,7 +152,13 @@ fun SlicerScreen(
         } else if (isTablet) {
             Row(Modifier.fillMaxSize().padding(20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 Column(Modifier.weight(1.3f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    PreviewCard(filePath, fillRemaining = true)
+                    PreviewCard(
+                        filePath = filePath,
+                        profile = selectedProfile,
+                        transform = transform,
+                        onSetTransform = onSetTransform,
+                        fillRemaining = true,
+                    )
                     SliceProgressCard(sliceState, onContinue = {
                         if (sliceState is SliceUi.Done) onNavigate(MobileDestination.Preview)
                     })
@@ -207,7 +213,13 @@ fun SlicerScreen(
                 Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                PreviewCard(filePath, fillRemaining = false)
+                PreviewCard(
+                    filePath = filePath,
+                    profile = selectedProfile,
+                    transform = transform,
+                    onSetTransform = onSetTransform,
+                    fillRemaining = false,
+                )
                 ProfileCard(allProfiles, selectedProfile, onSelect = { selectedProfile = it })
                 QuickOverridesCard(layerHeightOverride, onChange = { layerHeightOverride = it })
                 ToolsCard(
@@ -258,92 +270,162 @@ fun SlicerScreen(
     }
 }
 
+/**
+ * Interactive 3D bed + model preview — drop-in replacement for the
+ * static-PNG card. Builds an OpenGL ES 3 surface (ModelViewerView)
+ * that renders the model on top of the active profile's bed
+ * dimensions with a live grid; pinch-zoom / drag-orbit / two-finger-
+ * pan gestures all just work. A toggle button switches single-finger
+ * drag from "orbit camera" to "translate model on bed", which writes
+ * the user's drag back into transform.translateXmm/Ymm so the
+ * TransformSheet sliders stay in sync.
+ *
+ * GL viewer ported from u1-slicer-for-android (AGPL-3.0); see
+ * NOTICE.md for attribution.
+ */
 @Composable
-private fun PreviewCard(filePath: String, fillRemaining: Boolean) {
+private fun PreviewCard(
+    filePath: String,
+    profile: SlicerProfile,
+    transform: SlicerEngine.ModelPlacement,
+    onSetTransform: (SlicerEngine.ModelPlacement) -> Unit,
+    fillRemaining: Boolean,
+) {
     val ctx = LocalContext.current
-    var renderBitmap by remember(filePath) { mutableStateOf<android.graphics.Bitmap?>(null) }
-    var summary by remember(filePath) { mutableStateOf<AiIntrospection.GeometrySummary?>(null) }
-    var bvhCache by remember(filePath) { mutableStateOf<MeshBvh?>(null) }
-    var rendering by remember(filePath) { mutableStateOf(true) }
-    var cameraName by remember(filePath) { mutableStateOf("iso") }
-    // Audit H_PIXEL10 (2026-05-07) — surface the actual exception
-    // class + message when the preview pipeline fails. Phone users
-    // can't see logcat or the past-crash JSON without adb, so a
-    // silent "Preview unavailable" is a dead end. Showing the real
-    // failure (e.g. `nativeConvertToStl: read failed: bad zip
-    // archive`, `OutOfMemoryError`, `UnsatisfiedLinkError: ...`)
-    // lets the user share the exact failure.
+    var mesh by remember(filePath) { mutableStateOf<dev.orcaxr.app.StlMesh?>(null) }
+    var glMesh by remember(filePath) { mutableStateOf<dev.orcaxr.app.mobile.viewer.MeshData?>(null) }
+    var loading by remember(filePath) { mutableStateOf(true) }
     var loadError by remember(filePath) { mutableStateOf<String?>(null) }
+    var placementMode by remember { mutableStateOf(true) }
+    var viewerView by
+        remember(filePath) {
+            mutableStateOf<dev.orcaxr.app.mobile.viewer.ModelViewerView?>(null)
+        }
+    val transformLive = androidx.compose.runtime.rememberUpdatedState(transform)
+    val onSetTransformLive = androidx.compose.runtime.rememberUpdatedState(onSetTransform)
 
+    // Phase 1: load the StlMesh on a background thread (same pipeline
+    // as before — convertToStl for non-STL containers, then
+    // StlReader.read).
     LaunchedEffect(filePath) {
-        rendering = true
+        loading = true
         loadError = null
         runCatching {
             val source = File(filePath)
-            // Convert non-STL to STL through libslic3r so StlReader can read it.
-            val stl: File = if (source.extension.equals("stl", ignoreCase = true)) {
-                source
-            } else {
-                val derived = File(ctx.cacheDir, "mobile_preview_${source.nameWithoutExtension}.stl")
-                val ok = withContext(Dispatchers.IO) { SlicerEngine.convertToStl(source, derived) }
-                if (!ok) {
-                    error(
-                        "libslic3r could not read ${source.name} — the file may be " +
-                            "corrupt, unsupported, or a 3MF that requires Bambu / Orca " +
-                            "metadata that's missing.",
-                    )
+            val stl: File =
+                if (source.extension.equals("stl", ignoreCase = true)) {
+                    source
+                } else {
+                    val derived =
+                        File(ctx.cacheDir, "mobile_preview_${source.nameWithoutExtension}.stl")
+                    val ok =
+                        withContext(Dispatchers.IO) { SlicerEngine.convertToStl(source, derived) }
+                    if (!ok) {
+                        error(
+                            "libslic3r could not read ${source.name} — the file may be " +
+                                "corrupt, unsupported, or a 3MF that requires Bambu / Orca " +
+                                "metadata that's missing.",
+                        )
+                    }
+                    derived
                 }
-                derived
-            }
-            val mesh = withContext(Dispatchers.IO) { StlReader.read(stl) }
-            if (mesh.triCount == 0) error("STL has 0 triangles — the file is empty or unparseable.")
-            val bvh = withContext(Dispatchers.Default) { MeshBvh.build(mesh) }
-            bvhCache = bvh
-            summary = withContext(Dispatchers.Default) { AiIntrospection.geometry(bvh) }
-        }.onFailure {
-            it.printStackTrace()
-            loadError = "${it.javaClass.simpleName}: ${it.message ?: "no message"}"
-            rendering = false
+            val parsed = withContext(Dispatchers.IO) { StlReader.read(stl) }
+            if (parsed.triCount == 0) error("STL has 0 triangles — the file is empty or unparseable.")
+            mesh = parsed
+            glMesh =
+                withContext(Dispatchers.Default) {
+                    dev.orcaxr.app.mobile.viewer.MeshData.fromStlMesh(parsed)
+                }
+            loading = false
         }
+            .onFailure {
+                it.printStackTrace()
+                loadError = "${it.javaClass.simpleName}: ${it.message ?: "no message"}"
+                loading = false
+            }
     }
 
-    LaunchedEffect(bvhCache, cameraName) {
-        val bvh = bvhCache ?: return@LaunchedEffect
-        val geom = summary ?: return@LaunchedEffect
-        rendering = true
-        runCatching {
-            val cam = AiRenderEngine.namedPreset(cameraName, geom.bboxCenteredPreview, 720, 720)
-            val res = withContext(Dispatchers.Default) {
-                AiRenderEngine.render(
-                    bvh = bvh,
-                    camera = cam,
-                    mode = AiRenderEngine.RenderMode.Solid,
-                    palette = listOf("#79D0C7"),
-                    backgroundRgb = intArrayOf(15, 29, 48),
-                )
-            }
-            renderBitmap = android.graphics.BitmapFactory.decodeByteArray(res.pngBytes, 0, res.pngBytes.size)
-        }
-        rendering = false
+    // Phase 2: hand the MeshData to the GL view once both are ready.
+    LaunchedEffect(glMesh, viewerView) {
+        val m = glMesh
+        val v = viewerView
+        if (m != null && v != null) v.setMesh(m)
+    }
+
+    // Phase 3: bed dimensions follow the active profile.
+    LaunchedEffect(profile.id, viewerView) {
+        val v = viewerView ?: return@LaunchedEffect
+        val (w, d) = dev.orcaxr.app.BuildPlateGlb.sizeFor(profile)
+        v.setBedSize(w, d)
+    }
+
+    // Phase 4: project the user's transform (translate + scale) into
+    // the GL view's object position + scale uniforms. Drives the
+    // model's apparent position on the bed in real time as the user
+    // adjusts the TransformSheet sliders.
+    LaunchedEffect(transform, glMesh, profile.id, viewerView) {
+        val v = viewerView ?: return@LaunchedEffect
+        val m = glMesh ?: return@LaunchedEffect
+        val sx = transform.scaleXPct / 100f
+        val sy = transform.scaleYPct / 100f
+        val sz = transform.scaleZPct / 100f
+        v.setModelScale(sx, sy, sz)
+        val (bedW, bedD) = dev.orcaxr.app.BuildPlateGlb.sizeFor(profile)
+        val scaledW = m.sizeX * sx
+        val scaledD = m.sizeY * sy
+        v.setObjectPosition(
+            xMm = (bedW - scaledW) / 2f + transform.translateXmm,
+            yMm = (bedD - scaledD) / 2f + transform.translateYmm,
+        )
     }
 
     MobileCard {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = if (fillRemaining) Modifier.fillMaxHeight() else Modifier) {
-            SectionKicker("3D preview")
+        Column(
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = if (fillRemaining) Modifier.fillMaxHeight() else Modifier,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SectionKicker("3D preview")
+                Spacer(Modifier.weight(1f))
+                if (mesh != null) {
+                    val toggleLabel = if (placementMode) "Orbit" else "Move model"
+                    OutlinedButton(onClick = { placementMode = !placementMode }) {
+                        Text(toggleLabel)
+                    }
+                }
+            }
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .let { if (fillRemaining) it.weight(1f).fillMaxHeight() else it.aspectRatio(1f) }
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(16.dp)),
+                    .let {
+                        if (fillRemaining) it.weight(1f).fillMaxHeight()
+                        else it.aspectRatio(1f)
+                    }
+                    .background(
+                        MaterialTheme.colorScheme.surfaceContainerHighest,
+                        RoundedCornerShape(16.dp),
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
-                val bmp = renderBitmap
                 val err = loadError
-                if (bmp != null) {
-                    Image(
-                        bitmap = bmp.asImageBitmap(),
-                        contentDescription = "3D preview",
-                        contentScale = ContentScale.Fit,
+                if (glMesh != null) {
+                    androidx.compose.ui.viewinterop.AndroidView(
+                        factory = { factoryCtx ->
+                            dev.orcaxr.app.mobile.viewer.ModelViewerView(factoryCtx).also { v ->
+                                viewerView = v
+                                v.placementMode = placementMode
+                                v.onObjectMoved = { dx, dy ->
+                                    val cur = transformLive.value
+                                    onSetTransformLive.value(
+                                        cur.copy(
+                                            translateXmm = cur.translateXmm + dx,
+                                            translateYmm = cur.translateYmm + dy,
+                                        )
+                                    )
+                                }
+                            }
+                        },
+                        update = { v -> v.placementMode = placementMode },
                         modifier = Modifier.fillMaxSize(),
                     )
                 } else if (err != null) {
@@ -368,49 +450,130 @@ private fun PreviewCard(filePath: String, fillRemaining: Boolean) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                } else if (rendering) {
+                } else if (loading) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         LinearProgressIndicator(modifier = Modifier.width(120.dp))
                         Spacer(Modifier.height(8.dp))
-                        Text("Building preview…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                } else {
-                    Text("Preview unavailable", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            // Camera preset chips — let the user spin the still preview.
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(listOf("iso", "front", "right", "back", "left", "top", "bottom")) { p ->
-                    val sel = p == cameraName
-                    Surface(
-                        color = if (sel) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
-                        shape = RoundedCornerShape(50),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            if (sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                        ),
-                        onClick = { cameraName = p },
-                    ) {
                         Text(
-                            p,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (sel) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            "Building preview…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                } else {
+                    Text(
+                        "Preview unavailable",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
-            // Geometry stats
-            val s = summary
-            if (s != null) {
+            // Camera preset chips — apply a CameraViewState directly so
+            // the GL view jumps to the requested viewpoint without a
+            // re-render pipeline.
+            val (bedW, bedD) = dev.orcaxr.app.BuildPlateGlb.sizeFor(profile)
+            CameraPresetRow(
+                bedWidthMm = bedW,
+                bedDepthMm = bedD,
+                onApply = { state -> viewerView?.applyCameraState(state) },
+                onReset = { viewerView?.resetView() },
+            )
+            // Geometry stats — read from StlMesh; cheap, no BVH build.
+            val m = mesh
+            if (m != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                    MobileMetric("Triangles", "${s.totalTriangleCount}")
+                    MobileMetric("Triangles", "${m.triCount}")
+                    val sx = m.bboxMax.x - m.bboxMin.x
+                    val sy = m.bboxMax.y - m.bboxMin.y
+                    val sz = m.bboxMax.z - m.bboxMin.z
                     MobileMetric(
                         label = "BBox",
-                        value = "%.0f × %.0f × %.0f".format(s.bboxCenteredPreview.sizeX, s.bboxCenteredPreview.sizeY, s.bboxCenteredPreview.sizeZ),
+                        value =
+                            String.format(
+                                java.util.Locale.US,
+                                "%.0f × %.0f × %.0f",
+                                sx,
+                                sy,
+                                sz,
+                            ),
                         unit = "mm",
                     )
                 }
+            }
+        }
+    }
+}
+
+/** Horizontal chip row for camera preset shortcuts (iso / front / etc).
+ *  Each preset computes a CameraViewState pinned to the bed center and
+ *  hands it to the GL view via applyCameraState. */
+@Composable
+private fun CameraPresetRow(
+    bedWidthMm: Float,
+    bedDepthMm: Float,
+    onApply: (dev.orcaxr.app.mobile.viewer.CameraViewState) -> Unit,
+    onReset: () -> Unit,
+) {
+    val targetX = bedWidthMm / 2.0
+    val targetY = bedDepthMm / 2.0
+    val dist = (maxOf(bedWidthMm, bedDepthMm) * 1.85).toDouble().coerceAtLeast(200.0)
+    fun preset(azimuth: Double, elevation: Double) =
+        dev.orcaxr.app.mobile.viewer.CameraViewState(
+            azimuth = azimuth,
+            elevation = elevation,
+            distance = dist,
+            panX = 0.0,
+            panY = 0.0,
+            targetX = targetX,
+            targetY = targetY,
+            targetZ = 0.0,
+        )
+    val presets =
+        listOf(
+            "Iso" to preset(-45.0, 35.0),
+            "Front" to preset(-90.0, 15.0),
+            "Right" to preset(0.0, 15.0),
+            "Back" to preset(90.0, 15.0),
+            "Left" to preset(180.0, 15.0),
+            "Top" to preset(-90.0, 89.0),
+        )
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(presets) { (label, state) ->
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(50),
+                border =
+                    androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant,
+                    ),
+                onClick = { onApply(state) },
+            ) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                )
+            }
+        }
+        items(listOf("Reset")) { label ->
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = RoundedCornerShape(50),
+                border =
+                    androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.primary,
+                    ),
+                onClick = onReset,
+            ) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                )
             }
         }
     }

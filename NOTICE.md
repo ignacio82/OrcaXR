@@ -12,6 +12,25 @@ https://github.com/SoftFever/OrcaSlicer.
 License: **GNU AGPL v3.0** (`third_party/OrcaSlicer/LICENSE`). OrcaXR
 links libslic3r and is therefore AGPL-bound.
 
+## u1-slicer-for-android (mobile GL viewer)
+
+`app/src/main/java/dev/orcaxr/app/mobile/viewer/{Camera,ShaderProgram,
+MeshData,BaseGLViewerView,ModelRenderer,ModelViewerView}.kt` and
+`app/src/main/assets/shaders/{model,grid}.{vert,frag}` are ported from
+`taylormadearmy/u1-slicer-for-android`, snapshotted from `main` on
+2026-05-07. Source at
+https://github.com/taylormadearmy/u1-slicer-for-android.
+
+License: **GNU AGPL v3.0**. Slimmed for OrcaXR's mobile shell — bed +
+grid + single mesh + orbit + drag-to-move. The upstream viewer also
+ships a Snapmaker U1 logo texture, a bundled `bed/u1_bed.stl`,
+multi-instance arrange, a wipe-tower box, and per-extruder vertex
+recoloring; OrcaXR drops these (or moves them to the XR shell) and
+generates a rectangular bed mesh at runtime from the active profile's
+`printable_area` so any printer's bed renders without shipping
+per-vendor STLs. Two-light shader constants in `model.vert` match
+upstream byte-for-byte.
+
 ## Snapmaker OrcaSlicer profiles
 
 `app/src/main/java/dev/orcaxr/app/SlicerProfile.kt` carries
