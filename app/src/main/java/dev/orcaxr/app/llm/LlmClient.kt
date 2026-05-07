@@ -340,34 +340,129 @@ internal class GeminiLlmClient(
 
     /**
      * Gemini's function-declaration parser is stricter than Anthropic's
-     * — it rejects `additionalProperties` and gets confused by empty
-     * `properties` blocks. Strip those before sending. The MCP tool
-     * schemas use `additionalProperties: false` defensively; Gemini
-     * doesn't need it.
+     * — it rejects `additionalProperties` AND a handful of JSON Schema
+     * draft-2020 keys it doesn't understand (`$schema`, `$id`, `$ref`,
+     * `definitions`, `examples`). It also gets confused by empty
+     * `properties` blocks on `type: object`.
+     *
+     * The MCP tool catalog has 100+ tools and many use deeply-nested
+     * schemas (object → properties → object → properties → object,
+     * 4+ levels). The original sanitizer only walked the top-level +
+     * immediate children, which is why this 400'd in production:
+     *
+     *     "Unknown name \"additionalProperties\" at
+     *      'tools[0].function_declarations[94].parameters
+     *       .properties[2].value.properties[1].value'"
+     *
+     * Fix: recursive walk. For every nested schema node we (a) remove
+     * the offending keys, (b) recurse into `properties[*]`, `items`,
+     * and `oneOf` / `anyOf` / `allOf` arrays so no descendant escapes
+     * the strip. Then patch the empty-properties case at the top
+     * level only — Gemini wants a placeholder property when type is
+     * object, but inner empty objects (legitimate dictionaries) are
+     * left alone.
+     *
+     * We deep-copy the input via `JSONObject(toString())` so the
+     * caller's MCP tool schema is never mutated — the same registry
+     * feeds Claude / OpenAI clients which DO accept these keys.
      */
-    private fun sanitizeSchemaForGemini(schema: JSONObject): JSONObject {
+    internal fun sanitizeSchemaForGemini(schema: JSONObject): JSONObject {
         val cleaned = JSONObject(schema.toString())
-        cleaned.remove("additionalProperties")
-        val props = cleaned.optJSONObject("properties")
-        if (props == null || props.length() == 0) {
-            // Gemini rejects "type: object" with no properties. Add a
-            // dummy throwaway prop so the schema is well-formed.
-            if (cleaned.optString("type") == "object") {
-                cleaned.put("properties", JSONObject().put("_unused", JSONObject().apply {
-                    put("type", "string"); put("description", "ignored")
-                }))
-            }
-        } else {
-            for (key in props.keys()) {
-                val sub = props.optJSONObject(key) ?: continue
-                sub.remove("additionalProperties")
+        scrubGeminiUnsupportedRecursively(cleaned)
+        if (cleaned.optString("type") == "object") {
+            val props = cleaned.optJSONObject("properties")
+            if (props == null || props.length() == 0) {
+                cleaned.put(
+                    "properties",
+                    JSONObject().put(
+                        "_unused",
+                        JSONObject().apply {
+                            put("type", "string")
+                            put("description", "ignored")
+                        },
+                    ),
+                )
             }
         }
         return cleaned
     }
 
+    /**
+     * Walk a schema node and remove any keys Gemini's
+     * function-declaration parser refuses. Recurses into every
+     * structural position (`properties[*]`, `items`, `oneOf` /
+     * `anyOf` / `allOf` arrays, and `not`).
+     */
+    private fun scrubGeminiUnsupportedRecursively(node: JSONObject) {
+        // Strip every Gemini-incompatible key at this level. The list
+        // is conservative; if a future Gemini release adds support for
+        // any of these, the worst case is "we sent slightly less
+        // metadata," not "we crash." Better than the alternative
+        // (HTTP 400 surfacing as a confusing error in the chat panel).
+        for (key in GEMINI_UNSUPPORTED_KEYS) node.remove(key)
+
+        // Recurse into every structural position. JSONObject.keys()
+        // returns a snapshot iterator on Android's org.json so we can
+        // iterate while the underlying map is mutated by recursive
+        // scrubs deeper in the tree.
+        node.optJSONObject("properties")?.let { props ->
+            for (k in props.keys()) {
+                props.optJSONObject(k)?.let { scrubGeminiUnsupportedRecursively(it) }
+            }
+        }
+        node.optJSONObject("items")?.let { scrubGeminiUnsupportedRecursively(it) }
+        // `items` may also be an array of schemas in tuple form.
+        node.optJSONArray("items")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                arr.optJSONObject(i)?.let { scrubGeminiUnsupportedRecursively(it) }
+            }
+        }
+        for (variant in listOf("oneOf", "anyOf", "allOf")) {
+            node.optJSONArray(variant)?.let { arr ->
+                for (i in 0 until arr.length()) {
+                    arr.optJSONObject(i)?.let { scrubGeminiUnsupportedRecursively(it) }
+                }
+            }
+        }
+        node.optJSONObject("not")?.let { scrubGeminiUnsupportedRecursively(it) }
+        // `additionalProperties` may itself BE a schema object on some
+        // tools (rare but legal). The top-level remove above kills it
+        // outright; nothing left to recurse into.
+        // `patternProperties` follows the same shape as `properties`.
+        node.optJSONObject("patternProperties")?.let { props ->
+            for (k in props.keys()) {
+                props.optJSONObject(k)?.let { scrubGeminiUnsupportedRecursively(it) }
+            }
+        }
+    }
+
     companion object {
         const val DEFAULT_MODEL = "gemini-3-flash-preview"
+
+        // Keys Gemini's function-declaration parser does NOT accept.
+        // Sourced from the actual 400 the field reported plus the
+        // documented intersection of Gemini's "OpenAPI 3.0 subset"
+        // schema support vs full JSON Schema draft-2020.
+        internal val GEMINI_UNSUPPORTED_KEYS =
+            listOf(
+                "additionalProperties",
+                "\$schema",
+                "\$id",
+                "\$ref",
+                "\$defs",
+                "definitions",
+                "examples",
+                "patternProperties",
+                "unevaluatedProperties",
+                "if",
+                "then",
+                "else",
+                "const",
+                "contentEncoding",
+                "contentMediaType",
+                "exclusiveMinimum",
+                "exclusiveMaximum",
+            )
     }
 }
 
