@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OrcaXR — XR-native 3D printing slicer for Android XR</title>
-    <meta name="description" content="OrcaXR is an XR-native 3D printing slicer for Android XR. Plate models at 1:1 scale in your room, slice with the libslic3r engine on-device, and send to Klipper/Moonraker over your LAN.">
+    <meta name="description" content="OrcaXR is an XR-native 3D printing slicer for Android XR. Plate at 1:1 in your room, slice with libslic3r on-device, paint multi-color in mid-air, drive everything from an LLM over MCP, and send straight to Klipper/Moonraker.">
     <meta name="theme-color" content="#000B1E">
     <link rel="canonical" href="https://ignacio82.github.io/OrcaXR/">
     <link rel="stylesheet" href="style.css">
@@ -18,14 +18,14 @@
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="OrcaXR">
     <meta property="og:title" content="OrcaXR — XR-native 3D printing slicer">
-    <meta property="og:description" content="Plate at 1:1 in your room, slice on-device with libslic3r, send to Klipper/Moonraker. Open source, AGPL-3.0.">
+    <meta property="og:description" content="Plate at 1:1 in your room, slice on-device with libslic3r, paint multi-color in mid-air, drive it from an LLM, send to Klipper/Moonraker. Open source, AGPL-3.0.">
     <meta property="og:image" content="https://ignacio82.github.io/OrcaXR/images/feature.png">
     <meta property="og:url" content="https://ignacio82.github.io/OrcaXR/">
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="OrcaXR — XR-native 3D printing slicer">
-    <meta name="twitter:description" content="Plate at 1:1 in your room, slice on-device with libslic3r, send to Klipper/Moonraker. Open source, AGPL-3.0.">
+    <meta name="twitter:description" content="Plate at 1:1 in your room, slice on-device with libslic3r, paint multi-color in mid-air, drive it from an LLM, send to Klipper/Moonraker. Open source, AGPL-3.0.">
     <meta name="twitter:image" content="https://ignacio82.github.io/OrcaXR/images/feature.png">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -46,6 +46,7 @@
             <nav>
                 <a href="#features">Features</a>
                 <a href="#slicing">Spatial slicing</a>
+                <a href="#ai">AI &amp; MCP</a>
                 <a href="#compatibility">Compatibility</a>
                 <a href="https://github.com/ignacio82/OrcaXR" target="_blank" rel="noopener noreferrer">GitHub</a>
                 <a href="#early-access" class="nav-cta">Join beta</a>
@@ -64,8 +65,8 @@
                 <h1>Slice your models in the space they'll live.</h1>
                 <p class="hero-lead">
                     OrcaXR is built spatial-first for Android XR: plate at 1:1 in your room, paint
-                    multi-color in mid-air, and ship straight to Klipper over your LAN — powered by
-                    a native arm64-v8a build of <code>libslic3r</code>.
+                    multi-color in mid-air, drive every action from an LLM over MCP, and ship straight
+                    to Klipper over your LAN — powered by a native arm64-v8a build of <code>libslic3r</code>.
                 </p>
                 <div class="hero-buttons">
                     <a href="#early-access" class="btn btn-primary">Get early access</a>
@@ -75,6 +76,10 @@
                     <span>Spatial UI/UX</span>
                     <span>libslic3r engine</span>
                     <span>Multi-color paint</span>
+                    <span>AI-driven paint</span>
+                    <span>MCP server</span>
+                    <span>Voice control</span>
+                    <span>Digital twin</span>
                     <span>Moonraker native</span>
                     <span>100% on-device</span>
                     <span>AGPL-3.0</span>
@@ -130,18 +135,33 @@
                         <div class="bento-copy">
                             <span class="card-kicker">Multi-color</span>
                             <h3>Paint your vision in mid-air</h3>
-                            <p>Load painted 3MFs from OrcaSlicer or use the FullSpectrum mixed-filament pipeline. Per-triangle paint, support paint, and seam paint — all spatial.</p>
+                            <p>Per-triangle color, support, seam, fuzzy-skin and brim-ear paint — all spatial. Multi-step undo, smart-fill flood, full 3MF round-trip preserved end-to-end.</p>
                         </div>
                     </div>
                     <div class="bento-item">
                         <span class="card-kicker">Engine</span>
                         <h3>Native libslic3r</h3>
-                        <p>arm64-v8a cross-compile. The exact same toolpath generator you trust on the desktop, running locally on your headset.</p>
+                        <p>arm64-v8a cross-compile of v2.3.2. The exact same toolpath generator you trust on the desktop, running locally on your headset.</p>
+                    </div>
+                    <div class="bento-item">
+                        <span class="card-kicker">Object editing</span>
+                        <h3>Repair, cut, boolean, simplify, emboss</h3>
+                        <p>Mesh repair (CGAL self-union), planar cut, boolean ops, connected-component split, quadric simplify, text/SVG embossing, and 7 add-primitive shapes.</p>
+                    </div>
+                    <div class="bento-item">
+                        <span class="card-kicker">Workflow</span>
+                        <h3>Multi-plate, multi-object</h3>
+                        <p>Virtual build plates partition your project. Multi-object 3MFs split into independently selectable parts. Multi-selection drag, batch delete, auto-arrange.</p>
                     </div>
                     <div class="bento-item">
                         <span class="card-kicker">Networking</span>
                         <h3>Moonraker ready</h3>
-                        <p>Discover printers on your LAN, upload G-code, and watch the job live. No tablet, no cables, no cloud account.</p>
+                        <p>Auto-discover printers on your LAN, upload G-code, and watch the job live. AFC slot sync + filament-runout badges for the Snapmaker U1.</p>
+                    </div>
+                    <div class="bento-item">
+                        <span class="card-kicker">Digital twin</span>
+                        <h3>Watch the print, in your room</h3>
+                        <p>Switch to Devices mode and the toolpath GLB grows in lockstep with the physical print head's reported Z height — your living room becomes the print monitor.</p>
                     </div>
                     <div class="bento-item">
                         <span class="card-kicker">Privacy</span>
@@ -203,6 +223,41 @@
                         <div class="spatial-chip spatial-chip-b">
                             Layer 142 / 318
                         </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="features-section" id="ai">
+            <div class="container section-shell">
+                <div class="section-heading reveal">
+                    <p class="eyebrow">AI &amp; MCP</p>
+                    <h2>Drive the slicer with natural language.</h2>
+                    <p>Every action a hand can take in OrcaXR is also an MCP tool. Point Claude (or any MCP-aware LLM) at the headset's LAN address and it can plate, paint, slice, and send to the printer — by voice, by text, or autonomously.</p>
+                </div>
+
+                <div class="bento-grid reveal">
+                    <div class="bento-item bento-item-large bento-paint">
+                        <div class="bento-copy">
+                            <span class="card-kicker">100+ MCP tools</span>
+                            <h3>Workspace as a programmable surface</h3>
+                            <p>Bearer-token authed JSON-RPC over a hand-rolled HTTP transport. Tools cover printers, profiles, filaments, plates, transforms, slicing, saving, mesh ops, paint, vision rendering, and digital-twin telemetry. An MCP-driven action and a hand-pinch flow through the same observers — same paint history, same caches, same end result.</p>
+                        </div>
+                    </div>
+                    <div class="bento-item">
+                        <span class="card-kicker">AI Paint</span>
+                        <h3>"Paint Pikachu"</h3>
+                        <p>Spatial paint primitives (sphere, slab, normal-cone, geodesic disc, mirror) + vision tools (multi-view render, triangle-ID maps, feature anchors, decal projection). Bundled paint recipes auto-resolve MakerWorld design IDs.</p>
+                    </div>
+                    <div class="bento-item">
+                        <span class="card-kicker">Voice</span>
+                        <h3>Hands-free slicing</h3>
+                        <p>Android <code>SpeechRecognizer</code> → regex intent mapper → workspace action. "Slice the active plate." "Auto-arrange." "Show me layer 142." Destructive intents prompt for confirmation.</p>
+                    </div>
+                    <div class="bento-item">
+                        <span class="card-kicker">Vision transport</span>
+                        <h3>The LLM can see your model</h3>
+                        <p>Pure-Kotlin software rasterizer renders multi-view PNGs, served over <code>GET /resources/&lt;token&gt;.png</code> so a remote LLM with <code>WebFetch</code> can pull them directly from the headset.</p>
                     </div>
                 </div>
             </div>
