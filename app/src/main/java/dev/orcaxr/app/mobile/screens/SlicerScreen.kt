@@ -834,83 +834,182 @@ private fun TransformSheet(
     onSet: (SlicerEngine.ModelPlacement) -> Unit,
 ) {
     MobileCard {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             SectionKicker("Transform")
-            TransformSlider("Rotate X", transform.rotXdeg, -180f, 180f, "°") {
-                onSet(transform.copy(rotXdeg = it))
-            }
-            TransformSlider("Rotate Y", transform.rotYdeg, -180f, 180f, "°") {
-                onSet(transform.copy(rotYdeg = it))
-            }
-            TransformSlider("Rotate Z", transform.rotZdeg, -180f, 180f, "°") {
-                onSet(transform.copy(rotZdeg = it))
-            }
-            val uniformScale = transform.scaleXPct
-            TransformSlider("Scale", uniformScale, 10f, 400f, "%") {
-                onSet(
-                    transform.copy(
-                        scalePct = it,
-                        scaleXPct = it,
-                        scaleYPct = it,
-                        scaleZPct = it,
+            NumericTransformField(
+                label = "Rotate X",
+                value = transform.rotXdeg,
+                unit = "°",
+                onChange = { onSet(transform.copy(rotXdeg = it)) },
+                presets =
+                    listOf(
+                        "−90°" to -90f,
+                        "0°" to 0f,
+                        "+90°" to 90f,
+                        "180°" to 180f,
                     ),
-                )
-            }
-            TransformSlider("Translate X", transform.translateXmm, -150f, 150f, " mm") {
-                onSet(transform.copy(translateXmm = it))
-            }
-            TransformSlider("Translate Y", transform.translateYmm, -150f, 150f, " mm") {
-                onSet(transform.copy(translateYmm = it))
-            }
+            )
+            NumericTransformField(
+                label = "Rotate Y",
+                value = transform.rotYdeg,
+                unit = "°",
+                onChange = { onSet(transform.copy(rotYdeg = it)) },
+                presets =
+                    listOf(
+                        "−90°" to -90f,
+                        "0°" to 0f,
+                        "+90°" to 90f,
+                        "180°" to 180f,
+                    ),
+            )
+            NumericTransformField(
+                label = "Rotate Z",
+                value = transform.rotZdeg,
+                unit = "°",
+                onChange = { onSet(transform.copy(rotZdeg = it)) },
+                presets =
+                    listOf(
+                        "−90°" to -90f,
+                        "0°" to 0f,
+                        "+90°" to 90f,
+                        "180°" to 180f,
+                    ),
+            )
+            NumericTransformField(
+                label = "Scale",
+                value = transform.scaleXPct,
+                unit = "%",
+                onChange = {
+                    onSet(
+                        transform.copy(
+                            scalePct = it,
+                            scaleXPct = it,
+                            scaleYPct = it,
+                            scaleZPct = it,
+                        )
+                    )
+                },
+                presets =
+                    listOf(
+                        "50%" to 50f,
+                        "100%" to 100f,
+                        "150%" to 150f,
+                        "200%" to 200f,
+                    ),
+            )
+            NumericTransformField(
+                label = "Translate X",
+                value = transform.translateXmm,
+                unit = "mm",
+                onChange = { onSet(transform.copy(translateXmm = it)) },
+                presets = listOf("0" to 0f),
+            )
+            NumericTransformField(
+                label = "Translate Y",
+                value = transform.translateYmm,
+                unit = "mm",
+                onChange = { onSet(transform.copy(translateYmm = it)) },
+                presets = listOf("0" to 0f),
+            )
             if (transform != SlicerEngine.ModelPlacement()) {
                 androidx.compose.material3.OutlinedButton(
                     onClick = { onSet(SlicerEngine.ModelPlacement()) },
                     modifier = Modifier.align(androidx.compose.ui.Alignment.End),
                 ) {
-                    Text("Reset")
+                    Text("Reset all")
                 }
             }
         }
     }
 }
 
+/**
+ * Numeric text field + quick-preset chips for a single transform axis.
+ * Replaces the original slider so the user can type exact values like
+ * "90" for rotation and tap a preset for the common cases. Decoupled
+ * `value` (incoming) from the editable `text` (in-flight) so a typo
+ * doesn't snap to 0 mid-keypress; the change only commits when the
+ * field parses to a finite Float and differs from the current value.
+ */
 @Composable
-private fun TransformSlider(
+private fun NumericTransformField(
     label: String,
     value: Float,
-    min: Float,
-    max: Float,
     unit: String,
     onChange: (Float) -> Unit,
+    presets: List<Pair<String, Float>>,
 ) {
-    Column {
-        Row {
+    val canonical =
+        remember(value) { String.format(java.util.Locale.US, "%.2f", value) }
+    var text by remember(value) { mutableStateOf(canonical) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 label,
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
             )
-            Spacer(Modifier.weight(1f))
-            // H_PIXEL10 (2026-05-07) — `"%.1f$unit".format(value)` crashes
-            // with `UnknownFormatConversionException` when `unit == "%"`
-            // (the Scale slider): the Kotlin string template substitutes
-            // `%` into the format string, making `"%.1f%"`, which String
-            // .format reads as `%` followed by an end-of-string conversion
-            // specifier. Format only the numeric value, then concatenate
-            // the unit so the user-supplied unit text never reaches the
-            // format parser. Locale.US pins the decimal separator to '.'
-            // for consistent display across locales (e.g. de_DE, fr_FR).
-            Text(
-                String.format(java.util.Locale.US, "%.1f", value) + unit,
-                style = LocalMobileTextStyles.current.numeric,
-                color = MaterialTheme.colorScheme.primary,
+            OutlinedTextField(
+                value = text,
+                onValueChange = { v ->
+                    text = v
+                    val parsed = v.replace(',', '.').toFloatOrNull()
+                    if (parsed != null && parsed.isFinite() && parsed != value) {
+                        onChange(parsed)
+                    }
+                },
+                singleLine = true,
+                suffix = {
+                    Text(
+                        unit,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+                keyboardOptions =
+                    androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType =
+                            androidx.compose.ui.text.input.KeyboardType.Number,
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                    ),
+                textStyle = LocalMobileTextStyles.current.numeric,
+                modifier = Modifier.width(140.dp),
             )
         }
-        androidx.compose.material3.Slider(
-            value = value,
-            onValueChange = onChange,
-            valueRange = min..max,
-        )
+        if (presets.isNotEmpty()) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(presets) { (presetLabel, presetValue) ->
+                    val isSel = kotlin.math.abs(value - presetValue) < 0.05f
+                    Surface(
+                        color =
+                            if (isSel) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = RoundedCornerShape(50),
+                        border =
+                            androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isSel) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.outlineVariant,
+                            ),
+                        onClick = {
+                            text =
+                                String.format(java.util.Locale.US, "%.2f", presetValue)
+                            if (presetValue != value) onChange(presetValue)
+                        },
+                    ) {
+                        Text(
+                            presetLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            color =
+                                if (isSel) MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

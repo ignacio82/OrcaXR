@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.outlined.Architecture
 import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material.icons.outlined.Tune
@@ -230,6 +231,7 @@ fun MobileShell(
                         TabletNavRail(
                             selected = dest,
                             onSelect = { dest = it },
+                            onOpenAssistant = { llmAssistantOpen = true },
                         )
                         ScreenContent(
                             dest = dest,
@@ -283,6 +285,7 @@ fun MobileShell(
                         PhoneBottomNav(
                             selected = dest,
                             onSelect = { dest = it },
+                            onOpenAssistant = { llmAssistantOpen = true },
                         )
                     }
                 }
@@ -350,6 +353,7 @@ private fun ScreenContent(
 private fun PhoneBottomNav(
     selected: MobileDestination,
     onSelect: (MobileDestination) -> Unit,
+    onOpenAssistant: () -> Unit,
 ) {
     var moreOpen by remember { mutableStateOf(false) }
     val primary = listOf(
@@ -406,6 +410,10 @@ private fun PhoneBottomNav(
                 moreOpen = false
                 onSelect(it)
             },
+            onOpenAssistant = {
+                moreOpen = false
+                onOpenAssistant()
+            },
             onDismiss = { moreOpen = false },
         )
     }
@@ -417,6 +425,7 @@ private fun MoreSheet(
     destinations: List<MobileDestination>,
     selected: MobileDestination,
     onSelect: (MobileDestination) -> Unit,
+    onOpenAssistant: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     androidx.compose.material3.ModalBottomSheet(
@@ -456,6 +465,40 @@ private fun MoreSheet(
                             d.label,
                             style = MaterialTheme.typography.titleMedium,
                             color = if (selected == d) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
+            // Always-available shortcut to the LLM assistant. Sits with
+            // the other More items so users discover it the same way
+            // they discover Profiles / Filament / Settings. Tapping it
+            // dismisses the sheet AND opens the assistant takeover.
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                onClick = onOpenAssistant,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Filled.Mic,
+                        contentDescription = "AI assistant",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                    Spacer(Modifier.width(16.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "AI assistant",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                        Text(
+                            "Talk to OrcaXR with Claude, Gemini, or OpenAI.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                     }
                 }
@@ -504,6 +547,7 @@ private fun NavCell(
 private fun TabletNavRail(
     selected: MobileDestination,
     onSelect: (MobileDestination) -> Unit,
+    onOpenAssistant: () -> Unit,
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -536,6 +580,15 @@ private fun TabletNavRail(
                     onClick = { onSelect(d) },
                 )
             }
+            // Always-available shortcut to the LLM assistant. Sits at
+            // the bottom of the rail so it's reachable from any screen
+            // without going through Settings.
+            RailCell(
+                label = "AI",
+                icon = Icons.Filled.Mic,
+                selected = false,
+                onClick = onOpenAssistant,
+            )
         }
     }
 }
