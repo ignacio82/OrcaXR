@@ -66,7 +66,30 @@ sealed interface LlmTurn {
     ) : LlmTurn
 }
 
-data class ToolCall(val id: String, val name: String, val args: JSONObject)
+/**
+ * One tool-use request from the model. [id] is provider-assigned (or
+ * synthesized for Gemini, which doesn't return one), [name] / [args]
+ * are the call payload, and [providerMeta] is an opaque escape hatch
+ * for provider-specific bookkeeping that has to round-trip back when
+ * the conversation history is replayed.
+ *
+ * Currently used for Gemini's `thoughtSignature` field — thinking
+ * models include a signed thought-tag on each functionCall, and on
+ * the next turn the same signature MUST be echoed back on the same
+ * functionCall part or Gemini returns:
+ *   "Function call is missing a thought_signature in functionCall
+ *    parts. This is required for tools to work correctly."
+ * (https://ai.google.dev/gemini-api/docs/thought-signatures)
+ *
+ * Other providers (Claude, OpenAI) don't read this field; it stays
+ * null in their parsed responses and is ignored on serialize.
+ */
+data class ToolCall(
+    val id: String,
+    val name: String,
+    val args: JSONObject,
+    val providerMeta: JSONObject? = null,
+)
 
 /**
  * Tool description handed to the model. Lifted directly from
@@ -283,6 +306,16 @@ internal class GeminiLlmClient(
                     p.has("text") -> text.append(p.optString("text"))
                     p.has("functionCall") -> {
                         val fc = p.getJSONObject("functionCall")
+                        // Capture Gemini's thoughtSignature when present.
+                        // It can live either on the part itself OR on
+                        // the functionCall object — the API has shipped
+                        // both shapes across releases. Check both.
+                        val sig =
+                            fc.optString("thoughtSignature").ifBlank { null }
+                                ?: p.optString("thoughtSignature").ifBlank { null }
+                        val meta =
+                            if (sig != null) JSONObject().put("thoughtSignature", sig)
+                            else null
                         calls.add(
                             ToolCall(
                                 // Gemini doesn't return an id; synthesize one
@@ -291,6 +324,7 @@ internal class GeminiLlmClient(
                                 id = "gemini_${UUID.randomUUID().toString().take(8)}",
                                 name = fc.optString("name"),
                                 args = fc.optJSONObject("args") ?: JSONObject(),
+                                providerMeta = meta,
                             ),
                         )
                     }
@@ -304,7 +338,7 @@ internal class GeminiLlmClient(
         }
     }
 
-    private fun toGeminiContents(history: List<LlmTurn>): List<JSONObject> {
+    internal fun toGeminiContents(history: List<LlmTurn>): List<JSONObject> {
         val out = mutableListOf<JSONObject>()
         for (turn in history) {
             when (turn) {
@@ -315,11 +349,25 @@ internal class GeminiLlmClient(
                 is LlmTurn.Assistant -> {
                     val parts = JSONArray()
                     if (!turn.text.isNullOrBlank()) parts.put(JSONObject().put("text", turn.text))
-                    for (c in turn.toolCalls) parts.put(JSONObject().apply {
-                        put("functionCall", JSONObject().apply {
-                            put("name", c.name); put("args", c.args)
-                        })
-                    })
+                    for (c in turn.toolCalls) {
+                        // Gemini 3 / 2.5 thinking models embed a
+                        // thoughtSignature on each functionCall part
+                        // and require the same signature back on the
+                        // next-turn replay. The signature lives on the
+                        // OUTER part object (next to "functionCall"),
+                        // not inside the functionCall object — both
+                        // shapes have shipped historically; the outer
+                        // form is current. Send both for robustness.
+                        val sig = c.providerMeta?.optString("thoughtSignature")?.ifBlank { null }
+                        val partObj = JSONObject().apply {
+                            put("functionCall", JSONObject().apply {
+                                put("name", c.name); put("args", c.args)
+                                if (sig != null) put("thoughtSignature", sig)
+                            })
+                            if (sig != null) put("thoughtSignature", sig)
+                        }
+                        parts.put(partObj)
+                    }
                     out.add(JSONObject().apply { put("role", "model"); put("parts", parts) })
                 }
                 is LlmTurn.ToolResult -> out.add(JSONObject().apply {
