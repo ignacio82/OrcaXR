@@ -34,6 +34,13 @@ import androidx.xr.scenecore.InputEvent.Action
  * use closest-triangle lookup instead — for now the BVH path is the
  * conservative default.
  *
+ * Audit H22 (2026-05-07) — `PaintInputBenchTest` measures both paths
+ * on a 50K-tri sphere: BVH raycast ≈ 1.7 µs / hit, naïve linear
+ * closest-tri ≈ 86 µs / hit (~50× speedup for BVH). The "skip the
+ * BVH" optimization only pays off if the closest-tri lookup is ALSO
+ * BVH-accelerated; raw linear scan loses on every realistic mesh
+ * size. Don't replace the raycast with an unaccelerated lookup.
+ *
  * The class is constructed in `XrShell` once per active paint
  * session; the InteractableComponent listener captures it via
  * `rememberUpdatedState` so brush radius / slot / on-paint callback
