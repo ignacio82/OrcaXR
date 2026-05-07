@@ -31,6 +31,29 @@ object SubnetScanner {
     private val DEFAULT_PORTS = intArrayOf(80, 8080, 7125)
 
     /**
+     * Audit H19 — chunk size for the parallel TCP-connect sweep.
+     * Picked empirically: the headset's network stack happily fans
+     * out ~32 simultaneous `connect()`s; pushing to 64+ raised the
+     * failure rate (Android's connect-pool contention surfaces as
+     * "Software caused connection abort"). 16 doubled total scan
+     * time without improving accuracy. 32 is the sweet spot.
+     */
+    private const val SCAN_CHUNK_SIZE: Int = 32
+
+    /**
+     * Audit H19 — TCP connect timeout. 250 ms left a real-LAN miss on
+     * a known-good printer because the headset's WiFi radio gets
+     * contention spikes that push some round-trips past the deadline
+     * even when the device is up and answering normally a moment
+     * later. 800 ms is loose enough to absorb those spikes without
+     * stretching the full /24 sweep beyond the user's patience.
+     */
+    private const val DEFAULT_CONNECT_TIMEOUT_MS: Int = 800
+
+    /** /24 sweep covers .1 through .254. */
+    private const val SUBNET_HOST_RANGE_END: Int = 254
+
+    /**
      * Returns Moonraker hits as fully-formed [DiscoveredPrinter]
      * records so they can flow into the same UI list as mDNS
      * results.
@@ -42,19 +65,15 @@ object SubnetScanner {
     suspend fun scanLan(
         ctx: Context,
         ports: IntArray = DEFAULT_PORTS,
-        // Bumped from 250 to 800 ms after a real-LAN miss: the
-        // headset's WiFi radio gets contention spikes that push some
-        // round-trips past 250 ms even though the device is up and
-        // answering normally a moment later.
-        connectTimeoutMs: Int = 800,
+        connectTimeoutMs: Int = DEFAULT_CONNECT_TIMEOUT_MS,
         progress: ((Int, Int) -> Unit)? = null,
     ): List<DiscoveredPrinter> = withContext(Dispatchers.IO) {
         val (subnet, selfAddr) = inferSubnet(ctx) ?: return@withContext emptyList()
         android.util.Log.i("OrcaXR/discovery", "subnet-scan: subnet=$subnet self=$selfAddr ports=${ports.toList()} timeout=${connectTimeoutMs}ms")
-        val total = 254
+        val total = SUBNET_HOST_RANGE_END
         var done = 0
         val candidates: List<Pair<String, Int>> = coroutineScope {
-            val chunks = (1..254).chunked(32)
+            val chunks = (1..SUBNET_HOST_RANGE_END).chunked(SCAN_CHUNK_SIZE)
             chunks.flatMap { chunk ->
                 chunk.map { lastOctet ->
                     val host = "$subnet.$lastOctet"

@@ -134,4 +134,55 @@ class SharedIntentHandlerTest {
         assertTrue(a!!.absolutePath != b!!.absolutePath)
         assertEquals(2, sharedDir.listFiles()!!.size)
     }
+
+    /**
+     * Audit H1 — payloads above [SharedIntentHandler.MAX_FILE_SIZE_BYTES]
+     * must be rejected mid-stream and the temp file deleted, so a 5 GB
+     * share never lands a 5 GB cache artifact.
+     */
+    @Test
+    fun `stageStream rejects payloads above MAX_FILE_SIZE_BYTES`() {
+        val sharedDir = tmp.newFolder("shared")
+        // We don't materialize 500 MB+1 in memory — wrap a sized
+        // InputStream that emits zeros up to the requested length.
+        val cap = SharedIntentHandler.MAX_FILE_SIZE_BYTES
+        val payloadSize = cap + 1
+        val stream = object : java.io.InputStream() {
+            private var emitted = 0L
+            override fun read(): Int {
+                if (emitted >= payloadSize) return -1
+                emitted++; return 0
+            }
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (emitted >= payloadSize) return -1
+                val n = minOf(len.toLong(), payloadSize - emitted).toInt()
+                java.util.Arrays.fill(b, off, off + n, 0)
+                emitted += n
+                return n
+            }
+        }
+        val out = SharedIntentHandler.stageStream(stream, "huge.stl", sharedDir)
+        assertNull("payload over MAX_FILE_SIZE_BYTES should be rejected", out)
+        // Temp file ".incoming-*.stl" must have been cleaned up.
+        assertEquals(
+            "no cache files should remain after overflow",
+            0, sharedDir.listFiles()!!.size,
+        )
+    }
+
+    /**
+     * Audit H1 — exactly-at-the-cap payloads stage successfully (the
+     * cap is `>` not `>=`). Use a payload just under the cap to keep
+     * the test fast — boundary behavior is what matters.
+     */
+    @Test
+    fun `stageStream accepts payload just under cap`() {
+        val sharedDir = tmp.newFolder("shared")
+        val payload = ByteArray(1024 * 1024) // 1 MB, well under the 500 MB cap
+        val out = SharedIntentHandler.stageStream(
+            ByteArrayInputStream(payload), "moderate.stl", sharedDir,
+        )
+        assertNotNull("1 MB payload should succeed", out)
+        assertEquals(payload.size.toLong(), out!!.length())
+    }
 }

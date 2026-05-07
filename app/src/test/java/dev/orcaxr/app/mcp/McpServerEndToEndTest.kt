@@ -154,4 +154,53 @@ class McpServerEndToEndTest {
         val resp = rpc("""{"jsonrpc":"2.0","id":8,"method":"ping"}""", withAuth = false)
         assertEquals("ping should be auth-free", 0, resp.getJSONObject("result").length())
     }
+
+    /**
+     * Audit H2 — the `/resources/<token>.png` route must require the
+     * bearer header. A LAN attacker that scanned tokens against the
+     * unauthenticated route was the original threat model.
+     */
+    @Test fun resourceRouteRejectsMissingBearer() {
+        val req = Request.Builder()
+            .url("http://127.0.0.1:$port/resources/whatever.png")
+            .get()
+            .build()
+        http.newCall(req).execute().use { resp ->
+            assertEquals("expected 401 without bearer", 401, resp.code)
+        }
+    }
+
+    /**
+     * Audit H2 — same route with the bearer present resolves to the
+     * normal 404 path when the token is unknown (instead of 401). This
+     * confirms the auth gate fires before the lookup, but doesn't
+     * silently swallow the bearer.
+     */
+    @Test fun resourceRouteWithBearerTokenStillRejectsUnknownToken() {
+        val req = Request.Builder()
+            .url("http://127.0.0.1:$port/resources/madeuptoken.png")
+            .header("Authorization", "Bearer supersecret")
+            .get()
+            .build()
+        http.newCall(req).execute().use { resp ->
+            assertEquals("authorized but unknown token → 404", 404, resp.code)
+        }
+    }
+
+    /**
+     * Audit H2 — content tokens are 32 hex chars (128-bit truncation
+     * of SHA-256), not 16. The narrow 16-char tokens were brute-
+     * forceable on a LAN; widening pushes the floor to 2^128.
+     */
+    @Test fun contentTokenIs128Bits() {
+        val cam = dev.orcaxr.app.AiRenderEngine.CameraSpec(
+            widthPx = 256,
+            heightPx = 256,
+            viewMatrixRowMajor = FloatArray(16) { it.toFloat() },
+            projMatrixRowMajor = FloatArray(16) { (it * 2).toFloat() },
+        )
+        val token = AiSessionState.contentToken("model", "rgb", cam, 0)
+        assertEquals("token must be 32 hex chars (128 bits)", 32, token.length)
+        assertTrue("token must be lowercase hex", token.matches(Regex("^[0-9a-f]{32}$")))
+    }
 }

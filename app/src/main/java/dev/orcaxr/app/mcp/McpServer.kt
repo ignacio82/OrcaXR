@@ -150,17 +150,25 @@ class McpServer internal constructor(
      * `/resources/<token>.png`; the token is the content-hash key
      * AiSessionState used when the rendering tool stored the artifact.
      *
-     * **Auth (D21a):** the token is itself the capability — a 64-bit
-     * SHA-256 prefix the caller can't guess without already having
-     * called a render tool. Skipping the bearer check here lets the
-     * driving LLM fetch the rendered PNG via `WebFetch(absolute url)`
-     * without OrcaXR having to round-trip the bearer token through the
-     * client. The trade-off is that anyone on the LAN who has the
-     * token can fetch the PNG; that's the same blast radius as the
-     * other LAN side-channels (CIFS shares, mDNS) and the rendered
-     * mesh isn't sensitive in the way an API key is.
+     * **Auth (D21a + audit H2, 2026-05-07):** both the bearer token
+     * AND a valid render token are required. The previous design
+     * treated the token as the sole capability, on the theory that a
+     * 64-bit SHA-256 prefix is unguessable. The audit pushed back on
+     * two grounds: (a) a 64-bit cache key was not designed as a
+     * security primitive against an active LAN scanner, and (b) the
+     * server binds to 0.0.0.0 by default so any device on the network
+     * can probe. Tokens are now widened to 128 bits (see
+     * [AiSessionState.contentToken]) AND the bearer header is
+     * required. LLM clients that drive OrcaXR via the MCP transport
+     * already have the bearer in their session — they just need to
+     * forward it on the `WebFetch`. Inline base64 image parts on the
+     * tool result keep working for clients without LAN access at all.
      */
     private fun handleResourceGet(sock: Socket, request: HttpFraming.Request) {
+        if (!checkAuth(request)) {
+            writeStatus(sock, 401, "Unauthorized", "{\"error\":\"missing or wrong bearer token\"}")
+            return
+        }
         // Parse "/resources/<token>.png" — strip the prefix + extension.
         val rest = request.path.removePrefix("/resources/")
         val token = rest.substringBeforeLast('.').takeIf { it.isNotEmpty() }

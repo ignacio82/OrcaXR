@@ -51,9 +51,7 @@ import dev.orcaxr.app.mobile.MobileCard
 import dev.orcaxr.app.mobile.MobileTopBar
 import dev.orcaxr.app.mobile.SectionKicker
 import dev.orcaxr.app.mobile.formatBytes
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.DateFormat
 import java.util.Date
@@ -83,7 +81,7 @@ fun FilesScreen(
     ) { uri: Uri? ->
         if (uri != null) {
             scope.launch {
-                val staged = withContext(Dispatchers.IO) { stageUri(ctx, uri) }
+                val staged = stageUriBounded(ctx, uri)
                 if (staged != null) {
                     app.recentFiles.add(staged)
                     onOpenInSlicer(staged.absolutePath)
@@ -209,7 +207,7 @@ private fun FileRow(
 }
 
 /** Copy the bytes behind [uri] into cacheDir/shared/<hash>.<ext>. */
-private fun stageUri(ctx: Context, uri: Uri): File? {
+private suspend fun stageUriBounded(ctx: Context, uri: Uri): File? {
     val sharedDir = File(ctx.cacheDir, "shared").apply { mkdirs() }
-    return SharedIntentHandler.stageUri(ctx.contentResolver, uri, sharedDir)
+    return SharedIntentHandler.stageUriBounded(ctx.contentResolver, uri, sharedDir)
 }

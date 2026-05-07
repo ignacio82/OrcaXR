@@ -74,8 +74,10 @@ internal class AiPaintSessionStore internal constructor() {
             baseSeamFlags?.copyOf(),
             baseFuzzySkinFlags?.copyOf(),
         )
-        sessions[id] = s
-        evictIfNeeded()
+        synchronized(sessions) {
+            sessions[id] = s
+            evictIfNeededLocked()
+        }
         return s
     }
 
@@ -89,9 +91,14 @@ internal class AiPaintSessionStore internal constructor() {
         sessions.clear()
     }
 
-    private fun evictIfNeeded() {
+    /**
+     * Audit H9 — must be called inside `synchronized(sessions)`. The
+     * previous non-atomic check + eviction could drop a freshly-
+     * inserted session under concurrent `begin()` calls (sort-then-
+     * remove operates on a stale snapshot).
+     */
+    private fun evictIfNeededLocked() {
         if (sessions.size <= MAX_SESSIONS) return
-        // Sort by last-touched ascending; drop oldest until we're back under cap.
         val sorted = sessions.values.sortedBy { it.lastTouchedAtMs }
         val toRemove = sessions.size - MAX_SESSIONS
         for (i in 0 until toRemove.coerceAtLeast(0)) {

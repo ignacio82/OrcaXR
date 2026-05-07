@@ -26,6 +26,15 @@ internal object HttpFraming {
     private const val MAX_HEADER_BYTES: Int = 8 * 1024
     private const val MAX_BODY_BYTES: Int = 1 * 1024 * 1024
 
+    /**
+     * Audit H6 — `extraHeaders` keys are echoed straight into the
+     * response, so any caller-controlled value must be validated to
+     * prevent header-injection / response-splitting. The regex matches
+     * the RFC 7230 token set restricted to portable ASCII; values are
+     * checked separately against any CR/LF.
+     */
+    private val HEADER_NAME_REGEX = Regex("^[A-Za-z0-9-]+$")
+
     data class Request(
         val method: String,
         val path: String,
@@ -174,7 +183,19 @@ internal object HttpFraming {
         sb.append("Access-Control-Allow-Origin: *\r\n")
         sb.append("Access-Control-Allow-Methods: POST, GET, OPTIONS\r\n")
         sb.append("Access-Control-Allow-Headers: Content-Type, Authorization, Mcp-Session-Id\r\n")
-        for ((k, v) in extraHeaders) sb.append(k).append(": ").append(v).append("\r\n")
+        for ((k, v) in extraHeaders) {
+            // Audit H6 — defend against response-splitting / header-
+            // injection. Names must be portable-ASCII tokens; values
+            // may not contain CR or LF (which would otherwise let a
+            // caller forge new response headers or even a body).
+            if (!HEADER_NAME_REGEX.matches(k)) {
+                throw IllegalArgumentException("invalid extraHeader name: $k")
+            }
+            if (v.contains('\r') || v.contains('\n')) {
+                throw IllegalArgumentException("CR/LF in extraHeader value for $k")
+            }
+            sb.append(k).append(": ").append(v).append("\r\n")
+        }
         sb.append("\r\n")
         out.write(sb.toString().toByteArray(StandardCharsets.US_ASCII))
         out.write(bodyBytes)

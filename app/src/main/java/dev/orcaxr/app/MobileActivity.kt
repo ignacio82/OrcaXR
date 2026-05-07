@@ -14,10 +14,8 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import dev.orcaxr.app.mobile.MobileAppState
 import dev.orcaxr.app.mobile.MobileShell
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * Phone / tablet entry point. Hosts the Material 3 navigation shell
@@ -69,9 +67,7 @@ class MobileActivity : ComponentActivity() {
         lifecycleScope.launch {
             val uris = pendingSharedUris.value
             if (uris.isNotEmpty()) {
-                val files = withContext(Dispatchers.IO) {
-                    SharedIntentHandler.resolveAll(this@MobileActivity, intent)
-                }
+                val files = SharedIntentHandler.resolveAllBounded(this@MobileActivity, intent)
                 files.forEach { f -> appState.recentFiles.add(f) }
                 files.firstOrNull()?.let { pendingSlicerFile.value = it.absolutePath }
                 pendingSharedUris.value = emptyList()

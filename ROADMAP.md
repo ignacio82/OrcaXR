@@ -216,67 +216,65 @@ Add OctoPrint? Bambu cloud? Snapmaker native? The user's two printers (Snapmaker
 
 Bugs and improvement opportunities surfaced by a multi-agent audit on 2026-05-07. None block the current alpha but every Critical item should land before Play Store wide release. File:line citations are pinned to the audit snapshot — re-grep before fixing if the codebase has drifted.
 
-### H1. CRITICAL — `SharedIntentHandler.stageUri()` has no size cap 🔴
+### H1. CRITICAL — `SharedIntentHandler.stageUri()` has no size cap 🟢 SHIPPED
 
-> **File:** `app/src/main/java/dev/orcaxr/app/SharedIntentHandler.kt:97-108`.
+> **File:** `app/src/main/java/dev/orcaxr/app/SharedIntentHandler.kt`.
 
-A share intent pointing at a multi-GB file streams into the disk cache with no `MAX_FILE_SIZE_BYTES` check; trivial DoS via Android's share sheet (no malicious app required, just a large URL). Add a 500 MB cap inside the read loop and reject before the rename. Also add a `withTimeoutOrNull(30_000)` around the stream read so a pathological `content://` provider can't hang the importer indefinitely.
+A share intent pointing at a multi-GB file streamed into the disk cache with no size check; trivial DoS via Android's share sheet. Fixed: 500 MB cap enforced inside the read loop with mid-stream rejection, plus a 30 s timeout via a watchdog that closes the stream on expiry. `SharedIntentHandler.resolveAllBounded` is the new suspend entry point — Activity / Compose call sites updated.
 
-**Exit criteria:** importing a 600 MB file via share fails fast with a Toast; importing a 50 MB file still succeeds; `SharedIntentHandlerTest` covers both bounds.
+**Verified:** `SharedIntentHandlerTest` adds `stageStream rejects payloads above MAX_FILE_SIZE_BYTES` + `stageStream accepts payload just under cap`. 10/10 green.
 
-### H2. CRITICAL — MCP `/resources/<token>.png` route bypasses bearer-token auth, and the token is only 64 bits 🔴
+### H2. CRITICAL — MCP `/resources/<token>.png` route bypasses bearer-token auth, and the token is only 64 bits 🟢 SHIPPED
 
-> **Files:** `app/src/main/java/dev/orcaxr/app/mcp/McpServer.kt:138-184`, `app/src/main/java/dev/orcaxr/app/mcp/AiSessionState.kt::contentToken`.
+> **Files:** `app/src/main/java/dev/orcaxr/app/mcp/McpServer.kt`, `app/src/main/java/dev/orcaxr/app/mcp/AiSessionState.kt::contentToken`.
 
-The route is matched at line 138 *before* the auth block at line 206. Comment claims "the token is itself the capability," but a 64-bit cache key (SHA-256 truncated to 16 hex chars) was never designed as a security primitive. With 50 LRU entries and shared-LAN binding (`0.0.0.0`), a network attacker can scan tokens.
+The route was matched before the auth block; the token was a 64-bit SHA-256 prefix, never designed as a security primitive against a LAN scanner. Fixed: `contentToken` widened to 128 bits (32 hex chars), `/resources/<token>.png` now requires the bearer header. Inline base64 image parts on tool results keep working for clients without LAN reach.
 
-**Fix:** widen `contentToken` to 128 bits (32 hex chars) **and** require the bearer header on `/resources/` (still allow inline base64 image parts so LLM clients without LAN access keep working). Alternative: bind to loopback by default with an explicit "Expose to LAN" toggle in `McpServerCard`.
+**Verified:** `McpServerEndToEndTest` adds `resourceRouteRejectsMissingBearer`, `resourceRouteWithBearerTokenStillRejectsUnknownToken`, `contentTokenIs128Bits`. 12/12 green.
 
-### H3. CRITICAL — Anthropic API key persisted plaintext in DataStore 🔴
+### H3. CRITICAL — Anthropic API key persisted plaintext in DataStore 🟢 SHIPPED
 
-> **File:** `app/src/main/java/dev/orcaxr/app/mcp/McpSettings.kt:55-60`.
+> **Files:** `app/src/main/java/dev/orcaxr/app/mcp/SecretBox.kt` (new), `McpSettings.kt`, `LlmSettings.kt`.
 
-If the device is lost or filesystem-dumped, key is immediately compromised. Wrap with Android Keystore (EncryptedSharedPreferences or a Keystore-derived AEAD) before persisting. Also redact from any debug log path.
+Fixed: `SecretBox` (AES-256-GCM with a key in `AndroidKeyStore`, alias `orcaxr_secret_v1`) wraps both stores. On-disk format is `base64(IV || ciphertext+tag)`. Migration is silent: legacy plaintext values fall through `decrypt() == null` and are rewritten encrypted on the next setter call. Extended past the audit's stated scope to cover `LlmSettings` Claude / Gemini / OpenAI keys too — same threat model, free with the SecretBox abstraction. GEMINI.md gotcha #31 documents the model.
 
-**Exit criteria:** `McpSettings.anthropicApiKey` reads/writes through Keystore-backed encryption; rotating-key migration shipped so existing installs upgrade without user re-entry; new gotcha in GEMINI.md documenting the threat model.
+### H4. CRITICAL — `flush_actions` can deadlock if MainActivity tears down mid-flush 🟢 SHIPPED
 
-### H4. CRITICAL — `flush_actions` can deadlock if MainActivity tears down mid-flush 🔴
+> **File:** `app/src/main/java/dev/orcaxr/app/mcp/tools/WorkspaceTools.kt::FlushActions`.
 
-> **Files:** `app/src/main/java/dev/orcaxr/app/mcp/tools/WorkspaceTools.kt` (`flush_actions`), `app/src/main/java/dev/orcaxr/app/mcp/WorkspaceBinding.kt` (action collector).
+The existing implementation already wrapped `lastDrainedActionId.first { ... }` in `withTimeoutOrNull` — the audit's premise that the timeout was bypassed was inaccurate. But the deeper UX issue (the LLM stalls for the full timeout when the host is detached) is real. Fixed: `FlushActions` now short-circuits with a host-detached error when `target > drained && !attached`, returning immediately instead of waiting. The structured response gains `host_detached: bool` so the LLM can route around the failure cleanly.
 
-The `timeout_ms` only gates the *condition* — the upstream `actions.first()` Flow collection itself isn't wrapped in `withTimeoutOrNull`, so a backgrounded activity holds the MCP coroutine forever.
+**Verified:** `FlushActionsTest::flushFastFailsWhenHostDetached` asserts < 1 s elapsed even when the timeout is 5 s. 6/6 green.
 
-**Fix:** wrap the Flow `first()` in a `withTimeoutOrNull(timeout)`. Add a unit test: simulate the activity-detached state and assert the tool returns `isError: true` within `timeout_ms + 200`.
+### H5. IMPORTANT — HTTP framing accepts negative `Content-Length` 🟢 SHIPPED
 
-### H5. IMPORTANT — HTTP framing accepts negative `Content-Length` 🔴
+> **File:** `app/src/main/java/dev/orcaxr/app/mcp/HttpFraming.kt`.
 
-> **File:** `app/src/main/java/dev/orcaxr/app/mcp/HttpFraming.kt:76-79`.
+The negative-Content-Length guard already existed; the audit's claim was inaccurate. What was missing: a dedicated regression test. New `HttpFramingTest` covers negative, oversized, non-numeric, and well-formed Content-Length. 12/12 green.
 
-`Content-Length: -1` passes the upper-bound check, body read is skipped, socket desyncs. Add `if (contentLength < 0) throw IOException("invalid Content-Length")`. Add an `HttpFramingTest` round-trip suite (none exists today — covered only incidentally by `McpServerEndToEndTest`).
+### H6. IMPORTANT — `extraHeaders` map written without CRLF / name validation 🟢 SHIPPED
 
-### H6. IMPORTANT — `extraHeaders` map written without CRLF / name validation 🔴
+> **File:** `app/src/main/java/dev/orcaxr/app/mcp/HttpFraming.kt`.
 
-> **File:** `app/src/main/java/dev/orcaxr/app/mcp/HttpFraming.kt:177`.
+Fixed: header names validated against `^[A-Za-z0-9-]+$`, CR/LF in values rejected. `IllegalArgumentException` thrown for either case. Tests in `HttpFramingTest` (CRLF in name, non-token chars in name, CRLF in value, well-formed pass-through).
 
-Latent header-injection / response-splitting if any future tool puts caller-controlled values into headers. Validate names (`[A-Za-z0-9-]+`) and reject CR/LF in values. Add a regression test.
+### H7. IMPORTANT — Moonraker default scheme is `http://` 🟢 SHIPPED (one-time WARN; default unchanged)
 
-### H7. IMPORTANT — Moonraker default scheme is `http://` 🔴
+> **File:** `app/src/main/java/dev/orcaxr/app/MoonrakerClient.kt::applyApiKey`.
 
-> **File:** `app/src/main/java/dev/orcaxr/app/MoonrakerClient.kt:467`.
+Defaulting to `https://` would break ~all real-world Klipper installs (Moonraker doesn't ship TLS by default; both reference printers — Snapmaker U1, Elegoo Centauri Carbon — are bare HTTP out of the box). Took the audit's alternative: a one-warning-per-host WARN log when an API key is sent over plaintext HTTP. Ground truth is now in logcat without breaking the connectivity path.
 
-Bare hostnames (the user-friendly path) leak the printer API key over LAN. Default to `https://` and downgrade only when an explicit `http://` is given, or surface a "plaintext warning" once per host.
+### H8. IMPORTANT — Three bare `catch (_: Throwable)` blocks swallow OOM/IOException 🟢 SHIPPED
 
-### H8. IMPORTANT — Three bare `catch (_: Throwable)` blocks swallow OOM/IOException 🔴
+> **File:** `app/src/main/java/dev/orcaxr/app/SharedIntentHandler.kt`.
 
-> **File:** `app/src/main/java/dev/orcaxr/app/SharedIntentHandler.kt:87, 110, 156`.
+All three bare catches now log exception class + message at WARN. Subsumed by the H1 rewrite — the new structure has named catch sites at every failure point (`openInputStream`, `queryDisplayName`, the read loop) each emitting a one-line WARN with the URI / display name and exception class.
 
-Users hit "share didn't work" with zero diagnostics. Log at WARN before returning null — at minimum the exception class + message.
+### H9. IMPORTANT — `AiSessionState.evictOldest()` is non-atomic on `ConcurrentHashMap` 🟢 SHIPPED
 
-### H9. IMPORTANT — `AiSessionState.evictOldest()` is non-atomic on `ConcurrentHashMap` 🔴
+> **Files:** `app/src/main/java/dev/orcaxr/app/mcp/AiSessionState.kt`, `app/src/main/java/dev/orcaxr/app/mcp/AiPaintSessionStore.kt`.
 
-> **File:** `app/src/main/java/dev/orcaxr/app/mcp/AiSessionState.kt:143-151`.
-
-Sort-then-iterate-and-remove can drop a freshly-stored artifact under concurrent renders. Switch to `compute()` or `synchronized(this)` around the size-check + eviction. Same shape applies to `AiPaintSessionStore.kt:92-100`.
+Both eviction paths now hold `synchronized(map)` across the size-check + remove pair. Renamed to `evictOldestLocked` / `evictIfNeededLocked` so the lock contract is visible at the call site.
 
 ### H10. IMPORTANT — Tier-B `WorkspaceAction` handlers log a warning and silently succeed 🔴
 
@@ -312,9 +310,9 @@ Not a bug today, but a sustained risk: the stale-closure trap inside `BindWorksp
 
 Missing `-Wformat=2 -Wformat-security`, `-fstack-protector-strong`, `-D_FORTIFY_SOURCE=2`, `-fstack-clash-protection`. Add to release build options. The wrap-trampolines for `tbb::scalable_malloc` are correct (gotcha #18) but a future `lld` change could break them silently — add a one-line CMake assertion that the `__wrap_*` symbols resolve (compile-time test via `nm`).
 
-### H16. IMPORTANT — `crash_log.txt` (38 MB) committed to repo root 🔴
+### H16. IMPORTANT — `crash_log.txt` (38 MB) committed to repo root 🟢 SHIPPED
 
-Not secrets, but bloat. Delete and verify `.gitignore` covers future writes. Confirm `local.properties`, `regions.json`, `parse.py`, `get_regions.py`, `playstore/`, `nanobanana-output/` stay gitignored (verified clean in audit).
+Deleted from disk. Was never tracked in git (already covered by `.gitignore` lines 20 + 83), so no history rewrite needed. Confirmed `local.properties`, `regions.json`, `parse.py`, `get_regions.py`, `playstore/`, `nanobanana-output/` are still ignored.
 
 ### H17. IMPORTANT — No CI / pre-commit hooks 🔴
 
@@ -324,9 +322,9 @@ Not secrets, but bloat. Delete and verify `.gitignore` covers future writes. Con
 
 `OrcaProfileLoader.kt`, `SettingsBackup.kt`, `PlateStore.kt`, `MoonrakerClient.kt`, etc. Migrate to `kotlinx.serialization` (~2 K LOC saved, schema-mismatch caught at compile time). Big diff but pays for itself across the next year of MCP tool growth.
 
-### H19. NICE-TO-HAVE — `SubnetScanner.kt:57` magic numbers 🔴
+### H19. NICE-TO-HAVE — `SubnetScanner.kt:57` magic numbers 🟢 SHIPPED
 
-`chunked(32)` and `connectTimeoutMs = 800` are buried magic numbers. Lift to named `const val`s with one-line rationale (parallelism vs connection-pool contention).
+Lifted to `SCAN_CHUNK_SIZE = 32`, `DEFAULT_CONNECT_TIMEOUT_MS = 800`, `SUBNET_HOST_RANGE_END = 254`, each with a comment recording the empirical rationale (Android's connect-pool contention at higher fan-out, real-LAN miss at 250 ms timeout, /24 sweep range).
 
 ### H20. NICE-TO-HAVE — `RecessedFeaturesTest` is `@Ignore`d 🔴
 

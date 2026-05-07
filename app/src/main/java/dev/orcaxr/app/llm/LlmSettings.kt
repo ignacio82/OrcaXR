@@ -5,7 +5,9 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import dev.orcaxr.app.mcp.AndroidKeystoreSecretBox
 import dev.orcaxr.app.mcp.McpSettings
+import dev.orcaxr.app.mcp.SecretBox
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -42,14 +44,30 @@ enum class LlmProvider(val displayName: String, val keyName: String) {
  * entered here also unlocks the vision feature anchors tool — there
  * is no reason to ask the user for the same key twice.
  */
-class LlmSettings(ctx: Context) {
+class LlmSettings(
+    ctx: Context,
+    /**
+     * Audit H3 (2026-05-07) — same Keystore-backed AEAD that
+     * [McpSettings] uses, so the Claude / Gemini / OpenAI keys
+     * stored here ride encrypted at rest. Migration is silent: a
+     * legacy plaintext value falls through to the original string and
+     * gets rewritten encrypted on the next setter call.
+     */
+    private val secretBox: SecretBox = AndroidKeystoreSecretBox(),
+) {
 
     private val store = ctx.applicationContext.llmDataStore
-    private val mcp = McpSettings(ctx.applicationContext)
+    private val mcp = McpSettings(ctx.applicationContext, secretBox)
 
-    val claudeApiKey: Flow<String?> = store.data.map { it[KEY_CLAUDE] }
-    val geminiApiKey: Flow<String?> = store.data.map { it[KEY_GEMINI] }
-    val openAiApiKey: Flow<String?> = store.data.map { it[KEY_OPENAI] }
+    val claudeApiKey: Flow<String?> = store.data.map { decode(it[KEY_CLAUDE]) }
+    val geminiApiKey: Flow<String?> = store.data.map { decode(it[KEY_GEMINI]) }
+    val openAiApiKey: Flow<String?> = store.data.map { decode(it[KEY_OPENAI]) }
+
+    /** Audit H3 — try encrypted-format first, fall back to legacy
+     *  plaintext when the value doesn't decode. Returns null for null
+     *  inputs so empty Flows behave identically to the previous code. */
+    private fun decode(raw: String?): String? = if (raw == null) null
+        else (secretBox.decrypt(raw) ?: raw)
 
     val selectedProvider: Flow<LlmProvider> = store.data.map {
         LlmProvider.fromStorage(it[KEY_SELECTED])
@@ -76,7 +94,8 @@ class LlmSettings(ctx: Context) {
 
     suspend fun setClaudeApiKey(value: String?) {
         store.edit {
-            if (value.isNullOrBlank()) it.remove(KEY_CLAUDE) else it[KEY_CLAUDE] = value.trim()
+            if (value.isNullOrBlank()) it.remove(KEY_CLAUDE)
+            else it[KEY_CLAUDE] = secretBox.encrypt(value.trim())
         }
         // Mirror to McpSettings so existing tools (find_feature_anchors,
         // generate_mask_from_point) pick it up without a process restart.
@@ -87,13 +106,15 @@ class LlmSettings(ctx: Context) {
 
     suspend fun setGeminiApiKey(value: String?) {
         store.edit {
-            if (value.isNullOrBlank()) it.remove(KEY_GEMINI) else it[KEY_GEMINI] = value.trim()
+            if (value.isNullOrBlank()) it.remove(KEY_GEMINI)
+            else it[KEY_GEMINI] = secretBox.encrypt(value.trim())
         }
     }
 
     suspend fun setOpenAiApiKey(value: String?) {
         store.edit {
-            if (value.isNullOrBlank()) it.remove(KEY_OPENAI) else it[KEY_OPENAI] = value.trim()
+            if (value.isNullOrBlank()) it.remove(KEY_OPENAI)
+            else it[KEY_OPENAI] = secretBox.encrypt(value.trim())
         }
     }
 
@@ -109,13 +130,17 @@ class LlmSettings(ctx: Context) {
     suspend fun snapshot(): Snapshot {
         val prefs = store.data.first()
         val selected = LlmProvider.fromStorage(prefs[KEY_SELECTED])
-        val claude = prefs[KEY_CLAUDE]?.takeIf { it.isNotBlank() }
+        // Audit H3 — decrypt all three keys via the SecretBox so the
+        // snapshot returns plaintext for the chat panel. Migration-
+        // friendly: legacy plaintext values fall through to the original
+        // string courtesy of [decode].
+        val claude = decode(prefs[KEY_CLAUDE])?.takeIf { it.isNotBlank() }
             ?: mcp.anthropicApiKey.first()?.takeIf { it.isNotBlank() }
         return Snapshot(
             selected = selected,
             claudeKey = claude,
-            geminiKey = prefs[KEY_GEMINI]?.takeIf { it.isNotBlank() },
-            openAiKey = prefs[KEY_OPENAI]?.takeIf { it.isNotBlank() },
+            geminiKey = decode(prefs[KEY_GEMINI])?.takeIf { it.isNotBlank() },
+            openAiKey = decode(prefs[KEY_OPENAI])?.takeIf { it.isNotBlank() },
             voiceEnabled = prefs[KEY_VOICE] ?: false,
         )
     }

@@ -100,4 +100,37 @@ class FlushActionsTest {
         assertEquals(true, res.structured!!.getBoolean("timed_out"))
         drainJob.cancel()
     }
+
+    /**
+     * Audit H4 — when the host activity is detached (backgrounded /
+     * torn down), `flush_actions` must fail FAST instead of waiting
+     * the full timeout. Otherwise a misbehaving LLM client pins the
+     * MCP coroutine for the full window with no chance of progress.
+     */
+    @Test fun flushFastFailsWhenHostDetached() = runTest {
+        val ws = WorkspaceModel()
+        // Drain so emit doesn't block, then DETACH before emitting
+        // the action whose drain we'll wait for.
+        val drainJob = launch {
+            ws.actions.collect { /* discard */ }
+        }
+        ws.setAttached(true)
+        ws.emit(WorkspaceAction.SetActivePlateId(11))
+        ws.setAttached(false)
+        val tool = WorkspaceTools.FlushActions(ws)
+        // Pass a long timeout to prove we don't wait for it.
+        val startMs = System.currentTimeMillis()
+        val res = tool.call(JSONObject().apply { put("timeout_ms", 5_000) })
+        val elapsedMs = System.currentTimeMillis() - startMs
+        assertTrue("expected isError=true when host detached", res.isError)
+        assertEquals(true, res.structured!!.getBoolean("host_detached"))
+        // No exact upper bound — runTest uses virtual time but still
+        // does some real wall clock — but a fast-fail should be well
+        // under 1s (we passed 5_000 as the timeout).
+        assertTrue(
+            "expected fast-fail (<1s), got ${elapsedMs}ms",
+            elapsedMs < 1_000,
+        )
+        drainJob.cancel()
+    }
 }

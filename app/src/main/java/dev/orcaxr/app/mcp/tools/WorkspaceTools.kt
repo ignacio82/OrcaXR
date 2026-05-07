@@ -2458,6 +2458,33 @@ internal object WorkspaceTools {
             // emitMutex), this is a stable target.
             val target = ws.lastEmittedActionId.value
             val timeoutMs = args.optInt("timeout_ms", 5000).coerceIn(1, 30_000).toLong()
+
+            // Audit H4 (2026-05-07) — fast-fail when the activity is
+            // detached. Without this check, a backgrounded host pinned
+            // the MCP coroutine for the full timeout window before
+            // surfacing the failure. With it, the tool returns
+            // immediately with a clear "host detached" error so the
+            // LLM can route around the failure instead of stalling
+            // its turn for 5+ seconds.
+            //
+            // We still double-check after the wait completes — the
+            // host could detach mid-flight. The withTimeoutOrNull
+            // bound below is the second line of defense.
+            if (target > ws.lastDrainedActionId.value && !ws.attached.value) {
+                val body = JSONObject().apply {
+                    put("ok", false)
+                    put("target_id", target)
+                    put("drained_id", ws.lastDrainedActionId.value)
+                    put("timed_out", false)
+                    put("host_detached", true)
+                }
+                return ToolResult.error(
+                    "flush_actions: host activity is detached (target=$target, drained=${ws.lastDrainedActionId.value}). " +
+                        "The XR shell isn't running, so emitted actions will never drain. Re-attach by bringing the app to foreground.",
+                    body,
+                )
+            }
+
             val drained = kotlinx.coroutines.withTimeoutOrNull(timeoutMs) {
                 ws.lastDrainedActionId
                     .first { it >= target }
@@ -2467,6 +2494,7 @@ internal object WorkspaceTools {
                 put("target_id", target)
                 put("drained_id", ws.lastDrainedActionId.value)
                 put("timed_out", drained == null)
+                put("host_detached", !ws.attached.value)
             }
             val text = if (drained != null) {
                 "Drained $target action(s)."

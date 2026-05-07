@@ -26,7 +26,19 @@ import java.security.SecureRandom
  * `orcaxr.printers` etc.) so toggling this won't ever rewrite the
  * other stores.
  */
-class McpSettings(ctx: Context) {
+class McpSettings(
+    ctx: Context,
+    /**
+     * Audit H3 — symmetric AEAD wrapper used to encrypt the Anthropic
+     * API key at rest. Defaults to a Keystore-backed AES-256-GCM box;
+     * unit tests can pass a [PlaintextSecretBox] when they don't have
+     * a Keystore. The MCP bearer token is unencrypted today (it's
+     * generated on-device and is functionally a capability — losing
+     * it isn't an account-takeover the way the Anthropic key is); a
+     * future commit can extend the scheme to it.
+     */
+    private val secretBox: SecretBox = AndroidKeystoreSecretBox(),
+) {
 
     private val store = ctx.applicationContext.mcpDataStore
 
@@ -49,13 +61,28 @@ class McpSettings(ctx: Context) {
      * retrying. The key is for the user's own account — OrcaXR
      * doesn't own the billing relationship, costs accrue to whoever
      * provisioned the key.
+     *
+     * Audit H3 (2026-05-07) — encrypted at rest via [SecretBox] (AES-
+     * 256-GCM with the Keystore-held key). Migration: a value that
+     * doesn't decrypt as our format is treated as legacy plaintext and
+     * returned as-is; the next [setAnthropicApiKey] call rewrites the
+     * value encrypted. Don't add log statements that surface this Flow
+     * — the decrypted key must never reach logcat.
      */
-    val anthropicApiKey: Flow<String?> = store.data.map { it[KEY_ANTHROPIC_API_KEY] }
+    val anthropicApiKey: Flow<String?> = store.data.map { prefs ->
+        val raw = prefs[KEY_ANTHROPIC_API_KEY] ?: return@map null
+        // Try the encrypted path first; fall back to treating raw as
+        // legacy plaintext if decrypt fails. The migration is silent.
+        secretBox.decrypt(raw) ?: raw
+    }
 
     suspend fun setAnthropicApiKey(value: String?) {
         store.edit {
-            if (value.isNullOrBlank()) it.remove(KEY_ANTHROPIC_API_KEY)
-            else it[KEY_ANTHROPIC_API_KEY] = value
+            if (value.isNullOrBlank()) {
+                it.remove(KEY_ANTHROPIC_API_KEY)
+            } else {
+                it[KEY_ANTHROPIC_API_KEY] = secretBox.encrypt(value)
+            }
         }
     }
 

@@ -679,7 +679,7 @@ class MainActivity : ComponentActivity() {
         // headset orientation flip) doesn't re-ingest the same URI.
         intent.action = android.content.Intent.ACTION_MAIN
         activityIoScope.launch {
-            val files = SharedIntentHandler.resolveAll(this@MainActivity, intent)
+            val files = SharedIntentHandler.resolveAllBounded(this@MainActivity, intent)
             files.forEach { f ->
                 pendingSharedFiles.tryEmit(f)
             }

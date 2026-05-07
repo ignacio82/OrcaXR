@@ -65,6 +65,17 @@ class MoonrakerClient(
         private val sharedClient = OkHttpClient()
 
         /**
+         * Audit H7 — process-wide set of host strings already warned
+         * for sending an API key over plaintext HTTP. The warning fires
+         * once per host (not once per request) so logcat doesn't drown.
+         * Reset across process boundaries — that's fine, the warning
+         * is a sanity nudge for the developer / curious user, not a
+         * compliance gate.
+         */
+        private val plaintextWarnedHosts: java.util.concurrent.ConcurrentHashMap.KeySetView<String, Boolean> =
+            java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+        /**
          * Try several common ports against this printer's host until one
          * answers `/printer/info`. Returns the [PrinterConfig] that
          * actually worked (so callers can persist the corrected port)
@@ -433,7 +444,26 @@ class MoonrakerClient(
 
     private fun Request.Builder.applyApiKey(): Request.Builder {
         val key = printer.apiKey
-        if (!key.isNullOrBlank()) header("X-Api-Key", key)
+        if (!key.isNullOrBlank()) {
+            header("X-Api-Key", key)
+            // Audit H7 (2026-05-07) — Moonraker doesn't ship TLS by
+            // default and most home installs ride bare HTTP. Defaulting
+            // OrcaXR to https:// would break ~all real-world Klipper
+            // setups, so we keep http:// as the resolved default. But
+            // when an API key is configured AND the URL is plaintext,
+            // surface a one-time-per-host WARN so a security-conscious
+            // user can decide to put a TLS terminator in front. Once
+            // per host because logcat would otherwise drown in noise on
+            // every status poll.
+            val url = baseUrl()
+            if (url.startsWith("http://") && plaintextWarnedHosts.add(printer.host)) {
+                android.util.Log.w(
+                    TAG,
+                    "Sending Moonraker API key over plaintext HTTP to ${printer.host}. " +
+                        "Anyone on the LAN can read the key. Configure HTTPS on the printer or use an SSH tunnel.",
+                )
+            }
+        }
         return this
     }
 
