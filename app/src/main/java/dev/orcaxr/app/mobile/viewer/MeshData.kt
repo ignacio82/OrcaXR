@@ -37,8 +37,59 @@ class MeshData(
     val sizeZ get() = maxZ - minZ
     val maxDimension get() = maxOf(sizeX, sizeY, sizeZ)
 
-    /** Per-vertex color flag — always false in the slim mobile build. */
-    val hasPerVertexColor get() = false
+    /** True when [recolorByPaint] has written per-triangle RGBA into the
+     *  vertex buffer. The renderer reads this to flip
+     *  `u_UseVertexColor` between solid-fill and per-triangle colors. */
+    @Volatile var hasPerVertexColor: Boolean = false
+        private set
+
+    /**
+     * Write per-vertex RGBA into [vertices] based on a per-triangle
+     * filament slot index ([paintFilamentIndex], 0 = unpainted,
+     * 1..palette.size = slot index) and the matching [palette] of RGBA
+     * floats. Triangles tagged with an out-of-range or 0 slot get
+     * [unpaintedRgba] (defaults to OrcaXR brand mint). Sets
+     * [hasPerVertexColor] = true so the next draw will sample these
+     * colors. Caller is responsible for re-uploading the VBO (the
+     * renderer does this via its `pendingVboRefresh` flag).
+     */
+    fun recolorByPaint(
+        palette: List<FloatArray>,
+        paintFilamentIndex: ByteArray?,
+        unpaintedRgba: FloatArray = floatArrayOf(0.475f, 0.816f, 0.780f, 1f),
+    ) {
+        val triCount = vertexCount / 3
+        val buf = vertices
+        for (tri in 0 until triCount) {
+            val raw = paintFilamentIndex?.getOrNull(tri)?.toInt() ?: 0
+            val slot = raw and 0xff
+            val color =
+                if (slot in 1..palette.size) palette[slot - 1] else unpaintedRgba
+            for (v in 0 until 3) {
+                val base = (tri * 3 + v) * FLOATS_PER_VERTEX + 6
+                buf.put(base, color[0])
+                buf.put(base + 1, color[1])
+                buf.put(base + 2, color[2])
+                buf.put(base + 3, color[3])
+            }
+        }
+        hasPerVertexColor = true
+    }
+
+    /** Reset every vertex to the default white tint and clear
+     *  [hasPerVertexColor]. Use when the user clears paint or
+     *  switches to a paintless model. */
+    fun resetToUniformColor() {
+        val buf = vertices
+        for (v in 0 until vertexCount) {
+            val base = v * FLOATS_PER_VERTEX + 6
+            buf.put(base, 1f)
+            buf.put(base + 1, 1f)
+            buf.put(base + 2, 1f)
+            buf.put(base + 3, 1f)
+        }
+        hasPerVertexColor = false
+    }
 
     companion object {
         const val FLOATS_PER_VERTEX = 10

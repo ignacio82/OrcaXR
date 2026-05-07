@@ -157,6 +157,7 @@ fun SlicerScreen(
                         profile = selectedProfile,
                         transform = transform,
                         onSetTransform = onSetTransform,
+                        paintFilamentIndex = paintFilamentIndex,
                         fillRemaining = true,
                     )
                     SliceProgressCard(sliceState, onContinue = {
@@ -218,6 +219,7 @@ fun SlicerScreen(
                     profile = selectedProfile,
                     transform = transform,
                     onSetTransform = onSetTransform,
+                    paintFilamentIndex = paintFilamentIndex,
                     fillRemaining = false,
                 )
                 ProfileCard(allProfiles, selectedProfile, onSelect = { selectedProfile = it })
@@ -289,8 +291,10 @@ private fun PreviewCard(
     profile: SlicerProfile,
     transform: SlicerEngine.ModelPlacement,
     onSetTransform: (SlicerEngine.ModelPlacement) -> Unit,
+    paintFilamentIndex: ByteArray?,
     fillRemaining: Boolean,
 ) {
+    val app = LocalMobileAppState.current
     val ctx = LocalContext.current
     var mesh by remember(filePath) { mutableStateOf<dev.orcaxr.app.StlMesh?>(null) }
     var glMesh by remember(filePath) { mutableStateOf<dev.orcaxr.app.mobile.viewer.MeshData?>(null) }
@@ -359,24 +363,57 @@ private fun PreviewCard(
         v.setBedSize(w, d)
     }
 
-    // Phase 4: project the user's transform (translate + scale) into
-    // the GL view's object position + scale uniforms. Drives the
-    // model's apparent position on the bed in real time as the user
-    // adjusts the TransformSheet sliders.
+    // Phase 4: project the user's transform (translate + scale +
+    // rotate) into the GL view's uniforms. The renderer treats
+    // bedTranslationMm as a delta from "model centered on bed" and
+    // recomputes the rotated/scaled bbox per frame, so the model
+    // stays correctly placed under any rotation.
     LaunchedEffect(transform, glMesh, profile.id, viewerView) {
         val v = viewerView ?: return@LaunchedEffect
-        val m = glMesh ?: return@LaunchedEffect
+        glMesh ?: return@LaunchedEffect
         val sx = transform.scaleXPct / 100f
         val sy = transform.scaleYPct / 100f
         val sz = transform.scaleZPct / 100f
         v.setModelScale(sx, sy, sz)
-        val (bedW, bedD) = dev.orcaxr.app.BuildPlateGlb.sizeFor(profile)
-        val scaledW = m.sizeX * sx
-        val scaledD = m.sizeY * sy
-        v.setObjectPosition(
-            xMm = (bedW - scaledW) / 2f + transform.translateXmm,
-            yMm = (bedD - scaledD) / 2f + transform.translateYmm,
-        )
+        v.setModelRotation(transform.rotXdeg, transform.rotYdeg, transform.rotZdeg)
+        v.setBedTranslation(transform.translateXmm, transform.translateYmm)
+    }
+
+    // Phase 5: per-paint-slot recoloring. When the user has painted
+    // some triangles (paintFilamentIndex non-null), look up the
+    // active printer's filament-slot colors via FilamentSlotsStore,
+    // build an RGBA palette, and ask the renderer to recolor every
+    // triangle. When paint is null/empty, revert to the uniform mint
+    // fill.
+    val slotsByPrinter by
+        app.filamentSlots.all.collectAsState(initial = emptyMap<String, List<String>>())
+    LaunchedEffect(paintFilamentIndex, glMesh, viewerView, slotsByPrinter) {
+        val v = viewerView ?: return@LaunchedEffect
+        glMesh ?: return@LaunchedEffect
+        if (paintFilamentIndex == null) {
+            v.clearPaint()
+            return@LaunchedEffect
+        }
+        val printerId = app.prefs.lastPrinterId
+        val saved = printerId?.let { slotsByPrinter[it] }
+        // Use up to MAX_PAINT_SLOTS (32) slots — paint indices are
+        // bytes so anything past 255 is impossible anyway.
+        val padded = app.filamentSlots.pad(saved, count = 16)
+        val palette =
+            padded.map { hex ->
+                val parsed = runCatching { android.graphics.Color.parseColor(hex) }.getOrNull()
+                if (parsed != null) {
+                    floatArrayOf(
+                        android.graphics.Color.red(parsed) / 255f,
+                        android.graphics.Color.green(parsed) / 255f,
+                        android.graphics.Color.blue(parsed) / 255f,
+                        1f,
+                    )
+                } else {
+                    floatArrayOf(0.475f, 0.816f, 0.780f, 1f)
+                }
+            }
+        v.setPaint(palette, paintFilamentIndex)
     }
 
     MobileCard {

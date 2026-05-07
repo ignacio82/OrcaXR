@@ -52,11 +52,13 @@ class ModelViewerView(context: Context) : BaseGLViewerView(context) {
         requestRender()
     }
 
-    /** Set the model's position on the bed (mm, XY-min corner of the
-     *  scaled bbox). Pass null to recenter on the bed. */
-    fun setObjectPosition(xMm: Float?, yMm: Float?) {
-        renderer.objectPosition =
-            if (xMm == null || yMm == null) null else floatArrayOf(xMm, yMm)
+    /** Set the user's bed-translate offset (mm) — the same value the
+     *  TransformSheet's Translate X/Y sliders carry. (0, 0) centers
+     *  the model on the bed; positive X shifts right, positive Y
+     *  shifts back. Stays correct under any rotation/scale because
+     *  the renderer recomputes the rotated bbox per frame. */
+    fun setBedTranslation(xMm: Float, yMm: Float) {
+        renderer.bedTranslationMm = floatArrayOf(xMm, yMm)
         requestRender()
     }
 
@@ -65,8 +67,41 @@ class ModelViewerView(context: Context) : BaseGLViewerView(context) {
         requestRender()
     }
 
+    /** Set the model's rotation in degrees around the mesh center
+     *  (X then Y then Z, intrinsic). The renderer drops the rotated
+     *  bbox flush to Z=0 so the model still rests on the bed even
+     *  when tipped onto a different face. */
+    fun setModelRotation(rotXDeg: Float, rotYDeg: Float, rotZDeg: Float) {
+        renderer.modelRotationDeg = floatArrayOf(rotXDeg, rotYDeg, rotZDeg)
+        requestRender()
+    }
+
     fun resetView() {
         renderer.pendingCameraReset = true
+        requestRender()
+    }
+
+    /**
+     * Apply per-triangle paint to the rendered mesh. [palette] is a
+     * list of RGBA float arrays (one per filament slot;
+     * `palette[slotIndex - 1]` colors triangles tagged with slot N).
+     * [paintFilamentIndex] is a per-triangle byte array; entry i = 0
+     * means "unpainted" (mint default), 1..palette.size means "paint
+     * with that slot's color". Pass null/empty palette + null index to
+     * clear paint.
+     */
+    fun setPaint(palette: List<FloatArray>, paintFilamentIndex: ByteArray?) {
+        if (palette.isEmpty() || paintFilamentIndex == null) {
+            renderer.pendingPaintClear = true
+        } else {
+            renderer.pendingPaint = palette to paintFilamentIndex
+        }
+        requestRender()
+    }
+
+    /** Clear paint and revert to the uniform mint fill. */
+    fun clearPaint() {
+        renderer.pendingPaintClear = true
         requestRender()
     }
 
@@ -134,21 +169,54 @@ class ModelViewerView(context: Context) : BaseGLViewerView(context) {
     }
 
     /** Test whether bed coord (bx, by) falls inside the model's
-     *  scaled XY bbox, given its current objectPosition. */
+     *  rotated/scaled XY bbox, given the current rotation, scale, and
+     *  translate. Mirrors ModelRenderer's drawModel placement so the
+     *  drag hit target matches what the user sees. */
     private fun objectContains(bx: Float, by: Float): Boolean {
         val mesh = renderer.meshData ?: return false
         val s = renderer.modelScale
-        val width = (mesh.maxX - mesh.minX) * s[0]
-        val depth = (mesh.maxY - mesh.minY) * s[1]
-        val pos = renderer.objectPosition
-        val ox: Float
-        val oy: Float
-        if (pos != null && pos.size >= 2) {
-            ox = pos[0]; oy = pos[1]
-        } else {
-            ox = renderer.bedWidthMm / 2f - width / 2f
-            oy = renderer.bedDepthMm / 2f - depth / 2f
+        val r = renderer.modelRotationDeg
+        // Rotated/scaled bbox in mesh-centered coords (matches renderer).
+        val halfW = (mesh.maxX - mesh.minX) / 2f * s[0]
+        val halfH = (mesh.maxY - mesh.minY) / 2f * s[1]
+        val halfD = (mesh.maxZ - mesh.minZ) / 2f * s[2]
+        val rxRad = Math.toRadians(r[0].toDouble())
+        val ryRad = Math.toRadians(r[1].toDouble())
+        val rzRad = Math.toRadians(r[2].toDouble())
+        val cx = kotlin.math.cos(rxRad).toFloat()
+        val sxr = kotlin.math.sin(rxRad).toFloat()
+        val cy = kotlin.math.cos(ryRad).toFloat()
+        val syr = kotlin.math.sin(ryRad).toFloat()
+        val cz = kotlin.math.cos(rzRad).toFloat()
+        val szr = kotlin.math.sin(rzRad).toFloat()
+        val r00 = cz * cy
+        val r01 = cz * syr * sxr - szr * cx
+        val r02 = cz * syr * cx + szr * sxr
+        val r10 = szr * cy
+        val r11 = szr * syr * sxr + cz * cx
+        val r12 = szr * syr * cx - cz * sxr
+        var minX = Float.POSITIVE_INFINITY
+        var maxX = Float.NEGATIVE_INFINITY
+        var minY = Float.POSITIVE_INFINITY
+        var maxY = Float.NEGATIVE_INFINITY
+        for (i in 0 until 8) {
+            val px = if ((i and 1) == 0) -halfW else halfW
+            val py = if ((i and 2) == 0) -halfH else halfH
+            val pz = if ((i and 4) == 0) -halfD else halfD
+            val nx = r00 * px + r01 * py + r02 * pz
+            val ny = r10 * px + r11 * py + r12 * pz
+            if (nx < minX) minX = nx
+            if (nx > maxX) maxX = nx
+            if (ny < minY) minY = ny
+            if (ny > maxY) maxY = ny
         }
-        return bx >= ox && bx <= ox + width && by >= oy && by <= oy + depth
+        val rWidth = maxX - minX
+        val rDepth = maxY - minY
+        val centeredX = renderer.bedWidthMm / 2f - minX - rWidth / 2f
+        val centeredY = renderer.bedDepthMm / 2f - minY - rDepth / 2f
+        val translate = renderer.bedTranslationMm
+        val ox = centeredX + translate.getOrElse(0) { 0f } + minX
+        val oy = centeredY + translate.getOrElse(1) { 0f } + minY
+        return bx in ox..(ox + rWidth) && by in oy..(oy + rDepth)
     }
 }
