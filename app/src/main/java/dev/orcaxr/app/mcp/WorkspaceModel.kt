@@ -133,6 +133,34 @@ class WorkspaceModel internal constructor() {
     private val _attached = MutableStateFlow(false)
     val attached: StateFlow<Boolean> = _attached.asStateFlow()
 
+    /**
+     * Audit H10 (2026-05-07) — Tier-B capabilities the host has
+     * actually wired. A Tier-B [WorkspaceAction] requires a
+     * MainActivity-side callback (slice, save, repair, cut, etc.); if
+     * the callback isn't bound, the action's handler used to log a
+     * warning and silently succeed — so MCP tools "thought they ran"
+     * with no signal back to the LLM. Now: each Tier-B tool calls
+     * [requireCapability] before emitting, returning isError when the
+     * host hasn't wired the matching callback. Set is published by
+     * `BindWorkspaceModel` from its constructor params and updates
+     * live when the binding recomposes (e.g. an Activity teardown).
+     */
+    private val _wiredTierBCapabilities = MutableStateFlow(emptySet<TierBCapability>())
+    val wiredTierBCapabilities: StateFlow<Set<TierBCapability>> = _wiredTierBCapabilities.asStateFlow()
+
+    fun publishWiredTierBCapabilities(set: Set<TierBCapability>) {
+        _wiredTierBCapabilities.value = set
+    }
+
+    /**
+     * Helper for tools — returns true iff the host has wired the
+     * matching callback. Tools should fail-fast with a clear error
+     * message when this returns false (vs. emitting an action that
+     * would silently drop on the host side).
+     */
+    fun isCapabilityWired(c: TierBCapability): Boolean =
+        _wiredTierBCapabilities.value.contains(c)
+
     // ---- Actions ----
 
     /**

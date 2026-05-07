@@ -1,6 +1,7 @@
 package dev.orcaxr.app.mcp.tools
 
 import dev.orcaxr.app.PlacedModel
+import dev.orcaxr.app.mcp.TierBCapability
 import dev.orcaxr.app.mcp.WorkspaceAction
 import dev.orcaxr.app.mcp.WorkspaceModel
 import kotlinx.coroutines.CoroutineStart
@@ -25,6 +26,11 @@ class SimplifyModelToolTest {
     private fun emptyWs(): WorkspaceModel {
         val ws = WorkspaceModel()
         ws.setAttached(true)
+        // Audit H10 — the SimplifyModel tool gates on the matching
+        // TierBCapability. Publish it here so the requireCapability
+        // pre-flight passes and the action emits as expected. A real
+        // host activity would publish via BindWorkspaceModel.
+        ws.publishWiredTierBCapabilities(setOf(TierBCapability.SimplifyModel))
         ws.publishPlacedModels(listOf(PlacedModel(
             id = "m_test", source = File("/dev/null"), label = "test",
         )))

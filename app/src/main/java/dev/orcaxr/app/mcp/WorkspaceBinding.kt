@@ -219,6 +219,55 @@ fun BindWorkspaceModel(
     LaunchedEffect(previewPalette) { workspace.publishPreviewPalette(previewPalette) }
     LaunchedEffect(customGcodeTicksByPlate) { workspace.publishCustomGcodeTicks(customGcodeTicksByPlate) }
 
+    // Audit H10 — publish the set of Tier-B capabilities this host
+    // has wired. Tools call `workspace.isCapabilityWired(...)` before
+    // emitting and fail-fast with isError when the corresponding
+    // callback is null. Recomputed on every composition; usually
+    // stable for the lifetime of the activity.
+    val wiredCapabilities = remember(
+        onSliceActivePlate, onAutoArrangePlate, onDropToBed,
+        onSaveGcode, onSaveProject3mf, onSaveModelStl, onLoadModelFromPath,
+        onRepairModel, onSimplifyModel, onComputeAdaptiveLayerHeights,
+        onAddCustomGcodeTick, onRemoveCustomGcodeTick, onClearCustomGcodeTicks,
+        onCutModel, onMeshBoolean, onSplitModel,
+        onEmbossModel, onAddTextOrSvgObject, onAddTextOrSvgVolume,
+        onAddVolumeToModel, onRemoveVolume,
+        onClearPaint, onReplacePaintTag, onPaintPlaneSplit,
+        onPaintUndo, onPaintRedo, onPaintTriangleSet, onLoadPaintState,
+    ) {
+        buildSet {
+            if (onSliceActivePlate != null) add(TierBCapability.SliceActivePlate)
+            if (onAutoArrangePlate != null) add(TierBCapability.AutoArrangePlate)
+            if (onDropToBed != null) add(TierBCapability.DropToBed)
+            if (onSaveGcode != null) add(TierBCapability.SaveGcodeToDownloads)
+            if (onSaveProject3mf != null) add(TierBCapability.SaveProject3mf)
+            if (onSaveModelStl != null) add(TierBCapability.SaveModelStl)
+            if (onLoadModelFromPath != null) add(TierBCapability.LoadModelFromPath)
+            if (onRepairModel != null) add(TierBCapability.RepairModel)
+            if (onSimplifyModel != null) add(TierBCapability.SimplifyModel)
+            if (onComputeAdaptiveLayerHeights != null) add(TierBCapability.ComputeAdaptiveLayerHeights)
+            if (onAddCustomGcodeTick != null) add(TierBCapability.AddCustomGcodeTick)
+            if (onRemoveCustomGcodeTick != null) add(TierBCapability.RemoveCustomGcodeTick)
+            if (onClearCustomGcodeTicks != null) add(TierBCapability.ClearCustomGcodeTicks)
+            if (onCutModel != null) add(TierBCapability.CutModel)
+            if (onMeshBoolean != null) add(TierBCapability.MeshBoolean)
+            if (onSplitModel != null) add(TierBCapability.SplitModel)
+            if (onEmbossModel != null) add(TierBCapability.EmbossModel)
+            if (onAddTextOrSvgObject != null) add(TierBCapability.AddTextOrSvgObject)
+            if (onAddTextOrSvgVolume != null) add(TierBCapability.AddTextOrSvgVolume)
+            if (onAddVolumeToModel != null) add(TierBCapability.AddVolumeToModel)
+            if (onRemoveVolume != null) add(TierBCapability.RemoveVolume)
+            if (onClearPaint != null) add(TierBCapability.ClearPaint)
+            if (onReplacePaintTag != null) add(TierBCapability.ReplacePaintTag)
+            if (onPaintPlaneSplit != null) add(TierBCapability.PaintPlaneSplit)
+            if (onPaintUndo != null) add(TierBCapability.PaintUndo)
+            if (onPaintRedo != null) add(TierBCapability.PaintRedo)
+            if (onPaintTriangleSet != null) add(TierBCapability.PaintTriangleSet)
+            if (onLoadPaintState != null) add(TierBCapability.LoadPaintState)
+        }
+    }
+    LaunchedEffect(wiredCapabilities) { workspace.publishWiredTierBCapabilities(wiredCapabilities) }
+
     // ---- Action collector ----
     //
     // The collector lives inside `LaunchedEffect(workspace)` whose

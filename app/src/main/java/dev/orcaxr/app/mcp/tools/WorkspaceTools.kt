@@ -15,6 +15,7 @@ import dev.orcaxr.app.SlicerEngine
 import dev.orcaxr.app.SlicerProfile
 import dev.orcaxr.app.WorkspaceMode
 import dev.orcaxr.app.mcp.Schemas
+import dev.orcaxr.app.mcp.TierBCapability
 import dev.orcaxr.app.mcp.Tool
 import dev.orcaxr.app.mcp.ToolContext
 import dev.orcaxr.app.mcp.ToolResult
@@ -371,6 +372,26 @@ internal object WorkspaceTools {
         return ToolResult.error(
             "OrcaXR's main window isn't currently attached (app backgrounded?). " +
                 "Bring the app to the foreground and retry.",
+        )
+    }
+
+    /**
+     * Audit H10 — Tier-B capability gate. Returns isError when the
+     * host hasn't wired the matching callback (so MCP tools fail-
+     * fast instead of emitting an action that drops silently). Tools
+     * that have a Compose-state fallback in `WorkspaceBinding`
+     * (DropToBed, SetLayerHeightProfile, SetVolumeOverrides, etc.)
+     * skip this check — their action still does meaningful work
+     * without the callback.
+     */
+    private fun requireCapability(ws: WorkspaceModel, c: TierBCapability): ToolResult? {
+        if (ws.isCapabilityWired(c)) return null
+        return ToolResult.error(
+            "Tool requires the host activity to have wired the " +
+                "${c.name} callback. The XR shell is attached but the corresponding " +
+                "Compose call site doesn't pass a non-null lambda. This is usually a " +
+                "bring-up issue (the build doesn't include this feature path) — escalate " +
+                "to the developer or pick a different tool.",
         )
     }
 
@@ -749,6 +770,7 @@ internal object WorkspaceTools {
         override val inputSchema = Schemas.empty()
         override suspend fun call(args: JSONObject): ToolResult {
             requireAttached(ws)?.let { return it }
+            requireCapability(ws, TierBCapability.SliceActivePlate)?.let { return it }
             val placed = ws.placedModels.value.filter { it.plateId == ws.activePlateId.value }
             if (placed.isEmpty()) {
                 return ToolResult.error(
@@ -808,6 +830,7 @@ internal object WorkspaceTools {
         override val inputSchema = Schemas.empty()
         override suspend fun call(args: JSONObject): ToolResult {
             requireAttached(ws)?.let { return it }
+            requireCapability(ws, TierBCapability.AutoArrangePlate)?.let { return it }
             val placed = ws.placedModels.value.filter { it.plateId == ws.activePlateId.value }
             if (placed.isEmpty()) return ToolResult.error("No models on the active plate.")
             ws.emit(WorkspaceAction.AutoArrangePlate)
@@ -852,6 +875,7 @@ internal object WorkspaceTools {
         override val inputSchema = Schemas.empty()
         override suspend fun call(args: JSONObject): ToolResult {
             requireAttached(ws)?.let { return it }
+            requireCapability(ws, TierBCapability.SaveGcodeToDownloads)?.let { return it }
             val ss = ws.sliceState.value
             if (ss !is SliceUiState.Done || ss.result !is dev.orcaxr.app.SliceResult.Success) {
                 return ToolResult.error(
@@ -876,6 +900,7 @@ internal object WorkspaceTools {
         override val inputSchema = Schemas.empty()
         override suspend fun call(args: JSONObject): ToolResult {
             requireAttached(ws)?.let { return it }
+            requireCapability(ws, TierBCapability.SaveProject3mf)?.let { return it }
             if (ws.selectedModelIds.value.isEmpty()) {
                 return ToolResult.error(
                     "No model selected. Use select_models with exactly one id, then retry.",
@@ -899,6 +924,7 @@ internal object WorkspaceTools {
         override val inputSchema = Schemas.empty()
         override suspend fun call(args: JSONObject): ToolResult {
             requireAttached(ws)?.let { return it }
+            requireCapability(ws, TierBCapability.SaveModelStl)?.let { return it }
             if (ws.selectedModelIds.value.isEmpty()) {
                 return ToolResult.error("No model selected.")
             }
@@ -929,6 +955,7 @@ internal object WorkspaceTools {
         )
         override suspend fun call(args: JSONObject): ToolResult {
             requireAttached(ws)?.let { return it }
+            requireCapability(ws, TierBCapability.LoadModelFromPath)?.let { return it }
             val rawPath = args.optString("path").trim()
             if (rawPath.isEmpty()) return ToolResult.error("'path' is required.")
             val file = java.io.File(rawPath)
@@ -995,6 +1022,7 @@ internal object WorkspaceTools {
         )
         override suspend fun call(args: JSONObject): ToolResult {
             requireAttached(ws)?.let { return it }
+            requireCapability(ws, TierBCapability.RepairModel)?.let { return it }
             val id = args.optString("model_id").trim()
             if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
             if (ws.placedModels.value.none { it.id == id }) {
@@ -1032,6 +1060,7 @@ internal object WorkspaceTools {
         )
         override suspend fun call(args: JSONObject): ToolResult {
             requireAttached(ws)?.let { return it }
+            requireCapability(ws, TierBCapability.SimplifyModel)?.let { return it }
             val id = args.optString("model_id").trim()
             if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
             if (ws.placedModels.value.none { it.id == id }) {
@@ -1073,6 +1102,7 @@ internal object WorkspaceTools {
         )
         override suspend fun call(args: JSONObject): ToolResult {
             requireAttached(ws)?.let { return it }
+            requireCapability(ws, TierBCapability.CutModel)?.let { return it }
             val id = args.optString("model_id").trim()
             if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
             if (!args.has("plane_z_mm")) return ToolResult.error("'plane_z_mm' is required.")
@@ -1110,6 +1140,7 @@ internal object WorkspaceTools {
         )
         override suspend fun call(args: JSONObject): ToolResult {
             requireAttached(ws)?.let { return it }
+            requireCapability(ws, TierBCapability.MeshBoolean)?.let { return it }
             val a = args.optString("model_a_id").trim()
             val b = args.optString("model_b_id").trim()
             if (a.isEmpty() || b.isEmpty()) {
@@ -1150,6 +1181,7 @@ internal object WorkspaceTools {
         )
         override suspend fun call(args: JSONObject): ToolResult {
             requireAttached(ws)?.let { return it }
+            requireCapability(ws, TierBCapability.SplitModel)?.let { return it }
             val id = args.optString("model_id").trim()
             if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
             if (ws.placedModels.value.none { it.id == id }) {
