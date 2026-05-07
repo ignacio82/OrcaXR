@@ -4776,9 +4776,13 @@ Java_dev_orcaxr_app_SlicerEngine_nativeMeshBoolean(
         }
         // Merge result pieces into a single TriangleMesh. mcut may
         // return multiple disconnected components (e.g. Difference
-        // that splits A into two parts); we treat all of them as a
-        // single output for now. Future polish: emit as separate
-        // PlacedModels.
+        // that splits A into two parts); we merge here and let the
+        // Kotlin caller (`MainActivity::runBoolean`) post-process via
+        // `splitObject` to emit N PlacedModels. That keeps this JNI
+        // signature stable while honoring audit H23. Don't try to
+        // pre-split here — the existing connected-components helper
+        // lives at the Kotlin level via `nativeSplitObject` and reuses
+        // the same store_3mf pipeline.
         Slic3r::TriangleMesh merged = result_meshes.front();
         for (size_t i = 1; i < result_meshes.size(); ++i) {
             merged.merge(result_meshes[i]);

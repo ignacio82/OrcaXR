@@ -2367,7 +2367,8 @@ private fun XrShell(
                 SlicerEngine.BoolOp.INTERSECTION -> "isect"
                 else -> "op$op"
             }
-            val out = File(ctx.cacheDir, "bool_${opStr}_${System.currentTimeMillis()}.3mf")
+            val ts = System.currentTimeMillis()
+            val out = File(ctx.cacheDir, "bool_${opStr}_${ts}.3mf")
             val ok = runCatching {
                 SlicerEngine.meshBoolean(a.source, b.source, op, out)
             }.onFailure {
@@ -2381,24 +2382,52 @@ private fun XrShell(
                 ).show()
                 return@launch
             }
-            val newId = "model_${System.currentTimeMillis().toString(36)}_bool"
-            val fresh = PlacedModel(id = newId, source = out, label = "Bool ${opStr}")
-            // Replace BOTH sources with the boolean output.
-            placedModels = placedModels.filter { it.id != aId && it.id != bId } + fresh
-            selectedModelIds = setOfNotNull(newId)
+            // Audit H23 (2026-05-07) — when a Difference splits A into
+            // two parts, or a Union of two non-touching meshes
+            // produces a disjoint result, the merged 3MF carries
+            // multiple connected components. The user expects each
+            // component as a separately-grabbable PlacedModel (matches
+            // the Split tool's contract). Compose `meshBoolean` →
+            // `splitObject`: cheap, no JNI signature change, shared
+            // code path with the standalone Split tool. Single-
+            // component output still produces one PlacedModel (split
+            // is idempotent on a connected mesh).
+            val splitDir = File(ctx.cacheDir, "bool_${opStr}_${ts}_split").apply { mkdirs() }
+            val splits = runCatching {
+                SlicerEngine.splitObject(out, splitDir)
+            }.getOrNull().orEmpty()
+            // Fall back to the merged 3MF when split returns nothing
+            // (split failure shouldn't sink the operation; the merged
+            // result is still meaningful).
+            val resultPaths = if (splits.isNotEmpty()) splits else listOf(out.absolutePath)
+            val freshModels = resultPaths.mapIndexed { idx, path ->
+                val newId = "model_${ts.toString(36)}_bool_$idx"
+                val label = if (resultPaths.size == 1) "Bool $opStr"
+                            else "Bool $opStr (${idx + 1}/${resultPaths.size})"
+                PlacedModel(id = newId, source = File(path), label = label)
+            }
+            // Replace BOTH source models with the boolean output(s).
+            placedModels = placedModels.filter { it.id != aId && it.id != bId } + freshModels
+            selectedModelIds = freshModels.map { it.id }.toSet()
             sliceState.value = SliceUiState.Idle
             workspaceMode = WorkspaceMode.Prepare
             isLoadingModel = true
-            loadingLabel = fresh.label
+            loadingLabel = freshModels.firstOrNull()?.label
             try {
-                previewStl(newId)
+                // Bake the preview for each fresh model. They're sequential
+                // because previewStl mutates shared state; parallelizing
+                // would race the colored-GLB writer (gotcha #22).
+                for (m in freshModels) {
+                    previewStl(m.id)
+                }
             } finally {
                 isLoadingModel = false
                 loadingLabel = null
             }
+            val pieceText = if (freshModels.size > 1) " (${freshModels.size} pieces)" else ""
             android.widget.Toast.makeText(
                 ctx,
-                "Boolean ${opStr} done.",
+                "Boolean ${opStr} done${pieceText}.",
                 android.widget.Toast.LENGTH_SHORT,
             ).show()
         }
