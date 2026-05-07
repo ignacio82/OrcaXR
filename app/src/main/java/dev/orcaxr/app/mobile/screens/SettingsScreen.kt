@@ -46,6 +46,7 @@ fun SettingsScreen(
     isTablet: Boolean,
     forceDark: Boolean?,
     onSetForceDark: (Boolean?) -> Unit,
+    onOpenAssistant: () -> Unit = {},
 ) {
     val app = LocalMobileAppState.current
     val ctx = LocalContext.current
@@ -153,6 +154,16 @@ fun SettingsScreen(
                     }
                 }
             }
+
+            // AI assistant — Claude / Gemini / OpenAI key entry, model
+            // override, voice toggle, and "Open assistant" CTA. Same
+            // card the XR Devices panel uses; reused verbatim because
+            // the XR/mobile distinction is just chrome — keys, models,
+            // and the chat surface itself are device-agnostic.
+            dev.orcaxr.app.llm.LlmAssistantCard(
+                onOpenAssistant = onOpenAssistant,
+                modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+            )
 
             // About / debug
             MobileCard {

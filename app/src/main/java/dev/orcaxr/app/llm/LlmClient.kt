@@ -36,10 +36,18 @@ interface LlmClient {
     ): Result<LlmResponse>
 
     companion object {
-        fun forProvider(p: LlmProvider, apiKey: String): LlmClient = when (p) {
-            LlmProvider.Claude -> ClaudeLlmClient(apiKey)
-            LlmProvider.Gemini -> GeminiLlmClient(apiKey)
-            LlmProvider.OpenAI -> OpenAiLlmClient(apiKey)
+        /** Build a client for [p]. When [model] is non-blank it
+         *  overrides the per-provider DEFAULT_MODEL constant. The
+         *  user-facing model field in LlmAssistantCard threads the
+         *  override here so the user can paste in a model id their
+         *  key has access to without a code change. */
+        fun forProvider(p: LlmProvider, apiKey: String, model: String? = null): LlmClient {
+            val resolved = model?.takeIf { it.isNotBlank() }
+            return when (p) {
+                LlmProvider.Claude -> ClaudeLlmClient(apiKey, resolved ?: ClaudeLlmClient.DEFAULT_MODEL)
+                LlmProvider.Gemini -> GeminiLlmClient(apiKey, resolved ?: GeminiLlmClient.DEFAULT_MODEL)
+                LlmProvider.OpenAI -> OpenAiLlmClient(apiKey, resolved ?: OpenAiLlmClient.DEFAULT_MODEL)
+            }
         }
     }
 }

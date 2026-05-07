@@ -190,9 +190,15 @@ class ModelRenderer(private val context: Context) : GLSurfaceView.Renderer {
         }
 
         camera.updateViewMatrix()
-        if (viewportWidth > 0 && viewportHeight > 0) {
-            camera.updateProjectionMatrix(viewportWidth, viewportHeight)
-        }
+        // Always refresh the projection matrix so a camera state change
+        // (preset chip, drag-to-rotate) takes effect even if onSurface
+        // Changed already populated the viewport. Fallback to a 1:1
+        // square aspect when the viewport hasn't been measured yet
+        // (very first frame before layout completes) — keeps the MVP
+        // matrix non-degenerate so the bed and model stay visible.
+        val w = if (viewportWidth > 0) viewportWidth else 1
+        val h = if (viewportHeight > 0) viewportHeight else 1
+        camera.updateProjectionMatrix(w, h)
 
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT or GLES30.GL_DEPTH_BUFFER_BIT)
         drawBedAndGrid()

@@ -142,6 +142,7 @@ fun MobileShell(
                 var slicerPaintIndex by remember { mutableStateOf<ByteArray?>(null) }
                 var paintModeFile by rememberSaveable { mutableStateOf<String?>(null) }
                 var slicerTransform by remember { mutableStateOf(dev.orcaxr.app.SlicerEngine.ModelPlacement()) }
+                var llmAssistantOpen by rememberSaveable { mutableStateOf(false) }
 
                 // Onboarding gating: until at least one printer exists,
                 // route to the Onboarding flow regardless of `dest`.
@@ -175,6 +176,30 @@ fun MobileShell(
                         onSkip = { onboardingComplete = true },
                         onAdded = { onboardingComplete = true },
                     )
+                    return@BoxWithConstraints
+                }
+
+                // LLM assistant takes over the screen when opened from
+                // SettingsScreen. Reuses the XR shell's LlmAssistantPanel
+                // (which is plain Compose Material 3 — no XR runtime
+                // coupling) so the chat surface, voice input, suggestion
+                // chips, and tool-result rendering all "just work" on
+                // mobile.
+                if (llmAssistantOpen) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.background,
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        Column(
+                            Modifier
+                                .fillMaxSize()
+                                .windowInsetsPadding(WindowInsets.systemBars),
+                        ) {
+                            dev.orcaxr.app.llm.LlmAssistantPanel(
+                                onClose = { llmAssistantOpen = false },
+                            )
+                        }
+                    }
                     return@BoxWithConstraints
                 }
 
@@ -227,6 +252,7 @@ fun MobileShell(
                             onNavigate = { dest = it },
                             forceDark = forceDark,
                             onSetForceDark = onSetForceDark,
+                            onOpenAssistant = { llmAssistantOpen = true },
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -251,6 +277,7 @@ fun MobileShell(
                             onNavigate = { dest = it },
                             forceDark = forceDark,
                             onSetForceDark = onSetForceDark,
+                            onOpenAssistant = { llmAssistantOpen = true },
                             modifier = Modifier.weight(1f).fillMaxWidth(),
                         )
                         PhoneBottomNav(
@@ -279,6 +306,7 @@ private fun ScreenContent(
     onNavigate: (MobileDestination) -> Unit,
     forceDark: Boolean?,
     onSetForceDark: (Boolean?) -> Unit,
+    onOpenAssistant: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier) {
@@ -311,6 +339,7 @@ private fun ScreenContent(
                 isTablet = isTablet,
                 forceDark = forceDark,
                 onSetForceDark = onSetForceDark,
+                onOpenAssistant = onOpenAssistant,
             )
             MobileDestination.Preview -> MobilePreviewScreen(isTablet = isTablet)
         }

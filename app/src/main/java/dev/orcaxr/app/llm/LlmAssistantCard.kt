@@ -72,6 +72,9 @@ fun LlmAssistantCard(
     val claudeKey by settings.claudeApiKey.collectAsState(initial = null)
     val geminiKey by settings.geminiApiKey.collectAsState(initial = null)
     val openAiKey by settings.openAiApiKey.collectAsState(initial = null)
+    val claudeModel by settings.claudeModel.collectAsState(initial = null)
+    val geminiModel by settings.geminiModel.collectAsState(initial = null)
+    val openAiModel by settings.openAiModel.collectAsState(initial = null)
     val voiceEnabled by settings.voiceEnabled.collectAsState(initial = false)
 
     val currentKey = when (selected) {
@@ -79,14 +82,27 @@ fun LlmAssistantCard(
         LlmProvider.Gemini -> geminiKey
         LlmProvider.OpenAI -> openAiKey
     }
+    val currentModel = when (selected) {
+        LlmProvider.Claude -> claudeModel
+        LlmProvider.Gemini -> geminiModel
+        LlmProvider.OpenAI -> openAiModel
+    }
     val anyKeySet = !claudeKey.isNullOrBlank() || !geminiKey.isNullOrBlank() ||
         !openAiKey.isNullOrBlank()
 
     var draftKey by remember(selected, currentKey) {
         mutableStateOf(currentKey ?: "")
     }
+    var draftModel by remember(selected, currentModel) {
+        mutableStateOf(currentModel ?: "")
+    }
     var showKey by remember(selected) { mutableStateOf(false) }
     var lastSavedAt by remember(selected) { mutableStateOf<String?>(null) }
+    val defaultModelForProvider = when (selected) {
+        LlmProvider.Claude -> dev.orcaxr.app.llm.ClaudeLlmClient.DEFAULT_MODEL
+        LlmProvider.Gemini -> dev.orcaxr.app.llm.GeminiLlmClient.DEFAULT_MODEL
+        LlmProvider.OpenAI -> dev.orcaxr.app.llm.OpenAiLlmClient.DEFAULT_MODEL
+    }
 
     Surface(
         color = Color(0xFF12253A),
@@ -251,6 +267,80 @@ fun LlmAssistantCard(
                     color = Color(0xFF6FBF73),
                     style = MaterialTheme.typography.labelSmall,
                 )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // Model override. Empty = use the per-provider DEFAULT_MODEL
+            // constant from LlmClient.kt. Audit H_PIXEL10 (2026-05-08):
+            // we made this user-overridable because each provider's
+            // published model IDs rotate often and a 400 INVALID_ARGUMENT
+            // is the typical symptom of a stale baked-in default. Letting
+            // the user paste in whatever model id their key has access
+            // to is cheaper than shipping a release for every model
+            // family flip.
+            Text(
+                "Model (override; empty = $defaultModelForProvider)",
+                color = Color(0xFFB6BEC8),
+                style = MaterialTheme.typography.labelSmall,
+            )
+            Spacer(Modifier.height(4.dp))
+            OutlinedTextField(
+                value = draftModel,
+                onValueChange = { draftModel = it },
+                placeholder = {
+                    Text(
+                        defaultModelForProvider,
+                        color = Color(0xFF6A7484),
+                    )
+                },
+                singleLine = true,
+                colors = TextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedContainerColor = Color(0xFF0F1A28),
+                    unfocusedContainerColor = Color(0xFF0F1A28),
+                    focusedIndicatorColor = Color(0xFF4F8FF7),
+                    unfocusedIndicatorColor = Color(0xFF2A3A4F),
+                    cursorColor = Color.White,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            val v = draftModel.trim()
+                            when (selected) {
+                                LlmProvider.Claude -> settings.setClaudeModel(v.ifEmpty { null })
+                                LlmProvider.Gemini -> settings.setGeminiModel(v.ifEmpty { null })
+                                LlmProvider.OpenAI -> settings.setOpenAiModel(v.ifEmpty { null })
+                            }
+                            lastSavedAt =
+                                if (v.isEmpty()) "Reverted to $defaultModelForProvider."
+                                else "Model: $v."
+                        }
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F8FF7)),
+                ) { Text("Save model") }
+                if (!currentModel.isNullOrBlank()) {
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                when (selected) {
+                                    LlmProvider.Claude -> settings.setClaudeModel(null)
+                                    LlmProvider.Gemini -> settings.setGeminiModel(null)
+                                    LlmProvider.OpenAI -> settings.setOpenAiModel(null)
+                                }
+                                draftModel = ""
+                                lastSavedAt = "Reverted to $defaultModelForProvider."
+                            }
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                    ) { Text("Default") }
+                }
             }
 
             Spacer(Modifier.height(12.dp))

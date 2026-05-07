@@ -34,10 +34,18 @@ class Camera {
     @Volatile var targetY = 0.0
     @Volatile var targetZ = 0.0
 
-    val viewMatrix = FloatArray(16)
-    val projectionMatrix = FloatArray(16)
-    val mvpMatrix = FloatArray(16)
-    val normalMatrix = FloatArray(16)
+    // Initialize matrices to identity, NOT all-zeros (the FloatArray
+    // default). Bug fixed 2026-05-08: when the very first onDrawFrame
+    // ran before onSurfaceChanged populated viewportWidth/Height, the
+    // projection matrix stayed at all-zeros, MVP = projection * view
+    // collapsed to zero, and the model + bed rendered to gl_Position
+    // (0,0,0,0) — invisible. Tapping any camera preset would force a
+    // later re-render after the viewport was valid, which is why the
+    // user saw "Iso doesn't work until I click Front first."
+    val viewMatrix = FloatArray(16).also { Matrix.setIdentityM(it, 0) }
+    val projectionMatrix = FloatArray(16).also { Matrix.setIdentityM(it, 0) }
+    val mvpMatrix = FloatArray(16).also { Matrix.setIdentityM(it, 0) }
+    val normalMatrix = FloatArray(16).also { Matrix.setIdentityM(it, 0) }
     private val tempMatrix = FloatArray(16)
 
     fun setTarget(x: Double, y: Double, z: Double) {

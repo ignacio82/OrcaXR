@@ -95,12 +95,20 @@ fun LlmAssistantPanel(
     val claudeKey by settings.claudeApiKey.collectAsState(initial = null)
     val geminiKey by settings.geminiApiKey.collectAsState(initial = null)
     val openAiKey by settings.openAiApiKey.collectAsState(initial = null)
+    val claudeModel by settings.claudeModel.collectAsState(initial = null)
+    val geminiModel by settings.geminiModel.collectAsState(initial = null)
+    val openAiModel by settings.openAiModel.collectAsState(initial = null)
     val voiceEnabled by settings.voiceEnabled.collectAsState(initial = false)
 
     val activeKey = when (selected) {
         LlmProvider.Claude -> claudeKey
         LlmProvider.Gemini -> geminiKey
         LlmProvider.OpenAI -> openAiKey
+    }?.takeIf { it.isNotBlank() }
+    val activeModel = when (selected) {
+        LlmProvider.Claude -> claudeModel
+        LlmProvider.Gemini -> geminiModel
+        LlmProvider.OpenAI -> openAiModel
     }?.takeIf { it.isNotBlank() }
 
     val turns = remember { mutableStateListOf<LlmTurn>() }
@@ -134,7 +142,7 @@ fun LlmAssistantPanel(
                 voiceListening = false
                 if (text.isNotBlank()) {
                     sendMessage(
-                        text, turns, bridge, selected, activeKey,
+                        text, turns, bridge, selected, activeKey, activeModel,
                         scope, onError = { lastError = it },
                         onReplyingChange = { isReplying = it },
                     )
@@ -229,7 +237,7 @@ fun LlmAssistantPanel(
                             SuggestionChip(suggestion) {
                                 if (activeKey != null) {
                                     sendMessage(
-                                        suggestion, turns, bridge, selected, activeKey,
+                                        suggestion, turns, bridge, selected, activeKey, activeModel,
                                         scope, onError = { lastError = it },
                                         onReplyingChange = { isReplying = it },
                                     )
@@ -274,24 +282,54 @@ fun LlmAssistantPanel(
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                    ) {
+                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
                         Text(
                             err,
                             color = Color(0xFFE07070),
                             style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.fillMaxWidth(),
                         )
-                        Text(
-                            "Dismiss",
-                            color = Color(0xFFB6BEC8),
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier
-                                .clickable { lastError = null }
-                                .padding(horizontal = 8.dp),
-                        )
+                        Spacer(Modifier.height(6.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            // H_PIXEL10 follow-up (2026-05-08) — copying
+                            // an HTTP 4xx body is the fastest way for a
+                            // user to share what the provider rejected.
+                            // ClipboardManager not LocalClipboard so this
+                            // works the same on mobile (where the
+                            // suspend-based LocalClipboard is fine but
+                            // overkill for a one-shot setText).
+                            val ctx = androidx.compose.ui.platform.LocalContext.current
+                            Text(
+                                "Copy",
+                                color = Color(0xFF7BC8FF),
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.clickable {
+                                    val cm =
+                                        ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                            as? android.content.ClipboardManager
+                                    cm?.setPrimaryClip(
+                                        android.content.ClipData.newPlainText(
+                                            "OrcaXR LLM error",
+                                            err,
+                                        )
+                                    )
+                                    android.widget.Toast.makeText(
+                                        ctx,
+                                        "Error copied to clipboard",
+                                        android.widget.Toast.LENGTH_SHORT,
+                                    ).show()
+                                },
+                            )
+                            Text(
+                                "Dismiss",
+                                color = Color(0xFFB6BEC8),
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.clickable { lastError = null },
+                            )
+                        }
                     }
                 }
             }
@@ -353,7 +391,7 @@ fun LlmAssistantPanel(
                             val msg = draftText.trim()
                             draftText = ""
                             sendMessage(
-                                msg, turns, bridge, selected, activeKey,
+                                msg, turns, bridge, selected, activeKey, activeModel,
                                 scope, onError = { lastError = it },
                                 onReplyingChange = { isReplying = it },
                             )
@@ -409,6 +447,7 @@ private fun sendMessage(
     bridge: LlmToolBridge,
     selected: LlmProvider,
     activeKey: String?,
+    activeModel: String?,
     scope: kotlinx.coroutines.CoroutineScope,
     onError: (String) -> Unit,
     onReplyingChange: (Boolean) -> Unit,
@@ -419,7 +458,7 @@ private fun sendMessage(
     }
     turns.add(LlmTurn.User(text))
     onReplyingChange(true)
-    val client = LlmClient.forProvider(selected, activeKey)
+    val client = LlmClient.forProvider(selected, activeKey, activeModel)
     val toolDefs = bridge.toolDefs()
 
     scope.launch {

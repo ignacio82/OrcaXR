@@ -63,6 +63,20 @@ class LlmSettings(
     val geminiApiKey: Flow<String?> = store.data.map { decode(it[KEY_GEMINI]) }
     val openAiApiKey: Flow<String?> = store.data.map { decode(it[KEY_OPENAI]) }
 
+    /**
+     * Per-provider model override. When null/blank, the client falls
+     * back to its `DEFAULT_MODEL` constant. Audit H_PIXEL10 (2026-05-08):
+     * we made these user-overridable because the published model IDs
+     * on each provider's API change frequently (Gemini 3 preview lines
+     * appear / disappear, Claude 4.x family rotates, OpenAI rev IDs
+     * roll forward) and shipping a new APK to track every flip is
+     * unsustainable. Letting the user paste in whatever model id their
+     * key has access to is cheaper for everyone.
+     */
+    val claudeModel: Flow<String?> = store.data.map { it[KEY_MODEL_CLAUDE] }
+    val geminiModel: Flow<String?> = store.data.map { it[KEY_MODEL_GEMINI] }
+    val openAiModel: Flow<String?> = store.data.map { it[KEY_MODEL_OPENAI] }
+
     /** Audit H3 — try encrypted-format first, fall back to legacy
      *  plaintext when the value doesn't decode. Returns null for null
      *  inputs so empty Flows behave identically to the previous code. */
@@ -118,6 +132,27 @@ class LlmSettings(
         }
     }
 
+    suspend fun setClaudeModel(value: String?) {
+        store.edit {
+            if (value.isNullOrBlank()) it.remove(KEY_MODEL_CLAUDE)
+            else it[KEY_MODEL_CLAUDE] = value.trim()
+        }
+    }
+
+    suspend fun setGeminiModel(value: String?) {
+        store.edit {
+            if (value.isNullOrBlank()) it.remove(KEY_MODEL_GEMINI)
+            else it[KEY_MODEL_GEMINI] = value.trim()
+        }
+    }
+
+    suspend fun setOpenAiModel(value: String?) {
+        store.edit {
+            if (value.isNullOrBlank()) it.remove(KEY_MODEL_OPENAI)
+            else it[KEY_MODEL_OPENAI] = value.trim()
+        }
+    }
+
     suspend fun setSelectedProvider(p: LlmProvider) {
         store.edit { it[KEY_SELECTED] = p.name }
     }
@@ -141,6 +176,9 @@ class LlmSettings(
             claudeKey = claude,
             geminiKey = decode(prefs[KEY_GEMINI])?.takeIf { it.isNotBlank() },
             openAiKey = decode(prefs[KEY_OPENAI])?.takeIf { it.isNotBlank() },
+            claudeModel = prefs[KEY_MODEL_CLAUDE]?.takeIf { it.isNotBlank() },
+            geminiModel = prefs[KEY_MODEL_GEMINI]?.takeIf { it.isNotBlank() },
+            openAiModel = prefs[KEY_MODEL_OPENAI]?.takeIf { it.isNotBlank() },
             voiceEnabled = prefs[KEY_VOICE] ?: false,
         )
     }
@@ -150,12 +188,21 @@ class LlmSettings(
         val claudeKey: String?,
         val geminiKey: String?,
         val openAiKey: String?,
+        val claudeModel: String?,
+        val geminiModel: String?,
+        val openAiModel: String?,
         val voiceEnabled: Boolean,
     ) {
         fun keyFor(p: LlmProvider): String? = when (p) {
             LlmProvider.Claude -> claudeKey
             LlmProvider.Gemini -> geminiKey
             LlmProvider.OpenAI -> openAiKey
+        }
+
+        fun modelFor(p: LlmProvider): String? = when (p) {
+            LlmProvider.Claude -> claudeModel
+            LlmProvider.Gemini -> geminiModel
+            LlmProvider.OpenAI -> openAiModel
         }
 
         /** True when at least one provider has a key set. The chat
@@ -172,6 +219,9 @@ class LlmSettings(
         private val KEY_OPENAI = stringPreferencesKey("llm_openai_api_key")
         private val KEY_SELECTED = stringPreferencesKey("llm_selected_provider")
         private val KEY_VOICE = booleanPreferencesKey("llm_voice_enabled")
+        private val KEY_MODEL_CLAUDE = stringPreferencesKey("llm_claude_model")
+        private val KEY_MODEL_GEMINI = stringPreferencesKey("llm_gemini_model")
+        private val KEY_MODEL_OPENAI = stringPreferencesKey("llm_openai_model")
 
         @Volatile private var instance: LlmSettings? = null
 
