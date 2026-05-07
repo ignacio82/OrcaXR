@@ -200,38 +200,37 @@ android {
 }
 
 /**
- * Roadmap E9 — assert any libslic3r_jni.so under app/build/intermediates
- * was compiled with Clang ≥ 17. Reads each .so's `.comment` section
- * (which the linker preserves) via a streaming byte scan — no toolchain
- * dependencies, runs on every host. Fails the build with a pointer at
- * the gotcha so a future contributor doesn't downgrade NDK to "make
- * builds faster" and silently regress paint segmentation.
+ * Roadmap E9 — assert any libslic3r_jni.so under app/build/intermediates was compiled with Clang
+ * ≥ 17. Reads each .so's `.comment` section (which the linker preserves) via a streaming byte scan
+ * — no toolchain dependencies, runs on every host. Fails the build with a pointer at the gotcha so
+ * a future contributor doesn't downgrade NDK to "make builds faster" and silently regress paint
+ * segmentation.
  *
- * Wired as a `finalizedBy` of mergeDebugNativeLibs so the assertion
- * runs immediately after the .so lands in the merge output. We don't
- * gate `assembleDebug` directly because at -task-graph build time the
- * intermediates path doesn't exist yet — pinning to mergeDebug keeps
- * the order correct on a clean build.
+ * Wired as a `finalizedBy` of mergeDebugNativeLibs so the assertion runs immediately after the .so
+ * lands in the merge output. We don't gate `assembleDebug` directly because at -task-graph build
+ * time the intermediates path doesn't exist yet — pinning to mergeDebug keeps the order correct on
+ * a clean build.
  */
 val verifyNdkClangFloor by tasks.registering {
     group = "verification"
-    description = "Assert staged libslic3r_jni.so was built with Clang >= 17 (E9 / GEMINI gotcha 29)."
+    description =
+        "Assert staged libslic3r_jni.so was built with Clang >= 17 (E9 / GEMINI gotcha 29)."
     val intermediatesRoot = layout.buildDirectory.dir("intermediates").map { it.asFile }
     doLast {
         val root = intermediatesRoot.get()
-        val candidates = listOf(
-            // externalNativeBuild stages here.
-            File(root, "cxx"),
-            // mergeDebugNativeLibs / mergeReleaseNativeLibs land here.
-            File(root, "merged_native_libs"),
-        )
-        val sos = candidates
-            .filter { it.exists() }
-            .flatMap { dir ->
-                dir.walkTopDown()
-                    .filter { it.isFile && it.name == "libslic3r_jni.so" }
-                    .toList()
-            }
+        val candidates =
+            listOf(
+                // externalNativeBuild stages here.
+                File(root, "cxx"),
+                // mergeDebugNativeLibs / mergeReleaseNativeLibs land here.
+                File(root, "merged_native_libs"),
+            )
+        val sos =
+            candidates
+                .filter { it.exists() }
+                .flatMap { dir ->
+                    dir.walkTopDown().filter { it.isFile && it.name == "libslic3r_jni.so" }.toList()
+                }
         if (sos.isEmpty()) {
             // Nothing to verify yet — the JNI build may not have run.
             // Don't fail; the bash assert in scripts/build_native.sh
@@ -243,17 +242,18 @@ val verifyNdkClangFloor by tasks.registering {
         val FLOOR = 17
         for (so in sos) {
             val text = so.readBytes().toString(Charsets.ISO_8859_1)
-            val match = clangVersionRegex.find(text)
-                ?: throw GradleException(
-                    "verifyNdkClangFloor: ${so.name} carries no `clang version` marker — " +
-                        "was it built with a non-Clang toolchain? (See GEMINI.md gotcha §29.)",
-                )
+            val match =
+                clangVersionRegex.find(text)
+                    ?: throw GradleException(
+                        "verifyNdkClangFloor: ${so.name} carries no `clang version` marker — " +
+                            "was it built with a non-Clang toolchain? (See GEMINI.md gotcha §29.)"
+                    )
             val major = match.groupValues[1].toIntOrNull() ?: 0
             if (major < FLOOR) {
                 throw GradleException(
                     "verifyNdkClangFloor: ${so.name} was built with Clang $major (< $FLOOR). " +
                         "libslic3r's paint segmentation miscompiles on Clang < 17 — see " +
-                        "GEMINI.md gotcha §29 (u1-slicer B62). Update NDK to >= r26b and rebuild.",
+                        "GEMINI.md gotcha §29 (u1-slicer B62). Update NDK to >= r26b and rebuild."
                 )
             }
             logger.lifecycle("verifyNdkClangFloor: ${so.name} OK (Clang $major).")
