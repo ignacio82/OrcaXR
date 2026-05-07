@@ -147,23 +147,27 @@ internal object PaintRecipeTools {
             val modelId = args.optString("model_id").trim()
             val m = ws.placedModels.value.firstOrNull { it.id == modelId }
                 ?: return ToolResult.error("No model with id '$modelId'.")
-            // Need the model's tri count for the restore call. Use
-            // any existing paint array, or fall back to inspecting
-            // an empty array via a probe restore (PaintCacheStore
-            // returns null on triCount mismatch).
+            // Audit H11 (2026-05-07) — we used to require existing
+            // paint state on the model just to learn the tri count
+            // (and tell the user "paint a single stroke first"). Gross
+            // UX. The BVH is the ground truth: its `triCount` matches
+            // the model's mesh exactly, regardless of whether the user
+            // has touched it. Fall back to it when no paint array is
+            // present yet, then let the recipe-vs-bvh tri-count guard
+            // surface a real mismatch ("recipe was authored on a
+            // different mesh") instead of a fake "you must paint
+            // first" requirement.
             val triCount = m.paintFilamentIndex?.size
                 ?: m.supportFlags?.size
                 ?: m.seamFlags?.size
                 ?: m.fuzzySkinFlags?.size
-                // No paint state yet — try the recipe's own tri
-                // count, will mismatch later if the model is
-                // different.
+                ?: ws.getBvh(modelId)?.triCount
                 ?: -1
             if (triCount < 0) {
                 return ToolResult.error(
-                    "Model '$modelId' has no paint state yet; the load tool needs at least one " +
-                        "PaintTriangleSet first to learn the tri count. Workaround: paint a single " +
-                        "stroke, then load_paint_recipe.",
+                    "Model '$modelId' has no paint state and no BVH built yet. Re-select the " +
+                        "model in paint mode (which builds the BVH lazily) and retry, or call any " +
+                        "other paint tool first to warm the BVH.",
                 )
             }
             val entry = store.restore(name, triCount)

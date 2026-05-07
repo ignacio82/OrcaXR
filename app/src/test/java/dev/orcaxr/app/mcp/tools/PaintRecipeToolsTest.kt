@@ -114,6 +114,31 @@ class PaintRecipeToolsTest {
         assertEquals(4, action.paintFilamentIndex!![3].toInt())
     }
 
+    /**
+     * Audit H11 — a model with no paint state used to fail
+     * `load_paint_recipe` with "paint a single stroke first."
+     * With the BVH-provider fallback, the error is now about the BVH
+     * not being built — which is the actual root cause and points at
+     * the right next step (re-select in paint mode).
+     */
+    @Test fun loadOnUnpaintedModelFailsWithBvhMessage() = runTest {
+        // Place a model with NO paint arrays.
+        ws.publishPlacedModels(listOf(PlacedModel(
+            id = modelId, source = File("/dev/null"), label = "test",
+        )))
+        val res = PaintRecipeTools.LoadPaintRecipe(ws, store).call(JSONObject().apply {
+            put("name", "anything"); put("model_id", modelId)
+        })
+        assertTrue("load on unpainted+no-BVH model should error", res.isError)
+        // The error message must point at the BVH path, not the old
+        // "paint a stroke first" fallback the audit called gross UX.
+        val msg = res.text
+        assertTrue(
+            "expected BVH-related error message, got: $msg",
+            msg.contains("BVH") || msg.contains("paint mode"),
+        )
+    }
+
     @Test fun loadFailsOnTriCountMismatch() = runTest {
         primeModel(triCount = 100)
         PaintRecipeTools.SavePaintRecipe(ws, store).call(JSONObject().apply {
