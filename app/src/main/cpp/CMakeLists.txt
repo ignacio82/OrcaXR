@@ -36,6 +36,34 @@ if (ORCAXR_ASAN)
     add_link_options(-fsanitize=address)
 endif()
 
+# Audit H15 (2026-05-07) — hardening flags for the in-tree JNI shim.
+# Apply via add_compile_options so they hit slic3r_jni.cpp,
+# nanosvg_impl.cpp, and thumbnail_render.cpp; the libslic3r static
+# archives are pre-built upstream and aren't reached by these flags
+# (their hardening is libslic3r's concern). Defense-in-depth against
+# format-string bugs / stack-smashing in the shim's argument parsing
+# and ByteArray/JNI marshalling — every JNI entry takes attacker-
+# influenced bytes (model files, paint masks, gcode paths).
+#
+# - `-Wformat=2 -Wformat-security` — surface non-literal format
+#   strings at compile time. Cheap, no runtime cost.
+# - `-fstack-protector-strong` — emit canaries on functions that take
+#   a buffer-sized array or address-of-local. ABI-stable, ~1% perf.
+# - `-D_FORTIFY_SOURCE=2` — replace memcpy / strcpy / sprintf with
+#   bounds-checked variants when the compiler can prove the size.
+#   No-op at -O0 (debug); active at -O1+ which AGP uses for release.
+# - `-fstack-clash-protection` — probe the stack page-by-page so a
+#   pathological allocation can't jump the guard page. Available on
+#   AArch64 since clang 12; we pin Clang ≥ 17 (gotcha #29) so always
+#   present.
+add_compile_options(
+    -Wformat=2
+    -Wformat-security
+    -fstack-protector-strong
+    -D_FORTIFY_SOURCE=2
+    -fstack-clash-protection
+)
+
 # OrcaXR Android: tbb's scalable_malloc/scalable_free appear to be
 # broken on Android arm64 — vectors using `tbb::scalable_allocator<X>`
 # (notably Slic3r::Points = vector<Point, scalable_allocator<Point>>)
@@ -186,6 +214,24 @@ set(ORCAXR_STATIC_ARCHIVES
     ${ORCAXR_OCCT_LIBS}
 )
 
+# Audit H15 — assert the `__wrap_scalable_*` trampolines (gotcha #18 —
+# tbb::scalable_malloc miscompiles on Android arm64) actually landed
+# in the linked .so. A future `lld` change could silently break the
+# `-Wl,--wrap=` mechanism (e.g. if symbol pre-mangling diverges); the
+# slicer would then crash deep inside the MMU pipeline with no
+# obvious signal pointing back at the link wrapping. Run `nm` on the
+# output .so and require all 8 wrap symbols to be present. Fast
+# (single nm call); no toolchain dependencies beyond what AGP already
+# pulls.
+function(orcaxr_assert_wrap_symbols target)
+    add_custom_command(TARGET ${target} POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+            -DSO_PATH=$<TARGET_FILE:${target}>
+            -DCMAKE_NM=${CMAKE_NM}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/assert_wrap_symbols.cmake
+        VERBATIM)
+endfunction()
+
 target_link_libraries(slic3r_jni PRIVATE
     # --whole-archive for libslic3r.a was tempting (grab all 58k symbols
     # regardless of what the shim calls today), but it drags in 4
@@ -213,3 +259,9 @@ target_link_libraries(slic3r_jni PRIVATE
     z
     m
 )
+
+# Audit H15 — register the wrap-symbol assertion for slic3r_jni. Done
+# AFTER target_link_libraries so the link command has been registered
+# (the POST_BUILD command attaches to the link step, not the compile
+# step).
+orcaxr_assert_wrap_symbols(slic3r_jni)
