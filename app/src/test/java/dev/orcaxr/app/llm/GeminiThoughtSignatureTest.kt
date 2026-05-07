@@ -35,7 +35,14 @@ class GeminiThoughtSignatureTest {
     private val sut = GeminiLlmClient(apiKey = "test-key-not-used")
 
     @Test
-    fun toolCallWithSignatureSerializesToBothShapes() {
+    fun toolCallWithSignatureLandsOnOuterPartOnly() {
+        // 2026-05-08: the field 400 evolved twice. First Gemini said
+        // "missing thought_signature" → we added it. Then it said
+        //   `Unknown name "thoughtSignature" at
+        //     contents[N].parts[M].function_call: Cannot find field`
+        // when we put the signature INSIDE the functionCall object.
+        // The corrected shape: outer part only, never on the inner
+        // functionCall.
         val sig = "abc123_signature_blob"
         val history =
             listOf(
@@ -60,19 +67,18 @@ class GeminiThoughtSignatureTest {
         assertEquals(1, modelParts.length())
         val part = modelParts.getJSONObject(0)
 
-        // Signature is required on the outer part (current Gemini API
-        // shape) AND mirrored on the inner functionCall object (older
-        // shape, kept for robustness against API rotation).
+        // Outer part carries the signature.
         assertEquals(
             "outer part signature",
             sig,
             part.getString("thoughtSignature"),
         )
+        // Inner functionCall must NOT carry it — Gemini's schema
+        // validator rejects the nested placement.
         val fc = part.getJSONObject("functionCall")
-        assertEquals(
-            "inner functionCall signature",
-            sig,
-            fc.getString("thoughtSignature"),
+        assertTrue(
+            "inner functionCall must NOT carry signature",
+            !fc.has("thoughtSignature"),
         )
         assertEquals("name preserved", "get_workspace_state", fc.getString("name"))
     }

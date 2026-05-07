@@ -350,20 +350,26 @@ internal class GeminiLlmClient(
                     val parts = JSONArray()
                     if (!turn.text.isNullOrBlank()) parts.put(JSONObject().put("text", turn.text))
                     for (c in turn.toolCalls) {
-                        // Gemini 3 / 2.5 thinking models embed a
-                        // thoughtSignature on each functionCall part
-                        // and require the same signature back on the
-                        // next-turn replay. The signature lives on the
-                        // OUTER part object (next to "functionCall"),
-                        // not inside the functionCall object — both
-                        // shapes have shipped historically; the outer
-                        // form is current. Send both for robustness.
+                        // Gemini 3 / 2.5 thinking models attach a
+                        // thoughtSignature to every emitted functionCall
+                        // part. On the next-turn replay it MUST sit on
+                        // the OUTER part object (next to "functionCall"),
+                        // not inside the functionCall object — Google's
+                        // schema validator rejects the inner placement
+                        // with `Unknown name "thoughtSignature" at
+                        // contents[N].parts[M].function_call: Cannot
+                        // find field`. The defensive both-shapes write
+                        // we tried first explicitly hits that 400; this
+                        // is the corrected single-shape write.
                         val sig = c.providerMeta?.optString("thoughtSignature")?.ifBlank { null }
                         val partObj = JSONObject().apply {
-                            put("functionCall", JSONObject().apply {
-                                put("name", c.name); put("args", c.args)
-                                if (sig != null) put("thoughtSignature", sig)
-                            })
+                            put(
+                                "functionCall",
+                                JSONObject().apply {
+                                    put("name", c.name)
+                                    put("args", c.args)
+                                },
+                            )
                             if (sig != null) put("thoughtSignature", sig)
                         }
                         parts.put(partObj)
