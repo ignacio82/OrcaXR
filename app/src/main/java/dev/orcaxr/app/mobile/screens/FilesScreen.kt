@@ -80,11 +80,43 @@ fun FilesScreen(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
         if (uri != null) {
+            // Audit H_PIXEL10 (2026-05-07) — wrap the import body in
+            // runCatching so a single bad URI / DataStore IOException
+            // / staging-timeout doesn't crash the process. Coroutine
+            // failures inside `rememberCoroutineScope().launch` reach
+            // the dispatcher's default handler (Thread uncaught →
+            // CrashReporter → OS kill); the user just sees the app
+            // close. Surface the failure as a Toast and a recoverable
+            // log line instead.
             scope.launch {
-                val staged = stageUriBounded(ctx, uri)
-                if (staged != null) {
-                    app.recentFiles.add(staged)
-                    onOpenInSlicer(staged.absolutePath)
+                runCatching {
+                    val staged = stageUriBounded(ctx, uri)
+                    if (staged != null) {
+                        app.recentFiles.add(staged)
+                        onOpenInSlicer(staged.absolutePath)
+                        true
+                    } else {
+                        false
+                    }
+                }.onSuccess { loaded ->
+                    if (!loaded) {
+                        android.widget.Toast.makeText(
+                            ctx,
+                            "Unsupported or empty file — only STL / 3MF / OBJ / AMF / STEP up to 500 MB.",
+                            android.widget.Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                }.onFailure { t ->
+                    android.util.Log.w(
+                        "OrcaXR/files",
+                        "import failed for $uri: ${t.javaClass.simpleName}: ${t.message}",
+                        t,
+                    )
+                    android.widget.Toast.makeText(
+                        ctx,
+                        "Couldn't open file: ${t.javaClass.simpleName}: ${t.message ?: "unknown error"}",
+                        android.widget.Toast.LENGTH_LONG,
+                    ).show()
                 }
             }
         }

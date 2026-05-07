@@ -97,6 +97,12 @@ Currently single `:app` module. The split below is aspirational; do NOT create m
 :settings            DataStore-backed slicer profiles and presets
 ```
 
+## Phone/tablet shell — diagnostics and crash visibility
+
+The XR `MainActivity` and the phone/tablet `MobileActivity` share `OrcaXRApplication`, `CrashReporter`, and the libslic3r JNI bridge, but their crash-surfacing surfaces are NOT shared. `MainActivity` shows past-crash JSON via a Toast inside `setContent`; on phones, `MainActivity.onCreate` forwards to `MobileActivity` and `finish()`s before reaching `setContent`, so that Toast never fires. **Anything user-visible that has to survive a crash → restart cycle on the phone path must live inside `MobileShell` (or earlier in `OrcaXRApplication`), not in `MainActivity`.** As of 2026-05-07, `MobileShell` renders `PastCrashDialog` once per process when `CrashReporter.scanPastCrashes` is non-empty; the dialog includes a Copy-to-clipboard action because phone users can't `adb pull` `filesDir/crashes/` without USB debugging (and even then only with a debug-built APK via `run-as`).
+
+Coroutine failures in `rememberCoroutineScope().launch` blocks (e.g. the file-import path in `FilesScreen`) propagate to the dispatcher's default handler, which on Android is `Thread.UncaughtExceptionHandler` → `CrashReporter` → OS kill. The user just sees "OrcaXR has stopped." Two defensive layers: (1) `OrcaXRApplication.appCoroutineExceptionHandler` is a process-singleton `CoroutineExceptionHandler` that records via `CrashReporter.recordCrash` then rethrows, so coroutine crashes look identical to thread crashes in the on-disk JSON; (2) every `scope.launch { ... }` body that does IO / DataStore / JNI work must wrap in `runCatching { ... }.onFailure { Toast … }` so a single bad file doesn't crash the process. The FilesScreen import flow is the canonical pattern.
+
 ## Jetpack XR rendering gotchas
 
 1. **`SpatialPanel` does not render in Home Space.** A `Subspace { SpatialPanel { Compose UI } }` placed inside an Activity that's still in *Home Space* mode produces a panel frame with system chrome but a **solid black content surface**. Call `session.scene.requestFullSpaceMode()` from a `LaunchedEffect(session)` keyed on the Session before any Subspace work depends on the panel being visible.

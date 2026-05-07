@@ -266,9 +266,18 @@ private fun PreviewCard(filePath: String, fillRemaining: Boolean) {
     var bvhCache by remember(filePath) { mutableStateOf<MeshBvh?>(null) }
     var rendering by remember(filePath) { mutableStateOf(true) }
     var cameraName by remember(filePath) { mutableStateOf("iso") }
+    // Audit H_PIXEL10 (2026-05-07) — surface the actual exception
+    // class + message when the preview pipeline fails. Phone users
+    // can't see logcat or the past-crash JSON without adb, so a
+    // silent "Preview unavailable" is a dead end. Showing the real
+    // failure (e.g. `nativeConvertToStl: read failed: bad zip
+    // archive`, `OutOfMemoryError`, `UnsatisfiedLinkError: ...`)
+    // lets the user share the exact failure.
+    var loadError by remember(filePath) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(filePath) {
         rendering = true
+        loadError = null
         runCatching {
             val source = File(filePath)
             // Convert non-STL to STL through libslic3r so StlReader can read it.
@@ -277,13 +286,25 @@ private fun PreviewCard(filePath: String, fillRemaining: Boolean) {
             } else {
                 val derived = File(ctx.cacheDir, "mobile_preview_${source.nameWithoutExtension}.stl")
                 val ok = withContext(Dispatchers.IO) { SlicerEngine.convertToStl(source, derived) }
-                if (ok) derived else source
+                if (!ok) {
+                    error(
+                        "libslic3r could not read ${source.name} — the file may be " +
+                            "corrupt, unsupported, or a 3MF that requires Bambu / Orca " +
+                            "metadata that's missing.",
+                    )
+                }
+                derived
             }
             val mesh = withContext(Dispatchers.IO) { StlReader.read(stl) }
+            if (mesh.triCount == 0) error("STL has 0 triangles — the file is empty or unparseable.")
             val bvh = withContext(Dispatchers.Default) { MeshBvh.build(mesh) }
             bvhCache = bvh
             summary = withContext(Dispatchers.Default) { AiIntrospection.geometry(bvh) }
-        }.onFailure { it.printStackTrace() }
+        }.onFailure {
+            it.printStackTrace()
+            loadError = "${it.javaClass.simpleName}: ${it.message ?: "no message"}"
+            rendering = false
+        }
     }
 
     LaunchedEffect(bvhCache, cameraName) {
@@ -317,6 +338,7 @@ private fun PreviewCard(filePath: String, fillRemaining: Boolean) {
                 contentAlignment = Alignment.Center,
             ) {
                 val bmp = renderBitmap
+                val err = loadError
                 if (bmp != null) {
                     Image(
                         bitmap = bmp.asImageBitmap(),
@@ -324,6 +346,28 @@ private fun PreviewCard(filePath: String, fillRemaining: Boolean) {
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize(),
                     )
+                } else if (err != null) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(20.dp),
+                    ) {
+                        Text(
+                            "Preview failed",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        Text(
+                            err,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            "You can still try to slice — the preview path is independent of the slicer pipeline.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 } else if (rendering) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         LinearProgressIndicator(modifier = Modifier.width(120.dp))

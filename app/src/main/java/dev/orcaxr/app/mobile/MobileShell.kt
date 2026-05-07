@@ -2,6 +2,8 @@ package dev.orcaxr.app.mobile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -102,6 +104,30 @@ fun MobileShell(
         CompositionLocalProvider(LocalMobileAppState provides appState) {
             BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
                 val isTablet = maxWidth >= 600.dp
+
+                // Past-crash surface. Snapshotted at first composition
+                // so dismissing doesn't re-trigger if CrashReporter
+                // writes a new file mid-session. Phone users have no
+                // adb / no past-crash banner in MainActivity (they're
+                // forwarded to MobileActivity before MainActivity's
+                // setContent runs), so without this dialog a crash is
+                // invisible to the user. The dialog renders the latest
+                // crash's exception type + message + stack-head and
+                // offers Copy-to-clipboard so the user can paste the
+                // detail into a bug report.
+                val pastCrashes = remember {
+                    dev.orcaxr.app.CrashReporter.scanPastCrashes(appState.app)
+                }
+                var crashDialogDismissed by rememberSaveable { mutableStateOf(false) }
+                if (pastCrashes.isNotEmpty() && !crashDialogDismissed) {
+                    PastCrashDialog(
+                        files = pastCrashes,
+                        onDismiss = {
+                            dev.orcaxr.app.CrashReporter.clearPastCrashes(appState.app)
+                            crashDialogDismissed = true
+                        },
+                    )
+                }
 
                 var dest by rememberSaveable { mutableStateOf(MobileDestination.Home) }
                 var slicerFilePath by rememberSaveable { mutableStateOf<String?>(null) }
@@ -549,3 +575,106 @@ fun MobileTopBar(
 
 /** Used inside ScreenContent to supply default content padding. */
 val MobileScreenPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp)
+
+/**
+ * Past-crash detail dialog for the mobile shell. Phone users can't
+ * `adb pull` the JSON files the CrashReporter writes under
+ * filesDir/crashes/, so we render the latest crash inline with a
+ * Copy-to-clipboard action. Same trigger condition as MainActivity's
+ * PastCrashBanner toast — only shows when there's at least one
+ * crash file from a prior process. Dismissing clears the on-disk
+ * files so the dialog doesn't haunt subsequent launches.
+ */
+@Composable
+private fun PastCrashDialog(
+    files: List<java.io.File>,
+    onDismiss: () -> Unit,
+) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val latest = files.firstOrNull() ?: return
+    val parsed = remember(latest) { dev.orcaxr.app.CrashReporter.readCrash(latest) }
+    val exceptionClass = parsed?.optString("exception", "") ?: ""
+    val message = parsed?.optString("message", "") ?: ""
+    val stackHead = (parsed?.optString("stack", "") ?: "").lineSequence().take(12).joinToString("\n")
+    val device = parsed?.optString("device", "") ?: ""
+    val androidVersion = parsed?.optString("androidVersion", "") ?: ""
+    val versionName = parsed?.optString("versionName", "") ?: ""
+    val timestamp = parsed?.optString("timestamp", "") ?: ""
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            androidx.compose.material3.TextButton(
+                onClick = {
+                    val full = runCatching { latest.readText() }.getOrDefault(parsed?.toString(2) ?: "")
+                    clipboard.setText(androidx.compose.ui.text.AnnotatedString(full))
+                    android.widget.Toast.makeText(ctx, "Crash JSON copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                },
+            ) { Text("Copy") }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Dismiss") }
+        },
+        title = { Text("OrcaXR crashed last session") },
+        text = {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (files.size > 1) {
+                    Text(
+                        "${files.size} crash files; showing the most recent.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (exceptionClass.isNotBlank()) {
+                    Text(
+                        exceptionClass,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                if (message.isNotBlank()) {
+                    Text(
+                        message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                if (stackHead.isNotBlank()) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            stackHead,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = dev.orcaxr.app.ui.JetBrainsMono,
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(8.dp),
+                        )
+                    }
+                }
+                Text(
+                    buildString {
+                        if (versionName.isNotBlank()) append("OrcaXR $versionName · ")
+                        if (androidVersion.isNotBlank()) append("Android $androidVersion · ")
+                        if (device.isNotBlank()) append(device)
+                        if (timestamp.isNotBlank()) {
+                            if (isNotEmpty()) append('\n')
+                            append(timestamp)
+                        }
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    )
+}
