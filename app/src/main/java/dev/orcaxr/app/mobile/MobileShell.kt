@@ -145,6 +145,28 @@ fun MobileShell(
                 var slicerTransform by remember { mutableStateOf(dev.orcaxr.app.SlicerEngine.ModelPlacement()) }
                 var llmAssistantOpen by rememberSaveable { mutableStateOf(false) }
 
+                // Wire the WorkspaceModel singleton on mobile too, so
+                // MCP tools dispatched from the in-app assistant don't
+                // fail with "OrcaXR's main window isn't currently
+                // attached." Only LoadModelFromPath is wired for now;
+                // other Tier-B capabilities fall through to the tool's
+                // requireCapability gate and surface a clear "callback
+                // not wired" error to the LLM until they're hooked up.
+                BindMobileWorkspaceModel(
+                    selectedProfile = null,
+                    slicerFilePath = slicerFilePath,
+                    onLoadModelFromPath = { path ->
+                        slicerFilePath = path
+                        slicerOutputPath = null
+                        slicerPaintIndex = null
+                        slicerTransform = dev.orcaxr.app.SlicerEngine.ModelPlacement()
+                        dest = MobileDestination.Slicer
+                        // Close the assistant takeover so the user
+                        // sees the loaded model in the slicer screen.
+                        llmAssistantOpen = false
+                    },
+                )
+
                 // Onboarding gating: until at least one printer exists,
                 // route to the Onboarding flow regardless of `dest`.
                 val printersList by appState.printers.printers.collectAsState(
