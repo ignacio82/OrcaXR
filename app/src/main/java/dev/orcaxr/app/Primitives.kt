@@ -56,6 +56,17 @@ enum class PrimitiveKind(
         paramNames = listOf("radius_mm", "thickness_mm", "facet_angle_deg"),
         defaults = floatArrayOf(15f, 1f, 2f),
     ),
+    /**
+     * Audit H24 (2026-05-07): a SLAB is a rectangular prism with
+     * non-uniform dimensions (default 40×40×2 mm = a flat tile). It
+     * is NOT a placeholder cube — the cube primitive is a separate
+     * kind ([CUBE]) and the JNI dispatches them via different default
+     * values, not different mesh generators. If we ever want a
+     * non-prism slab (chamfered edges, fillet), add a new
+     * `CHAMBERED_SLAB` kind rather than mutating this one — callers
+     * persist primitives by `nativeOrdinal` and a silent shape change
+     * would re-bake their saved geometry.
+     */
     SLAB(
         nativeOrdinal = 6,
         displayName = "Slab",

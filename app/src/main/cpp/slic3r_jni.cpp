@@ -6004,7 +6004,18 @@ Java_dev_orcaxr_app_SlicerEngine_nativeBuildPrimitiveStl(
                 its = Slic3r::its_make_cylinder(r, h, fa);
                 break;
             }
-            case 6: { // SLAB — cube for now
+            case 6: { // SLAB — rectangular prism (flat tile/plate)
+                // Audit H24 (2026-05-07): the previous "// cube for now"
+                // comment misled the audit into flagging this as a
+                // placeholder. It isn't — a SLAB is intentionally a
+                // rectangular prism with non-uniform dimensions (the
+                // Kotlin defaults are 40×40×2 mm = a flat tile). The
+                // shape is RIGHT; only the comment was wrong. If we
+                // ever want a non-prism slab (chamfered edges, fillet,
+                // etc.), introduce a separate CHAMBERED_SLAB kind
+                // rather than mutating this one — callers persist
+                // primitives by ordinal and a silent shape change
+                // would re-bake their saved geometry.
                 if (!need(3)) return -1;
                 const double x = std::max(0.001, (double)params[0]);
                 const double y = std::max(0.001, (double)params[1]);
