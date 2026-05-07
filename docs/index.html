@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OrcaXR — XR-native 3D printing slicer for Android XR</title>
-    <meta name="description" content="OrcaXR is an XR-native 3D printing slicer for Android XR. Plate at 1:1 in your room, slice with libslic3r on-device, paint multi-color in mid-air, drive everything from an LLM over MCP, and send straight to Klipper/Moonraker.">
+    <title>OrcaXR — XR-native 3D printing slicer for Android XR, phones, and tablets</title>
+    <meta name="description" content="OrcaXR is an XR-native 3D printing slicer built for Android XR — and it also runs on Android phones and tablets. Plate at 1:1 in your room (or at desk-scale on your phone), slice with libslic3r on-device, paint multi-color, drive everything from an LLM over MCP, and send straight to Klipper/Moonraker.">
     <meta name="theme-color" content="#000B1E">
     <link rel="canonical" href="https://ignacio82.github.io/OrcaXR/">
     <link rel="stylesheet" href="style.css">
@@ -17,15 +17,15 @@
     <!-- Open Graph -->
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="OrcaXR">
-    <meta property="og:title" content="OrcaXR — XR-native 3D printing slicer">
-    <meta property="og:description" content="Plate at 1:1 in your room, slice on-device with libslic3r, paint multi-color in mid-air, drive it from an LLM, send to Klipper/Moonraker. Open source, AGPL-3.0.">
+    <meta property="og:title" content="OrcaXR — XR-native 3D printing slicer (also on phone and tablet)">
+    <meta property="og:description" content="Built for Android XR — also runs on Android phones and tablets. Slice on-device with libslic3r, paint multi-color, drive it from an LLM, send to Klipper/Moonraker. Open source, AGPL-3.0.">
     <meta property="og:image" content="https://ignacio82.github.io/OrcaXR/images/feature.png">
     <meta property="og:url" content="https://ignacio82.github.io/OrcaXR/">
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="OrcaXR — XR-native 3D printing slicer">
-    <meta name="twitter:description" content="Plate at 1:1 in your room, slice on-device with libslic3r, paint multi-color in mid-air, drive it from an LLM, send to Klipper/Moonraker. Open source, AGPL-3.0.">
+    <meta name="twitter:title" content="OrcaXR — XR-native 3D printing slicer (also on phone and tablet)">
+    <meta name="twitter:description" content="Built for Android XR — also runs on Android phones and tablets. Slice on-device with libslic3r, paint multi-color, drive it from an LLM, send to Klipper/Moonraker. Open source, AGPL-3.0.">
     <meta name="twitter:image" content="https://ignacio82.github.io/OrcaXR/images/feature.png">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -64,9 +64,10 @@
                 <p class="eyebrow">The future of 3D printing is spatial</p>
                 <h1>Slice your models in the space they'll live.</h1>
                 <p class="hero-lead">
-                    OrcaXR is built spatial-first for Android XR: plate at 1:1 in your room, paint
-                    multi-color in mid-air, drive every action from an LLM over MCP, and ship straight
-                    to Klipper over your LAN — powered by a native arm64-v8a build of <code>libslic3r</code>.
+                    OrcaXR is built spatial-first for Android XR — and runs on Android phones and tablets too.
+                    Plate at 1:1 in your room or at desk-scale on your phone, paint multi-color, drive
+                    every action from an LLM over MCP, and ship straight to Klipper over your LAN —
+                    powered by a native arm64-v8a build of <code>libslic3r</code>.
                 </p>
                 <div class="hero-buttons">
                     <a href="#early-access" class="btn btn-primary">Get early access</a>
@@ -74,6 +75,7 @@
                 </div>
                 <div class="hero-highlights" aria-label="Key features">
                     <span>Spatial UI/UX</span>
+                    <span>Phone &amp; tablet shell</span>
                     <span>libslic3r engine</span>
                     <span>Multi-color paint</span>
                     <span>AI-driven paint</span>
@@ -273,14 +275,27 @@
                 <div class="compat-grid reveal">
                     <article class="compat-card">
                         <header>
-                            <span class="compat-kicker">Headsets</span>
-                            <h3>Android XR</h3>
+                            <span class="compat-kicker">Primary</span>
+                            <h3>Android XR headsets</h3>
                         </header>
                         <ul>
                             <li><strong>Samsung Galaxy XR</strong> — primary target</li>
                             <li>Other Google Android XR devices</li>
                         </ul>
                         <p class="compat-note">Built on Jetpack XR (SceneCore + ARCore for XR).</p>
+                    </article>
+
+                    <article class="compat-card">
+                        <header>
+                            <span class="compat-kicker">Also supported</span>
+                            <h3>Phones &amp; tablets</h3>
+                        </header>
+                        <ul>
+                            <li>Any Android phone or tablet on Android 12+</li>
+                            <li>Adaptive Material 3 shell — bottom nav on phones, nav rail on tablets</li>
+                            <li>Interactive OpenGL ES 3 bed + model viewer (orbit, pinch zoom, drag-to-move)</li>
+                        </ul>
+                        <p class="compat-note">Same APK, same libslic3r core, same MCP server — the shell adapts to the device.</p>
                     </article>
 
                     <article class="compat-card">
@@ -304,7 +319,7 @@
                         <ul>
                             <li>Direct USB / serial connections</li>
                             <li>Cloud-only printer accounts (Bambu Cloud, etc.)</li>
-                            <li>Phone or tablet form factors — XR-only</li>
+                            <li>Android &lt; 12 (API 31)</li>
                         </ul>
                         <p class="compat-note">By design: keep the surface area focused while the project is young.</p>
                     </article>
@@ -399,8 +414,8 @@
                     </div>
                     <div class="step">
                         <div class="step-number">3</div>
-                        <h3>Install on your XR</h3>
-                        <p>Download OrcaXR directly from the official store. Automatic updates included.</p>
+                        <h3>Install on your device</h3>
+                        <p>Download OrcaXR directly from the official store onto your XR headset, phone, or tablet. Automatic updates included.</p>
                         <div class="button-group">
                             <a href="https://play.google.com/store/apps/details?id=dev.orcaxr.app&hl=en-US&ah=Sws62p-L-952WMSMkYcxOBzrkLU" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Install on Play Store</a>
                             <a href="https://github.com/ignacio82/OrcaXR/releases" class="btn-aside" target="_blank" rel="noopener noreferrer" style="text-decoration: underline;">Or sideload APK</a>

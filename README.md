@@ -2,9 +2,11 @@
 
 ![OrcaXR Mascot](app/src/main/res/drawable/echo.png)
 
-**OrcaXR** is the world's first XR-native 3D printing slicer, built specifically for **Android XR** (Samsung Galaxy XR and the Google Android XR platform).
+**OrcaXR** is the world's first XR-native 3D printing slicer, built primarily for **Android XR** (Samsung Galaxy XR and the Google Android XR platform) — and also runs on Android **phones and tablets** with an adaptive Material 3 shell so you can plate, paint, slice, and send to your printer from whatever device is in your hand.
 
 Instead of a 2D port of a desktop application, OrcaXR provides a ground-up spatial experience. It combines the powerful **libslic3r** engine from [OrcaSlicer](https://github.com/SoftFever/OrcaSlicer) with a modern, immersive Jetpack Compose XR interface — and exposes every action over a local **Model Context Protocol (MCP) server** so an LLM can drive the slicer end-to-end with natural language.
+
+On a phone or tablet (no XR session) the app falls back to a Compose Material 3 navigation shell with the same on-device libslic3r core, an interactive OpenGL ES 3 bed + model viewer (orbit, pinch zoom, drag-to-move), the same printer connectivity, and the same MCP server.
 
 ---
 
@@ -64,13 +66,23 @@ Instead of a 2D port of a desktop application, OrcaXR provides a ground-up spati
 *   **Voice → MCP** — Android `SpeechRecognizer` → regex-based `VoiceIntent` → `WorkspaceAction` for hands-free slicing, mode switching, and printer control.
 *   **Image transport** — render artifacts streamed over `GET /resources/<token>.png` so a remote LLM with `WebFetch` can see the model.
 
+### Phone & tablet shell
+*   **Adaptive Material 3 navigation** — bottom nav on phones, navigation rail on tablets, nine destinations (Home / Slicer / Files / Monitor / Filament / Profiles / Settings / Paint / G-code preview).
+*   **Interactive OpenGL ES 3 viewer** — bed sized from the active profile's `printable_area`, 10 mm minor + 50 mm major grid, single-finger orbit, pinch zoom, two-finger pan, and a "Move model" toggle that turns single-finger drag into translate-on-bed (drag deltas write straight back into the transform sliders so the two stay in sync).
+*   **Camera presets** — Iso / Front / Right / Back / Left / Top / Reset chips that snap the GL camera to a known viewpoint.
+*   **Same engine, same MCP, same printer flow** — every libslic3r call, every Moonraker upload, every MCP tool that runs on XR also runs on phone/tablet; the shell is the only thing that changes.
+*   **Share-target import** — open `.stl` / `.3mf` / `.obj` from any app (browser, MakerWorld, Bambu Handy) and OrcaXR routes you straight to the Slicer screen with the file pre-loaded.
+
 ### Configuration & breadth
 *   **Bundled profiles** — Snapmaker U1 (0.2 / 0.4 / 0.6 / 0.8 mm nozzles) + Elegoo Centauri Carbon (0.2 / 0.4 mm); branded filament leaves for PLA / PLA-CF / PLA Matte / PLA Eco / PLA Silk / PLA Metal / ABS / ASA / PETG / PETG-CF + generic PLA/ABS/PETG.
 *   **Settings backup / restore** as JSON — survives device wipes, syncs across two headsets, exposed as MCP tools too.
 
 ## Prerequisites
 
-*   **Hardware:** Samsung Galaxy XR headset or another Android XR compatible device (compileSdk 37, targetSdk 35, minSdk 31).
+*   **Hardware:**
+    *   **Primary:** Samsung Galaxy XR headset or another Android XR compatible device.
+    *   **Also supported:** Android phones and tablets — the same APK detects when no XR session is available and falls back to a Material 3 nav shell with an interactive OpenGL ES 3 bed + model viewer (orbit, pinch zoom, drag-to-move).
+    *   `compileSdk 37, targetSdk 35, minSdk 31` (Android 12 and newer).
 *   **Printer:** Klipper-based printers with Moonraker (e.g. Snapmaker U1, Elegoo Centauri Carbon). *Serial / USB / vendor-cloud connections are not supported and are out of scope.*
 
 ## Getting Started
