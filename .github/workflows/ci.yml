@@ -1,0 +1,97 @@
+# Audit H17 (2026-05-07) — minimum-viable PR gate. Three jobs in parallel:
+#   - test: gradlew :app:testDebugUnitTest (the 800+ unit tests)
+#   - format: ktfmt --kotlinlang-style check
+#   - secrets: gitleaks scan of the diff vs main
+#
+# What we deliberately DON'T do here:
+#   - Build the APK (slow; covered by the assembleDebug job below for main only)
+#   - Run androidTest (needs an Android emulator + 4 GB RAM, dramatically
+#     slower than unit tests; defer to a manual / nightly job)
+#   - Compile the JNI libslic3r against arm64 (requires the NDK + a 30+ min
+#     submodule build; the prebuilt .so under app/src/main/jniLibs/ is the
+#     contract for unit-test consumers)
+#
+# The unit-test corpus already covers the slicer, paint, MCP, and HTTP
+# framing layers via Robolectric-free pure-JVM tests. That's what the
+# audit findings (H1-H9, H19) actually exercised.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Unit tests (gradlew :app:testDebugUnitTest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false  # third_party/OrcaSlicer not needed for unit tests
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+      - name: Upload test report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: app/build/reports/tests/testDebugUnitTest/
+          retention-days: 7
+
+  format:
+    name: ktfmt --kotlinlang-style check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+      # `ktfmtCheck` is registered on every subproject by the root
+      # build.gradle.kts. Run on :app explicitly so a future module split
+      # doesn't silently widen the scope (or shrink it).
+      - name: ktfmt check
+        run: ./gradlew :app:ktfmtCheck --stacktrace
+
+  secrets:
+    name: gitleaks (secret scan)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # gitleaks needs history to scan the diff
+          submodules: false
+      # gitleaks-action mirrors TruffleHog's coverage but is faster on
+      # cold runs. Default config flags AWS / GCP / Slack tokens, generic
+      # "api[_-]?key" patterns, and PEM-encoded private keys. Audit H17
+      # specifically called out the Anthropic key (now encrypted at rest
+      # per H3) — gitleaks adds defense-in-depth in case a key ever lands
+      # in source by mistake.
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
