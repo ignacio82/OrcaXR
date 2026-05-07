@@ -206,6 +206,18 @@ internal class AiPaintSession internal constructor(
     @Volatile var lastTouchedAtMs: Long = createdAtMs
         private set
 
+    /**
+     * Audit H21 — test-only seam to set the LRU timestamp without
+     * sleeping for wall-clock ordering. Tests call this immediately
+     * after `begin()` to make eviction order deterministic. Production
+     * paths never call this; the public mutators (applyTriangleSet)
+     * stamp `System.currentTimeMillis()` inline.
+     */
+    @androidx.annotation.VisibleForTesting
+    internal fun setLastTouchedAtMsForTest(ms: Long) {
+        lastTouchedAtMs = ms
+    }
+
     /** Bumped on every mutation. Vision tools include this in their
      *  cache key so a re-render after a paint always misses the
      *  artifact cache. */

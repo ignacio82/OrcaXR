@@ -160,12 +160,14 @@ class AiPaintSessionStoreTest {
     @Test fun lruEvictsOldestWhenAtCap() {
         val store = AiPaintSessionStore()
         val ids = ArrayList<String>()
-        // Fill to MAX_SESSIONS + 2 and verify we have exactly MAX_SESSIONS.
+        // Audit H21 — instead of Thread.sleep(2) per insert (flaky on
+        // overloaded CI when two iterations land in the same ms),
+        // stamp `lastTouchedAtMs` explicitly so eviction order is
+        // deterministic and the test runs in <1 ms.
         for (i in 0 until AiPaintSessionStore.MAX_SESSIONS + 2) {
             val s = store.begin("m$i", 1, null, null, null, null)
+            s.setLastTouchedAtMsForTest(1000L + i)
             ids.add(s.id)
-            // Force timestamp ordering to be deterministic.
-            Thread.sleep(2)
         }
         assertEquals(AiPaintSessionStore.MAX_SESSIONS, store.all().size)
         // Oldest two should be evicted.
