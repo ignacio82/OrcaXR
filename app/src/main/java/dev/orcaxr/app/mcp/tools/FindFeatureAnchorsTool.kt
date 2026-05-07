@@ -242,6 +242,12 @@ internal class OkHttpVisionApiClient : VisionApiClient {
         .build()
 
     override suspend fun send(apiKey: String, requestBody: JSONObject): Result<JSONObject> {
+        // Audit H25 — bound vision-API throughput across all four
+        // tools so a runaway LLM client can't burn the user's
+        // Anthropic quota. The leaky bucket allows ~2 req/s sustained
+        // with a 4-call burst head; cooperative cancellation flows
+        // through `delay` if the caller's coroutine is cancelled.
+        dev.orcaxr.app.mcp.VisionRateLimiter.shared.acquire()
         return runCatching {
             val request = Request.Builder()
                 .url("https://api.anthropic.com/v1/messages")
