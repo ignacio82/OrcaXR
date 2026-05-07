@@ -691,8 +691,17 @@ private fun TransformSlider(
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(Modifier.weight(1f))
+            // H_PIXEL10 (2026-05-07) — `"%.1f$unit".format(value)` crashes
+            // with `UnknownFormatConversionException` when `unit == "%"`
+            // (the Scale slider): the Kotlin string template substitutes
+            // `%` into the format string, making `"%.1f%"`, which String
+            // .format reads as `%` followed by an end-of-string conversion
+            // specifier. Format only the numeric value, then concatenate
+            // the unit so the user-supplied unit text never reaches the
+            // format parser. Locale.US pins the decimal separator to '.'
+            // for consistent display across locales (e.g. de_DE, fr_FR).
             Text(
-                "%.1f$unit".format(value),
+                String.format(java.util.Locale.US, "%.1f", value) + unit,
                 style = LocalMobileTextStyles.current.numeric,
                 color = MaterialTheme.colorScheme.primary,
             )
