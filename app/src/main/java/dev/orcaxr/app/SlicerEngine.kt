@@ -1683,6 +1683,29 @@ object SlicerEngine {
     }
 
     /**
+     * Audit H12 (2026-05-07) — return the `layer_height` value that the
+     * 3MF authored, if any. Layer-height keys are deliberately
+     * EXCLUDED from [PROJECT_OVERRIDE_KEYS] so the user's profile pick
+     * + textfield always wins over what the 3MF authored (otherwise
+     * a freshly-loaded 3MF silently overrode "0.12 Fine" → "0.20"
+     * with no in-XR cue, see the comment block above). But the user
+     * still wants to know what the 3MF wanted. Returns the parsed
+     * float in mm, or null when:
+     *   - the file isn't a 3MF / can't be read
+     *   - the project_settings.config doesn't carry layer_height
+     *   - the value isn't parseable
+     *
+     * Surfaced as an info chip in [LeftProjectPanel]'s QualityTab —
+     * one tap to apply if the user actually wants the 3MF's value.
+     */
+    suspend fun read3mfLayerHeight(input: File): Float? = withContext(dispatcher) {
+        if (!input.exists() || !input.canRead()) return@withContext null
+        val raw = nativeRead3mfProjectOverrides(input.absolutePath, arrayOf("layer_height"))
+            ?: return@withContext null
+        raw.firstOrNull()?.trim()?.toFloatOrNull()?.takeIf { it in 0.05f..0.50f }
+    }
+
+    /**
      * Read the embedded `mixed_filament_definitions` string out of a
      * .3mf's `Metadata/project_settings.config` and return it verbatim.
      * Returns null when:

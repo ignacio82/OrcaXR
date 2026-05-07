@@ -1007,6 +1007,14 @@ private fun XrShell(
     // dragon fixture. Sparse map (only authored keys present);
     // empty map for STL/OBJ loads or 3MFs with no per-print tuning.
     var loadedProjectOverrides by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    // Audit H12 (2026-05-07) — the 3MF's authored layer_height. NOT
+    // applied to the slice (layer-height keys are deliberately
+    // excluded from PROJECT_OVERRIDE_KEYS so the user's profile pick
+    // + textfield always wins). Surfaced as an info chip in the
+    // Quality tab so the user knows what the 3MF wanted; one tap to
+    // apply if they actually want it. Null for STL/OBJ loads, 3MFs
+    // without an authored layer_height, or unparseable values.
+    var loadedLayerHeightHintMm by remember { mutableStateOf<Float?>(null) }
     // True between the moment the user picks a file and the moment
     // the preview GLB is ready on disk. Drives the spinner in the
     // Project panel's model row so big 3MFs (the dragon's
@@ -1505,9 +1513,22 @@ private fun XrShell(
                     android.util.Log.w(tag, "3mf project-overrides read failed: ${it.message}")
                     loadedProjectOverrides = emptyMap()
                 }
+                // Audit H12 — capture authored layer_height as an
+                // informational hint (NOT applied to the slice).
+                runCatching {
+                    loadedLayerHeightHintMm = SlicerEngine.read3mfLayerHeight(bakeSource)
+                    val h = loadedLayerHeightHintMm
+                    if (h != null) {
+                        android.util.Log.i(tag, "loaded layer-height hint from 3mf: $h mm (not applied; profile pick wins)")
+                    }
+                }.onFailure {
+                    android.util.Log.w(tag, "3mf layer-height-hint read failed: ${it.message}")
+                    loadedLayerHeightHintMm = null
+                }
             } else {
                 loadedFlushSettings = null
                 loadedProjectOverrides = emptyMap()
+                loadedLayerHeightHintMm = null
             }
 
             // Sync the project filament list with the 3MF's embedded
@@ -6085,6 +6106,7 @@ private fun XrShell(
                                 printSettingsOverrides.value + (key to value.trim())
                             }
                         },
+                        loadedLayerHeightHintMm = loadedLayerHeightHintMm,
                     )
                 }
 

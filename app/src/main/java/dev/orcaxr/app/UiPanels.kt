@@ -2188,6 +2188,16 @@ fun RightSettingsPanel(
      *  delete the override (i.e. revert to profile default for that key);
      *  non-empty = upsert the override. */
     onPrintSettingChange: (key: String, value: String) -> Unit = { _, _ -> },
+    /**
+     * Audit H12 — the layer_height value that the most-recently-loaded
+     * 3MF authored, in mm. NOT applied to the slice (the user's
+     * profile pick + textfield always wins, see [SlicerEngine
+     * .read3mfLayerHeight]). Surfaced under the Quality tab's layer-
+     * height TextField as a hint chip the user can tap to apply if
+     * they actually want the 3MF's value. Null = no 3MF loaded, or
+     * the 3MF didn't author layer_height.
+     */
+    loadedLayerHeightHintMm: Float? = null,
 ) {
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Quality", "Strength", "Speed", "Support", "Others")
@@ -2264,7 +2274,7 @@ fun RightSettingsPanel(
                 .verticalScroll(rememberScrollState()),
         ) {
             when (selectedTab) {
-                0 -> QualityTab(selectedProfile, layerHeightOverride, onLayerHeightChange)
+                0 -> QualityTab(selectedProfile, layerHeightOverride, onLayerHeightChange, loadedLayerHeightHintMm)
                 1 -> StrengthTab(selectedProfile)
                 2 -> SpeedTab(selectedProfile, printSettingsOverrides, onPrintSettingChange)
                 3 -> SupportTab(selectedProfile, printSettingsOverrides, onPrintSettingChange)
@@ -2279,6 +2289,9 @@ private fun QualityTab(
     profile: SlicerProfile,
     layerHeightOverride: String,
     onLayerHeightChange: (String) -> Unit,
+    /** Audit H12 — informational hint for the 3MF-authored layer_height.
+     *  Null = no 3MF loaded or no authored layer_height. */
+    loadedLayerHeightHintMm: Float? = null,
 ) {
     Text("Layer Height", style = MaterialTheme.typography.titleMedium, color = Color.White)
     Spacer(modifier = Modifier.height(8.dp))
@@ -2340,6 +2353,34 @@ private fun QualityTab(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text("mm", color = Color.Gray, style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(24.dp))
+        }
+    }
+
+    // Audit H12 — when the loaded 3MF authored a different layer_height
+    // than the user's effective value, surface it as a tappable info
+    // chip. Effective value is the override (if non-blank) else the
+    // profile default. Hide when it matches (no surprise to flag) or
+    // when no hint is present (STL/OBJ load).
+    val effectiveLayerMm = run {
+        val typed = layerHeightOverride.trim().toFloatOrNull()
+        typed ?: profile.config["layer_height"]?.toFloatOrNull()
+    }
+    val hintMm = loadedLayerHeightHintMm
+    if (
+        hintMm != null && effectiveLayerMm != null &&
+            kotlin.math.abs(hintMm - effectiveLayerMm) > 0.005f
+    ) {
+        Spacer(modifier = Modifier.height(4.dp))
+        TextButton(
+            onClick = { onLayerHeightChange("%.3f".format(hintMm).trimEnd('0').trimEnd('.')) },
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+        ) {
+            Text(
+                "3MF authored ${"%.2f".format(hintMm)} mm — tap to apply",
+                color = Color(0xFFFFB76B),  // amber: informational, not an error
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 
