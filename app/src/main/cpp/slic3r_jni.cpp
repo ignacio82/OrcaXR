@@ -4060,7 +4060,275 @@ std::string json_escape_string(const std::string& s) {
     }
     return out;
 }
+
+// Round to 6 decimals + format with `%.6f` so floats compare byte-for-byte
+// across libc / NDK versions in the diagnostics goldens.
+std::string fmt_f6(double v) {
+    if (!std::isfinite(v)) return std::string("null");
+    double r = std::round(v * 1e6) / 1e6;
+    if (r == 0.0) r = 0.0; // collapse -0.0 → 0.0
+    char buf[48];
+    std::snprintf(buf, sizeof(buf), "%.6f", r);
+    return std::string(buf);
+}
+
+// Strip directory prefix from a path string. Goldens travel between
+// machines whose filesDir paths differ; only the basename is stable.
+std::string path_basename(const std::string& p) {
+    const auto slash = p.find_last_of("/\\");
+    return slash == std::string::npos ? p : p.substr(slash + 1);
+}
 } // namespace
+
+// Differential diagnostics dump (issue: catch upstream-pick regressions
+// in the libslic3r parsers — `load_3mf`, `load_bbs_3mf`, `read_from_file`
+// — at parser time, before the slice runs and amplifies the corruption).
+//
+// Loads [path] via the same `load_mesh_container` dispatcher production
+// uses, then emits a deterministic JSON snapshot of the resulting
+// `Slic3r::Model`:
+//
+//   {
+//     "schema": 1,
+//     "input_basename": "...",
+//     "objects": [
+//       {
+//         "name": "...",
+//         "input_file_basename": "...",
+//         "config": {sorted-key-string-map},
+//         "layer_height_profile": {"empty": bool, "len": N,
+//                                  "sum_z": f6, "sum_h": f6},
+//         "volumes": [
+//           {
+//             "name": "...",
+//             "type": "MODEL_PART"|"PARAMETER_MODIFIER"|...,
+//             "config": {sorted-key-string-map},
+//             "mesh": {"triangles": N, "vertices": N,
+//                      "aabb_min": [f6,f6,f6], "aabb_max": [f6,f6,f6]},
+//             "mmu_segmentation_facets": {"empty": bool,
+//                                          "painted_records": N,
+//                                          "bitstream_size": N},
+//             "supported_facets":  {...},
+//             "seam_facets":       {...},
+//             "fuzzy_skin_facets": {...}
+//           }
+//         ],
+//         "instances": [
+//           {"translation_mm": [f6,f6,f6], "rotation_rad": [f6,f6,f6],
+//            "scaling_factor": [f6,f6,f6], "mirror": [f6,f6,f6]}
+//         ]
+//       }
+//     ],
+//     "plates_custom_gcodes": [
+//       {"plate": int, "ticks": [{"z_mm": f6, "type": "ColorChange"|...,
+//                                  "extruder": int, "color": "...",
+//                                  "extra": "..."}]}
+//     ]
+//   }
+//
+// Stability rules:
+//   - All map keys (object/volume config) sorted lexicographically.
+//   - Floats formatted as `%.6f` after rounding; -0.0 collapses to 0.0.
+//   - Paths emit basename only (filesDir varies across devices).
+//   - Object / volume / instance order preserved (file order — re-ordering
+//     IS a regression worth catching).
+//
+// Painted-facet annotations summarize without paying the cost of
+// rebuilding the per-state mesh: `painted_records` is the count of
+// source triangles that carry any paint (size of `triangles_to_split`),
+// and `bitstream_size` is the on-disk encoding length. Both change
+// deterministically when the painted state changes; both stay zero on
+// unpainted geometry.
+//
+// Returns null on read failure or empty model. Does NOT mutate any
+// global state — callers can run this safely in parallel with other
+// SlicerEngine entry points (the load happens in a stack-local Model).
+extern "C" JNIEXPORT jstring JNICALL
+Java_dev_orcaxr_app_SlicerEngine_nativeDumpModelJson(
+    JNIEnv* env, jclass, jstring jPath)
+{
+    ScopedUtf path(env, jPath);
+    try {
+        Slic3r::Model model = load_mesh_container(path.c);
+        if (model.objects.empty()) return nullptr;
+
+        std::ostringstream s;
+        s << "{\"schema\":1,\"input_basename\":\""
+          << json_escape_string(path_basename(std::string(path.c)))
+          << "\",\"objects\":[";
+
+        for (size_t i = 0; i < model.objects.size(); ++i) {
+            const Slic3r::ModelObject* mo = model.objects[i];
+            if (i > 0) s << ',';
+            s << "{\"name\":\"" << json_escape_string(mo->name) << "\","
+              << "\"input_file_basename\":\""
+              << json_escape_string(path_basename(mo->input_file)) << "\",";
+
+            // object config — sorted
+            s << "\"config\":{";
+            {
+                auto keys = mo->config.keys();
+                std::sort(keys.begin(), keys.end());
+                bool first = true;
+                for (const auto& k : keys) {
+                    if (!first) s << ',';
+                    first = false;
+                    s << '"' << json_escape_string(k) << "\":\""
+                      << json_escape_string(mo->config.opt_serialize(k)) << '"';
+                }
+            }
+            s << "},";
+
+            // layer_height_profile summary (full vector would balloon
+            // goldens; sums + length catch corruption without the bulk).
+            {
+                const auto v = mo->layer_height_profile.get();
+                s << "\"layer_height_profile\":{\"empty\":"
+                  << (v.empty() ? "true" : "false")
+                  << ",\"len\":" << v.size();
+                if (!v.empty()) {
+                    double sum_z = 0.0, sum_h = 0.0;
+                    for (size_t k = 0; k + 1 < v.size(); k += 2) {
+                        sum_z += v[k];
+                        sum_h += v[k + 1];
+                    }
+                    s << ",\"sum_z\":" << fmt_f6(sum_z)
+                      << ",\"sum_h\":" << fmt_f6(sum_h);
+                }
+                s << "},";
+            }
+
+            // volumes
+            s << "\"volumes\":[";
+            for (size_t vi = 0; vi < mo->volumes.size(); ++vi) {
+                if (vi > 0) s << ',';
+                const Slic3r::ModelVolume* mv = mo->volumes[vi];
+                s << "{\"name\":\""
+                  << json_escape_string(mv ? mv->name : std::string())
+                  << "\",\"type\":\"";
+                if (mv != nullptr) {
+                    switch (mv->type()) {
+                        case Slic3r::ModelVolumeType::MODEL_PART:         s << "MODEL_PART"; break;
+                        case Slic3r::ModelVolumeType::NEGATIVE_VOLUME:    s << "NEGATIVE_VOLUME"; break;
+                        case Slic3r::ModelVolumeType::PARAMETER_MODIFIER: s << "PARAMETER_MODIFIER"; break;
+                        case Slic3r::ModelVolumeType::SUPPORT_BLOCKER:    s << "SUPPORT_BLOCKER"; break;
+                        case Slic3r::ModelVolumeType::SUPPORT_ENFORCER:   s << "SUPPORT_ENFORCER"; break;
+                        default:                                          s << "MODEL_PART"; break;
+                    }
+                } else {
+                    s << "NULL";
+                }
+                s << "\",\"config\":{";
+                if (mv != nullptr) {
+                    auto vkeys = mv->config.keys();
+                    std::sort(vkeys.begin(), vkeys.end());
+                    bool first_v = true;
+                    for (const auto& k : vkeys) {
+                        if (!first_v) s << ',';
+                        first_v = false;
+                        s << '"' << json_escape_string(k) << "\":\""
+                          << json_escape_string(mv->config.opt_serialize(k)) << '"';
+                    }
+                }
+                s << "},";
+
+                if (mv != nullptr) {
+                    const auto& tm = mv->mesh();
+                    const auto& its = tm.its;
+                    const auto bb  = tm.bounding_box();
+                    s << "\"mesh\":{"
+                      << "\"triangles\":" << its.indices.size()
+                      << ",\"vertices\":" << its.vertices.size()
+                      << ",\"aabb_min\":["
+                      << fmt_f6(bb.min.x()) << ',' << fmt_f6(bb.min.y()) << ',' << fmt_f6(bb.min.z())
+                      << "],\"aabb_max\":["
+                      << fmt_f6(bb.max.x()) << ',' << fmt_f6(bb.max.y()) << ',' << fmt_f6(bb.max.z())
+                      << "]},";
+
+                    auto emit_fa = [&](const char* key, const Slic3r::FacetsAnnotation& fa) {
+                        const auto& d = fa.get_data();
+                        s << '"' << key << "\":{\"empty\":"
+                          << (fa.empty() ? "true" : "false")
+                          << ",\"painted_records\":" << d.triangles_to_split.size()
+                          << ",\"bitstream_size\":"  << d.bitstream.size()
+                          << '}';
+                    };
+                    emit_fa("mmu_segmentation_facets", mv->mmu_segmentation_facets); s << ',';
+                    emit_fa("supported_facets",        mv->supported_facets);        s << ',';
+                    emit_fa("seam_facets",             mv->seam_facets);             s << ',';
+                    emit_fa("fuzzy_skin_facets",       mv->fuzzy_skin_facets);
+                } else {
+                    s << "\"mesh\":null,"
+                      << "\"mmu_segmentation_facets\":null,"
+                      << "\"supported_facets\":null,"
+                      << "\"seam_facets\":null,"
+                      << "\"fuzzy_skin_facets\":null";
+                }
+                s << '}';
+            }
+            s << "],\"instances\":[";
+            for (size_t ii = 0; ii < mo->instances.size(); ++ii) {
+                if (ii > 0) s << ',';
+                const Slic3r::ModelInstance* mi = mo->instances[ii];
+                const Slic3r::Vec3d t  = mi->get_offset();
+                const Slic3r::Vec3d r  = mi->get_rotation();
+                const Slic3r::Vec3d sc = mi->get_scaling_factor();
+                const Slic3r::Vec3d mr = mi->get_mirror();
+                s << "{\"translation_mm\":["
+                  << fmt_f6(t.x())  << ',' << fmt_f6(t.y())  << ',' << fmt_f6(t.z())
+                  << "],\"rotation_rad\":["
+                  << fmt_f6(r.x())  << ',' << fmt_f6(r.y())  << ',' << fmt_f6(r.z())
+                  << "],\"scaling_factor\":["
+                  << fmt_f6(sc.x()) << ',' << fmt_f6(sc.y()) << ',' << fmt_f6(sc.z())
+                  << "],\"mirror\":["
+                  << fmt_f6(mr.x()) << ',' << fmt_f6(mr.y()) << ',' << fmt_f6(mr.z())
+                  << "]}";
+            }
+            s << "]}";
+        }
+        s << "],\"plates_custom_gcodes\":[";
+
+        std::vector<int> plate_ids;
+        plate_ids.reserve(model.plates_custom_gcodes.size());
+        for (const auto& kv : model.plates_custom_gcodes) plate_ids.push_back(kv.first);
+        std::sort(plate_ids.begin(), plate_ids.end());
+        bool first_p = true;
+        for (int pid : plate_ids) {
+            const auto& info = model.plates_custom_gcodes.at(pid);
+            if (!first_p) s << ',';
+            first_p = false;
+            s << "{\"plate\":" << pid << ",\"ticks\":[";
+            for (size_t k = 0; k < info.gcodes.size(); ++k) {
+                if (k > 0) s << ',';
+                const auto& it = info.gcodes[k];
+                s << "{\"z_mm\":" << fmt_f6(it.print_z) << ",\"type\":\"";
+                switch (it.type) {
+                    case Slic3r::CustomGCode::ColorChange: s << "ColorChange"; break;
+                    case Slic3r::CustomGCode::PausePrint:  s << "PausePrint";  break;
+                    case Slic3r::CustomGCode::ToolChange:  s << "ToolChange";  break;
+                    case Slic3r::CustomGCode::Template:    s << "Template";    break;
+                    case Slic3r::CustomGCode::Custom:      s << "Custom";      break;
+                    default:                               s << "Unknown";     break;
+                }
+                s << "\",\"extruder\":" << it.extruder
+                  << ",\"color\":\""    << json_escape_string(it.color) << '"'
+                  << ",\"extra\":\""    << json_escape_string(it.extra) << '"'
+                  << "}";
+            }
+            s << "]}";
+        }
+        s << "]}";
+
+        const std::string out = s.str();
+        return env->NewStringUTF(out.c_str());
+    } catch (const std::exception& e) {
+        ORCAXR_LOGE("nativeDumpModelJson: %s", e.what());
+        return nullptr;
+    } catch (...) {
+        ORCAXR_LOGE("nativeDumpModelJson: unknown exception");
+        return nullptr;
+    }
+}
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectConfigs(

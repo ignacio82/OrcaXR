@@ -822,6 +822,28 @@ object SlicerEngine {
     )
 
     /**
+     * Differential diagnostics: load [input] via the same
+     * `load_mesh_container` dispatcher production uses (BBS-vs-Prusa 3MF
+     * routing, `Model::read_from_file` for STL/OBJ/etc.) and return a
+     * deterministic JSON snapshot of the resulting `Slic3r::Model`.
+     *
+     * The dump is designed to catch upstream-pick regressions in the
+     * libslic3r parsers at parser time, before they amplify into a
+     * bad slice. Schema and stability rules live in `slic3r_jni.cpp`'s
+     * comment above `nativeDumpModelJson`. Float fields use `%.6f`
+     * formatting after rounding so goldens compare byte-for-byte
+     * across NDK / libc versions.
+     *
+     * Returns null on read failure or empty model. Goldens live under
+     * `app/src/androidTest/assets/diagnostics_goldens/<name>/` paired
+     * with their input fixture.
+     */
+    suspend fun dumpModelJson(input: File): String? = withContext(dispatcher) {
+        if (!input.exists() || !input.canRead()) return@withContext null
+        nativeDumpModelJson(input.absolutePath)
+    }
+
+    /**
      * D9 — extract per-object + per-volume `config` overrides from a
      * 3MF. Returns one [Read3mfObjectConfig] per object in declaration
      * order, or empty list if the file isn't a 3MF / has no overrides
@@ -1924,6 +1946,8 @@ object SlicerEngine {
     suspend fun extractObjectAsStl(archive: File, objectIndex: Int, outStl: File): Boolean = withContext(dispatcher) {
         nativeExtractObjectAsStl(archive.absolutePath, objectIndex, outStl.absolutePath) == 0
     }
+
+    private external fun nativeDumpModelJson(path: String): String?
 
     private external fun nativeRead3mfObjectMetadata(path: String): Array<ObjectMeta>?
 

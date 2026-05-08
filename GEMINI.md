@@ -243,6 +243,22 @@ Coroutine failures in `rememberCoroutineScope().launch` blocks (e.g. the file-im
 
 2. **Dependency Update Review:** `./gradlew versionCatalogUpdate` updates `gradle/libs.versions.toml`. Always review `git diff gradle/libs.versions.toml` before committing — XR / Compose / Media3 patch bumps occasionally break the build.
 
+## Differential diagnostics — `dumpModelJson`
+
+`SlicerEngine.dumpModelJson(file)` returns a deterministic JSON snapshot of `Slic3r::Model` immediately after the parser runs (`load_3mf` / `load_bbs_3mf` / `Model::read_from_file`, dispatched via `load_mesh_container`). Goldens for representative fixtures live under `app/src/androidTest/assets/diagnostics_goldens/<case>/expected.json`; `ModelJsonGoldenTest` diffs them on every instrumented run. The point is to catch upstream-pick regressions (Bambu paint-attribute drops, BBS-vs-Prusa misroute, per-object config decode, custom-gcode tick parse) at parser time, before they amplify into a bad slice.
+
+Stability rules baked into the JNI: object/volume config keys sorted lexicographically; floats formatted as `%.6f` after rounding so byte-equality holds across NDK / libc; paths reduced to basenames; object/volume/instance order preserved (re-ordering IS a regression to flag); painted-facet annotations summarized as `{empty, painted_records, bitstream_size}` rather than rebuilding per-state meshes.
+
+Regenerating goldens (only when the dump format intentionally changes or you add a new fixture):
+```
+adb shell am instrument -w \
+  -e class dev.orcaxr.app.diagnostics.ModelJsonGoldenTest \
+  -e orcaxr.regenerateGoldens true \
+  dev.orcaxr.app.test/androidx.test.runner.AndroidJUnitRunner
+adb pull /sdcard/Android/data/dev.orcaxr.app/files/diagnostics_goldens_actual/
+```
+Then copy each `expected.json` into `app/src/androidTest/assets/diagnostics_goldens/<case>/` and review the diff — a regenerated golden is only legitimate when the format change was deliberate. Initial goldens are captured on first device run after this lands.
+
 ## MCP server (C6) — architecture
 
 OrcaXR ships an in-process MCP (Model Context Protocol) server so an LLM
