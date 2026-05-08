@@ -123,9 +123,15 @@ internal object PaintSessionTools {
                 "call: one PaintHistory entry (one undo step undoes the whole session), one " +
                 "paintContentVersion bump, one colored-GLB rebake, one GltfModelEntity swap. " +
                 "Refuses if the live model's tri count has changed since session begin (a mesh-" +
-                "mutating action invalidated the session's triangle indices). After a successful " +
-                "commit the session is discarded. Pass discard_on_failure=false to keep the " +
-                "session intact when the validation fails so the caller can inspect or retry."
+                "mutating action invalidated the session's triangle indices). M7: also refuses " +
+                "if any add_paint_constraint invariant is violated by the session's paint state — " +
+                "the response includes per-constraint `violations` so the LLM can issue a " +
+                "corrective paint (e.g. paint with merge='only_unpainted' on the violators) " +
+                "without losing the rest of the session. Pass force=true to commit anyway; the " +
+                "response then surfaces `forced_violations` for audit. After a successful commit " +
+                "the session is discarded. discard_on_failure controls whether tri-count drift " +
+                "or constraint violation also discards the session (default true; set false to " +
+                "keep the session intact for inspection / retry)."
         override val inputSchema = Schemas.obj(
             required = listOf("session_id"),
             properties = mapOf(
@@ -133,6 +139,11 @@ internal object PaintSessionTools {
                 "discard_on_failure" to Schemas.bool(
                     "Drop the session even when commit validation fails (default true). " +
                         "Set false to keep the session for inspection / retry.",
+                ),
+                "force" to Schemas.bool(
+                    "M7: commit even when add_paint_constraint invariants are violated. The " +
+                        "response records the violations under `forced_violations` so the LLM " +
+                        "can audit. Default false.",
                 ),
             ),
         )
@@ -176,6 +187,58 @@ internal object PaintSessionTools {
                 )
             }
 
+            // M7 — validate attached constraints before doing anything
+            // observable. Runs before the no-op check so a session
+            // with constraints + zero paint actions still flags
+            // `must_be_painted` violations the LLM forgot to fulfill.
+            val force = args.optBoolean("force", false)
+            val violations = session.validateAttachedConstraints()
+            if (violations.isNotEmpty() && !force) {
+                if (discardOnFailure) store.discard(id)
+                val arr = JSONArray()
+                for (v in violations) {
+                    arr.put(JSONObject().apply {
+                        put("constraint_id", v.constraintId)
+                        put("kind", v.kindName)
+                        put("description", v.description)
+                        put("violating_triangle_count", v.violatingTriangles.size)
+                        // Cap the sample so the response stays small
+                        // (≥256 indices ≈ 1 KB; full set could blow
+                        // the body cap on a Pikachu-class mesh).
+                        val sampleCap = 256
+                        val sampleArr = JSONArray()
+                        val n = minOf(sampleCap, v.violatingTriangles.size)
+                        for (i in 0 until n) sampleArr.put(v.violatingTriangles[i])
+                        put("violating_triangle_sample", sampleArr)
+                        put("sample_truncated", v.violatingTriangles.size > sampleCap)
+                    })
+                }
+                val body = JSONObject().apply {
+                    put("ok", false)
+                    put("session_id", id)
+                    put("model_id", session.modelId)
+                    put("rejected", true)
+                    put("violation_count", violations.size)
+                    put("violations", arr)
+                    put("session_kept", !discardOnFailure)
+                    put("hint",
+                        "Commit rejected: ${violations.size} constraint(s) violated. " +
+                            "Apply a corrective paint over the violating triangles " +
+                            "(e.g. paint_triangle_list with merge='only_tagged') OR call " +
+                            "clear_paint_constraints / pass force=true if the constraint is " +
+                            "no longer relevant. The live model is unchanged.",
+                    )
+                }
+                val firstK = violations.first().kindName
+                val firstN = violations.first().violatingTriangles.size
+                return ToolResult.error(
+                    "commit_paint_session $id rejected: ${violations.size} constraint(s) violated " +
+                        "(first: $firstK, $firstN tri(s)). Live model untouched; session " +
+                        if (discardOnFailure) "discarded." else "kept.",
+                    body,
+                )
+            }
+
             // No-op short-circuit: commit a session that didn't paint
             // anything is a successful no-op, not an error — but we
             // surface it so the LLM's planning loop notices it didn't
@@ -206,6 +269,20 @@ internal object PaintSessionTools {
                 put("total_actions", session.totalActions)
                 put("total_triangles_painted", session.totalTrianglesPainted)
                 if (emitId > 0) put("emit_id", emitId)
+                if (violations.isNotEmpty()) {
+                    // Forced commit: surface what we waved through.
+                    val arr = JSONArray()
+                    for (v in violations) {
+                        arr.put(JSONObject().apply {
+                            put("constraint_id", v.constraintId)
+                            put("kind", v.kindName)
+                            put("description", v.description)
+                            put("violating_triangle_count", v.violatingTriangles.size)
+                        })
+                    }
+                    put("forced_violations", arr)
+                    put("forced", true)
+                }
                 put("hint", if (noop)
                     "Session had no mutations — nothing was committed."
                 else
@@ -215,6 +292,9 @@ internal object PaintSessionTools {
             }
             val text = if (noop)
                 "commit_paint_session $id: no-op (session unchanged from begin)"
+            else if (violations.isNotEmpty())
+                "commit_paint_session $id: FORCED commit despite ${violations.size} violation(s); " +
+                    "applied ${session.totalActions} action(s) (emit_id=$emitId)"
             else
                 "commit_paint_session $id: applied ${session.totalActions} action(s) covering " +
                     "${session.totalTrianglesPainted} triangle paints to ${session.modelId} " +

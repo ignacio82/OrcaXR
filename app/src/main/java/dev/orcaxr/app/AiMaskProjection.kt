@@ -20,13 +20,14 @@ import kotlin.math.min
  */
 internal object AiMaskProjection {
 
-    enum class DepthMode {
+    sealed interface DepthMode {
         /** Front-most ray hit only (default). Misses curvature
          *  wraparound on convex bulges. */
-        FrontFacingOnly,
+        data object FrontFacingOnly : DepthMode
         /** Every triangle along the ray. Paints both sides of a
-         *  thin shell. */
-        AllHits,
+         *  thin shell *and* anything on the far side of the model
+         *  along the same ray. */
+        data object AllHits : DepthMode
         /**
          * D18d: keep any triangle whose outward normal is within
          * 90° of `-camera_dir` (the lit hemisphere from the
@@ -37,7 +38,22 @@ internal object AiMaskProjection {
          * for organic shapes; for true rotational symmetry
          * paint_geodesic_disc (D18a) is still the right tool.
          */
-        AnyFacing,
+        data object AnyFacing : DepthMode
+        /**
+         * M8a: take the front-most hit AND any subsequent hits
+         * whose distance along the ray is within [thicknessMm]
+         * of the front hit. Catches the back face of a thin
+         * shell (Benchy hull, ~2 mm wall) without spilling onto
+         * deeper geometry along the same ray (cabin, opposite
+         * hull side). Combine with `backFaceFilter=true` (default)
+         * to drop normals that face away from the camera; the
+         * thin shell's outer back-face still passes that filter
+         * because its outward normal points back toward the
+         * camera origin.
+         */
+        data class FrontPlusThin(val thicknessMm: Float) : DepthMode {
+            init { require(thicknessMm > 0f) { "thicknessMm must be > 0" } }
+        }
     }
 
     /**
@@ -128,6 +144,60 @@ internal object AiMaskProjection {
                     val n = bvh.triangleNormal(t)
                     if (n.x * dx + n.y * dy + n.z * dz >= 0f) continue
                     out.add(t)
+                }
+            }
+            is DepthMode.FrontPlusThin -> {
+                // Take the front-most hit (subject to back-face
+                // filter — so we don't pick a hidden back-face as
+                // "front"); then include EVERY subsequent ray hit
+                // whose along-ray distance is within thicknessMm of
+                // the front hit, regardless of normal direction. The
+                // thin-extension pass deliberately ignores
+                // back_face_filter — by construction the back face
+                // of a thin shell has a normal pointing away from
+                // the camera, which is exactly what back_face_filter
+                // would otherwise reject. Anything farther than
+                // thicknessMm down the ray (the opposite hull side,
+                // the cabin interior) is left untouched.
+                val tris = bvh.intersectAll(camOrigin, Vec3f(dx, dy, dz))
+                if (tris.isEmpty()) return
+                val dirLen = kotlin.math.sqrt((dx * dx + dy * dy + dz * dz).toDouble()).toFloat()
+                if (dirLen < 1e-7f) return
+                val invDirLen = 1f / dirLen
+                fun distance(tri: Int): Float {
+                    // Project triangle centroid onto the ray.
+                    val c = bvh.triangleCentroid(tri)
+                    val cx = c.x - camOrigin.x
+                    val cy = c.y - camOrigin.y
+                    val cz = c.z - camOrigin.z
+                    return (cx * dx + cy * dy + cz * dz) * invDirLen
+                }
+                // The front-most hit by ray-distance is the smallest
+                // along-ray projection among triangles that pass the
+                // back-face filter (if enabled). Scanning here
+                // tolerates intersectAll returning hits in any
+                // order (the BVH leaf order isn't a guaranteed
+                // distance sort).
+                var frontDist = Float.POSITIVE_INFINITY
+                var frontTri = -1
+                for (t in tris) {
+                    if (backFaceFilter) {
+                        val n = bvh.triangleNormal(t)
+                        if (n.x * dx + n.y * dy + n.z * dz >= 0f) continue
+                    }
+                    val d = distance(t)
+                    if (d < frontDist) {
+                        frontDist = d
+                        frontTri = t
+                    }
+                }
+                if (frontTri < 0) return
+                out.add(frontTri)
+                val limit = frontDist + depthMode.thicknessMm
+                for (t in tris) {
+                    if (t == frontTri) continue
+                    val d = distance(t)
+                    if (d in frontDist..limit) out.add(t)
                 }
             }
         }

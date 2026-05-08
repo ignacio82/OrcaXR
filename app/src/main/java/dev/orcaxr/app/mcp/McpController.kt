@@ -2,6 +2,7 @@ package dev.orcaxr.app.mcp
 
 import android.content.Context
 import android.util.Log
+import dev.orcaxr.app.mcp.tools.AiAdvancedPaintTools
 import dev.orcaxr.app.mcp.tools.AiAnchorTools
 import dev.orcaxr.app.mcp.tools.AiIntrospectionTools
 import dev.orcaxr.app.mcp.tools.AiPaintTools
@@ -9,6 +10,7 @@ import dev.orcaxr.app.mcp.tools.AiSemanticPaintTools
 import dev.orcaxr.app.mcp.tools.AiVisionTools
 import dev.orcaxr.app.mcp.tools.AiVisionMaskTools
 import dev.orcaxr.app.mcp.tools.FindFeatureAnchorsTool
+import dev.orcaxr.app.mcp.tools.PaintConstraintTools
 import dev.orcaxr.app.mcp.tools.PaintDecalTool
 import dev.orcaxr.app.mcp.tools.PaintRecipeTools
 import dev.orcaxr.app.mcp.tools.PaintSessionTools
@@ -234,11 +236,21 @@ class McpController private constructor(
             // C9 milestone 1 — AI-driven spatial paint primitives.
             val aiPaintTools = AiPaintTools.all(WorkspaceModel.get())
             for (t in aiPaintTools) builder.tool(t)
+            // M6 — procedural paint (gradient / value-noise) + 2D-bbox
+            // frustum selection. Reuses AiPaintTools' internal preflight
+            // and emit plumbing so paint history / sessions / merge
+            // semantics behave identically to the existing primitives.
+            for (t in AiAdvancedPaintTools.all(WorkspaceModel.get())) builder.tool(t)
             // C9 milestone 4 — headless paint sessions. Lets an LLM
             // iterate paint+render without each refinement triggering a
             // colored-GLB rebake / scene-entity swap. Commit emits one
             // LoadPaintState ⇒ one applyPaintMutation ⇒ one undo step.
             for (t in PaintSessionTools.all(WorkspaceModel.get())) builder.tool(t)
+            // M7 — declarative paint constraints. Validated at
+            // commit_paint_session; on violation the commit is
+            // rejected and the live model is left untouched. Pass
+            // force=true to commit anyway.
+            for (t in PaintConstraintTools.all(WorkspaceModel.get())) builder.tool(t)
             // C9 milestone 3 — geometry / topology introspection.
             for (t in AiIntrospectionTools.all(WorkspaceModel.get())) builder.tool(t)
             // Anchor + seed + coverage tools — turn spatial reasoning

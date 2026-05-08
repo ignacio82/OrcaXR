@@ -915,6 +915,173 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRenderViews(
 
 ---
 
+### Milestone 6: Procedural paint + frustum selection (efficiency / ergonomics)
+
+Two cheap-to-build tools that fill obvious gaps in how the LLM authors paint:
+procedural patterns the LLM cannot easily express as triangle lists, and rectangular
+2D-bbox prompting which the LLM does far more reliably than authoring a polygon mask.
+
+**Files added/touched:**
+- `app/src/main/java/dev/orcaxr/app/AiProceduralPaint.kt` (new) — pure compute. Two
+  generators that produce `IntArray` triangle sets per filament-slot stop.
+  - `gradient(bvh, axis|direction, stops)` — for each triangle, evaluate
+    `t = (centroid · dir - tMin) / (tMax - tMin)` clamped to [0,1], pick the stop
+    whose `[t_lo, t_hi]` range contains it. Stops are an ordered list of
+    `{t_lo, t_hi, tag}` so an LLM can paint "0.0–0.3 brown, 0.3–0.7 unchanged,
+    0.7–1.0 white" with two emit calls (skipping the unchanged middle band).
+  - `valueNoise(bvh, frequency_per_mm, seed, stops)` — 3D value noise sampled at
+    each centroid in centered-preview frame; quantized to stops the same way.
+    Implementation: 3-axis lattice hash + tri-linear interpolation (pure Kotlin,
+    no perlin gradient table). Deterministic for `(seed, stops)`.
+- `app/src/main/java/dev/orcaxr/app/mcp/tools/AiProceduralPaintTools.kt` (new) —
+  `paint_gradient` and `paint_noise` MCP tools. Each tool emits one
+  `PaintTriangleSet` per stop (`emitAndRespond` is reused) so the result is N
+  undo steps for N stops; sessions group them under one commit.
+- `app/src/main/java/dev/orcaxr/app/mcp/tools/AiPaintTools.kt` — promote
+  `preflight`, `applyMergeFilter`, `emitAndRespond`, `parsePaintKind`,
+  `parseMergeMode`, `maxTagFor`, `resolveTag`, and `TagResult` to `internal` so
+  the new procedural tools live in their own file and reuse the shared plumbing
+  without duplication.
+
+**Frustum selection** (3b from the design review):
+- `paint_frustum` MCP tool: `(camera_descriptor, bbox_px = {x1, y1, x2, y2})` →
+  every triangle whose centroid projects inside the bbox AND whose outward
+  normal points toward the camera ("front-facing"). Implementation reuses
+  `AiMaskProjection`'s view-projection math and the BVH's `triangleCentroid` /
+  `triangleNormal` accessors. Faster than `paint_projected_mask` for rectangular
+  selections (no per-pixel raycast — one centroid-projection per triangle,
+  O(triCount)), and far more reliable for the LLM than authoring polygons.
+- Optional `connected_only: bool = false` — when true, take the connected
+  components rooted at any matched triangle (filters out small floating
+  matches in the bbox that aren't part of a larger feature).
+
+**Test strategy:**
+- `AiProceduralPaintTest` — unit cube + sphere fixture: gradient along Z with
+  three stops, assert per-tag counts match analytical bands; value noise with
+  fixed seed, assert stable triangle counts across runs.
+- `AiFrustumSelectionTest` — known camera + cube: bbox covering the front face,
+  assert exactly the front-facing triangles match.
+- MCP transcript `m6_procedural.txt`: load Benchy, paint a Z-gradient, render,
+  assert pixel counts roughly proportional to stop ranges.
+
+**Capability:** LLM authors gradients and rectangular selections in one tool
+call without composing multiple primitives.
+
+---
+
+### Milestone 7: Paint constraints + commit verification
+
+Catches the highest-frequency LLM paint error — bleeding into a region the LLM
+intended to leave alone — *before* it lands on the live model. Strict
+declarative constraints fail the commit instead of requiring the LLM to
+re-render and notice the bleed.
+
+**Files added/touched:**
+- `app/src/main/java/dev/orcaxr/app/mcp/AiPaintConstraints.kt` (new) — types:
+  ```kotlin
+  sealed interface AiPaintConstraint {
+      val id: String
+      val triangleIndices: IntArray
+      data class MustRemainUnpainted(...) : AiPaintConstraint
+      data class MustBePainted(...) : AiPaintConstraint
+      data class MustBeTag(val tag: Int, ...) : AiPaintConstraint
+      data class MustNotBeTag(val tag: Int, ...) : AiPaintConstraint
+  }
+  data class ConstraintViolation(
+      val constraintId: String,
+      val kind: String,        // "must_remain_unpainted" etc.
+      val violatingTriangles: IntArray,
+      val description: String,
+  )
+  ```
+- `app/src/main/java/dev/orcaxr/app/mcp/AiPaintSessionStore.kt` — extend
+  `AiPaintSession` with a synchronized `MutableList<AiPaintConstraint>`, plus
+  `addConstraint`, `clearConstraints`, `listConstraints`, and `validate()` that
+  walks each constraint against `paintFilamentIndex` and returns a list of
+  violations. Constraints persist for the session's lifetime; cleared by
+  `clearConstraints` or `discard`.
+- `app/src/main/java/dev/orcaxr/app/mcp/tools/PaintConstraintTools.kt` (new) —
+  three new MCP tools:
+  - `add_paint_constraint(session_id, kind, triangle_ids|region_id|seed,
+    [tag], [description])` — creates one constraint. Triangle set can come
+    from any triangle-set source the LLM already uses (raw list, segmentation
+    region id, surface region from a seed).
+  - `list_paint_constraints(session_id)` — diagnostic.
+  - `clear_paint_constraints(session_id, [constraint_id])` — drop one or all.
+- `app/src/main/java/dev/orcaxr/app/mcp/tools/PaintSessionTools.kt` —
+  `CommitPaintSession` runs `session.validate()` first. On any violation:
+  - Reject the commit (no `LoadPaintState` emitted).
+  - Return `ok=false`, `violations: [{constraint_id, kind, violating_triangle_count, sample: int[≤256], description}]`.
+  - Leave the session intact (default) so the LLM can `paint_undo` in-session
+    or apply a corrective `merge=only_unpainted` before re-trying. New flag
+    `force=true` overrides the gate (for the LLM's "I know better" case);
+    the response includes `forced_violations` for audit.
+
+**Why one place to enforce, not per-tool:** every paint-tool dispatcher would
+otherwise need to re-check constraints, and the LLM would pay re-validation
+cost on every primitive. Validating once at commit matches the session model
+("plan freely, gate at the boundary") and keeps the per-call path fast.
+
+**Test strategy:**
+- `AiPaintConstraintsTest` — unit cube fixture: declare
+  `MustRemainUnpainted` over the top face, then `paint_normal_cone(z=+1)`,
+  assert `validate()` returns exactly the 2 top-face triangles as violators.
+- `CommitWithConstraintViolationTest` — full session round-trip: begin →
+  add constraint → paint that violates → commit → assert commit rejected,
+  live model untouched, session still open. Then `paint_undo` (or
+  `discard_paint_session`), retry, assert success.
+
+**Capability:** the LLM can declare invariants and trust the engine to
+enforce them at commit time.
+
+---
+
+### Milestone 8: front_plus_thin depth mode + native SIMD BVH (later)
+
+**M8a — `front_plus_thin` depth mode (cheap, ship now).** The current
+`paint_projected_mask` has only `front_facing_only` and `all_hits`; the missing
+mid-option is "front side of a thin shell, both sides if the shell is thinner
+than N mm." This is the canonical Benchy hull case (the hull is ~2 mm thick;
+`all_hits` would also catch the deck above; `front_facing_only` paints only
+the visible side and leaves the inside un-painted for backlit slices).
+
+- `app/src/main/java/dev/orcaxr/app/AiMaskProjection.kt` — convert `DepthMode`
+  enum to a sealed class so the new mode can carry `thicknessMm: Float`.
+  Existing `FrontFacingOnly`, `AllHits`, `AnyFacing` become `data object`s; the
+  new mode is `data class FrontPlusThin(val thicknessMm: Float)`.
+- For each ray: take the front-most hit (call it `t0`); take subsequent hits
+  whose distance along the ray `< thicknessMm` from `t0` (only those, not all
+  back-side hits). Existing back-face filter stays: it rejects normals facing
+  away from the camera before the thickness gate, so the hull's outer
+  back-face shows up but interior cabin walls do not.
+- `app/src/main/java/dev/orcaxr/app/mcp/tools/AiPaintTools.kt::PaintProjectedMask`
+  — accept new `depth_mode: "front_plus_thin"` plus optional
+  `thickness_mm: float` (default = 2.0). Validates `thicknessMm > 0`.
+
+**M8b — native SIMD BVH (later, gated on profiling).** Mask projection at
+768² with `all_hits` is ~1.5 s today (G.5). When profiling shows this is the
+binding latency for the LLM loop, port `MeshBvh.intersect` /
+`MeshBvh.intersectAll` into C++ as `nativeBvhIntersect` /
+`nativeBvhIntersectAll` using a header-only SIMD BVH (e.g. madmann91/bvh).
+Embree is x86-only on Android arm64 — explicitly not viable. Out of scope for
+this milestone; tracked here so the path is documented when the data demands
+it.
+
+**Test strategy:**
+- `MaskProjectionFrontPlusThinTest` — known camera + a thin-walled hollow
+  cube fixture (outer shell at z=10, inner shell at z=8): mask the front
+  face, depth_mode=front_plus_thin, thickness=2.5. Assert front + back
+  outer-shell tris match, inner-shell tris excluded.
+- Sealed-class migration: `MaskProjectionTest` and `MaskProjectionAllHitsTest`
+  retain their assertions (the data-object cases must compile and behave
+  identically). No call-site changes outside this file since `DepthMode` was
+  always referenced by case.
+
+**Capability:** thin-shell models paint correctly in one pass without the LLM
+juggling `all_hits` + back-face filtering tricks.
+
+---
+
 ## G. Risks and decisions
 
 ### G.1 Coexistence with gesture paint

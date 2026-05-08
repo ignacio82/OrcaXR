@@ -138,6 +138,48 @@ class AiMaskProjectionTest {
         assertTrue("any_facing hits ≥ front_facing_only", anyFacing.size >= front.size)
     }
 
+    @Test fun frontPlusThinNarrowKeepsOnlyFrontShell() {
+        // 10mm cube; camera is "top" looking down. Top face at z=5,
+        // bottom face at z=-5. Distance between front and back hits
+        // along the ray is ~10mm. thickness=2 should keep ONLY the
+        // top face triangles; the bottom face is 10mm farther along
+        // and falls outside the thin window.
+        val bvh = MeshBvh.build(cube)
+        val geom = AiIntrospection.geometry(bvh, bins = 1)
+        val cam = AiRenderEngine.namedPreset("top", geom.bboxCenteredPreview, 16, 16)
+        val mask = BooleanArray(16 * 16) { false }
+        mask[8 * 16 + 8] = true
+        val tris = AiMaskProjection.project(
+            bvh, cam, mask,
+            depthMode = AiMaskProjection.DepthMode.FrontPlusThin(thicknessMm = 2f),
+            backFaceFilter = true,
+        ).toSet()
+        // Top face is tris 2 and 3; both share the same z so both
+        // are within the thin window from the front-most.
+        assertTrue("expected only +Z top tris (2,3); got $tris",
+            tris.all { it == 2 || it == 3 } && tris.isNotEmpty())
+    }
+
+    @Test fun frontPlusThinWideIncludesBackShell() {
+        // Same setup, thickness=12 spans the entire cube depth, so
+        // the bottom face's back-facing tris (which back_face_filter
+        // would normally drop) come along for the ride. This is the
+        // intended "thin shell with back side" behavior.
+        val bvh = MeshBvh.build(cube)
+        val geom = AiIntrospection.geometry(bvh, bins = 1)
+        val cam = AiRenderEngine.namedPreset("top", geom.bboxCenteredPreview, 16, 16)
+        val mask = BooleanArray(16 * 16) { false }
+        mask[8 * 16 + 8] = true
+        val tris = AiMaskProjection.project(
+            bvh, cam, mask,
+            depthMode = AiMaskProjection.DepthMode.FrontPlusThin(thicknessMm = 12f),
+            backFaceFilter = true,
+        ).toSet()
+        assertTrue("expected top tris (2,3)", tris.any { it == 2 || it == 3 })
+        assertTrue("expected bottom tris (0,1) within thickness window; got $tris",
+            tris.any { it == 0 || it == 1 })
+    }
+
     @Test fun projectionWithEmptyMaskReturnsNoTriangles() {
         val bvh = MeshBvh.build(cube)
         val geom = AiIntrospection.geometry(bvh, bins = 1)

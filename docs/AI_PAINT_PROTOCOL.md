@@ -100,6 +100,33 @@ arrays (color / support / seam / fuzzy). On a 1.4 M-tri mesh that's
 sessions evict silently if you exceed the cap; check with
 `list_paint_sessions`.
 
+**Paint constraints (M7).** A session can carry declarative
+invariants the engine validates at commit time. Use them when you
+plan to issue many paints and want the engine — not your own
+re-render — to catch a region that bled.
+
+| Tool | Purpose |
+|---|---|
+| `add_paint_constraint` | Attach an invariant to a session (e.g. "these triangles must remain unpainted") |
+| `list_paint_constraints` | Enumerate constraints on a session |
+| `clear_paint_constraints` | Drop one constraint or all |
+
+Constraint kinds:
+- `must_remain_unpainted` — the triangle set must end at tag 0.
+- `must_be_painted` — the triangle set must end non-zero (any tag).
+- `must_be_tag` (with `tag`) — the triangle set must end at this tag.
+- `must_not_be_tag` (with `tag`) — the triangle set must NOT end at this tag.
+
+`commit_paint_session` validates every constraint before emitting
+`LoadPaintState`. On any violation: commit is rejected, the live
+model is not touched, the session is left intact, and the response
+includes `violations: [{constraint_id, kind, violating_triangle_count, sample, description}]`
+so the LLM can fix in-session (apply a corrective paint with
+`merge='only_unpainted'`, paint a different tag with
+`merge='only_tagged'`, or `discard_paint_session` and retry).
+Pass `force=true` to commit anyway; the response records the
+forced violations for audit.
+
 ## Tool surface
 
 ### Vision (M2 + D18 + D19 + D21)
@@ -151,7 +178,10 @@ Render results include:
 | `paint_surface_region` | Smart-fill from a seed (dihedral-angle gated BFS) |
 | `paint_connected_component` | Paint whole connected sub-mesh from a seed |
 | `paint_triangle_list` | Raw escape hatch: a list of triangle IDs |
-| `paint_projected_mask` | Reverse-project a 2D polygon mask through a camera (D18d adds `depth_mode='any_facing'`) |
+| `paint_projected_mask` | Reverse-project a 2D polygon mask through a camera (D18d adds `depth_mode='any_facing'`; M8a adds `depth_mode='front_plus_thin'` with `thickness_mm` for thin shells) |
+| `paint_frustum` (M6) | Select triangles whose centroid projects inside a 2D pixel bbox + face the camera. Cheaper and more reliable than a polygon mask for rectangular selections |
+| `paint_gradient` (M6) | Procedural per-axis or per-direction gradient quantized to N filament-slot stops |
+| `paint_noise` (M6) | Procedural 3D value noise quantized to N stops; deterministic for a given `seed` |
 | `paint_geodesic_disc` (D18a) | Surface-bounded disc; right tool for organic bulges |
 | `paint_stroke` (D22) | Polyline brush: densify → union of geodesic discs → one undo step |
 | `paint_semantic_region` (D22) | Paint by cached segmentation `region_id` instead of triangle list |

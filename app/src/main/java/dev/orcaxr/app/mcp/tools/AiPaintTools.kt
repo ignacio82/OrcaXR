@@ -276,7 +276,7 @@ internal object AiPaintTools {
     }
 
     /** Common preflight: model exists, attached, kind / merge / tag valid. */
-    private suspend fun preflight(
+    internal suspend fun preflight(
         ws: WorkspaceModel,
         args: JSONObject,
     ): Either<ToolResult, Plan> {
@@ -339,7 +339,7 @@ internal object AiPaintTools {
         return Either.Right(Plan(model, kind, merge, tag, whereTag, bvh, session))
     }
 
-    private data class Plan(
+    internal data class Plan(
         val model: PlacedModel,
         val kind: WorkspaceAction.PaintKind,
         val merge: WorkspaceAction.MergeMode,
@@ -351,7 +351,7 @@ internal object AiPaintTools {
         val session: AiPaintSession?,
     )
 
-    private sealed interface Either<out L, out R> {
+    internal sealed interface Either<out L, out R> {
         data class Left<L>(val value: L) : Either<L, Nothing>
         data class Right<R>(val value: R) : Either<Nothing, R>
     }
@@ -399,7 +399,7 @@ internal object AiPaintTools {
      *  apply happens against the session's scratch buffer in-process
      *  (no [WorkspaceAction] emitted, no scene rebake). The response
      *  body's [`session_id`] field signals the headless path. */
-    private suspend fun emitAndRespond(
+    internal suspend fun emitAndRespond(
         ws: WorkspaceModel,
         plan: Plan,
         candidates: IntArray,
@@ -472,7 +472,7 @@ internal object AiPaintTools {
      *  default change). LLMs that genuinely consume the indices
      *  (rare — `paint_triangle_list` chaining is the main case) opt
      *  in per call. */
-    private fun returnIndicesFlag(args: JSONObject): Boolean =
+    internal fun returnIndicesFlag(args: JSONObject): Boolean =
         args.optBoolean("return_indices", false)
 
     /** Shared schema fragment for the session_id arg. Added to every
@@ -886,7 +886,18 @@ internal object AiPaintTools {
                         put("items", Schemas.number(""))
                     })
                 },
-                "depth_mode" to Schemas.string("'front_facing_only' (default) | 'any_facing' (catches curvature wraparound) | 'all_hits'"),
+                "depth_mode" to Schemas.string(
+                    "'front_facing_only' (default) | 'any_facing' (catches curvature wraparound) | " +
+                        "'all_hits' | 'front_plus_thin' (front-most hit + every hit within thickness_mm; " +
+                        "for thin-walled shells like a Benchy hull where the back face of the wall " +
+                        "should also paint but the opposite hull side / cabin interior should not)"
+                ),
+                "thickness_mm" to Schemas.number(
+                    "Required when depth_mode='front_plus_thin'. Wall thickness in mm — every ray hit " +
+                        "within this distance of the front-most hit also paints (back-face filter is " +
+                        "ignored on the thin extension by design, since a thin shell's back face has " +
+                        "a normal pointing away from the camera)."
+                ),
                 "back_face_filter" to Schemas.bool("Reject hits whose normal faces away from the camera (default true)"),
                 "tag" to Schemas.integer("Tag to apply"),
                 "merge" to Schemas.string("'replace' (default) | 'only_unpainted' | 'only_tagged'"),
@@ -926,14 +937,27 @@ internal object AiPaintTools {
             }
             if (polys.isEmpty()) return ToolResult.error("at least one non-empty polygon required")
             val depthRaw = args.optString("depth_mode", "front_facing_only").lowercase()
-            val depth = when (depthRaw) {
+            val depth: dev.orcaxr.app.AiMaskProjection.DepthMode = when (depthRaw) {
                 "", "front_facing_only", "front" -> dev.orcaxr.app.AiMaskProjection.DepthMode.FrontFacingOnly
                 "all_hits", "all" -> dev.orcaxr.app.AiMaskProjection.DepthMode.AllHits
                 // D18d — keep all front-facing tris along the ray
                 // (lit hemisphere), catching wraparound on bulges.
                 "any_facing", "any", "lit" -> dev.orcaxr.app.AiMaskProjection.DepthMode.AnyFacing
+                // M8a — front-most hit + every subsequent hit within
+                // thickness_mm. Catches the back face of a thin shell
+                // (Benchy hull) without painting deeper geometry.
+                "front_plus_thin", "thin", "shell" -> {
+                    val thicknessMm = args.optFloat("thickness_mm")
+                        ?: return ToolResult.error(
+                            "depth_mode='front_plus_thin' requires 'thickness_mm' (wall thickness in mm).",
+                        )
+                    if (thicknessMm <= 0f) {
+                        return ToolResult.error("thickness_mm must be > 0; got $thicknessMm.")
+                    }
+                    dev.orcaxr.app.AiMaskProjection.DepthMode.FrontPlusThin(thicknessMm)
+                }
                 else -> return ToolResult.error(
-                    "depth_mode must be front_facing_only|all_hits|any_facing",
+                    "depth_mode must be front_facing_only|all_hits|any_facing|front_plus_thin",
                 )
             }
             val backFace = args.optBoolean("back_face_filter", true)
