@@ -158,9 +158,9 @@ OrcaXR is a collaborative effort built upon the giant shoulders of the 3D printi
 
 ## Related work
 
-Other Android-native slicer projects in the same space. We don't share code with them, but we've benefited from knowing they exist:
+Other Android-native slicer projects in the same space:
 
-*   **[U1 Slicer for Android](https://github.com/taylormadearmy/u1-slicer-for-android)** — Snapmaker U1-only Android slicer built on the Snapmaker Orca 2.2.4 fork, with a Compose UI and an OpenGL ES G-code viewer. Independent codebase and architecture from OrcaXR.
+*   **[U1 Slicer for Android](https://github.com/taylormadearmy/u1-slicer-for-android)** — Snapmaker U1-only Android slicer built on the Snapmaker Orca 2.2.4 fork, with a Compose UI and an OpenGL ES bed/model viewer. OrcaXR's mobile-shell GL viewer (`app/src/main/java/dev/orcaxr/app/mobile/viewer/`) is ported from this project; see `NOTICE.md` for the per-file attribution. The slicing JNI architecture and 3MF pipeline are independent.
 
 ## License
 
