@@ -20,6 +20,7 @@ androidx-xr-compose = "1.0.0-alpha12"
 androidx-xr-compose-material3 = "1.0.0-alpha16"
 androidx-xr-runtime = "1.0.0-alpha12"
 androidx-xr-scenecore = "1.0.0-alpha13"
+filament = "1.71.3"
 junit = "4.13.2"
 kotlin = "2.3.21"
 kotlinx-coroutines = "1.10.2"
@@ -51,6 +52,9 @@ androidx-xr-compose = { module = "androidx.xr.compose:compose", version.ref = "a
 androidx-xr-compose-material3 = { module = "androidx.xr.compose.material3:material3", version.ref = "androidx-xr-compose-material3" }
 androidx-xr-runtime = { module = "androidx.xr.runtime:runtime", version.ref = "androidx-xr-runtime" }
 androidx-xr-scenecore = { module = "androidx.xr.scenecore:scenecore", version.ref = "androidx-xr-scenecore" }
+filament-android = { module = "com.google.android.filament:filament-android", version.ref = "filament" }
+filament-utils-android = { module = "com.google.android.filament:filament-utils-android", version.ref = "filament" }
+gltfio-android = { module = "com.google.android.filament:gltfio-android", version.ref = "filament" }
 junit = { module = "junit:junit", version.ref = "junit" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinx-coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }

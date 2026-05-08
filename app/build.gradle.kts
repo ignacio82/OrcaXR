@@ -336,6 +336,16 @@ dependencies {
     implementation(libs.androidx.xr.compose)
     implementation(libs.androidx.xr.compose.material3)
 
+    // Filament — direct GPU rendering for the mobile-shell 3D toolpath
+    // viewer. Loads the GLB produced by `ToolpathGlb.write` (the same
+    // bake the XR path consumes) so the mobile and XR previews share a
+    // single source of truth. `filament-utils-android` carries the
+    // orbit-camera Manipulator + KTX/IBL loaders; `gltfio-android`
+    // pulls glTF/GLB asset loading on top of the core engine.
+    implementation(libs.filament.android)
+    implementation(libs.filament.utils.android)
+    implementation(libs.gltfio.android)
+
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)

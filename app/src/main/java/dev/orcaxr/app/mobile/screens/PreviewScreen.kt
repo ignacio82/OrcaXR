@@ -24,6 +24,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,6 +47,7 @@ import dev.orcaxr.app.GcodeParser
 import dev.orcaxr.app.MoonrakerClient
 import dev.orcaxr.app.ParsedToolpath
 import dev.orcaxr.app.mobile.GcodeThumbnailReader
+import dev.orcaxr.app.mobile.MobileToolpath3DViewer
 import dev.orcaxr.app.mobile.ToolpathLayerView
 import dev.orcaxr.app.mobile.ToolpathRolesLegend
 import dev.orcaxr.app.MoonrakerResult
@@ -199,12 +203,33 @@ fun PreviewScreen(isTablet: Boolean) {
 
                 val tp = toolpath
                 if (tp != null && tp.layerZs.isNotEmpty()) {
+                    var view3D by remember(tp) { mutableStateOf(false) }
                     MobileCard {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            SectionKicker("Toolpath")
-                            ToolpathLayerView(parsed = tp)
-                            val activeRoles = remember(tp) { tp.segments.map { it.role }.toSet() }
-                            ToolpathRolesLegend(activeRoles)
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                SectionKicker("Toolpath")
+                                SingleChoiceSegmentedButtonRow {
+                                    val labels = listOf("2D layers", "3D")
+                                    labels.forEachIndexed { i, label ->
+                                        SegmentedButton(
+                                            selected = if (i == 0) !view3D else view3D,
+                                            onClick = { view3D = i == 1 },
+                                            shape = SegmentedButtonDefaults.itemShape(index = i, count = labels.size),
+                                        ) { Text(label) }
+                                    }
+                                }
+                            }
+                            if (view3D) {
+                                MobileToolpath3DViewer(parsed = tp)
+                            } else {
+                                ToolpathLayerView(parsed = tp)
+                                val activeRoles = remember(tp) { tp.segments.map { it.role }.toSet() }
+                                ToolpathRolesLegend(activeRoles)
+                            }
                         }
                     }
                 } else if (parsing) {
