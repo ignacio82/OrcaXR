@@ -75,6 +75,39 @@ internal object AiMaskProjection {
         val w = camera.widthPx
         val h = camera.heightPx
         require(mask.size == w * h) { "mask must be width*height booleans" }
+        // M8b — opt-in native fast path. Falls back to Kotlin if the
+        // toggle is off, the .so isn't loaded (JVM tests), or the
+        // call surfaces an error. Parity with the Kotlin
+        // implementation here is the load-bearing claim and is
+        // exercised by `benchmark_native_bvh` on-device.
+        if (NativeBvh.isEnabled()) {
+            val nativeOut = NativeBvh.projectMask(
+                bvhArrays = bvh.nativeBvhArraysView(),
+                camera = camera,
+                mask = mask,
+                depthMode = depthMode,
+                backFaceFilter = backFaceFilter,
+            )
+            if (nativeOut != null) return nativeOut
+        }
+        return projectKotlin(bvh, camera, mask, depthMode, backFaceFilter)
+    }
+
+    /**
+     * Pure-Kotlin reference implementation. Used as the canonical
+     * path until [NativeBvh] is verified on-device, and as the
+     * authoritative oracle for parity tests forever after.
+     */
+    fun projectKotlin(
+        bvh: MeshBvh,
+        camera: AiRenderEngine.CameraSpec,
+        mask: BooleanArray,
+        depthMode: DepthMode = DepthMode.FrontFacingOnly,
+        backFaceFilter: Boolean = true,
+    ): IntArray {
+        val w = camera.widthPx
+        val h = camera.heightPx
+        require(mask.size == w * h) { "mask must be width*height booleans" }
         val invMVP = invert4x4(matMulRowMajor(camera.projMatrixRowMajor, camera.viewMatrixRowMajor))
             ?: return IntArray(0)
         // Camera origin in world space = inverse(view) * (0, 0, 0, 1).

@@ -244,6 +244,23 @@ segment.
 | `split_model` | Split into connected components |
 | `emboss_model` | Text/SVG → boolean against host (`mode='emboss'`/`'engrave'`) OR drop as fresh PlacedModel (`mode='add_object'`, D15) |
 
+### Native BVH (M8b — opt-in)
+
+| Tool | Purpose |
+|---|---|
+| `set_native_bvh_enabled(enabled)` | Flip the C++ ray-mask projection toggle for `paint_projected_mask`. Default OFF. |
+| `get_native_bvh_status()` | Report toggle + JNI-probe state. |
+| `benchmark_native_bvh(model_id, camera_descriptor, polygons, [iterations, depth_mode, thickness_mm, back_face_filter])` | Run both Kotlin reference and native paths on the same inputs; assert triangle-set parity; report per-path min/median/max ms + `speedup_median`. The verification gate before flipping the toggle on. |
+
+Recipe: load a representative model → `render_view` for a camera → call
+`benchmark_native_bvh` with iterations≥5 → check `parity=true` AND
+`speedup_median > 1.5` AND `native_available=true` → only then call
+`set_native_bvh_enabled(true)`. The toggle is process-scoped (resets on
+app restart). If the native call fails at runtime for any reason
+(symbol missing, allocation failure, parity drift), the engine silently
+falls back to the canonical Kotlin path — painters never see corrupted
+output.
+
 ## D22 — LLM-painting amplifiers
 
 A late-2026 add bundle of eight tools that compress the typical

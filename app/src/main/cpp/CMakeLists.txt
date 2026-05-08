@@ -138,6 +138,13 @@ add_library(slic3r_jni SHARED
     slic3r_jni.cpp
     nanosvg_impl.cpp
     thumbnail_render.cpp
+    # M8b — native BVH ray-mask projection. Self-contained
+    # (libslic3r-free) C++ port of AiMaskProjection.project for
+    # paint_projected_mask. Lives behind an opt-in NativeBvh flag in
+    # Kotlin; the existing Kotlin path is the default until on-device
+    # parity + speedup are confirmed via benchmark_native_bvh.
+    ai_bvh.cpp
+    ai_bvh_jni.cpp
 )
 
 # First-pass link set. libslic3r.a goes inside --whole-archive because we

@@ -671,6 +671,26 @@ class MeshBvh private constructor(
         }
     }
 
+    /**
+     * M8b: expose the internal primitive arrays so [NativeBvh] can
+     * pass them to the native BVH traversal without copying. The
+     * arrays are immutable-by-convention from the time the BVH is
+     * built; sharing references is safe as long as callers don't
+     * mutate.
+     *
+     * Internal-visibility-only so the surface area stays narrow —
+     * only `NativeBvh` should be reaching in here.
+     */
+    internal fun nativeBvhArraysView(): NativeBvh.BvhArrays = NativeBvh.BvhArrays(
+        positions = mesh.positions,
+        triIdx = triIdx,
+        nodeAabb = nodeAabb,
+        nodeLeft = nodeLeft,
+        nodeRight = nodeRight,
+        nodeLeafStart = nodeLeafStart,
+        nodeLeafEnd = nodeLeafEnd,
+    )
+
     companion object {
         /** Below this leaf size, stop subdividing. Tuned so the leaf
          *  scan amortizes against the slab-test cost. */

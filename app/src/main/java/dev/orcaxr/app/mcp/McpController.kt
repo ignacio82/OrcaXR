@@ -18,6 +18,7 @@ import dev.orcaxr.app.mcp.tools.PaintStrokeTool
 import dev.orcaxr.app.mcp.tools.PaintTemplateTools
 import dev.orcaxr.app.mcp.tools.FilamentTools
 import dev.orcaxr.app.mcp.tools.HandyModelTools
+import dev.orcaxr.app.mcp.tools.NativeBvhTools
 import dev.orcaxr.app.mcp.tools.PrefsTools
 import dev.orcaxr.app.mcp.tools.CalibrationTools
 import dev.orcaxr.app.mcp.tools.SettingsBackupTools
@@ -251,6 +252,11 @@ class McpController private constructor(
             // rejected and the live model is left untouched. Pass
             // force=true to commit anyway.
             for (t in PaintConstraintTools.all(WorkspaceModel.get())) builder.tool(t)
+            // M8b — native BVH ray-mask projection (opt-in). The
+            // Kotlin path is canonical; flip with set_native_bvh_enabled
+            // after benchmark_native_bvh confirms parity + speedup
+            // on this device.
+            for (t in NativeBvhTools.all(WorkspaceModel.get())) builder.tool(t)
             // C9 milestone 3 — geometry / topology introspection.
             for (t in AiIntrospectionTools.all(WorkspaceModel.get())) builder.tool(t)
             // Anchor + seed + coverage tools — turn spatial reasoning

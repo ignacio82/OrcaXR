@@ -1058,14 +1058,46 @@ the visible side and leaves the inside un-painted for backlit slices).
   — accept new `depth_mode: "front_plus_thin"` plus optional
   `thickness_mm: float` (default = 2.0). Validates `thicknessMm > 0`.
 
-**M8b — native SIMD BVH (later, gated on profiling).** Mask projection at
-768² with `all_hits` is ~1.5 s today (G.5). When profiling shows this is the
-binding latency for the LLM loop, port `MeshBvh.intersect` /
-`MeshBvh.intersectAll` into C++ as `nativeBvhIntersect` /
-`nativeBvhIntersectAll` using a header-only SIMD BVH (e.g. madmann91/bvh).
-Embree is x86-only on Android arm64 — explicitly not viable. Out of scope for
-this milestone; tracked here so the path is documented when the data demands
-it.
+**M8b — native ray-mask projection (shipped behind opt-in toggle).** Direct
+C++ port of `AiMaskProjection.project` + the `MeshBvh.intersect` /
+`intersectAll` traversals it leans on. Lives in `app/src/main/cpp/ai_bvh.{cpp,hpp}`
++ a JNI binding in `ai_bvh_jni.cpp`; data passes through as primitive arrays
+pinned via `GetPrimitiveArrayCritical` (zero-copy). The Kotlin entry point
+[NativeBvh] gates on a runtime toggle that defaults OFF — the canonical
+[AiMaskProjection.projectKotlin] path stays the reference until on-device
+parity + speedup are confirmed.
+
+Three MCP tools surface the verification recipe:
+- `set_native_bvh_enabled(enabled: bool)` — flip the toggle.
+- `get_native_bvh_status()` — report current toggle + JNI probe state.
+- `benchmark_native_bvh(model_id, camera_descriptor, polygons, [iterations,
+  depth_mode, thickness_mm, back_face_filter])` — runs both Kotlin and native
+  paths against the same inputs; asserts the triangle sets match exactly;
+  reports min/median/max ms per path and `speedup_median`. `parity=true` is
+  the gate to flipping the toggle; `parity=false` surfaces sample diffs of
+  triangles that diverged. Run this on a real device before enabling
+  globally.
+
+SIMD-free for now — tightening to NEON ray packets is a follow-up gated on
+the benchmark numbers from a representative model. Embree is x86-only on
+Android arm64 and explicitly not viable; if/when the BVH itself needs to
+move to a SIMD-aware traversal we'll evaluate header-only options
+(madmann91/bvh).
+
+**Verification recipe (on-device):**
+1. `load_model_from_path` for a representative model (Pikachu / Benchy / a
+   high-poly Funko Pop work fine — anything with surface area > 5000 mm²).
+2. `render_view` to get a `camera_descriptor`.
+3. `benchmark_native_bvh` with `iterations: 10` and a polygon that covers a
+   meaningful fraction of the rendered model.
+4. Inspect the response: `parity=true`, `speedup_median > 1.5`, `native_available=true`.
+5. If all three hold, `set_native_bvh_enabled(true)`. Otherwise file the
+   `parity_diff` (or the speedup_median number) as a bug.
+
+The fallback safety: if anything goes wrong with the native call at runtime
+(symbol resolution, allocation failure, parity drift between platform
+versions), [NativeBvh.projectMask] returns null and [AiMaskProjection.project]
+silently runs the Kotlin reference. Painters never see corrupted state.
 
 **Test strategy:**
 - `MaskProjectionFrontPlusThinTest` — known camera + a thin-walled hollow
