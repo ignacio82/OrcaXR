@@ -156,6 +156,12 @@ OrcaXR is a collaborative effort built upon the giant shoulders of the 3D printi
 *   **[Klipper](https://github.com/Klipper3d/klipper) & [Moonraker](https://github.com/Arksine/moonraker)** — for the firmware and API that make network-based slicing possible.
 *   **Jetpack XR** — the Google / Samsung platform that makes spatial computing on Android a reality.
 
+## Related work
+
+Other Android-native slicer projects in the same space. We don't share code with them, but we've benefited from knowing they exist:
+
+*   **[U1 Slicer for Android](https://github.com/taylormadearmy/u1-slicer-for-android)** — Snapmaker U1-only Android slicer built on the Snapmaker Orca 2.2.4 fork, with a Compose UI and an OpenGL ES G-code viewer. Independent codebase and architecture from OrcaXR.
+
 ## License
 
 OrcaXR is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
