@@ -49,9 +49,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.Dispatchers
+import dev.orcaxr.app.llm.local.Gemma4Catalog
+import dev.orcaxr.app.llm.local.Gemma4DownloadRepository
+import dev.orcaxr.app.llm.local.Gemma4Size
+import dev.orcaxr.app.llm.runner.AgentRunner
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /**
@@ -88,7 +90,16 @@ fun LlmAssistantPanel(
 ) {
     val context = LocalContext.current
     val settings = remember { LlmSettings.get(context) }
+    // The bridge is still used for the header tool-count display.
+    // The runner has its own internal bridge for the actual loop;
+    // both read the same process-singleton stores so they agree on
+    // what tools exist.
     val bridge = remember { LlmToolBridge(context.applicationContext) }
+    // P2: hoist the conversation + tool-loop into the AgentRunner
+    // singleton so a turn survives the panel's dispose, the user
+    // taking off the headset, and process death. The panel becomes
+    // a pure observer + input forwarder — no in-flight Job here.
+    val runner = remember { AgentRunner.get(context) }
     val scope = rememberCoroutineScope()
 
     val selected by settings.selectedProvider.collectAsState(initial = LlmProvider.Claude)
@@ -99,23 +110,53 @@ fun LlmAssistantPanel(
     val geminiModel by settings.geminiModel.collectAsState(initial = null)
     val openAiModel by settings.openAiModel.collectAsState(initial = null)
     val voiceEnabled by settings.voiceEnabled.collectAsState(initial = false)
+    val localSize by settings.localModelSize.collectAsState(initial = Gemma4Size.E2B)
+
+    // Local-backend readiness — the .litertlm has to be on disk for
+    // [LocalLlmClient] to load it. We use the repository's
+    // statusFlow for the active size; switching size flips this and
+    // the send button updates accordingly.
+    val localRepo = remember(localSize) {
+        Gemma4DownloadRepository(context.applicationContext, Gemma4Catalog.forSize(localSize))
+    }
+    val localStatus by localRepo.statusFlow().collectAsState(
+        initial = localRepo.status.value,
+    )
+    val localReady = localStatus is Gemma4DownloadRepository.Status.Complete
 
     val activeKey = when (selected) {
         LlmProvider.Claude -> claudeKey
         LlmProvider.Gemini -> geminiKey
         LlmProvider.OpenAI -> openAiKey
+        LlmProvider.Local -> null
     }?.takeIf { it.isNotBlank() }
     val activeModel = when (selected) {
         LlmProvider.Claude -> claudeModel
         LlmProvider.Gemini -> geminiModel
         LlmProvider.OpenAI -> openAiModel
+        LlmProvider.Local -> null
     }?.takeIf { it.isNotBlank() }
+    /** Provider-agnostic readiness — true when the chat panel can
+     *  send a message. Cloud needs a key; Local needs the bundle on
+     *  disk. */
+    val readyForSend = when (selected) {
+        LlmProvider.Local -> localReady
+        else -> activeKey != null
+    }
 
-    val turns = remember { mutableStateListOf<LlmTurn>() }
-    var isReplying by remember { mutableStateOf(false) }
+    val turns by runner.turns.collectAsState()
+    val runState by runner.runState.collectAsState()
+    val isReplying = runState is AgentRunner.RunState.Replying
+    val runnerLastError by runner.lastError.collectAsState()
+    val interruptedOnLoad by runner.interruptedOnLoad.collectAsState()
     var draftText by remember { mutableStateOf("") }
     var voicePartial by remember { mutableStateOf<String?>(null) }
+    /** Transient panel-local errors (mic permission denied, voice
+     *  recogniser failures). Distinct from [runnerLastError]
+     *  which surfaces agent-loop failures. Both render in the
+     *  same banner. */
     var lastError by remember { mutableStateOf<String?>(null) }
+    val effectiveError = lastError ?: runnerLastError
 
     val voice = remember { VoiceInput(context.applicationContext) }
     var voiceListening by remember { mutableStateOf(false) }
@@ -140,13 +181,7 @@ fun LlmAssistantPanel(
             onFinal = { text ->
                 voicePartial = null
                 voiceListening = false
-                if (text.isNotBlank()) {
-                    sendMessage(
-                        text, turns, bridge, selected, activeKey, activeModel,
-                        scope, onError = { lastError = it },
-                        onReplyingChange = { isReplying = it },
-                    )
-                }
+                if (text.isNotBlank()) runner.send(text)
             },
             onError = { msg ->
                 voicePartial = null
@@ -198,16 +233,36 @@ fun LlmAssistantPanel(
 
             Spacer(Modifier.height(12.dp))
 
-            if (activeKey == null) {
+            if (!readyForSend) {
+                val (warningText, warningColor) = when (selected) {
+                    LlmProvider.Local -> {
+                        val status = localStatus
+                        val msg = when (status) {
+                            is Gemma4DownloadRepository.Status.Downloading -> {
+                                val mb = status.bytesDownloaded / 1_048_576L
+                                val total = status.bytesTotal / 1_048_576L
+                                "Gemma 4 ${localSize.name} downloading… $mb / $total MB"
+                            }
+                            is Gemma4DownloadRepository.Status.Failed ->
+                                "Gemma 4 ${localSize.name} download failed: ${status.reason}. " +
+                                    "Retry from Devices → AI assistant."
+                            else ->
+                                "Gemma 4 ${localSize.name} not yet on disk. Download from " +
+                                    "Devices → AI assistant to start chatting on-device."
+                        }
+                        msg to Color(0xFFE0B070)
+                    }
+                    else -> "No ${selected.keyName} key set. Add one in Devices → AI assistant " +
+                        "to start chatting." to Color(0xFFE0B070)
+                }
                 Surface(
                     color = Color(0xFF2A1F1A),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(
-                        "No ${selected.keyName} key set. Add one in Devices → AI assistant " +
-                            "to start chatting.",
-                        color = Color(0xFFE0B070),
+                        warningText,
+                        color = warningColor,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(12.dp),
                     )
@@ -235,13 +290,7 @@ fun LlmAssistantPanel(
                         Spacer(Modifier.height(8.dp))
                         for (suggestion in SUGGESTED_PROMPTS) {
                             SuggestionChip(suggestion) {
-                                if (activeKey != null) {
-                                    sendMessage(
-                                        suggestion, turns, bridge, selected, activeKey, activeModel,
-                                        scope, onError = { lastError = it },
-                                        onReplyingChange = { isReplying = it },
-                                    )
-                                }
+                                if (readyForSend) runner.send(suggestion)
                             }
                             Spacer(Modifier.height(6.dp))
                         }
@@ -275,7 +324,40 @@ fun LlmAssistantPanel(
                     )
                 }
             }
-            lastError?.let { err ->
+            // P2: surface "session was interrupted" once per load
+            // so the user knows the previous turn didn't complete.
+            // Acknowledging dismisses the banner; sending a new
+            // message also dismisses it (runner clears the flag).
+            if (interruptedOnLoad) {
+                Spacer(Modifier.height(6.dp))
+                Surface(
+                    color = Color(0xFF2A1F1A),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp).fillMaxWidth(),
+                    ) {
+                        Text(
+                            "Last turn was interrupted (process killed mid-turn). Send a new " +
+                                "message to continue, or start a New chat.",
+                            color = Color(0xFFE0B070),
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.height(0.dp))
+                        Text(
+                            "Got it",
+                            color = Color(0xFF7BC8FF),
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.clickable { runner.acknowledgeInterruption() },
+                        )
+                    }
+                }
+            }
+            effectiveError?.let { err ->
                 Spacer(Modifier.height(6.dp))
                 Surface(
                     color = Color(0xFF3A1A1A),
@@ -294,13 +376,6 @@ fun LlmAssistantPanel(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            // H_PIXEL10 follow-up (2026-05-08) — copying
-                            // an HTTP 4xx body is the fastest way for a
-                            // user to share what the provider rejected.
-                            // ClipboardManager not LocalClipboard so this
-                            // works the same on mobile (where the
-                            // suspend-based LocalClipboard is fine but
-                            // overkill for a one-shot setText).
                             val ctx = androidx.compose.ui.platform.LocalContext.current
                             Text(
                                 "Copy",
@@ -327,6 +402,11 @@ fun LlmAssistantPanel(
                                 "Dismiss",
                                 color = Color(0xFFB6BEC8),
                                 style = MaterialTheme.typography.labelSmall,
+                                // Dismiss covers both panel-local mic
+                                // errors and runner errors. The runner
+                                // clears its lastError on the next
+                                // successful send; explicit dismiss
+                                // also nulls the panel-local copy.
                                 modifier = Modifier.clickable { lastError = null },
                             )
                         }
@@ -348,7 +428,7 @@ fun LlmAssistantPanel(
                         shape = RoundedCornerShape(28.dp),
                         modifier = Modifier
                             .size(48.dp)
-                            .clickable(enabled = activeKey != null && !isReplying) {
+                            .clickable(enabled = readyForSend && !isReplying) {
                                 if (voiceListening) stopListening() else startListening()
                             },
                     ) {
@@ -365,7 +445,7 @@ fun LlmAssistantPanel(
                     value = draftText,
                     onValueChange = { draftText = it },
                     placeholder = { Text("Ask the assistant…", color = Color(0xFF6A7484)) },
-                    enabled = activeKey != null && !isReplying,
+                    enabled = readyForSend && !isReplying,
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.Sentences,
                         imeAction = ImeAction.Send,
@@ -387,14 +467,10 @@ fun LlmAssistantPanel(
                     shape = RoundedCornerShape(28.dp),
                     modifier = Modifier
                         .size(48.dp)
-                        .clickable(enabled = draftText.isNotBlank() && activeKey != null && !isReplying) {
+                        .clickable(enabled = draftText.isNotBlank() && readyForSend && !isReplying) {
                             val msg = draftText.trim()
                             draftText = ""
-                            sendMessage(
-                                msg, turns, bridge, selected, activeKey, activeModel,
-                                scope, onError = { lastError = it },
-                                onReplyingChange = { isReplying = it },
-                            )
+                            runner.send(msg)
                         },
                 ) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -409,20 +485,32 @@ fun LlmAssistantPanel(
 
             if (turns.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    "Clear conversation",
-                    color = Color(0xFF6A7484),
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.clickable {
-                        turns.clear(); lastError = null; voicePartial = null
-                    },
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    Text(
+                        "New chat",
+                        color = Color(0xFF6A7484),
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.clickable {
+                            runner.newConversation()
+                            lastError = null
+                            voicePartial = null
+                        },
+                    )
+                    if (isReplying) {
+                        Text(
+                            "Stop",
+                            color = Color(0xFFE07070),
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.clickable { runner.cancel(reason = "user") },
+                        )
+                    }
+                }
             }
         }
     }
 }
-
-private const val MAX_TOOL_HOPS = 12
 
 private val SUGGESTED_PROMPTS = listOf(
     "What can you do?",
@@ -431,77 +519,9 @@ private val SUGGESTED_PROMPTS = listOf(
     "Show me the active plate.",
 )
 
-private val SYSTEM_PROMPT = """
-    You are the in-headset assistant for OrcaXR, an Android XR slicer for 3D printers.
-    The user is wearing a headset and may be talking to you by voice. Keep replies short
-    (1–3 sentences when text-only suffices). When the user asks you to do something,
-    prefer using the available tools rather than describing what to do; the tools execute
-    real actions on the user's workspace and printers. Confirm destructive actions (delete,
-    cancel print, clear paint) before invoking them. If a tool returns an error, summarize
-    what went wrong and offer one concrete next step. Do not invent tool names or fields.
-""".trimIndent()
-
-private fun sendMessage(
-    text: String,
-    turns: androidx.compose.runtime.snapshots.SnapshotStateList<LlmTurn>,
-    bridge: LlmToolBridge,
-    selected: LlmProvider,
-    activeKey: String?,
-    activeModel: String?,
-    scope: kotlinx.coroutines.CoroutineScope,
-    onError: (String) -> Unit,
-    onReplyingChange: (Boolean) -> Unit,
-) {
-    if (activeKey == null) {
-        onError("No API key for ${selected.displayName}.")
-        return
-    }
-    turns.add(LlmTurn.User(text))
-    onReplyingChange(true)
-    val client = LlmClient.forProvider(selected, activeKey, activeModel)
-    val toolDefs = bridge.toolDefs()
-
-    scope.launch {
-        var hops = MAX_TOOL_HOPS
-        try {
-            while (hops > 0) {
-                hops--
-                val result = withContext(Dispatchers.IO) {
-                    client.respond(turns.toList(), toolDefs, SYSTEM_PROMPT)
-                }
-                val resp = result.getOrElse {
-                    onError("${selected.displayName}: ${it.message ?: it.javaClass.simpleName}")
-                    return@launch
-                }
-                turns.add(LlmTurn.Assistant(text = resp.text, toolCalls = resp.toolCalls))
-                if (resp.toolCalls.isEmpty()) return@launch
-                for (call in resp.toolCalls) {
-                    val toolResult = withContext(Dispatchers.IO) {
-                        bridge.execute(call.name, call.args)
-                    }
-                    val (content, isErr) = if (toolResult == null) {
-                        "Unknown tool '${call.name}'." to true
-                    } else {
-                        val payload = JSONObject().apply {
-                            put("text", toolResult.text)
-                            if (toolResult.structured != null) put("structured", toolResult.structured)
-                        }
-                        payload.toString() to toolResult.isError
-                    }
-                    turns.add(
-                        LlmTurn.ToolResult(
-                            callId = call.id, name = call.name,
-                            content = content, isError = isErr,
-                        ),
-                    )
-                }
-            }
-            onError("Assistant hit the tool-call safety cap ($MAX_TOOL_HOPS hops).")
-        } finally {
-            onReplyingChange(false)
-        }
-    }
-}
+// The system prompt + tool-loop hops cap moved to AgentRunner in
+// P2. The panel is now a pure UI surface; the runner singleton owns
+// the conversation state and the loop.
 
 @Composable
 private fun TranscriptRow(turn: LlmTurn) {

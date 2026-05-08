@@ -40,13 +40,24 @@ interface LlmClient {
          *  overrides the per-provider DEFAULT_MODEL constant. The
          *  user-facing model field in LlmAssistantCard threads the
          *  override here so the user can paste in a model id their
-         *  key has access to without a code change. */
+         *  key has access to without a code change.
+         *
+         *  [LlmProvider.Local] is intentionally rejected here — the
+         *  on-device backend takes a [android.content.Context] and a
+         *  [dev.orcaxr.app.llm.local.Gemma4Size] rather than an API
+         *  key, so callers must construct
+         *  [dev.orcaxr.app.llm.local.LocalLlmClient] directly. The
+         *  panel does this in its provider-branching `sendMessage`. */
         fun forProvider(p: LlmProvider, apiKey: String, model: String? = null): LlmClient {
             val resolved = model?.takeIf { it.isNotBlank() }
             return when (p) {
                 LlmProvider.Claude -> ClaudeLlmClient(apiKey, resolved ?: ClaudeLlmClient.DEFAULT_MODEL)
                 LlmProvider.Gemini -> GeminiLlmClient(apiKey, resolved ?: GeminiLlmClient.DEFAULT_MODEL)
                 LlmProvider.OpenAI -> OpenAiLlmClient(apiKey, resolved ?: OpenAiLlmClient.DEFAULT_MODEL)
+                LlmProvider.Local -> error(
+                    "LlmClient.forProvider does not support Local — construct " +
+                        "dev.orcaxr.app.llm.local.LocalLlmClient directly with a Context."
+                )
             }
         }
     }

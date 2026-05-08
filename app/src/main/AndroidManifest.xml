@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- XR target. required="false" so the APK installs on phones / emulators
          too (we fall back to a 2D Compose surface at runtime when the XR
@@ -31,6 +32,17 @@
          toggle and taps the panel's mic button for the first time. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
+    <!-- Local on-device LLM (Devices → AI assistant → Local). The
+         Gemma 4 .litertlm bundle is fetched as a foreground service
+         download (~2.4 GiB for E2B, ~3.4 GiB for E4B) so a multi-GB
+         pull survives the user backgrounding the app or doffing the
+         headset. WAKE_LOCK is what WorkManager's expedited path uses
+         under the hood to keep the CPU awake while the worker runs;
+         FOREGROUND_SERVICE / DATA_SYNC / POST_NOTIFICATIONS are
+         already declared above for the MCP server but apply equally
+         to the model download worker. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
         android:name=".OrcaXRApplication"
@@ -192,5 +204,32 @@
                 <action android:name="dev.orcaxr.app.action.SLICE_CANCEL" />
             </intent-filter>
         </receiver>
+
+        <!--
+          WorkManager's SystemForegroundService ships without a
+          foregroundServiceType attribute. Android 14+ rejects any
+          startForeground(type=…) call whose type isn't a subset of
+          the manifest declaration, so we override that service entry
+          to declare `dataSync` (matches the type
+          Gemma4DownloadWorker.createForegroundInfo passes in
+          ForegroundInfo). tools:node="merge" overlays this onto the
+          androidx.work-provided manifest entry rather than replacing
+          it wholesale.
+        -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+
+        <!--
+          dataSync foreground service that keeps the process alive
+          while the in-app assistant is mid-turn. AgentRunner starts
+          it on send() and stops it on Idle. Not exported — only
+          OrcaXR's own AgentRunner binds to it.
+        -->
+        <service
+            android:name=".llm.runner.AgentForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 </manifest>

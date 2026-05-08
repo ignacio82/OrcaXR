@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import dev.orcaxr.app.llm.local.Gemma4Size
 import dev.orcaxr.app.mcp.AndroidKeystoreSecretBox
 import dev.orcaxr.app.mcp.McpSettings
 import dev.orcaxr.app.mcp.SecretBox
@@ -14,16 +15,27 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 /**
- * The three providers OrcaXR's in-app assistant can talk to. Selection is
- * persisted so the user can keep keys for several providers but only
- * actively chat with one. The card flips between key-entry rows by
- * provider; the chat panel reads [LlmSettings.selectedProvider] to pick
- * which client to send through.
+ * The four providers OrcaXR's in-app assistant can talk to.
+ *
+ * - Cloud (Claude / Gemini / OpenAI) — billed to the user's own
+ *   account; needs an API key.
+ * - Local (on-device Gemma 4 via LiteRT-LM) — no key, free, but
+ *   requires downloading a 2-3 GiB .litertlm bundle the first time.
+ *   See `dev.orcaxr.app.llm.local.LocalLlmClient`.
+ *
+ * Selection is persisted so the user can keep keys for several
+ * providers but only actively chat with one. The card flips between
+ * key-entry rows (cloud) and a model-download row (local) by
+ * provider; the chat panel reads [LlmSettings.selectedProvider] to
+ * pick which client to send through.
  */
 enum class LlmProvider(val displayName: String, val keyName: String) {
     Claude("Claude", "Anthropic"),
     Gemini("Gemini", "Google AI Studio"),
     OpenAI("OpenAI", "OpenAI"),
+    /** On-device Gemma 4. `keyName` is unused for this entry but kept
+     *  non-empty for the existing card label code path. */
+    Local("Gemma 4", "On-device"),
     ;
     companion object {
         fun fromStorage(s: String?): LlmProvider = entries.firstOrNull { it.name == s } ?: Claude
@@ -96,6 +108,18 @@ class LlmSettings(
     val voiceEnabled: Flow<Boolean> = store.data.map { it[KEY_VOICE] ?: false }
 
     /**
+     * User's preferred Gemma 4 size for the on-device backend. E2B
+     * (~2.4 GiB, ~2.3B effective params) is the default — fits the
+     * Galaxy XR's thermal and RAM envelope better than E4B and the
+     * MMLU-Pro / tool-routing accuracy is enough for the slicer's
+     * tool surface. Users on a phone form factor with plenty of RAM
+     * can flip to E4B for the harder reasoning tasks.
+     */
+    val localModelSize: Flow<Gemma4Size> = store.data.map {
+        Gemma4Size.fromStorage(it[KEY_LOCAL_SIZE])
+    }
+
+    /**
      * Combined Claude key flow that prefers a value entered through this
      * settings store, with the legacy [McpSettings.anthropicApiKey] as
      * a fallback. The MCP-side vision tools subscribe to this so the
@@ -161,6 +185,10 @@ class LlmSettings(
         store.edit { it[KEY_VOICE] = value }
     }
 
+    suspend fun setLocalModelSize(size: Gemma4Size) {
+        store.edit { it[KEY_LOCAL_SIZE] = size.storageName }
+    }
+
     /** Snapshot for the chat panel — one DataStore read per turn. */
     suspend fun snapshot(): Snapshot {
         val prefs = store.data.first()
@@ -180,6 +208,7 @@ class LlmSettings(
             geminiModel = prefs[KEY_MODEL_GEMINI]?.takeIf { it.isNotBlank() },
             openAiModel = prefs[KEY_MODEL_OPENAI]?.takeIf { it.isNotBlank() },
             voiceEnabled = prefs[KEY_VOICE] ?: false,
+            localModelSize = Gemma4Size.fromStorage(prefs[KEY_LOCAL_SIZE]),
         )
     }
 
@@ -192,21 +221,28 @@ class LlmSettings(
         val geminiModel: String?,
         val openAiModel: String?,
         val voiceEnabled: Boolean,
+        val localModelSize: Gemma4Size,
     ) {
         fun keyFor(p: LlmProvider): String? = when (p) {
             LlmProvider.Claude -> claudeKey
             LlmProvider.Gemini -> geminiKey
             LlmProvider.OpenAI -> openAiKey
+            // On-device backend has no key — readiness is computed
+            // from Gemma4DownloadRepository.isDownloaded() at the
+            // call site instead.
+            LlmProvider.Local -> null
         }
 
         fun modelFor(p: LlmProvider): String? = when (p) {
             LlmProvider.Claude -> claudeModel
             LlmProvider.Gemini -> geminiModel
             LlmProvider.OpenAI -> openAiModel
+            LlmProvider.Local -> localModelSize.storageName
         }
 
-        /** True when at least one provider has a key set. The chat
-         *  panel and voice button gate on this. */
+        /** True when at least one cloud provider has a key set. The
+         *  chat panel and voice button gate on this OR
+         *  Local-model-downloaded. */
         val anyKeyConfigured: Boolean
             get() = !claudeKey.isNullOrBlank() ||
                 !geminiKey.isNullOrBlank() ||
@@ -222,6 +258,7 @@ class LlmSettings(
         private val KEY_MODEL_CLAUDE = stringPreferencesKey("llm_claude_model")
         private val KEY_MODEL_GEMINI = stringPreferencesKey("llm_gemini_model")
         private val KEY_MODEL_OPENAI = stringPreferencesKey("llm_openai_model")
+        private val KEY_LOCAL_SIZE = stringPreferencesKey("llm_local_size")
 
         @Volatile private var instance: LlmSettings? = null
 

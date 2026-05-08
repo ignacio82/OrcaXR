@@ -289,7 +289,26 @@ dependencies {
     implementation(libs.androidx.activity)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.datastore.preferences)
+    // WorkManager — drives the background download of the Gemma 4
+    // .litertlm bundle as a foreground service so a multi-GB fetch
+    // survives the user backgrounding the app or taking off the
+    // headset. dev.orcaxr.app.llm.local.Gemma4DownloadWorker is the
+    // load-bearing piece; the dep also provides
+    // androidx.work.impl.foreground.SystemForegroundService which the
+    // manifest re-declares with foregroundServiceType="dataSync".
+    implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.kotlinx.coroutines.android)
+    // On-device LLM runtime. com.google.ai.edge.litertlm:litertlm-android
+    // wraps libLiteRtLm + the GPU/NPU dispatchers; it loads
+    // .litertlm bundles (Gemma 4 E2B / E4B) and exposes a
+    // synchronous Engine + streaming Conversation API. Used by
+    // dev.orcaxr.app.llm.local.LiteRtEngineHolder. AICore (Gemini
+    // Nano via mlkit-genai-prompt) is intentionally NOT included —
+    // Galaxy XR has no Tensor TPU and AICore is allowlist-gated for
+    // third-party apps anyway; the cloud LlmClient implementations
+    // (Claude / Gemini / OpenAI) cover the smart-but-paid path and
+    // LiteRT-LM Gemma 4 covers the local-and-free path.
+    implementation(libs.litertlm.android)
     // Moonraker / printer HTTP client. Android's stock HttpURLConnection
     // returns SocketException("closed") talking to Mainsail's nginx in
     // front of Moonraker on the user's LAN even though curl from the

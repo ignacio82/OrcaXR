@@ -2,6 +2,7 @@ package dev.orcaxr.app
 
 import android.app.Application
 import android.util.Log
+import dev.orcaxr.app.llm.runner.AgentRunner
 import dev.orcaxr.app.mcp.McpController
 import kotlinx.coroutines.CoroutineExceptionHandler
 
@@ -48,6 +49,15 @@ class OrcaXRApplication : Application() {
         // on the NEXT launch.
         runCatching { McpController.get(this).start() }
             .onFailure { Log.e(TAG, "McpController.start failed; continuing without MCP", it) }
+        // P2: rejoin the most recent in-app-assistant session so a
+        // process kill mid-turn doesn't lose the user's transcript.
+        // start() reads the JSONL replay log under filesDir/llm_sessions
+        // and rebuilds the AgentRunner's StateFlows; the chat panel
+        // observes those flows directly. Wrapped in runCatching for
+        // the same reason as McpController above — a malformed JSONL
+        // line shouldn't take down Application.onCreate.
+        runCatching { AgentRunner.get(this).start() }
+            .onFailure { Log.e(TAG, "AgentRunner.start failed; continuing without history", it) }
     }
 
     companion object {

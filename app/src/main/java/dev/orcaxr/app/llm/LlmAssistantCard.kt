@@ -37,6 +37,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import dev.orcaxr.app.llm.local.Gemma4Catalog
+import dev.orcaxr.app.llm.local.Gemma4DownloadRepository
+import dev.orcaxr.app.llm.local.Gemma4Size
 import kotlinx.coroutines.launch
 
 /**
@@ -76,16 +79,37 @@ fun LlmAssistantCard(
     val geminiModel by settings.geminiModel.collectAsState(initial = null)
     val openAiModel by settings.openAiModel.collectAsState(initial = null)
     val voiceEnabled by settings.voiceEnabled.collectAsState(initial = false)
+    val localSize by settings.localModelSize.collectAsState(initial = Gemma4Size.E2B)
+
+    // One repository per Gemma 4 size — switching size on the
+    // picker rebinds the StateFlow and the download-status UI
+    // updates. Cheap to construct (just a WorkManager handle).
+    val localRepo = remember(localSize) {
+        Gemma4DownloadRepository(context.applicationContext, Gemma4Catalog.forSize(localSize))
+    }
+    val localStatus by localRepo.statusFlow().collectAsState(
+        initial = localRepo.status.value,
+    )
+    val localReady = localStatus is Gemma4DownloadRepository.Status.Complete
 
     val currentKey = when (selected) {
         LlmProvider.Claude -> claudeKey
         LlmProvider.Gemini -> geminiKey
         LlmProvider.OpenAI -> openAiKey
+        LlmProvider.Local -> null
     }
     val currentModel = when (selected) {
         LlmProvider.Claude -> claudeModel
         LlmProvider.Gemini -> geminiModel
         LlmProvider.OpenAI -> openAiModel
+        LlmProvider.Local -> null
+    }
+    /** True when the active provider can chat right now (cloud has a
+     *  key, or local has the bundle downloaded). The Open-assistant
+     *  button gates on this. */
+    val activeReady = when (selected) {
+        LlmProvider.Local -> localReady
+        else -> !currentKey.isNullOrBlank()
     }
     val anyKeySet = !claudeKey.isNullOrBlank() || !geminiKey.isNullOrBlank() ||
         !openAiKey.isNullOrBlank()
@@ -102,6 +126,7 @@ fun LlmAssistantCard(
         LlmProvider.Claude -> dev.orcaxr.app.llm.ClaudeLlmClient.DEFAULT_MODEL
         LlmProvider.Gemini -> dev.orcaxr.app.llm.GeminiLlmClient.DEFAULT_MODEL
         LlmProvider.OpenAI -> dev.orcaxr.app.llm.OpenAiLlmClient.DEFAULT_MODEL
+        LlmProvider.Local -> "Gemma 4"  // unused — Local takes the local-row branch below
     }
 
     Surface(
@@ -117,25 +142,32 @@ fun LlmAssistantCard(
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                "Optional. Talk to OrcaXR using Claude, Gemini, or OpenAI. " +
-                    "Your key stays on this device and is billed to your own account.",
+                "Optional. Talk to OrcaXR using Claude, Gemini, OpenAI, or on-device Gemma 4. " +
+                    "Cloud keys stay on this device and are billed to your own account; " +
+                    "Local Gemma 4 runs entirely on the headset GPU with no per-token cost.",
                 color = Color(0xFFB6BEC8),
                 style = MaterialTheme.typography.bodySmall,
             )
 
             Spacer(Modifier.height(12.dp))
 
-            // Provider picker.
+            // Provider picker. 4 tiles wrap onto one row at the
+            // typical Devices panel width — the labels are short
+            // enough that auto-weight keeps the typography legible.
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 for (p in LlmProvider.entries) {
                     val isSelected = p == selected
-                    val hasKey = when (p) {
+                    val isConfigured = when (p) {
                         LlmProvider.Claude -> !claudeKey.isNullOrBlank()
                         LlmProvider.Gemini -> !geminiKey.isNullOrBlank()
                         LlmProvider.OpenAI -> !openAiKey.isNullOrBlank()
+                        // For Local, "configured" means the active
+                        // size's bundle is on disk. Switching size
+                        // on the picker re-evaluates this.
+                        LlmProvider.Local -> localReady
                     }
                     Surface(
                         color = if (isSelected) Color(0xFF4F8FF7) else Color(0xFF0F1A28),
@@ -160,7 +192,7 @@ fun LlmAssistantCard(
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                 style = MaterialTheme.typography.bodyMedium,
                             )
-                            if (hasKey) {
+                            if (isConfigured) {
                                 Spacer(Modifier.height(0.dp))
                                 Text(
                                     "  •",
@@ -175,6 +207,28 @@ fun LlmAssistantCard(
 
             Spacer(Modifier.height(10.dp))
 
+            // Local backend has its own configuration UI (model size
+            // picker + download button), inline below. The cloud
+            // path falls through to the existing API-key + model
+            // override fields.
+            if (selected == LlmProvider.Local) {
+                LocalGemmaConfigRow(
+                    selectedSize = localSize,
+                    onSizeChange = { newSize ->
+                        scope.launch { settings.setLocalModelSize(newSize) }
+                    },
+                    status = localStatus,
+                    onDownload = { localRepo.start() },
+                    onCancel = { localRepo.cancel() },
+                    onDelete = { localRepo.deleteLocalCopy() },
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+
+            // Hide the cloud key/model rows when Local is selected —
+            // they're meaningless there. Voice toggle and Open
+            // Assistant stay visible for both.
+            if (selected != LlmProvider.Local) {
             Text(
                 "${selected.keyName} API key",
                 color = Color(0xFFB6BEC8),
@@ -190,6 +244,10 @@ fun LlmAssistantCard(
                             LlmProvider.Claude -> "sk-ant-…"
                             LlmProvider.Gemini -> "AIza…"
                             LlmProvider.OpenAI -> "sk-…"
+                            // Unreachable — this Composable subtree is gated on
+                            // `selected != LlmProvider.Local` above. Compiler
+                            // still needs the arm for exhaustiveness.
+                            LlmProvider.Local -> ""
                         },
                         color = Color(0xFF6A7484),
                     )
@@ -236,6 +294,7 @@ fun LlmAssistantCard(
                                 LlmProvider.Claude -> settings.setClaudeApiKey(v.ifEmpty { null })
                                 LlmProvider.Gemini -> settings.setGeminiApiKey(v.ifEmpty { null })
                                 LlmProvider.OpenAI -> settings.setOpenAiApiKey(v.ifEmpty { null })
+                                LlmProvider.Local -> Unit  // unreachable; cloud-only branch
                             }
                             lastSavedAt = if (v.isEmpty()) "Cleared." else "Saved."
                         }
@@ -251,6 +310,7 @@ fun LlmAssistantCard(
                                     LlmProvider.Claude -> settings.setClaudeApiKey(null)
                                     LlmProvider.Gemini -> settings.setGeminiApiKey(null)
                                     LlmProvider.OpenAI -> settings.setOpenAiApiKey(null)
+                                    LlmProvider.Local -> Unit  // unreachable; cloud-only branch
                                 }
                                 draftKey = ""
                                 lastSavedAt = "Cleared."
@@ -316,6 +376,7 @@ fun LlmAssistantCard(
                                 LlmProvider.Claude -> settings.setClaudeModel(v.ifEmpty { null })
                                 LlmProvider.Gemini -> settings.setGeminiModel(v.ifEmpty { null })
                                 LlmProvider.OpenAI -> settings.setOpenAiModel(v.ifEmpty { null })
+                                LlmProvider.Local -> Unit  // unreachable; cloud-only branch
                             }
                             lastSavedAt =
                                 if (v.isEmpty()) "Reverted to $defaultModelForProvider."
@@ -333,6 +394,7 @@ fun LlmAssistantCard(
                                     LlmProvider.Claude -> settings.setClaudeModel(null)
                                     LlmProvider.Gemini -> settings.setGeminiModel(null)
                                     LlmProvider.OpenAI -> settings.setOpenAiModel(null)
+                                    LlmProvider.Local -> Unit  // unreachable; cloud-only branch
                                 }
                                 draftModel = ""
                                 lastSavedAt = "Reverted to $defaultModelForProvider."
@@ -344,6 +406,7 @@ fun LlmAssistantCard(
             }
 
             Spacer(Modifier.height(12.dp))
+            } // end `if (selected != LlmProvider.Local)` — cloud key/model rows
 
             // Voice toggle.
             Row(
@@ -379,27 +442,153 @@ fun LlmAssistantCard(
 
             Button(
                 onClick = onOpenAssistant,
-                enabled = !currentKey.isNullOrBlank(),
+                enabled = activeReady,
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F8FF7)),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
-                    if (currentKey.isNullOrBlank()) "Add a key to open the assistant"
-                    else "Open assistant",
+                    when {
+                        activeReady -> "Open assistant"
+                        selected == LlmProvider.Local ->
+                            "Download Gemma 4 ${localSize.name} to open the assistant"
+                        else -> "Add a key to open the assistant"
+                    },
                 )
             }
 
-            if (anyKeySet) {
+            if (anyKeySet || localReady) {
                 Spacer(Modifier.height(8.dp))
                 Text(
                     "The assistant can drive every action OrcaXR exposes through MCP " +
                         "(load models, slice, paint, control printers). It runs in-process; " +
-                        "your prompts go directly to the selected provider, not through Anthropic.",
+                        "cloud prompts go directly to the selected provider, and Local prompts " +
+                        "never leave the headset.",
                     color = Color(0xFF9AA5B1),
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
+        }
+    }
+}
+
+/**
+ * Local Gemma 4 configuration row — model size picker (E2B / E4B)
+ * plus download / cancel / delete affordance with progress display.
+ *
+ * Lives in the same file as the parent card because it shares a lot
+ * of the surrounding visual style (color palette, spacing, button
+ * shapes) and is only used here.
+ */
+@Composable
+private fun LocalGemmaConfigRow(
+    selectedSize: Gemma4Size,
+    onSizeChange: (Gemma4Size) -> Unit,
+    status: Gemma4DownloadRepository.Status,
+    onDownload: () -> Unit,
+    onCancel: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val activeSpec = Gemma4Catalog.forSize(selectedSize)
+    Text(
+        "Local Gemma 4 model",
+        color = Color(0xFFB6BEC8),
+        style = MaterialTheme.typography.labelSmall,
+    )
+    Spacer(Modifier.height(4.dp))
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        for (size in Gemma4Size.entries) {
+            val isSelected = size == selectedSize
+            val spec = Gemma4Catalog.forSize(size)
+            Surface(
+                color = if (isSelected) Color(0xFF1F4D6E) else Color(0xFF0F1A28),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(56.dp),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSizeChange(size) }
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                ) {
+                    Text(
+                        size.name,
+                        color = if (isSelected) Color.White else Color(0xFFB6BEC8),
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        spec.displaySize,
+                        color = Color(0xFF9AA5B1),
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(8.dp))
+    when (status) {
+        is Gemma4DownloadRepository.Status.Idle -> {
+            Text(
+                "Not downloaded. The first download is ${activeSpec.displaySize}; " +
+                    "default constraint is unmetered Wi-Fi.",
+                color = Color(0xFF9AA5B1),
+                style = MaterialTheme.typography.labelSmall,
+            )
+            Spacer(Modifier.height(6.dp))
+            Button(
+                onClick = onDownload,
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F8FF7)),
+            ) { Text("Download Gemma 4 ${selectedSize.name}") }
+        }
+        is Gemma4DownloadRepository.Status.Downloading -> {
+            val mb = status.bytesDownloaded / 1_048_576L
+            val totalMb = status.bytesTotal / 1_048_576L
+            val mbps = status.bytesPerSec / 1_048_576.0
+            val pct = if (status.bytesTotal > 0) {
+                ((status.bytesDownloaded * 100L) / status.bytesTotal).toInt().coerceIn(0, 100)
+            } else 0
+            Text(
+                "Downloading… $pct%   $mb / $totalMb MB   %.1f MB/s".format(mbps),
+                color = Color.White,
+                style = MaterialTheme.typography.labelSmall,
+            )
+            Spacer(Modifier.height(6.dp))
+            OutlinedButton(
+                onClick = onCancel,
+                shape = RoundedCornerShape(8.dp),
+            ) { Text("Cancel") }
+        }
+        is Gemma4DownloadRepository.Status.Complete -> {
+            Text(
+                "${activeSpec.displayName} ready (${activeSpec.displaySize}).",
+                color = Color(0xFF8AE0A0),
+                style = MaterialTheme.typography.labelSmall,
+            )
+            Spacer(Modifier.height(6.dp))
+            OutlinedButton(
+                onClick = onDelete,
+                shape = RoundedCornerShape(8.dp),
+            ) { Text("Delete weights (free ${activeSpec.displaySize})") }
+        }
+        is Gemma4DownloadRepository.Status.Failed -> {
+            Text(
+                "Download failed: ${status.reason}",
+                color = Color(0xFFE07070),
+                style = MaterialTheme.typography.labelSmall,
+            )
+            Spacer(Modifier.height(6.dp))
+            Button(
+                onClick = onDownload,
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F8FF7)),
+            ) { Text("Retry") }
         }
     }
 }
