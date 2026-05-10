@@ -54,8 +54,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.orcaxr.app.AiIntrospection
 import dev.orcaxr.app.AiRenderEngine
+import dev.orcaxr.app.BuildPlateGlb
 import dev.orcaxr.app.MeshBvh
 import dev.orcaxr.app.OrcaProfileLoader
+import dev.orcaxr.app.PrimitiveKind
 import dev.orcaxr.app.Profiles
 import dev.orcaxr.app.SliceResult
 import dev.orcaxr.app.SlicerEngine
@@ -166,19 +168,84 @@ fun SlicerScreen(
         else SliceUi.Idle
     ) }
 
+    // Empty-plate import + primitive launcher. Mirrors OrcaSlicer:
+    // an empty plate is a first-class workspace state — the user
+    // sees the build plate, can drop a primitive on it (cube /
+    // cylinder / sphere / cone / disc / slab), or import a mesh.
+    // Slice stays disabled until something lands on the plate. Once
+    // a file is set the regular preview/profile/tools layout takes
+    // over.
+    val pickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            runCatching {
+                val sharedDir = File(ctx.cacheDir, "shared").apply { mkdirs() }
+                val staged = dev.orcaxr.app.SharedIntentHandler
+                    .stageUriBounded(ctx.contentResolver, uri, sharedDir)
+                if (staged != null) {
+                    app.recentFiles.add(staged)
+                    onSetFile(staged.absolutePath)
+                    onSetOutput(null)
+                }
+            }
+        }
+    }
+    var primitivePickerOpen by remember { mutableStateOf(false) }
+    if (primitivePickerOpen) {
+        PrimitivePickerSheet(
+            onDismiss = { primitivePickerOpen = false },
+            onPick = { kind ->
+                primitivePickerOpen = false
+                scope.launch {
+                    val out = File(ctx.cacheDir, "primitive_${kind.name.lowercase()}_${System.currentTimeMillis()}.stl")
+                    val built = withContext(Dispatchers.IO) {
+                        SlicerEngine.buildPrimitiveStl(kind, kind.defaults.copyOf(), out)
+                    }
+                    if (built != null) {
+                        app.recentFiles.add(built)
+                        onSetFile(built.absolutePath)
+                        onSetOutput(null)
+                    }
+                }
+            },
+        )
+    }
+
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         MobileTopBar(
             title = "Slicer",
-            subtitle = filePath?.let { File(it).name } ?: "No model loaded",
+            subtitle = filePath?.let { File(it).name } ?: "Empty plate",
         )
         if (filePath == null) {
-            Box(Modifier.fillMaxSize().padding(20.dp)) {
-                EmptyStateCard(
-                    title = "Pick a model to slice",
-                    body = "Open the Files tab to import a 3MF / STL / OBJ. Once a file is loaded you'll see a 3D preview, the profile picker, and the slice button here.",
-                    cta = "Open Files",
-                    onCta = { onNavigate(MobileDestination.Files) },
+            // OrcaSlicer-parity empty plate. The user gets a full
+            // workspace: bed visualization (sized to the active
+            // printer's profile), Add primitive + Import + Open Files
+            // actions, and the profile picker stays visible so they
+            // can pre-select settings before adding a model.
+            Column(
+                Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                EmptyPlateCard(
+                    profile = selectedProfile,
+                    onAddPrimitive = { primitivePickerOpen = true },
+                    onImport = {
+                        pickerLauncher.launch(
+                            arrayOf(
+                                "model/3mf", "application/x-3mf",
+                                "model/stl", "application/sla",
+                                "model/obj", "model/amf",
+                                "application/octet-stream",
+                                "*/*",
+                            ),
+                        )
+                    },
+                    onOpenFiles = { onNavigate(MobileDestination.Files) },
                 )
+                ProfileCard(displayedProfiles, selectedProfile, onSelect = { selectedProfile = it })
+                QuickOverridesCard(layerHeightOverride, onChange = { layerHeightOverride = it })
             }
         } else if (isTablet) {
             Row(Modifier.fillMaxSize().padding(20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -1226,6 +1293,153 @@ private fun ToolsCard(
             }
             if (paintApplied) {
                 StatusPill("Paint applied", MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
+}
+
+/**
+ * OrcaSlicer-parity empty-plate canvas. Shows a stylized build plate
+ * sized to the active printer's [SlicerProfile.printable_area], plus
+ * the three actions a user expects on an empty workspace:
+ *  - Add primitive — opens a sheet of cube / cylinder / sphere /
+ *    cone / disc / slab choices, each routed through
+ *    [SlicerEngine.buildPrimitiveStl] and dropped onto the plate.
+ *  - Import — system file picker (3MF / STL / OBJ / AMF / STEP).
+ *  - Open Files — jump to the Files tab to pick a recent.
+ */
+@Composable
+private fun EmptyPlateCard(
+    profile: SlicerProfile,
+    onAddPrimitive: () -> Unit,
+    onImport: () -> Unit,
+    onOpenFiles: () -> Unit,
+) {
+    val (bedWmm, bedHmm) = remember(profile.id) { BuildPlateGlb.sizeFor(profile) }
+    MobileCard {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            SectionKicker("Empty plate")
+            // Build-plate visual — a styled rectangle with the
+            // printer name + bed dimensions overlaid. Aspect ratio
+            // matches the actual bed so the user has a sense of
+            // scale before placing anything. The dashed-grid look
+            // mirrors OrcaSlicer's empty-plate render.
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(bedWmm / bedHmm)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceContainerHighest,
+                        RoundedCornerShape(16.dp),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+                    val gridStep = size.minDimension / 10f
+                    val stroke = androidx.compose.ui.graphics.Color(0xFF3A4049)
+                    var x = 0f
+                    while (x <= size.width) {
+                        drawLine(
+                            color = stroke,
+                            start = androidx.compose.ui.geometry.Offset(x, 0f),
+                            end = androidx.compose.ui.geometry.Offset(x, size.height),
+                            strokeWidth = 1f,
+                        )
+                        x += gridStep
+                    }
+                    var y = 0f
+                    while (y <= size.height) {
+                        drawLine(
+                            color = stroke,
+                            start = androidx.compose.ui.geometry.Offset(0f, y),
+                            end = androidx.compose.ui.geometry.Offset(size.width, y),
+                            strokeWidth = 1f,
+                        )
+                        y += gridStep
+                    }
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        profile.displayName,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        "${bedWmm.toInt()} × ${bedHmm.toInt()} mm",
+                        style = LocalMobileTextStyles.current.numeric,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Text(
+                "This plate is empty. Add a primitive shape, import a model file, " +
+                    "or pick a recent file from the Files tab.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(
+                    onClick = onAddPrimitive,
+                    modifier = Modifier.weight(1f),
+                ) { Text("Add primitive") }
+                androidx.compose.material3.OutlinedButton(
+                    onClick = onImport,
+                    modifier = Modifier.weight(1f),
+                ) { Text("Import…") }
+            }
+            androidx.compose.material3.TextButton(
+                onClick = onOpenFiles,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Open Files tab") }
+        }
+    }
+}
+
+/**
+ * Modal sheet listing the seven primitive kinds OrcaSlicer ships
+ * (cube / cylinder / sphere / cone / torus / disc / slab). Selection
+ * fires [onPick] with the kind; the caller is expected to call
+ * [SlicerEngine.buildPrimitiveStl] with the kind's defaults and load
+ * the resulting STL onto the plate.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun PrimitivePickerSheet(
+    onDismiss: () -> Unit,
+    onPick: (PrimitiveKind) -> Unit,
+) {
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                "Add primitive",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                "Each shape lands centered on the bed at its default size. " +
+                    "Tweak dimensions later from the Transform sheet.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            for (kind in PrimitiveKind.entries) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { onPick(kind) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        "${kind.displayName} · ${kind.defaults.joinToString("×") { it.toInt().toString() }}",
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
     }
