@@ -25,9 +25,13 @@
  */
 package dev.orcaxr.app.mobile
 
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
@@ -53,6 +57,13 @@ fun BindMobileWorkspaceModel(
     val workspace = remember { WorkspaceModel.get() }
     val ctx = LocalContext.current
     val bvhCache = remember { MeshBvhCache() }
+
+    // Per-model paint buffers, keyed by modelId. Lives across
+    // recompositions of this binding so a `commit_paint_session`
+    // (LoadPaintState) followed by a `paint_sphere` (PaintTriangleSet)
+    // sees the same arrays. Per-process — paint state does not survive
+    // app kill (saved-recipe persistence is the user-explicit path).
+    val paintByModel = remember { mutableStateMapOf<String, MobilePaintState>() }
 
     // Register a BvhProvider so AI / vision MCP tools (get_model_geometry,
     // render_montage, paint_*) can resolve "mobile_loaded" back to a
@@ -102,34 +113,68 @@ fun BindMobileWorkspaceModel(
         onDispose { workspace.setAttached(false) }
     }
 
+    // Resolve the active palette so AI tools rendering headless PNGs can
+    // see the correct colors instead of defaulting to gray/white.
+    val prefs = remember { dev.orcaxr.app.UserPreferences(ctx) }
+    val filamentEntriesStore = remember { dev.orcaxr.app.FilamentEntriesStore(ctx) }
+    val allEntries by filamentEntriesStore.all.collectAsState(initial = emptyMap())
+    val previewPalette = remember(allEntries, prefs.lastPrinterId) {
+        val printerId = prefs.lastPrinterId
+        val printerEntries = allEntries[printerId] ?: emptyList()
+        val arr = arrayOfNulls<String>(4)
+        for (e in printerEntries) {
+            val s = e.slotIndex ?: continue
+            if (s in 0 until 4) arr[s] = e.color
+        }
+        arr.map { it ?: "#FFFFFF" }
+    }
+    LaunchedEffect(previewPalette) { workspace.publishPreviewPalette(previewPalette) }
+
     LaunchedEffect(selectedProfile) { workspace.publishSelectedProfile(selectedProfile) }
 
-    // Synthesize a single-element PlacedModel list from the loaded
-    // file so MCP tools that read `list_placed_models` /
-    // `get_workspace_state` see *something* meaningful on mobile.
-    LaunchedEffect(slicerFilePath) {
+    // Re-publish the placed-model list whenever EITHER the file path
+    // OR a paint buffer for the current model changed. The two
+    // dependencies share one effect because the list build needs both:
+    // an incoming `LoadPaintState` mutates `paintByModel` and we have
+    // to re-emit a new PlacedModel carrying those byte arrays so
+    // `list_placed_models` / `get_paint_summary` reflect the commit.
+    LaunchedEffect(slicerFilePath, paintByModel.toMap()) {
         val list =
             if (slicerFilePath.isNullOrBlank()) emptyList()
             else {
                 val file = File(slicerFilePath)
+                val pb = paintByModel["mobile_loaded"]
                 listOf(
                     PlacedModel(
                         id = "mobile_loaded",
                         source = file,
                         label = file.nameWithoutExtension,
                         plateId = 1,
+                        paintFilamentIndex = pb?.color,
+                        supportFlags = pb?.support,
+                        seamFlags = pb?.seam,
+                        fuzzySkinFlags = pb?.fuzzy,
                     )
                 )
             }
         workspace.publishPlacedModels(list)
     }
 
-    // Publish wired Tier-B capabilities. Only LoadModelFromPath for
-    // now — the others stay null on mobile so their MCP tools fail
-    // -fast with a useful error instead of dispatching an action that
-    // drops silently.
+    // Publish wired Tier-B capabilities. Mobile wires the load-model
+    // path AND the four paint-actions (LoadPaintState +
+    // PaintTriangleSet + ClearPaint) — the action collector below
+    // applies them to `paintByModel`. A capability NOT in this set
+    // means the matching MCP tool fails fast via requireCapability
+    // (see commit_paint_session, paint_sphere, etc).
     LaunchedEffect(Unit) {
-        workspace.publishWiredTierBCapabilities(setOf(TierBCapability.LoadModelFromPath))
+        workspace.publishWiredTierBCapabilities(
+            setOf(
+                TierBCapability.LoadModelFromPath,
+                TierBCapability.LoadPaintState,
+                TierBCapability.PaintTriangleSet,
+                TierBCapability.ClearPaint,
+            ),
+        )
     }
 
     // Whenever the slicer-loaded file changes, drop any prior BVHs
@@ -149,23 +194,59 @@ fun BindMobileWorkspaceModel(
     // would route through a frozen old setter.
     val onLoadLatest = rememberUpdatedState(onLoadModelFromPath)
     LaunchedEffect(workspace) {
+        // Same emit-id sync-by-FIFO trick the XR binding uses — the
+        // SharedFlow delivers in order, a local counter mirrors the
+        // model's monotonic emit ids, and we mark drained AFTER the
+        // dispatch so `flush_actions` waiters wake up exactly when
+        // the action's effect has landed in published state.
+        var localId = 0L
         workspace.actions.collect { action ->
+            localId++
             when (action) {
-                is WorkspaceAction.LoadModelFromPath ->
+                is WorkspaceAction.LoadModelFromPath -> {
                     onLoadLatest.value.invoke(action.path)
+                }
+                is WorkspaceAction.LoadPaintState -> {
+                    paintByModel[action.modelId] =
+                        (paintByModel[action.modelId] ?: MobilePaintState())
+                            .applyLoadPaintState(action)
+                }
+                is WorkspaceAction.PaintTriangleSet -> {
+                    val triCount = workspace.getBvh(action.modelId)?.triCount
+                        ?: paintByModel[action.modelId]?.let { s ->
+                            s.color?.size ?: s.support?.size ?: s.seam?.size ?: s.fuzzy?.size
+                        }
+                        ?: ((action.triangleIndices.maxOrNull() ?: -1) + 1)
+                    paintByModel[action.modelId] =
+                        (paintByModel[action.modelId] ?: MobilePaintState())
+                            .applyTriangleSet(action, triCount)
+                }
+                is WorkspaceAction.ClearPaint -> {
+                    paintByModel[action.modelId] =
+                        (paintByModel[action.modelId] ?: MobilePaintState())
+                            .applyClearPaint(action)
+                }
                 else -> {
-                    // Other actions either (a) have a Compose-state
-                    // fallback the mobile shell doesn't replicate yet,
-                    // or (b) require capabilities not in the mobile
-                    // wiredTierBCapabilities set. The tool that emitted
-                    // them already returned isError to the LLM via
-                    // requireCapability, so there's no further work to
-                    // do here. Silent drop is correct.
+                    // Action types whose Tier-B capability isn't in the
+                    // wired set above. The MCP tool that emitted should
+                    // have refused via requireCapability — log loudly
+                    // here so any tool that slipped through the gate is
+                    // visible in `adb logcat`. We still markDrained
+                    // below so flush_actions doesn't wedge.
+                    Log.w(
+                        TAG,
+                        "MobileWorkspaceBinding dropping unwired action " +
+                            "${action::class.simpleName} (id=$localId). The matching tool " +
+                            "should have refused via requireCapability — file a bug.",
+                    )
                 }
             }
+            workspace.markDrained(localId)
         }
     }
 }
+
+private const val TAG = "OrcaXR/mobile/wsb"
 
 /**
  * Probe-read [file] as binary STL; if that fails or the file is a
