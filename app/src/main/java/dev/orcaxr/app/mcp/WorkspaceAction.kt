@@ -1,6 +1,7 @@
 package dev.orcaxr.app.mcp
 
 import dev.orcaxr.app.GizmoTool
+import dev.orcaxr.app.HeightRange
 import dev.orcaxr.app.PaintBrush
 import dev.orcaxr.app.PaintMode
 import dev.orcaxr.app.WorkspaceMode
@@ -262,6 +263,17 @@ sealed interface WorkspaceAction {
     data class SetObjectOverrides(
         val modelId: String,
         val overrides: Map<String, String>,
+    ) : WorkspaceAction
+
+    /**
+     * A12 — replace a [PlacedModel]'s `heightRanges` list. Threads
+     * through `nativeSlice.layerRangeZmin/Zmax/Override*` (slice-time)
+     * and `nativeSaveAs3mf.layerRange*` (3MF round-trip via
+     * `Metadata/layer_config_ranges.xml`). Pass empty list to clear.
+     */
+    data class SetHeightRanges(
+        val modelId: String,
+        val ranges: List<HeightRange>,
     ) : WorkspaceAction
 
     /**

@@ -614,6 +614,16 @@ private fun handleAction(
                 setPlacedModels(updated)
             }
         }
+        is WorkspaceAction.SetHeightRanges -> {
+            // A12 — no host callback needed; the default placedModels
+            // mutation flows through the same slice path as the
+            // selected-model state, so XR + mobile shells both pick
+            // up the new bands on the next slice.
+            val updated = placedModels.map { m ->
+                if (m.id == action.modelId) m.copy(heightRanges = action.ranges) else m
+            }
+            setPlacedModels(updated)
+        }
         is WorkspaceAction.AddCustomGcodeTick -> {
             if (onAddCustomGcodeTick != null) onAddCustomGcodeTick(action)
             else Log.w(TAG, "AddCustomGcodeTick not wired by host activity.")

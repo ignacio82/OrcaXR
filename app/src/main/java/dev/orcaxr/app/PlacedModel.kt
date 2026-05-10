@@ -39,6 +39,35 @@ data class BrimEarPoint(
     val headRadiusMm: Float = 5f,
 )
 
+/**
+ * A12 — one Z band on a [PlacedModel] that overrides selected libslic3r
+ * process keys for layers whose print Z falls in `[zMinMm, zMaxMm)`.
+ * Mirrors upstream OrcaSlicer's "Edit height range" feature (stored in
+ * libslic3r as `ModelObject::layer_config_ranges`, a
+ * `std::map<std::pair<double,double>, ModelConfig>` keyed by the
+ * (zMin, zMax) pair).
+ *
+ * Common workflows: 100% infill in the bottom 5 mm to add weight; a
+ * coarser layer height above a feature line; different wall count
+ * over the top of an embedded magnet pocket.
+ *
+ * Authoring rules (matching upstream):
+ * - `zMinMm` < `zMaxMm`. The empty range is a no-op.
+ * - Bands MAY overlap; libslic3r's `LayerRanges::assign` resolves
+ *   overlaps by splitting into non-overlapping sub-bands and applying
+ *   the **later** range's overrides on collisions (see PrintApply.cpp:342).
+ * - [overrides] is a sparse map of libslic3r config keys → string
+ *   values. The curated set the UI surfaces is layer_height,
+ *   sparse_infill_density, sparse_infill_pattern, wall_loops,
+ *   top_shell_layers, bottom_shell_layers, sparse_infill_speed.
+ *   Unknown keys are logged and skipped at slice time, not fatal.
+ */
+data class HeightRange(
+    val zMinMm: Float,
+    val zMaxMm: Float,
+    val overrides: Map<String, String> = emptyMap(),
+)
+
 enum class ModelVolumeType(val nativeOrdinal: Int) {
     // Values match `Slic3r::ModelVolumeType` in
     // `third_party/OrcaSlicer/src/libslic3r/Model.hpp:341-348` exactly:
@@ -323,6 +352,22 @@ data class PlacedModel(
      *  so libslic3r writes it onto the cloned ModelObject's
      *  `layer_height_profile` BEFORE Print::apply. */
     val layerHeightProfile: FloatArray? = null,
+    /** A12 — per-Z-band config overrides. Each entry is a (zMin, zMax]
+     *  band that overrides selected libslic3r process keys for layers
+     *  whose print Z falls in the band. Authored onto `mo->layer_
+     *  config_ranges` BEFORE Print::apply so libslic3r's
+     *  `layer_height_profile_from_ranges` (Slicing.cpp:171) and
+     *  `LayerRanges` (PrintApply.cpp:342) apply the per-band keys
+     *  to the matching slice layers. Default empty = no per-band
+     *  overrides; the model uses the global / per-object / profile
+     *  configs for every layer.
+     *
+     *  Mutually exclusive with [layerHeightProfile] for the
+     *  `layer_height` key — if both are authored, libslic3r uses
+     *  the explicit profile (PrintObject.cpp:3494). Other keys
+     *  (sparse_infill_density, wall_loops, …) are unaffected by
+     *  layerHeightProfile and stack normally. */
+    val heightRanges: List<HeightRange> = emptyList(),
 ) {
     // Custom equality: data-class default uses identity comparison
     // for ByteArray, which would make `placedModels.map { ... }` cycles
@@ -371,7 +416,8 @@ data class PlacedModel(
             brimEars == other.brimEars &&
             volumes == other.volumes &&
             configOverrides == other.configOverrides &&
-            floatArraysEqual(layerHeightProfile, other.layerHeightProfile)
+            floatArraysEqual(layerHeightProfile, other.layerHeightProfile) &&
+            heightRanges == other.heightRanges
     }
     override fun hashCode(): Int {
         var r = id.hashCode()
@@ -409,6 +455,7 @@ data class PlacedModel(
         r = 31 * r + volumes.hashCode()
         r = 31 * r + configOverrides.hashCode()
         r = 31 * r + (layerHeightProfile?.contentHashCode() ?: 0)
+        r = 31 * r + heightRanges.hashCode()
         return r
     }
 

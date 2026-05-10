@@ -216,6 +216,15 @@ object SlicerEngine {
          * keep one tick list per plate.
          */
         customGcodeTicks: List<CustomGcodeTick> = emptyList(),
+        /**
+         * A12 — per-Z-band config overrides authored onto the loaded
+         * model's first ModelObject `layer_config_ranges`. Each entry
+         * is a `[zMin, zMax)` band + sparse `Map<String, String>` of
+         * libslic3r config keys → values. Empty list = no per-band
+         * overrides (legacy behavior). Bands with `zMin >= zMax` are
+         * skipped server-side with a log line.
+         */
+        heightRanges: List<HeightRange> = emptyList(),
         onProgress: ((percent: Int, message: String) -> Unit)? = null,
     ): SliceResult = withContext(dispatcher) {
         require(stl.exists()) { "STL not found: ${stl.absolutePath}" }
@@ -294,6 +303,8 @@ object SlicerEngine {
 
         // A11 — flatten custom-gcode ticks into 5 parallel arrays.
         val (cgZ, cgT, cgE, cgC, cgX) = flattenCustomGcodeTicks(customGcodeTicks)
+        // A12 — flatten height ranges into 5 sparse parallel arrays.
+        val (lrZmin, lrZmax, lrIdx, lrK, lrV) = flattenHeightRanges(heightRanges)
         val rc = nativeSlice(
             stl.absolutePath,
             outGcode.absolutePath,
@@ -316,6 +327,7 @@ object SlicerEngine {
             volValArr,
             layerHeightProfile,
             cgZ, cgT, cgE, cgC, cgX,
+            lrZmin, lrZmax, lrIdx, lrK, lrV,
         )
         if (rc == -5) {
             // Roadmap E8 — nativeAbort() flipped CancelStatus and the
@@ -429,6 +441,16 @@ object SlicerEngine {
          * semantics). Default empty = no ticks.
          */
         customGcodeTicks: List<CustomGcodeTick> = emptyList(),
+        /**
+         * A12 — per-input height-range bands, parallel to [models].
+         * Each entry is a list of `[zMin, zMax)` bands + sparse
+         * override map authored onto the cloned ModelObject's
+         * `layer_config_ranges` BEFORE Print::apply. Null whole-list
+         * = no per-input ranges (all inputs use legacy behavior).
+         * Inner list size MAY differ per input; an empty inner list
+         * skips the apply for that input.
+         */
+        heightRangesPerInput: List<List<HeightRange>>? = null,
         onProgress: ((percent: Int, message: String) -> Unit)? = null,
     ): SliceResult = withContext(dispatcher) {
         require(models.isNotEmpty()) { "sliceMulti requires at least one model" }
@@ -444,6 +466,9 @@ object SlicerEngine {
         }
         require(layerHeightProfilesPerInput == null || layerHeightProfilesPerInput.size == models.size) {
             "layerHeightProfilesPerInput size ${layerHeightProfilesPerInput?.size} != models size ${models.size}"
+        }
+        require(heightRangesPerInput == null || heightRangesPerInput.size == models.size) {
+            "heightRangesPerInput size ${heightRangesPerInput?.size} != models size ${models.size}"
         }
         outGcode.parentFile?.mkdirs()
         outGcode.delete()
@@ -498,6 +523,53 @@ object SlicerEngine {
             else Array(models.size) { layerHeightProfilesPerInput[it] }
         // A11 — flatten ticks for the active plate.
         val (cgZ, cgT, cgE, cgC, cgX) = flattenCustomGcodeTicks(customGcodeTicks)
+        // A12 — flatten per-input height ranges into 5 Object[]s. Whole-
+        // list null (or list of empty lists) → 5 nulls so the JNI
+        // short-circuits the per-input range walk entirely.
+        val anyRanges = heightRangesPerInput != null &&
+            heightRangesPerInput.any { it.isNotEmpty() }
+        val lrZminPerInput: Array<FloatArray?>? = if (!anyRanges) null
+            else Array(models.size) { idx ->
+                heightRangesPerInput!![idx].let { rs ->
+                    if (rs.isEmpty()) null else FloatArray(rs.size) { rs[it].zMinMm }
+                }
+            }
+        val lrZmaxPerInput: Array<FloatArray?>? = if (!anyRanges) null
+            else Array(models.size) { idx ->
+                heightRangesPerInput!![idx].let { rs ->
+                    if (rs.isEmpty()) null else FloatArray(rs.size) { rs[it].zMaxMm }
+                }
+            }
+        val lrIdxPerInput: Array<IntArray?>? = if (!anyRanges) null
+            else Array(models.size) { idx ->
+                val rs = heightRangesPerInput!![idx]
+                if (rs.isEmpty()) null
+                else {
+                    val acc = ArrayList<Int>()
+                    rs.forEachIndexed { i, r -> repeat(r.overrides.size) { acc += i } }
+                    if (acc.isEmpty()) null else acc.toIntArray()
+                }
+            }
+        val lrKeyPerInput: Array<Array<String>?>? = if (!anyRanges) null
+            else Array(models.size) { idx ->
+                val rs = heightRangesPerInput!![idx]
+                if (rs.isEmpty()) null
+                else {
+                    val acc = ArrayList<String>()
+                    rs.forEach { r -> r.overrides.forEach { (k, _) -> acc += k } }
+                    if (acc.isEmpty()) null else acc.toTypedArray()
+                }
+            }
+        val lrValPerInput: Array<Array<String>?>? = if (!anyRanges) null
+            else Array(models.size) { idx ->
+                val rs = heightRangesPerInput!![idx]
+                if (rs.isEmpty()) null
+                else {
+                    val acc = ArrayList<String>()
+                    rs.forEach { r -> r.overrides.forEach { (_, v) -> acc += v } }
+                    if (acc.isEmpty()) null else acc.toTypedArray()
+                }
+            }
         val rc = nativeSliceMulti(
             paths,
             transforms,
@@ -509,6 +581,8 @@ object SlicerEngine {
             objectOrdinals,
             lhpsForJni,
             cgZ, cgT, cgE, cgC, cgX,
+            lrZminPerInput, lrZmaxPerInput,
+            lrIdxPerInput, lrKeyPerInput, lrValPerInput,
         )
         if (rc != 0) {
             return@withContext SliceResult.NativeError(
@@ -815,10 +889,12 @@ object SlicerEngine {
         val overrides: Map<String, String>,
     )
 
-    /** D9 — per-object config + volume configs extracted from a 3MF. */
+    /** D9 / A12 — per-object config + volume configs + height ranges
+     *  extracted from a 3MF. */
     data class Read3mfObjectConfig(
         val objectOverrides: Map<String, String>,
         val volumes: List<Read3mfVolumeConfig>,
+        val heightRanges: List<HeightRange> = emptyList(),
     )
 
     /**
@@ -892,7 +968,31 @@ object SlicerEngine {
                         vols += Read3mfVolumeConfig(name, type, ov)
                     }
                 }
-                out += Read3mfObjectConfig(objOver, vols)
+                // A12 — extract height-range bands. Older C++ builds
+                // that pre-date the height_ranges field still produce
+                // valid JSON without the key; .optJSONArray returns null
+                // and the list stays empty.
+                val rangesArr = obj.optJSONArray("height_ranges")
+                val ranges = ArrayList<HeightRange>(rangesArr?.length() ?: 0)
+                if (rangesArr != null) {
+                    for (ri in 0 until rangesArr.length()) {
+                        val r = rangesArr.getJSONObject(ri)
+                        val zMin = r.optDouble("z_min", Double.NaN).toFloat()
+                        val zMax = r.optDouble("z_max", Double.NaN).toFloat()
+                        if (!zMin.isFinite() || !zMax.isFinite() || zMin >= zMax) continue
+                        val overObj = r.optJSONObject("overrides")
+                        val ov = LinkedHashMap<String, String>()
+                        if (overObj != null) {
+                            val ks = overObj.keys()
+                            while (ks.hasNext()) {
+                                val k = ks.next()
+                                ov[k] = overObj.optString(k, "")
+                            }
+                        }
+                        ranges += HeightRange(zMin, zMax, ov)
+                    }
+                }
+                out += Read3mfObjectConfig(objOver, vols, ranges)
             }
             out
         }.getOrElse {
@@ -1419,6 +1519,15 @@ object SlicerEngine {
          * A11 — custom G-code ticks for the active plate.
          */
         customGcodeTicks: List<CustomGcodeTick> = emptyList(),
+        /**
+         * A12 — per-Z-band config overrides written onto
+         * `mo->layer_config_ranges` BEFORE store_3mf so libslic3r's
+         * bbs_3mf writer serializes them into
+         * `Metadata/layer_config_ranges.xml`. Empty list = no
+         * per-band overrides (legacy behavior). Bands with
+         * `zMin >= zMax` are skipped server-side.
+         */
+        heightRanges: List<HeightRange> = emptyList(),
     ): Boolean = withContext(dispatcher) {
         require(input.exists()) { "input not found: ${input.absolutePath}" }
         require(input.canRead()) { "input not readable: ${input.absolutePath}" }
@@ -1452,6 +1561,7 @@ object SlicerEngine {
         }
 
         val (cgZ, cgT, cgE, cgC, cgX) = flattenCustomGcodeTicks(customGcodeTicks)
+        val (lrZmin, lrZmax, lrIdx, lrK, lrV) = flattenHeightRanges(heightRanges)
 
         nativeSaveAs3mf(
             input.absolutePath, outPath.absolutePath, keys, values,
@@ -1459,6 +1569,7 @@ object SlicerEngine {
             objKeys, objValues,
             volIdxArr, volKeyArr, volValArr,
             cgZ, cgT, cgE, cgC, cgX,
+            lrZmin, lrZmax, lrIdx, lrK, lrV,
         ) == 0
     }
 
@@ -1484,6 +1595,46 @@ object SlicerEngine {
         val cs = Array(n) { ticks[it].color }
         val xs = Array(n) { ticks[it].extra }
         return CustomGcodeJniArrays(z, t, ex, cs, xs)
+    }
+
+    /**
+     * A12 — packed shape of the parallel arrays the JNI walks for
+     * `mo->layer_config_ranges`. See [nativeSlice]'s `layerRangeZmin`…
+     * docs. All five fields are null when the input list is empty so
+     * the C++ side short-circuits the apply loop entirely.
+     */
+    private data class HeightRangeJniArrays(
+        val zMin: FloatArray?,
+        val zMax: FloatArray?,
+        val rangeIdx: IntArray?,
+        val keys: Array<String>?,
+        val values: Array<String>?,
+    )
+
+    /**
+     * A12 — flatten a [HeightRange] list into the 5 parallel arrays
+     * the JNI consumes. Bands without overrides still produce a band
+     * entry (so an empty band can serve as a "no override here, but
+     * fix the layer height boundary" affordance — matches upstream).
+     */
+    private fun flattenHeightRanges(ranges: List<HeightRange>): HeightRangeJniArrays {
+        if (ranges.isEmpty())
+            return HeightRangeJniArrays(null, null, null, null, null)
+        val n = ranges.size
+        val zMin = FloatArray(n) { ranges[it].zMinMm }
+        val zMax = FloatArray(n) { ranges[it].zMaxMm }
+        val idxs = ArrayList<Int>()
+        val ks = ArrayList<String>()
+        val vs = ArrayList<String>()
+        ranges.forEachIndexed { i, r ->
+            r.overrides.forEach { (k, v) ->
+                idxs += i; ks += k; vs += v
+            }
+        }
+        val rangeIdx = if (idxs.isEmpty()) null else idxs.toIntArray()
+        val keys = if (ks.isEmpty()) null else ks.toTypedArray()
+        val values = if (vs.isEmpty()) null else vs.toTypedArray()
+        return HeightRangeJniArrays(zMin, zMax, rangeIdx, keys, values)
     }
 
     /**
@@ -1925,6 +2076,23 @@ object SlicerEngine {
         customGcodeExtruders: IntArray?,
         customGcodeColors: Array<String>?,
         customGcodeExtras: Array<String>?,
+        /**
+         * A12 — per-Z-band config overrides applied onto
+         * `model.objects.front()->layer_config_ranges` BEFORE
+         * Print::apply. Five sparse parallel arrays:
+         *   layerRangeZmin[r]               = band r's zMin in mm
+         *   layerRangeZmax[r]               = band r's zMax in mm
+         *   layerRangeOverrideRangeIdx[i]   = band slot for the (k, v) below
+         *   layerRangeOverrideKeys[i]       = config key
+         *   layerRangeOverrideValues[i]     = config value
+         * Null = no per-band overrides (legacy behavior). Bands with
+         * `zMin >= zMax` are skipped server-side with a log line.
+         */
+        layerRangeZmin: FloatArray?,
+        layerRangeZmax: FloatArray?,
+        layerRangeOverrideRangeIdx: IntArray?,
+        layerRangeOverrideKeys: Array<String>?,
+        layerRangeOverrideValues: Array<String>?,
     ): Int
     private external fun nativeConvertToStl(
         inputPath: String,
@@ -2055,6 +2223,7 @@ object SlicerEngine {
         params: FloatArray,
         outPath: String,
     ): Int
+    @Suppress("LongParameterList")
     private external fun nativeSaveAs3mf(
         inputPath: String,
         outPath: String,
@@ -2102,6 +2271,16 @@ object SlicerEngine {
         customGcodeExtruders: IntArray?,
         customGcodeColors: Array<String>?,
         customGcodeExtras: Array<String>?,
+        /**
+         * A12 — per-Z-band config overrides authored onto
+         * `mo->layer_config_ranges` BEFORE store_3mf. Same five sparse
+         * parallel arrays as [nativeSlice]'s A12 surface.
+         */
+        layerRangeZmin: FloatArray?,
+        layerRangeZmax: FloatArray?,
+        layerRangeOverrideRangeIdx: IntArray?,
+        layerRangeOverrideKeys: Array<String>?,
+        layerRangeOverrideValues: Array<String>?,
     ): Int
     private external fun nativeSliceMulti(
         inputPaths: Array<String>,
@@ -2143,11 +2322,27 @@ object SlicerEngine {
         customGcodeExtruders: IntArray?,
         customGcodeColors: Array<String>?,
         customGcodeExtras: Array<String>?,
+        /**
+         * A12 — per-input height-range bands. Five Object[]s sized to
+         * `inputPaths.size` (or null whole-array = no per-input ranges):
+         *   layerRangeZminPerInput[i]              = float[K_i] of band zMins
+         *   layerRangeZmaxPerInput[i]              = float[K_i] of band zMaxs
+         *   layerRangeOverrideRangeIdxPerInput[i]  = int[M_i] band slot
+         *   layerRangeOverrideKeysPerInput[i]      = String[M_i] config key
+         *   layerRangeOverrideValuesPerInput[i]    = String[M_i] config value
+         * Null per-input entries skip A12 for that input.
+         */
+        layerRangeZminPerInput: Array<FloatArray?>?,
+        layerRangeZmaxPerInput: Array<FloatArray?>?,
+        layerRangeOverrideRangeIdxPerInput: Array<IntArray?>?,
+        layerRangeOverrideKeysPerInput: Array<Array<String>?>?,
+        layerRangeOverrideValuesPerInput: Array<Array<String>?>?,
     ): Int
 
     /**
-     * D9 — read per-object + per-volume `config` overrides out of a
-     * 3MF and return them as a JSON string. See [read3mfObjectConfigs].
+     * D9 / A12 — read per-object + per-volume `config` overrides plus
+     * per-Z-band height ranges out of a 3MF and return them as a JSON
+     * string. See [read3mfObjectConfigs].
      */
     private external fun nativeRead3mfObjectConfigs(path: String): String?
 

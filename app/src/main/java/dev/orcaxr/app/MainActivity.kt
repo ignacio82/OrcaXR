@@ -2052,6 +2052,8 @@ private fun XrShell(
                         // the 3MF, indexed by object position. Empty
                         // map for objects that didn't author any.
                         configOverrides = objectConfigs.getOrNull(index)?.objectOverrides ?: emptyMap(),
+                        // A12 — height-range bands from the 3MF.
+                        heightRanges = objectConfigs.getOrNull(index)?.heightRanges ?: emptyList(),
                     )
                 }
             } else {
@@ -2069,6 +2071,7 @@ private fun XrShell(
                         // overrides at index 0; STLs return [] (empty
                         // list) so this falls through to no overrides.
                         configOverrides = objectConfigs.firstOrNull()?.objectOverrides ?: emptyMap(),
+                        heightRanges = objectConfigs.firstOrNull()?.heightRanges ?: emptyList(),
                     ),
                 )
             }
@@ -2243,6 +2246,7 @@ private fun XrShell(
                 objectConfigOverrides = selectedModel?.configOverrides ?: emptyMap(),
                 layerHeightProfile = selectedModel?.layerHeightProfile,
                 customGcodeTicks = customGcodeTicksByPlate[activePlateId] ?: emptyList(),
+                heightRanges = selectedModel?.heightRanges ?: emptyList(),
             ) { percent, message ->
                 // Fires on a libslic3r worker thread; mutating
                 // sliceState directly is fine — Compose's snapshot
@@ -3118,6 +3122,12 @@ private fun XrShell(
                 else models.map { m ->
                     m.layerHeightProfile?.takeIf { it.size >= 4 && (it.size and 1) == 0 }
                 }
+            // A12 — per-input height-range bands. Null whole-list when
+            // no model authored ranges; the JNI side then short-
+            // circuits the per-input walk.
+            val heightRangesForMulti: List<List<HeightRange>>? =
+                if (models.none { it.heightRanges.isNotEmpty() }) null
+                else models.map { it.heightRanges }
             val result = SlicerEngine.sliceMulti(
                 pairs,
                 outFile,
@@ -3126,6 +3136,7 @@ private fun XrShell(
                 objectOrdinals = ordinals,
                 layerHeightProfilesPerInput = lhpsForMulti,
                 customGcodeTicks = customGcodeTicksByPlate[activePlateId] ?: emptyList(),
+                heightRangesPerInput = heightRangesForMulti,
             ) { percent, message ->
                 val cur = sliceState.value
                 if (cur is SliceUiState.Slicing) {
@@ -4695,6 +4706,7 @@ private fun XrShell(
                             objectConfigOverrides = testStatePlacedModels.firstOrNull()?.configOverrides ?: emptyMap(),
                             layerHeightProfile = testStatePlacedModels.firstOrNull()?.layerHeightProfile,
                             customGcodeTicks = customGcodeTicksByPlate[activePlateId] ?: emptyList(),
+                            heightRanges = testStatePlacedModels.firstOrNull()?.heightRanges ?: emptyList(),
                         ) { percent, message ->
                             val now = sliceState.value
                             if (now is SliceUiState.Slicing) {
@@ -9393,6 +9405,10 @@ private suspend fun saveProjectAs3mfToDownloads(
      * A11 — custom-gcode ticks for the active plate.
      */
     customGcodeTicks: List<SlicerEngine.CustomGcodeTick> = emptyList(),
+    /**
+     * A12 — per-Z-band config overrides written into the 3MF.
+     */
+    heightRanges: List<HeightRange> = emptyList(),
 ): File? {
     if (!sourceFile.exists()) return null
     val dest = downloadsPathFor(sourceLabel, "3mf")
@@ -9408,6 +9424,7 @@ private suspend fun saveProjectAs3mfToDownloads(
             objectConfigOverrides = objectConfigOverrides,
             volumeConfigOverrides = volumeConfigOverrides,
             customGcodeTicks = customGcodeTicks,
+            heightRanges = heightRanges,
         )) dest else null
 }
 
@@ -9481,6 +9498,11 @@ private suspend fun sliceLocalFile(
      * A11 — custom G-code ticks for the active plate. Empty = no ticks.
      */
     customGcodeTicks: List<SlicerEngine.CustomGcodeTick> = emptyList(),
+    /**
+     * A12 — per-Z-band config overrides authored onto
+     * `mo->layer_config_ranges`. Empty = no per-band overrides.
+     */
+    heightRanges: List<HeightRange> = emptyList(),
     onProgress: ((percent: Int, message: String) -> Unit)? = null,
 ): SliceResult {
     val gcode = File(stl.parentFile, "${stl.name}.gcode")
@@ -9505,6 +9527,7 @@ private suspend fun sliceLocalFile(
         objectConfigOverrides = objectConfigOverrides,
         layerHeightProfile = effectiveLhp,
         customGcodeTicks = customGcodeTicks,
+        heightRanges = heightRanges,
         onProgress = onProgress,
     )
 }

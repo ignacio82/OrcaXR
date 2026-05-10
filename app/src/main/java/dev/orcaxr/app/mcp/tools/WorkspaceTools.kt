@@ -4,6 +4,7 @@ import dev.orcaxr.app.BedCollision
 import dev.orcaxr.app.BedFit
 import dev.orcaxr.app.EmbossAssets
 import dev.orcaxr.app.GizmoTool
+import dev.orcaxr.app.HeightRange
 import dev.orcaxr.app.ModelVolumeType
 import dev.orcaxr.app.PaintBrush
 import dev.orcaxr.app.PaintMode
@@ -99,6 +100,12 @@ internal object WorkspaceTools {
             // D9 — per-object Object Settings
             GetObjectOverrides(workspace),
             SetObjectOverrides(workspace),
+            // A12 — per-Z-band height ranges
+            ListHeightRanges(workspace),
+            AddHeightRange(workspace),
+            SetHeightRangeOverrides(workspace),
+            RemoveHeightRange(workspace),
+            ClearHeightRanges(workspace),
             // A11 — custom G-code per print Z
             ListCustomGcodeTicks(workspace),
             AddCustomGcodeTick(workspace),
@@ -1967,6 +1974,274 @@ internal object WorkspaceTools {
         }
     }
 
+    // ---- A12 — per-Z-band height-range overrides ----
+
+    /**
+     * A12 — curated subset of process keys that the height-range
+     * UI surfaces and that the MCP tools accept. Other keys still
+     * pass through (libslic3r logs and skips unknown keys at slice
+     * time, not fatal), but the tools won't auto-suggest them.
+     */
+    private val HEIGHT_RANGE_ALLOWED_KEYS = setOf(
+        "layer_height",
+        "sparse_infill_density",
+        "sparse_infill_pattern",
+        "wall_loops",
+        "top_shell_layers",
+        "bottom_shell_layers",
+        "sparse_infill_speed",
+        "outer_wall_speed",
+        "inner_wall_speed",
+        "bridge_speed",
+    )
+
+    private fun encodeHeightRange(r: HeightRange): JSONObject = JSONObject().apply {
+        put("z_min_mm", r.zMinMm.toDouble())
+        put("z_max_mm", r.zMaxMm.toDouble())
+        val ov = JSONObject()
+        for ((k, v) in r.overrides) ov.put(k, v)
+        put("overrides", ov)
+    }
+
+    private fun parseOverridesObject(raw: JSONObject): Map<String, String> {
+        val out = LinkedHashMap<String, String>()
+        val it = raw.keys()
+        while (it.hasNext()) {
+            val k = it.next()
+            val v = raw.opt(k) ?: continue
+            if (k.isBlank()) continue
+            out[k] = when (v) {
+                is String -> v
+                is Boolean -> if (v) "1" else "0"
+                else -> v.toString()
+            }
+        }
+        return out
+    }
+
+    /** A12 — list a model's `(zMin, zMax)` height-range bands. */
+    class ListHeightRanges(private val ws: WorkspaceModel) : Tool {
+        override val name = "list_height_ranges"
+        override val description =
+            "A12 — list all per-Z-band overrides on a PlacedModel. Bands are returned in " +
+                "declaration order (the libslic3r serializer sorts by zMin on save). " +
+                "Each entry has z_min_mm, z_max_mm, and an overrides map of libslic3r " +
+                "config keys → string values. Empty list = no per-band overrides; the " +
+                "model uses the global / per-object / profile config for every layer."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id from list_placed_models"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            val model = ws.placedModels.value.firstOrNull { it.id == id }
+                ?: return ToolResult.error("No model with id '$id'.")
+            val arr = JSONArray()
+            for (r in model.heightRanges) arr.put(encodeHeightRange(r))
+            return ToolResult.ok(
+                if (model.heightRanges.isEmpty()) "Model $id has no height ranges."
+                else "Model $id has ${model.heightRanges.size} height range(s).",
+                JSONObject().apply {
+                    put("ok", true)
+                    put("model_id", id)
+                    put("range_count", model.heightRanges.size)
+                    put("ranges", arr)
+                    val keys = JSONArray()
+                    for (k in HEIGHT_RANGE_ALLOWED_KEYS) keys.put(k)
+                    put("recommended_keys", keys)
+                },
+            )
+        }
+    }
+
+    /**
+     * A12 — append one band to a model's `heightRanges`. Bands MAY
+     * overlap; libslic3r's `LayerRanges::assign` resolves overlaps
+     * by splitting at boundaries and applying the LATER band's
+     * overrides on collision (PrintApply.cpp:342 — matches upstream
+     * OrcaSlicer's "Edit height range" UX).
+     */
+    class AddHeightRange(private val ws: WorkspaceModel) : Tool {
+        override val name = "add_height_range"
+        override val description =
+            "A12 — author a new (z_min, z_max] height range on a PlacedModel with a sparse " +
+                "map of process-key overrides (e.g. {\"sparse_infill_density\": \"100\"} for " +
+                "100% infill in the bottom 5 mm). Returns the new range index. Bands MAY " +
+                "overlap; libslic3r resolves collisions by splitting at the boundaries and " +
+                "applying the later band's overrides. Curated keys (see recommended_keys " +
+                "from list_height_ranges) are: layer_height, sparse_infill_density, " +
+                "wall_loops, top/bottom_shell_layers, sparse_infill_speed. Other keys still " +
+                "pass through but unknown keys are logged and skipped at slice time."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id", "z_min_mm", "z_max_mm"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id"),
+                "z_min_mm" to Schemas.number("Lower bound of the band, in mm (inclusive)"),
+                "z_max_mm" to Schemas.number("Upper bound of the band, in mm (exclusive)"),
+                "overrides" to JSONObject().apply {
+                    put("type", "object")
+                    put("description", "String→string map of libslic3r config keys → values. Optional; defaults to {}.")
+                    put("additionalProperties", JSONObject().apply { put("type", "string") })
+                },
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            val zMin = args.optDouble("z_min_mm", Double.NaN).toFloat()
+            val zMax = args.optDouble("z_max_mm", Double.NaN).toFloat()
+            if (!zMin.isFinite() || !zMax.isFinite()) {
+                return ToolResult.error("'z_min_mm' and 'z_max_mm' must be finite numbers.")
+            }
+            if (zMin >= zMax) {
+                return ToolResult.error("'z_min_mm' ($zMin) must be strictly less than 'z_max_mm' ($zMax).")
+            }
+            val model = ws.placedModels.value.firstOrNull { it.id == id }
+                ?: return ToolResult.error("No model with id '$id'.")
+            val overrides = args.optJSONObject("overrides")?.let(::parseOverridesObject)
+                ?: emptyMap()
+            val newRange = HeightRange(zMin, zMax, overrides)
+            val updated = model.heightRanges + newRange
+            ws.emit(WorkspaceAction.SetHeightRanges(id, updated))
+            val newIdx = updated.size - 1
+            return success(
+                "Added range[$newIdx] [%.2f, %.2f) on $id with ${overrides.size} override(s).".format(zMin, zMax),
+                JSONObject().apply {
+                    put("model_id", id)
+                    put("range_index", newIdx)
+                    put("range", encodeHeightRange(newRange))
+                    put("range_count", updated.size)
+                },
+            )
+        }
+    }
+
+    /**
+     * A12 — replace the override map on one band identified by its
+     * 0-based index. Pass `{}` to clear overrides on the band while
+     * keeping its `(zMin, zMax)` bounds.
+     */
+    class SetHeightRangeOverrides(private val ws: WorkspaceModel) : Tool {
+        override val name = "set_height_range_overrides"
+        override val description =
+            "A12 — replace the override map on one height-range band identified by its " +
+                "0-based index. Pass {} to clear the overrides on the band while keeping " +
+                "its (z_min, z_max) bounds. To change bounds, remove + add."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id", "range_index", "overrides"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id"),
+                "range_index" to Schemas.integer("0-based index into the model's heightRanges list"),
+                "overrides" to JSONObject().apply {
+                    put("type", "object")
+                    put("description", "String→string map of libslic3r config keys → values. {} clears.")
+                    put("additionalProperties", JSONObject().apply { put("type", "string") })
+                },
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            val idx = args.optInt("range_index", -1)
+            val raw = args.optJSONObject("overrides")
+                ?: return ToolResult.error("'overrides' must be an object (use {} to clear).")
+            val model = ws.placedModels.value.firstOrNull { it.id == id }
+                ?: return ToolResult.error("No model with id '$id'.")
+            if (idx < 0 || idx >= model.heightRanges.size) {
+                return ToolResult.error(
+                    "'range_index' $idx out of range [0, ${model.heightRanges.size}).",
+                )
+            }
+            val overrides = parseOverridesObject(raw)
+            val updated = model.heightRanges.mapIndexed { i, r ->
+                if (i == idx) r.copy(overrides = overrides) else r
+            }
+            ws.emit(WorkspaceAction.SetHeightRanges(id, updated))
+            return success(
+                "Wrote ${overrides.size} override(s) on $id range[$idx].",
+                JSONObject().apply {
+                    put("model_id", id)
+                    put("range_index", idx)
+                    put("range", encodeHeightRange(updated[idx]))
+                },
+            )
+        }
+    }
+
+    /** A12 — remove one band identified by its 0-based index. */
+    class RemoveHeightRange(private val ws: WorkspaceModel) : Tool {
+        override val name = "remove_height_range"
+        override val description =
+            "A12 — remove one height-range band by 0-based index. Subsequent bands shift " +
+                "down by one. To clear all bands at once use clear_height_ranges."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id", "range_index"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id"),
+                "range_index" to Schemas.integer("0-based index into the model's heightRanges list"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            val idx = args.optInt("range_index", -1)
+            val model = ws.placedModels.value.firstOrNull { it.id == id }
+                ?: return ToolResult.error("No model with id '$id'.")
+            if (idx < 0 || idx >= model.heightRanges.size) {
+                return ToolResult.error(
+                    "'range_index' $idx out of range [0, ${model.heightRanges.size}).",
+                )
+            }
+            val updated = model.heightRanges.toMutableList().apply { removeAt(idx) }
+            ws.emit(WorkspaceAction.SetHeightRanges(id, updated))
+            return success(
+                "Removed range[$idx] from $id; ${updated.size} remain.",
+                JSONObject().apply {
+                    put("model_id", id)
+                    put("range_count", updated.size)
+                },
+            )
+        }
+    }
+
+    /** A12 — wipe all bands on a model in one call. */
+    class ClearHeightRanges(private val ws: WorkspaceModel) : Tool {
+        override val name = "clear_height_ranges"
+        override val description =
+            "A12 — clear all height-range bands on a PlacedModel. Equivalent to calling " +
+                "remove_height_range repeatedly until none remain."
+        override val inputSchema = Schemas.obj(
+            required = listOf("model_id"),
+            properties = mapOf(
+                "model_id" to Schemas.string("Model id"),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            requireAttached(ws)?.let { return it }
+            val id = args.optString("model_id").trim()
+            if (id.isEmpty()) return ToolResult.error("'model_id' is required.")
+            val model = ws.placedModels.value.firstOrNull { it.id == id }
+                ?: return ToolResult.error("No model with id '$id'.")
+            if (model.heightRanges.isEmpty()) {
+                return success("Model $id already had no height ranges.", JSONObject().apply {
+                    put("model_id", id); put("range_count", 0)
+                })
+            }
+            ws.emit(WorkspaceAction.SetHeightRanges(id, emptyList()))
+            return success(
+                "Cleared all height ranges on $id.",
+                JSONObject().apply { put("model_id", id); put("range_count", 0) },
+            )
+        }
+    }
+
     // ---- A11 — custom G-code per print Z ----
 
     private fun parseCustomGcodeKind(raw: String): SlicerEngine.CustomGcodeKind? = when (raw.lowercase()) {
@@ -2531,7 +2806,29 @@ internal object WorkspaceTools {
             val text = if (drained != null) {
                 "Drained $target action(s)."
             } else {
-                "flush_actions timed out after ${timeoutMs}ms (target=$target, drained=${ws.lastDrainedActionId.value}). Activity may have backgrounded."
+                // Distinguish three timeout modes for the diagnostic. The
+                // historical message ("Activity may have backgrounded")
+                // misled in the common case where the activity IS
+                // foreground but doesn't wire the capabilities the
+                // emitted actions needed — that path silently drops
+                // actions in MobileWorkspaceBinding's catch-all branch.
+                val attached = ws.attached.value
+                val wired = ws.wiredTierBCapabilities.value
+                val hint = when {
+                    !attached ->
+                        "Activity is detached — bring the app to foreground."
+                    wired.isEmpty() ->
+                        "Activity is attached but no Tier-B capabilities are wired " +
+                            "(host shell hasn't reached its action-consumer composable yet). " +
+                            "Navigate to Slicer / Prepare on XR or open MobileShell on phone."
+                    else ->
+                        "Activity is attached and wires {${wired.joinToString(",") { it.name }}}, " +
+                            "but the emitted action(s) don't match any of those capabilities. " +
+                            "Tools should refuse via requireCapability before emit; if you hit " +
+                            "this, the offending tool slipped past the gate — file a bug."
+                }
+                "flush_actions timed out after ${timeoutMs}ms " +
+                    "(target=$target, drained=${ws.lastDrainedActionId.value}). $hint"
             }
             return if (drained != null) ToolResult.ok(text, body)
                    else ToolResult.error(text, body)

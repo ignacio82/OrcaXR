@@ -144,6 +144,44 @@ static Slic3r::Print* g_active_print = nullptr;
 namespace {
 
 /**
+ * Walk every coEnums option in [cfg] and re-attach the runtime
+ * `keys_map` pointer from its [ConfigOptionDef]. libslic3r's
+ * `ConfigOptionEnumsGenericTempl` carries an instance-side
+ * `keys_map` that the generic `set_deserialize` path dereferences to
+ * resolve string values to ints; without it, deserialize SIGSEGVs
+ * inside `keys_map->find(...)` (gotcha #20).
+ *
+ * Two fixup-relevant subclasses exist:
+ *   * `ConfigOptionEnumsGeneric         = …Templ<false>`  (non-nullable)
+ *   * `ConfigOptionEnumsGenericNullable = …Templ<true>`   (nullable)
+ *
+ * The original fixup only `dynamic_cast`'d to the non-nullable form, so
+ * options declared with `ConfigOptionEnumsGenericNullable` (notably
+ * `nozzle_type`, `nozzle_volume_type`, `extruder_type`) silently
+ * skipped the patch and crashed when a profile JSON later carried
+ * a value for them — observed Snapmaker U1 (and Snapmaker
+ * fdm_common.json with `"nozzle_type": "hardened_steel"`) on
+ * arm64 Release. Cast both forms here.
+ */
+static inline void fixup_enum_keys_map(Slic3r::DynamicPrintConfig& cfg) {
+    const Slic3r::ConfigDef* config_def = cfg.def();
+    if (config_def == nullptr) return;
+    for (const auto& kv : config_def->options) {
+        const auto& key = kv.first;
+        const Slic3r::ConfigOptionDef& opt_def = kv.second;
+        if (opt_def.type != Slic3r::coEnums || opt_def.enum_keys_map == nullptr)
+            continue;
+        Slic3r::ConfigOption* opt = cfg.option(key, false);
+        if (opt == nullptr) continue;
+        if (auto* en = dynamic_cast<Slic3r::ConfigOptionEnumsGeneric*>(opt)) {
+            if (en->keys_map == nullptr) en->keys_map = opt_def.enum_keys_map;
+        } else if (auto* enn = dynamic_cast<Slic3r::ConfigOptionEnumsGenericNullable*>(opt)) {
+            if (enn->keys_map == nullptr) enn->keys_map = opt_def.enum_keys_map;
+        }
+    }
+}
+
+/**
  * Build a ThumbnailsGeneratorCallback that renders the supplied
  * [model] via orcaxr::render_isometric_thumbnail and returns one
  * ThumbnailData at the size libslic3r asked for.
@@ -1214,7 +1252,28 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
     jintArray    jCustomGcodeTypes,
     jintArray    jCustomGcodeExtruders,
     jobjectArray jCustomGcodeColors,
-    jobjectArray jCustomGcodeExtras)
+    jobjectArray jCustomGcodeExtras,
+    /* A12 — per-Z-band config overrides authored onto
+     * `model.objects.front()->layer_config_ranges`. Five parallel
+     * arrays in sparse encoding so a model with K bands and M total
+     * (band, key, value) overrides costs O(K + M) ints / strings:
+     *   jLayerRangeZmin[r]               = band r's zMin in mm
+     *   jLayerRangeZmax[r]               = band r's zMax in mm
+     *   jLayerRangeOverrideRangeIdx[i]   = which band index r the
+     *                                       (k, v) below applies to
+     *   jLayerRangeOverrideKeys[i]       = libslic3r config key
+     *   jLayerRangeOverrideValues[i]     = config value
+     * Each (k, v) pair lands on the band's `ModelConfig` via
+     * `set_deserialize`; libslic3r's `LayerRanges` (PrintApply.cpp:
+     * 342) then resolves overlaps and `layer_height_profile_from_
+     * ranges` (Slicing.cpp:171) propagates the band keys onto the
+     * matching slice layers. Null arrays / empty = no per-band
+     * overrides (legacy behavior). */
+    jfloatArray  jLayerRangeZmin,
+    jfloatArray  jLayerRangeZmax,
+    jintArray    jLayerRangeOverrideRangeIdx,
+    jobjectArray jLayerRangeOverrideKeys,
+    jobjectArray jLayerRangeOverrideValues)
 {
     ScopedUtf stl(env, jStlPath);
     ScopedUtf out(env, jOutGcodePath);
@@ -1696,6 +1755,89 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
             }
         }
 
+        // A12 — apply per-Z-band config overrides onto
+        // `mo->layer_config_ranges`. Each band materializes one entry
+        // in the std::map<std::pair<double,double>, ModelConfig>; the
+        // sparse triples then `set_deserialize` per-band keys onto
+        // those configs. libslic3r's PrintApply.cpp:342 LayerRanges
+        // resolves any band overlaps by splitting into non-
+        // overlapping sub-bands at process time, with the later band
+        // winning on collision.
+        if (jLayerRangeZmin != nullptr && jLayerRangeZmax != nullptr) {
+            const jsize n_min = env->GetArrayLength(jLayerRangeZmin);
+            const jsize n_max = env->GetArrayLength(jLayerRangeZmax);
+            const jsize n_ranges = n_min < n_max ? n_min : n_max;
+            if (n_ranges > 0 && !model.objects.empty()) {
+                Slic3r::ModelObject* mo = model.objects.front();
+                std::vector<jfloat> zmin(n_ranges), zmax(n_ranges);
+                env->GetFloatArrayRegion(jLayerRangeZmin, 0, n_ranges, zmin.data());
+                env->GetFloatArrayRegion(jLayerRangeZmax, 0, n_ranges, zmax.data());
+
+                // Materialize entries up front so the override loop can
+                // index by range slot without re-keying the map. Skip
+                // degenerate / inverted bands with a log line.
+                std::vector<Slic3r::ModelConfig*> range_configs(
+                    size_t(n_ranges), nullptr);
+                for (jsize r = 0; r < n_ranges; ++r) {
+                    const Slic3r::coordf_t lo = Slic3r::coordf_t(zmin[r]);
+                    const Slic3r::coordf_t hi = Slic3r::coordf_t(zmax[r]);
+                    if (!(lo < hi)) {
+                        ORCAXR_LOGE("nativeSlice: skipping degenerate height range[%d] [%.3f, %.3f)",
+                                    int(r), double(lo), double(hi));
+                        continue;
+                    }
+                    Slic3r::t_layer_height_range key(lo, hi);
+                    range_configs[r] = &mo->layer_config_ranges[key];
+                }
+
+                if (jLayerRangeOverrideRangeIdx != nullptr &&
+                    jLayerRangeOverrideKeys != nullptr &&
+                    jLayerRangeOverrideValues != nullptr) {
+                    const jsize n_idx = env->GetArrayLength(jLayerRangeOverrideRangeIdx);
+                    const jsize n_k   = env->GetArrayLength(jLayerRangeOverrideKeys);
+                    const jsize n_v   = env->GetArrayLength(jLayerRangeOverrideValues);
+                    jsize n_t = n_idx < n_k ? n_idx : n_k;
+                    if (n_v < n_t) n_t = n_v;
+                    std::vector<jint> idxs(size_t(n_t));
+                    if (n_t > 0) {
+                        env->GetIntArrayRegion(jLayerRangeOverrideRangeIdx, 0,
+                                               n_t, idxs.data());
+                    }
+                    Slic3r::ConfigSubstitutionContext substitutions(
+                        Slic3r::ForwardCompatibilitySubstitutionRule::EnableSilent);
+                    for (jsize t = 0; t < n_t; ++t) {
+                        const int ri = int(idxs[size_t(t)]);
+                        if (ri < 0 || ri >= n_ranges || range_configs[ri] == nullptr) continue;
+                        jstring jk = (jstring) env->GetObjectArrayElement(jLayerRangeOverrideKeys, t);
+                        jstring jv = (jstring) env->GetObjectArrayElement(jLayerRangeOverrideValues, t);
+                        if (jk == nullptr || jv == nullptr) {
+                            if (jk) env->DeleteLocalRef(jk);
+                            if (jv) env->DeleteLocalRef(jv);
+                            continue;
+                        }
+                        {
+                            ScopedUtf k(env, jk);
+                            ScopedUtf v(env, jv);
+                            try {
+                                range_configs[ri]->set_deserialize(k.c, v.c, substitutions);
+                                ORCAXR_LOGI("nativeSlice: range[%d] %.2f..%.2fmm %s=%s",
+                                            ri, double(zmin[ri]), double(zmax[ri]), k.c, v.c);
+                            } catch (const std::exception& e) {
+                                ORCAXR_LOGE("nativeSlice: rejected range[%d] %s=%s: %s",
+                                            ri, k.c, v.c, e.what());
+                            } catch (...) {
+                                ORCAXR_LOGE("nativeSlice: rejected range[%d] %s=%s (unknown)",
+                                            ri, k.c, v.c);
+                            }
+                        }
+                        env->DeleteLocalRef(jk);
+                        env->DeleteLocalRef(jv);
+                    }
+                }
+                ORCAXR_LOGI("nativeSlice: authored %d height range band(s)", int(n_ranges));
+            }
+        }
+
         Slic3r::Print print;
         // Print::m_isBBLPrinter is uninitialized in the default ctor —
         // happens to read as garbage, often true. When true, GCode export
@@ -1746,20 +1888,7 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
         // the keys_map ConfigOptionDef already knows about. After this,
         // set_deserialize_nothrow on extruder_type / nozzle_volume_type
         // / overhang_fan_threshold succeeds normally.
-        if (const Slic3r::ConfigDef* config_def = cfg.def()) {
-            for (const auto& kv : config_def->options) {
-                const auto& key = kv.first;
-                const Slic3r::ConfigOptionDef& opt_def = kv.second;
-                if (opt_def.type != Slic3r::coEnums || opt_def.enum_keys_map == nullptr)
-                    continue;
-                Slic3r::ConfigOption* opt = cfg.option(key, false);
-                if (auto* en = dynamic_cast<Slic3r::ConfigOptionEnumsGeneric*>(opt)) {
-                    if (en->keys_map == nullptr) {
-                        en->keys_map = opt_def.enum_keys_map;
-                    }
-                }
-            }
-        }
+        fixup_enum_keys_map(cfg);
         // ---------------------------------------------------------------
 
         // Force relative E distances. Profiles that carry their own
@@ -2063,7 +2192,24 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
     jintArray    jCustomGcodeTypes,
     jintArray    jCustomGcodeExtruders,
     jobjectArray jCustomGcodeColors,
-    jobjectArray jCustomGcodeExtras)
+    jobjectArray jCustomGcodeExtras,
+    /* A12 — per-input height-range bands. Five Object[]s sized to
+     * n_inputs (or null whole-array = no per-input ranges):
+     *   jLayerRangeZminPerInput[i]              = float[K_i] — band zMins
+     *   jLayerRangeZmaxPerInput[i]              = float[K_i] — band zMaxs
+     *   jLayerRangeOverrideRangeIdxPerInput[i]  = int[M_i]   — band slot
+     *   jLayerRangeOverrideKeysPerInput[i]      = String[M_i]
+     *   jLayerRangeOverrideValuesPerInput[i]    = String[M_i]
+     * Each (k, v) pair lands on the band's `ModelConfig` via
+     * set_deserialize. Null per-input entries skip A12 for that
+     * input. See nativeSlice for the apply semantics; this is the
+     * sliceMulti-equivalent shape (parallel to jLayerHeightProfiles
+     * PerInput). */
+    jobjectArray jLayerRangeZminPerInput,
+    jobjectArray jLayerRangeZmaxPerInput,
+    jobjectArray jLayerRangeOverrideRangeIdxPerInput,
+    jobjectArray jLayerRangeOverrideKeysPerInput,
+    jobjectArray jLayerRangeOverrideValuesPerInput)
 {
     ScopedUtf out(env, jOutGcodePath);
     const jsize n_inputs = jInputPaths != nullptr ? env->GetArrayLength(jInputPaths) : 0;
@@ -2360,6 +2506,112 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
                     }
                 }
 
+                // A12 — apply per-input height-range bands. Same
+                // shape as nativeSlice's per-band apply, but five
+                // outer arrays each indexed by input ordinal so each
+                // input has its own band set. Null per-input entries
+                // skip the apply for that input.
+                if (jLayerRangeZminPerInput != nullptr &&
+                    jLayerRangeZmaxPerInput != nullptr) {
+                    const jsize n_zmin_outer = env->GetArrayLength(jLayerRangeZminPerInput);
+                    const jsize n_zmax_outer = env->GetArrayLength(jLayerRangeZmaxPerInput);
+                    if (i < n_zmin_outer && i < n_zmax_outer) {
+                        jfloatArray j_zmin = (jfloatArray) env->GetObjectArrayElement(
+                            jLayerRangeZminPerInput, i);
+                        jfloatArray j_zmax = (jfloatArray) env->GetObjectArrayElement(
+                            jLayerRangeZmaxPerInput, i);
+                        if (j_zmin != nullptr && j_zmax != nullptr) {
+                            const jsize n_min = env->GetArrayLength(j_zmin);
+                            const jsize n_max = env->GetArrayLength(j_zmax);
+                            const jsize n_ranges = n_min < n_max ? n_min : n_max;
+                            if (n_ranges > 0) {
+                                std::vector<jfloat> zmin(n_ranges), zmax(n_ranges);
+                                env->GetFloatArrayRegion(j_zmin, 0, n_ranges, zmin.data());
+                                env->GetFloatArrayRegion(j_zmax, 0, n_ranges, zmax.data());
+                                std::vector<Slic3r::ModelConfig*> range_configs(
+                                    size_t(n_ranges), nullptr);
+                                for (jsize r = 0; r < n_ranges; ++r) {
+                                    const coordf_t lo = coordf_t(zmin[r]);
+                                    const coordf_t hi = coordf_t(zmax[r]);
+                                    if (!(lo < hi)) {
+                                        ORCAXR_LOGE("nativeSliceMulti: model[%d] degenerate range[%d] [%.3f, %.3f)",
+                                                    i, int(r), double(lo), double(hi));
+                                        continue;
+                                    }
+                                    Slic3r::t_layer_height_range key(lo, hi);
+                                    range_configs[r] = &mo->layer_config_ranges[key];
+                                }
+                                if (jLayerRangeOverrideRangeIdxPerInput != nullptr &&
+                                    jLayerRangeOverrideKeysPerInput != nullptr &&
+                                    jLayerRangeOverrideValuesPerInput != nullptr) {
+                                    const jsize n_idx_o = env->GetArrayLength(jLayerRangeOverrideRangeIdxPerInput);
+                                    const jsize n_k_o   = env->GetArrayLength(jLayerRangeOverrideKeysPerInput);
+                                    const jsize n_v_o   = env->GetArrayLength(jLayerRangeOverrideValuesPerInput);
+                                    if (i < n_idx_o && i < n_k_o && i < n_v_o) {
+                                        jintArray    j_idx = (jintArray)    env->GetObjectArrayElement(jLayerRangeOverrideRangeIdxPerInput, i);
+                                        jobjectArray j_kk  = (jobjectArray) env->GetObjectArrayElement(jLayerRangeOverrideKeysPerInput, i);
+                                        jobjectArray j_vv  = (jobjectArray) env->GetObjectArrayElement(jLayerRangeOverrideValuesPerInput, i);
+                                        if (j_idx != nullptr && j_kk != nullptr && j_vv != nullptr) {
+                                            const jsize n_idx = env->GetArrayLength(j_idx);
+                                            const jsize n_k   = env->GetArrayLength(j_kk);
+                                            const jsize n_v   = env->GetArrayLength(j_vv);
+                                            jsize n_t = n_idx < n_k ? n_idx : n_k;
+                                            if (n_v < n_t) n_t = n_v;
+                                            std::vector<jint> idxs(size_t(n_t));
+                                            if (n_t > 0)
+                                                env->GetIntArrayRegion(j_idx, 0, n_t, idxs.data());
+                                            Slic3r::ConfigSubstitutionContext substitutions(
+                                                Slic3r::ForwardCompatibilitySubstitutionRule::EnableSilent);
+                                            for (jsize t = 0; t < n_t; ++t) {
+                                                const int ri = int(idxs[size_t(t)]);
+                                                if (ri < 0 || ri >= n_ranges || range_configs[ri] == nullptr) continue;
+                                                jstring jk = (jstring) env->GetObjectArrayElement(j_kk, t);
+                                                jstring jv = (jstring) env->GetObjectArrayElement(j_vv, t);
+                                                if (jk == nullptr || jv == nullptr) {
+                                                    if (jk) env->DeleteLocalRef(jk);
+                                                    if (jv) env->DeleteLocalRef(jv);
+                                                    continue;
+                                                }
+                                                {
+                                                    ScopedUtf k(env, jk);
+                                                    ScopedUtf v(env, jv);
+                                                    try {
+                                                        range_configs[ri]->set_deserialize(k.c, v.c, substitutions);
+                                                        ORCAXR_LOGI("nativeSliceMulti: model[%d] range[%d] %.2f..%.2fmm %s=%s",
+                                                                    i, ri, double(zmin[ri]), double(zmax[ri]), k.c, v.c);
+                                                    } catch (const std::exception& e) {
+                                                        ORCAXR_LOGE("nativeSliceMulti: model[%d] rejected range[%d] %s=%s: %s",
+                                                                    i, ri, k.c, v.c, e.what());
+                                                    } catch (...) {
+                                                        ORCAXR_LOGE("nativeSliceMulti: model[%d] rejected range[%d] %s=%s (unknown)",
+                                                                    i, ri, k.c, v.c);
+                                                    }
+                                                }
+                                                env->DeleteLocalRef(jk);
+                                                env->DeleteLocalRef(jv);
+                                            }
+                                            env->DeleteLocalRef(j_idx);
+                                            env->DeleteLocalRef(j_kk);
+                                            env->DeleteLocalRef(j_vv);
+                                        } else {
+                                            if (j_idx) env->DeleteLocalRef(j_idx);
+                                            if (j_kk)  env->DeleteLocalRef(j_kk);
+                                            if (j_vv)  env->DeleteLocalRef(j_vv);
+                                        }
+                                    }
+                                }
+                                ORCAXR_LOGI("nativeSliceMulti: model[%d] authored %d height range band(s)",
+                                            i, int(n_ranges));
+                            }
+                            env->DeleteLocalRef(j_zmin);
+                            env->DeleteLocalRef(j_zmax);
+                        } else {
+                            if (j_zmin) env->DeleteLocalRef(j_zmin);
+                            if (j_zmax) env->DeleteLocalRef(j_zmax);
+                        }
+                    }
+                }
+
                 ORCAXR_LOGI("nativeSliceMulti: model[%d] '%s' user_t=(%.1f,%.1f,%.1f) "
                             "user_r=(%.1f,%.1f,%.1f)° user_s=(%.2f,%.2f,%.2f) "
                             "src_r=(%.1f,%.1f,%.1f)° src_s=(%.2f,%.2f,%.2f) post-bed-z=%.2f",
@@ -2392,17 +2644,7 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
         } _active_print_guard2{prev_active2};
 
         Slic3r::DynamicPrintConfig cfg = Slic3r::DynamicPrintConfig::full_print_config();
-        if (const Slic3r::ConfigDef* config_def = cfg.def()) {
-            for (const auto& kv : config_def->options) {
-                const auto& key = kv.first;
-                const Slic3r::ConfigOptionDef& opt_def = kv.second;
-                if (opt_def.type != Slic3r::coEnums || opt_def.enum_keys_map == nullptr) continue;
-                Slic3r::ConfigOption* opt = cfg.option(key, false);
-                if (auto* en = dynamic_cast<Slic3r::ConfigOptionEnumsGeneric*>(opt)) {
-                    if (en->keys_map == nullptr) en->keys_map = opt_def.enum_keys_map;
-                }
-            }
-        }
+        fixup_enum_keys_map(cfg);
         cfg.set_key_value("use_relative_e_distances", new Slic3r::ConfigOptionBool(true));
 
         if (jConfigKeys != nullptr && jConfigValues != nullptr) {
@@ -2632,7 +2874,18 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSaveAs3mf(
     jintArray    jCustomGcodeTypes,
     jintArray    jCustomGcodeExtruders,
     jobjectArray jCustomGcodeColors,
-    jobjectArray jCustomGcodeExtras)
+    jobjectArray jCustomGcodeExtras,
+    /* A12 — per-Z-band config overrides for round-trip. Same five
+     * parallel arrays as nativeSlice; libslic3r's bbs_3mf
+     * `_add_layer_config_ranges_file_to_archive` writer serializes
+     * `mo->layer_config_ranges` into Metadata/layer_config_ranges.xml
+     * so a desktop OrcaSlicer reopen sees the bands.
+     * Null arrays / empty = no per-band overrides. */
+    jfloatArray  jLayerRangeZmin,
+    jfloatArray  jLayerRangeZmax,
+    jintArray    jLayerRangeOverrideRangeIdx,
+    jobjectArray jLayerRangeOverrideKeys,
+    jobjectArray jLayerRangeOverrideValues)
 {
     ScopedUtf in(env, jInputPath);
     ScopedUtf out(env, jOutPath);
@@ -2657,20 +2910,7 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSaveAs3mf(
         Slic3r::DynamicPrintConfig cfg = Slic3r::DynamicPrintConfig::full_print_config();
         // Same keys_map fixup as nativeSlice — generic-enum options
         // need their runtime keys_map pointer attached before deserialize.
-        if (const Slic3r::ConfigDef* config_def = cfg.def()) {
-            for (const auto& kv : config_def->options) {
-                const auto& key = kv.first;
-                const Slic3r::ConfigOptionDef& opt_def = kv.second;
-                if (opt_def.type != Slic3r::coEnums || opt_def.enum_keys_map == nullptr)
-                    continue;
-                Slic3r::ConfigOption* opt = cfg.option(key, false);
-                if (auto* en = dynamic_cast<Slic3r::ConfigOptionEnumsGeneric*>(opt)) {
-                    if (en->keys_map == nullptr) {
-                        en->keys_map = opt_def.enum_keys_map;
-                    }
-                }
-            }
-        }
+        fixup_enum_keys_map(cfg);
         cfg.set_key_value("use_relative_e_distances", new Slic3r::ConfigOptionBool(true));
 
         if (jConfigKeys != nullptr && jConfigValues != nullptr) {
@@ -2853,6 +3093,71 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSaveAs3mf(
                             jCustomGcodeZmm, jCustomGcodeTypes,
                             jCustomGcodeExtruders,
                             jCustomGcodeColors, jCustomGcodeExtras);
+
+        // A12 — author height ranges onto the first object's
+        // `layer_config_ranges`. libslic3r's bbs_3mf
+        // `_add_layer_config_ranges_file_to_archive` writer (bbs_3mf.
+        // cpp:7398) walks `mo->layer_config_ranges` and emits
+        // Metadata/layer_config_ranges.xml so a desktop OrcaSlicer
+        // reopen sees the bands.
+        if (jLayerRangeZmin != nullptr && jLayerRangeZmax != nullptr &&
+            !model.objects.empty()) {
+            const jsize n_min = env->GetArrayLength(jLayerRangeZmin);
+            const jsize n_max = env->GetArrayLength(jLayerRangeZmax);
+            const jsize n_ranges = n_min < n_max ? n_min : n_max;
+            if (n_ranges > 0) {
+                Slic3r::ModelObject* mo = model.objects.front();
+                std::vector<jfloat> zmin(n_ranges), zmax(n_ranges);
+                env->GetFloatArrayRegion(jLayerRangeZmin, 0, n_ranges, zmin.data());
+                env->GetFloatArrayRegion(jLayerRangeZmax, 0, n_ranges, zmax.data());
+                std::vector<Slic3r::ModelConfig*> range_configs(size_t(n_ranges), nullptr);
+                for (jsize r = 0; r < n_ranges; ++r) {
+                    const coordf_t lo = coordf_t(zmin[r]);
+                    const coordf_t hi = coordf_t(zmax[r]);
+                    if (!(lo < hi)) continue;
+                    Slic3r::t_layer_height_range key(lo, hi);
+                    range_configs[r] = &mo->layer_config_ranges[key];
+                }
+                if (jLayerRangeOverrideRangeIdx != nullptr &&
+                    jLayerRangeOverrideKeys != nullptr &&
+                    jLayerRangeOverrideValues != nullptr) {
+                    const jsize n_idx = env->GetArrayLength(jLayerRangeOverrideRangeIdx);
+                    const jsize n_k   = env->GetArrayLength(jLayerRangeOverrideKeys);
+                    const jsize n_v   = env->GetArrayLength(jLayerRangeOverrideValues);
+                    jsize n_t = n_idx < n_k ? n_idx : n_k;
+                    if (n_v < n_t) n_t = n_v;
+                    std::vector<jint> idxs(size_t(n_t));
+                    if (n_t > 0)
+                        env->GetIntArrayRegion(jLayerRangeOverrideRangeIdx, 0, n_t, idxs.data());
+                    Slic3r::ConfigSubstitutionContext substitutions(
+                        Slic3r::ForwardCompatibilitySubstitutionRule::EnableSilent);
+                    for (jsize t = 0; t < n_t; ++t) {
+                        const int ri = int(idxs[size_t(t)]);
+                        if (ri < 0 || ri >= n_ranges || range_configs[ri] == nullptr) continue;
+                        jstring jk = (jstring) env->GetObjectArrayElement(jLayerRangeOverrideKeys, t);
+                        jstring jv = (jstring) env->GetObjectArrayElement(jLayerRangeOverrideValues, t);
+                        if (jk == nullptr || jv == nullptr) {
+                            if (jk) env->DeleteLocalRef(jk);
+                            if (jv) env->DeleteLocalRef(jv);
+                            continue;
+                        }
+                        {
+                            ScopedUtf k(env, jk);
+                            ScopedUtf v(env, jv);
+                            try {
+                                range_configs[ri]->set_deserialize(k.c, v.c, substitutions);
+                            } catch (const std::exception& e) {
+                                ORCAXR_LOGE("nativeSaveAs3mf: range[%d] %s=%s rejected (%s)",
+                                            ri, k.c, v.c, e.what());
+                            }
+                        }
+                        env->DeleteLocalRef(jk);
+                        env->DeleteLocalRef(jv);
+                    }
+                }
+                ORCAXR_LOGI("nativeSaveAs3mf: authored %d height range band(s)", int(n_ranges));
+            }
+        }
 
         if (!Slic3r::store_3mf(out.c, &model, &cfg, /*fullpath_sources=*/false)) {
             ORCAXR_LOGE("nativeSaveAs3mf: store_3mf failed");
@@ -4377,6 +4682,26 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectConfigs(
                         s << '"' << json_escape_string(key) << "\":\""
                           << json_escape_string(mv->config.opt_serialize(key)) << '"';
                     }
+                }
+                s << "}}";
+            }
+            // A12 — emit per-object height ranges (one entry per
+            // (zMin, zMax) band in `mo->layer_config_ranges`, with the
+            // band's ModelConfig keys flattened to a string→string map).
+            s << "],\"height_ranges\":[";
+            bool first_r = true;
+            for (const auto& kv : mo->layer_config_ranges) {
+                if (!first_r) s << ',';
+                first_r = false;
+                s << "{\"z_min\":" << kv.first.first
+                  << ",\"z_max\":" << kv.first.second
+                  << ",\"overrides\":{";
+                bool first_k = true;
+                for (const std::string& key : kv.second.keys()) {
+                    if (!first_k) s << ',';
+                    first_k = false;
+                    s << '"' << json_escape_string(key) << "\":\""
+                      << json_escape_string(kv.second.opt_serialize(key)) << '"';
                 }
                 s << "}}";
             }

@@ -47,16 +47,6 @@ Kotlin-side `mergedConfig()`/`computeFilamentMap()` already enforces `(target % 
 
 **Trigger to schedule:** any user-reported defect on a 5+-filament U1 project where Kotlin-side resize doesn't match Snapmaker desktop output (e.g., wrong `retraction_length` baked into a T-command).
 
-### A12. Height-range modifiers (per-Z-range per-object settings) 🔴 Not started
-
-> **Files (planned):** `app/src/main/cpp/slic3r_jni.cpp` (apply `ModelObject::layer_config_ranges` before slice), `PlacedModel.kt` (add `heightRanges: List<HeightRange>`), new `HeightRangePanel.kt`, MCP tool `add_height_range`. Depends on **D16** (per-volume Object Settings UI) for the per-range setting editor.
-
-Upstream's "Edit height range" lets the user split an object into Z bands (e.g., 0–5 mm, 5–10 mm, 10+ mm) and override `layer_height`, `sparse_infill_density`, `wall_loops`, and a curated set of process keys per band. Stored as `ModelObject::layer_config_ranges` (`std::map<std::pair<double,double>, ModelConfig>`). Common workflows: 100 % infill in the bottom 5 mm to add weight; coarser layer height above a feature line; different wall count over the top of an embedded magnet pocket.
-
-**Implementation outline:** Per-PlacedModel `List<HeightRange(zMin, zMax, overrides: Map<key, value>)>`. JNI walks the list and writes onto `mo->layer_config_ranges` before `print.process()`. UI: a vertical Z-bar gizmo in `HeightRangePanel` with split / merge / edit affordances; tapping a band opens the existing per-volume settings editor (D16). 3MF round-trip via libslic3r's existing serializer. Range overlap rules match upstream (later range wins).
-
-**Exit criteria:** Author a 0–5 mm range with `sparse_infill_density=100` on a 20 mm cube; sliced gcode shows 100 % infill density in layers 1–25 and the project's default density above.
-
 ---
 
 ## B. XR UI / UX completeness
@@ -148,11 +138,11 @@ Possible role: parameter editing on a phone screen for users who don't want to t
 
 **Decision input needed:** does the user prefer (a) profiles-first, (b) phone companion, (c) Bluetooth keyboard, (d) hybrid?
 
-### E5. Phone / TV form factors ⚪ Deferred — XR must be solid first
+### E5. TV form factor ⚪ Deferred — phone shipped, TV speculative
 
-> See GEMINI.md "Target platform" section.
+> See GEMINI.md "Target platform" section. Phone / tablet shipped — see appendix entry below.
 
-Out of scope until XR has a 1.0-quality release.
+Phone + tablet shipped (`MobileActivity` + 10 screens — Home / Files / Slicer / Preview / Paint / Filament / Monitor / Profile / Settings / Onboarding — sharing the XR shell's stores, MoonrakerClient, libslic3r JNI, and AiRenderEngine). What remains is the TV form factor, which is speculative — Android TV's controller-only input model and 10-foot UX make XR-derived gizmos and laser-paint a poor fit. Defer until a concrete user request lands.
 
 ### E6. Vision Pro port ⚪ Deferred indefinitely
 
@@ -422,6 +412,7 @@ Reference index. Use `git log --oneline --grep=<topic>` for the full commit chai
 | A11 | Custom G-code per print Z (pause / color change / template) | `apply_custom_gcodes` + `CustomGcodePanel` + scrubber tick strip + 4 MCP tools |
 | A13 | Wipe-tower auto-positioning | Pure-Kotlin scorer + `auto_position_wipe_tower` MCP + `WipeTowerAutoPositionRow` Switch |
 | A14 | G-code feature-type color mode for toolpath viewer | `ToolpathGlb.ColorMode` + 3-button SegmentedButton in `BottomLayerPreviewPanel` |
+| A12 (partial — JNI + MCP + 3MF round-trip shipped, dedicated Z-bar gizmo deferred) | Height-range modifiers (per-Z-range per-object settings) | `PlacedModel.heightRanges: List<HeightRange>` + JNI plumbing on `nativeSlice` / `nativeSliceMulti` / `nativeSaveAs3mf` writes onto `mo->layer_config_ranges` (libslic3r's `LayerRanges::assign` resolves overlaps with later band winning); `nativeRead3mfObjectConfigs` extracts bands on load. 5 MCP tools (`list_height_ranges`, `add_height_range`, `set_height_range_overrides`, `remove_height_range`, `clear_height_ranges`). 3MF round-trip via libslic3r's existing `Metadata/layer_config_ranges.xml` writer. UI deferred (mirrors D16's "JNI + MCP shipped, dedicated SpatialPanel deferred" precedent). 27 unit tests (`HeightRangeTest` + `HeightRangeToolsTest`) green. Exit criterion: 0–5 mm band with `sparse_infill_density=100` on a 20 mm cube → 100% density in layers 1–25 |
 
 ### Section B — XR UI / UX (shipped)
 
@@ -455,6 +446,7 @@ Reference index. Use `git log --oneline --grep=<topic>` for the full commit chai
 | # | Feature | Commits / notes |
 |---|---|---|
 | E3 | Multi-plate workspace | `3364b9c` — `PlacedModel.plateId` + `PlateStore` + plate tab strip |
+| E5 (phone) | Phone / tablet form factor | `MobileActivity` + 10 screens (Home / Files / Slicer / Preview / Paint / Filament / Monitor / Profile / Settings / Onboarding) sharing XR stores, MoonrakerClient, libslic3r JNI, AiRenderEngine. Material 3 BottomNav (phone) / NavRail (tablet). Activated when `Session.create` returns null. Touch paint, transform sliders, slice cancel, 3D toolpath viewer (Filament-android), interactive bed preview, mobile export, voice assistant + MCP tool driving. Cherry-picked commits: `ca4669f`, `4dc03f2`, `55cb19f`, `b51829b`, `c8b78ac`, `82f2805`, `44c4d58`. TV form factor still deferred (see E5 above) |
 | E8 | Foreground-service background slicing | `SliceForegroundService` + `SliceLifecycle` + `nativeAbort` JNI hook + Cancel notification action |
 | E9 | Native build toolchain pin (NDK 26+ / Clang 17+) | GEMINI gotcha §29 + `build_native.sh` floor assert + `verifyNdkClangFloor` Gradle task |
 | E10 | Android Test Orchestrator | `androidx.test:orchestrator` + `clearPackageData=true` + `ANDROIDX_TEST_ORCHESTRATOR` execution |
