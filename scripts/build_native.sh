@@ -46,6 +46,16 @@ done
 : "${NDK_VERSION:=$NDK_VERSION_DEFAULT}"
 : "${ANDROID_NDK:=$ANDROID_HOME/ndk/$NDK_VERSION}"
 
+# Parallel job count. `cmake --build` / Ninja default to *every* core,
+# which pegs the host for the duration of an hours-long C++ build and
+# makes the desktop unusable. Default to `max(1, nproc - 3)` so a few
+# cores stay free for the browser / editor / window manager. Override
+# with `ORCAXR_JOBS=<n>` for headless or CI runs that want every core.
+if [[ -z "${ORCAXR_JOBS:-}" ]]; then
+    NCPU=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)
+    ORCAXR_JOBS=$(( NCPU > 3 ? NCPU - 3 : 1 ))
+fi
+
 TOOLCHAIN_FILE="${ANDROID_NDK}/build/cmake/android.toolchain.cmake"
 if [[ ! -f "$TOOLCHAIN_FILE" ]]; then
     echo "error: NDK toolchain file not found: $TOOLCHAIN_FILE" >&2
@@ -78,6 +88,7 @@ echo "  platform    : $ANDROID_PLATFORM"
 echo "  deps build  : $DEPS_BUILD_DIR"
 echo "  libslic3r   : $LIBSLIC3R_BUILD_DIR"
 echo "  clean       : $CLEAN"
+echo "  jobs        : $ORCAXR_JOBS"
 echo
 
 # ---- apply patches -------------------------------------------------------
@@ -228,7 +239,7 @@ cmake -S "$ORCA_DIR/deps" -B "$DEPS_BUILD_DIR" -G Ninja \
     -DFLATPAK=OFF
 
 echo "--- phase 1: build deps"
-cmake --build "$DEPS_BUILD_DIR"
+cmake --build "$DEPS_BUILD_DIR" -j "$ORCAXR_JOBS"
 
 # ---- phase 2: libslic3r --------------------------------------------------
 
@@ -306,24 +317,18 @@ cmake -S "$ORCA_DIR" -B "$LIBSLIC3R_BUILD_DIR" -G Ninja \
     -DORCA_TOOLS=OFF
 
 echo "--- phase 2: build libslic3r"
-# ASAN-instrumented libslic3r compiles peak at ~5 GB RSS per TU
-# (ASAN's shadow memory + Clang's own bookkeeping for the sanitizer
-# interceptors). On 32 GB hosts even `-j 4` OOMs once 4 heavy TUs
-# overlap (Boost.Geometry / OpenVDB headers blow up). Drop to
-# `-j 2` — the build doubles in wall time but stops getting killed.
-# Symptom of OOM: ninja reports `error: unable to rename temporary
-# 'X.cpp-HASH.o.tmp' to 'X.cpp.o': No such file or directory` (Clang
-# was SIGKILL'd between writing the .tmp and renaming it).
-ORCAXR_JOBS_FLAG=()
+# Memory pressure under ASAN forces a lower job count than the
+# CPU-responsiveness cap above: ASAN's shadow memory pushes peak RSS
+# to 8-10 GB on heavy TUs (bbs_3mf.cpp, anything pulling Boost.Geometry
+# / OpenVDB), so even `-j 2` OOMs and ninja reports `unable to rename
+# temporary 'X.cpp-HASH.o.tmp'` (Clang SIGKILL'd between writing and
+# renaming). Force serial when ASAN is on; total wall time 1.5-2 h
+# but builds complete deterministically.
+LIBSLIC3R_JOBS="$ORCAXR_JOBS"
 if [[ "${ORCAXR_ASAN:-0}" == "1" ]]; then
-    # `-j 2` still OOMs on bbs_3mf.cpp (the BBS 3MF parser is enormous;
-    # with ASAN's shadow-memory bookkeeping, peak RSS hits 8-10 GB on
-    # that single TU). `-j 1` builds serially: total wall time is
-    # 1.5-2 hours but the build completes deterministically with no
-    # killed compiles.
-    ORCAXR_JOBS_FLAG=(-j 1)
+    LIBSLIC3R_JOBS=1
 fi
-cmake --build "$LIBSLIC3R_BUILD_DIR" --target libslic3r "${ORCAXR_JOBS_FLAG[@]}"
+cmake --build "$LIBSLIC3R_BUILD_DIR" --target libslic3r -j "$LIBSLIC3R_JOBS"
 
 # Record the shim hash so subsequent runs skip the .o purge unless
 # the shim contents change. Set after a successful build so an
