@@ -396,39 +396,49 @@ class MoonrakerClient(
     }
 
     /**
-     * GET /webcam/?action=snapshot — Mainsail/Fluidd's crowsnest proxy
-     * exposes a JPEG snapshot of the configured stream at this URL.
-     * Returns the raw bytes; caller decodes via BitmapFactory.
+     * Build a [WebcamSession] for this printer. The session caches the
+     * resolved snapshot URL, runs the U1 wake keepalive, and survives
+     * across many fetches — construct it once per printer-id and
+     * reuse across recompositions, not once per frame.
      *
-     * If the printer doesn't have a webcam configured (or
-     * crowsnest/mjpgstreamer isn't running) the response is a 404 and
-     * we report NotFound — UI hides the preview cleanly.
+     * See [WebcamSession] for the protocol notes (Snapmaker U1's
+     * monitor.jpg + camera.start_monitor, Mainsail/Fluidd's mjpg-
+     * streamer fallback).
+     */
+    fun webcamSession(): WebcamSession = WebcamSession(
+        printer = printer,
+        baseUrl = baseUrl(),
+        httpClient = http,
+        applyApiKey = { it.applyApiKey() },
+    )
+
+    /**
+     * One-shot snapshot fetch — auto-discovers Snapmaker U1's
+     * monitor.jpg path / Mainsail's mjpg-streamer path / whatever
+     * `/server/webcams/list` advertises, sends one wake pulse to
+     * cover U1's idle camera, returns one JPEG.
+     *
+     * Used by callers that don't keep a [WebcamSession] alive
+     * (low-rate XR printer-list polling, the LLM render pipeline).
+     * For interactive live-view UIs prefer [webcamSession] so the
+     * wake pulse runs continuously.
      */
     suspend fun fetchWebcamSnapshot(): MoonrakerResult<ByteArray> = withContext(Dispatchers.IO) {
-        val req = Request.Builder()
-            .url(baseUrl() + "/webcam/?action=snapshot")
-            .header("Accept", "image/jpeg")
-            .applyApiKey()
-            .get()
-            .build()
-        try {
-            http.newCall(req).execute().use { response ->
-                val code = response.code
-                when {
-                    response.isSuccessful -> {
-                        val bytes = response.body?.bytes() ?: ByteArray(0)
-                        if (bytes.isEmpty()) MoonrakerResult.IoError("empty body (${req.url})")
-                        else MoonrakerResult.Ok(bytes)
-                    }
-                    code == 404 -> MoonrakerResult.NotFound("No webcam at /webcam/?action=snapshot")
-                    code == 401 || code == 403 -> MoonrakerResult.AuthError(
-                        "Webcam fetch rejected (HTTP $code).",
-                    )
-                    else -> MoonrakerResult.HttpError(code, "")
-                }
-            }
-        } catch (e: Throwable) {
-            MoonrakerResult.IoError(e.message ?: e::class.simpleName ?: "io error")
+        val session = webcamSession()
+        // One-shot wake — pump U1's `camera.start_monitor` and give
+        // the firmware a brief moment to publish a fresh frame to
+        // monitor.jpg before we read. Skipped on a hot first attempt
+        // for printers that don't need the wake (mjpg-streamer hosts
+        // serve monitor.jpg / snapshot continuously).
+        var first = runCatching { session.fetchFrame() }.getOrElse {
+            MoonrakerResult.IoError(it.message ?: "webcam fetch failed")
+        }
+        if (first is MoonrakerResult.Ok) return@withContext first
+        // First attempt failed — wake the camera then retry.
+        runCatching { session.wakeOncePublic() }
+        kotlinx.coroutines.delay(300)
+        runCatching { session.fetchFrame() }.getOrElse {
+            MoonrakerResult.IoError(it.message ?: "webcam fetch failed")
         }
     }
 

@@ -69,6 +69,14 @@ import java.util.Date
 fun FilesScreen(
     isTablet: Boolean,
     onOpenInSlicer: (String) -> Unit,
+    /**
+     * "Start with an empty plate" CTA — clear the active file and
+     * jump to the slicer screen with no model loaded. Useful when
+     * the user wants to import via a primitive / shared intent /
+     * starting a fresh project after a previous slice. Null hides
+     * the button.
+     */
+    onStartEmptyPlate: (() -> Unit)? = null,
 ) {
     val app = LocalMobileAppState.current
     val ctx = LocalContext.current
@@ -127,6 +135,12 @@ fun FilesScreen(
             title = "Files",
             subtitle = "Recent imports · ${recents.size}",
             actions = {
+                if (onStartEmptyPlate != null) {
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = onStartEmptyPlate,
+                    ) { Text("Empty plate") }
+                    Spacer(Modifier.width(8.dp))
+                }
                 Button(
                     onClick = {
                         pickerLauncher.launch(arrayOf(

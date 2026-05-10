@@ -356,6 +356,16 @@ private fun ScreenContent(
                     onSetSlicerOutput(null)
                     onNavigate(MobileDestination.Slicer)
                 },
+                // Empty-plate path — clear any prior file/output and
+                // jump to the Slicer screen, which renders its empty
+                // state with an Import CTA. Mirrors the XR shell's
+                // "no model loaded" workspace where the user picks a
+                // file or adds a primitive next.
+                onStartEmptyPlate = {
+                    onSetSlicerFile(null)
+                    onSetSlicerOutput(null)
+                    onNavigate(MobileDestination.Slicer)
+                },
             )
             MobileDestination.Monitor -> MonitorScreen(isTablet)
             MobileDestination.Filament -> FilamentScreen(isTablet)

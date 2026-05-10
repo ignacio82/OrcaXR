@@ -1,5 +1,7 @@
 package dev.orcaxr.app.mobile.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -117,10 +119,39 @@ fun SlicerScreen(
     val allProfiles = remember(userProfilesList, bundledProfiles) {
         bundledProfiles + Profiles.all + userProfilesList + listOf(Profiles.default)
     }
+    // Narrow the profile picker to rows that match the actively-
+    // selected printer + the project's shared material family. Mirrors
+    // the XR shell's `OrcaProfileLoader.filterForContext` gate so the
+    // user never sees a Snapmaker-U1 process listed when their
+    // selected printer is an Elegoo, or a PETG process row when every
+    // project filament is PLA. User-saved profiles (no machineName /
+    // filamentName) always pass through; if filtering would empty the
+    // list, the helper returns `allProfiles` unchanged so we never
+    // strand the user with an empty dropdown.
+    val printers by app.printers.printers.collectAsState(initial = emptyList())
+    val activePrinter = remember(printers, app.prefs.lastPrinterId) {
+        printers.firstOrNull { it.id == app.prefs.lastPrinterId } ?: printers.firstOrNull()
+    }
+    val filamentMap by app.filamentEntries.all.collectAsState(initial = emptyMap())
+    val activeFilamentEntries = activePrinter?.id?.let(filamentMap::get).orEmpty()
+    val displayedProfiles = remember(allProfiles, activePrinter, activeFilamentEntries) {
+        val brand = OrcaProfileLoader.brandOfPrinter(activePrinter?.name)
+        val model = OrcaProfileLoader.modelOfPrinter(activePrinter?.name)
+        val sharedMaterial = OrcaProfileLoader.sharedMaterialFamily(
+            activeFilamentEntries.map { it.filamentType },
+        )
+        OrcaProfileLoader.filterForContext(
+            all = allProfiles,
+            printerBrand = brand,
+            sharedMaterial = sharedMaterial,
+            printerModel = model,
+        )
+    }
 
-    var selectedProfile by remember(allProfiles) {
+    var selectedProfile by remember(displayedProfiles) {
         mutableStateOf(
-            app.prefs.lastProfileId?.let { id -> allProfiles.firstOrNull { it.id == id } }
+            app.prefs.lastProfileId?.let { id -> displayedProfiles.firstOrNull { it.id == id } }
+                ?: displayedProfiles.firstOrNull()
                 ?: allProfiles.firstOrNull()
                 ?: Profiles.default,
         )
@@ -165,7 +196,7 @@ fun SlicerScreen(
                     })
                 }
                 Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    ProfileCard(allProfiles, selectedProfile, onSelect = { selectedProfile = it })
+                    ProfileCard(displayedProfiles, selectedProfile, onSelect = { selectedProfile = it })
                     QuickOverridesCard(layerHeightOverride, onChange = { layerHeightOverride = it })
                     ToolsCard(
                         filePath = filePath,
@@ -222,7 +253,7 @@ fun SlicerScreen(
                     paintFilamentIndex = paintFilamentIndex,
                     fillRemaining = false,
                 )
-                ProfileCard(allProfiles, selectedProfile, onSelect = { selectedProfile = it })
+                ProfileCard(displayedProfiles, selectedProfile, onSelect = { selectedProfile = it })
                 QuickOverridesCard(layerHeightOverride, onChange = { layerHeightOverride = it })
                 ToolsCard(
                     filePath = filePath,
@@ -232,6 +263,11 @@ fun SlicerScreen(
                     paintApplied = paintFilamentIndex != null,
                     transform = transform,
                     onSetTransform = onSetTransform,
+                    exportConfig = selectedProfile.config + buildMap {
+                        layerHeightOverride.toFloatOrNull()
+                            ?.takeIf { it > 0f }
+                            ?.let { put("layer_height", it.toString()) }
+                    },
                 )
                 TransformSheet(transform, onSetTransform)
                 SliceButton(
@@ -1022,15 +1058,93 @@ private fun ToolsCard(
     paintApplied: Boolean,
     transform: SlicerEngine.ModelPlacement,
     onSetTransform: (SlicerEngine.ModelPlacement) -> Unit,
+    /**
+     * Configuration to embed when exporting as 3MF. Empty map = the
+     * 3MF carries only the mesh (no slicer settings); pass the
+     * caller's resolved profile + overrides for a round-trippable
+     * project file.
+     */
+    exportConfig: Map<String, String> = emptyMap(),
 ) {
+    val ctx = LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var repairing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var orienting by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var exporting by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var lastToolResult by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+
+    val saveStlLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("model/stl"),
+    ) { uri: android.net.Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            exporting = true
+            val src = File(filePath)
+            val tmp = File(cacheDir, "export_${src.nameWithoutExtension}.stl")
+            val ok = withContext(Dispatchers.IO) {
+                runCatching {
+                    val baseStl = if (src.extension.equals("stl", ignoreCase = true)) src
+                    else tmp.also { SlicerEngine.convertToStl(src, it) }
+                    if (!baseStl.exists() || baseStl.length() == 0L) return@runCatching false
+                    ctx.contentResolver.openOutputStream(uri)?.use { out ->
+                        baseStl.inputStream().use { it.copyTo(out) }
+                    } ?: return@runCatching false
+                    true
+                }.getOrElse { false }
+            }
+            exporting = false
+            lastToolResult = if (ok) "Exported STL." else "Export STL failed."
+        }
+    }
+    val save3mfLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("model/3mf"),
+    ) { uri: android.net.Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            exporting = true
+            val src = File(filePath)
+            val tmp = File(cacheDir, "export_${src.nameWithoutExtension}.3mf")
+            val ok = withContext(Dispatchers.IO) {
+                runCatching {
+                    val wrote = SlicerEngine.saveAs3mf(input = src, outPath = tmp, config = exportConfig)
+                    if (!wrote || !tmp.exists() || tmp.length() == 0L) return@runCatching false
+                    ctx.contentResolver.openOutputStream(uri)?.use { out ->
+                        tmp.inputStream().use { it.copyTo(out) }
+                    } ?: return@runCatching false
+                    true
+                }.getOrElse { false }
+            }
+            exporting = false
+            lastToolResult = if (ok) "Exported 3MF." else "Export 3MF failed."
+        }
+    }
 
     MobileCard {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             SectionKicker("Tools")
+            // Export row — STL strips paint + per-object config (binary
+            // mesh only, the universal interchange format); 3MF keeps
+            // the full project (mesh + paint + profile config) so it
+            // can be re-opened in OrcaXR or desktop OrcaSlicer with
+            // the same settings.
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        val stem = File(filePath).nameWithoutExtension.ifBlank { "model" }
+                        saveStlLauncher.launch("$stem.stl")
+                    },
+                    enabled = !repairing && !orienting && !exporting,
+                    modifier = Modifier.weight(1f),
+                ) { Text(if (exporting) "Saving…" else "Save .stl") }
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        val stem = File(filePath).nameWithoutExtension.ifBlank { "model" }
+                        save3mfLauncher.launch("$stem.3mf")
+                    },
+                    enabled = !repairing && !orienting && !exporting,
+                    modifier = Modifier.weight(1f),
+                ) { Text(if (exporting) "Saving…" else "Save .3mf") }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 androidx.compose.material3.OutlinedButton(
                     onClick = {

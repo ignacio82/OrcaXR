@@ -388,6 +388,93 @@ server. Tests rely on
 `android.util.Log` calls in production code don't blow up the unit
 harness.
 
+## Webcam — Snapmaker U1 needs a WebSocket wake pulse
+
+`MoonrakerClient.fetchWebcamSnapshot` historically GET'd
+`/webcam/?action=snapshot` (the mjpg-streamer / crowsnest URL). That's
+correct for vanilla MainsailOS / FluiddPi but **wrong for Snapmaker
+U1** — U1's firmware doesn't run mjpg-streamer. It publishes the
+camera as a Moonraker plugin: discovery via `/server/webcams/list`,
+frames at `/server/files/camera/monitor.jpg`. Crucially, U1 puts the
+camera to sleep after a few seconds; monitor.jpg returns either 404
+or a stale frame from minutes ago unless something pings
+`{"jsonrpc":"2.0","method":"camera.start_monitor",
+"params":{"domain":"lan","interval":0}}` over the Moonraker
+WebSocket every ~2 s. Without that pulse the live view looks frozen.
+
+`WebcamSession` (`app/src/main/java/dev/orcaxr/app/WebcamSession.kt`)
+encapsulates this:
+
+- Discovery: query `/server/webcams/list`, resolve relative URLs
+  against base both with-port and stripped-port (third-party
+  crowsnest installs serve the camera on a different port from
+  Moonraker), append the U1 monitor.jpg + legacy mjpg URLs as
+  fallback. Cached for the session's lifetime.
+- Wake: `startWakePulse(scope)` runs `wakeOnce()` every 2 s. Safe
+  on non-Snapmaker firmware — the WebSocket message is silently
+  ignored.
+- Polling: `fetchFrame()` walks the cached candidate list with a
+  per-call cache buster. Tolerant of multipart/x-mixed-replace
+  bodies (extracts the first SOI..EOI pair). After
+  FAIL_THRESHOLD * candidates strikes, surfaces NotFound so the
+  caller can hide the panel.
+
+**Both XR and phone surfaces must use the session, not the
+one-shot `fetchWebcamSnapshot`** if they want continuous live view.
+The XR `MainActivity` polling loop caches one session per printer
+in a remembered map; the phone `MonitorScreen` constructs a session
+in `remember(cfg.id)` and starts the wake job in a
+`DisposableEffect`. The XR `PrintMonitorPanel` (always-visible
+during a print) also takes the latest frame so the user sees video
+without opening the Devices overlay. The one-shot
+`fetchWebcamSnapshot` retries with a wake pulse + 300 ms delay
+so non-session callers (LLM render pipeline, low-rate overviews)
+also work on U1, just at higher latency.
+
+## Profile picker — narrow by brand × model × material
+
+`OrcaProfileLoader.filterForContext` is the seam that hides
+profiles that don't match the active printer + project filaments:
+
+- Brand: matches `printer.name` to `PRINTER_BRANDS` (Snapmaker /
+  Elegoo / Bambu / Prusa). Profile rows whose `machineName`
+  contains that brand pass.
+- Model: `modelOfPrinter(name)` returns a recognized model token
+  ("U1", "Centauri Carbon", "X1C", …) via `PRINTER_MODELS`
+  regexes. Profile rows whose `machineName` contains the model
+  pass. Without this layer, picking "Snapmaker U1" still
+  surfaced A350 / J1 / Artisan profiles.
+- Material: `sharedMaterialFamily(filaments)` reduces project
+  filament types to a single family ("PLA"). Profile rows whose
+  `filamentName` contains it pass. Mixed families = null = no
+  material filter (we don't strand the user when they're running
+  a multi-material print).
+
+Both the XR `RightSettingsPanel` and the phone `SlicerScreen`
+call `filterForContext` with all three args. User-saved profiles
+(`machineName == filamentName == null`) always pass — we don't
+second-guess the user's own picks. If filtering would empty the
+list, the helper returns the input unchanged so the dropdown
+never goes empty.
+
+When bundling a new vendor's machine profile leaves, add a row
+to `PRINTER_MODELS` so the picker stays narrow. Pattern order
+matters when patterns can overlap (`MK3.5` must win over `MK3`).
+
+## Mobile export — STL + 3MF via SAF
+
+The phone `SlicerScreen.ToolsCard` exposes "Save .stl" / "Save
+.3mf" buttons that route through Android's
+`ActivityResultContracts.CreateDocument` so the user picks the
+destination via the system file picker (no `WRITE_EXTERNAL_STORAGE`
+required, scoped-storage compliant). STL exports go through
+`SlicerEngine.convertToStl` (reads any libslic3r format), 3MF
+exports go through `SlicerEngine.saveAs3mf` with the active
+profile config so the saved 3MF re-opens with the same slice
+settings. Mirrors the XR `BottomRightSummaryPanel.onSaveModelStl`
+/ `onSaveProject3mf` paths but writes to the user-chosen Uri
+instead of the public Downloads/ directory.
+
 ## C7 — digital-twin monitoring
 
 `WorkspaceMode.Devices` is the third workspace mode (Prepare /

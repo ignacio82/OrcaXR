@@ -5077,6 +5077,13 @@ fun ModelLoadingOverlayPanel(label: String?) {
 fun PrintMonitorPanel(
     printerName: String,
     snapshot: PrintSnapshot?,
+    /**
+     * Live webcam frame from the printer, if available. Sourced from
+     * the per-printer [WebcamSession] in MainActivity's polling loop.
+     * Null when the printer has no webcam (or the session hasn't
+     * landed a frame yet); the panel hides the image area cleanly.
+     */
+    webcam: androidx.compose.ui.graphics.ImageBitmap? = null,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onCancel: () -> Unit,
@@ -5101,6 +5108,17 @@ fun PrintMonitorPanel(
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.titleMedium,
             )
+            if (webcam != null) {
+                androidx.compose.foundation.Image(
+                    bitmap = webcam,
+                    contentDescription = "Printer webcam",
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 200.dp)
+                        .clip(RoundedCornerShape(8.dp)),
+                )
+            }
             // LivePrintStatus claims whatever vertical room is left
             // after the title and the (fixed-height) control row
             // below, so the buttons stay visible no matter how dense

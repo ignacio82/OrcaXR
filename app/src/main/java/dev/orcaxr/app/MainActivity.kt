@@ -1213,8 +1213,18 @@ private fun XrShell(
     // network). Webcam snapshots only fire while a print is active.
     // Sequentially across printers — fine for 1-2 printers; revisit
     // with parallel polling once we have more.
+    // Per-printer webcam session, lazily constructed and cached so
+    // discovery + the U1 wake keepalive only fire once per printer.
+    // The session is reused across polling iterations.
+    val webcamSessions = remember { mutableMapOf<String, WebcamSession>() }
+    val webcamScope = rememberCoroutineScope()
     LaunchedEffect(printers) {
         if (printers.isEmpty()) return@LaunchedEffect
+        // Drop sessions for printers that were removed since last
+        // tick so their wake jobs don't outlive the printer config.
+        val liveIds = printers.map { it.id }.toSet()
+        val stale = webcamSessions.keys - liveIds
+        stale.forEach { id -> webcamSessions.remove(id)?.stopWakePulse() }
         while (true) {
             var anyActive = false
             for (p in printers) {
@@ -1226,10 +1236,17 @@ private fun XrShell(
 
                     // While a print is active, fetch a fresh webcam
                     // snapshot. The first request decides webcamSupported
-                    // for this printer — 404 disables future fetches.
+                    // for this printer — repeated 404 disables future
+                    // fetches (the discovery+fallback list inside
+                    // WebcamSession only surfaces NotFound after every
+                    // candidate has failed, so a true "no webcam" host
+                    // settles quickly).
                     val supported = webcamSupported[p.id]
                     if (r.value.isActive && supported != false) {
-                        when (val w = client.fetchWebcamSnapshot()) {
+                        val session = webcamSessions.getOrPut(p.id) {
+                            client.webcamSession().also { it.startWakePulse(webcamScope) }
+                        }
+                        when (val w = session.fetchFrame()) {
                             is MoonrakerResult.Ok -> {
                                 val bmp = runCatching {
                                     android.graphics.BitmapFactory.decodeByteArray(
@@ -1245,16 +1262,29 @@ private fun XrShell(
                             }
                             is MoonrakerResult.NotFound -> {
                                 webcamSupported = webcamSupported + (p.id to false)
+                                session.stopWakePulse()
+                                webcamSessions.remove(p.id)
                             }
                             else -> { /* transient — leave supported unchanged */ }
                         }
+                    } else if (!r.value.isActive) {
+                        // Print finished — release the wake job; we'll
+                        // rebuild the session next time the printer
+                        // goes active.
+                        webcamSessions.remove(p.id)?.stopWakePulse()
                     }
                 }
                 // Quiet on errors — the connection probe lives on the
                 // Test button, polling stays out of the way if a
                 // printer is offline mid-session.
             }
-            kotlinx.coroutines.delay(if (anyActive) 3_000 else 15_000)
+            kotlinx.coroutines.delay(if (anyActive) 1_000 else 15_000)
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            webcamSessions.values.forEach { it.stopWakePulse() }
+            webcamSessions.clear()
         }
     }
 
@@ -6110,11 +6140,17 @@ private fun XrShell(
                     // surface the row until the user changes filter
                     // context.
                     val printerBrand = OrcaProfileLoader.brandOfPrinter(activePrinter?.name)
+                    val printerModel = OrcaProfileLoader.modelOfPrinter(activePrinter?.name)
                     val sharedMaterial = OrcaProfileLoader.sharedMaterialFamily(
                         filamentList.map { it.filamentType },
                     )
-                    val displayedProfiles = remember(allProfiles, printerBrand, sharedMaterial) {
-                        OrcaProfileLoader.filterForContext(allProfiles, printerBrand, sharedMaterial)
+                    val displayedProfiles = remember(allProfiles, printerBrand, printerModel, sharedMaterial) {
+                        OrcaProfileLoader.filterForContext(
+                            all = allProfiles,
+                            printerBrand = printerBrand,
+                            sharedMaterial = sharedMaterial,
+                            printerModel = printerModel,
+                        )
                     }
                     RightSettingsPanel(
                         allProfiles = displayedProfiles,
@@ -6380,6 +6416,7 @@ private fun XrShell(
                             PrintMonitorPanel(
                                 printerName = cfg.name,
                                 snapshot = snap,
+                                webcam = webcamFrames[cfg.id],
                                 onPause = {
                                     setStatus(cfg.id, PrinterStatus("Pausing…", PrinterStatusTone.Info))
                                     scope.launch {

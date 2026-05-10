@@ -27,6 +27,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -148,17 +149,43 @@ private fun PrinterChip(p: PrinterConfig, selected: Boolean, onClick: () -> Unit
 @Composable
 private fun WebcamCard(cfg: PrinterConfig) {
     var bitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var hasWebcam by remember(cfg.id) { mutableStateOf(true) }
+    val scope = rememberCoroutineScope()
+    // One session per printer-id — the session caches the discovered
+    // snapshot URL across frames and runs the Snapmaker U1
+    // `camera.start_monitor` keepalive that wakes the camera every
+    // 2 s. Without that pulse the U1's monitor.jpg returns either a
+    // stale frame from minutes ago or a 404; with it, we get a fresh
+    // ~1 fps stream that's all the U1's firmware exposes.
+    val session = remember(cfg.id) { MoonrakerClient(cfg).webcamSession() }
+    DisposableEffect(cfg.id) {
+        session.startWakePulse(scope)
+        onDispose { session.stopWakePulse() }
+    }
     LaunchedEffect(cfg.id) {
+        var consecutive404 = 0
         while (true) {
-            val r = MoonrakerClient(cfg).fetchWebcamSnapshot()
-            if (r is MoonrakerResult.Ok) {
-                runCatching {
-                    val bytes = r.value
-                    val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                    if (bmp != null) bitmap = bmp
+            when (val r = session.fetchFrame()) {
+                is MoonrakerResult.Ok -> {
+                    runCatching {
+                        val bytes = r.value
+                        val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        if (bmp != null) bitmap = bmp
+                    }
+                    consecutive404 = 0
+                    hasWebcam = true
                 }
+                is MoonrakerResult.NotFound -> {
+                    consecutive404++
+                    if (consecutive404 >= 5) hasWebcam = false
+                }
+                else -> { /* transient — keep trying */ }
             }
-            delay(3_000)
+            // 500 ms poll cadence. Snapmaker U1's monitor.jpg is
+            // refreshed about every 250 ms by the firmware, so we
+            // capture roughly 2 fps live view. Mainsail/crowsnest
+            // mjpg-streamer hosts comfortably handle this rate.
+            delay(if (hasWebcam) 500 else 5_000)
         }
     }
     MobileCard {

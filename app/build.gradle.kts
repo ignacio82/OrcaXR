@@ -364,4 +364,8 @@ dependencies {
     // the classpath. The "json" jar (Apache 2.0) is the canonical drop-in.
     // Mirrors the same dependency the Android runtime ships.
     testImplementation("org.json:json:20240303")
+    // OkHttp's MockWebServer powers WebcamSession / MoonrakerClient
+    // tests. Pinned to the same version as the runtime client so the
+    // request/response APIs stay aligned.
+    testImplementation("com.squareup.okhttp3:mockwebserver:5.3.2")
 }

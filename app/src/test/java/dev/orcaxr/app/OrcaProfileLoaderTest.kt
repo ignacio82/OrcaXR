@@ -153,4 +153,82 @@ class OrcaProfileLoaderTest {
         val out = OrcaProfileLoader.flatten(leaf, byName = mapOf("test_machine" to leaf))
         assertEquals(matrix.joinToString(","), out["flush_volumes_matrix"])
     }
+
+    /**
+     * Profile-picker narrowing — the dropdown should hide rows that
+     * don't match the active printer's brand+model and the project's
+     * shared filament family. User-saved profiles (machineName /
+     * filamentName both null) MUST always pass so the user's own picks
+     * never disappear unexpectedly.
+     */
+    @Test fun filterForContextNarrowsByBrandModelAndMaterial() {
+        val u1Pla = SlicerProfile(
+            id = "u1.pla", displayName = "U1 PLA", description = "",
+            config = emptyMap(),
+            machineName = "Snapmaker U1 (0.4 nozzle)", filamentName = "Snapmaker PLA Matte",
+        )
+        val u1Petg = SlicerProfile(
+            id = "u1.petg", displayName = "U1 PETG", description = "",
+            config = emptyMap(),
+            machineName = "Snapmaker U1 (0.4 nozzle)", filamentName = "Generic PETG",
+        )
+        val a350Pla = SlicerProfile(
+            id = "a350.pla", displayName = "A350 PLA", description = "",
+            config = emptyMap(),
+            machineName = "Snapmaker A350", filamentName = "Generic PLA",
+        )
+        val centauriPla = SlicerProfile(
+            id = "ecc.pla", displayName = "ECC PLA", description = "",
+            config = emptyMap(),
+            machineName = "Elegoo Centauri Carbon (0.4 nozzle)", filamentName = "Generic PLA",
+        )
+        val userPick = SlicerProfile(
+            id = "user.custom", displayName = "My pick", description = "",
+            config = emptyMap(),
+            machineName = null, filamentName = null,
+        )
+        val all = listOf(u1Pla, u1Petg, a350Pla, centauriPla, userPick)
+
+        // Snapmaker U1 + PLA → only U1 PLA + user pick.
+        val brand = OrcaProfileLoader.brandOfPrinter("Snapmaker U1 — Living Room")
+        val model = OrcaProfileLoader.modelOfPrinter("Snapmaker U1 — Living Room")
+        val mat = OrcaProfileLoader.sharedMaterialFamily(listOf("Generic PLA", "Snapmaker PLA Matte"))
+        assertEquals("Snapmaker", brand)
+        assertEquals("U1", model)
+        assertEquals("PLA", mat)
+
+        val filtered = OrcaProfileLoader.filterForContext(
+            all = all,
+            printerBrand = brand,
+            sharedMaterial = mat,
+            printerModel = model,
+        )
+        // U1 PLA passes, U1 PETG fails (material), A350 PLA fails
+        // (model), Centauri PLA fails (brand), user pick always
+        // passes.
+        assertTrue("U1 PLA must be visible", u1Pla in filtered)
+        assertFalse("U1 PETG must be hidden", u1Petg in filtered)
+        assertFalse("A350 PLA must be hidden", a350Pla in filtered)
+        assertFalse("Centauri PLA must be hidden", centauriPla in filtered)
+        assertTrue("User pick must always be visible", userPick in filtered)
+    }
+
+    @Test fun filterForContextFallsBackToFullListWhenNarrowingEmpties() {
+        val petgOnly = SlicerProfile(
+            id = "petg", displayName = "PETG", description = "",
+            config = emptyMap(),
+            machineName = "Snapmaker U1 (0.4 nozzle)", filamentName = "Generic PETG",
+        )
+        // PLA-only project, but the catalog has nothing PLA-related —
+        // fall back to the full list rather than strand the user with
+        // an empty dropdown.
+        val out = OrcaProfileLoader.filterForContext(
+            all = listOf(petgOnly),
+            printerBrand = "Snapmaker",
+            sharedMaterial = "PLA",
+            printerModel = "U1",
+        )
+        assertEquals(1, out.size)
+        assertEquals("petg", out.first().id)
+    }
 }

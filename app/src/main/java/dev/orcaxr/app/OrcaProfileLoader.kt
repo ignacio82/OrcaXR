@@ -288,6 +288,44 @@ object OrcaProfileLoader {
     )
 
     /**
+     * Model-identifier patterns used to narrow the profile picker
+     * beyond the brand level. The pattern is matched against the
+     * printer's display name (case-insensitive); the captured string
+     * is then substring-matched against [SlicerProfile.machineName].
+     *
+     * Without this, a user with a Snapmaker U1 still sees profiles
+     * for Snapmaker A350 / J1 / Artisan in the dropdown. Pattern
+     * order matters when patterns can overlap (e.g. "MK3.5" must
+     * win over "MK3"). Add a row when bundling a new vendor's
+     * machine profile leaves so the picker stays narrow.
+     */
+    private val PRINTER_MODELS: List<Pair<Regex, String>> = listOf(
+        // Snapmaker
+        Regex("""\bArtisan\b""", RegexOption.IGNORE_CASE) to "Artisan",
+        Regex("""\bU1\b""", RegexOption.IGNORE_CASE) to "U1",
+        Regex("""\bJ1\b""", RegexOption.IGNORE_CASE) to "J1",
+        Regex("""\bA350\b""", RegexOption.IGNORE_CASE) to "A350",
+        Regex("""\bA250\b""", RegexOption.IGNORE_CASE) to "A250",
+        Regex("""\bA150\b""", RegexOption.IGNORE_CASE) to "A150",
+        // Elegoo
+        Regex("""\bCentauri\s+Carbon\b""", RegexOption.IGNORE_CASE) to "Centauri Carbon",
+        Regex("""\bECC\b""", RegexOption.IGNORE_CASE) to "Centauri Carbon",
+        // Bambu
+        Regex("""\bX1C\b""", RegexOption.IGNORE_CASE) to "X1C",
+        Regex("""\bX1E\b""", RegexOption.IGNORE_CASE) to "X1E",
+        Regex("""\bP1S\b""", RegexOption.IGNORE_CASE) to "P1S",
+        Regex("""\bP1P\b""", RegexOption.IGNORE_CASE) to "P1P",
+        Regex("""\bA1\s+mini\b""", RegexOption.IGNORE_CASE) to "A1 mini",
+        Regex("""\bA1\b""", RegexOption.IGNORE_CASE) to "A1",
+        // Prusa
+        Regex("""\bMK4S?\b""", RegexOption.IGNORE_CASE) to "MK4",
+        Regex("""\bMK3\.5\b""", RegexOption.IGNORE_CASE) to "MK3.5",
+        Regex("""\bMK3S?\b""", RegexOption.IGNORE_CASE) to "MK3",
+        Regex("""\bXL\b""", RegexOption.IGNORE_CASE) to "XL",
+        Regex("""\bMINI\b""", RegexOption.IGNORE_CASE) to "MINI",
+    )
+
+    /**
      * Material family tokens, longest-first so "PLA-CF" matches before
      * "PLA". Substring-matched case-insensitively against the project's
      * filament-type strings (e.g. "Generic PLA", "Elegoo PLA Matte"
@@ -309,6 +347,18 @@ object OrcaProfileLoader {
     fun brandOfPrinter(name: String?): String? {
         if (name.isNullOrBlank()) return null
         return PRINTER_BRANDS.firstOrNull { name.contains(it, ignoreCase = true) }
+    }
+
+    /**
+     * Extracts the recognized printer-model token from a printer's
+     * display name (e.g. "Snapmaker U1 — Living Room" → "U1",
+     * "Elegoo Centauri Carbon" → "Centauri Carbon"). Returns null
+     * when no [PRINTER_MODELS] pattern matches; callers fall back to
+     * brand-only filtering so the dropdown doesn't go empty.
+     */
+    fun modelOfPrinter(name: String?): String? {
+        if (name.isNullOrBlank()) return null
+        return PRINTER_MODELS.firstOrNull { (re, _) -> re.containsMatchIn(name) }?.second
     }
 
     /**
@@ -337,16 +387,25 @@ object OrcaProfileLoader {
         all: List<SlicerProfile>,
         printerBrand: String?,
         sharedMaterial: String?,
+        printerModel: String? = null,
     ): List<SlicerProfile> {
-        if (printerBrand == null && sharedMaterial == null) return all
+        if (printerBrand == null && sharedMaterial == null && printerModel == null) return all
         val filtered = all.filter { p ->
             val brandOk = printerBrand == null
                 || p.machineName == null
                 || p.machineName.contains(printerBrand, ignoreCase = true)
+            // Narrow further by printer-model when we recognized one
+            // — without this the dropdown surfaces every Snapmaker /
+            // Bambu / Prusa machine profile when only one model is
+            // physically present. User-saved profiles still pass
+            // (their machineName is null).
+            val modelOk = printerModel == null
+                || p.machineName == null
+                || p.machineName.contains(printerModel, ignoreCase = true)
             val materialOk = sharedMaterial == null
                 || p.filamentName == null
                 || p.filamentName.contains(sharedMaterial, ignoreCase = true)
-            brandOk && materialOk
+            brandOk && modelOk && materialOk
         }
         return if (filtered.isEmpty()) all else filtered
     }
