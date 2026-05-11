@@ -1,0 +1,159 @@
+Phase 2 (FullSpectrum engine emission, P2F): wire the FS
+`enable_infill_filament_override` toggle + boundary-layer infill
+base-reversion at the PrintRegion level.
+
+Ported from FS v0.9.9 (`ratdoux/OrcaSlicer-FullSpectrum@v0.9.9` commit
+b3c41fda), `src/libslic3r/PrintRegion.cpp` +32 LoC and
+`src/libslic3r/Preset.cpp` +3 LoC.
+
+Why this matters:
+
+Before FS, `sparse_infill_filament` acted as an "implicit override"
+when its value differed from `wall_filament` — sparse infill silently
+used a different filament from walls if the user had ever set the
+two to different values, even when they didn't actually want infill
+to override.
+
+FS v0.9.9 makes the override EXPLICIT via the
+`enable_infill_filament_override` PrintRegionConfig key (declared in
+patch 0027): when off (default), `frInfill` and same-filament
+`frSolidInfill` both resolve to `wall_filament` even if the user
+authored a different `sparse_infill_filament`. The boundary-layer
+toggles (`infill_filament_use_base_first_layers` /
+`_last_layers`) further force infill BACK to `wall_filament` on the
+first or last N layers regardless of the override setting — useful
+for clean top/bottom surfaces when the override-filament is darker
+or shows through.
+
+Changes:
+
+1. `PrintRegion.cpp` — two anonymous-namespace helpers
+   (`effective_sparse_infill_filament`,
+   `internal_solid_infill_uses_sparse_filament`) plus updates to
+   `PrintRegion::extruder(role)` (frInfill / frSolidInfill split),
+   `nozzle_dmr_avg`, and the static
+   `collect_object_printing_extruders(PrintConfig, PrintRegionConfig,
+   has_brim, out)` overload to emit the wall extruder as an extra
+   object extruder when boundary-layer reversion is configured.
+
+2. `Preset.cpp` — adds the three FS region-level keys to
+   `s_Preset_print_options` so process presets persist them and the
+   dirty-check sees them as part of the print preset.
+
+This is the PrintRegion-level peer to patch 0032 (which handles the
+LayerRegion-level resolution and consults `MixedFilamentManager` for
+virtual mixed-filament rows). PrintRegion is consulted at preset /
+extruder-collection time (no Layer context yet, no virtual filament
+resolution); LayerRegion at flow / make_perimeters time (full Layer
+context, MixedFilamentManager-aware).
+
+Verified compile-clean via incremental libslic3r rebuild (0 FAILED)
++ ./gradlew :app:assembleDebug (full APK assembled).
+
+Hard dependencies:
+  - patch 0027 (PrintRegionConfig fields enable_infill_filament_override
+    + use_base_first_layers / _last_layers declared as typed members)
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+diff --git a/src/libslic3r/Preset.cpp b/src/libslic3r/Preset.cpp
+index 28f0e67b86..231f9a7b29 100644
+--- a/src/libslic3r/Preset.cpp
++++ b/src/libslic3r/Preset.cpp
+@@ -914,6 +914,9 @@ static std::vector<std::string> s_Preset_print_options {
+     "support_interface_pattern", "support_interface_spacing", "support_interface_loop_pattern",
+     "support_top_z_distance", "support_on_build_plate_only","support_critical_regions_only", "bridge_no_support", "thick_bridges", "thick_internal_bridges","dont_filter_internal_bridges","enable_extra_bridge_layer", "max_bridge_length", "print_sequence", "print_order", "support_remove_small_overhang",
+     "filename_format", "wall_filament", "support_bottom_z_distance",
++    // OrcaXR Android (FullSpectrum patch 0034). Add FS region-level
++    // infill-filament-override keys so process presets persist them.
++    "enable_infill_filament_override", "infill_filament_use_base_first_layers", "infill_filament_use_base_last_layers",
+     "sparse_infill_filament", "solid_infill_filament", "support_filament", "support_interface_filament","support_interface_not_for_body",
+     "ooze_prevention", "standby_temperature_delta", "preheat_time","preheat_steps", "interface_shells", "line_width", "initial_layer_line_width", "inner_wall_line_width",
+     "outer_wall_line_width", "sparse_infill_line_width", "internal_solid_infill_line_width",
+diff --git a/src/libslic3r/PrintRegion.cpp b/src/libslic3r/PrintRegion.cpp
+index a2ba14da73..7af47daa64 100644
+--- a/src/libslic3r/PrintRegion.cpp
++++ b/src/libslic3r/PrintRegion.cpp
+@@ -1,8 +1,33 @@
+ #include "Exception.hpp"
+ #include "Print.hpp"
+ 
++#include <cmath>
++
+ namespace Slic3r {
+ 
++namespace {
++
++// OrcaXR Android (FullSpectrum patch 0034). When the
++// enable_infill_filament_override toggle is off, the prior FS code's
++// "implicit override" rule kicked in: sparse_infill_filament was treated
++// as an override whenever it differed from wall_filament. The new
++// explicit toggle makes the override opt-in; helpers here resolve the
++// effective infill filament according to it.
++unsigned int effective_sparse_infill_filament(const PrintRegionConfig &config)
++{
++    return config.enable_infill_filament_override.value ? config.sparse_infill_filament.value : config.wall_filament.value;
++}
++
++// Internal solid infill at 100% sparse density behaves identically to
++// regular infill on the solid plane — same nozzle, same flow. Helpers
++// for sites that need to pick the right filament for that case.
++bool internal_solid_infill_uses_sparse_filament(const PrintRegionConfig &config, FlowRole role)
++{
++    return role == frSolidInfill && std::abs(config.sparse_infill_density.value - 100.) < EPSILON;
++}
++
++} // namespace
++
+ // 1-based extruder identifier for this region and role.
+ unsigned int PrintRegion::extruder(FlowRole role) const
+ {
+@@ -10,8 +35,10 @@ unsigned int PrintRegion::extruder(FlowRole role) const
+     if (role == frPerimeter || role == frExternalPerimeter)
+         extruder = m_config.wall_filament;
+     else if (role == frInfill)
+-        extruder = m_config.sparse_infill_filament;
+-    else if (role == frSolidInfill || role == frTopSolidInfill)
++        extruder = effective_sparse_infill_filament(m_config);
++    else if (role == frSolidInfill)
++        extruder = internal_solid_infill_uses_sparse_filament(m_config, role) ? effective_sparse_infill_filament(m_config) : m_config.solid_infill_filament;
++    else if (role == frTopSolidInfill)
+         extruder = m_config.solid_infill_filament;
+     else
+         throw Slic3r::InvalidArgument("Unknown role");
+@@ -51,8 +78,11 @@ Flow PrintRegion::flow(const PrintObject &object, FlowRole role, double layer_he
+ 
+ coordf_t PrintRegion::nozzle_dmr_avg(const PrintConfig &print_config) const
+ {
+-    return (print_config.nozzle_diameter.get_at(m_config.wall_filament.value    - 1) + 
+-            print_config.nozzle_diameter.get_at(m_config.sparse_infill_filament.value       - 1) + 
++    // OrcaXR Android (FullSpectrum patch 0034). Use effective_sparse_infill_filament
++    // so the average reflects the actual nozzle used for infill when the
++    // explicit infill-filament-override toggle is off.
++    return (print_config.nozzle_diameter.get_at(m_config.wall_filament.value    - 1) +
++            print_config.nozzle_diameter.get_at(effective_sparse_infill_filament(m_config) - 1) +
+             print_config.nozzle_diameter.get_at(m_config.solid_infill_filament.value - 1)) / 3.;
+ }
+ 
+@@ -70,10 +100,21 @@ void PrintRegion::collect_object_printing_extruders(const PrintConfig &print_con
+     	int i = std::max(0, extruder_id - 1);
+         object_extruders.emplace_back((i >= num_extruders) ? 0 : i);
+     };
++    // OrcaXR Android (FullSpectrum patch 0034). When the FS
++    // infill_filament_override is on AND any boundary-layer base-reversion
++    // is configured, the first/last N layers print infill with the wall
++    // filament — so emit it as an additional object extruder so the
++    // per-extruder buffer allocations downstream cover both.
++    const bool use_base_infill_boundary_layers =
++        region_config.enable_infill_filament_override.value &&
++        region_config.sparse_infill_density.value > 0 &&
++        (region_config.infill_filament_use_base_first_layers.value > 0 || region_config.infill_filament_use_base_last_layers.value > 0);
+     if (region_config.wall_loops.value > 0 || has_brim)
+     	emplace_extruder(region_config.wall_filament);
++    if (use_base_infill_boundary_layers)
++        emplace_extruder(region_config.wall_filament);
+     if (region_config.sparse_infill_density.value > 0)
+-    	emplace_extruder(region_config.sparse_infill_filament);
++    	emplace_extruder(int(effective_sparse_infill_filament(region_config)));
+     if (region_config.top_shell_layers.value > 0 || region_config.bottom_shell_layers.value > 0)
+     	emplace_extruder(region_config.solid_infill_filament);
+ }
