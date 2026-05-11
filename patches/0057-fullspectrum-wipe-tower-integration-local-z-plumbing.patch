@@ -1,0 +1,339 @@
+diff --git a/src/libslic3r/GCode.cpp b/src/libslic3r/GCode.cpp
+index fe10cbcd41..946e0161a8 100644
+--- a/src/libslic3r/GCode.cpp
++++ b/src/libslic3r/GCode.cpp
+@@ -2571,8 +2571,13 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
+     {
+         if (is_bbl_printers) {
+             file.write("; CONFIG_BLOCK_START\n");
++            // OrcaXR: append_full_config crashes on Android when no preset
++            // bundle is loaded — some enum option's name table is null and
++            // serialize_single_value derefs it. Skip the config dump for
++            // now; it's just a comment block consumers don't strictly
++            // need. Re-enable when Phase 1 wires real preset bundles.
+             std::string full_config;
+-            append_full_config(print, full_config);
++            // append_full_config(print, full_config);
+             if (!full_config.empty())
+                 file.write(full_config);
+ 
+@@ -3282,8 +3287,15 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
+             std::vector<std::pair<coordf_t, std::vector<LayerToPrint>>> layers_to_print = collect_layers_to_print(print);
+             // Prusa Multi-Material wipe tower.
+             if (has_wipe_tower && ! layers_to_print.empty()) {
++                // FullSpectrum Local-Z (patch 0057): pass the per-layer
++                // Local-Z purge tcrs + reserve boxes from WipeTowerData
++                // so WipeTowerIntegration::next_layer() / tool_change()
++                // can route Z-walk emissions through them. Both vectors
++                // are empty when Local-Z is off.
+                 m_wipe_tower.reset(new WipeTowerIntegration(print.config(), print.get_plate_index(), print.get_plate_origin(), *print.wipe_tower_data().priming.get(),
+-                                                            print.wipe_tower_data().tool_changes, *print.wipe_tower_data().final_purge.get(), print.get_slice_used_filaments(false)));
++                                                            print.wipe_tower_data().tool_changes, *print.wipe_tower_data().final_purge.get(), print.get_slice_used_filaments(false),
++                                                            print.wipe_tower_data().local_z_tool_changes,
++                                                            print.wipe_tower_data().local_z_reserve_boxes));
+                 m_wipe_tower->set_wipe_tower_depth(print.get_wipe_tower_depth());
+                 m_wipe_tower->set_wipe_tower_bbx(print.get_wipe_tower_bbx());
+                 m_wipe_tower->set_rib_offset(print.get_rib_offset());
+@@ -3444,8 +3456,11 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
+             .c_str());
+       file.write("\n");
+       file.write("; CONFIG_BLOCK_START\n");
++      // OrcaXR: see comment on the BBL branch above. Skip the
++      // append_full_config dump; it crashes without a loaded preset
++      // bundle.
+       std::string full_config;
+-      append_full_config(print, full_config);
++      // append_full_config(print, full_config);
+       if (!full_config.empty())
+         file.write(full_config);
+ 
+diff --git a/src/libslic3r/GCode.hpp b/src/libslic3r/GCode.hpp
+index d379300bad..49c4964017 100644
+--- a/src/libslic3r/GCode.hpp
++++ b/src/libslic3r/GCode.hpp
+@@ -82,16 +82,25 @@ public:
+         const std::vector<WipeTower::ToolChangeResult>              &priming,
+         const std::vector<std::vector<WipeTower::ToolChangeResult>> &tool_changes,
+         const WipeTower::ToolChangeResult                           &final_purge,
+-        const std::vector<unsigned int>                             &slice_used_filaments) :
++        const std::vector<unsigned int>                             &slice_used_filaments,
++        // FullSpectrum Local-Z (patch 0057). Per-layer Local-Z purge
++        // emission state. Empty when Local-Z is off — both vectors
++        // are safe to leave default-constructed in that case.
++        const std::vector<std::vector<WipeTower::ToolChangeResult>> &local_z_tool_changes  = s_empty_local_z_tool_changes(),
++        const std::vector<std::vector<WipeTower::box_coordinates>>  &local_z_reserve_boxes = s_empty_local_z_reserve_boxes()) :
+         m_left(/*float(print_config.wipe_tower_x.value)*/ 0.f),
+         m_right(float(/*print_config.wipe_tower_x.value +*/ print_config.prime_tower_width.value)),
+         m_wipe_tower_pos(float(print_config.wipe_tower_x.get_at(plate_idx)), float(print_config.wipe_tower_y.get_at(plate_idx))),
+         m_wipe_tower_rotation(float(print_config.wipe_tower_rotation_angle)),
+         m_priming(priming),
+         m_tool_changes(tool_changes),
++        m_local_z_tool_changes(local_z_tool_changes),
++        m_local_z_reserve_boxes(local_z_reserve_boxes),
+         m_final_purge(final_purge),
+         m_layer_idx(-1),
+         m_tool_change_idx(0),
++        m_local_z_tool_change_idx(local_z_tool_changes.size(), 0),
++        m_local_z_reserve_slot_idx(local_z_reserve_boxes.size(), 0),
+         m_plate_origin(plate_origin),
+         m_single_extruder_multi_material(print_config.single_extruder_multi_material),
+         m_enable_timelapse_print(print_config.timelapse_type.value == TimelapseType::tlSmooth),
+@@ -108,7 +117,17 @@ public:
+     }
+ 
+     std::string prime(GCode &gcodegen);
+-    void next_layer() { ++ m_layer_idx; m_tool_change_idx = 0; }
++    void next_layer() {
++        ++ m_layer_idx;
++        m_tool_change_idx = 0;
++        // FullSpectrum Local-Z (patch 0057): reset per-layer Local-Z
++        // emission cursors so the gcode driver can pick fresh slots
++        // from get_local_z_reserve_boxes on every layer crossing.
++        if (m_layer_idx >= 0 && size_t(m_layer_idx) < m_local_z_tool_change_idx.size())
++            m_local_z_tool_change_idx[size_t(m_layer_idx)] = 0;
++        if (m_layer_idx >= 0 && size_t(m_layer_idx) < m_local_z_reserve_slot_idx.size())
++            m_local_z_reserve_slot_idx[size_t(m_layer_idx)] = 0;
++    }
+     std::string tool_change(GCode &gcodegen, int extruder_id, bool finish_layer);
+     bool is_empty_wipe_tower_gcode(GCode &gcodegen, int extruder_id, bool finish_layer);
+     std::string finalize(GCode &gcodegen);
+@@ -140,12 +159,36 @@ private:
+     // Reference to cached values at the Printer class.
+     const std::vector<WipeTower::ToolChangeResult>              &m_priming;
+     const std::vector<std::vector<WipeTower::ToolChangeResult>> &m_tool_changes;
++    // FullSpectrum Local-Z (patch 0057). Per-layer Local-Z purge tcrs +
++    // pre-reserved per-layer Local-Z purge boxes — empty when Local-Z
++    // is off. Indexed parallel to m_tool_changes.
++    const std::vector<std::vector<WipeTower::ToolChangeResult>> &m_local_z_tool_changes;
++    const std::vector<std::vector<WipeTower::box_coordinates>>  &m_local_z_reserve_boxes;
+     const WipeTower::ToolChangeResult                           &m_final_purge;
+     // Current layer index.
+     int                                                          m_layer_idx;
+     int                                                          m_tool_change_idx;
++    // FullSpectrum Local-Z (patch 0057). Per-layer cursors into
++    // m_local_z_tool_changes / m_local_z_reserve_boxes — reset on each
++    // layer crossing in next_layer(). Sized to the outer vector lengths.
++    std::vector<size_t>                                          m_local_z_tool_change_idx;
++    std::vector<size_t>                                          m_local_z_reserve_slot_idx;
+     double                                                       m_last_wipe_tower_print_z;
+ 
++    // FullSpectrum Local-Z (patch 0057). Lazy empty defaults so the
++    // pre-existing call site (GCode.cpp:3290) can construct a
++    // WipeTowerIntegration without supplying Local-Z vectors.
++    static const std::vector<std::vector<WipeTower::ToolChangeResult>> &s_empty_local_z_tool_changes()
++    {
++        static const std::vector<std::vector<WipeTower::ToolChangeResult>> empty;
++        return empty;
++    }
++    static const std::vector<std::vector<WipeTower::box_coordinates>> &s_empty_local_z_reserve_boxes()
++    {
++        static const std::vector<std::vector<WipeTower::box_coordinates>> empty;
++        return empty;
++    }
++
+     // BBS
+     Vec3d                                                        m_plate_origin;
+     bool                                                         m_single_extruder_multi_material;
+diff --git a/src/libslic3r/Print.hpp b/src/libslic3r/Print.hpp
+index b98811c8e3..3dd08b1d0c 100644
+--- a/src/libslic3r/Print.hpp
++++ b/src/libslic3r/Print.hpp
+@@ -17,6 +17,12 @@
+ #include "GCode/ThumbnailData.hpp"
+ #include "GCode/GCodeProcessor.hpp"
+ #include "MultiMaterialSegmentation.hpp"
++// OrcaXR Android (FullSpectrum integration): mixed-filament data
++// model lives in MixedFilament.hpp (patch 0015). Print holds a
++// MixedFilamentManager owning live MixedFilament rows; PrintApply
++// parses mixed_filament_definitions config into it; ToolOrdering
++// expands virtual rows to per-layer physical extruders.
++#include "MixedFilament.hpp"
+ #include "libslic3r.h"
+ 
+ #include <Eigen/Geometry>
+@@ -54,6 +60,51 @@ struct groupedVolumeSlices
+     ExPolygons              slices;
+ };
+ 
++// OrcaXR Android (FullSpectrum patch 0044). Local-Z dithering planner
++// cache. The sublayer planner subdivides Z intervals containing painted
++// mixed-filament regions into thinner sublayers; the unpainted majority
++// of the print continues at base layer height.
++//
++// LocalZInterval describes one source layer's worth of sublayer plan:
++// the base height, the sublayer thickness, and an index range into the
++// PrintObject's m_local_z_sublayer_plan vector for the actual
++// SubLayerPlan entries.
++struct LocalZInterval
++{
++    size_t layer_id { 0 };
++    double z_lo { 0.0 };
++    double z_hi { 0.0 };
++    double base_height { 0.0 };
++    double sublayer_height { 0.0 };
++    bool   has_mixed_paint { false };
++    size_t first_sublayer_idx { 0 };
++    size_t sublayer_count { 0 };
++};
++
++// SubLayerPlan describes one sub-slice of a Local-Z interval.
++// `painted_masks_by_extruder[i]` carries the XY mask for physical
++// extruder i at this sublayer's print_z. `fixed_painted_masks_by_extruder`
++// is the same but for "fixed" (manual-pattern) component placement
++// that mustn't be redistributed by the cadence resolver. `base_masks`
++// is the unpainted-region mask. `dependency_group` + `dependency_order`
++// let the LocalZOrderOptimizer (patch 0023) sort sublayers within a
++// group to minimize toolchanges.
++struct SubLayerPlan
++{
++    size_t layer_id { 0 };
++    size_t pass_index { 0 };
++    bool   split_interval { false };
++    double z_lo { 0.0 };
++    double z_hi { 0.0 };
++    double print_z { 0.0 };
++    double flow_height { 0.0 };
++    size_t dependency_group { 0 };
++    size_t dependency_order { 0 };
++    std::vector<ExPolygons> painted_masks_by_extruder;
++    std::vector<ExPolygons> fixed_painted_masks_by_extruder;
++    ExPolygons              base_masks;
++};
++
+ enum SupportNecessaryType {
+     NoNeedSupp=0,
+     SharpTail,
+@@ -400,6 +451,26 @@ public:
+     std::shared_ptr<TreeSupportData> alloc_tree_support_preview_cache();
+     void clear_tree_support_preview_cache() { m_tree_support_preview_cache.reset(); }
+ 
++    // OrcaXR Android (FullSpectrum patch 0044). Local-Z planner state
++    // accessors. populated by PrintObjectSlice's sublayer planner;
++    // consumed by Print.cpp wipe-tower coordination + GCode.cpp Z-walk
++    // emission. The intervals describe per-source-layer plans;
++    // the sublayer vector holds the actual SubLayerPlan entries
++    // (interval[i]'s plans live at indices [first_sublayer_idx,
++    // first_sublayer_idx + sublayer_count)).
++    const std::vector<LocalZInterval>& local_z_intervals() const { return m_local_z_intervals; }
++    const std::vector<SubLayerPlan>&   local_z_sublayer_plan() const { return m_local_z_sublayer_plan; }
++    void                                set_local_z_plan(std::vector<LocalZInterval> intervals, std::vector<SubLayerPlan> sublayers)
++    {
++        m_local_z_intervals = std::move(intervals);
++        m_local_z_sublayer_plan = std::move(sublayers);
++    }
++    void                                clear_local_z_plan()
++    {
++        m_local_z_intervals.clear();
++        m_local_z_sublayer_plan.clear();
++    }
++
+     size_t          support_layer_count() const { return m_support_layers.size(); }
+     void            clear_support_layers();
+     SupportLayer*   get_support_layer(int idx) { return idx<m_support_layers.size()? m_support_layers[idx]:nullptr; }
+@@ -557,6 +628,12 @@ private:
+     SupportLayerPtrs                        m_support_layers;
+     // BBS
+     std::shared_ptr<TreeSupportData>        m_tree_support_preview_cache;
++    // OrcaXR Android (FullSpectrum patch 0044). Local-Z planner cache:
++    // intervals describe per-source-layer plans; m_local_z_sublayer_plan
++    // holds the actual SubLayerPlan entries (interval[i]'s plans live at
++    // indices [first_sublayer_idx, first_sublayer_idx + sublayer_count)).
++    std::vector<LocalZInterval>             m_local_z_intervals;
++    std::vector<SubLayerPlan>               m_local_z_sublayer_plan;
+ 
+     // this is set to true when LayerRegion->slices is split in top/internal/bottom
+     // so that next call to make_perimeters() performs a union() before computing loops
+@@ -591,16 +668,16 @@ private:
+ struct FakeWipeTower
+ {
+     // generate fake extrusion
+-    Vec2f pos;
+-    float width;
+-    float height;
+-    float layer_height;// Due to variable layer height, this parameter may be not right.
+-    float depth;
++    Vec2f pos{0.f, 0.f};
++    float width{0.f};
++    float height{0.f};
++    float layer_height{0.f};// Due to variable layer height, this parameter may be not right.
++    float depth{0.f};
+     std::vector<std::pair<float, float>> z_and_depth_pairs;
+-    float brim_width;
+-    float rotation_angle;
+-    float cone_angle;
+-    Vec2d plate_origin;
++    float brim_width{0.f};
++    float rotation_angle{0.f};
++    float cone_angle{0.f};
++    Vec2d plate_origin{Vec2d::Zero()};
+     Vec2f rib_offset{0.f,0.f};
+     std::map<float , Polylines> outer_wall; //wipe tower's true outer wall and brim
+ 
+@@ -750,6 +827,17 @@ struct WipeTowerData
+     // Cache of tool changes per print layer.
+     std::unique_ptr<std::vector<WipeTower::ToolChangeResult>> priming;
+     std::vector<std::vector<WipeTower::ToolChangeResult>> tool_changes;
++    // OrcaXR Android (FullSpectrum patch 0044). Per-layer Local-Z
++    // toolchange purge passes scheduled by WipeTower2::plan_local_z_toolchange.
++    // Indexed parallel to tool_changes; each inner vector is the
++    // sequence of purges that fire between adjacent sublayers within
++    // one source layer's Local-Z interval. Empty for non-Local-Z layers.
++    std::vector<std::vector<WipeTower::ToolChangeResult>> local_z_tool_changes;
++    // OrcaXR Android (FullSpectrum patch 0057). Per-layer pre-reserved
++    // Local-Z purge boxes returned by WipeTower2::get_local_z_reserve_boxes.
++    // The GCode emitter picks one box per sub-Z purge when emitting
++    // Z-walks. Empty when Local-Z is off.
++    std::vector<std::vector<WipeTower::box_coordinates>>  local_z_reserve_boxes;
+     std::unique_ptr<WipeTower::ToolChangeResult>          final_purge;
+     std::vector<float>                                    used_filament;
+     int                                                   number_of_toolchanges;
+@@ -765,6 +853,10 @@ struct WipeTowerData
+     void clear() {
+         priming.reset(nullptr);
+         tool_changes.clear();
++        // OrcaXR Android (FullSpectrum patch 0044).
++        local_z_tool_changes.clear();
++        // OrcaXR Android (FullSpectrum patch 0057).
++        local_z_reserve_boxes.clear();
+         final_purge.reset(nullptr);
+         used_filament.clear();
+         number_of_toolchanges = -1;
+@@ -945,6 +1037,12 @@ public:
+     const PrintConfig&          config() const { return m_config; }
+     const PrintObjectConfig&    default_object_config() const { return m_default_object_config; }
+     const PrintRegionConfig& default_region_config() const { return m_default_region_config; }
++    // OrcaXR Android (FullSpectrum integration). Always present;
++    // populated from mixed_filament_definitions by PrintApply.
++    // ToolOrdering reads it to expand virtual mixed-filament IDs
++    // into per-layer physical extruders.
++    const MixedFilamentManager& mixed_filament_manager() const { return m_mixed_filament_mgr; }
++    MixedFilamentManager&       mixed_filament_manager()       { return m_mixed_filament_mgr; }
+     ConstPrintObjectPtrsAdaptor objects() const { return ConstPrintObjectPtrsAdaptor(&m_objects); }
+     PrintObject*                get_object(size_t idx) { return const_cast<PrintObject*>(m_objects[idx]); }
+     const PrintObject*          get_object(size_t idx) const { return m_objects[idx]; }
+@@ -1129,11 +1227,15 @@ private:
+     PrintConfig                             m_config;
+     PrintObjectConfig                       m_default_object_config;
+     PrintRegionConfig                       m_default_region_config;
++    // OrcaXR Android (FullSpectrum integration). Owns the live list
++    // of MixedFilament rows. Default-constructed (empty list);
++    // populated from the mixed_filament_definitions config key.
++    MixedFilamentManager                    m_mixed_filament_mgr;
+     PrintObjectPtrs                         m_objects;
+     PrintRegionPtrs                         m_print_regions;
+     
+     //SoftFever
+-    bool m_isBBLPrinter;
++    bool m_isBBLPrinter = false;
+ 
+     // Ordered collections of extrusion paths to build skirt loops and brim.
+     ExtrusionEntityCollection               m_skirt;
+@@ -1163,7 +1265,7 @@ private:
+     std::vector<unsigned int> m_slice_used_filaments_first_layer;
+ 
+     //BBS: plate's origin
+-    Vec3d   m_origin;
++    Vec3d   m_origin = Vec3d::Zero();
+     //BBS: modified_count
+     int     m_modified_count {0};
+     //BBS
