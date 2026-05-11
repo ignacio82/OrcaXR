@@ -1825,6 +1825,35 @@ object SlicerEngine {
         "top_surface_jerk",
         "initial_layer_jerk",
         "default_jerk",
+        // ---- FullSpectrum overrides ----
+        // 3MF projects may carry mixed-filament + dithering settings
+        // that the user authored in OrcaXR or another FS-aware fork.
+        // Without these in PROJECT_OVERRIDE_KEYS the 3MF's authored
+        // virtual rows + dithering knobs would lose to the active
+        // profile defaults on reload, breaking round-trip. Excluded
+        // ON PURPOSE: layer_height keys (gotcha #22 mandates the user's
+        // profile pick wins those).
+        "mixed_filament_definitions",
+        "mixed_filament_gradient_mode",
+        "mixed_filament_height_lower_bound",
+        "mixed_filament_height_upper_bound",
+        "mixed_filament_advanced_dithering",
+        "mixed_filament_pointillism_pixel_size",
+        "mixed_filament_pointillism_line_gap",
+        "mixed_filament_component_bias_enabled",
+        "mixed_filament_surface_indentation",
+        "mixed_filament_region_collapse",
+        "mixed_color_layer_height_a",
+        "mixed_color_layer_height_b",
+        "dithering_z_step_size",
+        "dithering_local_z_mode",
+        "dithering_local_z_whole_objects",
+        "dithering_local_z_direct_multicolor",
+        "dithering_step_painted_zones_only",
+        "local_z_wipe_tower_purge_lines",
+        "enable_infill_filament_override",
+        "infill_filament_use_base_first_layers",
+        "infill_filament_use_base_last_layers",
     )
 
     /**

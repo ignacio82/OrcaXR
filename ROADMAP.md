@@ -27,17 +27,17 @@ When you ship a feature: collapse its full entry to a one-line row in the append
 
 ## A. Slicing engine correctness & libslic3r parity
 
-### A2. FullSpectrum engine emission ⚪ Deferred — waiting on Snapmaker upstream merge
+### A2. FullSpectrum engine emission 🟡 Partial — LayerCycle wired via existing patch stack; Pointillisme + Local-Z still need planner port
 
-> **Patches required:** `0025-fullspectrum-engine-emission.patch` (new). **Patch budget:** ~3700 LoC in `PrintObjectSlice.cpp` alone.
+> **Patches required (new):** `0027-fullspectrum-printconfig-region-keys.patch`, `0028-fullspectrum-tool-ordering-emission.patch`, `0029-fullspectrum-printobjectslice-sublayer-planner.patch` (+4062 LoC), `0030-fullspectrum-print-object-and-print.patch` (+1426), `0031-fullspectrum-multimaterial-segmentation.patch`, `0032-fullspectrum-gcode-emission.patch` (+1885), `0033-fullspectrum-wipe-tower-purge.patch` (+350), `0034-fullspectrum-bbs3mf-roundtrip.patch`.
 
-Mixed-filament data layer (patches 0015–0019, 0023, 0024) and config keys are landed; `nativeWriteColoredGlb` paint preview works; project-side overrides flow through `mergedConfig`. What's missing: alternating-layer G-code emission. Requires porting Snapmaker's `feature_mix_filament_sm` deltas in `PrintObjectSlice.cpp` (+3749), `LayerRegion.cpp` (+118), `GCode.cpp` (+490), `GCode/ToolOrdering.cpp`.
+Mixed-filament data layer (patches 0015–0024) is at FullSpectrum v0.9.9 parity. Kotlin plumbing (2026-05-10): `MixedFilamentEntry` extended with v1 fields (`mixBPercent`, `manualPattern`, `gradientComponentIds/Weights`, `distributionMode`, `localZMaxSublayers`, `pointillismAllFilaments`, `custom`, `originAuto`); `toMixedFilamentDefinitions` emits the canonical v0.9.9 wire format (round-tripped by `parseMixedDefinitionsForKotlin` and `nativeRead3mfMixedFilamentDefinitions`); `OrcaProfileLoader.SAFE_KEYS` + `SlicerEngine.PROJECT_OVERRIDE_KEYS` whitelist the 17 mixed-filament/dithering + 3 region-override keys; UX has a per-row Advanced editor exposing distribution mode + Local-Z + manual pattern + gradient IDs; MCP gains `set_mixed_filament_row` / `delete_mixed_filament_row` mutators. **What's missing**: engine emission — the FS port of `PrintObjectSlice.cpp` (+4062 LoC sublayer planner), `GCode/ToolOrdering.cpp` (+311 callers of the patch-0019 resolver shim), `GCode.cpp` (+1885 toolchange/Z-walk emission), `WipeTower2.cpp` (+350 Local-Z purge), `MultiMaterialSegmentation.cpp`/`LayerRegion.cpp`/`PerimeterGenerator.cpp`/`Fill.cpp`/`VariableWidth.cpp` (combined ~500 LoC for painted-region virtual-slot routing). Source-of-truth pinned at FS tag `v0.9.9` (`ratdoux/OrcaSlicer-FullSpectrum`, commit b3c41fda).
 
 **Entry criteria:**
-1. Snapmaker `feature_mix_filament_sm` branch merges to their main (PRs #270/#272/#276/#277/#278 in flight as of 2026-04-29). Pin to a stable SHA before porting.
+1. Semantic port against FS `v0.9.9` against OrcaXR's pinned upstream v2.3.2 (patches won't `git apply` cleanly because the fork sits on Snapmaker/OrcaSlicer 2.3).
 2. Dedicated ASAN sweep of `PrintObjectSlice`'s parallel_for sites with the new code (interacts with our patch 0014 TBB serial shim).
 
-**Exit criteria:** A 2-physical-filament + 1-virtual-mix project produces alternating T0/T1 commands per layer in painted regions; existing 4-color dragon autotest preserves the gotcha #23 baseline (442 T-cmds, 17.4 MB, 4 filaments used).
+**Exit criteria:** A 2-physical-filament + 1-virtual-mix project produces alternating T0/T1 commands per layer in painted regions; existing 4-color dragon autotest preserves the gotcha #23 baseline (442 T-cmds, 17.4 MB, 4 filaments used); the four `@Ignore`'d instrumented tests under `app/src/androidTest/.../FullSpectrum*Test.kt` are re-enabled and pass on a connected Android target.
 
 ### A3. Filament → physical extruder full port 🟡 Partial — Kotlin-side modulo wraps, libslic3r-side unported
 
@@ -51,11 +51,13 @@ Kotlin-side `mergedConfig()`/`computeFilamentMap()` already enforces `(target % 
 
 ## B. XR UI / UX completeness
 
-### B2. Mixed-Filament UX panel for FullSpectrum 🔴 Not started
+### B2. Mixed-Filament UX panel for FullSpectrum 🟡 Partial — per-row advanced editor at v0.9.9 parity, settings panel + auto-gen prompt + color-match dialog still missing
 
-> **Files:** existing `MixedColorsPanel.kt` + `MixedFilamentStore.kt` (scaffold landed in commit `734410b`); needs full buildout.
+> **Files:** `UiPanels.kt` (`ColorMappingPanel`, `VirtualColorsSection`, `MixedAdvancedEditor`, `DistributionModeChips`), `MixedFilamentStore.kt`.
 
 The current `ColorMappingPanel` and `VirtualColorsSection` (`UiPanels.kt:585-871`) cover basics — virtual rows, A+B swap, ratio slider. Rewrite the UX to match FullSpectrum v0.9.8's actual surface (the prior scaffold misnamed several modes — `LayerCycle / Pointillisme / Local-Z` are NOT parallel modes; per-layer alternation is just on by default, dithering and Local-Z are orthogonal modulators).
+
+**Done (2026-05-10):** `MixedAdvancedEditor` now exposes distribution_mode (LayerCycle/Pointillisme/Simple chip group), local_z_max_sublayers slider, manual_pattern text field, gradient_component_ids/weights text fields, in addition to the existing cadence + bias controls. `fullSpectrumExtraOverrides()` auto-enables `mixed_filament_advanced_dithering` + `dithering_step_painted_zones_only` at slice time when any virtual row is enabled. **Still pending (B2.5-B2.7):** Color-Match simplex dialog, per-printer Settings card with sub-accordions for the global dithering knobs (`mixed_color_layer_height_a/b`, `dithering_z_step_size`, `local_z_wipe_tower_purge_lines`), auto-generation prompt on filament count change.
 
 **Implementation outline (in slices):**
 - **B2.1** rename header to "Mixed Filaments" (FullSpectrum's `_L("Mixed Filaments")`).

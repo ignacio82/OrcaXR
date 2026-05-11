@@ -1422,17 +1422,25 @@ private fun PhysicalSlotChooserRow(
 }
 
 /**
- * Advanced editor for one virtual-mix row: layer cadence steppers + bias
- * slider + enable toggle. Hidden behind the row's chevron so the row stays
- * glanceable in the common case.
+ * Advanced editor for one virtual-mix row. Mirrors FullSpectrum v0.9.9's
+ * advanced surface: cadence (ratio + bias), pointillisme + local-Z mode,
+ * optional manual cycle pattern, and an optional 3+ way gradient. Hidden
+ * behind the row's chevron so the row stays glanceable in the common case.
+ *
+ * Modes are NOT mutually exclusive — distribution_mode picks LayerCycle
+ * vs Pointillisme as the cadence engine, Local-Z is an orthogonal opt-in
+ * sublayer cap that applies on top, and a manual pattern overrides
+ * cadence entirely when populated.
  */
 @Composable
 private fun MixedAdvancedEditor(
     row: MixedFilamentEntry,
     onUpdate: (MixedFilamentEntry) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         HorizontalDivider(color = Color(0xFF2C3138))
+
+        // ---- Enable + cadence ratio ----
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(
                 checked = row.enabled,
@@ -1461,6 +1469,8 @@ private fun MixedAdvancedEditor(
                 onChange = { onUpdate(row.copy(ratioB = it)) },
             )
         }
+
+        // ---- Bias ----
         Text(
             "Bias: ${row.biasPercent}%  (negative = more T${row.componentA}, " +
                 "positive = more T${row.componentB})",
@@ -1473,6 +1483,146 @@ private fun MixedAdvancedEditor(
             valueRange = -100f..100f,
             steps = 39,
         )
+
+        // ---- Distribution mode ----
+        // 0 = LayerCycle (alternate full layers), 1 = SameLayerPointillisme
+        // (interleave XY stripes per layer), 2 = Simple (one component
+        // per assigned region — no dithering). Mirrors FS v0.9.9.
+        Text(
+            "Distribution",
+            color = Color.LightGray,
+            style = MaterialTheme.typography.labelSmall,
+        )
+        DistributionModeChips(
+            selected = row.distributionMode,
+            onSelect = { onUpdate(row.copy(distributionMode = it)) },
+        )
+
+        // ---- Local-Z sublayer cap ----
+        // 0 disables. Active when the global dithering_local_z_mode key
+        // is on. Higher = finer painted-zone Z resolution at the cost
+        // of more toolchanges in painted regions.
+        Text(
+            "Local-Z max sublayers: ${if (row.localZMaxSublayers == 0) "off" else row.localZMaxSublayers}",
+            color = Color.LightGray,
+            style = MaterialTheme.typography.labelSmall,
+        )
+        Slider(
+            value = row.localZMaxSublayers.toFloat(),
+            onValueChange = { onUpdate(row.copy(localZMaxSublayers = it.toInt())) },
+            valueRange = 0f..8f,
+            steps = 7,
+        )
+
+        // ---- Manual cycle pattern ----
+        // Tokens '1' = component A, '2' = component B, '3'..'9' = direct
+        // physical filament IDs. Empty falls back to ratio-based cadence.
+        OutlinedTextField(
+            value = row.manualPattern.orEmpty(),
+            onValueChange = { raw ->
+                val cleaned = raw.filter { it in '1'..'9' }.take(64)
+                onUpdate(row.copy(manualPattern = cleaned.ifEmpty { null }))
+            },
+            label = {
+                Text(
+                    "Manual pattern (e.g. 1112)",
+                    color = Color.Gray,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            colors = TextFieldDefaults.colors(
+                unfocusedContainerColor = Color(0xFF1B1F23),
+                focusedContainerColor = Color(0xFF1B1F23),
+                unfocusedTextColor = Color.White,
+                focusedTextColor = Color.White,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        // ---- Gradient (3+ way mix) ----
+        // Optional explicit component list for 3+ way gradients. IDs are
+        // compact digits ("123" = filaments 1+2+3). Weights are "/-joined
+        // ints aligned with IDs ("50/25/25"). Empty for plain 2-way A+B.
+        OutlinedTextField(
+            value = row.gradientComponentIds,
+            onValueChange = { raw ->
+                val cleaned = raw.filter { it in '1'..'9' }.take(9)
+                onUpdate(row.copy(gradientComponentIds = cleaned))
+            },
+            label = {
+                Text(
+                    "Gradient IDs (3+ way, e.g. 123)",
+                    color = Color.Gray,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            colors = TextFieldDefaults.colors(
+                unfocusedContainerColor = Color(0xFF1B1F23),
+                focusedContainerColor = Color(0xFF1B1F23),
+                unfocusedTextColor = Color.White,
+                focusedTextColor = Color.White,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (row.gradientComponentIds.length >= 3) {
+            OutlinedTextField(
+                value = row.gradientComponentWeights,
+                onValueChange = { raw ->
+                    val cleaned = raw.filter { it.isDigit() || it == '/' }.take(48)
+                    onUpdate(row.copy(gradientComponentWeights = cleaned))
+                },
+                label = {
+                    Text(
+                        "Gradient weights (e.g. 50/25/25)",
+                        color = Color.Gray,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                },
+                singleLine = true,
+                colors = TextFieldDefaults.colors(
+                    unfocusedContainerColor = Color(0xFF1B1F23),
+                    focusedContainerColor = Color(0xFF1B1F23),
+                    unfocusedTextColor = Color.White,
+                    focusedTextColor = Color.White,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+/**
+ * 3-way chip group for the distribution mode field. Selected chip gets
+ * an accent fill; the others are muted. Tap any chip to write the new
+ * mode into the row.
+ */
+@Composable
+private fun DistributionModeChips(selected: Int, onSelect: (Int) -> Unit) {
+    val modes = listOf(0 to "Layer cycle", 1 to "Pointillisme", 2 to "Simple")
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        for ((value, label) in modes) {
+            val active = value == selected
+            Surface(
+                onClick = { onSelect(value) },
+                shape = RoundedCornerShape(12.dp),
+                color = if (active) Color(0xFF2D3F4F) else Color(0xFF1B1F23),
+                border = BorderStroke(
+                    1.dp,
+                    if (active) Color(0xFF7BC8FF) else Color(0xFF2C3138),
+                ),
+            ) {
+                Text(
+                    label,
+                    color = if (active) Color(0xFF7BC8FF) else Color.LightGray,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                )
+            }
+        }
     }
 }
 

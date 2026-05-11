@@ -2230,7 +2230,7 @@ private fun XrShell(
                     paddedSlots,
                     mixedFilamentDefinitions,
                     paddedSlotRemap,
-                    extraOverrides = printSettingsOverrides.value + wipeTowerExtraOverrides(ctx),
+                    extraOverrides = printSettingsOverrides.value + wipeTowerExtraOverrides(ctx) + fullSpectrumExtraOverrides(mixedFilamentDefinitions.isNotBlank()),
                     flushFromProject = loadedFlushSettings,
                     projectOverrides = loadedProjectOverrides,
                     slotTypes = filamentList.map { it.filamentType },
@@ -2787,7 +2787,7 @@ private fun XrShell(
                 paddedSlots,
                 mixedFilamentDefinitions,
                 paddedSlotRemap,
-                extraOverrides = printSettingsOverrides.value + wipeTowerExtraOverrides(ctx),
+                extraOverrides = printSettingsOverrides.value + wipeTowerExtraOverrides(ctx) + fullSpectrumExtraOverrides(mixedFilamentDefinitions.isNotBlank()),
                 flushFromProject = loadedFlushSettings,
                 projectOverrides = loadedProjectOverrides,
                 slotTypes = filamentList.map { it.filamentType },
@@ -3102,7 +3102,7 @@ private fun XrShell(
                 slots,
                 mixedFilamentDefinitions,
                 slotRemap,
-                extraOverrides = printSettingsOverrides.value + wipeTowerExtraOverrides(ctx),
+                extraOverrides = printSettingsOverrides.value + wipeTowerExtraOverrides(ctx) + fullSpectrumExtraOverrides(mixedFilamentDefinitions.isNotBlank()),
                 flushFromProject = loadedFlushSettings,
                 projectOverrides = loadedProjectOverrides,
                 slotTypes = slotTypes,
@@ -3335,7 +3335,7 @@ private fun XrShell(
                     selectedProfile.value,
                     layerHeightOverride.value,
                     emptyList(),
-                    extraOverrides = printSettingsOverrides.value + wipeTowerExtraOverrides(ctx),
+                    extraOverrides = printSettingsOverrides.value + wipeTowerExtraOverrides(ctx) + fullSpectrumExtraOverrides(mixedFilamentDefinitions.isNotBlank()),
                 )
                 // D9 / A11 — bundle per-object + per-volume overrides
                 // and the active plate's custom-gcode ticks into the
@@ -4670,7 +4670,7 @@ private fun XrShell(
                             testStatePaddedSlots,
                             mixedFilamentDefinitions,
                             testStatePaddedSlotRemap,
-                            extraOverrides = printSettingsOverrides.value + wipeTowerExtraOverrides(ctx),
+                            extraOverrides = printSettingsOverrides.value + wipeTowerExtraOverrides(ctx) + fullSpectrumExtraOverrides(mixedFilamentDefinitions.isNotBlank()),
                             flushFromProject = loadedFlushSettings,
                             projectOverrides = loadedProjectOverrides,
                             slotTypes = testStateSlotTypes,
@@ -6311,7 +6311,7 @@ private fun XrShell(
                                     selectedProfile.value,
                                     layerHeightOverride.value,
                                     emptyList(),
-                                    extraOverrides = printSettingsOverrides.value + wipeTowerExtraOverrides(ctx),
+                                    extraOverrides = printSettingsOverrides.value + wipeTowerExtraOverrides(ctx) + fullSpectrumExtraOverrides(mixedFilamentDefinitions.isNotBlank()),
                                 )
                                 val dest = saveProjectAs3mfToDownloads(
                                     sourceFile = target.source,
@@ -8430,6 +8430,34 @@ internal fun wipeTowerExtraOverrides(ctx: android.content.Context): Map<String, 
     )
 }
 
+/**
+ * FullSpectrum auto-enabled config overrides. When the active printer
+ * has at least one enabled virtual filament row, switch on the master
+ * dithering toggle + sensible per-region defaults so the engine
+ * emission patches (0027-0034) see coherent settings at slice time.
+ * Empty for prints with no virtual filaments (zero-cost fallback to
+ * vanilla libslic3r behavior).
+ *
+ * Mirrors how FullSpectrum-aware OrcaSlicer forks auto-set these when
+ * the user populates the Mixed Filament panel — keeps OrcaXR's slice
+ * output identical to a desktop FS slice for the same project.
+ *
+ * Extend with explicit per-printer UI later; for now we trust the
+ * libslic3r defaults registered in patch 0016 for the rest of the
+ * dithering knobs (z step, line height A/B, pointillism geometry).
+ */
+internal fun fullSpectrumExtraOverrides(virtualRowsEnabled: Boolean): Map<String, String> {
+    if (!virtualRowsEnabled) return emptyMap()
+    return mapOf(
+        // Master toggle — engine emission patches 0028/0032 gate on this.
+        "mixed_filament_advanced_dithering" to "1",
+        // Restrict cadence to painted zones by default; full-bed cadence
+        // would force every layer to alternate even on background plates,
+        // which is rarely what the user wants.
+        "dithering_step_painted_zones_only" to "1",
+    )
+}
+
 internal fun mergedConfig(
     profile: SlicerProfile,
     layerHeightInput: String,
@@ -8953,9 +8981,10 @@ private fun applyPlacedTransforms(mesh: StlMesh, m: PlacedModel): StlMesh {
  * advanced cadence/dithering fields stay defaulted on the Kotlin side
  * since the XR panel doesn't expose them yet.
  */
-private fun parseMixedDefinitionsForKotlin(serialized: String): List<MixedFilamentEntry> {
+internal fun parseMixedDefinitionsForKotlin(serialized: String): List<MixedFilamentEntry> {
     if (serialized.isBlank()) return emptyList()
     val out = mutableListOf<MixedFilamentEntry>()
+    val maxBiasMm = 0.4f.coerceIn(0.01f, 0.35f)  // matches max_component_surface_offset_mm default
     for (rawRow in serialized.split(';')) {
         val row = rawRow.trim()
         if (row.isEmpty()) continue
@@ -8964,23 +8993,54 @@ private fun parseMixedDefinitionsForKotlin(serialized: String): List<MixedFilame
         val a = fields[0].toIntOrNull() ?: continue
         val b = fields[1].toIntOrNull() ?: continue
         val enabled = fields[2].toIntOrNull() != 0
-        // fields[3] = custom (ignored — Kotlin treats every row as live)
+        val custom = fields[3].toIntOrNull() != 0
         val mixB = fields[4].toIntOrNull()?.coerceIn(0, 100) ?: 50
+        var pointillismAll = false
+        var gradientIds = ""
+        var gradientWeights = ""
+        var distMode = 0
+        var localZMax = 0
+        var aOff = 0f
+        var bOff = 0f
         var deleted = false
+        var originAuto = false
         var stableId: String? = null
-        for (f in fields.drop(5)) {
+        var manualPattern: String? = null
+        if (fields.size >= 6) pointillismAll = (fields[5].toIntOrNull() ?: 0) != 0
+        for (f in fields.drop(6)) {
             when {
+                f.startsWith("xa") -> aOff = f.removePrefix("xa").toFloatOrNull() ?: 0f
+                f.startsWith("xb") -> bOff = f.removePrefix("xb").toFloatOrNull() ?: 0f
+                f.startsWith("g") -> gradientIds = f.removePrefix("g")
+                f.startsWith("w") -> gradientWeights = f.removePrefix("w")
+                f.startsWith("m") -> distMode = (f.removePrefix("m").toIntOrNull() ?: 0).coerceIn(0, 2)
+                f.startsWith("z") -> localZMax = (f.removePrefix("z").toIntOrNull() ?: 0).coerceAtLeast(0)
                 f.startsWith("d") -> deleted = (f.removePrefix("d").toIntOrNull() ?: 0) != 0
+                f.startsWith("o") -> originAuto = (f.removePrefix("o").toIntOrNull() ?: 0) != 0
                 f.startsWith("u") -> stableId = f.removePrefix("u")
+                // Trailing manual pattern: digits 1..9 only (libslic3r normalizes).
+                f.isNotEmpty() && f.all { ch -> ch in '1'..'9' } -> manualPattern = f
             }
         }
         if (deleted) continue
+        // Reverse surface_offset_pair_from_signed_bias() to recover signed bias%.
+        val signedBiasMm = bOff - aOff
+        val biasPct = kotlin.math.round((signedBiasMm / maxBiasMm) * 100f).toInt().coerceIn(-100, 100)
         out += MixedFilamentEntry(
             id = stableId?.let { "fs_$it" } ?: "fs_${a}_${b}_${out.size}",
             componentA = a,
             componentB = b,
-            biasPercent = mixB,
+            mixBPercent = mixB,
+            biasPercent = biasPct,
+            manualPattern = manualPattern,
+            gradientComponentIds = gradientIds,
+            gradientComponentWeights = gradientWeights,
+            distributionMode = distMode,
+            localZMaxSublayers = localZMax,
+            pointillismAllFilaments = pointillismAll,
             enabled = enabled,
+            custom = custom,
+            originAuto = originAuto,
         )
     }
     return out

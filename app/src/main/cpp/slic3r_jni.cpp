@@ -1779,8 +1779,8 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
                 std::vector<Slic3r::ModelConfig*> range_configs(
                     size_t(n_ranges), nullptr);
                 for (jsize r = 0; r < n_ranges; ++r) {
-                    const Slic3r::coordf_t lo = Slic3r::coordf_t(zmin[r]);
-                    const Slic3r::coordf_t hi = Slic3r::coordf_t(zmax[r]);
+                    const double lo = static_cast<double>(zmin[r]);
+                    const double hi = static_cast<double>(zmax[r]);
                     if (!(lo < hi)) {
                         ORCAXR_LOGE("nativeSlice: skipping degenerate height range[%d] [%.3f, %.3f)",
                                     int(r), double(lo), double(hi));
@@ -1798,7 +1798,7 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
                     const jsize n_v   = env->GetArrayLength(jLayerRangeOverrideValues);
                     jsize n_t = n_idx < n_k ? n_idx : n_k;
                     if (n_v < n_t) n_t = n_v;
-                    std::vector<jint> idxs(size_t(n_t));
+                    std::vector<jint> idxs(static_cast<size_t>(n_t));
                     if (n_t > 0) {
                         env->GetIntArrayRegion(jLayerRangeOverrideRangeIdx, 0,
                                                n_t, idxs.data());
@@ -2557,7 +2557,7 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
                                             const jsize n_v   = env->GetArrayLength(j_vv);
                                             jsize n_t = n_idx < n_k ? n_idx : n_k;
                                             if (n_v < n_t) n_t = n_v;
-                                            std::vector<jint> idxs(size_t(n_t));
+                                            std::vector<jint> idxs(static_cast<size_t>(n_t));
                                             if (n_t > 0)
                                                 env->GetIntArrayRegion(j_idx, 0, n_t, idxs.data());
                                             Slic3r::ConfigSubstitutionContext substitutions(
@@ -3126,7 +3126,7 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSaveAs3mf(
                     const jsize n_v   = env->GetArrayLength(jLayerRangeOverrideValues);
                     jsize n_t = n_idx < n_k ? n_idx : n_k;
                     if (n_v < n_t) n_t = n_v;
-                    std::vector<jint> idxs(size_t(n_t));
+                    std::vector<jint> idxs(static_cast<size_t>(n_t));
                     if (n_t > 0)
                         env->GetIntArrayRegion(jLayerRangeOverrideRangeIdx, 0, n_t, idxs.data());
                     Slic3r::ConfigSubstitutionContext substitutions(

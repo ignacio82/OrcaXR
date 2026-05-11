@@ -8,48 +8,91 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
-// FullSpectrum mixed-filament panel data model. Mirrors the
-// MixedFilament struct from
-// third_party/OrcaSlicer/src/libslic3r/MixedFilament.hpp (ported as
-// patch 0015): two physical filament IDs (1-based) combined via
-// alternating-layer cadence to produce an apparent third color. This
-// Kotlin shape stores only what the XR UI needs — the full C++ struct
-// has 20+ fields covering local-Z dithering and pointillisme modes
-// that we don't surface yet.
+// FullSpectrum mixed-filament data model. Mirrors the MixedFilament struct
+// from third_party/OrcaSlicer/src/libslic3r/MixedFilament.hpp (ported as
+// patch 0015) at FullSpectrum v0.9.9 parity. A virtual "mixed" filament
+// is two (or more) physical filaments combined via per-layer cadence and
+// optionally same-layer XY pointillisme + Local-Z sub-layering, producing
+// an apparent third color the eye averages.
 //
-// Until the Print/PrintObject/GCode integration from FullSpectrum is
-// also ported (see docs/FULLSPECTRUM_PORT_STATUS.md, phases 4-5),
-// these definitions are stored locally and will be serialized into
-// the `mixed_filament_definitions` config key (registered in patch
-// 0016) — but the slicer doesn't read them yet, so a slice with
-// mixed-filament rows still emits single-filament G-code per
-// assigned slot. Wiring this properly requires the engine work.
+// Until the libslic3r engine emission patches (0027-0034 — port of
+// PrintObjectSlice / GCode / WipeTower2 / ToolOrdering) land, the slicer
+// silently ignores virtual rows; OrcaXR can author and round-trip 3MFs
+// with mixed-filament rows but the emitted G-code is still
+// single-filament per assigned slot.
 data class MixedFilamentEntry(
     /** Stable id — UUID-ish so painted MMU assignments survive list rebuilds. */
     val id: String,
     /** 1-based physical filament IDs (matches MixedFilament.hpp). */
     val componentA: Int,
     val componentB: Int,
-    /** Alternation ratio: ratioA layers of A then ratioB layers of B, repeating. */
+    /** Layer-alternation ratio: ratioA layers of A then ratioB layers of B. */
     val ratioA: Int = 1,
     val ratioB: Int = 1,
-    /** Optional bias percentage [-100..100] — recesses one component slightly to shift hue. */
+    /** Blend percentage of component B in [0..100] — drives auto pattern. */
+    val mixBPercent: Int = 50,
+    /**
+     * Signed UI bias in [-100..100]. Positive shifts cadence toward B by
+     * recessing it slightly into the surface; negative does the same for A.
+     * Translated to `component_a/b_surface_offset` (mm) at serialize time.
+     */
     val biasPercent: Int = 0,
+    /** Optional manual cycle pattern, e.g. "11112222" or "121212". */
+    val manualPattern: String? = null,
+    /**
+     * Optional gradient component IDs as compact digits, e.g. "123" for
+     * filaments 1+2+3 (3-way mix). Empty for the default 2-way A+B cadence.
+     */
+    val gradientComponentIds: String = "",
+    /** Optional gradient weights as "/-joined ints, e.g. "50/25/25". */
+    val gradientComponentWeights: String = "",
+    /** Distribution mode: 0=LayerCycle, 1=SameLayerPointillisme, 2=Simple. */
+    val distributionMode: Int = 0,
+    /** Local-Z cap: 0 = disabled, otherwise max sublayers in painted zone. */
+    val localZMaxSublayers: Int = 0,
+    /** Legacy pointillism flag (predates distributionMode). */
+    val pointillismAllFilaments: Boolean = false,
     /** Whether this row is exposed for assignment. */
     val enabled: Boolean = true,
     /** Tombstones a row so auto-regeneration doesn't bring it back. */
     val deleted: Boolean = false,
+    /** True for user-authored / round-tripped rows; false for fresh auto-pairs. */
+    val custom: Boolean = false,
+    /** True when this row originated as an auto-generated pair. */
+    val originAuto: Boolean = false,
     /** Cached blended color "#RRGGBB" — recomputed when components change. */
     val displayColor: String = "#FFFFFF",
 )
 
 private val Context.mixedFilamentDataStore by preferencesDataStore("orcaxr.mixed_filament")
 
+/** Reference nozzle width used to convert UI bias-percent into mm-offset
+ *  before serialization. The libslic3r side clamps to per-print
+ *  reference_width at slice time (see surface_offset_pair_from_signed_bias
+ *  in MixedFilament.cpp), so getting this wrong only affects the
+ *  authored 3MF default — re-slicing with the actual nozzle re-clamps. */
+private const val DEFAULT_NOZZLE_MM = 0.4f
+
+/** Mirrors `max_component_surface_offset_mm` in MixedFilament.cpp. */
+private fun maxBiasMm(referenceWidthMm: Float = DEFAULT_NOZZLE_MM): Float {
+    val safe = max(0.05f, abs(referenceWidthMm))
+    return min(0.35f, max(0.01f, safe))
+}
+
 /**
  * DataStore-backed list of [MixedFilamentEntry] per printer. Same
  * pattern as the other stores. Each printer ID maps to a JSON array
  * of mixed-filament rows.
+ *
+ * JSON format is versioned via the top-level `_v` key so future schema
+ * bumps can migrate. v1 = pre-FS-v0.9.9 (component A/B + ratio + bias);
+ * v2 = current (adds manual_pattern, gradient, distribution_mode,
+ * local_z_max_sublayers, custom, originAuto). Older v1 blobs are
+ * promoted on first read, defaults filled in.
  */
 class MixedFilamentStore(ctx: Context) {
 
@@ -82,72 +125,23 @@ class MixedFilamentStore(ctx: Context) {
                     id = "auto_${a}_${b}",
                     componentA = a,
                     componentB = b,
+                    custom = false,
+                    originAuto = true,
                 )
             }
         }
         return out
     }
 
-    /**
-     * Serialize a printer's mixed-filament list into the wire format
-     * that libslic3r's `mixed_filament_definitions` config key expects.
-     * Mirrors `MixedFilamentManager::serialize_custom_entries` in
-     * `third_party/OrcaSlicer/src/libslic3r/MixedFilament.cpp`:
-     *
-     *   row := A,B,enabled,custom,mix_b_pct,pointillism,
-     *          gIDS,wWEIGHTS,mDIST,zZMAX,xaA_OFF,xbB_OFF,
-     *          dDELETED,oORIGIN_AUTO,uSTABLE_ID[,manual_pattern]
-     *   serialized := row(;row)*
-     *
-     * Tokens carry single/double-letter prefixes so the C++ parser can
-     * round-trip future fields without breaking historical rows. We
-     * only populate the fields the XR UI exposes — distribution_mode is
-     * forced to 0 (LayerCycle, the simplest cadence), gradient lists
-     * stay empty, surface offsets stay 0, pointillism is off. For a
-     * future advanced-settings panel the rest can fan out.
-     *
-     * `stable_id` needs to be a 64-bit number that survives store
-     * round-trips (it's how painted MMU assignments stay anchored to
-     * the right virtual row across edits). The Kotlin entry id is a
-     * UUID-ish string; we fold it into a positive 63-bit integer via
-     * a stable hash so the libslic3r side gets something consistent.
-     */
-    fun toMixedFilamentDefinitions(entries: List<MixedFilamentEntry>): String {
-        if (entries.isEmpty()) return ""
-
-        fun stableId64(s: String): Long {
-            // FNV-1a 64-bit. Keeps positive (drop sign bit).
-            var hash = 0xcbf29ce484222325uL
-            for (c in s) {
-                hash = hash xor c.code.toULong()
-                hash = (hash * 0x100000001b3uL)
-            }
-            return (hash.toLong() and Long.MAX_VALUE).coerceAtLeast(1L)
-        }
-
-        return entries.filter { !it.deleted }.joinToString(";") { e ->
-            listOf(
-                e.componentA.toString(),
-                e.componentB.toString(),
-                if (e.enabled) "1" else "0",
-                "1",                              // custom = true (user / auto-pair we treat as live)
-                e.biasPercent.coerceIn(0, 100).toString(),
-                "0",                              // pointillism_all_filaments
-                "g",                              // gradient_component_ids (empty)
-                "w",                              // gradient_component_weights (empty)
-                "m0",                             // distribution_mode = LayerCycle
-                "z0",                             // local_z_max_sublayers
-                "xa0",                            // component_a_surface_offset
-                "xb0",                            // component_b_surface_offset
-                "d" + (if (e.deleted) "1" else "0"),
-                "o0",                             // origin_auto
-                "u" + stableId64(e.id).toString(),
-            ).joinToString(",")
-        }
-    }
+    /** Instance method delegate — pure logic lives in the top-level
+     *  [serializeMixedFilamentDefinitions] so tests can call it without
+     *  paying for the DataStore-init cost in the constructor. */
+    fun toMixedFilamentDefinitions(entries: List<MixedFilamentEntry>): String =
+        serializeMixedFilamentDefinitions(entries)
 
     private fun encode(map: Map<String, List<MixedFilamentEntry>>): String {
         val root = JSONObject()
+        root.put("_v", 2)
         for ((printerId, entries) in map) {
             val arr = JSONArray()
             for (e in entries) {
@@ -157,9 +151,18 @@ class MixedFilamentStore(ctx: Context) {
                     put("b", e.componentB)
                     put("ra", e.ratioA)
                     put("rb", e.ratioB)
+                    put("mix_b", e.mixBPercent)
                     put("bias", e.biasPercent)
+                    if (!e.manualPattern.isNullOrEmpty()) put("pat", e.manualPattern)
+                    if (e.gradientComponentIds.isNotEmpty()) put("gids", e.gradientComponentIds)
+                    if (e.gradientComponentWeights.isNotEmpty()) put("gw", e.gradientComponentWeights)
+                    put("dm", e.distributionMode)
+                    put("lzm", e.localZMaxSublayers)
+                    if (e.pointillismAllFilaments) put("pall", true)
                     put("on", e.enabled)
                     put("del", e.deleted)
+                    put("cust", e.custom)
+                    put("oa", e.originAuto)
                     put("color", e.displayColor)
                 })
             }
@@ -176,6 +179,7 @@ class MixedFilamentStore(ctx: Context) {
             val keys = root.keys()
             while (keys.hasNext()) {
                 val k = keys.next()
+                if (k == "_v") continue
                 val arr = root.optJSONArray(k) ?: continue
                 val list = mutableListOf<MixedFilamentEntry>()
                 for (i in 0 until arr.length()) {
@@ -186,9 +190,18 @@ class MixedFilamentStore(ctx: Context) {
                         componentB = o.optInt("b", 2),
                         ratioA = o.optInt("ra", 1),
                         ratioB = o.optInt("rb", 1),
+                        mixBPercent = o.optInt("mix_b", 50),
                         biasPercent = o.optInt("bias", 0),
+                        manualPattern = o.optString("pat", "").ifEmpty { null },
+                        gradientComponentIds = o.optString("gids", ""),
+                        gradientComponentWeights = o.optString("gw", ""),
+                        distributionMode = o.optInt("dm", 0),
+                        localZMaxSublayers = o.optInt("lzm", 0),
+                        pointillismAllFilaments = o.optBoolean("pall", false),
                         enabled = o.optBoolean("on", true),
                         deleted = o.optBoolean("del", false),
+                        custom = o.optBoolean("cust", false),
+                        originAuto = o.optBoolean("oa", false),
                         displayColor = o.optString("color", "#FFFFFF"),
                     )
                 }
@@ -200,13 +213,83 @@ class MixedFilamentStore(ctx: Context) {
 }
 
 /**
+ * Serialize a mixed-filament list into the wire format that libslic3r's
+ * `mixed_filament_definitions` config key expects. Mirrors
+ * `MixedFilamentManager::serialize_custom_entries` in
+ * `third_party/OrcaSlicer/src/libslic3r/MixedFilament.cpp` (FS v0.9.9):
+ *
+ *   row := A,B,enabled,custom,mix_b_pct,pointillism,
+ *          gIDS,wWEIGHTS,mDIST,zZMAX,xaA_OFF,xbB_OFF,
+ *          dDELETED,oORIGIN_AUTO,uSTABLE_ID[,manual_pattern]
+ *   serialized := row(;row)*
+ *
+ * Tokens carry single/double-letter prefixes so the C++ parser can
+ * round-trip future fields without breaking historical rows.
+ *
+ * `stable_id` is a 64-bit number that survives store round-trips so
+ * painted MMU assignments stay anchored to the right virtual row. We
+ * fold the Kotlin entry id (UUID-ish) into a positive 63-bit FNV-1a
+ * hash so the libslic3r side gets something consistent.
+ *
+ * Pure function — no Context / DataStore dependency. Unit-testable.
+ */
+fun serializeMixedFilamentDefinitions(entries: List<MixedFilamentEntry>): String {
+    if (entries.isEmpty()) return ""
+
+    fun stableId64(s: String): Long {
+        var hash = 0xcbf29ce484222325uL
+        for (c in s) {
+            hash = hash xor c.code.toULong()
+            hash = (hash * 0x100000001b3uL)
+        }
+        return (hash.toLong() and Long.MAX_VALUE).coerceAtLeast(1L)
+    }
+
+    // Map signed UI bias to the (a_offset, b_offset) pair libslic3r expects.
+    // Mirrors surface_offset_pair_from_signed_bias() in MixedFilament.cpp.
+    fun offsetsForBias(biasPct: Int): Pair<Float, Float> {
+        val maxMm = maxBiasMm()
+        val biasMm = (biasPct.coerceIn(-100, 100) / 100f) * maxMm
+        return when {
+            biasMm > 1e-6f -> 0f to biasMm
+            biasMm < -1e-6f -> -biasMm to 0f
+            else -> 0f to 0f
+        }
+    }
+
+    fun fmtOffset(v: Float): String = "%.4f".format(v).trimEnd('0').trimEnd('.').ifEmpty { "0" }
+
+    return entries.joinToString(";") { e ->
+        val (aOff, bOff) = offsetsForBias(e.biasPercent)
+        val tokens = mutableListOf(
+            e.componentA.toString(),
+            e.componentB.toString(),
+            if (e.enabled) "1" else "0",
+            if (e.custom) "1" else "0",
+            e.mixBPercent.coerceIn(0, 100).toString(),
+            if (e.pointillismAllFilaments) "1" else "0",
+            "g" + e.gradientComponentIds,
+            "w" + e.gradientComponentWeights,
+            "m" + e.distributionMode.coerceIn(0, 2).toString(),
+            "z" + max(0, e.localZMaxSublayers).toString(),
+            "xa" + fmtOffset(aOff),
+            "xb" + fmtOffset(bOff),
+            "d" + if (e.deleted) "1" else "0",
+            "o" + if (e.originAuto) "1" else "0",
+            "u" + stableId64(e.id).toString(),
+        )
+        val pat = e.manualPattern?.takeIf { it.isNotBlank() }
+        if (pat != null) tokens += pat
+        tokens.joinToString(",")
+    }
+}
+
+/**
  * Compute the apparent blended color of [a] + [b] mixed at the
- * given layer ratio. This is a simple linear RGB blend weighted by
- * the ratio — NOT the same as FullSpectrum's RYB-based
- * `filament_mixer_lerp` (which lives in the C++ side, patch 0015).
- * Acceptable for UI swatches at small scale; the printed result will
- * differ slightly. Worth swapping to a JNI call into filament_mixer
- * once we expose one.
+ * given layer ratio. Linear RGB blend weighted by the ratio — NOT
+ * the perceptual blend libslic3r uses (filament_mixer.cpp). Acceptable
+ * for UI swatches; printed result will differ slightly. Worth swapping
+ * to a JNI call once we expose filament_mixer to Kotlin.
  */
 fun blendMixedColor(a: String, b: String, ratioA: Int, ratioB: Int): String {
     val ar = parseHex(a)

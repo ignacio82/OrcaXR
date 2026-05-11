@@ -876,5 +876,36 @@ object OrcaProfileLoader {
         // sizes / format the printer expects. coString — safe.
         "thumbnails",
         "thumbnails_format",
+        // ---- FullSpectrum mixed-filament + dithering (patches 0016, 0027) ----
+        // Registered in libslic3r as coBool/coFloat/coString/coInt via
+        // patch 0016. Whitelisted here per gotcha #2 — without these,
+        // set_deserialize_nothrow silently drops them at slice time
+        // and the engine emission patches see no config. The serialized
+        // virtual-row table is `mixed_filament_definitions`; the rest
+        // are global cadence + dithering knobs.
+        "mixed_filament_definitions",
+        "mixed_filament_gradient_mode",
+        "mixed_filament_height_lower_bound",
+        "mixed_filament_height_upper_bound",
+        "mixed_filament_advanced_dithering",
+        "mixed_filament_pointillism_pixel_size",
+        "mixed_filament_pointillism_line_gap",
+        "mixed_filament_component_bias_enabled",
+        "mixed_filament_surface_indentation",
+        "mixed_filament_region_collapse",
+        "mixed_color_layer_height_a",
+        "mixed_color_layer_height_b",
+        "dithering_z_step_size",
+        "dithering_local_z_mode",
+        "dithering_local_z_whole_objects",
+        "dithering_local_z_direct_multicolor",
+        "dithering_step_painted_zones_only",
+        "local_z_wipe_tower_purge_lines",
+        // Region-level overrides per FS v0.9.9 — let the user opt out
+        // of mixed cadence on N first/last layers' infill (cleaner
+        // adhesion / top surface). coBool + coInts.
+        "enable_infill_filament_override",
+        "infill_filament_use_base_first_layers",
+        "infill_filament_use_base_last_layers",
     )
 }
