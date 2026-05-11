@@ -1,0 +1,677 @@
+diff --git a/src/libslic3r/GCode/WipeTower2.cpp b/src/libslic3r/GCode/WipeTower2.cpp
+index c68a74f8b3..d7c89438f9 100644
+--- a/src/libslic3r/GCode/WipeTower2.cpp
++++ b/src/libslic3r/GCode/WipeTower2.cpp
+@@ -1253,6 +1253,8 @@ WipeTower2::WipeTower2(const PrintConfig& config, const PrintRegionConfig& defau
+     m_wipe_tower_width(float(config.prime_tower_width)),
+     m_wipe_tower_rotation_angle(float(config.wipe_tower_rotation_angle)),
+     m_wipe_tower_brim_width(float(config.prime_tower_brim_width)),
++    m_prime_tower_brim_chamfer(config.prime_tower_brim_chamfer),
++    m_prime_tower_brim_chamfer_max_width(float(config.prime_tower_brim_chamfer_max_width)),
+     m_wipe_tower_cone_angle(float(config.wipe_tower_cone_angle)),
+     m_extra_flow(float(config.wipe_tower_extra_flow/100.)),
+     m_extra_spacing_wipe(float(config.wipe_tower_extra_spacing/100. * config.wipe_tower_extra_flow/100.)),
+@@ -2109,36 +2111,69 @@ WipeTower::ToolChangeResult WipeTower2::finish_layer()
+         poly = generate_support_rib_wall(writer, wt_box, feedrate, first_layer, m_wall_type == (int)wtwRib, true, false);
+     }
+ 
+-    // brim (first layer only)
+-    if (first_layer) {
+-        writer.append("; WIPE_TOWER_BRIM_START\n");
+-            float brim_width = m_wipe_tower_brim_width;
+-        if (brim_width < 0.f)
+-            brim_width = WipeTower::get_auto_brim_by_height(m_wipe_tower_height);
++    // OrcaXR Phase D.1 (PR #131 port): brim with optional layer-by-layer
++    // chamfer. First layer prints the full brim; subsequent layers reduce
++    // the loop count by `dist_to_1st`, capped at
++    // `m_prime_tower_brim_chamfer_max_width / spacing`. Negative
++    // brim_width still resolves to auto-by-height (upstream OrcaSlicer
++    // behavior preserved). loops_num is held in `int` because the chamfer
++    // arithmetic can subtract past zero before clamping.
++    float brim_width = m_wipe_tower_brim_width;
++    if (brim_width < 0.f)
++        brim_width = WipeTower::get_auto_brim_by_height(m_wipe_tower_height);
++    int loops_num = int((brim_width + spacing / 2.f) / spacing);
++
++    if (brim_width > 0.f) {
++        if (first_layer) {
++            // first layer always prints the full brim
++        } else if (m_prime_tower_brim_chamfer) {
++            const size_t current_idx = size_t(m_layer_info - m_plan.begin());
++            const int    dist_to_1st = int(current_idx) - int(m_first_layer_idx);
++
++            if (m_first_layer_idx == size_t(-1) || m_first_layer_idx >= m_plan.size()) {
++                loops_num = 0;
++            } else {
++                const bool depth_changed = (m_layer_info->depth != m_plan[m_first_layer_idx].depth);
++                if (depth_changed) {
++                    loops_num = 0;
++                } else {
++                    const int chamfer_loops_num = int(m_prime_tower_brim_chamfer_max_width / spacing);
++                    loops_num = std::min(loops_num, chamfer_loops_num) - dist_to_1st;
++                    if (loops_num < 0)
++                        loops_num = 0;
++                }
++            }
++        } else {
++            // chamfer disabled — only the first layer gets a brim
++            loops_num = 0;
++        }
++    } else {
++        loops_num = 0;
++    }
+ 
+-        size_t loops_num = (brim_width + spacing / 2.f) / spacing;
+-        
+-        for (size_t i = 0; i < loops_num; ++ i) {
++    if (loops_num > 0) {
++        writer.append("; WIPE_TOWER_BRIM_START\n");
++        for (int i = 0; i < loops_num; ++i) {
+             poly = offset(poly, scale_(spacing)).front();
+             int cp = poly.closest_point_index(Point::new_scale(writer.x(), writer.y()));
+             writer.travel(unscale(poly.points[cp]).cast<float>());
+-            for (int i=cp+1; true; ++i ) {
+-                if (i==int(poly.points.size()))
+-                    i = 0;
+-                writer.extrude(unscale(poly.points[i]).cast<float>());
+-                if (i == cp)
++            for (int j = cp + 1; true; ++j) {
++                if (j == int(poly.points.size()))
++                    j = 0;
++                writer.extrude(unscale(poly.points[j]).cast<float>());
++                if (j == cp)
+                     break;
+             }
+         }
+         writer.append("; WIPE_TOWER_BRIM_END\n");
+-        // Save actual brim width to be later passed to the Print object, which will use it
+-        // for skirt calculation and pass it to GLCanvas for precise preview box
+-        m_wipe_tower_brim_width_real = loops_num * spacing;
+-
+-        // Compute actual first-layer bounding box from the outermost brim polygon,
+-        // matching how WipeTower::get_bbx() uses m_outer_wall extents.
+-        BoundingBox first_layer_box = get_extents(poly);
+-        m_first_layer_bbx = BoundingBoxf(unscale(first_layer_box.min), unscale(first_layer_box.max));
++        if (first_layer) {
++            // Save actual brim width and bbx only on the first layer — the
++            // Print object uses these for skirt calculation and the GLCanvas
++            // preview box. Chamfer layers should not shrink either value.
++            m_wipe_tower_brim_width_real = loops_num * spacing;
++            BoundingBox first_layer_box = get_extents(poly);
++            m_first_layer_bbx = BoundingBoxf(unscale(first_layer_box.min), unscale(first_layer_box.max));
++        }
+     }
+ 
+     // Now prepare future wipe.
+@@ -2249,7 +2284,101 @@ void WipeTower2::plan_toolchange(float z_par, float layer_height_par, unsigned i
+ 	m_plan.back().tool_changes.push_back(WipeTowerInfo::ToolChange(old_tool, new_tool, ramming_depth + wiping_depth, ramming_depth, first_wipe_line, wipe_volume));
+ }
+ 
++// =============================================================
++// OrcaXR Android (FullSpectrum Local-Z, patch 0053 — LZ4a scaffold).
++// Queues a sub-Z tool change inside the current nominal layer. Sizes
++// the slot using ramming + wipe depth math identical to plan_toolchange,
++// then pushes onto WipeTowerInfo::local_z_tool_changes (separate from
++// the normal tool_changes vector so the wipe-tower planner can size /
++// account for Local-Z purges independently).
++//
++// Source: FS v0.9.9 WipeTower2.cpp lines 2355-2385.
++// =============================================================
++void WipeTower2::plan_local_z_toolchange(float z_par, float layer_height_par, unsigned int old_tool, unsigned int new_tool, float wipe_volume)
++{
++    assert(m_plan.empty() || m_plan.back().z <= z_par + WT_EPSILON);
++
++    if (m_plan.empty() || m_plan.back().z + WT_EPSILON < z_par)
++        m_plan.push_back(WipeTowerInfo(z_par, layer_height_par));
++
++    if (m_first_layer_idx == size_t(-1) && (!m_no_sparse_layers || old_tool != new_tool || m_plan.size() == 1))
++        m_first_layer_idx = m_plan.size() - 1;
++
++    if (old_tool == new_tool)
++        return;
++
++    float width             = m_wipe_tower_width - 3 * m_perimeter_width;
++    float length_to_extrude = volume_to_length(0.25f * std::accumulate(m_filpar[old_tool].ramming_speed.begin(),
++                                                                       m_filpar[old_tool].ramming_speed.end(), 0.f),
++                                               m_perimeter_width * m_filpar[old_tool].ramming_line_width_multiplicator, layer_height_par);
++    float ramming_depth     = m_enable_filament_ramming ? ((int(length_to_extrude / width) + 1) *
++                                                       (m_perimeter_width * m_filpar[old_tool].ramming_line_width_multiplicator *
++                                                        m_filpar[old_tool].ramming_step_multiplicator) *
++                                                       m_extra_spacing_ramming) :
++                                                        0;
++    float first_wipe_line   = -(width * ((length_to_extrude / width) - int(length_to_extrude / width)) - width);
++
++    float first_wipe_volume = length_to_volume(first_wipe_line, m_perimeter_width * m_extra_flow, layer_height_par);
++    float wiping_depth      = get_wipe_depth(wipe_volume - first_wipe_volume, layer_height_par, m_perimeter_width, m_extra_flow,
++                                             m_extra_spacing_wipe, width);
++
++    m_plan.back().local_z_tool_changes.push_back(
++        WipeTowerInfo::ToolChange(old_tool, new_tool, ramming_depth + wiping_depth, ramming_depth, first_wipe_line, wipe_volume));
++}
++
++// Reserves `reserve_slot_count` Local-Z purge slots at z_par. Each slot
++// is sized to fit the worst-case (max ramming + wipe) of the loaded
++// filaments so the wipe-tower planner has room for purges scheduled
++// late (after plan_local_z_toolchange has stopped being called).
++//
++// Source: FS v0.9.9 WipeTower2.cpp lines 2387-2433.
++void WipeTower2::plan_local_z_reserve(float z_par, float layer_height_par, size_t reserve_slot_count, float wipe_volume)
++{
++    if (reserve_slot_count == 0)
++        return;
++
++    assert(m_plan.empty() || m_plan.back().z <= z_par + WT_EPSILON);
++
++    if (m_plan.empty() || m_plan.back().z + WT_EPSILON < z_par)
++        m_plan.push_back(WipeTowerInfo(z_par, layer_height_par));
++
++    const float mini_wipe_depth = m_local_z_wipe_tower_purge_lines * m_perimeter_width * m_extra_spacing_wipe;
++    const float wipe_width      = std::max(0.f, m_wipe_tower_width - 3.f * m_perimeter_width);
++    const float wiping_depth    = wipe_width > WT_EPSILON ?
++                                      get_wipe_depth(std::max(0.f, wipe_volume), layer_height_par, m_perimeter_width, m_extra_flow,
++                                                     m_extra_spacing_wipe, wipe_width) :
++                                      0.f;
++
++    float max_ramming_depth = 0.f;
++    if (wipe_width > WT_EPSILON) {
++        for (const FilamentParameters& filament : m_filpar) {
++            const bool do_ramming = (m_semm && m_enable_filament_ramming) || filament.multitool_ramming;
++            if (!do_ramming || filament.ramming_speed.empty())
++                continue;
++
++            const float line_width = m_perimeter_width * filament.ramming_line_width_multiplicator;
++            const float line_step =
++                (m_perimeter_width * filament.ramming_line_width_multiplicator * filament.ramming_step_multiplicator) *
++                m_extra_spacing_ramming;
++            if (line_width <= WT_EPSILON || line_step <= WT_EPSILON)
++                continue;
++
++            const float ramming_volume = 0.25f * std::accumulate(filament.ramming_speed.begin(), filament.ramming_speed.end(), 0.f);
++            const float length_to_extrude = volume_to_length(ramming_volume, line_width, layer_height_par);
++            const float ramming_depth =
++                (float(int(length_to_extrude / wipe_width) + 1) * line_step);
++            max_ramming_depth = std::max(max_ramming_depth, ramming_depth);
++        }
++    }
++
++    const float full_toolchange_depth = max_ramming_depth + wiping_depth;
++    const float slot_depth =
++        std::max(2.5f * m_perimeter_width, std::max(mini_wipe_depth + m_perimeter_width, full_toolchange_depth + m_perimeter_width));
+ 
++    WipeTowerInfo &layer = m_plan.back();
++    layer.local_z_reserve_slot_depth = std::max(layer.local_z_reserve_slot_depth, slot_depth);
++    layer.local_z_reserve_slot_count += reserve_slot_count;
++}
+ 
+ void WipeTower2::plan_tower()
+ {
+@@ -2283,8 +2412,11 @@ void WipeTower2::save_on_last_wipe()
+         if (m_layer_info->tool_changes.size()==0)   // we have no way to save anything on an empty layer
+             continue;
+ 
+-        // Which toolchange will finish_layer extrusions be subtracted from?
+-        int idx = first_toolchange_to_nonsoluble(m_layer_info->tool_changes);
++        // OrcaXR Phase D.2 (PR #222 port): use the wall-continuity selector
++        // here too so the depth/wipe budget reserved during planning matches
++        // what generate() will actually emit.
++        const WipeTowerInfo* next_layer_info = (m_layer_info + 1 < m_plan.end()) ? &*(m_layer_info + 1) : nullptr;
++        int idx = select_wall_extruder_idx(m_layer_info->tool_changes, next_layer_info);
+ 
+         if (idx == -1) {
+             // In this case, finish_layer will be called at the very beginning.
+@@ -2322,6 +2454,190 @@ void WipeTower2::save_on_last_wipe()
+ }
+ 
+ 
++// =============================================================
++// OrcaXR Android (FullSpectrum Local-Z, patch 0054 — LZ4b helpers).
++// Both helpers UNION layer.local_z_tool_changes with the normal
++// layer.tool_changes vector before answering, so call sites can
++// treat a wipe-tower layer as a single sequence regardless of
++// whether a purge originated from the per-layer toolchange planner
++// or the per-sub-Z Local-Z planner.
++//
++// Source: FS v0.9.9 WipeTower2.cpp lines 2509-2538.
++// =============================================================
++bool WipeTower2::layer_has_soluble_toolchange(const WipeTowerInfo &layer) const
++{
++    auto has_soluble = [this](const std::vector<WipeTowerInfo::ToolChange> &tool_changes) {
++        return std::any_of(tool_changes.begin(), tool_changes.end(), [this](const WipeTowerInfo::ToolChange &toolchange) {
++            return m_filpar[toolchange.new_tool].is_soluble || m_filpar[toolchange.old_tool].is_soluble;
++        });
++    };
++
++    return has_soluble(layer.local_z_tool_changes) || has_soluble(layer.tool_changes);
++}
++
++float WipeTower2::cumulative_toolchange_depth_before(const WipeTowerInfo::ToolChange *tool_change) const
++{
++    if (tool_change == nullptr || m_layer_info == m_plan.end())
++        return 0.f;
++
++    float depth = 0.f;
++    for (const WipeTowerInfo::ToolChange &entry : m_layer_info->local_z_tool_changes) {
++        if (&entry == tool_change)
++            return depth;
++        depth += entry.required_depth;
++    }
++    for (const WipeTowerInfo::ToolChange &entry : m_layer_info->tool_changes) {
++        if (&entry == tool_change)
++            return depth;
++        depth += entry.required_depth;
++    }
++
++    return depth;
++}
++
++// =============================================================
++// OrcaXR Android (FullSpectrum Local-Z, patch 0055 — LZ4c emission).
++// Per-sub-Z purge gcode emitter. Takes a caller-supplied
++// `cleaning_box` (typically picked from get_local_z_reserve_boxes())
++// and a `wipe_volume`, then mirrors tool_change() to actually drive
++// the unload+change+load+wipe sequence. Returns a ToolChangeResult
++// the LZ5 gcode driver can paste into the output stream.
++//
++// Differences vs FS v0.9.9 (WipeTower2.cpp lines 1669-1724):
++//   - Uses our 5-arg WipeTowerWriter2 ctor (no m_printer_model — FS
++//     adds that arg; the v2.3.2 baseline doesn't have it)
++//   - Skips the m_change_pressure / disable_linear_advance_value
++//     branches (FS-only members; OrcaXR's slicer doesn't ship them)
++//
++// Source: FS v0.9.9 WipeTower2.cpp lines 1669-1724.
++// =============================================================
++WipeTower::ToolChangeResult WipeTower2::local_z_tool_change(size_t new_tool,
++                                                            const WipeTower::box_coordinates &cleaning_box,
++                                                            float wipe_volume)
++{
++    const size_t old_tool = m_current_tool;
++
++    WipeTowerWriter2 writer(m_layer_height, m_perimeter_width, m_gcode_flavor, m_filpar, m_enable_arc_fitting);
++    writer.set_extrusion_flow(m_extrusion_flow)
++        .set_z(m_z_pos)
++        .set_initial_tool(m_current_tool)
++        .append(";--------------------\n"
++                "; CP TOOLCHANGE START\n");
++
++    writer.comment_with_value(" toolchange #", m_num_tool_changes + 1);
++    writer.append(std::string("; material : " + (m_current_tool < m_filpar.size() ? m_filpar[m_current_tool].material : "(NONE)") + " -> " +
++                              m_filpar[new_tool].material + "\n")
++                      .c_str())
++        .append(";--------------------\n");
++    writer.append(";" + GCodeProcessor::reserved_tag(GCodeProcessor::ETags::Wipe_Tower_Start) + "\n");
++
++    writer.speed_override_backup();
++    writer.speed_override(100);
++    writer.set_initial_position(cleaning_box.ld, m_wipe_tower_width, m_wipe_tower_depth, 0.f);
++
++    if (m_set_extruder_trimpot)
++        writer.set_extruder_trimpot(750);
++
++    const int old_tool_temp = is_first_layer() ? m_filpar[m_current_tool].first_layer_temperature : m_filpar[m_current_tool].temperature;
++    const int new_tool_temp = is_first_layer() ? m_filpar[new_tool].first_layer_temperature : m_filpar[new_tool].temperature;
++
++    toolchange_Unload(writer, cleaning_box, m_filpar[m_current_tool].material, old_tool_temp, new_tool_temp);
++    toolchange_Change(writer, new_tool, m_filpar[new_tool].material);
++    toolchange_Load(writer, cleaning_box);
++    writer.travel(writer.x(), writer.y() - m_perimeter_width);
++    toolchange_Wipe(writer, cleaning_box, wipe_volume, false);
++    writer.append(";" + GCodeProcessor::reserved_tag(GCodeProcessor::ETags::Wipe_Tower_End) + "\n");
++
++    ++m_num_tool_changes;
++
++    if (m_set_extruder_trimpot)
++        writer.set_extruder_trimpot(550);
++    writer.speed_override_restore();
++    writer.feedrate(m_travel_speed * 60.f)
++        .flush_planner_queue()
++        .reset_extruder()
++        .append("; CP TOOLCHANGE END\n"
++                ";------------------\n"
++                "\n\n");
++
++    if (m_current_tool < m_used_filament_length.size())
++        m_used_filament_length[m_current_tool] += writer.get_and_reset_used_filament_length();
++
++    WipeTower::ToolChangeResult result = construct_tcr(writer, false, old_tool, false);
++    result.purge_volume                = wipe_volume;
++    return result;
++}
++
++// Rotate a Local-Z reserve box corner around the tower centre by
++// `internal_angle_deg`. Used to alternate purge box orientation per
++// layer so successive sub-Z purges don't stack on the same plane.
++//
++// Source: FS v0.9.9 WipeTower2.cpp lines 2673-2683.
++static Vec2f rotate_local_z_reserve_point(const Vec2f& pt, float tower_width, float tower_depth, float y_shift, float internal_angle_deg)
++{
++    Vec2f shifted = pt;
++    shifted.x() -= tower_width / 2.f;
++    shifted.y() += y_shift - tower_depth / 2.f;
++    const double angle = internal_angle_deg * double(M_PI / 180.);
++    const double c     = std::cos(angle);
++    const double s     = std::sin(angle);
++    return Vec2f(float(shifted.x() * c - shifted.y() * s) + tower_width / 2.f,
++                 float(shifted.x() * s + shifted.y() * c) + tower_depth / 2.f);
++}
++
++// Returns per-layer Local-Z reserve boxes sized from each layer's
++// local_z_reserve_slot_depth/_count fields (populated by
++// plan_local_z_reserve in patch 0053). The LZ5 wiring picks one box
++// per sub-Z purge and feeds it into local_z_tool_change(). Internal
++// angle alternates per layer so sub-Z purges don't stack vertically.
++//
++// Source: FS v0.9.9 WipeTower2.cpp lines 2685-2729.
++std::vector<std::vector<WipeTower::box_coordinates>> WipeTower2::get_local_z_reserve_boxes() const
++{
++    std::vector<std::vector<WipeTower::box_coordinates>> out;
++    out.reserve(m_plan.size());
++
++    for (size_t layer_idx = 0; layer_idx < m_plan.size(); ++layer_idx) {
++        const WipeTowerInfo& layer = m_plan[layer_idx];
++        std::vector<WipeTower::box_coordinates> layer_boxes;
++        layer_boxes.reserve(layer.local_z_reserve_slot_count);
++
++        if (layer.local_z_reserve_slot_count > 0 && layer.local_z_reserve_slot_depth > WT_EPSILON) {
++            const float y_shift = layer.depth < m_wipe_tower_depth - m_perimeter_width ?
++                (m_wipe_tower_depth - layer.depth - m_perimeter_width) / 2.f : 0.f;
++            const float internal_angle = (layer_idx % 2 == 0) ? 180.f : 0.f;
++
++            for (size_t slot_idx = 0; slot_idx < layer.local_z_reserve_slot_count; ++slot_idx) {
++                const float slot_start = layer.toolchanges_depth() + float(slot_idx) * layer.local_z_reserve_slot_depth;
++                const float width      = std::max(0.f, m_wipe_tower_width - 2.f * m_perimeter_width);
++                const float height     = std::max(0.f, layer.local_z_reserve_slot_depth - m_perimeter_width);
++                if (width <= WT_EPSILON || height <= WT_EPSILON)
++                    continue;
++
++                const Vec2f ld_unrotated(m_perimeter_width, slot_start + m_perimeter_width);
++                const Vec2f rd_unrotated = ld_unrotated + Vec2f(width, 0.f);
++                const Vec2f ru_unrotated = ld_unrotated + Vec2f(width, height);
++                const Vec2f lu_unrotated = ld_unrotated + Vec2f(0.f, height);
++
++                const Vec2f ld = rotate_local_z_reserve_point(ld_unrotated, m_wipe_tower_width, m_wipe_tower_depth, y_shift, internal_angle);
++                const Vec2f rd = rotate_local_z_reserve_point(rd_unrotated, m_wipe_tower_width, m_wipe_tower_depth, y_shift, internal_angle);
++                const Vec2f ru = rotate_local_z_reserve_point(ru_unrotated, m_wipe_tower_width, m_wipe_tower_depth, y_shift, internal_angle);
++                const Vec2f lu = rotate_local_z_reserve_point(lu_unrotated, m_wipe_tower_width, m_wipe_tower_depth, y_shift, internal_angle);
++
++                const float min_x = std::min({ld.x(), rd.x(), ru.x(), lu.x()});
++                const float max_x = std::max({ld.x(), rd.x(), ru.x(), lu.x()});
++                const float min_y = std::min({ld.y(), rd.y(), ru.y(), lu.y()});
++                const float max_y = std::max({ld.y(), rd.y(), ru.y(), lu.y()});
++                layer_boxes.emplace_back(Vec2f(min_x, min_y), max_x - min_x, max_y - min_y);
++            }
++        }
++
++        out.emplace_back(std::move(layer_boxes));
++    }
++
++    return out;
++}
++
+ // Return index of first toolchange that switches to non-soluble extruder
+ // ot -1 if there is no such toolchange.
+ int WipeTower2::first_toolchange_to_nonsoluble(
+@@ -2339,6 +2655,91 @@ int WipeTower2::first_toolchange_to_nonsoluble(
+     return tool_changes.empty() ? -1 : 0;
+ }
+ 
++// OrcaXR Phase D.2 (PR #222 port): pick the toolchange index whose extruder
++// will draw the wipe-tower wall (finish_layer). Three priorities, in order:
++//   1. Same material as the previous layer's wall — preferring the exact
++//      same physical extruder, then falling back to a different extruder
++//      that shares the material.
++//   2. A material that also appears in the next layer — reduces the number
++//      of material switches the next layer will need on its wall.
++//   3. Original behavior: first non-soluble toolchange, else old_tool.
++//
++// Returns idx >= 0 (wall drawn after tool_changes[idx]) or -1 (wall drawn
++// before any toolchange, using m_current_tool).
++int WipeTower2::select_wall_extruder_idx(
++        const std::vector<WipeTowerInfo::ToolChange>& tool_changes,
++        const WipeTowerInfo* next_layer_info) const
++{
++    struct Candidate {
++        int    idx;
++        size_t tool;
++    };
++
++    std::vector<Candidate> candidates;
++    if (m_current_tool < m_filpar.size() && !m_filpar[m_current_tool].is_soluble)
++        candidates.push_back({-1, m_current_tool});
++    for (size_t i = 0; i < tool_changes.size(); ++i) {
++        const size_t t = tool_changes[i].new_tool;
++        if (t < m_filpar.size() && !m_filpar[t].is_soluble)
++            candidates.push_back({int(i), t});
++    }
++
++    if (candidates.empty())
++        return -1;
++
++    // Priority 1: same material as previous layer's wall.
++    if (m_last_wall_extruder >= 0 && size_t(m_last_wall_extruder) < m_filpar.size()) {
++        const std::string& last_material = m_filpar[m_last_wall_extruder].material;
++        int best = -2;
++        for (const Candidate& c : candidates) {
++            if (m_filpar[c.tool].material != last_material)
++                continue;
++            if (c.tool == size_t(m_last_wall_extruder))
++                return c.idx;
++            if (best == -2)
++                best = c.idx;
++        }
++        if (best != -2)
++            return best;
++    }
++
++    // Priority 2: material that also appears in the next layer.
++    if (next_layer_info && !next_layer_info->tool_changes.empty()) {
++        std::vector<std::string> next_materials;
++        std::vector<size_t>      next_extruders;
++        const size_t front_old = next_layer_info->tool_changes.front().old_tool;
++        if (front_old < m_filpar.size()) {
++            next_materials.push_back(m_filpar[front_old].material);
++            next_extruders.push_back(front_old);
++        }
++        for (const auto& tc : next_layer_info->tool_changes) {
++            if (tc.new_tool < m_filpar.size()) {
++                next_materials.push_back(m_filpar[tc.new_tool].material);
++                next_extruders.push_back(tc.new_tool);
++            }
++        }
++
++        int best = -2;
++        for (const Candidate& c : candidates) {
++            const std::string& mat = m_filpar[c.tool].material;
++            if (std::find(next_materials.begin(), next_materials.end(), mat) == next_materials.end())
++                continue;
++            if (std::find(next_extruders.begin(), next_extruders.end(), c.tool) != next_extruders.end())
++                return c.idx;
++            if (best == -2)
++                best = c.idx;
++        }
++        if (best != -2)
++            return best;
++    }
++
++    // Priority 3: fall back to the original heuristic, then to old_tool.
++    const int fallback = first_toolchange_to_nonsoluble(tool_changes);
++    if (fallback >= 0)
++        return fallback;
++    return candidates.front().idx;
++}
++
+ static WipeTower::ToolChangeResult merge_tcr(WipeTower::ToolChangeResult& first,
+                                              WipeTower::ToolChangeResult& second)
+ {
+@@ -2367,7 +2768,13 @@ void WipeTower2::generate(std::vector<std::vector<WipeTower::ToolChangeResult>>
+         return;
+ 
+ 	plan_tower();
+-#if 1
++// OrcaXR Phase D.3 (PR #134 port): the 5-iteration save_on_last_wipe /
++// plan_tower loop destabilizes depth calculations on Snapmaker U1 4-head
++// toolchanger geometries with `wipe_tower_extra_rib_length` set — depth
++// drifts each pass, m_y_shift changes, and the rotated polygon ends up
++// with negative coordinates that exit the build plate. Bambu Studio
++// has been single-pass since 1.x; matching that here.
++#if 0
+     for (int i=0;i<5;++i) {
+         save_on_last_wipe();
+         plan_tower();
+@@ -2396,9 +2803,10 @@ void WipeTower2::generate(std::vector<std::vector<WipeTower::ToolChangeResult>>
+     m_used_filament_length_until_layer.emplace_back(0.f, m_used_filament_length);
+ 
+     m_old_temperature = -1; // reset last temperature written in the gcode
++    m_last_wall_extruder = -1; // OrcaXR Phase D.2: reset wall-continuity tracker
+ 
+-	for (const WipeTower2::WipeTowerInfo& layer : m_plan)
+-	{
++    for (int layer_idx = 0; layer_idx < int(m_plan.size()); ++layer_idx) {
++        const WipeTower2::WipeTowerInfo& layer = m_plan[layer_idx];
+         std::vector<WipeTower::ToolChangeResult> layer_result;
+         set_layer(layer.z, layer.height, 0, false/*layer.z == m_plan.front().z*/, layer.z == m_plan.back().z);
+         m_internal_rotation += 180.f;
+@@ -2406,7 +2814,11 @@ void WipeTower2::generate(std::vector<std::vector<WipeTower::ToolChangeResult>>
+         if (m_layer_info->depth < m_wipe_tower_depth - m_perimeter_width)
+ 			m_y_shift = (m_wipe_tower_depth-m_layer_info->depth-m_perimeter_width)/2.f;
+ 
+-        int idx = first_toolchange_to_nonsoluble(layer.tool_changes);
++        // OrcaXR Phase D.2 (PR #222 port): pick wall extruder using material
++        // continuity, with a one-layer lookahead.
++        const WipeTowerInfo* next_layer_info = (layer_idx + 1 < int(m_plan.size())) ? &m_plan[layer_idx + 1] : nullptr;
++        int idx = select_wall_extruder_idx(layer.tool_changes, next_layer_info);
++        const size_t old_tool_at_layer_start = m_current_tool;
+         WipeTower::ToolChangeResult finish_layer_tcr;
+ 
+         if (idx == -1) {
+@@ -2435,6 +2847,13 @@ void WipeTower2::generate(std::vector<std::vector<WipeTower::ToolChangeResult>>
+                 layer_result[idx] = merge_tcr(layer_result[idx], finish_layer_tcr);
+         }
+ 
++        // OrcaXR Phase D.2: remember which extruder drew this layer's wall
++        // so the next layer's selector can prefer the same material.
++        if (idx >= 0)
++            m_last_wall_extruder = int(layer.tool_changes[idx].new_tool);
++        else if (old_tool_at_layer_start < m_filpar.size() && !m_filpar[old_tool_at_layer_start].is_soluble)
++            m_last_wall_extruder = int(old_tool_at_layer_start);
++
+ 		result.emplace_back(std::move(layer_result));
+ 
+         if (m_used_filament_length_until_layer.empty() || m_used_filament_length_until_layer.back().first != layer.z)
+diff --git a/src/libslic3r/GCode/WipeTower2.hpp b/src/libslic3r/GCode/WipeTower2.hpp
+index 7060eefa4a..1039cd5d87 100644
+--- a/src/libslic3r/GCode/WipeTower2.hpp
++++ b/src/libslic3r/GCode/WipeTower2.hpp
+@@ -52,6 +52,13 @@ public:
+ 	// to be used before building begins. The entries must be added ordered in z.
+     void plan_toolchange(float z_par, float layer_height_par, unsigned int old_tool, unsigned int new_tool, float wipe_volume = 0.f);
+ 
++    // FullSpectrum Local-Z (patch 0053): adds per-sublayer purge planning
++    // calls. plan_local_z_toolchange queues a tool-change emission inside
++    // the current nominal layer (sub-Z); plan_local_z_reserve pre-allocates
++    // slots when the exact toolchange count is unknown.
++    void plan_local_z_toolchange(float z_par, float layer_height_par, unsigned int old_tool, unsigned int new_tool, float wipe_volume = 0.f);
++    void plan_local_z_reserve(float z_par, float layer_height_par, size_t reserve_slot_count, float wipe_volume = 0.f);
++
+ 	// Iterates through prepared m_plan, generates ToolChangeResults and appends them to "result"
+ 	void generate(std::vector<std::vector<WipeTower::ToolChangeResult>> &result);
+ 
+@@ -206,6 +213,9 @@ private:
+ 	float  m_wipe_tower_cone_angle = 0.f;
+     float  m_wipe_tower_brim_width      = 0.f; 	// Width of brim (mm) from config
+     float  m_wipe_tower_brim_width_real = 0.f; 	// Width of brim (mm) after generation
++    // OrcaXR Phase D.1 (PR #131 port): chamfer brim around the prime tower.
++    bool   m_prime_tower_brim_chamfer          = true;   // gradual brim reduction enabled
++    float  m_prime_tower_brim_chamfer_max_width = 4.f;   // mm — taper zone half-width
+     BoundingBoxf m_first_layer_bbx;              // Actual first-layer bounding box (incl. brim/ribs)
+ 	float  m_wipe_tower_rotation_angle = 0.f; // Wipe tower rotation angle in degrees (with respect to x axis)
+     float  m_internal_rotation  = 0.f;
+@@ -275,6 +285,10 @@ private:
+ 	float			m_extra_flow      = 1.f;
+ 	float			m_extra_spacing_wipe    = 1.f;
+ 	float			m_extra_spacing_ramming = 1.f;
++	// FullSpectrum Local-Z (patch 0053): perimeter-line count to reserve
++	// for each Local-Z purge slot. Set from PrintConfig at construction
++	// time. Default mirrors FS v0.9.9 (3 lines).
++	float			m_local_z_wipe_tower_purge_lines = 3.f;
+ 
+     bool is_first_layer() const { return size_t(m_layer_info - m_plan.begin()) == m_first_layer_idx; }
+ 
+@@ -309,9 +323,30 @@ private:
+ 		float z;		// z position of the layer
+ 		float height;	// layer height
+ 		float depth;	// depth of the layer based on all layers above
+-		float toolchanges_depth() const { float sum = 0.f; for (const auto &a : tool_changes) sum += a.required_depth; return sum; }
++		// FullSpectrum Local-Z (patch 0053): toolchanges_depth() now sums
++		// only "normal" (non-Local-Z) tool changes; full planned depth is
++		// queried via planned_depth() so reserve slots + Local-Z purges
++		// count too.
++		float normal_toolchanges_depth() const { float sum = 0.f; for (const auto &a : tool_changes) sum += a.required_depth; return sum; }
++		float toolchanges_depth() const { return normal_toolchanges_depth() + local_z_toolchanges_depth(); }
++		float local_z_toolchanges_depth() const { float sum = 0.f; for (const auto &a : local_z_tool_changes) sum += a.required_depth; return sum; }
++		float local_z_reserve_depth() const { return local_z_reserve_slot_depth * float(local_z_reserve_slot_count); }
++		float planned_depth() const { return normal_toolchanges_depth() + local_z_toolchanges_depth() + local_z_reserve_depth(); }
+ 
+ 		std::vector<ToolChange> tool_changes;
++		// FullSpectrum Local-Z (patch 0053): sub-layer purge sequences
++		// emitted by plan_local_z_toolchange() — kept separate from the
++		// "normal" tool_changes so the wipe-tower planner can size /
++		// account for them independently of the layer's main toolchange
++		// pattern.
++		std::vector<ToolChange> local_z_tool_changes;
++		// Reserve slot depth + count for Local-Z purge planning: when the
++		// planner doesn't know yet exactly which tools will purge in the
++		// sub-layers it pre-reserves a slot of `local_z_reserve_slot_depth`
++		// per reserve unit so the wipe tower has room even if a purge is
++		// added late.
++		float  local_z_reserve_slot_depth { 0.f };
++		size_t local_z_reserve_slot_count { 0 };
+ 
+ 		WipeTowerInfo(float z_par, float layer_height_par)
+ 			: z{z_par}, height{layer_height_par}, depth{0} {}
+@@ -328,11 +363,46 @@ private:
+     std::vector<float> m_used_filament_length;
+ 	std::vector<std::pair<float, std::vector<float>>> m_used_filament_length_until_layer;
+ 
++    // OrcaXR Phase D.2 (PR #222 port): tracks the extruder used to draw
++    // the previous layer's wipe-tower wall so that select_wall_extruder_idx
++    // can prefer material continuity. -1 = no previous wall yet.
++    int m_last_wall_extruder = -1;
++
+     // Return index of first toolchange that switches to non-soluble extruder
+     // ot -1 if there is no such toolchange.
+     int first_toolchange_to_nonsoluble(
+             const std::vector<WipeTowerInfo::ToolChange>& tool_changes) const;
+ 
++    // OrcaXR Phase D.2 (PR #222 port): pick which toolchange index gets the
++    // wall (finish_layer) extrusion. Returns idx>=0 to draw the wall after
++    // tool_changes[idx], or -1 to draw before all toolchanges (using old_tool).
++    // Priority order: 1) same material as previous layer's wall (preferring
++    // exact same extruder), 2) material that also appears in next layer,
++    // 3) fallback to first non-soluble toolchange.
++    int select_wall_extruder_idx(
++            const std::vector<WipeTowerInfo::ToolChange>& tool_changes,
++            const WipeTowerInfo* next_layer_info) const;
++
++    // FullSpectrum Local-Z (patch 0054 — LZ4b): combined-vector helpers
++    // that union the legacy tool_changes vector with local_z_tool_changes
++    // before answering the query, so callers can treat the layer as a
++    // whole regardless of whether a purge is normal or Local-Z.
++    bool  layer_has_soluble_toolchange(const WipeTowerInfo &layer) const;
++    float cumulative_toolchange_depth_before(const WipeTowerInfo::ToolChange *tool_change) const;
++
++    // FullSpectrum Local-Z (patch 0055 — LZ4c): emits the gcode for one
++    // Local-Z purge inside a caller-supplied cleaning box. Mirrors
++    // tool_change() but takes the box + wipe volume directly (no plan
++    // lookup) so the LZ5 wiring can drive per-sub-Z purges from the
++    // reserve boxes returned by get_local_z_reserve_boxes().
++    WipeTower::ToolChangeResult local_z_tool_change(size_t new_tool,
++                                                    const WipeTower::box_coordinates &cleaning_box,
++                                                    float wipe_volume);
++    // Returns a per-layer list of pre-reserved Local-Z purge boxes,
++    // sized from WipeTowerInfo::local_z_reserve_slot_depth/count. The
++    // LZ5 wiring routes per-sub-Z purges into these boxes.
++    std::vector<std::vector<WipeTower::box_coordinates>> get_local_z_reserve_boxes() const;
++
+ 	void toolchange_Unload(
+ 		WipeTowerWriter2 &writer,
+ 		const WipeTower::box_coordinates  &cleaning_box, 
