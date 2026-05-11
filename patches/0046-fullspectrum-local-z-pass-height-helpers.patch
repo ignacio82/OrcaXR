@@ -1,0 +1,455 @@
+diff --git a/src/libslic3r/PrintObjectSlice.cpp b/src/libslic3r/PrintObjectSlice.cpp
+index e1f37a17c5..20d72286a0 100644
+--- a/src/libslic3r/PrintObjectSlice.cpp
++++ b/src/libslic3r/PrintObjectSlice.cpp
+@@ -131,6 +131,450 @@ static coordf_t clamped_mixed_component_surface_offset(const MixedFilamentManage
+     return std::clamp(offset_mm, -limit_mm, limit_mm);
+ }
+ 
++// =================================================================
++// OrcaXR Android (FullSpectrum Local-Z, patch 0046 — LZ3 helpers batch 2).
++// Pass-height math: redistributes a nominal layer's vertical budget
++// across N sub-passes while honoring the per-pass [lo, hi] envelope.
++// All helpers static, dead code until build_local_z_plan consumes them.
++// Source: FS v0.9.9 PrintObjectSlice.cpp lines 1199-1595.
++// =================================================================
++
++// Distributes a residual `delta` into a pass-height vector so the
++// sum equals `base_height` while keeping each entry inside [lo, hi].
++// Adjusts the last pass first, then back-fills from the top down if
++// the residual is too large to absorb in one slot.
++static bool fit_pass_heights_to_interval(std::vector<double> &passes, double base_height, double lo, double hi)
++{
++    if (passes.empty() || base_height <= EPSILON)
++        return false;
++
++    double sum = std::accumulate(passes.begin(), passes.end(), 0.0);
++    double delta = base_height - sum;
++
++    auto within = [lo, hi](double h) { return h >= lo - EPSILON && h <= hi + EPSILON; };
++    if (std::abs(delta) > EPSILON) {
++        if (within(passes.back() + delta)) {
++            passes.back() += delta;
++            delta = 0.0;
++        } else if (delta > 0.0) {
++            for (size_t i = passes.size(); i > 0 && delta > EPSILON; --i) {
++                double &h = passes[i - 1];
++                const double room = hi - h;
++                if (room <= EPSILON)
++                    continue;
++                const double take = std::min(room, delta);
++                h += take;
++                delta -= take;
++            }
++        } else {
++            for (size_t i = passes.size(); i > 0 && delta < -EPSILON; --i) {
++                double &h = passes[i - 1];
++                const double room = h - lo;
++                if (room <= EPSILON)
++                    continue;
++                const double take = std::min(room, -delta);
++                h -= take;
++                delta += take;
++            }
++        }
++    }
++
++    if (std::abs(delta) > 1e-6)
++        return false;
++    return std::all_of(passes.begin(), passes.end(), within);
++}
++
++// Clamps each entry into [0.01, max(0.01, upper_bound)] then re-fits
++// to the nominal base height. Used as a final-stage scrubber after
++// gradient/manual pattern construction emits raw values.
++static bool sanitize_local_z_pass_heights(std::vector<double> &passes, double base_height, double lower_bound, double upper_bound)
++{
++    if (passes.empty() || base_height <= EPSILON)
++        return false;
++
++    const double lo = std::max<double>(0.01, lower_bound);
++    const double hi = std::max<double>(lo, upper_bound);
++    for (double &h : passes) {
++        if (!std::isfinite(h))
++            h = lo;
++        h = std::clamp(h, lo, hi);
++    }
++    return fit_pass_heights_to_interval(passes, base_height, lo, hi);
++}
++
++// Picks an evenly-spaced pass count for the [lo, hi] envelope, then
++// emits N equal-height entries with the residual epsilon parked at
++// the top entry. Caps at `max_passes_limit` (0 = unlimited).
++static std::vector<double> build_uniform_local_z_pass_heights(double base_height,
++                                                              double lo,
++                                                              double hi,
++                                                              size_t max_passes_limit = 0)
++{
++    std::vector<double> out;
++    if (base_height <= EPSILON)
++        return out;
++
++    size_t min_passes = size_t(std::max<double>(1.0, std::ceil((base_height - EPSILON) / hi)));
++    size_t max_passes = size_t(std::max<double>(1.0, std::floor((base_height + EPSILON) / lo)));
++    size_t pass_count = min_passes;
++
++    if (max_passes >= min_passes) {
++        const double target_step = 0.5 * (lo + hi);
++        const size_t target_passes =
++            size_t(std::max<double>(1.0, std::llround(base_height / std::max<double>(target_step, EPSILON))));
++        pass_count = std::clamp(target_passes, min_passes, max_passes);
++    }
++
++    if (max_passes_limit > 0) {
++        const size_t capped_limit = std::max<size_t>(1, max_passes_limit);
++        if (pass_count > capped_limit)
++            pass_count = capped_limit;
++    }
++
++    if (pass_count == 1 && base_height >= 2.0 * lo - EPSILON && max_passes >= 2)
++        pass_count = 2;
++
++    if (pass_count <= 1) {
++        out.emplace_back(base_height);
++        return out;
++    }
++
++    const double uniform_height = base_height / double(pass_count);
++    out.assign(pass_count, uniform_height);
++
++    // Keep the accumulated numeric error at the very top of the interval.
++    double accumulated = 0.0;
++    for (size_t i = 0; i + 1 < out.size(); ++i)
++        accumulated += out[i];
++    out.back() = std::max<double>(EPSILON, base_height - accumulated);
++    return out;
++}
++
++// Uniform splitter with a caller-fixed pass count (vs the auto-chosen
++// count in build_uniform_local_z_pass_heights). Returns empty if the
++// requested count cannot satisfy the [lo, hi] envelope at all.
++static std::vector<double> build_uniform_local_z_pass_heights_exact(double base_height,
++                                                                    double lower_bound,
++                                                                    double upper_bound,
++                                                                    size_t pass_count)
++{
++    if (base_height <= EPSILON || pass_count == 0)
++        return {};
++
++    const double lo = std::max<double>(0.01, lower_bound);
++    const double hi = std::max<double>(lo, upper_bound);
++    if (pass_count == 1)
++        return { base_height };
++
++    if (double(pass_count) * lo > base_height + EPSILON || double(pass_count) * hi < base_height - EPSILON)
++        return {};
++
++    std::vector<double> out(pass_count, base_height / double(pass_count));
++    if (!fit_pass_heights_to_interval(out, base_height, lo, hi))
++        return {};
++    return out;
++}
++
++// Maps the 0..100 mix_b percentage onto a pair of pass heights inside
++// [lo, hi]: 0% → (hi, lo), 100% → (lo, hi). Used by gradient mode to
++// pick the per-component pass heights before alternating starts.
++static inline void compute_local_z_gradient_component_heights(int mix_b_percent, double lower_bound, double upper_bound,
++                                                              double &h_a, double &h_b)
++{
++    const int mix_b = std::clamp(mix_b_percent, 0, 100);
++    const double pct_b = double(mix_b) / 100.0;
++    const double pct_a = 1.0 - pct_b;
++    const double lo    = std::max<double>(0.01, lower_bound);
++    const double hi    = std::max<double>(lo, upper_bound);
++    h_a = lo + pct_a * (hi - lo);
++    h_b = lo + pct_b * (hi - lo);
++}
++
++// Decides whether the first sub-pass should carry component A or
++// component B by minimizing absolute error vs the expected gradient
++// heights. Ties on equal-split layers preserve row cadence so the
++// A/B/A/B sequence doesn't flip between adjacent nominal layers.
++static bool choose_local_z_start_with_component_a(const std::vector<double> &pass_heights,
++                                                  double                     expected_h_a,
++                                                  double                     expected_h_b,
++                                                  size_t                     cadence_index)
++{
++    double err_ab = 0.0;
++    double err_ba = 0.0;
++    for (size_t pass_i = 0; pass_i < pass_heights.size(); ++pass_i) {
++        const double expected_ab = (pass_i % 2) == 0 ? expected_h_a : expected_h_b;
++        const double expected_ba = (pass_i % 2) == 0 ? expected_h_b : expected_h_a;
++        err_ab += std::abs(pass_heights[pass_i] - expected_ab);
++        err_ba += std::abs(pass_heights[pass_i] - expected_ba);
++    }
++
++    if (err_ab + 1e-6 < err_ba)
++        return true;
++    if (err_ba + 1e-6 < err_ab)
++        return false;
++
++    // When the requested component heights are equal (for example 50/50),
++    // either A/B or B/A is numerically identical. Preserve the existing
++    // row cadence so equal-split layers keep the normal local-Z A/B/A/B
++    // sequence instead of flipping AB|BA between nominal layers.
++    if (std::abs(expected_h_a - expected_h_b) <= 1e-6) {
++        return (cadence_index % 2) == 0;
++    }
++
++    return expected_h_a >= expected_h_b;
++}
++
++// Builds an alternating (A, B, A, B, ...) pass-height sequence that
++// approximates the target gradient ratio while keeping every entry
++// inside [lo, hi] and the sum equal to base_height. Searches every
++// valid even pass count and picks the one minimizing ratio error,
++// then pass-count distance to a target, then max-height. Falls back
++// to the uniform splitter if no even count satisfies the envelope.
++static std::vector<double> build_local_z_alternating_pass_heights(double base_height,
++                                                                   double lower_bound,
++                                                                   double upper_bound,
++                                                                   double gradient_h_a,
++                                                                   double gradient_h_b,
++                                                                   size_t max_passes_limit = 0)
++{
++    if (base_height <= EPSILON)
++        return {};
++
++    const double lo = std::max<double>(0.01, lower_bound);
++    const double hi = std::max<double>(lo, upper_bound);
++    if (base_height < 2.0 * lo - EPSILON)
++        return { base_height };
++
++    const double cycle_h = std::max<double>(EPSILON, gradient_h_a + gradient_h_b);
++    const double ratio_a = std::clamp(gradient_h_a / cycle_h, 0.0, 1.0);
++
++    size_t min_passes = size_t(std::max<double>(2.0, std::ceil((base_height - EPSILON) / hi)));
++    if ((min_passes % 2) != 0)
++        ++min_passes;
++
++    size_t max_passes = size_t(std::max<double>(2.0, std::floor((base_height + EPSILON) / lo)));
++    if ((max_passes % 2) != 0)
++        --max_passes;
++    if (max_passes_limit > 0) {
++        size_t capped_limit = std::max<size_t>(2, max_passes_limit);
++        if ((capped_limit % 2) != 0)
++            --capped_limit;
++        if (capped_limit >= 2)
++            max_passes = std::min(max_passes, capped_limit);
++    }
++    if (max_passes < 2)
++        return build_uniform_local_z_pass_heights(base_height, lo, hi, max_passes_limit);
++    if (min_passes > max_passes)
++        min_passes = max_passes;
++    if (min_passes < 2)
++        min_passes = 2;
++    if ((min_passes % 2) != 0)
++        ++min_passes;
++    if (min_passes > max_passes)
++        return build_uniform_local_z_pass_heights(base_height, lo, hi, max_passes_limit);
++
++    const double target_step = 0.5 * (lo + hi);
++    size_t target_passes =
++        size_t(std::max<double>(2.0, std::llround(base_height / std::max<double>(target_step, EPSILON))));
++    if ((target_passes % 2) != 0) {
++        const size_t round_up = (target_passes < max_passes) ? (target_passes + 1) : max_passes;
++        const size_t round_down = (target_passes > min_passes) ? (target_passes - 1) : min_passes;
++        if (round_up > max_passes)
++            target_passes = round_down;
++        else if (round_down < min_passes)
++            target_passes = round_up;
++        else {
++            const size_t up_dist = round_up - target_passes;
++            const size_t down_dist = target_passes - round_down;
++            target_passes = (up_dist <= down_dist) ? round_up : round_down;
++        }
++    }
++    target_passes = std::clamp(target_passes, min_passes, max_passes);
++
++    bool                has_best             = false;
++    std::vector<double> best_passes;
++    double              best_ratio_error     = 0.0;
++    size_t              best_pass_distance   = 0;
++    double              best_max_height      = 0.0;
++    size_t              best_pass_count      = 0;
++
++    for (size_t pass_count = min_passes; pass_count <= max_passes; pass_count += 2) {
++        const size_t pair_count = pass_count / 2;
++        if (pair_count == 0)
++            continue;
++        const double pair_h = base_height / double(pair_count);
++
++        const double h_a_min = std::max(lo, pair_h - hi);
++        const double h_a_max = std::min(hi, pair_h - lo);
++        if (h_a_min > h_a_max + EPSILON)
++            continue;
++
++        const double h_a = std::clamp(pair_h * ratio_a, h_a_min, h_a_max);
++        const double h_b = pair_h - h_a;
++
++        std::vector<double> out;
++        out.reserve(pass_count);
++        for (size_t pair_idx = 0; pair_idx < pair_count; ++pair_idx) {
++            out.emplace_back(h_a);
++            out.emplace_back(h_b);
++        }
++        if (!fit_pass_heights_to_interval(out, base_height, lo, hi))
++            continue;
++
++        const double ratio_actual = (h_a + h_b > EPSILON) ? (h_a / (h_a + h_b)) : 0.5;
++        const double ratio_error  = std::abs(ratio_actual - ratio_a);
++        const size_t pass_distance =
++            (pass_count > target_passes) ? (pass_count - target_passes) : (target_passes - pass_count);
++        const double max_height = std::max(h_a, h_b);
++
++        const bool better_ratio    = !has_best || (ratio_error + 1e-6 < best_ratio_error);
++        const bool similar_ratio   = has_best && std::abs(ratio_error - best_ratio_error) <= 1e-6;
++        const bool better_distance = similar_ratio && (pass_distance < best_pass_distance);
++        const bool similar_distance = similar_ratio && (pass_distance == best_pass_distance);
++        const bool better_max_height = similar_distance && (max_height + 1e-6 < best_max_height);
++        const bool similar_max_height = similar_distance && std::abs(max_height - best_max_height) <= 1e-6;
++        const bool better_pass_count = similar_max_height && (pass_count > best_pass_count);
++
++        if (better_ratio || better_distance || better_max_height || better_pass_count) {
++            has_best = true;
++            best_passes = std::move(out);
++            best_ratio_error = ratio_error;
++            best_pass_distance = pass_distance;
++            best_max_height = max_height;
++            best_pass_count = pass_count;
++        }
++    }
++
++    if (has_best)
++        return best_passes;
++    return build_uniform_local_z_pass_heights(base_height, lo, hi, max_passes_limit);
++}
++
++// 2-pass variant of the alternating builder: skips the search loop
++// and emits a single (h_a, h_b) pair scaled by the gradient ratio.
++// Falls back to a single full-height pass if the envelope can't host
++// two passes at this base_height.
++static std::vector<double> build_local_z_two_pass_heights(double base_height,
++                                                          double lower_bound,
++                                                          double upper_bound,
++                                                          double gradient_h_a,
++                                                          double gradient_h_b)
++{
++    if (base_height <= EPSILON)
++        return {};
++
++    const double lo = std::max<double>(0.01, lower_bound);
++    const double hi = std::max<double>(lo, upper_bound);
++    if (base_height < 2.0 * lo - EPSILON || base_height > 2.0 * hi + EPSILON)
++        return { base_height };
++
++    const double cycle_h = std::max<double>(EPSILON, gradient_h_a + gradient_h_b);
++    const double ratio_a = std::clamp(gradient_h_a / cycle_h, 0.0, 1.0);
++
++    const double h_a_min = std::max(lo, base_height - hi);
++    const double h_a_max = std::min(hi, base_height - lo);
++    if (h_a_min > h_a_max + EPSILON)
++        return { base_height };
++
++    const double h_a = std::clamp(base_height * ratio_a, h_a_min, h_a_max);
++    const double h_b = base_height - h_a;
++
++    std::vector<double> out { h_a, h_b };
++    if (!fit_pass_heights_to_interval(out, base_height, lo, hi))
++        return { base_height };
++    return out;
++}
++
++// Shared (dense multi-zone) builder: emits one pair (lo, base-lo)
++// for the whole nominal layer instead of alternating per-pair. Used
++// when many painted zones share a layer and the cycle has to be
++// stable across zones.
++static std::vector<double> build_local_z_shared_pass_heights(double base_height, double lower_bound, double upper_bound)
++{
++    if (base_height <= EPSILON)
++        return {};
++
++    const double lo = std::max<double>(0.01, lower_bound);
++    const double hi = std::max<double>(lo, upper_bound);
++    if (base_height < 2.0 * lo - EPSILON)
++        return { base_height };
++
++    // In shared (dense multi-zone) mode keep a single pair of pass planes for
++    // the whole nominal layer, anchored to the configured lower / upper bounds.
++    double h_small = lo;
++    double h_large = base_height - h_small;
++    if (h_large > hi + EPSILON) {
++        h_large = hi;
++        h_small = base_height - h_large;
++    }
++    if (h_small < lo - EPSILON || h_small > hi + EPSILON ||
++        h_large < lo - EPSILON || h_large > hi + EPSILON)
++        return build_uniform_local_z_pass_heights(base_height, lo, hi);
++
++    std::vector<double> out { h_small, h_large };
++    if (!fit_pass_heights_to_interval(out, base_height, lo, hi))
++        return build_uniform_local_z_pass_heights(base_height, lo, hi);
++    if (out.size() == 2 && out[0] > out[1])
++        std::swap(out[0], out[1]);
++    return out;
++}
++
++// Dispatch: when caller supplies preferred per-component heights,
++// emit a repeating cadence until base_height fills; otherwise fall
++// back to uniform passes. If the cadence overshoots max_passes_limit,
++// retry through the alternating builder which honors the cap.
++static std::vector<double> build_local_z_pass_heights(double base_height,
++                                                      double lower_bound,
++                                                      double upper_bound,
++                                                      double preferred_a,
++                                                      double preferred_b,
++                                                      size_t max_passes_limit = 0)
++{
++    if (base_height <= EPSILON)
++        return {};
++
++    const double lo = std::max<double>(0.01, lower_bound);
++    const double hi = std::max<double>(lo, upper_bound);
++
++    std::vector<double> cadence_unit;
++    if (preferred_a > EPSILON)
++        cadence_unit.push_back(std::clamp(preferred_a, lo, hi));
++    if (preferred_b > EPSILON)
++        cadence_unit.push_back(std::clamp(preferred_b, lo, hi));
++
++    if (!cadence_unit.empty()) {
++        std::vector<double> out;
++        out.reserve(size_t(std::ceil(base_height / lo)) + 2);
++
++        double z_used = 0.0;
++        size_t idx = 0;
++        size_t guard = 0;
++        while (z_used + cadence_unit[idx] < base_height - EPSILON && guard++ < 100000) {
++            out.push_back(cadence_unit[idx]);
++            z_used += cadence_unit[idx];
++            idx = (idx + 1) % cadence_unit.size();
++        }
++
++        const double remainder = base_height - z_used;
++        if (remainder > EPSILON)
++            out.push_back(remainder);
++
++        if (fit_pass_heights_to_interval(out, base_height, lo, hi) &&
++            (max_passes_limit == 0 || out.size() <= max_passes_limit))
++            return out;
++
++        if (max_passes_limit > 0 && preferred_a > EPSILON && preferred_b > EPSILON)
++            return build_local_z_alternating_pass_heights(base_height,
++                                                          lower_bound,
++                                                          upper_bound,
++                                                          preferred_a,
++                                                          preferred_b,
++                                                          max_passes_limit);
++    }
++
++    return build_uniform_local_z_pass_heights(base_height, lo, hi, max_passes_limit);
++}
++
+ LayerPtrs new_layers(
+     PrintObject                 *print_object,
+     // Object layers (pairs of bottom/top Z coordinate), without the raft.
