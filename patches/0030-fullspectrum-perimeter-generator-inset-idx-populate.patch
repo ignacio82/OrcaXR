@@ -1,0 +1,57 @@
+Phase 2 (FullSpectrum engine emission, P2B): populate inset_idx on
+Loops and MultiPaths emitted by PerimeterGenerator::traverse_extrusions.
+
+Adds 8 lines that copy `extrusion->inset_idx` onto every ExtrusionPath
+in `paths`, the wrapper ExtrusionLoop / ExtrusionMultiPath, and any
+intermediate MultiPath splits. Without this the FullSpectrum
+Pointillisme router (decides outer-wall vs inner-wall extruder
+routing) and the existing Orca inner/outer ordering pass both see
+inset_idx == -1 for every emitted perimeter — they fall back to
+default extruder selection.
+
+Mechanical port from FS v0.9.9
+(`ratdoux/OrcaSlicer-FullSpectrum@v0.9.9` commit b3c41fda),
+`src/libslic3r/PerimeterGenerator.cpp` lines 510-544. Companion to
+patch 0029 (ExtrusionEntity.hpp inset_idx propagation through
+copy/move/assignment).
+
+diff --git a/src/libslic3r/PerimeterGenerator.cpp b/src/libslic3r/PerimeterGenerator.cpp
+index cc055c9d8a..6db47acb54 100644
+--- a/src/libslic3r/PerimeterGenerator.cpp
++++ b/src/libslic3r/PerimeterGenerator.cpp
+@@ -509,6 +509,13 @@ static ExtrusionEntityCollection traverse_extrusions(const PerimeterGenerator& p
+ 
+         // Append paths to collection.
+         if (!paths.empty()) {
++            // OrcaXR Android (FullSpectrum Pointillisme patch 0029).
++            // Tag every output path with its perimeter index so the
++            // FS XY-stripe router can identify outer vs inner walls.
++            const int inset_idx = int(extrusion->inset_idx);
++            for (ExtrusionPath &path : paths)
++                path.inset_idx = inset_idx;
++
+             if (extrusion->is_closed) {
+                 ExtrusionLoop extrusion_loop(std::move(paths), pg_extrusion.is_contour ? elrDefault : elrHole);
+                 extrusion_loop.make_counter_clockwise();
+@@ -520,6 +527,7 @@ static ExtrusionEntityCollection traverse_extrusions(const PerimeterGenerator& p
+                 }
+                 assert(extrusion_loop.paths.front().first_point() == extrusion_loop.paths.back().last_point());
+ 
++                extrusion_loop.inset_idx = inset_idx;
+                 extrusion_coll.append(std::move(extrusion_loop));
+             }
+             else {
+@@ -532,11 +540,13 @@ static ExtrusionEntityCollection traverse_extrusions(const PerimeterGenerator& p
+                 }
+                 ExtrusionMultiPath multi_path;
+                 multi_path.paths.emplace_back(std::move(paths.front()));
++                multi_path.inset_idx = inset_idx;
+ 
+                 for (auto it_path = std::next(paths.begin()); it_path != paths.end(); ++it_path) {
+                     if (multi_path.paths.back().last_point() != it_path->first_point()) {
+                         extrusion_coll.append(ExtrusionMultiPath(std::move(multi_path)));
+                         multi_path = ExtrusionMultiPath();
++                        multi_path.inset_idx = inset_idx;
+                     }
+                     multi_path.paths.emplace_back(std::move(*it_path));
+                 }

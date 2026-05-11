@@ -27,7 +27,7 @@ When you ship a feature: collapse its full entry to a one-line row in the append
 
 ## A. Slicing engine correctness & libslic3r parity
 
-### A2. FullSpectrum engine emission 🟡 Partial — LayerCycle wired via existing patch stack; Pointillisme + Local-Z still need planner port
+### A2. FullSpectrum engine emission 🟡 Partial — LayerCycle wired via existing patch stack; Pointillisme is `#if 0`'d upstream; Local-Z still needs ~5000 LoC planner port
 
 > **Patches required (new):** `0027-fullspectrum-printconfig-region-keys.patch`, `0028-fullspectrum-tool-ordering-emission.patch`, `0029-fullspectrum-printobjectslice-sublayer-planner.patch` (+4062 LoC), `0030-fullspectrum-print-object-and-print.patch` (+1426), `0031-fullspectrum-multimaterial-segmentation.patch`, `0032-fullspectrum-gcode-emission.patch` (+1885), `0033-fullspectrum-wipe-tower-purge.patch` (+350), `0034-fullspectrum-bbs3mf-roundtrip.patch`.
 
