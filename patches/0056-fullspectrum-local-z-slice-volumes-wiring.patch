@@ -1,0 +1,52 @@
+diff --git a/src/libslic3r/PrintObjectSlice.cpp b/src/libslic3r/PrintObjectSlice.cpp
+index 76f8336dfd..4a947ce5af 100644
+--- a/src/libslic3r/PrintObjectSlice.cpp
++++ b/src/libslic3r/PrintObjectSlice.cpp
+@@ -4099,6 +4099,47 @@ void PrintObject::slice_volumes()
+         apply_mm_segmentation(*this, [print]() { print->throw_if_canceled(); });
+     }
+ 
++    // =============================================================
++    // OrcaXR Android (FullSpectrum Local-Z, patch 0056 — LZ5a wiring).
++    // Drives the Local-Z planner whenever dithering_local_z_mode is on
++    // and the model uses (a) mixed/virtual filaments via the painted
++    // wall path. Computes the "wall segmentation" baseline via
++    // whole_object_local_z_segmentation_by_mixed_wall (FS helper
++    // landed in patch 0051), then hands it to build_local_z_plan
++    // (patch 0052). The resulting LocalZInterval + SubLayerPlan
++    // records are stashed on the PrintObject via
++    // set_local_z_plan() — consumption is wired into GCode.cpp by
++    // patch 0057 (LZ5b Z-walk emission).
++    //
++    // Painted-Local-Z (FS line 5005, where the mm_segmentation is
++    // merged in via local_z_planner_segmentation_with_whole_object_mixed_wall)
++    // is deferred to LZ5c — needs apply_mm_segmentation refactored to
++    // expose the intermediate segmentation grid; the whole-object path
++    // is enough to validate the engine end-to-end first.
++    {
++        const Print *print = this->print();
++        if (print != nullptr) {
++            const DynamicPrintConfig &full_cfg  = print->full_print_config();
++            const PrintConfig        &print_cfg = print->config();
++            const bool local_z_mode =
++                full_cfg.has("dithering_local_z_mode")
++                    ? full_cfg.opt_bool("dithering_local_z_mode")
++                    : print_cfg.dithering_local_z_mode.value;
++            if (local_z_mode && this->local_z_intervals().empty()) {
++                std::vector<std::vector<ExPolygons>> whole_object_local_z_segmentation =
++                    whole_object_local_z_segmentation_by_mixed_wall(*this);
++                if (!whole_object_local_z_segmentation.empty())
++                    build_local_z_plan(*this, whole_object_local_z_segmentation, [print]() { print->throw_if_canceled(); });
++            }
++        }
++    }
++
++    // FullSpectrum mixed-filament region surface offsets (patch 0050).
++    // Runs after Local-Z but is gated off internally whenever Local-Z
++    // is enabled (Local-Z handles surface offsetting natively per
++    // sublayer).
++    apply_mixed_region_surface_offsets(*this);
++
+     // Is any ModelVolume fuzzy skin painted?
+     if (this->model_object()->is_fuzzy_skin_painted()) {
+         // If XY Size compensation is also enabled, notify the user that XY Size compensation
