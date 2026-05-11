@@ -1,0 +1,175 @@
+Phase 2 (FullSpectrum Local-Z, LZ1+LZ2): introduce the Local-Z planner
+state types in Print.hpp.
+
+Three additions (combines two task units LZ1 + LZ2 since both touch
+the same file):
+
+1. `struct LocalZInterval` — describes one source layer's Local-Z plan:
+   layer_id, z_lo / z_hi span, base_height, sublayer_height,
+   has_mixed_paint flag, plus an index range into the PrintObject's
+   m_local_z_sublayer_plan vector for the SubLayerPlan entries.
+
+2. `struct SubLayerPlan` — one sub-slice of a Local-Z interval.
+   Carries per-extruder XY masks (painted_masks_by_extruder), the
+   fixed-pattern masks (fixed_painted_masks_by_extruder for manual
+   pattern entries that mustn't be redistributed by cadence),
+   base_masks for unpainted regions, and dependency_group +
+   dependency_order for LocalZOrderOptimizer (patch 0023) to use
+   when sorting sublayers within a group.
+
+3. `PrintObject` accessors + private members:
+   - `local_z_intervals()` / `local_z_sublayer_plan()` getters
+   - `set_local_z_plan(intervals, sublayers)` mutator
+   - `clear_local_z_plan()` reset
+   - `m_local_z_intervals` + `m_local_z_sublayer_plan` private storage
+
+4. `WipeTowerData::local_z_tool_changes` — per-layer Local-Z purge
+   toolchange sequences, populated by patches 0046+ (WipeTower2
+   plan_local_z_toolchange). Indexed parallel to `tool_changes`;
+   inner vectors hold the purge passes that fire between adjacent
+   sublayers within one source layer's Local-Z interval. Empty for
+   non-Local-Z layers. Cleared in `WipeTowerData::clear()`.
+
+DEAD CODE in isolation: nothing reads from any of these fields yet.
+The PrintObjectSlice.cpp planner (patch 0045) populates them; the
+GCode.cpp Z-walk emitter (patch 0048) consumes them. Until those
+land, this patch is structural scaffolding that survives every slice
+unchanged.
+
+Ported semantically from FS v0.9.9
+(`ratdoux/OrcaSlicer-FullSpectrum@v0.9.9` commit b3c41fda),
+`src/libslic3r/Print.hpp` lines 57-88 (struct definitions),
+431-442 (accessors), 591-593 (members), 777, 791 (WipeTowerData).
+Snapmaker fork pre-introduced LocalZInterval + SubLayerPlan; OrcaXR's
+v2.3.2 base has neither, so this patch is technically a merge of the
+Snapmaker scaffolding + the FS additions (dependency_group/_order +
+fixed_painted_masks_by_extruder).
+
+Verified compile-clean via full libslic3r rebuild (252/252, 0 FAILED)
++ ./gradlew :app:assembleDebug (full APK built).
+
+Companion patches in the Local-Z series (not yet landed):
+  - 0045 PrintObjectSlice.cpp sublayer planner (LZ3)
+  - 0046 WipeTower2 plan_local_z_toolchange (LZ4)
+  - 0047 Print.cpp planner consumption (LZ5a)
+  - 0048 GCode.cpp Z-walk emission (LZ5b)
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+diff --git a/src/libslic3r/Print.hpp b/src/libslic3r/Print.hpp
+index 96343872bc..7d7de55963 100644
+--- a/src/libslic3r/Print.hpp
++++ b/src/libslic3r/Print.hpp
+@@ -60,6 +60,51 @@ struct groupedVolumeSlices
+     ExPolygons              slices;
+ };
+ 
++// OrcaXR Android (FullSpectrum patch 0044). Local-Z dithering planner
++// cache. The sublayer planner subdivides Z intervals containing painted
++// mixed-filament regions into thinner sublayers; the unpainted majority
++// of the print continues at base layer height.
++//
++// LocalZInterval describes one source layer's worth of sublayer plan:
++// the base height, the sublayer thickness, and an index range into the
++// PrintObject's m_local_z_sublayer_plan vector for the actual
++// SubLayerPlan entries.
++struct LocalZInterval
++{
++    size_t layer_id { 0 };
++    double z_lo { 0.0 };
++    double z_hi { 0.0 };
++    double base_height { 0.0 };
++    double sublayer_height { 0.0 };
++    bool   has_mixed_paint { false };
++    size_t first_sublayer_idx { 0 };
++    size_t sublayer_count { 0 };
++};
++
++// SubLayerPlan describes one sub-slice of a Local-Z interval.
++// `painted_masks_by_extruder[i]` carries the XY mask for physical
++// extruder i at this sublayer's print_z. `fixed_painted_masks_by_extruder`
++// is the same but for "fixed" (manual-pattern) component placement
++// that mustn't be redistributed by the cadence resolver. `base_masks`
++// is the unpainted-region mask. `dependency_group` + `dependency_order`
++// let the LocalZOrderOptimizer (patch 0023) sort sublayers within a
++// group to minimize toolchanges.
++struct SubLayerPlan
++{
++    size_t layer_id { 0 };
++    size_t pass_index { 0 };
++    bool   split_interval { false };
++    double z_lo { 0.0 };
++    double z_hi { 0.0 };
++    double print_z { 0.0 };
++    double flow_height { 0.0 };
++    size_t dependency_group { 0 };
++    size_t dependency_order { 0 };
++    std::vector<ExPolygons> painted_masks_by_extruder;
++    std::vector<ExPolygons> fixed_painted_masks_by_extruder;
++    ExPolygons              base_masks;
++};
++
+ enum SupportNecessaryType {
+     NoNeedSupp=0,
+     SharpTail,
+@@ -406,6 +451,26 @@ public:
+     std::shared_ptr<TreeSupportData> alloc_tree_support_preview_cache();
+     void clear_tree_support_preview_cache() { m_tree_support_preview_cache.reset(); }
+ 
++    // OrcaXR Android (FullSpectrum patch 0044). Local-Z planner state
++    // accessors. populated by PrintObjectSlice's sublayer planner;
++    // consumed by Print.cpp wipe-tower coordination + GCode.cpp Z-walk
++    // emission. The intervals describe per-source-layer plans;
++    // the sublayer vector holds the actual SubLayerPlan entries
++    // (interval[i]'s plans live at indices [first_sublayer_idx,
++    // first_sublayer_idx + sublayer_count)).
++    const std::vector<LocalZInterval>& local_z_intervals() const { return m_local_z_intervals; }
++    const std::vector<SubLayerPlan>&   local_z_sublayer_plan() const { return m_local_z_sublayer_plan; }
++    void                                set_local_z_plan(std::vector<LocalZInterval> intervals, std::vector<SubLayerPlan> sublayers)
++    {
++        m_local_z_intervals = std::move(intervals);
++        m_local_z_sublayer_plan = std::move(sublayers);
++    }
++    void                                clear_local_z_plan()
++    {
++        m_local_z_intervals.clear();
++        m_local_z_sublayer_plan.clear();
++    }
++
+     size_t          support_layer_count() const { return m_support_layers.size(); }
+     void            clear_support_layers();
+     SupportLayer*   get_support_layer(int idx) { return idx<m_support_layers.size()? m_support_layers[idx]:nullptr; }
+@@ -563,6 +628,12 @@ private:
+     SupportLayerPtrs                        m_support_layers;
+     // BBS
+     std::shared_ptr<TreeSupportData>        m_tree_support_preview_cache;
++    // OrcaXR Android (FullSpectrum patch 0044). Local-Z planner cache:
++    // intervals describe per-source-layer plans; m_local_z_sublayer_plan
++    // holds the actual SubLayerPlan entries (interval[i]'s plans live at
++    // indices [first_sublayer_idx, first_sublayer_idx + sublayer_count)).
++    std::vector<LocalZInterval>             m_local_z_intervals;
++    std::vector<SubLayerPlan>               m_local_z_sublayer_plan;
+ 
+     // this is set to true when LayerRegion->slices is split in top/internal/bottom
+     // so that next call to make_perimeters() performs a union() before computing loops
+@@ -756,6 +827,12 @@ struct WipeTowerData
+     // Cache of tool changes per print layer.
+     std::unique_ptr<std::vector<WipeTower::ToolChangeResult>> priming;
+     std::vector<std::vector<WipeTower::ToolChangeResult>> tool_changes;
++    // OrcaXR Android (FullSpectrum patch 0044). Per-layer Local-Z
++    // toolchange purge passes scheduled by WipeTower2::plan_local_z_toolchange.
++    // Indexed parallel to tool_changes; each inner vector is the
++    // sequence of purges that fire between adjacent sublayers within
++    // one source layer's Local-Z interval. Empty for non-Local-Z layers.
++    std::vector<std::vector<WipeTower::ToolChangeResult>> local_z_tool_changes;
+     std::unique_ptr<WipeTower::ToolChangeResult>          final_purge;
+     std::vector<float>                                    used_filament;
+     int                                                   number_of_toolchanges;
+@@ -771,6 +848,8 @@ struct WipeTowerData
+     void clear() {
+         priming.reset(nullptr);
+         tool_changes.clear();
++        // OrcaXR Android (FullSpectrum patch 0044).
++        local_z_tool_changes.clear();
+         final_purge.reset(nullptr);
+         used_filament.clear();
+         number_of_toolchanges = -1;
