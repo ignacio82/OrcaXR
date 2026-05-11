@@ -1,0 +1,162 @@
+diff --git a/src/libslic3r/PrintObjectSlice.cpp b/src/libslic3r/PrintObjectSlice.cpp
+index 3bdb5c2a2d..abd2ed6f50 100644
+--- a/src/libslic3r/PrintObjectSlice.cpp
++++ b/src/libslic3r/PrintObjectSlice.cpp
+@@ -1291,6 +1291,157 @@ static LocalZActivePair derive_local_z_active_pair(const MixedFilament
+     return out;
+ }
+ 
++// =================================================================
++// OrcaXR Android (FullSpectrum Local-Z, patch 0049 — LZ3 helpers batch 5).
++// Mask-splitting + layer-region geometry helpers. All static, dead
++// code until apply_pointillism_mixed_segmentation /
++// apply_mixed_region_surface_offsets (later patches) call them.
++// Source: FS v0.9.9 PrintObjectSlice.cpp lines 2230-2568.
++// =================================================================
++
++// Splits `source_masks` into N XY stripes (one per cycle slot), then
++// distributes each stripe to its sequence-mapped physical extruder.
++// Direction alternates per layer (vertical/horizontal) so different
++// model faces receive mixed-color variation. Any geometry not covered
++// by the stripe sweep falls back to the first valid extruder ID so
++// no painted region is dropped.
++static bool split_masks_pointillism_stripes(const ExPolygons               &source_masks,
++                                            const std::vector<unsigned int> &sequence,
++                                            size_t                           num_physical,
++                                            size_t                           layer_id,
++                                            coord_t                          stripe_pitch,
++                                            bool                             flip_orientation,
++                                            std::vector<ExPolygons>         &out_by_extruder)
++{
++    if (source_masks.empty() || sequence.empty() || num_physical == 0 || stripe_pitch <= 0)
++        return false;
++
++    const BoundingBox bbox = get_extents(source_masks);
++    if (!bbox.defined || bbox.min.x() >= bbox.max.x() || bbox.min.y() >= bbox.max.y())
++        return false;
++
++    out_by_extruder.assign(num_physical, ExPolygons());
++
++    const size_t slot_count = sequence.size();
++    const size_t phase      = slot_count > 0 ? (layer_id % slot_count) : 0;
++
++    auto align_down_to_grid = [stripe_pitch](coord_t value) {
++        coord_t rem = value % stripe_pitch;
++        if (rem < 0)
++            rem += stripe_pitch;
++        return value - rem;
++    };
++
++    std::vector<Polygons> stripe_polygons_by_slot(slot_count);
++    const bool vertical_base = (bbox.max.x() - bbox.min.x()) >= (bbox.max.y() - bbox.min.y());
++    // Alternate stripe orientation every layer so different faces of the model
++    // receive mixed-color variation instead of long single-direction bands.
++    const bool layer_alternates = (layer_id & 1) != 0;
++    bool       vertical = layer_alternates ? !vertical_base : vertical_base;
++    if (flip_orientation)
++        vertical = !vertical;
++
++    if (vertical) {
++        const coord_t y0 = bbox.min.y();
++        const coord_t y1 = bbox.max.y();
++        const coord_t x_start_aligned = align_down_to_grid(bbox.min.x());
++        size_t stripe_idx = 0;
++        for (coord_t x = x_start_aligned; x < bbox.max.x(); x += stripe_pitch, ++stripe_idx) {
++            const coord_t x0 = std::max(x, bbox.min.x());
++            const coord_t x1 = std::min<coord_t>(x + stripe_pitch, bbox.max.x());
++            if (x1 <= x0)
++                continue;
++
++            const size_t slot = (stripe_idx + phase) % slot_count;
++            stripe_polygons_by_slot[slot].emplace_back(BoundingBox(Point(x0, y0), Point(x1, y1)).polygon());
++        }
++    } else {
++        const coord_t x0 = bbox.min.x();
++        const coord_t x1 = bbox.max.x();
++        const coord_t y_start_aligned = align_down_to_grid(bbox.min.y());
++        size_t stripe_idx = 0;
++        for (coord_t y = y_start_aligned; y < bbox.max.y(); y += stripe_pitch, ++stripe_idx) {
++            const coord_t y0 = std::max(y, bbox.min.y());
++            const coord_t y1 = std::min<coord_t>(y + stripe_pitch, bbox.max.y());
++            if (y1 <= y0)
++                continue;
++
++            const size_t slot = (stripe_idx + phase) % slot_count;
++            stripe_polygons_by_slot[slot].emplace_back(BoundingBox(Point(x0, y0), Point(x1, y1)).polygon());
++        }
++    }
++
++    unsigned int fallback_extruder = 0;
++    for (const unsigned int extruder_id : sequence) {
++        if (extruder_id >= 1 && extruder_id <= num_physical) {
++            fallback_extruder = extruder_id;
++            break;
++        }
++    }
++    if (fallback_extruder == 0)
++        return false;
++
++    for (size_t slot = 0; slot < slot_count; ++slot) {
++        const unsigned int extruder_id = sequence[slot];
++        if (extruder_id == 0 || extruder_id > num_physical || stripe_polygons_by_slot[slot].empty())
++            continue;
++
++        ExPolygons clipped = intersection_ex(source_masks, stripe_polygons_by_slot[slot], ApplySafetyOffset::Yes);
++        if (!clipped.empty())
++            append(out_by_extruder[extruder_id - 1], std::move(clipped));
++    }
++
++    ExPolygons assigned_union;
++    for (ExPolygons &masks : out_by_extruder) {
++        if (masks.size() > 1)
++            masks = union_ex(masks);
++        append(assigned_union, masks);
++    }
++
++    if (assigned_union.empty()) {
++        append(out_by_extruder[fallback_extruder - 1], source_masks);
++        return true;
++    }
++
++    if (assigned_union.size() > 1)
++        assigned_union = union_ex(assigned_union);
++
++    ExPolygons remainder = diff_ex(source_masks, assigned_union, ApplySafetyOffset::Yes);
++    if (!remainder.empty()) {
++        append(out_by_extruder[fallback_extruder - 1], std::move(remainder));
++        ExPolygons &fallback_masks = out_by_extruder[fallback_extruder - 1];
++        if (fallback_masks.size() > 1)
++            fallback_masks = union_ex(fallback_masks);
++    }
++
++    return true;
++}
++
++// Counts non-empty per-extruder mask vectors. Used to decide whether
++// a stripe-split actually produced multi-color geometry (must be ≥ 2)
++// before applying it to the segmentation.
++static size_t non_empty_mask_count(const std::vector<ExPolygons> &masks_by_extruder)
++{
++    size_t count = 0;
++    for (const ExPolygons &masks : masks_by_extruder)
++        if (!masks.empty())
++            ++count;
++    return count;
++}
++
++// Unions all LayerRegion slice surfaces into a single ExPolygons.
++// Used by apply_mixed_region_surface_offsets (future patch) as the
++// baseline geometry to which per-component surface offsets are applied.
++static ExPolygons collect_layer_region_slices(const Layer &layer)
++{
++    ExPolygons out;
++    for (const LayerRegion *layerm : layer.regions())
++        append(out, to_expolygons(layerm->slices.surfaces));
++    if (!out.empty())
++        out = union_ex(out);
++    return out;
++}
++
+ LayerPtrs new_layers(
+     PrintObject                 *print_object,
+     // Object layers (pairs of bottom/top Z coordinate), without the raft.
