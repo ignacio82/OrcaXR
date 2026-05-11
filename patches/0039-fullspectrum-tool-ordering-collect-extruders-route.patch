@@ -42,121 +42,22 @@ Hard dependencies:
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 diff --git a/src/libslic3r/GCode/ToolOrdering.cpp b/src/libslic3r/GCode/ToolOrdering.cpp
-index da250a9a7e..f78f3b94cd 100644
+index 3eb5330cbb..eaebc63bc4 100644
 --- a/src/libslic3r/GCode/ToolOrdering.cpp
 +++ b/src/libslic3r/GCode/ToolOrdering.cpp
-@@ -98,6 +98,69 @@ unsigned int LayerTools::resolve_mixed_1based(unsigned int filament_id) const
-                                     float(this->layer_height_for_mixed));
- }
- 
-+// OrcaXR Android (FullSpectrum patch 0036). Helpers used by
-+// LayerTools::sparse_infill_filament / solid_infill_filament to honor
-+// the FS enable_infill_filament_override toggle + boundary-layer
-+// base-reversion (mirrors PrintRegion patch 0034 at the per-LayerTools
-+// granularity, where object_layer_count + layer_index are available)
-+// and to short-circuit infill through resolve_perimeter when the
-+// configured filament has a grouped manual_pattern.
-+
-+namespace {
-+
-+bool internal_solid_infill_uses_sparse_filament(const PrintRegion &region, ExtrusionRole role)
-+{
-+    return role == erSolidInfill && std::abs(region.config().sparse_infill_density.value - 100.) < EPSILON;
-+}
-+
-+bool use_base_infill_filament(const LayerTools &layer_tools, const PrintRegion &region)
-+{
-+    const PrintRegionConfig &config = region.config();
-+    if (!config.enable_infill_filament_override.value)
-+        return true;
-+    if (layer_tools.object_layer_count <= 0)
-+        return false;
-+
-+    const int first_layers = std::max(0, config.infill_filament_use_base_first_layers.value);
-+    const int last_layers  = std::max(0, config.infill_filament_use_base_last_layers.value);
-+    return layer_tools.layer_index < first_layers || layer_tools.layer_index >= layer_tools.object_layer_count - last_layers;
-+}
-+
-+unsigned int sparse_infill_filament_id_1based(const LayerTools &layer_tools, const PrintRegion &region)
-+{
-+    return use_base_infill_filament(layer_tools, region) ? region.config().wall_filament.value : region.config().sparse_infill_filament.value;
-+}
-+
-+// Returns nonzero when the configured filament 1-based has a grouped
-+// manual_pattern (segments separated by ',') — in which case the infill
-+// must follow the same per-perimeter cadence the innermost wall picks.
-+// Returns 0 otherwise.
-+unsigned int grouped_manual_pattern_infill_filament_1based(const LayerTools&  layer_tools,
-+                                                           const PrintRegion& region,
-+                                                           unsigned int       configured_filament_id_1based)
-+{
-+    if (layer_tools.mixed_mgr == nullptr || layer_tools.num_physical == 0 || configured_filament_id_1based == 0)
-+        return 0;
-+    if (!layer_tools.mixed_mgr->is_mixed(configured_filament_id_1based, layer_tools.num_physical))
-+        return 0;
-+    const MixedFilament *mixed_row = layer_tools.mixed_mgr->mixed_filament_from_id(configured_filament_id_1based, layer_tools.num_physical);
-+    if (mixed_row == nullptr)
-+        return 0;
-+    const std::string normalized = MixedFilamentManager::normalize_manual_pattern(mixed_row->manual_pattern);
-+    if (normalized.find(',') == std::string::npos)
-+        return 0;
-+
-+    const int innermost_perimeter_index = std::max(0, region.config().wall_loops.value - 1);
-+    return layer_tools.mixed_mgr->resolve_perimeter(configured_filament_id_1based,
-+                                                    layer_tools.num_physical,
-+                                                    layer_tools.layer_index,
-+                                                    innermost_perimeter_index,
-+                                                    float(layer_tools.print_z),
-+                                                    float(layer_tools.layer_height_for_mixed));
-+}
-+
-+} // namespace
-+
- // Return a zero based extruder from the region, or extruder_override if overriden.
- unsigned int LayerTools::wall_filament(const PrintRegion &region) const
- {
-@@ -108,16 +171,24 @@ unsigned int LayerTools::wall_filament(const PrintRegion &region) const
- 
- unsigned int LayerTools::sparse_infill_filament(const PrintRegion &region) const
- {
--	assert(region.config().sparse_infill_filament.value > 0);
--	const unsigned int filament_1based = (this->extruder_override == 0) ? region.config().sparse_infill_filament.value : this->extruder_override;
--	return this->resolve_mixed_1based(filament_1based) - 1;
-+	// OrcaXR Android (FullSpectrum patch 0036). Resolve through
-+	// sparse_infill_filament_id_1based (honors the FS infill override
-+	// + boundary-layer reversion), then check grouped manual_pattern
-+	// first, fall back to LayerCycle resolve.
-+	assert(region.config().wall_filament.value > 0);
-+	const unsigned int filament_1based = (this->extruder_override == 0) ? sparse_infill_filament_id_1based(*this, region) : this->extruder_override;
-+	const unsigned int grouped = grouped_manual_pattern_infill_filament_1based(*this, region, filament_1based);
-+	return ((grouped != 0) ? grouped : resolve_mixed_1based(filament_1based)) - 1;
- }
- 
- unsigned int LayerTools::solid_infill_filament(const PrintRegion &region) const
- {
-+	// OrcaXR Android (FullSpectrum patch 0036). Same as
-+	// sparse_infill_filament — check grouped manual_pattern first.
- 	assert(region.config().solid_infill_filament.value > 0);
- 	const unsigned int filament_1based = (this->extruder_override == 0) ? region.config().solid_infill_filament.value : this->extruder_override;
--	return this->resolve_mixed_1based(filament_1based) - 1;
-+	const unsigned int grouped = grouped_manual_pattern_infill_filament_1based(*this, region, filament_1based);
-+	return ((grouped != 0) ? grouped : resolve_mixed_1based(filament_1based)) - 1;
- }
- 
- // Returns a zero based extruder this eec should be printed with, according to PrintRegion config or extruder_override if overriden.
-@@ -721,6 +792,11 @@ void ToolOrdering::collect_extruders(const PrintObject &object, const std::vecto
+@@ -792,6 +792,11 @@ void ToolOrdering::collect_extruders(const PrintObject &object, const std::vecto
          layer_tools.num_physical = num_physical;
          if (layer_tools.layer_index < 0)
              layer_tools.layer_index = layerCount;
 +        // OrcaXR Android (FullSpectrum patch 0039). Populate the object's
-+        // total layer count so use_base_infill_filament can resolve the
-+        // last-N-layers gate. Without this `object_layer_count` stays at
-+        // 0 and the boundary-layer reversion never fires.
++        // total layer count so use_base_infill_filament (patch 0036) can
++        // resolve the last-N-layers gate. Without this object_layer_count
++        // stays at 0 and the boundary-layer reversion never fires.
 +        layer_tools.object_layer_count = int(object.layers().size());
          layer_tools.layer_height_for_mixed = layer->height;
  
          // Override extruder with the next
-@@ -756,17 +832,26 @@ void ToolOrdering::collect_extruders(const PrintObject &object, const std::vecto
+@@ -827,17 +832,25 @@ void ToolOrdering::collect_extruders(const PrintObject &object, const std::vecto
                  layer_tools.has_object = true;
              }
  
@@ -164,8 +65,7 @@ index da250a9a7e..f78f3b94cd 100644
 -            bool has_solid_infill = false;
 +            // OrcaXR Android (FullSpectrum patch 0039). Rename has_infill ->
 +            // has_sparse_infill and route 100%-density solid infill through
-+            // the sparse path (same nozzle/flow as sparse infill at full
-+            // density). For the override emit, go through the LayerTools
++            // the sparse path. For the override emit, go through the LayerTools
 +            // sparse_infill_filament / solid_infill_filament methods so the
 +            // boundary-layer reversion + grouped manual_pattern from patch
 +            // 0036 takes effect.
@@ -187,7 +87,7 @@ index da250a9a7e..f78f3b94cd 100644
  
                  if (m_print_config_ptr) {
                      if (! layer_tools.wiping_extrusions().is_overriddable_and_mark(*fill, *m_print_config_ptr, object, region))
-@@ -777,13 +862,13 @@ void ToolOrdering::collect_extruders(const PrintObject &object, const std::vecto
+@@ -848,13 +861,13 @@ void ToolOrdering::collect_extruders(const PrintObject &object, const std::vecto
              if (something_nonoverriddable || !m_print_config_ptr) {
              	if (extruder_override == 0) {
  	                if (has_solid_infill)
