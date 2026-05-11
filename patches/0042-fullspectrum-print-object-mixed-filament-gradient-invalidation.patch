@@ -1,0 +1,67 @@
+Phase 2 (FullSpectrum engine emission): register the FS mixed-filament
+gradient controls + region-collapse keys in PrintObject's
+invalidate_state_by_config_options.
+
+Ported from FS v0.9.9 (`ratdoux/OrcaSlicer-FullSpectrum@v0.9.9` commit
+b3c41fda), `src/libslic3r/PrintObject.cpp` lines 974-986 — a new
+`else if` block that gates posSlice invalidation on 8 FS keys:
+
+  - mixed_filament_gradient_mode
+  - mixed_filament_height_lower_bound
+  - mixed_filament_height_upper_bound
+  - mixed_filament_advanced_dithering
+  - mixed_filament_component_bias_enabled
+  - mixed_filament_surface_indentation
+  - mixed_filament_region_collapse
+  - mixed_filament_definitions
+
+Why this matters:
+
+Patch 0037 added the 7 dithering / mixed-filament keys to two
+EXISTING invalidation blocks. But FS source introduces a SEPARATE
+`else if` block at line 974 specifically for the gradient controls.
+Without that block, our v2.3.2 tree drops `mixed_filament_definitions`
+on the floor in `invalidate_state_by_config_options` — meaning a
+user-authored change to the virtual filament rows BETWEEN slices
+silently reuses the old slice state.
+
+End user symptom: user authors a new virtual mix in the OrcaXR UI,
+hits slice, sees output identical to the prior slice. They infer the
+slicer is broken; actually the engine just didn't know to invalidate.
+
+The block is structurally a standalone `else if` chain in the same
+function, after the `interlocking_*` block and before
+`elefant_foot_compensation`. Easy to insert without touching anything
+else.
+
+Verified compile-clean via incremental libslic3r rebuild (2/2
+objects, 0 FAILED) + ./gradlew :app:assembleDebug (full APK built).
+
+Hard dependency: patch 0027 (PrintConfig.hpp typed declarations of
+these keys).
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+diff --git a/src/libslic3r/PrintObject.cpp b/src/libslic3r/PrintObject.cpp
+index 0845f7b818..b9ad7fd6df 100644
+--- a/src/libslic3r/PrintObject.cpp
++++ b/src/libslic3r/PrintObject.cpp
+@@ -1107,6 +1107,19 @@ bool PrintObject::invalidate_state_by_config_options(
+             || opt_key == "interlocking_depth"
+             || opt_key == "interlocking_boundary_avoidance"
+             || opt_key == "interlocking_beam_width") {
++            steps.emplace_back(posSlice);
++        } else if (
++               // OrcaXR Android (FullSpectrum patch 0042). FS mixed-filament
++               // gradient controls. Changing any of these affects layer
++               // cadence + virtual tool distribution; force re-slice.
++               opt_key == "mixed_filament_gradient_mode"
++            || opt_key == "mixed_filament_height_lower_bound"
++            || opt_key == "mixed_filament_height_upper_bound"
++            || opt_key == "mixed_filament_advanced_dithering"
++            || opt_key == "mixed_filament_component_bias_enabled"
++            || opt_key == "mixed_filament_surface_indentation"
++            || opt_key == "mixed_filament_region_collapse"
++            || opt_key == "mixed_filament_definitions") {
+             steps.emplace_back(posSlice);
+ 		} else if (
+                opt_key == "elefant_foot_compensation"
