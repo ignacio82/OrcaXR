@@ -1,0 +1,285 @@
+diff --git a/src/libslic3r/PrintObjectSlice.cpp b/src/libslic3r/PrintObjectSlice.cpp
+index 3a93551b07..1e546f53be 100644
+--- a/src/libslic3r/PrintObjectSlice.cpp
++++ b/src/libslic3r/PrintObjectSlice.cpp
+@@ -1592,6 +1592,280 @@ static bool apply_mixed_region_surface_offsets(PrintObject &print_object)
+     return true;
+ }
+ 
++// =================================================================
++// OrcaXR Android (FullSpectrum Local-Z, patch 0051 — LZ3 helpers batch 7).
++// Local-Z planner input-prep helpers: whole-object wall segmentation
++// aggregator + paint-segmentation overlay merger + per-pass fixed
++// mask emitter + transition-mask diff. All operate on the
++// segmentation grid that build_local_z_plan (next patch) will consume.
++// Static, dead until build_local_z_plan calls them.
++// Source: FS v0.9.9 PrintObjectSlice.cpp lines 2703-3019.
++// =================================================================
++
++// No-op stub of FS's SVG/JSON debug dumper. The real implementation
++// pulls in <fstream>, <iomanip>, SVG.hpp and writes to debug_out_path
++// — none of which we need on Android. Keeping the signature so future
++// build_local_z_plan port can call it without conditional code.
++static void export_local_z_plan_debug(const PrintObject &print_object, coordf_t lower_bound, coordf_t upper_bound)
++{
++    (void)print_object;
++    (void)lower_bound;
++    (void)upper_bound;
++}
++
++// Builds a segmentation grid (layer × channel × ExPolygons) populated
++// from every LayerRegion whose wall_filament resolves to a mixed
++// (virtual) filament ID. The result is the "wall segmentation"
++// baseline that the Local-Z planner uses when the whole-object flag
++// is set, so painted geometry isn't required to opt every region in.
++static std::vector<std::vector<ExPolygons>> whole_object_local_z_segmentation_by_mixed_wall(const PrintObject &print_object)
++{
++    std::vector<std::vector<ExPolygons>> segmentation;
++
++    const Print *print = print_object.print();
++    if (print == nullptr || print_object.layer_count() == 0)
++        return segmentation;
++
++    const size_t num_physical = print->config().filament_colour.size();
++    const size_t num_total    = print->mixed_filament_manager().total_filaments(num_physical);
++    if (num_total <= num_physical)
++        return segmentation;
++
++    segmentation.assign(print_object.layer_count(), std::vector<ExPolygons>(num_total + 1));
++    const MixedFilamentManager &mixed_mgr = print->mixed_filament_manager();
++    size_t mixed_region_layers = 0;
++    size_t mixed_region_count  = 0;
++
++    for (size_t layer_id = 0; layer_id < print_object.layer_count(); ++layer_id) {
++        const Layer &layer = *print_object.get_layer(int(layer_id));
++        bool layer_has_mixed_region = false;
++        for (int region_id = 0; region_id < layer.region_count(); ++region_id) {
++            const LayerRegion *layerm = layer.get_region(region_id);
++            if (layerm == nullptr || layerm->slices.empty())
++                continue;
++
++            const unsigned int filament_id = unsigned(std::max(0, layerm->region().config().wall_filament.value));
++            if (!mixed_mgr.is_mixed(filament_id, num_physical))
++                continue;
++            if (filament_id >= segmentation[layer_id].size())
++                continue;
++
++            ExPolygons state_masks = to_expolygons(layerm->slices.surfaces);
++            if (state_masks.empty())
++                continue;
++
++            append(segmentation[layer_id][filament_id], std::move(state_masks));
++            layer_has_mixed_region = true;
++            ++mixed_region_count;
++        }
++
++        if (layer_has_mixed_region) {
++            ++mixed_region_layers;
++            for (size_t channel_idx = num_physical + 1; channel_idx < segmentation[layer_id].size(); ++channel_idx) {
++                ExPolygons &state_masks = segmentation[layer_id][channel_idx];
++                if (state_masks.size() > 1)
++                    state_masks = union_ex(state_masks);
++            }
++        }
++    }
++
++    if (mixed_region_count == 0)
++        return {};
++
++    BOOST_LOG_TRIVIAL(info) << "Local-Z whole-object wall segmentation prepared"
++                            << " object=" << (print_object.model_object() ? print_object.model_object()->name : std::string("<unknown>"))
++                            << " mixed_region_layers=" << mixed_region_layers
++                            << " mixed_region_count=" << mixed_region_count
++                            << " physical_filaments=" << num_physical
++                            << " total_filaments=" << num_total;
++    return segmentation;
++}
++
++// Merges paint-derived segmentation with whole-object wall
++// segmentation: painted overrides clip the wall masks (so paint wins
++// over the wall heuristic), then the painted geometry is appended to
++// the per-channel buckets. Returns the merged segmentation that
++// build_local_z_plan will consume. If the wall aggregator returns
++// empty, falls back to the paint segmentation untouched.
++static std::vector<std::vector<ExPolygons>> local_z_planner_segmentation_with_whole_object_mixed_wall(
++    const PrintObject                          &print_object,
++    const std::vector<std::vector<ExPolygons>> &paint_segmentation)
++{
++    const Print *print = print_object.print();
++    if (print == nullptr || paint_segmentation.empty())
++        return paint_segmentation;
++
++    std::vector<std::vector<ExPolygons>> augmented = whole_object_local_z_segmentation_by_mixed_wall(print_object);
++    if (augmented.empty())
++        return paint_segmentation;
++
++    const size_t num_physical           = print->config().filament_colour.size();
++    const MixedFilamentManager &mixed_mgr = print->mixed_filament_manager();
++    size_t overlay_layers              = 0;
++    size_t overlay_mixed_channels      = 0;
++    size_t physical_override_layers    = 0;
++
++    for (size_t layer_id = 0; layer_id < augmented.size() && layer_id < paint_segmentation.size(); ++layer_id) {
++        if (augmented[layer_id].size() < paint_segmentation[layer_id].size())
++            augmented[layer_id].resize(paint_segmentation[layer_id].size());
++
++        ExPolygons painted_overrides;
++        for (size_t channel_idx = 1; channel_idx < paint_segmentation[layer_id].size(); ++channel_idx) {
++            const ExPolygons &state_masks = paint_segmentation[layer_id][channel_idx];
++            if (!state_masks.empty())
++                append(painted_overrides, state_masks);
++        }
++        if (painted_overrides.size() > 1)
++            painted_overrides = union_ex(painted_overrides);
++
++        bool layer_has_overlay = false;
++        if (!painted_overrides.empty()) {
++            bool clipped_for_physical_override = false;
++            for (size_t channel_idx = num_physical + 1; channel_idx < augmented[layer_id].size(); ++channel_idx) {
++                ExPolygons &state_masks = augmented[layer_id][channel_idx];
++                if (state_masks.empty())
++                    continue;
++                const ExPolygons clipped_masks = diff_ex(state_masks, painted_overrides);
++                if (clipped_masks.size() != state_masks.size())
++                    clipped_for_physical_override = true;
++                state_masks = clipped_masks;
++            }
++            if (clipped_for_physical_override)
++                ++physical_override_layers;
++            layer_has_overlay = true;
++        }
++
++        for (size_t channel_idx = 1; channel_idx < paint_segmentation[layer_id].size(); ++channel_idx) {
++            const ExPolygons &state_masks = paint_segmentation[layer_id][channel_idx];
++            if (state_masks.empty())
++                continue;
++
++            const unsigned int state_id = segmentation_channel_filament_id(channel_idx);
++            if (channel_idx >= augmented[layer_id].size())
++                augmented[layer_id].resize(channel_idx + 1);
++
++            append(augmented[layer_id][channel_idx], state_masks);
++            layer_has_overlay = true;
++            if (mixed_mgr.is_mixed(state_id, num_physical))
++                ++overlay_mixed_channels;
++        }
++
++        for (size_t channel_idx = num_physical + 1; channel_idx < augmented[layer_id].size(); ++channel_idx) {
++            ExPolygons &state_masks = augmented[layer_id][channel_idx];
++            if (state_masks.size() > 1)
++                state_masks = union_ex(state_masks);
++        }
++        if (layer_has_overlay)
++            ++overlay_layers;
++    }
++
++    if (overlay_layers > 0) {
++        BOOST_LOG_TRIVIAL(info) << "Local-Z planner merged whole-object mixed wall masks with painted overrides"
++                                << " object=" << (print_object.model_object() ? print_object.model_object()->name : std::string("<unknown>"))
++                                << " overlay_layers=" << overlay_layers
++                                << " overlay_mixed_channels=" << overlay_mixed_channels
++                                << " physical_override_layers=" << physical_override_layers;
++    }
++    return augmented;
++}
++
++// Pulls per-extruder mask vectors out of a single layer's
++// segmentation row. Channels at indices ≤ num_physical map to
++// physical extruder IDs (channel_idx - 1). Channels above are
++// virtual/mixed and dropped here — the planner handles those via
++// its mixed-row table separately.
++static std::vector<ExPolygons> collect_local_z_fixed_state_masks_by_extruder(const std::vector<ExPolygons> &layer_segmentation,
++                                                                             const size_t                   num_physical)
++{
++    std::vector<ExPolygons> masks_by_extruder(num_physical);
++    for (size_t channel_idx = 1; channel_idx < layer_segmentation.size(); ++channel_idx) {
++        const ExPolygons &state_masks = layer_segmentation[channel_idx];
++        if (state_masks.empty())
++            continue;
++
++        const unsigned int state_id = segmentation_channel_filament_id(channel_idx);
++        if (state_id == 0 || state_id > num_physical)
++            continue;
++        append(masks_by_extruder[state_id - 1], state_masks);
++    }
++    for (ExPolygons &masks : masks_by_extruder)
++        if (masks.size() > 1)
++            masks = union_ex(masks);
++    return masks_by_extruder;
++}
++
++// Per-sublayer mask emission for fixed (non-mixed) regions. Classifies
++// each current_mask into one of {persistent, entering, exiting,
++// isolated} relative to prev/next nominal layers, and emits at the
++// lowest pass (exit-side), the highest pass (enter + isolated), and
++// every pass (persistent). This guarantees that monotonic regions
++// stay covered without being printed multiple times at the same Z.
++static std::vector<ExPolygons> build_local_z_transition_fixed_masks_for_pass(
++    const std::vector<ExPolygons> &current_masks_by_extruder,
++    const std::vector<ExPolygons> &prev_masks_by_extruder,
++    const std::vector<ExPolygons> &next_masks_by_extruder,
++    const size_t                   pass_idx,
++    const size_t                   pass_count)
++{
++    if (pass_count <= 1)
++        return current_masks_by_extruder;
++
++    std::vector<ExPolygons> pass_masks_by_extruder(current_masks_by_extruder.size());
++    const bool is_lowest_pass = pass_idx == 0;
++    const bool is_highest_pass = pass_idx + 1 >= pass_count;
++
++    for (size_t extruder_idx = 0; extruder_idx < current_masks_by_extruder.size(); ++extruder_idx) {
++        const ExPolygons &current_masks = current_masks_by_extruder[extruder_idx];
++        if (current_masks.empty())
++            continue;
++
++        const ExPolygons prev_masks = extruder_idx < prev_masks_by_extruder.size() ? prev_masks_by_extruder[extruder_idx] : ExPolygons();
++        const ExPolygons next_masks = extruder_idx < next_masks_by_extruder.size() ? next_masks_by_extruder[extruder_idx] : ExPolygons();
++
++        const ExPolygons current_and_prev = prev_masks.empty() ? ExPolygons() : intersection_ex(current_masks, prev_masks);
++        const ExPolygons current_and_next = next_masks.empty() ? ExPolygons() : intersection_ex(current_masks, next_masks);
++        const ExPolygons persistent =
++            current_and_prev.empty() || current_and_next.empty() ? ExPolygons() : intersection_ex(current_and_prev, current_and_next);
++
++        ExPolygons entering = current_and_next;
++        if (!entering.empty() && !current_and_prev.empty())
++            entering = diff_ex(entering, current_and_prev);
++
++        ExPolygons exiting = current_and_prev;
++        if (!exiting.empty() && !current_and_next.empty())
++            exiting = diff_ex(exiting, current_and_next);
++
++        ExPolygons covered;
++        if (!persistent.empty())
++            append(covered, persistent);
++        if (!entering.empty())
++            append(covered, entering);
++        if (!exiting.empty())
++            append(covered, exiting);
++        if (covered.size() > 1)
++            covered = union_ex(covered);
++
++        const ExPolygons isolated = covered.empty() ? current_masks : diff_ex(current_masks, covered);
++
++        ExPolygons assigned;
++        if (!persistent.empty())
++            append(assigned, persistent);
++        if (is_lowest_pass && !exiting.empty())
++            append(assigned, exiting);
++        if (is_highest_pass) {
++            if (!entering.empty())
++                append(assigned, entering);
++            if (!isolated.empty())
++                append(assigned, isolated);
++        }
++        if (assigned.size() > 1)
++            assigned = union_ex(assigned);
++        pass_masks_by_extruder[extruder_idx] = std::move(assigned);
++    }
++
++    return pass_masks_by_extruder;
++}
++
+ LayerPtrs new_layers(
+     PrintObject                 *print_object,
+     // Object layers (pairs of bottom/top Z coordinate), without the raft.
