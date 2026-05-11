@@ -1,0 +1,341 @@
+Phase 2 (FullSpectrum engine emission, P2D): resolve virtual mixed-
+filament IDs at the LayerRegion level so per-region flow + extruder
+decisions land on the right physical filament/nozzle.
+
+Without this, a print authored with `wall_filament=5` (a virtual
+mixed-filament row) goes through libslic3r's default flow path
+which:
+  - calls `region().extruder(role)` and gets the literal `5`,
+  - passes `5` to `PrintConfig::nozzle_diameter.get_at(5 - 1)` which
+    overflows past the 4 physical slots → falls back to default
+    `0.4` nozzle even when the actual physical extruder is `0.2`,
+  - computes Flow / extrusion width / gap-fill spacing from that
+    wrong nozzle.
+
+This patch adds three pieces:
+
+1. `Layer.hpp` — declares `LayerRegion::extruder(FlowRole) const`.
+   One-line addition; the method does the resolution every flow-using
+   caller now goes through.
+
+2. `LayerRegion.cpp` — three anonymous-namespace helpers
+   (`effective_layer_filament_id`, `effective_infill_filament_id`,
+   `use_base_infill_filament`) and the `LayerRegion::extruder()`
+   implementation. The helpers consult `MixedFilamentManager` via
+   `Print::mixed_filament_manager()` (the manager is populated by
+   patch 0018's PrintApply hook). `use_base_infill_filament` honors
+   the FS `enable_infill_filament_override` +
+   `infill_filament_use_base_first_layers` /
+   `infill_filament_use_base_last_layers` keys (declared in patch
+   0027). `LayerRegion::flow(FlowRole, double)` is rewritten to look
+   up per-role line widths directly (the FS shape; matches FS v0.9.9
+   LayerRegion.cpp:107-141), and `bridging_flow` switches to
+   `this->extruder(role)` so bridge flow uses the resolved nozzle.
+   `make_perimeters()` builds a per-call `PrintRegionConfig` override
+   with resolved wall_filament / sparse_infill_filament /
+   solid_infill_filament so PerimeterGenerator emits correct
+   physical IDs into per-perimeter extruder fields.
+
+3. `Fill/Fill.cpp` — three call sites switch from
+   `layerm.region().extruder(role)` to `layerm.extruder(role)` so
+   the resolved physical extruder is used for infill flow / pattern
+   selection. The ipLockedZag branch picks up the same `effective_extruder`
+   for its skin + skeleton flow nozzle_diameter lookup.
+
+Mechanical port from FS v0.9.9
+(`ratdoux/OrcaSlicer-FullSpectrum@v0.9.9` commit b3c41fda),
+`src/libslic3r/LayerRegion.cpp` lines 1-141 + 190-220 and
+`src/libslic3r/Fill/Fill.cpp` lines 842-1083. Verified compile-clean
+via full libslic3r rebuild (37/37 objects, 0 FAILED) +
+:app:assembleDebug.
+
+Hard dependency on:
+  - patch 0015 (`MixedFilamentManager::effective_painted_region_filament_id`)
+  - patch 0017 (`Print::mixed_filament_manager()`)
+  - patch 0018 (PrintApply calls `load_custom_entries`)
+  - patch 0027 (PrintRegionConfig fields enable_infill_filament_override +
+    use_base_first_layers / _last_layers declared as typed members)
+
+Soft dependency: works correctly for both LayerCycle (the prior code
+path resolved via ToolOrdering only — this resolves at flow-decision
+time as well, so the picked nozzle is right) and any Pointillisme /
+Local-Z mode that lands later (those will reuse this resolution).
+
+diff --git a/src/libslic3r/Layer.hpp b/src/libslic3r/Layer.hpp
+index 4e9fdad059..ae9a2aec75 100644
+--- a/src/libslic3r/Layer.hpp
++++ b/src/libslic3r/Layer.hpp
+@@ -71,6 +71,13 @@ public:
+     // (this collection contains only ExtrusionEntityCollection objects)
+     ExtrusionEntityCollection   fills;
+ 
++    // OrcaXR Android (FullSpectrum patch 0032). Returns the effective
++    // physical filament id for this region + flow role, consulting
++    // MixedFilamentManager to resolve virtual mixed-filament rows to
++    // their per-layer physical, and honoring the
++    // enable_infill_filament_override + use_base_first_layers /
++    // _last_layers gates for boundary-layer infill base reversion.
++    unsigned int extruder(FlowRole role) const;
+     Flow    flow(FlowRole role) const;
+     Flow    flow(FlowRole role, double layer_height) const;
+     Flow    bridging_flow(FlowRole role, bool thick_bridge = false) const;
+
+diff --git a/src/libslic3r/LayerRegion.cpp b/src/libslic3r/LayerRegion.cpp
+index ec88905b96..87a0733d5d 100644
+--- a/src/libslic3r/LayerRegion.cpp
++++ b/src/libslic3r/LayerRegion.cpp
+@@ -1,6 +1,7 @@
+ #include "Layer.hpp"
+ #include "BridgeDetector.hpp"
+ #include "ClipperUtils.hpp"
++#include "Exception.hpp"
+ #include "Geometry.hpp"
+ #include "PerimeterGenerator.hpp"
+ #include "Print.hpp"
+@@ -9,6 +10,8 @@
+ #include "SVG.hpp"
+ #include "Algorithm/RegionExpansion.hpp"
+ 
++#include <algorithm>
++#include <cmath>
+ #include <string>
+ #include <map>
+ 
+@@ -17,6 +20,110 @@
+ 
+ namespace Slic3r {
+ 
++namespace {
++
++// OrcaXR Android (FullSpectrum patch 0032). Resolve a (possibly virtual)
++// 1-based filament id to the effective physical filament for this
++// layer's geometry / flow calculations. Mirrors FS v0.9.9's
++// `effective_layer_filament_id` in src/libslic3r/LayerRegion.cpp.
++unsigned int effective_layer_filament_id(const Layer &layer, unsigned int filament_id)
++{
++    if (filament_id == 0)
++        return filament_id;
++
++    const PrintObject *object = layer.object();
++    const Print       *print  = object ? object->print() : nullptr;
++    if (print == nullptr)
++        return filament_id;
++
++    const size_t num_physical = print->config().filament_diameter.size();
++    if (num_physical == 0)
++        return filament_id;
++
++    // Ordinary mixed rows still print with one physical filament per layer even
++    // when region collapse is disabled, so geometry / flow decisions must use
++    // that effective physical filament to avoid per-layer thin-feature drift.
++    return print->mixed_filament_manager().effective_painted_region_filament_id(filament_id,
++                                                                                num_physical,
++                                                                                int(layer.id()),
++                                                                                float(layer.print_z),
++                                                                                float(layer.height));
++}
++
++// OrcaXR Android (FullSpectrum patch 0032). Like effective_layer_filament_id
++// but biased toward the innermost-perimeter resolution when the mixed
++// row authors a multi-perimeter manual pattern (groupings separated by
++// commas, e.g. "11,22"). Infill uses the innermost-wall extruder so
++// the inner-wall and the infill it traps print with the same filament.
++unsigned int effective_infill_filament_id(const Layer &layer, const PrintRegionConfig &config, unsigned int filament_id)
++{
++    const unsigned int effective = effective_layer_filament_id(layer, filament_id);
++    if (effective != filament_id || filament_id == 0)
++        return effective;
++
++    const PrintObject *object = layer.object();
++    const Print       *print  = object ? object->print() : nullptr;
++    if (print == nullptr)
++        return filament_id;
++
++    const size_t num_physical = print->config().filament_diameter.size();
++    if (num_physical == 0)
++        return filament_id;
++
++    const MixedFilamentManager &mixed_mgr = print->mixed_filament_manager();
++    const MixedFilament *mixed_row = mixed_mgr.mixed_filament_from_id(filament_id, num_physical);
++    if (mixed_row == nullptr)
++        return filament_id;
++
++    const std::string normalized_pattern = MixedFilamentManager::normalize_manual_pattern(mixed_row->manual_pattern);
++    if (normalized_pattern.find(',') == std::string::npos)
++        return filament_id;
++
++    const int innermost_perimeter_index = std::max(0, config.wall_loops.value - 1);
++    return mixed_mgr.resolve_perimeter(filament_id,
++                                       num_physical,
++                                       int(layer.id()),
++                                       innermost_perimeter_index,
++                                       float(layer.print_z),
++                                       float(layer.height));
++}
++
++// OrcaXR Android (FullSpectrum patch 0032). When
++// enable_infill_filament_override is true and the layer is among the
++// first `infill_filament_use_base_first_layers` or the last
++// `infill_filament_use_base_last_layers` layers, infill reverts to
++// the wall filament (base filament). Returns true if infill should
++// use the wall filament instead of sparse_infill_filament.
++bool use_base_infill_filament(const PrintRegionConfig &config, int layer_index, int layer_count)
++{
++    if (!config.enable_infill_filament_override.value)
++        return true;
++    if (layer_count <= 0)
++        return false;
++
++    const int first_layers = std::max(0, config.infill_filament_use_base_first_layers.value);
++    const int last_layers  = std::max(0, config.infill_filament_use_base_last_layers.value);
++    return layer_index < first_layers || layer_index >= layer_count - last_layers;
++}
++
++} // namespace
++
++unsigned int LayerRegion::extruder(FlowRole role) const
++{
++    const PrintRegionConfig &config = this->region().config();
++    unsigned int             filament_id = 0;
++    if (role == frInfill)
++        filament_id = use_base_infill_filament(config, m_layer->id(), int(m_layer->object()->layers().size())) ? config.wall_filament.value : config.sparse_infill_filament.value;
++    else if (role == frSolidInfill && std::abs(config.sparse_infill_density.value - 100.) < EPSILON)
++        filament_id = use_base_infill_filament(config, m_layer->id(), int(m_layer->object()->layers().size())) ? config.wall_filament.value : config.sparse_infill_filament.value;
++    else
++        filament_id = this->region().extruder(role);
++
++    return (role == frInfill || role == frSolidInfill) ?
++        effective_infill_filament_id(*m_layer, config, filament_id) :
++        effective_layer_filament_id(*m_layer, filament_id);
++}
++
+ Flow LayerRegion::flow(FlowRole role) const
+ {
+     return this->flow(role, m_layer->height);
+@@ -24,7 +131,34 @@ Flow LayerRegion::flow(FlowRole role) const
+ 
+ Flow LayerRegion::flow(FlowRole role, double layer_height) const
+ {
+-    return m_region->flow(*m_layer->object(), role, layer_height, m_layer->id() == 0);
++    // OrcaXR Android (FullSpectrum patch 0032). Rather than delegating to
++    // PrintRegion::flow (which doesn't know about virtual mixed-filament
++    // rows), resolve config_width per role and nozzle_diameter via
++    // this->extruder(role) so the flow uses the effective physical
++    // nozzle for mixed rows.
++    const PrintConfig          &print_config = m_layer->object()->print()->config();
++    ConfigOptionFloatOrPercent config_width;
++    if (m_layer->id() == 0 && print_config.initial_layer_line_width.value > 0) {
++        config_width = print_config.initial_layer_line_width;
++    } else if (role == frExternalPerimeter) {
++        config_width = m_region->config().outer_wall_line_width;
++    } else if (role == frPerimeter) {
++        config_width = m_region->config().inner_wall_line_width;
++    } else if (role == frInfill) {
++        config_width = m_region->config().sparse_infill_line_width;
++    } else if (role == frSolidInfill) {
++        config_width = m_region->config().internal_solid_infill_line_width;
++    } else if (role == frTopSolidInfill) {
++        config_width = m_region->config().top_surface_line_width;
++    } else {
++        throw Slic3r::InvalidArgument("Unknown role");
++    }
++
++    if (config_width.value == 0)
++        config_width = m_layer->object()->config().line_width;
++
++    const auto nozzle_diameter = float(print_config.nozzle_diameter.get_at(this->extruder(role) - 1));
++    return Flow::new_from_config_width(role, config_width, nozzle_diameter, float(layer_height));
+ }
+ 
+ Flow LayerRegion::bridging_flow(FlowRole role, bool thick_bridge) const
+@@ -33,7 +167,7 @@ Flow LayerRegion::bridging_flow(FlowRole role, bool thick_bridge) const
+     const PrintRegionConfig &region_config  = region.config();
+     const PrintObject       &print_object   = *this->layer()->object();
+     Flow bridge_flow;
+-    auto nozzle_diameter = float(print_object.print()->config().nozzle_diameter.get_at(region.extruder(role) - 1));
++    auto nozzle_diameter = float(print_object.print()->config().nozzle_diameter.get_at(this->extruder(role) - 1));
+     if (thick_bridge) {
+         // The old Slic3r way (different from all other slicers): Use rounded extrusions.
+         // Get the configured nozzle_diameter for the extruder associated to the flow role requested.
+@@ -76,6 +210,17 @@ void LayerRegion::make_perimeters(const SurfaceCollection &slices, const LayerRe
+     const PrintConfig       &print_config  = this->layer()->object()->print()->config();
+     const PrintRegionConfig &region_config = this->region().config();
+     const PrintObjectConfig& object_config = this->layer()->object()->config();
++    // OrcaXR Android (FullSpectrum patch 0032). Build a per-call
++    // PrintRegionConfig override that swaps virtual mixed-filament IDs
++    // for their resolved physical equivalents. PerimeterGenerator reads
++    // wall_filament / sparse_infill_filament / solid_infill_filament
++    // directly from the region config when assigning per-perimeter
++    // extruder ids — without this resolution it'd write virtual ids
++    // that downstream code may not handle.
++    PrintRegionConfig        perimeter_config = region_config;
++    perimeter_config.wall_filament.value = int(effective_layer_filament_id(*this->layer(), unsigned(std::max(0, region_config.wall_filament.value))));
++    perimeter_config.sparse_infill_filament.value = int(effective_layer_filament_id(*this->layer(), unsigned(std::max(0, region_config.sparse_infill_filament.value))));
++    perimeter_config.solid_infill_filament.value = int(effective_layer_filament_id(*this->layer(), unsigned(std::max(0, region_config.solid_infill_filament.value))));
+     // This needs to be in sync with PrintObject::_slice() slicing_mode_normal_below_layer!
+     bool spiral_mode = print_config.spiral_mode &&
+         //FIXME account for raft layers.
+@@ -89,7 +234,7 @@ void LayerRegion::make_perimeters(const SurfaceCollection &slices, const LayerRe
+         this->layer()->height,
+         this->layer()->slice_z,
+         this->flow(frPerimeter),
+-        &region_config,
++        &perimeter_config,
+         &this->layer()->object()->config(),
+         &print_config,
+         spiral_mode,
+
+diff --git a/src/libslic3r/Fill/Fill.cpp b/src/libslic3r/Fill/Fill.cpp
+index 9d9962dbc8..115f908b05 100644
+--- a/src/libslic3r/Fill/Fill.cpp
++++ b/src/libslic3r/Fill/Fill.cpp
+@@ -861,7 +861,12 @@ std::vector<SurfaceFill> group_fills(const Layer &layer, LockRegionParam &lock_p
+ 		        const PrintRegionConfig &region_config = layerm.region().config();
+ 		        FlowRole extrusion_role = surface.is_top() ? frTopSolidInfill : (surface.is_solid() ? frSolidInfill : frInfill);
+ 		        bool     is_bridge 	    = layer.id() > 0 && surface.is_bridge();
+-		        params.extruder 	 = layerm.region().extruder(extrusion_role);
++		        // OrcaXR Android (FullSpectrum patch 0032). Use LayerRegion::extruder
++		        // (resolves virtual mixed-filament rows + honors infill base-layer
++		        // overrides) rather than PrintRegion::extruder which returns the
++		        // raw region config value.
++		        const unsigned int effective_extruder = layerm.extruder(extrusion_role);
++		        params.extruder 	 = effective_extruder;
+ 		        params.pattern 		 = region_config.sparse_infill_pattern.value;
+ 		        params.density       = float(region_config.sparse_infill_density);
+                 params.lateral_lattice_angle_1 = region_config.lateral_lattice_angle_1;
+@@ -959,7 +964,10 @@ std::vector<SurfaceFill> group_fills(const Layer &layer, LockRegionParam &lock_p
+ 		        } else {
+ 					// Internal infill. Calculating infill line spacing independent of the current layer height and 1st layer status,
+ 					// so that internall infill will be aligned over all layers of the current region.
+-		            params.spacing = layerm.region().flow(*layer.object(), frInfill, layer.object()->config().layer_height, false).spacing();
++					// OrcaXR Android (FullSpectrum patch 0032). Use LayerRegion::flow
++					// (resolves the effective nozzle diameter for virtual mixed rows)
++					// rather than PrintRegion::flow which uses the raw region extruder id.
++		            params.spacing = layerm.flow(frInfill, layer.object()->config().layer_height).spacing();
+ 		            // Anchor a sparse infill to inner perimeters with the following anchor length:
+ 			        params.anchor_length = float(region_config.infill_anchor);
+ 					if (region_config.infill_anchor.percent)
+@@ -973,7 +981,11 @@ std::vector<SurfaceFill> group_fills(const Layer &layer, LockRegionParam &lock_p
+ 				//get locked region param
+ 				if (params.pattern == ipLockedZag){
+ 					const PrintObject *object = layerm.layer()->object();
+-					auto nozzle_diameter = float(object->print()->config().nozzle_diameter.get_at(layerm.region().extruder(extrusion_role) - 1));
++					// OrcaXR Android (FullSpectrum patch 0032). Use the effective
++					// extruder (resolved through LayerRegion::extruder) when
++					// looking up nozzle_diameter so locked-zag prints with
++					// virtual mixed-filament rows pick the right physical nozzle.
++					auto nozzle_diameter = float(object->print()->config().nozzle_diameter.get_at(effective_extruder - 1));
+ 					Flow skin_flow = params.bridge ? params.flow : Flow::new_from_config_width(extrusion_role, region_config.skin_infill_line_width, nozzle_diameter, float((surface.thickness == -1) ? layer.height : surface.thickness));
+ 					//add skin flow
+ 					append_flow_param(lock_param.skin_flow_params, skin_flow, surface.expolygon);
+@@ -1102,7 +1114,9 @@ std::vector<SurfaceFill> group_fills(const Layer &layer, LockRegionParam &lock_p
+ 	        	}
+ 	        if (internal_solid_fill == nullptr) {
+ 	        	// Produce another solid fill.
+-		        params.extruder 	 = layerm.region().extruder(frSolidInfill);
++				// OrcaXR Android (FullSpectrum patch 0032). LayerRegion::extruder
++				// resolves virtual mixed-filament rows + honors infill base-layer.
++		        params.extruder 	 = layerm.extruder(frSolidInfill);
+                 const auto top_pattern = layerm.region().config().top_surface_pattern;
+                 if(top_pattern == ipMonotonic || top_pattern == ipMonotonicLine)
+                     params.pattern = top_pattern;
