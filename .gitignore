@@ -91,3 +91,6 @@ crash_log.txt
 /get_regions.py
 /parse.py
 /regions.json
+
+# screenshot artifacts (dev workflow only)
+screenshot*.png
