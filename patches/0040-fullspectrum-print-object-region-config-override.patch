@@ -1,0 +1,182 @@
+Phase 2 (FullSpectrum engine emission, P2L): integrate the FS
+infill-filament-override toggle into PrintObject's per-region config
+application + slicing parameters + combine_infill nozzle math.
+
+Ported from FS v0.9.9 (`ratdoux/OrcaSlicer-FullSpectrum@v0.9.9` commit
+b3c41fda), `src/libslic3r/PrintObject.cpp` four mid-function changes.
+
+Why this matters:
+
+`apply_to_print_region_config` is called every time a per-volume,
+per-layer-range, or per-object override is folded into a region's
+PrintRegionConfig. The prior code always copied
+sparse_infill_filament from the override (or default), regardless of
+whether the override toggle was actually set — which kept the legacy
+"implicit override" rule (sparse != wall implies override). FS's
+explicit toggle inverts that: if the toggle key is present in the
+override, that wins; if absent, the implicit rule is the fallback;
+and when the toggle is OFF, sparse_infill_filament should mirror
+wall_filament rather than carry the user's prior "override" value.
+
+Four changes:
+
+1. **`apply_to_print_region_config`** (line ~3341): adds
+   `key_enable_infill_filament_override` constant + detects the
+   toggle key in `in` and applies it explicitly to `out`. The
+   sparse_infill_filament copy is then SKIPPED when
+   `allow_local_infill_filament_override` is false.
+
+2. **`slicing_parameters`** (line ~3457): resets
+   `default_region_config.enable_infill_filament_override` to false
+   and `default_region_config.sparse_infill_filament` to mirror
+   wall_filament before per-volume/per-range overrides re-apply. Stops
+   stale overrides from leaking across slices.
+
+3. **`slicing_parameters` layer-range loop** (line ~3450): adds the 3
+   FS region keys to the predicate that decides whether a per-Z-band
+   config triggers `PrintRegion::collect_object_printing_extruders`.
+   Without this, a Z-band that only overrides the FS keys would be
+   silently skipped.
+
+4. **`combine_infill`** (line ~3908): the nozzle_diameter constraint
+   now starts from `wall_filament.value`, then min-with-sparse-infill
+   ONLY when the toggle is on, then min-with-solid-infill. The prior
+   code unconditionally min'd with sparse_infill_filament's nozzle,
+   which constrained combined-infill height by an unused extruder when
+   the override was off.
+
+Verified compile-clean via incremental libslic3r rebuild (3/3
+objects, 0 FAILED) + ./gradlew :app:assembleDebug.
+
+Hard dependencies:
+  - patch 0027 (PrintRegionConfig.enable_infill_filament_override declared)
+  - patch 0038 (PrintRegionConfig.enable_infill_filament_override registered)
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+diff --git a/src/libslic3r/PrintObject.cpp b/src/libslic3r/PrintObject.cpp
+index dc3ce14be4..4f7e0f1bf3 100644
+--- a/src/libslic3r/PrintObject.cpp
++++ b/src/libslic3r/PrintObject.cpp
+@@ -1081,6 +1081,16 @@ bool PrintObject::invalidate_state_by_config_options(
+             steps.emplace_back(posPerimeters);
+         } else if (
+                opt_key == "layer_height"
++            // OrcaXR Android (FullSpectrum patch 0037). FS dithering +
++            // mixed-filament keys: changing any of these forces a re-slice
++            // because they affect layer cadence + region geometry.
++            || opt_key == "dithering_z_step_size"
++            || opt_key == "dithering_local_z_mode"
++            || opt_key == "dithering_local_z_whole_objects"
++            || opt_key == "dithering_local_z_direct_multicolor"
++            || opt_key == "dithering_step_painted_zones_only"
++            || opt_key == "mixed_filament_component_bias_enabled"
++            || opt_key == "mixed_filament_region_collapse"
+             || opt_key == "mmu_segmented_region_max_width"
+             || opt_key == "mmu_segmented_region_interlocking_depth"
+             || opt_key == "raft_layers"
+@@ -1205,6 +1215,13 @@ bool PrintObject::invalidate_state_by_config_options(
+             || opt_key == "bottom_shell_thickness"
+             || opt_key == "top_shell_thickness"
+             || opt_key == "minimum_sparse_infill_area"
++            // OrcaXR Android (FullSpectrum patch 0037). FS infill-filament-
++            // override + boundary-layer reverts: changing any of these
++            // forces a re-slice because the effective infill filament for
++            // the first/last N layers shifts.
++            || opt_key == "enable_infill_filament_override"
++            || opt_key == "infill_filament_use_base_first_layers"
++            || opt_key == "infill_filament_use_base_last_layers"
+             || opt_key == "sparse_infill_filament"
+             || opt_key == "solid_infill_filament"
+             || opt_key == "sparse_infill_line_width"
+@@ -3319,6 +3336,11 @@ PrintObjectConfig PrintObject::object_config_from_model_object(const PrintObject
+ }
+ 
+ const std::string                                                    key_extruder { "extruder" };
++// OrcaXR Android (FullSpectrum patch 0040). Key used to detect explicit
++// infill-filament-override toggles in DynamicPrintConfig overrides so the
++// region config's enable_infill_filament_override field gets the right
++// value regardless of whether the override is present in `in`.
++const std::string                                                    key_enable_infill_filament_override { "enable_infill_filament_override" };
+ static constexpr const std::initializer_list<const std::string_view> keys_extruders { "sparse_infill_filament"sv, "solid_infill_filament"sv, "wall_filament"sv };
+ 
+ static void apply_to_print_region_config(PrintRegionConfig &out, const DynamicPrintConfig &in)
+@@ -3332,10 +3354,31 @@ static void apply_to_print_region_config(PrintRegionConfig &out, const DynamicPr
+             out.solid_infill_filament.value  = extruder;
+             out.wall_filament.value          = extruder;
+         }
++    // OrcaXR Android (FullSpectrum patch 0040). Detect explicit
++    // infill-filament-override toggles vs. implicit-via-different-
++    // sparse_infill_filament. The legacy implicit rule (sparse !=
++    // wall) is preserved as a fallback when the explicit toggle key
++    // is absent from `in`.
++    const auto *opt_enable_infill_filament_override = in.opt<ConfigOptionBool>(key_enable_infill_filament_override);
++    const auto *opt_sparse_infill_filament = in.opt<ConfigOptionInt>("sparse_infill_filament");
++    const bool  allow_local_infill_filament_override = opt_enable_infill_filament_override != nullptr ?
++        opt_enable_infill_filament_override->value :
++        (opt_sparse_infill_filament != nullptr &&
++         opt_sparse_infill_filament->value > 0 &&
++         opt_sparse_infill_filament->value != out.wall_filament.value);
++    if (opt_enable_infill_filament_override != nullptr)
++        out.enable_infill_filament_override.value = opt_enable_infill_filament_override->value;
++    else if (opt_sparse_infill_filament != nullptr)
++        out.enable_infill_filament_override.value = allow_local_infill_filament_override;
+     // 2) Copy the rest of the values.
+     for (auto it = in.cbegin(); it != in.cend(); ++ it)
+-        if (it->first != key_extruder)
++        if (it->first != key_extruder && it->first != key_enable_infill_filament_override)
+             if (ConfigOption* my_opt = out.option(it->first, false); my_opt != nullptr) {
++                // Skip writing sparse_infill_filament when the override
++                // toggle is off — the region's sparse_infill_filament
++                // should mirror wall_filament in that case.
++                if (it->first == "sparse_infill_filament" && !allow_local_infill_filament_override)
++                    continue;
+                 if (one_of(it->first, keys_extruders)) {
+                     // Ignore "default" extruders.
+                     int extruder = static_cast<const ConfigOptionInt*>(it->second.get())->value;
+@@ -3417,6 +3460,13 @@ SlicingParameters PrintObject::slicing_parameters(const DynamicPrintConfig &full
+ 	print_config.apply(full_config, true);
+ 	object_config.apply(full_config, true);
+ 	default_region_config.apply(full_config, true);
++    // OrcaXR Android (FullSpectrum patch 0040). Reset the override toggle
++    // + sparse_infill_filament on the default region so per-volume / per-
++    // layer-range configs aren't reading inherited overrides from a
++    // previous print. apply_to_print_region_config re-applies them when
++    // the volume/range config actually authors the override.
++    default_region_config.enable_infill_filament_override.value = false;
++    default_region_config.sparse_infill_filament.value          = default_region_config.wall_filament.value;
+     // BBS
+ 	size_t              filament_extruders = print_config.filament_diameter.size();
+ 	object_config = object_config_from_model_object(object_config, model_object, filament_extruders);
+@@ -3431,6 +3481,13 @@ SlicingParameters PrintObject::slicing_parameters(const DynamicPrintConfig &full
+ 				object_extruders);
+ 			for (const std::pair<const t_layer_height_range, ModelConfig> &range_and_config : model_object.layer_config_ranges)
+ 				if (range_and_config.second.has("wall_filament") ||
++                    // OrcaXR Android (FullSpectrum patch 0040). Include
++                    // the FS infill-filament-override keys so a per-Z-band
++                    // override of any of them is treated as authoring an
++                    // extruder set, not silently ignored.
++                    range_and_config.second.has("enable_infill_filament_override") ||
++                    range_and_config.second.has("infill_filament_use_base_first_layers") ||
++                    range_and_config.second.has("infill_filament_use_base_last_layers") ||
+ 					range_and_config.second.has("sparse_infill_filament") ||
+ 					range_and_config.second.has("solid_infill_filament"))
+ 					PrintRegion::collect_object_printing_extruders(
+@@ -3848,9 +3905,15 @@ void PrintObject::combine_infill()
+ 
+         // Limit the number of combined layers to the maximum height allowed by this regions' nozzle.
+         //FIXME limit the layer height to max_layer_height
+-        double nozzle_diameter = std::min(
+-            this->print()->config().nozzle_diameter.get_at(region.config().sparse_infill_filament.value - 1),
+-            this->print()->config().nozzle_diameter.get_at(region.config().solid_infill_filament.value - 1));
++        // OrcaXR Android (FullSpectrum patch 0040). When the
++        // enable_infill_filament_override toggle is OFF, sparse infill
++        // shares the wall extruder so the wall_filament nozzle is the
++        // binding constraint (not the unused sparse_infill_filament).
++        // Mirrors FS v0.9.9 PrintObject.cpp combine_infill change.
++        double nozzle_diameter = this->print()->config().nozzle_diameter.get_at(region.config().wall_filament.value - 1);
++        if (region.config().enable_infill_filament_override.value)
++            nozzle_diameter = std::min(nozzle_diameter, this->print()->config().nozzle_diameter.get_at(region.config().sparse_infill_filament.value - 1));
++        nozzle_diameter = std::min(nozzle_diameter, this->print()->config().nozzle_diameter.get_at(region.config().solid_infill_filament.value - 1));
+         
+         //Orca: Limit combination of infill to up to infill_combination_max_layer_height
+         const double infill_combination_max_layer_height = region.config().infill_combination_max_layer_height.get_abs_value(nozzle_diameter);
