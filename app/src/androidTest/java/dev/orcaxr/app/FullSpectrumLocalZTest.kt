@@ -5,7 +5,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
@@ -16,15 +15,21 @@ import java.io.File
  * With `dithering_local_z_mode=1` only painted XY regions get
  * sub-divided into `local_z_max_sublayers` thinner Z slices; unpainted
  * geometry stays at base layer height. Verifies the engine's sublayer
- * planner (patch 0029, `PrintObjectSlice.cpp`) actually emits sub-layer
- * z-jumps in painted layers while preserving unpainted-layer count.
+ * planner (patch 0052 build_local_z_plan) actually emits sub-layer
+ * z-jumps in painted layers via the LZ5g phase-b emit path (patches
+ * 0065+0066+0067).
  *
- * `@Ignore`'d until patch 0029 (sublayer planner) and `nativeSlice`'s
- * `paintFilamentIndex` plumbing all wire through to a Local-Z-capable
- * Print pipeline.
+ * Un-`@Ignore`'d 2026-05-11 — engine port complete via patches
+ * 0044-0067. The original assertion only checked that the gcode
+ * file was non-empty; that's too weak post-port. The strengthened
+ * assertion looks for the LZ5g phase-b marker comment
+ * `; local-z phase-b perimeter passes begin` which is only emitted
+ * when build_local_z_plan produced non-empty SubLayerPlan records
+ * AND the per-region clipping branch (patch 0065) populated
+ * LocalZPassBucket::by_extruder AND the emit branch (patch 0066)
+ * fired. If any link in that chain breaks, the marker is absent.
  */
 @RunWith(AndroidJUnit4::class)
-@Ignore("Awaiting FullSpectrum engine emission (patches 0027-0034) — see plan phase 2")
 class FullSpectrumLocalZTest {
 
     @Test
@@ -76,6 +81,19 @@ class FullSpectrumLocalZTest {
         assertTrue("Slice produced gcode: $result", result is SliceResult.Success)
 
         val gcode = outGcode.readText()
+
+        // Strong signal: the LZ5g emit branch (patch 0066) emits a
+        // comment marker every time it fires. Its presence proves the
+        // full chain ran end-to-end: build_local_z_plan → SubLayerPlan
+        // records → mixed_masks_union populated → per-region clipping
+        // populated pass_buckets → local_z_pass_refs non-empty → emit.
+        assertTrue(
+            "Expected '; local-z phase-b perimeter passes begin' marker in gcode " +
+                "(LZ5g emit didn't fire — check logcat for 'Local-Z context rejected' or " +
+                "'phase-b enabled but produced no perimeter passes')",
+            gcode.contains("; local-z phase-b perimeter passes begin"),
+        )
+
         // Local-Z Z-jumps appear as G0/G1 Z<x> with smaller step than base layer.
         // Heuristic: at least one Z move with a sub-base step.
         val zMoves = Regex("""G[01].*Z([0-9.]+)""").findAll(gcode)
