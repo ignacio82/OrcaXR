@@ -1,0 +1,87 @@
+Phase 2 (FullSpectrum engine emission, P2J): register the three FS
+region-level infill-filament-override keys in PrintConfigDef.
+
+Ported from FS v0.9.9 (`ratdoux/OrcaSlicer-FullSpectrum@v0.9.9` commit
+b3c41fda), `src/libslic3r/PrintConfig.cpp` lines 3321-3346.
+
+Bug being fixed:
+
+My earlier patch 0027 declared `enable_infill_filament_override`,
+`infill_filament_use_base_first_layers`, and
+`infill_filament_use_base_last_layers` as typed PrintRegionConfig
+fields, but I didn't add the matching `this->add(...)` registrations
+in PrintConfigDef::init_fff_params(). Without those:
+
+  1. `set_deserialize_nothrow` returns false for the key — silently
+     dropped at slice time even though the typed field exists.
+  2. The typed field reads return the C++ default (0 / false), NOT
+     a user-authored value flowing through DynamicPrintConfig.
+  3. Per GEMINI.md gotcha #2, this is exactly the "unknown key is
+     silently dropped" trap that bit OrcaXR before.
+
+This patch adds the missing registrations with the FS v0.9.9 labels
+(English, GUI/category metadata, comAdvanced mode, defaults from
+the FS source). Three keys:
+
+- `enable_infill_filament_override` (coBool, default false)
+- `infill_filament_use_base_first_layers` (coInt, default 0, min 0)
+- `infill_filament_use_base_last_layers` (coInt, default 0, min 0)
+
+Verified compile-clean via incremental libslic3r rebuild (3/3
+objects, 0 FAILED) + ./gradlew :app:assembleDebug.
+
+Hard dependency: patch 0027 (PrintRegionConfig typed field
+declarations). Companion to:
+  - 0034 (PrintRegion::extruder + collect_object_printing_extruders
+    consumers — these now find the registered values)
+  - 0036 (LayerTools::sparse_infill_filament + solid_infill_filament
+    consumers)
+  - 0037 (PrintObject::invalidate_state_by_config_options registers
+    the keys for change-tracking).
+
+Together, the four patches make the FS infill-filament-override
+toggle a fully-functional first-class feature in OrcaXR.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+diff --git a/src/libslic3r/PrintConfig.cpp b/src/libslic3r/PrintConfig.cpp
+index 1db4193795..419a2f3b2b 100644
+--- a/src/libslic3r/PrintConfig.cpp
++++ b/src/libslic3r/PrintConfig.cpp
+@@ -3912,6 +3912,37 @@ void PrintConfigDef::init_fff_params()
+     def->gui_type = ConfigOptionDef::GUIType::one_string;
+     def->set_default_value(new ConfigOptionPoints());
+ 
++    // OrcaXR Android (FullSpectrum patch 0038). Register the three FS
++    // region-level infill-filament-override keys whose typed declarations
++    // were added in patch 0027. Without these `this->add(...)` calls
++    // set_deserialize_nothrow rejects the keys at slice time and the
++    // engine's typed field reads return default-constructed values, NOT
++    // the user-authored config.
++    def = this->add("enable_infill_filament_override", coBool);
++    def->label = L("Override infill filament");
++    def->category = L("Extruders");
++    def->tooltip = L("Allow this print, object, or part to use a dedicated filament for sparse infill instead of inheriting its regular filament.");
++    def->mode = comAdvanced;
++    def->set_default_value(new ConfigOptionBool(false));
++
++    def = this->add("infill_filament_use_base_first_layers", coInt);
++    def->label = L("Base infill on first layers");
++    def->category = L("Extruders");
++    def->tooltip = L("Keep using the regular object filament for this many bottom infill layers before switching to the infill override filament.");
++    def->sidetext = L("layers");
++    def->min = 0;
++    def->mode = comAdvanced;
++    def->set_default_value(new ConfigOptionInt(0));
++
++    def = this->add("infill_filament_use_base_last_layers", coInt);
++    def->label = L("Base infill on last layers");
++    def->category = L("Extruders");
++    def->tooltip = L("Keep using the regular object filament for this many top infill layers after switching back from the infill override filament.");
++    def->sidetext = L("layers");
++    def->min = 0;
++    def->mode = comAdvanced;
++    def->set_default_value(new ConfigOptionInt(0));
++
+     def = this->add("sparse_infill_filament", coInt);
+     def->gui_type = ConfigOptionDef::GUIType::i_enum_open;
+     def->label = L("Infill");
