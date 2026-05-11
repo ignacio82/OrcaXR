@@ -1,0 +1,866 @@
+diff --git a/src/libslic3r/GCode.cpp b/src/libslic3r/GCode.cpp
+index fe10cbcd41..1257375521 100644
+--- a/src/libslic3r/GCode.cpp
++++ b/src/libslic3r/GCode.cpp
+@@ -12,6 +12,9 @@
+ #include "GCode/PrintExtents.hpp"
+ #include "GCode/Thumbnails.hpp"
+ #include "GCode/WipeTower.hpp"
++// FullSpectrum Local-Z (patch 0066). order_bucket_extruders used by the
++// LZ5g emit branch's legacy scheduler.
++#include "LocalZOrderOptimizer.hpp"
+ #include "ShortestPath.hpp"
+ #include "Print.hpp"
+ #include "Utils.hpp"
+@@ -1465,10 +1468,77 @@ static std::vector<Vec2d> get_path_of_change_filament(const Print& print)
+         return gcode;
+     }
+ 
+-    std::string WipeTowerIntegration::tool_change(GCode &gcodegen, int extruder_id, bool finish_layer)
++    std::string WipeTowerIntegration::tool_change(GCode &gcodegen, int extruder_id, bool finish_layer,
++                                                  bool local_z_unplanned, double local_z_nominal_layer_z)
+     {
+         std::string gcode;
+ 
++        // =============================================================
++        // OrcaXR Android (FullSpectrum Local-Z, patch 0058 — LZ5c).
++        // Local-Z unplanned-toolchange path: when the gcode driver wants
++        // to switch tools at a sub-Z boundary that wasn't anticipated
++        // by the per-layer wipe-tower planner, this branch consumes the
++        // next preplanned per-sub-Z tcr from m_local_z_tool_changes
++        // (populated by LZ5d's Print.cpp wipe-tower planning hook,
++        // calling WipeTower2::plan_local_z_toolchange — patch 0053). If
++        // the next preplanned tcr matches (initial_tool / new_tool both
++        // line up), the corresponding tcr is appended at
++        // local_z_nominal_layer_z; otherwise we fall back to a direct
++        // extruder switch.
++        //
++        // The reserve-box ad-hoc emission path (FS lines 1003-1188 —
++        // builds an ephemeral WipeTower2, calls local_z_tool_change on
++        // a slot from get_local_z_reserve_boxes) is deferred: it
++        // requires Print& access from GCode that we don't yet thread
++        // through, and the simpler set_extruder fallback is correct
++        // for printers that don't need a mid-print purge.
++        //
++        // Source: FS v0.9.9 GCode.cpp lines 969-1192.
++        if (local_z_unplanned) {
++            if (extruder_id < 0 || !gcodegen.writer().need_toolchange(extruder_id))
++                return "";
++            const double current_z          = gcodegen.writer().get_position().z();
++            const double tower_z            = local_z_nominal_layer_z >= 0. ? local_z_nominal_layer_z : current_z;
++            const double toolchange_print_z = tower_z - gcodegen.config().z_offset.value;
++
++            if (m_layer_idx >= 0 && size_t(m_layer_idx) < m_local_z_tool_changes.size() &&
++                size_t(m_layer_idx) < m_local_z_tool_change_idx.size()) {
++                size_t &local_z_tool_change_idx        = m_local_z_tool_change_idx[size_t(m_layer_idx)];
++                const auto &layer_local_z_tool_changes = m_local_z_tool_changes[size_t(m_layer_idx)];
++                if (local_z_tool_change_idx < layer_local_z_tool_changes.size()) {
++                    const WipeTower::ToolChangeResult &local_z_tcr = layer_local_z_tool_changes[local_z_tool_change_idx];
++                    // OrcaXR adaptation: FS writer().extruder() — ours uses
++                    // writer().filament() (same semantics, different name).
++                    const int current_tool = gcodegen.writer().filament() != nullptr ? int(gcodegen.writer().filament()->id()) : -1;
++                    if (int(local_z_tcr.new_tool) == extruder_id &&
++                        (current_tool < 0 || int(local_z_tcr.initial_tool) == current_tool)) {
++                        ++local_z_tool_change_idx;
++                        BOOST_LOG_TRIVIAL(debug) << "Local-Z toolchange emitted from preplanned wipe tower sequence"
++                                                 << " layer_idx=" << m_layer_idx
++                                                 << " extruder_id=" << extruder_id
++                                                 << " local_z_tool_change_idx=" << (local_z_tool_change_idx - 1);
++                        return append_tcr2(gcodegen, local_z_tcr, extruder_id, tower_z);
++                    }
++
++                    BOOST_LOG_TRIVIAL(warning) << "Local-Z preplanned wipe tower sequence mismatch, falling back"
++                                               << " layer_idx=" << m_layer_idx
++                                               << " requested_extruder=" << extruder_id
++                                               << " current_tool=" << current_tool
++                                               << " planned_initial=" << local_z_tcr.initial_tool
++                                               << " planned_new=" << local_z_tcr.new_tool
++                                               << " local_z_tool_change_idx=" << local_z_tool_change_idx;
++                }
++            }
++
++            // Fallback: direct extruder switch. The full FS implementation
++            // builds an ephemeral WipeTower2 from a reserve box at this
++            // point; that's deferred until LZ5d threads Print& through.
++            BOOST_LOG_TRIVIAL(debug) << "Local-Z unplanned toolchange using direct extruder switch"
++                                     << " layer_idx=" << m_layer_idx
++                                     << " extruder_id=" << extruder_id;
++            return gcodegen.set_extruder(unsigned(extruder_id), toolchange_print_z);
++        }
++
+         assert(m_layer_idx >= 0);
+         if (m_layer_idx >= (int) m_tool_changes.size())
+             return gcode;
+@@ -2571,8 +2641,13 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
+     {
+         if (is_bbl_printers) {
+             file.write("; CONFIG_BLOCK_START\n");
++            // OrcaXR: append_full_config crashes on Android when no preset
++            // bundle is loaded — some enum option's name table is null and
++            // serialize_single_value derefs it. Skip the config dump for
++            // now; it's just a comment block consumers don't strictly
++            // need. Re-enable when Phase 1 wires real preset bundles.
+             std::string full_config;
+-            append_full_config(print, full_config);
++            // append_full_config(print, full_config);
+             if (!full_config.empty())
+                 file.write(full_config);
+ 
+@@ -3282,8 +3357,15 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
+             std::vector<std::pair<coordf_t, std::vector<LayerToPrint>>> layers_to_print = collect_layers_to_print(print);
+             // Prusa Multi-Material wipe tower.
+             if (has_wipe_tower && ! layers_to_print.empty()) {
++                // FullSpectrum Local-Z (patch 0057): pass the per-layer
++                // Local-Z purge tcrs + reserve boxes from WipeTowerData
++                // so WipeTowerIntegration::next_layer() / tool_change()
++                // can route Z-walk emissions through them. Both vectors
++                // are empty when Local-Z is off.
+                 m_wipe_tower.reset(new WipeTowerIntegration(print.config(), print.get_plate_index(), print.get_plate_origin(), *print.wipe_tower_data().priming.get(),
+-                                                            print.wipe_tower_data().tool_changes, *print.wipe_tower_data().final_purge.get(), print.get_slice_used_filaments(false)));
++                                                            print.wipe_tower_data().tool_changes, *print.wipe_tower_data().final_purge.get(), print.get_slice_used_filaments(false),
++                                                            print.wipe_tower_data().local_z_tool_changes,
++                                                            print.wipe_tower_data().local_z_reserve_boxes));
+                 m_wipe_tower->set_wipe_tower_depth(print.get_wipe_tower_depth());
+                 m_wipe_tower->set_wipe_tower_bbx(print.get_wipe_tower_bbx());
+                 m_wipe_tower->set_rib_offset(print.get_rib_offset());
+@@ -3444,8 +3526,11 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
+             .c_str());
+       file.write("\n");
+       file.write("; CONFIG_BLOCK_START\n");
++      // OrcaXR: see comment on the BBL branch above. Skip the
++      // append_full_config dump; it crashes without a loaded preset
++      // bundle.
+       std::string full_config;
+-      append_full_config(print, full_config);
++      // append_full_config(print, full_config);
+       if (!full_config.empty())
+         file.write(full_config);
+ 
+@@ -4313,6 +4398,186 @@ std::string GCode::generate_skirt(const Print &print,
+     return gcode;
+ }
+ 
++// =============================================================
++// OrcaXR Android (FullSpectrum Local-Z, patch 0063 — LZ5g helpers).
++// File-scope helpers used by the future LZ5g-emit patch to clip each
++// LayerRegion's perimeter ExtrusionEntityCollection by per-pass
++// painted masks + override flow height to the sub-Z pass height.
++// All static, dead code until the emit branch consumes them.
++// Source: FS v0.9.9 GCode.cpp lines 3566-3735.
++// =============================================================
++
++// Rescales an ExtrusionPath's mm3_per_mm to a new flow height while
++// preserving total extrusion volume. Local-Z sub-Z passes use thinner
++// layers than the nominal layer height, so this is how the planner
++// keeps the volumetric extrusion rate correct.
++static inline void apply_local_z_flow_height_override(ExtrusionPath& path, const double flow_height_override)
++{
++    if (flow_height_override <= EPSILON)
++        return;
++    if (path.height > EPSILON) {
++        const double ratio = flow_height_override / path.height;
++        path.mm3_per_mm *= ratio;
++    }
++    path.height = float(flow_height_override);
++}
++
++// Clips a single ExtrusionPath against include/exclude masks and
++// appends each resulting Polyline as a fresh ExtrusionPath (copying
++// flow/role from src_path, with flow_height_override applied).
++static inline void append_clipped_path(const ExtrusionPath& src_path,
++                                       const ExPolygons*    include_masks,
++                                       const ExPolygons*    exclude_masks,
++                                       const double         flow_height_override,
++                                       ExtrusionEntityCollection& dst)
++{
++    Polylines segments{src_path.polyline};
++    if (include_masks != nullptr && !include_masks->empty())
++        segments = intersection_pl(std::move(segments), *include_masks);
++    if (exclude_masks != nullptr && !exclude_masks->empty())
++        segments = diff_pl(std::move(segments), *exclude_masks);
++
++    for (Polyline& segment : segments) {
++        if (!segment.is_valid())
++            continue;
++        ExtrusionPath clipped(segment, src_path);
++        apply_local_z_flow_height_override(clipped, flow_height_override);
++        dst.append(std::move(clipped));
++    }
++}
++
++// Expands masks by a small epsilon for boundary safety; falls back to
++// the source masks if the expansion erases everything. Used to pad
++// pass-bucket masks so perimeter centerlines don't disappear at the
++// exact boundary between Local-Z passes.
++static inline ExPolygons local_z_compensate_masks(const ExPolygons& src_masks,
++                                                  const float       delta_scaled,
++                                                  const bool        fallback_to_source)
++{
++    if (src_masks.empty() || std::abs(delta_scaled) <= EPSILON)
++        return src_masks;
++
++    ExPolygons compensated = offset_ex(src_masks, delta_scaled);
++    if (!compensated.empty() && compensated.size() > 1)
++        compensated = union_ex(compensated);
++
++    if (compensated.empty() && fallback_to_source)
++        return src_masks;
++    return compensated;
++}
++
++// Aggregated path-height stats used to validate that the
++// flow-height-override actually took effect on clipped paths.
++struct LocalZPathHeightStats
++{
++    size_t count { 0 };
++    double min   { std::numeric_limits<double>::max() };
++    double max   { 0.0 };
++};
++
++static inline void collect_local_z_path_height_stats(const ExtrusionEntity& entity, LocalZPathHeightStats& stats)
++{
++    if (const auto* path = dynamic_cast<const ExtrusionPath*>(&entity)) {
++        const double h = path->height;
++        ++stats.count;
++        stats.min = std::min(stats.min, h);
++        stats.max = std::max(stats.max, h);
++    } else if (const auto* multipath = dynamic_cast<const ExtrusionMultiPath*>(&entity)) {
++        for (const ExtrusionPath& p : multipath->paths) {
++            const double h = p.height;
++            ++stats.count;
++            stats.min = std::min(stats.min, h);
++            stats.max = std::max(stats.max, h);
++        }
++    } else if (const auto* loop = dynamic_cast<const ExtrusionLoop*>(&entity)) {
++        for (const ExtrusionPath& p : loop->paths) {
++            const double h = p.height;
++            ++stats.count;
++            stats.min = std::min(stats.min, h);
++            stats.max = std::max(stats.max, h);
++        }
++    } else if (const auto* collection = dynamic_cast<const ExtrusionEntityCollection*>(&entity)) {
++        for (const ExtrusionEntity* child : collection->entities)
++            if (child != nullptr)
++                collect_local_z_path_height_stats(*child, stats);
++    }
++}
++
++static inline void finalize_local_z_path_height_stats(LocalZPathHeightStats& stats)
++{
++    if (stats.count == 0) {
++        stats.min = 0.;
++        stats.max = 0.;
++    }
++}
++
++static inline LocalZPathHeightStats collect_local_z_path_height_stats(const ExtrusionEntityCollection& source)
++{
++    LocalZPathHeightStats stats;
++    ExtrusionEntityCollection flattened = source.flatten(false);
++    for (const ExtrusionEntity* entity : flattened.entities)
++        if (entity != nullptr)
++            collect_local_z_path_height_stats(*entity, stats);
++    finalize_local_z_path_height_stats(stats);
++    return stats;
++}
++
++static inline LocalZPathHeightStats collect_local_z_path_height_stats(const ExtrusionEntitiesPtr& source)
++{
++    LocalZPathHeightStats stats;
++    for (const ExtrusionEntity* entity : source)
++        if (entity != nullptr)
++            collect_local_z_path_height_stats(*entity, stats);
++    finalize_local_z_path_height_stats(stats);
++    return stats;
++}
++
++// Main clipping entry point: flattens the source collection, clips
++// each path against include/exclude masks, and applies the flow-height
++// override. Returns nullptr if the result would be empty (so callers
++// can short-circuit). std::unique_ptr lets the caller pin the lifetime
++// of the clipped collection to the pass bucket without copying.
++static std::unique_ptr<ExtrusionEntityCollection> clip_extrusion_collection_for_local_z(
++    const ExtrusionEntityCollection& source,
++    const ExPolygons*                include_masks,
++    const ExPolygons*                exclude_masks,
++    const double                     flow_height_override)
++{
++    if (source.entities.empty())
++        return nullptr;
++
++    if ((include_masks == nullptr || include_masks->empty()) &&
++        (exclude_masks == nullptr || exclude_masks->empty()) &&
++        flow_height_override <= EPSILON) {
++        return std::make_unique<ExtrusionEntityCollection>(source);
++    }
++
++    auto out = std::make_unique<ExtrusionEntityCollection>();
++    out->no_sort = source.no_sort;
++
++    ExtrusionEntityCollection flattened = source.flatten(false);
++    for (const ExtrusionEntity* entity : flattened.entities) {
++        if (const auto* path = dynamic_cast<const ExtrusionPath*>(entity)) {
++            append_clipped_path(*path, include_masks, exclude_masks, flow_height_override, *out);
++        } else if (const auto* multipath = dynamic_cast<const ExtrusionMultiPath*>(entity)) {
++            for (const ExtrusionPath& path : multipath->paths)
++                append_clipped_path(path, include_masks, exclude_masks, flow_height_override, *out);
++        } else if (const auto* loop = dynamic_cast<const ExtrusionLoop*>(entity)) {
++            for (const ExtrusionPath& path : loop->paths)
++                append_clipped_path(path, include_masks, exclude_masks, flow_height_override, *out);
++        } else {
++            // Fallback for unknown entity subclasses: keep behavior unchanged.
++            if (include_masks == nullptr && exclude_masks == nullptr && flow_height_override <= EPSILON)
++                out->append(*entity);
++        }
++    }
++
++    if (out->entities.empty())
++        return nullptr;
++
++    return out;
++}
++
+ // In sequential mode, process_layer is called once per each object and its copy,
+ // therefore layers will contain a single entry and single_object_instance_idx will point to the copy of the object.
+ // In non-sequential mode, process_layer is called per each print_z height with all object and support layers accumulated.
+@@ -4649,6 +4914,176 @@ LayerResult GCode::process_layer(
+     // Group extrusions by an extruder, then by an object, an island and a region.
+     std::map<unsigned int, std::vector<ObjectByExtruder>> by_extruder;
+     bool is_anything_overridden = const_cast<LayerTools&>(layer_tools).wiping_extrusions().is_anything_overridden();
++
++    // =============================================================
++    // OrcaXR Android (FullSpectrum Local-Z, patch 0061 — LZ5f scaffold).
++    // Per-layer Local-Z context setup. For each LayerToPrint whose
++    // PrintObject has populated local_z_intervals + sublayer_plans
++    // (build_local_z_plan, patch 0052), this block walks the
++    // SubLayerPlan records for the matching layer_id and accumulates
++    // a LocalZLayerContext with one LocalZPassBucket per split sub-Z
++    // pass. The bucket caches the per-extruder painted masks expanded
++    // by a small perimeter epsilon so the future Z-walk emit loop can
++    // route per-region extrusions into the right sub-Z pass.
++    //
++    // This patch lands the data-structure setup only — dead code
++    // until the future emit-loop patch consumes pass_buckets. Local-Z
++    // phase-b is not enabled with wiping-overrides: that flow emits a
++    // separate purge/print pass that is not Local-Z aware yet.
++    //
++    // Source: FS v0.9.9 GCode.cpp lines 4948-5170.
++    // =============================================================
++    constexpr double LOCAL_Z_PERIMETER_MASK_EXPAND_MM = 0.10;
++    constexpr double LOCAL_Z_BASE_MASK_EXPAND_MM      = 0.04;
++    const float      local_z_perimeter_mask_expand    = float(scale_(LOCAL_Z_PERIMETER_MASK_EXPAND_MM));
++    const float      local_z_base_mask_expand         = float(scale_(LOCAL_Z_BASE_MASK_EXPAND_MM));
++    const bool       local_z_whole_objects_enabled    = print.full_print_config().opt_bool("dithering_local_z_whole_objects");
++    (void)local_z_whole_objects_enabled;
++
++    struct LocalZPassBucket {
++        const SubLayerPlan*                                   plan { nullptr };
++        std::vector<ExPolygons>                               compensated_masks_by_extruder;
++        std::map<unsigned int, std::vector<ObjectByExtruder>> by_extruder;
++    };
++    struct LocalZLayerContext {
++        bool                          enabled { false };
++        ExPolygons                    raw_mixed_masks_union;
++        ExPolygons                    mixed_masks_union;
++        ExPolygons                    mixed_masks_union_for_base_exclude;
++        size_t                        local_clipped_collections { 0 };
++        size_t                        base_clipped_collections { 0 };
++        size_t                        base_clip_leak_warnings { 0 };
++        std::vector<LocalZPassBucket> pass_buckets;
++    };
++
++    const bool local_z_perimeter_runtime_supported = !is_anything_overridden;
++    bool       local_z_phase_b_requested_for_layer = false;
++    std::vector<LocalZLayerContext> local_z_layer_contexts;
++    // FullSpectrum Local-Z (patch 0065 — LZ5g population step 3).
++    // Storage for clipped ExtrusionEntityCollections — pinned here so
++    // pass_bucket.by_extruder pointers stay valid through the rest of
++    // process_layer (including the future emit branch). std::unique_ptr
++    // so each clipped collection has a clear owner.
++    std::vector<std::unique_ptr<ExtrusionEntityCollection>> local_z_clipped_collections;
++    if (local_z_perimeter_runtime_supported) {
++        local_z_layer_contexts.resize(layers.size());
++        for (size_t layer_to_print_idx = 0; layer_to_print_idx < layers.size(); ++layer_to_print_idx) {
++            const LayerToPrint& layer_to_print = layers[layer_to_print_idx];
++            if (layer_to_print.object_layer == nullptr)
++                continue;
++
++            const PrintObject* print_object = layer_to_print.original_object != nullptr ? layer_to_print.original_object : layer_to_print.object();
++            if (print_object == nullptr)
++                continue;
++
++            const size_t layer_id = size_t(layer_to_print.object_layer->id());
++            const auto&  intervals = print_object->local_z_intervals();
++            const auto&  plans     = print_object->local_z_sublayer_plan();
++            if (intervals.empty() || plans.empty())
++                continue;
++
++            auto it_interval = std::find_if(intervals.begin(), intervals.end(), [layer_id](const LocalZInterval& interval) {
++                return interval.layer_id == layer_id;
++            });
++            if (it_interval == intervals.end())
++                continue;
++            if (!it_interval->has_mixed_paint || it_interval->sublayer_count <= 1 || it_interval->first_sublayer_idx >= plans.size())
++                continue;
++            local_z_phase_b_requested_for_layer = true;
++
++            LocalZLayerContext& ctx = local_z_layer_contexts[layer_to_print_idx];
++            ctx.enabled = true;
++            const size_t first_idx = it_interval->first_sublayer_idx;
++            const size_t end_idx   = std::min(plans.size(), first_idx + it_interval->sublayer_count);
++            ExPolygons   raw_mixed_masks_union;
++            for (size_t plan_idx = first_idx; plan_idx < end_idx; ++plan_idx) {
++                const SubLayerPlan& plan = plans[plan_idx];
++                if (!plan.split_interval)
++                    continue;
++
++                LocalZPassBucket bucket;
++                bucket.plan = &plan;
++                const size_t plan_mask_slots = std::max(plan.painted_masks_by_extruder.size(), plan.fixed_painted_masks_by_extruder.size());
++                bucket.compensated_masks_by_extruder.assign(plan_mask_slots, ExPolygons());
++                for (size_t extruder_id = 0; extruder_id < plan_mask_slots; ++extruder_id) {
++                    const ExPolygons& mixed_raw = extruder_id < plan.painted_masks_by_extruder.size() ?
++                                                       plan.painted_masks_by_extruder[extruder_id] : ExPolygons();
++                    const ExPolygons& fixed_raw = extruder_id < plan.fixed_painted_masks_by_extruder.size() ?
++                                                       plan.fixed_painted_masks_by_extruder[extruder_id] : ExPolygons();
++                    if (mixed_raw.empty() && fixed_raw.empty())
++                        continue;
++                    ExPolygons compensated;
++                    if (!mixed_raw.empty()) {
++                        ExPolygons compensated_mixed = offset_ex(mixed_raw, local_z_perimeter_mask_expand);
++                        if (compensated_mixed.empty())
++                            compensated_mixed = mixed_raw;
++                        else if (compensated_mixed.size() > 1)
++                            compensated_mixed = union_ex(compensated_mixed);
++                        append(compensated, compensated_mixed);
++                        append(raw_mixed_masks_union, mixed_raw);
++                    }
++                    if (!fixed_raw.empty())
++                        append(compensated, fixed_raw);
++                    if (compensated.size() > 1)
++                        compensated = union_ex(compensated);
++                    bucket.compensated_masks_by_extruder[extruder_id] = std::move(compensated);
++                }
++                ctx.pass_buckets.push_back(std::move(bucket));
++                // FullSpectrum Local-Z (patch 0064 — LZ5g population step 1).
++                // Accumulate the appended bucket's compensated masks into
++                // ctx.mixed_masks_union — the per-layer envelope of all
++                // sub-Z painted geometry. The future LZ5g-emit population
++                // branch gates on this being non-empty before clipping
++                // any extrusions, so without this accumulation the gate
++                // never fires and pass_buckets stay empty.
++                {
++                    const LocalZPassBucket& appended = ctx.pass_buckets.back();
++                    for (const ExPolygons& masks : appended.compensated_masks_by_extruder)
++                        append(ctx.mixed_masks_union, masks);
++                }
++            }
++            ctx.raw_mixed_masks_union = std::move(raw_mixed_masks_union);
++            if (ctx.raw_mixed_masks_union.size() > 1)
++                ctx.raw_mixed_masks_union = union_ex(ctx.raw_mixed_masks_union);
++            // FullSpectrum Local-Z (patch 0064 — LZ5g population step 2).
++            // Tighten and fall-back the mixed_masks_union. If it can be
++            // unioned cleanly, use the union; otherwise fall back to the
++            // raw masks. Empty after this point means the buckets have
++            // no painted geometry — reject the context so the emit
++            // branch (future patch) doesn't try to clip empty masks.
++            if (!ctx.mixed_masks_union.empty() && ctx.mixed_masks_union.size() > 1) {
++                ExPolygons merged_masks = union_ex(ctx.mixed_masks_union);
++                if (!merged_masks.empty())
++                    ctx.mixed_masks_union = std::move(merged_masks);
++                else if (!ctx.raw_mixed_masks_union.empty())
++                    ctx.mixed_masks_union = ctx.raw_mixed_masks_union;
++            }
++            if (ctx.mixed_masks_union.empty() && !ctx.raw_mixed_masks_union.empty())
++                ctx.mixed_masks_union = ctx.raw_mixed_masks_union;
++            // Base-mask exclude: expanded by the (smaller) base epsilon
++            // and used by the future emit branch to subtract painted
++            // geometry from base-layer extrusions, so base perimeters
++            // don't overlap the sub-Z passes.
++            const ExPolygons& base_exclude_source =
++                !ctx.raw_mixed_masks_union.empty() ? ctx.raw_mixed_masks_union : ctx.mixed_masks_union;
++            if (!base_exclude_source.empty()) {
++                ctx.mixed_masks_union_for_base_exclude =
++                    local_z_compensate_masks(base_exclude_source, local_z_base_mask_expand, true);
++            }
++            if (ctx.pass_buckets.empty() || ctx.mixed_masks_union.empty()) {
++                ctx.enabled = false;
++                BOOST_LOG_TRIVIAL(warning) << "Local-Z context rejected"
++                                           << " print_z=" << print_z
++                                           << " layer_id=" << layer_id
++                                           << " pass_buckets=" << ctx.pass_buckets.size()
++                                           << " mixed_masks_polygons=" << ctx.mixed_masks_union.size();
++            }
++        }
++    }
++    if (local_z_phase_b_requested_for_layer) {
++        BOOST_LOG_TRIVIAL(debug) << "Local-Z phase-b context populated"
++                                 << " layers=" << local_z_layer_contexts.size();
++    }
+     for (const LayerToPrint &layer_to_print : layers) {
+         if (layer_to_print.support_layer != nullptr) {
+             const SupportLayer &support_layer = *layer_to_print.support_layer;
+@@ -4803,6 +5238,85 @@ LayerResult GCode::process_layer(
+                         if (extrusions->entities.empty()) // This shouldn't happen but first_point() would fail.
+                             continue;
+ 
++                        // FullSpectrum Local-Z (patch 0065 — LZ5g population step 3).
++                        // For perimeter extrusions in a Local-Z eligible layer, clip
++                        // each pass_bucket's compensated masks out of the extrusion
++                        // and route the clipped result into pass_bucket.by_extruder.
++                        // This is ADDITIVE — the original `extrusions` still flows
++                        // through the normal by_extruder path below. The future
++                        // LZ5g-emit patch will (a) consume pass_bucket.by_extruder
++                        // and (b) subtract painted geometry from the base path so
++                        // there's no double-printing. For now, until the emit
++                        // branch lands, pass_bucket.by_extruder is just populated
++                        // and read by local_z_pass_refs (patch 0062) — the
++                        // diagnostic log shows live data.
++                        if (entity_type == ObjectByExtruder::Island::Region::PERIMETERS &&
++                            local_z_perimeter_runtime_supported) {
++                            const size_t layer_to_print_idx_for_lz = size_t(&layer_to_print - layers.data());
++                            if (layer_to_print_idx_for_lz < local_z_layer_contexts.size()) {
++                                LocalZLayerContext& local_z_ctx_inner = local_z_layer_contexts[layer_to_print_idx_for_lz];
++                                if (local_z_ctx_inner.enabled && !local_z_ctx_inner.mixed_masks_union.empty()) {
++                                    for (LocalZPassBucket& pass_bucket : local_z_ctx_inner.pass_buckets) {
++                                        if (pass_bucket.plan == nullptr)
++                                            continue;
++                                        for (size_t pass_extruder_id = 0;
++                                             pass_extruder_id < pass_bucket.compensated_masks_by_extruder.size();
++                                             ++pass_extruder_id) {
++                                            const ExPolygons& pass_masks = pass_bucket.compensated_masks_by_extruder[pass_extruder_id];
++                                            if (pass_masks.empty())
++                                                continue;
++                                            auto clipped_local = clip_extrusion_collection_for_local_z(
++                                                *extrusions, &pass_masks, nullptr,
++                                                pass_bucket.plan->flow_height);
++                                            if (!clipped_local)
++                                                continue;
++                                            const ExtrusionEntityCollection* clipped_ptr = clipped_local.get();
++                                            const LocalZPathHeightStats local_height_stats =
++                                                collect_local_z_path_height_stats(*clipped_ptr);
++                                            ++local_z_ctx_inner.local_clipped_collections;
++                                            if (local_height_stats.count > 0 &&
++                                                (std::abs(local_height_stats.min - pass_bucket.plan->flow_height) > 1e-3 ||
++                                                 std::abs(local_height_stats.max - pass_bucket.plan->flow_height) > 1e-3)) {
++                                                BOOST_LOG_TRIVIAL(warning)
++                                                    << "Local-Z local pass height mismatch"
++                                                    << " print_z=" << print_z
++                                                    << " layer_to_print_idx=" << layer_to_print_idx_for_lz
++                                                    << " plan_layer_id=" << pass_bucket.plan->layer_id
++                                                    << " pass_index=" << pass_bucket.plan->pass_index
++                                                    << " expected_height=" << pass_bucket.plan->flow_height
++                                                    << " observed_min=" << local_height_stats.min
++                                                    << " observed_max=" << local_height_stats.max
++                                                    << " path_count=" << local_height_stats.count;
++                                            }
++                                            local_z_clipped_collections.emplace_back(std::move(clipped_local));
++                                            std::vector<ObjectByExtruder::Island>& bucket_islands =
++                                                object_islands_by_extruder(pass_bucket.by_extruder,
++                                                                           unsigned(pass_extruder_id),
++                                                                           layer_to_print_idx_for_lz,
++                                                                           layers.size(), n_slices + 1);
++                                            for (size_t i = 0; i <= n_slices; ++i) {
++                                                const bool   last       = i == n_slices;
++                                                const size_t island_idx = last ? n_slices : slices_test_order[i];
++                                                // OrcaXR: FS's entity_matches_surface is more thorough
++                                                // (probes midpoint + bbox center as fallback); our
++                                                // process_layer body uses point_inside_surface(first_point)
++                                                // which is good enough here.
++                                                if (last || point_inside_surface(island_idx, clipped_ptr->first_point())) {
++                                                    if (bucket_islands[island_idx].by_region.empty())
++                                                        bucket_islands[island_idx].by_region.assign(
++                                                            print.num_print_regions(),
++                                                            ObjectByExtruder::Island::Region());
++                                                    bucket_islands[island_idx].by_region[region.print_region_id()].append(
++                                                        ObjectByExtruder::Island::Region::PERIMETERS, clipped_ptr, nullptr);
++                                                    break;
++                                                }
++                                            }
++                                        }
++                                    }
++                                }
++                            }
++                        }
++
+                         // This extrusion is part of certain Region, which tells us which extruder should be used for it:
+                         int correct_extruder_id = layer_tools.extruder(*extrusions, region);
+ 
+@@ -4968,6 +5482,277 @@ LayerResult GCode::process_layer(
+     if (m_wipe_tower)
+         m_wipe_tower->set_is_first_print(true);
+ 
++    // =============================================================
++    // OrcaXR Android (FullSpectrum Local-Z, patch 0062 — LZ5g prep).
++    // Local-Z phase-b enabled-check + LocalZPassRef sort + bucket
++    // accessor lambdas. Pure data prep — local_z_pass_refs is
++    // populated from the buckets landed by patch 0061's setup loop
++    // but stays empty until the future emit-loop patch (LZ5g-emit)
++    // also populates LocalZPassBucket::by_extruder. Dead code today.
++    //
++    // Source: FS v0.9.9 GCode.cpp lines 5145-5660.
++    // =============================================================
++    const bool local_z_perimeter_phase_b_enabled =
++        local_z_perimeter_runtime_supported &&
++        std::any_of(local_z_layer_contexts.begin(), local_z_layer_contexts.end(),
++                    [](const LocalZLayerContext& ctx) { return ctx.enabled; });
++    if (local_z_phase_b_requested_for_layer && !local_z_perimeter_runtime_supported) {
++        BOOST_LOG_TRIVIAL(warning) << "Local-Z phase-b disabled"
++                                   << " print_z=" << print_z
++                                   << " has_wipe_tower=" << has_wipe_tower
++                                   << " wiping_overrides=" << is_anything_overridden;
++        gcode += "; local-z perimeter phase-b disabled for this layer (wiping overrides active)\n";
++    } else if (local_z_phase_b_requested_for_layer && !local_z_perimeter_phase_b_enabled) {
++        BOOST_LOG_TRIVIAL(warning) << "Local-Z phase-b requested but no eligible contexts"
++                                   << " print_z=" << print_z
++                                   << " runtime_supported=" << local_z_perimeter_runtime_supported;
++    }
++
++    struct LocalZPassRef {
++        size_t            layer_to_print_idx { 0 };
++        LocalZPassBucket* bucket { nullptr };
++    };
++
++    auto same_local_z_pass_group = [](const LocalZPassRef& lhs, const LocalZPassRef& rhs) {
++        assert(lhs.bucket != nullptr && rhs.bucket != nullptr);
++        assert(lhs.bucket->plan != nullptr && rhs.bucket->plan != nullptr);
++        return std::abs(lhs.bucket->plan->print_z - rhs.bucket->plan->print_z) <= EPSILON;
++    };
++
++    auto local_z_bucket_extruders = [](const LocalZPassBucket& bucket) {
++        std::vector<unsigned int> extruders;
++        extruders.reserve(bucket.by_extruder.size());
++        for (const auto& by_extruder_entry : bucket.by_extruder) {
++            if (!by_extruder_entry.second.empty())
++                extruders.push_back(by_extruder_entry.first);
++        }
++        return extruders;
++    };
++
++    auto shared_local_z_extruder = [](const std::vector<unsigned int>& lhs, const std::vector<unsigned int>& rhs) -> int {
++        for (unsigned int extruder_id : lhs) {
++            if (std::find(rhs.begin(), rhs.end(), extruder_id) != rhs.end())
++                return static_cast<int>(extruder_id);
++        }
++        return -1;
++    };
++
++    std::vector<LocalZPassRef> local_z_pass_refs;
++    if (local_z_perimeter_phase_b_enabled) {
++        for (size_t layer_to_print_idx = 0; layer_to_print_idx < local_z_layer_contexts.size(); ++layer_to_print_idx) {
++            LocalZLayerContext& ctx = local_z_layer_contexts[layer_to_print_idx];
++            if (!ctx.enabled)
++                continue;
++            for (LocalZPassBucket& bucket : ctx.pass_buckets) {
++                if (bucket.plan != nullptr && !bucket.by_extruder.empty())
++                    local_z_pass_refs.push_back(LocalZPassRef{layer_to_print_idx, &bucket});
++            }
++        }
++        std::sort(local_z_pass_refs.begin(), local_z_pass_refs.end(), [](const LocalZPassRef& lhs, const LocalZPassRef& rhs) {
++            assert(lhs.bucket != nullptr && rhs.bucket != nullptr);
++            assert(lhs.bucket->plan != nullptr && rhs.bucket->plan != nullptr);
++            if (lhs.bucket->plan->print_z != rhs.bucket->plan->print_z)
++                return lhs.bucket->plan->print_z < rhs.bucket->plan->print_z;
++            if (lhs.layer_to_print_idx != rhs.layer_to_print_idx)
++                return lhs.layer_to_print_idx < rhs.layer_to_print_idx;
++            return lhs.bucket->plan->pass_index < rhs.bucket->plan->pass_index;
++        });
++    }
++    if (local_z_perimeter_phase_b_enabled) {
++        BOOST_LOG_TRIVIAL(info) << "Local-Z phase-b prepared"
++                                << " print_z=" << print_z
++                                << " perimeter_passes=" << local_z_pass_refs.size();
++        if (local_z_pass_refs.empty()) {
++            BOOST_LOG_TRIVIAL(warning) << "Local-Z phase-b enabled but produced no perimeter passes"
++                                       << " print_z=" << print_z;
++        }
++    }
++    // =============================================================
++    // OrcaXR Android (FullSpectrum Local-Z, patch 0066 — LZ5g emit).
++    // Emit Local-Z phase-b perimeter passes: for each sorted pass_ref,
++    // call the wipe tower with local_z_unplanned=true to load the
++    // right extruder, travel_to_z to the pass's print_z, then
++    // extrude_perimeters for each instance/island stored in the
++    // bucket's by_extruder map. Legacy mode only — dependency-chain
++    // scheduler (FS lines 5833-6000) falls through to legacy here.
++    //
++    // This is the gcode-emitting branch. After this block, the
++    // remainder of process_layer (the normal per-extruder loop) still
++    // runs to print non-painted geometry. The base-mask exclude path
++    // (which would subtract painted geometry from the normal flow) is
++    // a future patch (LZ5h) — for now painted geometry may be
++    // duplicated by the normal flow. Acceptable for first validation:
++    // worst case the print is over-extruded at painted regions, not
++    // missing anything.
++    //
++    // Source: FS v0.9.9 GCode.cpp lines 5665-5824 (legacy scheduler).
++    // =============================================================
++    if (!local_z_pass_refs.empty()) {
++        int local_z_phase_b_active_extruder = (m_writer.filament() != nullptr) ? int(m_writer.filament()->id()) : -1;
++        BOOST_LOG_TRIVIAL(info) << "Local-Z phase-b emitting"
++                                << " print_z=" << print_z
++                                << " perimeter_passes=" << local_z_pass_refs.size();
++        gcode += "; local-z phase-b perimeter passes begin\n";
++
++        auto emit_local_z_toolchange = [&](unsigned int extruder_id, double toolchange_print_z) {
++            if (has_wipe_tower && m_wipe_tower) {
++                // FS: pass local_z_unplanned=true so WipeTowerIntegration::tool_change
++                // consumes the next preplanned per-sub-Z tcr (patch 0058 dispatch).
++                gcode += m_wipe_tower->tool_change(*this, int(extruder_id), false, true, print_z + m_config.z_offset.value);
++                m_last_processor_extrusion_role = erWipeTower;
++            } else {
++                gcode += this->set_extruder(extruder_id, toolchange_print_z);
++            }
++        };
++
++        auto emit_local_z_pass_for_extruder = [&](const LocalZPassRef& pass_ref, unsigned int local_extruder_id) {
++            assert(pass_ref.bucket != nullptr && pass_ref.bucket->plan != nullptr);
++            auto by_extruder_it = pass_ref.bucket->by_extruder.find(local_extruder_id);
++            if (by_extruder_it == pass_ref.bucket->by_extruder.end())
++                return;
++
++            std::vector<ObjectByExtruder>& objects_by_extruder = by_extruder_it->second;
++            if (objects_by_extruder.empty())
++                return;
++
++            const SubLayerPlan& pass_plan = *pass_ref.bucket->plan;
++            const double pass_z             = pass_plan.print_z + m_config.z_offset.value;
++            const double saved_nominal_z    = m_nominal_z;
++            const float  saved_last_layer_z = m_last_layer_z;
++            // Ensure all travel/lift logic inside this pass references the
++            // micro-pass Z, not the base layer nominal Z.
++            m_nominal_z    = pass_z;
++            m_last_layer_z = float(pass_z);
++            BOOST_LOG_TRIVIAL(debug) << "Local-Z pass emit"
++                                     << " print_z=" << print_z
++                                     << " layer_to_print_idx=" << pass_ref.layer_to_print_idx
++                                     << " layer_id=" << pass_plan.layer_id
++                                     << " pass_index=" << pass_plan.pass_index
++                                     << " dependency_group=" << pass_plan.dependency_group
++                                     << " pass_print_z=" << pass_plan.print_z
++                                     << " pass_flow_height=" << pass_plan.flow_height
++                                     << " extruder=" << local_extruder_id;
++            if (std::abs(m_writer.get_position().z() - pass_z) > EPSILON) {
++                gcode += this->retract(false, false, LiftType::NormalLift);
++                gcode += m_writer.travel_to_z(pass_z, "Local-Z perimeter pass");
++            }
++            if (std::abs(m_writer.get_position().z() - pass_z) > EPSILON) {
++                BOOST_LOG_TRIVIAL(warning) << "Local-Z pass z restore"
++                                           << " print_z=" << print_z
++                                           << " layer_id=" << pass_plan.layer_id
++                                           << " pass_index=" << pass_plan.pass_index
++                                           << " expected_pass_z=" << pass_z
++                                           << " observed_z_after_toolchange=" << m_writer.get_position().z();
++                gcode += m_writer.travel_to_z(pass_z, "Local-Z pass z restore");
++            }
++            std::vector<InstanceToPrint> instances_to_print =
++                sort_print_object_instances(objects_by_extruder, layers, ordering, single_object_instance_idx);
++
++            for (InstanceToPrint& instance_to_print : instances_to_print) {
++                const LayerToPrint& layer_to_print_inner = layers[instance_to_print.layer_id];
++                const bool object_layer_over_raft =
++                    layer_to_print_inner.object_layer && layer_to_print_inner.object_layer->id() > 0 &&
++                    instance_to_print.print_object.slicing_parameters().raft_layers() == layer_to_print_inner.object_layer->id();
++
++                m_config.apply(instance_to_print.print_object.config(), true);
++                m_layer                  = layer_to_print_inner.layer();
++                m_object_layer_over_raft = object_layer_over_raft;
++                const bool saved_reduce_crossing_wall = m_config.reduce_crossing_wall.value;
++                m_config.reduce_crossing_wall.value   = false;
++                m_avoid_crossing_perimeters.disable_once();
++
++                const Point& offset = instance_to_print.print_object.instances()[instance_to_print.instance_id].shift;
++                std::pair<const PrintObject*, Point> this_object_copy(&instance_to_print.print_object, offset);
++                if (m_last_obj_copy != this_object_copy)
++                    m_avoid_crossing_perimeters.use_external_mp_once();
++                m_last_obj_copy = this_object_copy;
++                this->set_origin(unscale(offset));
++
++                for (ObjectByExtruder::Island& island : instance_to_print.object_by_extruder.islands) {
++                    gcode += this->extrude_perimeters(print, island.by_region, first_layer, false);
++                    gcode += this->extrude_perimeters(print, island.by_region, first_layer, true);
++                }
++                m_config.reduce_crossing_wall.value = saved_reduce_crossing_wall;
++            }
++
++            m_nominal_z    = saved_nominal_z;
++            m_last_layer_z = saved_last_layer_z;
++        };
++
++        auto emit_local_z_legacy = [&](int active_extruder) {
++            size_t pass_ref_idx = 0;
++            while (pass_ref_idx < local_z_pass_refs.size()) {
++                size_t pass_group_end = pass_ref_idx + 1;
++                while (pass_group_end < local_z_pass_refs.size() &&
++                       same_local_z_pass_group(local_z_pass_refs[pass_ref_idx], local_z_pass_refs[pass_group_end])) {
++                    ++pass_group_end;
++                }
++
++                std::vector<unsigned int> pass_group_extruders;
++                struct LocalZPassTaskRef {
++                    const LocalZPassRef* pass_ref { nullptr };
++                    unsigned int         extruder_id { 0 };
++                };
++                std::vector<LocalZPassTaskRef> pass_group_tasks;
++                for (size_t group_idx = pass_ref_idx; group_idx < pass_group_end; ++group_idx) {
++                    const LocalZPassRef& pass_ref = local_z_pass_refs[group_idx];
++                    for (unsigned int extruder_id : local_z_bucket_extruders(*pass_ref.bucket)) {
++                        pass_group_tasks.push_back(LocalZPassTaskRef{ &pass_ref, extruder_id });
++                        if (std::find(pass_group_extruders.begin(), pass_group_extruders.end(), extruder_id) == pass_group_extruders.end())
++                            pass_group_extruders.push_back(extruder_id);
++                    }
++                }
++
++                std::vector<unsigned int> next_group_extruders;
++                if (pass_group_end < local_z_pass_refs.size()) {
++                    size_t next_group_end = pass_group_end + 1;
++                    while (next_group_end < local_z_pass_refs.size() &&
++                           same_local_z_pass_group(local_z_pass_refs[pass_group_end], local_z_pass_refs[next_group_end])) {
++                        ++next_group_end;
++                    }
++                    for (size_t group_idx = pass_group_end; group_idx < next_group_end; ++group_idx) {
++                        for (unsigned int extruder_id : local_z_bucket_extruders(*local_z_pass_refs[group_idx].bucket))
++                            if (std::find(next_group_extruders.begin(), next_group_extruders.end(), extruder_id) == next_group_extruders.end())
++                                next_group_extruders.push_back(extruder_id);
++                    }
++                }
++
++                const int preferred_last_extruder = shared_local_z_extruder(pass_group_extruders, next_group_extruders);
++                const std::vector<unsigned int> ordered_group_extruders =
++                    LocalZOrderOptimizer::order_bucket_extruders(pass_group_extruders,
++                                                                 active_extruder,
++                                                                 preferred_last_extruder);
++
++                for (unsigned int local_extruder_id : ordered_group_extruders) {
++                    emit_local_z_toolchange(local_extruder_id, local_z_pass_refs[pass_ref_idx].bucket->plan->print_z);
++                    for (const LocalZPassTaskRef& task_ref : pass_group_tasks) {
++                        if (task_ref.extruder_id != local_extruder_id || task_ref.pass_ref == nullptr)
++                            continue;
++                        emit_local_z_pass_for_extruder(*task_ref.pass_ref, local_extruder_id);
++                    }
++                    active_extruder = int(local_extruder_id);
++                }
++
++                pass_ref_idx = pass_group_end;
++            }
++            return active_extruder;
++        };
++
++        // Dependency-chain scheduler (FS lines 5826-6000) is deferred —
++        // fall through to legacy mode which handles same-print_z grouping +
++        // LocalZOrderOptimizer::order_bucket_extruders.
++        local_z_phase_b_active_extruder = emit_local_z_legacy(local_z_phase_b_active_extruder);
++        gcode += "; local-z phase-b perimeter passes end\n";
++        BOOST_LOG_TRIVIAL(info) << "Local-Z phase-b emitted"
++                                << " print_z=" << print_z
++                                << " final_active_extruder=" << local_z_phase_b_active_extruder;
++    } else {
++        // Quiet the LZ5g-prep accessor lambdas when no passes fire.
++        (void)same_local_z_pass_group;
++        (void)local_z_bucket_extruders;
++        (void)shared_local_z_extruder;
++    }
++
+     auto insert_wrapping_detection_gcode = [this, &print, &print_z, &most_used_extruder]() -> std::string {
+         std::string wrapping_gcode;
+         if (print.config().enable_wrapping_detection && !print.config().wrapping_detection_gcode.value.empty()) {
