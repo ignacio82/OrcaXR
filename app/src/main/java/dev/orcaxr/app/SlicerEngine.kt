@@ -1977,6 +1977,45 @@ object SlicerEngine {
     }
 
     /**
+     * Bambu Studio's identity keys, plus filament_type for the per-slot
+     * filament profile remap. Used by [bambu.BambuImportTranslator] to
+     * decide whether to treat the 3MF as a Bambu import and to drive the
+     * filament_type → U1 filament profile mapping. Same one-zip-open
+     * round trip as [read3mfProjectOverrides] — the native side just
+     * grabs three string values out of `project_settings.config` and
+     * returns them.
+     *
+     * Returns a [Bambu3mfFingerprint] with empty fields for any key the
+     * 3MF didn't author; the translator treats absent / blank values as
+     * "not Bambu" so OrcaSlicer-flavor 3MFs (which don't carry a
+     * Bambu-shaped printer_model) pass through unchanged.
+     */
+    suspend fun read3mfBambuFingerprint(input: File): Bambu3mfFingerprint = withContext(dispatcher) {
+        if (!input.exists() || !input.canRead()) return@withContext Bambu3mfFingerprint("", "", emptyList())
+        val keys = arrayOf("printer_model", "printer_settings_id", "filament_type")
+        val raw = nativeRead3mfProjectOverrides(input.absolutePath, keys)
+            ?: return@withContext Bambu3mfFingerprint("", "", emptyList())
+        Bambu3mfFingerprint(
+            printerModel = raw.getOrNull(0).orEmpty().trim(),
+            printerSettingsId = raw.getOrNull(1).orEmpty().trim(),
+            filamentTypes = raw.getOrNull(2).orEmpty()
+                .split(';', ',')
+                .map { it.trim().trim('"') }
+                .filter { it.isNotEmpty() },
+        )
+    }
+
+    /** Identity probe for a freshly-loaded 3MF, used to decide whether
+     *  a Bambu Studio-flavor import translation pass should run.
+     *  Empty/blank fields mean the 3MF doesn't carry that authoring
+     *  signal — treat as not-Bambu. */
+    data class Bambu3mfFingerprint(
+        val printerModel: String,
+        val printerSettingsId: String,
+        val filamentTypes: List<String>,
+    )
+
+    /**
      * Read the embedded `mixed_filament_definitions` string out of a
      * .3mf's `Metadata/project_settings.config` and return it verbatim.
      * Returns null when:

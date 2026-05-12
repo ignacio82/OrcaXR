@@ -1007,6 +1007,16 @@ private fun XrShell(
     // dragon fixture. Sparse map (only authored keys present);
     // empty map for STL/OBJ loads or 3MFs with no per-print tuning.
     var loadedProjectOverrides by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    // Result of the Bambu Studio 3MF translation pass — empty
+    // (`wasBambu=false`, no banner) for non-Bambu 3MFs and for STL/OBJ
+    // loads. Drives the import info banner + filament-profile
+    // suggestion overlay. The .translatedOverrides is what gets
+    // assigned into `loadedProjectOverrides` so the slice path sees
+    // the filtered map; we keep the full Result around so the banner
+    // can surface what was dropped.
+    var bambuImport by remember {
+        mutableStateOf<dev.orcaxr.app.bambu.BambuImportTranslator.Result?>(null)
+    }
     // Audit H12 (2026-05-07) — the 3MF's authored layer_height. NOT
     // applied to the slice (layer-height keys are deliberately
     // excluded from PROJECT_OVERRIDE_KEYS so the user's profile pick
@@ -1532,8 +1542,23 @@ private fun XrShell(
                     loadedFlushSettings = null
                 }
                 runCatching {
-                    loadedProjectOverrides = SlicerEngine.read3mfProjectOverrides(bakeSource)
-                    if (loadedProjectOverrides.isNotEmpty()) {
+                    val rawOverrides = SlicerEngine.read3mfProjectOverrides(bakeSource)
+                    val fp = SlicerEngine.read3mfBambuFingerprint(bakeSource)
+                    val result = dev.orcaxr.app.bambu.BambuImportTranslator.translate(
+                        rawOverrides = rawOverrides,
+                        fingerprint = fp,
+                        slotCount = slotCount,
+                    )
+                    loadedProjectOverrides = result.translatedOverrides
+                    bambuImport = if (result.wasBambu) result else null
+                    if (result.wasBambu) {
+                        android.util.Log.i(
+                            tag,
+                            "Bambu 3mf detected (printer_model='${fp.printerModel}', settings_id='${fp.printerSettingsId}'): " +
+                                "dropped ${result.droppedKeys.size} filament-tuning key(s) ${result.droppedKeys}, " +
+                                "suggesting filament profiles ${result.filamentProfileSuggestion}",
+                        )
+                    } else if (loadedProjectOverrides.isNotEmpty()) {
                         android.util.Log.i(
                             tag,
                             "loaded ${loadedProjectOverrides.size} project overrides from 3mf: ${loadedProjectOverrides.keys}",
@@ -1542,6 +1567,7 @@ private fun XrShell(
                 }.onFailure {
                     android.util.Log.w(tag, "3mf project-overrides read failed: ${it.message}")
                     loadedProjectOverrides = emptyMap()
+                    bambuImport = null
                 }
                 // Audit H12 — capture authored layer_height as an
                 // informational hint (NOT applied to the slice).
@@ -1559,6 +1585,7 @@ private fun XrShell(
                 loadedFlushSettings = null
                 loadedProjectOverrides = emptyMap()
                 loadedLayerHeightHintMm = null
+                bambuImport = null
             }
 
             // Sync the project filament list with the 3MF's embedded
