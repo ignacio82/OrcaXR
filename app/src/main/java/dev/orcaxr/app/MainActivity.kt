@@ -6211,6 +6211,8 @@ private fun XrShell(
                             }
                         },
                         loadedLayerHeightHintMm = loadedLayerHeightHintMm,
+                        bambuImport = bambuImport,
+                        onDismissBambuImport = { bambuImport = null },
                     )
                 }
 

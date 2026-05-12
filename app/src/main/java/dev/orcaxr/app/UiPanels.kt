@@ -504,6 +504,75 @@ private data class FilamentRulesBannerSpec(
  * stack visually as one set of pre-flight hints. Hides on
  * [TopCoverRule.Result.Ok].
  */
+/**
+ * Bambu Studio 3MF import banner. Surfaces under the Quality tab
+ * whenever the most-recently-loaded 3MF tripped
+ * [dev.orcaxr.app.bambu.BambuImportTranslator.detect]. Renders
+ * nothing for non-Bambu 3MFs / STL/OBJ loads / when the user has
+ * dismissed it for this load (the dismiss-X clears `bambuImport`
+ * in MainActivity).
+ *
+ * Shape mirrors [FilamentRulesBanner] / [TopCoverHintBanner] so the
+ * three banners stack visually as one pre-flight-hint set. The
+ * dropped-keys list is informational: it lets the user see WHY their
+ * Bambu filament tunings didn't carry over (so the U1 filament
+ * profile's values would take effect instead).
+ */
+@Composable
+private fun BambuImportBanner(
+    result: dev.orcaxr.app.bambu.BambuImportTranslator.Result?,
+    onDismiss: () -> Unit,
+) {
+    if (result == null || !result.wasBambu) return
+    Surface(color = Color(0xFF1E2A3A), shape = RoundedCornerShape(8.dp)) {
+        Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "ⓘ",
+                    color = Color(0xFF7BC8FF),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(end = 8.dp),
+                )
+                Text(
+                    "Bambu Studio 3MF imported",
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(
+                    onClick = onDismiss,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                ) {
+                    Text("✕", color = Color.LightGray)
+                }
+            }
+            Text(
+                result.bannerText,
+                color = Color.LightGray,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (result.droppedKeys.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Dropped: " + result.droppedKeys.joinToString(", "),
+                    color = Color(0xFF8DA0B5),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            if (result.filamentProfileSuggestion.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Suggested filament profiles per slot: " +
+                        result.filamentProfileSuggestion.joinToString(", "),
+                    color = Color(0xFF8DA0B5),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun TopCoverHintBanner(result: TopCoverRule.Result) {
     val w = result as? TopCoverRule.Result.Warning ?: return
@@ -2348,6 +2417,20 @@ fun RightSettingsPanel(
      * the 3MF didn't author layer_height.
      */
     loadedLayerHeightHintMm: Float? = null,
+    /**
+     * Result of [dev.orcaxr.app.bambu.BambuImportTranslator.translate]
+     * for the most-recently-loaded 3MF, or null when the file wasn't
+     * a Bambu Studio 3MF / wasn't a 3MF at all. When non-null and
+     * `wasBambu=true`, a dismissable info chip surfaces above the
+     * Quality tab content explaining what got dropped and which U1
+     * filament profiles are being suggested.
+     */
+    bambuImport: dev.orcaxr.app.bambu.BambuImportTranslator.Result? = null,
+    /** Invoked when the user taps the dismiss-X on the Bambu import
+     *  banner. Caller should set its `bambuImport` Compose state to
+     *  null so the banner stays dismissed for this load. Default is a
+     *  no-op so callers that don't surface the chip can ignore it. */
+    onDismissBambuImport: () -> Unit = {},
 ) {
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Quality", "Strength", "Speed", "Support", "Others")
@@ -2410,6 +2493,13 @@ fun RightSettingsPanel(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        // Bambu Studio import banner. Visible only after a Bambu-flavor
+        // 3MF load — non-Bambu loads (Snapmaker, generic) pass
+        // bambuImport=null and the row collapses to zero height.
+        // Dismissable via the X; once dismissed the banner stays
+        // hidden for this load (caller clears the state).
+        BambuImportBanner(bambuImport, onDismissBambuImport)
 
         // Tab content scrolls independently of the title / profile picker
         // / tab bar above. Without this the Strength/Support tabs
