@@ -1854,6 +1854,75 @@ object SlicerEngine {
         "enable_infill_filament_override",
         "infill_filament_use_base_first_layers",
         "infill_filament_use_base_last_layers",
+        // ---- Wall + perimeter strategy ----
+        // The 3MF's `different_settings_to_system` field for the desktop
+        // FullSpectrum reference (PeggyPalette38+Mini+BRYW.3mf) lists
+        // these as user-customized: wall_generator=arachne (vs profile's
+        // classic), wall_sequence=outer/inner (vs inner/outer),
+        // precise_outer_wall=1 (vs 0). Without these in the override
+        // list, OrcaXR slices with profile defaults and emits a totally
+        // different wall toolpath (classic walls + inner-first), which
+        // shifts the per-slot filament usage to a degree that swamps
+        // any mixed-filament resolution comparison.
+        "wall_generator",
+        "wall_sequence",
+        "wall_distribution_count",
+        "wall_direction",
+        "precise_outer_wall",
+        // ---- Skirt / brim / bottom shell ----
+        // 3MF says skirt_loops=0 + brim_width=5; profile default is
+        // skirt_loops=1 + brim_width=0. Different perimeter geometry
+        // → different first-layer extrusion amounts.
+        "skirt_loops",
+        "skirt_distance",
+        "skirt_height",
+        "skirt_speed",
+        "skirt_start_angle",
+        "skirt_type",
+        "brim_width",
+        "brim_type",
+        "brim_object_gap",
+        "bottom_shell_thickness",
+        "top_shell_thickness",
+        "ensure_vertical_shell_thickness",
+        "bottom_solid_infill_flow_ratio",
+        "top_solid_infill_flow_ratio",
+        "top_surface_line_width",
+        // ---- Prime / wipe tower ----
+        "prime_tower_width",
+        "prime_tower_brim_width",
+        "prime_volume",
+        "wipe_tower_wall_type",
+        "wipe_tower_cone_angle",
+        "wipe_tower_extra_flow",
+        "wipe_tower_extra_spacing",
+        "wipe_tower_extra_rib_length",
+        "wipe_tower_rib_width",
+        "wipe_tower_fillet_wall",
+        "wipe_tower_bridging",
+        "wipe_tower_max_purge_speed",
+        "enable_prime_tower",
+        // ---- Other commonly authored print-time keys ----
+        "elefant_foot_compensation",
+        "elefant_foot_compensation_layers",
+        "scarf_joint_speed",
+        "scarf_joint_flow_ratio",
+        "scarf_angle_threshold",
+        "scarf_overhang_threshold",
+        "seam_slope_type",
+        "seam_slope_min_length",
+        "seam_slope_steps",
+        "seam_gap",
+        "fill_multiline",
+        "internal_solid_infill_pattern",
+        "bottom_surface_pattern",
+        "infill_direction",
+        "infill_wall_overlap",
+        "top_bottom_infill_wall_overlap",
+        "support_multi_bed_types",
+        "detect_overhang_wall",
+        "detect_thin_wall",
+        "detect_narrow_internal_solid_infill",
     )
 
     /**

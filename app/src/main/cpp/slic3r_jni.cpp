@@ -2035,6 +2035,15 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
             print.auto_assign_extruders(mo);
         }
 
+        // Diagnostic: log the active advanced-dithering value going into
+        // print.apply. Previously this key was hardcoded to "1" via
+        // fullSpectrumExtraOverrides which made it impossible to test the
+        // simple-cycle resolver path (use_component_b_advanced_dither
+        // vs the cycle (pos < ratio_a) branch). Both produce the same
+        // statistical distribution per row, but visibility matters when
+        // diff'ing OrcaXR output against a desktop FullSpectrum slice.
+        ORCAXR_LOGI("nativeSlice: mixed_filament_advanced_dithering=%s",
+                    cfg.opt_serialize("mixed_filament_advanced_dithering").c_str());
         print.apply(model, cfg);
         auto err = print.validate();
         if (!err.string.empty()) {

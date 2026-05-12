@@ -8449,11 +8449,19 @@ internal fun wipeTowerExtraOverrides(ctx: android.content.Context): Map<String, 
 internal fun fullSpectrumExtraOverrides(virtualRowsEnabled: Boolean): Map<String, String> {
     if (!virtualRowsEnabled) return emptyMap()
     return mapOf(
-        // Master toggle — engine emission patches 0028/0032 gate on this.
-        "mixed_filament_advanced_dithering" to "1",
         // Restrict cadence to painted zones by default; full-bed cadence
         // would force every layer to alternate even on background plates,
         // which is rarely what the user wants.
+        //
+        // `mixed_filament_advanced_dithering` is deliberately omitted here so
+        // the 3MF's authored value (or the libslic3r default = false) wins.
+        // Previously we hardcoded it to "1" which clobbered the 3MF's "0"
+        // via the extraOverrides → projectOverrides precedence and forced
+        // OrcaXR onto the use_component_b_advanced_dither resolver branch,
+        // producing a T0↔T3 inversion vs the desktop FullSpectrum reference
+        // for PeggyPalette38+Mini+BRYW.3mf. Users who want it on for
+        // STL-loaded models can flip the toggle in the MixedAdvancedEditor
+        // UI; 3MFs already carry the value they were authored with.
         "dithering_step_painted_zones_only" to "1",
     )
 }
@@ -9022,7 +9030,20 @@ internal fun parseMixedDefinitionsForKotlin(serialized: String): List<MixedFilam
                 f.isNotEmpty() && f.all { ch -> ch in '1'..'9' } -> manualPattern = f
             }
         }
-        if (deleted) continue
+        // PRESERVE deleted (d=1) rows. Skipping them here corrupts the row
+        // index that libslic3r's MixedFilamentManager::resolve uses:
+        // `mixed_index_from_filament_id` computes `filament_id - num_physical - 1`
+        // as a direct index into `m_mixed`, so dropping the 6 auto-pair
+        // rows that the desktop FullSpectrum app emits at the top of the
+        // wire format (one per unordered physical pair, all marked d=1)
+        // shifts every virtual filament ID by 6. The model's parts then
+        // map to the wrong rows — observed as a T0↔T3 inversion vs the
+        // desktop reference for PeggyPalette38+Mini+BRYW.3mf
+        // (OrcaXR's extruder=21 → 1+4 27/73 row, desktop's extruder=21 →
+        // 2+3 88/12 row). Round-tripped rows retain `deleted=true` and
+        // the serializer re-emits them as `d1` so the libslic3r side
+        // sees the same vector layout it would after running its own
+        // auto_generate.
         // Reverse surface_offset_pair_from_signed_bias() to recover signed bias%.
         val signedBiasMm = bOff - aOff
         val biasPct = kotlin.math.round((signedBiasMm / maxBiasMm) * 100f).toInt().coerceIn(-100, 100)
@@ -9040,6 +9061,7 @@ internal fun parseMixedDefinitionsForKotlin(serialized: String): List<MixedFilam
             pointillismAllFilaments = pointillismAll,
             enabled = enabled,
             custom = custom,
+            deleted = deleted,
             originAuto = originAuto,
         )
     }
