@@ -892,6 +892,64 @@ static bool extract_3mf_string_array(
             }
         }
     }
+    // Fallback: many 3MFs (FullSpectrum-authored ones in particular,
+    // and the .3mfs our own save path produces) store config in
+    // `Metadata/Slic3r_PE.config` as INI-style "; key = value" lines.
+    // Parse those when the JSON path above missed. For the value:
+    //   - ConfigOptionStrings keys (filament_colour, etc.) use `;`
+    //     as the inter-entry separator
+    //   - ConfigOptionFloats keys (flush_volumes_matrix etc.) use `,`
+    // Both separators are split here; in practice each key uses only
+    // one of them.
+    if (!ok) {
+        int ini_index = mz_zip_reader_locate_file(
+            &zip, "Metadata/Slic3r_PE.config", nullptr, 0);
+        if (ini_index >= 0) {
+            size_t uncomp_size = 0;
+            void* p = mz_zip_reader_extract_to_heap(
+                &zip, static_cast<mz_uint>(ini_index), &uncomp_size, 0);
+            if (p != nullptr && uncomp_size > 0) {
+                std::string text(static_cast<const char*>(p), uncomp_size);
+                mz_free(p);
+                const std::string needle = std::string(json_key) + " = ";
+                size_t pos = 0;
+                while (pos < text.size()) {
+                    const size_t line_end = text.find('\n', pos);
+                    const size_t end = (line_end == std::string::npos) ? text.size() : line_end;
+                    size_t line_start = pos;
+                    while (line_start < end && (text[line_start] == ';' || text[line_start] == ' ' || text[line_start] == '\t'))
+                        ++line_start;
+                    if (line_start + needle.size() <= end &&
+                        text.compare(line_start, needle.size(), needle) == 0) {
+                        std::string value = text.substr(line_start + needle.size(),
+                                                        end - (line_start + needle.size()));
+                        while (!value.empty() && (value.back() == ' ' || value.back() == '\t' || value.back() == '\r'))
+                            value.pop_back();
+                        // Determine separator: ConfigOptionStrings uses
+                        // `;`, ConfigOptionFloats uses `,`. Try ';' first
+                        // (matches filament_colour); fall back to ','.
+                        const char sep = (value.find(';') != std::string::npos) ? ';' : ',';
+                        size_t i = 0;
+                        while (i <= value.size()) {
+                            size_t j = value.find(sep, i);
+                            if (j == std::string::npos) j = value.size();
+                            std::string tok = value.substr(i, j - i);
+                            while (!tok.empty() && (tok.front() == ' ' || tok.front() == '\t'))
+                                tok.erase(0, 1);
+                            while (!tok.empty() && (tok.back() == ' ' || tok.back() == '\t'))
+                                tok.pop_back();
+                            if (!tok.empty()) out.emplace_back(std::move(tok));
+                            if (j == value.size()) break;
+                            i = j + 1;
+                        }
+                        ok = !out.empty() || !value.empty();
+                        break;
+                    }
+                    pos = (line_end == std::string::npos) ? text.size() : line_end + 1;
+                }
+            }
+        }
+    }
     mz_zip_reader_end(&zip);
     return ok;
 }
