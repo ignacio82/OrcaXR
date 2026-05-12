@@ -4,6 +4,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -37,6 +38,34 @@ class FullSpectrumLocalZTest {
         val appCtx = ApplicationProvider.getApplicationContext<android.content.Context>()
         val testCtx = InstrumentationRegistry.getInstrumentation().context
 
+        // Start from a real Snapmaker U1 PLA profile so all the
+        // extrusion widths / nozzle / temperature / etc. are populated.
+        // Without that the bare config map below produces
+        // "Flow::spacing() produced negative spacing" at slice time.
+        val catalog = OrcaProfileLoader.loadCatalog(appCtx)
+        // Match the SPECIFIC 0.4-nozzle / 0.20-standard / PLA profile so
+        // the merge produces a coherent layer_height vs nozzle_diameter
+        // pair. A looser "any u1 + 0.4" pick once merged a 0.8-nozzle
+        // process onto a 0.2-nozzle machine and tripped
+        // "Layer height cannot exceed nozzle diameter".
+        // Profile IDs use underscores (e.g.
+        // "bundled_snapmaker_u1_0.4_nozzle.0.20_standard.snapmaker_pla_u1").
+        val target = catalog.firstOrNull {
+            it.id.contains("u1", ignoreCase = true) &&
+                it.id.contains("0.4_nozzle", ignoreCase = true) &&
+                it.id.contains("0.20", ignoreCase = true) &&
+                it.id.contains("pla", ignoreCase = true)
+        } ?: catalog.firstOrNull {
+            it.id.contains("u1", ignoreCase = true) &&
+                it.id.contains("0.4_nozzle", ignoreCase = true) &&
+                it.id.contains("pla", ignoreCase = true)
+        }
+        assertNotNull(
+            "expected a Snapmaker U1 0.4-nozzle PLA profile in the catalog of " +
+                "${catalog.size} entries: ${catalog.take(10).joinToString { it.id }}",
+            target,
+        )
+
         val stl = File(appCtx.cacheDir, "fs_localz_cube.stl").also { dst ->
             testCtx.assets.open("cube_20mm.stl").use { input ->
                 dst.outputStream().use { input.copyTo(it) }
@@ -47,9 +76,12 @@ class FullSpectrumLocalZTest {
         // Paint approximately half the cube's triangles (top half by Z)
         // as virtual filament 1. The cube's 12 triangles can be coarsely
         // partitioned: 0..5 = bottom half / sides, 6..11 = top half.
-        // The actual assignment is fixture-dependent; the assertion only
-        // expects SOME layers without Local-Z sub-cuts.
-        val paint = ByteArray(12) { i -> if (i >= 6) 3.toByte() else 0.toByte() }
+        // Snapmaker U1 = 4 physical extruders; the virtual row below
+        // gets filament ID 5 (4 + 1). For Local-Z to fire the painted
+        // slot MUST be the virtual ID (mixed_mgr.is_mixed checks
+        // filament_id > num_physical).
+        val virtualSlot = 5.toByte()
+        val paint = ByteArray(12) { i -> if (i >= 6) virtualSlot else 0.toByte() }
 
         val mixedDefinitions = MixedFilamentStore(appCtx).toMixedFilamentDefinitions(
             listOf(
@@ -67,17 +99,22 @@ class FullSpectrumLocalZTest {
             ),
         )
 
-        val config = mapOf(
+        // The U1 PLA filament profile only declares 1 filament_diameter
+        // entry, but the U1 machine has 4 nozzles. apply_mm_segmentation's
+        // gate requires filament_diameter.size() > 1, so expand to match
+        // the 4-nozzle layout (Snapmaker U1 standard PLA at 1.75 mm).
+        val config = target!!.config + mapOf(
             "before_layer_change_gcode" to "G92 E0\n",
-            "filament_colour" to "#FF0000;#0000FF",
+            "filament_diameter" to "1.75,1.75,1.75,1.75",
             "mixed_filament_definitions" to mixedDefinitions,
-            "mixed_filament_advanced_dithering" to "1",
             "dithering_local_z_mode" to "1",
-            "dithering_step_painted_zones_only" to "1",
-            "dithering_z_step_size" to "0.05",
         )
 
-        val result = SlicerEngine.slice(stl, outGcode, config)
+        // patch 0068: pass paint through so apply_mm_segmentation
+        // populates the painted segmentation that build_local_z_plan
+        // consumes. Without this the LZ planner sees zero painted
+        // intervals and skips emit.
+        val result = SlicerEngine.slice(stl, outGcode, config, paintFilamentIndex = paint)
         assertTrue("Slice produced gcode: $result", result is SliceResult.Success)
 
         val gcode = outGcode.readText()
