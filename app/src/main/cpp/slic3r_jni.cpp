@@ -3869,6 +3869,47 @@ static bool extract_3mf_string_value(
             }
         }
     }
+    // Fallback: many 3MFs (including ones our own save path produces)
+    // store config in `Metadata/Slic3r_PE.config` as INI-style lines
+    // prefixed with "; key = value" — the gcode-comment shape rather
+    // than the newer JSON-encoded `project_settings.config`. Parse it
+    // line by line when the JSON path missed.
+    if (!ok) {
+        int ini_index = mz_zip_reader_locate_file(
+            &zip, "Metadata/Slic3r_PE.config", nullptr, 0);
+        if (ini_index >= 0) {
+            size_t uncomp_size = 0;
+            void* p = mz_zip_reader_extract_to_heap(
+                &zip, static_cast<mz_uint>(ini_index), &uncomp_size, 0);
+            if (p != nullptr && uncomp_size > 0) {
+                std::string text(static_cast<const char*>(p), uncomp_size);
+                mz_free(p);
+                // Each line: "; key = value" (optional leading ';' and
+                // whitespace). Find any line whose key matches; return
+                // the substring after " = " up to end-of-line.
+                const std::string needle = std::string(json_key) + " = ";
+                size_t pos = 0;
+                while (pos < text.size()) {
+                    const size_t line_end = text.find('\n', pos);
+                    const size_t end = (line_end == std::string::npos) ? text.size() : line_end;
+                    // Strip optional "; " prefix.
+                    size_t line_start = pos;
+                    while (line_start < end && (text[line_start] == ';' || text[line_start] == ' ' || text[line_start] == '\t'))
+                        ++line_start;
+                    if (line_start + needle.size() <= end &&
+                        text.compare(line_start, needle.size(), needle) == 0) {
+                        out.assign(text, line_start + needle.size(), end - (line_start + needle.size()));
+                        // Trim trailing whitespace / CR.
+                        while (!out.empty() && (out.back() == ' ' || out.back() == '\t' || out.back() == '\r'))
+                            out.pop_back();
+                        ok = true;
+                        break;
+                    }
+                    pos = (line_end == std::string::npos) ? text.size() : line_end + 1;
+                }
+            }
+        }
+    }
     mz_zip_reader_end(&zip);
     return ok;
 }

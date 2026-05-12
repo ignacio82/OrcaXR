@@ -51,15 +51,23 @@ class FullSpectrumLayerCycleTest {
         val catalog = OrcaProfileLoader.loadCatalog(appCtx)
 
         // Snapmaker U1 standard PLA + 0.4 nozzle. ID format
-        // `bundled_<machine>.<process>.<filament>` — these substrings
-        // match the bundled asset slug.
+        // `bundled_<machine>.<process>.<filament>` — IDs use underscores
+        // (e.g. "bundled_..._0.4_nozzle..."), and "0.4" alone matches
+        // both nozzle and layer-height substrings, which can merge a
+        // 0.8-nozzle process onto a 0.4-nozzle machine. Match the
+        // specific 0.4-nozzle / 0.20-standard / PLA profile.
         val target = catalog.firstOrNull {
-            it.id.contains("u1") &&
-                it.id.contains("0.4") &&
-                it.id.contains("pla_standard", ignoreCase = true)
-        } ?: catalog.firstOrNull { it.id.contains("u1") && it.id.contains("0.4") }
+            it.id.contains("u1", ignoreCase = true) &&
+                it.id.contains("0.4_nozzle", ignoreCase = true) &&
+                it.id.contains("0.20", ignoreCase = true) &&
+                it.id.contains("pla", ignoreCase = true)
+        } ?: catalog.firstOrNull {
+            it.id.contains("u1", ignoreCase = true) &&
+                it.id.contains("0.4_nozzle", ignoreCase = true) &&
+                it.id.contains("pla", ignoreCase = true)
+        }
         assertNotNull(
-            "expected a Snapmaker U1 profile in the catalog of " +
+            "expected a Snapmaker U1 0.4-nozzle PLA profile in the catalog of " +
                 "${catalog.size} entries: ${catalog.take(10).joinToString { it.id }}",
             target,
         )
@@ -90,11 +98,16 @@ class FullSpectrumLayerCycleTest {
         // layer. The master dithering toggle gates the FS code path.
         val virtualFilamentId = "5"
         val config = target!!.config + mapOf(
+            // U1 PLA filament profile only declares 1 filament_diameter
+            // entry, but the U1 machine has 4 nozzles. Without 4 entries
+            // here the slicer trips Print::validate() with
+            // "Too small line width". See FullSpectrumLocalZTest for
+            // the same fix.
+            "filament_diameter" to "1.75,1.75,1.75,1.75",
             "wall_filament" to virtualFilamentId,
             "sparse_infill_filament" to virtualFilamentId,
             "solid_infill_filament" to virtualFilamentId,
             "mixed_filament_definitions" to mixedDefinitions,
-            "mixed_filament_advanced_dithering" to "1",
             "enable_prime_tower" to "1",
         )
 
