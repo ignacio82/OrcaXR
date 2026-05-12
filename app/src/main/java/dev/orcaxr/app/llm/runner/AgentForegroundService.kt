@@ -14,8 +14,8 @@ import androidx.core.app.NotificationCompat
 import dev.orcaxr.app.R
 
 /**
- * dataSync foreground service that keeps OrcaXR's process alive
- * while the in-app assistant is mid-turn.
+ * Foreground service that keeps OrcaXR's process alive while the
+ * in-app assistant is mid-turn.
  *
  * Why this exists: the chat panel runs an arbitrary number of MCP
  * tool calls per user message — slicing, painting, rendering,
@@ -32,6 +32,12 @@ import dev.orcaxr.app.R
  * Lifecycle: [AgentRunner] starts this when a turn begins and stops
  * it when the runner enters Idle. Not exported — only OrcaXR's own
  * runner binds it.
+ *
+ * `foregroundServiceType="specialUse"` (manifest) — sharing a single
+ * `dataSync` quota with [dev.orcaxr.app.mcp.McpForegroundService]
+ * meant a long-lived MCP session would exhaust the 6h/24h cap and
+ * deny startForeground for both. The agent runner is per-turn but
+ * fires repeatedly; specialUse keeps it independent.
  */
 class AgentForegroundService : Service() {
 
@@ -40,11 +46,22 @@ class AgentForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val title = intent?.getStringExtra(EXTRA_TITLE) ?: DEFAULT_TITLE
         val text = intent?.getStringExtra(EXTRA_TEXT) ?: DEFAULT_TEXT
-        startForeground(
-            NOTIFICATION_ID,
-            buildNotification(title, text),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
-        )
+        // Wrapped because Android 15+ can deny startForeground when an
+        // FGS-quota is exhausted or the app is in a restricted launch
+        // state. Crashing here would kill the entire process mid-turn,
+        // dropping any in-flight slice / paint / upload — far worse
+        // than running this turn without the foreground promotion.
+        val promoted = try {
+            startForeground(
+                NOTIFICATION_ID,
+                buildNotification(title, text),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+            )
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "startForeground denied: ${e.javaClass.simpleName}: ${e.message}")
+            false
+        }
         if (intent?.action == ACTION_CANCEL) {
             Log.i(TAG, "cancel action received")
             // The runner is the source of truth — service just
@@ -53,7 +70,25 @@ class AgentForegroundService : Service() {
             stopSelfCompat()
             return START_NOT_STICKY
         }
+        if (!promoted) {
+            // Without foreground promotion the OS will reap the
+            // process within seconds. Stop cleanly so the runner
+            // notices and continues without leaking a phantom service.
+            stopSelfCompat()
+            return START_NOT_STICKY
+        }
         return START_NOT_STICKY
+    }
+
+    /**
+     * Android 15+ time-limit hook. specialUse has no cumulative cap
+     * today, but if the OS ever asks us to wind down (battery saver,
+     * future revision adding a cap), do it gracefully instead of
+     * being force-killed.
+     */
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        Log.w(TAG, "onTimeout(startId=$startId, type=$fgsType) — stopping cleanly")
+        stopSelfCompat()
     }
 
     override fun onDestroy() {

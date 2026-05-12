@@ -4,6 +4,7 @@ import dev.orcaxr.app.AiIntrospection
 import dev.orcaxr.app.mcp.AiPaintSession
 import dev.orcaxr.app.mcp.AiPaintSessionStore
 import dev.orcaxr.app.mcp.Schemas
+import dev.orcaxr.app.mcp.TierBCapability
 import dev.orcaxr.app.mcp.Tool
 import dev.orcaxr.app.mcp.ToolResult
 import dev.orcaxr.app.mcp.WorkspaceAction
@@ -245,6 +246,23 @@ internal object PaintSessionTools {
             // apply any work.
             val sessionFp = session.currentFingerprint()
             val noop = sessionFp == session.baseFingerprint && session.totalActions == 0
+
+            // The LoadPaintState emit only matters when there's actual
+            // work to apply; refuse non-no-op commits early when no
+            // host shell is consuming LoadPaintState. Without this the
+            // commit returned ok=true but the live model never picked
+            // up the paint — an LLM driving OrcaXR over MCP couldn't
+            // tell its work was on the floor.
+            if (!noop && !ws.isCapabilityWired(TierBCapability.LoadPaintState)) {
+                if (discardOnFailure) store.discard(id)
+                return ToolResult.error(
+                    "LoadPaintState capability isn't wired in the active OrcaXR shell. The " +
+                        "session has $${session.totalActions} action(s) of paint that would " +
+                        "be silently dropped. Bring the activity into a screen that wires " +
+                        "the Tier-B paint callbacks (Slicer / Prepare on XR; MobileShell on " +
+                        "phone) and retry. Session ${if (discardOnFailure) "discarded" else "kept"}.",
+                )
+            }
 
             val emitId = if (noop) -1L else ws.emit(
                 WorkspaceAction.LoadPaintState(

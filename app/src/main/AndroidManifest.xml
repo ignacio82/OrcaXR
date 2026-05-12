@@ -21,9 +21,19 @@
          lives only in the Application singleton, which the OS will
          eventually reap once the Activity is gone. POST_NOTIFICATIONS is
          needed because Android 13+ requires a runtime grant to display
-         the persistent "MCP server running" notification. -->
+         the persistent "MCP server running" notification.
+
+         FOREGROUND_SERVICE_SPECIAL_USE is for the MCP server + the
+         in-app assistant runner. Both are long-running services the
+         user opted into; on Android 15+ (API 35+) the `dataSync` type
+         carries a 6-hour-per-24h cumulative time limit, which the MCP
+         "always-on local listener" use case will absolutely exhaust on
+         a daily-driver setup. `specialUse` has no such cap, in
+         exchange for shipping the SUBTYPE property below justifying
+         the use. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Optional in-app LLM assistant (Devices → AI assistant). Voice
@@ -143,6 +153,23 @@
                 <data android:mimeType="application/step" />
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
+
+            <!--
+              Quick Share / share-sheet target for the OrcaXR MCP grant
+              snippet. The XR-side McpServerCard's Share button drops a
+              short markdown blob (signature, endpoint URL, bearer
+              token) onto a SEND intent with mimeType=text/plain; this
+              filter makes OrcaXR a candidate in the receiving device's
+              chooser so a single tap lands the headset's connection
+              details on the phone — no copy-paste, no QR, no manual
+              entry. Non-OrcaXR shared text is silently ignored at
+              parse time (the snippet's signature line is required).
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <!--
@@ -153,34 +180,64 @@
           intents may carry VIEW / SEND data so the file-share flow
           works on phones too.
         -->
+        <!--
+          supportsPictureInPicture: when the MCP server is running and
+          the user hits Home, MobileActivity.onUserLeaveHint shrinks
+          the workspace into PiP instead of going to onStop. Keeps
+          WorkspaceBinding's `attached` flag true so a remote LLM
+          driving OrcaXR over MCP doesn't lose the renderer-backed
+          tools the moment the user pockets the phone.
+
+          configChanges: PiP enter / exit triggers screenSize +
+          screenLayout + smallestScreenSize + orientation reconfigs;
+          listing them here lets us survive the transition without
+          recreating the Activity (which would cancel the JNI BVH
+          builds and reset the GL paint cache).
+        -->
         <activity
             android:name=".MobileActivity"
             android:exported="false"
             android:launchMode="singleTask"
+            android:supportsPictureInPicture="true"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:theme="@style/Theme.App.Starting" />
 
         <!--
           Hosts the MCP HTTP server so it survives headset removal. Stays
           tightly scoped to the user-toggled MCP feature: started only
           when the Devices → MCP switch is on, stopped immediately when
-          the user flips it off. foregroundServiceType="dataSync" is the
-          canonical pick for "I'm running a long-lived background data
-          channel"; Android 14+ requires the type to be declared.
+          the user flips it off. foregroundServiceType="specialUse"
+          because the MCP server is an always-on local listener — the
+          user explicitly opts in (Devices → MCP) and expects it to stay
+          up across a full session, including hours where the headset is
+          doffed. Android 15+ caps `dataSync` at 6 hours of cumulative
+          uptime per rolling 24h, which a daily-driver MCP setup will
+          exhaust and then crash with ForegroundServiceStartNotAllowed
+          on the next service refresh (port change, key rotate, app
+          relaunch). `specialUse` carries no such cap; the SUBTYPE
+          property below documents the use for Play.
           Not exported — only McpController inside our process binds it.
         -->
         <service
             android:name=".mcp.McpForegroundService"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Local MCP (Model Context Protocol) JSON-RPC server, opt-in via Devices → MCP, lets a companion app drive the slicer over the loopback network while the user has the XR headset off." />
+        </service>
 
         <!--
           Roadmap E8 — keeps OrcaXR's process alive during a slice so
           the user can take off the XR headset mid-slice and have the
           result waiting when they return. SliceLifecycle starts/stops
           this service per slice (re-entrant counter under nested
-          inner slices). Same dataSync foregroundServiceType as MCP —
-          long-running networked / compute work the user explicitly
-          opted into. Not exported.
+          inner slices). Kept on `dataSync` because slicing is a
+          finite, naturally-bounded operation (30-120s typical) — it
+          will never legitimately exhaust the 6h/24h cap. The
+          long-lived MCP server and the per-turn agent runner moved
+          to specialUse so they don't consume slicing's quota. Not
+          exported.
         -->
         <service
             android:name=".SliceForegroundService"
@@ -222,14 +279,27 @@
             tools:node="merge" />
 
         <!--
-          dataSync foreground service that keeps the process alive
-          while the in-app assistant is mid-turn. AgentRunner starts
-          it on send() and stops it on Idle. Not exported — only
-          OrcaXR's own AgentRunner binds to it.
+          Foreground service that keeps the process alive while the
+          in-app assistant is mid-turn. AgentRunner starts it on send()
+          and stops it on Idle. Not exported — only OrcaXR's own
+          AgentRunner binds to it.
+
+          foregroundServiceType="specialUse" rather than dataSync — a
+          chained MCP turn can run for many minutes (slice → render →
+          paint → upload to Moonraker), and the MCP server runs in the
+          same process so the two services share the same `dataSync`
+          quota when both are typed that way. Quota exhaustion in
+          either one would deny startForeground for both. The agent
+          runner is the canonical "user explicitly fired this off and
+          expects it to keep running" use case `specialUse` exists for.
         -->
         <service
             android:name=".llm.runner.AgentForegroundService"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="In-app AI assistant turn runner — keeps the process alive while the user-initiated assistant turn drives MCP tools (slice, render, upload). Stops as soon as the runner enters Idle." />
+        </service>
     </application>
 </manifest>

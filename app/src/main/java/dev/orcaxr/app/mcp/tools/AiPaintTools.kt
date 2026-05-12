@@ -421,6 +421,22 @@ internal object AiPaintTools {
                 whereTag = plan.whereTag,
             )
         } else {
+            // Live (non-session) path: a host activity must be wired to
+            // consume PaintTriangleSet, otherwise the action is queued
+            // and silently dropped — exactly the bug that made
+            // mobile-shell paint commits look successful but leave the
+            // model unpainted. Refuse here with a concrete hint
+            // instead of emitting into the void.
+            if (!ws.isCapabilityWired(dev.orcaxr.app.mcp.TierBCapability.PaintTriangleSet)) {
+                return ToolResult.error(
+                    "PaintTriangleSet capability isn't wired in the active OrcaXR shell. " +
+                        "Either: (a) pass session_id to paint into a headless scratch buffer " +
+                        "and commit_paint_session when done — sessions don't need the host " +
+                        "wiring; or (b) bring the activity into a screen that wires the " +
+                        "Tier-B paint callbacks (Slicer / Prepare on the XR shell, " +
+                        "MobileShell on phone).",
+                )
+            }
             painted = effective.size
             ws.emit(
                 WorkspaceAction.PaintTriangleSet(

@@ -1,8 +1,14 @@
 package dev.orcaxr.app
 
+import android.app.PictureInPictureParams
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.util.Log
+import android.util.Rational
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -11,7 +17,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import dev.orcaxr.app.mcp.McpController
+import dev.orcaxr.app.mcp.McpShareSnippet
+import dev.orcaxr.app.mcp.RemoteMcpEndpoint
+import dev.orcaxr.app.mcp.RemoteMcpStore
 import dev.orcaxr.app.mobile.MobileAppState
 import dev.orcaxr.app.mobile.MobileShell
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,6 +57,17 @@ class MobileActivity : ComponentActivity() {
      */
     val pendingSlicerFile = MutableStateFlow<String?>(null)
 
+    /**
+     * Most-recently-received OrcaXR MCP grant (the snippet the XR
+     * headset's Devices → MCP → Share button drops onto a Quick Share
+     * intent). The shell watches this and, when non-null, raises a
+     * one-shot "Use this remote MCP?" confirmation dialog so the user
+     * sees that the share landed and can review the URL+token before
+     * the phone starts trusting it. Drained by the dialog so a
+     * recomposition doesn't re-prompt.
+     */
+    val pendingRemoteMcp = MutableStateFlow<RemoteMcpEndpoint?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -54,6 +77,8 @@ class MobileActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         ingestSharedIntent(intent)
+
+        observeMcpForLifecycle()
 
         val appState = MobileAppState(this)
 
@@ -100,6 +125,7 @@ class MobileActivity : ComponentActivity() {
                     appState.prefs.mobileTheme = raw
                 },
                 pendingSlicerFile = pendingSlicerFile,
+                pendingRemoteMcp = pendingRemoteMcp,
             )
         }
     }
@@ -107,6 +133,74 @@ class MobileActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         ingestSharedIntent(intent)
+    }
+
+    /**
+     * Home-button (and gesture nav home-swipe) hook. We use this
+     * exclusively for opt-into PiP: when the MCP server is running,
+     * shrink the workspace into a PiP window instead of letting the
+     * activity go to onStop. While in PiP the activity stays in
+     * RESUMED, so the WorkspaceBinding DisposableEffect doesn't fire,
+     * `attached` stays true, and an LLM driving OrcaXR over MCP can
+     * keep using the renderer-backed tools (paint_*, render_view,
+     * find_feature_anchors, etc.) while the user does something else
+     * on the phone. Gated on serverRunning so non-MCP users still
+     * get the standard "back to launcher" home behavior.
+     */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
+        val ctl = McpController.get(this)
+        if (!ctl.serverRunning.value) return
+        if (isInPictureInPictureMode) return
+        val params = PictureInPictureParams.Builder()
+            // 16:9 keeps the workspace readable in the PiP slab — the
+            // shell is mostly the GL surface plus a thin chrome
+            // strip; a square would crop the chrome.
+            .setAspectRatio(Rational(16, 9))
+            .build()
+        try {
+            enterPictureInPictureMode(params)
+        } catch (e: IllegalStateException) {
+            // Some OEM skins reject PiP under specific conditions
+            // (split-screen, lock-task, etc.). Logged but never
+            // rethrown — falling back to normal background is
+            // strictly safer than crashing the home-button path.
+            Log.w("OrcaXR/Mobile", "enterPictureInPictureMode rejected: ${e.message}")
+        }
+    }
+
+    /**
+     * Bind two MCP-driven activity behaviors together:
+     *  1. FLAG_KEEP_SCREEN_ON while the server is running — without
+     *     this, screen-timeout drops the activity into onStop, the
+     *     WorkspaceBinding DisposableEffect runs onDispose, and the
+     *     remote MCP client suddenly gets "OrcaXR not attached" on
+     *     every paint / render call. Toggling the flag in lockstep
+     *     with the server means battery is only burned while the
+     *     user genuinely opted into a remotely-driven session.
+     *  2. (Hooked from onUserLeaveHint above — left here as a
+     *     reading-order anchor, no work to do in this method.)
+     *
+     * Uses repeatOnLifecycle(STARTED) so the collector is paused
+     * when the activity is in PiP-only-not-visible / stopped state
+     * — when the user comes back, it resumes from the latest value
+     * (StateFlow conflates) and re-applies the flag.
+     */
+    private fun observeMcpForLifecycle() {
+        val ctl = McpController.get(this)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                ctl.serverRunning.collect { running ->
+                    if (running) {
+                        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    } else {
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
+                }
+            }
+        }
     }
 
     private fun ingestSharedIntent(intent: Intent?) {
@@ -125,6 +219,23 @@ class MobileActivity : ComponentActivity() {
         }
         if (uris.isNotEmpty()) {
             pendingSharedUris.value = pendingSharedUris.value + uris
+        }
+        // Quick-Share-an-MCP-grant path. SEND with text/plain + an
+        // EXTRA_TEXT that contains the OrcaXR signature line is
+        // unambiguous; everything else (a Twitter link, a regular
+        // SMS) is silently ignored by the parser.
+        if (intent.action == Intent.ACTION_SEND &&
+            (intent.type == "text/plain" || intent.type == null)
+        ) {
+            val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+            McpShareSnippet.parse(text)?.let { endpoint ->
+                pendingRemoteMcp.value = endpoint
+                lifecycleScope.launch {
+                    runCatching {
+                        RemoteMcpStore(this@MobileActivity).set(endpoint)
+                    }
+                }
+            }
         }
     }
 

@@ -19,21 +19,21 @@ class McpShareSnippetTest {
     @Test fun parsesCanonicalSnippet() {
         val canonical = buildShareSnippet(
             primaryUrl = "http://192.168.1.42:7080/mcp",
-            token = "ABCDefgh1234567890XYZW1234567890",
+            token = "test-token-not-a-real-key",
             lanIps = listOf("192.168.1.42"),
             port = 7080,
         )
         val parsed = McpShareSnippet.parse(canonical)
         assertNotNull("canonical snippet should parse", parsed)
         assertEquals("http://192.168.1.42:7080/mcp", parsed!!.url)
-        assertEquals("ABCDefgh1234567890XYZW1234567890", parsed.token)
+        assertEquals("test-token-not-a-real-key", parsed.token)
     }
 
     @Test fun rejectsTextWithoutSignature() {
         // Plausible-looking URL + bearer but no OrcaXR signature.
         val text = """
             http://192.168.1.42:7080/mcp
-            Bearer ABCDefgh1234567890XYZW1234567890
+            Bearer test-token-not-a-real-key
         """.trimIndent()
         assertNull(
             "no-signature text must NOT silently configure the phone",
@@ -51,7 +51,7 @@ class McpShareSnippetTest {
         val text = """
             OrcaXR MCP server (running on my Android XR headset).
             Endpoint: http://10.0.0.5:7080
-            Bearer token: ABCDefgh1234567890XYZW1234567890
+            Bearer token: test-token-not-a-real-key
         """.trimIndent()
         val parsed = McpShareSnippet.parse(text)
         assertNotNull(parsed)
@@ -60,17 +60,17 @@ class McpShareSnippetTest {
 
     @Test fun toleratesSingleLineConcatenation() {
         // Some Quick Share previews flatten newlines.
-        val text = "OrcaXR MCP server: http://10.0.0.5:7080/mcp Bearer ABCDefgh1234567890XYZW1234567890"
+        val text = "OrcaXR MCP server: http://10.0.0.5:7080/mcp Bearer test-token-not-a-real-key"
         val parsed = McpShareSnippet.parse(text)
         assertNotNull(parsed)
-        assertEquals("ABCDefgh1234567890XYZW1234567890", parsed!!.token)
+        assertEquals("test-token-not-a-real-key", parsed!!.token)
     }
 
     @Test fun acceptsHttpsEndpoint() {
         val text = """
             OrcaXR MCP server.
             Endpoint: https://orcaxr.local:7080/mcp
-            Bearer token: ABCDefgh1234567890XYZW1234567890
+            Bearer token: test-token-not-a-real-key
         """.trimIndent()
         val parsed = McpShareSnippet.parse(text)
         assertNotNull(parsed)
@@ -84,7 +84,7 @@ class McpShareSnippetTest {
         // their phone with the share sheet still open.
         val snippet = buildShareSnippet(
             primaryUrl = "http://192.168.1.42:7080/mcp",
-            token = "ABCDefgh1234567890XYZW1234567890",
+            token = "test-token-not-a-real-key",
             lanIps = listOf("192.168.1.42"),
             port = 7080,
         )
@@ -110,6 +110,6 @@ class McpShareSnippetTest {
         val parsed = McpShareSnippet.parse(snippet)
         assertNotNull(parsed)
         assertEquals("http://192.168.1.42:7080/mcp", parsed!!.url)
-        assertEquals("ABCDefgh1234567890XYZW1234567890", parsed.token)
+        assertEquals("test-token-not-a-real-key", parsed.token)
     }
 }

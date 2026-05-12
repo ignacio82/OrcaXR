@@ -49,6 +49,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
+import dev.orcaxr.app.llm.aicore.AICoreEngineHolder
+import dev.orcaxr.app.llm.aicore.AICoreStatus
 import dev.orcaxr.app.llm.local.Gemma4Catalog
 import dev.orcaxr.app.llm.local.Gemma4DownloadRepository
 import dev.orcaxr.app.llm.local.Gemma4Size
@@ -124,23 +126,37 @@ fun LlmAssistantPanel(
     )
     val localReady = localStatus is Gemma4DownloadRepository.Status.Complete
 
+    // AICore readiness — re-probe whenever the user opens the panel
+    // with AICore selected. Avoids stuck-Unknown after returning
+    // from a background download triggered from the card.
+    var aicoreStatus by remember { mutableStateOf<AICoreStatus>(AICoreStatus.Unknown) }
+    LaunchedEffect(selected) {
+        if (selected == LlmProvider.AICore) {
+            aicoreStatus = AICoreEngineHolder.checkStatus(context)
+        }
+    }
+    val aicoreReady = aicoreStatus is AICoreStatus.Ready
+
     val activeKey = when (selected) {
         LlmProvider.Claude -> claudeKey
         LlmProvider.Gemini -> geminiKey
         LlmProvider.OpenAI -> openAiKey
         LlmProvider.Local -> null
+        LlmProvider.AICore -> null
     }?.takeIf { it.isNotBlank() }
     val activeModel = when (selected) {
         LlmProvider.Claude -> claudeModel
         LlmProvider.Gemini -> geminiModel
         LlmProvider.OpenAI -> openAiModel
         LlmProvider.Local -> null
+        LlmProvider.AICore -> null
     }?.takeIf { it.isNotBlank() }
     /** Provider-agnostic readiness — true when the chat panel can
      *  send a message. Cloud needs a key; Local needs the bundle on
-     *  disk. */
+     *  disk; AICore needs the Gemini Nano feature pack provisioned. */
     val readyForSend = when (selected) {
         LlmProvider.Local -> localReady
+        LlmProvider.AICore -> aicoreReady
         else -> activeKey != null
     }
 
@@ -249,6 +265,26 @@ fun LlmAssistantPanel(
                             else ->
                                 "Gemma 4 ${localSize.name} not yet on disk. Download from " +
                                     "Devices → AI assistant to start chatting on-device."
+                        }
+                        msg to Color(0xFFE0B070)
+                    }
+                    LlmProvider.AICore -> {
+                        val msg = when (val s = aicoreStatus) {
+                            is AICoreStatus.Downloadable ->
+                                "Gemini Nano not provisioned yet. Download it from " +
+                                    "Devices → AI assistant to start chatting on-device."
+                            is AICoreStatus.Downloading -> {
+                                val mb = s.bytesDownloaded / 1_048_576L
+                                if (mb > 0L) "Gemini Nano downloading… $mb MB"
+                                else "Gemini Nano downloading…"
+                            }
+                            is AICoreStatus.Warming -> "Gemini Nano warming up…"
+                            is AICoreStatus.Unavailable ->
+                                "AICore unavailable on this device (${s.reason}). " +
+                                    "Pick a different backend in Devices → AI assistant."
+                            is AICoreStatus.Error ->
+                                "AICore error: ${s.message}. Retry from Devices → AI assistant."
+                            else -> "Checking AICore status…"
                         }
                         msg to Color(0xFFE0B070)
                     }

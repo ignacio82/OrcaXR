@@ -45,10 +45,20 @@ object LiteRtEngineHolder {
 
     private const val TAG = "LiteRtEngineHolder"
 
-    /** Default max tokens per inference call. Generous enough that a
-     *  Gemma 4 thinking-block + JSON-envelope response fits, tight
-     *  enough that runaway generation is bounded. */
-    private const val DEFAULT_MAX_TOKENS = 4096
+    /** Engine context window (input + output), in tokens. OrcaXR's
+     *  MCP tool catalogue is ~100 tools so the prompt alone runs
+     *  ~9-10k tokens before history; 4096 used to overflow with
+     *  "Status Code: 3 — Input token ids are too long". The KV
+     *  buffer is committed up-front at Engine.initialize() at fp16
+     *  over Gemma 4's full layer stack, competing with the model
+     *  weights and the system compositor for VRAM — 32k and 16k
+     *  both crashed Pixel 10 Pro hard enough to take the whole
+     *  device down. 10k is the working compromise: enough headroom
+     *  for the ~9-10k MCP tool catalogue + a short turn of history,
+     *  while staying well under the crash threshold. Very long
+     *  chat history will still hit "Input token ids are too long"
+     *  and the runner needs to trim history accordingly. */
+    private const val DEFAULT_MAX_TOKENS = 10_240
 
     @OptIn(ExperimentalApi::class)
     @Volatile

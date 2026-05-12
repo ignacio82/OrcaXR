@@ -7,6 +7,7 @@ import dev.orcaxr.app.llm.LlmProvider
 import dev.orcaxr.app.llm.LlmSettings
 import dev.orcaxr.app.llm.LlmToolBridge
 import dev.orcaxr.app.llm.LlmTurn
+import dev.orcaxr.app.llm.aicore.AICoreLlmClient
 import dev.orcaxr.app.llm.local.LocalLlmClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -238,6 +239,7 @@ class AgentRunner private constructor(
     private fun buildClient(snapshot: LlmSettings.Snapshot): LlmClient {
         return when (snapshot.selected) {
             LlmProvider.Local -> LocalLlmClient(appContext, snapshot.localModelSize)
+            LlmProvider.AICore -> AICoreLlmClient(appContext)
             else -> {
                 val key = snapshot.keyFor(snapshot.selected)
                     ?: error("No API key for ${snapshot.selected.displayName}.")

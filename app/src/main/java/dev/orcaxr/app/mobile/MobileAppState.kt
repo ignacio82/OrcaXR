@@ -14,6 +14,7 @@ import dev.orcaxr.app.UserPreferences
 import dev.orcaxr.app.UserProfilesStore
 import dev.orcaxr.app.mcp.McpController
 import dev.orcaxr.app.mcp.McpSettings
+import dev.orcaxr.app.mcp.RemoteMcpStore
 
 /**
  * Bundle of long-lived process-singletons the mobile UI reads from /
@@ -38,4 +39,5 @@ class MobileAppState(ctx: Context) {
     val customGcodeStore = CustomGcodeStore(app)
     val mcpSettings = McpSettings(app)
     val mcpController by lazy { McpController.get(app) }
+    val remoteMcp = RemoteMcpStore(app)
 }

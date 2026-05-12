@@ -38,6 +38,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -64,6 +67,19 @@ class McpController private constructor(
 
     private var watcher: Job? = null
     private var server: McpServer? = null
+
+    /**
+     * True while [server] holds an open socket. Driven by
+     * [startServerSnapshot] / [stopServer] so the value flips exactly
+     * when the listener becomes / stops being reachable. The mobile
+     * shell observes this to decide whether to keep the screen on
+     * (FLAG_KEEP_SCREEN_ON), the foreground service observes it to
+     * refresh its persistent notification, and PiP entry is gated on
+     * it so we don't shrink the workspace into a thumbnail when the
+     * user wasn't even using MCP.
+     */
+    private val _serverRunning = MutableStateFlow(false)
+    val serverRunning: StateFlow<Boolean> = _serverRunning.asStateFlow()
 
     val toolContext: ToolContext by lazy { ToolContext(appContext) }
 
@@ -169,16 +185,19 @@ class McpController private constructor(
         server = s
         try {
             val bound = s.start(snap.port)
+            _serverRunning.value = true
             Log.i(tag, "Server up on $bound (auth=${if (token != null) "on" else "off"})")
         } catch (e: IOException) {
             Log.e(tag, "Failed to bind on ${snap.port}: ${e.message}")
             server = null
+            _serverRunning.value = false
         }
     }
 
     private fun stopServer() {
         server?.stop()
         server = null
+        _serverRunning.value = false
     }
 
     companion object {

@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -42,9 +43,12 @@ import kotlinx.coroutines.launch
  * is follow-up work that lands alongside the libslic3r abort hook
  * (currently `cancel_slice` is a no-op for the same reason).
  *
- * `foregroundServiceType="dataSync"` (manifest) — same canonical type
- * MCP uses, justified by "long-running background work the user
- * explicitly opted into."
+ * `foregroundServiceType="dataSync"` (manifest) — slicing is a
+ * naturally-bounded finite operation (30-120s typical), so the
+ * Android 15+ 6h/24h `dataSync` cap will never legitimately bite.
+ * The long-lived MCP server and per-turn agent runner moved to
+ * `specialUse` so their accumulated runtime doesn't eat the slice
+ * service's quota.
  *
  * **Cancellation:** the user can dismiss the notification (no Cancel
  * action wired up yet — the libslic3r abort hook needed to honor it
@@ -62,13 +66,19 @@ class SliceForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         ensureChannel(this)
-        startForegroundCompat()
+        if (!startForegroundCompat()) {
+            stopSelf()
+            return
+        }
         startProgressObserver()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         ensureChannel(this)
-        startForegroundCompat()
+        if (!startForegroundCompat()) {
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
         // Re-arm the observer if onStartCommand is delivered after
         // an onCreate→onDestroy cycle (rare, but the OS does this).
         if (observerJob == null) startProgressObserver()
@@ -77,6 +87,19 @@ class SliceForegroundService : Service() {
         // the start is gone, and a zombie service with no slice in
         // flight would just confuse the user.
         return START_NOT_STICKY
+    }
+
+    /**
+     * Android 15+ time-limit hook. dataSync foreground services have
+     * a 6-hour cumulative cap per rolling 24h. A typical slice is
+     * 30-120s so we'll never legitimately hit this, but if multiple
+     * services in the app collectively exhaust the quota, the OS
+     * fires onTimeout before throwing on the next startForeground.
+     * Stop cleanly here.
+     */
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        Log.w(TAG, "onTimeout(startId=$startId, type=$fgsType) — stopping cleanly")
+        stopSelf(startId)
     }
 
     override fun onDestroy() {
@@ -106,20 +129,37 @@ class SliceForegroundService : Service() {
         }
     }
 
-    private fun startForegroundCompat() {
+    /**
+     * Promote to foreground; returns true on success, false on
+     * denial. Caller must stopSelf on false — a service that fails
+     * startForeground continues running as a plain background Service
+     * the OS will reap within seconds.
+     */
+    private fun startForegroundCompat(): Boolean {
         val notification = buildNotification(
             label = SliceLifecycle.activeLabel.value,
             percent = SliceLifecycle.progressPercent.value,
             message = SliceLifecycle.progressMessage.value,
         )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            true
+        } catch (e: Exception) {
+            // Catches ForegroundServiceStartNotAllowedException —
+            // typically because the app's dataSync quota was exhausted
+            // by a long-lived sibling service. The slice itself can
+            // still finish (the JNI call already runs on a worker
+            // thread), it just won't show up in the notification shade.
+            Log.w(TAG, "startForeground denied: ${e.javaClass.simpleName}: ${e.message}")
+            false
         }
     }
 
@@ -177,6 +217,7 @@ class SliceForegroundService : Service() {
     }
 
     companion object {
+        private const val TAG: String = "OrcaXR/slice/svc"
         private const val NOTIFICATION_ID: Int = 0xC9D
         private const val NOTIFICATION_CHANNEL_ID: String = "orcaxr.slice"
         private const val NOTIFICATION_CHANNEL_NAME: String = "Slicing"
@@ -186,7 +227,16 @@ class SliceForegroundService : Service() {
         const val ACTION_CANCEL: String = "dev.orcaxr.app.action.SLICE_CANCEL"
 
         fun start(ctx: Context) {
-            ctx.startForegroundService(Intent(ctx, SliceForegroundService::class.java))
+            try {
+                ctx.startForegroundService(Intent(ctx, SliceForegroundService::class.java))
+            } catch (e: Exception) {
+                // Caller-side denial (background-launch policy on
+                // Android 12+, or a stricter future revision). Logged
+                // and swallowed — the slice itself runs on a worker
+                // thread and doesn't depend on this service to
+                // complete; the only thing lost is the notification.
+                Log.w(TAG, "startForegroundService denied: ${e.javaClass.simpleName}: ${e.message}")
+            }
         }
 
         fun stop(ctx: Context) {

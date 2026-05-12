@@ -100,6 +100,9 @@ fun MobileShell(
     forceDark: Boolean?,
     onSetForceDark: (Boolean?) -> Unit,
     pendingSlicerFile: kotlinx.coroutines.flow.MutableStateFlow<String?>? = null,
+    /** Quick-Share inbox for OrcaXR MCP grants — drained by a one-shot
+     *  confirmation dialog inside the shell. Null in headless tests. */
+    pendingRemoteMcp: kotlinx.coroutines.flow.MutableStateFlow<dev.orcaxr.app.mcp.RemoteMcpEndpoint?>? = null,
 ) {
     OrcaXrMobileTheme(forceDark = forceDark) {
         CompositionLocalProvider(LocalMobileAppState provides appState) {
@@ -130,7 +133,38 @@ fun MobileShell(
                     )
                 }
 
+                // Quick-Share-received MCP grant. The LE collects from
+                // MobileActivity's flow into a Compose state so a
+                // recomposition mid-flight doesn't re-pop after the
+                // user dismisses; tapping Open Settings routes the
+                // shell so the "Connected to remote OrcaXR" card is
+                // visible immediately.
+                var pendingMcpDialog by remember {
+                    mutableStateOf<dev.orcaxr.app.mcp.RemoteMcpEndpoint?>(null)
+                }
+                if (pendingRemoteMcp != null) {
+                    androidx.compose.runtime.LaunchedEffect(Unit) {
+                        pendingRemoteMcp.collect { ep ->
+                            if (ep != null) {
+                                pendingMcpDialog = ep
+                                pendingRemoteMcp.value = null
+                            }
+                        }
+                    }
+                }
+
                 var dest by rememberSaveable { mutableStateOf(MobileDestination.Home) }
+
+                pendingMcpDialog?.let { ep ->
+                    QuickShareMcpDialog(
+                        endpoint = ep,
+                        onDismiss = { pendingMcpDialog = null },
+                        onOpenSettings = {
+                            pendingMcpDialog = null
+                            dest = MobileDestination.Settings
+                        },
+                    )
+                }
                 var slicerFilePath by rememberSaveable { mutableStateOf<String?>(null) }
                 var slicerOutputPath by rememberSaveable { mutableStateOf<String?>(null) }
                 // Paint state — ByteArrays don't go through rememberSaveable
@@ -166,6 +200,31 @@ fun MobileShell(
                         llmAssistantOpen = false
                     },
                 )
+
+                // Bridge MCP-committed paint into the slicer-screen
+                // state. WorkspaceModel.placedModels carries
+                // paintFilamentIndex (kept in sync by the binding's
+                // LoadPaintState / PaintTriangleSet handlers); the
+                // slicer screen reads paint from `slicerPaintIndex`.
+                // Without this bridge, an MCP commit_paint_session
+                // succeeded server-side and showed up via render_view
+                // but the in-app SlicerScreen still rendered the model
+                // gray and passed paintFilamentIndex=null to the slice
+                // call. This LaunchedEffect copies any non-null,
+                // length-matching paint array back across the bridge
+                // — and only across — so a user manually painting via
+                // PaintScreen still wins (because PaintScreen.onApply
+                // sets `slicerPaintIndex` directly with no equivalent
+                // round-trip into WorkspaceModel).
+                val workspaceModel = remember { dev.orcaxr.app.mcp.WorkspaceModel.get() }
+                val placedModels by workspaceModel.placedModels.collectAsState()
+                androidx.compose.runtime.LaunchedEffect(placedModels) {
+                    val mcpPaint =
+                        placedModels.firstOrNull { it.id == "mobile_loaded" }?.paintFilamentIndex
+                    if (mcpPaint != null && !mcpPaint.contentEquals(slicerPaintIndex)) {
+                        slicerPaintIndex = mcpPaint
+                    }
+                }
 
                 // Onboarding gating: until at least one printer exists,
                 // route to the Onboarding flow regardless of `dest`.
@@ -785,6 +844,80 @@ private fun PastCrashDialog(
                             append(timestamp)
                         }
                     },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    )
+}
+
+/**
+ * One-shot dialog that lands when the user has just Quick-Shared an
+ * OrcaXR MCP grant from another device (typically the headset). The
+ * endpoint is already persisted by `MobileActivity.ingestSharedIntent`
+ * by the time this composes — the dialog just confirms what arrived
+ * and offers a one-tap path to Settings to review/disconnect.
+ *
+ * The token is masked by default. Showing it requires an explicit tap
+ * so a casual screen-share doesn't reveal the bearer to whoever's
+ * watching.
+ */
+@Composable
+private fun QuickShareMcpDialog(
+    endpoint: dev.orcaxr.app.mcp.RemoteMcpEndpoint,
+    onDismiss: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    var showToken by remember { mutableStateOf(false) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onOpenSettings) {
+                Text("Open Settings")
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) {
+                Text("OK")
+            }
+        },
+        title = { Text("Connected to remote OrcaXR") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "This phone can now drive the OrcaXR running at:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    endpoint.url,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontFamily = dev.orcaxr.app.ui.JetBrainsMono,
+                    ),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Bearer token: ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        if (showToken) endpoint.token
+                        else "•".repeat(endpoint.token.length.coerceAtMost(20)),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = dev.orcaxr.app.ui.JetBrainsMono,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    androidx.compose.material3.TextButton(
+                        onClick = { showToken = !showToken },
+                    ) { Text(if (showToken) "Hide" else "Show") }
+                }
+                Text(
+                    "Manage or disconnect from Settings → Remote OrcaXR.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -15,19 +15,25 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 /**
- * The four providers OrcaXR's in-app assistant can talk to.
+ * The five providers OrcaXR's in-app assistant can talk to.
  *
  * - Cloud (Claude / Gemini / OpenAI) — billed to the user's own
  *   account; needs an API key.
  * - Local (on-device Gemma 4 via LiteRT-LM) — no key, free, but
  *   requires downloading a 2-3 GiB .litertlm bundle the first time.
- *   See `dev.orcaxr.app.llm.local.LocalLlmClient`.
+ *   See `dev.orcaxr.app.llm.local.LocalLlmClient`. Runs on Adreno
+ *   GPU on phones / on the headset's GPU on Galaxy XR.
+ * - AICore (on-device Gemini Nano via ML Kit GenAI Prompt) — no key,
+ *   free, runs on the Pixel Tensor TPU at the OS level. The model is
+ *   provisioned by AICore (typically a few-hundred-MB feature pack)
+ *   and is unavailable on devices without a Tensor SoC. See
+ *   `dev.orcaxr.app.llm.aicore.AICoreLlmClient`.
  *
  * Selection is persisted so the user can keep keys for several
  * providers but only actively chat with one. The card flips between
- * key-entry rows (cloud) and a model-download row (local) by
- * provider; the chat panel reads [LlmSettings.selectedProvider] to
- * pick which client to send through.
+ * key-entry rows (cloud) and a model-download row (local / aicore)
+ * by provider; the chat panel reads [LlmSettings.selectedProvider]
+ * to pick which client to send through.
  */
 enum class LlmProvider(val displayName: String, val keyName: String) {
     Claude("Claude", "Anthropic"),
@@ -36,6 +42,8 @@ enum class LlmProvider(val displayName: String, val keyName: String) {
     /** On-device Gemma 4. `keyName` is unused for this entry but kept
      *  non-empty for the existing card label code path. */
     Local("Gemma 4", "On-device"),
+    /** On-device Gemini Nano via AICore. Pixel-class devices only. */
+    AICore("Gemini Nano", "On-device (Tensor)"),
     ;
     companion object {
         fun fromStorage(s: String?): LlmProvider = entries.firstOrNull { it.name == s } ?: Claude
@@ -227,10 +235,12 @@ class LlmSettings(
             LlmProvider.Claude -> claudeKey
             LlmProvider.Gemini -> geminiKey
             LlmProvider.OpenAI -> openAiKey
-            // On-device backend has no key — readiness is computed
-            // from Gemma4DownloadRepository.isDownloaded() at the
-            // call site instead.
+            // On-device backends have no key — readiness is computed
+            // from Gemma4DownloadRepository.isDownloaded() (Local) or
+            // AICoreEngineHolder.checkStatus() (AICore) at the call
+            // site instead.
             LlmProvider.Local -> null
+            LlmProvider.AICore -> null
         }
 
         fun modelFor(p: LlmProvider): String? = when (p) {
@@ -238,6 +248,9 @@ class LlmSettings(
             LlmProvider.Gemini -> geminiModel
             LlmProvider.OpenAI -> openAiModel
             LlmProvider.Local -> localModelSize.storageName
+            // AICore picks whichever Gemini Nano feature pack the
+            // device has provisioned; the user doesn't override.
+            LlmProvider.AICore -> null
         }
 
         /** True when at least one cloud provider has a key set. The

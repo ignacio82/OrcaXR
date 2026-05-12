@@ -3,6 +3,7 @@ package dev.orcaxr.app.mobile.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,14 +23,25 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.orcaxr.app.PrinterConfig
+import dev.orcaxr.app.SubnetScanner
+import dev.orcaxr.app.mcp.McpServer
+import dev.orcaxr.app.mcp.RemoteMcpEndpoint
+import dev.orcaxr.app.mcp.RemoteMcpProbe
+import dev.orcaxr.app.mcp.buildShareSnippet
 import dev.orcaxr.app.mobile.LocalMobileAppState
 import dev.orcaxr.app.mobile.LocalMobileTextStyles
 import dev.orcaxr.app.mobile.MobileCard
@@ -55,6 +67,42 @@ fun SettingsScreen(
     val mcpEnabled by app.mcpSettings.enabled.collectAsState(initial = false)
     val mcpPort by app.mcpSettings.port.collectAsState(initial = 7080)
     val mcpToken by app.mcpSettings.apiKey.collectAsState(initial = null)
+    val remoteEndpoint by app.remoteMcp.endpoint.collectAsState(initial = null)
+
+    // LAN addresses for the local MCP Share snippet. Recomputed when
+    // the server toggle flips so a new Wi-Fi network's address shows
+    // up without needing to re-enter Settings.
+    var lanAddresses by remember { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(mcpEnabled, mcpPort) {
+        lanAddresses = if (mcpEnabled) McpServer.lanAddresses() else emptyList()
+    }
+
+    // Auto-run mDNS discovery while the Settings screen is composed,
+    // so a user with one or more printers already configured can still
+    // find more without going through onboarding. Stop on dispose so
+    // we're not holding the NSD listener open in the background. The
+    // subnet sweep fires once 600 ms after the screen lands — slow
+    // enough that the user isn't paying for an unused scan when they
+    // open Settings just to flip the theme, fast enough that "I went
+    // to Settings to look for my printer" feels responsive.
+    val discovered by app.discovery.services.collectAsState(initial = emptyList())
+    val configuredHosts: Set<String> = app.printers.printers
+        .collectAsState(initial = emptyList()).value.map { it.host }.toSet()
+    val printersUnknown = discovered.filterNot { it.host in configuredHosts }
+    var isScanning by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        runCatching { app.discovery.start() }
+        isScanning = true
+        kotlinx.coroutines.delay(600)
+        runCatching {
+            val hits = SubnetScanner.scanLan(ctx)
+            app.discovery.addResults(hits)
+        }
+        isScanning = false
+    }
+    DisposableEffect(Unit) {
+        onDispose { runCatching { app.discovery.stop() } }
+    }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         MobileTopBar(title = "Settings")
@@ -142,6 +190,30 @@ fun SettingsScreen(
                                     OutlinedButton(onClick = {
                                         scope.launch { app.mcpSettings.rotateApiKey() }
                                     }) { Text("Rotate") }
+                                    OutlinedButton(
+                                        enabled = mcpEnabled && lanAddresses.isNotEmpty(),
+                                        onClick = {
+                                            val firstIp = lanAddresses.firstOrNull()
+                                                ?: return@OutlinedButton
+                                            val primaryUrl = "http://$firstIp:$mcpPort/mcp"
+                                            val snippet = buildShareSnippet(
+                                                primaryUrl = primaryUrl,
+                                                token = token,
+                                                lanIps = lanAddresses,
+                                                port = mcpPort,
+                                            )
+                                            copyToClipboard(ctx, "OrcaXR MCP grant", snippet)
+                                            val send = Intent(Intent.ACTION_SEND).apply {
+                                                type = "text/plain"
+                                                putExtra(Intent.EXTRA_SUBJECT, "OrcaXR MCP server connection")
+                                                putExtra(Intent.EXTRA_TEXT, snippet)
+                                            }
+                                            val chooser = Intent.createChooser(
+                                                send, "Share via Quick Share",
+                                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            runCatching { ctx.startActivity(chooser) }
+                                        },
+                                    ) { Text("Share") }
                                 }
                             }
                         }
@@ -154,6 +226,56 @@ fun SettingsScreen(
                     }
                 }
             }
+
+            // Remote OrcaXR card — shown only after a Quick-Share
+            // grant has landed in `RemoteMcpStore`. Lets the user
+            // see what they're paired with, run a live "is the
+            // headset reachable + does the token still work" probe,
+            // rename the entry, and disconnect.
+            remoteEndpoint?.let { endpoint ->
+                RemoteMcpCard(
+                    endpoint = endpoint,
+                    onRename = { newLabel ->
+                        scope.launch { app.remoteMcp.rename(newLabel) }
+                    },
+                    onDisconnect = {
+                        scope.launch { app.remoteMcp.set(null) }
+                    },
+                )
+            }
+
+            // Discovered printers — auto-running mDNS + subnet scan
+            // surfaces anything reachable on the LAN that the user
+            // hasn't configured yet. One-tap add wires the row into
+            // `PrintersStore`, the same path Onboarding uses.
+            DiscoveredPrintersCard(
+                discovered = printersUnknown,
+                isScanning = isScanning,
+                onRescan = {
+                    scope.launch {
+                        isScanning = true
+                        runCatching { app.discovery.stop() }
+                        runCatching { app.discovery.start() }
+                        runCatching {
+                            val hits = SubnetScanner.scanLan(ctx)
+                            app.discovery.addResults(hits)
+                        }
+                        isScanning = false
+                    }
+                },
+                onAdd = { d ->
+                    scope.launch {
+                        val cfg = PrinterConfig(
+                            id = "printer_${System.currentTimeMillis().toString(36)}",
+                            name = d.sn?.let { "Snapmaker $it" } ?: d.name.ifBlank { d.host },
+                            host = d.host,
+                            port = d.port,
+                            apiKey = null,
+                        )
+                        app.printers.upsert(cfg)
+                    }
+                },
+            )
 
             // AI assistant — Claude / Gemini / OpenAI key entry, model
             // override, voice toggle, and "Open assistant" CTA. Same
@@ -201,6 +323,189 @@ private fun SwitchRow(
 private fun copyToClipboard(ctx: Context, label: String, text: String) {
     val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
     cm.setPrimaryClip(ClipData.newPlainText(label, text))
+}
+
+@Composable
+private fun RemoteMcpCard(
+    endpoint: RemoteMcpEndpoint,
+    onRename: (String) -> Unit,
+    onDisconnect: () -> Unit,
+) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf<RemoteMcpProbe.Status?>(null) }
+    var probing by remember { mutableStateOf(false) }
+    var showToken by remember { mutableStateOf(false) }
+    var labelDraft by remember(endpoint.label) { mutableStateOf(endpoint.label) }
+    var editingLabel by remember { mutableStateOf(false) }
+
+    // First-render probe so the card opens with a live status. Cheap
+    // — one HTTP POST to /mcp; failure is silently absorbed by the
+    // probe and surfaces as Offline.
+    LaunchedEffect(endpoint.url, endpoint.token) {
+        probing = true
+        status = RemoteMcpProbe.probe(endpoint)
+        probing = false
+    }
+
+    MobileCard {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SectionKicker("Remote OrcaXR")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (editingLabel) {
+                    androidx.compose.material3.OutlinedTextField(
+                        value = labelDraft,
+                        onValueChange = { labelDraft = it },
+                        label = { Text("Label") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    OutlinedButton(onClick = {
+                        onRename(labelDraft.ifBlank { endpoint.label })
+                        editingLabel = false
+                    }) { Text("Save") }
+                } else {
+                    Text(
+                        endpoint.label,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedButton(onClick = { editingLabel = true }) { Text("Rename") }
+                }
+            }
+            Text(
+                endpoint.url,
+                style = LocalMobileTextStyles.current.numeric,
+                color = MaterialTheme.colorScheme.primary,
+                overflow = TextOverflow.Visible,
+            )
+            val statusLabel = when (val s = status) {
+                null -> if (probing) "Checking…" else ""
+                is RemoteMcpProbe.Status.Online -> "Online · ${s.toolCount} tools"
+                RemoteMcpProbe.Status.Unauthorized -> "Token rejected — ask the headset for a fresh share."
+                is RemoteMcpProbe.Status.Offline -> "Offline (${s.message})"
+            }
+            val statusColor = when (status) {
+                is RemoteMcpProbe.Status.Online -> MaterialTheme.colorScheme.primary
+                RemoteMcpProbe.Status.Unauthorized -> MaterialTheme.colorScheme.error
+                is RemoteMcpProbe.Status.Offline -> MaterialTheme.colorScheme.onSurfaceVariant
+                null -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            if (statusLabel.isNotBlank()) {
+                Text(
+                    statusLabel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = statusColor,
+                )
+            }
+            // Bearer token row.
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        "Bearer token",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        if (showToken) endpoint.token
+                        else "•".repeat(endpoint.token.length.coerceAtMost(32)),
+                        style = LocalMobileTextStyles.current.numeric,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { showToken = !showToken }) {
+                            Text(if (showToken) "Hide" else "Show")
+                        }
+                        OutlinedButton(onClick = {
+                            copyToClipboard(ctx, "OrcaXR MCP token", endpoint.token)
+                        }) { Text("Copy") }
+                    }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    enabled = !probing,
+                    onClick = {
+                        scope.launch {
+                            probing = true
+                            status = RemoteMcpProbe.probe(endpoint)
+                            probing = false
+                        }
+                    },
+                ) { Text(if (probing) "Testing…" else "Test connection") }
+                OutlinedButton(onClick = onDisconnect) { Text("Disconnect") }
+            }
+            Text(
+                "Quick-Share another grant (Settings → MCP server → Share on the headset) " +
+                    "to overwrite this entry.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DiscoveredPrintersCard(
+    discovered: List<dev.orcaxr.app.DiscoveredPrinter>,
+    isScanning: Boolean,
+    onRescan: () -> Unit,
+    onAdd: (dev.orcaxr.app.DiscoveredPrinter) -> Unit,
+) {
+    MobileCard {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    SectionKicker("Printers nearby")
+                    Text(
+                        if (isScanning) "Scanning the LAN…"
+                        else "${discovered.size} reachable on this Wi-Fi",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                OutlinedButton(enabled = !isScanning, onClick = onRescan) {
+                    Text(if (isScanning) "…" else "Rescan")
+                }
+            }
+            if (discovered.isEmpty() && !isScanning) {
+                Text(
+                    "No new Klipper / Moonraker hosts found. The first scan covers " +
+                        "mDNS announcements + a /24 sweep on the active Wi-Fi; tap " +
+                        "Rescan if you've just powered the printer on.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                for (svc in discovered) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                svc.name.ifBlank { svc.host },
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                "${svc.host}:${svc.port}",
+                                style = LocalMobileTextStyles.current.numeric,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Button(onClick = { onAdd(svc) }) { Text("Add") }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable

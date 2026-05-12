@@ -58,6 +58,10 @@ interface LlmClient {
                     "LlmClient.forProvider does not support Local — construct " +
                         "dev.orcaxr.app.llm.local.LocalLlmClient directly with a Context."
                 )
+                LlmProvider.AICore -> error(
+                    "LlmClient.forProvider does not support AICore — construct " +
+                        "dev.orcaxr.app.llm.aicore.AICoreLlmClient directly with a Context."
+                )
             }
         }
     }

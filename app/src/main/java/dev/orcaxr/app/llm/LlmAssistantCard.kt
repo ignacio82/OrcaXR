@@ -21,6 +21,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +38,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import dev.orcaxr.app.llm.aicore.AICoreEngineHolder
+import dev.orcaxr.app.llm.aicore.AICoreStatus
 import dev.orcaxr.app.llm.local.Gemma4Catalog
 import dev.orcaxr.app.llm.local.Gemma4DownloadRepository
 import dev.orcaxr.app.llm.local.Gemma4Size
@@ -92,23 +95,41 @@ fun LlmAssistantCard(
     )
     val localReady = localStatus is Gemma4DownloadRepository.Status.Complete
 
+    // AICore status. Probed lazily when the user picks the AICore
+    // backend; the `LaunchedEffect` keys on `selected` so the probe
+    // fires on first tap and on re-tap after returning from a
+    // download. The `aicoreTick` ratchets after every download /
+    // warmup to force a re-probe even if the selection didn't change.
+    var aicoreStatus by remember { mutableStateOf<AICoreStatus>(AICoreStatus.Unknown) }
+    var aicoreTick by remember { mutableStateOf(0) }
+    LaunchedEffect(selected, aicoreTick) {
+        if (selected == LlmProvider.AICore) {
+            aicoreStatus = AICoreEngineHolder.checkStatus(context)
+        }
+    }
+    val aicoreReady = aicoreStatus is AICoreStatus.Ready
+
     val currentKey = when (selected) {
         LlmProvider.Claude -> claudeKey
         LlmProvider.Gemini -> geminiKey
         LlmProvider.OpenAI -> openAiKey
         LlmProvider.Local -> null
+        LlmProvider.AICore -> null
     }
     val currentModel = when (selected) {
         LlmProvider.Claude -> claudeModel
         LlmProvider.Gemini -> geminiModel
         LlmProvider.OpenAI -> openAiModel
         LlmProvider.Local -> null
+        LlmProvider.AICore -> null
     }
     /** True when the active provider can chat right now (cloud has a
-     *  key, or local has the bundle downloaded). The Open-assistant
+     *  key, or local has the bundle downloaded, or AICore has the
+     *  Gemini Nano feature pack provisioned). The Open-assistant
      *  button gates on this. */
     val activeReady = when (selected) {
         LlmProvider.Local -> localReady
+        LlmProvider.AICore -> aicoreReady
         else -> !currentKey.isNullOrBlank()
     }
     val anyKeySet = !claudeKey.isNullOrBlank() || !geminiKey.isNullOrBlank() ||
@@ -127,6 +148,7 @@ fun LlmAssistantCard(
         LlmProvider.Gemini -> dev.orcaxr.app.llm.GeminiLlmClient.DEFAULT_MODEL
         LlmProvider.OpenAI -> dev.orcaxr.app.llm.OpenAiLlmClient.DEFAULT_MODEL
         LlmProvider.Local -> "Gemma 4"  // unused — Local takes the local-row branch below
+        LlmProvider.AICore -> "Gemini Nano"  // unused — AICore takes the aicore-row branch below
     }
 
     Surface(
@@ -142,9 +164,10 @@ fun LlmAssistantCard(
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                "Optional. Talk to OrcaXR using Claude, Gemini, OpenAI, or on-device Gemma 4. " +
+                "Optional. Talk to OrcaXR using Claude, Gemini, OpenAI, on-device Gemma 4 " +
+                    "(LiteRT/GPU), or on-device Gemini Nano (AICore on Pixel Tensor TPU). " +
                     "Cloud keys stay on this device and are billed to your own account; " +
-                    "Local Gemma 4 runs entirely on the headset GPU with no per-token cost.",
+                    "the on-device backends run entirely on the device with no per-token cost.",
                 color = Color(0xFFB6BEC8),
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -168,6 +191,12 @@ fun LlmAssistantCard(
                         // size's bundle is on disk. Switching size
                         // on the picker re-evaluates this.
                         LlmProvider.Local -> localReady
+                        // AICore is "configured" when the device
+                        // reports the Gemini Nano feature pack as
+                        // AVAILABLE — the dot is only meaningful when
+                        // the user has actively selected AICore at
+                        // least once and triggered the probe.
+                        LlmProvider.AICore -> aicoreReady
                     }
                     Surface(
                         color = if (isSelected) Color(0xFF4F8FF7) else Color(0xFF0F1A28),
@@ -225,10 +254,37 @@ fun LlmAssistantCard(
                 Spacer(Modifier.height(12.dp))
             }
 
-            // Hide the cloud key/model rows when Local is selected —
-            // they're meaningless there. Voice toggle and Open
-            // Assistant stay visible for both.
-            if (selected != LlmProvider.Local) {
+            // AICore backend has its own configuration UI (status
+            // probe + Gemini Nano feature-pack download). The cloud
+            // path falls through to the existing API-key + model
+            // override fields.
+            if (selected == LlmProvider.AICore) {
+                AICoreConfigRow(
+                    status = aicoreStatus,
+                    onProbe = { aicoreTick++ },
+                    onDownload = {
+                        scope.launch {
+                            AICoreEngineHolder.downloadFeature(context).collect { update ->
+                                aicoreStatus = update
+                            }
+                            // Download flow completed (with Warming
+                            // or Error). Run a warmup pass and then
+                            // re-probe so we end on Ready / Error
+                            // deterministically.
+                            if (aicoreStatus is AICoreStatus.Warming) {
+                                aicoreStatus = AICoreEngineHolder.warmup(context)
+                            }
+                            aicoreTick++
+                        }
+                    },
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+
+            // Hide the cloud key/model rows when an on-device
+            // backend is selected — they're meaningless there.
+            // Voice toggle and Open Assistant stay visible for all.
+            if (selected != LlmProvider.Local && selected != LlmProvider.AICore) {
             Text(
                 "${selected.keyName} API key",
                 color = Color(0xFFB6BEC8),
@@ -247,7 +303,9 @@ fun LlmAssistantCard(
                             // Unreachable — this Composable subtree is gated on
                             // `selected != LlmProvider.Local` above. Compiler
                             // still needs the arm for exhaustiveness.
+                            // Unreachable — gated by `selected != Local && selected != AICore`.
                             LlmProvider.Local -> ""
+                            LlmProvider.AICore -> ""
                         },
                         color = Color(0xFF6A7484),
                     )
@@ -295,6 +353,7 @@ fun LlmAssistantCard(
                                 LlmProvider.Gemini -> settings.setGeminiApiKey(v.ifEmpty { null })
                                 LlmProvider.OpenAI -> settings.setOpenAiApiKey(v.ifEmpty { null })
                                 LlmProvider.Local -> Unit  // unreachable; cloud-only branch
+                                LlmProvider.AICore -> Unit  // unreachable; cloud-only branch
                             }
                             lastSavedAt = if (v.isEmpty()) "Cleared." else "Saved."
                         }
@@ -311,6 +370,7 @@ fun LlmAssistantCard(
                                     LlmProvider.Gemini -> settings.setGeminiApiKey(null)
                                     LlmProvider.OpenAI -> settings.setOpenAiApiKey(null)
                                     LlmProvider.Local -> Unit  // unreachable; cloud-only branch
+                                LlmProvider.AICore -> Unit  // unreachable; cloud-only branch
                                 }
                                 draftKey = ""
                                 lastSavedAt = "Cleared."
@@ -377,6 +437,7 @@ fun LlmAssistantCard(
                                 LlmProvider.Gemini -> settings.setGeminiModel(v.ifEmpty { null })
                                 LlmProvider.OpenAI -> settings.setOpenAiModel(v.ifEmpty { null })
                                 LlmProvider.Local -> Unit  // unreachable; cloud-only branch
+                                LlmProvider.AICore -> Unit  // unreachable; cloud-only branch
                             }
                             lastSavedAt =
                                 if (v.isEmpty()) "Reverted to $defaultModelForProvider."
@@ -395,6 +456,7 @@ fun LlmAssistantCard(
                                     LlmProvider.Gemini -> settings.setGeminiModel(null)
                                     LlmProvider.OpenAI -> settings.setOpenAiModel(null)
                                     LlmProvider.Local -> Unit  // unreachable; cloud-only branch
+                                LlmProvider.AICore -> Unit  // unreachable; cloud-only branch
                                 }
                                 draftModel = ""
                                 lastSavedAt = "Reverted to $defaultModelForProvider."
@@ -452,12 +514,21 @@ fun LlmAssistantCard(
                         activeReady -> "Open assistant"
                         selected == LlmProvider.Local ->
                             "Download Gemma 4 ${localSize.name} to open the assistant"
+                        selected == LlmProvider.AICore -> when (aicoreStatus) {
+                            is AICoreStatus.Downloadable -> "Download Gemini Nano to open the assistant"
+                            is AICoreStatus.Downloading -> "Downloading Gemini Nano…"
+                            is AICoreStatus.Warming -> "Warming up Gemini Nano…"
+                            is AICoreStatus.Unavailable ->
+                                "AICore unavailable on this device — pick another backend"
+                            is AICoreStatus.Error -> "AICore error — retry from the status row above"
+                            else -> "Checking AICore status…"
+                        }
                         else -> "Add a key to open the assistant"
                     },
                 )
             }
 
-            if (anyKeySet || localReady) {
+            if (anyKeySet || localReady || aicoreReady) {
                 Spacer(Modifier.height(8.dp))
                 Text(
                     "The assistant can drive every action OrcaXR exposes through MCP " +
@@ -555,7 +626,7 @@ private fun LocalGemmaConfigRow(
                 ((status.bytesDownloaded * 100L) / status.bytesTotal).toInt().coerceIn(0, 100)
             } else 0
             Text(
-                "Downloading… $pct%   $mb / $totalMb MB   %.1f MB/s".format(mbps),
+                "Downloading… $pct%   $mb / $totalMb MB   ${"%.1f".format(mbps)} MB/s",
                 color = Color.White,
                 style = MaterialTheme.typography.labelSmall,
             )
@@ -589,6 +660,117 @@ private fun LocalGemmaConfigRow(
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F8FF7)),
             ) { Text("Retry") }
+        }
+    }
+}
+
+/**
+ * AICore (Gemini Nano on Tensor TPU) configuration row. Surfaces
+ * the device's [AICoreStatus] and exposes a one-tap download +
+ * warmup affordance when the feature pack hasn't been provisioned
+ * yet. There is no model-size choice here — AICore picks whichever
+ * Nano feature it has, and the no-arg `Generation.getClient()`
+ * accepts that selection (the explicit-model overload throws
+ * `FEATURE_NOT_FOUND` on stock Pixel 10 Pro).
+ *
+ * Colour palette mirrors [LocalGemmaConfigRow] so the two on-device
+ * sections read as a related pair.
+ */
+@Composable
+private fun AICoreConfigRow(
+    status: AICoreStatus,
+    onProbe: () -> Unit,
+    onDownload: () -> Unit,
+) {
+    Text(
+        "On-device Gemini Nano (AICore)",
+        color = Color(0xFFB6BEC8),
+        style = MaterialTheme.typography.labelSmall,
+    )
+    Spacer(Modifier.height(6.dp))
+    when (val s = status) {
+        is AICoreStatus.Unknown -> {
+            Text(
+                "Checking AICore status…",
+                color = Color(0xFFB6BEC8),
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+        is AICoreStatus.Unavailable -> {
+            Text(
+                "AICore unavailable on this device. ${s.reason}",
+                color = Color(0xFFE0B070),
+                style = MaterialTheme.typography.labelSmall,
+            )
+            Spacer(Modifier.height(6.dp))
+            OutlinedButton(
+                onClick = onProbe,
+                shape = RoundedCornerShape(8.dp),
+            ) { Text("Re-check") }
+        }
+        is AICoreStatus.Downloadable -> {
+            Text(
+                "Gemini Nano feature pack not yet provisioned. " +
+                    "Tap Download to fetch it via AICore (size depends on the device).",
+                color = Color(0xFFB6BEC8),
+                style = MaterialTheme.typography.labelSmall,
+            )
+            Spacer(Modifier.height(6.dp))
+            Button(
+                onClick = onDownload,
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F8FF7)),
+            ) { Text("Download Gemini Nano") }
+        }
+        is AICoreStatus.Downloading -> {
+            val mb = s.bytesDownloaded / 1_048_576L
+            val total = if (s.totalBytes > 0L) s.totalBytes / 1_048_576L else 0L
+            val text = if (total > 0L) "Downloading Gemini Nano… $mb / $total MB"
+                else if (mb > 0L) "Downloading Gemini Nano… $mb MB"
+                else "Downloading Gemini Nano…"
+            Text(
+                text,
+                color = Color(0xFFE0B070),
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+        is AICoreStatus.Warming -> {
+            Text(
+                "Warming up Gemini Nano…",
+                color = Color(0xFFE0B070),
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+        is AICoreStatus.Ready -> {
+            Text(
+                "Gemini Nano ready (running on Tensor TPU via AICore).",
+                color = Color(0xFF8AE0A0),
+                style = MaterialTheme.typography.labelSmall,
+            )
+            Spacer(Modifier.height(6.dp))
+            OutlinedButton(
+                onClick = onProbe,
+                shape = RoundedCornerShape(8.dp),
+            ) { Text("Re-check") }
+        }
+        is AICoreStatus.Error -> {
+            Text(
+                "AICore error: ${s.message}",
+                color = Color(0xFFE07070),
+                style = MaterialTheme.typography.labelSmall,
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onDownload,
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F8FF7)),
+                ) { Text("Retry download") }
+                OutlinedButton(
+                    onClick = onProbe,
+                    shape = RoundedCornerShape(8.dp),
+                ) { Text("Re-check") }
+            }
         }
     }
 }

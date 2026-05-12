@@ -306,11 +306,15 @@ fun McpServerCard(
 
 /**
  * Build the markdown blob the Share button drops onto the clipboard.
- * Designed to be paste-and-go: a receiving Claude (or any LLM that
- * speaks MCP) gets the URL, the token, and a one-liner that wires
- * OrcaXR into Claude Code's MCP config without any further
+ * Designed to be paste-and-go: a receiving LLM CLI (Claude Code,
+ * Gemini CLI, OpenAI Codex) gets the URL, the token, and a recipe
+ * that wires OrcaXR into its MCP config without any further
  * back-and-forth. Multi-IP setups list every detected LAN address —
  * the user picks the one that's actually reachable.
+ *
+ * The receiving-side parser in [McpShareSnippet] takes the first
+ * matched URL and the first token-shape that follows it, so the
+ * URL/token repeated inside the per-CLI recipe blocks is harmless.
  */
 internal fun buildShareSnippet(
     primaryUrl: String,
@@ -329,10 +333,24 @@ internal fun buildShareSnippet(
     appendLine("Bearer token (Authorization: Bearer …):")
     appendLine("  $token")
     appendLine()
-    appendLine("To register it with Claude Code, run:")
+    appendLine("To register it with your LLM CLI:")
+    appendLine()
+    appendLine("  # Claude Code")
     appendLine("  claude mcp add --transport http orcaxr \\")
     appendLine("    $primaryUrl \\")
     appendLine("    --header \"Authorization: Bearer $token\"")
+    appendLine()
+    appendLine("  # Gemini CLI")
+    appendLine("  gemini mcp add --transport http orcaxr \\")
+    appendLine("    $primaryUrl \\")
+    appendLine("    --header \"Authorization: Bearer $token\"")
+    appendLine()
+    appendLine("  # OpenAI Codex CLI — add to ~/.codex/config.toml:")
+    appendLine("  [mcp_servers.orcaxr]")
+    appendLine("  url = \"$primaryUrl\"")
+    appendLine("  bearer_token_env_var = \"ORCAXR_BEARER\"")
+    appendLine("  # then in your shell:")
+    appendLine("  #   export ORCAXR_BEARER=\"$token\"")
     appendLine()
     appendLine("Then `tools/list` over MCP returns the OrcaXR surface")
     appendLine("(load_model_from_path, paint_split_plane, slice_active_plate, …).")

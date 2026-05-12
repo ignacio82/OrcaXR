@@ -298,17 +298,27 @@ dependencies {
     // manifest re-declares with foregroundServiceType="dataSync".
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.kotlinx.coroutines.android)
-    // On-device LLM runtime. com.google.ai.edge.litertlm:litertlm-android
-    // wraps libLiteRtLm + the GPU/NPU dispatchers; it loads
-    // .litertlm bundles (Gemma 4 E2B / E4B) and exposes a
-    // synchronous Engine + streaming Conversation API. Used by
-    // dev.orcaxr.app.llm.local.LiteRtEngineHolder. AICore (Gemini
-    // Nano via mlkit-genai-prompt) is intentionally NOT included —
-    // Galaxy XR has no Tensor TPU and AICore is allowlist-gated for
-    // third-party apps anyway; the cloud LlmClient implementations
-    // (Claude / Gemini / OpenAI) cover the smart-but-paid path and
-    // LiteRT-LM Gemma 4 covers the local-and-free path.
+    // On-device LLM runtimes. Two are bundled, one per accelerator:
+    //
+    //  - com.google.ai.edge.litertlm:litertlm-android — wraps
+    //    libLiteRtLm + the GPU/NPU dispatchers. Loads .litertlm
+    //    bundles (Gemma 4 E2B / E4B) and exposes a synchronous
+    //    Engine + streaming Conversation API. Used by
+    //    dev.orcaxr.app.llm.local.LiteRtEngineHolder. This is the
+    //    only on-device path that runs on Galaxy XR (no Tensor TPU
+    //    in the headset SoC).
+    //
+    //  - com.google.mlkit:genai-prompt — entry point into AICore /
+    //    Gemini Nano on Pixel 8/9/10 class devices. Runs on the
+    //    Tensor TPU at the OS level via ML Kit GenAI Prompt; the
+    //    no-arg Generation.getClient() overload is publicly
+    //    available (no allowlist) and is what SpatialFin and Google
+    //    AI Edge Gallery use. Used by
+    //    dev.orcaxr.app.llm.aicore.AICoreEngineHolder. Backstop for
+    //    Pixel-class phones where the Adreno path under LiteRT-LM
+    //    over-commits VRAM and freezes the device.
     implementation(libs.litertlm.android)
+    implementation(libs.mlkit.genai.prompt)
     // Moonraker / printer HTTP client. Android's stock HttpURLConnection
     // returns SocketException("closed") talking to Mainsail's nginx in
     // front of Moonraker on the user's LAN even though curl from the
