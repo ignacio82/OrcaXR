@@ -6213,6 +6213,30 @@ private fun XrShell(
                         loadedLayerHeightHintMm = loadedLayerHeightHintMm,
                         bambuImport = bambuImport,
                         onDismissBambuImport = { bambuImport = null },
+                        onApplyBambuFilamentSuggestion = {
+                            // The Bambu translator's per-slot
+                            // filamentProfileSuggestion is keyed by
+                            // slot index (0..slotCount-1). Map each
+                            // suggestion onto the matching
+                            // FilamentEntry.filamentType — that's the
+                            // string the bundled-filament catalog
+                            // keys off, so writing it in flips the
+                            // slot to the suggested U1 profile on the
+                            // next composition. Clear the banner
+                            // afterwards so the suggestion doesn't
+                            // re-apply on subsequent dismiss-then-
+                            // reopen cycles.
+                            val printerId = activePrinter?.id
+                            val suggestion = bambuImport?.filamentProfileSuggestion.orEmpty()
+                            if (printerId != null && suggestion.isNotEmpty()) {
+                                val updated = filamentList.mapIndexed { i, entry ->
+                                    val s = suggestion.getOrNull(i)
+                                    if (s.isNullOrBlank()) entry else entry.copy(filamentType = s)
+                                }
+                                scope.launch { filamentEntriesStore.set(printerId, updated) }
+                                bambuImport = null
+                            }
+                        },
                     )
                 }
 

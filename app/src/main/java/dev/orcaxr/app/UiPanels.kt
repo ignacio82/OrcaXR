@@ -522,6 +522,7 @@ private data class FilamentRulesBannerSpec(
 private fun BambuImportBanner(
     result: dev.orcaxr.app.bambu.BambuImportTranslator.Result?,
     onDismiss: () -> Unit,
+    onApplyFilamentSuggestion: () -> Unit = {},
 ) {
     if (result == null || !result.wasBambu) return
     Surface(color = Color(0xFF1E2A3A), shape = RoundedCornerShape(8.dp)) {
@@ -568,6 +569,17 @@ private fun BambuImportBanner(
                     color = Color(0xFF8DA0B5),
                     style = MaterialTheme.typography.bodySmall,
                 )
+                Spacer(modifier = Modifier.height(4.dp))
+                TextButton(
+                    onClick = onApplyFilamentSuggestion,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        "Apply suggested filament profiles",
+                        color = Color(0xFF7BC8FF),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
         }
     }
@@ -2431,6 +2443,11 @@ fun RightSettingsPanel(
      *  null so the banner stays dismissed for this load. Default is a
      *  no-op so callers that don't surface the chip can ignore it. */
     onDismissBambuImport: () -> Unit = {},
+    /** Invoked when the user taps "Apply suggested filament profiles"
+     *  in the Bambu banner. Caller should update the FilamentEntries
+     *  store so each slot's `filamentType` matches the per-slot value
+     *  in `bambuImport.filamentProfileSuggestion`. */
+    onApplyBambuFilamentSuggestion: () -> Unit = {},
 ) {
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Quality", "Strength", "Speed", "Support", "Others")
@@ -2499,7 +2516,7 @@ fun RightSettingsPanel(
         // bambuImport=null and the row collapses to zero height.
         // Dismissable via the X; once dismissed the banner stays
         // hidden for this load (caller clears the state).
-        BambuImportBanner(bambuImport, onDismissBambuImport)
+        BambuImportBanner(bambuImport, onDismissBambuImport, onApplyBambuFilamentSuggestion)
 
         // Tab content scrolls independently of the title / profile picker
         // / tab bar above. Without this the Strength/Support tabs
