@@ -50,6 +50,7 @@ class FlushActionsTest {
     @Test fun flushReturnsImmediatelyWhenAlreadyDrained() = runTest {
         val ws = WorkspaceModel()
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         // Pre-set drained = emitted: nothing pending.
         ws.markDrained(10)
         // emit nothing additional; lastEmittedId is 0, lastDrainedId is 10 (>= 0).
@@ -62,6 +63,7 @@ class FlushActionsTest {
     @Test fun flushBlocksUntilDrainCatchesUp() = runTest {
         val ws = WorkspaceModel()
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         // Emit one action without draining.
         val drainJob = launch {
             ws.actions.collect { /* discard */ }
@@ -89,6 +91,7 @@ class FlushActionsTest {
     @Test fun flushTimesOutWhenDrainStuck() = runTest {
         val ws = WorkspaceModel()
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         val drainJob = launch {
             ws.actions.collect { /* discard */ }
         }
@@ -115,6 +118,7 @@ class FlushActionsTest {
             ws.actions.collect { /* discard */ }
         }
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         ws.emit(WorkspaceAction.SetActivePlateId(11))
         ws.setAttached(false)
         val tool = WorkspaceTools.FlushActions(ws)

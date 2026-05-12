@@ -71,6 +71,7 @@ class PaintConstraintToolsTest {
     @Before fun setUp() {
         ws = WorkspaceModel()
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         modelId = "m_test_constraints"
         ws.publishPlacedModels(listOf(PlacedModel(
             id = modelId,

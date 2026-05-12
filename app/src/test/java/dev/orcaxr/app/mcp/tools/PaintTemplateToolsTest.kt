@@ -61,6 +61,7 @@ class PaintTemplateToolsTest {
         // (e.g. "yellow"→2) before dispatching.
         val ws = WorkspaceModel()
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         val modelId = "m_test"
         ws.publishPlacedModels(listOf(PlacedModel(
             id = modelId,

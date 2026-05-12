@@ -30,6 +30,7 @@ class PaintRecipeToolsTest {
     @Before fun setUp() {
         ws = WorkspaceModel()
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         // Build a PaintCacheStore against a fake "filesDir" so tests
         // don't share state with each other or with the device cache.
         // PaintCacheStore takes a Context — we sidestep by writing

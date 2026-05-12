@@ -51,6 +51,7 @@ class AiVisionToolsTest {
     @Before fun setUp() {
         ws = WorkspaceModel()
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         session = AiSessionState()
         ws.publishPlacedModels(listOf(PlacedModel(
             id = modelId, source = File("/dev/null"), label = "test cube",

@@ -24,6 +24,7 @@ class EmbossModelAddObjectTest {
     private fun ws(): WorkspaceModel {
         val ws = WorkspaceModel()
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         ws.publishPlacedModels(listOf(PlacedModel(
             id = "m_host", source = File("/dev/null"), label = "host",
         )))

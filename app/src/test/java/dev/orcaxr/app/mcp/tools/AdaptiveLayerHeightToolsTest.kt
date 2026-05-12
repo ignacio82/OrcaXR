@@ -31,6 +31,7 @@ class AdaptiveLayerHeightToolsTest {
     private fun ws(model: PlacedModel = sampleModel()): WorkspaceModel {
         val ws = WorkspaceModel()
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         ws.publishPlacedModels(listOf(model))
         return ws
     }

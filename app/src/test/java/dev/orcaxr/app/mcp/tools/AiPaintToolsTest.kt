@@ -67,6 +67,18 @@ class AiPaintToolsTest {
         // so we can hand them the local one.
         ws = WorkspaceModel()
         ws.setAttached(true)
+        // Wire ALL Tier-B capabilities so AiPaintTools.emitAndRespond
+        // doesn't short-circuit with the "capability isn't wired"
+        // error. Without this, tools return ToolResult.error AND skip
+        // ws.emit(...), so captureNextAction's ws.actions.first() hangs
+        // forever waiting for an emission that will never come — that
+        // was the UncompletedCoroutinesError flake on CI (1m runTest
+        // timeout). The host wires real callbacks in production; the
+        // test only needs the capability set populated to pass the
+        // emitAndRespond gate.
+        ws.publishWiredTierBCapabilities(
+            dev.orcaxr.app.mcp.TierBCapability.entries.toSet(),
+        )
         modelId = "m_test"
         val placed = PlacedModel(
             id = modelId,

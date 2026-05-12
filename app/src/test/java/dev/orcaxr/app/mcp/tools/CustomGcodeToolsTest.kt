@@ -33,6 +33,7 @@ class CustomGcodeToolsTest {
     ): WorkspaceModel {
         val ws = WorkspaceModel()
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         ws.publishPlacedModels(listOf(
             PlacedModel(id = "m_test", source = File("/dev/null"), label = "test"),
         ))

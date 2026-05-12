@@ -189,6 +189,7 @@ class LlmPaintingAmplifiersTest {
     @Before fun setUp() {
         ws = WorkspaceModel()
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         ws.publishPlacedModels(listOf(PlacedModel(
             id = modelId, source = File("/dev/null"), label = "test cube",
         )))
@@ -312,6 +313,7 @@ class LlmPaintingAmplifiersTest {
     private fun setUpSymmetricCubeWs(): WorkspaceModel {
         val ws2 = WorkspaceModel()
         ws2.setAttached(true)
+        ws2.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         ws2.publishPlacedModels(listOf(PlacedModel(
             id = "ms", source = File("/dev/null"), label = "sym cube",
         )))

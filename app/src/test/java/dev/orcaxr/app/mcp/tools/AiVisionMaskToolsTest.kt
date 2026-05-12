@@ -50,6 +50,7 @@ class AiVisionMaskToolsTest {
     private fun setupWs(modelId: String): WorkspaceModel {
         val ws = WorkspaceModel()
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         ws.publishPlacedModels(listOf(PlacedModel(
             id = modelId, source = File("/dev/null"), label = "test cube",
         )))

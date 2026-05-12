@@ -14,6 +14,7 @@ class ListActivePaletteTest {
     @Test fun emptyPaletteReturnsCountZero() = runTest {
         val ws = WorkspaceModel()
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         val tool = AiVisionTools.ListActivePalette(ws)
         val res = tool.call(JSONObject())
         assertFalse(res.isError)
@@ -25,6 +26,7 @@ class ListActivePaletteTest {
     @Test fun publishedPaletteEnumeratesWithTagsAndHex() = runTest {
         val ws = WorkspaceModel()
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         ws.publishPreviewPalette(listOf("#000000", "#FFFF00", "#FFFFFF", "#FF0000"))
         ws.publishSelectedPrinterId("printer_test")
         val res = AiVisionTools.ListActivePalette(ws).call(JSONObject())
@@ -46,6 +48,7 @@ class ListActivePaletteTest {
     @Test fun textOutputIncludesAllSlots() = runTest {
         val ws = WorkspaceModel()
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         ws.publishPreviewPalette(listOf("#000000", "#FFFFFF"))
         val res = AiVisionTools.ListActivePalette(ws).call(JSONObject())
         assertTrue("text contains tag 1", res.text.contains("tag 1"))

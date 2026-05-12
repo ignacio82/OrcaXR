@@ -27,6 +27,7 @@ class ObjectOverridesToolsTest {
     private fun ws(overrides: Map<String, String> = emptyMap()): WorkspaceModel {
         val ws = WorkspaceModel()
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         ws.publishPlacedModels(listOf(
             PlacedModel(
                 id = "m_test",

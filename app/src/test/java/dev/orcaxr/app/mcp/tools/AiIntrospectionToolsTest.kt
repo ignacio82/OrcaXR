@@ -47,6 +47,7 @@ class AiIntrospectionToolsTest {
     @Before fun setUp() {
         ws = WorkspaceModel()
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         modelId = "m_test"
         ws.publishPlacedModels(listOf(PlacedModel(
             id = modelId, source = File("/dev/null"), label = "test cube",

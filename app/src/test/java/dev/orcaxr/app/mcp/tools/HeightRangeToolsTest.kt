@@ -30,6 +30,7 @@ class HeightRangeToolsTest {
     private fun ws(ranges: List<HeightRange> = emptyList()): WorkspaceModel {
         val ws = WorkspaceModel()
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         ws.publishPlacedModels(listOf(
             PlacedModel(
                 id = "m_test",

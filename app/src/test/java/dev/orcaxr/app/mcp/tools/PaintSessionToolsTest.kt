@@ -63,6 +63,7 @@ class PaintSessionToolsTest {
     @Before fun setUp() {
         ws = WorkspaceModel()
         ws.setAttached(true)
+        ws.publishWiredTierBCapabilities(dev.orcaxr.app.mcp.TierBCapability.entries.toSet())
         modelId = "m_test"
         val placed = PlacedModel(
             id = modelId,
