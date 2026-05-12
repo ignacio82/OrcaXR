@@ -83,6 +83,7 @@ object SettingsBackup {
         "orcaxr.recent_files",
         "orcaxr.llm",
         "orcaxr.mcp",
+        "orcaxr.remote_mcp",
     )
 
     /** Single SharedPreferences instance used by [UserPreferences]. */
