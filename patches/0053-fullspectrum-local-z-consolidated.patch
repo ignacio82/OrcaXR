@@ -1072,7 +1072,7 @@ index d379300bad..26aeab3fce 100644
      Vec3d                                                        m_plate_origin;
      bool                                                         m_single_extruder_multi_material;
 diff --git a/src/libslic3r/GCode/ToolOrdering.cpp b/src/libslic3r/GCode/ToolOrdering.cpp
-index eaebc63bc4..165fa8f176 100644
+index eaebc63bc4..8a6ae85f39 100644
 --- a/src/libslic3r/GCode/ToolOrdering.cpp
 +++ b/src/libslic3r/GCode/ToolOrdering.cpp
 @@ -192,27 +192,27 @@ unsigned int LayerTools::solid_infill_filament(const PrintRegion &region) const
@@ -1122,6 +1122,41 @@ index eaebc63bc4..165fa8f176 100644
  }
  
  static double calc_max_layer_height(const PrintConfig &config, double max_object_layer_height)
+@@ -1371,9 +1371,22 @@ void ToolOrdering::reorder_extruders_for_minimum_flush_volume(bool reorder_first
+     size_t             nozzle_nums = print_config->nozzle_diameter.values.size();
+     const auto wipe_tower_type = m_print->wipe_tower_type();
+ 
++    // OrcaXR (FS parity): when the project's flush_volumes_matrix is
++    // sized for a single shared wipe-tower (N*N values for N filaments)
++    // and not for nozzle_nums separate matrices, get_flush_volumes_matrix
++    // would slice it into nozzle_nums fragments and the per-fragment
++    // inner-loop below would read past the end of the resulting vector.
++    // FS upstream's reorder treats flush_volumes_matrix as a single
++    // shared NxN with N derived from sqrt(size). Match that behavior
++    // when the matrix is sized for the single-shared layout.
++    const bool single_shared_flush_matrix =
++        print_config->flush_volumes_matrix.values.size() ==
++        size_t(number_of_extruders) * size_t(number_of_extruders);
++    const size_t effective_nozzle_nums = single_shared_flush_matrix ? size_t(1) : nozzle_nums;
++
+     std::vector<FlushMatrix> nozzle_flush_mtx;
+-    for (size_t nozzle_id = 0; nozzle_id < nozzle_nums; ++nozzle_id) {
+-        std::vector<float> flush_matrix(cast<float>(get_flush_volumes_matrix(print_config->flush_volumes_matrix.values, nozzle_id, nozzle_nums)));
++    for (size_t nozzle_id = 0; nozzle_id < effective_nozzle_nums; ++nozzle_id) {
++        std::vector<float> flush_matrix(cast<float>(get_flush_volumes_matrix(print_config->flush_volumes_matrix.values, nozzle_id, effective_nozzle_nums)));
+         std::vector<std::vector<float>> wipe_volumes;
+         if ((print_config->purge_in_prime_tower && print_config->single_extruder_multi_material) || wipe_tower_type == WipeTowerType::Type1) {
+             for (unsigned int i = 0; i < number_of_extruders; ++i)
+@@ -1385,6 +1398,9 @@ void ToolOrdering::reorder_extruders_for_minimum_flush_volume(bool reorder_first
+         }
+         nozzle_flush_mtx.emplace_back(wipe_volumes);
+     }
++    // Pad to nozzle_nums entries so downstream indexing by nozzle_id doesn't OOB.
++    while (nozzle_flush_mtx.size() < nozzle_nums)
++        nozzle_flush_mtx.push_back(nozzle_flush_mtx.front());
+ 
+     auto flush_multiplies = print_config->flush_multiplier.values;
+     flush_multiplies.resize(nozzle_nums, 1);
 diff --git a/src/libslic3r/GCode/WipeTower2.cpp b/src/libslic3r/GCode/WipeTower2.cpp
 index da472dd4f4..d7c89438f9 100644
 --- a/src/libslic3r/GCode/WipeTower2.cpp
