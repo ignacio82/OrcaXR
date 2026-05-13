@@ -105,6 +105,26 @@ class PeggyPaletteFullSpectrumParityTest {
         android.util.Log.i(tag, "Parsed ${config.size} config keys from reference")
         assertTrue("CONFIG_BLOCK parse produced no keys", config.size > 100)
 
+        // Undo append_full_config's flush_multiplier transformation.
+        // GCode::append_full_config multiplies flush_volumes_matrix by
+        // flush_multiplier when writing the CONFIG_BLOCK dump, so the
+        // reference's matrix is already *flush_multiplier. If we feed it
+        // back without unwinding, OrcaXR's append_full_config will
+        // multiply again — wipe tower runs at flush_multiplier^2 (e.g.,
+        // 0.49 instead of 0.7), distorting per-slot filament use.
+        run {
+            val mStr = config["flush_multiplier"] ?: return@run
+            val m = mStr.toDoubleOrNull() ?: return@run
+            if (m <= 0.0 || m == 1.0) return@run
+            val rawMatrix = config["flush_volumes_matrix"] ?: return@run
+            val unwound = rawMatrix.split(",").map {
+                val v = it.trim().toDoubleOrNull() ?: return@run
+                (v / m).let { x -> if (x % 1.0 == 0.0) x.toLong().toString() else "%.4f".format(x) }
+            }.joinToString(",")
+            config["flush_volumes_matrix"] = unwound
+            android.util.Log.i(tag, "unwound flush_volumes_matrix by /${m}: was '$rawMatrix' -> '$unwound'")
+        }
+
         // Slice into the test's writable external-files dir. The
         // post-test `cp` back to /sdcard/Download/ uses the same shell
         // trick (the test process can't write directly under /sdcard
