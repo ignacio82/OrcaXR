@@ -1071,6 +1071,57 @@ index d379300bad..26aeab3fce 100644
      // BBS
      Vec3d                                                        m_plate_origin;
      bool                                                         m_single_extruder_multi_material;
+diff --git a/src/libslic3r/GCode/ToolOrdering.cpp b/src/libslic3r/GCode/ToolOrdering.cpp
+index eaebc63bc4..165fa8f176 100644
+--- a/src/libslic3r/GCode/ToolOrdering.cpp
++++ b/src/libslic3r/GCode/ToolOrdering.cpp
+@@ -192,27 +192,27 @@ unsigned int LayerTools::solid_infill_filament(const PrintRegion &region) const
+ }
+ 
+ // Returns a zero based extruder this eec should be printed with, according to PrintRegion config or extruder_override if overriden.
++// OrcaXR Phase F (FS parity): dispatch through the same role-aware
++// helpers FS upstream uses, so virtual-filament resolution for infill
++// and solid-infill walks the same grouped-pattern / base-filament
++// reversion code path the per-role getters take. The earlier shape
++// (config().solid_infill_filament -> resolve_mixed_1based) bypassed
++// grouped_manual_pattern_infill_filament_1based and
++// use_base_infill_filament, causing per-slot drift vs desktop FS.
+ unsigned int LayerTools::extruder(const ExtrusionEntityCollection &extrusions, const PrintRegion &region) const
+ {
+-	assert(region.config().wall_filament.value > 0);
+-	assert(region.config().sparse_infill_filament.value > 0);
+-	assert(region.config().solid_infill_filament.value > 0);
+-	// 1 based extruder ID.
+-    unsigned int extruder = 1;
+-    if (this->extruder_override == 0) {
+-        if (extrusions.has_infill()) {
+-            if (extrusions.has_solid_infill())
+-                extruder = region.config().solid_infill_filament;
+-            else
+-                extruder = region.config().sparse_infill_filament;
+-        } else
+-            extruder = region.config().wall_filament.value;
+-    } else
+-        extruder = this->extruder_override;
+-
+-    if (extruder == 0)
+-        return 0;
+-    return this->resolve_mixed_1based(extruder) - 1;
++    assert(region.config().wall_filament.value > 0);
++    assert(region.config().sparse_infill_filament.value > 0);
++    assert(region.config().solid_infill_filament.value > 0);
++    if (this->extruder_override != 0)
++        return this->resolve_mixed_1based(this->extruder_override) - 1;
++    if (extrusions.has_infill()) {
++        const ExtrusionRole role = extrusions.entities.empty() ? erNone : extrusions.entities.front()->role();
++        if (internal_solid_infill_uses_sparse_filament(region, role))
++            return sparse_infill_filament(region);
++        return is_solid_infill(role) ? solid_infill_filament(region) : sparse_infill_filament(region);
++    }
++    return wall_filament(region);
+ }
+ 
+ static double calc_max_layer_height(const PrintConfig &config, double max_object_layer_height)
 diff --git a/src/libslic3r/GCode/WipeTower2.cpp b/src/libslic3r/GCode/WipeTower2.cpp
 index da472dd4f4..d7c89438f9 100644
 --- a/src/libslic3r/GCode/WipeTower2.cpp
