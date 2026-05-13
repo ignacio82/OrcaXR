@@ -1072,7 +1072,7 @@ index d379300bad..26aeab3fce 100644
      Vec3d                                                        m_plate_origin;
      bool                                                         m_single_extruder_multi_material;
 diff --git a/src/libslic3r/GCode/ToolOrdering.cpp b/src/libslic3r/GCode/ToolOrdering.cpp
-index eaebc63bc4..8a6ae85f39 100644
+index eaebc63bc4..c4c4d533cb 100644
 --- a/src/libslic3r/GCode/ToolOrdering.cpp
 +++ b/src/libslic3r/GCode/ToolOrdering.cpp
 @@ -192,27 +192,27 @@ unsigned int LayerTools::solid_infill_filament(const PrintRegion &region) const
@@ -1122,7 +1122,7 @@ index eaebc63bc4..8a6ae85f39 100644
  }
  
  static double calc_max_layer_height(const PrintConfig &config, double max_object_layer_height)
-@@ -1371,9 +1371,22 @@ void ToolOrdering::reorder_extruders_for_minimum_flush_volume(bool reorder_first
+@@ -1371,11 +1371,44 @@ void ToolOrdering::reorder_extruders_for_minimum_flush_volume(bool reorder_first
      size_t             nozzle_nums = print_config->nozzle_diameter.values.size();
      const auto wipe_tower_type = m_print->wipe_tower_type();
  
@@ -1139,15 +1139,38 @@ index eaebc63bc4..8a6ae85f39 100644
 +        size_t(number_of_extruders) * size_t(number_of_extruders);
 +    const size_t effective_nozzle_nums = single_shared_flush_matrix ? size_t(1) : nozzle_nums;
 +
++    // OrcaXR (FS parity): FS upstream gates the real-flush-matrix path on
++    // `m_is_BBL_printer`, which OrcaXR force-disables in slic3r_jni (so
++    // every slice in OrcaXR claims non-BBL). Upstream OrcaSlicer instead
++    // gates on `wipe_tower_type == Type1` which only fires for BBL prime
++    // towers. With Type2 (Slic3r-style wipe tower, our Snapmaker U1 case)
++    // the else branch fills wipe_volumes with `prime_volume` — a uniform
++    // matrix that gives the reorder DP no signal, so it picks arbitrary
++    // sequences. Desktop FS, seeing `m_is_BBL_printer==true`, uses the
++    // real per-pair flush volumes and picks T3-first on the PeggyPalette
++    // model, leading to 200mm of T3 material that OrcaXR misroutes to
++    // T0/T2.
++    //
++    // Use the real flush_volumes_matrix whenever the project supplies
++    // one sized to number_of_extruders² and the printer has a wipe
++    // tower at all (Type1 or Type2).
++    const bool use_real_flush_matrix =
++        (print_config->purge_in_prime_tower && print_config->single_extruder_multi_material) ||
++        wipe_tower_type == WipeTowerType::Type1 ||
++        single_shared_flush_matrix;
++
      std::vector<FlushMatrix> nozzle_flush_mtx;
 -    for (size_t nozzle_id = 0; nozzle_id < nozzle_nums; ++nozzle_id) {
 -        std::vector<float> flush_matrix(cast<float>(get_flush_volumes_matrix(print_config->flush_volumes_matrix.values, nozzle_id, nozzle_nums)));
 +    for (size_t nozzle_id = 0; nozzle_id < effective_nozzle_nums; ++nozzle_id) {
 +        std::vector<float> flush_matrix(cast<float>(get_flush_volumes_matrix(print_config->flush_volumes_matrix.values, nozzle_id, effective_nozzle_nums)));
          std::vector<std::vector<float>> wipe_volumes;
-         if ((print_config->purge_in_prime_tower && print_config->single_extruder_multi_material) || wipe_tower_type == WipeTowerType::Type1) {
+-        if ((print_config->purge_in_prime_tower && print_config->single_extruder_multi_material) || wipe_tower_type == WipeTowerType::Type1) {
++        if (use_real_flush_matrix && flush_matrix.size() >= size_t(number_of_extruders) * size_t(number_of_extruders)) {
              for (unsigned int i = 0; i < number_of_extruders; ++i)
-@@ -1385,6 +1398,9 @@ void ToolOrdering::reorder_extruders_for_minimum_flush_volume(bool reorder_first
+                 wipe_volumes.push_back(std::vector<float>(flush_matrix.begin() + i * number_of_extruders, flush_matrix.begin() + (i + 1) * number_of_extruders));
+         } else {
+@@ -1385,6 +1418,9 @@ void ToolOrdering::reorder_extruders_for_minimum_flush_volume(bool reorder_first
          }
          nozzle_flush_mtx.emplace_back(wipe_volumes);
      }
