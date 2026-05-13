@@ -1362,7 +1362,7 @@ private fun VirtualRowEquation(
 ) {
     val colorA = printerPalette.getOrNull(row.componentA - 1)?.colorHex ?: "#FFFFFF"
     val colorB = printerPalette.getOrNull(row.componentB - 1)?.colorHex ?: "#FFFFFF"
-    val preview = blendMixedColor(colorA, colorB, row.ratioA, row.ratioB)
+    val (mixColors, mixWeights) = mixedSwatchInputs(row, printerPalette)
 
     Surface(color = Color(0xFF1B1F23), shape = RoundedCornerShape(8.dp)) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
@@ -1391,7 +1391,11 @@ private fun VirtualRowEquation(
                     onTap = { onTapComponent(ComponentSide.B) },
                 )
                 Text("=", color = Color.LightGray, style = MaterialTheme.typography.titleMedium)
-                SwatchBox(preview, size = 32.dp, accent = true)
+                MixedSwatchBox(
+                    componentColorsHex = mixColors,
+                    componentWeights = mixWeights,
+                    size = 32.dp,
+                )
                 Spacer(modifier = Modifier.weight(1f))
                 TextButton(onClick = onToggleAdvanced) {
                     Text(
@@ -1967,7 +1971,17 @@ private fun MappingTargetButton(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            SwatchBox(target.colorHex, size = 24.dp, accent = target.isVirtual)
+            val virtComponents = target.virtualComponentColors
+            val virtWeights = target.virtualComponentWeights
+            if (target.isVirtual && virtComponents != null && virtWeights != null) {
+                MixedSwatchBox(
+                    componentColorsHex = virtComponents,
+                    componentWeights = virtWeights,
+                    size = 24.dp,
+                )
+            } else {
+                SwatchBox(target.colorHex, size = 24.dp, accent = target.isVirtual)
+            }
             Column {
                 Text(
                     target.primaryLabel,
@@ -2095,9 +2109,7 @@ private fun MappingTargetEditor(
                 for ((idx, row) in visibleVirtual.withIndex()) {
                     val virtualSlot = idx + 1
                     val isSelected = entry.virtualSlot == virtualSlot
-                    val a = printerPalette.getOrNull(row.componentA - 1)?.colorHex ?: "#FFFFFF"
-                    val b = printerPalette.getOrNull(row.componentB - 1)?.colorHex ?: "#FFFFFF"
-                    val preview = blendMixedColor(a, b, row.ratioA, row.ratioB)
+                    val (mixColors, mixWeights) = mixedSwatchInputs(row, printerPalette)
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
@@ -2105,16 +2117,12 @@ private fun MappingTargetEditor(
                             .clickable { onMapToVirtual(virtualSlot) }
                             .padding(2.dp),
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(parseHexColorOrDefault(preview))
-                                .border(
-                                    if (isSelected) 2.dp else 1.dp,
-                                    if (isSelected) Color(0xFF7BC8FF) else Color(0xFF7BC8FF).copy(alpha = 0.4f),
-                                    RoundedCornerShape(6.dp),
-                                ),
+                        MixedSwatchBox(
+                            componentColorsHex = mixColors,
+                            componentWeights = mixWeights,
+                            size = 36.dp,
+                            highlight = isSelected,
+                            accent = !isSelected,
                         )
                         Text(
                             "V$virtualSlot",
@@ -2296,6 +2304,101 @@ private fun SwatchBox(
 }
 
 /**
+ * Visualizes a virtual-mix filament as the actual source colors that go into
+ * it, instead of a flat midpoint blend. Two-component mixes render as two
+ * horizontal bands (top = component A, bottom = component B) with the band
+ * height proportional to the layer-cycle ratio. 3+ component gradients
+ * render as N bands proportional to gradient weights.
+ *
+ * Why this exists: the previous single-color swatch used the linear-RGB
+ * midpoint of A and B, which produces a muddy mid-tone that's visually
+ * indistinguishable across most pairs of saturated filaments (orange+cyan,
+ * orange+green, and cyan+green all read as "muddy yellow-gray" at swatch
+ * size). Users couldn't tell virtual rows apart at a glance until the
+ * sliced preview showed the actual alternating layers — exactly the cue
+ * this swatch now provides up front.
+ */
+@Composable
+private fun MixedSwatchBox(
+    componentColorsHex: List<String>,
+    componentWeights: List<Float>,
+    size: androidx.compose.ui.unit.Dp = 32.dp,
+    highlight: Boolean = false,
+    accent: Boolean = true,
+) {
+    val border = when {
+        highlight -> Color(0xFF7BC8FF)
+        accent -> Color(0xFF7BC8FF).copy(alpha = 0.6f)
+        else -> Color(0xFF2C3138)
+    }
+    val colors = componentColorsHex.map { parseHexColorOrDefault(it) }
+    // Normalize weights so they sum to 1. Empty / all-zero falls back to equal
+    // shares so the swatch still renders something useful.
+    val total = componentWeights.sum().takeIf { it > 0f } ?: componentWeights.size.toFloat()
+    val shares = if (total > 0f && componentWeights.size == colors.size) {
+        componentWeights.map { it / total }
+    } else {
+        List(colors.size) { 1f / colors.size.coerceAtLeast(1) }
+    }
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(RoundedCornerShape(6.dp))
+            .border(if (highlight || accent) 1.5.dp else 1.dp, border, RoundedCornerShape(6.dp)),
+    ) {
+        androidx.compose.foundation.Canvas(modifier = Modifier.matchParentSize()) {
+            val w = this.size.width
+            val h = this.size.height
+            var y = 0f
+            for ((i, c) in colors.withIndex()) {
+                val bandH = h * shares.getOrElse(i) { 0f }
+                drawRect(
+                    color = c,
+                    topLeft = androidx.compose.ui.geometry.Offset(0f, y),
+                    size = androidx.compose.ui.geometry.Size(w, bandH),
+                )
+                y += bandH
+            }
+            // Fill any rounding gap at the bottom with the last color so we
+            // don't leave a 1-px transparent strip.
+            if (y < h && colors.isNotEmpty()) {
+                drawRect(
+                    color = colors.last(),
+                    topLeft = androidx.compose.ui.geometry.Offset(0f, y),
+                    size = androidx.compose.ui.geometry.Size(w, h - y),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Resolve a virtual-mix row into the per-component swatch inputs
+ * ([MixedSwatchBox] takes a parallel List of hex colors and weights).
+ * Honors gradient definitions for 3+ component mixes, falls back to
+ * 2-component A/B for the default row.
+ */
+private fun mixedSwatchInputs(
+    row: MixedFilamentEntry,
+    printerPalette: List<EffectivePrinterSlot>,
+): Pair<List<String>, List<Float>> {
+    fun colorFor(slot1Based: Int): String =
+        printerPalette.getOrNull(slot1Based - 1)?.colorHex ?: "#FFFFFF"
+
+    val gradientIds = row.gradientComponentIds.filter { it.isDigit() }.map { it.digitToInt() }
+    if (gradientIds.size >= 2) {
+        val weights = row.gradientComponentWeights
+            .split('/')
+            .mapNotNull { it.trim().toFloatOrNull() }
+        val colors = gradientIds.map { colorFor(it) }
+        val w = if (weights.size == colors.size) weights else List(colors.size) { 1f }
+        return colors to w
+    }
+    return listOf(colorFor(row.componentA), colorFor(row.componentB)) to
+        listOf(row.ratioA.toFloat().coerceAtLeast(0.01f), row.ratioB.toFloat().coerceAtLeast(0.01f))
+}
+
+/**
  * Resolved snapshot of a model row's mapping target. Carries everything the
  * row needs to render the right-side chip without re-running the resolution
  * logic at multiple call sites.
@@ -2305,6 +2408,14 @@ private data class ResolvedMappingTarget(
     val primaryLabel: String,
     val secondaryLabel: String?,
     val isVirtual: Boolean,
+    /** For virtual targets: the source component colors that go into the
+     *  mix (length 2 for default A+B rows, N for gradients). Null for
+     *  physical / identity targets, which use [colorHex] directly. */
+    val virtualComponentColors: List<String>? = null,
+    /** Parallel to [virtualComponentColors]: the relative weight of each
+     *  source band in the swatch (ratioA/ratioB for default rows, gradient
+     *  weights for gradients). */
+    val virtualComponentWeights: List<Float>? = null,
 )
 
 private fun resolveMappingTarget(
@@ -2322,11 +2433,14 @@ private fun resolveMappingTarget(
             if (row != null) {
                 val a = printerPalette.getOrNull(row.componentA - 1)?.colorHex ?: "#FFFFFF"
                 val b = printerPalette.getOrNull(row.componentB - 1)?.colorHex ?: "#FFFFFF"
+                val (compColors, compWeights) = mixedSwatchInputs(row, printerPalette)
                 ResolvedMappingTarget(
                     colorHex = blendMixedColor(a, b, row.ratioA, row.ratioB),
                     primaryLabel = "V$virtualSlot",
                     secondaryLabel = "T${row.componentA}+T${row.componentB}",
                     isVirtual = true,
+                    virtualComponentColors = compColors,
+                    virtualComponentWeights = compWeights,
                 )
             } else {
                 // Virtual row was removed under the selection — surface the

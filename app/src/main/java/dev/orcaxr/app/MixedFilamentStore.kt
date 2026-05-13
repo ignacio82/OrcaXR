@@ -286,10 +286,21 @@ fun serializeMixedFilamentDefinitions(entries: List<MixedFilamentEntry>): String
 
 /**
  * Compute the apparent blended color of [a] + [b] mixed at the
- * given layer ratio. Linear RGB blend weighted by the ratio — NOT
- * the perceptual blend libslic3r uses (filament_mixer.cpp). Acceptable
- * for UI swatches; printed result will differ slightly. Worth swapping
- * to a JNI call once we expose filament_mixer to Kotlin.
+ * given layer ratio.
+ *
+ * Uses gamma-correct (sRGB-aware) blending: hex colors are decoded as
+ * sRGB, expanded to linear light (γ ≈ 2.2), averaged by ratio, then
+ * compressed back to sRGB. The naive linear-RGB midpoint of two
+ * saturated hex colors produces a muddy mid-tone that's visually
+ * indistinguishable across different pairs (orange+cyan vs orange+green
+ * vs cyan+green all read as "muddy yellow-gray" at swatch size); the
+ * gamma-correct midpoint stays brighter and more distinct, which is
+ * what the eye expects when looking at two filaments alternating on
+ * the bed.
+ *
+ * Still not the perceptual blend libslic3r's filament_mixer.cpp uses —
+ * worth a JNI call once we expose it — but the gamma fix gets us 80% of
+ * the visual quality for one floating-point pow.
  */
 fun blendMixedColor(a: String, b: String, ratioA: Int, ratioB: Int): String {
     val ar = parseHex(a)
@@ -297,10 +308,30 @@ fun blendMixedColor(a: String, b: String, ratioA: Int, ratioB: Int): String {
     val totalRatio = (ratioA + ratioB).coerceAtLeast(1)
     val wa = ratioA.toFloat() / totalRatio
     val wb = ratioB.toFloat() / totalRatio
-    val r = (ar.first * wa + br.first * wb).toInt().coerceIn(0, 255)
-    val g = (ar.second * wa + br.second * wb).toInt().coerceIn(0, 255)
-    val bl = (ar.third * wa + br.third * wb).toInt().coerceIn(0, 255)
-    return "#%02X%02X%02X".format(r, g, bl)
+
+    fun srgbToLinear(c: Int): Float {
+        val s = c / 255f
+        // Standard sRGB → linear transfer. The piecewise formula below is
+        // the exact IEC 61966-2-1 form; for a UI swatch the simpler
+        // pow(s, 2.2f) approximation would do, but the cost is identical
+        // and this matches what Compose's Color.toLinear does internally.
+        return if (s <= 0.04045f) s / 12.92f
+        else Math.pow(((s + 0.055f) / 1.055f).toDouble(), 2.4).toFloat()
+    }
+    fun linearToSrgb(l: Float): Int {
+        val s = if (l <= 0.0031308f) 12.92f * l
+        else (1.055f * Math.pow(l.toDouble(), 1.0 / 2.4).toFloat() - 0.055f)
+        return (s.coerceIn(0f, 1f) * 255f + 0.5f).toInt()
+    }
+
+    val rLin = srgbToLinear(ar.first) * wa + srgbToLinear(br.first) * wb
+    val gLin = srgbToLinear(ar.second) * wa + srgbToLinear(br.second) * wb
+    val bLin = srgbToLinear(ar.third) * wa + srgbToLinear(br.third) * wb
+    return "#%02X%02X%02X".format(
+        linearToSrgb(rLin).coerceIn(0, 255),
+        linearToSrgb(gLin).coerceIn(0, 255),
+        linearToSrgb(bLin).coerceIn(0, 255),
+    )
 }
 
 private fun parseHex(s: String): Triple<Int, Int, Int> {

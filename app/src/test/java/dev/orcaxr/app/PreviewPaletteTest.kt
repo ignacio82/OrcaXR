@@ -100,9 +100,11 @@ class PreviewPaletteTest {
             virtualRows = virtualRows,
             slotCount = 2,
         )
-        // 50/50 blend of #FF0000 and #0000FF → #7F007F (each channel
-        // averaged via blendMixedColor's int truncation).
-        assertEquals("#7F007F", resolved[0])
+        // 50/50 gamma-correct blend of #FF0000 and #0000FF → #BC00BC.
+        // We decode each channel to linear light (sRGB γ ≈ 2.2), average,
+        // and re-encode, so the midpoint stays saturated instead of
+        // collapsing into the muddy linear-RGB midpoint (#7F007F).
+        assertEquals("#BC00BC", resolved[0])
         // Slot 1 was untouched, defaults to T1's loaded color.
         assertEquals("#0000FF", resolved[1])
     }
@@ -146,7 +148,7 @@ class PreviewPaletteTest {
             virtualRows = virtualRows,
             slotCount = 1,
         )
-        assertEquals("#7F7F00", resolved[0])
+        assertEquals("#BCBC00", resolved[0])
     }
 
     @Test fun partialPrinterLoadoutFallsBackToSuggestions() {

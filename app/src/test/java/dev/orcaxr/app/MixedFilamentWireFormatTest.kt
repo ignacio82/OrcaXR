@@ -138,18 +138,24 @@ class MixedFilamentWireFormatTest {
         assertTrue("bias preserved within 5%, was ${r.biasPercent}", biasDelta <= 5)
     }
 
-    @Test fun deletedRowsAreFilteredAtParseTime() {
+    @Test fun deletedRowsArePreservedAtParseTime() {
         val rows = listOf(
             MixedFilamentEntry(id = "keep_me", componentA = 1, componentB = 2),
             MixedFilamentEntry(id = "kill_me", componentA = 1, componentB = 3, deleted = true),
         )
         val wire = serializeMixedFilamentDefinitions(rows)
         val parsed = parseMixedDefinitionsForKotlin(wire)
-        // The parser drops deleted rows so downstream code doesn't see tombstones.
-        // The serializer writes them (so libslic3r can keep them tombstoned too).
-        assertEquals("Parser filters deleted rows", 1, parsed.size)
-        assertNotNull("Live row passes through", parsed.firstOrNull { it.componentB == 2 })
-        assertNull("Tombstoned row filtered", parsed.firstOrNull { it.componentB == 3 })
+        // The parser PRESERVES deleted rows so the wire-format row index
+        // matches what libslic3r's MixedFilamentManager::resolve expects
+        // (mixed_index_from_filament_id = filament_id - num_physical - 1
+        // is a direct vector index into m_mixed — dropping tombstoned
+        // rows would shift every subsequent row's id). See the comment
+        // block in MainActivity.parseMixedDefinitionsForKotlin for the
+        // bug this prevents.
+        assertEquals("Parser preserves deleted rows", 2, parsed.size)
+        assertNotNull("Live row passes through", parsed.firstOrNull { it.componentB == 2 && !it.deleted })
+        assertNotNull("Tombstoned row preserved with deleted=true",
+            parsed.firstOrNull { it.componentB == 3 && it.deleted })
     }
 
     @Test fun gradientWeightsOmittedWhenIdsBelowThreeWay() {
