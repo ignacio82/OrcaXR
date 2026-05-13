@@ -1,0 +1,132 @@
+--- a/src/libslic3r/PrintConfig.hpp
++++ b/src/libslic3r/PrintConfig.hpp
+@@ -1292,6 +1292,13 @@
+     ((ConfigOptionIntsNullable,        nozzle_flush_dataset))
+     ((ConfigOptionFloatsNullable,      filament_flush_volumetric_speed))
+     ((ConfigOptionIntsNullable,        filament_flush_temp))
++    // OrcaXR/FullSpectrum parity: filament-level override for tool-change
++    // retract length. When non-null for a given filament index, takes
++    // precedence over the printer-level `retract_length_toolchange`.
++    // Matches Snapmaker Orca's `filament_retract_length_toolchange` field
++    // so 3MFs and gcode CONFIG_BLOCKs round-trip without losing the
++    // smaller per-filament retract values FullSpectrum users rely on.
++    ((ConfigOptionFloatsNullable,      filament_retract_length_toolchange))
+     // BBS
+     ((ConfigOptionBool,                scan_first_layer))
+     ((ConfigOptionEnum<PowerLossRecoveryMode>, enable_power_loss_recovery))
+--- a/src/libslic3r/PrintConfig.cpp
++++ b/src/libslic3r/PrintConfig.cpp
+@@ -4923,6 +4923,22 @@
+     def->mode = comAdvanced;
+     def->set_default_value(new ConfigOptionFloats { 10. });
+ 
++    // OrcaXR/FullSpectrum parity: filament-level override for the
++    // toolchange retract length. Nullable per filament — when a slot's
++    // value is non-nil it overrides the printer-level
++    // `retract_length_toolchange` for that filament. Snapmaker Orca's
++    // fork uses this key; vanilla OrcaSlicer used to drop it silently,
++    // causing 5 mm-per-toolchange retract setups to silently fall back
++    // to the printer default (typically 10 mm), doubling wipe-tower
++    // retract activity on multi-tool prints.
++    def = this->add("filament_retract_length_toolchange", coFloats);
++    def->label = L("Length");
++    def->full_label = "Retraction Length (Toolchange)";
++    def->sidetext = L("mm");
++    def->mode = comAdvanced;
++    def->nullable = true;
++    def->set_default_value(new ConfigOptionFloatsNullable{ ConfigOptionFloatsNullable::nil_value() });
++
+     def = this->add("z_hop", coFloats);
+     def->label = L("Z-hop height");
+     def->tooltip = L("Whenever the retraction is done, the nozzle is lifted a little to create clearance between nozzle and the print. "
+@@ -6982,7 +6998,9 @@
+         "retraction_length", "z_hop", "z_hop_types", "retract_lift_above", "retract_lift_below", "retract_lift_enforce", "retraction_speed", "deretraction_speed",
+         "retract_before_wipe", "retract_restart_extra", "retraction_minimum_travel", "wipe", "wipe_distance",
+         "retract_when_changing_layer", "retract_length_toolchange", "retract_restart_extra_toolchange", "filament_colour",
+-        "default_filament_profile","retraction_distances_when_cut","long_retractions_when_cut"/*,"filament_seam_gap"*/
++        "default_filament_profile","retraction_distances_when_cut","long_retractions_when_cut",
++        // OrcaXR/FullSpectrum parity: filament-level retract override.
++        "filament_retract_length_toolchange"/*,"filament_seam_gap"*/
+     };
+ 
+     m_filament_retract_keys = {
+@@ -7992,7 +8010,8 @@
+     "filament_ironing_flow",
+     "filament_ironing_spacing",
+     "filament_ironing_inset",
+-    "filament_ironing_speed"
++    "filament_ironing_speed",
++    "filament_retract_length_toolchange"
+ };
+ 
+ // Parameters that are the same as the number of extruders
+--- a/src/libslic3r/Extruder.cpp
++++ b/src/libslic3r/Extruder.cpp
+@@ -204,6 +204,16 @@
+ 
+ double Extruder::retract_length_toolchange() const
+ {
++    // OrcaXR/FullSpectrum parity: a non-nil filament-level
++    // `filament_retract_length_toolchange[id]` overrides the printer-
++    // level `retract_length_toolchange[extruder_id]`. The key was added
++    // by Snapmaker Orca's fork and is what FullSpectrum users author
++    // their 5 mm-per-toolchange profiles with; before this patch the
++    // value silently dropped on the floor here and the printer default
++    // (usually 10 mm) ran, doubling wipe-tower retract activity.
++    const unsigned int filament_idx = m_id;
++    if (!m_config->filament_retract_length_toolchange.is_nil(filament_idx))
++        return m_config->filament_retract_length_toolchange.get_at(filament_idx);
+     return m_config->retract_length_toolchange.get_at(extruder_id());
+ }
+ 
+--- a/src/libslic3r/GCode.cpp
++++ b/src/libslic3r/GCode.cpp
+@@ -847,8 +847,18 @@
+ 
+                 float old_retract_length = (old_filament_id != -1) ? full_config.retraction_length.get_at(old_filament_id) : 0;
+                 float new_retract_length = full_config.retraction_length.get_at(new_filament_id);
+-                float old_retract_length_toolchange = (old_filament_id != -1) ? full_config.retract_length_toolchange.get_at(old_filament_id) : 0;
+-                float new_retract_length_toolchange = full_config.retract_length_toolchange.get_at(new_filament_id);
++                // OrcaXR/FullSpectrum parity: filament-level retract override
++                // takes precedence over the printer-level value. See the
++                // Extruder::retract_length_toolchange() helper for the
++                // rationale.
++                auto effective_retract_toolchange = [&full_config](int filament_id) -> float {
++                    if (filament_id < 0) return 0.f;
++                    if (!full_config.filament_retract_length_toolchange.is_nil(filament_id))
++                        return static_cast<float>(full_config.filament_retract_length_toolchange.get_at(filament_id));
++                    return static_cast<float>(full_config.retract_length_toolchange.get_at(filament_id));
++                };
++                float old_retract_length_toolchange = effective_retract_toolchange(old_filament_id);
++                float new_retract_length_toolchange = effective_retract_toolchange(new_filament_id);
+                 int old_filament_temp = (old_filament_id != -1) ? (gcodegen.on_first_layer()? full_config.nozzle_temperature_initial_layer.get_at(old_filament_id) : full_config.nozzle_temperature.get_at(old_filament_id)) : 210;
+                 int new_filament_temp = gcodegen.on_first_layer() ? full_config.nozzle_temperature_initial_layer.get_at(new_filament_id) : full_config.nozzle_temperature.get_at(new_filament_id);
+                 Vec3d nozzle_pos = gcode_writer.get_position();
+@@ -7448,7 +7458,13 @@
+ 
+     // BBS
+     float new_retract_length = m_config.retraction_length.get_at(new_filament_id);
+-    float new_retract_length_toolchange = m_config.retract_length_toolchange.get_at(new_filament_id);
++    // OrcaXR/FullSpectrum parity: filament-level retract override
++    // takes precedence over the printer-level value. Same pattern as
++    // Extruder::retract_length_toolchange().
++    float new_retract_length_toolchange =
++        (!m_config.filament_retract_length_toolchange.is_nil(new_filament_id))
++            ? static_cast<float>(m_config.filament_retract_length_toolchange.get_at(new_filament_id))
++            : static_cast<float>(m_config.retract_length_toolchange.get_at(new_filament_id));
+     int new_filament_temp = this->on_first_layer() ? m_config.nozzle_temperature_initial_layer.get_at(new_filament_id) : m_config.nozzle_temperature.get_at(new_filament_id);
+     // BBS: if print_z == 0 use first layer temperature
+     if (abs(print_z) < EPSILON)
+@@ -7475,7 +7491,11 @@
+         int old_extruder_id = m_writer.filament() != nullptr ? m_writer.filament()->extruder_id() : get_extruder_id(m_start_gcode_filament);
+ 
+         old_retract_length = m_config.retraction_length.get_at(old_filament_id);
+-        old_retract_length_toolchange = m_config.retract_length_toolchange.get_at(old_filament_id);
++        // OrcaXR/FullSpectrum parity: filament-level override.
++        old_retract_length_toolchange =
++            (!m_config.filament_retract_length_toolchange.is_nil(old_filament_id))
++                ? m_config.filament_retract_length_toolchange.get_at(old_filament_id)
++                : m_config.retract_length_toolchange.get_at(old_filament_id);
+         old_filament_temp = this->on_first_layer()? m_config.nozzle_temperature_initial_layer.get_at(old_filament_id) : m_config.nozzle_temperature.get_at(old_filament_id);
+ 
+         //During the filament change, the extruder will extrude an extra length of grab_length for the corresponding detection, so the purge can reduce this length.
