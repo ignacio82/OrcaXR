@@ -18,6 +18,9 @@
 #   NDK_VERSION       optional — defaults to the version pinned in CLAUDE.md
 #   ANDROID_ABI       optional — defaults to arm64-v8a
 #   ANDROID_PLATFORM  optional — defaults to android-31 (minSdk)
+#   ORCAXR_JOBS       optional — compile job cap (default max(1, nproc-3))
+#   ORCAXR_LOAD_LIMIT optional — pass `-l` load cap to Ninja builds
+#   ORCAXR_BG_BUILD   optional — default 1; if 1 runs builds with nice/ionice
 
 set -euo pipefail
 
@@ -56,6 +59,22 @@ if [[ -z "${ORCAXR_JOBS:-}" ]]; then
     ORCAXR_JOBS=$(( NCPU > 3 ? NCPU - 3 : 1 ))
 fi
 
+# Keep host responsive by default: run expensive compile/link steps at
+# lower scheduler + IO priority unless explicitly disabled.
+ORCAXR_BG_BUILD="${ORCAXR_BG_BUILD:-1}"
+
+build_cmd() {
+    if [[ "$ORCAXR_BG_BUILD" == "1" ]]; then
+        if command -v ionice >/dev/null 2>&1; then
+            ionice -c 3 nice -n 10 "$@"
+        else
+            nice -n 10 "$@"
+        fi
+    else
+        "$@"
+    fi
+}
+
 TOOLCHAIN_FILE="${ANDROID_NDK}/build/cmake/android.toolchain.cmake"
 if [[ ! -f "$TOOLCHAIN_FILE" ]]; then
     echo "error: NDK toolchain file not found: $TOOLCHAIN_FILE" >&2
@@ -89,6 +108,10 @@ echo "  deps build  : $DEPS_BUILD_DIR"
 echo "  libslic3r   : $LIBSLIC3R_BUILD_DIR"
 echo "  clean       : $CLEAN"
 echo "  jobs        : $ORCAXR_JOBS"
+echo "  bg build    : $ORCAXR_BG_BUILD"
+if [[ -n "${ORCAXR_LOAD_LIMIT:-}" ]]; then
+    echo "  load limit  : $ORCAXR_LOAD_LIMIT"
+fi
 echo
 
 # ---- apply patches -------------------------------------------------------
@@ -239,7 +262,11 @@ cmake -S "$ORCA_DIR/deps" -B "$DEPS_BUILD_DIR" -G Ninja \
     -DFLATPAK=OFF
 
 echo "--- phase 1: build deps"
-cmake --build "$DEPS_BUILD_DIR" -j "$ORCAXR_JOBS"
+DEPS_BUILD_ARGS=(cmake --build "$DEPS_BUILD_DIR" -j "$ORCAXR_JOBS")
+if [[ -n "${ORCAXR_LOAD_LIMIT:-}" ]]; then
+    DEPS_BUILD_ARGS+=(-- -l "$ORCAXR_LOAD_LIMIT")
+fi
+build_cmd "${DEPS_BUILD_ARGS[@]}"
 
 # ---- phase 2: libslic3r --------------------------------------------------
 
@@ -328,7 +355,11 @@ LIBSLIC3R_JOBS="$ORCAXR_JOBS"
 if [[ "${ORCAXR_ASAN:-0}" == "1" ]]; then
     LIBSLIC3R_JOBS=1
 fi
-cmake --build "$LIBSLIC3R_BUILD_DIR" --target libslic3r -j "$LIBSLIC3R_JOBS"
+LIBSLIC3R_BUILD_ARGS=(cmake --build "$LIBSLIC3R_BUILD_DIR" --target libslic3r -j "$LIBSLIC3R_JOBS")
+if [[ -n "${ORCAXR_LOAD_LIMIT:-}" ]]; then
+    LIBSLIC3R_BUILD_ARGS+=(-- -l "$ORCAXR_LOAD_LIMIT")
+fi
+build_cmd "${LIBSLIC3R_BUILD_ARGS[@]}"
 
 # Record the shim hash so subsequent runs skip the .o purge unless
 # the shim contents change. Set after a successful build so an
