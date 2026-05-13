@@ -42,6 +42,7 @@ internal object PrinterTools {
         GetPrintProgress(ctx),
         PingPrinter(ctx),
         StartPrint(ctx),
+        SendAndPrint(ctx),
         PausePrint(ctx),
         ResumePrint(ctx),
         CancelPrint(ctx),
@@ -371,7 +372,7 @@ internal object PrinterTools {
         override val description =
             "Begin printing a G-code file already on the printer's filesystem (e.g. uploaded via Mainsail or a previous slice→send). " +
                 "Pass the remote filename as it appears in /server/files/list (typically 'gcodes/<file>.gcode'). " +
-                "This does NOT upload — for upload+start use the slice/send-to-printer flow once that tool ships."
+                "This does NOT upload — for upload+start use send_and_print."
         override val inputSchema = Schemas.obj(
             required = listOf("printer_id", "filename"),
             properties = mapOf(
@@ -389,6 +390,103 @@ internal object PrinterTools {
                 result,
                 successText = { "${printer.name}: started print of $filename" },
                 successData = { JSONObject().apply { put("filename", filename) } },
+            )
+        }
+    }
+
+    /**
+     * UI mirror of the BottomRightSummaryPanel "Send & Print" button:
+     * apply pre-print options to the most-recently-sliced g-code, push
+     * it to the printer, optionally toggle moonraker-timelapse, and
+     * start the print. Mirrors OrcaSlicer's pre-print toggles for
+     * Klipper hosts (their Bambu-only toggles don't translate; ours are
+     * Klipper-native — `BED_MESH_CALIBRATE` and the moonraker-timelapse
+     * component).
+     */
+    class SendAndPrint(private val ctx: ToolContext) : Tool {
+        override val name = "send_and_print"
+        override val description =
+            "Upload the most-recently-sliced G-code to the printer and start the print. Optional pre-print toggles: " +
+                "`bed_mesh_calibrate` injects `BED_MESH_CALIBRATE` before the print; `timelapse` injects " +
+                "`TIMELAPSE_TAKE_FRAME` at every layer change and enables the moonraker-timelapse component on the host " +
+                "(requires the component to be installed; we no-op gracefully when it isn't). Requires that the user has " +
+                "already sliced something — read the slice state via the workspace bindings first."
+        override val inputSchema = Schemas.obj(
+            required = listOf("printer_id"),
+            properties = mapOf(
+                "printer_id" to Schemas.string("Printer id (or name) from list_printers"),
+                "bed_mesh_calibrate" to Schemas.bool("Run BED_MESH_CALIBRATE before the print (adds 30–90 s). Default false."),
+                "timelapse" to Schemas.bool("Record a timelapse via the moonraker-timelapse component. Default false."),
+            ),
+        )
+        override suspend fun call(args: JSONObject): ToolResult {
+            val id = args.optString("printer_id").trim()
+            val printer = resolve(ctx, id)
+                ?: return ToolResult.error("No printer matches '$id'.")
+
+            // Pull the latest slice's outputPath off the workspace
+            // model. The UI Send & Print button is gated on this being
+            // a SliceResult.Success — surface the same precondition to
+            // the LLM as a clear error instead of failing later in the
+            // upload.
+            val ws = dev.orcaxr.app.mcp.WorkspaceModel.get()
+            val sliceState = ws.sliceState.value
+            val sliced = (sliceState as? dev.orcaxr.app.SliceUiState.Done)?.result
+                as? dev.orcaxr.app.SliceResult.Success
+                ?: return ToolResult.error(
+                    "No sliced output. Slice a model first (the BottomRightSummaryPanel's Slice button, or wait for an in-flight slice to complete)."
+                )
+            val gcode = java.io.File(sliced.outputPath)
+            if (!gcode.exists()) {
+                return ToolResult.error("Sliced g-code is missing on disk: ${sliced.outputPath}")
+            }
+
+            val options = dev.orcaxr.app.PrintOptions(
+                bedMeshCalibrate = args.optBoolean("bed_mesh_calibrate", false),
+                timelapse = args.optBoolean("timelapse", false),
+            )
+            val injected = dev.orcaxr.app.applyPrintOptionsToGcode(gcode, options)
+            val client = MoonrakerClient(printer)
+
+            // Toggle timelapse to match the user pick. Same lenient
+            // handling as the UI path: not-installed → ignore; auth
+            // failures abort because the same key is about to be used
+            // for the upload.
+            if (options.timelapse) {
+                when (val t = client.setTimelapseEnabled(true)) {
+                    is MoonrakerResult.Ok, is MoonrakerResult.NotFound -> { /* fine */ }
+                    is MoonrakerResult.AuthError -> return errorOutcome("auth_error", t.message)
+                    is MoonrakerResult.HttpError -> { /* warn-only */ }
+                    is MoonrakerResult.IoError -> { /* warn-only */ }
+                }
+            }
+
+            val remote = "orcaxr-${injected.name}"
+            val upload = client.uploadGcode(injected, remote)
+            if (injected != gcode) injected.delete()
+            val uploadedAs = (upload as? MoonrakerResult.Ok)?.value
+                ?: return moonrakerOutcome(
+                    upload,
+                    successText = { "${printer.name}: upload ok" },
+                    successData = { JSONObject() },
+                )
+            val start = client.startPrint(uploadedAs)
+            return moonrakerOutcome(
+                start,
+                successText = {
+                    val opts = buildString {
+                        if (options.bedMeshCalibrate) append(", bed mesh")
+                        if (options.timelapse) append(", timelapse")
+                    }
+                    "${printer.name}: started print of $uploadedAs$opts"
+                },
+                successData = {
+                    JSONObject().apply {
+                        put("filename", uploadedAs)
+                        put("bed_mesh_calibrate", options.bedMeshCalibrate)
+                        put("timelapse", options.timelapse)
+                    }
+                },
             )
         }
     }

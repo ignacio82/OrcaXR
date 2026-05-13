@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -46,6 +47,9 @@ import dev.orcaxr.app.ExtrusionRole
 import dev.orcaxr.app.GcodeParser
 import dev.orcaxr.app.MoonrakerClient
 import dev.orcaxr.app.ParsedToolpath
+import dev.orcaxr.app.PrintOptions
+import dev.orcaxr.app.SendAndPrintOptionsPanel
+import dev.orcaxr.app.applyPrintOptionsToGcode
 import dev.orcaxr.app.mobile.GcodeThumbnailReader
 import dev.orcaxr.app.mobile.MobileToolpath3DViewer
 import dev.orcaxr.app.mobile.ToolpathLayerView
@@ -113,12 +117,29 @@ fun PreviewScreen(isTablet: Boolean) {
     var uploadingId by remember { mutableStateOf<String?>(null) }
     var lastResult by remember { mutableStateOf<String?>(null) }
 
-    fun upload(p: PrinterConfig, andStart: Boolean) {
+    // Pending Send & Print request — non-null while the options dialog
+    // is on screen. Tapping "Send & Print" opens it, Confirm runs the
+    // upload, Cancel just clears it.
+    var pendingSendPrinter by remember { mutableStateOf<PrinterConfig?>(null) }
+    // Cached "moonraker-timelapse installed" probe, per printer id.
+    var timelapseSupported by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
+
+    fun upload(p: PrinterConfig, andStart: Boolean, options: PrintOptions = PrintOptions.Default) {
         val f = gcodeFile ?: return
         scope.launch {
             uploadingId = p.id
             val client = MoonrakerClient(p)
-            val r = client.uploadGcode(f, f.name)
+            // Apply g-code injections (no-op when options are all off).
+            val injected = withContext(Dispatchers.IO) {
+                runCatching { applyPrintOptionsToGcode(f, options) }.getOrDefault(f)
+            }
+            // Toggle the moonraker-timelapse component on/off to match
+            // the user's pick. Errors are non-fatal — log via lastResult
+            // append, but proceed to the upload.
+            if (andStart) {
+                runCatching { client.setTimelapseEnabled(options.timelapse) }
+            }
+            val r = client.uploadGcode(injected, injected.name)
             uploadingId = null
             lastResult = when (r) {
                 is MoonrakerResult.Ok -> {
@@ -131,7 +152,31 @@ fun PreviewScreen(isTablet: Boolean) {
                 is MoonrakerResult.IoError -> "Upload failed: ${r.message}"
                 else -> "Upload failed."
             }
+            if (injected != f) withContext(Dispatchers.IO) { injected.delete() }
         }
+    }
+
+    // Render the options sheet as a Material AlertDialog when a Send &
+    // Print request is pending. Confirm dispatches `upload(p, true, opts)`.
+    val pending = pendingSendPrinter
+    if (pending != null) {
+        AlertDialog(
+            onDismissRequest = { pendingSendPrinter = null },
+            confirmButton = {},
+            dismissButton = {},
+            text = {
+                SendAndPrintOptionsPanel(
+                    printerName = pending.name,
+                    initialOptions = PrintOptions.Default,
+                    timelapseAvailable = timelapseSupported[pending.id] == true,
+                    onCancel = { pendingSendPrinter = null },
+                    onConfirm = { picked ->
+                        pendingSendPrinter = null
+                        upload(pending, andStart = true, options = picked)
+                    },
+                )
+            },
+        )
     }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -270,7 +315,18 @@ fun PreviewScreen(isTablet: Boolean) {
                                     }
                                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                         Button(
-                                            onClick = { upload(p, andStart = true) },
+                                            onClick = {
+                                                pendingSendPrinter = p
+                                                // Probe moonraker-timelapse availability
+                                                // for this printer if we haven't yet.
+                                                if (!timelapseSupported.containsKey(p.id)) {
+                                                    scope.launch {
+                                                        val ok = runCatching { MoonrakerClient(p).timelapseSupported() }
+                                                            .getOrDefault(false)
+                                                        timelapseSupported = timelapseSupported + (p.id to ok)
+                                                    }
+                                                }
+                                            },
                                             enabled = uploadingId == null,
                                             colors = ButtonDefaults.buttonColors(
                                                 containerColor = MaterialTheme.colorScheme.primary,

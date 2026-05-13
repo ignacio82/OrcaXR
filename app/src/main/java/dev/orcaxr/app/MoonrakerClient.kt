@@ -331,6 +331,50 @@ class MoonrakerClient(
         postEmpty("/printer/print/start?filename=$encoded")
     }
 
+    /**
+     * POST /machine/timelapse/settings — toggles the moonraker-timelapse
+     * component's render-on-print flag. The component itself emits
+     * `TIMELAPSE_TAKE_FRAME` macros into Klipper when the slicer's
+     * g-code includes layer-change calls (we inject those in
+     * [applyPrintOptionsToGcode]); this endpoint just controls whether
+     * the captured frames get rendered into an mp4 at the end.
+     *
+     * Returns [MoonrakerResult.NotFound] when the component isn't
+     * installed — the caller should grey out the Timelapse toggle in
+     * the UI when [timelapseSupported] reports false to avoid this
+     * round-trip on every send, but we still surface the error
+     * gracefully when a printer reports support but the endpoint is
+     * absent.
+     */
+    suspend fun setTimelapseEnabled(enabled: Boolean): MoonrakerResult<Unit> = withContext(Dispatchers.IO) {
+        // moonraker-timelapse accepts settings as form-encoded fields.
+        // `enabled` is the master kill-switch; we don't touch
+        // mode/parkhead/etc — let the user keep whatever they
+        // configured in Mainsail/Fluidd.
+        val form = okhttp3.FormBody.Builder()
+            .add("enabled", if (enabled) "true" else "false")
+            .build()
+        val req = Request.Builder()
+            .url(baseUrl() + "/machine/timelapse/settings")
+            .header("Accept", "application/json")
+            .applyApiKey()
+            .post(form)
+            .build()
+        execute(req) { _ -> MoonrakerResult.Ok(Unit) }
+    }
+
+    /**
+     * Convenience: probe [serverInfo] for the `timelapse` component.
+     * Cheap (no auth, ~1 KB response) so it's fine to call once per
+     * Send & Print panel open; the UI gates the Timelapse switch on
+     * the result so users on vanilla MainsailOS / non-timelapse setups
+     * don't see a toggle that 404s.
+     */
+    suspend fun timelapseSupported(): Boolean = when (val r = serverInfo()) {
+        is MoonrakerResult.Ok -> "timelapse" in r.value.components
+        else -> false
+    }
+
     /** POST /printer/print/pause — Klipper interprets via PAUSE macro. */
     suspend fun pausePrint(): MoonrakerResult<Unit> = withContext(Dispatchers.IO) {
         postEmpty("/printer/print/pause")

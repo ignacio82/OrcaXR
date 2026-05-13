@@ -1092,6 +1092,16 @@ private fun XrShell(
     var gizmoTool by remember { mutableStateOf(GizmoTool.Move) }
     
     var devicesShown by remember { mutableStateOf(false) }
+    // Pre-print options sheet shown between tapping Send & Print and
+    // the actual upload+start. Null = sheet hidden. Non-null carries
+    // the printer + sliced output file the user is sending to so the
+    // confirm path doesn't have to re-derive them.
+    var sendOptionsRequest by remember { mutableStateOf<SendOptionsRequest?>(null) }
+    // Cached "is moonraker-timelapse installed on this printer" probe.
+    // Keyed by printer id so switching printers doesn't carry a stale
+    // verdict. Populated lazily when the user opens the options sheet
+    // for a given printer.
+    var timelapseSupportedByPrinter by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
     // App-wide preferences SpatialPanel (in-app LLM assistant + future
     // cards). Distinct from Devices, which is for printer connections
     // and the MCP server toggle. Toggled from the Settings icon on the
@@ -6388,58 +6398,67 @@ private fun XrShell(
                             val cfg = activePrinter ?: return@BottomRightSummaryPanel
                             val src = (sliceState.value as? SliceUiState.Done)?.result as? SliceResult.Success
                                 ?: return@BottomRightSummaryPanel
-                            devicesShown = true
-                            workspaceMode = WorkspaceMode.Devices
-                            setStatus(cfg.id, PrinterStatus("Uploading ${File(src.outputPath).name}…", PrinterStatusTone.Info))
-                            android.widget.Toast.makeText(
-                                ctx,
-                                "Sending to ${cfg.name}…",
-                                android.widget.Toast.LENGTH_SHORT,
-                            ).show()
-                            scope.launch {
-                                val client = MoonrakerClient(cfg)
-                                val gcode = File(src.outputPath)
-                                val remote = "orcaxr-${gcode.name}"
-                                val sizeKB = gcode.length() / 1024
-                                // Throttle progress emissions: OkHttp ticks at
-                                // 8 KB granularity which would flood Compose
-                                // recomposition. Update at most once per 1%.
-                                val tickStart = System.currentTimeMillis()
-                                var lastPct = -1
-                                val onProgress: (Long, Long) -> Unit = { sent, total ->
-                                    val pct = if (total > 0) ((sent * 100) / total).toInt() else 0
-                                    if (pct != lastPct) {
-                                        lastPct = pct
-                                        val sentKB = sent / 1024
-                                        val elapsed = (System.currentTimeMillis() - tickStart) / 1000
-                                        val msg = "Uploading ${gcode.name}… ${sentKB}/${sizeKB} KB ($pct%, ${elapsed}s)"
-                                        setStatus(cfg.id, PrinterStatus(msg, PrinterStatusTone.Info, progress = pct / 100f))
-                                    }
-                                }
-                                when (val up = client.uploadGcode(gcode, remote, onProgress)) {
-                                    is MoonrakerResult.Ok -> {
-                                        setStatus(cfg.id, PrinterStatus("Starting print…", PrinterStatusTone.Info))
-                                        when (val st = client.startPrint(up.value)) {
-                                            is MoonrakerResult.Ok -> setStatus(
-                                                cfg.id,
-                                                PrinterStatus("Print started: ${up.value}", PrinterStatusTone.Success),
-                                            )
-                                            is MoonrakerResult.AuthError -> setStatus(cfg.id, PrinterStatus(st.message, PrinterStatusTone.Error))
-                                            is MoonrakerResult.NotFound -> setStatus(cfg.id, PrinterStatus(st.message, PrinterStatusTone.Error))
-                                            is MoonrakerResult.HttpError -> setStatus(cfg.id, PrinterStatus("Start HTTP ${st.code}", PrinterStatusTone.Error))
-                                            is MoonrakerResult.IoError -> setStatus(cfg.id, PrinterStatus("Start: ${st.message}", PrinterStatusTone.Error))
-                                        }
-                                    }
-                                    is MoonrakerResult.AuthError -> setStatus(cfg.id, PrinterStatus(up.message, PrinterStatusTone.Error))
-                                    is MoonrakerResult.NotFound -> setStatus(cfg.id, PrinterStatus(up.message, PrinterStatusTone.Error))
-                                    is MoonrakerResult.HttpError -> setStatus(cfg.id, PrinterStatus("Upload HTTP ${up.code}", PrinterStatusTone.Error))
-                                    is MoonrakerResult.IoError -> setStatus(cfg.id, PrinterStatus("Upload: ${up.message}", PrinterStatusTone.Error))
+                            // Open the pre-print options sheet. The
+                            // confirm callback (rendered further down)
+                            // runs the actual upload+start with the
+                            // picked PrintOptions.
+                            sendOptionsRequest = SendOptionsRequest(
+                                printer = cfg,
+                                gcode = File(src.outputPath),
+                            )
+                            // Kick off the timelapse-component probe now
+                            // so the sheet renders with the right
+                            // enabled state on first frame (it falls
+                            // back to false until the probe lands).
+                            if (!timelapseSupportedByPrinter.containsKey(cfg.id)) {
+                                scope.launch {
+                                    val ok = runCatching { MoonrakerClient(cfg).timelapseSupported() }
+                                        .getOrDefault(false)
+                                    timelapseSupportedByPrinter =
+                                        timelapseSupportedByPrinter + (cfg.id to ok)
                                 }
                             }
                         },
                         filamentRuleResult = filamentRuleResult,
                         bedCollisionForbidden = bedCollision is BedCollision.Result.Off,
                     )
+                }
+
+                // Pre-print options sheet — shown when the user taps
+                // Send & Print on BottomRightSummaryPanel. On confirm
+                // the upload+start sequence runs with the picked
+                // [PrintOptions]; on cancel the sheet just closes. Z=
+                // +200 keeps it forward of the workspace panels.
+                run {
+                    val req = sendOptionsRequest
+                    if (req != null) {
+                        SpatialPanel(
+                            modifier = SubspaceModifier
+                                .subspaceWidth(520.dp)
+                                .subspaceHeight(340.dp)
+                                .offset(x = 0.dp, y = 80.dp, z = 200.dp),
+                        ) {
+                            SendAndPrintOptionsPanel(
+                                printerName = req.printer.name,
+                                initialOptions = PrintOptions.Default,
+                                timelapseAvailable = timelapseSupportedByPrinter[req.printer.id] == true,
+                                onCancel = { sendOptionsRequest = null },
+                                onConfirm = { picked ->
+                                    sendOptionsRequest = null
+                                    devicesShown = true
+                                    workspaceMode = WorkspaceMode.Devices
+                                    runUploadAndStart(
+                                        scope = scope,
+                                        ctx = ctx,
+                                        cfg = req.printer,
+                                        gcode = req.gcode,
+                                        options = picked,
+                                        setStatus = ::setStatus,
+                                    )
+                                },
+                            )
+                        }
+                    }
                 }
 
                 // Centered loading overlay — only present while the
@@ -6808,41 +6827,17 @@ private fun XrShell(
                             },
                             onSendSlice = { p ->
                                 val gcode = gcodeFile ?: return@PrinterPanel
-                                setStatus(p.id, PrinterStatus("Uploading ${gcode.name}…", PrinterStatusTone.Info))
-                                scope.launch {
-                                    val client = MoonrakerClient(p)
-                                    val remote = "orcaxr-${gcode.name}"
-                                    val sizeKB = gcode.length() / 1024
-                                    val tickStart = System.currentTimeMillis()
-                                    var lastPct = -1
-                                    val onProgress: (Long, Long) -> Unit = { sent, total ->
-                                        val pct = if (total > 0) ((sent * 100) / total).toInt() else 0
-                                        if (pct != lastPct) {
-                                            lastPct = pct
-                                            val sentKB = sent / 1024
-                                            val elapsed = (System.currentTimeMillis() - tickStart) / 1000
-                                            val msg = "Uploading ${gcode.name}… ${sentKB}/${sizeKB} KB ($pct%, ${elapsed}s)"
-                                            setStatus(p.id, PrinterStatus(msg, PrinterStatusTone.Info, progress = pct / 100f))
-                                        }
-                                    }
-                                    when (val up = client.uploadGcode(gcode, remote, onProgress)) {
-                                        is MoonrakerResult.Ok -> {
-                                            setStatus(p.id, PrinterStatus("Starting print…", PrinterStatusTone.Info))
-                                            when (val st = client.startPrint(up.value)) {
-                                                is MoonrakerResult.Ok -> setStatus(
-                                                    p.id,
-                                                    PrinterStatus("Print started: ${up.value}", PrinterStatusTone.Success),
-                                                )
-                                                is MoonrakerResult.AuthError -> setStatus(p.id, PrinterStatus(st.message, PrinterStatusTone.Error))
-                                                is MoonrakerResult.NotFound -> setStatus(p.id, PrinterStatus(st.message, PrinterStatusTone.Error))
-                                                is MoonrakerResult.HttpError -> setStatus(p.id, PrinterStatus("Start HTTP ${st.code}", PrinterStatusTone.Error))
-                                                is MoonrakerResult.IoError -> setStatus(p.id, PrinterStatus("Start: ${st.message}", PrinterStatusTone.Error))
-                                            }
-                                        }
-                                        is MoonrakerResult.AuthError -> setStatus(p.id, PrinterStatus(up.message, PrinterStatusTone.Error))
-                                        is MoonrakerResult.NotFound -> setStatus(p.id, PrinterStatus(up.message, PrinterStatusTone.Error))
-                                        is MoonrakerResult.HttpError -> setStatus(p.id, PrinterStatus("Upload HTTP ${up.code}", PrinterStatusTone.Error))
-                                        is MoonrakerResult.IoError -> setStatus(p.id, PrinterStatus("Upload: ${up.message}", PrinterStatusTone.Error))
+                                // Same pre-print options flow as the
+                                // BottomRightSummaryPanel's Send & Print
+                                // button: open the sheet, run the upload
+                                // on confirm.
+                                sendOptionsRequest = SendOptionsRequest(p, gcode)
+                                if (!timelapseSupportedByPrinter.containsKey(p.id)) {
+                                    scope.launch {
+                                        val ok = runCatching { MoonrakerClient(p).timelapseSupported() }
+                                            .getOrDefault(false)
+                                        timelapseSupportedByPrinter =
+                                            timelapseSupportedByPrinter + (p.id to ok)
                                     }
                                 }
                             },
