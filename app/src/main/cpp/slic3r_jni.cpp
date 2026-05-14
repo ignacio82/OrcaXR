@@ -307,6 +307,34 @@ static void clamp_filament_arrays_to_painted(
     const size_t baseline = (fc != nullptr) ? fc->values.size() : 0;
     if (target <= baseline) return;
 
+    // FullSpectrum virtual-filament gate. When mixed_filament_definitions
+    // is non-empty, painted-face IDs greater than filament_colour.size()
+    // are VIRTUAL filament references that libslic3r's
+    // MixedFilamentManager resolves back to one of the [baseline]
+    // physical extruders at slice time — NOT new physical filaments.
+    // Extending filament_colour here turns each virtual reference into
+    // a fresh "physical" slot, producing the wildly wrong PeggyPalette
+    // parity diff (4 ref `filament used [mm]` entries vs 38 actual,
+    // physical slot totals 913/939/816/2154 → 974/298/296/1396 + 34
+    // bogus tracks). Skip the clamp entirely in that case — the
+    // downstream pipeline already handles the mapping.
+    //
+    // The original crash this helper protects against happens only
+    // when painted IDs exceed filament_colour.size() AND no virtual
+    // filament setup is present (so ToolOrdering can't fold the IDs
+    // back to physicals via the MixedFilamentManager). In that case we
+    // still pad the per-filament arrays as before — it's the lesser
+    // evil vs. a SIGSEGV.
+    auto* mfd = cfg.option<Slic3r::ConfigOptionString>("mixed_filament_definitions");
+    if (mfd != nullptr && !mfd->value.empty()) {
+        ORCAXR_LOGI(
+            "clamp_filament_arrays_to_painted: mixed_filament_definitions "
+            "present (%zu bytes) — leaving filament_colour at %zu (max painted=%zu); "
+            "MixedFilamentManager resolves the gap.",
+            mfd->value.size(), baseline, target);
+        return;
+    }
+
     // Anchor nozzle count to the printer-side nozzle_diameter vector
     // rather than guessing from collision sizes. This is what the
     // downstream GCode::append_full_config check uses as
