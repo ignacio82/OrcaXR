@@ -342,3 +342,139 @@ private fun parseHex(s: String): Triple<Int, Int, Int> {
         h.substring(4, 6).toIntOrNull(16) ?: 255,
     )
 }
+
+private fun srgbToLinearByte(c: Int): Float {
+    val s = c / 255f
+    return if (s <= 0.04045f) s / 12.92f
+    else Math.pow(((s + 0.055f) / 1.055f).toDouble(), 2.4).toFloat()
+}
+
+private fun linearToSrgbByte(l: Float): Int {
+    val s = if (l <= 0.0031308f) 12.92f * l
+    else (1.055f * Math.pow(l.toDouble(), 1.0 / 2.4).toFloat() - 0.055f)
+    return (s.coerceIn(0f, 1f) * 255f + 0.5f).toInt()
+}
+
+/**
+ * Blend an arbitrary set of hex colors by per-component weight using
+ * the same gamma-correct mixing [blendMixedColor] uses for 2-way pairs.
+ * Falls back to "#FFFFFF" when [components] is empty or every weight is
+ * zero. Weights are normalized by their sum; they don't have to add to
+ * any specific total.
+ */
+fun blendComponentsHex(components: List<Pair<String, Float>>): String {
+    val nonZero = components.filter { it.second > 0f }
+    if (nonZero.isEmpty()) return "#FFFFFF"
+    val totalWeight = nonZero.sumOf { it.second.toDouble() }.toFloat()
+    if (totalWeight <= 0f) return "#FFFFFF"
+    var rLin = 0f; var gLin = 0f; var bLin = 0f
+    for ((hex, weight) in nonZero) {
+        val w = weight / totalWeight
+        val (r, g, b) = parseHex(hex)
+        rLin += srgbToLinearByte(r) * w
+        gLin += srgbToLinearByte(g) * w
+        bLin += srgbToLinearByte(b) * w
+    }
+    return "#%02X%02X%02X".format(
+        linearToSrgbByte(rLin).coerceIn(0, 255),
+        linearToSrgbByte(gLin).coerceIn(0, 255),
+        linearToSrgbByte(bLin).coerceIn(0, 255),
+    )
+}
+
+/**
+ * Resolve a FullSpectrum [MixedFilamentEntry] into its blended display
+ * color given the active base palette. Mirrors how desktop FullSpectrum
+ * renders its filament-tab swatches and the per-sphere shading the user
+ * sees in OrcaSlicer's preview.
+ *
+ * Resolution rules:
+ *  - If the row carries a gradient (`gradientComponentIds` non-empty,
+ *    each char is a 1-based filament id; `gradientComponentWeights` is
+ *    a `/`-separated weight list), use those — pads missing weights to 1.
+ *  - Else if a `manualPattern` is present (digits 1..9, one filament id
+ *    per cycle slot), each digit contributes one unit of weight to its
+ *    corresponding base filament.
+ *  - Else fall back to the 2-way A+B cadence with weights derived from
+ *    `ratioA` / `ratioB`, biased by `mixBPercent` (0..100 = pure A → pure B).
+ *
+ * Out-of-range base indices are silently dropped so a row that
+ * references a filament beyond [basePalette]'s end doesn't crash —
+ * caller gets the blend of whatever components ARE in range.
+ */
+fun resolveMixedRowDisplayColor(
+    row: MixedFilamentEntry,
+    basePalette: List<String>,
+): String {
+    fun base(idx1: Int): String? =
+        basePalette.getOrNull(idx1 - 1)
+
+    if (row.gradientComponentIds.isNotEmpty()) {
+        val ids = row.gradientComponentIds.mapNotNull { ch ->
+            ch.digitToIntOrNull()?.takeIf { it in 1..basePalette.size }
+        }
+        val rawWeights = row.gradientComponentWeights
+            .split('/').mapNotNull { it.trim().toFloatOrNull() }
+        val components = ids.mapIndexedNotNull { i, id ->
+            val hex = base(id) ?: return@mapIndexedNotNull null
+            val w = rawWeights.getOrNull(i) ?: 1f
+            hex to w
+        }
+        if (components.isNotEmpty()) return blendComponentsHex(components)
+    }
+    val pattern = row.manualPattern
+    if (!pattern.isNullOrBlank()) {
+        val tally = mutableMapOf<Int, Float>()
+        for (ch in pattern) {
+            val id = ch.digitToIntOrNull() ?: continue
+            tally[id] = (tally[id] ?: 0f) + 1f
+        }
+        val components = tally.entries.mapNotNull { (id, w) ->
+            val hex = base(id) ?: return@mapNotNull null
+            hex to w
+        }
+        if (components.isNotEmpty()) return blendComponentsHex(components)
+    }
+    val a = base(row.componentA)
+    val b = base(row.componentB)
+    if (a == null && b == null) return "#FFFFFF"
+    // Use mixBPercent when the user authored a non-50% blend; otherwise
+    // fall back to the ratioA/ratioB cadence. Matches how desktop FS
+    // resolves a row's swatch (mix_b_pct wins when authored explicitly).
+    val mixB = row.mixBPercent.coerceIn(0, 100)
+    val wB = if (mixB != 50 || row.ratioA == row.ratioB) {
+        mixB.toFloat() / 100f
+    } else {
+        row.ratioB.toFloat() / (row.ratioA + row.ratioB).coerceAtLeast(1).toFloat()
+    }
+    val wA = 1f - wB
+    val components = buildList {
+        if (a != null && wA > 0f) add(a to wA)
+        if (b != null && wB > 0f) add(b to wB)
+    }
+    return if (components.isEmpty()) "#FFFFFF" else blendComponentsHex(components)
+}
+
+/**
+ * Extend [basePalette] with one entry per [virtualRows] so painted-face
+ * filament IDs greater than the base size resolve to a visible blend
+ * color in the preview. Mirrors libslic3r's MixedFilamentManager
+ * convention where filament id N+k (k >= 1) maps to virtual row k-1.
+ *
+ * Deleted rows are kept (their slot is replicated in the wire format —
+ * see the long comment in parseMixedDefinitionsForKotlin — and the
+ * libslic3r side still indexes into them). Disabled rows are also kept
+ * so the painted-face IDs line up with the on-disk row indices.
+ */
+fun extendPaletteWithVirtualRows(
+    basePalette: List<String>,
+    virtualRows: List<MixedFilamentEntry>,
+): List<String> {
+    if (virtualRows.isEmpty()) return basePalette
+    val extended = ArrayList<String>(basePalette.size + virtualRows.size)
+    extended.addAll(basePalette)
+    for (row in virtualRows) {
+        extended.add(resolveMixedRowDisplayColor(row, basePalette))
+    }
+    return extended
+}

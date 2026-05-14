@@ -405,6 +405,15 @@ private fun PreviewCard(
     // Lets the preview show the 3MF's authored colors without requiring
     // the user to paint anything. Cleared on filePath change; user paint
     // (paintFilamentIndex parameter) still takes precedence in Phase 5.
+    //
+    // [embeddedPalette] is the BASE filament_colour palette PLUS one
+    // entry per FullSpectrum virtual mix row (resolved via
+    // resolveMixedRowDisplayColor) so painted-face filament IDs that
+    // point at virtual slots (id > num_physical) get a representative
+    // blend color instead of falling through to the unpainted tint.
+    // Desktop OrcaSlicer FullSpectrum does the same when rendering its
+    // 3D preview — virtual slots show their blended color, not a
+    // placeholder.
     var embeddedPaintFilament by remember(filePath) { mutableStateOf<ByteArray?>(null) }
     var embeddedPalette by remember(filePath) { mutableStateOf<List<String>>(emptyList()) }
     var loading by remember(filePath) { mutableStateOf(true) }
@@ -454,7 +463,25 @@ private fun PreviewCard(
                     dev.orcaxr.app.mobile.viewer.MeshData.fromStlMesh(parsed)
                 }
                 embeddedPaintFilament = painted.paintFilament
-                embeddedPalette = painted.palette.toList()
+                // Extend the base filament_colour palette with one
+                // entry per FullSpectrum virtual mix row so painted-
+                // face IDs above num_physical resolve to a visible
+                // blend color. Failures here (malformed wire format,
+                // missing components) degrade quietly to the base
+                // palette only — never block the preview load.
+                embeddedPalette = withContext(Dispatchers.Default) {
+                    val basePalette = painted.palette.toList()
+                    val serialized = runCatching {
+                        SlicerEngine.read3mfMixedFilamentDefinitions(source)
+                    }.getOrNull()
+                    if (serialized.isNullOrBlank() || basePalette.isEmpty()) {
+                        basePalette
+                    } else {
+                        val rows = dev.orcaxr.app
+                            .parseMixedDefinitionsForKotlin(serialized)
+                        dev.orcaxr.app.extendPaletteWithVirtualRows(basePalette, rows)
+                    }
+                }
             } else {
                 val stl: File =
                     if (source.extension.equals("stl", ignoreCase = true)) {
@@ -565,15 +592,24 @@ private fun PreviewCard(
             paintFilamentIndex == null && embeddedPalette.isNotEmpty()
         val printerId = app.prefs.lastPrinterId
         val savedSlots = printerId?.let { slotsByPrinter[it] }
-        val paddedSlots = app.filamentSlots.pad(savedSlots, count = 16)
+        // Effective palette size matches the highest filament id that
+        // could be referenced by [effectivePaint]. A multi-color 3MF
+        // with FullSpectrum virtual mix rows easily exceeds 16
+        // entries (PeggyPalette has 4 physical + ~30 virtual), so the
+        // old hard-coded 16-slot cap dropped every virtual slot into
+        // the unpainted color. Take the max of: 16 (legacy printer
+        // slot count), the embedded palette length, and the highest
+        // value present in effectivePaint.
+        val maxPaintRef = effectivePaint.maxOfOrNull { it.toInt() and 0xff } ?: 0
+        val baseSlotCount = maxOf(16, embeddedPalette.size, maxPaintRef)
+        val paddedSlots = app.filamentSlots.pad(savedSlots, count = baseSlotCount)
         val sourceHex: List<String> =
             if (usingEmbedded) {
-                // Pad embedded palette out to 16 entries using the
-                // printer's slot colors so an over-large filament index
-                // in [effectivePaint] still resolves to a stable color
-                // instead of falling back to the brand mint.
-                val out = mutableListOf<String>()
-                for (i in 0 until 16) {
+                // Use the embedded palette where it has an entry, fall
+                // back to the printer's slot color for any index the
+                // 3MF didn't supply. Final fallback is the brand mint.
+                val out = ArrayList<String>(baseSlotCount)
+                for (i in 0 until baseSlotCount) {
                     val embeddedHex = embeddedPalette.getOrNull(i)
                     out.add(embeddedHex ?: paddedSlots.getOrElse(i) { "#79D0C7" })
                 }
