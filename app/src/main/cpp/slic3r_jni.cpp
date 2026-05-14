@@ -4055,14 +4055,19 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfPaintedMesh(
     ScopedUtf path(env, jPath);
     if (!boost::algorithm::iends_with(path.c, ".3mf")) return nullptr;
 
+    const auto t_total_start = std::chrono::steady_clock::now();
     Slic3r::DynamicPrintConfig cfg;
     Slic3r::Model model;
+    const auto t_load_start = std::chrono::steady_clock::now();
     try {
         model = load_mesh_container(path.c, &cfg);
     } catch (const std::exception& e) {
         ORCAXR_LOGI("nativeRead3mfPaintedMesh: load failed: %s", e.what());
         return nullptr;
     }
+    const auto t_load_end = std::chrono::steady_clock::now();
+    const long long load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        t_load_end - t_load_start).count();
     if (model.objects.empty()) return nullptr;
 
     auto extruder_of = [](const Slic3r::ModelConfigObject& c) -> int {
@@ -4104,8 +4109,10 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfPaintedMesh(
     float maxY = -std::numeric_limits<float>::infinity();
     float maxZ = -std::numeric_limits<float>::infinity();
 
+    const auto t_walk_start = std::chrono::steady_clock::now();
     size_t painted_volumes = 0;
     size_t volumes_walked = 0;
+    long long t_paint_us = 0;
     for (const Slic3r::ModelObject* mo : model.objects) {
         if (mo == nullptr) continue;
         const int obj_extruder = extruder_of(mo->config);
@@ -4138,6 +4145,7 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfPaintedMesh(
             // volume's raw mesh as a single unpainted bucket.
             std::vector<indexed_triangle_set> per_state;
             if (has_paint) {
+                const auto t_p0 = std::chrono::steady_clock::now();
                 try {
                     mv->mmu_segmentation_facets.get_facets(*mv, per_state);
                 } catch (const std::exception& e) {
@@ -4146,6 +4154,9 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfPaintedMesh(
                         mo->name.c_str(), e.what());
                     per_state.clear();
                 }
+                const auto t_p1 = std::chrono::steady_clock::now();
+                t_paint_us += std::chrono::duration_cast<std::chrono::microseconds>(
+                    t_p1 - t_p0).count();
             }
             if (per_state.empty()) {
                 per_state.push_back(mv->mesh().its);
@@ -4185,16 +4196,22 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfPaintedMesh(
         }
     }
 
+    const auto t_walk_end = std::chrono::steady_clock::now();
+    const long long walk_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        t_walk_end - t_walk_start).count();
     if (paint.empty()) {
         ORCAXR_LOGI(
-            "nativeRead3mfPaintedMesh: %zu volumes walked, no triangles emitted",
-            volumes_walked);
+            "nativeRead3mfPaintedMesh: %zu volumes walked, no triangles emitted (load=%lldms walk=%lldms)",
+            volumes_walked, load_ms, walk_ms);
         return nullptr;
     }
     const size_t tri_count = paint.size();
     ORCAXR_LOGI(
-        "nativeRead3mfPaintedMesh: %zu tris (%zu volumes, %zu painted) bbox (%.1f..%.1f, %.1f..%.1f, %.1f..%.1f)",
+        "nativeRead3mfPaintedMesh: %zu tris (%zu volumes, %zu painted) "
+        "TIMING load=%lldms walk=%lldms (paint_remesh=%lldms) "
+        "bbox (%.1f..%.1f, %.1f..%.1f, %.1f..%.1f)",
         tri_count, volumes_walked, painted_volumes,
+        load_ms, walk_ms, (long long)(t_paint_us / 1000),
         minX, maxX, minY, maxY, minZ, maxZ);
 
     // Palette source priority:
@@ -4278,6 +4295,10 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfPaintedMesh(
     env->DeleteLocalRef(jPaint);
     env->DeleteLocalRef(jPalette);
     env->DeleteLocalRef(meshCls);
+    const auto t_total_end = std::chrono::steady_clock::now();
+    const long long total_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        t_total_end - t_total_start).count();
+    ORCAXR_LOGI("nativeRead3mfPaintedMesh: TIMING total=%lldms", total_ms);
     return result;
 }
 
