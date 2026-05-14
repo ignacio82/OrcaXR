@@ -98,6 +98,32 @@ if (NOT EXISTS "${ORCAXR_SLIC3R_BIN}/src/libslic3r/liblibslic3r.a")
         "Run scripts/build_native.sh from the repo root first.")
 endif()
 
+# TBB serial shim auto-bootstrap. scripts/build_native.sh normally
+# copies patches/tbb_serial/tbb/*.h into both ${ORCA}/src/libslic3r/tbb/
+# AND ${ORCA}/src/libslic3r/oneapi/tbb/ so the `#include "tbb/parallel_for.h"`
+# in SeamPlacer.cpp / MultiMaterialSegmentation.cpp / etc. resolves to
+# the serial shim (when the TU defines ORCAXR_TBB_SERIAL_ACTIVE) before
+# the real TBB header on the system include path. Without this, files
+# like SeamPlacer.cpp that define ORCAXR_TBB_SERIAL_ACTIVE silently
+# get the real TBB and the parallel_for races trip a scudo misaligned-
+# pointer SIGABRT in ~deque<Perimeter> at the end of Print::export_gcode.
+#
+# Incremental Gradle builds (assembleDebug) bypass scripts/build_native.sh
+# and don't reinstall the shim. Re-stage from patches/ here on every
+# CMake configure so a fresh `assembleDebug` from a clean third_party/
+# checkout still gets the shim. Idempotent — file_copy with ONLY_IF_DIFFERENT
+# avoids re-touching headers that already match.
+set(ORCAXR_TBB_SHIM_SRC "${ORCAXR_REPO_ROOT}/patches/tbb_serial/tbb")
+if (EXISTS "${ORCAXR_TBB_SHIM_SRC}")
+    file(GLOB ORCAXR_TBB_SHIM_HEADERS "${ORCAXR_TBB_SHIM_SRC}/*.h")
+    foreach(shim_subdir IN ITEMS "tbb" "oneapi/tbb")
+        set(SHIM_DST "${ORCAXR_ORCA_ROOT}/src/libslic3r/${shim_subdir}")
+        file(MAKE_DIRECTORY "${SHIM_DST}")
+        file(COPY ${ORCAXR_TBB_SHIM_HEADERS} DESTINATION "${SHIM_DST}")
+    endforeach()
+    message(STATUS "OrcaXR: TBB serial shim installed at src/libslic3r/{tbb,oneapi/tbb}/")
+endif()
+
 include_directories(
     "${ORCAXR_ORCA_ROOT}/src/libslic3r"
     # libslic3r_version.h is generated at libslic3r build time under
