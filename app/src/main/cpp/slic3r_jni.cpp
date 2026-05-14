@@ -183,6 +183,90 @@ static inline void fixup_enum_keys_map(Slic3r::DynamicPrintConfig& cfg) {
 }
 
 /**
+ * Strip painted-face state (mmu_segmentation_facets) wherever the state
+ * is greater than [keep_at_most]. Used to keep the model's effective
+ * filament_count under control when the user's profile declares fewer
+ * physical filaments than the 3MF authored painted IDs for — without
+ * this, clamp_filament_arrays_to_painted's per-filament-array extension
+ * exposes a latent buffer overrun in libslic3r's IDEX / wipe-tower /
+ * GCodeCheckResult code paths that scudo flags as a header-corruption
+ * SIGABRT during ~GCode cleanup.
+ *
+ * Strategy: walk every ModelVolume, decode its mmu_segmentation_facets
+ * into the 16 EnforcerBlockerType buckets via get_facets, and reset
+ * the whole annotation. The model then prints monochromatic on the
+ * user's selected single filament — clearly visible degradation, but
+ * vastly better than the SIGABRT.
+ *
+ * No-op when [keep_at_most] >= the model's actual max painted ID
+ * (callers query that via max_referenced_filament_in_model first).
+ */
+static void strip_painted_facets_beyond_baseline(
+    Slic3r::Model& model, size_t keep_at_most)
+{
+    if (keep_at_most >= 16) return;  // EnforcerBlockerType max is 16
+    size_t facets_stripped = 0;
+    size_t extruders_clamped = 0;
+    for (Slic3r::ModelObject* mo : model.objects) {
+        if (mo == nullptr) continue;
+        // Object-level extruder: FullSpectrum 3MFs commonly stamp the
+        // virtual filament id here. Clamp first so the per-volume loop
+        // sees a sane default.
+        if (auto* opt = const_cast<Slic3r::ConfigOption*>(
+                mo->config.get().option("extruder"))) {
+            if (auto* oi = dynamic_cast<Slic3r::ConfigOptionInt*>(opt)) {
+                if (oi->value > static_cast<int>(keep_at_most)) {
+                    oi->value = 1;
+                    ++extruders_clamped;
+                }
+            }
+        }
+        for (Slic3r::ModelVolume* mv : mo->volumes) {
+            if (mv == nullptr || !mv->is_model_part()) continue;
+
+            // Painted facet state: reset if any state exceeds the cap.
+            if (!mv->mmu_segmentation_facets.empty()) {
+                bool needs_strip = false;
+                for (int s = static_cast<int>(keep_at_most) + 1;
+                     s <= static_cast<int>(Slic3r::EnforcerBlockerType::ExtruderMax);
+                     ++s) {
+                    if (mv->mmu_segmentation_facets.has_facets(
+                            *mv, static_cast<Slic3r::EnforcerBlockerType>(s))) {
+                        needs_strip = true;
+                        break;
+                    }
+                }
+                if (needs_strip) {
+                    mv->mmu_segmentation_facets.reset();
+                    ++facets_stripped;
+                }
+            }
+
+            // Per-volume extruder: also a common high-id stamping site
+            // (one volume per filament in FullSpectrum 3MFs). Clamp
+            // regardless of painted-facet state — runs on every model
+            // volume so virtual-filament-only models stay safe too.
+            if (auto* opt = const_cast<Slic3r::ConfigOption*>(
+                    mv->config.get().option("extruder"))) {
+                if (auto* oi = dynamic_cast<Slic3r::ConfigOptionInt*>(opt)) {
+                    if (oi->value > static_cast<int>(keep_at_most)) {
+                        oi->value = 1;
+                        ++extruders_clamped;
+                    }
+                }
+            }
+        }
+    }
+    if (facets_stripped > 0 || extruders_clamped > 0) {
+        ORCAXR_LOGI(
+            "strip_painted_facets_beyond_baseline: %zu volumes had painted "
+            "facets stripped, %zu extruder ids clamped to 1 (keep_at_most=%zu) "
+            "— model will print monochromatic on the user's single filament",
+            facets_stripped, extruders_clamped, keep_at_most);
+    }
+}
+
+/**
  * Scan a loaded Model for the highest filament index any volume references
  * (via per-volume `extruder` config, per-object `extruder` config, or
  * `mmu_segmentation_facets` painted-face state). Returns the 1-based max
@@ -318,13 +402,6 @@ static void clamp_filament_arrays_to_painted(
     // physical slot totals 913/939/816/2154 → 974/298/296/1396 + 34
     // bogus tracks). Skip the clamp entirely in that case — the
     // downstream pipeline already handles the mapping.
-    //
-    // The original crash this helper protects against happens only
-    // when painted IDs exceed filament_colour.size() AND no virtual
-    // filament setup is present (so ToolOrdering can't fold the IDs
-    // back to physicals via the MixedFilamentManager). In that case we
-    // still pad the per-filament arrays as before — it's the lesser
-    // evil vs. a SIGSEGV.
     auto* mfd = cfg.option<Slic3r::ConfigOptionString>("mixed_filament_definitions");
     if (mfd != nullptr && !mfd->value.empty()) {
         ORCAXR_LOGI(
@@ -334,6 +411,25 @@ static void clamp_filament_arrays_to_painted(
             mfd->value.size(), baseline, target);
         return;
     }
+
+    // (Synthesized-virtual-row fallback removed — without
+    // enable_prime_tower / single_extruder_multi_material set on the
+    // profile, MixedFilamentManager doesn't activate to resolve the
+    // synthesized rows, and the original calc_filament_change_info
+    // SIGSEGV returns. The extend-every-per-filament-vector path
+    // below is the working compromise.)
+    //
+    // Note: this code path STILL trips a latent buffer overrun
+    // somewhere inside libslic3r's IDEX / wipe-tower / GCodeCheckResult
+    // pipeline when the user's profile is multi-extruder but
+    // filament_count grew from 1 to N. Caller now also calls
+    // strip_painted_facets_beyond_baseline AHEAD of clamp so the model
+    // looks single-filament to libslic3r — that side-steps the latent
+    // overrun by keeping the filament_count expansion below the
+    // wipe-tower's threshold for activating its multi-extruder
+    // codepath. clamp_filament_arrays_to_painted then no-ops on that
+    // path (target <= baseline after stripping) and the slice
+    // completes.
 
     // Anchor nozzle count to the printer-side nozzle_diameter vector
     // rather than guessing from collision sizes. This is what the
@@ -2460,6 +2556,27 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
         // extruder assignments reference more filaments than the user's
         // profile declared can't crash ToolOrdering. See
         // clamp_filament_arrays_to_painted for the full SIGSEGV postmortem.
+        //
+        // Pre-strip painted facets that the profile can't safely handle.
+        // Skipped automatically when the profile has the FullSpectrum
+        // virtual-filament setup (mixed_filament_definitions non-empty)
+        // — MixedFilamentManager handles the resolution in that case.
+        // Without that setup, the clamp would extend filament_colour
+        // and every per-filament vector from baseline to target=15+,
+        // which exposes a latent libslic3r buffer overrun in IDEX /
+        // wipe-tower / GCodeCheckResult — visible as scudo SIGABRT in
+        // ~GCodeConfig / ~TrieNode / ~GCodeCheckResult depending on
+        // heap layout. Stripping makes the model monochromatic on the
+        // user's single filament.
+        {
+            auto* mfd = cfg.option<Slic3r::ConfigOptionString>("mixed_filament_definitions");
+            const bool has_virtual_setup = (mfd != nullptr && !mfd->value.empty());
+            const auto* fc = cfg.option<Slic3r::ConfigOptionStrings>("filament_colour");
+            const size_t profile_filaments = (fc != nullptr) ? fc->values.size() : 0;
+            if (!has_virtual_setup && profile_filaments > 0) {
+                strip_painted_facets_beyond_baseline(model, profile_filaments);
+            }
+        }
         clamp_filament_arrays_to_painted(cfg, max_referenced_filament_in_model(model));
 
         print.apply(model, cfg);
@@ -3212,7 +3329,17 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
         // model so a multi-color 3MF whose painted faces / per-volume
         // extruder assignments reference more filaments than the user's
         // profile declared can't crash ToolOrdering. Mirrors the same
-        // guard in nativeSlice — see clamp_filament_arrays_to_painted.
+        // guard in nativeSlice — see clamp_filament_arrays_to_painted
+        // and the strip helper.
+        {
+            auto* mfd = cfg.option<Slic3r::ConfigOptionString>("mixed_filament_definitions");
+            const bool has_virtual_setup = (mfd != nullptr && !mfd->value.empty());
+            const auto* fc = cfg.option<Slic3r::ConfigOptionStrings>("filament_colour");
+            const size_t profile_filaments = (fc != nullptr) ? fc->values.size() : 0;
+            if (!has_virtual_setup && profile_filaments > 0) {
+                strip_painted_facets_beyond_baseline(multi, profile_filaments);
+            }
+        }
         clamp_filament_arrays_to_painted(cfg, max_referenced_filament_in_model(multi));
 
         print.apply(multi, cfg);
