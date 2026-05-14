@@ -182,6 +182,139 @@ static inline void fixup_enum_keys_map(Slic3r::DynamicPrintConfig& cfg) {
 }
 
 /**
+ * Scan a loaded Model for the highest filament index any volume references
+ * (via per-volume `extruder` config, per-object `extruder` config, or
+ * `mmu_segmentation_facets` painted-face state). Returns the 1-based max
+ * filament ID, or 0 if the model uses no explicit assignment.
+ *
+ * Painted-face state is enumerated by walking EnforcerBlockerType states
+ * Extruder1..Extruder16 in reverse and calling has_facets — cheaper than
+ * decoding the full FacetsAnnotation bitstream and good enough because
+ * we only need the MAX, not a per-face map.
+ */
+static int max_referenced_filament_in_model(const Slic3r::Model& model) {
+    int max_id = 0;
+    for (const Slic3r::ModelObject* mo : model.objects) {
+        if (mo == nullptr) continue;
+        // Object-level extruder override applies as a default to all
+        // volumes that don't carry their own. ConfigOptionInt::value
+        // is 1-based.
+        if (const auto* opt = mo->config.option("extruder")) {
+            if (const auto* oi = dynamic_cast<const Slic3r::ConfigOptionInt*>(opt))
+                max_id = std::max(max_id, oi->value);
+        }
+        for (const Slic3r::ModelVolume* mv : mo->volumes) {
+            if (mv == nullptr) continue;
+            if (const auto* opt = mv->config.option("extruder")) {
+                if (const auto* oi = dynamic_cast<const Slic3r::ConfigOptionInt*>(opt))
+                    max_id = std::max(max_id, oi->value);
+            }
+            if (mv->mmu_segmentation_facets.empty()) continue;
+            for (int s = static_cast<int>(Slic3r::EnforcerBlockerType::ExtruderMax); s >= 1; --s) {
+                if (mv->mmu_segmentation_facets.has_facets(
+                        *mv, static_cast<Slic3r::EnforcerBlockerType>(s))) {
+                    if (s > max_id) max_id = s;
+                    break;
+                }
+            }
+        }
+    }
+    return max_id;
+}
+
+/**
+ * Extend every per-filament vector option in [cfg] to at least
+ * [target_size] entries. Per-filament options are detected as vector
+ * options whose current size equals the baseline (cfg.filament_colour
+ * size before extension). Padding values replicate the last existing
+ * entry — or a type-appropriate default when the option was empty.
+ *
+ * This is the fix for the pre-2026-05-14 SIGSEGV in
+ * Slic3r::calc_filament_change_info_by_toolorder (ToolOrdering.cpp:248)
+ * triggered when a multi-color 3MF's painted faces or per-volume extruder
+ * assignments referenced more filaments than the user's profile declared.
+ * The undersized cfg.filament_colour propagated into nozzle_flush_mtx as
+ * an undersized N×N matrix, and the inner ToolOrdering loop's
+ * `flush_matrix[extruder_id][last_filament][item]` indexed past the end
+ * — fault at 0x0 because the OOB read landed on an empty inner vector.
+ *
+ * flush_volumes_matrix gets special handling because its size is N²
+ * (single-shared) or nozzle_nums*N² (multi-nozzle), not N. We rebuild
+ * the matrix in place, preserving existing pairs, defaulting new pairs
+ * to 280 mm³ (FullSpectrum's empirical "fresh-pair purge" baseline)
+ * and setting the diagonal to 0 (a filament never purges against itself).
+ */
+static void clamp_filament_arrays_to_painted(
+    Slic3r::DynamicPrintConfig& cfg, int max_filament_1based)
+{
+    if (max_filament_1based <= 0) return;
+    const size_t target = static_cast<size_t>(max_filament_1based);
+    auto* fc = cfg.option<Slic3r::ConfigOptionStrings>("filament_colour");
+    const size_t baseline = (fc != nullptr) ? fc->values.size() : 0;
+    if (target <= baseline) return;
+
+    ORCAXR_LOGI(
+        "clamp_filament_arrays_to_painted: baseline=%zu target=%zu — extending per-filament options",
+        baseline, target);
+
+    for (const std::string& key : cfg.keys()) {
+        Slic3r::ConfigOption* opt = cfg.option(key, false);
+        if (opt == nullptr) continue;
+        if (key == "flush_volumes_matrix") continue;  // N² shape, handled below
+        if (auto* o = dynamic_cast<Slic3r::ConfigOptionStrings*>(opt)) {
+            if (o->values.size() == baseline) {
+                const std::string fill = o->values.empty() ? std::string("#FFFFFF") : o->values.back();
+                o->values.resize(target, fill);
+            }
+        } else if (auto* o = dynamic_cast<Slic3r::ConfigOptionInts*>(opt)) {
+            if (o->values.size() == baseline) {
+                const int fill = o->values.empty() ? 1 : o->values.back();
+                o->values.resize(target, fill);
+            }
+        } else if (auto* o = dynamic_cast<Slic3r::ConfigOptionFloats*>(opt)) {
+            if (o->values.size() == baseline) {
+                const double fill = o->values.empty() ? 0.0 : o->values.back();
+                o->values.resize(target, fill);
+            }
+        } else if (auto* o = dynamic_cast<Slic3r::ConfigOptionBools*>(opt)) {
+            if (o->values.size() == baseline) {
+                const unsigned char fill =
+                    o->values.empty() ? (unsigned char)0 : o->values.back();
+                o->values.resize(target, fill);
+            }
+        } else if (auto* o = dynamic_cast<Slic3r::ConfigOptionPercents*>(opt)) {
+            if (o->values.size() == baseline) {
+                const double fill = o->values.empty() ? 0.0 : o->values.back();
+                o->values.resize(target, fill);
+            }
+        }
+    }
+
+    // flush_volumes_matrix: N² (single-shared layout). If the user's
+    // profile supplied a matrix sized exactly to baseline², rebuild
+    // it at target² preserving existing pairs and defaulting new
+    // pairs to FullSpectrum's 280 mm³ baseline (diagonal = 0).
+    if (auto* fvm = cfg.option<Slic3r::ConfigOptionFloats>("flush_volumes_matrix")) {
+        const size_t old_sq = baseline * baseline;
+        const size_t new_sq = target * target;
+        if (fvm->values.size() == old_sq && new_sq > old_sq) {
+            std::vector<double> rebuilt(new_sq, 280.0);
+            for (size_t i = 0; i < baseline; ++i) {
+                for (size_t j = 0; j < baseline; ++j) {
+                    rebuilt[i * target + j] = fvm->values[i * baseline + j];
+                }
+            }
+            for (size_t i = 0; i < target; ++i)
+                rebuilt[i * target + i] = 0.0;
+            fvm->values = std::move(rebuilt);
+            ORCAXR_LOGI(
+                "clamp_filament_arrays_to_painted: flush_volumes_matrix %zux%zu -> %zux%zu",
+                baseline, baseline, target, target);
+        }
+    }
+}
+
+/**
  * Build a ThumbnailsGeneratorCallback that renders the supplied
  * [model] via orcaxr::render_isometric_thumbnail and returns one
  * ThumbnailData at the size libslic3r asked for.
@@ -2044,6 +2177,14 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
         // diff'ing OrcaXR output against a desktop FullSpectrum slice.
         ORCAXR_LOGI("nativeSlice: mixed_filament_advanced_dithering=%s",
                     cfg.opt_serialize("mixed_filament_advanced_dithering").c_str());
+
+        // Sanitize cfg's per-filament list options against the loaded
+        // model so a multi-color 3MF whose painted faces / per-volume
+        // extruder assignments reference more filaments than the user's
+        // profile declared can't crash ToolOrdering. See
+        // clamp_filament_arrays_to_painted for the full SIGSEGV postmortem.
+        clamp_filament_arrays_to_painted(cfg, max_referenced_filament_in_model(model));
+
         print.apply(model, cfg);
         auto err = print.validate();
         if (!err.string.empty()) {
@@ -2789,6 +2930,13 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
                             jCustomGcodeZmm, jCustomGcodeTypes,
                             jCustomGcodeExtruders,
                             jCustomGcodeColors, jCustomGcodeExtras);
+
+        // Sanitize cfg's per-filament list options against the merged
+        // model so a multi-color 3MF whose painted faces / per-volume
+        // extruder assignments reference more filaments than the user's
+        // profile declared can't crash ToolOrdering. Mirrors the same
+        // guard in nativeSlice — see clamp_filament_arrays_to_painted.
+        clamp_filament_arrays_to_painted(cfg, max_referenced_filament_in_model(multi));
 
         print.apply(multi, cfg);
         auto err = print.validate();
