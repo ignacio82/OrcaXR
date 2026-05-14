@@ -394,6 +394,29 @@ fun blendComponentsHex(components: List<Pair<String, Float>>): String {
 var nativeFilamentBlender: ((Array<String>, IntArray) -> String)? = null
 
 /**
+ * Blend an arbitrary (hex, weight) list using the pigment-aware
+ * polynomial mixer when available, else the gamma-correct sRGB
+ * midpoint via [blendComponentsHex]. Used by UI swatches that have
+ * the components already broken out (e.g. MixedSwatchBox in
+ * UiPanels.kt) so they can render the same color the slice path will
+ * emit instead of an inputs-only side-by-side bands display.
+ */
+fun blendComponentsHexPigmentAware(components: List<Pair<String, Float>>): String {
+    val nonZero = components.filter { it.second > 0f }
+    if (nonZero.isEmpty()) return "#FFFFFF"
+    val native = nativeFilamentBlender
+    if (native != null) {
+        val hexes = Array(nonZero.size) { nonZero[it].first }
+        val weights = IntArray(nonZero.size) {
+            kotlin.math.max(1, (nonZero[it].second * 1000f + 0.5f).toInt())
+        }
+        val result = runCatching { native(hexes, weights) }.getOrNull()
+        if (!result.isNullOrBlank() && result.startsWith('#')) return result
+    }
+    return blendComponentsHex(nonZero)
+}
+
+/**
  * Resolve a FullSpectrum [MixedFilamentEntry] into its blended display
  * color given the active base palette. Mirrors how desktop FullSpectrum
  * renders its filament-tab swatches and the per-sphere shading the user

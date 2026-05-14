@@ -38,11 +38,26 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * 2D layer scrubber for a parsed G-code toolpath. Renders one layer at
- * a time with extrusion role coloring (matches RoleColors palette so
- * the visual language is consistent with XR's GLB toolpath). User drags
- * the slider to pick a layer; up/down ticks are bound to discrete
+ * Toolpath segment coloring strategy. ByRole colors each extrusion by
+ * what it IS (perimeter / infill / support / …) — the historical default
+ * and the only sensible mode on a single-filament print. ByFilament
+ * colors by the active tool index when the segment was emitted,
+ * matching what desktop OrcaSlicer shows for a multi-color print so the
+ * user sees distinct slot colors per layer instead of a monochrome
+ * "everything is the same role" view.
+ */
+enum class ToolpathColorMode { ByRole, ByFilament }
+
+/**
+ * 2D layer scrubber for a parsed G-code toolpath. User drags the
+ * slider to pick a layer; up/down ticks are bound to discrete
  * `parsed.layerZs` indices, not continuous Z mm.
+ *
+ * Coloring follows [colorMode]:
+ *  - [ToolpathColorMode.ByRole] — RoleColors palette (perimeter / infill / …);
+ *  - [ToolpathColorMode.ByFilament] — looks up [filamentPalette] by each
+ *    segment's `extruder` index. Falls back to RoleColors when the
+ *    palette is too short or empty.
  *
  * The view is intentionally cheap: O(segments-on-current-layer) per
  * frame, which on a typical 200-layer print is a few hundred segments
@@ -52,6 +67,8 @@ import kotlin.math.min
 fun ToolpathLayerView(
     parsed: ParsedToolpath,
     showTravels: Boolean = false,
+    colorMode: ToolpathColorMode = ToolpathColorMode.ByRole,
+    filamentPalette: List<Color> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     if (parsed.layerZs.isEmpty()) {
@@ -152,9 +169,23 @@ fun ToolpathLayerView(
                     }
                 }
                 for (s in activeSegments) {
-                    val rgb = RoleColors.colorFor(s.role)
+                    val color = when (colorMode) {
+                        ToolpathColorMode.ByFilament -> {
+                            // s.extruder is 0-based. If the palette is
+                            // short (or empty) fall through to the role
+                            // color so the segment is still visible.
+                            filamentPalette.getOrNull(s.extruder)
+                                ?: RoleColors.colorFor(s.role).let {
+                                    Color(it.r, it.g, it.b, 1f)
+                                }
+                        }
+                        ToolpathColorMode.ByRole -> {
+                            val rgb = RoleColors.colorFor(s.role)
+                            Color(rgb.r, rgb.g, rgb.b, 1f)
+                        }
+                    }
                     drawLine(
-                        color = Color(rgb.r, rgb.g, rgb.b, 1f),
+                        color = color,
                         start = Offset(mapX(s.start.x), mapY(s.start.y)),
                         end = Offset(mapX(s.end.x), mapY(s.end.y)),
                         strokeWidth = 2.5f,
@@ -173,6 +204,46 @@ fun ToolpathLayerView(
 }
 
 private data class ToolpathBbox(val minX: Float, val minY: Float, val maxX: Float, val maxY: Float)
+
+/**
+ * Filament-legend chip row — one swatch + label per tool index that
+ * appears in the toolpath. Used under [ToolpathLayerView] when the
+ * user has switched to "By filament" coloring so each color reads as
+ * "T0 = white" / "T1 = orange" instead of a guess.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ToolpathFilamentsLegend(
+    activeExtruders: Set<Int>,
+    palette: List<Color>,
+    labels: List<String> = emptyList(),
+    modifier: Modifier = Modifier,
+) {
+    if (activeExtruders.isEmpty()) return
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        for (idx in activeExtruders.sorted()) {
+            val color = palette.getOrNull(idx) ?: Color(0.475f, 0.816f, 0.780f, 1f)
+            val label = labels.getOrNull(idx)?.takeIf { it.isNotBlank() } ?: "T$idx"
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(10.dp)
+                        .background(color, RoundedCornerShape(2.dp)),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
 
 /**
  * Roles-legend chip row — small swatch + label per active role.

@@ -52,6 +52,8 @@ import dev.orcaxr.app.SendAndPrintOptionsPanel
 import dev.orcaxr.app.applyPrintOptionsToGcode
 import dev.orcaxr.app.mobile.GcodeThumbnailReader
 import dev.orcaxr.app.mobile.MobileToolpath3DViewer
+import dev.orcaxr.app.mobile.ToolpathColorMode
+import dev.orcaxr.app.mobile.ToolpathFilamentsLegend
 import dev.orcaxr.app.mobile.ToolpathLayerView
 import dev.orcaxr.app.mobile.ToolpathRolesLegend
 import dev.orcaxr.app.MoonrakerResult
@@ -268,12 +270,113 @@ fun PreviewScreen(isTablet: Boolean) {
                                     }
                                 }
                             }
+                            // Per-tool palette for "color by filament"
+                            // mode. Pull the active printer's saved
+                            // slot colors (Settings → Filament tab),
+                            // fall back to the default suggestion list
+                            // and finally to the brand mint so an
+                            // unsaved slot still resolves to something
+                            // visible.
+                            val slotsByPrinter by app.filamentSlots.all
+                                .collectAsState(initial = emptyMap<String, List<String>>())
+                            val entriesByPrinter by app.filamentEntries.all
+                                .collectAsState(initial = emptyMap())
+                            val activePrinterId = app.prefs.lastPrinterId
+                            val activeSlotHexes = remember(slotsByPrinter, entriesByPrinter, activePrinterId) {
+                                val entries = activePrinterId
+                                    ?.let { entriesByPrinter[it] }
+                                    .orEmpty()
+                                    .sortedBy { it.slotIndex }
+                                if (entries.isNotEmpty()) {
+                                    entries.map { it.color }
+                                } else {
+                                    activePrinterId?.let { slotsByPrinter[it] }.orEmpty()
+                                }
+                            }
+                            val activeSlotLabels = remember(entriesByPrinter, activePrinterId) {
+                                activePrinterId
+                                    ?.let { entriesByPrinter[it] }
+                                    .orEmpty()
+                                    .sortedBy { it.slotIndex }
+                                    .map { it.filamentType }
+                            }
+                            val filamentColors = remember(activeSlotHexes) {
+                                activeSlotHexes.map { hex ->
+                                    val parsedRgb =
+                                        runCatching { android.graphics.Color.parseColor(hex) }
+                                            .getOrNull()
+                                    if (parsedRgb != null) {
+                                        androidx.compose.ui.graphics.Color(
+                                            android.graphics.Color.red(parsedRgb) / 255f,
+                                            android.graphics.Color.green(parsedRgb) / 255f,
+                                            android.graphics.Color.blue(parsedRgb) / 255f,
+                                            1f,
+                                        )
+                                    } else {
+                                        androidx.compose.ui.graphics.Color(0.475f, 0.816f, 0.780f, 1f)
+                                    }
+                                }
+                            }
+                            // Multi-tool slices default to "By filament"
+                            // coloring so the user sees what desktop
+                            // OrcaSlicer's preview shows. Single-tool
+                            // slices stay on "By role" since per-slot
+                            // colors don't add information there.
+                            val activeExtruders = remember(tp) {
+                                tp.segments.map { it.extruder }.toSet()
+                            }
+                            val isMultiTool = activeExtruders.size > 1
+                            var colorMode by remember(tp) {
+                                mutableStateOf(
+                                    if (isMultiTool) ToolpathColorMode.ByFilament
+                                    else ToolpathColorMode.ByRole,
+                                )
+                            }
+                            if (isMultiTool) {
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    SingleChoiceSegmentedButtonRow {
+                                        val modes = listOf(
+                                            "By filament" to ToolpathColorMode.ByFilament,
+                                            "By role" to ToolpathColorMode.ByRole,
+                                        )
+                                        modes.forEachIndexed { i, (label, m) ->
+                                            SegmentedButton(
+                                                selected = colorMode == m,
+                                                onClick = { colorMode = m },
+                                                shape = SegmentedButtonDefaults.itemShape(
+                                                    index = i,
+                                                    count = modes.size,
+                                                ),
+                                            ) { Text(label) }
+                                        }
+                                    }
+                                }
+                            }
                             if (view3D) {
-                                MobileToolpath3DViewer(parsed = tp)
+                                MobileToolpath3DViewer(
+                                    parsed = tp,
+                                    extruderPalette = activeSlotHexes.takeIf { it.isNotEmpty() },
+                                )
                             } else {
-                                ToolpathLayerView(parsed = tp)
-                                val activeRoles = remember(tp) { tp.segments.map { it.role }.toSet() }
-                                ToolpathRolesLegend(activeRoles)
+                                ToolpathLayerView(
+                                    parsed = tp,
+                                    colorMode = colorMode,
+                                    filamentPalette = filamentColors,
+                                )
+                                if (colorMode == ToolpathColorMode.ByFilament) {
+                                    ToolpathFilamentsLegend(
+                                        activeExtruders = activeExtruders,
+                                        palette = filamentColors,
+                                        labels = activeSlotLabels,
+                                    )
+                                } else {
+                                    val activeRoles = remember(tp) { tp.segments.map { it.role }.toSet() }
+                                    ToolpathRolesLegend(activeRoles)
+                                }
                             }
                         }
                     }

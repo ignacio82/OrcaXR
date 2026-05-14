@@ -2331,45 +2331,27 @@ private fun MixedSwatchBox(
         accent -> Color(0xFF7BC8FF).copy(alpha = 0.6f)
         else -> Color(0xFF2C3138)
     }
-    val colors = componentColorsHex.map { parseHexColorOrDefault(it) }
-    // Normalize weights so they sum to 1. Empty / all-zero falls back to equal
-    // shares so the swatch still renders something useful.
-    val total = componentWeights.sum().takeIf { it > 0f } ?: componentWeights.size.toFloat()
-    val shares = if (total > 0f && componentWeights.size == colors.size) {
-        componentWeights.map { it / total }
-    } else {
-        List(colors.size) { 1f / colors.size.coerceAtLeast(1) }
+    // Resolve the components into a single blended color via the
+    // pigment-aware mixer (filament_mixer's degree-4 polynomial
+    // regression, ~Mixbox parity) so the swatch matches what the print
+    // will actually look like — not a "half + half" bands view of the
+    // inputs. The old bands rendering was useful as a debugging hint
+    // but kept misleading users (matched feedback "I see the sum of
+    // the filaments as half of each instead of the produced color").
+    val components = componentColorsHex.mapIndexed { i, hex ->
+        hex to (componentWeights.getOrNull(i) ?: 1f)
     }
+    val resolvedHex = remember(componentColorsHex, componentWeights) {
+        blendComponentsHexPigmentAware(components)
+    }
+    val resolvedColor = parseHexColorOrDefault(resolvedHex)
     Box(
         modifier = Modifier
             .size(size)
             .clip(RoundedCornerShape(6.dp))
+            .background(resolvedColor)
             .border(if (highlight || accent) 1.5.dp else 1.dp, border, RoundedCornerShape(6.dp)),
-    ) {
-        androidx.compose.foundation.Canvas(modifier = Modifier.matchParentSize()) {
-            val w = this.size.width
-            val h = this.size.height
-            var y = 0f
-            for ((i, c) in colors.withIndex()) {
-                val bandH = h * shares.getOrElse(i) { 0f }
-                drawRect(
-                    color = c,
-                    topLeft = androidx.compose.ui.geometry.Offset(0f, y),
-                    size = androidx.compose.ui.geometry.Size(w, bandH),
-                )
-                y += bandH
-            }
-            // Fill any rounding gap at the bottom with the last color so we
-            // don't leave a 1-px transparent strip.
-            if (y < h && colors.isNotEmpty()) {
-                drawRect(
-                    color = colors.last(),
-                    topLeft = androidx.compose.ui.geometry.Offset(0f, y),
-                    size = androidx.compose.ui.geometry.Size(w, h - y),
-                )
-            }
-        }
-    }
+    )
 }
 
 /**

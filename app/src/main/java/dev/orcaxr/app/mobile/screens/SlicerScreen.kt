@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +38,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -264,6 +266,10 @@ fun SlicerScreen(
                 }
                 Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     ProfileCard(displayedProfiles, selectedProfile, onSelect = { selectedProfile = it })
+                    FilamentsCard(
+                        activePrinter = activePrinter,
+                        onEditSlots = { onNavigate(MobileDestination.Filament) },
+                    )
                     QuickOverridesCard(layerHeightOverride, onChange = { layerHeightOverride = it })
                     ToolsCard(
                         filePath = filePath,
@@ -321,6 +327,10 @@ fun SlicerScreen(
                     fillRemaining = false,
                 )
                 ProfileCard(displayedProfiles, selectedProfile, onSelect = { selectedProfile = it })
+                FilamentsCard(
+                    activePrinter = activePrinter,
+                    onEditSlots = { onNavigate(MobileDestination.Filament) },
+                )
                 QuickOverridesCard(layerHeightOverride, onChange = { layerHeightOverride = it })
                 ToolsCard(
                     filePath = filePath,
@@ -853,6 +863,181 @@ private fun ProfileCard(
                 enabled = true,
                 onSelect = onSelect,
             )
+        }
+    }
+}
+
+/**
+ * Inline per-slot filament card. Surfaces the active printer's project
+ * palette (color + material) directly on the Slicer screen so the user
+ * can see/edit slot colors without bouncing to the Filament tab, and
+ * "Sync from printer" pulls the colors Klipper reports loaded right
+ * now (Moonraker queryFilamentSlots) into both the legacy
+ * FilamentSlotsStore (drives palette suggestions across the app) and
+ * the project FilamentEntriesStore (keeps material types).
+ *
+ * Mirrors how desktop OrcaSlicer's left sidebar carries the filament
+ * dropdowns immediately under the printer picker.
+ */
+@Composable
+private fun FilamentsCard(
+    activePrinter: dev.orcaxr.app.PrinterConfig?,
+    onEditSlots: () -> Unit,
+) {
+    val app = LocalMobileAppState.current
+    val scope = rememberCoroutineScope()
+    val slotsByPrinter by app.filamentSlots.all
+        .collectAsState(initial = emptyMap<String, List<String>>())
+    val entriesByPrinter by app.filamentEntries.all
+        .collectAsState(initial = emptyMap())
+    val savedColors = activePrinter?.id?.let { slotsByPrinter[it] }
+    val savedEntries = activePrinter?.id?.let { entriesByPrinter[it] }.orEmpty()
+    // Slot count comes from entries first (the newer surface), then
+    // saved colors, defaulting to 4 (Snapmaker U1) so a fresh install
+    // always shows something rather than an empty card.
+    val slotCount = savedEntries.size.takeIf { it > 0 }
+        ?: savedColors?.size?.takeIf { it > 0 }
+        ?: 4
+    val effective = remember(savedEntries, savedColors, slotCount) {
+        val byIndex = savedEntries.associateBy { it.slotIndex }
+        val padded = app.filamentSlots.pad(savedColors, slotCount)
+        (0 until slotCount).map { i ->
+            byIndex[i] ?: dev.orcaxr.app.FilamentEntry(
+                id = "auto_$i",
+                color = padded.getOrNull(i) ?: "#FFFFFF",
+                slotIndex = i,
+                filamentType = "Generic PLA",
+            )
+        }
+    }
+
+    var syncing by remember { mutableStateOf(false) }
+    var syncStatus by remember { mutableStateOf<String?>(null) }
+
+    MobileCard {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SectionKicker("Filaments")
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onEditSlots) { Text("Edit") }
+            }
+            if (activePrinter == null) {
+                Text(
+                    "Add a printer to configure filament slots.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for ((i, e) in effective.withIndex()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            val swatchColor =
+                                runCatching { android.graphics.Color.parseColor(e.color) }
+                                    .getOrNull()
+                                    ?.let { argb ->
+                                        androidx.compose.ui.graphics.Color(
+                                            android.graphics.Color.red(argb) / 255f,
+                                            android.graphics.Color.green(argb) / 255f,
+                                            android.graphics.Color.blue(argb) / 255f,
+                                            1f,
+                                        )
+                                    }
+                                    ?: androidx.compose.ui.graphics.Color(0.475f, 0.816f, 0.780f, 1f)
+                            Box(
+                                Modifier
+                                    .size(24.dp)
+                                    .background(swatchColor, RoundedCornerShape(6.dp))
+                                    .border(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outlineVariant,
+                                        RoundedCornerShape(6.dp),
+                                    ),
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "T$i  ${e.color.uppercase()}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                Text(
+                                    e.filamentType,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+                OutlinedButton(
+                    onClick = {
+                        val printer = activePrinter
+                        if (printer == null) return@OutlinedButton
+                        scope.launch {
+                            syncing = true
+                            syncStatus = null
+                            val result = withContext(Dispatchers.IO) {
+                                runCatching { dev.orcaxr.app.MoonrakerClient(printer).queryFilamentSlots() }
+                                    .getOrElse { dev.orcaxr.app.MoonrakerResult.IoError(it.message ?: "probe failed") }
+                            }
+                            when (result) {
+                                is dev.orcaxr.app.MoonrakerResult.Ok -> {
+                                    val probedColors = result.value.map { it.colorHex }
+                                    val newCount = probedColors.size.coerceAtLeast(slotCount)
+                                    val newEntries = (0 until newCount).map { i ->
+                                        val probed = probedColors.getOrNull(i)
+                                        val existing = effective.getOrNull(i)
+                                        dev.orcaxr.app.FilamentEntry(
+                                            id = existing?.id ?: "synced_$i",
+                                            color = probed ?: existing?.color ?: "#FFFFFF",
+                                            slotIndex = i,
+                                            filamentType = existing?.filamentType ?: "Generic PLA",
+                                            physicalSlot = existing?.physicalSlot,
+                                            virtualSlot = existing?.virtualSlot,
+                                        )
+                                    }
+                                    // Write both stores so legacy callers
+                                    // (palette suggestions, GLB writer) AND
+                                    // the project entries flow get the
+                                    // refreshed colors.
+                                    app.filamentSlots.set(
+                                        printer.id,
+                                        newEntries.map { it.color },
+                                    )
+                                    app.filamentEntries.set(printer.id, newEntries)
+                                    syncStatus = "Synced ${probedColors.size} slot(s) from ${printer.name}"
+                                }
+                                is dev.orcaxr.app.MoonrakerResult.HttpError ->
+                                    syncStatus = "Printer probe HTTP ${result.code}"
+                                is dev.orcaxr.app.MoonrakerResult.IoError ->
+                                    syncStatus = "Printer offline (${result.message})"
+                                else ->
+                                    syncStatus = "Sync failed"
+                            }
+                            syncing = false
+                        }
+                    },
+                    enabled = !syncing && activePrinter != null,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        if (syncing) "Syncing…" else "Sync from printer",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+                val status = syncStatus
+                if (status != null) {
+                    Text(
+                        status,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (status.startsWith("Synced")) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
         }
     }
 }
