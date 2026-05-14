@@ -843,40 +843,16 @@ private fun ProfileCard(
     MobileCard {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SectionKicker("Profile")
-            Text(
-                selected.displayName,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+            // OrcaSlicer-style three-dropdown picker: Printer (with
+            // nozzle), Resolution (process), Material. Replaces the
+            // legacy single-chip row that bundled all three into one
+            // long label — see commit message for the UX rationale.
+            dev.orcaxr.app.ui.PrinterProcessFilamentPicker(
+                profiles = profiles,
+                selected = selected,
+                enabled = true,
+                onSelect = onSelect,
             )
-            Text(
-                selected.description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(8.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(profiles) { p ->
-                    val isSel = p.id == selected.id
-                    Surface(
-                        color = if (isSel) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
-                        shape = RoundedCornerShape(50),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            if (isSel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                        ),
-                        onClick = { onSelect(p) },
-                    ) {
-                        Text(
-                            text = profileChipLabel(p),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (isSel) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        )
-                    }
-                }
-            }
         }
     }
 }

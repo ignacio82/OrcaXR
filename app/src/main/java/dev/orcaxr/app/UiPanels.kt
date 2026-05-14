@@ -2576,15 +2576,39 @@ fun RightSettingsPanel(
         Text("Print Settings", style = MaterialTheme.typography.titleLarge, color = Color.White)
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Profile selector — proper dropdown so users see the catalog
-        // at a glance instead of cycling blind through it. Built-in
-        // entries can't be deleted; user-saved entries can.
-        ProfileDropdown(
-            allProfiles = allProfiles,
-            selectedProfile = selectedProfile,
-            onProfileSelect = onProfileSelect,
-            onDeleteProfile = onDeleteProfile,
+        // OrcaSlicer-style three-dropdown picker: Printer (with
+        // nozzle), Resolution (process / layer height), Material.
+        // Replaces the legacy single-row ProfileDropdown so the XR
+        // user has the same independent axes as desktop OrcaSlicer
+        // and Snapmaker's fork. User-saved profiles still flow
+        // through the same allProfiles list (their machineName /
+        // filamentName are null, so they show up under "(none)" in
+        // each axis until the user explicitly picks them via a row
+        // that carries metadata).
+        dev.orcaxr.app.ui.PrinterProcessFilamentPicker(
+            profiles = allProfiles,
+            selected = selectedProfile,
+            enabled = true,
+            onSelect = onProfileSelect,
         )
+        // Allow deleting a user-saved profile via a small affordance
+        // beneath the picker — previously baked into ProfileDropdown
+        // as a context menu, now an explicit row so it survives the
+        // dropdown swap. Hidden when the active selection is a
+        // built-in (no user-deletable identity).
+        val canDelete =
+            selectedProfile.machineName == null && selectedProfile.filamentName == null
+        if (canDelete) {
+            TextButton(
+                onClick = { onDeleteProfile(selectedProfile.id) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    "Delete '${selectedProfile.displayName}'",
+                    color = Color(0xFFFF7B7B),
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
         TextButton(
