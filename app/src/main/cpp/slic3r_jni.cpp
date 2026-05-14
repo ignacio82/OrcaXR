@@ -356,7 +356,44 @@ static void clamp_filament_arrays_to_painted(
         if (key == "flush_volumes_matrix") continue;  // N²·nozzle_nums, handled below
         Slic3r::ConfigOption* opt = cfg.option(key, false);
         if (opt == nullptr) continue;
-        if (auto* o = dynamic_cast<Slic3r::ConfigOptionStrings*>(opt)) {
+        // Nullable variants first — dynamic_cast<ConfigOptionFloats*>
+        // returns null for ConfigOptionFloatsNullable (different
+        // template instantiation), so without this branch the nullable
+        // per-filament keys (filament_flow_ratio,
+        // filament_retract_length_toolchange, filament_ironing_*,
+        // filament_flush_volumetric_speed, filament_adaptive_volumetric_
+        // speed, filament_flush_temp, etc.) silently stay at their
+        // original size. Downstream libslic3r then writes filament[5..N-1]
+        // assuming size N → heap header corruption (observed on Pixel
+        // 10 Pro slicing snorca-full-spectrum-hexagon with
+        // baseline=1 target=15 nozzle_nums=4).
+        if (auto* o = dynamic_cast<Slic3r::ConfigOptionFloatsNullable*>(opt)) {
+            if (o->values.size() == baseline) {
+                const double fill = o->values.empty() ? 0.0 : o->values.back();
+                o->values.resize(target, fill);
+            }
+        } else if (auto* o = dynamic_cast<Slic3r::ConfigOptionIntsNullable*>(opt)) {
+            if (o->values.size() == baseline) {
+                const int fill = o->values.empty() ? 1 : o->values.back();
+                o->values.resize(target, fill);
+            }
+        } else if (auto* o = dynamic_cast<Slic3r::ConfigOptionBoolsNullable*>(opt)) {
+            if (o->values.size() == baseline) {
+                const unsigned char fill =
+                    o->values.empty() ? (unsigned char)0 : o->values.back();
+                o->values.resize(target, fill);
+            }
+        } else if (auto* o = dynamic_cast<Slic3r::ConfigOptionPercentsNullable*>(opt)) {
+            if (o->values.size() == baseline) {
+                const double fill = o->values.empty() ? 0.0 : o->values.back();
+                o->values.resize(target, fill);
+            }
+        }
+        // Non-nullable variants. dynamic_cast still resolves on these
+        // even if a nullable branch above matched first — those are
+        // distinct types because Nullable = Templ<true> vs base =
+        // Templ<false>, so a nullable opt never reaches this block.
+        else if (auto* o = dynamic_cast<Slic3r::ConfigOptionStrings*>(opt)) {
             if (o->values.size() == baseline) {
                 const std::string fill = o->values.empty() ? std::string("#FFFFFF") : o->values.back();
                 o->values.resize(target, fill);
