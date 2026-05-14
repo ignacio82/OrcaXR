@@ -76,6 +76,7 @@ extern "C" {
 #include <libslic3r/Semver.hpp>
 #include <libslic3r/Preset.hpp>
 #include <libslic3r/TriangleSelector.hpp>
+#include <libslic3r/MixedFilament.hpp>
 #include <libslic3r/Orient.hpp>
 #include <libslic3r/Arrange.hpp>
 #include <libslic3r/Exception.hpp>
@@ -3958,6 +3959,72 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
         ORCAXR_LOGE("nativeWriteColoredGlb: unknown exception");
         return -3;
     }
+}
+
+// nativeBlendFilamentColors — wrap MixedFilamentManager::blend_color_multi.
+//
+// OrcaSlicer FullSpectrum mixes virtual-filament swatches using a degree-4
+// polynomial regression that approximates Mixbox pigment behavior
+// (filament_mixer_model.h, Mean Delta-E ~2.07). It produces "real paint"
+// results — e.g. blue (#002185) + yellow (#FCD300) at 50% → a saturated
+// green near #2F8D38, not the muddy gray-green a naive sRGB-linear
+// midpoint gives. The Kotlin-side gamma-correct fallback in
+// MixedFilamentStore.kt gets close on neighboring hues but loses to the
+// polynomial mixer on opponent-color pairs (yellow+blue, red+green).
+//
+// Inputs: parallel arrays of hex colors (#RRGGBB / #RRGGBBAA — the wrapper
+// trims the alpha) and integer weights (any positive scale; sum doesn't
+// have to be 100). Returns "#RRGGBB" of the same shape Kotlin uses.
+// Empty / all-zero-weight input returns "#FFFFFF" so the caller can show
+// the unpainted fallback. Invalid hex entries are skipped.
+extern "C" JNIEXPORT jstring JNICALL
+Java_dev_orcaxr_app_SlicerEngine_nativeBlendFilamentColors(
+    JNIEnv* env, jclass,
+    jobjectArray jHexes,
+    jintArray jWeights)
+{
+    if (jHexes == nullptr || jWeights == nullptr) {
+        return env->NewStringUTF("#FFFFFF");
+    }
+    const jsize nH = env->GetArrayLength(jHexes);
+    const jsize nW = env->GetArrayLength(jWeights);
+    const jsize n = nH < nW ? nH : nW;
+    if (n <= 0) {
+        return env->NewStringUTF("#FFFFFF");
+    }
+    std::vector<jint> weights(static_cast<size_t>(n));
+    env->GetIntArrayRegion(jWeights, 0, n, weights.data());
+
+    std::vector<std::pair<std::string, int>> color_percents;
+    color_percents.reserve(static_cast<size_t>(n));
+    for (jsize i = 0; i < n; ++i) {
+        if (weights[i] <= 0) continue;
+        jstring js = static_cast<jstring>(env->GetObjectArrayElement(jHexes, i));
+        if (js == nullptr) continue;
+        {
+            ScopedUtf hex(env, js);
+            if (hex.c == nullptr) continue;
+            std::string h = hex.c;
+            // libslic3r's parse_hex_color accepts "#RRGGBB"; strip any
+            // trailing alpha the 3MF's filament_colour may carry.
+            if (!h.empty() && h[0] == '#' && h.size() > 7) h.resize(7);
+            color_percents.emplace_back(std::move(h), int(weights[i]));
+        }
+    }
+    if (color_percents.empty()) {
+        return env->NewStringUTF("#FFFFFF");
+    }
+    std::string blended;
+    try {
+        blended = Slic3r::MixedFilamentManager::blend_color_multi(color_percents);
+    } catch (const std::exception& e) {
+        ORCAXR_LOGE("nativeBlendFilamentColors: blend_color_multi threw: %s", e.what());
+        return env->NewStringUTF("#FFFFFF");
+    } catch (...) {
+        ORCAXR_LOGE("nativeBlendFilamentColors: blend_color_multi threw (unknown)");
+        return env->NewStringUTF("#FFFFFF");
+    }
+    return env->NewStringUTF(blended.c_str());
 }
 
 // nativeRead3mfPaintedMesh — build a mobile-preview-ready mesh out of a

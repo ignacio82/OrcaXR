@@ -62,6 +62,12 @@ fun interface SlicerProgressListener {
 object SlicerEngine {
     init {
         System.loadLibrary("slic3r_jni")
+        // Route MixedFilamentStore's display-color resolver through the
+        // native pigment blender so the preview matches what desktop
+        // OrcaSlicer FullSpectrum renders. Pure-JVM unit tests don't run
+        // this init block (they don't instantiate the SlicerEngine
+        // object), so the gamma-correct sRGB fallback still runs there.
+        nativeFilamentBlender = ::blendFilamentColors
     }
 
     /**
@@ -2343,6 +2349,27 @@ object SlicerEngine {
     }
 
     private external fun nativeRead3mfPaintedMesh(path: String): Painted3mfMesh?
+
+    /**
+     * Mix N hex colors using libslic3r's pigment-aware polynomial blender
+     * (filament_mixer, the degree-4 regression that approximates Mixbox).
+     * Same math desktop OrcaSlicer FullSpectrum uses to render virtual-
+     * filament swatches and 3D preview surfaces, so a Kotlin caller asking
+     * for the same blend (e.g. resolveMixedRowDisplayColor) gets pixel-
+     * identical output.
+     *
+     * Inputs are parallel — entry i of [hexes] is mixed at weight
+     * [weights][i] (any positive integer; the native side normalizes by
+     * sum). Returns "#RRGGBB". Invalid input degrades to "#FFFFFF".
+     */
+    fun blendFilamentColors(hexes: Array<String>, weights: IntArray): String =
+        runCatching { nativeBlendFilamentColors(hexes, weights) }
+            .getOrElse { "#FFFFFF" }
+
+    private external fun nativeBlendFilamentColors(
+        hexes: Array<String>,
+        weights: IntArray,
+    ): String
     private external fun nativeRead3mfMixedFilamentDefinitions(inputPath: String): String?
     /**
      * Two-element envelope: `[flush_volumes_matrix_csv, flush_multiplier_csv]`.

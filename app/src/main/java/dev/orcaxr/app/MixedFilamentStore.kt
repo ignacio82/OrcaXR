@@ -383,6 +383,17 @@ fun blendComponentsHex(components: List<Pair<String, Float>>): String {
 }
 
 /**
+ * Optional native blender hook — set at startup to
+ * [SlicerEngine::blendFilamentColors] so [resolveMixedRowDisplayColor]
+ * routes through libslic3r's pigment-aware polynomial mixer (the same
+ * filament_mixer desktop OrcaSlicer uses for its FullSpectrum swatches).
+ * Left null in pure-JVM unit tests so the gamma-correct sRGB fallback
+ * runs without needing the .so on the test classpath.
+ */
+@Volatile
+var nativeFilamentBlender: ((Array<String>, IntArray) -> String)? = null
+
+/**
  * Resolve a FullSpectrum [MixedFilamentEntry] into its blended display
  * color given the active base palette. Mirrors how desktop FullSpectrum
  * renders its filament-tab swatches and the per-sphere shading the user
@@ -401,6 +412,17 @@ fun blendComponentsHex(components: List<Pair<String, Float>>): String {
  * Out-of-range base indices are silently dropped so a row that
  * references a filament beyond [basePalette]'s end doesn't crash —
  * caller gets the blend of whatever components ARE in range.
+ *
+ * Blender priority:
+ *  1. [nativeFilamentBlender] when set — calls libslic3r's
+ *     MixedFilamentManager::blend_color_multi (filament_mixer's
+ *     degree-4 polynomial regression, ~Mixbox parity). Same math
+ *     OrcaSlicer desktop uses.
+ *  2. [blendComponentsHex] — gamma-correct sRGB midpoint. ~80% as
+ *     accurate on neighboring hues, loses to the polynomial on
+ *     opponent pairs (yellow+blue → green for the polynomial vs
+ *     gray-green for sRGB). Used in unit tests and as a safety net
+ *     if the JNI call throws.
  */
 fun resolveMixedRowDisplayColor(
     row: MixedFilamentEntry,
@@ -408,6 +430,24 @@ fun resolveMixedRowDisplayColor(
 ): String {
     fun base(idx1: Int): String? =
         basePalette.getOrNull(idx1 - 1)
+
+    fun blend(components: List<Pair<String, Float>>): String {
+        if (components.isEmpty()) return "#FFFFFF"
+        val native = nativeFilamentBlender
+        if (native != null) {
+            // libslic3r's blender takes integer weights; scale the
+            // float weights up by 1000 to preserve fractional ratios
+            // (the native side normalizes internally by sum so the
+            // absolute scale doesn't matter).
+            val hexes = Array(components.size) { components[it].first }
+            val weights = IntArray(components.size) {
+                kotlin.math.max(1, (components[it].second * 1000f + 0.5f).toInt())
+            }
+            val result = runCatching { native(hexes, weights) }.getOrNull()
+            if (!result.isNullOrBlank() && result.startsWith('#')) return result
+        }
+        return blendComponentsHex(components)
+    }
 
     if (row.gradientComponentIds.isNotEmpty()) {
         val ids = row.gradientComponentIds.mapNotNull { ch ->
@@ -420,7 +460,7 @@ fun resolveMixedRowDisplayColor(
             val w = rawWeights.getOrNull(i) ?: 1f
             hex to w
         }
-        if (components.isNotEmpty()) return blendComponentsHex(components)
+        if (components.isNotEmpty()) return blend(components)
     }
     val pattern = row.manualPattern
     if (!pattern.isNullOrBlank()) {
@@ -433,7 +473,7 @@ fun resolveMixedRowDisplayColor(
             val hex = base(id) ?: return@mapNotNull null
             hex to w
         }
-        if (components.isNotEmpty()) return blendComponentsHex(components)
+        if (components.isNotEmpty()) return blend(components)
     }
     val a = base(row.componentA)
     val b = base(row.componentB)
@@ -452,7 +492,7 @@ fun resolveMixedRowDisplayColor(
         if (a != null && wA > 0f) add(a to wA)
         if (b != null && wB > 0f) add(b to wB)
     }
-    return if (components.isEmpty()) "#FFFFFF" else blendComponentsHex(components)
+    return blend(components)
 }
 
 /**
