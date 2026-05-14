@@ -501,6 +501,94 @@ static void clamp_filament_arrays_to_painted(
                 nozzle_nums);
         }
     }
+
+    // POST-CLAMP AUDIT: walk every vector option in cfg AND every
+    // option known to the static config def. Log any that still
+    // disagree with `target` (filament count) yet aren't in the
+    // per-nozzle blacklist — those are the latent culprits whose
+    // size mismatches let libslic3r overrun their backing vector
+    // and corrupt scudo's chunk header on a neighboring allocation.
+    //
+    // Also touches options that are in the static def but NOT yet
+    // in cfg.keys() — those silently use defaults from
+    // FullPrintConfig (typically size 1), which libslic3r then
+    // writes past when it iterates by filament_id. Force-create
+    // them in cfg (size target, fill with the static default) so
+    // they end up properly sized too.
+    const Slic3r::ConfigDef* def = cfg.def();
+    if (def != nullptr) {
+        for (const auto& kv : def->options) {
+            const std::string& key = kv.first;
+            const Slic3r::ConfigOptionDef& d = kv.second;
+            // Only care about vector types (those that scale with
+            // filament count or nozzle count).
+            const bool is_vector =
+                d.type == Slic3r::coStrings || d.type == Slic3r::coInts ||
+                d.type == Slic3r::coFloats || d.type == Slic3r::coBools ||
+                d.type == Slic3r::coPercents || d.type == Slic3r::coFloatsOrPercents ||
+                d.type == Slic3r::coEnums;
+            if (!is_vector) continue;
+            if (blacklist.count(key) != 0) continue;
+            if (key == "flush_volumes_matrix") continue;
+            Slic3r::ConfigOption* opt = cfg.option(key, false);
+            if (opt == nullptr) continue;
+            size_t sz = 0;
+            if (auto* o = dynamic_cast<Slic3r::ConfigOptionVectorBase*>(opt)) {
+                sz = o->size();
+            }
+            if (sz == baseline) {
+                // Still at baseline — our clamp missed it. Likely
+                // a custom Templ instantiation we don't dynamic_cast
+                // on. Force-resize via the type-aware path.
+                if (auto* o = dynamic_cast<Slic3r::ConfigOptionFloatsNullable*>(opt)) {
+                    const double f = o->values.empty() ? 0.0 : o->values.back();
+                    o->values.resize(target, f);
+                } else if (auto* o = dynamic_cast<Slic3r::ConfigOptionIntsNullable*>(opt)) {
+                    const int f = o->values.empty() ? 1 : o->values.back();
+                    o->values.resize(target, f);
+                } else if (auto* o = dynamic_cast<Slic3r::ConfigOptionBoolsNullable*>(opt)) {
+                    const unsigned char f =
+                        o->values.empty() ? (unsigned char)0 : o->values.back();
+                    o->values.resize(target, f);
+                } else if (auto* o = dynamic_cast<Slic3r::ConfigOptionPercentsNullable*>(opt)) {
+                    const double f = o->values.empty() ? 0.0 : o->values.back();
+                    o->values.resize(target, f);
+                } else if (auto* o = dynamic_cast<Slic3r::ConfigOptionStrings*>(opt)) {
+                    const std::string f = o->values.empty() ? std::string("#FFFFFF") : o->values.back();
+                    o->values.resize(target, f);
+                } else if (auto* o = dynamic_cast<Slic3r::ConfigOptionInts*>(opt)) {
+                    const int f = o->values.empty() ? 1 : o->values.back();
+                    o->values.resize(target, f);
+                } else if (auto* o = dynamic_cast<Slic3r::ConfigOptionFloats*>(opt)) {
+                    const double f = o->values.empty() ? 0.0 : o->values.back();
+                    o->values.resize(target, f);
+                } else if (auto* o = dynamic_cast<Slic3r::ConfigOptionBools*>(opt)) {
+                    const unsigned char f =
+                        o->values.empty() ? (unsigned char)0 : o->values.back();
+                    o->values.resize(target, f);
+                } else if (auto* o = dynamic_cast<Slic3r::ConfigOptionPercents*>(opt)) {
+                    const double f = o->values.empty() ? 0.0 : o->values.back();
+                    o->values.resize(target, f);
+                } else {
+                    ORCAXR_LOGE(
+                        "clamp audit: per-filament vector '%s' still size=%zu "
+                        "(target=%zu) — unhandled ConfigOption subtype",
+                        key.c_str(), sz, target);
+                    continue;
+                }
+                ORCAXR_LOGI(
+                    "clamp audit: force-resized '%s' from %zu to %zu",
+                    key.c_str(), sz, target);
+            } else if (sz != target && sz != nozzle_nums &&
+                       sz != nozzle_nums * target && sz > 0) {
+                // Suspicious size — log so we can spot the culprit.
+                ORCAXR_LOGE(
+                    "clamp audit: vector '%s' size=%zu (expected %zu or %zu); "
+                    "possible OOB risk if libslic3r indexes by filament_id",
+                    key.c_str(), sz, target, nozzle_nums);
+            }
+        }
+    }
 }
 
 /**
