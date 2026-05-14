@@ -87,7 +87,21 @@ class MoonrakerClient(
                 MoonrakerResult.IoError("no port candidates")
             for (port in candidates) {
                 val cfg = printer.copy(port = port)
-                val result = MoonrakerClient(cfg).ping()
+                // A malformed host (e.g. an IPv6 literal that slipped
+                // through unbracketed) makes ping() raise
+                // IllegalArgumentException out of OkHttp's URL parser,
+                // which kills the discovery coroutine. Convert any such
+                // throw into a soft failure so the probe loop can fall
+                // through to the next candidate and discovery keeps
+                // running. The unbracketed-IPv6 case is fixed in
+                // baseUrl(); this runCatching is the belt-and-suspenders
+                // for any future URL-shape regression.
+                val result = runCatching { MoonrakerClient(cfg).ping() }
+                    .getOrElse {
+                        MoonrakerResult.IoError(
+                            "probe threw: ${it.javaClass.simpleName}: ${it.message ?: "no message"}",
+                        )
+                    }
                 if (result is MoonrakerResult.Ok) return cfg to result
                 lastFailure = result
             }
