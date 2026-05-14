@@ -16,7 +16,7 @@ index 160f498c60..a3273873e9 100644
  
          if (idx == -1) {
              // In this case, finish_layer will be called at the very beginning.
-@@ -2374,6 +2377,91 @@ int WipeTower2::first_toolchange_to_nonsoluble(
+@@ -2374,6 +2377,113 @@ int WipeTower2::first_toolchange_to_nonsoluble(
      return tool_changes.empty() ? -1 : 0;
  }
  
@@ -39,6 +39,28 @@ index 160f498c60..a3273873e9 100644
 +        int    idx;
 +        size_t tool;
 +    };
++
++    // OrcaXR FS-parity: PR #222 D.2's wall-continuity optimization steers
++    // wipe-tower brim/empty-grid extrusion onto whichever extruder drew the
++    // previous layer's wall — useful when filaments use different materials,
++    // but in same-material prints (e.g., all PLA) it just sticks the wall to
++    // the initial extruder for the whole print, mis-attributing ~150 mm of
++    // prime-tower material vs FS upstream. Skip D.2 when no material switch
++    // can be saved (all non-soluble filaments share a material) and use FS
++    // upstream's first_toolchange_to_nonsoluble instead. The full D.2 logic
++    // below still runs for genuinely mixed-material prints.
++    bool any_material_differs = false;
++    if (!m_filpar.empty()) {
++        const std::string& mat0 = m_filpar.front().material;
++        for (const auto& fp : m_filpar) {
++            if (!fp.is_soluble && fp.material != mat0) {
++                any_material_differs = true;
++                break;
++            }
++        }
++    }
++    if (!any_material_differs)
++        return first_toolchange_to_nonsoluble(tool_changes);
 +
 +    std::vector<Candidate> candidates;
 +    if (m_current_tool < m_filpar.size() && !m_filpar[m_current_tool].is_soluble)

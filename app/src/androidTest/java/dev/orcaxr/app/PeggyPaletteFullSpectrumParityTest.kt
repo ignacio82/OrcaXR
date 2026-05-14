@@ -169,6 +169,30 @@ class PeggyPaletteFullSpectrumParityTest {
             )
         }
 
+        // Per-slot filament-use parity. As of patch 0021 (same-material wall
+        // continuity short-circuit), OrcaXR matches REF to within 0.3 % on
+        // every slot. Lock that in with a 2 % envelope so any regression in
+        // wipe-tower attribution or model-extrusion routing fails loudly
+        // here instead of needing manual diff inspection.
+        val refSlots = parseFilamentUsedMm(ref)
+        val actSlots = parseFilamentUsedMm(out)
+        android.util.Log.i(tag, "filament used [mm]: ref=$refSlots act=$actSlots")
+        assertTrue(
+            "could not parse `; filament used [mm]` from both gcodes (ref=$refSlots act=$actSlots)",
+            refSlots.size == actSlots.size && refSlots.isNotEmpty(),
+        )
+        val tolerance = 0.02
+        refSlots.forEachIndexed { i, refMm ->
+            val actMm = actSlots[i]
+            val delta = (actMm - refMm).toDouble()
+            val pct = if (refMm > 0f) delta / refMm.toDouble() else 0.0
+            android.util.Log.i(tag, "  T$i: ref=$refMm act=$actMm delta=$delta (${"%.2f".format(pct * 100)}%)")
+            assertTrue(
+                "T$i filament use diverged > ${tolerance * 100}% (ref=$refMm act=$actMm delta=$delta)",
+                refMm > 0f && kotlin.math.abs(pct) <= tolerance,
+            )
+        }
+
         // Copy the produced gcode back under /sdcard/Download/ so the
         // developer can pull it with a plain `adb pull` instead of
         // chasing the test's external-files path.
@@ -201,6 +225,19 @@ class PeggyPaletteFullSpectrumParityTest {
             }
         }
         return -1f
+    }
+
+    /** Parse `; filament used [mm] = 913.36, 938.70, 816.20, 2154.26` into per-slot mm. */
+    private fun parseFilamentUsedMm(f: File): List<Float> {
+        f.bufferedReader().use { r ->
+            for (line in r.lineSequence()) {
+                if (!line.startsWith("; filament used [mm]")) continue
+                val eq = line.indexOf('=')
+                if (eq < 0) continue
+                return line.substring(eq + 1).split(',').mapNotNull { it.trim().toFloatOrNull() }
+            }
+        }
+        return emptyList()
     }
 
     private fun countExecLines(f: File): Int {
