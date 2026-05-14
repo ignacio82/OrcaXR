@@ -43,17 +43,22 @@ fun resolveAsWillPrintPalette(
     // slot count fell off the array and slic3r_jni's nativeWriteColoredGlb
     // saw the missing slots as #FFFFFF.
     val resolvedCount = maxOf(filaments.size, slotCount)
-    return (0 until resolvedCount).map { i ->
+    val byProjectIndex = (0 until resolvedCount).map { i ->
         val entry = filaments.getOrNull(i)
         val virtualSlot = entry?.virtualSlot
         val physicalSlot = entry?.physicalSlot
         when {
             virtualSlot != null -> {
-                val row = visibleVirtual.getOrNull(virtualSlot - 1)
+                val row = virtualRows.getOrNull(virtualSlot - 1)
                 if (row != null) {
-                    val a = physicalColor(row.componentA - 1)
-                    val b = physicalColor(row.componentB - 1)
-                    blendMixedColor(a, b, row.ratioA, row.ratioB)
+                    // Route through resolveMixedRowDisplayColor so the
+                    // native pigment blender fires when wired (matches
+                    // OrcaSlicer FullSpectrum swatch output). Falls back
+                    // to gamma-correct sRGB in pure-JVM tests.
+                    resolveMixedRowDisplayColor(
+                        row,
+                        (0 until slotCount).map { physicalColor(it) },
+                    )
                 } else {
                     // Dangling virtual reference (row was removed under
                     // the selection). Surface the same neutral the panel
@@ -74,4 +79,24 @@ fun resolveAsWillPrintPalette(
             else -> entry?.color ?: "#FFFFFF"
         }
     }
+
+    // Append one entry per virtual mix row so painted faces / per-volume
+    // extruder assignments that target a FullSpectrum virtual slot
+    // (libslic3r encodes them as `filament_id = num_physical + 1 + idx`
+    // — see MixedFilamentManager::mixed_index_from_filament_id) resolve
+    // to the row's authored blend color in the GLB writer. Without this
+    // extension, painted-face id 5 on a 4-physical-slot print read
+    // palette[4] = out of bounds → nativeWriteColoredGlb emitted white,
+    // i.e. the user saw "only 4 colors" on the SnOrca hexagon and
+    // similar FullSpectrum 3MFs.
+    //
+    // Deleted/disabled rows keep their palette slot because libslic3r
+    // indexes m_mixed[] by raw row position (see the long-standing
+    // comment in parseMixedDefinitionsForKotlin). Skipping them would
+    // shift every later virtual id down by one and mis-color the model.
+    val physicalPalette = (0 until slotCount).map { physicalColor(it) }
+    val virtualPalette = virtualRows.map { row ->
+        resolveMixedRowDisplayColor(row, physicalPalette)
+    }
+    return byProjectIndex + virtualPalette
 }
