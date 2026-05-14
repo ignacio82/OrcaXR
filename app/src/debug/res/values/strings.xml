@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-only label override. Pairs with applicationIdSuffix=".debug" in
+  app/build.gradle.kts so a debug install can sit next to a Play Store
+  install on the same device without colliding on launcher entry or
+  package id. The dev launcher icon is also overridden in this source
+  set (180° foreground rotation + bright orange background) so the two
+  builds are unmistakable at a glance.
+-->
+<resources>
+    <string name="app_name" translatable="false">OrcaXR Dev</string>
+</resources>

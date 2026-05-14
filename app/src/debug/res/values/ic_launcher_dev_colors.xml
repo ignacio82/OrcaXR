@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Bright orange background used only by the debug adaptive launcher icon.
+  Chosen for high contrast against OrcaXR's blue brand foreground so the
+  dev install pops on the launcher grid.
+-->
+<resources>
+    <color name="ic_launcher_dev_background">#FFFF6F00</color>
+</resources>

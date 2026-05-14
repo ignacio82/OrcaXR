@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug launcher foreground = main foreground rotated 180°. RotateDrawable
+  with fromDegrees == toDegrees renders as a fixed rotation (no animation
+  driven by level). Pairs with the contrasting orange background in the
+  debug adaptive icon XML to make the dev install instantly distinguishable
+  from a Play Store install on the launcher.
+-->
+<rotate xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@mipmap/ic_launcher_foreground"
+    android:fromDegrees="180"
+    android:toDegrees="180"
+    android:pivotX="50%"
+    android:pivotY="50%" />
