@@ -401,6 +401,12 @@ private fun PreviewCard(
     val ctx = LocalContext.current
     var mesh by remember(filePath) { mutableStateOf<dev.orcaxr.app.StlMesh?>(null) }
     var glMesh by remember(filePath) { mutableStateOf<dev.orcaxr.app.mobile.viewer.MeshData?>(null) }
+    // Per-triangle filament tag + palette parsed out of the loaded 3MF.
+    // Lets the preview show the 3MF's authored colors without requiring
+    // the user to paint anything. Cleared on filePath change; user paint
+    // (paintFilamentIndex parameter) still takes precedence in Phase 5.
+    var embeddedPaintFilament by remember(filePath) { mutableStateOf<ByteArray?>(null) }
+    var embeddedPalette by remember(filePath) { mutableStateOf<List<String>>(emptyList()) }
     var loading by remember(filePath) { mutableStateOf(true) }
     var loadError by remember(filePath) { mutableStateOf<String?>(null) }
     var placementMode by remember { mutableStateOf(true) }
@@ -419,30 +425,67 @@ private fun PreviewCard(
         loadError = null
         runCatching {
             val source = File(filePath)
-            val stl: File =
-                if (source.extension.equals("stl", ignoreCase = true)) {
-                    source
-                } else {
-                    val derived =
-                        File(ctx.cacheDir, "mobile_preview_${source.nameWithoutExtension}.stl")
-                    val ok =
-                        withContext(Dispatchers.IO) { SlicerEngine.convertToStl(source, derived) }
-                    if (!ok) {
-                        error(
-                            "libslic3r could not read ${source.name} — the file may be " +
-                                "corrupt, unsupported, or a 3MF that requires Bambu / Orca " +
-                                "metadata that's missing.",
-                        )
-                    }
-                    derived
+            val isThreemf = source.extension.equals("3mf", ignoreCase = true)
+            // For 3MFs, prefer the painted-mesh loader: it preserves
+            // per-volume / per-face filament tagging AND the 3MF's
+            // embedded filament_colour palette so the preview matches
+            // what slicing will actually emit. Falls through to the
+            // STL-conversion path if libslic3r can't decode the file.
+            val painted = if (isThreemf) {
+                withContext(Dispatchers.IO) {
+                    runCatching { SlicerEngine.readPainted3mfMesh(source) }
+                        .getOrNull()
                 }
-            val parsed = withContext(Dispatchers.IO) { StlReader.read(stl) }
-            if (parsed.triCount == 0) error("STL has 0 triangles — the file is empty or unparseable.")
-            mesh = parsed
-            glMesh =
-                withContext(Dispatchers.Default) {
+            } else null
+
+            if (painted != null) {
+                val parsed = dev.orcaxr.app.StlMesh(
+                    positions = painted.positions,
+                    triCount = painted.triCount,
+                    bboxMin = dev.orcaxr.app.Vec3f(
+                        painted.bboxMinX, painted.bboxMinY, painted.bboxMinZ,
+                    ),
+                    bboxMax = dev.orcaxr.app.Vec3f(
+                        painted.bboxMaxX, painted.bboxMaxY, painted.bboxMaxZ,
+                    ),
+                )
+                mesh = parsed
+                glMesh = withContext(Dispatchers.Default) {
                     dev.orcaxr.app.mobile.viewer.MeshData.fromStlMesh(parsed)
                 }
+                embeddedPaintFilament = painted.paintFilament
+                embeddedPalette = painted.palette.toList()
+            } else {
+                val stl: File =
+                    if (source.extension.equals("stl", ignoreCase = true)) {
+                        source
+                    } else {
+                        val derived =
+                            File(ctx.cacheDir, "mobile_preview_${source.nameWithoutExtension}.stl")
+                        val ok =
+                            withContext(Dispatchers.IO) {
+                                SlicerEngine.convertToStl(source, derived)
+                            }
+                        if (!ok) {
+                            error(
+                                "libslic3r could not read ${source.name} — the file may be " +
+                                    "corrupt, unsupported, or a 3MF that requires Bambu / Orca " +
+                                    "metadata that's missing.",
+                            )
+                        }
+                        derived
+                    }
+                val parsed = withContext(Dispatchers.IO) { StlReader.read(stl) }
+                if (parsed.triCount == 0) {
+                    error("STL has 0 triangles — the file is empty or unparseable.")
+                }
+                mesh = parsed
+                glMesh = withContext(Dispatchers.Default) {
+                    dev.orcaxr.app.mobile.viewer.MeshData.fromStlMesh(parsed)
+                }
+                embeddedPaintFilament = null
+                embeddedPalette = emptyList()
+            }
             loading = false
         }
             .onFailure {
@@ -490,20 +533,56 @@ private fun PreviewCard(
     // fill.
     val slotsByPrinter by
         app.filamentSlots.all.collectAsState(initial = emptyMap<String, List<String>>())
-    LaunchedEffect(paintFilamentIndex, glMesh, viewerView, slotsByPrinter) {
+    LaunchedEffect(
+        paintFilamentIndex,
+        embeddedPaintFilament,
+        embeddedPalette,
+        glMesh,
+        viewerView,
+        slotsByPrinter,
+    ) {
         val v = viewerView ?: return@LaunchedEffect
         glMesh ?: return@LaunchedEffect
-        if (paintFilamentIndex == null) {
+        // Effective paint precedence:
+        //   1. user-painted faces (paintFilamentIndex from the Paint
+        //      screen) — always wins;
+        //   2. otherwise the 3MF's embedded per-triangle filament tags
+        //      (so a freshly-loaded multi-color 3MF shows its authored
+        //      colors immediately);
+        //   3. otherwise clear paint to show the uniform mint fill.
+        val effectivePaint = paintFilamentIndex ?: embeddedPaintFilament
+        if (effectivePaint == null) {
             v.clearPaint()
             return@LaunchedEffect
         }
+        // Build the palette. When the user is painting their own faces
+        // we map slot index → printer-saved slot color (existing
+        // behavior). When we're driving from the 3MF's embedded
+        // tagging, prefer the 3MF's own filament_colour palette so the
+        // preview matches what the file authored — fall back to the
+        // printer slot colors for any slot the 3MF didn't supply.
+        val usingEmbedded =
+            paintFilamentIndex == null && embeddedPalette.isNotEmpty()
         val printerId = app.prefs.lastPrinterId
-        val saved = printerId?.let { slotsByPrinter[it] }
-        // Use up to MAX_PAINT_SLOTS (32) slots — paint indices are
-        // bytes so anything past 255 is impossible anyway.
-        val padded = app.filamentSlots.pad(saved, count = 16)
+        val savedSlots = printerId?.let { slotsByPrinter[it] }
+        val paddedSlots = app.filamentSlots.pad(savedSlots, count = 16)
+        val sourceHex: List<String> =
+            if (usingEmbedded) {
+                // Pad embedded palette out to 16 entries using the
+                // printer's slot colors so an over-large filament index
+                // in [effectivePaint] still resolves to a stable color
+                // instead of falling back to the brand mint.
+                val out = mutableListOf<String>()
+                for (i in 0 until 16) {
+                    val embeddedHex = embeddedPalette.getOrNull(i)
+                    out.add(embeddedHex ?: paddedSlots.getOrElse(i) { "#79D0C7" })
+                }
+                out
+            } else {
+                paddedSlots
+            }
         val palette =
-            padded.map { hex ->
+            sourceHex.map { hex ->
                 val parsed = runCatching { android.graphics.Color.parseColor(hex) }.getOrNull()
                 if (parsed != null) {
                     floatArrayOf(
@@ -516,7 +595,7 @@ private fun PreviewCard(
                     floatArrayOf(0.475f, 0.816f, 0.780f, 1f)
                 }
             }
-        v.setPaint(palette, paintFilamentIndex)
+        v.setPaint(palette, effectivePaint)
     }
 
     MobileCard {

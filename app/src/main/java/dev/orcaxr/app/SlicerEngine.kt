@@ -90,6 +90,56 @@ object SlicerEngine {
         val openEdgeCount: Int,
     )
 
+    /**
+     * Painted-mesh preview payload extracted from a 3MF.
+     *
+     * [positions] is the standard flat `triCount * 9` xyz layout shared
+     * with [StlMesh], so callers can feed it through
+     * [dev.orcaxr.app.mobile.viewer.MeshData.fromStlMesh] after wrapping
+     * in [StlMesh]. Vertices are in world space (each volume's geometry
+     * is transformed by its own matrix AND the object instance's matrix
+     * before emission), so the bbox is directly usable for camera framing.
+     *
+     * [paintFilament] is a per-triangle filament index (1-based, 0 means
+     * "use the default tint"). It combines two sources:
+     *  - When a ModelVolume carries `mmu_segmentation_facets`, the native
+     *    side asks libslic3r's TriangleSelector to remesh the volume
+     *    into one indexed_triangle_set per filament state — each
+     *    fragment is then tagged with its state's filament id.
+     *  - Volumes WITHOUT painted facets use the volume's (or owning
+     *    object's) `extruder` config option as the filament id for
+     *    every triangle.
+     *
+     * [palette] is the 3MF's embedded `filament_colour` array (#RRGGBB
+     * strings). Empty array means the 3MF had no embedded palette; the
+     * caller should fall back to the user's chosen profile / printer
+     * filament slots.
+     */
+    data class Painted3mfMesh(
+        val positions: FloatArray,
+        val triCount: Int,
+        val bboxMinX: Float,
+        val bboxMinY: Float,
+        val bboxMinZ: Float,
+        val bboxMaxX: Float,
+        val bboxMaxY: Float,
+        val bboxMaxZ: Float,
+        val paintFilament: ByteArray,
+        val palette: Array<String>,
+    ) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is Painted3mfMesh) return false
+            return triCount == other.triCount &&
+                positions.contentEquals(other.positions) &&
+                paintFilament.contentEquals(other.paintFilament) &&
+                palette.contentEquals(other.palette)
+        }
+        override fun hashCode(): Int =
+            (positions.contentHashCode() * 31 + triCount) * 31 +
+                paintFilament.contentHashCode()
+    }
+
     private val dispatcher: CoroutineDispatcher =
         Executors.newSingleThreadExecutor { r -> Thread(r, "OrcaXR-libslic3r") }
             .asCoroutineDispatcher()
@@ -2277,6 +2327,22 @@ object SlicerEngine {
         objectIndex: Int,
     ): Int
     private external fun nativeRead3mfFilamentColours(inputPath: String): Array<String>?
+
+    /**
+     * Load a 3MF for the mobile preview path with per-triangle filament
+     * tagging preserved. Returns null when:
+     *   - [input] is not a 3MF (caller falls back to STL conversion);
+     *   - libslic3r couldn't read the file;
+     *   - the parsed model has no model-part volumes.
+     *
+     * See [Painted3mfMesh] for the payload layout.
+     */
+    suspend fun readPainted3mfMesh(input: File): Painted3mfMesh? = withContext(dispatcher) {
+        if (!input.exists() || !input.canRead()) return@withContext null
+        nativeRead3mfPaintedMesh(input.absolutePath)
+    }
+
+    private external fun nativeRead3mfPaintedMesh(path: String): Painted3mfMesh?
     private external fun nativeRead3mfMixedFilamentDefinitions(inputPath: String): String?
     /**
      * Two-element envelope: `[flush_volumes_matrix_csv, flush_multiplier_csv]`.

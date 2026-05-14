@@ -3960,6 +3960,260 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
     }
 }
 
+// nativeRead3mfPaintedMesh — build a mobile-preview-ready mesh out of a
+// .3mf that preserves per-triangle filament tagging. Returns a
+// `SlicerEngine$Painted3mfMesh` to Kotlin, or null when the file isn't
+// a 3MF / can't be read / has no model-part volumes.
+//
+// For each ModelObject → ModelVolume:
+//   - Composite transform `inst_xf * volume_xf` is applied to every
+//     emitted vertex so the resulting positions are in world space.
+//     Matches what ModelObject::mesh() would produce.
+//   - When the volume carries `mmu_segmentation_facets` (painted faces),
+//     libslic3r's TriangleSelector remeshes the volume into one
+//     indexed_triangle_set per filament state (Extruder1..ExtruderMax
+//     + an unpainted bucket at index 0). Triangles inherit their
+//     bucket's filament id. Unpainted-bucket triangles fall back to the
+//     volume's own `extruder` config option (or 0 = "no tint").
+//   - When the volume has no painted facets, every triangle is tagged
+//     with the volume / object's `extruder` config value.
+//
+// Palette comes from the 3MF's embedded `filament_colour` config (#RRGGBB
+// strings). Empty array means the 3MF didn't author one — callers fall
+// back to the user's printer-side filament slots.
+extern "C" JNIEXPORT jobject JNICALL
+Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfPaintedMesh(
+    JNIEnv* env, jclass, jstring jPath)
+{
+    ScopedUtf path(env, jPath);
+    if (!boost::algorithm::iends_with(path.c, ".3mf")) return nullptr;
+
+    Slic3r::DynamicPrintConfig cfg;
+    Slic3r::Model model;
+    try {
+        model = load_mesh_container(path.c, &cfg);
+    } catch (const std::exception& e) {
+        ORCAXR_LOGI("nativeRead3mfPaintedMesh: load failed: %s", e.what());
+        return nullptr;
+    }
+    if (model.objects.empty()) return nullptr;
+
+    auto extruder_of = [](const Slic3r::ModelConfigObject& c) -> int {
+        const auto* opt = c.get().option<Slic3r::ConfigOptionInt>("extruder");
+        return (opt != nullptr) ? opt->value : 0;
+    };
+
+    auto emit_triangle = [&](
+        std::vector<float>& positions,
+        std::vector<unsigned char>& paint,
+        float& minX, float& minY, float& minZ,
+        float& maxX, float& maxY, float& maxZ,
+        const Slic3r::Vec3f& v0,
+        const Slic3r::Vec3f& v1,
+        const Slic3r::Vec3f& v2,
+        unsigned char fil)
+    {
+        const Slic3r::Vec3f verts[3] = { v0, v1, v2 };
+        for (int k = 0; k < 3; ++k) {
+            positions.push_back(verts[k].x());
+            positions.push_back(verts[k].y());
+            positions.push_back(verts[k].z());
+            if (verts[k].x() < minX) minX = verts[k].x();
+            if (verts[k].y() < minY) minY = verts[k].y();
+            if (verts[k].z() < minZ) minZ = verts[k].z();
+            if (verts[k].x() > maxX) maxX = verts[k].x();
+            if (verts[k].y() > maxY) maxY = verts[k].y();
+            if (verts[k].z() > maxZ) maxZ = verts[k].z();
+        }
+        paint.push_back(fil);
+    };
+
+    std::vector<float> positions;
+    std::vector<unsigned char> paint;
+    float minX = std::numeric_limits<float>::infinity();
+    float minY = std::numeric_limits<float>::infinity();
+    float minZ = std::numeric_limits<float>::infinity();
+    float maxX = -std::numeric_limits<float>::infinity();
+    float maxY = -std::numeric_limits<float>::infinity();
+    float maxZ = -std::numeric_limits<float>::infinity();
+
+    size_t painted_volumes = 0;
+    size_t volumes_walked = 0;
+    for (const Slic3r::ModelObject* mo : model.objects) {
+        if (mo == nullptr) continue;
+        const int obj_extruder = extruder_of(mo->config);
+        // The 3MF may carry zero or many instances per object. Emit
+        // each instance separately so multi-instance plates render
+        // every copy. If the object has no instances we still emit the
+        // raw mesh at identity so the user sees the geometry.
+        std::vector<Slic3r::Transform3d> inst_xfs;
+        if (mo->instances.empty()) {
+            inst_xfs.push_back(Slic3r::Transform3d::Identity());
+        } else {
+            for (const auto* inst : mo->instances)
+                inst_xfs.push_back(inst->get_matrix());
+        }
+        for (const Slic3r::ModelVolume* mv : mo->volumes) {
+            if (mv == nullptr || !mv->is_model_part()) continue;
+            ++volumes_walked;
+            const int vol_extruder_local = extruder_of(mv->config);
+            const int vol_extruder =
+                vol_extruder_local > 0 ? vol_extruder_local : obj_extruder;
+            const unsigned char vol_fil =
+                vol_extruder > 0 && vol_extruder <= 255
+                    ? static_cast<unsigned char>(vol_extruder) : 0;
+            const Slic3r::Transform3d vol_xf = mv->get_matrix();
+
+            const bool has_paint = !mv->mmu_segmentation_facets.empty();
+            if (has_paint) ++painted_volumes;
+
+            // Per-state triangle sets when painted; otherwise treat the
+            // volume's raw mesh as a single unpainted bucket.
+            std::vector<indexed_triangle_set> per_state;
+            if (has_paint) {
+                try {
+                    mv->mmu_segmentation_facets.get_facets(*mv, per_state);
+                } catch (const std::exception& e) {
+                    ORCAXR_LOGE(
+                        "nativeRead3mfPaintedMesh: get_facets threw on '%s': %s — falling back to unpainted",
+                        mo->name.c_str(), e.what());
+                    per_state.clear();
+                }
+            }
+            if (per_state.empty()) {
+                per_state.push_back(mv->mesh().its);
+            }
+
+            for (size_t state = 0; state < per_state.size(); ++state) {
+                const auto& its = per_state[state];
+                if (its.indices.empty()) continue;
+                unsigned char fil;
+                if (state == 0) {
+                    // Unpainted bucket — use the volume's own filament.
+                    fil = vol_fil;
+                } else {
+                    // Bucket [state] = filament id `state` (1-based).
+                    fil = static_cast<unsigned char>(state);
+                }
+                for (const Slic3r::Transform3d& inst_xf : inst_xfs) {
+                    const Slic3r::Transform3d total = inst_xf * vol_xf;
+                    for (const auto& tri : its.indices) {
+                        const auto& a = its.vertices[tri(0)];
+                        const auto& b = its.vertices[tri(1)];
+                        const auto& c = its.vertices[tri(2)];
+                        // its.vertices are Vec3f — cast up to double for
+                        // the transform, then back down.
+                        Slic3r::Vec3d ad = total * a.cast<double>();
+                        Slic3r::Vec3d bd = total * b.cast<double>();
+                        Slic3r::Vec3d cd = total * c.cast<double>();
+                        emit_triangle(positions, paint,
+                                      minX, minY, minZ, maxX, maxY, maxZ,
+                                      ad.cast<float>(),
+                                      bd.cast<float>(),
+                                      cd.cast<float>(),
+                                      fil);
+                    }
+                }
+            }
+        }
+    }
+
+    if (paint.empty()) {
+        ORCAXR_LOGI(
+            "nativeRead3mfPaintedMesh: %zu volumes walked, no triangles emitted",
+            volumes_walked);
+        return nullptr;
+    }
+    const size_t tri_count = paint.size();
+    ORCAXR_LOGI(
+        "nativeRead3mfPaintedMesh: %zu tris (%zu volumes, %zu painted) bbox (%.1f..%.1f, %.1f..%.1f, %.1f..%.1f)",
+        tri_count, volumes_walked, painted_volumes,
+        minX, maxX, minY, maxY, minZ, maxZ);
+
+    // Palette source priority:
+    //   1. cfg.filament_colour (populated by load_bbs_3mf for BBS-style
+    //      archives whose embedded preset bundle parsed correctly);
+    //   2. project_settings.config's `filament_colour` field, scanned
+    //      via the same extract_3mf_string_array helper that powers
+    //      nativeRead3mfFilamentColours. Standard 3MFs (non-BBS) flow
+    //      through this path because load_3mf doesn't auto-merge
+    //      project_settings.config into cfg.
+    // Empty palette is a clean "fall back to printer slot colors" on
+    // the Kotlin side — not a failure.
+    std::vector<std::string> palette_strs;
+    if (const auto* fc = cfg.option<Slic3r::ConfigOptionStrings>("filament_colour")) {
+        palette_strs = fc->values;
+    }
+    if (palette_strs.empty()) {
+        std::vector<std::string> fallback;
+        if (extract_3mf_string_array(path.c, "filament_colour", fallback)) {
+            palette_strs = std::move(fallback);
+        }
+    }
+    // Trim "#RRGGBBAA" → "#RRGGBB" so android.graphics.Color.parseColor
+    // accepts every entry on the Kotlin side. Matches the same trim
+    // the Kotlin read3mfFilamentColours wrapper applies upstream.
+    for (auto& hex : palette_strs) {
+        if (!hex.empty() && hex[0] == '#' && hex.size() > 7) {
+            hex.resize(7);
+        }
+    }
+
+    jclass meshCls = env->FindClass("dev/orcaxr/app/SlicerEngine$Painted3mfMesh");
+    if (meshCls == nullptr) {
+        env->ExceptionClear();
+        ORCAXR_LOGE("nativeRead3mfPaintedMesh: FindClass(Painted3mfMesh) failed");
+        return nullptr;
+    }
+    jmethodID ctor = env->GetMethodID(
+        meshCls, "<init>",
+        "([FIFFFFFF[B[Ljava/lang/String;)V");
+    if (ctor == nullptr) {
+        env->ExceptionClear();
+        ORCAXR_LOGE("nativeRead3mfPaintedMesh: GetMethodID(<init>) failed");
+        env->DeleteLocalRef(meshCls);
+        return nullptr;
+    }
+
+    jfloatArray jPositions = env->NewFloatArray(static_cast<jsize>(positions.size()));
+    if (jPositions == nullptr) { env->DeleteLocalRef(meshCls); return nullptr; }
+    env->SetFloatArrayRegion(jPositions, 0,
+                             static_cast<jsize>(positions.size()),
+                             positions.data());
+
+    jbyteArray jPaint = env->NewByteArray(static_cast<jsize>(paint.size()));
+    if (jPaint == nullptr) {
+        env->DeleteLocalRef(jPositions);
+        env->DeleteLocalRef(meshCls);
+        return nullptr;
+    }
+    env->SetByteArrayRegion(jPaint, 0,
+                            static_cast<jsize>(paint.size()),
+                            reinterpret_cast<const jbyte*>(paint.data()));
+
+    jclass strCls = env->FindClass("java/lang/String");
+    jobjectArray jPalette = env->NewObjectArray(
+        static_cast<jsize>(palette_strs.size()), strCls, nullptr);
+    for (size_t i = 0; i < palette_strs.size(); ++i) {
+        jstring js = env->NewStringUTF(palette_strs[i].c_str());
+        env->SetObjectArrayElement(jPalette, static_cast<jsize>(i), js);
+        env->DeleteLocalRef(js);
+    }
+    env->DeleteLocalRef(strCls);
+
+    jobject result = env->NewObject(
+        meshCls, ctor,
+        jPositions, static_cast<jint>(tri_count),
+        minX, minY, minZ, maxX, maxY, maxZ,
+        jPaint, jPalette);
+
+    env->DeleteLocalRef(jPositions);
+    env->DeleteLocalRef(jPaint);
+    env->DeleteLocalRef(jPalette);
+    env->DeleteLocalRef(meshCls);
+    return result;
+}
+
 // nativeRead3mfFilamentColours — pull the embedded `filament_colour`
 // JSON array out of a .3mf and return each entry as a String. Returns
 // null if the file isn't readable / isn't a 3MF / has no filament_colour
