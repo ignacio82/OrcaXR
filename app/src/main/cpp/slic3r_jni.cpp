@@ -245,6 +245,59 @@ static int max_referenced_filament_in_model(const Slic3r::Model& model) {
  * to 280 mm³ (FullSpectrum's empirical "fresh-pair purge" baseline)
  * and setting the diagonal to 0 (a filament never purges against itself).
  */
+// Keys that scale with the printer's number of NOZZLES, not filaments.
+// Mirrors libslic3r's PrintConfig.cpp::printer_extruder_options (and a
+// handful of related per-nozzle keys) so the per-filament walk in
+// clamp_filament_arrays_to_painted skips them — extending these would
+// desync them from nozzle_diameter and trip the
+// filament_count² * heads_count == matrix_size check inside
+// GCode::append_full_config (observed throwing
+// "Flush volumes matrix do not match to the correct size!" when
+// flush_multiplier got accidentally extended alongside the filament
+// arrays).
+static const std::set<std::string>& per_nozzle_keys() {
+    static const std::set<std::string> KEYS = {
+        // libslic3r's printer_extruder_options
+        "extruder_type",
+        "nozzle_diameter",
+        "default_nozzle_volume_type",
+        "extruder_printable_area",
+        "extruder_printable_height",
+        "min_layer_height",
+        "max_layer_height",
+        // Flush-related per-nozzle scalars
+        "flush_multiplier",
+        // Per-nozzle physical / retract / extruder options
+        "nozzle_volume",
+        "nozzle_volume_type",
+        "nozzle_type",
+        "nozzle_flush_dataset",
+        "extruder_offset",
+        "retraction_length",
+        "retract_length_toolchange",
+        "retraction_speed",
+        "deretraction_speed",
+        "retraction_minimum_travel",
+        "retract_when_changing_layer",
+        "retract_before_wipe",
+        "retract_restart_extra",
+        "retract_restart_extra_toolchange",
+        "retract_lift_above",
+        "retract_lift_below",
+        "retract_lift_enforce",
+        "wipe",
+        "wipe_distance",
+        "z_hop",
+        "z_hop_types",
+        "travel_slope",
+        "long_retractions_when_cut",
+        "retraction_distances_when_cut",
+        "printer_extruder_id",
+        "printer_extruder_variant",
+    };
+    return KEYS;
+}
+
 static void clamp_filament_arrays_to_painted(
     Slic3r::DynamicPrintConfig& cfg, int max_filament_1based)
 {
@@ -254,14 +307,27 @@ static void clamp_filament_arrays_to_painted(
     const size_t baseline = (fc != nullptr) ? fc->values.size() : 0;
     if (target <= baseline) return;
 
-    ORCAXR_LOGI(
-        "clamp_filament_arrays_to_painted: baseline=%zu target=%zu — extending per-filament options",
-        baseline, target);
+    // Anchor nozzle count to the printer-side nozzle_diameter vector
+    // rather than guessing from collision sizes. This is what the
+    // downstream GCode::append_full_config check uses as
+    // heads_count_tmp = flush_multiplier.size(), and on a sane profile
+    // flush_multiplier.size() == nozzle_diameter.size(). Falls back to 1
+    // if no nozzle_diameter was supplied (vanishingly rare in practice).
+    size_t nozzle_nums = 1;
+    if (const auto* nd = cfg.option<Slic3r::ConfigOptionFloats>("nozzle_diameter")) {
+        if (!nd->values.empty()) nozzle_nums = nd->values.size();
+    }
 
+    ORCAXR_LOGI(
+        "clamp_filament_arrays_to_painted: baseline=%zu target=%zu nozzle_nums=%zu — extending per-filament options",
+        baseline, target, nozzle_nums);
+
+    const auto& blacklist = per_nozzle_keys();
     for (const std::string& key : cfg.keys()) {
+        if (blacklist.count(key) != 0) continue;
+        if (key == "flush_volumes_matrix") continue;  // N²·nozzle_nums, handled below
         Slic3r::ConfigOption* opt = cfg.option(key, false);
         if (opt == nullptr) continue;
-        if (key == "flush_volumes_matrix") continue;  // N² shape, handled below
         if (auto* o = dynamic_cast<Slic3r::ConfigOptionStrings*>(opt)) {
             if (o->values.size() == baseline) {
                 const std::string fill = o->values.empty() ? std::string("#FFFFFF") : o->values.back();
@@ -291,65 +357,85 @@ static void clamp_filament_arrays_to_painted(
         }
     }
 
-    // flush_volumes_matrix: either N² (single-shared layout, observed
-    // on most consumer printers) or nozzle_nums * N² (multi-nozzle
-    // toolchanger layout — Snapmaker U1 ships its profile at 4*4*4 = 64).
-    // Both layouts need rebuilding when [target] > baseline, otherwise
-    // Print::export_gcode throws "Flush volumes matrix do not match to
-    // the correct size!" — observed on Galaxy XR slicing a U1 painted
-    // model where filament_colour grew 4→38 but flush_volumes_matrix
-    // stayed at 64 (needed 4 * 38² = 5776).
+    // flush_volumes_matrix: ALWAYS rebuilt to nozzle_nums * target²
+    // (matches the check inside GCode::append_full_config:
+    //   filament_count² * heads_count == matrix_size).
+    //
+    // Preserve existing values when the source matrix matches a known
+    // layout:
+    //   - nozzle_nums * baseline² → preserve per-nozzle block
+    //   - baseline²               → replicate single-shared across
+    //                               every nozzle block
+    // Anything else → defaults (280 mm³ off-diagonal, 0 on-diagonal).
+    //
+    // Previous version (k = current/old_sq) misdetected when baseline
+    // was 1 because every integer divides by 1 → it thought a
+    // 16-cell matrix meant "16 nozzles of 1×1 each" and produced
+    // 16 × 15² = 3600 cells, which mismatches the
+    // nozzle_diameter.size()=1 case and tripped the export check.
     if (auto* fvm = cfg.option<Slic3r::ConfigOptionFloats>("flush_volumes_matrix")) {
         const size_t old_sq = baseline * baseline;
         const size_t new_sq = target * target;
-        const size_t current = fvm->values.size();
-
-        // Detect whether the matrix is single-shared (size == N²) or
-        // multi-nozzle (size == k * N² for some k >= 1, typically
-        // k = nozzle_diameter.values.size()).
-        size_t k = 0;
-        if (current == old_sq) {
-            k = 1;
-        } else if (old_sq > 0 && current % old_sq == 0) {
-            k = current / old_sq;
-        }
-
-        if (k > 0 && new_sq > old_sq) {
-            std::vector<double> rebuilt(k * new_sq, 280.0);
-            for (size_t block = 0; block < k; ++block) {
-                const size_t src_base = block * old_sq;
+        if (new_sq > old_sq) {
+            const size_t current = fvm->values.size();
+            std::vector<double> rebuilt(nozzle_nums * new_sq, 280.0);
+            for (size_t block = 0; block < nozzle_nums; ++block) {
                 const size_t dst_base = block * new_sq;
-                for (size_t i = 0; i < baseline; ++i) {
-                    for (size_t j = 0; j < baseline; ++j) {
-                        rebuilt[dst_base + i * target + j] =
-                            fvm->values[src_base + i * baseline + j];
-                    }
-                }
                 for (size_t i = 0; i < target; ++i)
                     rebuilt[dst_base + i * target + i] = 0.0;
             }
+            if (current == nozzle_nums * old_sq && baseline > 0) {
+                // Per-nozzle source layout — preserve each block.
+                for (size_t block = 0; block < nozzle_nums; ++block) {
+                    const size_t src_base = block * old_sq;
+                    const size_t dst_base = block * new_sq;
+                    for (size_t i = 0; i < baseline; ++i) {
+                        for (size_t j = 0; j < baseline; ++j) {
+                            rebuilt[dst_base + i * target + j] =
+                                fvm->values[src_base + i * baseline + j];
+                        }
+                    }
+                    for (size_t i = 0; i < target; ++i)
+                        rebuilt[dst_base + i * target + i] = 0.0;
+                }
+            } else if (current == old_sq && baseline > 0) {
+                // Single-shared source — replicate across nozzle blocks.
+                for (size_t block = 0; block < nozzle_nums; ++block) {
+                    const size_t dst_base = block * new_sq;
+                    for (size_t i = 0; i < baseline; ++i) {
+                        for (size_t j = 0; j < baseline; ++j) {
+                            rebuilt[dst_base + i * target + j] =
+                                fvm->values[i * baseline + j];
+                        }
+                    }
+                    for (size_t i = 0; i < target; ++i)
+                        rebuilt[dst_base + i * target + i] = 0.0;
+                }
+            }
+            // else: unknown source layout — keep the all-default rebuild.
             fvm->values = std::move(rebuilt);
             ORCAXR_LOGI(
                 "clamp_filament_arrays_to_painted: flush_volumes_matrix "
-                "%zu*%zux%zu -> %zu*%zux%zu",
-                k, baseline, baseline, k, target, target);
-        } else if (new_sq > old_sq) {
-            // Matrix size doesn't match any expected layout — log so a
-            // future bug report has a breadcrumb, but don't crash.
-            // Print::export_gcode will throw downstream with the
-            // specific "wrong size" message.
-            ORCAXR_LOGI(
-                "clamp_filament_arrays_to_painted: flush_volumes_matrix "
-                "size=%zu does not match baseline²=%zu nor k*baseline² — "
-                "leaving untouched (export will likely reject it)",
-                current, old_sq);
+                "%zu cells -> %zu cells (nozzle_nums=%zu, %zux%zu -> %zux%zu)",
+                current, nozzle_nums * new_sq,
+                nozzle_nums, baseline, baseline, target, target);
         }
     }
 
-    // flush_multiplier: per-nozzle scalar. Doesn't need extending with
-    // filament count, but the matrix-shape check downstream expects it
-    // to stay synced with nozzle_diameter — no-op here, recorded for
-    // future bug-trace context.
+    // flush_multiplier: per-nozzle scalar. MUST stay sized to
+    // nozzle_nums so the downstream
+    //   filament_count² * flush_multiplier.size() == matrix.size()
+    // check holds. Pad or truncate to nozzle_nums; default new entries
+    // to 1.0 (unity scaling) so they don't surprise the user.
+    if (auto* fm = cfg.option<Slic3r::ConfigOptionFloats>("flush_multiplier")) {
+        if (fm->values.size() != nozzle_nums) {
+            const double fill = fm->values.empty() ? 1.0 : fm->values.back();
+            fm->values.resize(nozzle_nums, fill);
+            ORCAXR_LOGI(
+                "clamp_filament_arrays_to_painted: flush_multiplier resized to %zu",
+                nozzle_nums);
+        }
+    }
 }
 
 /**
