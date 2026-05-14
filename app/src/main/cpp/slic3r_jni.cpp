@@ -291,28 +291,65 @@ static void clamp_filament_arrays_to_painted(
         }
     }
 
-    // flush_volumes_matrix: N² (single-shared layout). If the user's
-    // profile supplied a matrix sized exactly to baseline², rebuild
-    // it at target² preserving existing pairs and defaulting new
-    // pairs to FullSpectrum's 280 mm³ baseline (diagonal = 0).
+    // flush_volumes_matrix: either N² (single-shared layout, observed
+    // on most consumer printers) or nozzle_nums * N² (multi-nozzle
+    // toolchanger layout — Snapmaker U1 ships its profile at 4*4*4 = 64).
+    // Both layouts need rebuilding when [target] > baseline, otherwise
+    // Print::export_gcode throws "Flush volumes matrix do not match to
+    // the correct size!" — observed on Galaxy XR slicing a U1 painted
+    // model where filament_colour grew 4→38 but flush_volumes_matrix
+    // stayed at 64 (needed 4 * 38² = 5776).
     if (auto* fvm = cfg.option<Slic3r::ConfigOptionFloats>("flush_volumes_matrix")) {
         const size_t old_sq = baseline * baseline;
         const size_t new_sq = target * target;
-        if (fvm->values.size() == old_sq && new_sq > old_sq) {
-            std::vector<double> rebuilt(new_sq, 280.0);
-            for (size_t i = 0; i < baseline; ++i) {
-                for (size_t j = 0; j < baseline; ++j) {
-                    rebuilt[i * target + j] = fvm->values[i * baseline + j];
+        const size_t current = fvm->values.size();
+
+        // Detect whether the matrix is single-shared (size == N²) or
+        // multi-nozzle (size == k * N² for some k >= 1, typically
+        // k = nozzle_diameter.values.size()).
+        size_t k = 0;
+        if (current == old_sq) {
+            k = 1;
+        } else if (old_sq > 0 && current % old_sq == 0) {
+            k = current / old_sq;
+        }
+
+        if (k > 0 && new_sq > old_sq) {
+            std::vector<double> rebuilt(k * new_sq, 280.0);
+            for (size_t block = 0; block < k; ++block) {
+                const size_t src_base = block * old_sq;
+                const size_t dst_base = block * new_sq;
+                for (size_t i = 0; i < baseline; ++i) {
+                    for (size_t j = 0; j < baseline; ++j) {
+                        rebuilt[dst_base + i * target + j] =
+                            fvm->values[src_base + i * baseline + j];
+                    }
                 }
+                for (size_t i = 0; i < target; ++i)
+                    rebuilt[dst_base + i * target + i] = 0.0;
             }
-            for (size_t i = 0; i < target; ++i)
-                rebuilt[i * target + i] = 0.0;
             fvm->values = std::move(rebuilt);
             ORCAXR_LOGI(
-                "clamp_filament_arrays_to_painted: flush_volumes_matrix %zux%zu -> %zux%zu",
-                baseline, baseline, target, target);
+                "clamp_filament_arrays_to_painted: flush_volumes_matrix "
+                "%zu*%zux%zu -> %zu*%zux%zu",
+                k, baseline, baseline, k, target, target);
+        } else if (new_sq > old_sq) {
+            // Matrix size doesn't match any expected layout — log so a
+            // future bug report has a breadcrumb, but don't crash.
+            // Print::export_gcode will throw downstream with the
+            // specific "wrong size" message.
+            ORCAXR_LOGI(
+                "clamp_filament_arrays_to_painted: flush_volumes_matrix "
+                "size=%zu does not match baseline²=%zu nor k*baseline² — "
+                "leaving untouched (export will likely reject it)",
+                current, old_sq);
         }
     }
+
+    // flush_multiplier: per-nozzle scalar. Doesn't need extending with
+    // filament count, but the matrix-shape check downstream expects it
+    // to stay synced with nozzle_diameter — no-op here, recorded for
+    // future bug-trace context.
 }
 
 /**
