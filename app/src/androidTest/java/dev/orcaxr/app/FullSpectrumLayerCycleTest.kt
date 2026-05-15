@@ -44,16 +44,28 @@ import java.io.File
  */
 @RunWith(AndroidJUnit4::class)
 @Ignore(
-    "FullSpectrum LayerCycle without painting needs config-apply " +
-        "propagation that our v2.3.2 baseline doesn't fully wire: setting " +
-        "wall_filament=5 at the print-level config map doesn't reach " +
-        "m_default_region_config.wall_filament (verified 2026-05-12 on " +
-        "Galaxy XR: region.config().wall_filament stays at 1 even when " +
-        "the slice config map says 5). The painted-Local-Z path " +
-        "(FullSpectrumLocalZTest, dithering_local_z_mode=1 + " +
-        "mmu_segmentation_facets) DOES work end-to-end. For the user's " +
-        "first hardware print, use paint + Local-Z, not LayerCycle " +
-        "without painting."
+    "FullSpectrum LayerCycle fully diagnosed 2026-05-15 (see " +
+        "docs/proposals/fullspectrum-layercycle-engine.md §Status; " +
+        "instrumented on Pixel 10 Pro XL + Galaxy XR). It is THREE " +
+        "stacked gaps, all part of the same FS v0.9.9 emission port: " +
+        "(1) region-config propagation -- the BBS Model::add_object " +
+        "extruder=1 stamp is force-mapped onto wall_filament and is " +
+        "indistinguishable from a deliberate per-object extruder, so " +
+        "propagation canNOT be fixed in isolation; (2) FS-virtual-wall " +
+        "regions are wipe-tower is_overriddable so collect_extruders " +
+        "never emplaces the resolved per-layer extruder; (3) the " +
+        "resolved cadence does not survive reorder_filaments_for_" +
+        "minimum_flush_volume (ToolOrderUtils.cpp, zero MixedFilament " +
+        "awareness) + _make_wipe_tower into the emission ToolOrdering " +
+        "(post-reorder layer_tools collapse to [0]/[]). No standalone " +
+        "propagation fix exists; this is the ~800-LoC GCode.cpp + " +
+        "~311-LoC ToolOrdering + reorder-DP FS port. Candidate patches " +
+        "0072/0073 were prototyped + reverted (no standalone benefit). " +
+        "The painted-Local-Z path (FullSpectrumLocalZTest) remains the " +
+        "working multi-color recipe -- BUT note PeggyPalette parity is " +
+        "separately regressed on current main (+5.4% T1, pre-existing, " +
+        "unrelated to LayerCycle; bisect afc6f7d..e8a7cad). Un-ignore " +
+        "when the Gap 1+2+3 emission port lands."
 )
 class FullSpectrumLayerCycleTest {
 

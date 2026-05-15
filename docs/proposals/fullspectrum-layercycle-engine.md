@@ -14,6 +14,123 @@ The root cause is **not** a missing patch from FS v0.9.9. Patches 0017 + 0018 + 
 
 This proposal closes the propagation gap so LayerCycle works **without requiring the user to paint every triangle**.
 
+## Status 2026-05-15 — Phase 1 complete, two of three gaps fixed
+
+A full instrumented diagnosis on Pixel 10 Pro XL + Galaxy XR (canaries in
+`Print::apply`, `region_config_from_model_volume`, `ToolOrdering::
+collect_extruders`, `WipingExtrusions::is_overriddable`, the reorder
+write-back, and `GCode::process_layer`) found the unpainted-LayerCycle
+failure is **three** stacked gaps, not one:
+
+1. **Region-config propagation** *(diagnosed; candidate patch 0072
+   REVERTED — regressed PeggyPalette parity)*. `Slic3r::Model::
+   add_object` unconditionally stamps every loaded object with
+   `extruder=1`; `apply_to_print_region_config`'s extruder special-case
+   then force-overrides the project-level virtual `wall_filament=5`
+   back to 1. Probe trail: `[B] m_default_region_config.wall_filament=5`
+   → `[C] region_config_from_model_volume start_wf=5 after_obj=1` →
+   `[D] resolved=1` (no cycle). A candidate fix (patch 0072) restored
+   the parent virtual id when no scope set the filament key explicitly;
+   `[D]` then showed `region.wall=5 resolved=1,2,1,2…` (resolver cycled
+   correctly). **But it regressed `PeggyPaletteFullSpectrumParityTest`
+   by itself**: T1 938.68 → 989.13 mm (+5.4 %, tolerance ±2 %). Root
+   cause of the regression: PeggyPalette's 38 parts express per-object
+   filament via the BBS `extruder=N` key (N up to 38, often virtual),
+   which `apply_to_print_region_config` maps onto `wall_filament`. The
+   "explicitly set" guard only checked the `wall_filament` key, so it
+   treated those deliberate per-object choices as unset and clobbered
+   them with the project default. The spurious BBS auto-`extruder=1`
+   stamp (fresh STL, unpainted LayerCycle) and a deliberate per-object
+   `extruder=N` (PeggyPalette) are **indistinguishable** at
+   `region_config_from_model_volume` — both are just an `extruder` key
+   on the object config. There is no clean isolated propagation fix;
+   it is entangled with the Gap 3 emission port (FS v0.9.9 resolves
+   per-layer cadence in the emission pipeline regardless of region
+   `wall_filament`, sidestepping this ambiguity). **Patch 0072 was
+   dropped.**
+
+2. **Wipe-tower overriddability** *(diagnosed; candidate patch 0073
+   REVERTED — regressed PeggyPalette parity)*. With `flush_into_objects`
+   on (the default in every shipped profile),
+   `WipingExtrusions::is_overriddable` returns true for the object's
+   perimeters, so `collect_extruders` marks the walls overriddable and
+   the FS-resolved per-layer extruder is never emplaced into
+   `LayerTools::extruders`. A candidate fix (patch 0073) made
+   FS-virtual-wall regions non-overriddable; `[G]` confirmed it fired
+   (`is_overriddable → NONOVERRIDDABLE` every layer) **but it changed
+   nothing observable downstream** (Gap 3 still collapses the result)
+   **and it regressed `PeggyPaletteFullSpectrumParityTest`**: T1
+   filament use went 938.68 → 989.15 mm (+5.4 %, ref 938.7, tolerance
+   ±2 %). PeggyPalette's 38 parts carry explicit per-object virtual
+   `extruder=N` (N up to 38); those regions legitimately go through the
+   wipe-tower flush path, and forcing them non-overriddable shifts the
+   painted-Local-Z allocation. The `is_overriddable` change cannot be
+   made in isolation — it has to be folded into the Gap 3 emission port
+   where the painted vs. unpainted-virtual distinction can be made
+   correctly without regressing the painted path. **Patch 0073 was
+   dropped; only patch 0072 ships.**
+
+3. **Emission-pipeline carry-through** *(STILL OPEN — the large port)*.
+   Even with 0072+0073, `[F]` (post-`reorder_extruders_for_minimum_
+   flush_volume`) shows the per-layer sequence collapsed to
+   `L0[0] L1[] L2[0] L3[] …` and `[E]` (`process_layer`) sees
+   `extruders=[0]` for every layer — the resolved 1/2 cadence does not
+   survive the reorder + wipe-tower-planning pipeline into the
+   ToolOrdering instance the G-code emitter consumes
+   (`print.tool_ordering()` via `_make_wipe_tower` / `sort_and_build_
+   data` → `reorder_filaments_for_minimum_flush_volume`). This is
+   exactly the **~800-LoC GCode.cpp + ~311-LoC ToolOrdering emission
+   port** GEMINI.md flagged as the major un-ported FS piece; it is
+   *not* a small propagation fix and is out of scope for patches
+   0072/0073.
+
+**Shipped: no code patches — the diagnosis is the deliverable.** Both
+candidate patches (0072 region-config propagation, 0073 is_overriddable
+gate) were authored, built, and device-tested. Neither produced working
+LayerCycle (Gap 3 collapses the result regardless), so they have zero
+standalone user-observable benefit today. They were **not shipped**
+because, with the FS parity reference test already failing at baseline
+(see the pre-existing-regression note below), there is no clean
+known-good reference to fully certify the patches regress nothing
+across the FS surface — and shipping zero-benefit engine patches under
+imperfect regression certification violates "ship verified." They can
+be re-derived from this proposal when Gap 3 is tackled. The deliverable
+of this work is the **diagnosis itself**: the proposal's original
+premise — "LayerCycle is just a config-propagation fix" — is
+**disproven**. It is the full FS v0.9.9 emission port. The submodule
+tree is back to the verified pinned + 0001-0071 state.
+
+**Pre-existing regression discovered (UNRELATED to LayerCycle, action
+needed).** While regression-testing the candidate patches,
+`PeggyPaletteFullSpectrumParityTest` was found **failing on the
+current main branch at baseline** (no LayerCycle patches): T1 filament
+use = 989.14 mm vs ref 938.7 mm = **+5.4 %**, well past the ±2 %
+tolerance. The candidate patches do **not** move this number (T1 =
+989.13–989.15 across baseline / +0072 / +0072+0073 — identical within
+float noise), proving the divergence is independent of this work. This
+contradicts memory `project_orcaxr_patch_chain.md` (2026-05-14) which
+recorded T1 within ±0.3 % (938.68). Something in the slicer commits
+after that date regressed the painted-Local-Z PeggyPalette parity —
+candidate range `afc6f7d..e8a7cad` (the `clamp_filament_arrays` /
+`strip_painted_facets` series). This needs its own bisect + fix; it is
+the **highest-priority FS issue** because painted-Local-Z is currently
+the *only* working multi-color path and it is now off by 5.4 % on the
+reference model.
+
+**Remaining (the real work):** port FS v0.9.9's mixed-filament-aware
+emission pipeline — `reorder_filaments_for_minimum_flush_volume`
+(`ToolOrderUtils.cpp`, currently *zero* MixedFilament awareness),
+`_make_wipe_tower` / `sort_and_build_data` planning, and
+`GCode::process_layer` toolchange emission — so the resolved per-layer
+cadence survives into the gcode. FS resolves per-layer virtual-filament
+cadence *in the emission pipeline itself*, which is why it never hits
+the propagation ambiguity that sank patch 0072. Estimated ~800-LoC
+`GCode.cpp` + ~311-LoC `ToolOrdering` + the `ToolOrderUtils.cpp` reorder
+DP, accessed semantically from FS tag `v0.9.9` (`ratdoux/OrcaSlicer-
+FullSpectrum`, b3c41fda). The canonical `FullSpectrumLayerCycleTest`
+stays `@Ignore`d until this lands; the painted-Local-Z recipe remains
+the working multi-color path today (PeggyPalette parity ±0.3 %).
+
 ## Why now
 
 1. **GEMINI.md gotcha #20** documents the gap and references this test.
