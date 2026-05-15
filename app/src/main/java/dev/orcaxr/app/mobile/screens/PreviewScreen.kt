@@ -51,6 +51,7 @@ import dev.orcaxr.app.PrintOptions
 import dev.orcaxr.app.SendAndPrintOptionsPanel
 import dev.orcaxr.app.applyPrintOptionsToGcode
 import dev.orcaxr.app.mobile.GcodeThumbnailReader
+import dev.orcaxr.app.mobile.MobileMesh3DViewer
 import dev.orcaxr.app.mobile.MobileToolpath3DViewer
 import dev.orcaxr.app.mobile.ToolpathColorMode
 import dev.orcaxr.app.mobile.ToolpathFilamentsLegend
@@ -249,8 +250,26 @@ fun PreviewScreen(isTablet: Boolean) {
                 }
 
                 val tp = toolpath
+                // Sidecar colored-mesh GLB baked by SlicerScreen's
+                // runSlice (writeColoredGlb). Path is `<gcode-base>.colored.glb`
+                // in the same gcode cache dir; if the bake failed
+                // we just skip the "Model" mode on the toggle.
+                val coloredMeshGlb = remember(gcodeFile?.absolutePath) {
+                    gcodeFile?.let { File(it.parentFile, "${it.nameWithoutExtension}.colored.glb") }
+                }
+                val coloredMeshReady = coloredMeshGlb?.let { it.exists() && it.length() > 0 } == true
                 if (tp != null && tp.layerZs.isNotEmpty()) {
-                    var view3D by remember(tp) { mutableStateOf(false) }
+                    // Three-mode picker:
+                    //   0 = 2D layers (existing per-layer Z slice view)
+                    //   1 = 3D model (colored-mesh GLB from writeColoredGlb;
+                    //       mirrors XR's GlbSceneEntity post-slice)
+                    //   2 = 3D toolpath (g-code segments)
+                    // Default to "3D model" when the bake succeeded so
+                    // the user lands on the colored visualization the
+                    // XR shell shows; otherwise fall back to 2D layers.
+                    var viewMode by remember(tp, coloredMeshReady) {
+                        mutableStateOf(if (coloredMeshReady) 1 else 0)
+                    }
                     MobileCard {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Row(
@@ -258,14 +277,27 @@ fun PreviewScreen(isTablet: Boolean) {
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                SectionKicker("Toolpath")
+                                SectionKicker("Visualization")
+                                // Build the list of available modes. The
+                                // "3D model" option only appears when
+                                // the colored-mesh sidecar bake
+                                // succeeded — otherwise the user can
+                                // still scrub layers or inspect the
+                                // toolpath.
+                                val modeOptions = buildList<Pair<String, Int>> {
+                                    add("2D layers" to 0)
+                                    if (coloredMeshReady) add("3D model" to 1)
+                                    add("3D toolpath" to 2)
+                                }
                                 SingleChoiceSegmentedButtonRow {
-                                    val labels = listOf("2D layers", "3D")
-                                    labels.forEachIndexed { i, label ->
+                                    modeOptions.forEachIndexed { i, (label, modeId) ->
                                         SegmentedButton(
-                                            selected = if (i == 0) !view3D else view3D,
-                                            onClick = { view3D = i == 1 },
-                                            shape = SegmentedButtonDefaults.itemShape(index = i, count = labels.size),
+                                            selected = viewMode == modeId,
+                                            onClick = { viewMode = modeId },
+                                            shape = SegmentedButtonDefaults.itemShape(
+                                                index = i,
+                                                count = modeOptions.size,
+                                            ),
                                         ) { Text(label) }
                                     }
                                 }
@@ -332,7 +364,12 @@ fun PreviewScreen(isTablet: Boolean) {
                                     else ToolpathColorMode.ByRole,
                                 )
                             }
-                            if (isMultiTool) {
+                            // "By filament / By role" only applies to
+                            // the 2D layer view and the 3D toolpath
+                            // view — the 3D model view paints vertex
+                            // colors baked by writeColoredGlb and has
+                            // no per-segment role/filament axis.
+                            if (isMultiTool && viewMode != 1) {
                                 Row(
                                     Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.End,
@@ -356,26 +393,40 @@ fun PreviewScreen(isTablet: Boolean) {
                                     }
                                 }
                             }
-                            if (view3D) {
-                                MobileToolpath3DViewer(
-                                    parsed = tp,
-                                    extruderPalette = activeSlotHexes.takeIf { it.isNotEmpty() },
-                                )
-                            } else {
-                                ToolpathLayerView(
-                                    parsed = tp,
-                                    colorMode = colorMode,
-                                    filamentPalette = filamentColors,
-                                )
-                                if (colorMode == ToolpathColorMode.ByFilament) {
-                                    ToolpathFilamentsLegend(
-                                        activeExtruders = activeExtruders,
-                                        palette = filamentColors,
-                                        labels = activeSlotLabels,
+                            when (viewMode) {
+                                1 -> {
+                                    val glb = coloredMeshGlb
+                                    if (glb != null) MobileMesh3DViewer(glbPath = glb)
+                                    if (isMultiTool) {
+                                        ToolpathFilamentsLegend(
+                                            activeExtruders = activeExtruders,
+                                            palette = filamentColors,
+                                            labels = activeSlotLabels,
+                                        )
+                                    }
+                                }
+                                2 -> {
+                                    MobileToolpath3DViewer(
+                                        parsed = tp,
+                                        extruderPalette = activeSlotHexes.takeIf { it.isNotEmpty() },
                                     )
-                                } else {
-                                    val activeRoles = remember(tp) { tp.segments.map { it.role }.toSet() }
-                                    ToolpathRolesLegend(activeRoles)
+                                }
+                                else -> {
+                                    ToolpathLayerView(
+                                        parsed = tp,
+                                        colorMode = colorMode,
+                                        filamentPalette = filamentColors,
+                                    )
+                                    if (colorMode == ToolpathColorMode.ByFilament) {
+                                        ToolpathFilamentsLegend(
+                                            activeExtruders = activeExtruders,
+                                            palette = filamentColors,
+                                            labels = activeSlotLabels,
+                                        )
+                                    } else {
+                                        val activeRoles = remember(tp) { tp.segments.map { it.role }.toSet() }
+                                        ToolpathRolesLegend(activeRoles)
+                                    }
                                 }
                             }
                         }

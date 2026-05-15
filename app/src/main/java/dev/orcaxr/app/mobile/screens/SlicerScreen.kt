@@ -170,6 +170,19 @@ fun SlicerScreen(
         else SliceUi.Idle
     ) }
 
+    // Active printer's filament-slot palette. Drives the colored-mesh
+    // GLB bake at slice time so PreviewScreen can render the model in
+    // 3D with the same paint colors the XR shell shows. Falls back to
+    // FilamentSlotsStore (legacy color-only path) when no entries are
+    // configured for the active printer.
+    val filamentSlotsByPrinter by app.filamentSlots.all.collectAsState(initial = emptyMap<String, List<String>>())
+    val activePaletteHex = remember(filamentMap, filamentSlotsByPrinter, activePrinter?.id) {
+        val entries = activePrinter?.id?.let { filamentMap[it] }.orEmpty()
+            .sortedBy { it.slotIndex }
+        if (entries.isNotEmpty()) entries.map { it.color }
+        else activePrinter?.id?.let { filamentSlotsByPrinter[it] }.orEmpty()
+    }
+
     // Empty-plate import + primitive launcher. Mirrors OrcaSlicer:
     // an empty plate is a first-class workspace state — the user
     // sees the build plate, can drop a primitive on it (cube /
@@ -294,6 +307,7 @@ fun SlicerScreen(
                                     cacheDir = ctx.cacheDir,
                                     paintFilamentIndex = paintFilamentIndex,
                                     transform = transform,
+                                    paletteHex = activePaletteHex,
                                     onProgress = { p, m ->
                                         if (sliceState is SliceUi.Slicing) sliceState = SliceUi.Slicing(p, m)
                                     },
@@ -360,6 +374,7 @@ fun SlicerScreen(
                                 cacheDir = ctx.cacheDir,
                                 paintFilamentIndex = paintFilamentIndex,
                                 transform = transform,
+                                paletteHex = activePaletteHex,
                                 onProgress = { p, m ->
                                     if (sliceState is SliceUi.Slicing) sliceState = SliceUi.Slicing(p, m)
                                 },
@@ -1171,6 +1186,7 @@ private suspend fun runSlice(
     cacheDir: File,
     paintFilamentIndex: ByteArray?,
     transform: SlicerEngine.ModelPlacement,
+    paletteHex: List<String>,
     onProgress: (Int, String) -> Unit,
     onResult: (SliceResult) -> Unit,
 ) {
@@ -1203,6 +1219,39 @@ private suspend fun runSlice(
             paintFilamentIndices = listOf(paintFilamentIndex),
             onProgress = { percent, message -> onProgress(percent, message) },
         )
+    }
+    // Bake a colored-mesh GLB sidecar next to the gcode so the
+    // post-slice PreviewScreen can show the model in 3D with
+    // FullSpectrum / paint colors — same `writeColoredGlb` path the
+    // XR shell uses for its on-plate preview. Non-fatal on failure:
+    // the Preview screen simply falls back to "Toolpath only" when
+    // the sidecar isn't there.
+    if (result is SliceResult.Success) {
+        runCatching {
+            val coloredGlb = File(outDir, "${source.nameWithoutExtension}.colored.glb")
+            val palette = FloatArray(16 * 3) { 1f }
+            for (i in 0 until minOf(paletteHex.size, 16)) {
+                val h = paletteHex[i].trimStart('#').padStart(6, '0').take(6)
+                palette[i * 3 + 0] = (h.substring(0, 2).toIntOrNull(16) ?: 255) / 255f
+                palette[i * 3 + 1] = (h.substring(2, 4).toIntOrNull(16) ?: 255) / 255f
+                palette[i * 3 + 2] = (h.substring(4, 6).toIntOrNull(16) ?: 255) / 255f
+            }
+            val paintForPreview =
+                if (paintFilamentIndex != null && paintFilamentIndex.any { it.toInt() != 0 }) {
+                    paintFilamentIndex
+                } else null
+            SlicerEngine.writeColoredGlb(
+                input = source,
+                outGlb = coloredGlb,
+                paletteRgb = palette,
+                paintFilamentIndex = paintForPreview,
+            )
+        }.onFailure {
+            android.util.Log.w(
+                "OrcaXR/mobile-slice",
+                "colored preview GLB bake failed (preview falls back to toolpath only): ${it.message}",
+            )
+        }
     }
     onResult(result)
 }
