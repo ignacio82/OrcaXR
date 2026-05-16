@@ -1,11 +1,16 @@
 # Smart Auto-Paint — design proposal
 
-Status: **M1 + M2 + M4 shipped**, plus **5 ideas borrowed from
+Status: **M1 + M2 + M3 + M4 shipped**, plus **5 ideas borrowed from
 `taylormadearmy/u1-slicer-for-android`** (see "Borrowed ideas" below) —
 `auto_paint` + `auto_paint_from_reference` + `auto_paint_label` MCP
-tools, physical-only. M3 (FullSpectrum) gated on green PeggyPalette.
-Roadmap home: **D20** (Full-Color & High-Fidelity Painting) + **D21**
-(auto-paint without an LLM driver).
+tools. M3 (FullSpectrum) is **experimental, opt-in**
+(`use_full_spectrum=true`): its gate "green PeggyPalette" is now
+satisfied (re-gated by `1b4ef8b` onto per-tool MODEL extrusion ±2%,
+device-GREEN 2026-05-16); the FS Local-Z engine port is
+software-verified (patches 0067 + `MixedFilamentWireFormatTest`) with
+only the Snapmaker U1 hardware print pending. Roadmap home: **D20**
+(Full-Color & High-Fidelity Painting) + **D21** (auto-paint without an
+LLM driver).
 
 ## Goal
 
@@ -65,11 +70,12 @@ machinery is already in the tree and battle-tested:
 5. **FullSpectrum honesty.** Painted-Local-Z FS emission is complete
    end-to-end (patch 0067) and is *the* working multi-color path — an
    auto-paint produces painted geometry, so it is the ideal FS consumer.
-   **But** the `PeggyPaletteFullSpectrumParityTest` +5.4% regression is
-   open and is the highest-priority FS issue, and there is a hard
-   "never commit on red PeggyPalette" gate for slicer-touching commits.
-   Therefore **FS mode is deferred** (see Milestones); physical-only is
-   the always-correct path and ships first.
+   The `PeggyPaletteFullSpectrumParityTest` gate is GREEN (the "+5.4%"
+   was a stale *total*-filament-mm artifact; `1b4ef8b` re-gated onto the
+   real per-tool MODEL ±2% invariant). FS therefore ships as M3 but
+   stays **experimental + opt-in** (`use_full_spectrum=true`) —
+   physical-only remains the always-correct default, and the Snapmaker
+   U1 hardware print is the one remaining FS validation step.
 
 ## Architecture
 
@@ -85,8 +91,9 @@ The engine is a pipeline with a pluggable *appearance source* and a
      neighbour via BFS over MeshBvh adjacency (no holes, ever)
 3. QUANTIZE    → only when the appearance source produces RGB targets:
      cluster targets in CIELAB (k ≤ palette size / user cap),
-     physical-only:  GamutMatcher with blends disabled
-     FullSpectrum:   GamutMatcher full gamut → applyGamutMatches()  [deferred]
+     physical-only:  nearest physical PaletteSlot (ColorScience)
+     FullSpectrum:   FullSpectrumGamut extended palette → FsPaintSupport
+                     materializes virtual rows  [M3, experimental]
 4. EMIT        → ByteArray(triCount) of 1-based slot tags
                  → LoadPaintState (live, one undo) OR into a paint session
 5. VERIFY/LOOP → (target image only) render_view → score_paint_against_
@@ -162,13 +169,14 @@ FS is one parameter on one function. `GamutMatcher.matchModelColors`
 already enumerates physical + pigment-mixed blend candidates and picks
 the CIEDE2000-nearest; `applyGamutMatches` already materializes the
 virtual `MixedFilamentEntry` rows and rewrites `virtualSlot`s.
-Physical-only quantization is the same call with blends disabled
-(`mixStepPercent` large / `blendDeltaEMargin` ∞). When PeggyPalette goes
-green and FS Local-Z is hardware-verified, FS mode is: flip the
-parameter, add the predicted-mix preview (via the same pigment mixer the
-slice uses, `SlicerEngine.blendFilamentColors`), and add an
-"experimental" UI gate. No architectural rework — the engine's quantize
-stage is written against the `GamutMatcher` seam from M2 onward.
+**Shipped (M3)** exactly as predicted: `FullSpectrumGamut` reuses
+`GamutMatcher.enumerateGamut` (physical + pigment-mixer-predicted
+blends) to build a wider `PaletteSlot` list; the unchanged engines
+quantize against it; `FsPaintSupport` materializes the chosen blends
+into virtual `MixedFilamentEntry` rows (same `ensureBlendRow` semantics
++ per-printer store seam as `applyGamutMatches` / "Match to my
+filaments", `8e462e0`) and reports the predicted printed colours. No
+architectural rework — a wider palette was the entire mechanism.
 
 ## Tool & UX surface
 
@@ -176,10 +184,11 @@ stage is written against the `GamutMatcher` seam from M2 onward.
   (`height_bands` | `components` | `cavity` | `recipe`; `auto` picks
   `recipe`→fallback), `axis` (for `height_bands`), `max_colors`,
   `session_id`, `dry_run` (returns the per-slot histogram + a render
-  without committing). FS params (`use_full_spectrum`) reserved, rejected
-  with a clear "deferred until FS is green" message until M3-equivalent.
-  Image params (`image_base64`/`image_token`, `camera_descriptor`)
-  reserved for M2. Registered with one `builder.tool(...)` line in
+  without committing). `use_full_spectrum=true` (M3, experimental) is
+  honored on the color-matching modes (image / label / reference) and
+  degrades to physical-only with a stated reason elsewhere. Image
+  params (`image_base64`/`image_token`, `camera_descriptor`) shipped
+  in M2. Registered with one `builder.tool(...)` line in
   `McpController.registerAllTools`, gated on
   `isCapabilityWired(LoadPaintState)`, session-aware.
 - **XR:** a "Smart Paint" card — strategy picker, image picker (reuse
@@ -224,10 +233,27 @@ Each is independently shippable and verified before the next.
   with a fake; the planner is pure and tested standalone). The "make
   it look like this" headline. Honest scope: a single reference view
   colors the camera-facing accents; base covers the rest.
-- **M3 (later, gated) — FullSpectrum gamut.** Unblocked only when
-  `PeggyPaletteFullSpectrumParityTest` is green and FS Local-Z is
-  hardware-verified. Flip the `GamutMatcher` blend parameter + predicted
-  mix preview + experimental UI gate.
+- **M3 — FullSpectrum gamut (shipped, experimental).** The gate is met:
+  `PeggyPaletteFullSpectrumParityTest` is GREEN (re-gated by `1b4ef8b`
+  onto the real per-tool MODEL-extrusion ±2% invariant — the old
+  "+5.4% T1" was a *total* filament-mm delta that counted purge and
+  flagged OrcaXR's superior flush-minimiser as a regression), and the
+  FS Local-Z engine port is software-verified (patches 0067 +
+  `MixedFilamentWireFormatTest`); only the Snapmaker U1 hardware print
+  remains. `FullSpectrumGamut` (pure) extends the quantizer palette
+  with `GamutMatcher`-enumerated, pigment-mixer-predicted blend
+  candidates; `FsPaintSupport` materializes the blends the engine
+  actually picked into virtual `MixedFilamentEntry` rows via the same
+  per-printer store seam "Match to my filaments" (`8e462e0`, in `main`)
+  already ships, remaps the painted ids to the real `physicalCount + k`
+  virtual ids, and reports predicted colours. Opt-in
+  (`use_full_spectrum=true`) on the color-matching modes (`auto_paint`
+  image, `auto_paint_label`, `auto_paint_from_reference`); degrades to
+  physical-only with a stated reason when there's no active printer; a
+  blend that can't fit `MAX_PAINT_SLOTS` falls back to its nearest
+  physical slot so the paint is always sliceable. The engines were
+  **not** changed — a wider palette is the entire mechanism (the "FS
+  drop-in seam" the design predicted).
 
 ## Borrowed ideas (from `taylormadearmy/u1-slicer-for-android`)
 

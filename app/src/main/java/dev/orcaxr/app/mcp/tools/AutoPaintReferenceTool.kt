@@ -42,15 +42,17 @@ import java.util.Base64
  *  6. commits the best candidate as ONE `LoadPaintState` (one undo).
  *
  * `dry_run=true` runs the loop and returns the plan/score report
- * without committing. Physical-only; `use_full_spectrum=true` rejected
- * (FS deferred — proposal §FullSpectrum drop-in seam). Needs an
- * Anthropic key (LlmSettings / McpSettings).
+ * without committing. Physical-only by default; `use_full_spectrum=true`
+ * is experimental (also matches FS blends, materializing virtual rows
+ * for the active printer). Needs an Anthropic key (LlmSettings /
+ * McpSettings).
  */
 internal class AutoPaintReferenceTool(
     private val ws: WorkspaceModel,
     private val session: AiSessionState,
     private val apiKeyFlow: Flow<String?>,
     private val client: VisionApiClient = OkHttpVisionApiClient(),
+    private val fsStore: FsPaintSupport.MixedRowStore? = null,
 ) : Tool {
     override val name = "auto_paint_from_reference"
     override val description =
@@ -61,7 +63,7 @@ internal class AutoPaintReferenceTool(
             "the result against the reference, and iterates up to max_iterations keeping " +
             "the best-scoring attempt. Reference is reference_image_base64 OR " +
             "reference_render_token. dry_run=true returns the plan/score report without " +
-            "applying. Physical-only (use_full_spectrum rejected). model_id optional when " +
+            "applying. Physical-only by default; use_full_spectrum (experimental) also matches FS blends. model_id optional when " +
             "exactly one model is placed. Requires an Anthropic API key."
     override val inputSchema = Schemas.obj(
         properties = mapOf(
@@ -78,19 +80,13 @@ internal class AutoPaintReferenceTool(
             "max_colors" to Schemas.integer("Cap on palette slots (1..$MAX_PAINT_SLOTS)."),
             "vision_model" to Schemas.string("Anthropic model id (default claude-haiku-4-5)."),
             "dry_run" to Schemas.bool("Run the loop but do NOT apply (default false)."),
-            "use_full_spectrum" to Schemas.bool("Reserved — rejected (FS deferred)."),
+            "use_full_spectrum" to Schemas.bool("Experimental: also match FullSpectrum blend colors (materializes virtual rows)."),
         ),
     )
 
     override suspend fun call(args: JSONObject): ToolResult {
         if (!ws.attached.value) return ToolResult.error("OrcaXR not attached.")
-        if (args.optBoolean("use_full_spectrum", false)) {
-            return ToolResult.error(
-                "use_full_spectrum is not available yet: the FullSpectrum gamut option is " +
-                    "deferred until PeggyPaletteFullSpectrumParityTest is green (see " +
-                    "docs/proposals/smart-auto-paint.md). Re-run physical-only.",
-            )
-        }
+        val useFs = args.optBoolean("use_full_spectrum", false)
         val apiKey = apiKeyFlow.first()
         if (apiKey.isNullOrBlank()) {
             return ToolResult.error(
@@ -124,9 +120,11 @@ internal class AutoPaintReferenceTool(
         } else {
             paletteSize
         }
-        val palette = AutoPaintImageEngine.paletteFromHex(
-            ws.previewPalette.value.filter { it.isNotBlank() }.take(maxColors),
+        val fsPal = FsPaintSupport.resolvePalette(
+            useFs, ws.previewPalette.value.filter { it.isNotBlank() }.take(maxColors),
+            fsStore, ws.selectedPrinterId.value,
         )
+        val palette = fsPal.paletteSlots
         if (palette.isEmpty()) return ToolResult.error("No usable filament colors in the palette.")
 
         // Reference image.
@@ -227,7 +225,17 @@ internal class AutoPaintReferenceTool(
             feedback = gradeJson.optJSONArray("regions")
         }
 
-        val finalPaint = best ?: return ToolResult.error("No usable paint produced.")
+        val basePaint = best ?: return ToolResult.error("No usable paint produced.")
+        var finalPaint = basePaint
+        var fsReport: Any? = fsPal.note
+        val builtFs = fsPal.built
+        if (builtFs != null && fsStore != null) {
+            val fin = FsPaintSupport.finalize(
+                builtFs, basePaint, fsStore, ws.selectedPrinterId.value!!,
+            )
+            finalPaint = fin.paint
+            fsReport = fin.report
+        }
         val dryRun = args.optBoolean("dry_run", false)
 
         val hist = IntArray(MAX_PAINT_SLOTS + 1)
@@ -254,6 +262,7 @@ internal class AutoPaintReferenceTool(
             put("regions", regionsArr)
             put("slots_used", slotsUsed)
             put("per_slot_histogram", histArr)
+            if (fsReport != null) put("full_spectrum", fsReport)
             put("dry_run", dryRun)
             put("applied", false)
         }

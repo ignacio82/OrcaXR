@@ -36,14 +36,16 @@ import java.util.Base64
  * path). Single image → only the camera-facing side carries true color.
  *
  * `dry_run=true` returns the per-slot histogram without committing.
- * Physical-only; `use_full_spectrum=true` is rejected (FS deferred
- * until PeggyPalette is green — proposal §FullSpectrum drop-in seam).
- * For catalogued shapes prefer find_similar_recipe + paint_template
+ * Physical-only by default; `use_full_spectrum=true` (experimental,
+ * image mode only) also matches the colors FullSpectrum can synthesize
+ * by blending two filaments, materializing virtual rows for the active
+ * printer. For catalogued shapes prefer find_similar_recipe + paint_template
  * (strategy='recipe' returns that pointer).
  */
 internal class AutoPaintTool(
     private val ws: WorkspaceModel,
     private val session: AiSessionState,
+    private val fsStore: FsPaintSupport.MixedRowStore? = null,
 ) : Tool {
     override val name = "auto_paint"
     override val description =
@@ -98,7 +100,8 @@ internal class AutoPaintTool(
             ),
             "dry_run" to Schemas.bool("Compute + return the histogram but do NOT apply (default false)"),
             "use_full_spectrum" to Schemas.bool(
-                "Reserved — FullSpectrum gamut is deferred; true is rejected.",
+                "Experimental: also match FullSpectrum blend colors (image mode only; " +
+                    "materializes virtual rows for the active printer). Default false.",
             ),
         ),
     )
@@ -106,14 +109,7 @@ internal class AutoPaintTool(
     override suspend fun call(args: JSONObject): ToolResult {
         if (!ws.attached.value) return ToolResult.error("OrcaXR not attached.")
 
-        if (args.optBoolean("use_full_spectrum", false)) {
-            return ToolResult.error(
-                "use_full_spectrum is not available yet: the FullSpectrum gamut option is " +
-                    "deferred until PeggyPaletteFullSpectrumParityTest is green and FS Local-Z " +
-                    "is hardware-verified (see docs/proposals/smart-auto-paint.md). Re-run " +
-                    "physical-only (omit use_full_spectrum).",
-            )
-        }
+        val useFs = args.optBoolean("use_full_spectrum", false)
 
         val models = ws.placedModels.value
         val requestedId = args.optString("model_id").trim()
@@ -144,7 +140,7 @@ internal class AutoPaintTool(
         val hasImage = args.has("image_base64") || args.has("image_token")
         val strategyKey = args.optString("strategy").trim()
         val outcome = when {
-            hasImage -> runImage(args, bvh, maxColors)
+            hasImage -> runImage(args, bvh, maxColors, useFs)
             strategyKey == "" || strategyKey == "auto" || strategyKey == "cascade" ->
                 runCascade(args, bvh, model.paintFilamentIndex, minOf(paletteSize, maxColors))
             else -> runGeometric(args, bvh, minOf(paletteSize, maxColors))
@@ -182,6 +178,15 @@ internal class AutoPaintTool(
             put("dry_run", dryRun)
             put("applied", false)
             for (k in modeBody.keys()) put(k, modeBody.get(k))
+            if (useFs && !modeBody.has("full_spectrum")) {
+                put(
+                    "full_spectrum",
+                    "ignored — applies to the image color-matching mode; cascade / " +
+                        "geometric strategies map regions to physical slots. Use " +
+                        "auto_paint_label or auto_paint_from_reference for FS, or pass " +
+                        "an image.",
+                )
+            }
         }
 
         if (dryRun) {
@@ -291,10 +296,11 @@ internal class AutoPaintTool(
         return Run.Ok(r.perTriangleSlot, mb, r.strategy)
     }
 
-    private fun runImage(
+    private suspend fun runImage(
         args: JSONObject,
         bvh: dev.orcaxr.app.MeshBvh,
         maxColors: Int,
+        useFs: Boolean,
     ): Run {
         val pngBytes: ByteArray = when {
             args.has("image_base64") -> {
@@ -314,7 +320,10 @@ internal class AutoPaintTool(
             ?: return Run.Err(ToolResult.error("Couldn't decode PNG bytes."))
 
         val paletteHex = ws.previewPalette.value.filter { it.isNotBlank() }.take(maxColors)
-        val palette = AutoPaintImageEngine.paletteFromHex(paletteHex)
+        val fsPal = FsPaintSupport.resolvePalette(
+            useFs, paletteHex, fsStore, ws.selectedPrinterId.value,
+        )
+        val palette = fsPal.paletteSlots
         if (palette.isEmpty()) {
             return Run.Err(ToolResult.error(
                 "No usable palette — set the workspace filament colors before image auto-paint.",
@@ -378,7 +387,7 @@ internal class AutoPaintTool(
                     "from render_view, or check background_color.",
             ))
         }
-        val out = proj.perTriangleSlot
+        var out = proj.perTriangleSlot
         if (!AutoPaintImageEngine.finalizeCoverage(bvh, out)) {
             return Run.Err(ToolResult.error("Projection produced no paint."))
         }
@@ -390,6 +399,16 @@ internal class AutoPaintTool(
             put("sampled_pixels", proj.sampledPixels)
             put("decal_width", decoded.widthPx)
             put("decal_height", decoded.heightPx)
+        }
+        val built = fsPal.built
+        if (built != null && fsStore != null) {
+            val fin = FsPaintSupport.finalize(
+                built, out, fsStore, ws.selectedPrinterId.value!!,
+            )
+            out = fin.paint
+            mb.put("full_spectrum", fin.report)
+        } else if (fsPal.note != null) {
+            mb.put("full_spectrum", fsPal.note)
         }
         val label = "image" + (pickedPreset?.let { " (auto cam: $it)" } ?: " (camera)")
         return Run.Ok(out, mb, label)

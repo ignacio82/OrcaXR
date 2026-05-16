@@ -89,9 +89,12 @@ class AutoPaintLabelToolTest {
         client: VisionApiClient = CapturingClient(textResp(goodSegments)),
         key: String? = "fake-key",
         captureProvider: ((VisionProvider) -> Unit)? = null,
-    ) = AutoPaintLabelTool(ws, session, flowOf(key)) { p ->
-        captureProvider?.invoke(p); client
-    }
+        fsStore: FsPaintSupport.MixedRowStore? = null,
+    ) = AutoPaintLabelTool(
+        ws, session, flowOf(key),
+        clientFor = { p -> captureProvider?.invoke(p); client },
+        fsStore = fsStore,
+    )
 
     private suspend fun captureNextAction(block: suspend () -> Unit): WorkspaceAction {
         @Suppress("OPT_IN_USAGE")
@@ -156,7 +159,7 @@ class AutoPaintLabelToolTest {
 
     @Test fun noKeyFallsBackToDeterministicWithoutError() = runTest {
         val client = CapturingClient(textResp(goodSegments))
-        val t = AutoPaintLabelTool(ws, session, flowOf(null)) { client }
+        val t = AutoPaintLabelTool(ws, session, flowOf(null), clientFor = { client })
         val res = t.call(JSONObject().apply { put("model_id", modelId); put("dry_run", true) })
         assertFalse(res.isError)
         assertEquals(false, res.structured!!.getBoolean("ai_used"))
@@ -174,12 +177,14 @@ class AutoPaintLabelToolTest {
         assertEquals("gemini", res.structured!!.getString("provider"))
     }
 
-    @Test fun fullSpectrumRejected() = runTest {
+    @Test fun fullSpectrumWithoutStoreDegradesToPhysicalWithNote() = runTest {
+        // tool() injects no fsStore → FS requested but degrades to
+        // physical-only with a stated reason (not an error).
         val res = tool().call(JSONObject().apply {
-            put("model_id", modelId); put("use_full_spectrum", true)
+            put("model_id", modelId); put("use_full_spectrum", true); put("dry_run", true)
         })
-        assertTrue(res.isError)
-        assertTrue(res.text.contains("FullSpectrum") || res.text.contains("full"))
+        assertFalse(res.text, res.isError)
+        assertTrue(res.structured!!.getString("full_spectrum").contains("physical-only"))
     }
 
     @Test fun capabilityGateBlocksApply() = runTest {

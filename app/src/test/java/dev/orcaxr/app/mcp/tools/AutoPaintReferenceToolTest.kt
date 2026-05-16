@@ -115,13 +115,15 @@ class AutoPaintReferenceToolTest {
         assertTrue(res.text.contains("API key"))
     }
 
-    @Test fun fullSpectrumRejected() = runTest {
+    @Test fun fullSpectrumWithoutStoreDegradesToPhysicalWithNote() = runTest {
+        // No fsStore injected → FS requested but degrades to
+        // physical-only with a stated reason (not an error).
         val res = tool(FakeVision(listOf(0.9))).call(JSONObject().apply {
             put("model_id", modelId); put("reference_image_base64", refB64())
-            put("use_full_spectrum", true)
+            put("use_full_spectrum", true); put("dry_run", true)
         })
-        assertTrue(res.isError)
-        assertTrue(res.text.contains("FullSpectrum"))
+        assertFalse(res.text, res.isError)
+        assertTrue(res.structured!!.getString("full_spectrum").contains("physical-only"))
     }
 
     @Test fun referenceRequired() = runTest {

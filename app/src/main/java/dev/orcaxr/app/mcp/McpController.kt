@@ -307,7 +307,10 @@ class McpController private constructor(
             builder.tool(PaintDecalTool(WorkspaceModel.get(), AiSessionState.get()))
             // D20 M1 — Smart Auto-Paint: whole-model geometric paint in
             // one undo step. Physical-only; no image/vision deps.
-            builder.tool(AutoPaintTool(WorkspaceModel.get(), AiSessionState.get()))
+            builder.tool(AutoPaintTool(
+                WorkspaceModel.get(), AiSessionState.get(),
+                dev.orcaxr.app.mcp.tools.FsPaintSupport.CtxMixedRowStore(ctx),
+            ))
             // D19a + D19d — vision-LLM driven 2D mask authoring.
             // Both share the FindFeatureAnchorsTool's API-key flow.
             builder.tool(AiVisionMaskTools.GenerateMaskFromPoint(
@@ -341,11 +344,13 @@ class McpController private constructor(
             // plan + automated grade/refine loop. One undo step.
             builder.tool(AutoPaintReferenceTool(
                 WorkspaceModel.get(), AiSessionState.get(), claudeKeyFlow,
+                fsStore = dev.orcaxr.app.mcp.tools.FsPaintSupport.CtxMixedRowStore(ctx),
             ))
             // Borrowed ideas #2/#3 — deterministic-segmentation + AI
             // naming/recolour (no spatial grounding), multi-provider.
             builder.tool(AutoPaintLabelTool(
                 WorkspaceModel.get(), AiSessionState.get(), claudeKeyFlow,
+                fsStore = dev.orcaxr.app.mcp.tools.FsPaintSupport.CtxMixedRowStore(ctx),
             ))
         }
     }

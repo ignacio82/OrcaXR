@@ -146,12 +146,67 @@ class AutoPaintToolTest {
         assertTrue(res.text.contains("paint_template"))
     }
 
-    @Test fun fullSpectrumIsRejectedUntilGreen() = runTest {
+    @Test fun fullSpectrumWithGeometricStrategyIsNotedNotRejected() = runTest {
+        // FS only applies to the image color-matching mode; a cascade /
+        // geometric run notes that it was ignored rather than erroring.
         val res = tool().call(JSONObject().apply {
-            put("model_id", modelId); put("use_full_spectrum", true)
+            put("model_id", modelId); put("use_full_spectrum", true); put("dry_run", true)
         })
-        assertTrue(res.isError)
-        assertTrue(res.text.contains("FullSpectrum"))
+        assertFalse(res.text, res.isError)
+        assertTrue(res.structured!!.getString("full_spectrum").contains("ignored"))
+    }
+
+    private class FakeMixedStore : FsPaintSupport.MixedRowStore {
+        val byPrinter = HashMap<String, List<dev.orcaxr.app.MixedFilamentEntry>>()
+        override suspend fun get(printerId: String) = byPrinter[printerId].orEmpty()
+        override suspend fun set(printerId: String, rows: List<dev.orcaxr.app.MixedFilamentEntry>) {
+            byPrinter[printerId] = rows
+        }
+    }
+
+    @Test fun fullSpectrumImageModeMaterializesVirtualRowsAndRemapsPaint() = runTest {
+        // Two physicals; a purple target lands between them, so FS
+        // should pick a blend, materialize a virtual row, and the
+        // painted ids should reference it (> physical count).
+        ws.publishPreviewPalette(listOf("#FF0000", "#0000FF"))
+        ws.publishSelectedPrinterId("P1")
+        val store = FakeMixedStore()
+        val t = AutoPaintTool(ws, session, store)
+        val png = solidPng(48, 48, 128, 0, 128) // purple
+        val b64 = java.util.Base64.getEncoder().encodeToString(png)
+        val action = captureNextAction {
+            t.call(JSONObject().apply {
+                put("model_id", modelId)
+                put("image_base64", b64)
+                put("background_color", "#00FF00")
+                put("use_full_spectrum", true)
+            })
+        }
+        val a = action as WorkspaceAction.LoadPaintState
+        assertTrue("full coverage", a.paintFilamentIndex!!.none { it.toInt() == 0 })
+        // A blend was chosen → a virtual row persisted for the printer
+        // AND at least one painted id is a virtual id (> 2 physicals).
+        assertTrue("virtual rows persisted", store.byPrinter["P1"]?.isNotEmpty() == true)
+        assertTrue(
+            "a virtual painted id present",
+            a.paintFilamentIndex!!.any { (it.toInt() and 0xff) > 2 },
+        )
+    }
+
+    @Test fun fullSpectrumImageWithoutPrinterDegradesToPhysical() = runTest {
+        ws.publishPreviewPalette(listOf("#FF0000", "#0000FF"))
+        // no selectedPrinterId, no fsStore on tool() → physical-only + note
+        val png = solidPng(32, 32, 128, 0, 128)
+        val b64 = java.util.Base64.getEncoder().encodeToString(png)
+        val res = tool().call(JSONObject().apply {
+            put("model_id", modelId); put("image_base64", b64)
+            put("background_color", "#00FF00"); put("use_full_spectrum", true)
+            put("dry_run", true)
+        })
+        assertFalse(res.text, res.isError)
+        assertTrue(
+            res.structured!!.getString("full_spectrum").contains("physical-only"),
+        )
     }
 
     @Test fun unknownStrategyRejected() = runTest {

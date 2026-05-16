@@ -35,14 +35,17 @@ import java.util.Base64
  * AI is decorative and optional (their principle): if no provider /
  * key is available or the reply doesn't parse, the deterministic
  * cascade colours are committed anyway (`ai_used=false`). One undo
- * step. Physical-only (FS deferred). Uses the multi-provider client
- * (borrowed idea #3) so it works on the free tiers, not Anthropic-only.
+ * step. Physical-only by default; `use_full_spectrum=true` is
+ * experimental (also matches FS blends, materializing virtual rows for
+ * the active printer). Uses the multi-provider client (borrowed idea
+ * #3) so it works on the free tiers, not Anthropic-only.
  */
 internal class AutoPaintLabelTool(
     private val ws: WorkspaceModel,
     private val session: AiSessionState,
     private val apiKeyFlow: Flow<String?>,
     private val clientFor: (VisionProvider) -> VisionApiClient = { MultiProviderVisionClient(it) },
+    private val fsStore: FsPaintSupport.MixedRowStore? = null,
 ) : Tool {
     override val name = "auto_paint_label"
     override val description =
@@ -56,7 +59,7 @@ internal class AutoPaintLabelTool(
             "(ai_used=false). provider: claude|gemini|openai|openrouter|pollinations " +
             "(default claude). api_key optional (else the configured Anthropic key). " +
             "dry_run previews. One undo step; support/seam/fuzzy preserved. " +
-            "use_full_spectrum rejected (FS deferred)."
+            "use_full_spectrum (experimental) also matches FullSpectrum blends."
     override val inputSchema = Schemas.obj(
         properties = mapOf(
             "model_id" to Schemas.string("Model id. Optional if exactly one model is placed."),
@@ -67,18 +70,13 @@ internal class AutoPaintLabelTool(
             "api_key" to Schemas.string("Override key for the chosen provider (else the Anthropic key)."),
             "vision_model" to Schemas.string("Provider model id (else the provider default)."),
             "dry_run" to Schemas.bool("Compute + return without applying (default false)."),
-            "use_full_spectrum" to Schemas.bool("Reserved — rejected (FS deferred)."),
+            "use_full_spectrum" to Schemas.bool("Experimental: also match FullSpectrum blend colors (materializes virtual rows)."),
         ),
     )
 
     override suspend fun call(args: JSONObject): ToolResult {
         if (!ws.attached.value) return ToolResult.error("OrcaXR not attached.")
-        if (args.optBoolean("use_full_spectrum", false)) {
-            return ToolResult.error(
-                "use_full_spectrum is not available yet (FS deferred until PeggyPalette is " +
-                    "green — docs/proposals/smart-auto-paint.md). Re-run physical-only.",
-            )
-        }
+        val useFs = args.optBoolean("use_full_spectrum", false)
 
         val models = ws.placedModels.value
         val requestedId = args.optString("model_id").trim()
@@ -104,9 +102,11 @@ internal class AutoPaintLabelTool(
             paletteSize
         }
         val k = minOf(paletteSize, maxColors).coerceIn(1, MAX_PAINT_SLOTS)
-        val palette = AutoPaintImageEngine.paletteFromHex(
-            ws.previewPalette.value.filter { it.isNotBlank() }.take(maxColors),
+        val fsPal = FsPaintSupport.resolvePalette(
+            useFs, ws.previewPalette.value.filter { it.isNotBlank() }.take(maxColors),
+            fsStore, ws.selectedPrinterId.value,
         )
+        val palette = fsPal.paletteSlots
         if (palette.isEmpty()) return ToolResult.error("No usable filament colors.")
 
         val axisKey = args.optString("axis").trim().ifEmpty { "z" }
@@ -180,6 +180,17 @@ internal class AutoPaintLabelTool(
             return ToolResult.error("Internal: segmentation left triangles unpainted.")
         }
 
+        // M3: materialize any FS blend placeholders the quantizer chose.
+        var fsReport: Any? = fsPal.note
+        val built = fsPal.built
+        if (built != null && fsStore != null) {
+            val fin = FsPaintSupport.finalize(
+                built, finalPaint, fsStore, ws.selectedPrinterId.value!!,
+            )
+            finalPaint = fin.paint
+            fsReport = fin.report
+        }
+
         val hist = IntArray(MAX_PAINT_SLOTS + 1)
         for (s in finalPaint) hist[s.toInt() and 0xff]++
         val histArr = JSONArray()
@@ -201,6 +212,7 @@ internal class AutoPaintLabelTool(
             put("bands", bandInfo)
             put("slots_used", slotsUsed)
             put("per_slot_histogram", histArr)
+            if (fsReport != null) put("full_spectrum", fsReport)
             put("dry_run", dryRun)
             put("applied", false)
         }
