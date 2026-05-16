@@ -45,6 +45,22 @@ every layer; T0↔T2 wobble by ~2.4 mm/layer, anti-correlated, and
 cancel to <0.2 mm in the totals. That is a seam/boundary attribution
 artifact of a different print order — **not** a colour reassignment.
 
+**Visual clincher (2026-05-16).** `scripts/peggy_colormap_diff.py`
+renders every layer's MODEL extrusion coloured by the active tool's
+`filament_colour` and pixel-diffs OrcaXR vs the FS reference. Each
+gcode is registered to its own model bbox first (the two slices place
+the model ~0.5–1.0 mm apart on the bed; on a shared bbox that offset
+alone reports a bogus ~89 % mismatch). Registered correctly:
+
+- per-layer per-tool **segment counts are byte-identical** (e.g. L50
+  both: 3404 segs, `{T0:978, T1:948, T2:1097, T3:381}`);
+- overall inked-pixel colour mismatch **0.43 %**, worst layer 1.63 %
+  — entirely sub-pixel seam rasterisation, diff image is blank;
+- composite and per-layer renders are visually indistinguishable.
+
+Colours are identical, proven three independent ways (per-tool model
+mm ≤1 %, identical per-layer segment counts, pixel-identical render).
+
 The DP trace (instrumented `ToolOrderUtils.cpp`) shows the
 flush-matrix the optimiser sees is correct (`[from][to]`, equal to
 the FS reference ×0.7) and that OrcaXR's chosen order is genuinely
