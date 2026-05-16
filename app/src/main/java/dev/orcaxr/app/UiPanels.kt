@@ -192,6 +192,14 @@ fun LeftProjectPanel(
     /** Phase D4 — open the Emboss / Engrave panel for the given
      *  model. Called from the per-row Emboss icon. */
     onEmbossPlacedModel: (id: String) -> Unit = {},
+    /** "Match to my filaments" — user taps the button, reviews the
+     *  per-color preview, and confirms. The panel computes the matches
+     *  itself (it already has the model colors + loaded slots + virtual
+     *  rows); the callback just persists the chosen [GamutMatcher.GamutMatch]
+     *  list (caller runs [GamutMatcher.applyGamutMatches] against the
+     *  full mixed-row list so virtual indices stay consistent with the
+     *  slice path). Null hides the button. */
+    onApplyGamutMatches: ((List<GamutMatcher.GamutMatch>) -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier
@@ -418,6 +426,44 @@ fun LeftProjectPanel(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+
+        // "Match to my filaments" — remap every model color onto the
+        // closest color the loaded spools can produce, directly or as a
+        // FullSpectrum blend. User-triggered and preview-gated: tapping
+        // only opens the review sheet; nothing changes until they
+        // confirm. Hidden until a model palette + printer slots exist.
+        if (onApplyGamutMatches != null && filaments.isNotEmpty() && slotCount > 0) {
+            var gamutPreview by remember {
+                mutableStateOf<List<GamutMatcher.GamutMatch>?>(null)
+            }
+            val byPhysical = printerLoadedSlots.associateBy { it.slotIndex }
+            val physicalColors = (0 until slotCount).map { i ->
+                byPhysical[i]?.colorHex
+                    ?: paletteSuggestions.getOrNull(i)
+                    ?: "#FFFFFF"
+            }
+            OutlinedButton(
+                onClick = {
+                    gamutPreview = GamutMatcher.matchModelColors(
+                        sourceColors = filaments.map { it.color },
+                        physicalColors = physicalColors,
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("🎨  Match to my filaments") }
+
+            gamutPreview?.let { matches ->
+                GamutMatchDialog(
+                    matches = matches,
+                    onApply = {
+                        onApplyGamutMatches(matches)
+                        gamutPreview = null
+                    },
+                    onDismiss = { gamutPreview = null },
+                )
+            }
+        }
+
         ColorMappingPanel(
             slotCount = slotCount,
             printerLoadedSlots = printerLoadedSlots,
@@ -437,6 +483,132 @@ fun LeftProjectPanel(
             onRemoveVirtualRow = onRemoveVirtualRow,
         )
     }
+}
+
+/** Parse "#RRGGBB" into a Compose [Color], falling back to mid-gray on
+ *  anything unparseable so the preview swatch never crashes the dialog. */
+private fun parseUiColor(hex: String): Color = runCatching {
+    Color(android.graphics.Color.parseColor(hex))
+}.getOrDefault(Color(0xFF888888))
+
+/**
+ * Review sheet for "Match to my filaments". Shows every model color, the
+ * achievable color it would be remapped to, the recipe, and an honest
+ * per-color quality badge (CIEDE2000). Nothing is persisted until the
+ * user taps Apply — the caller owns that.
+ */
+@Composable
+private fun GamutMatchDialog(
+    matches: List<GamutMatcher.GamutMatch>,
+    onApply: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    fun qualityLabel(q: GamutMatcher.MatchQuality): Pair<String, Color> = when (q) {
+        GamutMatcher.MatchQuality.EXACT -> "Exact" to Color(0xFF4FC97A)
+        GamutMatcher.MatchQuality.CLOSE -> "Close" to Color(0xFF7BC8FF)
+        GamutMatcher.MatchQuality.APPROXIMATE -> "Approx" to Color(0xFFFFB04A)
+        GamutMatcher.MatchQuality.OUT_OF_GAMUT -> "Best effort" to Color(0xFFFF8A8E)
+    }
+
+    fun recipeText(r: GamutMatcher.GamutRecipe): String = when (r) {
+        is GamutMatcher.GamutRecipe.Physical -> "→ T${r.physicalSlot0} (loaded spool)"
+        is GamutMatcher.GamutRecipe.Blend ->
+            "→ FullSpectrum: T${r.componentA1 - 1} + T${r.componentB1 - 1} " +
+                "(${100 - r.mixBPercent}/${r.mixBPercent})"
+        GamutMatcher.GamutRecipe.Keep -> "→ kept (no usable match)"
+    }
+
+    val anyBlend = matches.any { it.recipe is GamutMatcher.GamutRecipe.Blend }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            Button(onClick = onApply) { Text("Apply matches") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+        title = { Text("Match to my filaments") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 460.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    "Each model color is remapped to the closest color your " +
+                        "loaded filaments can make. ΔE is the perceptual error " +
+                        "(lower = closer).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.LightGray,
+                )
+                matches.forEach { m ->
+                    val (qLabel, qColor) = qualityLabel(m.quality)
+                    Surface(
+                        color = Color(0xFF1B1F23),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp).fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .background(parseUiColor(m.sourceHex), CircleShape),
+                            )
+                            Text(
+                                "  →  ",
+                                color = Color.Gray,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .background(parseUiColor(m.targetHex), CircleShape),
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    recipeText(m.recipe),
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Text(
+                                    if (m.deltaE >= Double.MAX_VALUE / 2) qLabel
+                                    else "$qLabel · ΔE ${"%.1f".format(m.deltaE)}",
+                                    color = qColor,
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        }
+                    }
+                }
+                if (anyBlend) {
+                    Text(
+                        "⚠ FullSpectrum blends print as the nearest single " +
+                            "spool until LayerCycle emission ships — your saved " +
+                            "match upgrades to the true blend automatically once " +
+                            "it does, no re-match needed.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFFFFB04A),
+                    )
+                }
+                Text(
+                    "A blended color reads as a third color at viewing " +
+                        "distance / on flat tops; vertical walls may show faint " +
+                        "banding. Swatches are idealized.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray,
+                )
+            }
+        },
+        containerColor = Color(0xFF15181B),
+        titleContentColor = Color.White,
+        textContentColor = Color.White,
+    )
 }
 
 /**
@@ -1768,7 +1940,11 @@ private fun ModelColorsSection(
             color = Color.Gray,
             style = MaterialTheme.typography.labelSmall,
         )
-        for (slot in 0 until slotCount) {
+        // Render every project filament, not just the first slotCount —
+        // a model can carry more colors than the printer has slots, and
+        // those extra rows are exactly the ones the user needs to see
+        // and remap (manually or via "Match to my filaments").
+        for (slot in 0 until maxOf(slotCount, projectFilaments.size)) {
             val entry = projectFilaments.getOrNull(slot) ?: FilamentEntry(
                 id = "slot_$slot",
                 color = "#FFFFFF",

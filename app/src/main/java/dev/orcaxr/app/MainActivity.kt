@@ -875,7 +875,19 @@ private fun XrShell(
     val filamentList: List<FilamentEntry> = remember(activePrinter, filamentEntriesAll, slotCount, filamentSlotsStore) {
         val saved = activePrinter?.id?.let(filamentEntriesAll::get).orEmpty()
         val bySlot = saved.mapNotNull { e -> e.slotIndex?.let { it to e } }.toMap()
-        (0 until slotCount).map { slot ->
+        // Variable-length project palette. A model can use MORE colors
+        // than the printer has physical slots (the gamut-match feature's
+        // whole reason to exist). The list is keyed by slotIndex (=
+        // model-palette position, set at 3MF import for every color),
+        // so it must span up to the highest saved slot, not just
+        // slotCount. For a ≤slotCount model maxSlot == slotCount and
+        // this is byte-for-byte the old behavior — zero regression on
+        // the common path. Painted-face index k resolves to the k-th
+        // entry here; paddedSlots / paddedSlotRemap / paddedVirtualRemap
+        // / computeFilamentMap all derive their length from this list,
+        // so widening it widens the whole slice config in lockstep.
+        val maxSlot = maxOf(slotCount, bySlot.keys.maxOrNull()?.plus(1) ?: 0)
+        (0 until maxSlot).map { slot ->
             bySlot[slot] ?: FilamentEntry(
                 id = "slot_${slot}_default",
                 color = filamentSlotsStore.defaultPalette[slot % filamentSlotsStore.defaultPalette.size],
@@ -1610,7 +1622,17 @@ private fun XrShell(
                     val embedded = SlicerEngine.read3mfFilamentColours(bakeSource)
                     val printerId = activePrinter?.id
                     if (printerId != null && embedded.isNotEmpty() && slotCount > 0) {
-                        val updated = (0 until slotCount).map { i ->
+                        // Preserve EVERY embedded model color, not just
+                        // the first slotCount. A 6-color model on a
+                        // 4-slot printer must surface all 6 as project
+                        // filaments so the gamut matcher (and manual
+                        // mapping) can route colors 5+ to a physical
+                        // slot or a FullSpectrum blend. slotIndex = i
+                        // for all i (model-palette position); indices
+                        // ≥ slotCount have no identity physical slot but
+                        // are still addressable by painted-face index
+                        // and the resolver/slice config.
+                        val updated = (0 until maxOf(embedded.size, slotCount)).map { i ->
                             val embeddedColor = embedded.getOrNull(i)
                             val existing = filamentList.getOrNull(i)
                             FilamentEntry(
@@ -1618,15 +1640,16 @@ private fun XrShell(
                                 color = embeddedColor ?: (existing?.color ?: "#FFFFFF"),
                                 slotIndex = i,
                                 filamentType = existing?.filamentType ?: "PLA",
-                                // Preserve any user-set physical-slot remap
-                                // across 3MF loads — that remap is the
-                                // user's "use what's loaded at T_M for
-                                // this filament" preference, which is
-                                // about the printer's spool layout, not
-                                // about which model is loaded. Per spec:
-                                // only an explicit picker action mutates
-                                // the remap.
+                                // Preserve any user-set physical/virtual
+                                // remap across 3MF loads — that remap is
+                                // the user's "use what's loaded at T_M /
+                                // FullSpectrum V_K for this filament"
+                                // preference, about the printer's spool
+                                // layout, not which model is loaded. Per
+                                // spec only an explicit picker (or the
+                                // gamut-match) action mutates the remap.
                                 physicalSlot = existing?.physicalSlot,
+                                virtualSlot = existing?.virtualSlot,
                             )
                         }
                         filamentEntriesStore.set(printerId, updated)
@@ -5816,6 +5839,36 @@ private fun XrShell(
                                         filamentEntriesStore.set(pid, cleared)
                                     }
                                 }
+                            }
+                        },
+                        onApplyGamutMatches = { matches ->
+                            val pid = activePrinter?.id ?: return@LeftProjectPanel
+                            // Apply against the FULL mixed-row list so the
+                            // 1-based virtualSlot indices the matcher hands
+                            // back line up with resolveAsWillPrintPalette /
+                            // the slice path (both index the full list,
+                            // deleted rows included — see PreviewPalette).
+                            val result = GamutMatcher.applyGamutMatches(
+                                filaments = filamentList,
+                                virtualRows = mixedRows,
+                                matches = matches,
+                            )
+                            scope.launch {
+                                mixedFilamentsStore.set(pid, result.virtualRows)
+                                filamentEntriesStore.set(pid, result.filaments)
+                                val applied = matches.count {
+                                    it.recipe !is GamutMatcher.GamutRecipe.Keep
+                                }
+                                val approx = matches.count {
+                                    it.quality == GamutMatcher.MatchQuality.APPROXIMATE ||
+                                        it.quality == GamutMatcher.MatchQuality.OUT_OF_GAMUT
+                                }
+                                android.widget.Toast.makeText(
+                                    ctx,
+                                    "Matched $applied color${if (applied == 1) "" else "s"} to loaded filaments" +
+                                        if (approx > 0) " ($approx approximate)" else "",
+                                    android.widget.Toast.LENGTH_LONG,
+                                ).show()
                             }
                         },
                         filamentRuleResult = filamentRuleResult,
