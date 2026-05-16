@@ -26,9 +26,11 @@ Per-object `configOverrides` round-trip through 3MF via libslic3r's `model_setti
 
 **Exit criteria (remaining piece):** A 3MF authored in desktop OrcaSlicer with a PARAMETER_MODIFIER volume + `sparse_infill_density=100` reopens in OrcaXR with the volume restored and `get_volume_overrides` returning the override.
 
-### D20. Full-Color & High-Fidelity Painting (Primed3D Parity) 🔴 Not started
+### D20. Full-Color & High-Fidelity Painting (Primed3D Parity) 🟡 Partial — Smart Auto-Paint M1 shipped
 
 To match dedicated full-color painting tools (like Primed3D) and fully support CMYKW 3D printing workflows, OrcaXR needs advanced color blending, decal mapping, and mesh resolution adjustments.
+
+> **Smart Auto-Paint** (one action → whole-model paint, optional target image, optional FullSpectrum): design + milestone plan in [`docs/proposals/smart-auto-paint.md`](docs/proposals/smart-auto-paint.md). M1 (geometric strategies + `auto_paint` MCP tool, physical-only) is shipped; M2 (image-projection core), M4 (semantic LLM transfer), and M3 (FullSpectrum gamut, gated on green PeggyPalette) are designed, not started.
 
 #### D20a. CMYKW Color Dithering (FullSpectrum Integration)
 

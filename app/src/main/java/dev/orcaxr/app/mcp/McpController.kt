@@ -9,6 +9,7 @@ import dev.orcaxr.app.mcp.tools.AiPaintTools
 import dev.orcaxr.app.mcp.tools.AiSemanticPaintTools
 import dev.orcaxr.app.mcp.tools.AiVisionTools
 import dev.orcaxr.app.mcp.tools.AiVisionMaskTools
+import dev.orcaxr.app.mcp.tools.AutoPaintTool
 import dev.orcaxr.app.mcp.tools.FindFeatureAnchorsTool
 import dev.orcaxr.app.mcp.tools.PaintConstraintTools
 import dev.orcaxr.app.mcp.tools.PaintDecalTool
@@ -302,6 +303,9 @@ class McpController private constructor(
             // D19c — decal / texture projection (single undo step
             // via LoadPaintState). No outbound deps.
             builder.tool(PaintDecalTool(WorkspaceModel.get(), AiSessionState.get()))
+            // D20 M1 — Smart Auto-Paint: whole-model geometric paint in
+            // one undo step. Physical-only; no image/vision deps.
+            builder.tool(AutoPaintTool(WorkspaceModel.get()))
             // D19a + D19d — vision-LLM driven 2D mask authoring.
             // Both share the FindFeatureAnchorsTool's API-key flow.
             builder.tool(AiVisionMaskTools.GenerateMaskFromPoint(
