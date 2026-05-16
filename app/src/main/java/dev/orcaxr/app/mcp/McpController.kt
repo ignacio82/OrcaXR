@@ -305,7 +305,7 @@ class McpController private constructor(
             builder.tool(PaintDecalTool(WorkspaceModel.get(), AiSessionState.get()))
             // D20 M1 — Smart Auto-Paint: whole-model geometric paint in
             // one undo step. Physical-only; no image/vision deps.
-            builder.tool(AutoPaintTool(WorkspaceModel.get()))
+            builder.tool(AutoPaintTool(WorkspaceModel.get(), AiSessionState.get()))
             // D19a + D19d — vision-LLM driven 2D mask authoring.
             // Both share the FindFeatureAnchorsTool's API-key flow.
             builder.tool(AiVisionMaskTools.GenerateMaskFromPoint(

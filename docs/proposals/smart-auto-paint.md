@@ -1,8 +1,10 @@
 # Smart Auto-Paint — design proposal
 
-Status: **M1 shipped** (geometric strategies + `auto_paint` MCP tool, physical-only).
-M2 / M4 designed, not started. Roadmap home: **D20** (Full-Color &
-High-Fidelity Painting) + **D21** (auto-paint without an LLM driver).
+Status: **M1 + M2 shipped** (geometric strategies + image-projection
+core + `auto_paint` MCP tool, physical-only). M4 designed, not started;
+M3 (FullSpectrum) gated on green PeggyPalette. Roadmap home: **D20**
+(Full-Color & High-Fidelity Painting) + **D21** (auto-paint without an
+LLM driver).
 
 ## Goal
 
@@ -195,10 +197,18 @@ Each is independently shippable and verified before the next.
   full-coverage guarantee; one-undo `LoadPaintState`; `dry_run`;
   capability gate; session support. No image, no API, fully on the
   green physical path. JVM-tested.
-- **M2 — Projection core.** `RenderMode.TriangleId` per-view pixel→tri →
-  multi-view vote accumulation over presets → geodesic diffusion fill →
-  perceptual quantization via extracted `ColorScience` → `GamutMatcher`
-  physical-only. Silhouette-IoU camera search. Handles B1 end-to-end.
+- **M2 — Projection core (shipped).** `RenderMode.TriangleId` per-view
+  occlusion-correct pixel→tri (`AutoPaintImageEngine.project`) →
+  per-triangle mean-color accumulation → perceptual CIEDE2000
+  quantization via the extracted `ColorScience` → `finalizeCoverage`
+  (diffuse + majority backfill) so the whole model is covered →
+  one-undo `LoadPaintState`. `bestPresetBySilhouette` does
+  zoom/translation-invariant silhouette-IoU camera auto-pick when no
+  `camera_descriptor` is supplied. Wired into `auto_paint` as the
+  image mode (`image_base64`/`image_token` + optional
+  `camera_descriptor`/`background_color`). Single image → only the
+  camera-facing side carries true color (honest B1); multi-image /
+  off-axis-photo semantic transfer is M4. JVM-tested.
 - **M4 — Semantic LLM transfer + automated score loop.** Render montage
   + target → Claude region map → existing vision tools → per-region
   color → quantize → paint session → `score_paint_against_reference` →

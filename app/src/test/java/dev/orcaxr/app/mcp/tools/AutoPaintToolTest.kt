@@ -2,8 +2,10 @@ package dev.orcaxr.app.mcp.tools
 
 import dev.orcaxr.app.MeshBvh
 import dev.orcaxr.app.PlacedModel
+import dev.orcaxr.app.PngWriter
 import dev.orcaxr.app.StlMesh
 import dev.orcaxr.app.Vec3f
+import dev.orcaxr.app.mcp.AiSessionState
 import dev.orcaxr.app.mcp.TierBCapability
 import dev.orcaxr.app.mcp.WorkspaceAction
 import dev.orcaxr.app.mcp.WorkspaceModel
@@ -22,6 +24,7 @@ import java.io.File
 class AutoPaintToolTest {
 
     private lateinit var ws: WorkspaceModel
+    private lateinit var session: AiSessionState
     private lateinit var bvh: MeshBvh
     private val modelId = "m_auto"
 
@@ -67,6 +70,19 @@ class AutoPaintToolTest {
         bvh = bvhOf(cubeAt(0f, 0f, 0f))
         ws.setBvhProvider(WorkspaceModel.BvhProvider { id -> if (id == modelId) bvh else null })
         ws.publishPreviewPalette(listOf("#FF0000", "#00FF00", "#0000FF", "#FFFF00"))
+        session = AiSessionState()
+    }
+
+    private fun tool() = AutoPaintTool(ws, session)
+
+    /** Opaque RGBA PNG (no alpha background). */
+    private fun solidPng(w: Int, h: Int, r: Int, g: Int, b: Int): ByteArray {
+        val rgba = ByteArray(w * h * 4)
+        for (i in 0 until w * h) {
+            val o = i * 4
+            rgba[o] = r.toByte(); rgba[o + 1] = g.toByte(); rgba[o + 2] = b.toByte(); rgba[o + 3] = 255.toByte()
+        }
+        return PngWriter.encodeRgba(rgba, w, h)
     }
 
     private suspend fun captureNextAction(block: suspend () -> Unit): WorkspaceAction {
@@ -79,8 +95,7 @@ class AutoPaintToolTest {
     }
 
     @Test fun dryRunReturnsHistogramWithoutApplying() = runTest {
-        val tool = AutoPaintTool(ws)
-        val res = tool.call(JSONObject().apply {
+        val res = tool().call(JSONObject().apply {
             put("model_id", modelId); put("strategy", "height_bands"); put("dry_run", true)
         })
         assertFalse(res.isError)
@@ -100,9 +115,9 @@ class AutoPaintToolTest {
                 supportFlags = support, seamFlags = seam, fuzzySkinFlags = fuzzy,
             ),
         ))
-        val tool = AutoPaintTool(ws)
+        val t = tool()
         val action = captureNextAction {
-            tool.call(JSONObject().apply { put("model_id", modelId); put("strategy", "height_bands") })
+            t.call(JSONObject().apply { put("model_id", modelId); put("strategy", "height_bands") })
         }
         assertTrue(action is WorkspaceAction.LoadPaintState)
         val a = action as WorkspaceAction.LoadPaintState
@@ -117,14 +132,13 @@ class AutoPaintToolTest {
 
     @Test fun capabilityGateBlocksWhenLoadPaintStateNotWired() = runTest {
         ws.publishWiredTierBCapabilities(emptySet())
-        val tool = AutoPaintTool(ws)
-        val res = tool.call(JSONObject().apply { put("model_id", modelId) })
+        val res = tool().call(JSONObject().apply { put("model_id", modelId) })
         assertTrue(res.isError)
         assertTrue(res.text.contains("LoadPaintState"))
     }
 
     @Test fun recipeStrategyPointsToFindSimilarRecipe() = runTest {
-        val res = AutoPaintTool(ws).call(JSONObject().apply {
+        val res = tool().call(JSONObject().apply {
             put("model_id", modelId); put("strategy", "recipe")
         })
         assertTrue(res.isError)
@@ -133,7 +147,7 @@ class AutoPaintToolTest {
     }
 
     @Test fun fullSpectrumIsRejectedUntilGreen() = runTest {
-        val res = AutoPaintTool(ws).call(JSONObject().apply {
+        val res = tool().call(JSONObject().apply {
             put("model_id", modelId); put("use_full_spectrum", true)
         })
         assertTrue(res.isError)
@@ -141,7 +155,7 @@ class AutoPaintToolTest {
     }
 
     @Test fun unknownStrategyRejected() = runTest {
-        val res = AutoPaintTool(ws).call(JSONObject().apply {
+        val res = tool().call(JSONObject().apply {
             put("model_id", modelId); put("strategy", "nonsense")
         })
         assertTrue(res.isError)
@@ -149,7 +163,7 @@ class AutoPaintToolTest {
     }
 
     @Test fun modelIdOptionalWhenSingleModel() = runTest {
-        val res = AutoPaintTool(ws).call(JSONObject().apply {
+        val res = tool().call(JSONObject().apply {
             put("strategy", "height_bands"); put("dry_run", true)
         })
         assertFalse(res.isError)
@@ -161,13 +175,13 @@ class AutoPaintToolTest {
             PlacedModel(id = "a", source = File("/dev/null"), label = "a"),
             PlacedModel(id = "b", source = File("/dev/null"), label = "b"),
         ))
-        val res = AutoPaintTool(ws).call(JSONObject().apply { put("strategy", "height_bands") })
+        val res = tool().call(JSONObject().apply { put("strategy", "height_bands") })
         assertTrue(res.isError)
         assertTrue(res.text.contains("model_id is required"))
     }
 
     @Test fun maxColorsCapsSlotsUsed() = runTest {
-        val res = AutoPaintTool(ws).call(JSONObject().apply {
+        val res = tool().call(JSONObject().apply {
             put("model_id", modelId); put("strategy", "height_bands")
             put("max_colors", 2); put("dry_run", true)
         })
@@ -181,10 +195,79 @@ class AutoPaintToolTest {
     @Test fun componentsStrategyReportsTwoShells() = runTest {
         val two = bvhOf(cubeAt(0f, 0f, 0f) + cubeAt(100f, 0f, 0f))
         ws.setBvhProvider(WorkspaceModel.BvhProvider { id -> if (id == modelId) two else null })
-        val res = AutoPaintTool(ws).call(JSONObject().apply {
+        val res = tool().call(JSONObject().apply {
             put("model_id", modelId); put("strategy", "components"); put("dry_run", true)
         })
         assertFalse(res.isError)
         assertEquals(2, res.structured!!.getInt("slots_used"))
+    }
+
+    // ---- M2 image mode ----
+
+    @Test fun imageModeAutoCameraEmitsFullCoverageLoadPaintState() = runTest {
+        // Pure-red opaque image; background_color set to a color the
+        // image doesn't contain so the whole frame is foreground.
+        val png = solidPng(48, 48, 255, 0, 0)
+        val b64 = java.util.Base64.getEncoder().encodeToString(png)
+        val t = tool()
+        val action = captureNextAction {
+            t.call(JSONObject().apply {
+                put("model_id", modelId)
+                put("image_base64", b64)
+                put("background_color", "#00FF00")
+            })
+        }
+        assertTrue(action is WorkspaceAction.LoadPaintState)
+        val a = action as WorkspaceAction.LoadPaintState
+        assertEquals(bvh.triCount, a.paintFilamentIndex!!.size)
+        assertTrue("full coverage", a.paintFilamentIndex!!.none { it.toInt() == 0 })
+        // Red → palette slot 1 (#FF0000). Whole model should be slot 1.
+        assertTrue(a.paintFilamentIndex!!.all { it.toInt() == 1 })
+    }
+
+    @Test fun imageModeDryRunReportsImageModeAndCamera() = runTest {
+        val png = solidPng(32, 32, 0, 0, 255) // blue
+        val b64 = java.util.Base64.getEncoder().encodeToString(png)
+        val res = tool().call(JSONObject().apply {
+            put("model_id", modelId)
+            put("image_base64", b64)
+            put("background_color", "#FF00FF")
+            put("dry_run", true)
+        })
+        assertFalse(res.text, res.isError)
+        val s = res.structured!!
+        assertEquals("image", s.getString("mode"))
+        assertEquals(false, s.getBoolean("applied"))
+        assertTrue(s.getString("camera").startsWith("auto:"))
+        assertTrue(s.getInt("covered_triangles") > 0)
+    }
+
+    @Test fun imageModeFullyTransparentImageErrorsClearly() = runTest {
+        // Alpha 0 everywhere → no foreground at all.
+        val rgba = ByteArray(16 * 16 * 4) // all zero incl. alpha
+        val png = PngWriter.encodeRgba(rgba, 16, 16)
+        val b64 = java.util.Base64.getEncoder().encodeToString(png)
+        val res = tool().call(JSONObject().apply {
+            put("model_id", modelId); put("image_base64", b64)
+        })
+        assertTrue(res.isError)
+        assertTrue(res.text.contains("didn't cover") || res.text.contains("background"))
+    }
+
+    @Test fun imageModeBadBackgroundColorRejected() = runTest {
+        val b64 = java.util.Base64.getEncoder().encodeToString(solidPng(8, 8, 1, 2, 3))
+        val res = tool().call(JSONObject().apply {
+            put("model_id", modelId); put("image_base64", b64); put("background_color", "nothex")
+        })
+        assertTrue(res.isError)
+        assertTrue(res.text.contains("background_color"))
+    }
+
+    @Test fun imageModeInvalidBase64Rejected() = runTest {
+        val res = tool().call(JSONObject().apply {
+            put("model_id", modelId); put("image_base64", "!!!not base64!!!")
+        })
+        assertTrue(res.isError)
+        assertTrue(res.text.contains("base64"))
     }
 }

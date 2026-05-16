@@ -696,6 +696,6 @@ Implementation:
 
 - [`ROADMAP.md`](ROADMAP.md) — forward-looking feature roadmap (single source of truth for sections A, B, C, E, F, G).
 - [`ROADMAP-painting-and-editing.md`](ROADMAP-painting-and-editing.md) — sibling roadmap for section D (painting & object editing). Split out under the parent's "<600 lines" rule.
-- [`docs/proposals/smart-auto-paint.md`](docs/proposals/smart-auto-paint.md) — Smart Auto-Paint design (D20): one-action whole-model paint, optional target image, optional FullSpectrum. M1 geometric strategies + `auto_paint` MCP tool shipped physical-only; FS deferred until PeggyPalette is green.
+- [`docs/proposals/smart-auto-paint.md`](docs/proposals/smart-auto-paint.md) — Smart Auto-Paint design (D20): one-action whole-model paint, optional target image, optional FullSpectrum. M1 geometric + M2 image-projection (`ColorScience`, `AutoPaintImageEngine`, silhouette camera auto-pick) shipped via `auto_paint`, physical-only; M4 semantic transfer pending; FS deferred until PeggyPalette is green.
 - [`DESIGN.md`](DESIGN.md) — XR UX spec and baselines.
 - [`patches/README.md`](patches/README.md) — rules for patches against the OrcaSlicer submodule.
