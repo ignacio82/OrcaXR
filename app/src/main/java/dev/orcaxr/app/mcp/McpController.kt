@@ -9,6 +9,7 @@ import dev.orcaxr.app.mcp.tools.AiPaintTools
 import dev.orcaxr.app.mcp.tools.AiSemanticPaintTools
 import dev.orcaxr.app.mcp.tools.AiVisionTools
 import dev.orcaxr.app.mcp.tools.AiVisionMaskTools
+import dev.orcaxr.app.mcp.tools.AutoPaintLabelTool
 import dev.orcaxr.app.mcp.tools.AutoPaintReferenceTool
 import dev.orcaxr.app.mcp.tools.AutoPaintTool
 import dev.orcaxr.app.mcp.tools.FindFeatureAnchorsTool
@@ -339,6 +340,11 @@ class McpController private constructor(
             // whole model to resemble a reference image via a vision
             // plan + automated grade/refine loop. One undo step.
             builder.tool(AutoPaintReferenceTool(
+                WorkspaceModel.get(), AiSessionState.get(), claudeKeyFlow,
+            ))
+            // Borrowed ideas #2/#3 — deterministic-segmentation + AI
+            // naming/recolour (no spatial grounding), multi-provider.
+            builder.tool(AutoPaintLabelTool(
                 WorkspaceModel.get(), AiSessionState.get(), claudeKeyFlow,
             ))
         }

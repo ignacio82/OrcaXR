@@ -1,6 +1,7 @@
 package dev.orcaxr.app.mcp.tools
 
 import dev.orcaxr.app.AiRenderEngine
+import dev.orcaxr.app.AutoPaintCascade
 import dev.orcaxr.app.AutoPaintEngine
 import dev.orcaxr.app.AutoPaintImageEngine
 import dev.orcaxr.app.MAX_PAINT_SLOTS
@@ -46,10 +47,13 @@ internal class AutoPaintTool(
 ) : Tool {
     override val name = "auto_paint"
     override val description =
-        "Automatically paint the entire model in one undo step. GEOMETRIC mode " +
-            "(strategy='height_bands'|'components'|'cavity'|'auto'): no image/API — " +
-            "height_bands ramps slots along `axis` (default Z), components gives each " +
-            "disconnected shell its own slot, cavity puts a contrast slot in recesses. " +
+        "Automatically paint the entire model in one undo step. GEOMETRIC/CASCADE mode " +
+            "(no image/API). Default strategy 'auto'/'cascade' is metadata-aware: it " +
+            "respects the model's existing paint, else segments by shells (small-shell " +
+            "merge + palette cap), else geometry — and reports `source` + " +
+            "`alternate_source`. Force a strategy with 'height_bands' (ramp along `axis`, " +
+            "default Z), 'components' (each shell its own slot), or 'cavity' (contrast in " +
+            "recesses). " +
             "TARGET-IMAGE mode (pass image_base64 OR image_token): the image is projected " +
             "onto the model and each face quantized to the perceptually-nearest filament " +
             "(CIEDE2000); unseen faces inherit the nearest color for full coverage. " +
@@ -65,7 +69,9 @@ internal class AutoPaintTool(
                 "Model id. Optional — defaults to the only placed model if there's exactly one.",
             ),
             "strategy" to Schemas.string(
-                "Geometric: 'height_bands' | 'components' | 'cavity' | 'auto' (default) | " +
+                "'auto'/'cascade' (default — metadata-aware: respects existing paint, " +
+                    "else shells, else geometry; reports source + alternate_source), or a " +
+                    "forced geometric strategy 'height_bands' | 'components' | 'cavity', or " +
                     "'recipe' (pointer only). Ignored when an image is supplied.",
             ),
             "axis" to Schemas.string("For height_bands: 'x' | 'y' | 'z' (default 'z')"),
@@ -136,10 +142,12 @@ internal class AutoPaintTool(
         val dryRun = args.optBoolean("dry_run", false)
 
         val hasImage = args.has("image_base64") || args.has("image_token")
-        val outcome = if (hasImage) {
-            runImage(args, bvh, maxColors)
-        } else {
-            runGeometric(args, bvh, minOf(paletteSize, maxColors))
+        val strategyKey = args.optString("strategy").trim()
+        val outcome = when {
+            hasImage -> runImage(args, bvh, maxColors)
+            strategyKey == "" || strategyKey == "auto" || strategyKey == "cascade" ->
+                runCascade(args, bvh, model.paintFilamentIndex, minOf(paletteSize, maxColors))
+            else -> runGeometric(args, bvh, minOf(paletteSize, maxColors))
         }
         val (perTri, modeBody, summary) = when (outcome) {
             is Run.Err -> return outcome.result
@@ -220,6 +228,32 @@ internal class AutoPaintTool(
             val summary: String,
         ) : Run
         data class Err(val result: ToolResult) : Run
+    }
+
+    /** Borrowed ideas #1/#4/#5: the metadata-aware prioritized cascade
+     *  (paint-state → components → geometric), with the source + the
+     *  alternate a follow-up could use surfaced in the result. */
+    private fun runCascade(
+        args: JSONObject,
+        bvh: dev.orcaxr.app.MeshBvh,
+        existingPaint: ByteArray?,
+        effectiveSlots: Int,
+    ): Run {
+        val axisKey = args.optString("axis").trim().ifEmpty { "z" }
+        val axis = AutoPaintEngine.Axis.fromKey(axisKey)
+            ?: return Run.Err(ToolResult.error("Unknown axis '$axisKey'. Use x | y | z."))
+        val r = AutoPaintCascade.run(
+            bvh, existingPaint, effectiveSlots.coerceIn(1, MAX_PAINT_SLOTS), axis,
+        )
+        val mb = JSONObject().apply {
+            put("mode", "cascade")
+            put("strategy", "cascade")
+            put("source", r.source.key)
+            put("alternate_source", r.alternateSource?.key ?: JSONObject.NULL)
+            put("branches_available", org.json.JSONArray(r.branchesAvailable))
+            put("axis", if (r.source == AutoPaintCascade.Source.HeightBands) axis.key else JSONObject.NULL)
+        }
+        return Run.Ok(r.perTriangleSlot, mb, "cascade(${r.source.key})")
     }
 
     private fun runGeometric(

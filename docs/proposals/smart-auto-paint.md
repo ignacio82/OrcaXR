@@ -1,10 +1,10 @@
 # Smart Auto-Paint — design proposal
 
-Status: **M1 + M2 + M4 shipped** (geometric strategies, image-projection
-core, and vision-LLM semantic transfer with an automated grade/refine
-loop — `auto_paint` + `auto_paint_from_reference` MCP tools,
-physical-only). M3 (FullSpectrum) gated on green PeggyPalette. Roadmap
-home: **D20** (Full-Color & High-Fidelity Painting) + **D21**
+Status: **M1 + M2 + M4 shipped**, plus **5 ideas borrowed from
+`taylormadearmy/u1-slicer-for-android`** (see "Borrowed ideas" below) —
+`auto_paint` + `auto_paint_from_reference` + `auto_paint_label` MCP
+tools, physical-only. M3 (FullSpectrum) gated on green PeggyPalette.
+Roadmap home: **D20** (Full-Color & High-Fidelity Painting) + **D21**
 (auto-paint without an LLM driver).
 
 ## Goal
@@ -228,6 +228,48 @@ Each is independently shippable and verified before the next.
   `PeggyPaletteFullSpectrumParityTest` is green and FS Local-Z is
   hardware-verified. Flip the `GamutMatcher` blend parameter + predicted
   mix preview + experimental UI gate.
+
+## Borrowed ideas (from `taylormadearmy/u1-slicer-for-android`)
+
+Their "Smart Paint" is a deterministic segmentation cascade where the
+AI is opt-in and decorative — the opposite philosophy to our M4. Five
+ideas were worth taking; all shipped, physical-only, JVM-tested:
+
+1. **Metadata-aware prioritized cascade** — `AutoPaintCascade`: respect
+   the model's existing per-triangle paint (`paintFilamentIndex`, e.g.
+   an MMU/SEMM 3MF) → else shells → else geometry. `auto`/`cascade` is
+   now the default `auto_paint` strategy. Exploits structure we already
+   have instead of always height-banding; zero API cost.
+4. **Confetti / robustness guard** — folded into the cascade's
+   components branch: shells below `MIN_COMPONENT_FRACTION` are absorbed
+   into the largest shell and distinct shells are capped to the palette
+   size, so a decimated / high-fragmentation mesh can't explode into
+   hundreds of one-triangle colors (their B113 lesson). PaintState also
+   majority-backfills any fully-occluded unpainted island (their B111
+   "never ship a partial mesh" lesson). We were already structurally
+   safe from B111 proper (paint arrays are sized to the derived-STL tri
+   count, committed on the real mesh — we never subsample).
+5. **Report segmentation source + alternate** — the cascade result
+   carries `source`, `alternate_source`, and `branches_available`,
+   surfaced in the `auto_paint` tool body so an agent can reason about
+   or override the choice.
+2. **No-spatial-grounding AI mode** — `auto_paint_label`: their fix32
+   pivot proved vision models are unreliable at returning regions but
+   reliable at *naming what they see*. So this tool segments
+   deterministically (the cascade), renders a plain + a region-banded
+   view (same camera), and asks the model only to NAME each region and
+   suggest a colour (text task); colours are CIEDE2000-quantized via
+   `ColorScience`. AI is decorative: with no provider/key or on a parse
+   failure the deterministic colours are committed anyway
+   (`ai_used=false`). Complements M4 (which is right *with* a reference
+   image); this is the robust no-target path.
+3. **Multi-provider, free-tier-first vision client** —
+   `MultiProviderVisionClient` implements the existing `VisionApiClient`
+   seam (tools keep building Anthropic-shaped requests; it translates
+   to/from the provider wire format) for Claude / Gemini (free, 3-model
+   fallback chain) / OpenAI / OpenRouter / Pollinations (free, key
+   optional). Lifts the Anthropic-key-only gate; injectable HTTP for
+   tests; honors the shared `VisionRateLimiter`.
 
 ## Test plan
 

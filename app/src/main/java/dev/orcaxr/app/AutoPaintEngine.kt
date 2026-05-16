@@ -177,6 +177,28 @@ internal object AutoPaintEngine {
      * so the largest shell is always slot 1.
      */
     private fun componentSlots(bvh: MeshBvh, k: Int): ByteArray {
+        val (compOf, sizes) = componentLabels(bvh)
+        // Rank components by size (desc), tie-break by first-seen
+        // component id so the assignment is deterministic.
+        val order = sizes.indices.sortedWith(
+            compareByDescending<Int> { sizes[it] }.thenBy { it },
+        )
+        val slotOfComp = IntArray(sizes.size)
+        for ((rank, comp) in order.withIndex()) slotOfComp[comp] = (rank % k) + 1
+        val out = ByteArray(compOf.size)
+        for (i in compOf.indices) out[i] = slotOfComp[compOf[i]].toByte()
+        return out
+    }
+
+    /**
+     * Single O(triangles) shared-vertex flood. Returns `(compOf,
+     * sizes)`: `compOf[t]` is triangle t's 0-based component id;
+     * `sizes[c]` is component c's triangle count. One visited array,
+     * no per-seed allocation. Shared by [componentSlots] and the
+     * metadata-aware cascade (which adds small-component merging and a
+     * leaf cap on top of this — the B113 "confetti" guard).
+     */
+    fun componentLabels(bvh: MeshBvh): Pair<IntArray, IntArray> {
         val n = bvh.triCount
         val compOf = IntArray(n) { -1 }
         val sizes = ArrayList<Int>()
@@ -201,16 +223,7 @@ internal object AutoPaintEngine {
             }
             sizes.add(size)
         }
-        // Rank components by size (desc), tie-break by first-seen
-        // component id so the assignment is deterministic.
-        val order = (0 until nextComp).sortedWith(
-            compareByDescending<Int> { sizes[it] }.thenBy { it },
-        )
-        val slotOfComp = IntArray(nextComp)
-        for ((rank, comp) in order.withIndex()) slotOfComp[comp] = (rank % k) + 1
-        val out = ByteArray(n)
-        for (i in 0 until n) out[i] = slotOfComp[compOf[i]].toByte()
-        return out
+        return compOf to sizes.toIntArray()
     }
 
     /**
