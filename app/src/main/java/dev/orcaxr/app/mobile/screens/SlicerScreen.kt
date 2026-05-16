@@ -111,6 +111,7 @@ fun SlicerScreen(
     onNavigate: (MobileDestination) -> Unit,
     paintFilamentIndex: ByteArray? = null,
     onOpenPaint: ((String) -> Unit)? = null,
+    onOpenSmartPaint: (() -> Unit)? = null,
     transform: SlicerEngine.ModelPlacement = SlicerEngine.ModelPlacement(),
     onSetTransform: (SlicerEngine.ModelPlacement) -> Unit = {},
 ) {
@@ -289,6 +290,7 @@ fun SlicerScreen(
                         cacheDir = ctx.cacheDir,
                         onSetFile = onSetFile,
                         onOpenPaint = onOpenPaint,
+                        onOpenSmartPaint = onOpenSmartPaint,
                         paintApplied = paintFilamentIndex != null,
                         transform = transform,
                         onSetTransform = onSetTransform,
@@ -351,6 +353,7 @@ fun SlicerScreen(
                     cacheDir = ctx.cacheDir,
                     onSetFile = onSetFile,
                     onOpenPaint = onOpenPaint,
+                    onOpenSmartPaint = onOpenSmartPaint,
                     paintApplied = paintFilamentIndex != null,
                     transform = transform,
                     onSetTransform = onSetTransform,
@@ -1447,6 +1450,7 @@ private fun ToolsCard(
     cacheDir: File,
     onSetFile: (String?) -> Unit,
     onOpenPaint: ((String) -> Unit)?,
+    onOpenSmartPaint: (() -> Unit)?,
     paintApplied: Boolean,
     transform: SlicerEngine.ModelPlacement,
     onSetTransform: (SlicerEngine.ModelPlacement) -> Unit,
@@ -1606,6 +1610,16 @@ private fun ToolsCard(
                     Icon(Icons.Filled.Brush, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
                     Text(if (paintApplied) "Edit paint" else "Paint by slot")
+                }
+            }
+            if (onOpenSmartPaint != null) {
+                androidx.compose.material3.Button(
+                    onClick = { onOpenSmartPaint() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Filled.Brush, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Smart Paint")
                 }
             }
             val msg = lastToolResult

@@ -4248,6 +4248,11 @@ fun TopNavigationPill(
      */
     paintPalette: List<String> = emptyList(),
 ) {
+    val smartPaintShown =
+        androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    if (smartPaintShown.value) {
+        SmartPaintDialog(onDismiss = { smartPaintShown.value = false })
+    }
     Surface(
         color = OrcaXrColors.Panel,
         shape = RoundedCornerShape(22.dp),
@@ -4402,6 +4407,13 @@ fun TopNavigationPill(
                     isSelected = paintBrush.mode != PaintMode.Off,
                     enabled = paintEnabled,
                     onClick = onTogglePaint,
+                )
+                NavAction(
+                    label = "Smart",
+                    icon = androidx.compose.material.icons.Icons.Default.AutoAwesome,
+                    isSelected = smartPaintShown.value,
+                    enabled = paintEnabled,
+                    onClick = { smartPaintShown.value = true },
                 )
                 NavAction(
                     label = "Reset",

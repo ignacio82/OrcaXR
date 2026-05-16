@@ -129,6 +129,13 @@ fun BindMobileWorkspaceModel(
         arr.map { it ?: "#FFFFFF" }
     }
     LaunchedEffect(previewPalette) { workspace.publishPreviewPalette(previewPalette) }
+    // Publish the active printer id so MCP tools that key per-printer
+    // state work on the phone path too — notably Smart Paint's
+    // FullSpectrum mode, which materializes virtual mixed-filament rows
+    // for this printer (without it FS degrades to physical-only).
+    LaunchedEffect(prefs.lastPrinterId) {
+        workspace.publishSelectedPrinterId(prefs.lastPrinterId?.takeIf { it.isNotBlank() })
+    }
 
     LaunchedEffect(selectedProfile) { workspace.publishSelectedProfile(selectedProfile) }
 

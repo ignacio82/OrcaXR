@@ -176,6 +176,7 @@ fun MobileShell(
                 // explicitly committed to a slice.
                 var slicerPaintIndex by remember { mutableStateOf<ByteArray?>(null) }
                 var paintModeFile by rememberSaveable { mutableStateOf<String?>(null) }
+                var smartPaintOpen by rememberSaveable { mutableStateOf(false) }
                 var slicerTransform by remember { mutableStateOf(dev.orcaxr.app.SlicerEngine.ModelPlacement()) }
                 var llmAssistantOpen by rememberSaveable { mutableStateOf(false) }
 
@@ -306,7 +307,24 @@ fun MobileShell(
                     return@BoxWithConstraints
                 }
 
+                // Smart Paint is a full-screen takeover too — it drives
+                // the auto-paint MCP tools in-process; the committed
+                // paint flows back via the workspace binding into
+                // `slicerPaintIndex` (same bridge as MCP).
+                val spFile = slicerFilePath
+                if (smartPaintOpen && spFile != null) {
+                    dev.orcaxr.app.mobile.screens.SmartPaintScreen(
+                        modelName = java.io.File(spFile).name,
+                        onClose = {
+                            smartPaintOpen = false
+                            dest = MobileDestination.Slicer
+                        },
+                    )
+                    return@BoxWithConstraints
+                }
+
                 val openPaintCallback: (String) -> Unit = { fp -> paintModeFile = fp }
+                val openSmartPaintCallback: () -> Unit = { smartPaintOpen = true }
                 if (isTablet) {
                     Row(Modifier.fillMaxSize()) {
                         TabletNavRail(
@@ -330,6 +348,7 @@ fun MobileShell(
                             onSetSlicerOutput = { slicerOutputPath = it },
                             slicerPaintIndex = slicerPaintIndex,
                             onOpenPaint = openPaintCallback,
+                            onOpenSmartPaint = openSmartPaintCallback,
                             transform = slicerTransform,
                             onSetTransform = { slicerTransform = it },
                             onNavigate = { dest = it },
@@ -355,6 +374,7 @@ fun MobileShell(
                             onSetSlicerOutput = { slicerOutputPath = it },
                             slicerPaintIndex = slicerPaintIndex,
                             onOpenPaint = openPaintCallback,
+                            onOpenSmartPaint = openSmartPaintCallback,
                             transform = slicerTransform,
                             onSetTransform = { slicerTransform = it },
                             onNavigate = { dest = it },
@@ -385,6 +405,7 @@ private fun ScreenContent(
     onSetSlicerOutput: (String?) -> Unit,
     slicerPaintIndex: ByteArray?,
     onOpenPaint: (String) -> Unit,
+    onOpenSmartPaint: (() -> Unit)?,
     transform: dev.orcaxr.app.SlicerEngine.ModelPlacement,
     onSetTransform: (dev.orcaxr.app.SlicerEngine.ModelPlacement) -> Unit,
     onNavigate: (MobileDestination) -> Unit,
@@ -405,6 +426,7 @@ private fun ScreenContent(
                 onNavigate = onNavigate,
                 paintFilamentIndex = slicerPaintIndex,
                 onOpenPaint = onOpenPaint,
+                onOpenSmartPaint = onOpenSmartPaint,
                 transform = transform,
                 onSetTransform = onSetTransform,
             )
