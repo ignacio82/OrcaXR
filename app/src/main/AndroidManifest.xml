@@ -112,11 +112,29 @@
                 <data android:mimeType="application/step" />
             </intent-filter>
             <!--
-              Some senders (Bambu Handy, the Pixel "Files" app on
-              certain MIME types) hand us application/octet-stream and
-              rely on the receiver to pattern-match the path. Combined
-              host="*" + mimeType + pathPattern is the canonical Android
-              shape for "I accept any path with this extension".
+              Extension-gated catch-all. Most file managers (Pixel
+              Files, Samsung My Files, Drive, Downloads) report a
+              `.stl` / `.3mf` as `application/octet-stream` — or as an
+              empty / unknown type the system widens to `*/*` — because
+              Android's MimeTypeMap has no entry for these extensions.
+              We therefore accept ANY mimeType but ONLY when the URI
+              path carries one of our extensions, so OrcaXR never grabs
+              unrelated files.
+
+              `pathSuffix` + `pathAdvancedPattern` were added in API 31
+              (minSdk is 31, so always available) and match far more
+              reliably than the legacy `pathPattern` greedy globs:
+              `pathSuffix` is an exact tail match, and
+              `pathAdvancedPattern` supports the `[sS]` case-insensitive
+              character classes below so a `.STL` / `.Stl` / `.stl` all
+              resolve through one rule regardless of sender casing.
+
+              Inherent Android limitation (no manifest can fix it): a
+              `content://…/document/msf:1234`-style SAF URI whose path
+              is an opaque document id with NO extension cannot be
+              matched here — only the explicit-mimeType filter above can
+              catch those, and only if the provider reports a real
+              model/* type. That case falls back to the in-app picker.
             -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -126,6 +144,23 @@
                 <data android:scheme="file" />
                 <data android:host="*" />
                 <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="*/*" />
+                <!-- Exact-suffix match (case-sensitive), API 31+. -->
+                <data android:pathSuffix=".3mf" />
+                <data android:pathSuffix=".stl" />
+                <data android:pathSuffix=".obj" />
+                <data android:pathSuffix=".amf" />
+                <data android:pathSuffix=".step" />
+                <data android:pathSuffix=".stp" />
+                <!-- Case-insensitive coverage (.STL/.Stl/.3MF/…), API 31+. -->
+                <data android:pathAdvancedPattern=".*\\.[3][mM][fF]" />
+                <data android:pathAdvancedPattern=".*\\.[sS][tT][lL]" />
+                <data android:pathAdvancedPattern=".*\\.[oO][bB][jJ]" />
+                <data android:pathAdvancedPattern=".*\\.[aA][mM][fF]" />
+                <data android:pathAdvancedPattern=".*\\.[sS][tT][eE][pP]" />
+                <data android:pathAdvancedPattern=".*\\.[sS][tT][pP]" />
+                <!-- Legacy greedy globs kept for senders that still key
+                     off pathPattern specifically. -->
                 <data android:pathPattern=".*\\.3mf" />
                 <data android:pathPattern=".*\\.stl" />
                 <data android:pathPattern=".*\\.STL" />
