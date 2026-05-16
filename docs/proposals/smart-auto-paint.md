@@ -1,10 +1,11 @@
 # Smart Auto-Paint — design proposal
 
-Status: **M1 + M2 shipped** (geometric strategies + image-projection
-core + `auto_paint` MCP tool, physical-only). M4 designed, not started;
-M3 (FullSpectrum) gated on green PeggyPalette. Roadmap home: **D20**
-(Full-Color & High-Fidelity Painting) + **D21** (auto-paint without an
-LLM driver).
+Status: **M1 + M2 + M4 shipped** (geometric strategies, image-projection
+core, and vision-LLM semantic transfer with an automated grade/refine
+loop — `auto_paint` + `auto_paint_from_reference` MCP tools,
+physical-only). M3 (FullSpectrum) gated on green PeggyPalette. Roadmap
+home: **D20** (Full-Color & High-Fidelity Painting) + **D21**
+(auto-paint without an LLM driver).
 
 ## Goal
 
@@ -209,10 +210,20 @@ Each is independently shippable and verified before the next.
   `camera_descriptor`/`background_color`). Single image → only the
   camera-facing side carries true color (honest B1); multi-image /
   off-axis-photo semantic transfer is M4. JVM-tested.
-- **M4 — Semantic LLM transfer + automated score loop.** Render montage
-  + target → Claude region map → existing vision tools → per-region
-  color → quantize → paint session → `score_paint_against_reference` →
-  bounded corrective loop. The "make it look like this photo" headline.
+- **M4 — Semantic LLM transfer + automated score loop (shipped).**
+  `auto_paint_from_reference`: render the model view → one vision call
+  for a paint plan (`base_color` + accent `regions` with polygons) →
+  `SemanticPaintPlanner` resolves it (base fills the whole model incl.
+  the unseen back; region polygons reverse-project to triangles via
+  `AiMaskProjection`, CIEDE2000-quantized through `ColorScience`) →
+  render the candidate → grade it against the reference (the same
+  two-image {score,comment,regions[]} contract as
+  `score_paint_against_reference`) → bounded loop (≤5) that feeds the
+  critique back and keeps the highest-scoring attempt (monotonic) →
+  one-undo `LoadPaintState`. Injectable `VisionApiClient` (JVM-tested
+  with a fake; the planner is pure and tested standalone). The "make
+  it look like this" headline. Honest scope: a single reference view
+  colors the camera-facing accents; base covers the rest.
 - **M3 (later, gated) — FullSpectrum gamut.** Unblocked only when
   `PeggyPaletteFullSpectrumParityTest` is green and FS Local-Z is
   hardware-verified. Flip the `GamutMatcher` blend parameter + predicted

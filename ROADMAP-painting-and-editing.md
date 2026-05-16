@@ -30,7 +30,7 @@ Per-object `configOverrides` round-trip through 3MF via libslic3r's `model_setti
 
 To match dedicated full-color painting tools (like Primed3D) and fully support CMYKW 3D printing workflows, OrcaXR needs advanced color blending, decal mapping, and mesh resolution adjustments.
 
-> **Smart Auto-Paint** (one action → whole-model paint, optional target image, optional FullSpectrum): design + milestone plan in [`docs/proposals/smart-auto-paint.md`](docs/proposals/smart-auto-paint.md). M1 (geometric strategies) + M2 (target-image projection core: `ColorScience`, `AutoPaintImageEngine`, silhouette camera auto-pick) shipped via the `auto_paint` MCP tool, physical-only. M4 (semantic LLM transfer for off-axis photos) designed, not started; M3 (FullSpectrum gamut) gated on green PeggyPalette.
+> **Smart Auto-Paint** (one action → whole-model paint, optional target image, optional FullSpectrum): design + milestone plan in [`docs/proposals/smart-auto-paint.md`](docs/proposals/smart-auto-paint.md). M1 (geometric strategies, `auto_paint`) + M2 (target-image projection core: `ColorScience`, `AutoPaintImageEngine`, silhouette camera auto-pick) + M4 (vision-LLM semantic transfer with automated grade/refine loop: `SemanticPaintPlanner`, `auto_paint_from_reference`) shipped, physical-only. M3 (FullSpectrum gamut) gated on green PeggyPalette.
 
 #### D20a. CMYKW Color Dithering (FullSpectrum Integration)
 

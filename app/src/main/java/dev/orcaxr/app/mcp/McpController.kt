@@ -9,6 +9,7 @@ import dev.orcaxr.app.mcp.tools.AiPaintTools
 import dev.orcaxr.app.mcp.tools.AiSemanticPaintTools
 import dev.orcaxr.app.mcp.tools.AiVisionTools
 import dev.orcaxr.app.mcp.tools.AiVisionMaskTools
+import dev.orcaxr.app.mcp.tools.AutoPaintReferenceTool
 import dev.orcaxr.app.mcp.tools.AutoPaintTool
 import dev.orcaxr.app.mcp.tools.FindFeatureAnchorsTool
 import dev.orcaxr.app.mcp.tools.PaintConstraintTools
@@ -332,6 +333,12 @@ class McpController private constructor(
             builder.tool(RenderPaintSessionDiffTool(WorkspaceModel.get(), AiSessionState.get()))
             for (t in RecipeRecommendTools.all(WorkspaceModel.get(), ctx)) builder.tool(t)
             builder.tool(ScorePaintAgainstReferenceTool(
+                WorkspaceModel.get(), AiSessionState.get(), claudeKeyFlow,
+            ))
+            // D20 M4 — Smart Auto-Paint semantic transfer: paint the
+            // whole model to resemble a reference image via a vision
+            // plan + automated grade/refine loop. One undo step.
+            builder.tool(AutoPaintReferenceTool(
                 WorkspaceModel.get(), AiSessionState.get(), claudeKeyFlow,
             ))
         }
