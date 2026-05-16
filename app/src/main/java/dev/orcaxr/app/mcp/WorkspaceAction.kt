@@ -412,6 +412,30 @@ sealed interface WorkspaceAction {
     data class RemoveVolume(val modelId: String, val volumeId: String) : WorkspaceAction
 
     /**
+     * "Add Magnets" — recess N magnet-shaped pockets into a model as
+     * `NEGATIVE_VOLUME`s (non-destructive: paint/support are preserved,
+     * `source` is NOT swapped) and auto-author one `PausePrint` tick so
+     * the user can drop physical magnets in mid-print before the model
+     * bridges a roof over them. `shape` is "disc" or "block";
+     * dimensions are the physical magnet (cavity adds clearance).
+     * v1 targets single standalone models only — multi-object plates
+     * don't yet thread per-input volumes through `sliceMulti`.
+     */
+    data class AddMagnets(
+        val modelId: String,
+        val count: Int,
+        val shape: String,
+        val diameterMm: Float = 0f,
+        val heightMm: Float = 0f,
+        val blockXmm: Float = 0f,
+        val blockYmm: Float = 0f,
+        val blockZmm: Float = 0f,
+        val clearanceMm: Float = 0.2f,
+        val roofThicknessMm: Float = 0.8f,
+        val edgeMarginMm: Float = 3f,
+    ) : WorkspaceAction
+
+    /**
      * Which per-triangle paint state to operate on. Mirrors the four
      * ByteArray fields on `PlacedModel`:
      * - `Color`: filament-slot tag (0..32, 0 = unpainted).

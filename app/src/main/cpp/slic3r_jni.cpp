@@ -1642,16 +1642,19 @@ static void apply_custom_gcodes(JNIEnv* env, Slic3r::Model& model,
         if (jColors != nullptr && i < nC) {
             jstring jc = (jstring) env->GetObjectArrayElement(jColors, i);
             if (jc != nullptr) {
-                ScopedUtf c(env, jc);
-                item.color = c.c ? std::string(c.c) : std::string();
+                // gotcha #3: ScopedUtf's ReleaseStringUTFChars must run
+                // while jc is still a valid local ref — scope it so the
+                // dtor fires BEFORE DeleteLocalRef(jc), not after.
+                { ScopedUtf c(env, jc);
+                  item.color = c.c ? std::string(c.c) : std::string(); }
                 env->DeleteLocalRef(jc);
             }
         }
         if (jExtras != nullptr && i < nX) {
             jstring jx = (jstring) env->GetObjectArrayElement(jExtras, i);
             if (jx != nullptr) {
-                ScopedUtf x(env, jx);
-                item.extra = x.c ? std::string(x.c) : std::string();
+                { ScopedUtf x(env, jx);
+                  item.extra = x.c ? std::string(x.c) : std::string(); }
                 env->DeleteLocalRef(jx);
             }
         }

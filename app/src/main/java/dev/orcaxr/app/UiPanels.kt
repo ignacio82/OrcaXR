@@ -192,6 +192,8 @@ fun LeftProjectPanel(
     /** Phase D4 — open the Emboss / Engrave panel for the given
      *  model. Called from the per-row Emboss icon. */
     onEmbossPlacedModel: (id: String) -> Unit = {},
+    /** Open the Add Magnets panel for the given model. Per-row 🧲. */
+    onAddMagnetsPlacedModel: (id: String) -> Unit = {},
     /** "Match to my filaments" — user taps the button, reviews the
      *  per-color preview, and confirms. The panel computes the matches
      *  itself (it already has the model colors + loaded slots + virtual
@@ -292,6 +294,7 @@ fun LeftProjectPanel(
             onMoveToPlate = onMoveToPlate,
             onRepair = onRepairPlacedModel,
             onEmboss = onEmbossPlacedModel,
+            onAddMagnets = onAddMagnetsPlacedModel,
         )
 
         // Bed-fit indicator. Only visible once a model is loaded so the
@@ -805,6 +808,7 @@ private fun PlacedModelsSection(
     onMoveToPlate: (String, Int) -> Unit,
     onRepair: (String) -> Unit,
     onEmboss: (String) -> Unit,
+    onAddMagnets: (String) -> Unit,
 ) {
     if (models.isEmpty()) return
     val atCapacity = models.size >= MAX_PLACED_MODELS
@@ -877,6 +881,7 @@ private fun PlacedModelsSection(
                             onMoveToPlate = onMoveToPlate,
                             onRepair = onRepair,
                             onEmboss = onEmboss,
+                            onAddMagnets = onAddMagnets,
                             isGrouped = true,
                         )
                     }
@@ -895,6 +900,7 @@ private fun PlacedModelsSection(
                         onMoveToPlate = onMoveToPlate,
                         onRepair = onRepair,
                         onEmboss = onEmboss,
+                        onAddMagnets = onAddMagnets,
                         isGrouped = false,
                     )
                 }
@@ -930,6 +936,7 @@ private fun ModelRow(
     onMoveToPlate: (String, Int) -> Unit,
     onRepair: (String) -> Unit,
     onEmboss: (String) -> Unit,
+    onAddMagnets: (String) -> Unit,
     isGrouped: Boolean = false,
 ) {
     var showPlateMenu by remember { mutableStateOf(false) }
@@ -1009,6 +1016,15 @@ private fun ModelRow(
                 // imported here.
                 Text(
                     "𝐀",
+                    color = Color(0xFF7BC8FF),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+            IconButton(onClick = { onAddMagnets(m.id) }) {
+                // "Add Magnets" entry point — recess magnet pockets +
+                // an auto print-pause for insertion.
+                Text(
+                    "🧲",
                     color = Color(0xFF7BC8FF),
                     style = MaterialTheme.typography.titleMedium,
                 )
@@ -7429,6 +7445,148 @@ fun EmbossPanel(
                 if (mode == EmbossMode.ADD) "Apply Emboss" else "Apply Engrave",
                 fontWeight = FontWeight.Bold,
             )
+        }
+    }
+}
+
+/**
+ * "Add Magnets" authoring panel. Recesses N magnet pockets into
+ * [targetModel] as negative volumes + an auto pause tick. Mirrors
+ * [EmbossPanel]'s look; reuses [EmbossSlider] for the mm knobs.
+ * Dimensions entered here are the PHYSICAL magnet — the cut adds
+ * `clearance`. v1 supports a single standalone model (host enforces).
+ */
+@Composable
+fun MagnetPanel(
+    targetModel: PlacedModel,
+    onApply: (MagnetSpec) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var isDisc by remember { mutableStateOf(true) }
+    var count by remember { mutableStateOf(2) }
+    var diameter by remember { mutableStateOf(6f) }
+    var discHeight by remember { mutableStateOf(2f) }
+    var blockX by remember { mutableStateOf(10f) }
+    var blockY by remember { mutableStateOf(4f) }
+    var blockZ by remember { mutableStateOf(3f) }
+    var clearance by remember { mutableStateOf(0.2f) }
+    var roof by remember { mutableStateOf(0.8f) }
+    var edgeMargin by remember { mutableStateOf(3f) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF15181B))
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Add Magnets",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.White,
+                )
+                Text(
+                    "Target: ${targetModel.label}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.LightGray,
+                )
+            }
+            IconButton(onClick = onDismiss) {
+                Text("✕", color = Color.Gray, style = MaterialTheme.typography.titleMedium)
+            }
+        }
+
+        Text(
+            "Pockets are cut as negative volumes; the print pauses above " +
+                "them so you can drop the magnets in before it roofs over.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFF9AA7B2),
+        )
+
+        // Shape.
+        Surface(color = Color(0xFF1B1F23), shape = RoundedCornerShape(8.dp)) {
+            Row(
+                modifier = Modifier.padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Shape", color = Color.White, modifier = Modifier.weight(1f))
+                FilterChip(
+                    selected = isDisc,
+                    onClick = { isDisc = true },
+                    label = { Text("Disc") },
+                )
+                FilterChip(
+                    selected = !isDisc,
+                    onClick = { isDisc = false },
+                    label = { Text("Block") },
+                )
+            }
+        }
+
+        // Count stepper.
+        Surface(color = Color(0xFF1B1F23), shape = RoundedCornerShape(8.dp)) {
+            Row(
+                modifier = Modifier.padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Count", color = Color.White, modifier = Modifier.weight(1f))
+                IconButton(onClick = { if (count > 1) count-- }) {
+                    Text("−", color = Color(0xFF7BC8FF), style = MaterialTheme.typography.titleLarge)
+                }
+                Text(
+                    "$count",
+                    color = Color(0xFF7BC8FF),
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
+                IconButton(onClick = { if (count < 16) count++ }) {
+                    Text("+", color = Color(0xFF7BC8FF), style = MaterialTheme.typography.titleLarge)
+                }
+            }
+        }
+
+        if (isDisc) {
+            EmbossSlider("Diameter", diameter, { diameter = it }, 1f..30f)
+            EmbossSlider("Magnet height", discHeight, { discHeight = it }, 0.5f..10f)
+        } else {
+            EmbossSlider("Magnet X", blockX, { blockX = it }, 2f..40f)
+            EmbossSlider("Magnet Y", blockY, { blockY = it }, 2f..40f)
+            EmbossSlider("Magnet Z", blockZ, { blockZ = it }, 0.5f..10f)
+        }
+        EmbossSlider("Clearance", clearance, { clearance = it }, 0f..1f)
+        EmbossSlider("Roof / floor", roof, { roof = it }, 0.4f..3f)
+        EmbossSlider("Edge margin", edgeMargin, { edgeMargin = it }, 1f..15f)
+
+        Button(
+            onClick = {
+                onApply(
+                    MagnetSpec(
+                        count = count,
+                        shape = if (isDisc) MagnetShape.DISC else MagnetShape.BLOCK,
+                        diameterMm = diameter,
+                        discHeightMm = discHeight,
+                        blockXmm = blockX,
+                        blockYmm = blockY,
+                        blockZmm = blockZ,
+                        clearanceMm = clearance,
+                        roofThicknessMm = roof,
+                        edgeMarginMm = edgeMargin,
+                    ),
+                )
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF7BC8FF),
+                contentColor = Color.Black,
+            ),
+        ) {
+            Text("Add Magnets", fontWeight = FontWeight.Bold)
         }
     }
 }

@@ -167,6 +167,8 @@ fun BindWorkspaceModel(
     onAddVolumeToModel: ((modelId: String, sourcePath: String, type: String) -> Unit)? = null,
     /** Drop a previously-attached volume from a PlacedModel. */
     onRemoveVolume: ((modelId: String, volumeId: String) -> Unit)? = null,
+    /** "Add Magnets" — recess N magnet pockets + auto-pause tick. */
+    onAddMagnets: ((WorkspaceAction.AddMagnets) -> Unit)? = null,
     /**
      * Paint-state edits — color / support / seam / fuzzy slot remap,
      * clear, undo, redo. Each sub-action passes through to a
@@ -231,7 +233,7 @@ fun BindWorkspaceModel(
         onAddCustomGcodeTick, onRemoveCustomGcodeTick, onClearCustomGcodeTicks,
         onCutModel, onMeshBoolean, onSplitModel,
         onEmbossModel, onAddTextOrSvgObject, onAddTextOrSvgVolume,
-        onAddVolumeToModel, onRemoveVolume,
+        onAddVolumeToModel, onRemoveVolume, onAddMagnets,
         onClearPaint, onReplacePaintTag, onPaintPlaneSplit,
         onPaintUndo, onPaintRedo, onPaintTriangleSet, onLoadPaintState,
     ) {
@@ -257,6 +259,7 @@ fun BindWorkspaceModel(
             if (onAddTextOrSvgVolume != null) add(TierBCapability.AddTextOrSvgVolume)
             if (onAddVolumeToModel != null) add(TierBCapability.AddVolumeToModel)
             if (onRemoveVolume != null) add(TierBCapability.RemoveVolume)
+            if (onAddMagnets != null) add(TierBCapability.AddMagnets)
             if (onClearPaint != null) add(TierBCapability.ClearPaint)
             if (onReplacePaintTag != null) add(TierBCapability.ReplacePaintTag)
             if (onPaintPlaneSplit != null) add(TierBCapability.PaintPlaneSplit)
@@ -318,6 +321,7 @@ fun BindWorkspaceModel(
     val onAddTextOrSvgVolumeLatest = rememberUpdatedState(onAddTextOrSvgVolume)
     val onAddVolumeLatest = rememberUpdatedState(onAddVolumeToModel)
     val onRemoveVolumeLatest = rememberUpdatedState(onRemoveVolume)
+    val onAddMagnetsLatest = rememberUpdatedState(onAddMagnets)
     val onClearPaintLatest = rememberUpdatedState(onClearPaint)
     val onReplacePaintLatest = rememberUpdatedState(onReplacePaintTag)
     val onPaintPlaneSplitLatest = rememberUpdatedState(onPaintPlaneSplit)
@@ -378,6 +382,7 @@ fun BindWorkspaceModel(
             onAddTextOrSvgVolume = onAddTextOrSvgVolumeLatest.value,
             onAddVolumeToModel = onAddVolumeLatest.value,
             onRemoveVolume = onRemoveVolumeLatest.value,
+            onAddMagnets = onAddMagnetsLatest.value,
             onClearPaint = onClearPaintLatest.value,
             onReplacePaintTag = onReplacePaintLatest.value,
             onPaintPlaneSplit = onPaintPlaneSplitLatest.value,
@@ -434,6 +439,7 @@ private fun handleAction(
     onAddTextOrSvgVolume: ((WorkspaceAction.AddTextOrSvgVolume) -> Unit)?,
     onAddVolumeToModel: ((modelId: String, sourcePath: String, type: String) -> Unit)?,
     onRemoveVolume: ((modelId: String, volumeId: String) -> Unit)?,
+    onAddMagnets: ((WorkspaceAction.AddMagnets) -> Unit)?,
     onClearPaint: ((modelId: String, kind: WorkspaceAction.PaintKind?) -> Unit)?,
     onReplacePaintTag: ((modelId: String, kind: WorkspaceAction.PaintKind, fromTag: Int, toTag: Int) -> Unit)?,
     onPaintPlaneSplit: ((WorkspaceAction.PaintPlaneSplit) -> Unit)?,
@@ -667,6 +673,10 @@ private fun handleAction(
         is WorkspaceAction.RemoveVolume -> {
             if (onRemoveVolume != null) onRemoveVolume(action.modelId, action.volumeId)
             else Log.w(TAG, "RemoveVolume not wired.")
+        }
+        is WorkspaceAction.AddMagnets -> {
+            if (onAddMagnets != null) onAddMagnets(action)
+            else Log.w(TAG, "AddMagnets not wired.")
         }
         is WorkspaceAction.ClearPaint -> {
             if (onClearPaint != null) onClearPaint(action.modelId, action.kind)

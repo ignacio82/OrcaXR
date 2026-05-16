@@ -1150,6 +1150,7 @@ private fun XrShell(
     // the named PlacedModel. Set by the per-row Emboss icon; cleared on
     // panel dismiss or successful Apply.
     var embossTargetModelId by remember { mutableStateOf<String?>(null) }
+    var magnetTargetModelId by remember { mutableStateOf<String?>(null) }
     var printerStatuses by remember { mutableStateOf<Map<String, PrinterStatus>>(emptyMap()) }
     var printerSnapshots by remember { mutableStateOf<Map<String, PrintSnapshot>>(emptyMap()) }
     var webcamFrames by remember { mutableStateOf<Map<String, androidx.compose.ui.graphics.ImageBitmap>>(emptyMap()) }
@@ -2674,6 +2675,183 @@ private fun XrShell(
     }
 
     /**
+     * "Add Magnets" — recess N magnet-shaped pockets into [modelId] as
+     * `NEGATIVE_VOLUME`s and auto-author one `PausePrint` tick so the
+     * user can drop physical magnets into the open pockets mid-print
+     * before the model bridges a roof over them.
+     *
+     * Unlike [runEmboss] this is NON-destructive: `source` is NOT
+     * swapped (libslic3r boolean-subtracts the negative volumes at
+     * slice time), so paint / support / seam / fuzzy state and any
+     * existing volumes are PRESERVED — we only append.
+     *
+     * v1 gate: only the single-model slice path (`runSlice` →
+     * `SlicerEngine.slice`) threads per-model `extraVolumes`;
+     * `sliceMulti` does not yet. So magnets require exactly one model
+     * on the bed and a non-decomposed source (`originalSource == null`).
+     */
+    fun runMagnets(action: dev.orcaxr.app.mcp.WorkspaceAction.AddMagnets) {
+        val src = placedModels.firstOrNull { it.id == action.modelId } ?: return
+        if (placedModels.size != 1 || src.originalSource != null) {
+            android.widget.Toast.makeText(
+                ctx,
+                "Add Magnets needs a single standalone model on the bed " +
+                    "(multi-object plates aren't supported yet).",
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+            return
+        }
+        val shape = when (action.shape.trim().lowercase()) {
+            "disc", "cylinder", "round" -> MagnetShape.DISC
+            "block", "cube", "rect", "rectangular" -> MagnetShape.BLOCK
+            else -> {
+                android.widget.Toast.makeText(
+                    ctx,
+                    "Unknown magnet shape '${action.shape}' (use disc or block).",
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+                return
+            }
+        }
+        if (action.count < 1) {
+            android.widget.Toast.makeText(
+                ctx, "Magnet count must be ≥ 1.", android.widget.Toast.LENGTH_LONG,
+            ).show()
+            return
+        }
+        val originalLabel = src.label
+        scope.launch {
+            isLoadingModel = true
+            loadingLabel = "Adding magnets to $originalLabel"
+
+            // Resolve the slice layer height the SAME way mergedConfig
+            // does (gotcha #22): override TextField wins, else the
+            // active profile's layer_height, clamped. Never derive it
+            // from the 3MF or the bbox — the pause must land on a real
+            // slice layer boundary.
+            val lh = run {
+                val parsed = layerHeightOverride.value.trim().toFloatOrNull()
+                val v = if (parsed == null || parsed.isNaN()) {
+                    selectedProfile.value.config["layer_height"]?.toFloatOrNull() ?: 0.2f
+                } else parsed
+                v.coerceIn(0.05f, 0.50f)
+            }
+
+            val spec = MagnetSpec(
+                count = action.count,
+                shape = shape,
+                diameterMm = action.diameterMm,
+                discHeightMm = action.heightMm,
+                blockXmm = action.blockXmm,
+                blockYmm = action.blockYmm,
+                blockZmm = action.blockZmm,
+                clearanceMm = action.clearanceMm,
+                roofThicknessMm = action.roofThicknessMm,
+                edgeMarginMm = action.edgeMarginMm,
+            )
+
+            // Placement is in the host's mesh-local (unscaled) frame —
+            // the per-volume transform is applied before the instance
+            // scale, so use baseBbox*, NOT footprintMm() (post-scale).
+            val placement = MagnetOp.placeCavities(
+                footprintXmm = src.baseBboxXmm,
+                footprintYmm = src.baseBboxYmm,
+                hostHeightMm = src.baseBboxZmm,
+                spec = spec,
+                resolvedLayerHeightMm = lh,
+            )
+            val warnings = placement.warnings.toMutableList()
+            // A scaled host scales its negative volumes too — the
+            // physical pocket would no longer match the magnet.
+            if (src.effectiveScaleX != 1f || src.effectiveScaleY != 1f ||
+                src.effectiveScaleZ != 1f) {
+                warnings += "Model is scaled; magnet pockets scale with it " +
+                    "and may not fit the physical magnet."
+            }
+            if (warnings.isNotEmpty()) {
+                android.widget.Toast.makeText(
+                    ctx, warnings.joinToString("\n"), android.widget.Toast.LENGTH_LONG,
+                ).show()
+            }
+
+            val magnetStl = File(
+                ctx.cacheDir,
+                "magnet_${action.modelId}_${System.currentTimeMillis()}.stl",
+            )
+            val built = runCatching {
+                SlicerEngine.buildPrimitiveStl(
+                    kind = placement.primitiveKind,
+                    params = placement.primitiveParams,
+                    output = magnetStl,
+                )
+            }.onFailure {
+                android.util.Log.e("OrcaXR", "buildPrimitiveStl (magnet) threw", it)
+            }.getOrNull()
+            if (built == null) {
+                isLoadingModel = false
+                loadingLabel = null
+                android.widget.Toast.makeText(
+                    ctx, "Magnet mesh build failed (see logs).",
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+                return@launch
+            }
+
+            val stamp = System.currentTimeMillis()
+            val newVolumes = placement.cavities.mapIndexed { i, c ->
+                PlacedVolume(
+                    id = "magnet_${stamp}_$i",
+                    source = built,
+                    type = ModelVolumeType.NEGATIVE_VOLUME,
+                    translateXmm = c.centerXmm,
+                    translateYmm = c.centerYmm,
+                    translateZmm = placement.floorZmm,
+                )
+            }
+            // Append, preserving source/paint/support/existing volumes.
+            placedModels = placedModels.map {
+                if (it.id != action.modelId) it else it.copy(
+                    volumes = it.volumes + newVolumes,
+                    previewVersion = it.previewVersion + 1,
+                    previewRotZDeg = -1,
+                    previewScalePct = -1,
+                )
+            }
+
+            // Author ONE PausePrint tick at the pocket top, de-duping
+            // any prior magnet pause within half a layer on this plate.
+            val plateId = src.plateId
+            val existing = customGcodeTicksByPlate[plateId] ?: emptyList()
+            val eps = lh / 2f
+            val deduped = existing.filterNot {
+                it.kind == SlicerEngine.CustomGcodeKind.PausePrint &&
+                    kotlin.math.abs(it.printZmm - placement.pauseZmm) <= eps
+            }
+            val merged = (deduped + SlicerEngine.CustomGcodeTick(
+                printZmm = placement.pauseZmm,
+                kind = SlicerEngine.CustomGcodeKind.PausePrint,
+                color = "Insert magnets",
+            )).sortedBy { it.printZmm }
+            customGcodeStore.set(plateId, merged)
+
+            sliceState.value = SliceUiState.Idle
+            try {
+                previewStl(action.modelId)
+            } finally {
+                isLoadingModel = false
+                loadingLabel = null
+            }
+            android.widget.Toast.makeText(
+                ctx,
+                "Added ${placement.cavities.size} magnet ${shape.name.lowercase()} " +
+                    "pocket(s) + pause @ ${"%.2f".format(placement.pauseZmm)} mm to " +
+                    originalLabel + ".",
+                android.widget.Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
+
+    /**
      * Phase A5 ("Fix Model") — run cross-platform mesh repair on the
      * given PlacedModel. Replaces its `source` with the repaired 3MF,
      * clears all paint state (topology may have changed → per-triangle
@@ -3731,6 +3909,7 @@ private fun XrShell(
                 else m
             }
         },
+        onAddMagnets = { action -> runMagnets(action) },
         // Paint state mutations route through PaintHistory so MCP edits
         // are undoable in XR (and vice versa). The auto-debounced
         // observers above (LE_2800 paint→GLB rebake, LE_2819 paint→
@@ -5789,6 +5968,7 @@ private fun XrShell(
                         },
                         onRepairPlacedModel = ::runRepair,
                         onEmbossPlacedModel = { id -> embossTargetModelId = id },
+                        onAddMagnetsPlacedModel = { id -> magnetTargetModelId = id },
                         allPlates = allPlates,
                         onMoveToPlate = { modelId, plateId ->
                             placedModels = placedModels.map {
@@ -7312,6 +7492,41 @@ private fun XrShell(
                                 embossTargetModelId = null
                             },
                             onDismiss = { embossTargetModelId = null },
+                        )
+                    }
+                }
+
+                val magnetTarget = magnetTargetModelId
+                    ?.let { id -> placedModels.firstOrNull { it.id == id } }
+                if (magnetTarget != null) {
+                    MovablePanelWrapper(
+                        id = "magnet-panel",
+                        width = 480.dp,
+                        height = 760.dp,
+                        initialOffset = androidx.xr.runtime.math.Vector3(0.85f, 0.05f, -0.05f),
+                        session = session,
+                    ) {
+                        MagnetPanel(
+                            targetModel = magnetTarget,
+                            onApply = { spec ->
+                                runMagnets(
+                                    dev.orcaxr.app.mcp.WorkspaceAction.AddMagnets(
+                                        modelId = magnetTarget.id,
+                                        count = spec.count,
+                                        shape = spec.shape.name.lowercase(),
+                                        diameterMm = spec.diameterMm,
+                                        heightMm = spec.discHeightMm,
+                                        blockXmm = spec.blockXmm,
+                                        blockYmm = spec.blockYmm,
+                                        blockZmm = spec.blockZmm,
+                                        clearanceMm = spec.clearanceMm,
+                                        roofThicknessMm = spec.roofThicknessMm,
+                                        edgeMarginMm = spec.edgeMarginMm,
+                                    ),
+                                )
+                                magnetTargetModelId = null
+                            },
+                            onDismiss = { magnetTargetModelId = null },
                         )
                     }
                 }

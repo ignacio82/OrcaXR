@@ -23,6 +23,7 @@ import dev.orcaxr.app.mcp.tools.PrefsTools
 import dev.orcaxr.app.mcp.tools.CalibrationTools
 import dev.orcaxr.app.mcp.tools.SettingsBackupTools
 import dev.orcaxr.app.mcp.tools.WipeTowerTools
+import dev.orcaxr.app.mcp.tools.MagnetTools
 import dev.orcaxr.app.mcp.tools.PrimitiveTools
 import dev.orcaxr.app.mcp.tools.PrinterTools
 import dev.orcaxr.app.mcp.tools.ProfileTools
@@ -251,6 +252,7 @@ class McpController private constructor(
             for (t in WorkspaceTools.all(ctx)) builder.tool(t)
             // D12 — primitive shape authoring (cube / cylinder / sphere / …).
             for (t in PrimitiveTools.all(ctx)) builder.tool(t)
+            for (t in MagnetTools.all(ctx)) builder.tool(t)
             // D13 — handy model library (Benchy / Orca Cube / …).
             for (t in HandyModelTools.all(ctx)) builder.tool(t)
             // C9 milestone 1 — AI-driven spatial paint primitives.

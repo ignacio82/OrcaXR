@@ -67,6 +67,8 @@ enum class TierBCapability {
     AddVolumeToModel,
     /** [WorkspaceAction.RemoveVolume]. */
     RemoveVolume,
+    /** [WorkspaceAction.AddMagnets]. */
+    AddMagnets,
     /** [WorkspaceAction.ClearPaint]. */
     ClearPaint,
     /** [WorkspaceAction.ReplacePaintTag]. */
