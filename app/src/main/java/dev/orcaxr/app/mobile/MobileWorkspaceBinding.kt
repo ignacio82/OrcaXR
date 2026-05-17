@@ -214,6 +214,13 @@ fun BindMobileWorkspaceModel(
                 TierBCapability.AddCustomGcodeTick,
                 TierBCapability.RemoveCustomGcodeTick,
                 TierBCapability.ClearCustomGcodeTicks,
+                // Re-arch increment 5 — single-model geometry ops.
+                // (split / boolean / add-volume stay UNpublished so
+                // their tools fail-fast cleanly: those are inherently
+                // multi-model/-volume and don't fit the single-model
+                // phone shell — a clean refusal, not a silent drop.)
+                TierBCapability.CutModel,
+                TierBCapability.SimplifyModel,
             ),
         )
     }
@@ -311,6 +318,51 @@ fun BindMobileWorkspaceModel(
                     gcodeStore.removeAt(action.plateId, action.index)
                 is WorkspaceAction.ClearCustomGcodeTicks ->
                     gcodeStore.clear(action.plateId)
+                // Single-model geometry ops (re-arch increment 5).
+                // Run the JNI op to a fresh cache file, then route
+                // through the wired load path (clears paint/transform,
+                // navigates to Slicer) — mirrors XR's "replace model".
+                is WorkspaceAction.CutModel -> {
+                    val model = workspace.placedModels.value
+                        .firstOrNull { it.id == action.modelId }
+                    if (model != null) {
+                        val out = File(
+                            ctx.cacheDir,
+                            "cut_${action.modelId}_${action.planeZmm.toInt()}mm.3mf",
+                        )
+                        val ok = runCatching {
+                            SlicerEngine.cutObject(
+                                model.source, out, action.planeZmm,
+                                SlicerEngine.CutAttr.KEEP_UPPER or
+                                    SlicerEngine.CutAttr.KEEP_LOWER or
+                                    SlicerEngine.CutAttr.PLACE_ON_CUT_UPPER or
+                                    SlicerEngine.CutAttr.PLACE_ON_CUT_LOWER,
+                            )
+                        }.getOrDefault(false)
+                        if (ok && out.exists() && out.length() > 0) {
+                            onLoadLatest.value.invoke(out.absolutePath)
+                        }
+                    }
+                }
+                is WorkspaceAction.SimplifyModel -> {
+                    val model = workspace.placedModels.value
+                        .firstOrNull { it.id == action.modelId }
+                    if (model != null) {
+                        val out = File(
+                            ctx.cacheDir,
+                            "simplify_${action.modelId}_${System.currentTimeMillis()}.3mf",
+                        )
+                        val res = runCatching {
+                            SlicerEngine.simplifyMesh(
+                                model.source, out,
+                                action.targetTriangleCount, action.maxError,
+                            )
+                        }.getOrNull()
+                        if (res != null && out.exists() && out.length() > 0) {
+                            onLoadLatest.value.invoke(out.absolutePath)
+                        }
+                    }
+                }
                 is WorkspaceAction.ComputeAdaptiveLayerHeights -> {
                     val model = workspace.placedModels.value
                         .firstOrNull { it.id == action.modelId }
