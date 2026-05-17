@@ -15,13 +15,22 @@
  *     (empty list when no model is loaded; one PlacedModel when loaded)
  *   - `TierBCapability.LoadModelFromPath` so an LLM agent can drive
  *     the assistant via `load_model_from_path`
+ *   - the four paint actions, AND (re-arch increment 1) the plain
+ *     capability-free per-model data mutators `SetHeightRanges` /
+ *     `SetObjectOverrides` / `SetVolumeOverrides` /
+ *     `SetLayerHeightProfile` — applied to [MobileModelState] and
+ *     carried onto the published `mobile_loaded` PlacedModel
  *
  * Not wired yet (and any tool that needs them will fail-fast via
- * `requireCapability` until they are):
- *   - Multi-model arrange / select / paint / cut / boolean / split
- *   - Slice / save flows (slicing is invoked from the SlicerScreen
- *     button; the MCP slice tool would need a separate hook into
- *     SlicerScreen's runSlice that survives the assistant takeover)
+ * `requireCapability` or hit the `else` drop until they are):
+ *   - Multi-model arrange / select / cut / boolean / split / simplify
+ *     / emboss / magnets (geometry ops — need a JNI run + source-file
+ *     replace; subsequent re-arch increment)
+ *   - Tier-B compute-adaptive / custom-gcode-tick mutators
+ *   - Slice-path consumption of the accumulated state (the SlicerScreen
+ *     slice call must read heightRanges / configOverrides /
+ *     layerHeightProfile off the model; next increment)
+ *   - Slice / save flows from the assistant takeover
  */
 package dev.orcaxr.app.mobile
 
@@ -58,12 +67,13 @@ fun BindMobileWorkspaceModel(
     val ctx = LocalContext.current
     val bvhCache = remember { MeshBvhCache() }
 
-    // Per-model paint buffers, keyed by modelId. Lives across
-    // recompositions of this binding so a `commit_paint_session`
-    // (LoadPaintState) followed by a `paint_sphere` (PaintTriangleSet)
-    // sees the same arrays. Per-process — paint state does not survive
-    // app kill (saved-recipe persistence is the user-explicit path).
-    val paintByModel = remember { mutableStateMapOf<String, MobilePaintState>() }
+    // Per-model state, keyed by modelId — paint arrays PLUS the
+    // non-geometry mutables (height ranges, object/volume overrides,
+    // layer-height profile) the binding now applies instead of
+    // dropping. Lives across recompositions so a sequence of MCP
+    // mutators accumulates. Per-process — not persisted (saved-recipe
+    // / 3MF export are the explicit persistence paths).
+    val stateByModel = remember { mutableStateMapOf<String, MobileModelState>() }
 
     // Register a BvhProvider so AI / vision MCP tools (get_model_geometry,
     // render_montage, paint_*) can resolve "mobile_loaded" back to a
@@ -145,22 +155,25 @@ fun BindMobileWorkspaceModel(
     // an incoming `LoadPaintState` mutates `paintByModel` and we have
     // to re-emit a new PlacedModel carrying those byte arrays so
     // `list_placed_models` / `get_paint_summary` reflect the commit.
-    LaunchedEffect(slicerFilePath, paintByModel.toMap()) {
+    LaunchedEffect(slicerFilePath, stateByModel.toMap()) {
         val list =
             if (slicerFilePath.isNullOrBlank()) emptyList()
             else {
                 val file = File(slicerFilePath)
-                val pb = paintByModel["mobile_loaded"]
+                val st = stateByModel["mobile_loaded"]
                 listOf(
                     PlacedModel(
                         id = "mobile_loaded",
                         source = file,
                         label = file.nameWithoutExtension,
                         plateId = 1,
-                        paintFilamentIndex = pb?.color,
-                        supportFlags = pb?.support,
-                        seamFlags = pb?.seam,
-                        fuzzySkinFlags = pb?.fuzzy,
+                        paintFilamentIndex = st?.paint?.color,
+                        supportFlags = st?.paint?.support,
+                        seamFlags = st?.paint?.seam,
+                        fuzzySkinFlags = st?.paint?.fuzzy,
+                        configOverrides = st?.configOverrides ?: emptyMap(),
+                        layerHeightProfile = st?.layerHeightProfile,
+                        heightRanges = st?.heightRanges ?: emptyList(),
                     )
                 )
             }
@@ -214,24 +227,45 @@ fun BindMobileWorkspaceModel(
                     onLoadLatest.value.invoke(action.path)
                 }
                 is WorkspaceAction.LoadPaintState -> {
-                    paintByModel[action.modelId] =
-                        (paintByModel[action.modelId] ?: MobilePaintState())
-                            .applyLoadPaintState(action)
+                    val st = stateByModel[action.modelId] ?: MobileModelState()
+                    stateByModel[action.modelId] =
+                        st.copy(paint = st.paint.applyLoadPaintState(action))
                 }
                 is WorkspaceAction.PaintTriangleSet -> {
+                    val st = stateByModel[action.modelId] ?: MobileModelState()
                     val triCount = workspace.getBvh(action.modelId)?.triCount
-                        ?: paintByModel[action.modelId]?.let { s ->
+                        ?: st.paint.let { s ->
                             s.color?.size ?: s.support?.size ?: s.seam?.size ?: s.fuzzy?.size
                         }
                         ?: ((action.triangleIndices.maxOrNull() ?: -1) + 1)
-                    paintByModel[action.modelId] =
-                        (paintByModel[action.modelId] ?: MobilePaintState())
-                            .applyTriangleSet(action, triCount)
+                    stateByModel[action.modelId] =
+                        st.copy(paint = st.paint.applyTriangleSet(action, triCount))
                 }
                 is WorkspaceAction.ClearPaint -> {
-                    paintByModel[action.modelId] =
-                        (paintByModel[action.modelId] ?: MobilePaintState())
-                            .applyClearPaint(action)
+                    val st = stateByModel[action.modelId] ?: MobileModelState()
+                    stateByModel[action.modelId] =
+                        st.copy(paint = st.paint.applyClearPaint(action))
+                }
+                // Plain (capability-free) per-model data mutators the
+                // binding used to drop. They take effect on phone now
+                // and round-trip through the published PlacedModel so
+                // get_object_overrides / list_height_ranges /
+                // get_layer_height_profile read back correctly.
+                is WorkspaceAction.SetHeightRanges -> {
+                    val st = stateByModel[action.modelId] ?: MobileModelState()
+                    stateByModel[action.modelId] = st.applySetHeightRanges(action)
+                }
+                is WorkspaceAction.SetObjectOverrides -> {
+                    val st = stateByModel[action.modelId] ?: MobileModelState()
+                    stateByModel[action.modelId] = st.applySetObjectOverrides(action)
+                }
+                is WorkspaceAction.SetVolumeOverrides -> {
+                    val st = stateByModel[action.modelId] ?: MobileModelState()
+                    stateByModel[action.modelId] = st.applySetVolumeOverrides(action)
+                }
+                is WorkspaceAction.SetLayerHeightProfile -> {
+                    val st = stateByModel[action.modelId] ?: MobileModelState()
+                    stateByModel[action.modelId] = st.applySetLayerHeightProfile(action)
                 }
                 else -> {
                     // Action types whose Tier-B capability isn't in the
