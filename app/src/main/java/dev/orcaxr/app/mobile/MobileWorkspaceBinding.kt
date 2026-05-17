@@ -15,22 +15,33 @@
  *     (empty list when no model is loaded; one PlacedModel when loaded)
  *   - `TierBCapability.LoadModelFromPath` so an LLM agent can drive
  *     the assistant via `load_model_from_path`
- *   - the four paint actions, AND (re-arch increment 1) the plain
- *     capability-free per-model data mutators `SetHeightRanges` /
- *     `SetObjectOverrides` / `SetVolumeOverrides` /
- *     `SetLayerHeightProfile` — applied to [MobileModelState] and
- *     carried onto the published `mobile_loaded` PlacedModel
+ *   - the four paint actions; the plain per-model data mutators
+ *     `SetHeightRanges` / `SetObjectOverrides` / `SetVolumeOverrides` /
+ *     `SetLayerHeightProfile` (inc. 1, on [MobileModelState], carried
+ *     onto the published `mobile_loaded` PlacedModel AND threaded into
+ *     the phone slice — inc. 2); the shell-state mutators
+ *     `TransformModel` / `DropToBed` / `DeleteModels` + benign
+ *     `SetActivePlateId` / `SetSelectedModels` no-ops (inc. 3); the
+ *     Tier-B mutators `ComputeAdaptiveLayerHeights` +
+ *     `Add/Remove/ClearCustomGcodeTick` via the shared CustomGcodeStore
+ *     (inc. 4); and single-model geometry ops `CutModel` /
+ *     `SimplifyModel` → run-op-then-reload (inc. 5a).
  *
- * Not wired yet (and any tool that needs them will fail-fast via
- * `requireCapability` or hit the `else` drop until they are):
- *   - Multi-model arrange / select / cut / boolean / split / simplify
- *     / emboss / magnets (geometry ops — need a JNI run + source-file
- *     replace; subsequent re-arch increment)
- *   - Tier-B compute-adaptive / custom-gcode-tick mutators
- *   - Slice-path consumption of the accumulated state (the SlicerScreen
- *     slice call must read heightRanges / configOverrides /
- *     layerHeightProfile off the model; next increment)
- *   - Slice / save flows from the assistant takeover
+ * Deliberately NOT wired (their tools fail-fast cleanly — a clean
+ * refusal, NOT a silent drop):
+ *   - `SplitModel` / `MeshBoolean` / `AddVolumeToModel` /
+ *     `RemoveVolume` — inherently multi-model/-volume; don't fit the
+ *     single-model phone shell.
+ *   - `EmbossModel` / `AddMagnets` — their XR cores are large
+ *     multi-JNI + bbox-math handlers that can't be verified headless;
+ *     duplicating them into the binding unverified would risk a device
+ *     crash. These need the XR op cores extracted into a shared,
+ *     testable engine first (a refactor, tracked separately) — not a
+ *     binding gap.
+ *   - `SwitchProfile` / `SetLayerHeightOverride` — driven by
+ *     SlicerScreen-local Compose state today; needs that state hoisted
+ *     before the MCP path can reach it.
+ *   - Slice / save flows from the assistant takeover.
  */
 package dev.orcaxr.app.mobile
 
