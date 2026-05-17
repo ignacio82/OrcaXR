@@ -50,7 +50,7 @@ android {
         applicationId = "dev.orcaxr.app"
         minSdk = 31
         targetSdk = 35
-        versionCode = 2026051702
+        versionCode = 2026051703
         versionName = "0.0.6"
 
         // Phase 0 targets arm64-v8a only. Add more ABIs when we support

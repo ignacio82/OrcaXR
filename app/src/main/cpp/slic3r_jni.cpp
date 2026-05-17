@@ -3938,7 +3938,14 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
             Slic3r::Transform3d  xform;
         };
         std::vector<EmitBatch> emit_batches;
-        const size_t PREVIEW_TRI_BUDGET = 150000;  // SceneCore-safe cap
+        // 150k still tripped gotcha #13 on the 1.4M-tri PAINTED dragon
+        // (decimated-but-4-batch GLB attach racing the concurrent
+        // SelectionBbox + 3 TransformGizmo + echo material binds
+        // saturated Filament's instance queue). 64k roughly halves the
+        // model's material-instance/vertex pressure; 六剑刃 (0.5M) and
+        // all lighter models stay well clear. Preview-only — the slice
+        // path reads the original container at full res, unaffected.
+        const size_t PREVIEW_TRI_BUDGET = 64000;   // SceneCore-safe cap
         const size_t PREVIEW_MIN_BATCH  = 64;       // never collapse to nothing
         auto stage = [&](const indexed_triangle_set& its,
                          const float rgb[3],
