@@ -6,7 +6,6 @@ import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
@@ -42,24 +41,16 @@ import java.io.File
  * Requires a connected arm64-v8a Android device. Galaxy XR or the
  * Snapmaker U1's Android-based control panel both work.
  */
+// LayerCycle Gap-1 (region_config_from_model_volume virtual
+// propagation — patches/0072) + Gap-3 (get_custom_seq cadence
+// preservation — patches/0073) ship as numbered patches applied by
+// build_native.sh, so this test runs on a clean build. Reworked to the
+// real unpainted wall_filament=<virtual id> FS UX with hardened
+// assertions (>=40 of each toolchange, >=80% per-layer alternation).
+// Verified GREEN on a connected Galaxy XR alongside PeggyPalette /
+// LocalZ / Roundtrip. Full mechanism: docs/proposals/
+// fullspectrum-layercycle-engine.md.
 @RunWith(AndroidJUnit4::class)
-@Ignore(
-    "LayerCycle Gap-1 (region_config_from_model_volume virtual " +
-        "propagation, PrintObject.cpp) + Gap-3 (get_custom_seq cadence " +
-        "preservation, ToolOrdering.cpp) were implemented and this test " +
-        "(reworked to the real unpainted wall_filament=virtual UX + " +
-        "hardened >=40-each / >=80%-alternation assertions) PASSED " +
-        "GREEN on a connected Galaxy XR in-session (2026-05-17) " +
-        "alongside PeggyPalette / LocalZ / Roundtrip staying GREEN. " +
-        "BUT the fix lives in the third_party/OrcaSlicer SUBMODULE, " +
-        "which is never committed (ignore=dirty) and is reset by " +
-        "build_native.sh. It is NOT yet materialized as numbered " +
-        "patches 0072 (Gap-1) / 0073 (Gap-3) in patches/. Stays " +
-        "@Ignore'd so a clean build (no patches) doesn't run it red. " +
-        "Un-ignore in the SAME commit that adds patches 0072/0073. " +
-        "Full mechanism + the proven fix are in " +
-        "docs/proposals/fullspectrum-layercycle-engine.md."
-)
 class FullSpectrumLayerCycleTest {
 
     @Test

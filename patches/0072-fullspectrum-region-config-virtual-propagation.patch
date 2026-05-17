@@ -1,0 +1,33 @@
+--- a/src/libslic3r/PrintObject.cpp
++++ b/src/libslic3r/PrintObject.cpp
+@@ -3414,6 +3414,30 @@ PrintRegionConfig region_config_from_model_volume(const PrintRegionConfig &defau
+         assert(volume.is_model_part());
+     	apply_to_print_region_config(config, *layer_range_config);
+     }
++    // OrcaXR FullSpectrum (Gap-1 region-config virtual propagation).
++    // Slic3r::Model::add_object stamps every loaded object extruder=1;
++    // apply_to_print_region_config maps that onto wall_filament,
++    // clobbering a project-level virtual wall (the unpainted-LayerCycle
++    // failure). num_extruders here == print_config.filament_diameter
++    // .size() == num_physical. When the parent/project config targets a
++    // VIRTUAL row (wall_filament > num_physical) but the object/volume
++    // extruder stamp knocked the result down to a physical id (no scope
++    // set a deliberate virtual wall), restore the parent virtual id so
++    // the per-layer MixedFilamentManager::resolve cadence fires. This is
++    // the FS-desktop semantic. PeggyPalette is unaffected: its project
++    // wall_filament is physical (colour comes from painted segmentation
++    // + mixed_filament_definitions, not a virtual wall), so the
++    // "parent targets virtual" guard never triggers for it.
++    {
++        const int parent_wall = default_or_parent_region_config.wall_filament.value;
++        if (parent_wall > int(num_extruders) &&
++            config.wall_filament.value > 0 &&
++            config.wall_filament.value <= int(num_extruders)) {
++            config.wall_filament.value          = parent_wall;
++            config.sparse_infill_filament.value = parent_wall;
++            config.solid_infill_filament.value  = parent_wall;
++        }
++    }
+     // OrcaXR FullSpectrum (patch 0069): do NOT clamp wall_filament /
+     // sparse_infill_filament / solid_infill_filament to num_extruders.
+     // Project filament IDs > num_physical legitimately reference virtual

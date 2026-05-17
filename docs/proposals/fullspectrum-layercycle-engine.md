@@ -1,8 +1,8 @@
 # FullSpectrum LayerCycle engine
 
-Status: **diagnosed — original "config-propagation only" thesis DISPROVEN.** See §Status 2026-05-15. Real remaining work = the FS v0.9.9 emission-pipeline port (Gap 3), not a small propagation patch. The §Summary and §Approach sections below the Status header were written under the disproven thesis and are retained only for the probe trail / acceptance-test shapes — **read §Status first.**
-Owner: TBD
-Estimated effort: multi-day FS v0.9.9 emission-pipeline port (~800-LoC `GCode.cpp` + ~311-LoC `ToolOrdering` + the `ToolOrderUtils.cpp` reorder DP). NOT the "3–5 day propagation fix" the disproven §Approach below estimates.
+Status: **SHIPPED 2026-05-17 — patches `0072` + `0073`, device-verified GREEN.** The 2026-05-15 "Gap 3 dominant / FS emission-pipeline port" framing was itself superseded by the 2026-05-17 instrumented re-test (see §Status 2026-05-17): the bundled `FullSpectrumLayerCycleTest` was blocked **solely by Gap 1** (the `Model::add_object` `extruder=1` stamp clobbering the project virtual `wall_filament`). Fix = `patches/0072-fullspectrum-region-config-virtual-propagation.patch` (restore parent virtual wall when the object stamp would demote it; PeggyPalette-inert because its project wall is physical) + `patches/0073-fullspectrum-reorder-cadence-preservation.patch` (`get_custom_seq` pins the resolved per-layer cadence when `mixed_filament_definitions` is set). `FullSpectrumLayerCycleTest` un-`@Ignore`'d with hardened assertions; LocalZ / Roundtrip / PeggyPalette stay GREEN. The §Status 2026-05-15 and §Approach sections below are retained as the historical probe trail — **read §Status 2026-05-17 first.**
+Owner: shipped
+Estimated effort: DONE — ~75 LoC across two config-propagation patches (the disproven "multi-day emission-pipeline port" estimate was wrong; the empirical re-test found Gap 1 was the real, small blocker).
 
 ## Summary
 
