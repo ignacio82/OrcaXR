@@ -1,18 +1,18 @@
 # FullSpectrum LayerCycle engine
 
-Status: proposed
+Status: **diagnosed — original "config-propagation only" thesis DISPROVEN.** See §Status 2026-05-15. Real remaining work = the FS v0.9.9 emission-pipeline port (Gap 3), not a small propagation patch. The §Summary and §Approach sections below the Status header were written under the disproven thesis and are retained only for the probe trail / acceptance-test shapes — **read §Status first.**
 Owner: TBD
-Estimated effort: 1–2 weeks of engine work + 1 week of hardware verification on Snapmaker U1
+Estimated effort: multi-day FS v0.9.9 emission-pipeline port (~800-LoC `GCode.cpp` + ~311-LoC `ToolOrdering` + the `ToolOrderUtils.cpp` reorder DP). NOT the "3–5 day propagation fix" the disproven §Approach below estimates.
 
 ## Summary
 
-OrcaXR ships **FullSpectrum Local-Z end-to-end** (patches 0044-0067, consolidated into `0053-fullspectrum-local-z-consolidated.patch`; PeggyPalette parity within ±0.3 % per slot as of 2026-05-14). What it does **not** ship is **LayerCycle without painting** — the user-facing FS mode where `wall_filament` is set to a virtual mixed-filament row and the slicer alternates the physical extruder for every wall/infill layer.
+> **⚠️ Superseded by §Status 2026-05-15.** The thesis in this section — *"the root cause is a config-propagation bug, not a missing patch"* — was **disproven** by instrumented diagnosis. Candidate propagation patches 0072/0073 were built, device-tested, and reverted: Gap 3 (the emission-pipeline port) collapses the result regardless of propagation. The text below is kept as the historical premise the diagnosis refuted; the **current** root cause and the real plan are in §Status and the §Remaining-work pointer at the end of §Status.
 
-The root cause is **not** a missing patch from FS v0.9.9. Patches 0017 + 0018 + 0019 already wire the resolver chain (`MixedFilamentManager::resolve` → `ToolOrdering::resolve_filament_for_layer` → `LayerTools::extruders`). The gap is a **config propagation bug** in OrcaXR's v2.3.2 baseline: a top-level `wall_filament=<virtual id>` in the project slice config never reaches `PrintRegionConfig`, so every region keeps its default `wall_filament=1` and the FS resolver path is never consulted.
+OrcaXR ships **FullSpectrum Local-Z end-to-end** (patches 0044-0067, consolidated into `0053-fullspectrum-local-z-consolidated.patch`). What it does **not** ship is **LayerCycle without painting** — the user-facing FS mode where `wall_filament` is set to a virtual mixed-filament row and the slicer alternates the physical extruder for every wall/infill layer.
 
-`FullSpectrumLayerCycleTest` is `@Ignore`d with this exact diagnosis (verified 2026-05-12 on Galaxy XR): *"region.config().wall_filament stays at 1 even when the slice config map says 5."* The painted-Local-Z workaround (`mmu_segmentation_facets`) is what users have today.
+~~The root cause is **not** a missing patch from FS v0.9.9.~~ *(Disproven — it is the FS v0.9.9 emission port.)* Patches 0017 + 0018 + 0019 wire the resolver chain (`MixedFilamentManager::resolve` → `ToolOrdering::resolve_filament_for_layer` → `LayerTools::extruders`), but the resolved per-layer cadence does **not survive** `reorder_filaments_for_minimum_flush_volume` + `_make_wipe_tower` into the emission `ToolOrdering` — see §Status Gap 3.
 
-This proposal closes the propagation gap so LayerCycle works **without requiring the user to paint every triangle**.
+The painted-Local-Z path (`mmu_segmentation_facets`) is the working multi-color mode users have today; its `PeggyPaletteFullSpectrumParityTest` gate is **GREEN** (re-gated by commit `1b4ef8b` onto per-tool MODEL extrusion ±2% — the colour-bearing invariant; the old "+5.4% total-mm" alarm was a legitimate purge-minimisation win, **resolved and stale, do NOT bisect**).
 
 ## Status 2026-05-15 — Phase 1 complete, two of three gaps fixed
 
@@ -100,22 +100,30 @@ premise — "LayerCycle is just a config-propagation fix" — is
 **disproven**. It is the full FS v0.9.9 emission port. The submodule
 tree is back to the verified pinned + 0001-0071 state.
 
-**Pre-existing regression discovered (UNRELATED to LayerCycle, action
-needed).** While regression-testing the candidate patches,
-`PeggyPaletteFullSpectrumParityTest` was found **failing on the
-current main branch at baseline** (no LayerCycle patches): T1 filament
-use = 989.14 mm vs ref 938.7 mm = **+5.4 %**, well past the ±2 %
-tolerance. The candidate patches do **not** move this number (T1 =
-989.13–989.15 across baseline / +0072 / +0072+0073 — identical within
-float noise), proving the divergence is independent of this work. This
-contradicts memory `project_orcaxr_patch_chain.md` (2026-05-14) which
-recorded T1 within ±0.3 % (938.68). Something in the slicer commits
-after that date regressed the painted-Local-Z PeggyPalette parity —
-candidate range `afc6f7d..e8a7cad` (the `clamp_filament_arrays` /
-`strip_painted_facets` series). This needs its own bisect + fix; it is
-the **highest-priority FS issue** because painted-Local-Z is currently
-the *only* working multi-color path and it is now off by 5.4 % on the
-reference model.
+**The "+5.4 % PeggyPalette regression" — RESOLVED 2026-05-16, do NOT
+re-open.** During this work `PeggyPaletteFullSpectrumParityTest` was
+seen "failing" at T1 = 989.14 mm vs ref 938.7 mm (+5.4 %) under its
+*then* gate (per-slot **total** filament-mm). Commit `1b4ef8b`
+("test(parity): gate PeggyPalette on model extrusion, not total
+filament-mm", 2026-05-16) proved this was **never a slicer bug**:
+decomposing the G-code shows per-tool **MODEL** extrusion is
+byte-identical to the FS reference (`region->filament` is fixed by the
+painted segmentation); only conserved wipe-tower purge is
+redistributed, because OrcaXR's stock
+`reorder_filaments_for_minimum_flush_volume` legitimately purges ~10 %
+*less* than desktop FS (pair-cost 2263 vs 2526) — a print-quality
+**win** the old total-mm gate misflagged as a regression. `1b4ef8b`
+re-based the gate onto the colour-bearing invariant (per-tool MODEL
+extrusion ±2 %) and the test is **GREEN**. The `afc6f7d..e8a7cad`
+(`clamp_filament_arrays` / `strip_painted_facets`) bisect lead is a
+**dead end** — those commits are no-ops for this model (PeggyPalette's
+ref ships `mixed_filament_definitions`, so `clamp_filament_arrays`
+short-circuits). Do **not** re-chase this; the commit message records
+it "cost many multi-hour debugging sessions chasing a non-bug."
+*(Note: the conserved purge redistribution — stock reorder gets even
+layers' order wrong via a localised 1↔3 swap — is the same Gap-3
+mechanism as LayerCycle; it is characterised precisely below as the
+real port's map, but it is not a parity defect.)*
 
 **Remaining (the real work):** port FS v0.9.9's mixed-filament-aware
 emission pipeline — `reorder_filaments_for_minimum_flush_volume`
@@ -136,9 +144,68 @@ the working multi-color path today (PeggyPalette parity ±0.3 %).
 1. **GEMINI.md gotcha #20** documents the gap and references this test.
 2. **Local-Z is the only working FS mode today**, and it requires explicit paint operations. LayerCycle is the easier UX (set virtual row in `MixedAdvancedEditor`, every wall alternates, no paint needed) — exactly what FS desktop users expect.
 3. **Pointillisme is `#if 0`'d upstream** (FS v0.9.9), so the next FS-mode win is LayerCycle, not Pointillisme.
-4. **The fix is small** compared to the Local-Z port: this is hundreds of LoC of config plumbing, not thousands of LoC of a new sub-Z planner.
+4. ~~**The fix is small**~~ — **FALSE, disproven.** This was the original mis-estimate. The real remaining work is the FS v0.9.9 emission-pipeline port (Gap 3), comparable in scope to the Local-Z port, not "hundreds of LoC of config plumbing."
 
-## Approach
+## Real remaining work — Gap 3 emission port (the current plan)
+
+> This supersedes the disproven §Approach Phases 1–4 below (those targeted the config-propagation thesis that 0072/0073 refuted).
+
+**Mechanism, pinned 2026-05-16 by an instrumented DP trace on SM-I610
+(Galaxy XR), `ToolOrderUtils.cpp`:** stock
+`reorder_filaments_for_minimum_flush_volume` has **zero**
+MixedFilament / Local-Z awareness. It genuinely minimises flush and
+picks per-layer order `[0,3,1,2]`(odd)/`[2,1,3,0]`(even) — pair-cost
+2263 — whereas desktop FullSpectrum does **not** flush-minimise: it
+keeps the FS Local-Z planner's deliberate cadence (pair-cost 2526,
+higher on purpose). Stock reorder gets **odd** layers exactly right
+(`[0,3,1,2]` == REF) but **even** layers wrong (`[2,1,3,0]` vs REF
+`[2,3,1,0]` — a localised 1↔3 swap). Post-reorder `lt.extruders`
+collapses to `[0]`/`[]`, so `process_layer` emits zero per-layer
+toolchanges → LayerCycle produces single-filament G-code.
+
+**Proven-partial fix (NOT complete — documented so it is not
+re-derived from scratch):** feeding the incoming per-layer order as
+`get_custom_seq` for every layer when `mixed_filament_definitions` is
+non-empty (capture `fs_preserve_order` + `&layer_filaments` in
+`ToolOrdering::reorder_extruders_for_minimum_flush_volume`, return
+`layer_filaments[L]+1`) makes reorder preserve order and **fixes T1
+exactly**. But `layer_filaments` (= `lt.extruders`, ordered
+`[3,0,1,2]`/`[2,0,1,3]`) is **NOT** the true desktop-FS cadence
+(`[_,3,1,_]`), so T0/T3 balloon. **The open step:** find where the
+true FS Local-Z per-layer cadence is computed/stored (deep dive into
+the 2279-line `patches/0053-fullspectrum-local-z-consolidated.patch`
+planner — the pigment pair-cycle in the 0044-0052 lineage / patch
+0019/0036/0039 FS tool-ordering resolve) and feed **that** (not
+`lt.extruders`) into `get_custom_seq`. Instrument with an
+`ORCAXR_TOU_LOG` per-layer trace (`#include <android/log.h>` in
+`ToolOrderUtils.cpp`; log `in= start= seq= cost=`).
+
+**Build/iterate procedure (proven faithful):** edit submodule source
+directly, then `cmake --build
+third_party/OrcaSlicer/build-android-arm64-v8a --target libslic3r
+-j13` (do **not** run `build_native.sh` mid-iteration — it
+`git reset --hard`s the submodule and wipes direct edits; use it only
+for a from-patches clean build). Then wipe
+`app/build/intermediates/{merged,stripped}_native_libs/debug`,
+`.../cmake/debug`, `.../cxx/Debug`, `app/.cxx/Debug`, the debug apks;
+`touch app/src/main/cpp/slic3r_jni.cpp`; run
+`:app:connectedDebugAndroidTest`. ≈ 4 min libslic3r incremental + ~1
+min JNI/test per cycle.
+
+**Commit gate:** every iteration must keep
+`PeggyPaletteFullSpectrumParityTest` GREEN (the working Local-Z path
+shares this reorder DP — a naive `get_custom_seq` override regresses
+it). Never commit on red ([[feedback_peggypalette_commit_gate]]).
+
+## Approach (HISTORICAL — disproven config-propagation plan)
+
+> **⚠️ Superseded.** Phases 1–4 below targeted the "it's a
+> config-propagation bug" thesis. Candidate patches 0072/0073 executed
+> Phases 1–2 and proved the thesis wrong (Gap 3 collapses the result
+> regardless). Retained only for the probe trail and the Phase 3/4
+> acceptance-test shapes (the stricter `FullSpectrumLayerCycleTest`
+> assertions and the UX/MCP surface) which still apply once the Gap 3
+> port above lands. Do not execute Phases 1–2 as written.
 
 A four-phase, **shippable-at-each-phase** plan. Each phase ends with an instrumented test removed from `@Ignore` and a single commit on `main`. No big-bang merges. No half-finished patches.
 
