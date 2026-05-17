@@ -24,6 +24,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -95,6 +97,32 @@ fun PreviewScreen(isTablet: Boolean) {
         val dir = File(app.app.cacheDir, "gcode")
         if (!dir.exists()) null
         else dir.listFiles { f -> f.extension == "gcode" }?.maxByOrNull { it.lastModified() }
+    }
+
+    // Phone parity for save_gcode_to_downloads — the binding can't see
+    // the slice output, so this is a direct SAF export of the produced
+    // .gcode (the XR shell copies to Downloads; here the user picks the
+    // destination). runCatching+Toast per the phone-shell crash rule.
+    val exportCtx = androidx.compose.ui.platform.LocalContext.current
+    var exportStatus by remember { mutableStateOf<String?>(null) }
+    val gcodeSaveLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream"),
+    ) { uri: android.net.Uri? ->
+        val gf = gcodeFile
+        if (uri == null || gf == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            runCatching {
+                exportCtx.contentResolver.openOutputStream(uri)?.use { o ->
+                    gf.inputStream().use { it.copyTo(o) }
+                } ?: error("couldn't open destination")
+                exportStatus = "✓ G-code saved."
+            }.onFailure {
+                android.util.Log.w("OrcaXR/preview", "gcode export failed", it)
+                android.widget.Toast.makeText(
+                    exportCtx, "Save failed.", android.widget.Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
     }
 
     var meta by remember(gcodeFile?.absolutePath) { mutableStateOf<GcodeMeta?>(null) }
@@ -498,6 +526,23 @@ fun PreviewScreen(isTablet: Boolean) {
                                     }
                                 }
                             }
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                val gf = gcodeFile
+                                if (gf != null) {
+                                    gcodeSaveLauncher.launch(gf.name)
+                                }
+                            },
+                            enabled = gcodeFile != null,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("Save G-code…") }
+                        exportStatus?.let {
+                            Text(
+                                it,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
                         }
                         val lr = lastResult
                         if (lr != null) {
