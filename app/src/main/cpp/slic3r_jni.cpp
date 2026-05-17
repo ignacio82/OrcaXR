@@ -3920,6 +3920,37 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
             }
         };
 
+        // gotcha #13: SceneCore / Impress aborts with "unknown
+        // material instance id" when it has to manage a very dense
+        // multi-material GLB across attach / re-pose / re-parent churn
+        // (load echo re-bakes, bed move, gizmo, paint). A 0.5M-triangle
+        // preview is far past what the renderer keeps stable. Decimate
+        // the PREVIEW geometry only — the slice path reads the original
+        // container directly and is untouched, so print fidelity is
+        // unaffected. Colour is flat per emitted batch (one extruder
+        // slot per indexed_triangle_set), so quadric-decimating each
+        // batch independently preserves the colour mapping exactly.
+        // Collect every (mesh, colour, transform) batch first so the
+        // budget can be split proportionally across batches.
+        struct EmitBatch {
+            indexed_triangle_set its;
+            float                rgb[3];
+            Slic3r::Transform3d  xform;
+        };
+        std::vector<EmitBatch> emit_batches;
+        const size_t PREVIEW_TRI_BUDGET = 150000;  // SceneCore-safe cap
+        const size_t PREVIEW_MIN_BATCH  = 64;       // never collapse to nothing
+        auto stage = [&](const indexed_triangle_set& its,
+                         const float rgb[3],
+                         const Slic3r::Transform3d& xform) {
+            if (its.empty()) return;
+            EmitBatch b;
+            b.its = its;
+            b.rgb[0] = rgb[0]; b.rgb[1] = rgb[1]; b.rgb[2] = rgb[2];
+            b.xform = xform;
+            emit_batches.push_back(std::move(b));
+        };
+
         // Lay out objects in a row centered on (0, 0). The build
         // plate GLB lives in the same workspace frame and is
         // centered at the origin, so this puts the row of objects
@@ -3990,14 +4021,52 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
                                     t, slot,
                                     palette[slot][0], palette[slot][1], palette[slot][2],
                                     per_type[t].indices.size());
-                        emit(per_type[t], palette[slot], &vol_xform);
+                        stage(per_type[t], palette[slot], vol_xform);
                     }
                 } else {
                     // Unpainted volume: render the whole thing in
                     // the volume's default color.
-                    emit(mv->mesh().its, palette[default_slot], &vol_xform);
+                    stage(mv->mesh().its, palette[default_slot], vol_xform);
                 }
             }
+        }
+
+        // gotcha #13: cap total preview triangles. Split the budget
+        // proportionally across batches, quadric-decimate any batch
+        // whose share is below its size, then emit. Skips decimation
+        // entirely when already under budget (common case: STL / light
+        // 3MF) so light models keep full fidelity.
+        {
+            size_t total_tris = 0;
+            for (const auto& b : emit_batches) total_tris += b.its.indices.size();
+            const bool over = total_tris > PREVIEW_TRI_BUDGET;
+            if (over) {
+                ORCAXR_LOGI("nativeWriteColoredGlb: decimating preview %zu -> ~%zu tris (%zu batches)",
+                            total_tris, PREVIEW_TRI_BUDGET, emit_batches.size());
+            }
+            for (auto& b : emit_batches) {
+                const size_t bt = b.its.indices.size();
+                if (over && bt > PREVIEW_MIN_BATCH) {
+                    // This batch's proportional share of the budget.
+                    size_t target = (size_t)((double)PREVIEW_TRI_BUDGET *
+                                             (double)bt / (double)total_tris);
+                    if (target < PREVIEW_MIN_BATCH) target = PREVIEW_MIN_BATCH;
+                    if (target < bt) {
+                        try {
+                            Slic3r::its_quadric_edge_collapse(
+                                b.its, (uint32_t)target, nullptr, nullptr, nullptr);
+                        } catch (const std::exception& e) {
+                            ORCAXR_LOGE("nativeWriteColoredGlb: decimate failed (%s) — emitting full batch",
+                                        e.what());
+                        } catch (...) {
+                            ORCAXR_LOGE("nativeWriteColoredGlb: decimate failed — emitting full batch");
+                        }
+                    }
+                }
+                emit(b.its, b.rgb, &b.xform);
+            }
+            emit_batches.clear();
+            emit_batches.shrink_to_fit();
         }
 
         if (indices.empty()) {
@@ -5153,6 +5222,76 @@ Java_dev_orcaxr_app_SlicerEngine_nativeConvertToStl(
         return -3;
     } catch (...) {
         ORCAXR_LOGE("nativeConvertToStl: unknown exception");
+        return -3;
+    }
+}
+
+// nativeWriteVolumeStl — emit ONLY the exact mesh that the paint
+// pipeline authors onto and slices: model.objects[idx].volumes.front()
+// .mesh() (raw `its`, no instance/object transform), matching
+// `apply_orcaxr_paint` (slic3r_jni.cpp ~958) and `nativeSlice`'s
+// `volumes.front()` selection. The generic `nativeConvertToStl` merges
+// every object's `mo->mesh()` WITH per-instance transforms, which for a
+// multi-volume / instanced 3MF produces a different (often much larger)
+// triangle set than the single volume paint is applied to — so a BVH
+// built from that merged STL yields a paintFilamentIndex whose indices
+// do not correspond to the sliced/rendered volume (root cause of
+// "Smart Paint on a 3MF renders black", gotcha #21 family). Building
+// the paint BVH from THIS output keeps author↔apply↔slice↔render
+// triangle indices identical.
+//
+// objectIndex: -1 (or 0) selects the first object; >=0 selects that
+// object (multi-object extraction parity with nativeWriteColoredGlb).
+// Returns 0 on success, negative on failure (-1 read, -2 empty/oob,
+// -3 write).
+extern "C" JNIEXPORT jint JNICALL
+Java_dev_orcaxr_app_SlicerEngine_nativeWriteVolumeStl(
+    JNIEnv* env, jclass,
+    jstring jInputPath, jstring jOutStlPath, jint jObjectIndex)
+{
+    ScopedUtf in(env, jInputPath);
+    ScopedUtf out(env, jOutStlPath);
+    ORCAXR_LOGI("nativeWriteVolumeStl: %s -> %s (obj=%d)", in.c, out.c, (int)jObjectIndex);
+
+    try {
+        Slic3r::Model model;
+        try {
+            model = load_mesh_container(in.c);
+        } catch (const std::exception& e) {
+            ORCAXR_LOGE("nativeWriteVolumeStl: read failed: %s", e.what());
+            return -1;
+        }
+        if (model.objects.empty()) {
+            ORCAXR_LOGE("nativeWriteVolumeStl: model has no objects");
+            return -2;
+        }
+        const int idx = jObjectIndex >= 0 ? (int)jObjectIndex : 0;
+        if ((size_t)idx >= model.objects.size() ||
+            model.objects[idx]->volumes.empty()) {
+            ORCAXR_LOGE("nativeWriteVolumeStl: oob/empty obj %d (objects=%zu)",
+                        idx, model.objects.size());
+            return -2;
+        }
+        // EXACT same selection as apply_orcaxr_paint / nativeSlice:
+        // first volume of the target object, raw mesh, no transform.
+        const Slic3r::ModelVolume* mv = model.objects[idx]->volumes.front();
+        const Slic3r::TriangleMesh& vmesh = mv->mesh();
+        if (vmesh.empty()) {
+            ORCAXR_LOGE("nativeWriteVolumeStl: volume mesh empty");
+            return -2;
+        }
+        if (!vmesh.write_binary(out.c)) {
+            ORCAXR_LOGE("nativeWriteVolumeStl: write_binary failed");
+            return -3;
+        }
+        ORCAXR_LOGI("nativeWriteVolumeStl: wrote %s (%zu facets)",
+                    out.c, vmesh.facets_count());
+        return 0;
+    } catch (const std::exception& e) {
+        ORCAXR_LOGE("nativeWriteVolumeStl: exception %s", e.what());
+        return -3;
+    } catch (...) {
+        ORCAXR_LOGE("nativeWriteVolumeStl: unknown exception");
         return -3;
     }
 }

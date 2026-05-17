@@ -14,7 +14,60 @@ OrcaXR ships **FullSpectrum Local-Z end-to-end** (patches 0044-0067, consolidate
 
 The painted-Local-Z path (`mmu_segmentation_facets`) is the working multi-color mode users have today; its `PeggyPaletteFullSpectrumParityTest` gate is **GREEN** (re-gated by commit `1b4ef8b` onto per-tool MODEL extrusion ±2% — the colour-bearing invariant; the old "+5.4% total-mm" alarm was a legitimate purge-minimisation win, **resolved and stale, do NOT bisect**).
 
-## Status 2026-05-15 — Phase 1 complete, two of three gaps fixed
+## Status 2026-05-17 — empirical re-test: Gap 1 is the SOLE active blocker for the test path; Gap 3 is moot here
+
+Instrumented `ToolOrdering.cpp` (Gap-2 emplace check, PRE `lt.extruders`,
+POST reorder-seq) on a clean from-patches `libslic3r.a` + ran
+`FullSpectrumLayerCycleTest` (painted-all-virtual cube) on the Galaxy
+XR (SM-I610), 2026-05-17. Trace verdict — every layer:
+
+```
+GAP2 L# wall_id=1 resolved=1 nonoverriddable=1 emplaced=1 num_physical=4
+PRE  L# lt.extruders=[0,]   POST L# reorder_seq=[0,]
+```
+
+- **Gap 2 is NOT the blocker for this path** — `something_nonoverriddable`
+  is true and the wall extruder *is* emplaced (`emplaced=1`).
+- **Gap 1 is the sole active blocker** — `region.config().wall_filament`
+  is **1** (the `Slic3r::Model::add_object` `extruder=1` auto-stamp
+  clobbering the parent at `apply_to_print_region_config`
+  PrintObject.cpp:3367), so `resolve_filament_for_layer(1,…)`
+  early-returns (`1 ≤ num_physical`) and `MixedFilamentManager::resolve`
+  **never runs**. No per-layer cadence is ever computed.
+- **Gap 3 is moot for this path** — `lt.extruders` is `[0]` *before*
+  reorder, so there is no multi-extruder cadence for the reorder DP to
+  collapse. The "Gap 3 dominant / ~800-LoC reorder port" framing below
+  was measured on a different (project-`wall_filament=5`) scenario; it
+  does not describe what blocks the bundled test.
+- **The test's own premise is disproven.** Its `paintAllVirtual`
+  comment claims `mmu_segmentation_facets` routes the virtual slot into
+  a per-region `wall_filament=5` "proven by the LocalZ test." It does
+  **not**: this build's painted segmentation is Local-Z-centric (masks
+  bucketed into `num_physical` arrays, `PrintObjectSlice.cpp:1323`);
+  with `dithering_local_z_mode` off the virtual paint has nowhere to go
+  and the region stays at the `extruder=1` stamp. Painted-all-virtual
+  is **not** a valid LayerCycle driver — real FS LayerCycle is
+  *unpainted* `wall_filament=<virtual id>` (proposal Phase 4).
+
+**Implication / current plan:** the fix is the **Gap-1 region-config
+virtual propagation** (patch 0072's territory): in
+`apply_to_print_region_config` / `region_config_from_model_volume`,
+when the parent/project config targets a virtual row
+(`wall_filament > num_physical`) and the incoming object `extruder`
+stamp is the default physical, *preserve the parent virtual id* (the
+FS-desktop semantic). The discriminator the 2026-05-15 status said
+"does not exist" (checking only the `wall_filament` key) **does**
+exist via *"parent targets virtual"* — PeggyPalette's project
+`wall_filament` is physical (it drives colour via painted
+segmentation + `mixed_filament_definitions`, not a virtual wall),
+so the rule does not fire for it. Plus: drive the test the real way
+(`wall_filament=5`, unpainted), not via the disproven paint path.
+Crucially, **patch 0072's only revert reason — the +5.4% T1
+PeggyPalette delta — is the conserved-purge non-bug `1b4ef8b`
+re-gated out.** It was judged against a test invariant that no longer
+exists.
+
+## Status 2026-05-15 — Phase 1 complete, two of three gaps fixed (SUPERSEDED for the test path by the 2026-05-17 re-test above)
 
 A full instrumented diagnosis on Pixel 10 Pro XL + Galaxy XR (canaries in
 `Print::apply`, `region_config_from_model_volume`, `ToolOrdering::

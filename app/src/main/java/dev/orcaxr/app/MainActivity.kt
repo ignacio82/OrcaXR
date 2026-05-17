@@ -43,6 +43,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.xr.compose.material3.EnableXrComponentOverrides
+import androidx.xr.compose.material3.ExperimentalMaterial3XrApi
+import androidx.xr.compose.material3.XrComponentOverride
+import androidx.xr.compose.material3.XrComponentOverrideEnabler
+import androidx.xr.compose.material3.XrComponentOverrideEnablerContext
 import androidx.xr.compose.spatial.Subspace
 import androidx.xr.compose.subspace.SceneCoreEntity
 import androidx.xr.compose.subspace.SpatialPanel
@@ -272,6 +277,7 @@ class MainActivity : ComponentActivity() {
             kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()
         )
 
+    @OptIn(ExperimentalMaterial3XrApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -502,6 +508,22 @@ class MainActivity : ComponentActivity() {
                     val mixedFilamentsAll by mixedFilaments.all.collectAsState(initial = emptyMap())
                     val s = session
                     if (s != null) {
+                        // Spatialize ONLY Material3 AlertDialog in the
+                        // XR shell. Without an EnableXrComponentOverrides
+                        // ancestor, AlertDialogs (Smart Paint, Gamut
+                        // Match, Save Profile, Rename Plate) render into
+                        // the flat 2D activity window and are invisible
+                        // in full-space XR. Scoped to BasicAlertDialog
+                        // so the hand-rolled spatial nav/toolbars stay
+                        // untouched; degrades to a normal Dialog in 2D.
+                        EnableXrComponentOverrides(
+                            object : XrComponentOverrideEnabler {
+                                @Composable
+                                override fun XrComponentOverrideEnablerContext.shouldOverrideComponent(
+                                    component: XrComponentOverride,
+                                ): Boolean = component == XrComponentOverride.BasicAlertDialog
+                            }
+                        ) {
                         XrShell(s, sliceState, maxLayer, selectedProfile, layerHeightOverride,
                             printSettingsOverrides = printSettingsOverrides,
                             showTravels = showTravels,
@@ -526,6 +548,7 @@ class MainActivity : ComponentActivity() {
                             plateStore = plateStore,
                             customGcodeStore = customGcodeStore,
                             pendingSharedFiles = pendingSharedFiles)
+                        }
                     } else {
                         FlatShell(sliceState, maxLayer, selectedProfile, layerHeightOverride, showTravels)
                     }
@@ -1502,6 +1525,17 @@ private fun XrShell(
         // the user's filament-slot palette. STL doesn't carry color
         // info, so .stl inputs continue to use the legacy path below.
         if (ext == "3mf" || ext == "amf") {
+            // gotcha #13: set by the embedded-colour sync below so the
+            // FIRST bake of a freshly-loaded 3MF uses the resolved
+            // synced palette instead of the not-yet-recomposed
+            // previewPalette. Without this v1 bakes with the stale
+            // palette and the echo recomposition bakes a DIFFERENT v2,
+            // producing a v1→v2 heavy-GLB swap whose SceneCore
+            // attach/detach churn trips the Impress material-instance
+            // SIGABRT. With it, v1 == v2 byte-for-byte so the
+            // GlbSceneEntity byte-identical guard collapses them to a
+            // single stable attach.
+            var syncedFirstBakePalette: List<String>? = null
             // Snap the project's filament list to whatever the 3mf
             // was authored with — same behavior as desktop OrcaSlicer
             // and the Snapmaker fork. ONLY on the first load of a
@@ -1654,6 +1688,20 @@ private fun XrShell(
                             )
                         }
                         filamentEntriesStore.set(printerId, updated)
+                        // gotcha #13: resolve the "as will print"
+                        // palette synchronously from the just-synced
+                        // entries (same pure fn + inputs as the
+                        // previewPalette derivation) so this first bake
+                        // is already correct — previewPalette won't
+                        // reflect the set() until the next
+                        // recomposition.
+                        syncedFirstBakePalette = resolveAsWillPrintPalette(
+                            filaments = updated,
+                            printerLoadedSlots = activePrinterLoadedSlots,
+                            paletteSuggestions = filamentSlotsStore.defaultPalette,
+                            virtualRows = mixedRows,
+                            slotCount = slotCount,
+                        )
                         android.util.Log.i(
                             tag,
                             "applied ${embedded.size} embedded filament colors from 3mf to printer $printerId (slotCount=$slotCount)",
@@ -1673,7 +1721,11 @@ private fun XrShell(
             // identity-T_N) so the in-XR preview matches the printed
             // result; the panel rows still surface the authored color
             // on the left swatch as the diff.
-            val raw = previewPalette
+            // gotcha #13: prefer the synchronously-resolved synced
+            // palette when the embedded-colour sync just fired, so the
+            // first bake is correct and byte-identical to the echo
+            // re-bake (which the GlbSceneEntity guard then collapses).
+            val raw = syncedFirstBakePalette ?: previewPalette
             val palette = FloatArray(16 * 3) { 1.0f }
             for (i in 0 until minOf(raw.size, 16)) {
                 val hex = raw[i].trimStart('#').padStart(6, '0').take(6)
@@ -4076,8 +4128,38 @@ private fun XrShell(
                 bvhCache.get(modelId)?.let { return@BvhProvider it }
                 val model = ws.placedModels.value.firstOrNull { it.id == modelId }
                     ?: return@BvhProvider null
-                val resolved = runCatching { deriveStlFor(model.source) }
-                    .getOrNull() ?: return@BvhProvider null
+                // The paint BVH MUST be the exact mesh the paint
+                // pipeline authors onto / slices /
+                // renders: model.objects[bakeIndex].volumes.front()
+                // .mesh(). deriveStlFor() merges every object's
+                // instanced mo->mesh() → for a multi-volume / instanced
+                // 3MF that is a DIFFERENT (often 3-4×) tessellation than
+                // the single volume apply_orcaxr_paint targets, so a
+                // paintFilamentIndex sized to that BVH lands on the
+                // wrong triangles and the model renders black (gotcha
+                // #21 family). For 3MF/AMF build the BVH from
+                // writeVolumeStl using the SAME source+object index the
+                // colored-GLB / slice path uses; STL inputs already have
+                // one consistent mesh so deriveStlFor is correct there.
+                val resolved = run {
+                    val paintSource = model.originalSource ?: model.source
+                    val paintExt = paintSource.extension.lowercase()
+                    if (paintExt == "3mf" || paintExt == "amf") {
+                        val bakeIndex =
+                            if (model.originalSource != null) model.groupOrdinal else -1
+                        val volStl = File(ctx.cacheDir, "bvh_vol_${modelId}.stl")
+                        runCatching {
+                            if (SlicerEngine.writeVolumeStl(paintSource, volStl, bakeIndex)) {
+                                volStl
+                            } else {
+                                null
+                            }
+                        }.getOrNull()
+                            ?: runCatching { deriveStlFor(model.source) }.getOrNull()
+                    } else {
+                        runCatching { deriveStlFor(model.source) }.getOrNull()
+                    }
+                } ?: return@BvhProvider null
                 withContext(Dispatchers.Default) {
                     val mesh = runCatching { StlReader.read(resolved) }
                         .getOrNull() ?: return@withContext null
@@ -8139,6 +8221,13 @@ private fun GlbSceneEntity(
     liveOverride: GizmoDragOverride? = null,
 ) {
     var entity by remember { mutableStateOf<GltfModelEntity?>(null) }
+    // gotcha #13: signature (size<<32 | contentHash) of the GLB bytes
+    // currently attached. When previewStl emits a redundant re-bake
+    // whose bytes are identical (the v1→v2(→v3) churn, now byte-equal
+    // via the synced-palette fix), we skip the SceneCore detach/
+    // re-attach entirely — that attach/detach churn on a heavy mesh is
+    // what trips the Impress "unknown material instance id" SIGABRT.
+    var attachedGlbSig by remember { mutableStateOf<Long?>(null) }
     val ctx = LocalContext.current
     // Capture the LATEST hooks so the long-lived InputEvent listener
     // sees current brush state (radius / slot edits between strokes
@@ -8170,6 +8259,7 @@ private fun GlbSceneEntity(
 
         if (glbPath.isNullOrEmpty()) {
             entity = null
+            attachedGlbSig = null
             disposeEntityDeferred(oldEntity)
             return@LaunchedEffect
         }
@@ -8180,7 +8270,30 @@ private fun GlbSceneEntity(
         }
         if (bytes == null) {
             entity = null
+            attachedGlbSig = null
             disposeEntityDeferred(oldEntity)
+            return@LaunchedEffect
+        }
+
+        // gotcha #13: if the new GLB is byte-identical to the one
+        // already attached, skip the entire SceneCore create/attach/
+        // dispose cycle. previewStl re-bakes the colored GLB on several
+        // recomposition triggers (palette/selection/paint effects); for
+        // a freshly-loaded 3MF the v1 and echo v2 bakes are now
+        // byte-identical (synced-palette fix), and selection re-fires
+        // produce the same bytes too. Re-attaching a heavy (0.5M-tri)
+        // GLB on every echo churns Impress material instances and
+        // intermittently aborts with "unknown material instance id".
+        // Collapsing identical re-bakes to a single stable attach
+        // removes that churn. oldEntity === entity here, so there is
+        // nothing to dispose.
+        val newSig = (bytes.size.toLong() shl 32) or
+            (bytes.contentHashCode().toLong() and 0xffffffffL)
+        if (entity != null && !entity!!.isDisposed && newSig == attachedGlbSig) {
+            android.util.Log.i(
+                "OrcaXR",
+                "GlbSceneEntity skip re-attach (byte-identical) $glbPath",
+            )
             return@LaunchedEffect
         }
 
@@ -8218,6 +8331,7 @@ private fun GlbSceneEntity(
         }
 
         entity = ent
+        attachedGlbSig = newSig
         android.util.Log.i("OrcaXR", "GlbSceneEntity attached $glbPath at ($offsetXmm, $offsetYmm, $offsetZmm)")
         disposeEntityDeferred(oldEntity)
     }

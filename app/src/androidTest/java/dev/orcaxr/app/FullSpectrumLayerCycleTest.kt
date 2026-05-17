@@ -44,28 +44,21 @@ import java.io.File
  */
 @RunWith(AndroidJUnit4::class)
 @Ignore(
-    "FullSpectrum LayerCycle fully diagnosed 2026-05-15 (see " +
-        "docs/proposals/fullspectrum-layercycle-engine.md §Status; " +
-        "instrumented on Pixel 10 Pro XL + Galaxy XR). It is THREE " +
-        "stacked gaps, all part of the same FS v0.9.9 emission port: " +
-        "(1) region-config propagation -- the BBS Model::add_object " +
-        "extruder=1 stamp is force-mapped onto wall_filament and is " +
-        "indistinguishable from a deliberate per-object extruder, so " +
-        "propagation canNOT be fixed in isolation; (2) FS-virtual-wall " +
-        "regions are wipe-tower is_overriddable so collect_extruders " +
-        "never emplaces the resolved per-layer extruder; (3) the " +
-        "resolved cadence does not survive reorder_filaments_for_" +
-        "minimum_flush_volume (ToolOrderUtils.cpp, zero MixedFilament " +
-        "awareness) + _make_wipe_tower into the emission ToolOrdering " +
-        "(post-reorder layer_tools collapse to [0]/[]). No standalone " +
-        "propagation fix exists; this is the ~800-LoC GCode.cpp + " +
-        "~311-LoC ToolOrdering + reorder-DP FS port. Candidate patches " +
-        "0072/0073 were prototyped + reverted (no standalone benefit). " +
-        "The painted-Local-Z path (FullSpectrumLocalZTest) remains the " +
-        "working multi-color recipe -- BUT note PeggyPalette parity is " +
-        "separately regressed on current main (+5.4% T1, pre-existing, " +
-        "unrelated to LayerCycle; bisect afc6f7d..e8a7cad). Un-ignore " +
-        "when the Gap 1+2+3 emission port lands."
+    "LayerCycle Gap-1 (region_config_from_model_volume virtual " +
+        "propagation, PrintObject.cpp) + Gap-3 (get_custom_seq cadence " +
+        "preservation, ToolOrdering.cpp) were implemented and this test " +
+        "(reworked to the real unpainted wall_filament=virtual UX + " +
+        "hardened >=40-each / >=80%-alternation assertions) PASSED " +
+        "GREEN on a connected Galaxy XR in-session (2026-05-17) " +
+        "alongside PeggyPalette / LocalZ / Roundtrip staying GREEN. " +
+        "BUT the fix lives in the third_party/OrcaSlicer SUBMODULE, " +
+        "which is never committed (ignore=dirty) and is reset by " +
+        "build_native.sh. It is NOT yet materialized as numbered " +
+        "patches 0072 (Gap-1) / 0073 (Gap-3) in patches/. Stays " +
+        "@Ignore'd so a clean build (no patches) doesn't run it red. " +
+        "Un-ignore in the SAME commit that adds patches 0072/0073. " +
+        "Full mechanism + the proven fix are in " +
+        "docs/proposals/fullspectrum-layercycle-engine.md."
 )
 class FullSpectrumLayerCycleTest {
 
@@ -121,19 +114,19 @@ class FullSpectrumLayerCycleTest {
         // id 5 (1-based: 4 physical + 1 virtual). Force every wall +
         // infill onto the virtual slot so the resolver fires layer-over-
         // layer. The master dithering toggle gates the FS code path.
+        // Real FS LayerCycle UX (proposal Phase 4): the user enables a
+        // virtual row and `wall_filament` is set to its 1-based id —
+        // NO painting. Snapmaker U1 has 4 physical slots → virtual row
+        // 1 = filament id 5 (4 physical + 1 virtual). The earlier
+        // paint-all-virtual approach was empirically disproven
+        // (2026-05-17 trace: this build's painted segmentation is
+        // Local-Z-centric, so an unpainted-Local-Z virtual slot never
+        // reaches region.config().wall_filament — it stayed 1). The
+        // Gap-1 region-config virtual-propagation fix in
+        // region_config_from_model_volume now carries a project-level
+        // virtual wall_filament past the Model::add_object extruder=1
+        // stamp into PrintRegionConfig so resolve() cycles per layer.
         val virtualFilamentId = "5"
-        // Paint EVERY triangle with virtual filament slot 5. The
-        // wall_filament=5 / sparse_infill_filament=5 / etc. global
-        // overrides DO NOT propagate to PrintRegionConfig in our
-        // build (region.config().wall_filament stays at the default
-        // 1), so the resolver was being called with filament_id=1
-        // and not hitting the virtual path at all. Painting via
-        // mmu_segmentation_facets routes each face through
-        // apply_mm_segmentation which creates a per-extruder region
-        // for the virtual slot — that path is proven by the LocalZ
-        // test.
-        val virtualSlot = 5.toByte()
-        val paintAllVirtual = ByteArray(12) { virtualSlot }
         val config = target!!.config + mapOf(
             // U1 PLA filament profile only declares 1 filament_diameter
             // entry, but the U1 machine has 4 nozzles. Without 4 entries
@@ -141,33 +134,71 @@ class FullSpectrumLayerCycleTest {
             // "Too small line width". See FullSpectrumLocalZTest for
             // the same fix.
             "filament_diameter" to "1.75,1.75,1.75,1.75",
+            // number_of_extruders (and ToolOrdering's filament_map /
+            // calc_filament_change_info_by_toolorder sizing) derives
+            // from filament_colour.size(). The U1 PLA profile declares
+            // only 1 colour; once the Gap-1 fix makes resolve() return
+            // real physical extruder 2 for the virtual row, a 1-entry
+            // filament_colour makes filament_map[2] read OOB → SIGSEGV.
+            // Declare 4 physical colours to match the 4-nozzle layout
+            // (same shape the Roundtrip/Pointillisme FS tests use).
+            "filament_colour" to "#FF0000;#00FF00;#0000FF;#FFFF00",
             "mixed_filament_definitions" to mixedDefinitions,
             "enable_prime_tower" to "1",
+            // Every wall + infill on the virtual row → resolve() fires
+            // layer-over-layer (LayerCycle modulo). Unpainted.
+            "wall_filament" to virtualFilamentId,
+            "sparse_infill_filament" to virtualFilamentId,
+            "solid_infill_filament" to virtualFilamentId,
         )
 
-        val result = SlicerEngine.slice(stl, outGcode, config, paintFilamentIndex = paintAllVirtual)
+        val result = SlicerEngine.slice(stl, outGcode, config)
         assertTrue("Slice produced gcode (got: $result)", result is SliceResult.Success)
         assertTrue("Output gcode exists", outGcode.exists())
 
         val gcode = outGcode.readText()
         val t0Count = Regex("""^T0\s*$""", RegexOption.MULTILINE).findAll(gcode).count()
         val t1Count = Regex("""^T1\s*$""", RegexOption.MULTILINE).findAll(gcode).count()
+
+        // A 20 mm cube at 0.20 mm layer height is ~100 layers; a 1:1
+        // LayerCycle row alternates the physical extruder every layer,
+        // so each of T0/T1 must fire on the order of ~50 times. The
+        // pre-fix failure mode was 0 of one tool (resolve never cycled /
+        // reorder collapsed the cadence) — assert a strong floor, not
+        // just >= 1.
         assertTrue(
-            "LayerCycle must emit T0 toolchanges (got $t0Count). " +
-                "If 0, MixedFilamentManager::resolve isn't being consulted at " +
-                "slice time — check patches 0017/0018/0019 still apply.",
-            t0Count >= 1,
+            "LayerCycle must emit many T0 toolchanges (got $t0Count, want >= 40). " +
+                "If low, the Gap-1 region-config virtual propagation or the " +
+                "Gap-3 get_custom_seq cadence-preservation regressed.",
+            t0Count >= 40,
         )
         assertTrue(
-            "LayerCycle must emit T1 toolchanges (got $t1Count). " +
-                "Per-layer alternation requires both extruders to fire across " +
-                "the slice; only one means the resolver isn't cycling.",
-            t1Count >= 1,
+            "LayerCycle must emit many T1 toolchanges (got $t1Count, want >= 40). " +
+                "Per-layer alternation requires both extruders ~equally.",
+            t1Count >= 40,
         )
         assertTrue(
-            "LayerCycle should produce roughly balanced T0/T1 counts (got " +
-                "$t0Count vs $t1Count). 5x+ imbalance suggests resolve isn't cycling.",
-            (t0Count.toDouble() / t1Count.coerceAtLeast(1)) in 0.2..5.0,
+            "LayerCycle 1:1 must produce near-balanced T0/T1 (got $t0Count vs " +
+                "$t1Count; |diff| must be <= 8). Imbalance => cadence not 1:1.",
+            kotlin.math.abs(t0Count - t1Count) <= 8,
+        )
+
+        // Strongest signal: the ordered stream of T0/T1 tokens must
+        // genuinely *alternate* per layer, not appear as two blocks
+        // (all T0 then all T1) or single-tool. >= 80 % of adjacent
+        // token pairs must be a change. A wipe-tower may occasionally
+        // double a tool, so allow a small slack rather than requiring
+        // strict A,B,A,B.
+        val tokens = Regex("""^T([01])\s*$""", RegexOption.MULTILINE)
+            .findAll(gcode).map { it.groupValues[1] }.toList()
+        val transitions = tokens.zipWithNext().count { (a, b) -> a != b }
+        val adjacencies = (tokens.size - 1).coerceAtLeast(1)
+        assertTrue(
+            "LayerCycle tokens must alternate per layer: only $transitions of " +
+                "$adjacencies adjacent T-pairs changed (want >= 80 %). A low " +
+                "ratio means the per-layer cadence collapsed to blocks/one tool. " +
+                "First 24 tokens: ${tokens.take(24)}",
+            transitions.toDouble() / adjacencies >= 0.80,
         )
     }
 }

@@ -675,6 +675,25 @@ object SlicerEngine {
     }
 
     /**
+     * Emit ONLY `model.objects[objectIndex].volumes.front().mesh()` as
+     * a binary STL — the exact mesh the paint pipeline authors onto and
+     * slices (`apply_orcaxr_paint` / `nativeSlice` `volumes.front()`).
+     * Unlike [convertToStl] (which merges every object's instanced
+     * `mo->mesh()`), this preserves a 1:1 triangle-index correspondence
+     * between the paint BVH and the sliced/rendered volume — required
+     * so Smart Paint on a 3MF doesn't render black (gotcha #21 family).
+     * objectIndex: -1 selects the first object.
+     */
+    suspend fun writeVolumeStl(input: File, outStl: File, objectIndex: Int = -1): Boolean =
+        withContext(dispatcher) {
+            require(input.exists()) { "input not found: ${input.absolutePath}" }
+            require(input.canRead()) { "input not readable: ${input.absolutePath}" }
+            outStl.parentFile?.mkdirs()
+            outStl.delete()
+            nativeWriteVolumeStl(input.absolutePath, outStl.absolutePath, objectIndex) == 0
+        }
+
+    /**
      * Phase XR_OBJ_3 — auto-orient a model via libslic3r's
      * `orientation::orient(ModelObject*)`. Returns the recommended
      * rotation as `[rotXDeg, rotYDeg, rotZDeg]` Euler angles, or null
@@ -2290,6 +2309,11 @@ object SlicerEngine {
     private external fun nativeConvertToStl(
         inputPath: String,
         outStlPath: String,
+    ): Int
+    private external fun nativeWriteVolumeStl(
+        inputPath: String,
+        outStlPath: String,
+        objectIndex: Int,
     ): Int
 
     suspend fun read3mfObjectMetadata(file: File): Array<ObjectMeta>? = withContext(dispatcher) {

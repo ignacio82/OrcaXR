@@ -9,7 +9,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -26,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -134,15 +139,41 @@ fun SmartPaintDialog(onDismiss: () -> Unit) {
                         }
                     }
                 }
-                Text(
-                    "Max colours: $maxColors / $paletteSize",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                androidx.compose.material3.Slider(
-                    value = maxColors.toFloat(),
-                    onValueChange = { maxColors = it.toInt().coerceIn(1, 32) },
-                    valueRange = 1f..paletteSize.coerceAtLeast(2).toFloat(),
-                )
+                run {
+                    val maxColorCap = paletteSize.coerceIn(1, 32)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "Max colours (of $maxColorCap)",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedButton(
+                                onClick = { maxColors = (maxColors - 1).coerceIn(1, maxColorCap) },
+                                enabled = maxColors > 1,
+                                contentPadding = PaddingValues(0.dp),
+                                modifier = Modifier.size(40.dp),
+                            ) { Text("−", style = MaterialTheme.typography.titleMedium) }
+                            Text(
+                                "$maxColors",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.widthIn(min = 40.dp),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            )
+                            OutlinedButton(
+                                onClick = { maxColors = (maxColors + 1).coerceIn(1, maxColorCap) },
+                                enabled = maxColors < maxColorCap,
+                                contentPadding = PaddingValues(0.dp),
+                                modifier = Modifier.size(40.dp),
+                            ) { Text("+", style = MaterialTheme.typography.titleMedium) }
+                        }
+                    }
+                    // Keep the value valid if the palette shrank.
+                    if (maxColors > maxColorCap) maxColors = maxColorCap
+                }
                 if (mode.needsImage) {
                     OutlinedButton(
                         onClick = { picker.launch(arrayOf("image/*")) },
