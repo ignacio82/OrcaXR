@@ -50,6 +50,7 @@ fun ModelToolsScreen(
     onClose: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
     val ws = remember { WorkspaceModel.get() }
     val placed by ws.placedModels.collectAsState()
     val ticksByPlate by ws.customGcodeTicks.collectAsState()
@@ -186,6 +187,15 @@ fun ModelToolsScreen(
                             modifier = Modifier.weight(1f),
                         ) { Text("Remove model") }
                     }
+                    OutlinedButton(
+                        enabled = !running,
+                        onClick = {
+                            fire("Positioning wipe tower", closeOnOk = false) {
+                                MobileWorkspaceActions.autoPositionWipeTower(appCtx)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Auto-position wipe tower") }
                 }
             }
 

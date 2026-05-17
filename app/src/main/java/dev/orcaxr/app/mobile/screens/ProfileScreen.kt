@@ -22,7 +22,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.orcaxr.app.OrcaProfileLoader
@@ -31,6 +33,7 @@ import dev.orcaxr.app.SlicerProfile
 import dev.orcaxr.app.mobile.LocalMobileAppState
 import dev.orcaxr.app.mobile.LocalMobileTextStyles
 import dev.orcaxr.app.mobile.MobileCard
+import dev.orcaxr.app.mobile.MobileWorkspaceActions
 import dev.orcaxr.app.mobile.MobileTopBar
 import dev.orcaxr.app.mobile.SectionKicker
 import dev.orcaxr.app.mobile.StatusPill
@@ -46,6 +49,7 @@ import dev.orcaxr.app.mobile.StatusPill
 fun ProfileScreen(isTablet: Boolean) {
     val app = LocalMobileAppState.current
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     val userProfiles by app.userProfiles.profiles.collectAsState(initial = emptyList())
     val bundled = remember { OrcaProfileLoader.loadCatalog(ctx) }
     val all = remember(userProfiles, bundled) { bundled + Profiles.all + userProfiles + listOf(Profiles.default) }
@@ -83,20 +87,32 @@ fun ProfileScreen(isTablet: Boolean) {
                     items(items.chunked(2)) { row ->
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             for (p in row) Box(Modifier.weight(1f)) {
-                                ProfileCardView(p, p.id == selectedId, onSelect = {
-                                    selectedId = p.id
-                                    app.prefs.lastProfileId = p.id
-                                })
+                                ProfileCardView(
+                                    p, p.id == selectedId,
+                                    onSelect = {
+                                        selectedId = p.id
+                                        app.prefs.lastProfileId = p.id
+                                    },
+                                    onDelete = if (userProfiles.any { it.id == p.id }) {
+                                        { scope.launch { MobileWorkspaceActions.deleteUserProfile(ctx, p.id) } }
+                                    } else null,
+                                )
                             }
                             if (row.size == 1) Box(Modifier.weight(1f))
                         }
                     }
                 } else {
                     items(items) { p ->
-                        ProfileCardView(p, p.id == selectedId, onSelect = {
-                            selectedId = p.id
-                            app.prefs.lastProfileId = p.id
-                        })
+                        ProfileCardView(
+                            p, p.id == selectedId,
+                            onSelect = {
+                                selectedId = p.id
+                                app.prefs.lastProfileId = p.id
+                            },
+                            onDelete = if (userProfiles.any { it.id == p.id }) {
+                                { scope.launch { MobileWorkspaceActions.deleteUserProfile(ctx, p.id) } }
+                            } else null,
+                        )
                     }
                 }
             }
@@ -105,7 +121,12 @@ fun ProfileScreen(isTablet: Boolean) {
 }
 
 @Composable
-private fun ProfileCardView(p: SlicerProfile, selected: Boolean, onSelect: () -> Unit) {
+private fun ProfileCardView(
+    p: SlicerProfile,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    onDelete: (() -> Unit)? = null,
+) {
     MobileCard(onClick = onSelect) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.Top) {
@@ -132,6 +153,14 @@ private fun ProfileCardView(p: SlicerProfile, selected: Boolean, onSelect: () ->
                 ProfileTag("Walls", p.config["wall_loops"] ?: "—")
                 ProfileTag("Infill", p.config["sparse_infill_density"] ?: "—")
                 ProfileTag("Material", p.filamentName?.take(14) ?: p.config["filament_type"] ?: "—")
+            }
+            if (onDelete != null) {
+                androidx.compose.material3.TextButton(
+                    onClick = onDelete,
+                    modifier = Modifier.align(Alignment.End),
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
             }
         }
     }

@@ -1,7 +1,12 @@
 package dev.orcaxr.app.mobile
 
+import android.content.Context
 import dev.orcaxr.app.ToolDispatch
+import dev.orcaxr.app.mcp.ToolContext
 import dev.orcaxr.app.mcp.WorkspaceModel
+import dev.orcaxr.app.mcp.tools.PrinterTools
+import dev.orcaxr.app.mcp.tools.ProfileTools
+import dev.orcaxr.app.mcp.tools.WipeTowerTools
 import dev.orcaxr.app.mcp.tools.WorkspaceTools
 import org.json.JSONObject
 
@@ -91,5 +96,43 @@ internal object MobileWorkspaceActions {
         ToolDispatch.call(
             WorkspaceTools.DeleteModels(ws()),
             JSONObject().put("model_ids", org.json.JSONArray().put(MODEL)),
+        )
+
+    // ToolContext-backed (DataStore / prefs) — work on phone with no
+    // binding involvement.
+
+    suspend fun autoPositionWipeTower(appContext: Context): ToolDispatch.Result =
+        ToolDispatch.call(
+            WipeTowerTools.AutoPositionWipeTower(ws(), ToolContext(appContext)),
+            JSONObject().put("plate_id", PLATE).put("persist", true),
+        )
+
+    suspend fun deleteUserProfile(appContext: Context, profileId: String): ToolDispatch.Result =
+        ToolDispatch.call(
+            ProfileTools.DeleteUserProfile(ToolContext(appContext)),
+            JSONObject().put("profile_id", profileId),
+        )
+
+    suspend fun updatePrinter(
+        appContext: Context,
+        printerId: String,
+        name: String?,
+        host: String?,
+        port: Int?,
+        apiKey: String?,
+    ): ToolDispatch.Result = ToolDispatch.call(
+        PrinterTools.UpdatePrinter(ToolContext(appContext)),
+        JSONObject().put("printer_id", printerId).apply {
+            if (name != null) put("name", name)
+            if (host != null) put("host", host)
+            if (port != null) put("port", port)
+            if (apiKey != null) put("api_key", apiKey)
+        },
+    )
+
+    suspend fun deletePrinter(appContext: Context, printerId: String): ToolDispatch.Result =
+        ToolDispatch.call(
+            PrinterTools.DeletePrinter(ToolContext(appContext)),
+            JSONObject().put("printer_id", printerId),
         )
 }
