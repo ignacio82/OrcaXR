@@ -287,6 +287,8 @@ fun SettingsScreen(
                 modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
             )
 
+            SettingsBackupCard()
+
             // About / debug
             MobileCard {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -525,5 +527,98 @@ private fun ThemePill(label: String, selected: Boolean, onClick: () -> Unit) {
             color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
             modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
         )
+    }
+}
+
+/**
+ * Backup & restore — the phone affordance for the `export_settings` /
+ * `import_settings` MCP tools (previously XR-voice-only / unreachable).
+ * Routes through [dev.orcaxr.app.SettingsBackupRunner] so it's the same
+ * logic the MCP path uses; SAF handles the content:// I/O the tool
+ * can't. Every URI touch is runCatching+Toast per the phone-shell
+ * crash-visibility rule.
+ */
+@Composable
+private fun SettingsBackupCard() {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var replace by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf<String?>(null) }
+
+    val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri: android.net.Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            runCatching {
+                val (r, envelope) = dev.orcaxr.app.SettingsBackupRunner
+                    .exportEnvelope(ctx.applicationContext)
+                if (!r.ok || envelope == null) {
+                    status = "✗ ${r.message}"
+                    return@runCatching
+                }
+                ctx.contentResolver.openOutputStream(uri)?.use {
+                    it.write(envelope.toByteArray())
+                } ?: error("couldn't open destination")
+                status = "✓ Settings exported."
+            }.onFailure {
+                android.util.Log.w("OrcaXR/backup", "export failed", it)
+                android.widget.Toast.makeText(ctx, "Export failed.", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri: android.net.Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            runCatching {
+                val text = ctx.contentResolver.openInputStream(uri)?.use {
+                    it.readBytes().decodeToString()
+                } ?: error("couldn't read file")
+                val r = dev.orcaxr.app.SettingsBackupRunner
+                    .importEnvelope(ctx.applicationContext, text, replace)
+                status = if (r.ok) "✓ Imported (${if (replace) "replace" else "merge"}). " +
+                    "Restart OrcaXR to apply." else "✗ ${r.message}"
+            }.onFailure {
+                android.util.Log.w("OrcaXR/backup", "import failed", it)
+                android.widget.Toast.makeText(ctx, "Import failed.", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    MobileCard {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            SectionKicker("Backup & restore")
+            Text(
+                "Export every profile, printer, plate, filament, MCP and preference as one " +
+                    "JSON file — restore it on another device or after a reinstall.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Switch(checked = replace, onCheckedChange = { replace = it })
+                Text(
+                    "Replace on import (default merges)",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(
+                    onClick = { exportLauncher.launch("orcaxr-settings.json") },
+                    modifier = androidx.compose.ui.Modifier.weight(1f),
+                ) { Text("Export…") }
+                OutlinedButton(
+                    onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) },
+                    modifier = androidx.compose.ui.Modifier.weight(1f),
+                ) { Text("Restore…") }
+            }
+            status?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
+        }
     }
 }
