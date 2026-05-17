@@ -157,6 +157,14 @@ fun BindMobileWorkspaceModel(
 
     LaunchedEffect(selectedProfile) { workspace.publishSelectedProfile(selectedProfile) }
 
+    // Re-arch increment 4 — custom-gcode ticks via the SAME persistent
+    // CustomGcodeStore the XR shell uses (no in-memory divergence), and
+    // mirror it into WorkspaceModel so list_custom_gcode_ticks reads
+    // back. Phone is single-plate (id 1).
+    val gcodeStore = remember { dev.orcaxr.app.CustomGcodeStore(ctx) }
+    val ticksByPlate by gcodeStore.ticksByPlate.collectAsState(initial = emptyMap())
+    LaunchedEffect(ticksByPlate) { workspace.publishCustomGcodeTicks(ticksByPlate) }
+
     // Re-publish the placed-model list whenever EITHER the file path
     // OR a paint buffer for the current model changed. The two
     // dependencies share one effect because the list build needs both:
@@ -201,6 +209,11 @@ fun BindMobileWorkspaceModel(
                 TierBCapability.LoadPaintState,
                 TierBCapability.PaintTriangleSet,
                 TierBCapability.ClearPaint,
+                // Re-arch increment 4 — Tier-B mutators now applied.
+                TierBCapability.ComputeAdaptiveLayerHeights,
+                TierBCapability.AddCustomGcodeTick,
+                TierBCapability.RemoveCustomGcodeTick,
+                TierBCapability.ClearCustomGcodeTicks,
             ),
         )
     }
@@ -291,6 +304,34 @@ fun BindMobileWorkspaceModel(
                 is WorkspaceAction.SetSelectedModels -> {
                     /* no-op: single model / single plate on phone */
                 }
+                // Tier-B mutators (re-arch increment 4).
+                is WorkspaceAction.AddCustomGcodeTick ->
+                    gcodeStore.add(action.plateId, customGcodeTickOf(action))
+                is WorkspaceAction.RemoveCustomGcodeTick ->
+                    gcodeStore.removeAt(action.plateId, action.index)
+                is WorkspaceAction.ClearCustomGcodeTicks ->
+                    gcodeStore.clear(action.plateId)
+                is WorkspaceAction.ComputeAdaptiveLayerHeights -> {
+                    val model = workspace.placedModels.value
+                        .firstOrNull { it.id == action.modelId }
+                    val src = model?.let { deriveStl(ctx, it.source) }
+                    val profile = if (src == null) null else runCatching {
+                        SlicerEngine.computeAdaptiveLayerHeights(
+                            input = src,
+                            quality = action.quality,
+                            smoothingRadius = action.smoothingRadius,
+                            smoothingKeepMin = action.smoothingKeepMin,
+                        )
+                    }.getOrNull()
+                    if (profile != null && profile.size >= 4) {
+                        val st = stateByModel[action.modelId] ?: MobileModelState()
+                        // Reuse the spine's validation so a malformed
+                        // native result clears rather than corrupts.
+                        stateByModel[action.modelId] = st.applySetLayerHeightProfile(
+                            WorkspaceAction.SetLayerHeightProfile(action.modelId, profile),
+                        )
+                    }
+                }
                 else -> {
                     // Action types whose Tier-B capability isn't in the
                     // wired set above. The MCP tool that emitted should
@@ -312,6 +353,24 @@ fun BindMobileWorkspaceModel(
 }
 
 private const val TAG = "OrcaXR/mobile/wsb"
+
+/**
+ * Map an `AddCustomGcodeTick` action to a [SlicerEngine.CustomGcodeTick].
+ * The action's `kind` string matches the enum names 1:1
+ * (ColorChange / PausePrint / ToolChange / Template / Custom); an
+ * unknown kind falls back to Custom (matches the XR handler).
+ * `internal` so it's unit-testable without a Context.
+ */
+internal fun customGcodeTickOf(
+    a: WorkspaceAction.AddCustomGcodeTick,
+): SlicerEngine.CustomGcodeTick = SlicerEngine.CustomGcodeTick(
+    printZmm = a.zMm,
+    kind = runCatching { SlicerEngine.CustomGcodeKind.valueOf(a.kind) }
+        .getOrDefault(SlicerEngine.CustomGcodeKind.Custom),
+    extruder = a.extruder,
+    color = a.color,
+    extra = a.extra,
+)
 
 /**
  * Probe-read [file] as binary STL; if that fails or the file is a

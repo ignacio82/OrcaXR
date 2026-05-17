@@ -113,6 +113,7 @@ fun SlicerScreen(
     heightRanges: List<dev.orcaxr.app.HeightRange> = emptyList(),
     layerHeightProfile: FloatArray? = null,
     objectConfig: Map<String, String> = emptyMap(),
+    customGcodeTicks: List<SlicerEngine.CustomGcodeTick> = emptyList(),
     onOpenPaint: ((String) -> Unit)? = null,
     onOpenSmartPaint: (() -> Unit)? = null,
     transform: SlicerEngine.ModelPlacement = SlicerEngine.ModelPlacement(),
@@ -316,6 +317,7 @@ fun SlicerScreen(
                                     heightRanges = heightRanges,
                                     layerHeightProfile = layerHeightProfile,
                                     objectConfig = objectConfig,
+                                    customGcodeTicks = customGcodeTicks,
                                     onProgress = { p, m ->
                                         if (sliceState is SliceUi.Slicing) sliceState = SliceUi.Slicing(p, m)
                                     },
@@ -387,6 +389,7 @@ fun SlicerScreen(
                                 heightRanges = heightRanges,
                                 layerHeightProfile = layerHeightProfile,
                                 objectConfig = objectConfig,
+                                customGcodeTicks = customGcodeTicks,
                                 onProgress = { p, m ->
                                     if (sliceState is SliceUi.Slicing) sliceState = SliceUi.Slicing(p, m)
                                 },
@@ -1202,6 +1205,7 @@ private suspend fun runSlice(
     heightRanges: List<dev.orcaxr.app.HeightRange> = emptyList(),
     layerHeightProfile: FloatArray? = null,
     objectConfig: Map<String, String> = emptyMap(),
+    customGcodeTicks: List<SlicerEngine.CustomGcodeTick> = emptyList(),
     onProgress: (Int, String) -> Unit,
     onResult: (SliceResult) -> Unit,
 ) {
@@ -1228,7 +1232,8 @@ private suspend fun runSlice(
     // one object.
     val isIdentity = transform == SlicerEngine.ModelPlacement()
     val hasExtra = paintFilamentIndex != null || heightRanges.isNotEmpty() ||
-        layerHeightProfile != null || objectConfig.isNotEmpty()
+        layerHeightProfile != null || objectConfig.isNotEmpty() ||
+        customGcodeTicks.isNotEmpty()
     val result = when {
         isIdentity && !hasExtra -> SlicerEngine.slice(
             stl = source,
@@ -1245,6 +1250,7 @@ private suspend fun runSlice(
             objectConfigOverrides = objectConfig,
             layerHeightProfile = layerHeightProfile,
             heightRanges = heightRanges,
+            customGcodeTicks = customGcodeTicks,
             onProgress = { percent, message -> onProgress(percent, message) },
         )
         else -> SlicerEngine.sliceMulti(
@@ -1255,6 +1261,7 @@ private suspend fun runSlice(
             paintFilamentIndices = listOf(paintFilamentIndex),
             layerHeightProfilesPerInput =
                 if (layerHeightProfile != null) listOf(layerHeightProfile) else null,
+            customGcodeTicks = customGcodeTicks,
             heightRangesPerInput =
                 if (heightRanges.isNotEmpty()) listOf(heightRanges) else null,
             onProgress = { percent, message -> onProgress(percent, message) },

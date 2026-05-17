@@ -180,6 +180,7 @@ fun MobileShell(
                 var slicerHeightRanges by remember { mutableStateOf<List<dev.orcaxr.app.HeightRange>>(emptyList()) }
                 var slicerLayerProfile by remember { mutableStateOf<FloatArray?>(null) }
                 var slicerObjectConfig by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+                var slicerGcodeTicks by remember { mutableStateOf<List<dev.orcaxr.app.SlicerEngine.CustomGcodeTick>>(emptyList()) }
                 var paintModeFile by rememberSaveable { mutableStateOf<String?>(null) }
                 var smartPaintOpen by rememberSaveable { mutableStateOf(false) }
                 var slicerTransform by remember { mutableStateOf(dev.orcaxr.app.SlicerEngine.ModelPlacement()) }
@@ -263,6 +264,14 @@ fun MobileShell(
                             else slicerLayerProfile?.contentEquals(lp) == true
                         if (!same) slicerLayerProfile = lp
                         if (m.configOverrides != slicerObjectConfig) slicerObjectConfig = m.configOverrides
+                    }
+                }
+                // Ticks change via CustomGcodeStore→publishCustomGcodeTicks
+                // (not placedModels), so collect that flow directly.
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    workspaceModel.customGcodeTicks.collect { byPlate ->
+                        val t = byPlate[1] ?: emptyList()
+                        if (t != slicerGcodeTicks) slicerGcodeTicks = t
                     }
                 }
 
@@ -389,6 +398,7 @@ fun MobileShell(
                             slicerHeightRanges = slicerHeightRanges,
                             slicerLayerProfile = slicerLayerProfile,
                             slicerObjectConfig = slicerObjectConfig,
+                            slicerGcodeTicks = slicerGcodeTicks,
                             onOpenPaint = openPaintCallback,
                             onOpenSmartPaint = openSmartPaintCallback,
                             transform = slicerTransform,
@@ -418,6 +428,7 @@ fun MobileShell(
                             slicerHeightRanges = slicerHeightRanges,
                             slicerLayerProfile = slicerLayerProfile,
                             slicerObjectConfig = slicerObjectConfig,
+                            slicerGcodeTicks = slicerGcodeTicks,
                             onOpenPaint = openPaintCallback,
                             onOpenSmartPaint = openSmartPaintCallback,
                             transform = slicerTransform,
@@ -452,6 +463,7 @@ private fun ScreenContent(
     slicerHeightRanges: List<dev.orcaxr.app.HeightRange>,
     slicerLayerProfile: FloatArray?,
     slicerObjectConfig: Map<String, String>,
+    slicerGcodeTicks: List<dev.orcaxr.app.SlicerEngine.CustomGcodeTick>,
     onOpenPaint: (String) -> Unit,
     onOpenSmartPaint: (() -> Unit)?,
     transform: dev.orcaxr.app.SlicerEngine.ModelPlacement,
@@ -476,6 +488,7 @@ private fun ScreenContent(
                 heightRanges = slicerHeightRanges,
                 layerHeightProfile = slicerLayerProfile,
                 objectConfig = slicerObjectConfig,
+                customGcodeTicks = slicerGcodeTicks,
                 onOpenPaint = onOpenPaint,
                 onOpenSmartPaint = onOpenSmartPaint,
                 transform = transform,
