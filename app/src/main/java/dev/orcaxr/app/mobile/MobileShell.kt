@@ -183,6 +183,7 @@ fun MobileShell(
                 var slicerGcodeTicks by remember { mutableStateOf<List<dev.orcaxr.app.SlicerEngine.CustomGcodeTick>>(emptyList()) }
                 var paintModeFile by rememberSaveable { mutableStateOf<String?>(null) }
                 var smartPaintOpen by rememberSaveable { mutableStateOf(false) }
+                var modelToolsOpen by rememberSaveable { mutableStateOf(false) }
                 var slicerTransform by remember { mutableStateOf(dev.orcaxr.app.SlicerEngine.ModelPlacement()) }
                 var llmAssistantOpen by rememberSaveable { mutableStateOf(false) }
 
@@ -370,9 +371,20 @@ fun MobileShell(
                     )
                     return@BoxWithConstraints
                 }
+                if (modelToolsOpen && spFile != null) {
+                    dev.orcaxr.app.mobile.screens.ModelToolsScreen(
+                        modelName = java.io.File(spFile).name,
+                        onClose = {
+                            modelToolsOpen = false
+                            dest = MobileDestination.Slicer
+                        },
+                    )
+                    return@BoxWithConstraints
+                }
 
                 val openPaintCallback: (String) -> Unit = { fp -> paintModeFile = fp }
                 val openSmartPaintCallback: () -> Unit = { smartPaintOpen = true }
+                val openModelToolsCallback: () -> Unit = { modelToolsOpen = true }
                 if (isTablet) {
                     Row(Modifier.fillMaxSize()) {
                         TabletNavRail(
@@ -401,6 +413,7 @@ fun MobileShell(
                             slicerGcodeTicks = slicerGcodeTicks,
                             onOpenPaint = openPaintCallback,
                             onOpenSmartPaint = openSmartPaintCallback,
+                            onOpenModelTools = openModelToolsCallback,
                             transform = slicerTransform,
                             onSetTransform = { slicerTransform = it },
                             onNavigate = { dest = it },
@@ -431,6 +444,7 @@ fun MobileShell(
                             slicerGcodeTicks = slicerGcodeTicks,
                             onOpenPaint = openPaintCallback,
                             onOpenSmartPaint = openSmartPaintCallback,
+                            onOpenModelTools = openModelToolsCallback,
                             transform = slicerTransform,
                             onSetTransform = { slicerTransform = it },
                             onNavigate = { dest = it },
@@ -466,6 +480,7 @@ private fun ScreenContent(
     slicerGcodeTicks: List<dev.orcaxr.app.SlicerEngine.CustomGcodeTick>,
     onOpenPaint: (String) -> Unit,
     onOpenSmartPaint: (() -> Unit)?,
+    onOpenModelTools: (() -> Unit)?,
     transform: dev.orcaxr.app.SlicerEngine.ModelPlacement,
     onSetTransform: (dev.orcaxr.app.SlicerEngine.ModelPlacement) -> Unit,
     onNavigate: (MobileDestination) -> Unit,
@@ -491,6 +506,7 @@ private fun ScreenContent(
                 customGcodeTicks = slicerGcodeTicks,
                 onOpenPaint = onOpenPaint,
                 onOpenSmartPaint = onOpenSmartPaint,
+                onOpenModelTools = onOpenModelTools,
                 transform = transform,
                 onSetTransform = onSetTransform,
             )

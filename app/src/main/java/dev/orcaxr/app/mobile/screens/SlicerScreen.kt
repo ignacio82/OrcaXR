@@ -116,6 +116,7 @@ fun SlicerScreen(
     customGcodeTicks: List<SlicerEngine.CustomGcodeTick> = emptyList(),
     onOpenPaint: ((String) -> Unit)? = null,
     onOpenSmartPaint: (() -> Unit)? = null,
+    onOpenModelTools: (() -> Unit)? = null,
     transform: SlicerEngine.ModelPlacement = SlicerEngine.ModelPlacement(),
     onSetTransform: (SlicerEngine.ModelPlacement) -> Unit = {},
 ) {
@@ -295,6 +296,7 @@ fun SlicerScreen(
                         onSetFile = onSetFile,
                         onOpenPaint = onOpenPaint,
                         onOpenSmartPaint = onOpenSmartPaint,
+                        onOpenModelTools = onOpenModelTools,
                         paintApplied = paintFilamentIndex != null,
                         transform = transform,
                         onSetTransform = onSetTransform,
@@ -362,6 +364,7 @@ fun SlicerScreen(
                     onSetFile = onSetFile,
                     onOpenPaint = onOpenPaint,
                     onOpenSmartPaint = onOpenSmartPaint,
+                    onOpenModelTools = onOpenModelTools,
                     paintApplied = paintFilamentIndex != null,
                     transform = transform,
                     onSetTransform = onSetTransform,
@@ -1495,6 +1498,7 @@ private fun ToolsCard(
     onSetFile: (String?) -> Unit,
     onOpenPaint: ((String) -> Unit)?,
     onOpenSmartPaint: (() -> Unit)?,
+    onOpenModelTools: (() -> Unit)?,
     paintApplied: Boolean,
     transform: SlicerEngine.ModelPlacement,
     onSetTransform: (SlicerEngine.ModelPlacement) -> Unit,
@@ -1665,6 +1669,12 @@ private fun ToolsCard(
                     Spacer(Modifier.width(6.dp))
                     Text("Smart Paint")
                 }
+            }
+            if (onOpenModelTools != null) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { onOpenModelTools() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Model tools (cut · simplify · adaptive)") }
             }
             val msg = lastToolResult
             if (msg != null) {
