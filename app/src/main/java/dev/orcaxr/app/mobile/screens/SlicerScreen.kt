@@ -110,6 +110,9 @@ fun SlicerScreen(
     onSetOutput: (String?) -> Unit,
     onNavigate: (MobileDestination) -> Unit,
     paintFilamentIndex: ByteArray? = null,
+    heightRanges: List<dev.orcaxr.app.HeightRange> = emptyList(),
+    layerHeightProfile: FloatArray? = null,
+    objectConfig: Map<String, String> = emptyMap(),
     onOpenPaint: ((String) -> Unit)? = null,
     onOpenSmartPaint: (() -> Unit)? = null,
     transform: SlicerEngine.ModelPlacement = SlicerEngine.ModelPlacement(),
@@ -310,6 +313,9 @@ fun SlicerScreen(
                                     paintFilamentIndex = paintFilamentIndex,
                                     transform = transform,
                                     paletteHex = activePaletteHex,
+                                    heightRanges = heightRanges,
+                                    layerHeightProfile = layerHeightProfile,
+                                    objectConfig = objectConfig,
                                     onProgress = { p, m ->
                                         if (sliceState is SliceUi.Slicing) sliceState = SliceUi.Slicing(p, m)
                                     },
@@ -378,6 +384,9 @@ fun SlicerScreen(
                                 paintFilamentIndex = paintFilamentIndex,
                                 transform = transform,
                                 paletteHex = activePaletteHex,
+                                heightRanges = heightRanges,
+                                layerHeightProfile = layerHeightProfile,
+                                objectConfig = objectConfig,
                                 onProgress = { p, m ->
                                     if (sliceState is SliceUi.Slicing) sliceState = SliceUi.Slicing(p, m)
                                 },
@@ -1190,6 +1199,9 @@ private suspend fun runSlice(
     paintFilamentIndex: ByteArray?,
     transform: SlicerEngine.ModelPlacement,
     paletteHex: List<String>,
+    heightRanges: List<dev.orcaxr.app.HeightRange> = emptyList(),
+    layerHeightProfile: FloatArray? = null,
+    objectConfig: Map<String, String> = emptyMap(),
     onProgress: (Int, String) -> Unit,
     onResult: (SliceResult) -> Unit,
 ) {
@@ -1205,21 +1217,46 @@ private suspend fun runSlice(
     // scale knobs are honored even for the single-model flow. When
     // the transform is identity, sliceMulti behaves identically to
     // the single-model `slice()` path.
+    // Re-arch increment 2 — the workspace state the MCP mutators
+    // accumulate (object overrides / height ranges / layer-height
+    // profile, bridged from `mobile_loaded`) must reach the slice, not
+    // just round-trip for reads. `slice()` carries all of them
+    // (incl. objectConfigOverrides) but no transform; `sliceMulti`
+    // carries the transform + per-input profile/ranges but has no
+    // object-config arg, so for the (single-object) phone we fold the
+    // object overrides into the print config there — equivalent for
+    // one object.
     val isIdentity = transform == SlicerEngine.ModelPlacement()
-    val result = if (isIdentity && paintFilamentIndex == null) {
-        SlicerEngine.slice(
+    val hasExtra = paintFilamentIndex != null || heightRanges.isNotEmpty() ||
+        layerHeightProfile != null || objectConfig.isNotEmpty()
+    val result = when {
+        isIdentity && !hasExtra -> SlicerEngine.slice(
+            stl = source,
+            outGcode = out,
+            config = effectiveConfig,
+            paintFilamentIndex = null,
+            onProgress = { percent, message -> onProgress(percent, message) },
+        )
+        isIdentity -> SlicerEngine.slice(
             stl = source,
             outGcode = out,
             config = effectiveConfig,
             paintFilamentIndex = paintFilamentIndex,
+            objectConfigOverrides = objectConfig,
+            layerHeightProfile = layerHeightProfile,
+            heightRanges = heightRanges,
             onProgress = { percent, message -> onProgress(percent, message) },
         )
-    } else {
-        SlicerEngine.sliceMulti(
+        else -> SlicerEngine.sliceMulti(
             models = listOf(source to transform),
             outGcode = out,
-            config = effectiveConfig,
+            config = if (objectConfig.isEmpty()) effectiveConfig
+            else (effectiveConfig + objectConfig).toMutableMap(),
             paintFilamentIndices = listOf(paintFilamentIndex),
+            layerHeightProfilesPerInput =
+                if (layerHeightProfile != null) listOf(layerHeightProfile) else null,
+            heightRangesPerInput =
+                if (heightRanges.isNotEmpty()) listOf(heightRanges) else null,
             onProgress = { percent, message -> onProgress(percent, message) },
         )
     }

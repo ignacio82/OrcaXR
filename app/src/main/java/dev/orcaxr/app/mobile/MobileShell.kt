@@ -175,6 +175,11 @@ fun MobileShell(
                 // XR shell's behavior — paint is per-session unless
                 // explicitly committed to a slice.
                 var slicerPaintIndex by remember { mutableStateOf<ByteArray?>(null) }
+                // Re-arch increment 2 — MCP-accumulated per-model state
+                // bridged from `mobile_loaded` so the phone slice honors it.
+                var slicerHeightRanges by remember { mutableStateOf<List<dev.orcaxr.app.HeightRange>>(emptyList()) }
+                var slicerLayerProfile by remember { mutableStateOf<FloatArray?>(null) }
+                var slicerObjectConfig by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
                 var paintModeFile by rememberSaveable { mutableStateOf<String?>(null) }
                 var smartPaintOpen by rememberSaveable { mutableStateOf(false) }
                 var slicerTransform by remember { mutableStateOf(dev.orcaxr.app.SlicerEngine.ModelPlacement()) }
@@ -220,10 +225,18 @@ fun MobileShell(
                 val workspaceModel = remember { dev.orcaxr.app.mcp.WorkspaceModel.get() }
                 val placedModels by workspaceModel.placedModels.collectAsState()
                 androidx.compose.runtime.LaunchedEffect(placedModels) {
-                    val mcpPaint =
-                        placedModels.firstOrNull { it.id == "mobile_loaded" }?.paintFilamentIndex
+                    val m = placedModels.firstOrNull { it.id == "mobile_loaded" }
+                    val mcpPaint = m?.paintFilamentIndex
                     if (mcpPaint != null && !mcpPaint.contentEquals(slicerPaintIndex)) {
                         slicerPaintIndex = mcpPaint
+                    }
+                    if (m != null) {
+                        if (m.heightRanges != slicerHeightRanges) slicerHeightRanges = m.heightRanges
+                        val lp = m.layerHeightProfile
+                        val same = if (lp == null) slicerLayerProfile == null
+                            else slicerLayerProfile?.contentEquals(lp) == true
+                        if (!same) slicerLayerProfile = lp
+                        if (m.configOverrides != slicerObjectConfig) slicerObjectConfig = m.configOverrides
                     }
                 }
 
@@ -347,6 +360,9 @@ fun MobileShell(
                             slicerOutputPath = slicerOutputPath,
                             onSetSlicerOutput = { slicerOutputPath = it },
                             slicerPaintIndex = slicerPaintIndex,
+                            slicerHeightRanges = slicerHeightRanges,
+                            slicerLayerProfile = slicerLayerProfile,
+                            slicerObjectConfig = slicerObjectConfig,
                             onOpenPaint = openPaintCallback,
                             onOpenSmartPaint = openSmartPaintCallback,
                             transform = slicerTransform,
@@ -373,6 +389,9 @@ fun MobileShell(
                             slicerOutputPath = slicerOutputPath,
                             onSetSlicerOutput = { slicerOutputPath = it },
                             slicerPaintIndex = slicerPaintIndex,
+                            slicerHeightRanges = slicerHeightRanges,
+                            slicerLayerProfile = slicerLayerProfile,
+                            slicerObjectConfig = slicerObjectConfig,
                             onOpenPaint = openPaintCallback,
                             onOpenSmartPaint = openSmartPaintCallback,
                             transform = slicerTransform,
@@ -404,6 +423,9 @@ private fun ScreenContent(
     slicerOutputPath: String?,
     onSetSlicerOutput: (String?) -> Unit,
     slicerPaintIndex: ByteArray?,
+    slicerHeightRanges: List<dev.orcaxr.app.HeightRange>,
+    slicerLayerProfile: FloatArray?,
+    slicerObjectConfig: Map<String, String>,
     onOpenPaint: (String) -> Unit,
     onOpenSmartPaint: (() -> Unit)?,
     transform: dev.orcaxr.app.SlicerEngine.ModelPlacement,
@@ -425,6 +447,9 @@ private fun ScreenContent(
                 onSetOutput = onSetSlicerOutput,
                 onNavigate = onNavigate,
                 paintFilamentIndex = slicerPaintIndex,
+                heightRanges = slicerHeightRanges,
+                layerHeightProfile = slicerLayerProfile,
+                objectConfig = slicerObjectConfig,
                 onOpenPaint = onOpenPaint,
                 onOpenSmartPaint = onOpenSmartPaint,
                 transform = transform,
