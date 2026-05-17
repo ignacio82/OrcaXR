@@ -50,8 +50,8 @@ android {
         applicationId = "dev.orcaxr.app"
         minSdk = 31
         targetSdk = 35
-        versionCode = 2026051602
-        versionName = "0.0.4"
+        versionCode = 2026051701
+        versionName = "0.0.5"
 
         // Phase 0 targets arm64-v8a only. Add more ABIs when we support
         // other form factors; libslic3r_jni.so is arm64-only for now.
