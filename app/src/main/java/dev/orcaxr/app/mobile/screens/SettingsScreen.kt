@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -248,6 +249,31 @@ fun SettingsScreen(
             // surfaces anything reachable on the LAN that the user
             // hasn't configured yet. One-tap add wires the row into
             // `PrintersStore`, the same path Onboarding uses.
+            // Configured printers — rename / delete (the phone affordance
+            // for update_printer / delete_printer; routed through the
+            // same tools the MCP path uses).
+            val configuredPrinters by app.printers.printers
+                .collectAsState(initial = emptyList<dev.orcaxr.app.PrinterConfig>())
+            if (configuredPrinters.isNotEmpty()) {
+                ConfiguredPrintersCard(
+                    printers = configuredPrinters,
+                    onRename = { id, newName ->
+                        scope.launch {
+                            dev.orcaxr.app.mobile.MobileWorkspaceActions.updatePrinter(
+                                ctx.applicationContext, id, newName, null, null, null,
+                            )
+                        }
+                    },
+                    onDelete = { id ->
+                        scope.launch {
+                            dev.orcaxr.app.mobile.MobileWorkspaceActions.deletePrinter(
+                                ctx.applicationContext, id,
+                            )
+                        }
+                    },
+                )
+            }
+
             DiscoveredPrintersCard(
                 discovered = printersUnknown,
                 isScanning = isScanning,
@@ -618,6 +644,53 @@ private fun SettingsBackupCard() {
             }
             status?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
+}
+
+/**
+ * Configured-printers management — the phone affordance for
+ * `update_printer` / `delete_printer` (rename inline; delete per row).
+ * Discovery/add stays in [DiscoveredPrintersCard]; this is the
+ * previously-missing "manage what I already added" surface.
+ */
+@Composable
+private fun ConfiguredPrintersCard(
+    printers: List<dev.orcaxr.app.PrinterConfig>,
+    onRename: (id: String, newName: String) -> Unit,
+    onDelete: (id: String) -> Unit,
+) {
+    MobileCard {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SectionKicker("Your printers")
+            for (p in printers) {
+                var draft by remember(p.id, p.name) { mutableStateOf(p.name) }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        label = { Text("Name") },
+                        singleLine = true,
+                        modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        "${p.host}:${p.port}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(
+                            onClick = { if (draft.isNotBlank() && draft != p.name) onRename(p.id, draft) },
+                            enabled = draft.isNotBlank() && draft != p.name,
+                            modifier = androidx.compose.ui.Modifier.weight(1f),
+                        ) { Text("Save name") }
+                        OutlinedButton(
+                            onClick = { onDelete(p.id) },
+                            modifier = androidx.compose.ui.Modifier.weight(1f),
+                        ) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                    }
+                }
             }
         }
     }
