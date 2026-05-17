@@ -62,6 +62,14 @@ fun BindMobileWorkspaceModel(
     selectedProfile: SlicerProfile?,
     slicerFilePath: String?,
     onLoadModelFromPath: (String) -> Unit,
+    /** Re-arch increment 3 — shell-state mutators. Compose the action's
+     *  non-null fields onto the live transform. */
+    onTransformModel: (WorkspaceAction.TransformModel) -> Unit = {},
+    /** Reset any Z lift (phone slice auto-grounds, so this is the
+     *  meaningful "drop"). */
+    onDropToBed: () -> Unit = {},
+    /** Clear the workspace (single-model phone == clear the file). */
+    onDeleteModels: () -> Unit = {},
 ) {
     val workspace = remember { WorkspaceModel.get() }
     val ctx = LocalContext.current
@@ -213,6 +221,9 @@ fun BindMobileWorkspaceModel(
     // load_model_from_path after the user changed slicerFilePath
     // would route through a frozen old setter.
     val onLoadLatest = rememberUpdatedState(onLoadModelFromPath)
+    val onTransformLatest = rememberUpdatedState(onTransformModel)
+    val onDropLatest = rememberUpdatedState(onDropToBed)
+    val onDeleteLatest = rememberUpdatedState(onDeleteModels)
     LaunchedEffect(workspace) {
         // Same emit-id sync-by-FIFO trick the XR binding uses — the
         // SharedFlow delivers in order, a local counter mirrors the
@@ -266,6 +277,19 @@ fun BindMobileWorkspaceModel(
                 is WorkspaceAction.SetLayerHeightProfile -> {
                     val st = stateByModel[action.modelId] ?: MobileModelState()
                     stateByModel[action.modelId] = st.applySetLayerHeightProfile(action)
+                }
+                // Shell-state mutators (re-arch increment 3).
+                is WorkspaceAction.TransformModel -> onTransformLatest.value.invoke(action)
+                is WorkspaceAction.DropToBed -> onDropLatest.value.invoke()
+                is WorkspaceAction.DeleteModels -> onDeleteLatest.value.invoke()
+                // Single-model / single-plate phone: these are benign
+                // no-ops (there is exactly one model and one plate), so
+                // acknowledge them rather than log a scary "dropped
+                // unwired action" — the agent's call genuinely had no
+                // additional effect to apply here.
+                is WorkspaceAction.SetActivePlateId,
+                is WorkspaceAction.SetSelectedModels -> {
+                    /* no-op: single model / single plate on phone */
                 }
                 else -> {
                     // Action types whose Tier-B capability isn't in the

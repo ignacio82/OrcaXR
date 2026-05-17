@@ -205,6 +205,32 @@ fun MobileShell(
                         // sees the loaded model in the slicer screen.
                         llmAssistantOpen = false
                     },
+                    onTransformModel = { a ->
+                        slicerTransform = slicerTransform.copy(
+                            translateXmm = a.translateXmm ?: slicerTransform.translateXmm,
+                            translateYmm = a.translateYmm ?: slicerTransform.translateYmm,
+                            translateZmm = a.translateZmm ?: slicerTransform.translateZmm,
+                            rotXdeg = a.rotXDeg ?: slicerTransform.rotXdeg,
+                            rotYdeg = a.rotYDeg ?: slicerTransform.rotYdeg,
+                            rotZdeg = a.rotZDeg?.toFloat() ?: slicerTransform.rotZdeg,
+                            scaleXPct = a.scaleXPct ?: slicerTransform.scaleXPct,
+                            scaleYPct = a.scaleYPct ?: slicerTransform.scaleYPct,
+                            scaleZPct = a.scaleZPct ?: slicerTransform.scaleZPct,
+                            mirrorX = a.mirrorX ?: slicerTransform.mirrorX,
+                            mirrorY = a.mirrorY ?: slicerTransform.mirrorY,
+                            mirrorZ = a.mirrorZ ?: slicerTransform.mirrorZ,
+                        )
+                    },
+                    onDropToBed = {
+                        slicerTransform = slicerTransform.copy(translateZmm = 0f)
+                    },
+                    onDeleteModels = {
+                        slicerFilePath = null
+                        slicerOutputPath = null
+                        slicerPaintIndex = null
+                        slicerTransform = dev.orcaxr.app.SlicerEngine.ModelPlacement()
+                        dest = MobileDestination.Slicer
+                    },
                 )
 
                 // Bridge MCP-committed paint into the slicer-screen
