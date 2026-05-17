@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -177,6 +178,7 @@ fun FilesScreen(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                item { HandyModelsCard() }
                 if (isTablet) {
                     items(recents.chunked(2)) { chunk ->
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -256,4 +258,74 @@ private fun FileRow(
 private suspend fun stageUriBounded(ctx: Context, uri: Uri): File? {
     val sharedDir = File(ctx.cacheDir, "shared").apply { mkdirs() }
     return SharedIntentHandler.stageUriBounded(ctx.contentResolver, uri, sharedDir)
+}
+
+/**
+ * Bundled "handy models" picker — the phone affordance for the
+ * `add_handy_model` MCP tool (was XR-voice-only, absent on phone).
+ * Routes through [dev.orcaxr.app.mobile.HandyModelRunner] →
+ * `add_handy_model`, which emits LoadModelFromPath; the shell binding
+ * then navigates to the Slicer automatically. ([[feedback_ui_mcp_parity]])
+ */
+@Composable
+private fun HandyModelsCard() {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf<String?>(null) }
+    MobileCard {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            SectionKicker("Handy models")
+            Text(
+                "Bundled test & calibration meshes — tap to load into the slicer.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            for (m in dev.orcaxr.app.mobile.HandyModelRunner.entries()) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = busy == null) {
+                            busy = m.id
+                            scope.launch {
+                                runCatching {
+                                    val r = dev.orcaxr.app.mobile.HandyModelRunner
+                                        .add(ctx.applicationContext, m.id, replace = true)
+                                    if (!r.ok) {
+                                        android.widget.Toast.makeText(
+                                            ctx, r.message, android.widget.Toast.LENGTH_LONG,
+                                        ).show()
+                                    }
+                                }.onFailure {
+                                    android.util.Log.w("OrcaXR/handy", "load failed", it)
+                                    android.widget.Toast.makeText(
+                                        ctx, "Couldn't load ${m.displayName}.",
+                                        android.widget.Toast.LENGTH_LONG,
+                                    ).show()
+                                }
+                                busy = null
+                            }
+                        }
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            m.displayName,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            m.hint,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (busy == m.id) {
+                        Text("…", style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        }
+    }
 }
