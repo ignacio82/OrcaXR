@@ -8113,6 +8113,8 @@ private fun SelectionBboxEntity(
         val oldEntity = entity
 
         // Define vertex layout: position (buffer 0) and color (buffer 1).
+        // COLOR requires FLOAT4 (RGBA) in alpha15 — FLOAT3 throws
+        // IllegalArgumentException at VertexAttributeDescriptor init.
         val layout = androidx.xr.scenecore.VertexLayout(
             listOf(
                 androidx.xr.scenecore.VertexAttributeDescriptor(
@@ -8122,7 +8124,7 @@ private fun SelectionBboxEntity(
                 ),
                 androidx.xr.scenecore.VertexAttributeDescriptor(
                     androidx.xr.scenecore.VertexAttribute.COLOR,
-                    androidx.xr.scenecore.VertexAttributeType.FLOAT3,
+                    androidx.xr.scenecore.VertexAttributeType.FLOAT4,
                     1
                 )
             )
@@ -8135,10 +8137,10 @@ private fun SelectionBboxEntity(
         val xNeg = -sizeXmm / 2f; val xPos = sizeXmm / 2f
         val yNeg = -sizeYmm / 2f; val yPos = sizeYmm / 2f
         val zLo = 0f; val zHi = sizeZmm
-        val selColor = floatArrayOf(1.0f, 0.65f, 0.0f) // Orca Orange
+        val selColor = floatArrayOf(1.0f, 0.65f, 0.0f, 1.0f) // Orca Orange, fully opaque
 
         val positions = FloatArray(96 * 3)
-        val colors = FloatArray(96 * 3)
+        val colors = FloatArray(96 * 4)  // RGBA per vertex
         val indices = IntArray(432)
 
         var pi = 0; var ci = 0; var ii = 0; var baseId = 0
@@ -8150,7 +8152,7 @@ private fun SelectionBboxEntity(
             )
             for (v in 0 until 8) {
                 positions[pi++] = pts[v * 3]; positions[pi++] = pts[v * 3 + 1]; positions[pi++] = pts[v * 3 + 2]
-                colors[ci++] = selColor[0]; colors[ci++] = selColor[1]; colors[ci++] = selColor[2]
+                colors[ci++] = selColor[0]; colors[ci++] = selColor[1]; colors[ci++] = selColor[2]; colors[ci++] = selColor[3]
             }
             val faces = intArrayOf(
                 0, 3, 2, 0, 2, 1, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4,
