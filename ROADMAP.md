@@ -127,6 +127,26 @@ Render the probed bed-mesh grid as a heatmap GLB on the build plate. Today we'd 
 
 ## E. Architecture / scaling beyond MVP
 
+### E11. SceneCore Custom Meshes (DP4) 🔴 Not started
+
+> **Trigger to schedule:** Android XR SDK Developer Preview 4 or Beta release.
+
+**Why it matters:** Currently, OrcaXR writes temporary `.glb` files via `libslic3r` (`nativeWriteColoredGlb`, `writeColoredGlb`, `nativeConvertToStl`) to render plates, toolpaths, and colored painted models in SceneCore. This saturates Filament's bind queue (gotchas #11e and #22) and requires workarounds like `delay(250)`.
+**Implementation:** Evaluate `CustomMesh.BuilderFromMeshData` to pipe vertex and index data directly from the JNI into `ByteBufferRegion`s. If we can instantiate `MeshEntity.create(...)` directly from our slicer's layout data, we can bypass the disk I/O, `.glb` conversion overhead, and the Filament queue saturation issues.
+
+### E12. Native Compose `SpatialGltfModel` (DP4) 🔴 Not started
+
+> **Trigger to schedule:** Android XR SDK Developer Preview 4 or Beta release.
+
+**Why it matters:** We currently orchestrate `GltfModelEntity` lifecycles manually inside `LaunchedEffect` and `DisposableEffect`. This leads to crashes if cancelled synchronously (`NOT_FOUND: unknown material/node`, gotchas #9, #10, #13) requiring cascading `awaitFrame()` delays.
+**Implementation:** Evaluate migrating `GltfModelEntity` usages to Compose for XR's native `SpatialGltfModel`. If Jetpack XR manages the entity and Filament bindings correctly, we can drop our workaround logic. Consider also evaluating `GltfModelNode` to selectively apply material overrides (e.g., for painted components) without rebaking the entire GLB mesh (gotcha #11h).
+
+### E13. Jetpack XR Beta Migration 🔴 Not started
+
+> **Trigger to schedule:** Android XR SDK Beta release.
+
+**Implementation:** The core XR libraries (XR Runtime, Jetpack SceneCore, ARCore) are dropping legacy Guava and RxJava3 in favor of a Kotlin-first architecture. Bump alpha dependencies (`androidx.xr.*:1.0.0-alpha12/13`) to Beta, ensuring OrcaXR's imports align with the modern API surface.
+
 ### E1. Module split 🔴 Not started — ship when single-module pain bites
 
 > See GEMINI.md "Module layout" section for the aspirational split.

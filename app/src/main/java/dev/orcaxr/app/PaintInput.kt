@@ -96,8 +96,8 @@ class PaintInputHooks(
                 val effectiveOrigin = originOverride ?: event.origin
                 val (mO, mD) = worldRayToMeshMm(effectiveOrigin, event.direction, hit.transform)
                 val s = hit.transform.scale
-                val pT = hit.transform.pose.translation
-                val pR = hit.transform.pose.rotation
+                val pT = hit.transform.toPose().translation
+                val pR = hit.transform.toPose().rotation
                 android.util.Log.i(
                     LOG_TAG,
                     "diag stroke: action=${event.action} " +
@@ -190,7 +190,7 @@ class PaintInputHooks(
      * collapsed to sub-millimeter values for a 60 mm mesh, then later
      * the pose translation alone (interpreted as world meters) shifted
      * Y by ~65 m phantom. Empirical DOWN frame dump proved
-     * `transform.scale ≈ 666.67` AND `transform.pose.translation` is in
+     * `transform.scale ≈ 666.67` AND `transform.toPose().translation` is in
      * mesh-mm, not meters. See unit tests in `PaintInputMathTest` for
      * the canonical reference rays.
      */
@@ -224,13 +224,13 @@ class PaintInputHooks(
                 worldOrigin.y * s.y,
                 worldOrigin.z * s.z,
             )
-            val meshOrigin = transform.pose.transformPoint(scaledOrigin)
+            val meshOrigin = transform.toPose().transformPoint(scaledOrigin)
             val scaledDir = androidx.xr.runtime.math.Vector3(
                 worldDirection.x * s.x,
                 worldDirection.y * s.y,
                 worldDirection.z * s.z,
             )
-            val rotatedDir = transform.pose.transformVector(scaledDir)
+            val rotatedDir = transform.toPose().transformVector(scaledDir)
             return Vec3f(meshOrigin.x, meshOrigin.y, meshOrigin.z) to
                 Vec3f(rotatedDir.x, rotatedDir.y, rotatedDir.z)
         }

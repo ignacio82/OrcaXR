@@ -69,9 +69,9 @@ import kotlinx.coroutines.withContext
 import androidx.xr.runtime.Session
 import androidx.xr.runtime.SessionCreateSuccess
 
+import androidx.xr.scenecore.Entity
 import androidx.xr.scenecore.GltfModel
 import androidx.xr.scenecore.GltfModelEntity
-import androidx.xr.scenecore.GroupEntity
 import androidx.xr.scenecore.scene
 import java.io.File
 import java.util.zip.ZipFile
@@ -142,7 +142,7 @@ fun MovablePanelWrapper(
     val handleDepthMeters = 0.02f
     SceneCoreEntity(
         factory = {
-            val group = androidx.xr.scenecore.GroupEntity.create(session, "panel-$id")
+            val group = Entity.create(session, "panel-$id")
             val executor = androidx.core.content.ContextCompat.getMainExecutor(ctx)
             val listener = object : androidx.xr.scenecore.EntityMoveListener {
                 override fun onMoveUpdate(
@@ -5473,7 +5473,7 @@ private fun XrShell(
     // bound to that root.
     val rootEntity = remember(session) {
         runCatching {
-            val root = GroupEntity.create(session, "OrcaXR-root")
+            val root = Entity.create(session, "OrcaXR-root")
             // Push the entire UI shell back by 1.5 meters. 0.8 m put the
             // bed in the user's lap and made the panels feel oversized
             // because they were sitting right in front of the eyes; at
@@ -5507,7 +5507,7 @@ private fun XrShell(
             return@remember null
         }
         val res = runCatching {
-            val ws = GroupEntity.create(session, "OrcaXR-workspace")
+            val ws = Entity.create(session, "OrcaXR-workspace")
             ws.parent = rootEntity
             ws.setPose(
                 androidx.xr.runtime.math.Pose(
@@ -7920,10 +7920,12 @@ private fun XrShell(
 
     DisposableEffect(rootEntity, workspaceEntity) {
         onDispose {
-            // Dispose children first so SceneCore doesn't keep stale
+            // Detach children first so SceneCore doesn't keep stale
             // parent refs when we re-create on a new session.
-            workspaceEntity?.dispose()
-            rootEntity?.dispose()
+            // Entity.dispose() is deprecated in alpha15; parent = null
+            // detaches from the scene graph and lets GC reclaim.
+            workspaceEntity?.let { it.parent = null }
+            rootEntity?.let { it.parent = null }
         }
     }
 }
@@ -8016,7 +8018,9 @@ private suspend fun disposeEntityDeferred(ent: androidx.xr.scenecore.Entity?) {
     if (ent == null || ent.isDisposed) return
     kotlinx.coroutines.android.awaitFrame()
     kotlinx.coroutines.android.awaitFrame()
-    if (!ent.isDisposed) runCatching { ent.dispose() }
+    // Entity.dispose() is deprecated in alpha15; detach via parent = null
+    // and let GC reclaim. The isDisposed guard stays for safety.
+    if (!ent.isDisposed) runCatching { ent.parent = null }
 }
 
 /** Folds a gizmo drag's final delta into a [PlacedModel] on commit. */
@@ -8090,6 +8094,7 @@ private fun BuildPlateSceneEntity(
  * which we explicitly DON'T want here (the bbox sits a hair outside the
  * model and would steal hits otherwise).
  */
+@OptIn(androidx.xr.scenecore.ExperimentalCustomMeshApi::class)
 @Composable
 private fun SelectionBboxEntity(
     session: Session,
@@ -8102,75 +8107,102 @@ private fun SelectionBboxEntity(
     sizeYmm: Float,
     sizeZmm: Float,
 ) {
-    val ctx = LocalContext.current
-    var entity by remember { mutableStateOf<GltfModelEntity?>(null) }
+    var entity by remember { mutableStateOf<androidx.xr.scenecore.MeshEntity?>(null) }
 
     LaunchedEffect(modelId, sizeXmm, sizeYmm, sizeZmm, parentEntity) {
-        // Capture old entity for deferred dispose. Disposing
-        // synchronously here races split_engine_bridge with NOT_FOUND
-        // aborts ("unknown node" / "unknown material instance id")
-        // when the render thread still has queued ops on the old
-        // node — common during 3MF load because gotcha #22 fires
-        // two previewStl bakes within ms, and the bbox dims update
-        // fires a re-bbox bake right alongside the GLB swap.
         val oldEntity = entity
 
-        val dimsHash = java.util.Objects.hash(sizeXmm, sizeYmm, sizeZmm)
-        val out = File(ctx.cacheDir, "sel_bbox_${modelId}_${Integer.toHexString(dimsHash)}.glb")
-        if (!out.exists()) {
-            withContext(Dispatchers.IO) {
-                runCatching {
-                    writeBboxOutlineGlb(
-                        file = out,
-                        sizeXmm = sizeXmm,
-                        sizeYmm = sizeYmm,
-                        sizeZmm = sizeZmm,
-                    )
-                }.onFailure {
-                    android.util.Log.e("OrcaXR", "selection bbox write failed", it)
-                }
+        // Define vertex layout: position (buffer 0) and color (buffer 1).
+        val layout = androidx.xr.scenecore.VertexLayout(
+            listOf(
+                androidx.xr.scenecore.VertexAttributeDescriptor(
+                    androidx.xr.scenecore.VertexAttribute.POSITION,
+                    androidx.xr.scenecore.VertexAttributeType.FLOAT3,
+                    0
+                ),
+                androidx.xr.scenecore.VertexAttributeDescriptor(
+                    androidx.xr.scenecore.VertexAttribute.COLOR,
+                    androidx.xr.scenecore.VertexAttributeType.FLOAT3,
+                    1
+                )
+            )
+        )
+
+        // Selection bbox is a wireframe box composed of 12 edges, each rendered as
+        // a small 2mm tube-like box (8 vertices, 36 indices per edge).
+        // Total: 12 * 8 = 96 vertices, 12 * 36 = 432 indices.
+        val h = 1.0f // 1mm half-thickness
+        val xNeg = -sizeXmm / 2f; val xPos = sizeXmm / 2f
+        val yNeg = -sizeYmm / 2f; val yPos = sizeYmm / 2f
+        val zLo = 0f; val zHi = sizeZmm
+        val selColor = floatArrayOf(1.0f, 0.65f, 0.0f) // Orca Orange
+
+        val positions = FloatArray(96 * 3)
+        val colors = FloatArray(96 * 3)
+        val indices = IntArray(432)
+
+        var pi = 0; var ci = 0; var ii = 0; var baseId = 0
+
+        fun emitBox(xmin: Float, ymin: Float, zmin: Float, xmax: Float, ymax: Float, zmax: Float) {
+            val pts = floatArrayOf(
+                xmin, ymin, zmin, xmax, ymin, zmin, xmax, ymax, zmin, xmin, ymax, zmin,
+                xmin, ymin, zmax, xmax, ymin, zmax, xmax, ymax, zmax, xmin, ymax, zmax
+            )
+            for (v in 0 until 8) {
+                positions[pi++] = pts[v * 3]; positions[pi++] = pts[v * 3 + 1]; positions[pi++] = pts[v * 3 + 2]
+                colors[ci++] = selColor[0]; colors[ci++] = selColor[1]; colors[ci++] = selColor[2]
             }
-        }
-        if (!out.exists()) {
-            entity = null
-            disposeEntityDeferred(oldEntity)
-            return@LaunchedEffect
-        }
-
-        android.util.Log.i("OrcaXR", "SelectionBboxEntity loading ${out.name}")
-        val bytes = withContext(Dispatchers.IO) {
-            runCatching { out.readBytes() }.getOrNull()
-        }
-        if (bytes == null) {
-            entity = null
-            disposeEntityDeferred(oldEntity)
-            return@LaunchedEffect
+            val faces = intArrayOf(
+                0, 3, 2, 0, 2, 1, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4,
+                3, 7, 6, 3, 6, 2, 0, 4, 7, 0, 7, 3, 1, 2, 6, 1, 6, 5
+            )
+            for (idx in faces) indices[ii++] = baseId + idx
+            baseId += 8
         }
 
-        val uniqueName = "bbox_${modelId}_${System.currentTimeMillis().toString(36)}.glb"
-        val model = runCatching { GltfModel.create(session, bytes, uniqueName) }
-            .onFailure { android.util.Log.e("OrcaXR", "selection bbox GltfModel.create failed", it) }
-            .getOrNull()
-        if (model == null) {
-            entity = null
-            disposeEntityDeferred(oldEntity)
-            return@LaunchedEffect
+        // 4 vertical edges
+        for (xs in floatArrayOf(xNeg, xPos)) for (ys in floatArrayOf(yNeg, yPos)) {
+            emitBox(xs - h, ys - h, zLo - h, xs + h, ys + h, zHi + h)
+        }
+        // 4 X-axis edges
+        for (ys in floatArrayOf(yNeg, yPos)) for (zs in floatArrayOf(zLo, zHi)) {
+            emitBox(xNeg - h, ys - h, zs - h, xPos + h, ys + h, zs + h)
+        }
+        // 4 Y-axis edges
+        for (xs in floatArrayOf(xNeg, xPos)) for (zs in floatArrayOf(zLo, zHi)) {
+            emitBox(xs - h, yNeg - h, zs - h, xs + h, yPos + h, zs + h)
         }
 
-        val ent = GltfModelEntity.create(session, model)
+        val posBuf = java.nio.ByteBuffer.allocateDirect(positions.size * 4).order(java.nio.ByteOrder.nativeOrder())
+        posBuf.asFloatBuffer().put(positions).flip()
+        val colBuf = java.nio.ByteBuffer.allocateDirect(colors.size * 4).order(java.nio.ByteOrder.nativeOrder())
+        colBuf.asFloatBuffer().put(colors).flip()
+        val idxBuf = java.nio.ByteBuffer.allocateDirect(indices.size * 4).order(java.nio.ByteOrder.nativeOrder())
+        idxBuf.asIntBuffer().put(indices).flip()
+
+        val mesh = androidx.xr.scenecore.CustomMesh.FromMeshDataBuilder(session, layout)
+            .addVertexData(androidx.xr.scenecore.ByteBufferRegion(posBuf, 0, posBuf.capacity()))
+            .addVertexData(androidx.xr.scenecore.ByteBufferRegion(colBuf, 0, colBuf.capacity()))
+            .setIndexData(androidx.xr.scenecore.ByteBufferRegion(idxBuf, 0, idxBuf.capacity()))
+            .addSubset(androidx.xr.scenecore.MeshSubset(androidx.xr.scenecore.MeshSubsetTopology.TRIANGLES, 0, indices.size))
+            .build()
+
+        val material = androidx.xr.scenecore.KhronosUnlitMaterial.create(session, androidx.xr.scenecore.AlphaMode.OPAQUE)
+        material.setBaseColorFactor(androidx.xr.runtime.math.Vector4(1f, 1f, 1f, 1f)) // Vertex colors already have orange
+
+        val ent = androidx.xr.scenecore.MeshEntity.create(session, mesh, listOf(material))
         applyWorkspacePose(ent, parentEntity ?: session.scene.activitySpace)
-        // See GlbSceneEntity for the rationale — give the render
-        // thread time to bind this entity's material before
-        // downstream effects can pose-modify it.
+
+        // Give Filament a few frames to settle as usual.
         kotlinx.coroutines.android.awaitFrame()
         kotlinx.coroutines.android.awaitFrame()
         kotlinx.coroutines.android.awaitFrame()
+
         if (ent.isDisposed) {
             disposeEntityDeferred(oldEntity)
             return@LaunchedEffect
         }
         entity = ent
-        android.util.Log.i("OrcaXR", "SelectionBboxEntity attached ${out.name}")
         disposeEntityDeferred(oldEntity)
     }
 
@@ -8196,7 +8228,7 @@ private fun SelectionBboxEntity(
     // split_engine_bridge "unknown node id" race.
     DisposableEffect(Unit) {
         onDispose {
-            entity?.let { if (!it.isDisposed) runCatching { it.dispose() } }
+            entity?.let { if (!it.isDisposed) runCatching { it.parent = null } }
             entity = null
         }
     }
@@ -8453,7 +8485,11 @@ private fun GlbSceneEntity(
 
             val attached = ic != null && !ent.isDisposed && runCatching { ent.addComponent(ic!!) }.getOrDefault(false)
             if (attached) {
+                // Space.REAL_WORLD is deprecated in alpha15 (no direct
+                // replacement yet); suppress for diagnostic logging only.
+                @Suppress("DEPRECATION")
                 val pose = runCatching { ent.getPose(androidx.xr.scenecore.Space.REAL_WORLD) }.getOrNull()
+                @Suppress("DEPRECATION")
                 val scale = runCatching { ent.getScale(androidx.xr.scenecore.Space.REAL_WORLD) }.getOrNull()
                 val posStr = pose?.translation?.let {
                     "(%.3f,%.3f,%.3f)m".format(it.x, it.y, it.z)
@@ -8488,7 +8524,7 @@ private fun GlbSceneEntity(
     DisposableEffect(Unit) {
         onDispose {
             android.util.Log.i("OrcaXR", "GlbSceneEntity onDispose $glbPath (composition leave)")
-            entity?.let { if (!it.isDisposed) runCatching { it.dispose() } }
+            entity?.let { if (!it.isDisposed) runCatching { it.parent = null } }
             entity = null
         }
     }

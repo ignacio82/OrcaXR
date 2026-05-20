@@ -132,7 +132,7 @@ fun TransformGizmo(
 ) {
     if (tool == GizmoTool.Select) return
     val ctx = LocalContext.current
-    var rootEntity by remember { mutableStateOf<GroupEntity?>(null) }
+    var rootEntity by remember { mutableStateOf<Entity?>(null) }
 
     LaunchedEffect(selectedModel.id, selectedModel.baseBboxXmm, selectedModel.baseBboxYmm, selectedModel.baseBboxZmm) {
         android.util.Log.i("OrcaXR", "TransformGizmo for model ${selectedModel.id}: dims=[${selectedModel.baseBboxXmm}, ${selectedModel.baseBboxYmm}, ${selectedModel.baseBboxZmm}] scales=[${selectedModel.effectiveScaleX}, ${selectedModel.effectiveScaleY}, ${selectedModel.effectiveScaleZ}]")
@@ -141,12 +141,12 @@ fun TransformGizmo(
     // Single DisposableEffect for the root's lifecycle — see commit history
     // for why splitting create/dispose across two effects was racy.
     DisposableEffect(session, parentEntity) {
-        val root = GroupEntity.create(session, "OrcaXR-gizmoRoot")
+        val root = Entity.create(session, "OrcaXR-gizmoRoot")
         root.parent = parentEntity ?: session.scene.activitySpace
         rootEntity = root
         onDispose {
             rootEntity = null
-            if (!root.isDisposed) runCatching { root.dispose() }
+            if (!root.isDisposed) runCatching { root.parent = null }
         }
     }
 
@@ -356,12 +356,12 @@ fun GizmoDragHandle(
             // The handle's GltfModelEntity is parented to the gizmo's
             // GroupEntity; on activity destroy SceneCore cascade-disposes
             // children before the handle composables' onDispose runs.
-            // Without these guards removeComponent / dispose throw
+            // Without these guards removeComponent / detach throw
             // Entity$DisposedException, which aborts the activity teardown
             // and led to a process restart with empty placedModels.
             if (!ent.isDisposed) {
                 runCatching { ent.removeComponent(ic) }
-                runCatching { ent.dispose() }
+                runCatching { ent.parent = null }
             }
         }
     }
@@ -490,12 +490,12 @@ fun GizmoRotHandle(
             // The handle's GltfModelEntity is parented to the gizmo's
             // GroupEntity; on activity destroy SceneCore cascade-disposes
             // children before the handle composables' onDispose runs.
-            // Without these guards removeComponent / dispose throw
+            // Without these guards removeComponent / detach throw
             // Entity$DisposedException, which aborts the activity teardown
             // and led to a process restart with empty placedModels.
             if (!ent.isDisposed) {
                 runCatching { ent.removeComponent(ic) }
-                runCatching { ent.dispose() }
+                runCatching { ent.parent = null }
             }
         }
     }
@@ -617,12 +617,12 @@ fun GizmoScaleHandle(
             // The handle's GltfModelEntity is parented to the gizmo's
             // GroupEntity; on activity destroy SceneCore cascade-disposes
             // children before the handle composables' onDispose runs.
-            // Without these guards removeComponent / dispose throw
+            // Without these guards removeComponent / detach throw
             // Entity$DisposedException, which aborts the activity teardown
             // and led to a process restart with empty placedModels.
             if (!ent.isDisposed) {
                 runCatching { ent.removeComponent(ic) }
-                runCatching { ent.dispose() }
+                runCatching { ent.parent = null }
             }
         }
     }

@@ -764,7 +764,7 @@ object ToolpathGlb {
             // Back cap (start, looking along −t):  0,2,1 / 0,3,2
             // Front cap (end, looking along +t):   4,5,6 / 4,6,7
             // -side face (v0,v3,v7,v4):            0,4,7 / 0,7,3   — wait, careful with winding
-            // Use the same convention as `writeBboxOutlineGlb` where
+            // Use the same convention as the refactored `SelectionBboxEntity` where
             // (xmin,ymin,zmin)=v0 etc. Adapted:
             val faces = intArrayOf(
                 // back cap (start) — points along −t

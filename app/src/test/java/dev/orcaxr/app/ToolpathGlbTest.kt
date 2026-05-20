@@ -80,7 +80,7 @@ class ToolpathGlbTest {
         // Mode 4 = TRIANGLES.
         assertTrue("mode=4 (TRIANGLES)", json.contains(""""mode":4"""))
         // doubleSided so the inside of the tube renders even at
-        // sharp viewing angles — same trick as writeBboxOutlineGlb.
+        // sharp viewing angles — same trick as SelectionBboxEntity.
         assertTrue("doubleSided is set", json.contains(""""doubleSided":true"""))
         val counts = Regex(""""count":(\d+)""").findAll(json).map { it.groupValues[1].toInt() }.toList()
         assertEquals(listOf(16, 16, 72), counts)

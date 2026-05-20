@@ -65,9 +65,9 @@ engine (`libslic3r`) as the computational core.
 
 | Layer | Choice |
 |---|---|
-| UI | Jetpack Compose + `androidx.xr.compose:1.0.0-alpha12` |
-| 3D | `androidx.xr.scenecore:1.0.0-alpha13` (`GltfModelEntity` for build plate / model preview / toolpath) |
-| Session | `androidx.xr.runtime:1.0.0-alpha12` |
+| UI | Jetpack Compose + `androidx.xr.compose:1.0.0-alpha14` |
+| 3D | `androidx.xr.scenecore:1.0.0-alpha15` (`GltfModelEntity` for build plate / model preview / toolpath; `MeshEntity` + `CustomMesh` for selection bbox) |
+| Session | `androidx.xr.runtime:1.0.0-alpha15` |
 | Material | `androidx.xr.compose.material3:1.0.0-alpha16` |
 | Theme | `dev.orcaxr.app.ui.OrcaXrTheme` — palette + typography + LocalContentColor wrapper. All MaterialTheme calls live there; the activity wraps `setContent { OrcaXrTheme { … } }`. Fonts (Instrument Sans, Space Grotesk, JetBrains Mono) are downloadable via `androidx.compose.ui:ui-text-google-fonts`; cert hashes in `res/values/font_certs.xml`. |
 | DI | None yet (single-module Compose state). Hilt when we split modules. |
@@ -113,7 +113,7 @@ Coroutine failures in `rememberCoroutineScope().launch` blocks (e.g. the file-im
    - **Model Grab:** A 25×12.5×25 cm grab box (`OrcaXR-modelGrab`) is parented to the workspace and centered on the model. It drives the `modelOffsetXmm/Ymm` state.
    - **`MovableComponent.size` is in world meters, not entity-local units.** Matches the `MovablePanelWrapper` pattern (`mc.size = widthMeters` directly). Dividing by `WORLD_SCALE` because the entity has `setScale(WORLD_SCALE)` is the trap — the `size` is *not* multiplied by the entity transform.
 
-3. **`SpatialPanel` should be wrapped in `SceneCoreEntity(factory = { GroupEntity })`** when you need to add components (movable, anchor, etc).
+3. **`SpatialPanel` should be wrapped in `SceneCoreEntity(factory = { Entity })`** when you need to add components (movable, anchor, etc). (`GroupEntity.create` is deprecated in alpha15 — use `Entity.create` for content-less scene graph nodes.)
 
 4. **`MaterialTheme {}` with no `colorScheme` arg + missing `LocalContentColor` provider** can produce a content area that paints with `Color.Unspecified` against the SpatialPanel's transparent surface. Always pass an explicit `colorScheme` and provide `LocalContentColor` via `contentColorFor(MaterialTheme.colorScheme.background)`.
 
@@ -127,7 +127,14 @@ Coroutine failures in `rememberCoroutineScope().launch` blocks (e.g. the file-im
 
 9. **Compose coroutine cancellation on `AndroidUiDispatcher` is cooperative — non-suspending bodies still run after cancel.** A `LaunchedEffect { entity.setPose(...) }` whose Job has been cancelled (key changed, composition leaving) will still execute its body to completion if there's no suspension point, and `setPose` on an already-disposed `Entity` throws `Entity.DisposedException`. Guard with `if (ent.isDisposed) return@LaunchedEffect` before any SceneCore call inside a `LaunchedEffect`.
 
-10. **SceneCore parent dispose cascades to children before Compose `DisposableEffect.onDispose` runs.** When the activity tears down, disposing a `GroupEntity` synchronously disposes its child `GltfModelEntity`s, so each child's `onDispose { ent.removeComponent(ic); ent.dispose() }` then throws `Entity.DisposedException` and aborts `Activity.performDestroy()` — the next process bootstraps with empty state and looks like the user's work vanished. Wrap teardown in `if (!ent.isDisposed) runCatching { ... }`. Same applies to setPose racing with Filament's material binding on freshly-created entities: re-issuing `setScale(Vector3, Space.PARENT)` on every recomposition (vs once at create with the scalar overload) aborts the render thread with `split_engine_bridge: unknown material instance id`.
+10. **SceneCore parent detach cascades to children before Compose `DisposableEffect.onDispose` runs.** When the activity tears down, detaching a parent `Entity` (via `parent = null`) lets GC reclaim its child `GltfModelEntity`s, so each child's `onDispose { ent.removeComponent(ic); ent.parent = null }` then throws `Entity.DisposedException` and aborts `Activity.performDestroy()` — the next process bootstraps with empty state and looks like the user's work vanished. Wrap teardown in `if (!ent.isDisposed) runCatching { ... }`. Same applies to setPose racing with Filament's material binding on freshly-created entities: re-issuing `setScale(Vector3, Space.PARENT)` on every recomposition (vs once at create with the scalar overload) aborts the render thread with `split_engine_bridge: unknown material instance id`.
+
+    **Alpha15 deprecations applied (2026-05-20):**
+    - `GroupEntity.create(session, name)` → `Entity.create(session, name)` (GroupEntity is deprecated; Entity is the content-less scene graph node factory).
+    - `Entity.dispose()` → `entity.parent = null` (GC-based lifecycle; detach from scene graph instead of manual dispose).
+    - `Matrix4.pose` property → `Matrix4.toPose()` method (PaintInput.kt world→mesh-mm transform).
+    - `Space.REAL_WORLD` → suppressed with `@Suppress("DEPRECATION")` for diagnostic logging only (no direct replacement announced yet).
+    - `writeBboxOutlineGlb` deleted from GlbBuilder.kt — `SelectionBboxEntity` now uses `CustomMesh.FromMeshDataBuilder` + `MeshEntity` + `KhronosUnlitMaterial` for zero-disk-IO bbox rendering.
 
 11. **`InputEvent.Source` filters that hard-code `CONTROLLER` silently break on Galaxy XR.** Hand-pinch interactions arrive as `HANDS` (and may also be reported as `GAZE_AND_GESTURE` depending on gesture path); the device has no controller at all. Guards like `if (event.source != InputEvent.Source.CONTROLLER) return` will swallow every event and the user sees a perfectly-rendered gizmo / interactable that does nothing. Filter on `source != InputEvent.Source.UNKNOWN` (or just gate on `event.action`) instead. Bit any code path that takes `InputEvent` from `InteractableComponent`: gizmos, paint, selection. **Caveat (2026-05-02):** on the actual Galaxy XR retail device with hand-tracking active, hand pinches arrive labeled `Source.CONTROLLER ptr=RIGHT` rather than `HANDS` — the OpenXR runtime maps the hand-pinch action profile to the controller binding because no physical controller is paired. So the `!= CONTROLLER` filter is wrong on this device too, just for a different reason. The `!= UNKNOWN` filter is the right answer regardless of which source the runtime decides to label hand events with.
 
@@ -288,7 +295,9 @@ Each patch verified by incremental `cmake --build` (0 FAILED objects) + `./gradl
 
 30. **Instrumented (`androidTest`) tests run under Android Test Orchestrator, one process per test method.** `app/build.gradle.kts` declares `testInstrumentationRunnerArguments["clearPackageData"] = "true"` and `execution = "ANDROIDX_TEST_ORCHESTRATOR"` plus the `androidTestUtil("androidx.test:orchestrator")` artifact. Without orchestration, libslic3r's `Print` / `Model` / `Layer` C++ allocations leak from one test method into the next (the JNI shim doesn't reset state at method boundaries — it's a per-process lifecycle), and after 3-5 slicing tests the test process OOMs at the typical 256 MB Android cap. Roadmap E10 records the fix. Symptom that pins this: `RepairModelTest` passes alone, then `SliceMultiInstrumentedTest` immediately after dies with `std::bad_alloc` from inside `parallel_for` even though it succeeds in isolation. Don't disable Orchestrator to "speed up CI" — the per-test process model is load-bearing.
 
-1. **Pre-Bundle Requirement:** Before building a bundle for the Play Store, you MUST run `./gradlew versionCatalogUpdate` to check for library updates. If any updates are found, notify the user, commit the changes to `gradle/libs.versions.toml`, and advise the user to perform regression testing before final bundle generation.
+1. **Pre-Bundle Requirement:** Before building a bundle for the Play Store, you MUST:
+    - Run `./gradlew versionCatalogUpdate` to check for library updates. If any updates are found, notify the user, commit the changes to `gradle/libs.versions.toml`, and advise the user to perform regression testing before final bundle generation.
+    - Increment the `versionCode` in `app/build.gradle.kts`. Use the format `YYYYMMDDNN` (e.g., `2026051801` for the first build on May 18, 2026). Verify with the user if they've already uploaded a build for that day to avoid collisions.
 
 2. **Dependency Update Review:** `./gradlew versionCatalogUpdate` updates `gradle/libs.versions.toml`. Always review `git diff gradle/libs.versions.toml` before committing — XR / Compose / Media3 patch bumps occasionally break the build.
 
