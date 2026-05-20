@@ -8113,8 +8113,7 @@ private fun SelectionBboxEntity(
         val oldEntity = entity
 
         // Define vertex layout: position (buffer 0) and color (buffer 1).
-        // COLOR requires FLOAT4 (RGBA) in alpha15 — FLOAT3 throws
-        // IllegalArgumentException at VertexAttributeDescriptor init.
+        // COLOR requires UBYTE4_NORM in alpha15.
         val layout = androidx.xr.scenecore.VertexLayout(
             listOf(
                 androidx.xr.scenecore.VertexAttributeDescriptor(
@@ -8124,7 +8123,7 @@ private fun SelectionBboxEntity(
                 ),
                 androidx.xr.scenecore.VertexAttributeDescriptor(
                     androidx.xr.scenecore.VertexAttribute.COLOR,
-                    androidx.xr.scenecore.VertexAttributeType.FLOAT4,
+                    androidx.xr.scenecore.VertexAttributeType.UBYTE4_NORM,
                     1
                 )
             )
@@ -8140,7 +8139,7 @@ private fun SelectionBboxEntity(
         val selColor = floatArrayOf(1.0f, 0.65f, 0.0f, 1.0f) // Orca Orange, fully opaque
 
         val positions = FloatArray(96 * 3)
-        val colors = FloatArray(96 * 4)  // RGBA per vertex
+        val colors = ByteArray(96 * 4)  // RGBA per vertex (UBYTE4_NORM)
         val indices = IntArray(432)
 
         var pi = 0; var ci = 0; var ii = 0; var baseId = 0
@@ -8150,9 +8149,13 @@ private fun SelectionBboxEntity(
                 xmin, ymin, zmin, xmax, ymin, zmin, xmax, ymax, zmin, xmin, ymax, zmin,
                 xmin, ymin, zmax, xmax, ymin, zmax, xmax, ymax, zmax, xmin, ymax, zmax
             )
+            val rByte = (selColor[0] * 255f).toInt().toByte()
+            val gByte = (selColor[1] * 255f).toInt().toByte()
+            val bByte = (selColor[2] * 255f).toInt().toByte()
+            val aByte = (selColor[3] * 255f).toInt().toByte()
             for (v in 0 until 8) {
                 positions[pi++] = pts[v * 3]; positions[pi++] = pts[v * 3 + 1]; positions[pi++] = pts[v * 3 + 2]
-                colors[ci++] = selColor[0]; colors[ci++] = selColor[1]; colors[ci++] = selColor[2]; colors[ci++] = selColor[3]
+                colors[ci++] = rByte; colors[ci++] = gByte; colors[ci++] = bByte; colors[ci++] = aByte
             }
             val faces = intArrayOf(
                 0, 3, 2, 0, 2, 1, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4,
@@ -8177,8 +8180,8 @@ private fun SelectionBboxEntity(
 
         val posBuf = java.nio.ByteBuffer.allocateDirect(positions.size * 4).order(java.nio.ByteOrder.nativeOrder())
         posBuf.asFloatBuffer().put(positions).flip()
-        val colBuf = java.nio.ByteBuffer.allocateDirect(colors.size * 4).order(java.nio.ByteOrder.nativeOrder())
-        colBuf.asFloatBuffer().put(colors).flip()
+        val colBuf = java.nio.ByteBuffer.allocateDirect(colors.size).order(java.nio.ByteOrder.nativeOrder())
+        colBuf.put(colors).flip()
         val idxBuf = java.nio.ByteBuffer.allocateDirect(indices.size * 4).order(java.nio.ByteOrder.nativeOrder())
         idxBuf.asIntBuffer().put(indices).flip()
 
