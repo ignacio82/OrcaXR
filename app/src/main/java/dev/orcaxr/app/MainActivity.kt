@@ -1409,7 +1409,7 @@ private fun XrShell(
      */
     suspend fun deriveStlFor(file: File): File? {
         if (file.extension.equals("stl", ignoreCase = true)) {
-            // Probe-read with the binary-only Kotlin parser. If it
+            // Fast binary STL check using our light isBinary helper. If it
             // succeeds, the source is already binary STL and we can
             // hand it back unchanged (saves a libslic3r round-trip
             // on the common case). If it fails — e.g. the bundled
@@ -1419,7 +1419,7 @@ private fun XrShell(
             // `StlReader threw: STL triangle count looks corrupt`
             // in every consumer (previewStl, BVH builder, paint
             // BVH).
-            if (runCatching { StlReader.read(file) }.isSuccess) return file
+            if (StlReader.isBinary(file)) return file
         }
         val derived = File(ctx.cacheDir, "${file.nameWithoutExtension}_derived.stl")
         val ok = runCatching { SlicerEngine.convertToStl(file, derived) }.getOrDefault(false)
@@ -1776,8 +1776,12 @@ private fun XrShell(
             // nativeRead3mfObjectMetadata at load time are already
             // accurate and preserved.
             var dims: androidx.xr.runtime.math.Vector3? = null
-            runCatching {
-                val derived = deriveStlFor(bakeSource)
+            try {
+                // If it is a multi-object part, the single-object STL has already been
+                // extracted and sits in initial.source. We can use it directly to avoid
+                // a heavy, redundant full-mesh JNI merge of the entire 3MF container.
+                val derivedSource = if (bakeIndex >= 0) initial.source else bakeSource
+                val derived = deriveStlFor(derivedSource)
                 if (derived != null) {
                     val raw3mf = StlReader.read(derived)
                     if (bakeIndex < 0) {
@@ -1791,8 +1795,10 @@ private fun XrShell(
                     bedFit = computeBedFit(mesh3mf, bedW, bedH)
                     bedCollision = BedCollision.detect(mesh3mf, bedW, bedH, recenterToBed = true)
                 }
-            }.onFailure {
-                android.util.Log.w(tag, "3mf bedCollision compute failed: ${it.message}")
+            } catch (e: OutOfMemoryError) {
+                android.util.Log.e(tag, "OutOfMemoryError in 3mf preview processing. Skipping bedCollision / bedFit calculation.", e)
+            } catch (t: Throwable) {
+                android.util.Log.w(tag, "3mf bedCollision compute failed: ${t.message}")
             }
             sweepOldPreviews(out, modelId)
             // Version was already bumped at the top of previewStl so

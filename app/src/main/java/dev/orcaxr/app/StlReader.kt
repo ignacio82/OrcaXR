@@ -252,47 +252,121 @@ object StlReader {
     fun read(file: File): StlMesh = file.inputStream().use { read(it, file.length()) }
 
     fun read(input: InputStream, totalBytes: Long): StlMesh {
-        val all = input.readBytes()
-        require(all.size.toLong() == totalBytes || totalBytes < 0) {
-            "STL: expected $totalBytes bytes, got ${all.size}"
-        }
-        return parseBinary(all)
-    }
+        val bis = if (input is java.io.BufferedInputStream) input else java.io.BufferedInputStream(input)
 
-    private fun parseBinary(bytes: ByteArray): StlMesh {
-        require(bytes.size >= BINARY_HEADER_BYTES + 4) { "STL too short: ${bytes.size} bytes" }
-        val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
-        buf.position(BINARY_HEADER_BYTES)
-        val triCount = buf.int
+        // Read header
+        val header = ByteArray(BINARY_HEADER_BYTES)
+        var bytesRead = readFully(bis, header)
+        require(bytesRead == BINARY_HEADER_BYTES) { "STL too short: header incomplete" }
+
+        // Read triangle count
+        val countBytes = ByteArray(4)
+        bytesRead = readFully(bis, countBytes)
+        require(bytesRead == 4) { "STL too short: triangle count incomplete" }
+
+        val triCount = ByteBuffer.wrap(countBytes).order(ByteOrder.LITTLE_ENDIAN).int
         require(triCount in 0..50_000_000) { "STL triangle count looks corrupt: $triCount" }
 
-        val expectedSize = BINARY_HEADER_BYTES + 4 + triCount.toLong() * BINARY_TRIANGLE_BYTES
-        require(bytes.size.toLong() == expectedSize) {
-            "STL size mismatch: got ${bytes.size}, expected $expectedSize for $triCount tris " +
-                "(file may be ASCII STL; only binary is supported)"
+        if (totalBytes >= 0) {
+            val expectedSize = BINARY_HEADER_BYTES + 4 + triCount.toLong() * BINARY_TRIANGLE_BYTES
+            require(totalBytes == expectedSize) {
+                "STL size mismatch: got $totalBytes, expected $expectedSize for $triCount tris " +
+                        "(file may be ASCII STL; only binary is supported)"
+            }
         }
 
         val positions = FloatArray(triCount * 9)
         var minX = Float.POSITIVE_INFINITY; var minY = Float.POSITIVE_INFINITY; var minZ = Float.POSITIVE_INFINITY
         var maxX = Float.NEGATIVE_INFINITY; var maxY = Float.NEGATIVE_INFINITY; var maxZ = Float.NEGATIVE_INFINITY
+
+        // Read triangles in chunks to optimize throughput and memory
+        val batchTriangles = 4096 // approx 204 KB
+        val bufferSize = batchTriangles * BINARY_TRIANGLE_BYTES
+        val buffer = ByteArray(bufferSize)
+        val byteBuf = ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN)
+
         var p = 0
-        for (i in 0 until triCount) {
-            buf.position(BINARY_HEADER_BYTES + 4 + i * BINARY_TRIANGLE_BYTES + 12)  // skip normal
-            for (v in 0 until 3) {
-                val x = buf.float; val y = buf.float; val z = buf.float
-                positions[p++] = x; positions[p++] = y; positions[p++] = z
-                if (x < minX) minX = x; if (y < minY) minY = y; if (z < minZ) minZ = z
-                if (x > maxX) maxX = x; if (y > maxY) maxY = y; if (z > maxZ) maxZ = z
+        var trianglesRemaining = triCount
+        while (trianglesRemaining > 0) {
+            val toRead = kotlin.math.min(trianglesRemaining, batchTriangles)
+            val bytesToRead = toRead * BINARY_TRIANGLE_BYTES
+            val read = readFully(bis, buffer, 0, bytesToRead)
+            require(read == bytesToRead) {
+                "STL incomplete: expected to read $bytesToRead bytes, only got $read"
             }
+
+            byteBuf.position(0)
+            byteBuf.limit(bytesToRead)
+
+            for (i in 0 until toRead) {
+                // skip normal (12 bytes)
+                byteBuf.position(byteBuf.position() + 12)
+                for (v in 0 until 3) {
+                    val x = byteBuf.float
+                    val y = byteBuf.float
+                    val z = byteBuf.float
+                    positions[p++] = x
+                    positions[p++] = y
+                    positions[p++] = z
+                    if (x < minX) minX = x
+                    if (y < minY) minY = y
+                    if (z < minZ) minZ = z
+                    if (x > maxX) maxX = x
+                    if (y > maxY) maxY = y
+                    if (z > maxZ) maxZ = z
+                }
+                // skip attribute byte count (2 bytes)
+                byteBuf.position(byteBuf.position() + 2)
+            }
+            trianglesRemaining -= toRead
         }
+
         if (triCount == 0) {
             minX = 0f; minY = 0f; minZ = 0f; maxX = 0f; maxY = 0f; maxZ = 0f
         }
+
         return StlMesh(
             positions = positions,
             triCount = triCount,
             bboxMin = Vec3f(minX, minY, minZ),
             bboxMax = Vec3f(maxX, maxY, maxZ),
         )
+    }
+
+    fun readTriangleCount(file: File): Int {
+        if (file.length() < BINARY_HEADER_BYTES + 4) return 0
+        return try {
+            file.inputStream().use { input ->
+                val header = ByteArray(BINARY_HEADER_BYTES)
+                var read = 0
+                while (read < BINARY_HEADER_BYTES) {
+                    val r = input.read(header, read, BINARY_HEADER_BYTES - read)
+                    if (r == -1) return 0
+                    read += r
+                }
+                val countBytes = ByteArray(4)
+                if (input.read(countBytes) != 4) return 0
+                ByteBuffer.wrap(countBytes).order(ByteOrder.LITTLE_ENDIAN).int
+            }
+        } catch (t: Throwable) {
+            0
+        }
+    }
+
+    fun isBinary(file: File): Boolean {
+        val triCount = readTriangleCount(file)
+        if (triCount < 0 || triCount > 50_000_000) return false
+        val expectedSize = BINARY_HEADER_BYTES + 4 + triCount.toLong() * BINARY_TRIANGLE_BYTES
+        return file.length() == expectedSize
+    }
+
+    private fun readFully(input: InputStream, buffer: ByteArray, offset: Int = 0, length: Int = buffer.size): Int {
+        var totalRead = 0
+        while (totalRead < length) {
+            val read = input.read(buffer, offset + totalRead, length - totalRead)
+            if (read == -1) break
+            totalRead += read
+        }
+        return totalRead
     }
 }

@@ -448,7 +448,7 @@ private suspend fun deriveStl(
     source: File,
 ): File? {
     if (source.extension.equals("stl", ignoreCase = true)) {
-        if (runCatching { StlReader.read(source) }.isSuccess) return source
+        if (StlReader.isBinary(source)) return source
     }
     val derived = File(ctx.cacheDir, "${source.nameWithoutExtension}_derived.stl")
     val ok = runCatching { SlicerEngine.convertToStl(source, derived) }.getOrDefault(false)
