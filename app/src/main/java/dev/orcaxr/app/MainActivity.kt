@@ -8100,9 +8100,28 @@ private suspend fun disposeResourcesDeferred(resources: BboxResources?) {
     if (resources == null) return
     val ent = resources.entity
     if (ent.isDisposed) return
+    
+    // Wait two frames so that any pending rendering instructions complete
     kotlinx.coroutines.android.awaitFrame()
     kotlinx.coroutines.android.awaitFrame()
+    
+    // Detach from scene graph
     if (!ent.isDisposed) runCatching { ent.parent = null }
+    
+    // Extract assets to local variables so we keep them alive
+    val mesh = resources.mesh
+    val material = resources.material
+    val posBuf = resources.posBuf
+    val colBuf = resources.colBuf
+    val idxBuf = resources.idxBuf
+    
+    // Suspend for a generous window (5 seconds) to allow the GC to finalize
+    // the MeshEntity first, then reclaim these assets.
+    kotlinx.coroutines.delay(5000)
+    
+    // Ensure the JVM compiler doesn't optimize away these local variables.
+    val keepAlive = mesh.hashCode() xor material.hashCode() xor posBuf.hashCode() xor colBuf.hashCode() xor idxBuf.hashCode()
+    android.util.Log.d("OrcaXR/bbox", "SelectionBbox resources finalized safely. Hash: $keepAlive")
 }
 
 /**
@@ -8136,107 +8155,119 @@ private fun SelectionBboxEntity(
 
     LaunchedEffect(modelId, sizeXmm, sizeYmm, sizeZmm, parentEntity) {
         val oldResources = activeResources
-
-        // Define vertex layout: position (buffer 0) and color (buffer 1).
-        // COLOR requires UBYTE4_NORM in alpha15.
-        val layout = androidx.xr.scenecore.VertexLayout(
-            listOf(
-                androidx.xr.scenecore.VertexAttributeDescriptor(
-                    androidx.xr.scenecore.VertexAttribute.POSITION,
-                    androidx.xr.scenecore.VertexAttributeType.FLOAT3,
-                    0
-                ),
-                androidx.xr.scenecore.VertexAttributeDescriptor(
-                    androidx.xr.scenecore.VertexAttribute.COLOR,
-                    androidx.xr.scenecore.VertexAttributeType.UBYTE4_NORM,
-                    1
+        var newRes: BboxResources? = null
+        try {
+            // Define vertex layout: position (buffer 0) and color (buffer 1).
+            // COLOR requires UBYTE4_NORM in alpha15.
+            val layout = androidx.xr.scenecore.VertexLayout(
+                listOf(
+                    androidx.xr.scenecore.VertexAttributeDescriptor(
+                        androidx.xr.scenecore.VertexAttribute.POSITION,
+                        androidx.xr.scenecore.VertexAttributeType.FLOAT3,
+                        0
+                    ),
+                    androidx.xr.scenecore.VertexAttributeDescriptor(
+                        androidx.xr.scenecore.VertexAttribute.COLOR,
+                        androidx.xr.scenecore.VertexAttributeType.UBYTE4_NORM,
+                        1
+                    )
                 )
             )
-        )
 
-        // Selection bbox is a wireframe box composed of 12 edges, each rendered as
-        // a small 2mm tube-like box (8 vertices, 36 indices per edge).
-        // Total: 12 * 8 = 96 vertices, 12 * 36 = 432 indices.
-        val h = 1.0f // 1mm half-thickness
-        val xNeg = -sizeXmm / 2f; val xPos = sizeXmm / 2f
-        val yNeg = -sizeYmm / 2f; val yPos = sizeYmm / 2f
-        val zLo = 0f; val zHi = sizeZmm
-        val selColor = floatArrayOf(1.0f, 0.65f, 0.0f, 1.0f) // Orca Orange, fully opaque
+            // Selection bbox is a wireframe box composed of 12 edges, each rendered as
+            // a small 2mm tube-like box (8 vertices, 36 indices per edge).
+            // Total: 12 * 8 = 96 vertices, 12 * 36 = 432 indices.
+            val h = 1.0f // 1mm half-thickness
+            val xNeg = -sizeXmm / 2f; val xPos = sizeXmm / 2f
+            val yNeg = -sizeYmm / 2f; val yPos = sizeYmm / 2f
+            val zLo = 0f; val zHi = sizeZmm
+            val selColor = floatArrayOf(1.0f, 0.65f, 0.0f, 1.0f) // Orca Orange, fully opaque
 
-        val positions = FloatArray(96 * 3)
-        val colors = ByteArray(96 * 4)  // RGBA per vertex (UBYTE4_NORM)
-        val indices = IntArray(432)
+            val positions = FloatArray(96 * 3)
+            val colors = ByteArray(96 * 4)  // RGBA per vertex (UBYTE4_NORM)
+            val indices = IntArray(432)
 
-        var pi = 0; var ci = 0; var ii = 0; var baseId = 0
+            var pi = 0; var ci = 0; var ii = 0; var baseId = 0
 
-        fun emitBox(xmin: Float, ymin: Float, zmin: Float, xmax: Float, ymax: Float, zmax: Float) {
-            val pts = floatArrayOf(
-                xmin, ymin, zmin, xmax, ymin, zmin, xmax, ymax, zmin, xmin, ymax, zmin,
-                xmin, ymin, zmax, xmax, ymin, zmax, xmax, ymax, zmax, xmin, ymax, zmax
-            )
-            val rByte = (selColor[0] * 255f).toInt().toByte()
-            val gByte = (selColor[1] * 255f).toInt().toByte()
-            val bByte = (selColor[2] * 255f).toInt().toByte()
-            val aByte = (selColor[3] * 255f).toInt().toByte()
-            for (v in 0 until 8) {
-                positions[pi++] = pts[v * 3]; positions[pi++] = pts[v * 3 + 1]; positions[pi++] = pts[v * 3 + 2]
-                colors[ci++] = rByte; colors[ci++] = gByte; colors[ci++] = bByte; colors[ci++] = aByte
+            fun emitBox(xmin: Float, ymin: Float, zmin: Float, xmax: Float, ymax: Float, zmax: Float) {
+                val pts = floatArrayOf(
+                    xmin, ymin, zmin, xmax, ymin, zmin, xmax, ymax, zmin, xmin, ymax, zmin,
+                    xmin, ymin, zmax, xmax, ymin, zmax, xmax, ymax, zmax, xmin, ymax, zmax
+                )
+                val rByte = (selColor[0] * 255f).toInt().toByte()
+                val gByte = (selColor[1] * 255f).toInt().toByte()
+                val bByte = (selColor[2] * 255f).toInt().toByte()
+                val aByte = (selColor[3] * 255f).toInt().toByte()
+                for (v in 0 until 8) {
+                    positions[pi++] = pts[v * 3]; positions[pi++] = pts[v * 3 + 1]; positions[pi++] = pts[v * 3 + 2]
+                    colors[ci++] = rByte; colors[ci++] = gByte; colors[ci++] = bByte; colors[ci++] = aByte
+                }
+                val faces = intArrayOf(
+                    0, 3, 2, 0, 2, 1, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4,
+                    3, 7, 6, 3, 6, 2, 0, 4, 7, 0, 7, 3, 1, 2, 6, 1, 6, 5
+                )
+                for (idx in faces) indices[ii++] = baseId + idx
+                baseId += 8
             }
-            val faces = intArrayOf(
-                0, 3, 2, 0, 2, 1, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4,
-                3, 7, 6, 3, 6, 2, 0, 4, 7, 0, 7, 3, 1, 2, 6, 1, 6, 5
-            )
-            for (idx in faces) indices[ii++] = baseId + idx
-            baseId += 8
-        }
 
-        // 4 vertical edges
-        for (xs in floatArrayOf(xNeg, xPos)) for (ys in floatArrayOf(yNeg, yPos)) {
-            emitBox(xs - h, ys - h, zLo - h, xs + h, ys + h, zHi + h)
-        }
-        // 4 X-axis edges
-        for (ys in floatArrayOf(yNeg, yPos)) for (zs in floatArrayOf(zLo, zHi)) {
-            emitBox(xNeg - h, ys - h, zs - h, xPos + h, ys + h, zs + h)
-        }
-        // 4 Y-axis edges
-        for (xs in floatArrayOf(xNeg, xPos)) for (zs in floatArrayOf(zLo, zHi)) {
-            emitBox(xs - h, yNeg - h, zs - h, xs + h, yPos + h, zs + h)
-        }
+            // 4 vertical edges
+            for (xs in floatArrayOf(xNeg, xPos)) for (ys in floatArrayOf(yNeg, yPos)) {
+                emitBox(xs - h, ys - h, zLo - h, xs + h, ys + h, zHi + h)
+            }
+            // 4 X-axis edges
+            for (ys in floatArrayOf(yNeg, yPos)) for (zs in floatArrayOf(zLo, zHi)) {
+                emitBox(xNeg - h, ys - h, zs - h, xPos + h, ys + h, zs + h)
+            }
+            // 4 Y-axis edges
+            for (xs in floatArrayOf(xNeg, xPos)) for (zs in floatArrayOf(zLo, zHi)) {
+                emitBox(xs - h, yNeg - h, zs - h, xs + h, yPos + h, zs + h)
+            }
 
-        val posBuf = java.nio.ByteBuffer.allocateDirect(positions.size * 4).order(java.nio.ByteOrder.nativeOrder())
-        posBuf.asFloatBuffer().put(positions).flip()
-        val colBuf = java.nio.ByteBuffer.allocateDirect(colors.size).order(java.nio.ByteOrder.nativeOrder())
-        colBuf.put(colors).flip()
-        val idxBuf = java.nio.ByteBuffer.allocateDirect(indices.size * 4).order(java.nio.ByteOrder.nativeOrder())
-        idxBuf.asIntBuffer().put(indices).flip()
+            val posBuf = java.nio.ByteBuffer.allocateDirect(positions.size * 4).order(java.nio.ByteOrder.nativeOrder())
+            posBuf.asFloatBuffer().put(positions).flip()
+            val colBuf = java.nio.ByteBuffer.allocateDirect(colors.size).order(java.nio.ByteOrder.nativeOrder())
+            colBuf.put(colors).flip()
+            val idxBuf = java.nio.ByteBuffer.allocateDirect(indices.size * 4).order(java.nio.ByteOrder.nativeOrder())
+            idxBuf.asIntBuffer().put(indices).flip()
 
-        val mesh = androidx.xr.scenecore.CustomMesh.FromMeshDataBuilder(session, layout)
-            .addVertexData(androidx.xr.scenecore.ByteBufferRegion(posBuf, 0, posBuf.capacity()))
-            .addVertexData(androidx.xr.scenecore.ByteBufferRegion(colBuf, 0, colBuf.capacity()))
-            .setIndexData(androidx.xr.scenecore.ByteBufferRegion(idxBuf, 0, idxBuf.capacity()))
-            .addSubset(androidx.xr.scenecore.MeshSubset(androidx.xr.scenecore.MeshSubsetTopology.TRIANGLES, 0, indices.size))
-            .build()
+            val mesh = androidx.xr.scenecore.CustomMesh.FromMeshDataBuilder(session, layout)
+                .addVertexData(androidx.xr.scenecore.ByteBufferRegion(posBuf, 0, posBuf.capacity()))
+                .addVertexData(androidx.xr.scenecore.ByteBufferRegion(colBuf, 0, colBuf.capacity()))
+                .setIndexData(androidx.xr.scenecore.ByteBufferRegion(idxBuf, 0, idxBuf.capacity()))
+                .addSubset(androidx.xr.scenecore.MeshSubset(androidx.xr.scenecore.MeshSubsetTopology.TRIANGLES, 0, indices.size))
+                .build()
 
-        val material = androidx.xr.scenecore.KhronosUnlitMaterial.create(session, androidx.xr.scenecore.AlphaMode.OPAQUE)
-        material.setBaseColorFactor(androidx.xr.runtime.math.Vector4(1f, 1f, 1f, 1f)) // Vertex colors already have orange
+            val material = androidx.xr.scenecore.KhronosUnlitMaterial.create(session, androidx.xr.scenecore.AlphaMode.OPAQUE)
+            material.setBaseColorFactor(androidx.xr.runtime.math.Vector4(1f, 1f, 1f, 1f)) // Vertex colors already have orange
 
-        val ent = androidx.xr.scenecore.MeshEntity.create(session, mesh, listOf(material))
-        applyWorkspacePose(ent, parentEntity ?: session.scene.activitySpace)
+            val ent = androidx.xr.scenecore.MeshEntity.create(session, mesh, listOf(material))
+            applyWorkspacePose(ent, parentEntity ?: session.scene.activitySpace)
 
-        // Give Filament a few frames to settle as usual.
-        kotlinx.coroutines.android.awaitFrame()
-        kotlinx.coroutines.android.awaitFrame()
-        kotlinx.coroutines.android.awaitFrame()
+            newRes = BboxResources(ent, mesh, material, posBuf, colBuf, idxBuf)
 
-        if (ent.isDisposed) {
+            // Give Filament a few frames to settle as usual.
+            kotlinx.coroutines.android.awaitFrame()
+            kotlinx.coroutines.android.awaitFrame()
+            kotlinx.coroutines.android.awaitFrame()
+
+            if (ent.isDisposed) {
+                bboxCleanupScope.launch {
+                    disposeResourcesDeferred(oldResources)
+                }
+                return@LaunchedEffect
+            }
+            activeResources = newRes
             bboxCleanupScope.launch {
                 disposeResourcesDeferred(oldResources)
             }
-            return@LaunchedEffect
-        }
-        activeResources = BboxResources(ent, mesh, material, posBuf, colBuf, idxBuf)
-        bboxCleanupScope.launch {
-            disposeResourcesDeferred(oldResources)
+        } finally {
+            // If activeResources was NOT updated to newRes (meaning the coroutine was cancelled
+            // during awaitFrame or we exited early), we must dispose newRes immediately to avoid leak/crash.
+            if (activeResources != newRes && newRes != null) {
+                bboxCleanupScope.launch {
+                    disposeResourcesDeferred(newRes)
+                }
+            }
         }
     }
 
