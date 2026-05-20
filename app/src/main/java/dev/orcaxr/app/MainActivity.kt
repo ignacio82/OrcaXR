@@ -8081,6 +8081,30 @@ private fun BuildPlateSceneEntity(
     GlbSceneEntity(session, glbPath, parentEntity, onTap = onTap)
 }
 
+@OptIn(androidx.xr.scenecore.ExperimentalCustomMeshApi::class)
+private class BboxResources(
+    val entity: androidx.xr.scenecore.MeshEntity,
+    val mesh: androidx.xr.scenecore.CustomMesh,
+    val material: androidx.xr.scenecore.KhronosUnlitMaterial,
+    val posBuf: java.nio.ByteBuffer,
+    val colBuf: java.nio.ByteBuffer,
+    val idxBuf: java.nio.ByteBuffer,
+)
+
+private val bboxCleanupScope = kotlinx.coroutines.CoroutineScope(
+    kotlinx.coroutines.Dispatchers.Main.immediate + kotlinx.coroutines.SupervisorJob()
+)
+
+@OptIn(androidx.xr.scenecore.ExperimentalCustomMeshApi::class)
+private suspend fun disposeResourcesDeferred(resources: BboxResources?) {
+    if (resources == null) return
+    val ent = resources.entity
+    if (ent.isDisposed) return
+    kotlinx.coroutines.android.awaitFrame()
+    kotlinx.coroutines.android.awaitFrame()
+    if (!ent.isDisposed) runCatching { ent.parent = null }
+}
+
 /**
  * Phase XR_OBJ_1 selection feedback. Bakes a wireframe-bbox GLB sized
  * to the selected model's effective footprint and mounts it as a sibling
@@ -8107,10 +8131,11 @@ private fun SelectionBboxEntity(
     sizeYmm: Float,
     sizeZmm: Float,
 ) {
-    var entity by remember { mutableStateOf<androidx.xr.scenecore.MeshEntity?>(null) }
+    var activeResources by remember { mutableStateOf<BboxResources?>(null) }
+    val entity = activeResources?.entity
 
     LaunchedEffect(modelId, sizeXmm, sizeYmm, sizeZmm, parentEntity) {
-        val oldEntity = entity
+        val oldResources = activeResources
 
         // Define vertex layout: position (buffer 0) and color (buffer 1).
         // COLOR requires UBYTE4_NORM in alpha15.
@@ -8204,11 +8229,15 @@ private fun SelectionBboxEntity(
         kotlinx.coroutines.android.awaitFrame()
 
         if (ent.isDisposed) {
-            disposeEntityDeferred(oldEntity)
+            bboxCleanupScope.launch {
+                disposeResourcesDeferred(oldResources)
+            }
             return@LaunchedEffect
         }
-        entity = ent
-        disposeEntityDeferred(oldEntity)
+        activeResources = BboxResources(ent, mesh, material, posBuf, colBuf, idxBuf)
+        bboxCleanupScope.launch {
+            disposeResourcesDeferred(oldResources)
+        }
     }
 
     LaunchedEffect(entity, offsetXmm, offsetYmm, offsetZmm) {
@@ -8233,8 +8262,13 @@ private fun SelectionBboxEntity(
     // split_engine_bridge "unknown node id" race.
     DisposableEffect(Unit) {
         onDispose {
-            entity?.let { if (!it.isDisposed) runCatching { it.parent = null } }
-            entity = null
+            val res = activeResources
+            if (res != null) {
+                activeResources = null
+                bboxCleanupScope.launch {
+                    disposeResourcesDeferred(res)
+                }
+            }
         }
     }
 }
