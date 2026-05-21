@@ -67,8 +67,8 @@ engine (`libslic3r`) as the computational core.
 |---|---|
 | UI | Jetpack Compose + `androidx.xr.compose:1.0.0-alpha14` |
 | 3D | `androidx.xr.scenecore:1.0.0-alpha15` (`GltfModelEntity` for build plate / model preview / toolpath; `MeshEntity` + `CustomMesh` for selection bbox) |
-| Session | `androidx.xr.runtime:1.0.0-alpha15` |
-| Material | `androidx.xr.compose.material3:1.0.0-alpha16` |
+| Session | `androidx.xr.runtime:1.0.0-alpha14` |
+| Material | `androidx.xr.compose.material3:1.0.0-alpha17` |
 | Theme | `dev.orcaxr.app.ui.OrcaXrTheme` — palette + typography + LocalContentColor wrapper. All MaterialTheme calls live there; the activity wraps `setContent { OrcaXrTheme { … } }`. Fonts (Instrument Sans, Space Grotesk, JetBrains Mono) are downloadable via `androidx.compose.ui:ui-text-google-fonts`; cert hashes in `res/values/font_certs.xml`. |
 | DI | None yet (single-module Compose state). Hilt when we split modules. |
 | Persistence | DataStore Preferences for profiles/printers/filaments. No Room yet. |

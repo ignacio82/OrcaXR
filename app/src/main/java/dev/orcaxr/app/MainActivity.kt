@@ -8097,9 +8097,11 @@ private class BboxResources(
     val idxBuf: java.nio.ByteBuffer,
 )
 
-private val bboxCleanupScope = kotlinx.coroutines.CoroutineScope(
-    kotlinx.coroutines.Dispatchers.Main.immediate + kotlinx.coroutines.SupervisorJob()
-)
+private val bboxCleanupScope: kotlinx.coroutines.CoroutineScope by lazy {
+    kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.Dispatchers.Main.immediate + kotlinx.coroutines.SupervisorJob()
+    )
+}
 
 @OptIn(androidx.xr.scenecore.ExperimentalCustomMeshApi::class)
 private suspend fun disposeResourcesDeferred(resources: BboxResources?) {

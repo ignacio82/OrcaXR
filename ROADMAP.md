@@ -127,25 +127,37 @@ Render the probed bed-mesh grid as a heatmap GLB on the build plate. Today we'd 
 
 ## E. Architecture / scaling beyond MVP
 
-### E11. SceneCore Custom Meshes (DP4) 🔴 Not started
+### E11. SceneCore Custom Meshes (DP4) 🟡 Partial — selection bbox shipped; plate/toolpath/model direct mesh path pending
+
+> **Trigger:** Android XR SDK DP4 (2026-05-19) calls out experimental SceneCore Custom Meshes; OrcaXR already compiles against `androidx.xr.scenecore:1.0.0-alpha15`.
+
+Selection bbox already uses `CustomMesh.FromMeshDataBuilder` + `MeshEntity` safely (see GEMINI.md gotcha #10's strong-reference rules). The remaining opportunity is bigger: OrcaXR still writes temporary `.glb` files via `libslic3r` (`nativeWriteColoredGlb`, `writeColoredGlb`, `nativeConvertToStl`) for build plates, toolpaths, and painted-model previews. That disk-GLB path saturates Filament's bind queue (gotchas #11e and #22) and forces `awaitFrame()`/`delay(250)` workarounds.
+
+**Implementation:** add a JNI mesh-stream DTO for positions / indices / per-vertex colors, then prototype direct `MeshEntity.create(...)` for `BuildPlateGlb` first, `ToolpathGlb` second, colored model previews last. Keep `MeshEntity`, `CustomMesh`, material, and direct `ByteBuffer`s strongly referenced for the entity lifetime.
+
+**Exit criteria:** build plate and one toolpath preview render without temp GLB files; no `split_engine_bridge` material/node errors over 20 repeated load/slice/clear cycles on Galaxy XR.
+
+### E12. Native Compose `SpatialGltfModel` + `GltfModelNode` (DP4) 🔴 Not started
 
 > **Trigger to schedule:** Android XR SDK Developer Preview 4 or Beta release.
 
-**Why it matters:** Currently, OrcaXR writes temporary `.glb` files via `libslic3r` (`nativeWriteColoredGlb`, `writeColoredGlb`, `nativeConvertToStl`) to render plates, toolpaths, and colored painted models in SceneCore. This saturates Filament's bind queue (gotchas #11e and #22) and requires workarounds like `delay(250)`.
-**Implementation:** Evaluate `CustomMesh.BuilderFromMeshData` to pipe vertex and index data directly from the JNI into `ByteBufferRegion`s. If we can instantiate `MeshEntity.create(...)` directly from our slicer's layout data, we can bypass the disk I/O, `.glb` conversion overhead, and the Filament queue saturation issues.
+**Why it matters:** DP4 adds native glTF support in Compose for XR plus SceneCore node access / node material overrides. OrcaXR currently orchestrates `GltfModelEntity` lifecycles manually inside `LaunchedEffect` and `DisposableEffect`, which is why gotchas #9, #10, #13, and #11e exist.
 
-### E12. Native Compose `SpatialGltfModel` (DP4) 🔴 Not started
+**Implementation:** create an isolated prototype that loads a generated model via `SpatialGltfModel`, moves it, swaps it, and tears it down 50 times. If lifecycle safety is better than our manual entity wrapper, migrate `GlbSceneEntity` and `TransformGizmo` handles. Separately test `GltfModelNode` material override as a possible paint-preview path that avoids rebaking an entire GLB when only colors change (gotcha #11h).
 
-> **Trigger to schedule:** Android XR SDK Developer Preview 4 or Beta release.
+### E13. Jetpack XR Beta migration 🔴 Not started
 
-**Why it matters:** We currently orchestrate `GltfModelEntity` lifecycles manually inside `LaunchedEffect` and `DisposableEffect`. This leads to crashes if cancelled synchronously (`NOT_FOUND: unknown material/node`, gotchas #9, #10, #13) requiring cascading `awaitFrame()` delays.
-**Implementation:** Evaluate migrating `GltfModelEntity` usages to Compose for XR's native `SpatialGltfModel`. If Jetpack XR manages the entity and Filament bindings correctly, we can drop our workaround logic. Consider also evaluating `GltfModelNode` to selectively apply material overrides (e.g., for painted components) without rebaking the entire GLB mesh (gotcha #11h).
+> **Trigger:** Google says XR Runtime, SceneCore, and ARCore for Jetpack XR are moving to Beta soon; do not assume current alpha workarounds survive unchanged.
 
-### E13. Jetpack XR Beta Migration 🔴 Not started
+**Current DP4 alignment (2026-05-21):** `compose=1.0.0-alpha14`, `scenecore=1.0.0-alpha15`, `runtime=1.0.0-alpha14` (Google Maven's atomic group resolves runtime alpha15 requests down to alpha14), `compose.material3=1.0.0-alpha17`, AGP `9.2.1` satisfies Compose XR alpha14's API-37 / AGP-9.2 floor.
 
-> **Trigger to schedule:** Android XR SDK Beta release.
+**Implementation:** when Beta lands, bump the XR dependency set together, remove Guava/RxJava-era imports if any remain, re-run all SceneCore lifecycle probes from GEMINI.md gotchas #9/#10/#13, and re-check `CustomMesh` COLOR attribute / strong-reference behavior.
 
-**Implementation:** The core XR libraries (XR Runtime, Jetpack SceneCore, ARCore) are dropping legacy Guava and RxJava3 in favor of a Kotlin-first architecture. Bump alpha dependencies (`androidx.xr.*:1.0.0-alpha12/13`) to Beta, ensuring OrcaXR's imports align with the modern API surface.
+### E14. Display/audio glasses companion surface (DP4 Projected + Glimmer) ⚪ Deferred — not a full slicer form factor
+
+DP4 renames the glasses form factors to audio glasses and display glasses and adds Projected device-availability / testing APIs plus Glimmer UI components. OrcaXR's full slicer remains headset-first; glasses are plausible for a lightweight companion only: print status, alerts, voice commands, and maybe "approve/cancel print" while the heavy spatial editor stays on Galaxy XR.
+
+**Trigger to schedule:** actual display-glasses hardware in hand (or Android XR Developer Catalyst access) plus a user ask for monitoring away from the headset. Do not port the XR slicer UI to Glimmer speculatively.
 
 ### E1. Module split 🔴 Not started — ship when single-module pain bites
 
@@ -319,7 +331,7 @@ The override doesn't actually apply to the slice (layer-height keys are excluded
 
 Attempted in this audit sweep — `proguard-rules.pro` is ready (narrow keeps for native methods, `SlicerEngine` nested classes, androidx.xr alpha13). Hit an upstream blocker: Kotlin 2.3.21's Compose compiler (2.2.10) tries to download `org.jetbrains.kotlin:compose-group-mapping:2.2.10` to feed R8 a Compose-aware optimization hint; that artifact isn't published on dl.google.com or maven central as of 2026-05-07, so `produceReleaseComposeMapping` fails before R8 even runs. Two workarounds tried (late `tasks.matching {}.disable`, clearing the configuration's dependencies in `afterEvaluate`) both fire too late — the configuration cache fails at evaluation time. Real fix: wait for upstream artifact OR pin Compose compiler to 2.0.x. The `proguard-rules.pro` keep file is committed and ready to wire in once the blocker resolves; the inline comment in `app/build.gradle.kts` records the trace so a future contributor doesn't re-tread.
 
-### H14. IMPORTANT — `MainActivity.kt` is 9 478 lines and contains the entire XR shell + paint dispatch + slice coordinator + crash UI 🔴
+### H14. IMPORTANT — `MainActivity.kt` is 10 213 lines and contains the entire XR shell + paint dispatch + slice coordinator + crash UI 🔴
 
 Not a bug today, but a sustained risk: the stale-closure trap inside `BindWorkspaceModel` (per GEMINI.md) is exactly the kind of bug that hides in a 10 K-line file. Carve out `XrPaintCoordinator`, `XrSliceCoordinator`, and `XrCrashSurface` as the next refactor. Pre-condition for E1 (module split) becoming worthwhile.
 
@@ -375,9 +387,59 @@ The "// SLAB — cube for now" comment misled the audit. A SLAB is intentionally
 
 Render tokens, Anthropic key, Moonraker key, MCP bearer all have different storage/exposure characteristics. One unified `Capability` interface (Keystore-backed, with a documented threat model in GEMINI.md) would tighten H2/H3/H7 in one go.
 
-### H27. NICE-TO-HAVE — No `HttpFramingTest` 🔴
+### H27. NICE-TO-HAVE — No `HttpFramingTest` 🟢 SHIPPED
 
-Only tested incidentally via `McpServerEndToEndTest`. Add direct round-trip + malformed-input cases (negative Content-Length, oversized body, header injection, CRLF in name). Pairs with H5 + H6.
+Superseded by H5/H6: `HttpFramingTest` now directly covers malformed input and header-injection cases.
+
+## I. Audit follow-ups (2026-05-21 codebase + Android XR DP4 audit)
+
+Fresh audit findings after reading the DP4 announcement, checking Google Maven metadata, running `./gradlew :app:testDebugUnitTest`, and inspecting high-risk storage / paint / FullSpectrum paths.
+
+### I0. CRITICAL — Host-JVM tests crashed on `MainActivityKt` static init 🟢 SHIPPED
+
+> **File:** `app/src/main/java/dev/orcaxr/app/MainActivity.kt::bboxCleanupScope`.
+
+`bboxCleanupScope` used to be a top-level `CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())`. Any JVM test touching `MainActivityKt` initialized Android's Main dispatcher before a test dispatcher existed, causing 46 cascading `NoClassDefFoundError` / `TestMainDispatcherJvm` failures. Fixed by making the scope lazy so Main is only touched when the selection-bbox cleanup path actually runs on device.
+
+**Verification:** targeted `FilamentMapTest` + `PreviewPaletteTest` dropped from 48 failures to only the two real `PreviewPaletteTest` failures below.
+
+### I1. CRITICAL — FullSpectrum virtual-row indices drift between UI, preview, and slicing 🔴
+
+> **Files:** `UiPanels.kt::MappingPopup`, `PreviewPalette.kt::resolveAsWillPrintPalette`, `MainActivity.kt::paddedVirtualRemap`, `MixedFilamentStore.kt::serializeMixedFilamentDefinitions`.
+
+The UI maps virtual rows through the visible list (`!deleted && enabled`) and persists `virtualSlot = visibleIndex + 1`, but the preview / slice paths index the raw serialized row list because libslic3r's `MixedFilamentManager` uses direct vector indices. That mismatch is now pinned by two failing unit tests: `PreviewPaletteTest.missingVirtualRowSurfacesNeutral` and `PreviewPaletteTest.deletedOrDisabledVirtualRowsAreSkipped`.
+
+**Implementation:** choose one canonical meaning for `FilamentEntry.virtualSlot` and make every surface honor it. Best candidate: persist raw 1-based mixed-row index, but present compact visible labels in the UI by translating visible row → raw index on click; when a row is deleted/disabled, sweep or relabel affected mappings deterministically. Then update `PreviewPaletteTest`, `MixedFilamentWireFormatTest`, `GamutMatcher.applyGamutMatches`, MCP filament tools, and the slice-time `paddedVirtualRemap` path together.
+
+**Exit criteria:** full JVM suite green; mapping to the first visible row after a tombstoned row previews the same blend that G-code resolves; removing a row cannot silently retarget a project filament to a different mix.
+
+### I2. IMPORTANT — Settings backup V1 is not a faithful cross-device restore 🔴
+
+> **Files:** `SettingsBackup.kt`, `SecretBox.kt`, `LlmSettings.kt`, `McpSettings.kt`.
+
+Two independent issues: `mode="replace"` does not clear DataStore files absent from the envelope (`SettingsBackup.kt` skips missing entries), so older exports leave newer stores stale; and Keystore-encrypted LLM / MCP API keys are exported as raw DataStore ciphertext. On a different device, `SecretBox.decrypt()` fails and `LlmSettings` / `McpSettings` treat the ciphertext as legacy plaintext, so API calls use a base64 blob instead of prompting the user to re-enter the key.
+
+**Implementation:** introduce SettingsBackup V2 with structured secret handling: either exclude account secrets by default with `"requires_reentry"` markers, or export them only through an explicit passphrase-wrapped portable secret bundle. Make replace mode clear every known store even when the envelope lacks that store. Add max decoded blob sizes before `Base64.decode`.
+
+**Exit criteria:** import a V1 and V2 bundle on a fresh device; missing stores are cleared in replace mode; cloud-provider keys show "re-enter required" instead of becoming bogus configured keys; oversized DataStore blobs are rejected without writing.
+
+### I3. IMPORTANT — Smart Paint image import can read unbounded payloads into heap 🔴
+
+> **Files:** `SmartPaintDialog.kt`, `mobile/screens/SmartPaintScreen.kt`.
+
+Both Smart Paint image pickers call `openInputStream(uri).readBytes()` directly. A huge or malicious `content://` image can OOM the process, bypassing the bounded staging path already built for share intents in `SharedIntentHandler`.
+
+**Implementation:** add a bounded image-staging helper with a smaller cap than model files (for example 32 MB), MIME sniffing / decode validation, and a timeout. Reuse it from XR and mobile Smart Paint surfaces, then pass base64 from the staged bytes. Log and toast the rejection reason.
+
+**Exit criteria:** unit/instrumented tests cover just-under-cap, over-cap, blocking provider, corrupt image, and normal PNG/JPEG; neither UI uses raw `readBytes()` on a user-controlled stream.
+
+### I4. IMPORTANT — DP4 feature adoption needs device-level probes, not blind migration 🔴
+
+DP4's `SpatialGltfModel`, `GltfModelNode`, Custom Meshes, and Material3 movable modifiers are directly relevant to OrcaXR's largest crash class, but they touch the same SceneCore lifecycle edge cases documented in GEMINI.md. Treat them as experiments with explicit stress tests before broad migration.
+
+**Implementation:** add a small `androidTest` probe suite for: repeated `SpatialGltfModel` load/swap/dispose, `GltfModelNode` material override under paint rebakes, `CustomMesh` large colored model lifetime, and Material3 alpha17 movable modifier behavior on `SpatialPanel`.
+
+**Exit criteria:** probes run green on Galaxy XR for 20 cycles each and either unblock E11/E12 migration or document a new gotcha in GEMINI.md.
 
 ---
 
