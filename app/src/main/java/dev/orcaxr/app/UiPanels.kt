@@ -7632,3 +7632,192 @@ private fun EmbossSlider(
         }
     }
 }
+
+@Composable
+fun ProjectAndSettingsPanel(
+    // LeftProjectPanel args
+    sliceState: SliceUiState,
+    bedFit: BedFit?,
+    bedCollision: BedCollision.Result? = null,
+    printers: List<PrinterConfig>,
+    selectedPrinterId: String?,
+    onSelectPrinter: (String?) -> Unit,
+    onOpenDevices: () -> Unit,
+    onPickStl: () -> Unit,
+    onClearModel: () -> Unit,
+    isLoadingModel: Boolean = false,
+    loadingLabel: String? = null,
+    filaments: List<FilamentEntry>,
+    slotCount: Int,
+    paletteSuggestions: List<String>,
+    printerLoadedSlots: List<FilamentSlot> = emptyList(),
+    onChangeFilamentColor: (slotIndex: Int, hex: String) -> Unit,
+    onMapToPhysicalSlot: (slotIndex: Int, physicalSlot: Int) -> Unit,
+    onMapToVirtualSlot: (slotIndex: Int, virtualSlot: Int) -> Unit,
+    onClearMapping: (slotIndex: Int) -> Unit,
+    onChangeFilamentType: (slotIndex: Int, type: String) -> Unit,
+    onDetectFilaments: (() -> Unit)? = null,
+    filamentTypes: List<String>,
+    onSyncFromPrinter: (() -> Unit)? = null,
+    virtualRows: List<MixedFilamentEntry> = emptyList(),
+    onUpdateVirtualRow: (MixedFilamentEntry) -> Unit = {},
+    onAddVirtualRow: (MixedFilamentEntry) -> Unit = {},
+    onRemoveVirtualRow: (MixedFilamentEntry) -> Unit = {},
+    allPlates: List<PlateMetadata> = listOf(PlateMetadata(1, "Plate 1")),
+    onMoveToPlate: (String, Int) -> Unit = { _, _ -> },
+    filamentRuleResult: FilamentRules.Result = FilamentRules.Result.Ok,
+    topCoverHint: TopCoverRule.Result = TopCoverRule.Result.Ok,
+    placedModels: List<PlacedModel> = emptyList(),
+    selectedPlacedModelIds: Set<String> = emptySet(),
+    onSelectPlacedModels: (ids: Set<String>) -> Unit = {},
+    onDeletePlacedModels: (ids: Set<String>) -> Unit = {},
+    onAddPlacedModel: () -> Unit = {},
+    onAutoArrangePlacedModels: () -> Unit = {},
+    onRepairPlacedModel: (id: String) -> Unit = {},
+    onEmbossPlacedModel: (id: String) -> Unit = {},
+    onAddMagnetsPlacedModel: (id: String) -> Unit = {},
+    onApplyGamutMatches: ((List<GamutMatcher.GamutMatch>) -> Unit)? = null,
+
+    // RightSettingsPanel args
+    allProfiles: List<SlicerProfile>,
+    selectedProfile: SlicerProfile,
+    onProfileSelect: (SlicerProfile) -> Unit,
+    onSaveAsProfile: (String) -> Unit,
+    onDeleteProfile: (String) -> Unit,
+    layerHeightOverride: String,
+    onLayerHeightChange: (String) -> Unit,
+    printSettingsOverrides: Map<String, String> = emptyMap(),
+    onPrintSettingChange: (key: String, value: String) -> Unit = { _, _ -> },
+    loadedLayerHeightHintMm: Float? = null,
+    bambuImport: dev.orcaxr.app.bambu.BambuImportTranslator.Result? = null,
+    onDismissBambuImport: () -> Unit = {},
+    onApplyBambuFilamentSuggestion: () -> Unit = {}
+) {
+    var activeTab by remember { mutableStateOf(0) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF15181B))
+    ) {
+        TabRow(
+            selectedTabIndex = activeTab,
+            containerColor = Color(0xFF1B1F23),
+            contentColor = Color(0xFF7BC8FF)
+        ) {
+            Tab(
+                selected = activeTab == 0,
+                onClick = { activeTab = 0 },
+                text = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Folder,
+                            contentDescription = null,
+                            tint = if (activeTab == 0) Color(0xFF7BC8FF) else Color.Gray,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Project",
+                            fontWeight = FontWeight.Bold,
+                            color = if (activeTab == 0) Color(0xFF7BC8FF) else Color.Gray
+                        )
+                    }
+                }
+            )
+            Tab(
+                selected = activeTab == 1,
+                onClick = { activeTab = 1 },
+                text = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = null,
+                            tint = if (activeTab == 1) Color(0xFF7BC8FF) else Color.Gray,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Print Settings",
+                            fontWeight = FontWeight.Bold,
+                            color = if (activeTab == 1) Color(0xFF7BC8FF) else Color.Gray
+                        )
+                    }
+                }
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
+            if (activeTab == 0) {
+                LeftProjectPanel(
+                    sliceState = sliceState,
+                    bedFit = bedFit,
+                    bedCollision = bedCollision,
+                    printers = printers,
+                    selectedPrinterId = selectedPrinterId,
+                    onSelectPrinter = onSelectPrinter,
+                    onOpenDevices = onOpenDevices,
+                    onPickStl = onPickStl,
+                    onClearModel = onClearModel,
+                    isLoadingModel = isLoadingModel,
+                    loadingLabel = loadingLabel,
+                    filaments = filaments,
+                    slotCount = slotCount,
+                    paletteSuggestions = paletteSuggestions,
+                    printerLoadedSlots = printerLoadedSlots,
+                    onChangeFilamentColor = onChangeFilamentColor,
+                    onMapToPhysicalSlot = onMapToPhysicalSlot,
+                    onMapToVirtualSlot = onMapToVirtualSlot,
+                    onClearMapping = onClearMapping,
+                    onChangeFilamentType = onChangeFilamentType,
+                    onDetectFilaments = onDetectFilaments,
+                    filamentTypes = filamentTypes,
+                    onSyncFromPrinter = onSyncFromPrinter,
+                    virtualRows = virtualRows,
+                    onUpdateVirtualRow = onUpdateVirtualRow,
+                    onAddVirtualRow = onAddVirtualRow,
+                    onRemoveVirtualRow = onRemoveVirtualRow,
+                    allPlates = allPlates,
+                    onMoveToPlate = onMoveToPlate,
+                    filamentRuleResult = filamentRuleResult,
+                    topCoverHint = topCoverHint,
+                    placedModels = placedModels,
+                    selectedPlacedModelIds = selectedPlacedModelIds,
+                    onSelectPlacedModels = onSelectPlacedModels,
+                    onDeletePlacedModels = onDeletePlacedModels,
+                    onAddPlacedModel = onAddPlacedModel,
+                    onAutoArrangePlacedModels = onAutoArrangePlacedModels,
+                    onRepairPlacedModel = onRepairPlacedModel,
+                    onEmbossPlacedModel = onEmbossPlacedModel,
+                    onAddMagnetsPlacedModel = onAddMagnetsPlacedModel,
+                    onApplyGamutMatches = onApplyGamutMatches
+                )
+            } else {
+                RightSettingsPanel(
+                    allProfiles = allProfiles,
+                    selectedProfile = selectedProfile,
+                    onProfileSelect = onProfileSelect,
+                    onSaveAsProfile = onSaveAsProfile,
+                    onDeleteProfile = onDeleteProfile,
+                    layerHeightOverride = layerHeightOverride,
+                    onLayerHeightChange = onLayerHeightChange,
+                    printSettingsOverrides = printSettingsOverrides,
+                    onPrintSettingChange = onPrintSettingChange,
+                    loadedLayerHeightHintMm = loadedLayerHeightHintMm,
+                    bambuImport = bambuImport,
+                    onDismissBambuImport = onDismissBambuImport,
+                    onApplyBambuFilamentSuggestion = onApplyBambuFilamentSuggestion
+                )
+            }
+        }
+    }
+}
+

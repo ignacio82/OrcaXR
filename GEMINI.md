@@ -519,7 +519,7 @@ profiles that don't match the active printer + project filaments:
   material filter (we don't strand the user when they're running
   a multi-material print).
 
-Both the XR `RightSettingsPanel` and the phone `SlicerScreen`
+Both the XR `ProjectAndSettingsPanel` (Settings tab) and the phone `SlicerScreen`
 call `filterForContext` with all three args. User-saved profiles
 (`machineName == filamentName == null`) always pass — we don't
 second-guess the user's own picks. If filtering would empty the
@@ -547,8 +547,8 @@ instead of the public Downloads/ directory.
 ## C7 — digital-twin monitoring
 
 `WorkspaceMode.Devices` is the third workspace mode (Prepare /
-Preview / Devices). When entered, the four slicing panels
-(`LeftProjectPanel`, `RightSettingsPanel`, `BottomLayerPreviewPanel`,
+Preview / Devices). When entered, the three slicing panels
+(`ProjectAndSettingsPanel`, `BottomLayerPreviewPanel`,
 `BottomRightSummaryPanel`) hide via `if (workspaceMode !=
 WorkspaceMode.Devices)` guards at their MovablePanelWrapper call
 sites; `PrinterPanel` (the existing `devicesShown` overlay) and

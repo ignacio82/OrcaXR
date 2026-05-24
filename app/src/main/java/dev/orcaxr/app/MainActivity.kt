@@ -5938,322 +5938,289 @@ private fun XrShell(
                     )
                 }
 
-                // Left Panel — hidden in Devices mode (no project /
-                // slicing affordances when monitoring a live print).
-                if (workspaceMode != WorkspaceMode.Devices) MovablePanelWrapper(
-                    id = "left-project",
-                    width = 360.dp,
-                    height = 720.dp,
-                    // Compact left column, leaving a clean central
-                    // opening around the bed and selected object.
-                    initialOffset = androidx.xr.runtime.math.Vector3(-0.70f, 0.05f, -0.06f),
-                    session = session,
-                ) {
-                    LeftProjectPanel(
-                        sliceState = sliceState.value,
-                        bedFit = bedFit,
-                        bedCollision = bedCollision,
-                        printers = printers,
-                        selectedPrinterId = selectedPrinterId.value,
-                        onSelectPrinter = { selectedPrinterId.value = it },
-                        onOpenDevices = {
-                            devicesShown = true
-                            workspaceMode = WorkspaceMode.Devices
-                        },
-                        filaments = filamentList,
-                        slotCount = slotCount,
-                        paletteSuggestions = filamentSlotsStore.defaultPalette,
-                        printerLoadedSlots = activePrinter
-                            ?.id
-                            ?.let(printerLoadedFilaments::get)
-                            .orEmpty(),
-                        filamentTypes = filamentsCatalog.keys.sorted().toList(),
-                        onChangeFilamentColor = { slotIdx, hex ->
-                            val printerId = activePrinter?.id ?: return@LeftProjectPanel
-                            // ColorMappingPanel separates color edits from
-                            // mapping edits. A manual hex / common-color
-                            // pick on a model row updates ONLY the swatch;
-                            // the row's mapping target (physicalSlot or
-                            // virtualSlot) survives the edit, since the
-                            // user's "purple body prints from T2" intent
-                            // doesn't change just because they picked a
-                            // slightly darker purple. The picker no longer
-                            // offers a way to bundle color + mapping in one
-                            // tap — that was the source of the swatch-only-
-                            // looks-right bug the redesign fixes.
-                            val updated = applyChangeColor(filamentList, slotIdx, hex)
-                            scope.launch { filamentEntriesStore.set(printerId, updated) }
-                        },
-                        onMapToPhysicalSlot = { slotIdx, physicalSlot ->
-                            val printerId = activePrinter?.id ?: return@LeftProjectPanel
-                            // User explicitly picked T[physicalSlot+1] as
-                            // the destination for project filament [slotIdx].
-                            // Persist the remap so mergedConfig emits
-                            // filament_map[slotIdx] = physicalSlot+1
-                            // (1-based for libslic3r). The model color stays
-                            // visible on the row's left side; the chip on
-                            // the right tells the user where it actually
-                            // prints from. Mutually exclusive with
-                            // virtualSlot.
-                            val updated = applyMapToPhysical(filamentList, slotIdx, physicalSlot)
-                            scope.launch { filamentEntriesStore.set(printerId, updated) }
-                        },
-                        onMapToVirtualSlot = { slotIdx, virtualSlot ->
-                            val printerId = activePrinter?.id ?: return@LeftProjectPanel
-                            // User picked V_K for project filament [slotIdx].
-                            // Persist virtualSlot so the JNI face-state
-                            // rewrite at slice time flips painted faces to
-                            // (num_physical + virtualSlot) and ToolOrdering
-                            // alternates per layer. Mutually exclusive with
-                            // physicalSlot.
-                            val updated = applyMapToVirtual(filamentList, slotIdx, virtualSlot)
-                            scope.launch { filamentEntriesStore.set(printerId, updated) }
-                        },
-                        onClearMapping = { slotIdx ->
-                            val printerId = activePrinter?.id ?: return@LeftProjectPanel
-                            val updated = applyClearMapping(filamentList, slotIdx)
-                            scope.launch { filamentEntriesStore.set(printerId, updated) }
-                        },
-                        onChangeFilamentType = { slotIdx, type ->
-                            val printerId = activePrinter?.id ?: return@LeftProjectPanel
-                            val updated = applyChangeType(filamentList, slotIdx, type)
-                            scope.launch { filamentEntriesStore.set(printerId, updated) }
-                        },
-                        onSyncFromPrinter = activePrinter?.let { cfg ->
-                            // Phase I.1: copy ALL printer-loaded slots
-                            // into the project palette. Hidden until
-                            // Detect has populated the cache (no
-                            // entries → button hidden).
-                            val cached = printerLoadedFilaments[cfg.id].orEmpty()
-                            if (cached.isEmpty()) null else {
+                if (workspaceMode != WorkspaceMode.Devices) {
+                    val printerBrand = OrcaProfileLoader.brandOfPrinter(activePrinter?.name)
+                    val printerModel = OrcaProfileLoader.modelOfPrinter(activePrinter?.name)
+                    val sharedMaterial = OrcaProfileLoader.sharedMaterialFamily(
+                        filamentList.map { it.filamentType },
+                    )
+                    val displayedProfiles = remember(allProfiles, printerBrand, printerModel, sharedMaterial) {
+                        OrcaProfileLoader.filterForContext(
+                            all = allProfiles,
+                            printerBrand = printerBrand,
+                            sharedMaterial = sharedMaterial,
+                            printerModel = printerModel,
+                        )
+                    }
+
+                    MovablePanelWrapper(
+                        id = "project-settings",
+                        width = 380.dp,
+                        height = 720.dp,
+                        // Positioned on the far left and pushed back in Z
+                        // to avoid overlapping/clipping with the build plate.
+                        initialOffset = androidx.xr.runtime.math.Vector3(-0.75f, 0.15f, -0.25f),
+                        session = session,
+                    ) {
+                        ProjectAndSettingsPanel(
+                            // LeftProjectPanel args
+                            sliceState = sliceState.value,
+                            bedFit = bedFit,
+                            bedCollision = bedCollision,
+                            printers = printers,
+                            selectedPrinterId = selectedPrinterId.value,
+                            onSelectPrinter = { selectedPrinterId.value = it },
+                            onOpenDevices = {
+                                devicesShown = true
+                                workspaceMode = WorkspaceMode.Devices
+                            },
+                            filaments = filamentList,
+                            slotCount = slotCount,
+                            paletteSuggestions = filamentSlotsStore.defaultPalette,
+                            printerLoadedSlots = activePrinter
+                                ?.id
+                                ?.let(printerLoadedFilaments::get)
+                                .orEmpty(),
+                            filamentTypes = filamentsCatalog.keys.sorted().toList(),
+                            onChangeFilamentColor = { slotIdx, hex ->
+                                val printerId = activePrinter?.id ?: return@ProjectAndSettingsPanel
+                                val updated = applyChangeColor(filamentList, slotIdx, hex)
+                                scope.launch { filamentEntriesStore.set(printerId, updated) }
+                            },
+                            onMapToPhysicalSlot = { slotIdx, physicalSlot ->
+                                val printerId = activePrinter?.id ?: return@ProjectAndSettingsPanel
+                                val updated = applyMapToPhysical(filamentList, slotIdx, physicalSlot)
+                                scope.launch { filamentEntriesStore.set(printerId, updated) }
+                            },
+                            onMapToVirtualSlot = { slotIdx, virtualSlot ->
+                                val printerId = activePrinter?.id ?: return@ProjectAndSettingsPanel
+                                val updated = applyMapToVirtual(filamentList, slotIdx, virtualSlot)
+                                scope.launch { filamentEntriesStore.set(printerId, updated) }
+                            },
+                            onClearMapping = { slotIdx ->
+                                val printerId = activePrinter?.id ?: return@ProjectAndSettingsPanel
+                                val updated = applyClearMapping(filamentList, slotIdx)
+                                scope.launch { filamentEntriesStore.set(printerId, updated) }
+                            },
+                            onChangeFilamentType = { slotIdx, type ->
+                                val printerId = activePrinter?.id ?: return@ProjectAndSettingsPanel
+                                val updated = applyChangeType(filamentList, slotIdx, type)
+                                scope.launch { filamentEntriesStore.set(printerId, updated) }
+                            },
+                            onSyncFromPrinter = activePrinter?.let { cfg ->
+                                val cached = printerLoadedFilaments[cfg.id].orEmpty()
+                                if (cached.isEmpty()) null else {
+                                    {
+                                        scope.launch {
+                                            val byIndex = cached.associateBy { it.slotIndex }
+                                            val updated = (0 until slotCount).map { idx ->
+                                                val phys = byIndex[idx]
+                                                val existing = filamentList.getOrNull(idx)
+                                                    ?: FilamentEntry(
+                                                        id = "slot_$idx",
+                                                        color = "#FFFFFF",
+                                                        slotIndex = idx,
+                                                    )
+                                                if (phys != null) existing.copy(
+                                                    color = phys.colorHex,
+                                                    filamentType = phys.material,
+                                                    physicalSlot = null,
+                                                    virtualSlot = null,
+                                                ) else existing
+                                            }
+                                            filamentEntriesStore.set(cfg.id, updated)
+                                            val syncedCount = (0 until slotCount).count { byIndex[it] != null }
+                                            android.widget.Toast.makeText(
+                                                ctx,
+                                                "Synced $syncedCount slot${if (syncedCount == 1) "" else "s"} from ${cfg.name}",
+                                                android.widget.Toast.LENGTH_LONG,
+                                            ).show()
+                                        }
+                                    }
+                                }
+                            },
+                            onDetectFilaments = activePrinter?.let { cfg ->
                                 {
                                     scope.launch {
-                                        val byIndex = cached.associateBy { it.slotIndex }
-                                        val updated = (0 until slotCount).map { idx ->
-                                            val phys = byIndex[idx]
-                                            val existing = filamentList.getOrNull(idx)
-                                                ?: FilamentEntry(
-                                                    id = "slot_$idx",
-                                                    color = "#FFFFFF",
-                                                    slotIndex = idx,
-                                                )
-                                            if (phys != null) existing.copy(
-                                                color = phys.colorHex,
-                                                filamentType = phys.material,
-                                                // Identity remap (project N
-                                                // → physical T_N). Sync
-                                                // realigns the project
-                                                // palette TO the printer's
-                                                // current loadout, so the
-                                                // remap returns to default.
-                                                physicalSlot = null,
-                                                virtualSlot = null,
-                                            ) else existing
+                                        val client = MoonrakerClient(cfg)
+                                        val result = client.queryFilamentSlots()
+                                        val msg: String = when (result) {
+                                            is MoonrakerResult.Ok -> {
+                                                val slots = result.value
+                                                printerLoadedFilaments =
+                                                    printerLoadedFilaments + (cfg.id to slots)
+                                                if (slots.isEmpty()) {
+                                                    "No filaments loaded in ${cfg.name}"
+                                                } else {
+                                                    "Detected ${slots.size} filament${if (slots.size == 1) "" else "s"} loaded in ${cfg.name}"
+                                                }
+                                            }
+                                            is MoonrakerResult.NotFound -> result.message
+                                            is MoonrakerResult.AuthError -> result.message
+                                            is MoonrakerResult.HttpError -> "Detect HTTP ${result.code}"
+                                            is MoonrakerResult.IoError -> "Detect: ${result.message}"
                                         }
-                                        filamentEntriesStore.set(cfg.id, updated)
-                                        val syncedCount = (0 until slotCount).count { byIndex[it] != null }
                                         android.widget.Toast.makeText(
                                             ctx,
-                                            "Synced $syncedCount slot${if (syncedCount == 1) "" else "s"} from ${cfg.name}",
+                                            msg,
                                             android.widget.Toast.LENGTH_LONG,
                                         ).show()
                                     }
                                 }
-                            }
-                        },
-                        onDetectFilaments = activePrinter?.let { cfg ->
-                            {
+                            },
+                            onPickStl = launchPicker,
+                            onClearModel = {
+                                val removed = placedModels.filter { it.plateId == activePlateId }
+                                placedModels = placedModels.filter { it.plateId != activePlateId }
+                                if (selectedModelIds.firstOrNull() in removed.map { it.id }) {
+                                    selectedModelIds = setOfNotNull(placedModels.firstOrNull()?.id)
+                                }
+                                if (placedModelsOnActivePlate.isEmpty()) {
+                                    glbPath = null
+                                    stlPreviewPath = null
+                                    bedFit = null
+                                    bedCollision = null
+                                    sliceState.value = SliceUiState.Idle
+                                    workspaceMode = WorkspaceMode.Prepare
+                                }
+                                removed.forEach { m ->
+                                    runCatching {
+                                        ctx.cacheDir.listFiles { f ->
+                                            f.name.startsWith("stl_preview_${m.id}_v") &&
+                                                f.name.endsWith(".glb")
+                                        }?.forEach { it.delete() }
+                                    }
+                                }
+                            },
+                            placedModels = placedModelsOnActivePlate,
+                            selectedPlacedModelIds = selectedModelIds,
+                            onSelectPlacedModels = { ids ->
+                                selectedModelIds = ids
+                            },
+                            onDeletePlacedModels = { ids ->
+                                val removed = placedModels.filter { it.id in ids }
+                                placedModels = placedModels.filter { it.id !in ids }
+                                selectedModelIds = selectedModelIds - ids
+                                
+                                ids.forEach { id ->
+                                    sweepOldPreviews(File(""), id)
+                                }
+
+                                if (placedModelsOnActivePlate.isEmpty()) {
+                                    glbPath = null
+                                    stlPreviewPath = null
+                                    bedFit = null
+                                    bedCollision = null
+                                    sliceState.value = SliceUiState.Idle
+                                    workspaceMode = WorkspaceMode.Prepare
+                                }
+                            },
+                            onAddPlacedModel = launchPickerForAdd,
+                            onAutoArrangePlacedModels = {
+                                runAutoArrange()
+                            },
+                            onRepairPlacedModel = ::runRepair,
+                            onEmbossPlacedModel = { id -> embossTargetModelId = id },
+                            onAddMagnetsPlacedModel = { id -> magnetTargetModelId = id },
+                            allPlates = allPlates,
+                            onMoveToPlate = { modelId, plateId ->
+                                placedModels = placedModels.map {
+                                    if (it.id == modelId) it.copy(plateId = plateId) else it
+                                }
+                                activePlateId = plateId
+                            },
+                            isLoadingModel = isLoadingModel,
+                            loadingLabel = loadingLabel,
+                            virtualRows = mixedRows.filter { !it.deleted },
+                            onUpdateVirtualRow = { row ->
+                                val pid = activePrinter?.id ?: return@ProjectAndSettingsPanel
+                                val updated = mixedRows.map { if (it.id == row.id) row else it }
+                                scope.launch { mixedFilamentsStore.set(pid, updated) }
+                            },
+                            onAddVirtualRow = { row ->
+                                val pid = activePrinter?.id ?: return@ProjectAndSettingsPanel
+                                scope.launch { mixedFilamentsStore.set(pid, mixedRows + row) }
+                            },
+                            onRemoveVirtualRow = { row ->
+                                val pid = activePrinter?.id ?: return@ProjectAndSettingsPanel
+                                val visibleBefore = mixedRows.filter { !it.deleted && it.enabled }
+                                val removedSlot = visibleBefore.indexOfFirst { it.id == row.id } + 1
                                 scope.launch {
-                                    // Detect refreshes the printer-
-                                    // loaded-filaments cache. The cache
-                                    // feeds the inline color picker's
-                                    // "Loaded in printer" quick-pick
-                                    // row so the user can copy any of
-                                    // those colors onto a project
-                                    // filament with one tap. We do NOT
-                                    // overwrite the project filaments
-                                    // here — that would clobber the
-                                    // 3mf's authored palette and any
-                                    // user edits the user has made.
-                                    val client = MoonrakerClient(cfg)
-                                    val result = client.queryFilamentSlots()
-                                    val msg: String = when (result) {
-                                        is MoonrakerResult.Ok -> {
-                                            val slots = result.value
-                                            printerLoadedFilaments =
-                                                printerLoadedFilaments + (cfg.id to slots)
-                                            if (slots.isEmpty()) {
-                                                "No filaments loaded in ${cfg.name}"
-                                            } else {
-                                                "Detected ${slots.size} filament${if (slots.size == 1) "" else "s"} loaded in ${cfg.name}"
-                                            }
+                                    mixedFilamentsStore.set(
+                                        pid,
+                                        mixedRows.map { if (it.id == row.id) it.copy(deleted = true) else it },
+                                    )
+                                    if (removedSlot > 0) {
+                                        val cleared = filamentList.map { f ->
+                                            if (f.virtualSlot == removedSlot)
+                                                f.copy(virtualSlot = null) else f
                                         }
-                                        is MoonrakerResult.NotFound -> result.message
-                                        is MoonrakerResult.AuthError -> result.message
-                                        is MoonrakerResult.HttpError -> "Detect HTTP ${result.code}"
-                                        is MoonrakerResult.IoError -> "Detect: ${result.message}"
+                                        if (cleared != filamentList) {
+                                            filamentEntriesStore.set(pid, cleared)
+                                        }
+                                    }
+                                }
+                            },
+                            onApplyGamutMatches = { matches ->
+                                val pid = activePrinter?.id ?: return@ProjectAndSettingsPanel
+                                val result = GamutMatcher.applyGamutMatches(
+                                    filaments = filamentList,
+                                    virtualRows = mixedRows,
+                                    matches = matches,
+                                )
+                                scope.launch {
+                                    mixedFilamentsStore.set(pid, result.virtualRows)
+                                    filamentEntriesStore.set(pid, result.filaments)
+                                    val applied = matches.count {
+                                        it.recipe !is GamutMatcher.GamutRecipe.Keep
+                                    }
+                                    val approx = matches.count {
+                                        it.quality == GamutMatcher.MatchQuality.APPROXIMATE ||
+                                            it.quality == GamutMatcher.MatchQuality.OUT_OF_GAMUT
                                     }
                                     android.widget.Toast.makeText(
                                         ctx,
-                                        msg,
+                                        "Matched $applied color${if (applied == 1) "" else "s"} to loaded filaments" +
+                                            if (approx > 0) " ($approx approximate)" else "",
                                         android.widget.Toast.LENGTH_LONG,
                                     ).show()
                                 }
-                            }
-                        },
-                        onPickStl = launchPicker,
-                        onClearModel = {
-                            // Phase E3: only clear models on the ACTIVE plate.
-                            val removed = placedModels.filter { it.plateId == activePlateId }
-                            placedModels = placedModels.filter { it.plateId != activePlateId }
-                            if (selectedModelIds.firstOrNull() in removed.map { it.id }) {
-                                selectedModelIds = setOfNotNull(placedModels.firstOrNull()?.id)
-                            }
-                            if (placedModelsOnActivePlate.isEmpty()) {
-                                glbPath = null
-                                stlPreviewPath = null
-                                bedFit = null
-                                bedCollision = null
-                                sliceState.value = SliceUiState.Idle
-                                workspaceMode = WorkspaceMode.Prepare
-                            }
-                            // Best-effort cleanup of removed models' preview cache
-                            removed.forEach { m ->
-                                runCatching {
-                                    ctx.cacheDir.listFiles { f ->
-                                        f.name.startsWith("stl_preview_${m.id}_v") &&
-                                            f.name.endsWith(".glb")
-                                    }?.forEach { it.delete() }
+                            },
+                            filamentRuleResult = filamentRuleResult,
+                            topCoverHint = topCoverHint,
+                            // RightSettingsPanel args
+                            allProfiles = displayedProfiles,
+                            selectedProfile = selectedProfile.value,
+                            onProfileSelect = { selectedProfile.value = it },
+                            onSaveAsProfile = onSaveAsProfile,
+                            onDeleteProfile = onDeleteProfile,
+                            layerHeightOverride = layerHeightOverride.value,
+                            onLayerHeightChange = { layerHeightOverride.value = it },
+                            printSettingsOverrides = printSettingsOverrides.value,
+                            onPrintSettingChange = { key, value ->
+                                printSettingsOverrides.value = if (value.isBlank()) {
+                                    printSettingsOverrides.value - key
+                                } else {
+                                    printSettingsOverrides.value + (key to value.trim())
                                 }
-                            }
-                        },
-                        placedModels = placedModelsOnActivePlate,
-                        selectedPlacedModelIds = selectedModelIds,
-                        onSelectPlacedModels = { ids ->
-                            selectedModelIds = ids
-                        },
-                        onDeletePlacedModels = { ids ->
-                            // Drop these models from the bed. Sweep
-                            // their preview GLBs from the cache and re-
-                            // pick a selection if we removed the
-                            // active one.
-                            val removed = placedModels.filter { it.id in ids }
-                            placedModels = placedModels.filter { it.id !in ids }
-                            selectedModelIds = selectedModelIds - ids
-                            
-                            ids.forEach { id ->
-                                sweepOldPreviews(File(""), id)
-                            }
-
-                            if (placedModelsOnActivePlate.isEmpty()) {
-                                glbPath = null
-                                stlPreviewPath = null
-                                bedFit = null
-                                bedCollision = null
-                                sliceState.value = SliceUiState.Idle
-                                workspaceMode = WorkspaceMode.Prepare
-                            }
-                        },
-                        onAddPlacedModel = launchPickerForAdd,
-                        onAutoArrangePlacedModels = {
-                            // Phase XR_OBJ_7: libslic3r-backed packing
-                            // (falls back to naive row-layout on
-                            // null). Single model sets translation to
-                            // (0, 0); 2+ models pack tightly within
-                            // 256×256 mm bed bounds, 5 mm gaps. The
-                            // LE that re-positions the grab handle
-                            // picks up the new translateXmm/Ymm
-                            // automatically.
-                            runAutoArrange()
-                        },
-                        onRepairPlacedModel = ::runRepair,
-                        onEmbossPlacedModel = { id -> embossTargetModelId = id },
-                        onAddMagnetsPlacedModel = { id -> magnetTargetModelId = id },
-                        allPlates = allPlates,
-                        onMoveToPlate = { modelId, plateId ->
-                            placedModels = placedModels.map {
-                                if (it.id == modelId) it.copy(plateId = plateId) else it
-                            }
-                            // Follow the model to the destination plate
-                            // so the user doesn't think it vanished.
-                            activePlateId = plateId
-                        },
-                        isLoadingModel = isLoadingModel,
-                        loadingLabel = loadingLabel,
-                        // Phase J: virtual mixes are now defined inline in
-                        // the same panel as the mapping flow, replacing the
-                        // standalone MixedColorsPanel toggle. The persistence
-                        // path (MixedFilamentStore + mergedConfig serialization)
-                        // is unchanged — only the surfacing UI moves.
-                        virtualRows = mixedRows.filter { !it.deleted },
-                        onUpdateVirtualRow = { row ->
-                            val pid = activePrinter?.id ?: return@LeftProjectPanel
-                            val updated = mixedRows.map { if (it.id == row.id) row else it }
-                            scope.launch { mixedFilamentsStore.set(pid, updated) }
-                        },
-                        onAddVirtualRow = { row ->
-                            val pid = activePrinter?.id ?: return@LeftProjectPanel
-                            scope.launch { mixedFilamentsStore.set(pid, mixedRows + row) }
-                        },
-                        onRemoveVirtualRow = { row ->
-                            val pid = activePrinter?.id ?: return@LeftProjectPanel
-                            // Tombstone the row, then sweep any project
-                            // filaments whose virtualSlot pointed at it.
-                            // Without the sweep the slicer would still
-                            // resolve a dangling virtualSlot to "missing"
-                            // and the user's mapping would silently be
-                            // wrong on the next slice.
-                            val visibleBefore = mixedRows.filter { !it.deleted && it.enabled }
-                            val removedSlot = visibleBefore.indexOfFirst { it.id == row.id } + 1
-                            scope.launch {
-                                mixedFilamentsStore.set(
-                                    pid,
-                                    mixedRows.map { if (it.id == row.id) it.copy(deleted = true) else it },
-                                )
-                                if (removedSlot > 0) {
-                                    val cleared = filamentList.map { f ->
-                                        if (f.virtualSlot == removedSlot)
-                                            f.copy(virtualSlot = null) else f
+                            },
+                            loadedLayerHeightHintMm = loadedLayerHeightHintMm,
+                            bambuImport = bambuImport,
+                            onDismissBambuImport = { bambuImport = null },
+                            onApplyBambuFilamentSuggestion = {
+                                val printerId = activePrinter?.id
+                                val suggestion = bambuImport?.filamentProfileSuggestion.orEmpty()
+                                if (printerId != null && suggestion.isNotEmpty()) {
+                                    val updated = filamentList.mapIndexed { i, entry ->
+                                        val s = suggestion.getOrNull(i)
+                                        if (s.isNullOrBlank()) entry else entry.copy(filamentType = s)
                                     }
-                                    if (cleared != filamentList) {
-                                        filamentEntriesStore.set(pid, cleared)
-                                    }
+                                    scope.launch { filamentEntriesStore.set(printerId, updated) }
+                                    bambuImport = null
                                 }
-                            }
-                        },
-                        onApplyGamutMatches = { matches ->
-                            val pid = activePrinter?.id ?: return@LeftProjectPanel
-                            // Apply against the FULL mixed-row list so the
-                            // 1-based virtualSlot indices the matcher hands
-                            // back line up with resolveAsWillPrintPalette /
-                            // the slice path (both index the full list,
-                            // deleted rows included — see PreviewPalette).
-                            val result = GamutMatcher.applyGamutMatches(
-                                filaments = filamentList,
-                                virtualRows = mixedRows,
-                                matches = matches,
-                            )
-                            scope.launch {
-                                mixedFilamentsStore.set(pid, result.virtualRows)
-                                filamentEntriesStore.set(pid, result.filaments)
-                                val applied = matches.count {
-                                    it.recipe !is GamutMatcher.GamutRecipe.Keep
-                                }
-                                val approx = matches.count {
-                                    it.quality == GamutMatcher.MatchQuality.APPROXIMATE ||
-                                        it.quality == GamutMatcher.MatchQuality.OUT_OF_GAMUT
-                                }
-                                android.widget.Toast.makeText(
-                                    ctx,
-                                    "Matched $applied color${if (applied == 1) "" else "s"} to loaded filaments" +
-                                        if (approx > 0) " ($approx approximate)" else "",
-                                    android.widget.Toast.LENGTH_LONG,
-                                ).show()
-                            }
-                        },
-                        filamentRuleResult = filamentRuleResult,
-                        topCoverHint = topCoverHint,
-                    )
+                            },
+                        )
+                    }
                 }
 
                 // Phase XR_OBJ_2 — Transform panel. Numeric X/Y/Z
@@ -6594,90 +6561,7 @@ private fun XrShell(
                     )
                 }
 
-                // Right Panel — hidden in Devices mode.
-                if (workspaceMode != WorkspaceMode.Devices) MovablePanelWrapper(
-                    id = "right-settings",
-                    width = 360.dp,
-                    height = 540.dp,
-                    // Outer right column clears the transform controls
-                    // while remaining inside the comfortable FOV.
-                    initialOffset = androidx.xr.runtime.math.Vector3(0.86f, 0.06f, -0.06f),
-                    session = session,
-                ) {
-                    // Smart profile filter — narrow the dropdown to rows
-                    // that make sense for the active printer's vendor
-                    // and the project's shared material family. User-
-                    // saved profiles (no machineName/filamentName)
-                    // always pass through. If filtering would empty the
-                    // list, falls back to the full catalog so the user
-                    // never ends up with an empty dropdown. The
-                    // selection-side LaunchedEffect at line ~359 keys on
-                    // the unfiltered `allProfiles`, so a printer swap
-                    // that hides the currently-selected profile leaves
-                    // the selection alone — the dropdown just won't
-                    // surface the row until the user changes filter
-                    // context.
-                    val printerBrand = OrcaProfileLoader.brandOfPrinter(activePrinter?.name)
-                    val printerModel = OrcaProfileLoader.modelOfPrinter(activePrinter?.name)
-                    val sharedMaterial = OrcaProfileLoader.sharedMaterialFamily(
-                        filamentList.map { it.filamentType },
-                    )
-                    val displayedProfiles = remember(allProfiles, printerBrand, printerModel, sharedMaterial) {
-                        OrcaProfileLoader.filterForContext(
-                            all = allProfiles,
-                            printerBrand = printerBrand,
-                            sharedMaterial = sharedMaterial,
-                            printerModel = printerModel,
-                        )
-                    }
-                    RightSettingsPanel(
-                        allProfiles = displayedProfiles,
-                        selectedProfile = selectedProfile.value,
-                        onProfileSelect = { selectedProfile.value = it },
-                        onSaveAsProfile = onSaveAsProfile,
-                        onDeleteProfile = onDeleteProfile,
-                        layerHeightOverride = layerHeightOverride.value,
-                        onLayerHeightChange = { layerHeightOverride.value = it },
-                        printSettingsOverrides = printSettingsOverrides.value,
-                        onPrintSettingChange = { key, value ->
-                            // Empty value reverts the field to the profile
-                            // default (i.e. drop the override entirely).
-                            // Non-empty replaces the prior override.
-                            printSettingsOverrides.value = if (value.isBlank()) {
-                                printSettingsOverrides.value - key
-                            } else {
-                                printSettingsOverrides.value + (key to value.trim())
-                            }
-                        },
-                        loadedLayerHeightHintMm = loadedLayerHeightHintMm,
-                        bambuImport = bambuImport,
-                        onDismissBambuImport = { bambuImport = null },
-                        onApplyBambuFilamentSuggestion = {
-                            // The Bambu translator's per-slot
-                            // filamentProfileSuggestion is keyed by
-                            // slot index (0..slotCount-1). Map each
-                            // suggestion onto the matching
-                            // FilamentEntry.filamentType — that's the
-                            // string the bundled-filament catalog
-                            // keys off, so writing it in flips the
-                            // slot to the suggested U1 profile on the
-                            // next composition. Clear the banner
-                            // afterwards so the suggestion doesn't
-                            // re-apply on subsequent dismiss-then-
-                            // reopen cycles.
-                            val printerId = activePrinter?.id
-                            val suggestion = bambuImport?.filamentProfileSuggestion.orEmpty()
-                            if (printerId != null && suggestion.isNotEmpty()) {
-                                val updated = filamentList.mapIndexed { i, entry ->
-                                    val s = suggestion.getOrNull(i)
-                                    if (s.isNullOrBlank()) entry else entry.copy(filamentType = s)
-                                }
-                                scope.launch { filamentEntriesStore.set(printerId, updated) }
-                                bambuImport = null
-                            }
-                        },
-                    )
-                }
+
 
 
                 // Bottom Center Panel (Layer Preview) — hidden in
