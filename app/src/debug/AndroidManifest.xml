@@ -15,6 +15,10 @@
         android:protectionLevel="signature" />
 
     <application>
+        <activity
+            android:name=".SpatialGltfProbeActivity"
+            android:exported="false" />
+
         <receiver
             android:name=".TestBroadcastReceiver"
             android:exported="true"

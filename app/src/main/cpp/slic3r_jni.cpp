@@ -830,13 +830,18 @@ static std::vector<ObjectPlacement> row_layout(
     for (size_t i = 0; i < objects.size(); ++i) {
         const auto& b = wbb[i];
         double w = b.max.x() - b.min.x();
+        if (!std::isfinite(w)) w = 0.0;
         double current_cx = (b.min.x() + b.max.x()) * 0.5;
         double current_cy = (b.min.y() + b.max.y()) * 0.5;
+        double current_min_z = b.min.z();
+        if (!std::isfinite(current_cx)) current_cx = 0.0;
+        if (!std::isfinite(current_cy)) current_cy = 0.0;
+        if (!std::isfinite(current_min_z)) current_min_z = 0.0;
         double target_cx = cursor_x + w / 2.0;
         Slic3r::Vec3d t(
             target_cx - current_cx,
             bed_center.y() - current_cy,
-            -b.min.z()  // raise bbox bottom to z=0
+            -current_min_z  // raise bbox bottom to z=0
         );
         out.push_back({t, b});
         cursor_x += w + gap_mm;
@@ -876,12 +881,17 @@ static std::vector<ObjectPlacement> centered_existing_layout(
         wbb.push_back(b);
     }
 
-    const double current_cx = (all.min.x() + all.max.x()) * 0.5;
-    const double current_cy = (all.min.y() + all.max.y()) * 0.5;
+    double current_cx = (all.min.x() + all.max.x()) * 0.5;
+    double current_cy = (all.min.y() + all.max.y()) * 0.5;
+    double current_min_z = all.min.z();
+    if (!std::isfinite(current_cx)) current_cx = 0.0;
+    if (!std::isfinite(current_cy)) current_cy = 0.0;
+    if (!std::isfinite(current_min_z)) current_min_z = 0.0;
+
     const Slic3r::Vec3d translation(
         bed_center.x() - current_cx,
         bed_center.y() - current_cy,
-        -all.min.z());
+        -current_min_z);
 
     for (const auto& b : wbb) {
         out.push_back({translation, b});
@@ -3892,25 +3902,23 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
         // Aggregator — append every triangle here with its color, then
         // stream the result out as a GLB at the end.
         std::vector<float> positions;   // xyz xyz xyz...
-        std::vector<float> colors;      // rgb rgb rgb...
+        std::vector<uint8_t> colors;    // rgba rgba rgba...
         std::vector<int>   indices;     // 0,1,2, 3,4,5, ...
 
-        auto emit = [&](const indexed_triangle_set& its,
-                        const float rgb[3],
-                        const Slic3r::Transform3d* transform)
-        {
-            if (its.empty()) return;
-            int base = static_cast<int>(positions.size() / 3);
-            // Vertices.
+        auto emit = [&](const indexed_triangle_set& its, const float rgb[3],
+                        const Slic3r::Transform3d* transform = nullptr) {
+            const int base = positions.size() / 3;
+            // Positions and Colors.
             for (const auto& v : its.vertices) {
                 Slic3r::Vec3d p(v.x(), v.y(), v.z());
                 if (transform) p = (*transform) * p;
                 positions.push_back(static_cast<float>(p.x()));
                 positions.push_back(static_cast<float>(p.y()));
                 positions.push_back(static_cast<float>(p.z()));
-                colors.push_back(rgb[0]);
-                colors.push_back(rgb[1]);
-                colors.push_back(rgb[2]);
+                colors.push_back(static_cast<uint8_t>(std::clamp(rgb[0] * 255.0f, 0.0f, 255.0f)));
+                colors.push_back(static_cast<uint8_t>(std::clamp(rgb[1] * 255.0f, 0.0f, 255.0f)));
+                colors.push_back(static_cast<uint8_t>(std::clamp(rgb[2] * 255.0f, 0.0f, 255.0f)));
+                colors.push_back(255);
             }
             // Indices.
             for (const auto& t : its.indices) {
@@ -4301,6 +4309,7 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
         constexpr float AMBIENT = 0.16f;
         for (size_t v = 0; v < v_count; ++v) {
             const size_t ni = v * 3;
+            const size_t ci = v * 4;
             const float nx = unit_normals[ni + 0];
             const float ny = unit_normals[ni + 1];
             const float nz = unit_normals[ni + 2];
@@ -4313,9 +4322,9 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
                         + KICK.intensity * kick_term;
             shade *= (1.0f - AO_STRENGTH * ao[v]);
             const float clamped = std::min(1.0f, std::max(0.0f, shade));
-            colors[ni + 0] *= clamped;
-            colors[ni + 1] *= clamped;
-            colors[ni + 2] *= clamped;
+            colors[ci + 0] = static_cast<uint8_t>(colors[ci + 0] * clamped);
+            colors[ci + 1] = static_cast<uint8_t>(colors[ci + 1] * clamped);
+            colors[ci + 2] = static_cast<uint8_t>(colors[ci + 2] * clamped);
         }
         // Stats so we can confirm in logcat that AO is firing.
         float ao_min = 1.0f, ao_max = 0.0f, ao_sum = 0.0f;
@@ -4336,10 +4345,10 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
         // ----
         const size_t vertex_count = positions.size() / 3;
         const size_t index_count = indices.size();
-        const uint32_t positions_bytes = static_cast<uint32_t>(positions.size() * 4);
-        const uint32_t colors_bytes    = static_cast<uint32_t>(colors.size() * 4);
-        const uint32_t indices_bytes   = static_cast<uint32_t>(indices.size() * 4);
-        const uint32_t bin_body_bytes  = positions_bytes + colors_bytes + indices_bytes;
+        const uint32_t positions_bytes = static_cast<uint32_t>(positions.size() * sizeof(float));
+        const uint32_t colors_bytes = static_cast<uint32_t>(colors.size());
+        const uint32_t indices_bytes = static_cast<uint32_t>(indices.size() * sizeof(int));
+        const uint32_t bin_body_bytes = positions_bytes + colors_bytes + indices_bytes;
 
         // Bbox for the POSITION accessor.
         float xmin = INFINITY, xmax = -INFINITY;
@@ -4347,10 +4356,25 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
         float zmin = INFINITY, zmax = -INFINITY;
         for (size_t i = 0; i + 2 < positions.size(); i += 3) {
             float x = positions[i], y = positions[i + 1], z = positions[i + 2];
-            if (x < xmin) xmin = x; if (x > xmax) xmax = x;
-            if (y < ymin) ymin = y; if (y > ymax) ymax = y;
-            if (z < zmin) zmin = z; if (z > zmax) zmax = z;
+            if (std::isfinite(x)) {
+                if (x < xmin) xmin = x; if (x > xmax) xmax = x;
+            }
+            if (std::isfinite(y)) {
+                if (y < ymin) ymin = y; if (y > ymax) ymax = y;
+            }
+            if (std::isfinite(z)) {
+                if (z < zmin) zmin = z; if (z > zmax) zmax = z;
+            }
         }
+        
+        // Prevent invalid JSON from NaN/inf bounds
+        if (!std::isfinite(xmin)) xmin = 0.0f;
+        if (!std::isfinite(xmax)) xmax = 0.0f;
+        if (!std::isfinite(ymin)) ymin = 0.0f;
+        if (!std::isfinite(ymax)) ymax = 0.0f;
+        if (!std::isfinite(zmin)) zmin = 0.0f;
+        if (!std::isfinite(zmax)) zmax = 0.0f;
+
         ORCAXR_LOGI("nativeWriteColoredGlb: emitted vertex bbox X(%.2f..%.2f) Y(%.2f..%.2f) Z(%.2f..%.2f)",
                     xmin, xmax, ymin, ymax, zmin, zmax);
 
@@ -4370,7 +4394,7 @@ Java_dev_orcaxr_app_SlicerEngine_nativeWriteColoredGlb(
             "\"accessors\":["
                 "{\"bufferView\":0,\"componentType\":5126,\"count\":%zu,\"type\":\"VEC3\","
                     "\"min\":[%.6f,%.6f,%.6f],\"max\":[%.6f,%.6f,%.6f]},"
-                "{\"bufferView\":1,\"componentType\":5126,\"count\":%zu,\"type\":\"VEC3\"},"
+                "{\"bufferView\":1,\"componentType\":5121,\"normalized\":true,\"count\":%zu,\"type\":\"VEC4\"},"
                 "{\"bufferView\":2,\"componentType\":5125,\"count\":%zu,\"type\":\"SCALAR\"}],"
             "\"bufferViews\":["
                 "{\"buffer\":0,\"byteOffset\":0,\"byteLength\":%u,\"target\":34962},"
@@ -5355,6 +5379,13 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
             Slic3r::Transform3d xf = Slic3r::Transform3d::Identity();
             if (!mo->instances.empty()) xf = mo->instances.front()->get_matrix();
             Slic3r::BoundingBoxf3 b = world_bbox_of(mo->raw_mesh_bounding_box(), xf);
+            if (!std::isfinite(b.min.x())) b.min.x() = 0.0;
+            if (!std::isfinite(b.min.y())) b.min.y() = 0.0;
+            if (!std::isfinite(b.min.z())) b.min.z() = 0.0;
+            if (!std::isfinite(b.max.x())) b.max.x() = 0.0;
+            if (!std::isfinite(b.max.y())) b.max.y() = 0.0;
+            if (!std::isfinite(b.max.z())) b.max.z() = 0.0;
+
             if (first_obj) { all = b; first_obj = false; }
             else           { all.merge(b); }
         }
@@ -5373,6 +5404,12 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
             Slic3r::Transform3d mesh_xf = Slic3r::Transform3d::Identity();
             if (!mo->instances.empty()) mesh_xf = mo->instances.front()->get_matrix();
             Slic3r::BoundingBoxf3 bbox = world_bbox_of(mo->raw_mesh_bounding_box(), mesh_xf);
+            if (!std::isfinite(bbox.min.x())) bbox.min.x() = 0.0;
+            if (!std::isfinite(bbox.min.y())) bbox.min.y() = 0.0;
+            if (!std::isfinite(bbox.min.z())) bbox.min.z() = 0.0;
+            if (!std::isfinite(bbox.max.x())) bbox.max.x() = 0.0;
+            if (!std::isfinite(bbox.max.y())) bbox.max.y() = 0.0;
+            if (!std::isfinite(bbox.max.z())) bbox.max.z() = 0.0;
             Slic3r::Vec3f size = bbox.size().cast<float>();
             Slic3r::TriangleMesh mesh = mo->mesh();
 
@@ -5396,6 +5433,12 @@ Java_dev_orcaxr_app_SlicerEngine_nativeRead3mfObjectMetadata(
                 const auto& inst = *mo->instances.front();
                 Slic3r::Transform3d xf = inst.get_matrix();
                 Slic3r::BoundingBoxf3 b = world_bbox_of(mo->raw_mesh_bounding_box(), xf);
+                if (!std::isfinite(b.min.x())) b.min.x() = 0.0;
+                if (!std::isfinite(b.min.y())) b.min.y() = 0.0;
+                if (!std::isfinite(b.min.z())) b.min.z() = 0.0;
+                if (!std::isfinite(b.max.x())) b.max.x() = 0.0;
+                if (!std::isfinite(b.max.y())) b.max.y() = 0.0;
+                if (!std::isfinite(b.max.z())) b.max.z() = 0.0;
                 double icx = (b.min.x() + b.max.x()) * 0.5;
                 double icy = (b.min.y() + b.max.y()) * 0.5;
                 ox = static_cast<float>(icx - group_cx);

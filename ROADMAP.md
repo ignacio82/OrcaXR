@@ -137,13 +137,15 @@ Selection bbox already uses `CustomMesh.FromMeshDataBuilder` + `MeshEntity` safe
 
 **Exit criteria:** build plate and one toolpath preview render without temp GLB files; no `split_engine_bridge` material/node errors over 20 repeated load/slice/clear cycles on Galaxy XR.
 
-### E12. Native Compose `SpatialGltfModel` + `GltfModelNode` (DP4) 🔴 Not started
+### E12. Native Compose `SpatialGltfModel` + `GltfModelNode` (DP4) 🟡 Probe shipped — production migration gated on device results
 
 > **Trigger to schedule:** Android XR SDK Developer Preview 4 or Beta release.
 
 **Why it matters:** DP4 adds native glTF support in Compose for XR plus SceneCore node access / node material overrides. OrcaXR currently orchestrates `GltfModelEntity` lifecycles manually inside `LaunchedEffect` and `DisposableEffect`, which is why gotchas #9, #10, #13, and #11e exist.
 
-**Implementation:** create an isolated prototype that loads a generated model via `SpatialGltfModel`, moves it, swaps it, and tears it down 50 times. If lifecycle safety is better than our manual entity wrapper, migrate `GlbSceneEntity` and `TransformGizmo` handles. Separately test `GltfModelNode` material override as a possible paint-preview path that avoids rebaking an entire GLB when only colors change (gotcha #11h).
+**Implementation:** `SpatialGltfProbeActivity` (debug-only) plus `SpatialGltfProbeTest` now load generated GLB bytes through `SpatialGltfModel`, move them, swap cube/ring sources, apply/clear/reapply a `GltfModelNode` material override, and tear the model down for 50 cycles. The test skips cleanly on non-XR devices and is intended to run on Galaxy XR with Android Test Orchestrator.
+
+**Migration gate:** do not replace `GlbSceneEntity` or `TransformGizmo` until the probe is green on device and the replacement has a real input/component story. The current editor paths still need `InteractableComponent` / `MovableComponent` on the rendered entity for selection, paint, and gizmo drags; `SpatialGltfModel` exposes nodes/material overrides but not a root entity to attach those components to.
 
 ### E13. Jetpack XR Beta migration 🔴 Not started
 
@@ -433,11 +435,11 @@ Both Smart Paint image pickers call `openInputStream(uri).readBytes()` directly.
 
 **Exit criteria:** unit/instrumented tests cover just-under-cap, over-cap, blocking provider, corrupt image, and normal PNG/JPEG; neither UI uses raw `readBytes()` on a user-controlled stream.
 
-### I4. IMPORTANT — DP4 feature adoption needs device-level probes, not blind migration 🔴
+### I4. IMPORTANT — DP4 feature adoption needs device-level probes, not blind migration 🟡 E12 probe shipped
 
 DP4's `SpatialGltfModel`, `GltfModelNode`, Custom Meshes, and Material3 movable modifiers are directly relevant to OrcaXR's largest crash class, but they touch the same SceneCore lifecycle edge cases documented in GEMINI.md. Treat them as experiments with explicit stress tests before broad migration.
 
-**Implementation:** add a small `androidTest` probe suite for: repeated `SpatialGltfModel` load/swap/dispose, `GltfModelNode` material override under paint rebakes, `CustomMesh` large colored model lifetime, and Material3 alpha17 movable modifier behavior on `SpatialPanel`.
+**Implementation:** add a small `androidTest` probe suite for: repeated `SpatialGltfModel` load/swap/dispose, `GltfModelNode` material override under paint rebakes, `CustomMesh` large colored model lifetime, and Material3 alpha17 movable modifier behavior on `SpatialPanel`. E12's `SpatialGltfProbeTest` covers the first two.
 
 **Exit criteria:** probes run green on Galaxy XR for 20 cycles each and either unblock E11/E12 migration or document a new gotcha in GEMINI.md.
 

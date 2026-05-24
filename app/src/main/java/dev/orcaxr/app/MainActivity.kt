@@ -50,7 +50,10 @@ import androidx.xr.compose.material3.XrComponentOverrideEnabler
 import androidx.xr.compose.material3.XrComponentOverrideEnablerContext
 import androidx.xr.compose.spatial.Subspace
 import androidx.xr.compose.subspace.SceneCoreEntity
+import androidx.xr.compose.subspace.SpatialGltfModel
+import androidx.xr.compose.subspace.SpatialGltfModelStatus
 import androidx.xr.compose.subspace.SpatialPanel
+import androidx.xr.compose.subspace.draw.scale
 import androidx.xr.compose.subspace.layout.SubspaceModifier
 import androidx.xr.compose.subspace.layout.height as subspaceHeight
 // SubspaceModifier.movable() is internal in androidx.xr.compose alpha12
@@ -59,6 +62,7 @@ import androidx.xr.compose.subspace.layout.height as subspaceHeight
 // now only the workspace's MovableComponent (XrShell) gives drag
 // support, and individual SpatialPanels stay at their authored offsets.
 import androidx.xr.compose.subspace.layout.offset
+import androidx.xr.compose.subspace.layout.rotate
 import androidx.xr.compose.subspace.layout.width as subspaceWidth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -1098,8 +1102,8 @@ private fun XrShell(
         placedModels = placedModels.map { if (it.id == id) transform(it) else it }
     }
     
-    // Track world translation of the workspace.
-    var workspaceTx by remember { mutableStateOf(androidx.xr.runtime.math.Vector3(0f, WORKSPACE_Y_OFFSET, 0.0f)) }
+    // Track the workspace translation in activity-space coordinates.
+    var workspaceTx by remember { mutableStateOf(defaultWorkspaceTranslation()) }
     var isWorkspaceGrabbing by remember { mutableStateOf(false) }
     // Plate-move mode. When true a MovableComponent on the workspace
     // entity makes any pinch over the bed footprint drag the build
@@ -1120,11 +1124,10 @@ private fun XrShell(
     }
 
     // Active transform tool (Move / Rotate / Scale) selected from the
-    // top nav. Default Move so loading a model and grabbing it Just
-    // Works without a tool tap. Tapping the active tool's button cycles
-    // back to Select (no gizmo) — handy when the user wants the gizmo
-    // out of the way to inspect the model.
-    var gizmoTool by remember { mutableStateOf(GizmoTool.Move) }
+    // top nav. Keep imports in Select until the user asks for handles:
+    // constructing the three GLB gizmo handles while a heavy preview is
+    // first binding materials aborts SplitEngine on Galaxy XR.
+    var gizmoTool by remember { mutableStateOf(GizmoTool.Select) }
     
     var devicesShown by remember { mutableStateOf(false) }
     // Pre-print options sheet shown between tapping Send & Print and
@@ -1431,45 +1434,25 @@ private fun XrShell(
         return File(dir, "part_$index.stl")
     }
 
-    /** Delete prior stl_preview*.glb files belonging to [modelId] so
-     *  each preview rebuild for a single model doesn't leave a 20 MB
-     *  ghost behind. Files for other models are left alone — that's
-     *  the multi-model invariant. Pass an empty modelId to sweep
-     *  legacy single-model preview files (`stl_preview_v*.glb`). */
+    /** Delete preview GLBs for [modelId] after that model is removed.
+     *
+     * A published GLB remains an asynchronous scene input: Compose XR
+     * may not open it until after a newer bake has completed. Deleting
+     * prior versions while the model is still present can therefore
+     * remove a path the renderer is about to load. Passing a non-empty
+     * [keep] is an active-bake notification and intentionally retains
+     * all published versions. Pass an empty modelId to remove legacy
+     * single-model preview files (`stl_preview_v*.glb`). */
     fun sweepOldPreviews(keep: File, modelId: String) {
+        if (keep.name.isNotEmpty()) return
         runCatching {
-            val perModelPrefix = "stl_preview_${modelId}_v"
-            // Parse a version number out of "stl_preview_<id>_v<N>.glb".
-            // Files we can't parse are treated as "unknown version" and
-            // only deleted when keep is empty (model-removal sweep).
-            fun versionOf(name: String): Int? {
-                if (!name.startsWith(perModelPrefix)) return null
-                val tail = name.substringAfter(perModelPrefix)
-                val numStr = tail.substringBefore('.')
-                return numStr.toIntOrNull()
+            val prefix = if (modelId.isEmpty()) {
+                "stl_preview_v"
+            } else {
+                "stl_preview_${modelId}_v"
             }
-            val keepName = keep.name
-            val keepVersion = versionOf(keepName)
-            val explicitDeleteAll = keep.absolutePath.isEmpty() || keepName.isEmpty()
             ctx.cacheDir.listFiles { f ->
-                if (!f.name.endsWith(".glb")) return@listFiles false
-                if (f.absolutePath == keep.absolutePath) return@listFiles false
-                if (f.name.startsWith("stl_preview_v")) {
-                    // Legacy single-model filenames — always sweep.
-                    return@listFiles true
-                }
-                if (!f.name.startsWith(perModelPrefix)) return@listFiles false
-                if (explicitDeleteAll) return@listFiles true
-                val v = versionOf(f.name) ?: return@listFiles false
-                // Only delete strictly OLDER versions. A concurrent
-                // previewStl can have an in-flight bake at version > keep
-                // (its writeColoredGlb just opened the file for write but
-                // hasn't published the path yet); deleting that file
-                // unlinks the directory entry while the JNI keeps writing
-                // to the open FD, so the bytes vanish at FD close —
-                // exactly the cause of the v2.glb ENOENT race that left
-                // the model invisible after a 3MF load.
-                keepVersion != null && v < keepVersion
+                f.name.startsWith(prefix) && f.name.endsWith(".glb")
             }?.forEach { it.delete() }
         }
     }
@@ -2156,15 +2139,15 @@ private fun XrShell(
                         source = outStl,
                         originalSource = file,
                         label = "${file.name} - ${m.name.ifEmpty { "Part ${index + 1}" }}",
-                        translateXmm = m.offsetX,
-                        translateYmm = m.offsetY,
-                        translateZmm = m.offsetZ,
+                        translateXmm = m.offsetX.takeIf { it.isFinite() } ?: 0f,
+                        translateYmm = m.offsetY.takeIf { it.isFinite() } ?: 0f,
+                        translateZmm = m.offsetZ.takeIf { it.isFinite() } ?: 0f,
                         previewFilamentIndex = m.defaultExtruder.coerceAtLeast(0),
                         groupId = gid,
                         groupOrdinal = index,
-                        baseBboxXmm = m.bboxX,
-                        baseBboxYmm = m.bboxY,
-                        baseBboxZmm = m.bboxZ,
+                        baseBboxXmm = m.bboxX.takeIf { it.isFinite() && it > 0f } ?: 0f,
+                        baseBboxYmm = m.bboxY.takeIf { it.isFinite() && it > 0f } ?: 0f,
+                        baseBboxZmm = m.bboxZ.takeIf { it.isFinite() && it > 0f } ?: 0f,
                         plateId = importPlateToApp[m.plateIndex] ?: importPlateToApp.getValue(1),
                         needsRepair = m.openEdgeCount > 0,
                         // D9 — apply per-object config overrides from
@@ -2177,8 +2160,9 @@ private fun XrShell(
                 }
             } else {
                 val newId = "model_${System.currentTimeMillis().toString(36)}_${placedModels.size}"
-                val singlePlate = meta?.firstOrNull()?.plateIndex ?: 1
-                val singleNeedsRepair = (meta?.firstOrNull()?.openEdgeCount ?: 0) > 0
+                val singleMeta = meta?.firstOrNull()
+                val singlePlate = singleMeta?.plateIndex ?: 1
+                val singleNeedsRepair = (singleMeta?.openEdgeCount ?: 0) > 0
                 listOf(
                     PlacedModel(
                         id = newId,
@@ -2186,6 +2170,9 @@ private fun XrShell(
                         label = label,
                         plateId = importPlateToApp[singlePlate] ?: importPlateToApp.getValue(1),
                         needsRepair = singleNeedsRepair,
+                        baseBboxXmm = singleMeta?.bboxX?.takeIf { it.isFinite() && it > 0f } ?: 0f,
+                        baseBboxYmm = singleMeta?.bboxY?.takeIf { it.isFinite() && it > 0f } ?: 0f,
+                        baseBboxZmm = singleMeta?.bboxZ?.takeIf { it.isFinite() && it > 0f } ?: 0f,
                         // D9 — single-object 3MFs put their per-object
                         // overrides at index 0; STLs return [] (empty
                         // list) so this falls through to no overrides.
@@ -4326,8 +4313,32 @@ private fun XrShell(
         }
     }
 
-    LaunchedEffect(session) {
-        runCatching { session.scene.requestFullSpaceMode() }
+    DisposableEffect(session) {
+        val initial3dContentCapability =
+            session.scene.spatialCapabilities.contains(
+                androidx.xr.scenecore.SpatialCapability.SPATIAL_3D_CONTENT,
+            )
+        val listener =
+            java.util.function.Consumer<Set<androidx.xr.scenecore.SpatialCapability>> { capabilities ->
+                val available =
+                    capabilities.contains(androidx.xr.scenecore.SpatialCapability.SPATIAL_3D_CONTENT)
+                android.util.Log.i(
+                    "OrcaXR",
+                    "Spatial capabilities changed: 3dContent=$available capabilities=$capabilities",
+                )
+            }
+        android.util.Log.i(
+            "OrcaXR",
+            "Spatial capabilities initial: 3dContent=$initial3dContentCapability " +
+                "capabilities=${session.scene.spatialCapabilities}",
+        )
+        session.scene.addSpatialCapabilitiesChangedListener(
+            androidx.core.content.ContextCompat.getMainExecutor(ctx),
+            listener,
+        )
+        onDispose {
+            session.scene.removeSpatialCapabilitiesChangedListener(listener)
+        }
     }
 
     val controllerInput = LocalControllerInput.current
@@ -5498,28 +5509,104 @@ private fun XrShell(
     // its bounding box intercepts gaze/pinch raycasts, preventing clicks
     // from reaching the UI panels. Each SpatialPanel has its own system handle.
 
-    // Workspace parent: a GroupEntity nested under rootEntity that
-    // carries the bed/model/toolpath. Holding the workspace separately
-    // gives us two things:
-    //  1. The workspace pose (offset + axis-convention rotation) lives
-    //     on this entity, so child GLBs only need WORLD_SCALE applied.
-    //  2. We can attach a MovableComponent to *only* the workspace —
-    //     the user can grab and reorient the bed independently of the
-    //     info panels, without the grab box intercepting clicks on the
-    //     panels (the workspace box sits below the panel column).
-    val workspaceEntity = remember(session, rootEntity) {
-        if (rootEntity == null) {
-            android.util.Log.w("OrcaXR", "workspaceEntity: rootEntity is null")
-            return@remember null
+    // SceneCore applies the recommended Full Space pose and scale to the
+    // scene key entity. Keep that placement node unrotated, then express
+    // printer axes on its child workspace so a recenter cannot tip the bed.
+    val workspacePlacementEntity = remember(session) {
+        val res = runCatching {
+            val placement = Entity.create(session, "OrcaXR-workspace-placement")
+            placement.parent = session.scene.activitySpace
+            val recommendedCenter =
+                session.scene.activitySpace.recommendedContentBoxInFullSpace.center
+            placement.setPose(
+                androidx.xr.runtime.math.Pose(
+                    recommendedCenter,
+                    androidx.xr.runtime.math.Quaternion.Identity,
+                ),
+            )
+            android.util.Log.i(
+                "OrcaXR",
+                "Workspace placement initialized from recommended content box center=" +
+                    recommendedCenter,
+            )
+            placement
         }
+        res.onFailure {
+            android.util.Log.e("OrcaXR", "workspacePlacementEntity creation failed", it)
+        }
+        res.getOrNull()
+    }
+
+    DisposableEffect(session, workspacePlacementEntity) {
+        val placement = workspacePlacementEntity
+        val previousKeyEntity = session.scene.keyEntity
+        val executor = androidx.core.content.ContextCompat.getMainExecutor(ctx)
+        val modeListener =
+            java.util.function.Consumer<androidx.xr.scenecore.SpatialModeChangeEvent> { event ->
+                placement?.setPose(event.recommendedPose)
+                placement?.setScale(event.recommendedScale)
+                android.util.Log.i(
+                    "OrcaXR",
+                    "Workspace placement applied spatial-mode recommendation " +
+                        "pose=${event.recommendedPose} scale=${event.recommendedScale}",
+                )
+            }
+        val visibilityListener =
+            java.util.function.Consumer<androidx.xr.scenecore.SpatialVisibility> { visibility ->
+                val visibilityName = when (visibility) {
+                    androidx.xr.scenecore.SpatialVisibility.WITHIN_FIELD_OF_VIEW ->
+                        "WITHIN_FIELD_OF_VIEW"
+                    androidx.xr.scenecore.SpatialVisibility.PARTIALLY_WITHIN_FIELD_OF_VIEW ->
+                        "PARTIALLY_WITHIN_FIELD_OF_VIEW"
+                    androidx.xr.scenecore.SpatialVisibility.OUTSIDE_FIELD_OF_VIEW ->
+                        "OUTSIDE_FIELD_OF_VIEW"
+                    else -> "UNKNOWN"
+                }
+                android.util.Log.i("OrcaXR", "Spatial visibility=$visibilityName")
+            }
+
+        if (placement != null) {
+            session.scene.keyEntity = placement
+            session.scene.setSpatialModeChangedListener(executor, modeListener)
+            session.scene.addSpatialVisibilityChangedListener(executor, visibilityListener)
+            android.util.Log.i("OrcaXR", "Workspace placement registered as scene key entity")
+        }
+
+        onDispose {
+            if (placement != null) {
+                session.scene.removeSpatialVisibilityChangedListener(visibilityListener)
+                if (session.scene.keyEntity === placement) {
+                    runCatching { session.scene.keyEntity = previousKeyEntity }
+                }
+                session.scene.clearSpatialModeChangedListener()
+                if (!placement.isDisposed) {
+                    runCatching { placement.parent = null }
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(session, workspacePlacementEntity) {
+        if (workspacePlacementEntity != null) {
+            runCatching { session.scene.requestFullSpaceMode() }
+        }
+    }
+
+    val workspaceEntity = remember(session, workspacePlacementEntity) {
+        val placement = workspacePlacementEntity ?: return@remember null
         val res = runCatching {
             val ws = Entity.create(session, "OrcaXR-workspace")
-            ws.parent = rootEntity
+            ws.parent = placement
             ws.setPose(
                 androidx.xr.runtime.math.Pose(
-                    androidx.xr.runtime.math.Vector3(0f, WORKSPACE_Y_OFFSET, 0.0f),
+                    defaultWorkspaceTranslation(),
                     WORKSPACE_ROTATION,
                 ),
+            )
+            android.util.Log.i(
+                "OrcaXR",
+                "Workspace render content attached below key entity at " +
+                    "(0.0, $WORKSPACE_Y_OFFSET, $WORKSPACE_Z_OFFSET)",
             )
             ws
         }
@@ -5632,12 +5719,11 @@ private fun XrShell(
                 // Top Navigation Pill
                 MovablePanelWrapper(
                     id = "top-nav",
-                    width = 800.dp,
-                    height = 250.dp, // Increased height for two-tier layout
-                    // Top-center; raised to +0.55 so it sits above the
-                    // build plate area and frees y=0 for the side
-                    // panels.
-                    initialOffset = androidx.xr.runtime.math.Vector3(0f, 0.55f, -0.2f),
+                    width = 720.dp,
+                    height = 210.dp,
+                    // Keep commands just above the plate without
+                    // dominating the upper field of view.
+                    initialOffset = androidx.xr.runtime.math.Vector3(0f, 0.48f, -0.10f),
                     session = session,
                 ) {
                     TopNavigationPill(
@@ -5645,7 +5731,7 @@ private fun XrShell(
                         onModeChange = { workspaceMode = it },
                         previewEnabled = glbPath != null,
                         onResetWorkspace = {
-                            val newWsTx = androidx.xr.runtime.math.Vector3(0f, WORKSPACE_Y_OFFSET, 0.0f)
+                            val newWsTx = defaultWorkspaceTranslation()
                             workspaceTx = newWsTx
                             // Reset model
                             workspaceEntity?.setPose(
@@ -5828,13 +5914,11 @@ private fun XrShell(
                 // slicing affordances when monitoring a live print).
                 if (workspaceMode != WorkspaceMode.Devices) MovablePanelWrapper(
                     id = "left-project",
-                    width = 400.dp,
-                    height = 800.dp,
-                    // Far left at the wide edge of the XR FOV — Galaxy
-                    // XR's ~110° horizontal FOV easily covers ±1.05 m
-                    // at panel-distance and the project panel was
-                    // previously cramped against the build plate.
-                    initialOffset = androidx.xr.runtime.math.Vector3(-1.05f, 0f, -0.1f),
+                    width = 360.dp,
+                    height = 720.dp,
+                    // Compact left column, leaving a clean central
+                    // opening around the bed and selected object.
+                    initialOffset = androidx.xr.runtime.math.Vector3(-0.70f, 0.05f, -0.06f),
                     session = session,
                 ) {
                     LeftProjectPanel(
@@ -6152,14 +6236,11 @@ private fun XrShell(
                 var autoOrientBusy by remember { mutableStateOf(false) }
                 MovablePanelWrapper(
                     id = "transform-panel",
-                    width = 380.dp,
-                    height = 600.dp,
-                    // Transform panel only appears when a model is
-                    // selected. Park it just to the right of the bed
-                    // (x=+0.50) so it lands near the focused model
-                    // rather than off-screen on the far left, and
-                    // doesn't compete with the left-project panel.
-                    initialOffset = androidx.xr.runtime.math.Vector3(0.50f, -0.05f, -0.1f),
+                    width = 340.dp,
+                    height = 540.dp,
+                    // Editing controls stay next to the focused model;
+                    // the settings panel forms a second right column.
+                    initialOffset = androidx.xr.runtime.math.Vector3(0.46f, 0.06f, 0.02f),
                     session = session,
                 ) {
                     TransformPanel(
@@ -6449,9 +6530,9 @@ private fun XrShell(
                     // to the LEFT of the bed at mid-height — clear of
                     // both right-settings AND left-project.
                     id = "plate-tabs",
-                    width = 240.dp,
-                    height = 400.dp,
-                    initialOffset = androidx.xr.runtime.math.Vector3(-0.55f, -0.10f, -0.1f),
+                    width = 180.dp,
+                    height = 340.dp,
+                    initialOffset = androidx.xr.runtime.math.Vector3(-0.39f, -0.08f, 0.02f),
                     session = session,
                 ) {
                     PlateTabPanel(
@@ -6488,12 +6569,11 @@ private fun XrShell(
                 // Right Panel — hidden in Devices mode.
                 if (workspaceMode != WorkspaceMode.Devices) MovablePanelWrapper(
                     id = "right-settings",
-                    width = 400.dp,
-                    height = 600.dp,
-                    // Far right — was at x=0.6 colliding with both
-                    // plate-tabs and print-monitor. Push out to 1.05 so
-                    // each right-side panel gets its own column.
-                    initialOffset = androidx.xr.runtime.math.Vector3(1.05f, 0.05f, -0.1f),
+                    width = 360.dp,
+                    height = 540.dp,
+                    // Outer right column clears the transform controls
+                    // while remaining inside the comfortable FOV.
+                    initialOffset = androidx.xr.runtime.math.Vector3(0.86f, 0.06f, -0.06f),
                     session = session,
                 ) {
                     // Smart profile filter — narrow the dropdown to rows
@@ -6581,9 +6661,9 @@ private fun XrShell(
                 val currentLayer = maxLayer.value ?: maxIdx
                 if (workspaceMode != WorkspaceMode.Devices) MovablePanelWrapper(
                     id = "bottom-layer",
-                    width = 600.dp,
-                    height = 200.dp,
-                    initialOffset = androidx.xr.runtime.math.Vector3(0f, -0.5f, 0f),
+                    width = 500.dp,
+                    height = 170.dp,
+                    initialOffset = androidx.xr.runtime.math.Vector3(-0.13f, -0.49f, 0.02f),
                     session = session,
                 ) {
                     BottomLayerPreviewPanel(
@@ -6614,9 +6694,9 @@ private fun XrShell(
                 // monitoring an active print).
                 if (workspaceMode != WorkspaceMode.Devices) MovablePanelWrapper(
                     id = "bottom-summary",
-                    width = 400.dp,
-                    height = 250.dp,
-                    initialOffset = androidx.xr.runtime.math.Vector3(0.6f, -0.475f, -0.05f),
+                    width = 340.dp,
+                    height = 220.dp,
+                    initialOffset = androidx.xr.runtime.math.Vector3(0.35f, -0.49f, 0.01f),
                     session = session,
                 ) {
                     val activePrinter = printers.firstOrNull { it.id == selectedPrinterId.value }
@@ -6811,11 +6891,8 @@ private fun XrShell(
                             id = "print-monitor",
                             width = 420.dp,
                             height = 220.dp,
-                            // Stack directly under right-settings on
-                            // the far-right column. Was at (0.61,
-                            // -0.235) which sat INSIDE right-settings'
-                            // footprint when both were visible.
-                            initialOffset = androidx.xr.runtime.math.Vector3(1.05f, -0.55f, -0.1f),
+                            // Stack under the outer settings column.
+                            initialOffset = androidx.xr.runtime.math.Vector3(0.86f, -0.45f, -0.06f),
                             session = session,
                         ) {
                             PrintMonitorPanel(
@@ -6873,12 +6950,11 @@ private fun XrShell(
                 // does nothing is worse than no button.
                 MovablePanelWrapper(
                     id = "radial-menu",
-                    width = 200.dp,
-                    height = 200.dp,
-                    // Bottom-left corner, outboard of left-project so
-                    // the menu's hit-radius doesn't compete with the
-                    // project panel's scrollable interior.
-                    initialOffset = androidx.xr.runtime.math.Vector3(-1.05f, -0.55f, 0.05f),
+                    width = 180.dp,
+                    height = 180.dp,
+                    // Lower-left command cluster, clear of the layer
+                    // controls and project panel scroll area.
+                    initialOffset = androidx.xr.runtime.math.Vector3(-0.57f, -0.49f, 0.03f),
                     session = session,
                 ) {
                     RadialMenuPanel(
@@ -7622,6 +7698,11 @@ private fun XrShell(
         }
 
         // Build plate first so the toolpath/STL render on top of it.
+        // Keep SpatialGltfModel content composed even when the SDK's
+        // capability snapshot is briefly stale after a Full Space
+        // relaunch. Galaxy XR has reported full-space-managed while
+        // still returning 3dContent=false indefinitely; gating here
+        // would leave an otherwise valid workspace blank.
         buildPlatePath?.let { path ->
             key(path) {
                 BuildPlateSceneEntity(
@@ -7710,12 +7791,10 @@ private fun XrShell(
                 }
                 // Phase XR_OBJ_1: render a yellow bbox outline for the
                 // currently-selected model. Skipped while paint mode is
-                // on — the user's focus is on triangle picks, the bbox
-                // would just be visual noise, and the bbox entity
-                // doesn't participate in the InteractableComponent
-                // pipeline so it can occlude paint hits if it overlaps
-                // the model. Keyed on (id, footprint, height) so the
-                // GLB rebakes when the user rotates / scales.
+                // on — the user's focus is on triangle picks and the
+                // outline would be visual noise over the paint surface.
+                // Keyed on selection identity while its internal GLB
+                // path refreshes when dimensions change.
                 val selectedList = placedModels.filter { it.id in selectedModelIds }
                 if (selectedList.isNotEmpty() && paintBrush.mode == PaintMode.Off) {
                     var minX = Float.POSITIVE_INFINITY
@@ -7742,7 +7821,7 @@ private fun XrShell(
                     // Pad the selection bbox slightly outside the model's
                     // own footprint so the wireframe doesn't z-fight with
                     // the model's surface and the user can clearly see
-                    // it wrapping (vs hugging) the geometry. 4mm on each
+                    // it wrapping (vs hugging) the geometry. 5mm on each
                     // side feels right at typical model scales (~30-100mm).
                     val pad = SELECTION_BBOX_PADDING_MM
                     val fw = (maxX - minX) + pad * 2f
@@ -7760,20 +7839,13 @@ private fun XrShell(
                         // model with a hair of air").
                         val cz = minZ - pad
 
-                        // Keyed only on the selection identity (NOT
-                        // dims). Including fw/fd/fh would re-mount the
-                        // composable on every dim tweak — and re-mount
-                        // fires DisposableEffect(Unit).onDispose
-                        // synchronously, racing split_engine_bridge with
-                        // the same NOT_FOUND aborts as the path-keyed
-                        // GlbSceneEntity bug. Dim changes are absorbed
-                        // by SelectionBboxEntity's internal
-                        // LaunchedEffect (which uses the deferred
-                        // dispose helper).
+                        // Render the outline through the same Compose XR
+                        // GLB route as the visible model. A SceneCore-only
+                        // mesh uses a different placement/scale path once
+                        // the visible object is SpatialGltfModel, which
+                        // makes the outline appear too small or displaced.
                         key(selectedModelIds.hashCode()) {
-                            SelectionBboxEntity(
-                                session = session,
-                                parentEntity = workspaceEntity,
+                            SpatialSelectionOutline(
                                 modelId = "multi_select_bbox",
                                 offsetXmm = cx,
                                 offsetYmm = cy,
@@ -7972,6 +8044,16 @@ private const val PREFERRED_DEFAULT_PROFILE_ID =
 private const val WORKSPACE_Y_OFFSET = -0.10f
 
 /**
+ * Keep SceneCore-rendered content at ActivitySpace's default viewing depth.
+ * Applying the panel shell's -1.5 m depth a second time placed the plate and
+ * models several metres away on Galaxy XR.
+ */
+private const val WORKSPACE_Z_OFFSET = 0.0f
+
+private fun defaultWorkspaceTranslation() =
+    androidx.xr.runtime.math.Vector3(0f, WORKSPACE_Y_OFFSET, WORKSPACE_Z_OFFSET)
+
+/**
  * Rotation that maps printer space (X right, Y front, Z up) onto
  * SceneCore world space (X right, Y up, Z forward toward user). Without
  * this the bed would render as a vertical wall behind the panels and the
@@ -8001,14 +8083,13 @@ private fun previewRgbForFilamentIndex(indexOneBased: Int, palette: List<String>
 }
 
 /** Margin (mm) added around the selection wireframe so it visibly wraps
- *  the model rather than z-fighting with its surface. ~4mm reads as a
- *  hair of breathing room at typical model scales (30-100 mm). */
-internal const val SELECTION_BBOX_PADDING_MM = 4f
+ *  the model rather than z-fighting with its surface. */
+internal const val SELECTION_BBOX_PADDING_MM = 5f
 
 private fun applyWorkspacePose(ent: androidx.xr.scenecore.Entity, parent: androidx.xr.scenecore.Entity?) {
-    // The workspace parent (a GroupEntity created in XrShell) already
-    // carries WORKSPACE_Y_OFFSET + WORKSPACE_ROTATION, so child GLBs
-    // only need the unit-conversion scale. Pose stays at identity.
+    // The dedicated activity-space workspace parent already carries
+    // the translation and axis-convention rotation, so child GLBs only
+    // need the unit-conversion scale. Pose stays at identity.
     ent.parent = parent
     ent.setScale(WORLD_SCALE)
 }
@@ -8047,6 +8128,7 @@ internal fun applyOverride(m: PlacedModel, ov: GizmoDragOverride): PlacedModel {
 
 @Composable
 private fun ToolpathSceneEntity(session: Session, glbPath: String, parentEntity: androidx.xr.scenecore.Entity?) {
+    SpatialGlbVisual(glbPath)
     GlbSceneEntity(session, glbPath, parentEntity)
 }
 
@@ -8074,6 +8156,7 @@ private fun StlPreviewSceneEntity(
      *  being dragged. Null when no drag is active. */
     liveOverride: GizmoDragOverride? = null,
 ) {
+    SpatialGlbVisual(glbPath, offsetXmm, offsetYmm, offsetZmm)
     GlbSceneEntity(session, glbPath, parentEntity, offsetXmm, offsetYmm, offsetZmm, paintHooks, onTap, onHoverChange, liveOverride)
 }
 
@@ -8084,72 +8167,75 @@ private fun BuildPlateSceneEntity(
     parentEntity: androidx.xr.scenecore.Entity?,
     onTap: (() -> Unit)? = null,
 ) {
+    SpatialGlbVisual(glbPath)
     GlbSceneEntity(session, glbPath, parentEntity, onTap = onTap)
 }
 
-@OptIn(androidx.xr.scenecore.ExperimentalCustomMeshApi::class)
-private class BboxResources(
-    val entity: androidx.xr.scenecore.MeshEntity,
-    val mesh: androidx.xr.scenecore.CustomMesh,
-    val material: androidx.xr.scenecore.KhronosUnlitMaterial,
-    val posBuf: java.nio.ByteBuffer,
-    val colBuf: java.nio.ByteBuffer,
-    val idxBuf: java.nio.ByteBuffer,
-)
+/**
+ * Compose XR visual path for generated GLBs. The SceneCore entities remain
+ * mounted for interaction components, but on Galaxy XR their raw attachment
+ * can be present and within view without producing visible geometry.
+ */
+@Composable
+private fun SpatialGlbVisual(
+    glbPath: String,
+    offsetXmm: Float = 0f,
+    offsetYmm: Float = 0f,
+    offsetZmm: Float = 0f,
+) {
+    var bytes by remember(glbPath) { mutableStateOf<ByteArray?>(null) }
 
-private val bboxCleanupScope: kotlinx.coroutines.CoroutineScope by lazy {
-    kotlinx.coroutines.CoroutineScope(
-        kotlinx.coroutines.Dispatchers.Main.immediate + kotlinx.coroutines.SupervisorJob()
+    LaunchedEffect(glbPath) {
+        bytes = withContext(Dispatchers.IO) {
+            runCatching { File(glbPath).readBytes() }
+                .onFailure { android.util.Log.e("OrcaXR", "Spatial GLB read failed for $glbPath", it) }
+                .getOrNull()
+        }
+    }
+
+    val modelBytes = bytes ?: return
+    val source = remember(glbPath, modelBytes) {
+        ByteArraySpatialGltfModelSource(
+            bytes = modelBytes,
+            modelName = "spatial_${File(glbPath).nameWithoutExtension}_${modelBytes.contentHashCode()}.glb",
+        )
+    }
+    val state = androidx.xr.compose.subspace.rememberSpatialGltfModelState(source)
+
+    LaunchedEffect(state.status, glbPath) {
+        when (val status = state.status) {
+            is SpatialGltfModelStatus.Loaded ->
+                android.util.Log.i("OrcaXR", "SpatialGltfModel visible path loaded $glbPath")
+            is SpatialGltfModelStatus.Failed ->
+                android.util.Log.e("OrcaXR", "SpatialGltfModel failed $glbPath", status.exception)
+            is SpatialGltfModelStatus.Loading -> Unit
+        }
+    }
+
+    // The imported meshes are authored in printer millimetres. Rotate their
+    // Z-up coordinate system into XR Y-up space and apply the same mm-to-m
+    // scale/translation as the entity-backed interaction proxy.
+    SpatialGltfModel(
+        state = state,
+        modifier = SubspaceModifier
+            .offset(
+                x = (offsetXmm * WORLD_SCALE * 1000f).dp,
+                y = ((WORKSPACE_Y_OFFSET + offsetZmm * WORLD_SCALE) * 1000f).dp,
+                z = (-offsetYmm * WORLD_SCALE * 1000f).dp,
+            )
+            .rotate(pitch = -90f, yaw = 0f, roll = 0f)
+            .scale(WORLD_SCALE),
     )
 }
 
-@OptIn(androidx.xr.scenecore.ExperimentalCustomMeshApi::class)
-private suspend fun disposeResourcesDeferred(resources: BboxResources?) {
-    if (resources == null) return
-    val ent = resources.entity
-    if (ent.isDisposed) return
-    
-    // Wait two frames so that any pending rendering instructions complete
-    kotlinx.coroutines.android.awaitFrame()
-    kotlinx.coroutines.android.awaitFrame()
-    
-    // Detach from scene graph
-    if (!ent.isDisposed) runCatching { ent.parent = null }
-    
-    // Extract assets to local variables so we keep them alive
-    val mesh = resources.mesh
-    val material = resources.material
-    val posBuf = resources.posBuf
-    val colBuf = resources.colBuf
-    val idxBuf = resources.idxBuf
-    
-    // Suspend for a generous window (5 seconds) to allow the GC to finalize
-    // the MeshEntity first, then reclaim these assets.
-    kotlinx.coroutines.delay(5000)
-    
-    // Ensure the JVM compiler doesn't optimize away these local variables.
-    val keepAlive = mesh.hashCode() xor material.hashCode() xor posBuf.hashCode() xor colBuf.hashCode() xor idxBuf.hashCode()
-    android.util.Log.d("OrcaXR/bbox", "SelectionBbox resources finalized safely. Hash: $keepAlive")
-}
-
 /**
- * Phase XR_OBJ_1 selection feedback. Bakes a wireframe-bbox GLB sized
- * to the selected model's effective footprint and mounts it as a sibling
- * of the model entity. The bbox itself carries no `InteractableComponent`
- * — it's purely visual. Cache files live at
- * `${cacheDir}/sel_bbox_${modelId}_${dimsHash}.glb` so a rotation /
- * scale change produces a new file rather than re-using a stale one.
- *
- * We don't reuse `GlbSceneEntity` because its DisposableEffect chain
- * tries to attach an InteractableComponent when callbacks are non-null,
- * which we explicitly DON'T want here (the bbox sits a hair outside the
- * model and would steal hits otherwise).
+ * Visual selection feedback rendered through the same Compose XR path as the
+ * selected model. Matching the route, transform and scale is important:
+ * SceneCore interaction proxies are intentionally retained for input, but
+ * are not a reliable visible coordinate source on Galaxy XR.
  */
-@OptIn(androidx.xr.scenecore.ExperimentalCustomMeshApi::class)
 @Composable
-private fun SelectionBboxEntity(
-    session: Session,
-    parentEntity: androidx.xr.scenecore.Entity?,
+private fun SpatialSelectionOutline(
     modelId: String,
     offsetXmm: Float,
     offsetYmm: Float,
@@ -8158,158 +8244,98 @@ private fun SelectionBboxEntity(
     sizeYmm: Float,
     sizeZmm: Float,
 ) {
-    var activeResources by remember { mutableStateOf<BboxResources?>(null) }
-    val entity = activeResources?.entity
+    val ctx = LocalContext.current
+    val outlineKey = remember(modelId, sizeXmm, sizeYmm, sizeZmm) {
+        "${modelId.hashCode().toString(36)}_" +
+            "${sizeXmm.toBits().toString(36)}_${sizeYmm.toBits().toString(36)}_" +
+            sizeZmm.toBits().toString(36)
+    }
+    var glbPath by remember(outlineKey) { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(modelId, sizeXmm, sizeYmm, sizeZmm, parentEntity) {
-        val oldResources = activeResources
-        var newRes: BboxResources? = null
-        try {
-            // Define vertex layout: position (buffer 0) and color (buffer 1).
-            // COLOR requires UBYTE4_NORM in alpha15.
-            val layout = androidx.xr.scenecore.VertexLayout(
-                listOf(
-                    androidx.xr.scenecore.VertexAttributeDescriptor(
-                        androidx.xr.scenecore.VertexAttribute.POSITION,
-                        androidx.xr.scenecore.VertexAttributeType.FLOAT3,
-                        0
-                    ),
-                    androidx.xr.scenecore.VertexAttributeDescriptor(
-                        androidx.xr.scenecore.VertexAttribute.COLOR,
-                        androidx.xr.scenecore.VertexAttributeType.UBYTE4_NORM,
-                        1
-                    )
-                )
-            )
-
-            // Selection bbox is a wireframe box composed of 12 edges, each rendered as
-            // a small 2mm tube-like box (8 vertices, 36 indices per edge).
-            // Total: 12 * 8 = 96 vertices, 12 * 36 = 432 indices.
-            val h = 1.0f // 1mm half-thickness
-            val xNeg = -sizeXmm / 2f; val xPos = sizeXmm / 2f
-            val yNeg = -sizeYmm / 2f; val yPos = sizeYmm / 2f
-            val zLo = 0f; val zHi = sizeZmm
-            val selColor = floatArrayOf(1.0f, 0.65f, 0.0f, 1.0f) // Orca Orange, fully opaque
-
-            val positions = FloatArray(96 * 3)
-            val colors = ByteArray(96 * 4)  // RGBA per vertex (UBYTE4_NORM)
-            val indices = IntArray(432)
-
-            var pi = 0; var ci = 0; var ii = 0; var baseId = 0
-
-            fun emitBox(xmin: Float, ymin: Float, zmin: Float, xmax: Float, ymax: Float, zmax: Float) {
-                val pts = floatArrayOf(
-                    xmin, ymin, zmin, xmax, ymin, zmin, xmax, ymax, zmin, xmin, ymax, zmin,
-                    xmin, ymin, zmax, xmax, ymin, zmax, xmax, ymax, zmax, xmin, ymax, zmax
-                )
-                val rByte = (selColor[0] * 255f).toInt().toByte()
-                val gByte = (selColor[1] * 255f).toInt().toByte()
-                val bByte = (selColor[2] * 255f).toInt().toByte()
-                val aByte = (selColor[3] * 255f).toInt().toByte()
-                for (v in 0 until 8) {
-                    positions[pi++] = pts[v * 3]; positions[pi++] = pts[v * 3 + 1]; positions[pi++] = pts[v * 3 + 2]
-                    colors[ci++] = rByte; colors[ci++] = gByte; colors[ci++] = bByte; colors[ci++] = aByte
-                }
-                val faces = intArrayOf(
-                    0, 3, 2, 0, 2, 1, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4,
-                    3, 7, 6, 3, 6, 2, 0, 4, 7, 0, 7, 3, 1, 2, 6, 1, 6, 5
-                )
-                for (idx in faces) indices[ii++] = baseId + idx
-                baseId += 8
-            }
-
-            // 4 vertical edges
-            for (xs in floatArrayOf(xNeg, xPos)) for (ys in floatArrayOf(yNeg, yPos)) {
-                emitBox(xs - h, ys - h, zLo - h, xs + h, ys + h, zHi + h)
-            }
-            // 4 X-axis edges
-            for (ys in floatArrayOf(yNeg, yPos)) for (zs in floatArrayOf(zLo, zHi)) {
-                emitBox(xNeg - h, ys - h, zs - h, xPos + h, ys + h, zs + h)
-            }
-            // 4 Y-axis edges
-            for (xs in floatArrayOf(xNeg, xPos)) for (zs in floatArrayOf(zLo, zHi)) {
-                emitBox(xs - h, yNeg - h, zs - h, xs + h, yPos + h, zs + h)
-            }
-
-            val posBuf = java.nio.ByteBuffer.allocateDirect(positions.size * 4).order(java.nio.ByteOrder.nativeOrder())
-            posBuf.asFloatBuffer().put(positions).flip()
-            val colBuf = java.nio.ByteBuffer.allocateDirect(colors.size).order(java.nio.ByteOrder.nativeOrder())
-            colBuf.put(colors).flip()
-            val idxBuf = java.nio.ByteBuffer.allocateDirect(indices.size * 4).order(java.nio.ByteOrder.nativeOrder())
-            idxBuf.asIntBuffer().put(indices).flip()
-
-            val mesh = androidx.xr.scenecore.CustomMesh.FromMeshDataBuilder(session, layout)
-                .addVertexData(androidx.xr.scenecore.ByteBufferRegion(posBuf, 0, posBuf.capacity()))
-                .addVertexData(androidx.xr.scenecore.ByteBufferRegion(colBuf, 0, colBuf.capacity()))
-                .setIndexData(androidx.xr.scenecore.ByteBufferRegion(idxBuf, 0, idxBuf.capacity()))
-                .addSubset(androidx.xr.scenecore.MeshSubset(androidx.xr.scenecore.MeshSubsetTopology.TRIANGLES, 0, indices.size))
-                .build()
-
-            val material = androidx.xr.scenecore.KhronosUnlitMaterial.create(session, androidx.xr.scenecore.AlphaMode.OPAQUE)
-            material.setBaseColorFactor(androidx.xr.runtime.math.Vector4(1f, 1f, 1f, 1f)) // Vertex colors already have orange
-
-            val ent = androidx.xr.scenecore.MeshEntity.create(session, mesh, listOf(material))
-            applyWorkspacePose(ent, parentEntity ?: session.scene.activitySpace)
-
-            newRes = BboxResources(ent, mesh, material, posBuf, colBuf, idxBuf)
-
-            // Give Filament a few frames to settle as usual.
-            kotlinx.coroutines.android.awaitFrame()
-            kotlinx.coroutines.android.awaitFrame()
-            kotlinx.coroutines.android.awaitFrame()
-
-            if (ent.isDisposed) {
-                bboxCleanupScope.launch {
-                    disposeResourcesDeferred(oldResources)
-                }
-                return@LaunchedEffect
-            }
-            activeResources = newRes
-            bboxCleanupScope.launch {
-                disposeResourcesDeferred(oldResources)
-            }
-        } finally {
-            // If activeResources was NOT updated to newRes (meaning the coroutine was cancelled
-            // during awaitFrame or we exited early), we must dispose newRes immediately to avoid leak/crash.
-            if (activeResources != newRes && newRes != null) {
-                bboxCleanupScope.launch {
-                    disposeResourcesDeferred(newRes)
-                }
-            }
+    LaunchedEffect(outlineKey) {
+        glbPath = withContext(Dispatchers.IO) {
+            runCatching {
+                val output = File(ctx.cacheDir, "selection_outline_$outlineKey.glb")
+                writeSelectionOutlineGlb(output, sizeXmm, sizeYmm, sizeZmm)
+                ctx.cacheDir.listFiles { file ->
+                    file.name.startsWith("selection_outline_") &&
+                        file.name.endsWith(".glb") &&
+                        file != output
+                }?.forEach { it.delete() }
+                output.absolutePath
+            }.onFailure {
+                android.util.Log.e("OrcaXR", "Selection outline GLB write failed", it)
+            }.getOrNull()
         }
     }
 
-    LaunchedEffect(entity, offsetXmm, offsetYmm, offsetZmm) {
-        val ent = entity ?: return@LaunchedEffect
-        if (ent.isDisposed) return@LaunchedEffect
-        ent.setPose(
-            androidx.xr.runtime.math.Pose(
-                androidx.xr.runtime.math.Vector3(
-                    offsetXmm * WORLD_SCALE,
-                    offsetYmm * WORLD_SCALE,
-                    offsetZmm * WORLD_SCALE,
-                ),
-                androidx.xr.runtime.math.Quaternion.Identity,
-            ),
+    glbPath?.let { SpatialGlbVisual(it, offsetXmm, offsetYmm, offsetZmm) }
+}
+
+private fun writeSelectionOutlineGlb(
+    output: File,
+    sizeXmm: Float,
+    sizeYmm: Float,
+    sizeZmm: Float,
+) {
+    val positions = ArrayList<Float>(96 * 3)
+    val indices = ArrayList<Int>(432)
+    var baseVertex = 0
+
+    fun emitBox(xmin: Float, ymin: Float, zmin: Float, xmax: Float, ymax: Float, zmax: Float) {
+        val vertices = floatArrayOf(
+            xmin, ymin, zmin, xmax, ymin, zmin, xmax, ymax, zmin, xmin, ymax, zmin,
+            xmin, ymin, zmax, xmax, ymin, zmax, xmax, ymax, zmax, xmin, ymax, zmax,
+        )
+        positions.addAll(vertices.toList())
+        val faces = intArrayOf(
+            0, 3, 2, 0, 2, 1, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4,
+            3, 7, 6, 3, 6, 2, 0, 4, 7, 0, 7, 3, 1, 2, 6, 1, 6, 5,
+        )
+        faces.forEach { indices.add(baseVertex + it) }
+        baseVertex += 8
+    }
+
+    val halfEdgeWidthMm = 1.5f
+    val xNeg = -sizeXmm / 2f
+    val xPos = sizeXmm / 2f
+    val yNeg = -sizeYmm / 2f
+    val yPos = sizeYmm / 2f
+    val zLo = 0f
+    val zHi = sizeZmm
+
+    for (x in floatArrayOf(xNeg, xPos)) for (y in floatArrayOf(yNeg, yPos)) {
+        emitBox(
+            x - halfEdgeWidthMm, y - halfEdgeWidthMm, zLo - halfEdgeWidthMm,
+            x + halfEdgeWidthMm, y + halfEdgeWidthMm, zHi + halfEdgeWidthMm,
+        )
+    }
+    for (y in floatArrayOf(yNeg, yPos)) for (z in floatArrayOf(zLo, zHi)) {
+        emitBox(
+            xNeg - halfEdgeWidthMm, y - halfEdgeWidthMm, z - halfEdgeWidthMm,
+            xPos + halfEdgeWidthMm, y + halfEdgeWidthMm, z + halfEdgeWidthMm,
+        )
+    }
+    for (x in floatArrayOf(xNeg, xPos)) for (z in floatArrayOf(zLo, zHi)) {
+        emitBox(
+            x - halfEdgeWidthMm, yNeg - halfEdgeWidthMm, z - halfEdgeWidthMm,
+            x + halfEdgeWidthMm, yPos + halfEdgeWidthMm, z + halfEdgeWidthMm,
         )
     }
 
-    // Composition-leave dispose only — keyed on Unit so it does NOT
-    // fire on every modelId / size change. Those are handled by the
-    // load LaunchedEffect above with a deferred dispose; firing this
-    // onDispose synchronously on a swap would re-introduce the
-    // split_engine_bridge "unknown node id" race.
-    DisposableEffect(Unit) {
-        onDispose {
-            val res = activeResources
-            if (res != null) {
-                activeResources = null
-                bboxCleanupScope.launch {
-                    disposeResourcesDeferred(res)
-                }
-            }
-        }
+    val colors = FloatArray(positions.size)
+    for (i in colors.indices step 3) {
+        colors[i] = 1.0f
+        colors[i + 1] = 0.65f
+        colors[i + 2] = 0.0f
     }
+    GlbBuilder(
+        positions = positions.toFloatArray(),
+        indices = indices.toIntArray(),
+        mode = GlbBuilder.MODE_TRIANGLES,
+        colors = colors,
+        doubleSided = true,
+    ).writeTo(output)
 }
 
 @Composable
@@ -8362,7 +8388,7 @@ private fun GlbSceneEntity(
         // render thread still has queued ops on the old node — common
         // during 3MF load because gotcha #22 fires two previewStl
         // bakes within milliseconds, and the GLB swap also recomposes
-        // the SelectionBboxEntity / TransformGizmo whose own component
+        // the selection visual / TransformGizmo whose own component
         // adds get queued to the same render thread. Holding the old
         // entity ref alive briefly past the swap lets that queue drain.
         val oldEntity = entity
