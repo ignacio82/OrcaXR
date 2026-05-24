@@ -658,6 +658,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        xrSession.value?.scene?.requestFullSpaceMode()
+    }
+
     override fun onPause() {
         // A stick stuck deflected when the user removes the headset
         // would keep scrubbing on resume — reset axis snapshots to 0.
