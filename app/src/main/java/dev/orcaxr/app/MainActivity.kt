@@ -5568,6 +5568,25 @@ private fun XrShell(
                     else -> "UNKNOWN"
                 }
                 android.util.Log.i("OrcaXR", "Spatial visibility=$visibilityName")
+                if (visibility == androidx.xr.scenecore.SpatialVisibility.WITHIN_FIELD_OF_VIEW && placement != null) {
+                    val box = session.scene.activitySpace.recommendedContentBoxInFullSpace
+                    val center = box.center
+                    val isZero = kotlin.math.abs(center.x) < 0.001f &&
+                                 kotlin.math.abs(center.y) < 0.001f &&
+                                 kotlin.math.abs(center.z) < 0.001f
+                    if (!isZero) {
+                        placement.setPose(
+                            androidx.xr.runtime.math.Pose(
+                                center,
+                                androidx.xr.runtime.math.Quaternion.Identity,
+                            ),
+                        )
+                        android.util.Log.i(
+                            "OrcaXR",
+                            "Workspace placement updated from visibility transition to center=" + center,
+                        )
+                    }
+                }
             }
 
         if (placement != null) {
