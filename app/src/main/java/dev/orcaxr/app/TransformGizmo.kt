@@ -186,19 +186,19 @@ fun TransformGizmo(
     // WORKSPACE_ROTATION shows up as world X, -world Z, world Y).
     // Arrows scale their length per-axis to stay outside the model.
     if (tool == GizmoTool.Move) {
-    GizmoDragHandle(session, ctx, root, "arrow_x_v3.glb", Vector3(lenX, baseScale, baseScale),
+    GizmoDragHandle(session, ctx, root, "arrow_x_v4.glb", Vector3(lenX, baseScale, baseScale),
         generate = { f -> GizmoGlb.writeArrow(f, 0, GIZMO_ARROW_LEN_MM, GIZMO_ARROW_SHAFT_MM, floatArrayOf(1f, 0.2f, 0.2f)) },
         projectDelta = { delta -> delta.x },
         buildOverride = { dxMm -> GizmoDragOverride(deltaTxMm = dxMm) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
-    GizmoDragHandle(session, ctx, root, "arrow_y_v3.glb", Vector3(baseScale, lenY, baseScale),
+    GizmoDragHandle(session, ctx, root, "arrow_y_v4.glb", Vector3(baseScale, lenY, baseScale),
         generate = { f -> GizmoGlb.writeArrow(f, 1, GIZMO_ARROW_LEN_MM, GIZMO_ARROW_SHAFT_MM, floatArrayOf(0.2f, 1f, 0.2f)) },
         projectDelta = { delta -> -delta.z },
         buildOverride = { dyMm -> GizmoDragOverride(deltaTyMm = dyMm) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
-    GizmoDragHandle(session, ctx, root, "arrow_z_v3.glb", Vector3(baseScale, baseScale, lenZ),
+    GizmoDragHandle(session, ctx, root, "arrow_z_v4.glb", Vector3(baseScale, baseScale, lenZ),
         generate = { f -> GizmoGlb.writeArrow(f, 2, GIZMO_ARROW_LEN_MM, GIZMO_ARROW_SHAFT_MM, floatArrayOf(0.2f, 0.2f, 1f)) },
         projectDelta = { delta -> delta.y },
         buildOverride = { dzMm -> GizmoDragOverride(deltaTzMm = dzMm) },
@@ -213,17 +213,17 @@ fun TransformGizmo(
     // Rotation Rings — printer X/Y/Z map to world X / -Z / Y.
     if (tool == GizmoTool.Rotate) {
     val uniScale = Vector3(baseScale, baseScale, baseScale)
-    GizmoRotHandle(session, ctx, root, "ring_x_v2.glb", axis = 0, centerWorld = centerWorld, gizmoScale = uniScale,
+    GizmoRotHandle(session, ctx, root, "ring_x_v3.glb", axis = 0, centerWorld = centerWorld, gizmoScale = uniScale,
         generate = { f -> GizmoGlb.writeRing(f, 0, GIZMO_RING_RADIUS_MM, GIZMO_RING_THICK_MM, floatArrayOf(1f, 0.2f, 0.2f)) },
         buildOverride = { deg -> GizmoDragOverride(deltaRotXDeg = deg) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
-    GizmoRotHandle(session, ctx, root, "ring_y_v2.glb", axis = 1, centerWorld = centerWorld, gizmoScale = uniScale,
+    GizmoRotHandle(session, ctx, root, "ring_y_v3.glb", axis = 1, centerWorld = centerWorld, gizmoScale = uniScale,
         generate = { f -> GizmoGlb.writeRing(f, 1, GIZMO_RING_RADIUS_MM, GIZMO_RING_THICK_MM, floatArrayOf(0.2f, 1f, 0.2f)) },
         buildOverride = { deg -> GizmoDragOverride(deltaRotYDeg = deg) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
-    GizmoRotHandle(session, ctx, root, "ring_z_v2.glb", axis = 2, centerWorld = centerWorld, gizmoScale = uniScale,
+    GizmoRotHandle(session, ctx, root, "ring_z_v3.glb", axis = 2, centerWorld = centerWorld, gizmoScale = uniScale,
         generate = { f -> GizmoGlb.writeRing(f, 2, GIZMO_RING_RADIUS_MM, GIZMO_RING_THICK_MM, floatArrayOf(0.2f, 0.2f, 1f)) },
         buildOverride = { deg -> GizmoDragOverride(deltaRotZDeg = deg) },
         onLivePreview = onLivePreview, onCommit = onCommit,
@@ -233,17 +233,17 @@ fun TransformGizmo(
     // Scale Handles — printer X/Y/Z map to world X / -Z / Y.
     if (tool == GizmoTool.Scale) {
     val uniScale = Vector3(baseScale, baseScale, baseScale)
-    GizmoScaleHandle(session, ctx, root, "scale_x_v2.glb", axis = 0, centerWorld = centerWorld, gizmoScale = uniScale,
+    GizmoScaleHandle(session, ctx, root, "scale_x_v3.glb", axis = 0, centerWorld = centerWorld, gizmoScale = uniScale,
         generate = { f -> GizmoGlb.writeCube(f, GIZMO_SCALE_CUBE_MM, floatArrayOf(GIZMO_SCALE_OFFSET_MM, 0f, 0f), floatArrayOf(1f, 0.5f, 0.5f)) },
         buildOverride = { ratio -> GizmoDragOverride(scaleMultX = ratio) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
-    GizmoScaleHandle(session, ctx, root, "scale_y_v2.glb", axis = 1, centerWorld = centerWorld, gizmoScale = uniScale,
+    GizmoScaleHandle(session, ctx, root, "scale_y_v3.glb", axis = 1, centerWorld = centerWorld, gizmoScale = uniScale,
         generate = { f -> GizmoGlb.writeCube(f, GIZMO_SCALE_CUBE_MM, floatArrayOf(0f, GIZMO_SCALE_OFFSET_MM, 0f), floatArrayOf(0.5f, 1f, 0.5f)) },
         buildOverride = { ratio -> GizmoDragOverride(scaleMultY = ratio) },
         onLivePreview = onLivePreview, onCommit = onCommit,
     )
-    GizmoScaleHandle(session, ctx, root, "scale_z_v2.glb", axis = 2, centerWorld = centerWorld, gizmoScale = uniScale,
+    GizmoScaleHandle(session, ctx, root, "scale_z_v3.glb", axis = 2, centerWorld = centerWorld, gizmoScale = uniScale,
         generate = { f -> GizmoGlb.writeCube(f, GIZMO_SCALE_CUBE_MM, floatArrayOf(0f, 0f, GIZMO_SCALE_OFFSET_MM), floatArrayOf(0.5f, 0.5f, 1f)) },
         buildOverride = { ratio -> GizmoDragOverride(scaleMultZ = ratio) },
         onLivePreview = onLivePreview, onCommit = onCommit,
