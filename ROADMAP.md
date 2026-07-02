@@ -137,7 +137,7 @@ Selection bbox already uses `CustomMesh.FromMeshDataBuilder` + `MeshEntity` safe
 
 **Exit criteria:** build plate and one toolpath preview render without temp GLB files; no `split_engine_bridge` material/node errors over 20 repeated load/slice/clear cycles on Galaxy XR.
 
-### E12. Native Compose `SpatialGltfModel` + `GltfModelNode` (DP4) 🟡 Probe shipped — production migration gated on device results
+### E12. Native Compose `SpatialGltfModel` + `GltfModelNode` (DP4) 🟡 Visible path integrated; interaction proxies retained
 
 > **Trigger to schedule:** Android XR SDK Developer Preview 4 or Beta release.
 
@@ -145,7 +145,7 @@ Selection bbox already uses `CustomMesh.FromMeshDataBuilder` + `MeshEntity` safe
 
 **Implementation:** `SpatialGltfProbeActivity` (debug-only) plus `SpatialGltfProbeTest` now load generated GLB bytes through `SpatialGltfModel`, move them, swap cube/ring sources, apply/clear/reapply a `GltfModelNode` material override, and tear the model down for 50 cycles. The test skips cleanly on non-XR devices and is intended to run on Galaxy XR with Android Test Orchestrator.
 
-**Migration gate:** do not replace `GlbSceneEntity` or `TransformGizmo` until the probe is green on device and the replacement has a real input/component story. The current editor paths still need `InteractableComponent` / `MovableComponent` on the rendered entity for selection, paint, and gizmo drags; `SpatialGltfModel` exposes nodes/material overrides but not a root entity to attach those components to.
+**Migration gate:** visible build plate, preview, toolpath, and outline GLBs now render through `SpatialGltfModel`; retain `GlbSceneEntity` / `TransformGizmo` proxies for `InteractableComponent` and `MovableComponent`. Both paths must be descendants of the same Compose-bridged workspace `SceneCoreEntity`: a standalone proxy branch rendered successfully but made the plate and gizmos inert on Galaxy XR on 2026-05-25. Do not remove the proxies until `SpatialGltfModel` exposes an equivalent input/component story.
 
 ### E13. Jetpack XR Beta migration 🔴 Not started
 

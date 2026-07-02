@@ -430,41 +430,19 @@ fun LeftProjectPanel(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // "Match to my filaments" — remap every model color onto the
-        // closest color the loaded spools can produce, directly or as a
-        // FullSpectrum blend. User-triggered and preview-gated: tapping
-        // only opens the review sheet; nothing changes until they
-        // confirm. Hidden until a model palette + printer slots exist.
         if (onApplyGamutMatches != null && filaments.isNotEmpty() && slotCount > 0) {
-            var gamutPreview by remember {
-                mutableStateOf<List<GamutMatcher.GamutMatch>?>(null)
-            }
             val byPhysical = printerLoadedSlots.associateBy { it.slotIndex }
             val physicalColors = (0 until slotCount).map { i ->
                 byPhysical[i]?.colorHex
                     ?: paletteSuggestions.getOrNull(i)
                     ?: "#FFFFFF"
             }
-            OutlinedButton(
-                onClick = {
-                    gamutPreview = GamutMatcher.matchModelColors(
-                        sourceColors = filaments.map { it.color },
-                        physicalColors = physicalColors,
-                    )
-                },
+            GamutMatchButton(
+                sourceModelColors = filaments.map { it.color },
+                physicalSlotColors = physicalColors,
+                onApply = onApplyGamutMatches,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("🎨  Match to my filaments") }
-
-            gamutPreview?.let { matches ->
-                GamutMatchDialog(
-                    matches = matches,
-                    onApply = {
-                        onApplyGamutMatches(matches)
-                        gamutPreview = null
-                    },
-                    onDismiss = { gamutPreview = null },
-                )
-            }
+            )
         }
 
         ColorMappingPanel(
@@ -486,132 +464,6 @@ fun LeftProjectPanel(
             onRemoveVirtualRow = onRemoveVirtualRow,
         )
     }
-}
-
-/** Parse "#RRGGBB" into a Compose [Color], falling back to mid-gray on
- *  anything unparseable so the preview swatch never crashes the dialog. */
-private fun parseUiColor(hex: String): Color = runCatching {
-    Color(android.graphics.Color.parseColor(hex))
-}.getOrDefault(Color(0xFF888888))
-
-/**
- * Review sheet for "Match to my filaments". Shows every model color, the
- * achievable color it would be remapped to, the recipe, and an honest
- * per-color quality badge (CIEDE2000). Nothing is persisted until the
- * user taps Apply — the caller owns that.
- */
-@Composable
-private fun GamutMatchDialog(
-    matches: List<GamutMatcher.GamutMatch>,
-    onApply: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    fun qualityLabel(q: GamutMatcher.MatchQuality): Pair<String, Color> = when (q) {
-        GamutMatcher.MatchQuality.EXACT -> "Exact" to Color(0xFF4FC97A)
-        GamutMatcher.MatchQuality.CLOSE -> "Close" to Color(0xFF7BC8FF)
-        GamutMatcher.MatchQuality.APPROXIMATE -> "Approx" to Color(0xFFFFB04A)
-        GamutMatcher.MatchQuality.OUT_OF_GAMUT -> "Best effort" to Color(0xFFFF8A8E)
-    }
-
-    fun recipeText(r: GamutMatcher.GamutRecipe): String = when (r) {
-        is GamutMatcher.GamutRecipe.Physical -> "→ T${r.physicalSlot0} (loaded spool)"
-        is GamutMatcher.GamutRecipe.Blend ->
-            "→ FullSpectrum: T${r.componentA1 - 1} + T${r.componentB1 - 1} " +
-                "(${100 - r.mixBPercent}/${r.mixBPercent})"
-        GamutMatcher.GamutRecipe.Keep -> "→ kept (no usable match)"
-    }
-
-    val anyBlend = matches.any { it.recipe is GamutMatcher.GamutRecipe.Blend }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            Button(onClick = onApply) { Text("Apply matches") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-        title = { Text("Match to my filaments") },
-        text = {
-            Column(
-                modifier = Modifier
-                    .heightIn(max = 460.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    "Each model color is remapped to the closest color your " +
-                        "loaded filaments can make. ΔE is the perceptual error " +
-                        "(lower = closer).",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.LightGray,
-                )
-                matches.forEach { m ->
-                    val (qLabel, qColor) = qualityLabel(m.quality)
-                    Surface(
-                        color = Color(0xFF1B1F23),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(10.dp).fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .background(parseUiColor(m.sourceHex), CircleShape),
-                            )
-                            Text(
-                                "  →  ",
-                                color = Color.Gray,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .background(parseUiColor(m.targetHex), CircleShape),
-                            )
-                            Spacer(Modifier.width(10.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    recipeText(m.recipe),
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                Text(
-                                    if (m.deltaE >= Double.MAX_VALUE / 2) qLabel
-                                    else "$qLabel · ΔE ${"%.1f".format(m.deltaE)}",
-                                    color = qColor,
-                                    style = MaterialTheme.typography.labelSmall,
-                                )
-                            }
-                        }
-                    }
-                }
-                if (anyBlend) {
-                    Text(
-                        "⚠ FullSpectrum blends print as the nearest single " +
-                            "spool until LayerCycle emission ships — your saved " +
-                            "match upgrades to the true blend automatically once " +
-                            "it does, no re-match needed.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFFFFB04A),
-                    )
-                }
-                Text(
-                    "A blended color reads as a third color at viewing " +
-                        "distance / on flat tops; vertical walls may show faint " +
-                        "banding. Swatches are idealized.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.Gray,
-                )
-            }
-        },
-        containerColor = Color(0xFF15181B),
-        titleContentColor = Color.White,
-        textContentColor = Color.White,
-    )
 }
 
 /**
@@ -5602,7 +5454,7 @@ private fun formatHms(secondsRaw: Float): String {
  * pure Composable so the parent decides when/where to host it.
  */
 @Composable
-fun ModelLoadingOverlayPanel(label: String?) {
+fun ModelLoadingOverlayPanel(label: String?, progress: Int? = null) {
     if (label == null) return
     Surface(
         color = Color(0xE6121518),
@@ -5622,6 +5474,15 @@ fun ModelLoadingOverlayPanel(label: String?) {
                 modifier = Modifier.size(56.dp),
             )
             Spacer(modifier = Modifier.height(20.dp))
+            if (progress != null) {
+                LinearProgressIndicator(
+                    progress = { progress / 100f },
+                    modifier = Modifier.width(200.dp).height(8.dp),
+                    color = Color(0xFF7BC8FF),
+                    trackColor = Color(0x337BC8FF),
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
             Text(
                 "Loading model",
                 color = Color.White,
@@ -5630,7 +5491,7 @@ fun ModelLoadingOverlayPanel(label: String?) {
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                label,
+                label + (if (progress != null) " ($progress%)" else ""),
                 color = Color(0xFF7BC8FF),
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
@@ -7820,4 +7681,3 @@ fun ProjectAndSettingsPanel(
         }
     }
 }
-

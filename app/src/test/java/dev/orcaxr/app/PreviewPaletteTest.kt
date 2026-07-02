@@ -125,20 +125,21 @@ class PreviewPaletteTest {
             virtualRows = virtualRows,
             slotCount = 1,
         )
-        assertEquals(listOf("#888888"), resolved)
+        assertEquals(listOf("#888888", "#FF0000"), resolved)
     }
 
-    @Test fun deletedOrDisabledVirtualRowsAreSkipped() {
-        // Visible virtual list filters out deleted + disabled rows.
-        // V1 visible = the second `MixedFilamentEntry` (the first is
-        // deleted), so virtualSlot=1 should resolve to that row.
+    @Test fun deletedOrDisabledVirtualRowsKeepRawPaletteSlots() {
+        // Raw virtual row positions are preserved. A project row still
+        // pointing at V1 resolves through raw row 1, and appended
+        // virtual-palette entries keep deleted/disabled row positions so
+        // native paint IDs don't shift.
         val filaments = listOf(fil(0, "#000000", virtual = 1))
         val loaded = listOf(
             FilamentSlot(0, "#FF0000", "PLA", "Elegoo"),
             FilamentSlot(1, "#00FF00", "PLA", "Elegoo"),
         )
         val virtualRows = listOf(
-            MixedFilamentEntry(id = "tombstoned", componentA = 1, componentB = 2, deleted = true),
+            MixedFilamentEntry(id = "tombstoned", componentA = 1, componentB = 1, deleted = true),
             MixedFilamentEntry(id = "v1_real", componentA = 1, componentB = 2, ratioA = 1, ratioB = 1),
         )
         val resolved = resolveAsWillPrintPalette(
@@ -146,9 +147,9 @@ class PreviewPaletteTest {
             printerLoadedSlots = loaded,
             paletteSuggestions = suggestions,
             virtualRows = virtualRows,
-            slotCount = 1,
+            slotCount = 2,
         )
-        assertEquals("#BCBC00", resolved[0])
+        assertEquals(listOf("#FF0000", "#00FF00", "#FF0000", "#BCBC00"), resolved)
     }
 
     @Test fun partialPrinterLoadoutFallsBackToSuggestions() {

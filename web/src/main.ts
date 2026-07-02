@@ -9,16 +9,44 @@ import 'xrblocks/addons/simulator/SimulatorAddons.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import * as xb from 'xrblocks';
+// @ts-ignore
+import * as uikit from '@pmndrs/uikit';
 
 import { OrcaWorkspace } from './workspace/OrcaWorkspace';
 
 declare global {
   interface Window { ORCAXR_VERSION: string }
 }
-window.ORCAXR_VERSION = 'v13-real-profiles';
+window.ORCAXR_VERSION = 'v21-load-instr';
 
 /** 2D-page UI wiring for standard web slicer mode. */
 function setupDomUI(workspace: OrcaWorkspace) {
+// Inject error logger
+const errDiv = document.createElement('div');
+errDiv.style.position = 'fixed';
+errDiv.style.bottom = '0';
+errDiv.style.left = '0';
+errDiv.style.width = '100%';
+errDiv.style.maxHeight = '50%';
+errDiv.style.overflow = 'auto';
+errDiv.style.backgroundColor = 'rgba(100,0,0,0.8)';
+errDiv.style.color = 'white';
+errDiv.style.zIndex = '999999';
+errDiv.style.fontFamily = 'monospace';
+errDiv.style.fontSize = '12px';
+errDiv.style.padding = '10px';
+errDiv.style.pointerEvents = 'none';
+document.body.appendChild(errDiv);
+
+const oldError = console.error;
+console.error = function(...args) {
+  oldError.apply(console, args);
+  const msg = args.map(a => (a && a.stack) ? a.stack : String(a)).join(' ');
+  errDiv.innerHTML += msg + '<br/><hr/>';
+};
+window.addEventListener('error', e => {
+  console.error(e.error ? e.error.stack : e.message);
+});
   const fileInput = document.getElementById('file-input') as HTMLInputElement;
   const btnLoad = document.getElementById('btn-load') as HTMLButtonElement;
   const btnSlice = document.getElementById('btn-slice') as HTMLButtonElement;
@@ -95,7 +123,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   options.controllers.enabled = true;
   options.controllers.visualizeRays = true;
   options.controllers.performRaycastOnUpdate = true;
+  options.enableUI();
+  
+  // @ts-ignore
+  options.uikit.enable(uikit);
+
   const workspace = new OrcaWorkspace();
+  (window as any).workspace = workspace;
   xb.add(workspace);
   await xb.init(options);
 
@@ -107,7 +141,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   workspace.orbitControls = orbit;
   workspace.setup2DControls(canvas);
 
-  // Debug handle for remote scene inspection via CDP.
+  // Debug handles for remote scene inspection / automated testing via CDP.
   (window as unknown as { __orcaScene: unknown }).__orcaScene = xb.core.scene;
+  (window as unknown as { __orca: unknown }).__orca = workspace;
   setupDomUI(workspace);
 });

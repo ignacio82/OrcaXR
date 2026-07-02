@@ -19,11 +19,10 @@ import kotlin.math.min
 // optionally same-layer XY pointillisme + Local-Z sub-layering, producing
 // an apparent third color the eye averages.
 //
-// Until the libslic3r engine emission patches (0027-0034 — port of
-// PrintObjectSlice / GCode / WipeTower2 / ToolOrdering) land, the slicer
-// silently ignores virtual rows; OrcaXR can author and round-trip 3MFs
-// with mixed-filament rows but the emitted G-code is still
-// single-filament per assigned slot.
+// OrcaXR's libslic3r patch stack now emits FullSpectrum LayerCycle /
+// painted Local-Z G-code from these virtual rows. The Kotlin model stays
+// at the FullSpectrum v0.9.9 wire format so desktop-authored 3MF rows
+// round-trip without schema translation.
 data class MixedFilamentEntry(
     /** Stable id — UUID-ish so painted MMU assignments survive list rebuilds. */
     val id: String,

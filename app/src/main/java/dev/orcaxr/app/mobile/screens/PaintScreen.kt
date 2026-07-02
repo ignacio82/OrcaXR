@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -68,6 +69,11 @@ import java.io.File
 
 private val PRESETS = listOf("iso", "front", "right", "back", "left", "top")
 
+enum class PaintScreenMode {
+    Filament,
+    Support,
+}
+
 /**
  * Touch paint screen. The user taps on a still rendering of the model
  * to mark which filament slot prints which triangles. The flow:
@@ -96,6 +102,7 @@ private val PRESETS = listOf("iso", "front", "right", "back", "left", "top")
 @Composable
 fun PaintScreen(
     filePath: String,
+    mode: PaintScreenMode = PaintScreenMode.Filament,
     initialPaint: ByteArray?,
     onApply: (ByteArray) -> Unit,
     onCancel: () -> Unit,
@@ -112,13 +119,18 @@ fun PaintScreen(
 
     // Resolve the active palette: user's per-printer FilamentEntry
     // colors when present, else padded slot colors, else our default.
-    val palette = remember(activePrinterId, entries, savedSlots) {
+    val filamentPalette = remember(activePrinterId, entries, savedSlots) {
         val e = entries[activePrinterId]
         if (e != null && e.isNotEmpty()) {
             e.sortedBy { it.slotIndex ?: Int.MAX_VALUE }.map { it.color }
         } else {
             app.filamentSlots.pad(savedSlots[activePrinterId], 4)
         }
+    }
+    val palette = if (mode == PaintScreenMode.Support) {
+        listOf("#F5A524", "#5B6472")
+    } else {
+        filamentPalette
     }
 
     var bvh by remember(filePath) { mutableStateOf<MeshBvh?>(null) }
@@ -137,6 +149,7 @@ fun PaintScreen(
     var renderSize by remember(filePath) { mutableStateOf(IntSize.Zero) }
     var brushRadiusMm by remember { mutableStateOf(3f) }
     var slot by remember { mutableStateOf(1) }
+    var supportTag by remember { mutableStateOf(1) }
     var rebakingPreview by remember { mutableStateOf(false) }
 
     // 1) Build BVH on first composition.
@@ -213,13 +226,14 @@ fun PaintScreen(
         if (triId < 0) return
         val touched = b.radiusBfs(triId, brushRadiusMm)
         val updated = pi.copyOf()
-        for (t in touched) updated[t] = slot.toByte()
+        val tag = if (mode == PaintScreenMode.Support) supportTag else slot
+        for (t in touched) updated[t] = tag.toByte()
         paintIndex = updated
     }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         MobileTopBar(
-            title = "Paint",
+            title = if (mode == PaintScreenMode.Support) "Support paint" else "Paint",
             subtitle = File(filePath).name,
         )
         Column(
@@ -229,14 +243,16 @@ fun PaintScreen(
             // Render canvas
             MobileCard {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    SectionKicker("Tap to paint")
+                    SectionKicker(
+                        if (mode == PaintScreenMode.Support) "Tap supports" else "Tap to paint",
+                    )
                     Box(
                         Modifier
                             .fillMaxWidth()
                             .aspectRatio(1f)
                             .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(16.dp))
                             .onSizeChanged { renderSize = it }
-                            .pointerInput(triIdMap, slot, brushRadiusMm) {
+                            .pointerInput(triIdMap, slot, supportTag, brushRadiusMm, mode) {
                                 detectTapGestures(onTap = { offset ->
                                     if (renderSize.width > 0 && renderSize.height > 0) {
                                         applyTap(offset.x, offset.y, renderSize.width, renderSize.height)
@@ -275,18 +291,34 @@ fun PaintScreen(
                 }
             }
 
-            // Slot picker + brush radius
+            // Slot / support-state picker + brush radius
             MobileCard {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    SectionKicker("Filament slot")
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        for ((i, hex) in palette.withIndex()) {
-                            SlotPill(
-                                slotIdx = i + 1,
-                                hex = hex,
-                                selected = slot == i + 1,
-                                onClick = { slot = i + 1 },
+                    if (mode == PaintScreenMode.Support) {
+                        SectionKicker("Support mode")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = supportTag == 1,
+                                onClick = { supportTag = 1 },
+                                label = { Text("Force support") },
                             )
+                            FilterChip(
+                                selected = supportTag == 2,
+                                onClick = { supportTag = 2 },
+                                label = { Text("Block support") },
+                            )
+                        }
+                    } else {
+                        SectionKicker("Filament slot")
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            for ((i, hex) in palette.withIndex()) {
+                                SlotPill(
+                                    slotIdx = i + 1,
+                                    hex = hex,
+                                    selected = slot == i + 1,
+                                    onClick = { slot = i + 1 },
+                                )
+                            }
                         }
                     }
                     SectionKicker("Brush radius (mm)")
@@ -317,7 +349,8 @@ fun PaintScreen(
                         Text("Loading mesh…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
                         val total = pi.size
-                        val byBucket = IntArray(palette.size + 2)
+                        val bucketCount = if (mode == PaintScreenMode.Support) 3 else palette.size + 2
+                        val byBucket = IntArray(bucketCount)
                         for (b in pi) {
                             val v = b.toInt() and 0xff
                             if (v in 0 until byBucket.size) byBucket[v]++
@@ -332,11 +365,20 @@ fun PaintScreen(
                                 )
                             }
                             Spacer(Modifier.width(20.dp))
-                            for (i in 1..palette.size) {
+                            val maxBucket = if (mode == PaintScreenMode.Support) 2 else palette.size
+                            for (i in 1..maxBucket) {
                                 val n = byBucket.getOrElse(i) { 0 }
                                 if (n == 0) continue
                                 Column(Modifier.padding(end = 12.dp)) {
-                                    Text("SLOT $i", style = LocalMobileTextStyles.current.sectionLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(
+                                        if (mode == PaintScreenMode.Support) {
+                                            if (i == 1) "FORCED" else "BLOCKED"
+                                        } else {
+                                            "SLOT $i"
+                                        },
+                                        style = LocalMobileTextStyles.current.sectionLabel,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
                                     Text("$n", style = LocalMobileTextStyles.current.numeric, color = MaterialTheme.colorScheme.onSurface)
                                 }
                             }

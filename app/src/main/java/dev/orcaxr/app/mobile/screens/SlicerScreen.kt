@@ -31,6 +31,8 @@ import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -57,6 +59,8 @@ import androidx.compose.ui.unit.dp
 import dev.orcaxr.app.AiIntrospection
 import dev.orcaxr.app.AiRenderEngine
 import dev.orcaxr.app.BuildPlateGlb
+import dev.orcaxr.app.GamutMatchButton
+import dev.orcaxr.app.GamutMatcher
 import dev.orcaxr.app.MeshBvh
 import dev.orcaxr.app.OrcaProfileLoader
 import dev.orcaxr.app.PrimitiveKind
@@ -65,18 +69,28 @@ import dev.orcaxr.app.SliceResult
 import dev.orcaxr.app.SlicerEngine
 import dev.orcaxr.app.SlicerProfile
 import dev.orcaxr.app.StlReader
+import dev.orcaxr.app.hasAnyPaint
 import dev.orcaxr.app.mobile.EmptyStateCard
 import dev.orcaxr.app.mobile.LocalMobileAppState
 import dev.orcaxr.app.mobile.LocalMobileTextStyles
 import dev.orcaxr.app.mobile.MobileCard
 import dev.orcaxr.app.mobile.MobileDestination
 import dev.orcaxr.app.mobile.MobileMetric
+import dev.orcaxr.app.mobile.MobilePrintOverrideDraft
+import dev.orcaxr.app.mobile.MobilePrintOverrideMapper
+import dev.orcaxr.app.mobile.MobileSliceFilamentConfig
+import dev.orcaxr.app.mobile.MobileSupportMode
+import dev.orcaxr.app.mobile.MobileSupportStyle
 import dev.orcaxr.app.mobile.MobileTopBar
 import dev.orcaxr.app.mobile.SectionKicker
 import dev.orcaxr.app.mobile.StatusPill
+import dev.orcaxr.app.mobile.buildMobileSliceFilamentConfig
 import dev.orcaxr.app.mobile.formatBytes
 import dev.orcaxr.app.mobile.formatDurationCompact
+import dev.orcaxr.app.mobile.mobilePhysicalSlotCount
+import dev.orcaxr.app.mobile.normalizeMobileProjectFilaments
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -110,11 +124,15 @@ fun SlicerScreen(
     onSetOutput: (String?) -> Unit,
     onNavigate: (MobileDestination) -> Unit,
     paintFilamentIndex: ByteArray? = null,
+    supportFlags: ByteArray? = null,
+    onSetSupportFlags: (ByteArray?) -> Unit = {},
     heightRanges: List<dev.orcaxr.app.HeightRange> = emptyList(),
     layerHeightProfile: FloatArray? = null,
     objectConfig: Map<String, String> = emptyMap(),
+    onSetObjectConfig: (Map<String, String>) -> Unit = {},
     customGcodeTicks: List<SlicerEngine.CustomGcodeTick> = emptyList(),
     onOpenPaint: ((String) -> Unit)? = null,
+    onOpenSupportPaint: ((String) -> Unit)? = null,
     onOpenSmartPaint: (() -> Unit)? = null,
     onOpenModelTools: (() -> Unit)? = null,
     transform: SlicerEngine.ModelPlacement = SlicerEngine.ModelPlacement(),
@@ -176,17 +194,76 @@ fun SlicerScreen(
         else SliceUi.Idle
     ) }
 
-    // Active printer's filament-slot palette. Drives the colored-mesh
-    // GLB bake at slice time so PreviewScreen can render the model in
-    // 3D with the same paint colors the XR shell shows. Falls back to
-    // FilamentSlotsStore (legacy color-only path) when no entries are
-    // configured for the active printer.
+    val mixedByPrinter by app.mixedFilaments.all.collectAsState(initial = emptyMap())
+    val activeMixedRows = activePrinter?.id?.let(mixedByPrinter::get).orEmpty()
+    val filamentsCatalog = remember(ctx) { OrcaProfileLoader.loadFilaments(ctx) }
+
+    // Active printer's physical slot palette. Keep this independent
+    // from the project filament list: a 6-color 3MF on a U1 still has
+    // 6 project colors but only 4 physical toolchanger slots.
     val filamentSlotsByPrinter by app.filamentSlots.all.collectAsState(initial = emptyMap<String, List<String>>())
-    val activePaletteHex = remember(filamentMap, filamentSlotsByPrinter, activePrinter?.id) {
-        val entries = activePrinter?.id?.let { filamentMap[it] }.orEmpty()
-            .sortedBy { it.slotIndex }
-        if (entries.isNotEmpty()) entries.map { it.color }
-        else activePrinter?.id?.let { filamentSlotsByPrinter[it] }.orEmpty()
+    val savedPhysicalColors = activePrinter?.id?.let { filamentSlotsByPrinter[it] }
+    val physicalSlotCount = remember(activePrinter, selectedProfile, savedPhysicalColors) {
+        mobilePhysicalSlotCount(
+            printer = activePrinter,
+            profile = selectedProfile,
+            savedPhysicalColors = savedPhysicalColors,
+        )
+    }
+    val physicalPalette = remember(savedPhysicalColors, physicalSlotCount) {
+        app.filamentSlots.pad(savedPhysicalColors, physicalSlotCount)
+    }
+    val filamentConfig = remember(
+        selectedProfile,
+        layerHeightOverride,
+        activeFilamentEntries,
+        physicalSlotCount,
+        physicalPalette,
+        activeMixedRows,
+        filamentsCatalog,
+    ) {
+        buildMobileSliceFilamentConfig(
+            profile = selectedProfile,
+            layerHeightInput = layerHeightOverride,
+            projectFilaments = activeFilamentEntries,
+            physicalSlotCount = physicalSlotCount,
+            physicalSlotColors = physicalPalette,
+            defaultPalette = app.filamentSlots.defaultPalette,
+            virtualRows = activeMixedRows,
+            allFilaments = filamentsCatalog,
+        )
+    }
+    val activePaletteHex = filamentConfig.asWillPrintPalette
+
+    var lastEmbeddedSyncKey by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(filePath, activePrinter?.id, physicalSlotCount) {
+        val path = filePath ?: return@LaunchedEffect
+        val printerId = activePrinter?.id ?: return@LaunchedEffect
+        val source = File(path)
+        if (!source.extension.equals("3mf", ignoreCase = true)) return@LaunchedEffect
+        val syncKey = "$printerId|${source.absolutePath}"
+        if (lastEmbeddedSyncKey == syncKey) return@LaunchedEffect
+
+        runCatching {
+            val embedded = SlicerEngine.read3mfFilamentColours(source)
+            if (embedded.isNotEmpty()) {
+                val latestEntries = app.filamentEntries.all.first()[printerId].orEmpty()
+                val normalized = normalizeMobileProjectFilaments(
+                    embeddedPalette = embedded,
+                    existingEntries = latestEntries,
+                    physicalSlotCount = physicalSlotCount,
+                    defaultPalette = app.filamentSlots.defaultPalette,
+                )
+                app.filamentEntries.set(printerId, normalized)
+            }
+
+            val serialized = SlicerEngine.read3mfMixedFilamentDefinitions(source)
+            if (!serialized.isNullOrBlank()) {
+                val parsed = dev.orcaxr.app.parseMixedDefinitionsForKotlin(serialized)
+                if (parsed.isNotEmpty()) app.mixedFilaments.set(printerId, parsed)
+            }
+        }
+        lastEmbeddedSyncKey = syncKey
     }
 
     // Empty-plate import + primitive launcher. Mirrors OrcaSlicer:
@@ -277,6 +354,7 @@ fun SlicerScreen(
                         transform = transform,
                         onSetTransform = onSetTransform,
                         paintFilamentIndex = paintFilamentIndex,
+                        asWillPrintPalette = activePaletteHex,
                         fillRemaining = true,
                     )
                     SliceProgressCard(sliceState, onContinue = {
@@ -287,19 +365,60 @@ fun SlicerScreen(
                     ProfileCard(displayedProfiles, selectedProfile, onSelect = { selectedProfile = it })
                     FilamentsCard(
                         activePrinter = activePrinter,
+                        physicalSlotCount = filamentConfig.physicalSlotCount,
+                        projectFilaments = filamentConfig.projectFilaments,
+                        physicalPalette = filamentConfig.physicalPalette,
                         onEditSlots = { onNavigate(MobileDestination.Filament) },
                     )
-                    QuickOverridesCard(layerHeightOverride, onChange = { layerHeightOverride = it })
+                    if (activePrinter != null) {
+                        GamutMatchButton(
+                            sourceModelColors = filamentConfig.projectFilaments.map { it.color },
+                            physicalSlotColors = filamentConfig.physicalPalette,
+                            onApply = { matches ->
+                                val printerId = activePrinter.id
+                                val result = GamutMatcher.applyGamutMatches(
+                                    filaments = filamentConfig.projectFilaments,
+                                    virtualRows = activeMixedRows,
+                                    matches = matches,
+                                )
+                                scope.launch {
+                                    app.mixedFilaments.set(printerId, result.virtualRows)
+                                    app.filamentEntries.set(printerId, result.filaments)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    PrintSetupCard(
+                        layerHeight = layerHeightOverride,
+                        onLayerHeightChange = { layerHeightOverride = it },
+                        objectConfig = objectConfig,
+                        onObjectConfigChange = onSetObjectConfig,
+                    )
                     ToolsCard(
                         filePath = filePath,
                         cacheDir = ctx.cacheDir,
                         onSetFile = onSetFile,
                         onOpenPaint = onOpenPaint,
+                        onOpenSupportPaint = onOpenSupportPaint,
                         onOpenSmartPaint = onOpenSmartPaint,
                         onOpenModelTools = onOpenModelTools,
-                        paintApplied = paintFilamentIndex != null,
+                        paintApplied = hasAnyPaint(paintFilamentIndex),
+                        supportPaintApplied = hasAnyPaint(supportFlags),
+                        onClearSupportPaint = { onSetSupportFlags(null) },
                         transform = transform,
                         onSetTransform = onSetTransform,
+                        paintFilamentIndex = paintFilamentIndex,
+                        supportFlags = supportFlags,
+                        objectConfigOverrides = objectConfig,
+                        exportConfig = selectedProfile.config + buildMap {
+                            layerHeightOverride.toFloatOrNull()
+                                ?.takeIf { it > 0f }
+                                ?.let {
+                                    put("layer_height", it.toString())
+                                    put("initial_layer_print_height", it.toString())
+                                }
+                        },
                     )
                     TransformSheet(transform, onSetTransform)
                     SliceButton(
@@ -310,12 +429,11 @@ fun SlicerScreen(
                             scope.launch {
                                 runSlice(
                                     inputPath = filePath,
-                                    profile = selectedProfile,
-                                    layerHeightOverride = layerHeightOverride,
                                     cacheDir = ctx.cacheDir,
                                     paintFilamentIndex = paintFilamentIndex,
+                                    supportFlags = supportFlags,
                                     transform = transform,
-                                    paletteHex = activePaletteHex,
+                                    filamentConfig = filamentConfig,
                                     heightRanges = heightRanges,
                                     layerHeightProfile = layerHeightProfile,
                                     objectConfig = objectConfig,
@@ -350,28 +468,65 @@ fun SlicerScreen(
                     transform = transform,
                     onSetTransform = onSetTransform,
                     paintFilamentIndex = paintFilamentIndex,
+                    asWillPrintPalette = activePaletteHex,
                     fillRemaining = false,
                 )
                 ProfileCard(displayedProfiles, selectedProfile, onSelect = { selectedProfile = it })
                 FilamentsCard(
                     activePrinter = activePrinter,
+                    physicalSlotCount = filamentConfig.physicalSlotCount,
+                    projectFilaments = filamentConfig.projectFilaments,
+                    physicalPalette = filamentConfig.physicalPalette,
                     onEditSlots = { onNavigate(MobileDestination.Filament) },
                 )
-                QuickOverridesCard(layerHeightOverride, onChange = { layerHeightOverride = it })
+                if (activePrinter != null) {
+                    GamutMatchButton(
+                        sourceModelColors = filamentConfig.projectFilaments.map { it.color },
+                        physicalSlotColors = filamentConfig.physicalPalette,
+                        onApply = { matches ->
+                            val printerId = activePrinter.id
+                            val result = GamutMatcher.applyGamutMatches(
+                                filaments = filamentConfig.projectFilaments,
+                                virtualRows = activeMixedRows,
+                                matches = matches,
+                            )
+                            scope.launch {
+                                app.mixedFilaments.set(printerId, result.virtualRows)
+                                app.filamentEntries.set(printerId, result.filaments)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                PrintSetupCard(
+                    layerHeight = layerHeightOverride,
+                    onLayerHeightChange = { layerHeightOverride = it },
+                    objectConfig = objectConfig,
+                    onObjectConfigChange = onSetObjectConfig,
+                )
                 ToolsCard(
                     filePath = filePath,
                     cacheDir = ctx.cacheDir,
                     onSetFile = onSetFile,
                     onOpenPaint = onOpenPaint,
+                    onOpenSupportPaint = onOpenSupportPaint,
                     onOpenSmartPaint = onOpenSmartPaint,
                     onOpenModelTools = onOpenModelTools,
-                    paintApplied = paintFilamentIndex != null,
+                    paintApplied = hasAnyPaint(paintFilamentIndex),
+                    supportPaintApplied = hasAnyPaint(supportFlags),
+                    onClearSupportPaint = { onSetSupportFlags(null) },
                     transform = transform,
                     onSetTransform = onSetTransform,
+                    paintFilamentIndex = paintFilamentIndex,
+                    supportFlags = supportFlags,
+                    objectConfigOverrides = objectConfig,
                     exportConfig = selectedProfile.config + buildMap {
                         layerHeightOverride.toFloatOrNull()
                             ?.takeIf { it > 0f }
-                            ?.let { put("layer_height", it.toString()) }
+                            ?.let {
+                                put("layer_height", it.toString())
+                                put("initial_layer_print_height", it.toString())
+                            }
                     },
                 )
                 TransformSheet(transform, onSetTransform)
@@ -383,12 +538,11 @@ fun SlicerScreen(
                         scope.launch {
                             runSlice(
                                 inputPath = filePath,
-                                profile = selectedProfile,
-                                layerHeightOverride = layerHeightOverride,
                                 cacheDir = ctx.cacheDir,
                                 paintFilamentIndex = paintFilamentIndex,
+                                supportFlags = supportFlags,
                                 transform = transform,
-                                paletteHex = activePaletteHex,
+                                filamentConfig = filamentConfig,
                                 heightRanges = heightRanges,
                                 layerHeightProfile = layerHeightProfile,
                                 objectConfig = objectConfig,
@@ -438,6 +592,7 @@ private fun PreviewCard(
     transform: SlicerEngine.ModelPlacement,
     onSetTransform: (SlicerEngine.ModelPlacement) -> Unit,
     paintFilamentIndex: ByteArray?,
+    asWillPrintPalette: List<String>,
     fillRemaining: Boolean,
 ) {
     val app = LocalMobileAppState.current
@@ -607,6 +762,7 @@ private fun PreviewCard(
         paintFilamentIndex,
         embeddedPaintFilament,
         embeddedPalette,
+        asWillPrintPalette,
         glMesh,
         viewerView,
         slotsByPrinter,
@@ -646,20 +802,28 @@ private fun PreviewCard(
         val maxPaintRef = effectivePaint.maxOfOrNull { it.toInt() and 0xff } ?: 0
         val baseSlotCount = maxOf(16, embeddedPalette.size, maxPaintRef)
         val paddedSlots = app.filamentSlots.pad(savedSlots, count = baseSlotCount)
-        val sourceHex: List<String> =
-            if (usingEmbedded) {
-                // Use the embedded palette where it has an entry, fall
-                // back to the printer's slot color for any index the
-                // 3MF didn't supply. Final fallback is the brand mint.
+        val sourceHex: List<String> = when {
+            asWillPrintPalette.isNotEmpty() -> {
+                val out = ArrayList<String>(baseSlotCount)
+                for (i in 0 until baseSlotCount) {
+                    out.add(
+                        asWillPrintPalette.getOrNull(i)
+                            ?: embeddedPalette.getOrNull(i)
+                            ?: paddedSlots.getOrElse(i) { "#79D0C7" },
+                    )
+                }
+                out
+            }
+            usingEmbedded -> {
                 val out = ArrayList<String>(baseSlotCount)
                 for (i in 0 until baseSlotCount) {
                     val embeddedHex = embeddedPalette.getOrNull(i)
                     out.add(embeddedHex ?: paddedSlots.getOrElse(i) { "#79D0C7" })
                 }
                 out
-            } else {
-                paddedSlots
             }
+            else -> paddedSlots
+        }
         val palette =
             sourceHex.map { hex ->
                 val parsed = runCatching { android.graphics.Color.parseColor(hex) }.getOrNull()
@@ -901,9 +1065,9 @@ private fun ProfileCard(
 }
 
 /**
- * Inline per-slot filament card. Surfaces the active printer's project
- * palette (color + material) directly on the Slicer screen so the user
- * can see/edit slot colors without bouncing to the Filament tab, and
+ * Inline per-slot filament card. Surfaces the active printer's physical
+ * slot colors directly on the Slicer screen so the user can see/edit
+ * loaded-spool colors without bouncing to the Filament tab, and
  * "Sync from printer" pulls the colors Klipper reports loaded right
  * now (Moonraker queryFilamentSlots) into both the legacy
  * FilamentSlotsStore (drives palette suggestions across the app) and
@@ -915,29 +1079,22 @@ private fun ProfileCard(
 @Composable
 private fun FilamentsCard(
     activePrinter: dev.orcaxr.app.PrinterConfig?,
+    physicalSlotCount: Int,
+    projectFilaments: List<dev.orcaxr.app.FilamentEntry>,
+    physicalPalette: List<String>,
     onEditSlots: () -> Unit,
 ) {
     val app = LocalMobileAppState.current
     val scope = rememberCoroutineScope()
-    val slotsByPrinter by app.filamentSlots.all
-        .collectAsState(initial = emptyMap<String, List<String>>())
     val entriesByPrinter by app.filamentEntries.all
         .collectAsState(initial = emptyMap())
-    val savedColors = activePrinter?.id?.let { slotsByPrinter[it] }
     val savedEntries = activePrinter?.id?.let { entriesByPrinter[it] }.orEmpty()
-    // Slot count comes from entries first (the newer surface), then
-    // saved colors, defaulting to 4 (Snapmaker U1) so a fresh install
-    // always shows something rather than an empty card.
-    val slotCount = savedEntries.size.takeIf { it > 0 }
-        ?: savedColors?.size?.takeIf { it > 0 }
-        ?: 4
-    val effective = remember(savedEntries, savedColors, slotCount) {
-        val byIndex = savedEntries.associateBy { it.slotIndex }
-        val padded = app.filamentSlots.pad(savedColors, slotCount)
-        (0 until slotCount).map { i ->
+    val effective = remember(projectFilaments, physicalPalette, physicalSlotCount) {
+        val byIndex = projectFilaments.associateBy { it.slotIndex }
+        (0 until physicalSlotCount).map { i ->
             byIndex[i] ?: dev.orcaxr.app.FilamentEntry(
                 id = "auto_$i",
-                color = padded.getOrNull(i) ?: "#FFFFFF",
+                color = physicalPalette.getOrNull(i) ?: "#FFFFFF",
                 slotIndex = i,
                 filamentType = "Generic PLA",
             )
@@ -1005,10 +1162,9 @@ private fun FilamentsCard(
                         }
                     }
                 }
+                val printer = activePrinter
                 OutlinedButton(
                     onClick = {
-                        val printer = activePrinter
-                        if (printer == null) return@OutlinedButton
                         scope.launch {
                             syncing = true
                             syncStatus = null
@@ -1019,13 +1175,25 @@ private fun FilamentsCard(
                             when (result) {
                                 is dev.orcaxr.app.MoonrakerResult.Ok -> {
                                     val probedColors = result.value.map { it.colorHex }
-                                    val newCount = probedColors.size.coerceAtLeast(slotCount)
-                                    val newEntries = (0 until newCount).map { i ->
+                                    val newPhysicalCount = maxOf(
+                                        probedColors.size,
+                                        physicalSlotCount,
+                                    )
+                                    val currentProject = savedEntries.ifEmpty { projectFilaments }
+                                    val byIndex = currentProject.associateBy { it.slotIndex }
+                                    val projectCount = maxOf(
+                                        currentProject.size,
+                                        newPhysicalCount,
+                                    )
+                                    val newEntries = (0 until projectCount).map { i ->
+                                        val existing = byIndex[i]
                                         val probed = probedColors.getOrNull(i)
-                                        val existing = effective.getOrNull(i)
                                         dev.orcaxr.app.FilamentEntry(
                                             id = existing?.id ?: "synced_$i",
-                                            color = probed ?: existing?.color ?: "#FFFFFF",
+                                            color = probed
+                                                ?: existing?.color
+                                                ?: physicalPalette.getOrNull(i)
+                                                ?: "#FFFFFF",
                                             slotIndex = i,
                                             filamentType = existing?.filamentType ?: "Generic PLA",
                                             physicalSlot = existing?.physicalSlot,
@@ -1038,7 +1206,11 @@ private fun FilamentsCard(
                                     // refreshed colors.
                                     app.filamentSlots.set(
                                         printer.id,
-                                        newEntries.map { it.color },
+                                        (0 until newPhysicalCount).map { i ->
+                                            probedColors.getOrNull(i)
+                                                ?: physicalPalette.getOrNull(i)
+                                                ?: "#FFFFFF"
+                                        },
                                     )
                                     app.filamentEntries.set(printer.id, newEntries)
                                     syncStatus = "Synced ${probedColors.size} slot(s) from ${printer.name}"
@@ -1053,7 +1225,7 @@ private fun FilamentsCard(
                             syncing = false
                         }
                     },
-                    enabled = !syncing && activePrinter != null,
+                    enabled = !syncing,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(
@@ -1102,6 +1274,182 @@ private fun QuickOverridesCard(layerHeight: String, onChange: (String) -> Unit) 
             )
         }
     }
+}
+
+@Composable
+private fun PrintSetupCard(
+    layerHeight: String,
+    onLayerHeightChange: (String) -> Unit,
+    objectConfig: Map<String, String>,
+    onObjectConfigChange: (Map<String, String>) -> Unit,
+) {
+    var localOverrides by remember { mutableStateOf(objectConfig) }
+    var draft by remember { mutableStateOf(MobilePrintOverrideDraft.from(objectConfig)) }
+
+    LaunchedEffect(objectConfig) {
+        if (objectConfig != localOverrides) {
+            localOverrides = objectConfig
+            draft = MobilePrintOverrideDraft.from(objectConfig)
+        }
+    }
+
+    fun commit(next: MobilePrintOverrideDraft) {
+        draft = next
+        val updated = MobilePrintOverrideMapper.apply(localOverrides, next)
+        localOverrides = updated
+        onObjectConfigChange(updated)
+    }
+
+    MobileCard {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SectionKicker("Print setup")
+            PrintSetupNumberField(
+                label = "Layer height",
+                value = layerHeight,
+                key = "layer_height",
+                suffix = "mm",
+                onChange = onLayerHeightChange,
+            )
+            PrintSetupNumberField(
+                label = "Infill density",
+                value = draft.infillDensity,
+                key = "sparse_infill_density",
+                suffix = "%",
+                onChange = { commit(draft.copy(infillDensity = it)) },
+            )
+            PrintSetupNumberField(
+                label = "Wall loops",
+                value = draft.wallLoops,
+                key = "wall_loops",
+                onChange = { commit(draft.copy(wallLoops = it)) },
+            )
+
+            HorizontalDivider()
+            Text("Support mode", style = MaterialTheme.typography.titleSmall)
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(MobileSupportMode.values().toList()) { mode ->
+                    FilterChip(
+                        selected = draft.supportMode == mode,
+                        onClick = { commit(draft.copy(supportMode = mode)) },
+                        label = { Text(mode.label) },
+                    )
+                }
+            }
+
+            if (draft.supportMode == MobileSupportMode.Generate) {
+                Text("Support style", style = MaterialTheme.typography.titleSmall)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(MobileSupportStyle.values().toList()) { style ->
+                        FilterChip(
+                            selected = draft.supportStyle == style,
+                            onClick = { commit(draft.copy(supportStyle = style)) },
+                            label = { Text(style.label) },
+                        )
+                    }
+                }
+                PrintSetupNumberField(
+                    label = "Threshold angle",
+                    value = draft.supportThresholdAngle,
+                    key = "support_threshold_angle",
+                    suffix = "deg",
+                    onChange = { commit(draft.copy(supportThresholdAngle = it)) },
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    PrintSetupNumberField(
+                        label = "Top Z gap",
+                        value = draft.supportTopZDistance,
+                        key = "support_top_z_distance",
+                        suffix = "mm",
+                        onChange = { commit(draft.copy(supportTopZDistance = it)) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    PrintSetupNumberField(
+                        label = "Bottom Z gap",
+                        value = draft.supportBottomZDistance,
+                        key = "support_bottom_z_distance",
+                        suffix = "mm",
+                        onChange = { commit(draft.copy(supportBottomZDistance = it)) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                PrintSetupNumberField(
+                    label = "XY distance",
+                    value = draft.supportXyDistance,
+                    key = "support_object_xy_distance",
+                    suffix = "mm",
+                    onChange = { commit(draft.copy(supportXyDistance = it)) },
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    PrintSetupNumberField(
+                        label = "Top interface layers",
+                        value = draft.supportInterfaceTopLayers,
+                        key = "support_interface_top_layers",
+                        onChange = { commit(draft.copy(supportInterfaceTopLayers = it)) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    PrintSetupNumberField(
+                        label = "Bottom interface layers",
+                        value = draft.supportInterfaceBottomLayers,
+                        key = "support_interface_bottom_layers",
+                        onChange = { commit(draft.copy(supportInterfaceBottomLayers = it)) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    PrintSetupNumberField(
+                        label = "Support speed",
+                        value = draft.supportSpeed,
+                        key = "support_speed",
+                        suffix = "mm/s",
+                        onChange = { commit(draft.copy(supportSpeed = it)) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    PrintSetupNumberField(
+                        label = "Interface speed",
+                        value = draft.supportInterfaceSpeed,
+                        key = "support_interface_speed",
+                        suffix = "mm/s",
+                        onChange = { commit(draft.copy(supportInterfaceSpeed = it)) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PrintSetupNumberField(
+    label: String,
+    value: String,
+    key: String,
+    onChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    suffix: String? = null,
+) {
+    val valid = if (key == "layer_height") {
+        val trimmed = value.trim()
+        trimmed.isEmpty() || trimmed.toFloatOrNull()?.let { it in 0.04f..1.5f } == true
+    } else {
+        MobilePrintOverrideMapper.isNumericTextValidOrBlank(key, value)
+    }
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(label) },
+        singleLine = true,
+        suffix = suffix?.let { s -> { Text(s) } },
+        isError = !valid,
+        supportingText = if (valid) null else {
+            { Text("Invalid value") }
+        },
+        keyboardOptions =
+            androidx.compose.foundation.text.KeyboardOptions(
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+            ),
+        modifier = modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
@@ -1199,12 +1547,11 @@ private fun SliceProgressCard(state: SliceUi, onContinue: () -> Unit) {
 
 private suspend fun runSlice(
     inputPath: String,
-    profile: SlicerProfile,
-    layerHeightOverride: String,
     cacheDir: File,
     paintFilamentIndex: ByteArray?,
+    supportFlags: ByteArray?,
     transform: SlicerEngine.ModelPlacement,
-    paletteHex: List<String>,
+    filamentConfig: MobileSliceFilamentConfig,
     heightRanges: List<dev.orcaxr.app.HeightRange> = emptyList(),
     layerHeightProfile: FloatArray? = null,
     objectConfig: Map<String, String> = emptyMap(),
@@ -1215,11 +1562,8 @@ private suspend fun runSlice(
     val source = File(inputPath)
     val outDir = File(cacheDir, "gcode").apply { mkdirs() }
     val out = File(outDir, "${source.nameWithoutExtension}.gcode")
-    val effectiveConfig = profile.config.toMutableMap()
-    layerHeightOverride.toFloatOrNull()?.let { lh ->
-        effectiveConfig["layer_height"] = lh.toString()
-        effectiveConfig["initial_layer_print_height"] = lh.toString()
-    }
+    val effectiveConfig = filamentConfig.config.toMutableMap()
+    val effectiveRemap = filamentConfig.effectiveVirtualRemap
     // Route through sliceMulti so the user's translate / rotate /
     // scale knobs are honored even for the single-model flow. When
     // the transform is identity, sliceMulti behaves identically to
@@ -1234,7 +1578,10 @@ private suspend fun runSlice(
     // object overrides into the print config there — equivalent for
     // one object.
     val isIdentity = transform == SlicerEngine.ModelPlacement()
-    val hasExtra = paintFilamentIndex != null || heightRanges.isNotEmpty() ||
+    val effectivePaint = paintFilamentIndex.takeIf { hasAnyPaint(it) }
+    val effectiveSupport = supportFlags.takeIf { hasAnyPaint(it) }
+    val hasExtra = effectiveRemap != null ||
+        effectivePaint != null || effectiveSupport != null || heightRanges.isNotEmpty() ||
         layerHeightProfile != null || objectConfig.isNotEmpty() ||
         customGcodeTicks.isNotEmpty()
     val result = when {
@@ -1242,6 +1589,7 @@ private suspend fun runSlice(
             stl = source,
             outGcode = out,
             config = effectiveConfig,
+            virtualRemap = null,
             paintFilamentIndex = null,
             onProgress = { percent, message -> onProgress(percent, message) },
         )
@@ -1249,7 +1597,9 @@ private suspend fun runSlice(
             stl = source,
             outGcode = out,
             config = effectiveConfig,
-            paintFilamentIndex = paintFilamentIndex,
+            virtualRemap = effectiveRemap,
+            paintFilamentIndex = effectivePaint,
+            supportFlags = effectiveSupport,
             objectConfigOverrides = objectConfig,
             layerHeightProfile = layerHeightProfile,
             heightRanges = heightRanges,
@@ -1261,7 +1611,9 @@ private suspend fun runSlice(
             outGcode = out,
             config = if (objectConfig.isEmpty()) effectiveConfig
             else (effectiveConfig + objectConfig).toMutableMap(),
-            paintFilamentIndices = listOf(paintFilamentIndex),
+            virtualRemap = effectiveRemap,
+            paintFilamentIndices = listOf(effectivePaint),
+            supportFlagsPerInput = listOf(effectiveSupport),
             layerHeightProfilesPerInput =
                 if (layerHeightProfile != null) listOf(layerHeightProfile) else null,
             customGcodeTicks = customGcodeTicks,
@@ -1280,21 +1632,17 @@ private suspend fun runSlice(
         runCatching {
             val coloredGlb = File(outDir, "${source.nameWithoutExtension}.colored.glb")
             val palette = FloatArray(16 * 3) { 1f }
-            for (i in 0 until minOf(paletteHex.size, 16)) {
-                val h = paletteHex[i].trimStart('#').padStart(6, '0').take(6)
+            for (i in 0 until minOf(filamentConfig.asWillPrintPalette.size, 16)) {
+                val h = filamentConfig.asWillPrintPalette[i].trimStart('#').padStart(6, '0').take(6)
                 palette[i * 3 + 0] = (h.substring(0, 2).toIntOrNull(16) ?: 255) / 255f
                 palette[i * 3 + 1] = (h.substring(2, 4).toIntOrNull(16) ?: 255) / 255f
                 palette[i * 3 + 2] = (h.substring(4, 6).toIntOrNull(16) ?: 255) / 255f
             }
-            val paintForPreview =
-                if (paintFilamentIndex != null && paintFilamentIndex.any { it.toInt() != 0 }) {
-                    paintFilamentIndex
-                } else null
             SlicerEngine.writeColoredGlb(
                 input = source,
                 outGlb = coloredGlb,
                 paletteRgb = palette,
-                paintFilamentIndex = paintForPreview,
+                paintFilamentIndex = effectivePaint,
             )
         }.onFailure {
             android.util.Log.w(
@@ -1497,11 +1845,17 @@ private fun ToolsCard(
     cacheDir: File,
     onSetFile: (String?) -> Unit,
     onOpenPaint: ((String) -> Unit)?,
+    onOpenSupportPaint: ((String) -> Unit)?,
     onOpenSmartPaint: (() -> Unit)?,
     onOpenModelTools: (() -> Unit)?,
     paintApplied: Boolean,
+    supportPaintApplied: Boolean,
+    onClearSupportPaint: () -> Unit,
     transform: SlicerEngine.ModelPlacement,
     onSetTransform: (SlicerEngine.ModelPlacement) -> Unit,
+    paintFilamentIndex: ByteArray? = null,
+    supportFlags: ByteArray? = null,
+    objectConfigOverrides: Map<String, String> = emptyMap(),
     /**
      * Configuration to embed when exporting as 3MF. Empty map = the
      * 3MF carries only the mesh (no slicer settings); pass the
@@ -1550,7 +1904,14 @@ private fun ToolsCard(
             val tmp = File(cacheDir, "export_${src.nameWithoutExtension}.3mf")
             val ok = withContext(Dispatchers.IO) {
                 runCatching {
-                    val wrote = SlicerEngine.saveAs3mf(input = src, outPath = tmp, config = exportConfig)
+                    val wrote = SlicerEngine.saveAs3mf(
+                        input = src,
+                        outPath = tmp,
+                        config = exportConfig,
+                        paintFilamentIndex = paintFilamentIndex,
+                        supportFlags = supportFlags,
+                        objectConfigOverrides = objectConfigOverrides,
+                    )
                     if (!wrote || !tmp.exists() || tmp.length() == 0L) return@runCatching false
                     ctx.contentResolver.openOutputStream(uri)?.use { out ->
                         tmp.inputStream().use { it.copyTo(out) }
@@ -1660,6 +2021,27 @@ private fun ToolsCard(
                     Text(if (paintApplied) "Edit paint" else "Paint by slot")
                 }
             }
+            if (onOpenSupportPaint != null) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { onOpenSupportPaint(filePath) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Filled.Brush, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (supportPaintApplied) "Edit support paint" else "Paint supports")
+                }
+            }
+            if (supportPaintApplied) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        onClearSupportPaint()
+                        lastToolResult = "Support paint cleared."
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Clear support paint")
+                }
+            }
             if (onOpenSmartPaint != null) {
                 androidx.compose.material3.Button(
                     onClick = { onOpenSmartPaint() },
@@ -1686,6 +2068,9 @@ private fun ToolsCard(
             }
             if (paintApplied) {
                 StatusPill("Paint applied", MaterialTheme.colorScheme.primary)
+            }
+            if (supportPaintApplied) {
+                StatusPill("Support paint applied", MaterialTheme.colorScheme.secondary)
             }
         }
     }

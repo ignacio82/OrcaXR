@@ -12,12 +12,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -55,26 +53,10 @@ fun ModelToolsScreen(
     val scope = rememberCoroutineScope()
     val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
     val ws = remember { WorkspaceModel.get() }
-    val placed by ws.placedModels.collectAsState()
     val ticksByPlate by ws.customGcodeTicks.collectAsState()
-    val curOverrides = placed.firstOrNull { it.id == "mobile_loaded" }?.configOverrides
-        ?: emptyMap()
     var cutZ by remember { mutableStateOf("5") }
     var simplifyTarget by remember { mutableStateOf("20000") }
     var quality by remember { mutableStateOf(0.5f) }
-    var infill by remember(curOverrides) {
-        mutableStateOf(curOverrides["sparse_infill_density"]?.removeSuffix("%") ?: "")
-    }
-    var walls by remember(curOverrides) { mutableStateOf(curOverrides["wall_loops"] ?: "") }
-    var supportEnabled by remember(curOverrides) {
-        mutableStateOf(curOverrides["enable_support"]?.trim() in listOf("1", "true", "True"))
-    }
-    var supportType by remember(curOverrides) {
-        mutableStateOf(curOverrides["support_type"] ?: "normal(auto)")
-    }
-    var supportAngle by remember(curOverrides) {
-        mutableStateOf(curOverrides["support_threshold_angle"] ?: "")
-    }
     var tickZ by remember { mutableStateOf("10") }
     var tickKind by remember { mutableStateOf("PausePrint") }
     var running by remember { mutableStateOf(false) }
@@ -208,118 +190,6 @@ fun ModelToolsScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text("Auto-position wipe tower") }
-                }
-            }
-
-            MobileCard {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SectionKicker("Object settings")
-                    Text(
-                        "Per-model print overrides (blank = inherit profile).",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    OutlinedTextField(
-                        value = infill,
-                        onValueChange = { infill = it.filter(Char::isDigit) },
-                        label = { Text("Sparse infill density (%)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = walls,
-                        onValueChange = { walls = it.filter(Char::isDigit) },
-                        label = { Text("Wall loops") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-
-                    HorizontalDivider()
-                    Text("Supports", style = MaterialTheme.typography.titleSmall)
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Switch(
-                            checked = supportEnabled,
-                            onCheckedChange = { supportEnabled = it },
-                        )
-                        Text(
-                            if (supportEnabled) "Generate supports" else "No supports (inherit profile)",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                    if (supportEnabled) {
-                        Text(
-                            "Style",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        FlowRow(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            listOf(
-                                "normal(auto)" to "Normal · auto",
-                                "tree(auto)" to "Tree · auto",
-                                "normal(manual)" to "Normal · manual",
-                                "tree(manual)" to "Tree · manual",
-                            ).forEach { (value, label) ->
-                                FilterChip(
-                                    selected = supportType == value,
-                                    onClick = { supportType = value },
-                                    label = { Text(label) },
-                                )
-                            }
-                        }
-                        OutlinedTextField(
-                            value = supportAngle,
-                            onValueChange = {
-                                supportAngle = it.filter { c -> c.isDigit() }
-                            },
-                            label = { Text("Overhang threshold (°, blank = auto)") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Button(
-                            enabled = !running,
-                            onClick = {
-                                val m = buildMap {
-                                    infill.toIntOrNull()?.let { put("sparse_infill_density", "$it%") }
-                                    walls.toIntOrNull()?.let { put("wall_loops", "$it") }
-                                    if (supportEnabled) {
-                                        put("enable_support", "1")
-                                        put("support_type", supportType)
-                                        supportAngle.toIntOrNull()?.let {
-                                            put("support_threshold_angle", "$it")
-                                        }
-                                    }
-                                }
-                                fire("Applying overrides", closeOnOk = false) {
-                                    MobileWorkspaceActions.setObjectOverrides(m)
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) { Text("Apply") }
-                        OutlinedButton(
-                            enabled = !running,
-                            onClick = {
-                                infill = ""; walls = ""
-                                supportEnabled = false
-                                supportType = "normal(auto)"
-                                supportAngle = ""
-                                fire("Clearing overrides", closeOnOk = false) {
-                                    MobileWorkspaceActions.setObjectOverrides(emptyMap())
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) { Text("Clear") }
-                    }
                 }
             }
 

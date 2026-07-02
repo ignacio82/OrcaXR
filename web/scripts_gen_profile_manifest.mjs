@@ -1,20 +1,29 @@
-// Build-time: generate public/profiles/manifest.json (the browser can't
-// list directories). Rerun after adding/removing profile JSONs.
-import { readdirSync, writeFileSync, statSync } from 'node:fs';
+// Build-time: bundle ALL profile JSONs into public/profiles/catalog.json.
+// One fetch at runtime — and immune to the vite dev-middleware quirk that
+// returns the SPA fallback for URLs whose filenames contain '@'.
+import { readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = 'public/profiles';
-const manifest = {};
+const catalog = {};
+let count = 0;
 for (const brand of readdirSync(root)) {
-  if (!statSync(join(root, brand)).isDirectory()) continue;
-  manifest[brand] = {};
+  const bdir = join(root, brand);
+  if (!statSync(bdir).isDirectory()) continue;
+  catalog[brand] = { machine: [], process: [], filament: [] };
   for (const cat of ['machine', 'process', 'filament']) {
     try {
-      manifest[brand][cat] = readdirSync(join(root, brand, cat)).filter((f) => f.endsWith('.json'));
-    } catch {
-      manifest[brand][cat] = [];
-    }
+      for (const f of readdirSync(join(bdir, cat))) {
+        if (!f.endsWith('.json')) continue;
+        try {
+          catalog[brand][cat].push(JSON.parse(readFileSync(join(bdir, cat, f), 'utf8')));
+          count++;
+        } catch (e) {
+          console.warn('skip unparseable', brand, cat, f);
+        }
+      }
+    } catch { /* category missing */ }
   }
 }
-writeFileSync(join(root, 'manifest.json'), JSON.stringify(manifest, null, 1));
-console.log('manifest written:', Object.keys(manifest).join(', '));
+writeFileSync(join(root, 'catalog.json'), JSON.stringify(catalog));
+console.log(`catalog.json: ${count} profiles from ${Object.keys(catalog).join(', ')}`);

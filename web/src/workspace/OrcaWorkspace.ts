@@ -11,7 +11,15 @@ import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
+import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
+
+THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
+THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
+THREE.Mesh.prototype.raycast = acceleratedRaycast;
 import * as xb from 'xrblocks';
+// @ts-ignore
+import { UICore, UIPanel, UIText, UIIcon, raycastSortFunction, ManipulationBehavior } from 'xrblocks/addons/uiblocks/src/index.js';
 
 import { bedSizeFromProfile, ProfileCatalog, SlicerProfile } from '../slicer/ProfileLoader';
 import { SlicerClient } from '../slicer/SlicerClient';
@@ -27,6 +35,7 @@ const PLATE_Y = 0.8;
 const PLATE_Z = -0.9;
 
 export class OrcaWorkspace extends xb.Script {
+  private uiCore: any;
   private slicer = new SlicerClient();
   private catalog = new ProfileCatalog();
   private profile: SlicerProfile | null = null;
@@ -46,8 +55,24 @@ export class OrcaWorkspace extends xb.Script {
   public onStatusChanged: ((text: string) => void) | null = null;
   public onDownloadReady: ((ready: boolean) => void) | null = null;
 
+  constructor() {
+    super();
+    this.uiCore = new UICore(this);
+  }
+
   async init() {
+    if (xb.core.input.raycaster) {
+      xb.core.input.raycaster.sortFunction = raycastSortFunction;
+    }
     xb.core.input.addReticles();
+    
+    // Bind interaction events
+    xb.core.input.controllers.forEach((controller: any) => {
+      controller.addEventListener('selectstart', (e: any) => this.onSelectStart(e));
+      controller.addEventListener('select', (e: any) => this.onSelecting(e));
+      controller.addEventListener('selectend', () => this.onSelectEnd());
+    });
+    
     this.addLights();
     // NOTE: the group is NOT scaled — XR Blocks' DragManager (platform
     // translate, rotation cylinder, panel pinch) breaks inside scaled
@@ -151,7 +176,12 @@ export class OrcaWorkspace extends xb.Script {
         const intersects = raycaster.intersectObject(entry.display, true);
         if (intersects.length > 0) {
           hitModel = true;
-          this.selectModel(entry);
+          if (this.tool === 'lay_on_face' && intersects[0].face) {
+            this.layOnFace(entry, intersects[0].face.normal, intersects[0].object);
+            this.setTool('move');
+          } else {
+            this.selectModel(entry);
+          }
           break;
         }
       }
@@ -162,7 +192,8 @@ export class OrcaWorkspace extends xb.Script {
     });
   }
 
-  private tool: 'move' | 'rotate' | 'scale' = 'move';
+  private tool: 'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint' = 'move';
+  private activePaintColor = new THREE.Color(0xff0000); // Default to red
   private drag: {
     controller: THREE.Object3D;
     startControllerLocal: THREE.Vector3;
@@ -178,6 +209,17 @@ export class OrcaWorkspace extends xb.Script {
       intersectionsForController: Map<unknown, THREE.Intersection[]>;
     };
     const ints = input.intersectionsForController.get(event.target) ?? [];
+    
+    // Do nothing if we hit a UI panel! (Otherwise clicking a UI button unselects the model)
+    const hitUI = ints.some(i => {
+      let isUi = false;
+      i.object.traverseAncestors(a => {
+        if (a.name === 'LeftToolbar' || a.name === 'RightSidebar') isUi = true;
+      });
+      return isUi || i.object.name === 'LeftToolbar' || i.object.name === 'RightSidebar';
+    });
+    if (hitUI) return;
+
     console.log('[orcaxr-hit]', ints.slice(0, 3)
       .map((i) => `${i.object.name || i.object.type}@${i.distance.toFixed(2)}`)
       .join(' | ') || 'NOTHING');
@@ -192,6 +234,13 @@ export class OrcaWorkspace extends xb.Script {
       return false;
     });
     if (!entry) return;
+
+    if (this.tool === 'lay_on_face' && first.face) {
+      this.layOnFace(entry, first.face.normal, first.object);
+      this.setTool('move');
+      return;
+    }
+
     const controller = event.target as THREE.Object3D;
     const startControllerLocal = this.workspace.worldToLocal(
       controller.getWorldPosition(new THREE.Vector3()),
@@ -206,6 +255,36 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   onSelecting(event: { target: unknown }) {
+    if (this.tool === 'paint') {
+      const controller = event.target as THREE.Object3D;
+      const raycaster = new THREE.Raycaster();
+      const tempMatrix = new THREE.Matrix4().extractRotation(controller.matrixWorld);
+      raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+      raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+      const meshes = this.models.map(m => m.viewer.getObjectByName('modelMesh')).filter(Boolean) as THREE.Mesh[];
+      const hits = raycaster.intersectObjects(meshes, false);
+      const meshHit = hits[0];
+
+      if (meshHit && meshHit.face) {
+        const geom = meshHit.object.geometry as THREE.BufferGeometry;
+        const colorAttr = geom.getAttribute('color') as THREE.BufferAttribute;
+        
+        // Paint the hit triangle and its neighbors within a small radius (brush size)
+        // For simplicity right now we'll just paint the exact triangle hit.
+        const face = meshHit.face;
+        const r = this.activePaintColor.r;
+        const g = this.activePaintColor.g;
+        const b = this.activePaintColor.b;
+        
+        colorAttr.setXYZ(face.a, r, g, b);
+        colorAttr.setXYZ(face.b, r, g, b);
+        colorAttr.setXYZ(face.c, r, g, b);
+        colorAttr.needsUpdate = true;
+      }
+      return;
+    }
+
     const d = this.drag;
     if (!d || event.target !== d.controller) return;
     const entry = this.models[0];
@@ -227,7 +306,7 @@ export class OrcaWorkspace extends xb.Script {
       // Horizontal hand sweep = yaw: 25 cm of travel = a full turn.
       entry.viewer.rotation.y = d.startRotY + (delta.x / 0.25) * Math.PI * 2;
       this.showValues(`rotZ ${((entry.viewer.rotation.y * 180) / Math.PI % 360).toFixed(0)}°`);
-    } else {
+    } else if (this.tool === 'scale') {
       // Vertical hand travel = scale: +25 cm doubles, −25 cm halves.
       const f = Math.pow(2, delta.y / 0.25);
       const sNew = THREE.MathUtils.clamp(d.startScale * f, 0.05, 20);
@@ -246,6 +325,53 @@ export class OrcaWorkspace extends xb.Script {
       viewer.position.x = THREE.MathUtils.clamp(viewer.position.x, -halfX, halfX);
       viewer.position.z = THREE.MathUtils.clamp(viewer.position.z, -halfZ, halfZ);
     }
+  }
+
+  /** Distinct machine names in catalog order. */
+  private machineChoices(): string[] {
+    return [...new Set(this.catalog.profiles.map((p) => p.machineName))];
+  }
+
+  /** Processes compatible with the machine (same nozzle-size token). */
+  private processChoices(machine: string): string[] {
+    const nozzle = /0\.\d+/.exec(machine)?.[0] ?? '';
+    return [...new Set(
+      this.catalog.profiles
+        .filter((p) => p.machineName === machine && (!nozzle || p.processName.includes(nozzle)))
+        .map((p) => p.processName),
+    )];
+  }
+
+  private filamentChoices(machine: string): string[] {
+    return [...new Set(
+      this.catalog.profiles
+        .filter((p) => p.machineName === machine)
+        .map((p) => p.filamentName),
+    )];
+  }
+
+  /** Cycle one dimension of the profile triple (public: panel + tests). */
+  cycleProfilePart(part: 'machine' | 'process' | 'filament') {
+    const cur = this.profile;
+    if (!cur) return;
+    const cycle = (list: string[], val: string) =>
+      list[(Math.max(0, list.indexOf(val)) + 1) % Math.max(1, list.length)] ?? val;
+    let machine = cur.machineName;
+    let process = cur.processName;
+    let filament = cur.filamentName;
+    if (part === 'machine') {
+      machine = cycle(this.machineChoices(), machine);
+      process = this.processChoices(machine)[0] ?? process;
+      filament = this.filamentChoices(machine)[0] ?? filament;
+    } else if (part === 'process') {
+      process = cycle(this.processChoices(machine), process);
+    } else {
+      filament = cycle(this.filamentChoices(machine), filament);
+    }
+    const next = this.catalog.profiles.find(
+      (x) => x.machineName === machine && x.processName === process && x.filamentName === filament,
+    ) ?? this.catalog.find(machine, process, filament);
+    if (next) this.setProfile(next);
   }
 
   private setProfile(p: SlicerProfile) {
@@ -280,7 +406,8 @@ export class OrcaWorkspace extends xb.Script {
       m.viewer.traverse((o) => { delete (o as any).draggingMode; });
     }
 
-    if (this.panel) this.panel.visible = true;
+    if (this.leftToolbarCard) this.leftToolbarCard.show();
+    if (this.rightSidebarCard) this.rightSidebarCard.show();
   }
 
   onXRSessionEnded() {
@@ -299,20 +426,33 @@ export class OrcaWorkspace extends xb.Script {
       this.selectModel(this.models[this.models.length - 1]);
     }
 
-    if (this.panel) this.panel.visible = false;
+    if (this.leftToolbarCard) this.leftToolbarCard.hide();
+    if (this.rightSidebarCard) this.rightSidebarCard.hide();
   }
 
   onSimulatorStarted() {
     this.needsRecenter = true;
   }
 
-  update() {
+  update(time: number, frame: XRFrame) {
     if (this.needsRecenter) {
       const cam = xb.core.camera;
       if (cam.position.lengthSq() > 1e-6) {
         this.needsRecenter = false;
         this.recenterInFrontOfUser();
       }
+    }
+    
+    try {
+      for (const card of this.uiCore.cards) {
+        try {
+          card.update(time, frame);
+        } catch (e: any) {
+          console.error('UICard update error:', e);
+        }
+      }
+    } catch (e) {
+      console.error("UI Card update error:", e);
     }
   }
 
@@ -333,15 +473,24 @@ export class OrcaWorkspace extends xb.Script {
     this.workspace.rotation.set(0, yaw, 0);
     this.workspace.updateMatrixWorld(true);
 
-    // Park the panel to the right of the plate, raised, facing the user.
-    if (this.panel) {
+    if (this.leftToolbarCard) {
+      const left = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0));
+      const ppos = pos.clone().addScaledVector(left, 0.45);
+      ppos.y = pos.y + 0.15;
+      ppos.addScaledVector(fwd, -0.15);
+      this.leftToolbarCard.position.copy(ppos);
+      this.leftToolbarCard.rotation.set(0, yaw, 0);
+      this.leftToolbarCard.updateMatrixWorld(true);
+    }
+
+    if (this.rightSidebarCard) {
       const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).negate();
       const ppos = pos.clone().addScaledVector(right, -0.45);
-      ppos.y = pos.y + 0.28;
-      ppos.addScaledVector(fwd, -0.05);
-      this.panel.position.copy(ppos);
-      this.panel.rotation.set(0, yaw, 0);
-      this.panel.updateMatrixWorld(true);
+      ppos.y = pos.y + 0.25;
+      ppos.addScaledVector(fwd, -0.15);
+      this.rightSidebarCard.position.copy(ppos);
+      this.rightSidebarCard.rotation.set(0, yaw, 0);
+      this.rightSidebarCard.updateMatrixWorld(true);
     }
   }
 
@@ -420,34 +569,39 @@ export class OrcaWorkspace extends xb.Script {
   /** Injected by main.ts: requests the browser to open the file picker. */
   onRequestLoadStl: (() => void) | null = null;
 
+  /** Load an STL by URL into the library (used by tests + built-ins). */
+  async loadModelFromUrl(url: string): Promise<void> {
+    const t0 = performance.now();
+    console.log('[orcaxr-load] fetching', url);
+    const raw = await new STLLoader().loadAsync(url);
+    console.log('[orcaxr-load] parsed in', Math.round(performance.now() - t0), 'ms,',
+      raw.getAttribute('position').count / 3, 'tris');
+    this.loadModelFromGeometry(raw, url.split('/').pop() ?? url);
+    console.log('[orcaxr-load] scene setup done at', Math.round(performance.now() - t0), 'ms');
+  }
+
   /** Replace the current model with [raw] (STL geometry: mm, Z-up). */
   loadModelFromGeometry(raw: THREE.BufferGeometry, name: string) {
     this.library.push({ name, geometry: raw });
     this.libraryIndex = this.library.length - 1;
-    this.showLibraryModel();
-  }
-
-  private showLibraryModel() {
-    const entry = this.library[this.libraryIndex];
-    if (!entry) return;
-    for (const { viewer } of this.models) {
-      this.workspace.remove(viewer);
-    }
-    this.models.length = 0;
-    this.addModelFromGeometry(entry.geometry, 0x4fc3f7);
+    this.addModelFromGeometry(raw, 0x4fc3f7);
     if (this.transformControls && this.models.length > 0) {
-      this.selectModel(this.models[0]);
+      this.selectModel(this.models[this.models.length - 1]);
     }
-    this.setStatus(
-      `model ${this.libraryIndex + 1}/${this.library.length}: ${entry.name}\n` +
-      '(swap cycles files loaded on the 2D page)',
-    );
+    this.setStatus(`Loaded ${name}.`);
   }
 
-  private cycleModel() {
+  private addFromLibrary() {
     if (this.library.length === 0) return;
     this.libraryIndex = (this.libraryIndex + 1) % this.library.length;
-    this.showLibraryModel();
+    const entry = this.library[this.libraryIndex];
+    if (entry) {
+      this.addModelFromGeometry(entry.geometry, 0x4fc3f7);
+      if (this.transformControls && this.models.length > 0) {
+        this.selectModel(this.models[this.models.length - 1]);
+      }
+      this.setStatus(`Added ${entry.name}`);
+    }
   }
 
   getLastGcode(): string | null {
@@ -456,10 +610,20 @@ export class OrcaWorkspace extends xb.Script {
 
   private addModelFromGeometry(raw: THREE.BufferGeometry, color: number) {
     raw.computeVertexNormals();
+    raw.computeBoundsTree();
+
+    const colors = new Float32Array(raw.attributes.position.count * 3);
+    const colorObj = new THREE.Color(color);
+    for (let i = 0; i < colors.length; i += 3) {
+      colors[i] = colorObj.r;
+      colors[i + 1] = colorObj.g;
+      colors[i + 2] = colorObj.b;
+    }
+    raw.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     const mesh = new THREE.Mesh(
       raw,
-      new THREE.MeshStandardMaterial({ color, roughness: 0.5 }),
+      new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5 }),
     );
     mesh.name = 'modelMesh';
     // STL is mm / Z-up; display is meters / Y-up, magnified.
@@ -492,109 +656,323 @@ export class OrcaWorkspace extends xb.Script {
     this.models.push({ raw, display: mesh, viewer: model });
   }
 
-  private panel: InstanceType<typeof xb.SpatialPanel> | null = null;
-
-  private toolButtons: { tool: 'move' | 'rotate' | 'scale'; btn: { fontColor: string | number } }[] = [];
-  private valueText: { text: string } | null = null;
+  private toolButtons: { tool: string; btn: UIPanel; iconEl: UIIcon }[] = [];
+  private paintOptionsPanel?: UIPanel;
+  private paintSwatches: { c: number; btn: UIPanel }[] = [];
+  private valueText: any = null;
   private loadButtonNode: THREE.Object3D | null = null;
+  private leftToolbarCard: any = null;
+  private rightSidebarCard: any = null;
 
   private addControlPanel() {
-    // Size via panel options — scaling the panel object desyncs its
-    // internal view hit-rects (v5: button pinches only ever hit PanelMesh).
-    const panel = new xb.SpatialPanel({
-      backgroundColor: '#20242baa',
-      width: 0.52,
-      height: 0.42,
-      useDefaultPosition: false,
-    });
-    panel.isRoot = true;
-    panel.position.set(0.45, PLATE_Y + 0.25, PLATE_Z + 0.1);
-    panel.visible = false; // Hidden in 2D mode by default
-    this.add(panel);
-    this.panel = panel;
-
-    const grid = panel.addGrid();
-    this.statusText = grid.addRow({ weight: 0.3 }).addText({
-      text: 'OrcaXR v13 — pick a tool, then\npinch-drag the model.',
-      fontColor: '#ffffff',
-      fontSize: 0.05,
-    }) as unknown as { text: string };
-    this.valueText = grid.addRow({ weight: 0.18 }).addText({
-      text: '',
-      fontColor: '#ffb74d',
-      fontSize: 0.055,
-    }) as unknown as { text: string };
-
-    const tools = grid.addRow({ weight: 0.3 });
-    const mk = (tool: 'move' | 'rotate' | 'scale', icon: string) => {
-      const btn = tools
-        .addCol({ weight: 1 / 3 })
-        .addIconButton({ text: icon, fontSize: 0.42 }) as unknown as {
-        fontColor: string | number;
-        onTriggered: () => void;
-      };
-      btn.onTriggered = () => this.setTool(tool);
-      this.toolButtons.push({ tool, btn });
-    };
-    mk('move', 'open_with');
-    mk('rotate', 'rotate_right');
-    mk('scale', 'open_in_full');
-
-    const ctrl = grid.addRow({ weight: 0.22 });
-    const loadButton = ctrl
-      .addCol({ weight: 1 / 5 })
-      .addIconButton({ text: 'upload_file', fontSize: 0.42 });
-    this.loadButtonNode = loadButton as unknown as THREE.Object3D;
-    (loadButton as unknown as { onTriggered: () => void }).onTriggered = () => {
-      // Fallback: mostly ignored because the native select hook catches it first,
-      // but left here in case the user clicks via Desktop simulator (mouse).
-      if (this.onRequestLoadStl) this.onRequestLoadStl();
-    };
-    const swapButton = ctrl
-      .addCol({ weight: 1 / 5 })
-      .addIconButton({ text: 'swap_horiz', fontSize: 0.42 });
-    (swapButton as unknown as { onTriggered: () => void }).onTriggered = () => {
-      this.cycleModel();
-    };
-    const sliceButton = ctrl
-      .addCol({ weight: 1 / 5 })
-      .addIconButton({ text: 'play_circle', fontSize: 0.5 });
-    (sliceButton as unknown as { onTriggered: () => void }).onTriggered = () => {
-      void this.sliceNow();
-    };
-    const dlButton = ctrl
-      .addCol({ weight: 1 / 5 })
-      .addIconButton({ text: 'download', fontSize: 0.42 });
-    (dlButton as unknown as { onTriggered: () => void }).onTriggered = () => {
-      if (this.lastGcode && this.onDownloadGcode) {
-        this.onDownloadGcode(this.lastGcode);
-        this.setStatus('G-code download queued —\ncheck Downloads after exiting XR.');
-      } else {
-        this.setStatus('No G-code yet — slice first.');
-      }
-    };
-    const exitButton = ctrl
-      .addCol({ weight: 1 / 5 })
-      .addIconButton({ text: 'logout', fontSize: 0.42 });
-    (exitButton as unknown as { onTriggered: () => void }).onTriggered = () => {
-      // End the immersive session — back to the 2D page (Load STL /
-      // Download G-code live there; downloads flush on exit).
-      void xb.core.renderer.xr.getSession()?.end();
-    };
-    panel.updateLayouts();
+    this.addLeftToolbar();
+    this.addRightSidebar();
     this.refreshToolButtons();
   }
 
-  public setTool(tool: 'move' | 'rotate' | 'scale') {
+  private addLeftToolbar() {
+    const card = this.uiCore.createCard({
+      name: 'LeftToolbar',
+      sizeX: 0.12,
+      sizeY: 0.8,
+      pixelSize: 0.0012,
+      position: new THREE.Vector3(-0.45, PLATE_Y + 0.15, PLATE_Z + 0.1),
+      width: 100,
+      alignItems: 'center',
+      behaviors: [
+        new ManipulationBehavior({
+          draggable: true,
+          faceCamera: true,
+          manipulationMargin: 10,
+          manipulationCornerRadius: 12,
+        })
+      ]
+    });
+    card.visible = false;
+    this.leftToolbarCard = card;
+
+    const root = new UIPanel({
+      width: '100%',
+      height: '100%',
+      flexDirection: 'column',
+      fillColor: '#14171aA6',
+      cornerRadius: 12,
+      padding: 10,
+      gap: 10,
+      strokeWidth: 1,
+      strokeColor: '#ffffff14'
+    });
+    card.add(root);
+
+    const addToolBtn = (tool: 'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint', icon: string) => {
+      const btn = new UIPanel({
+        width: 80, height: 80,
+        justifyContent: 'center', alignItems: 'center',
+        cornerRadius: 8,
+        fillColor: '#ffffff14',
+        strokeWidth: 1, strokeColor: '#ffffff1a',
+        onClick: () => { this.setTool(tool); return true; },
+        onHoverEnter: () => { btn.fillColor = '#ffffff26'; },
+        onHoverExit: () => { this.refreshToolButtons(); }
+      });
+      const iconEl = new UIIcon(icon, { color: '#cccccc', width: 48, height: 48 });
+      btn.add(iconEl);
+      root.add(btn);
+      this.toolButtons.push({ tool, btn, iconEl });
+    };
+
+    addToolBtn('move', 'open_with');
+    addToolBtn('rotate', 'rotate_right');
+    addToolBtn('scale', 'open_in_full');
+    addToolBtn('lay_on_face', 'flip_to_back');
+    addToolBtn('paint', 'format_paint');
+    
+    // Paint options palette
+    this.paintOptionsPanel = new UIPanel({
+      width: '100%',
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 5
+    });
+    const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xffffff, 0x444444];
+    this.paintSwatches = [];
+    for (const c of colors) {
+      const swatch = new UIPanel({
+        width: 35, height: 35,
+        cornerRadius: 4,
+        fillColor: '#' + c.toString(16).padStart(6, '0'),
+        strokeWidth: 2, strokeColor: '#444444',
+        onClick: () => { 
+          this.activePaintColor.setHex(c); 
+          this.setTool('paint'); 
+          return true; 
+        }
+      });
+      this.paintSwatches.push({ c, btn: swatch });
+      this.paintOptionsPanel.add(swatch);
+    }
+    root.add(this.paintOptionsPanel);
+    
+    // Add spacer
+    const spacer = new UIPanel({ width: 60, height: 2, fillColor: '#ffffff33' });
+    root.add(spacer);
+
+    // Auto orient button
+    const orientBtn = new UIPanel({
+      width: 80, height: 80,
+      justifyContent: 'center', alignItems: 'center',
+      cornerRadius: 8,
+      fillColor: '#ffffff14',
+      strokeWidth: 1, strokeColor: '#ffffff1a',
+      onClick: () => { this.autoOrientSelectedModel(); return true; },
+      onHoverEnter: () => { orientBtn.fillColor = '#ffffff26'; },
+      onHoverExit: () => { orientBtn.fillColor = '#ffffff14'; }
+    });
+    orientBtn.add(new UIIcon('explore', { color: '#cccccc', width: 48, height: 48 }));
+    root.add(orientBtn);
+
+    // Delete button
+    const delBtn = new UIPanel({
+      width: 80, height: 80,
+      justifyContent: 'center', alignItems: 'center',
+      cornerRadius: 8,
+      fillColor: '#ffffff14',
+      strokeWidth: 1, strokeColor: '#ff525233',
+      onClick: () => { this.deleteSelectedModel(); return true; },
+      onHoverEnter: () => { delBtn.fillColor = '#ff525226'; },
+      onHoverExit: () => { delBtn.fillColor = '#ffffff14'; }
+    });
+    delBtn.add(new UIIcon('delete', { color: '#ff5252', width: 48, height: 48 }));
+    root.add(delBtn);
+  }
+
+  private addRightSidebar() {
+    const card = this.uiCore.createCard({
+      name: 'RightSidebar',
+      sizeX: 0.35,
+      sizeY: 0.6,
+      pixelSize: 0.0012,
+      position: new THREE.Vector3(0.45, PLATE_Y + 0.25, PLATE_Z + 0.1),
+      width: 290,
+      alignItems: 'center',
+      behaviors: [
+        new ManipulationBehavior({
+          draggable: true,
+          faceCamera: true,
+          manipulationMargin: 16,
+          manipulationCornerRadius: 16,
+        })
+      ]
+    });
+    card.visible = false;
+    this.rightSidebarCard = card;
+
+    const root = new UIPanel({
+      width: '100%',
+      flexDirection: 'column',
+      fillColor: '#14171aA6',
+      cornerRadius: 16,
+      padding: 24,
+      gap: 20,
+      strokeWidth: 1,
+      strokeColor: '#ffffff14'
+    });
+    card.add(root);
+
+    // Header
+    const header = new UIPanel({ width: '100%', flexDirection: 'row', alignItems: 'center' });
+    header.add(new UIText('OrcaXR Web', { fontSize: 32, fontWeight: 'bold', color: '#ffffff' }));
+    root.add(header);
+
+    // Profile selectors
+    const profPanel = new UIPanel({ width: '100%', flexDirection: 'row', justifyContent: 'space-between', gap: 10 });
+    const mkProf = (part: 'machine' | 'process' | 'filament', icon: string) => {
+      const btn = new UIPanel({
+        flexGrow: 1, height: 50,
+        justifyContent: 'center', alignItems: 'center',
+        cornerRadius: 8,
+        fillColor: '#ffffff14',
+        strokeWidth: 1, strokeColor: '#ffffff1a',
+        onClick: () => { this.cycleProfilePart(part); return true; },
+        onHoverEnter: () => { btn.fillColor = '#ffffff26'; },
+        onHoverExit: () => { btn.fillColor = '#ffffff14'; }
+      });
+      btn.add(new UIIcon(icon, { color: '#ffffff', width: 24, height: 24 }));
+      profPanel.add(btn);
+    };
+    mkProf('machine', 'print');
+    mkProf('process', 'tune');
+    mkProf('filament', 'water_drop');
+    root.add(profPanel);
+
+    // Action buttons
+    const mkAction = (text: string, icon: string, primary: boolean, onClick: () => void) => {
+      const btn = new UIPanel({
+        width: '100%', height: 50,
+        flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10,
+        cornerRadius: 10,
+        fillColor: primary ? '#ffb74d' : '#ffffff14',
+        strokeWidth: primary ? 0 : 1,
+        strokeColor: primary ? '#ffb74d' : '#ffffff1a',
+        onClick: () => { onClick(); return true; },
+        onHoverEnter: () => { btn.fillColor = primary ? '#ff6d00' : '#ffffff26'; },
+        onHoverExit: () => { btn.fillColor = primary ? '#ffb74d' : '#ffffff14'; }
+      });
+      btn.add(new UIIcon(icon, { color: primary ? '#000000' : '#ffffff', width: 24, height: 24 }));
+      btn.add(new UIText(text, { fontSize: 20, fontWeight: 'bold', color: primary ? '#000000' : '#ffffff' }));
+      return btn;
+    };
+
+    const loadBtn = mkAction('Load STL', 'upload_file', false, () => {
+      if (this.onRequestLoadStl) this.onRequestLoadStl();
+    });
+    this.loadButtonNode = loadBtn as unknown as THREE.Object3D;
+    root.add(loadBtn);
+    
+    root.add(mkAction('Slice', 'play_circle', true, () => void this.sliceNow()));
+    
+    root.add(mkAction('Download G-Code', 'download', false, () => {
+      if (this.lastGcode && this.onDownloadGcode) {
+        this.onDownloadGcode(this.lastGcode);
+        this.setStatus('G-code download queued');
+      } else {
+        this.setStatus('No G-code yet - slice first.');
+      }
+    }));
+    
+    root.add(mkAction('Add from Library', 'add_circle', false, () => this.addFromLibrary()));
+    root.add(mkAction('Fix Model (ADMesh)', 'healing', false, () => void this.fixSelectedModel()));
+    root.add(mkAction('Union (Merge All)', 'merge', false, () => void this.booleanModels('UNION')));
+    root.add(mkAction('Subtract (Cut)', 'content_cut', false, () => void this.booleanModels('A_NOT_B')));
+
+    // Status Area
+    const statusPanel = new UIPanel({
+      width: '100%',
+      padding: 16,
+      fillColor: '#0000004d',
+      cornerRadius: 8,
+      strokeWidth: 1,
+      strokeColor: '#ffffff0d'
+    });
+    this.statusText = new UIText('Ready. Load an STL to begin.', { fontSize: 16, color: '#a0aab5' });
+    statusPanel.add(this.statusText);
+    root.add(statusPanel);
+    
+    // Value text (for tools)
+    this.valueText = new UIText(' ', { fontSize: 18, color: '#ffb74d' });
+    root.add(this.valueText);
+  }
+
+  public setTool(tool: 'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint') {
     this.tool = tool;
     this.refreshToolButtons();
-    this.setStatus(`tool: ${tool} — pinch-drag the model`);
-    
-    if (this.transformControls) {
-      if (tool === 'move') this.transformControls.setMode('translate');
-      else if (tool === 'rotate') this.transformControls.setMode('rotate');
-      else if (tool === 'scale') this.transformControls.setMode('scale');
+    if (this.tool === 'lay_on_face') {
+      this.setStatus('Select a face on the model to lay flat');
+    } else {
+      this.setStatus(`tool: ${tool} - pinch-drag the model`);
+      
+      if (this.transformControls) {
+        if (tool === 'move') this.transformControls.setMode('translate');
+        else if (tool === 'rotate') this.transformControls.setMode('rotate');
+        else if (tool === 'scale') this.transformControls.setMode('scale');
+      }
     }
+  }
+
+  private snapToBed(entry: { viewer: THREE.Object3D }) {
+    entry.viewer.updateMatrixWorld();
+    const box = new THREE.Box3().setFromObject(entry.viewer);
+    const lowestWorldY = box.min.y;
+    const bedWorldY = this.workspace.getWorldPosition(new THREE.Vector3()).y;
+    entry.viewer.position.y += (bedWorldY - lowestWorldY);
+  }
+
+  private layOnFace(entry: { viewer: THREE.Object3D, display: THREE.Mesh }, faceNormal: THREE.Vector3, hitObject: THREE.Object3D) {
+    const normalMatrix = new THREE.Matrix3().getNormalMatrix(hitObject.matrixWorld);
+    const worldNormal = faceNormal.clone().applyMatrix3(normalMatrix).normalize();
+    const targetNormal = new THREE.Vector3(0, -1, 0);
+    const q = new THREE.Quaternion().setFromUnitVectors(worldNormal, targetNormal);
+    
+    const workspaceWorldQuat = this.workspace.getWorldQuaternion(new THREE.Quaternion());
+    const workspaceInvQuat = workspaceWorldQuat.clone().invert();
+    const localQ = workspaceInvQuat.clone().multiply(q).multiply(workspaceWorldQuat);
+    
+    entry.viewer.quaternion.premultiply(localQ);
+    this.snapToBed(entry);
+    this.setStatus('Laid on face');
+  }
+
+  private autoOrientSelectedModel() {
+    if (!this.selectedModel) return;
+    const entry = this.selectedModel;
+    const originalQuat = entry.viewer.quaternion.clone();
+    
+    const candidates = [
+      new THREE.Quaternion(),
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2),
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2),
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI),
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2),
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2),
+    ];
+    
+    let bestQuat = originalQuat;
+    let minHeight = Infinity;
+    
+    for (const q of candidates) {
+      entry.viewer.quaternion.copy(q);
+      entry.viewer.updateMatrixWorld();
+      const box = new THREE.Box3().setFromObject(entry.viewer);
+      const height = box.max.y - box.min.y;
+      if (height < minHeight) {
+        minHeight = height;
+        bestQuat = q;
+      }
+    }
+    
+    entry.viewer.quaternion.copy(bestQuat);
+    this.snapToBed(entry);
+    this.setStatus('Auto-oriented model');
   }
 
   private checkLoadButtonAndTrigger() {
@@ -629,18 +1007,32 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   private refreshToolButtons() {
-    for (const { tool, btn } of this.toolButtons) {
-      btn.fontColor = tool === this.tool ? '#ff6d00' : '#ffffff';
+    for (const { tool, btn, iconEl } of this.toolButtons) {
+      const active = this.tool === tool;
+      btn.fillColor = active ? '#ffffff4d' : '#ffffff14';
+      iconEl.color = active ? '#ffffff' : '#cccccc';
+    }
+    if (this.paintOptionsPanel) {
+      this.refreshPaintSwatches();
+    }
+  }
+
+  private refreshPaintSwatches() {
+    const activeHex = this.activePaintColor.getHex();
+    for (const { c, btn } of this.paintSwatches) {
+      btn.strokeColor = (c === activeHex) ? '#ffffff' : '#444444';
     }
   }
 
   private showValues(text: string) {
-    if (this.valueText) this.valueText.text = text;
+    if (this.valueText && this.rightSidebarCard && !this.rightSidebarCard.visible) {
+      this.valueText.setText(text);
+    }
   }
 
   private setStatus(text: string) {
-    if (this.statusText) {
-      this.statusText.text = text;
+    if (this.statusText && this.rightSidebarCard && !this.rightSidebarCard.visible) {
+      this.statusText.setText(text);
     }
     if (this.onStatusChanged) {
       this.onStatusChanged(text);
@@ -648,13 +1040,29 @@ export class OrcaWorkspace extends xb.Script {
     console.log('[orcaxr-web]', text);
   }
 
+  private deleteSelectedModel() {
+    if (!this.selectedModel) return;
+    const idx = this.models.indexOf(this.selectedModel);
+    if (idx !== -1) {
+      this.workspace.remove(this.selectedModel.viewer);
+      this.models.splice(idx, 1);
+      this.unselectModel();
+      if (this.models.length > 0) {
+        this.selectModel(this.models[this.models.length - 1]);
+      }
+      this.setStatus('Model deleted.');
+    }
+  }
+
   public async sliceNow() {
     if (this.slicer.isSlicing) return;
-    const entry = this.models[0];
-    if (!entry) return;
+    if (this.models.length === 0) {
+      this.setStatus('No models to slice.');
+      return;
+    }
     try {
       this.setStatus('baking transforms…');
-      const stl = this.bakeToPrinterStl(entry.display);
+      const stl = this.bakeToPrinterStl();
       this.setStatus('slicing…');
       const t0 = performance.now();
       const gcode = await this.slicer.slice(stl, 4, this.profile?.config ?? {});
@@ -671,22 +1079,14 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /**
-   * Bake the display mesh's CURRENT world pose into a binary STL in
+   * Bake the display meshes' CURRENT world poses into a binary STL in
    * printer coordinates: mm, Z-up, bed origin at the plate corner with
-   * the model dropped onto Z=0.
+   * the models dropped onto Z=0.
    */
-  private bakeToPrinterStl(display: THREE.Mesh): ArrayBuffer {
-    display.updateMatrixWorld(true);
+  private bakeToPrinterStl(): ArrayBuffer {
     this.plateAnchor.updateMatrixWorld(true);
+    const plateInverse = new THREE.Matrix4().copy(this.plateAnchor.matrixWorld).invert();
 
-    // Display-world → plate-local (meters, Y-up).
-    const rel = new THREE.Matrix4()
-      .copy(this.plateAnchor.matrixWorld)
-      .invert()
-      .multiply(display.matrixWorld);
-
-    // Plate-local meters (Y-up) → printer mm (Z-up):
-    // (x, y, z) → (x·1000, −z·1000, y·1000), then shift to bed center.
     const conv = new THREE.Matrix4().set(
       1000, 0, 0, this.bedMm.x / 2,
       0, 0, -1000, this.bedMm.y / 2,
@@ -694,16 +1094,109 @@ export class OrcaWorkspace extends xb.Script {
       0, 0, 0, 1,
     );
 
-    const geo = (display.geometry as THREE.BufferGeometry).clone();
-    geo.applyMatrix4(rel);
-    geo.applyMatrix4(conv);
+    const geometries: THREE.BufferGeometry[] = [];
+    
+    for (const entry of this.models) {
+      entry.display.updateMatrixWorld(true);
+      const rel = new THREE.Matrix4()
+        .copy(plateInverse)
+        .multiply(entry.display.matrixWorld);
 
-    // Drop onto the bed.
-    geo.computeBoundingBox();
-    const minZ = geo.boundingBox!.min.z;
-    geo.translate(0, 0, -minZ);
+      const geo = (entry.display.geometry as THREE.BufferGeometry).clone();
+      geo.applyMatrix4(rel);
+      geo.applyMatrix4(conv);
+      geometries.push(geo);
+    }
+    
+    if (geometries.length === 0) {
+       return new ArrayBuffer(84);
+    }
 
-    return writeBinaryStl(geo);
+    const merged = BufferGeometryUtils.mergeGeometries(geometries, false);
+    if (!merged) return new ArrayBuffer(84);
+
+    merged.computeBoundingBox();
+    const minZ = merged.boundingBox!.min.z;
+    merged.translate(0, 0, -minZ);
+
+    return writeBinaryStl(merged);
+  }
+
+  private async fixSelectedModel() {
+    if (!this.selectedModel) {
+      this.setStatus('Select a model to fix first.');
+      return;
+    }
+    const entry = this.selectedModel;
+    try {
+      this.setStatus('Fixing model (ADMesh + CGAL)...');
+      const stlBuf = writeBinaryStl(entry.raw);
+      const repaired = await this.slicer.repair(stlBuf);
+      
+      const raw = new STLLoader().parse(repaired);
+      entry.raw = raw;
+      entry.raw.computeVertexNormals();
+      entry.raw.computeBoundsTree();
+      
+      entry.display.geometry.dispose();
+      entry.display.geometry = raw;
+      
+      this.setStatus('Model repaired successfully.');
+    } catch (e: any) {
+      this.setStatus(`Repair failed: ${e.message}`);
+    }
+  }
+
+  private async booleanModels(op: 'UNION' | 'A_NOT_B' | 'INTERSECTION') {
+    if (this.models.length < 2) {
+      this.setStatus('Requires at least 2 models for boolean operations.');
+      return;
+    }
+    let target = this.selectedModel;
+    let tool = this.models.find(m => m !== target);
+
+    if (!target) {
+      target = this.models[0];
+      tool = this.models[1];
+    }
+
+    if (!target || !tool) return;
+
+    try {
+      this.setStatus(`Running boolean ${op}...`);
+      
+      // We must bake the transforms into the STL so mcut sees world space overlaps
+      const targetGeom = target.raw.clone();
+      targetGeom.applyMatrix4(target.viewer.matrixWorld);
+      const toolGeom = tool.raw.clone();
+      toolGeom.applyMatrix4(tool.viewer.matrixWorld);
+
+      const targetStl = writeBinaryStl(targetGeom);
+      const toolStl = writeBinaryStl(toolGeom);
+
+      const resultStl = await this.slicer.boolean(targetStl, toolStl, op);
+
+      const raw = new STLLoader().parse(resultStl);
+      
+      // Inverse the target's matrixWorld so the resulting mesh stays in the target's local space
+      const invMatrix = target.viewer.matrixWorld.clone().invert();
+      raw.applyMatrix4(invMatrix);
+
+      target.raw = raw;
+      target.raw.computeVertexNormals();
+      target.raw.computeBoundsTree();
+
+      target.display.geometry.dispose();
+      target.display.geometry = raw;
+
+      // Remove the tool model from the workspace
+      this.workspace.remove(tool.viewer);
+      this.models = this.models.filter(m => m !== tool);
+
+      this.setStatus(`Boolean ${op} successful.`);
+    } catch (e: any) {
+      this.setStatus(`Boolean failed: ${e.message}`);
+    }
   }
 }
 

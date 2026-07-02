@@ -65,7 +65,7 @@ for a in "${ARCHIVES[@]}"; do
     [[ -f "$a" ]] || { echo "missing archive: $a" >&2; exit 1; }
 done
 
-em++ -O2 -pthread -fwasm-exceptions \
+em++ -O2 -pthread -fwasm-exceptions --profiling-funcs -sASSERTIONS=1 \
     -isystem "$HERE/shim-include" \
     -I "$ORCA/src" \
     -I "$ORCA/src/libslic3r" \
@@ -87,6 +87,8 @@ em++ -O2 -pthread -fwasm-exceptions \
     -sALLOW_MEMORY_GROWTH=1 \
     -sINITIAL_MEMORY=268435456 \
     -sSTACK_SIZE=5242880 \
+    -sDEFAULT_PTHREAD_STACK_SIZE=5242880 \
+    -sMAXIMUM_MEMORY=2147483648 \
     -sPTHREAD_POOL_SIZE=10 \
     -sFORCE_FILESYSTEM=1 \
     -sEXPORTED_RUNTIME_METHODS=FS \

@@ -93,6 +93,36 @@ class MobileModelStateTest {
         assertEquals(1, withRanges.heightRanges.size)
     }
 
+    @Test fun publishSnapshotClearsStaleStateWhenFileChanges() {
+        val stale = MobileModelState(
+            paint = MobilePaintState(support = byteArrayOf(1, 2, 0)),
+            configOverrides = mapOf("enable_support" to "1"),
+        )
+
+        val snapshot = mobileModelStateSnapshotForPublish(
+            previousPath = "/tmp/old.stl",
+            nextPath = "/tmp/new.stl",
+            stateByModel = mapOf("mobile_loaded" to stale),
+        )
+
+        assertTrue(snapshot.isEmpty())
+    }
+
+    @Test fun publishSnapshotKeepsStateWhenFileIsUnchanged() {
+        val state = MobileModelState(
+            paint = MobilePaintState(support = byteArrayOf(1, 0)),
+            configOverrides = mapOf("wall_loops" to "3"),
+        )
+
+        val snapshot = mobileModelStateSnapshotForPublish(
+            previousPath = "/tmp/same.stl",
+            nextPath = "/tmp/same.stl",
+            stateByModel = mapOf("mobile_loaded" to state),
+        )
+
+        assertEquals(state, snapshot["mobile_loaded"])
+    }
+
     @Test fun equalsAndHashCodeHandleFloatArrayAndAreValueBased() {
         val a = MobileModelState()
             .applySetLayerHeightProfile(WorkspaceAction.SetLayerHeightProfile("m", floatArrayOf(0f, 0.2f, 5f, 0.1f)))

@@ -952,12 +952,9 @@ private fun XrShell(
 
     // FullSpectrum mixed-filament rows for the active printer. The list is
     // serialized into the `mixed_filament_definitions` config key on each
-    // slice via mergedConfig. The slicing engine picks them up in
-    // PrintApply (patches/0018) and routes them through MixedFilamentManager;
-    // ToolOrdering / 3MF metadata integration (phases C & D) lands later,
-    // so today the rows show up in the panel and reach the engine but the
-    // emitted G-code is still single-filament per slot. Persisting them
-    // here means the moment those engine phases land, the wiring is ready.
+    // slice via mergedConfig. The slicing engine consumes it in PrintApply
+    // and ToolOrdering, and the virtual remap below rewrites project color
+    // facets onto those mixed rows before slicing.
     val mixedRows: List<MixedFilamentEntry> = remember(activePrinter, mixedFilamentsAll) {
         activePrinter?.id?.let(mixedFilamentsAll::get).orEmpty()
     }
@@ -1075,6 +1072,7 @@ private fun XrShell(
     // colored-GLB write takes ~10s) don't look like the app froze.
     var isLoadingModel by remember { mutableStateOf(false) }
     var loadingLabel by remember { mutableStateOf<String?>(null) }
+    var loadingProgress by remember { mutableFloatStateOf(0f) }
     // Roadmap B7 — recents flow surfaces on the empty-state panel
     // when placedModels is empty. validRecents pre-filters entries
     // whose underlying file no longer exists, so a stale recents
@@ -3401,6 +3399,9 @@ private fun XrShell(
             val paintsForMulti: List<ByteArray?>? =
                 if (models.none { hasAnyPaint(it.paintFilamentIndex) }) null
                 else models.map { it.paintFilamentIndex }
+            val supportForMulti: List<ByteArray?>? =
+                if (models.none { hasAnyPaint(it.supportFlags) }) null
+                else models.map { it.supportFlags }
             // A10: per-input variable layer-height profile, parallel
             // to `pairs`. Null whole-list when no model has authored
             // a profile so the JNI side short-circuits the per-input
@@ -3420,7 +3421,9 @@ private fun XrShell(
                 pairs,
                 outFile,
                 cfg,
+                virtualRemap = virtualRemap,
                 paintFilamentIndices = paintsForMulti,
+                supportFlagsPerInput = supportForMulti,
                 objectOrdinals = ordinals,
                 layerHeightProfilesPerInput = lhpsForMulti,
                 customGcodeTicks = customGcodeTicksByPlate[activePlateId] ?: emptyList(),
@@ -5621,21 +5624,19 @@ private fun XrShell(
     }
 
     val workspaceEntity = remember(session, workspacePlacementEntity) {
-        val placement = workspacePlacementEntity ?: return@remember null
+        // `placement` is retained only as the scene keyEntity for the
+        // recommended-pose / full-space machinery; the workspace itself is
+        // NO LONGER parented to it. Instead it is bridged into the Subspace
+        // via its own SceneCoreEntity below (gotcha #2) so its interaction
+        // proxies receive spatial input — parenting it to the independent
+        // `placement`/`activitySpace` branch leaves the whole tree inert
+        // (confirmed 2026-06-17: only Subspace-bridged entities get input).
+        // Pose + WORKSPACE_ROTATION are applied on that bridge's
+        // SubspaceModifier, not here, to avoid double-transforming.
+        if (workspacePlacementEntity == null) return@remember null
         val res = runCatching {
             val ws = Entity.create(session, "OrcaXR-workspace")
-            ws.parent = placement
-            ws.setPose(
-                androidx.xr.runtime.math.Pose(
-                    defaultWorkspaceTranslation(),
-                    WORKSPACE_ROTATION,
-                ),
-            )
-            android.util.Log.i(
-                "OrcaXR",
-                "Workspace render content attached below key entity at " +
-                    "(0.0, $WORKSPACE_Y_OFFSET, $WORKSPACE_Z_OFFSET)",
-            )
+            android.util.Log.i("OrcaXR", "Workspace entity created (bridged into Subspace for input routing)")
             ws
         }
         res.onFailure { android.util.Log.e("OrcaXR", "workspaceEntity creation failed", it) }
@@ -5698,13 +5699,14 @@ private fun XrShell(
                         // instance id". Resumes the moment the bake
                         // completes (typically <500 ms).
                         if (bakeInFlight.isNotEmpty()) return
-                        // Discard the system-proposed rotation; the
-                        // workspace must stay upright (WORKSPACE_ROTATION
-                        // maps printer-Z → world-Y so a "leaned"
-                        // workspace would tip the bed and prints).
-                        val newTx = currentPose.translation
-                        workspaceTx = newTx
-                        ws.setPose(androidx.xr.runtime.math.Pose(newTx, WORKSPACE_ROTATION))
+                        // The workspace pose is owned by its SceneCoreEntity
+                        // bridge modifier (offset = workspaceTx, fixed
+                        // WORKSPACE_ROTATION), so just publish the new
+                        // translation — recomposition repositions the bridge.
+                        // Calling ws.setPose here would double-apply the
+                        // modifier's -90° rotation and tip the bed. Rotation
+                        // stays fixed on the modifier, so a grab can't lean it.
+                        workspaceTx = currentPose.translation
                     }
 
                     override fun onMoveEnd(
@@ -5722,7 +5724,15 @@ private fun XrShell(
                 )
                 val bw = if (bedW > 0) bedW else 256f
                 val bh = if (bedH > 0) bedH else 256f
-                val side = maxOf(bw, bh) * WORLD_SCALE
+                // The bed GLB is centered on the workspace origin (BuildPlateGlb
+                // spans -half..+half), and so is this collider — but on Galaxy XR
+                // SceneCore renders the MovableComponent hit volume noticeably
+                // SMALLER than the requested full extent, so a 1× box only grabs
+                // a tiny patch over the bed center. Oversize it (2.2×) so the
+                // whole visible plate — plus a forgiving margin around it — is
+                // grabbable. Grabbing just off the plate edge still moves the
+                // workspace, which is the intuitive behavior.
+                val side = maxOf(bw, bh) * WORLD_SCALE * 2.2f
                 mc.size = androidx.xr.runtime.math.FloatSize3d(side, side, side)
                 ws.addComponent(mc)
                 workspaceMovable = mc
@@ -5759,15 +5769,11 @@ private fun XrShell(
                         onModeChange = { workspaceMode = it },
                         previewEnabled = glbPath != null,
                         onResetWorkspace = {
-                            val newWsTx = defaultWorkspaceTranslation()
-                            workspaceTx = newWsTx
-                            // Reset model
-                            workspaceEntity?.setPose(
-                                androidx.xr.runtime.math.Pose(
-                                    newWsTx,
-                                    WORKSPACE_ROTATION,
-                                ),
-                            )
+                            // Workspace pose is owned by its SceneCoreEntity
+                            // bridge modifier (offset = workspaceTx); just
+                            // reset the published translation and the bridge
+                            // recomposes back to the default placement.
+                            workspaceTx = defaultWorkspaceTranslation()
 
                             // Reset every plated model's XY offset (Phase G:
                             // multi-model state). Reset uses (0, 0) for
@@ -6790,7 +6796,10 @@ private fun XrShell(
                             .subspaceHeight(220.dp)
                             .offset(x = 0.dp, y = 100.dp, z = 200.dp),
                     ) {
-                        ModelLoadingOverlayPanel(label = loadingLabel ?: "Loading…")
+                        ModelLoadingOverlayPanel(
+                            label = loadingLabel ?: "Loading…",
+                            progress = if (loadingProgress > 0f && loadingProgress < 100f) loadingProgress.toInt() else null
+                        )
                     }
                 }
 
@@ -7609,6 +7618,30 @@ private fun XrShell(
             }
         }
 
+        // Bridge the workspace entity into the Subspace so its interaction
+        // proxies (build plate, model colliders, transform gizmo) actually
+        // receive spatial input. SceneCoreEntity only parents the content in
+        // its lambda: leaving this lambda empty makes the visible
+        // SpatialGltfModels sibling nodes, so the system hit-tests them while
+        // the MovableComponent / InteractableComponent tree receives nothing.
+        // Keep every workspace visual and proxy below this node.
+        //
+        // The Y_OFFSET + WORKSPACE_ROTATION (-90° about X) and the live
+        // plate-grab translation (workspaceTx) are applied on THIS modifier
+        // (not entity.setPose) to avoid double-transforming. Children use
+        // printer-local offsets and inherit this transform.
+        workspaceEntity?.let { ws ->
+            SceneCoreEntity(
+                factory = { ws },
+                modifier = SubspaceModifier
+                    .offset(
+                        x = (workspaceTx.x * 1000f).dp,
+                        y = (workspaceTx.y * 1000f).dp,
+                        z = (workspaceTx.z * 1000f).dp,
+                    )
+                    .rotate(pitch = -90f, yaw = 0f, roll = 0f),
+            ) {
+
         // Build plate first so the toolpath/STL render on top of it.
         // Keep SpatialGltfModel content composed even when the SDK's
         // capability snapshot is briefly stale after a Full Space
@@ -7698,6 +7731,29 @@ private fun XrShell(
                                     hoveredModelId = null
                                 }
                             },
+                            // Gizmo manipulation drives off the model's own
+                            // collider (the only one that reliably receives
+                            // hand pinches on Galaxy XR). Active only for the
+                            // single selected model when not painting; the
+                            // tap/paint IC is suppressed while active so the
+                            // grab wins the pinch.
+                            manipTool = if (
+                                selectedModelIds.size == 1 &&
+                                m.id in selectedModelIds &&
+                                paintBrush.mode == PaintMode.Off
+                            ) gizmoTool else GizmoTool.Select,
+                            onManipPreview = { ov ->
+                                liveDragOverride = if (ov == null) null else setOf(m.id) to ov
+                            },
+                            onManipCommit = { ov ->
+                                liveDragOverride = null
+                                placedModels = placedModels.map {
+                                    if (it.id == m.id) applyOverride(it, ov) else it
+                                }
+                            },
+                            effXmm = m.baseBboxXmm * m.effectiveScaleX,
+                            effYmm = m.baseBboxYmm * m.effectiveScaleY,
+                            effZmm = m.baseBboxZmm * m.effectiveScaleZ,
                         )
                     }
                 }
@@ -7833,19 +7889,15 @@ private fun XrShell(
                         } else if (selectedList.size == 1) {
                             val selected = selectedList.first()
                             // Defer composing the gizmo until the model has
-                            // a preview GLB on disk. While a 3MF is loading,
-                            // the StlPreview rebake (gotcha #22 fires it
-                            // twice) + SelectionBbox attach already saturate
-                            // Filament's material-instance binding queue
-                            // (gotcha #11e). Three GizmoDragHandle entities
-                            // racing in on top of that crashed
-                            // `split_engine_bridge.cc:100 NOT_FOUND: unknown
-                            // material instance id` even with the per-handle
-                            // 3-awaitFrame gate. Withholding the gizmo
-                            // composition until previewPath is non-null
-                            // lets the heavier loads settle first; the user
-                            // can't usefully drag a gizmo on an invisible
-                            // model anyway.
+                            // a preview GLB on disk. The grab-box gizmo is
+                            // cheap (a content-less MovableComponent entity,
+                            // no GLB/Filament binding), but withholding it
+                            // until previewPath is non-null avoids mounting
+                            // an affordance on an invisible model while the
+                            // heavier StlPreview/SelectionBbox bakes are
+                            // still saturating Filament's bind queue
+                            // (gotcha #11e/#22). The user can't usefully
+                            // grab a model that hasn't rendered yet anyway.
                             if (selected.previewPath != null) {
                                 key(selected.id) {
                                     TransformGizmo(
@@ -7904,6 +7956,8 @@ private fun XrShell(
                             )                        }
                     }
                 }
+            }
+        }
             }
         }
     }
@@ -8067,9 +8121,49 @@ private fun StlPreviewSceneEntity(
     /** Live transform override applied to this model while a gizmo is
      *  being dragged. Null when no drag is active. */
     liveOverride: GizmoDragOverride? = null,
+    /** When not [GizmoTool.Select], pinch-drags on the model's own
+     *  InteractableComponent drive the active transform via ray/plane
+     *  math ([GizmoRayDragDriver]) instead of tap/paint. */
+    manipTool: GizmoTool = GizmoTool.Select,
+    onManipPreview: ((GizmoDragOverride?) -> Unit)? = null,
+    onManipCommit: ((GizmoDragOverride) -> Unit)? = null,
+    /** Effective model dimensions (mm) used by the body drag driver's
+     *  plane / rotation-center anchors. */
+    effXmm: Float = 0f,
+    effYmm: Float = 0f,
+    effZmm: Float = 0f,
 ) {
-    SpatialGlbVisual(glbPath, offsetXmm, offsetYmm, offsetZmm)
-    GlbSceneEntity(session, glbPath, parentEntity, offsetXmm, offsetYmm, offsetZmm, paintHooks, onTap, onHoverChange, liveOverride)
+    // During a gizmo drag the visible preview follows the live override so the
+    // model tracks the user's hand: translate via the offset, rotate via a
+    // display-only pitch/yaw/roll, scale via a uniform multiplier. None of
+    // these re-key the GLB source, so the mesh never reloads mid-drag; the
+    // baked GLB only changes once, on commit's single re-bake (which then
+    // clears the override so the preview transforms reset to identity over
+    // the now-baked geometry).
+    // Per-axis scale previews use the axis multiplier furthest from 1 as the
+    // uniform stand-in (SubspaceModifier.scale is uniform-only); the commit
+    // re-bake applies the exact per-axis scale.
+    val previewScale = listOf(
+        liveOverride?.scaleMultX ?: 1f,
+        liveOverride?.scaleMultY ?: 1f,
+        liveOverride?.scaleMultZ ?: 1f,
+    ).maxByOrNull { kotlin.math.abs(it - 1f) } ?: 1f
+    SpatialGlbVisual(
+        glbPath,
+        offsetXmm + (liveOverride?.deltaTxMm ?: 0f),
+        offsetYmm + (liveOverride?.deltaTyMm ?: 0f),
+        offsetZmm + (liveOverride?.deltaTzMm ?: 0f),
+        previewRotXDeg = liveOverride?.deltaRotXDeg ?: 0f,
+        previewRotYDeg = liveOverride?.deltaRotYDeg ?: 0f,
+        previewRotZDeg = liveOverride?.deltaRotZDeg ?: 0f,
+        previewScaleMult = previewScale,
+    )
+    GlbSceneEntity(
+        session, glbPath, parentEntity, offsetXmm, offsetYmm, offsetZmm,
+        paintHooks, onTap, onHoverChange, liveOverride = null,
+        manipTool = manipTool, onManipPreview = onManipPreview, onManipCommit = onManipCommit,
+        effXmm = effXmm, effYmm = effYmm, effZmm = effZmm,
+    )
 }
 
 @Composable
@@ -8089,11 +8183,22 @@ private fun BuildPlateSceneEntity(
  * can be present and within view without producing visible geometry.
  */
 @Composable
-private fun SpatialGlbVisual(
+fun SpatialGlbVisual(
     glbPath: String,
     offsetXmm: Float = 0f,
     offsetYmm: Float = 0f,
     offsetZmm: Float = 0f,
+    /** Live preview rotation about the model's printer X/Y/Z axes, in
+     *  degrees. Display-only so a Rotate drag previews without a GLB re-bake;
+     *  cleared to 0 on commit when the re-baked GLB carries the rotation.
+     *  Only one axis is non-zero at a time (each ring drags one axis), so
+     *  Euler composition order doesn't matter here. */
+    previewRotXDeg: Float = 0f,
+    previewRotYDeg: Float = 0f,
+    previewRotZDeg: Float = 0f,
+    /** Live preview uniform scale multiplier (1 = baked size). Display-only,
+     *  same lifecycle as [previewRotZDeg]. */
+    previewScaleMult: Float = 1f,
 ) {
     var bytes by remember(glbPath) { mutableStateOf<ByteArray?>(null) }
 
@@ -8124,19 +8229,24 @@ private fun SpatialGlbVisual(
         }
     }
 
-    // The imported meshes are authored in printer millimetres. Rotate their
-    // Z-up coordinate system into XR Y-up space and apply the same mm-to-m
-    // scale/translation as the entity-backed interaction proxy.
+    // The workspace SceneCoreEntity owns the bed's world placement and the
+    // printer-Z -> world-Y rotation. Every visual is composed in that
+    // entity's lambda, so it must use printer-local coordinates here. Keeping
+    // the transform local also makes the visual model and its SceneCore input
+    // proxy descendants of the same hit-test tree.
+    // Modifier order (rightmost applied to content first): rotate spins the
+    // model about its own origin, then scale, then offset places it — so the
+    // preview spins/grows in place rather than orbiting the workspace origin.
     SpatialGltfModel(
         state = state,
         modifier = SubspaceModifier
             .offset(
                 x = (offsetXmm * WORLD_SCALE * 1000f).dp,
-                y = ((WORKSPACE_Y_OFFSET + offsetZmm * WORLD_SCALE) * 1000f).dp,
-                z = (-offsetYmm * WORLD_SCALE * 1000f).dp,
+                y = (offsetYmm * WORLD_SCALE * 1000f).dp,
+                z = (offsetZmm * WORLD_SCALE * 1000f).dp,
             )
-            .rotate(pitch = -90f, yaw = 0f, roll = 0f)
-            .scale(WORLD_SCALE),
+            .scale(WORLD_SCALE * previewScaleMult)
+            .rotate(pitch = previewRotXDeg, yaw = previewRotYDeg, roll = previewRotZDeg),
     )
 }
 
@@ -8267,6 +8377,19 @@ private fun GlbSceneEntity(
      *  drag end; the parent then commits to PlacedModel and the
      *  re-bake LaunchedEffect runs once with the final values. */
     liveOverride: GizmoDragOverride? = null,
+    /** Gizmo manipulation: when not [GizmoTool.Select], the model's own
+     *  (already-attached) InteractableComponent routes pinch-drags to a
+     *  transform handler instead of tap/paint. No component is added or
+     *  swapped on the model entity — addComponent/removeComponent on a
+     *  GltfModelEntity races Filament material binding (gotcha #13) — so
+     *  this reuses the one collider proven to receive pinches on Galaxy
+     *  XR with zero churn. Drag deltas come from the hit position. */
+    manipTool: GizmoTool = GizmoTool.Select,
+    onManipPreview: ((GizmoDragOverride?) -> Unit)? = null,
+    onManipCommit: ((GizmoDragOverride) -> Unit)? = null,
+    effXmm: Float = 0f,
+    effYmm: Float = 0f,
+    effZmm: Float = 0f,
 ) {
     var entity by remember { mutableStateOf<GltfModelEntity?>(null) }
     // gotcha #13: signature (size<<32 | contentHash) of the GLB bytes
@@ -8288,6 +8411,15 @@ private fun GlbSceneEntity(
     // missed events.
     val onTapLive = rememberUpdatedState(onTap)
     val onHoverLive = rememberUpdatedState(onHoverChange)
+    // Gizmo manipulation, routed at dispatch time from the same persistent
+    // IC (no component churn). Read live so toggling Move/Rotate/Scale
+    // never re-keys the listener.
+    val manipToolLive = rememberUpdatedState(manipTool)
+    val onManipPreviewLive = rememberUpdatedState(onManipPreview)
+    val onManipCommitLive = rememberUpdatedState(onManipCommit)
+    // Model height (mm) read live by the body drag driver so the drag plane /
+    // rotation center track scale edits without re-keying the listener.
+    val effZLive = rememberUpdatedState(effZmm)
     // Throttle hand HOVER_MOVE logs to one per 250 ms per entity so
     // the actionable lines (DOWN / MOVE / UP / ray miss) aren't
     // drowned out. Mutable Long so the listener closure can update it.
@@ -8464,13 +8596,43 @@ private fun GlbSceneEntity(
     // the IC is whatever the model needs as soon as the entity exists,
     // and a brush-mode flip just changes which `*Live.value` the
     // listener reads on the next event.
+    // The IC stays attached for the entity's whole life and is ALSO the gizmo
+    // drag source: the paint pipeline proves this exact collider streams
+    // DOWN/MOVE/UP pinch-drag events at ~60 Hz on Galaxy XR (with the world
+    // ray + world→mesh-mm transform on each event), so body manipulation
+    // routes through it with ray/plane math — no MovableComponent proxies.
     DisposableEffect(entity) {
         val ent = entity
         if (ent == null) {
             onDispose { /* nothing attached */ }
         } else {
             val executor = androidx.core.content.ContextCompat.getMainExecutor(ctx)
+            // Body drag driver: Move = free slide on the bed (the model tracks
+            // the laser dot), Rotate = turntable about printer Z, Scale =
+            // uniform about the model center. Mapping resolved at pinch-DOWN
+            // from the live tool. Mesh-mm frame = the preview GLB's local
+            // coords: origin at the model's XY center on the bed (z=0 base).
+            val bodyDriver = GizmoRayDragDriver(
+                tag = "body",
+                mappingProvider = {
+                    val halfZ = effZLive.value / 2f
+                    when (manipToolLive.value) {
+                        GizmoTool.Move -> GizmoDragMapping.MoveInPlane(planeZmm = halfZ)
+                        GizmoTool.Rotate -> GizmoDragMapping.RotateAboutAxis(2, Vec3f(0f, 0f, halfZ))
+                        GizmoTool.Scale -> GizmoDragMapping.ScaleUniform(Vec3f(0f, 0f, halfZ))
+                        GizmoTool.Select -> null
+                    }
+                },
+                onPreview = { onManipPreviewLive.value?.invoke(it) },
+                onCommit = { onManipCommitLive.value?.invoke(it) },
+            )
             val listener = java.util.function.Consumer<androidx.xr.scenecore.InputEvent> { event ->
+                // Gizmo mode owns the pinch. The isDragging check keeps an
+                // in-flight drag consistent if the tool flips mid-gesture.
+                if (manipToolLive.value != GizmoTool.Select || bodyDriver.isDragging) {
+                    bodyDriver.handle(event)
+                    return@Consumer
+                }
                 val routedToPaint = hooksLive.value != null
                 // Per-event log removed — string formatting at 60 Hz
                 // produced ~30 KB/s of garbage that worsened the

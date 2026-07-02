@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -181,6 +182,70 @@ class SlicerEngineTest {
             "expected combined X extent ≥ 50 mm (two cubes 60 mm apart), got $xExtent",
             xExtent >= 50f,
         )
+    }
+
+    @Test
+    fun overhangSupportToggleControlsSupportGcode() = runBlocking {
+        val appCtx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val fixture = File(appCtx.cacheDir, "support_overhang_fixture.stl")
+        StlWriter.write(overhangFixture(), fixture)
+
+        val supportCfg = minValidConfig + mapOf(
+            "enable_support" to "1",
+            "support_type" to "normal(auto)",
+            "support_threshold_angle" to "10",
+            "support_top_z_distance" to "0.2",
+            "support_bottom_z_distance" to "0.2",
+        )
+        val onOut = File(appCtx.cacheDir, "support_enabled.gcode")
+        val onResult = SlicerEngine.slice(fixture, onOut, supportCfg)
+        assertTrue("support-enabled slice failed: $onResult", onResult is SliceResult.Success)
+        assertTrue("support-enabled gcode should contain support moves",
+            onOut.readText().contains(";TYPE:Support"))
+
+        val offOut = File(appCtx.cacheDir, "support_disabled.gcode")
+        val offResult = SlicerEngine.slice(
+            fixture,
+            offOut,
+            supportCfg + ("enable_support" to "0"),
+        )
+        assertTrue("support-disabled slice failed: $offResult", offResult is SliceResult.Success)
+        assertFalse("support-disabled gcode unexpectedly contains support moves",
+            offOut.readText().contains(";TYPE:Support"))
+    }
+
+    @Test
+    fun sliceMultiCarriesSupportFlagsForTransformedSingleModel() = runBlocking {
+        val appCtx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val cube = File(appCtx.cacheDir, "cube_support_flags_multi.stl")
+        assertNotNull(
+            "cube primitive build failed",
+            SlicerEngine.buildPrimitiveStl(
+                PrimitiveKind.CUBE,
+                floatArrayOf(20f, 20f, 20f),
+                cube,
+            ),
+        )
+        val triCount = StlReader.read(cube).triCount
+        val support = ByteArray(triCount).also {
+            if (it.isNotEmpty()) it[0] = 1
+        }
+        val out = File(appCtx.cacheDir, "cube_support_flags_multi.gcode")
+        val result = SlicerEngine.sliceMulti(
+            models = listOf(
+                cube to SlicerEngine.ModelPlacement(
+                    translateXmm = 5f,
+                    translateYmm = -5f,
+                    rotZdeg = 15f,
+                ),
+            ),
+            outGcode = out,
+            config = minValidConfig + mapOf("enable_support" to "1"),
+            supportFlagsPerInput = listOf(support),
+        )
+        assertTrue("sliceMulti with support flags failed: $result", result is SliceResult.Success)
+        assertTrue("output gcode missing", out.exists())
+        assertTrue("output gcode empty", (result as SliceResult.Success).sizeBytes > 0)
     }
 
     /**
@@ -1064,5 +1129,57 @@ class SlicerEngineTest {
         assertEquals("38", flush.primeVolume)
         assertEquals("28", flush.primeTowerWidth)
         assertEquals("5", flush.primeTowerBrimWidth)
+    }
+
+    private fun overhangFixture(): StlMesh {
+        val tris = mutableListOf<Float>()
+        appendBox(tris, 0f, 0f, 0f, 20f, 20f, 20f)
+        appendBox(tris, 0f, 0f, 20f, 70f, 20f, 30f)
+        return StlMesh(
+            positions = tris.toFloatArray(),
+            triCount = tris.size / 9,
+            bboxMin = Vec3f(0f, 0f, 0f),
+            bboxMax = Vec3f(70f, 20f, 30f),
+        )
+    }
+
+    private fun appendBox(
+        out: MutableList<Float>,
+        x0: Float,
+        y0: Float,
+        z0: Float,
+        x1: Float,
+        y1: Float,
+        z1: Float,
+    ) {
+        // Bottom (-Z).
+        tri(out, x0, y0, z0, x1, y1, z0, x1, y0, z0)
+        tri(out, x0, y0, z0, x0, y1, z0, x1, y1, z0)
+        // Top (+Z).
+        tri(out, x0, y0, z1, x1, y0, z1, x1, y1, z1)
+        tri(out, x0, y0, z1, x1, y1, z1, x0, y1, z1)
+        // Front (-Y).
+        tri(out, x0, y0, z0, x1, y0, z0, x1, y0, z1)
+        tri(out, x0, y0, z0, x1, y0, z1, x0, y0, z1)
+        // Back (+Y).
+        tri(out, x0, y1, z0, x1, y1, z1, x1, y1, z0)
+        tri(out, x0, y1, z0, x0, y1, z1, x1, y1, z1)
+        // Left (-X).
+        tri(out, x0, y0, z0, x0, y1, z1, x0, y1, z0)
+        tri(out, x0, y0, z0, x0, y0, z1, x0, y1, z1)
+        // Right (+X).
+        tri(out, x1, y0, z0, x1, y1, z0, x1, y1, z1)
+        tri(out, x1, y0, z0, x1, y1, z1, x1, y0, z1)
+    }
+
+    private fun tri(
+        out: MutableList<Float>,
+        ax: Float, ay: Float, az: Float,
+        bx: Float, by: Float, bz: Float,
+        cx: Float, cy: Float, cz: Float,
+    ) {
+        out += ax; out += ay; out += az
+        out += bx; out += by; out += bz
+        out += cx; out += cy; out += cz
     }
 }

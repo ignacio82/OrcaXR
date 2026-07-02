@@ -45,6 +45,7 @@ import dev.orcaxr.app.mobile.LocalMobileTextStyles
 import dev.orcaxr.app.mobile.MobileCard
 import dev.orcaxr.app.mobile.MobileTopBar
 import dev.orcaxr.app.mobile.SectionKicker
+import dev.orcaxr.app.mobile.mobilePhysicalSlotCount
 import dev.orcaxr.app.mobile.parseHex
 import kotlinx.coroutines.launch
 
@@ -92,19 +93,26 @@ private fun FilamentSlots(active: PrinterConfig, isTablet: Boolean) {
     val slotsAll by app.filamentSlots.all.collectAsState(initial = emptyMap())
     val entriesAll by app.filamentEntries.all.collectAsState(initial = emptyMap())
 
-    // Slot count: from saved entries (newer surface) or from the
-    // legacy slots map; default to 4 (Snapmaker U1) when neither
-    // exists. The Filament screen lets the user edit slot count too.
-    var slotCount by remember(active.id) {
-        mutableStateOf(
-            entriesAll[active.id]?.size?.takeIf { it > 0 }
-                ?: slotsAll[active.id]?.size?.takeIf { it > 0 }
-                ?: 4,
+    val savedColors = slotsAll[active.id]
+    val savedEntries = entriesAll[active.id].orEmpty()
+    val defaultSlotCount = remember(active, savedColors) {
+        mobilePhysicalSlotCount(
+            printer = active,
+            profile = null,
+            savedPhysicalColors = savedColors,
         )
     }
 
-    val savedColors = slotsAll[active.id]
-    val savedEntries = entriesAll[active.id].orEmpty()
+    // Slot count is the physical printer inventory only. Project
+    // FilamentEntry rows may be longer when a 3MF carries more authored
+    // colors than the printer has loaded tools.
+    var slotCount by remember(active.id) {
+        mutableStateOf(defaultSlotCount)
+    }
+
+    LaunchedEffect(active.id, defaultSlotCount) {
+        slotCount = defaultSlotCount
+    }
 
     // Build effective slot list: prefer FilamentEntry, fall back to
     // padded slot colors from the legacy store.
@@ -165,7 +173,7 @@ private fun FilamentSlots(active: PrinterConfig, isTablet: Boolean) {
         MobileCard {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    SectionKicker("Project palette")
+                    SectionKicker("Printer slots")
                     Spacer(Modifier.weight(1f))
                     SlotCountStepper(slotCount, onChange = {
                         slotCount = it.coerceIn(1, 8)
@@ -215,7 +223,8 @@ private fun FilamentSlots(active: PrinterConfig, isTablet: Boolean) {
                             slotIndex = i,
                         )
                     }
-                    app.filamentEntries.set(active.id, newList)
+                    val preservedProjectRows = savedEntries.filter { (it.slotIndex ?: -1) >= slotCount }
+                    app.filamentEntries.set(active.id, newList + preservedProjectRows)
                     // Mirror into legacy slots store for any code path
                     // that still reads colors from there (XR shell does).
                     app.filamentSlots.set(active.id, newList.map { it.color })

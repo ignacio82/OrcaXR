@@ -52,8 +52,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import dev.orcaxr.app.MeshBvh
 import dev.orcaxr.app.MeshBvhCache
@@ -67,6 +69,13 @@ import dev.orcaxr.app.mcp.WorkspaceModel
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+internal fun mobileModelStateSnapshotForPublish(
+    previousPath: String?,
+    nextPath: String?,
+    stateByModel: Map<String, MobileModelState>,
+): Map<String, MobileModelState> =
+    if (previousPath == nextPath) stateByModel else emptyMap()
 
 @Composable
 fun BindMobileWorkspaceModel(
@@ -93,6 +102,7 @@ fun BindMobileWorkspaceModel(
     // mutators accumulates. Per-process — not persisted (saved-recipe
     // / 3MF export are the explicit persistence paths).
     val stateByModel = remember { mutableStateMapOf<String, MobileModelState>() }
+    var lastPublishedSlicerFilePath by remember { mutableStateOf<String?>(null) }
 
     // Register a BvhProvider so AI / vision MCP tools (get_model_geometry,
     // render_montage, paint_*) can resolve "mobile_loaded" back to a
@@ -183,11 +193,22 @@ fun BindMobileWorkspaceModel(
     // to re-emit a new PlacedModel carrying those byte arrays so
     // `list_placed_models` / `get_paint_summary` reflect the commit.
     LaunchedEffect(slicerFilePath, stateByModel.toMap()) {
+        val pathChanged = slicerFilePath != lastPublishedSlicerFilePath
+        val stateSnapshot = mobileModelStateSnapshotForPublish(
+            previousPath = lastPublishedSlicerFilePath,
+            nextPath = slicerFilePath,
+            stateByModel = stateByModel,
+        )
+        if (pathChanged) {
+            bvhCache.clear()
+            stateByModel.clear()
+            lastPublishedSlicerFilePath = slicerFilePath
+        }
         val list =
             if (slicerFilePath.isNullOrBlank()) emptyList()
             else {
                 val file = File(slicerFilePath)
-                val st = stateByModel["mobile_loaded"]
+                val st = stateSnapshot["mobile_loaded"]
                 listOf(
                     PlacedModel(
                         id = "mobile_loaded",
@@ -236,14 +257,6 @@ fun BindMobileWorkspaceModel(
         )
     }
 
-    // Whenever the slicer-loaded file changes, drop any prior BVHs
-    // from the cache so the next BvhProvider call rebuilds against
-    // the new source. Without this, switching between models would
-    // hand the AI tools the cached BVH from the previous file.
-    LaunchedEffect(slicerFilePath) {
-        bvhCache.clear()
-    }
-
     // Action collector. Same stale-closure pattern as the XR
     // BindWorkspaceModel: every callback / setter goes through
     // rememberUpdatedState before being read inside the long-lived
@@ -266,6 +279,8 @@ fun BindMobileWorkspaceModel(
             localId++
             when (action) {
                 is WorkspaceAction.LoadModelFromPath -> {
+                    stateByModel.clear()
+                    bvhCache.clear()
                     onLoadLatest.value.invoke(action.path)
                 }
                 is WorkspaceAction.LoadPaintState -> {

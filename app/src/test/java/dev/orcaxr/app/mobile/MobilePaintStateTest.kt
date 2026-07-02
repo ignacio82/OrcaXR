@@ -35,6 +35,20 @@ class MobilePaintStateTest {
         assertNull(out.fuzzy)
     }
 
+    @Test fun loadPaintStateCarriesSupportFlags() {
+        val out = MobilePaintState().applyLoadPaintState(
+            WorkspaceAction.LoadPaintState(
+                modelId = "m",
+                paintFilamentIndex = null,
+                supportFlags = byteArrayOf(0, 1, 2, 1),
+                seamFlags = null,
+                fuzzySkinFlags = null,
+            ),
+        )
+
+        assertArrayEquals(byteArrayOf(0, 1, 2, 1), out.support)
+    }
+
     @Test fun paintTriangleSetReplaceWritesEveryTri() {
         val out = MobilePaintState().applyTriangleSet(
             WorkspaceAction.PaintTriangleSet(
@@ -115,6 +129,31 @@ class MobilePaintStateTest {
         assertArrayEquals(byteArrayOf(0, 0, 1, 0), out.support)
         // Color must remain untouched
         assertArrayEquals(byteArrayOf(1, 1, 1, 1), out.color)
+    }
+
+    @Test fun supportPaintTriangleSetWritesEnforcerAndBlockerStates() {
+        var state = MobilePaintState().applyTriangleSet(
+            WorkspaceAction.PaintTriangleSet(
+                modelId = "m",
+                kind = WorkspaceAction.PaintKind.Support,
+                triangleIndices = intArrayOf(0, 2),
+                tag = 1,
+                mergeMode = WorkspaceAction.MergeMode.Replace,
+            ),
+            triCount = 4,
+        )
+        state = state.applyTriangleSet(
+            WorkspaceAction.PaintTriangleSet(
+                modelId = "m",
+                kind = WorkspaceAction.PaintKind.Support,
+                triangleIndices = intArrayOf(1, 2),
+                tag = 2,
+                mergeMode = WorkspaceAction.MergeMode.Replace,
+            ),
+            triCount = 4,
+        )
+
+        assertArrayEquals(byteArrayOf(1, 2, 2, 0), state.support)
     }
 
     @Test fun clearPaintWithKindClearsOnlyThatKind() {

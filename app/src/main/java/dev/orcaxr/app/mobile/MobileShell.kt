@@ -45,6 +45,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -61,6 +62,7 @@ import dev.orcaxr.app.mobile.screens.PreviewScreen as MobilePreviewScreen
 import dev.orcaxr.app.mobile.screens.ProfileScreen
 import dev.orcaxr.app.mobile.screens.SettingsScreen
 import dev.orcaxr.app.mobile.screens.SlicerScreen
+import kotlinx.coroutines.launch
 
 /** App-state CompositionLocal — every screen pulls stores out of here. */
 val LocalMobileAppState = staticCompositionLocalOf<MobileAppState> {
@@ -175,6 +177,7 @@ fun MobileShell(
                 // XR shell's behavior — paint is per-session unless
                 // explicitly committed to a slice.
                 var slicerPaintIndex by remember { mutableStateOf<ByteArray?>(null) }
+                var slicerSupportFlags by remember { mutableStateOf<ByteArray?>(null) }
                 // Re-arch increment 2 — MCP-accumulated per-model state
                 // bridged from `mobile_loaded` so the phone slice honors it.
                 var slicerHeightRanges by remember { mutableStateOf<List<dev.orcaxr.app.HeightRange>>(emptyList()) }
@@ -182,10 +185,38 @@ fun MobileShell(
                 var slicerObjectConfig by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
                 var slicerGcodeTicks by remember { mutableStateOf<List<dev.orcaxr.app.SlicerEngine.CustomGcodeTick>>(emptyList()) }
                 var paintModeFile by rememberSaveable { mutableStateOf<String?>(null) }
+                var paintMode by rememberSaveable {
+                    mutableStateOf(dev.orcaxr.app.mobile.screens.PaintScreenMode.Filament)
+                }
                 var smartPaintOpen by rememberSaveable { mutableStateOf(false) }
                 var modelToolsOpen by rememberSaveable { mutableStateOf(false) }
                 var slicerTransform by remember { mutableStateOf(dev.orcaxr.app.SlicerEngine.ModelPlacement()) }
                 var llmAssistantOpen by rememberSaveable { mutableStateOf(false) }
+                val shellScope = rememberCoroutineScope()
+
+                fun clearSlicerTransientState() {
+                    slicerOutputPath = null
+                    slicerPaintIndex = null
+                    slicerSupportFlags = null
+                    slicerHeightRanges = emptyList()
+                    slicerLayerProfile = null
+                    slicerObjectConfig = emptyMap()
+                    slicerTransform = dev.orcaxr.app.SlicerEngine.ModelPlacement()
+                }
+
+                fun setSlicerFile(path: String?) {
+                    if (path != slicerFilePath) {
+                        clearSlicerTransientState()
+                    }
+                    slicerFilePath = path
+                }
+
+                fun setSlicerObjectConfig(next: Map<String, String>) {
+                    slicerObjectConfig = next
+                    shellScope.launch {
+                        runCatching { MobileWorkspaceActions.setObjectOverrides(next) }
+                    }
+                }
 
                 // Wire the WorkspaceModel singleton on mobile too, so
                 // MCP tools dispatched from the in-app assistant don't
@@ -198,10 +229,7 @@ fun MobileShell(
                     selectedProfile = null,
                     slicerFilePath = slicerFilePath,
                     onLoadModelFromPath = { path ->
-                        slicerFilePath = path
-                        slicerOutputPath = null
-                        slicerPaintIndex = null
-                        slicerTransform = dev.orcaxr.app.SlicerEngine.ModelPlacement()
+                        setSlicerFile(path)
                         dest = MobileDestination.Slicer
                         // Close the assistant takeover so the user
                         // sees the loaded model in the slicer screen.
@@ -227,10 +255,7 @@ fun MobileShell(
                         slicerTransform = slicerTransform.copy(translateZmm = 0f)
                     },
                     onDeleteModels = {
-                        slicerFilePath = null
-                        slicerOutputPath = null
-                        slicerPaintIndex = null
-                        slicerTransform = dev.orcaxr.app.SlicerEngine.ModelPlacement()
+                        setSlicerFile(null)
                         dest = MobileDestination.Slicer
                     },
                 )
@@ -257,6 +282,10 @@ fun MobileShell(
                     val mcpPaint = m?.paintFilamentIndex
                     if (mcpPaint != null && !mcpPaint.contentEquals(slicerPaintIndex)) {
                         slicerPaintIndex = mcpPaint
+                    }
+                    val mcpSupport = m?.supportFlags
+                    if (mcpSupport != null && !mcpSupport.contentEquals(slicerSupportFlags)) {
+                        slicerSupportFlags = mcpSupport
                     }
                     if (m != null) {
                         if (m.heightRanges != slicerHeightRanges) slicerHeightRanges = m.heightRanges
@@ -293,9 +322,7 @@ fun MobileShell(
                     androidx.compose.runtime.LaunchedEffect(Unit) {
                         pendingSlicerFile.collect { p ->
                             if (p != null) {
-                                slicerFilePath = p
-                                slicerOutputPath = null
-                                slicerPaintIndex = null
+                                setSlicerFile(p)
                                 onboardingComplete = true
                                 dest = MobileDestination.Slicer
                                 pendingSlicerFile.value = null
@@ -342,9 +369,19 @@ fun MobileShell(
                 if (activePaintFile != null) {
                     dev.orcaxr.app.mobile.screens.PaintScreen(
                         filePath = activePaintFile,
-                        initialPaint = slicerPaintIndex,
+                        mode = paintMode,
+                        initialPaint = if (paintMode == dev.orcaxr.app.mobile.screens.PaintScreenMode.Support) {
+                            slicerSupportFlags
+                        } else {
+                            slicerPaintIndex
+                        },
                         onApply = { applied ->
-                            slicerPaintIndex = applied
+                            val effective = applied.takeIf { dev.orcaxr.app.hasAnyPaint(it) }
+                            if (paintMode == dev.orcaxr.app.mobile.screens.PaintScreenMode.Support) {
+                                slicerSupportFlags = effective
+                            } else {
+                                slicerPaintIndex = effective
+                            }
                             paintModeFile = null
                             dest = MobileDestination.Slicer
                         },
@@ -382,7 +419,14 @@ fun MobileShell(
                     return@BoxWithConstraints
                 }
 
-                val openPaintCallback: (String) -> Unit = { fp -> paintModeFile = fp }
+                val openPaintCallback: (String) -> Unit = { fp ->
+                    paintMode = dev.orcaxr.app.mobile.screens.PaintScreenMode.Filament
+                    paintModeFile = fp
+                }
+                val openSupportPaintCallback: (String) -> Unit = { fp ->
+                    paintMode = dev.orcaxr.app.mobile.screens.PaintScreenMode.Support
+                    paintModeFile = fp
+                }
                 val openSmartPaintCallback: () -> Unit = { smartPaintOpen = true }
                 val openModelToolsCallback: () -> Unit = { modelToolsOpen = true }
                 if (isTablet) {
@@ -396,22 +440,19 @@ fun MobileShell(
                             dest = dest,
                             isTablet = true,
                             slicerFilePath = slicerFilePath,
-                            onSetSlicerFile = {
-                                if (it != slicerFilePath) {
-                                    // New file → discard stale paint + transform
-                                    slicerPaintIndex = null
-                                    slicerTransform = dev.orcaxr.app.SlicerEngine.ModelPlacement()
-                                }
-                                slicerFilePath = it
-                            },
+                            onSetSlicerFile = ::setSlicerFile,
                             slicerOutputPath = slicerOutputPath,
                             onSetSlicerOutput = { slicerOutputPath = it },
                             slicerPaintIndex = slicerPaintIndex,
+                            slicerSupportFlags = slicerSupportFlags,
+                            onSetSlicerSupportFlags = { slicerSupportFlags = it },
                             slicerHeightRanges = slicerHeightRanges,
                             slicerLayerProfile = slicerLayerProfile,
                             slicerObjectConfig = slicerObjectConfig,
+                            onSetSlicerObjectConfig = ::setSlicerObjectConfig,
                             slicerGcodeTicks = slicerGcodeTicks,
                             onOpenPaint = openPaintCallback,
+                            onOpenSupportPaint = openSupportPaintCallback,
                             onOpenSmartPaint = openSmartPaintCallback,
                             onOpenModelTools = openModelToolsCallback,
                             transform = slicerTransform,
@@ -429,20 +470,19 @@ fun MobileShell(
                             dest = dest,
                             isTablet = false,
                             slicerFilePath = slicerFilePath,
-                            onSetSlicerFile = {
-                                if (it != slicerFilePath) {
-                                    slicerPaintIndex = null
-                                }
-                                slicerFilePath = it
-                            },
+                            onSetSlicerFile = ::setSlicerFile,
                             slicerOutputPath = slicerOutputPath,
                             onSetSlicerOutput = { slicerOutputPath = it },
                             slicerPaintIndex = slicerPaintIndex,
+                            slicerSupportFlags = slicerSupportFlags,
+                            onSetSlicerSupportFlags = { slicerSupportFlags = it },
                             slicerHeightRanges = slicerHeightRanges,
                             slicerLayerProfile = slicerLayerProfile,
                             slicerObjectConfig = slicerObjectConfig,
+                            onSetSlicerObjectConfig = ::setSlicerObjectConfig,
                             slicerGcodeTicks = slicerGcodeTicks,
                             onOpenPaint = openPaintCallback,
+                            onOpenSupportPaint = openSupportPaintCallback,
                             onOpenSmartPaint = openSmartPaintCallback,
                             onOpenModelTools = openModelToolsCallback,
                             transform = slicerTransform,
@@ -474,11 +514,15 @@ private fun ScreenContent(
     slicerOutputPath: String?,
     onSetSlicerOutput: (String?) -> Unit,
     slicerPaintIndex: ByteArray?,
+    slicerSupportFlags: ByteArray?,
+    onSetSlicerSupportFlags: (ByteArray?) -> Unit,
     slicerHeightRanges: List<dev.orcaxr.app.HeightRange>,
     slicerLayerProfile: FloatArray?,
     slicerObjectConfig: Map<String, String>,
+    onSetSlicerObjectConfig: (Map<String, String>) -> Unit,
     slicerGcodeTicks: List<dev.orcaxr.app.SlicerEngine.CustomGcodeTick>,
     onOpenPaint: (String) -> Unit,
+    onOpenSupportPaint: (String) -> Unit,
     onOpenSmartPaint: (() -> Unit)?,
     onOpenModelTools: (() -> Unit)?,
     transform: dev.orcaxr.app.SlicerEngine.ModelPlacement,
@@ -500,11 +544,15 @@ private fun ScreenContent(
                 onSetOutput = onSetSlicerOutput,
                 onNavigate = onNavigate,
                 paintFilamentIndex = slicerPaintIndex,
+                supportFlags = slicerSupportFlags,
+                onSetSupportFlags = onSetSlicerSupportFlags,
                 heightRanges = slicerHeightRanges,
                 layerHeightProfile = slicerLayerProfile,
                 objectConfig = slicerObjectConfig,
+                onSetObjectConfig = onSetSlicerObjectConfig,
                 customGcodeTicks = slicerGcodeTicks,
                 onOpenPaint = onOpenPaint,
+                onOpenSupportPaint = onOpenSupportPaint,
                 onOpenSmartPaint = onOpenSmartPaint,
                 onOpenModelTools = onOpenModelTools,
                 transform = transform,

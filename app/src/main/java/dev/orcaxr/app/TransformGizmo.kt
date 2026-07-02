@@ -9,24 +9,19 @@ import androidx.xr.runtime.math.Pose
 import androidx.xr.runtime.math.Vector3
 import androidx.xr.runtime.math.Quaternion
 import java.io.File
-import kotlin.math.atan2
-import kotlin.math.abs
-import kotlin.math.sqrt
 
 /**
  * Which gizmo tool is currently active. Mirrors OrcaSlicer desktop's
- * Move / Rotate / Scale toolbar: only one tool's handles are visible at
- * a time so the user isn't fighting nine concentric arrows/rings/cubes.
- * Select is the no-gizmo state — the top bar's Move/Rotate/Scale buttons
- * are toggles, tapping the active one drops back to Select.
+ * Move / Rotate / Scale toolbar: only one tool's affordance is visible
+ * at a time. Select is the no-gizmo state — the top bar's
+ * Move/Rotate/Scale buttons are toggles, tapping the active one drops
+ * back to Select.
  */
 enum class GizmoTool { Select, Move, Rotate, Scale }
 
 /**
  * Live-drag override emitted by [TransformGizmo] during a drag, applied
- * by the renderer to the model's [GltfModelEntity] via setPose+setScale.
- * Avoids re-baking the colored preview GLB on every drag delta (which
- * caused the model to flicker/disappear during rotation/scale interaction).
+ * by the renderer to the model's preview via offset/re-bake.
  *
  * On UP, the gizmo emits the final override via `onCommit`; the parent
  * folds it into [PlacedModel] (which then triggers a single re-bake).
@@ -52,578 +47,382 @@ data class GizmoDragOverride(
 //   printer X = world X
 //   printer Y = world -Z
 //   printer Z = world Y
+// A child entity parented to the workspace therefore lives in printer
+// space: its local X/Y/Z are printer X/Y/Z and the workspace's own
+// rotation maps them to world. The visible preview GLBs use the same
+// local frame (translate*WORLD_SCALE), so a handle collider parented to
+// the workspace and the visible model share one coordinate system, and
+// `InputEvent.hitInfo.transform` converts world rays into that frame
+// (see PaintInputHooks.worldRayToMeshMm).
 
-// Geometry constants for the GLB primitives generated below. The handle
-// entity's setScale() then linearly resizes them so the visible / hittable
-// size grows with the selected model's bounding box.
-private const val GIZMO_ARROW_LEN_MM = 50f
-private const val GIZMO_ARROW_SHAFT_MM = 10f // Chunky but reasonable
-private const val GIZMO_RING_RADIUS_MM = 55f
-private const val GIZMO_RING_THICK_MM = 4f
-private const val GIZMO_SCALE_CUBE_MM = 12f
-private const val GIZMO_SCALE_OFFSET_MM = 60f
+// Every visible handle is paired with a FAT invisible input mesh on its own
+// GltfModelEntity + InteractableComponent (GizmoHandleEntity below) — grab
+// volumes are generous while the visuals stay slim. All dimensions derive
+// from the model's largest extent in [GizmoVisuals] (with clamps) so they
+// read consistently across a 20 mm trinket and a 200 mm bust.
 
-/**
- * Base scale for gizmo handles (thickness/rings). Grows with the model
- * but slower than length to keep the visual weight balanced.
- */
-private fun computeGizmoBaseScale(selected: PlacedModel): Float {
-    val effX = selected.baseBboxXmm * selected.effectiveScaleX
-    val effY = selected.baseBboxYmm * selected.effectiveScaleY
-    val effZ = selected.baseBboxZmm * selected.effectiveScaleZ
-    val maxDim = maxOf(effX, effY, effZ)
-    // Sized so that at WORLD_SCALE (1mm), the handle has a reasonable thickness.
-    // Scales up with the model to remain grabable.
-    val targetThickMm = (maxDim * 0.15f + 40f).coerceIn(40f, 150f)
-    return WORLD_SCALE * (targetThickMm / GIZMO_ARROW_LEN_MM)
-}
-
-/**
- * Axis-specific length scale. Ensures the arrow tip sits 80mm
- * beyond the model's bounding box face on that axis.
- */
-private fun computeAxisLengthScale(dimMm: Float): Float {
-    val halfDim = dimMm / 2f
-    // Arrow tip (GIZMO_ARROW_LEN_MM) should be at halfDim + 80mm
-    val targetLenMm = halfDim + 80f
-    return WORLD_SCALE * (targetLenMm / GIZMO_ARROW_LEN_MM)
-}
-
-/** Half the model's effective Z extent — used to lift the gizmo root from
- *  the bed (where the model's translateZmm is anchored after the bed-snap
- *  pass) to the model's geometric center, so the +Z arrow has room to poke
- *  out the top instead of disappearing inside the mesh. */
+/** Half the model's effective Z extent — used to anchor the gizmo at the
+ *  model's geometric center (the preview is anchored at its base on the
+ *  bed) so the affordance brackets the model instead of sitting under it. */
 private fun modelHalfHeightMm(selected: PlacedModel): Float =
     selected.baseBboxZmm * selected.effectiveScaleZ / 2f
 
-// XR input filter: SceneCore delivers DOWN/MOVE/UP/CANCEL from any of
-// CONTROLLER, HANDS, MOUSE, GAZE_AND_GESTURE depending on the device. The
-// previous "CONTROLLER only" filter dropped every event on Galaxy XR
-// (hand pinch only) and made the gizmos look broken. UNKNOWN events have
-// no actionable origin, so we still drop those.
-private fun isInteractiveSource(source: InputEvent.Source): Boolean =
-    source != InputEvent.Source.UNKNOWN
+
+/** Gap (printer mm) from the model's top to the center of the vertical (Z)
+ *  move grab knob, so the knob sits clearly ABOVE the model — not buried in it
+ *  where it'd be ambiguous with the body free-grab. The blue Move arrow reaches
+ *  this far so it visibly points at the knob. */
+internal const val GIZMO_Z_KNOB_GAP_MM = 55f
+
+/** Minimum side (printer mm) of the invisible inflated body-grab box. The
+ *  model's exact mesh is the natural grab target, but a 20 mm trinket is a
+ *  ~3 cm world-space target — too small to pinch reliably. The body box
+ *  guarantees at least this much grab volume around the model center. */
+internal const val GIZMO_BODY_GRAB_MIN_MM = 60f
+
 
 @Composable
 fun TransformGizmo(
     session: Session,
     parentEntity: Entity?,
     selectedModel: PlacedModel,
-    workspaceTx: Vector3,
-    /** Active tool — only the matching handles render. Select hides the
-     *  gizmo entirely (the call site can also avoid composing
-     *  TransformGizmo at all in Select mode; the guard here lets a single
-     *  composition survive tool switches without re-creating the
-     *  GroupEntity root). */
+    @Suppress("UNUSED_PARAMETER") workspaceTx: Vector3,
+    /** Active tool — only the matching affordance renders. Select hides
+     *  the gizmo entirely. */
     tool: GizmoTool,
     /** Live-drag override, sourced from the same `liveDragOverride` slot
-     *  the model preview reads. Applied to the gizmo's root pose so the
-     *  arrows / rings / cubes follow the model in real time during a
-     *  drag (rather than staying anchored at the pre-drag position
-     *  while the model translates away from them). Null = no drag. */
+     *  the model preview reads, so the visible affordance follows the
+     *  model during a Move drag. Null = no drag. */
     liveOverride: GizmoDragOverride? = null,
-    /** Emitted continuously during drag with the in-progress delta. The
-     *  parent should apply it as a live setPose/setScale on the model
-     *  entity (no re-bake). null = no drag in progress, drop the override. */
+    /** Emitted continuously during a drag with the in-progress delta. The
+     *  parent applies it as a live preview on the model (no re-bake).
+     *  null = no drag in progress, drop the override. */
     onLivePreview: (GizmoDragOverride?) -> Unit,
-    /** Emitted once at drag end with the final delta. Parent commits
-     *  to PlacedModel (which triggers a single re-bake). */
+    /** Emitted once at drag end with the final delta. Parent commits to
+     *  PlacedModel (which triggers a single re-bake). */
     onCommit: (GizmoDragOverride) -> Unit,
 ) {
     if (tool == GizmoTool.Select) return
+    android.util.Log.i("OrcaXR/gizmo", "TransformGizmo composing tool=$tool model=${selectedModel.id}")
+
+    // Direct ray manipulation: every handle is a real GltfModelEntity
+    // collider with an InteractableComponent, driven by ray/plane math
+    // (GizmoRayDragDriver) — the same input mechanism the paint pipeline
+    // proves streams pinch-drag events on Galaxy XR. Each visible handle
+    // is paired with a FAT invisible input mesh (SceneCore entities
+    // don't render on Galaxy XR here) so the grab volume is generous
+    // while the visuals stay slim.
+    GizmoVisuals(
+        session = session,
+        parentEntity = parentEntity,
+        selectedModel = selectedModel,
+        tool = tool,
+        liveOverride = liveOverride,
+        onLivePreview = onLivePreview,
+        onCommit = onCommit,
+    )
+}
+
+
+@Composable
+fun GizmoVisuals(
+    session: Session,
+    parentEntity: Entity?,
+    selectedModel: PlacedModel,
+    tool: GizmoTool,
+    liveOverride: GizmoDragOverride?,
+    onLivePreview: (GizmoDragOverride?) -> Unit,
+    onCommit: (GizmoDragOverride) -> Unit,
+) {
+    if (tool == GizmoTool.Select) return
+
     val ctx = LocalContext.current
-    var rootEntity by remember { mutableStateOf<Entity?>(null) }
-
-    LaunchedEffect(selectedModel.id, selectedModel.baseBboxXmm, selectedModel.baseBboxYmm, selectedModel.baseBboxZmm) {
-        android.util.Log.i("OrcaXR", "TransformGizmo for model ${selectedModel.id}: dims=[${selectedModel.baseBboxXmm}, ${selectedModel.baseBboxYmm}, ${selectedModel.baseBboxZmm}] scales=[${selectedModel.effectiveScaleX}, ${selectedModel.effectiveScaleY}, ${selectedModel.effectiveScaleZ}]")
-    }
-
-    // Single DisposableEffect for the root's lifecycle — see commit history
-    // for why splitting create/dispose across two effects was racy.
-    DisposableEffect(session, parentEntity) {
-        val root = Entity.create(session, "OrcaXR-gizmoRoot")
-        root.parent = parentEntity ?: session.scene.activitySpace
-        rootEntity = root
-        onDispose {
-            rootEntity = null
-            if (!root.isDisposed) runCatching { root.parent = null }
-        }
-    }
-
-    val root = rootEntity ?: return
-
-    val baseScale = computeGizmoBaseScale(selectedModel)
-    val lenX = computeAxisLengthScale(selectedModel.baseBboxXmm * selectedModel.effectiveScaleX)
-    val lenY = computeAxisLengthScale(selectedModel.baseBboxYmm * selectedModel.effectiveScaleY)
-    val lenZ = computeAxisLengthScale(selectedModel.baseBboxZmm * selectedModel.effectiveScaleZ)
-    val halfHeightMm = modelHalfHeightMm(selectedModel)
     val ovTx = liveOverride?.deltaTxMm ?: 0f
     val ovTy = liveOverride?.deltaTyMm ?: 0f
     val ovTz = liveOverride?.deltaTzMm ?: 0f
 
-    LaunchedEffect(
-        root,
-        selectedModel.translateXmm, selectedModel.translateYmm, selectedModel.translateZmm,
-        halfHeightMm, ovTx, ovTy, ovTz,
-    ) {
-        if (root.isDisposed) return@LaunchedEffect
-        // Anchor at the model's geometric center (not the bed) so each
-        // axis arrow has room to extend past the corresponding bbox face.
-        // During a drag, the live override slides the root with the model.
-        val cx = (selectedModel.translateXmm + ovTx) * WORLD_SCALE
-        val cy = (selectedModel.translateYmm + ovTy) * WORLD_SCALE
-        val cz = (selectedModel.translateZmm + halfHeightMm + ovTz) * WORLD_SCALE
-        root.setPose(Pose(Vector3(cx, cy, cz), Quaternion.Identity))
+    // Center the affordance on the model (preview is anchored at its base).
+    // Visuals follow the live drag; the INPUT colliders stay at the
+    // drag-start pose (bcx/bcy/bcz) so the frame captured at pinch-DOWN
+    // remains valid for the whole drag, then jump on commit.
+    val bcx = selectedModel.translateXmm
+    val bcy = selectedModel.translateYmm
+    val bcz = selectedModel.translateZmm + modelHalfHeightMm(selectedModel)
+    val cx = bcx + ovTx
+    val cy = bcy + ovTy
+    val cz = bcz + ovTz
+
+    val effX = selectedModel.baseBboxXmm * selectedModel.effectiveScaleX
+    val effY = selectedModel.baseBboxYmm * selectedModel.effectiveScaleY
+    val effZ = selectedModel.baseBboxZmm * selectedModel.effectiveScaleZ
+
+    // Scale the affordance geometry to the model so it reads the same on a
+    // 20 mm trinket and a 200 mm bust: a fixed 2 mm shaft is a fat tube on a
+    // tiny model and a thread on a big one, and a fixed 22 mm clearance dwarfs
+    // a small model. Tie the shaft radius, ring thickness, scale cube and the
+    // clearances to the model's largest dimension, clamped so extremes stay
+    // sane. The fixed GIZMO_* constants are kept as the clamp floors/ceilings.
+    val maxDim = maxOf(effX, effY, effZ).coerceAtLeast(1f)
+    val shaftR = (maxDim * 0.012f).coerceIn(0.8f, 4.0f)
+    val ringThick = (maxDim * 0.015f).coerceIn(1.2f, 4.0f)
+    val ringClear = (maxDim * 0.07f).coerceIn(6f, 20f)
+    val cubeSize = (maxDim * 0.05f).coerceIn(5f, 14f)
+    val cubeClear = (maxDim * 0.09f).coerceIn(8f, 26f)
+
+    // Fat input-collider dimensions: generous enough to pinch without
+    // hunting, clamped so a small model's handles don't merge into one blob.
+    val fatArrowR = (maxDim * 0.09f).coerceIn(10f, 30f)
+
+    // Fat invisible BODY collider: the model's exact-mesh IC is a tiny target
+    // on a small model, so every tool also mounts an inflated box around the
+    // body (≥ GIZMO_BODY_GRAB_MIN_MM per side) carrying the same body mapping.
+    // Its mesh frame is centered at the model center (the box GLB is authored
+    // around the origin), so body mappings anchor at Vec3f(0,0,0).
+    val bodyX = (effX * 1.25f).coerceAtLeast(GIZMO_BODY_GRAB_MIN_MM)
+    val bodyY = (effY * 1.25f).coerceAtLeast(GIZMO_BODY_GRAB_MIN_MM)
+    val bodyZ = (effZ * 1.25f).coerceAtLeast(GIZMO_BODY_GRAB_MIN_MM)
+    val bodyMapping = when (tool) {
+        GizmoTool.Move -> GizmoDragMapping.MoveInPlane(planeZmm = 0f)
+        GizmoTool.Rotate -> GizmoDragMapping.RotateAboutAxis(2, Vec3f(0f, 0f, 0f))
+        GizmoTool.Scale -> GizmoDragMapping.ScaleUniform(Vec3f(0f, 0f, 0f))
+        GizmoTool.Select -> null
+    }
+    if (bodyMapping != null) {
+        GizmoHandleEntity(
+            session = session,
+            parentEntity = parentEntity,
+            filename = "gzi_body_${tool}_${bodyX.toInt()}_${bodyY.toInt()}_${bodyZ.toInt()}.glb",
+            centerXmm = bcx, centerYmm = bcy, centerZmm = bcz,
+            mapping = bodyMapping,
+            onPreview = onLivePreview,
+            onCommit = onCommit,
+        ) { f -> GizmoGlb.writeBox(f, bodyX, bodyY, bodyZ, floatArrayOf(1f, 1f, 1f)) }
     }
 
-    val centerWorld = Vector3(
-        workspaceTx.x + (selectedModel.translateXmm + ovTx) * WORLD_SCALE,
-        workspaceTx.y + (selectedModel.translateYmm + ovTy) * WORLD_SCALE,
-        workspaceTx.z + (selectedModel.translateZmm + halfHeightMm + ovTz) * WORLD_SCALE,
-    )
+    when (tool) {
+        GizmoTool.Move -> {
+            // Functional arrows: grab an arrow anywhere along its length for an
+            // axis-constrained move; grab the model body for a free move on the
+            // bed. Lengths are proportional to the model (no fixed floor — a
+            // 75 mm minimum dwarfed small models).
+            val arrowClear = (maxDim * 0.30f).coerceIn(12f, 45f)
+            val lenX = effX / 2f + arrowClear
+            val lenY = effY / 2f + arrowClear
+            val lenZ = effZ / 2f + arrowClear
+            val r = shaftR
+            val axes = listOf(
+                Triple(0, lenX, floatArrayOf(0.95f, 0.26f, 0.21f)),
+                Triple(1, lenY, floatArrayOf(0.30f, 0.69f, 0.31f)),
+                Triple(2, lenZ, floatArrayOf(0.26f, 0.54f, 0.96f)),
+            )
+            for ((axis, len, color) in axes) {
+                val axisName = "xyz"[axis]
+                GizmoVisualModel(
+                    session, ctx, "arrow_${axisName}_${len.toInt()}_${(r * 10).toInt()}.glb", cx, cy, cz,
+                ) { f -> GizmoGlb.writeArrow(f, axis, len, r, color) }
+                // Fat collider starting past the body-box surface so it never
+                // shadows the body free-grab; runs past the visual tip so the
+                // arrowhead region is easy to pinch.
+                val bodyHalf = when (axis) { 0 -> bodyX; 1 -> bodyY; else -> bodyZ } / 2f
+                val startMm = bodyHalf * 1.02f
+                val inputLen = maxOf(len + 25f, startMm + 40f)
+                GizmoHandleEntity(
+                    session = session,
+                    parentEntity = parentEntity,
+                    filename = "gzi_arrow_${axisName}_${inputLen.toInt()}_${fatArrowR.toInt()}_${startMm.toInt()}.glb",
+                    centerXmm = bcx, centerYmm = bcy, centerZmm = bcz,
+                    mapping = GizmoDragMapping.MoveAlongAxis(axis, Vec3f(0f, 0f, 0f)),
+                    onPreview = onLivePreview,
+                    onCommit = onCommit,
+                ) { f -> GizmoGlb.writeArrow(f, axis, inputLen, fatArrowR, color, start = startMm) }
+            }
+        }
 
-    // Translation Arrows — drag projected onto printer axis (which after
-    // WORKSPACE_ROTATION shows up as world X, -world Z, world Y).
-    // Arrows scale their length per-axis to stay outside the model.
-    if (tool == GizmoTool.Move) {
-    GizmoDragHandle(session, ctx, root, "arrow_x_v4.glb", Vector3(lenX, baseScale, baseScale),
-        generate = { f -> GizmoGlb.writeArrow(f, 0, GIZMO_ARROW_LEN_MM, GIZMO_ARROW_SHAFT_MM, floatArrayOf(1f, 0.2f, 0.2f)) },
-        projectDelta = { delta -> delta.x },
-        buildOverride = { dxMm -> GizmoDragOverride(deltaTxMm = dxMm) },
-        onLivePreview = onLivePreview, onCommit = onCommit,
-    )
-    GizmoDragHandle(session, ctx, root, "arrow_y_v4.glb", Vector3(baseScale, lenY, baseScale),
-        generate = { f -> GizmoGlb.writeArrow(f, 1, GIZMO_ARROW_LEN_MM, GIZMO_ARROW_SHAFT_MM, floatArrayOf(0.2f, 1f, 0.2f)) },
-        projectDelta = { delta -> -delta.z },
-        buildOverride = { dyMm -> GizmoDragOverride(deltaTyMm = dyMm) },
-        onLivePreview = onLivePreview, onCommit = onCommit,
-    )
-    GizmoDragHandle(session, ctx, root, "arrow_z_v4.glb", Vector3(baseScale, baseScale, lenZ),
-        generate = { f -> GizmoGlb.writeArrow(f, 2, GIZMO_ARROW_LEN_MM, GIZMO_ARROW_SHAFT_MM, floatArrayOf(0.2f, 0.2f, 1f)) },
-        projectDelta = { delta -> delta.y },
-        buildOverride = { dzMm -> GizmoDragOverride(deltaTzMm = dzMm) },
-        onLivePreview = onLivePreview, onCommit = onCommit,
-    )
-    }
+        GizmoTool.Rotate -> {
+            // OrcaSlicer-style rotation rings: grab a ring and sweep it — the
+            // model rotates about that axis by the swept angle, 1:1.
+            val radius = maxOf(effX, effY, effZ) / 2f + ringClear
+            val fatRingT = (radius * 0.18f).coerceIn(10f, 30f)
+            val axes = listOf(
+                Triple(0, floatArrayOf(0.95f, 0.26f, 0.21f), "x"),
+                Triple(1, floatArrayOf(0.30f, 0.69f, 0.31f), "y"),
+                Triple(2, floatArrayOf(0.26f, 0.54f, 0.96f), "z"),
+            )
+            for ((axis, color, axisName) in axes) {
+                GizmoVisualModel(
+                    session, ctx, "ring_${axisName}_${radius.toInt()}_${(ringThick * 10).toInt()}.glb", cx, cy, cz,
+                ) { f -> GizmoGlb.writeRing(f, axis, radius, ringThick, color) }
+                GizmoHandleEntity(
+                    session = session,
+                    parentEntity = parentEntity,
+                    filename = "gzi_ring_${axisName}_${radius.toInt()}_${fatRingT.toInt()}.glb",
+                    centerXmm = bcx, centerYmm = bcy, centerZmm = bcz,
+                    mapping = GizmoDragMapping.RotateAboutAxis(axis, Vec3f(0f, 0f, 0f)),
+                    onPreview = onLivePreview,
+                    onCommit = onCommit,
+                ) { f -> GizmoGlb.writeRing(f, axis, radius, fatRingT, color) }
+            }
+        }
 
-    // Rotation Rings — angle measured in the plane perpendicular to the
-    // ring's printer-space normal. Hits arrive in world coords, so we
-    // pick atan2 args that match the world plane the ring physically
-    // lies in (X ring -> world YZ; Y ring -> world XY; Z ring -> world XZ).
-    // Rotation Rings — printer X/Y/Z map to world X / -Z / Y.
-    if (tool == GizmoTool.Rotate) {
-    val uniScale = Vector3(baseScale, baseScale, baseScale)
-    GizmoRotHandle(session, ctx, root, "ring_x_v3.glb", axis = 0, centerWorld = centerWorld, gizmoScale = uniScale,
-        generate = { f -> GizmoGlb.writeRing(f, 0, GIZMO_RING_RADIUS_MM, GIZMO_RING_THICK_MM, floatArrayOf(1f, 0.2f, 0.2f)) },
-        buildOverride = { deg -> GizmoDragOverride(deltaRotXDeg = deg) },
-        onLivePreview = onLivePreview, onCommit = onCommit,
-    )
-    GizmoRotHandle(session, ctx, root, "ring_y_v3.glb", axis = 1, centerWorld = centerWorld, gizmoScale = uniScale,
-        generate = { f -> GizmoGlb.writeRing(f, 1, GIZMO_RING_RADIUS_MM, GIZMO_RING_THICK_MM, floatArrayOf(0.2f, 1f, 0.2f)) },
-        buildOverride = { deg -> GizmoDragOverride(deltaRotYDeg = deg) },
-        onLivePreview = onLivePreview, onCommit = onCommit,
-    )
-    GizmoRotHandle(session, ctx, root, "ring_z_v3.glb", axis = 2, centerWorld = centerWorld, gizmoScale = uniScale,
-        generate = { f -> GizmoGlb.writeRing(f, 2, GIZMO_RING_RADIUS_MM, GIZMO_RING_THICK_MM, floatArrayOf(0.2f, 0.2f, 1f)) },
-        buildOverride = { deg -> GizmoDragOverride(deltaRotZDeg = deg) },
-        onLivePreview = onLivePreview, onCommit = onCommit,
-    )
-    }
+        GizmoTool.Scale -> {
+            // Per-axis cubes; the model body (own IC) scales uniformly.
+            val size = cubeSize
+            val fatCube = (size * 2.5f).coerceIn(18f, 40f)
+            val axes = listOf(
+                Triple(0, effX, floatArrayOf(0.95f, 0.26f, 0.21f)),
+                Triple(1, effY, floatArrayOf(0.30f, 0.69f, 0.31f)),
+                Triple(2, effZ, floatArrayOf(0.26f, 0.54f, 0.96f)),
+            )
+            for ((axis, eff, color) in axes) {
+                val axisName = "xyz"[axis]
+                val off = eff / 2f + cubeClear
+                val offVec = FloatArray(3).also { it[axis] = off }
+                GizmoVisualModel(
+                    session, ctx, "scale_${axisName}_${size.toInt()}_${off.toInt()}.glb", cx, cy, cz,
+                ) { f -> GizmoGlb.writeCube(f, size, offVec, color) }
+                GizmoHandleEntity(
+                    session = session,
+                    parentEntity = parentEntity,
+                    filename = "gzi_scale_${axisName}_${fatCube.toInt()}_${off.toInt()}.glb",
+                    centerXmm = bcx, centerYmm = bcy, centerZmm = bcz,
+                    mapping = GizmoDragMapping.ScaleAlongAxis(axis, Vec3f(0f, 0f, 0f)),
+                    onPreview = onLivePreview,
+                    onCommit = onCommit,
+                ) { f -> GizmoGlb.writeCube(f, fatCube, offVec, color) }
+            }
+        }
 
-    // Scale Handles — printer X/Y/Z map to world X / -Z / Y.
-    if (tool == GizmoTool.Scale) {
-    val uniScale = Vector3(baseScale, baseScale, baseScale)
-    GizmoScaleHandle(session, ctx, root, "scale_x_v3.glb", axis = 0, centerWorld = centerWorld, gizmoScale = uniScale,
-        generate = { f -> GizmoGlb.writeCube(f, GIZMO_SCALE_CUBE_MM, floatArrayOf(GIZMO_SCALE_OFFSET_MM, 0f, 0f), floatArrayOf(1f, 0.5f, 0.5f)) },
-        buildOverride = { ratio -> GizmoDragOverride(scaleMultX = ratio) },
-        onLivePreview = onLivePreview, onCommit = onCommit,
-    )
-    GizmoScaleHandle(session, ctx, root, "scale_y_v3.glb", axis = 1, centerWorld = centerWorld, gizmoScale = uniScale,
-        generate = { f -> GizmoGlb.writeCube(f, GIZMO_SCALE_CUBE_MM, floatArrayOf(0f, GIZMO_SCALE_OFFSET_MM, 0f), floatArrayOf(0.5f, 1f, 0.5f)) },
-        buildOverride = { ratio -> GizmoDragOverride(scaleMultY = ratio) },
-        onLivePreview = onLivePreview, onCommit = onCommit,
-    )
-    GizmoScaleHandle(session, ctx, root, "scale_z_v3.glb", axis = 2, centerWorld = centerWorld, gizmoScale = uniScale,
-        generate = { f -> GizmoGlb.writeCube(f, GIZMO_SCALE_CUBE_MM, floatArrayOf(0f, 0f, GIZMO_SCALE_OFFSET_MM), floatArrayOf(0.5f, 0.5f, 1f)) },
-        buildOverride = { ratio -> GizmoDragOverride(scaleMultZ = ratio) },
-        onLivePreview = onLivePreview, onCommit = onCommit,
-    )
+        GizmoTool.Select -> {}
     }
 }
 
+/**
+ * Invisible input collider for one gizmo handle: a GltfModelEntity
+ * (SceneCore entities produce no visible geometry on Galaxy XR here — the
+ * visuals render via the Compose [SpatialGlbVisual] path) parented to the
+ * workspace at the gizmo center, with an InteractableComponent feeding a
+ * [GizmoRayDragDriver]. The handle GLB is authored around the gizmo
+ * center in printer axes, so the drag mapping's mesh-mm frame has the
+ * gizmo center at the origin.
+ */
 @Composable
-fun GizmoDragHandle(
+private fun GizmoHandleEntity(
     session: Session,
-    ctx: Context,
-    parentEntity: Entity,
+    parentEntity: Entity?,
     filename: String,
-    gizmoScale: Vector3,
-    generate: (File) -> Unit,
-    projectDelta: (Vector3) -> Float,
-    buildOverride: (Float) -> GizmoDragOverride,
-    onLivePreview: (GizmoDragOverride?) -> Unit,
+    centerXmm: Float,
+    centerYmm: Float,
+    centerZmm: Float,
+    mapping: GizmoDragMapping,
+    onPreview: (GizmoDragOverride?) -> Unit,
     onCommit: (GizmoDragOverride) -> Unit,
+    generate: (File) -> Unit,
 ) {
-    var entity by remember { mutableStateOf<GltfModelEntity?>(null) }
-    val projectDeltaLive = rememberUpdatedState(projectDelta)
-    val buildOverrideLive = rememberUpdatedState(buildOverride)
-    val onLivePreviewLive = rememberUpdatedState(onLivePreview)
+    val ctx = LocalContext.current
+    var entity by remember(filename) { mutableStateOf<GltfModelEntity?>(null) }
+    val mappingLive = rememberUpdatedState(mapping)
+    val onPreviewLive = rememberUpdatedState(onPreview)
     val onCommitLive = rememberUpdatedState(onCommit)
-    val gizmoScaleLive = rememberUpdatedState(gizmoScale)
 
-    LaunchedEffect(session, filename) {
-        // Gotcha #11e/#22: when this handle is first composed during a
-        // 3MF load, the StlPreviewSceneEntity is still rebaking (gotcha
-        // #22 fires writeColoredGlb twice) and the SelectionBboxEntity
-        // is also attaching. Three GltfModelEntity.create calls (one
-        // per handle) racing in at the same time saturate Filament's
-        // material-instance binding queue and crash with
-        // `split_engine_bridge.cc:100 NOT_FOUND: unknown material
-        // instance id`. A 250 ms pre-create delay lets the heavier
-        // bake/attach traffic clear before the gizmo handles try to
-        // claim their own material slots. Keyed only on
-        // (session, filename), so this delay is paid once per handle
-        // per session, not on every recomposition.
-        kotlinx.coroutines.delay(250)
-        val file = File(ctx.cacheDir, filename)
-        if (!file.exists()) generate(file)
-        val bytes = file.readBytes()
-        val uniqueName = "${filename.removeSuffix(".glb")}_${System.currentTimeMillis().toString(36)}.glb"
-        val model = GltfModel.create(session, bytes, uniqueName)
-        val ent = GltfModelEntity.create(session, model)
-        ent.parent = parentEntity
-        // Use scalar scale initially; the updater effect below handles
-        // the non-uniform scale after a frame delay to avoid racing
-        // Filament.
+    LaunchedEffect(filename, parentEntity) {
+        val parent = parentEntity ?: return@LaunchedEffect
+        val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val f = File(ctx.cacheDir, filename)
+                if (!f.exists()) generate(f)
+                f.readBytes()
+            }.onFailure {
+                android.util.Log.e("OrcaXR/gizmo", "handle GLB write failed $filename", it)
+            }.getOrNull()
+        } ?: return@LaunchedEffect
+        val model = runCatching {
+            GltfModel.create(session, bytes, "gz_${filename.hashCode().toString(36)}.glb")
+        }.onFailure {
+            android.util.Log.e("OrcaXR/gizmo", "handle GltfModel.create failed $filename", it)
+        }.getOrNull() ?: return@LaunchedEffect
+        val ent = runCatching { GltfModelEntity.create(session, model) }
+            .onFailure { android.util.Log.e("OrcaXR/gizmo", "handle entity create failed $filename", it) }
+            .getOrNull() ?: return@LaunchedEffect
+        ent.parent = parent
         ent.setScale(WORLD_SCALE)
-        // Gotcha #11e: assigning `entity = ent` here triggers
-        // DisposableEffect(entity)'s ent.addComponent(ic) on the next
-        // recomposition — but Filament hasn't bound the freshly-created
-        // entity's material yet. Three awaitFrame() lets Filament
-        // settle before the IC attach, mirroring the fix in
-        // SelectionBboxEntity / GlbSceneEntity.
+        // Let the render thread bind the entity before the IC attach below
+        // queues collider ops on it (gotcha #13 family).
         kotlinx.coroutines.android.awaitFrame()
         kotlinx.coroutines.android.awaitFrame()
-        kotlinx.coroutines.android.awaitFrame()
-        if (!ent.isDisposed) entity = ent
+        if (ent.isDisposed) return@LaunchedEffect
+        entity = ent
+        android.util.Log.i("OrcaXR/gizmo", "handle entity attached $filename")
     }
 
-    LaunchedEffect(entity, gizmoScale) {
+    LaunchedEffect(entity, centerXmm, centerYmm, centerZmm) {
         val ent = entity ?: return@LaunchedEffect
         if (ent.isDisposed) return@LaunchedEffect
-        // Gotcha #10: setScale(Vector3) races material binding on freshly 
-        // created entities. Wait one frame before applying non-uniform scale.
-        kotlinx.coroutines.android.awaitFrame()
-        if (!ent.isDisposed) runCatching { ent.setScale(gizmoScale) }
+        ent.setPose(
+            Pose(
+                Vector3(centerXmm * WORLD_SCALE, centerYmm * WORLD_SCALE, centerZmm * WORLD_SCALE),
+                Quaternion.Identity,
+            ),
+        )
     }
 
     DisposableEffect(entity) {
-        val ent = entity ?: return@DisposableEffect onDispose {}
-        var lastHit: Vector3? = null
-        var cumulativeMm = 0f
-        val executor = androidx.core.content.ContextCompat.getMainExecutor(ctx)
-        val listener = java.util.function.Consumer<InputEvent> { event ->
-            if (!isInteractiveSource(event.source)) return@Consumer
-            val hit = event.hitInfoList.firstOrNull()?.hitPosition ?: return@Consumer
-            when (event.action) {
-                InputEvent.Action.DOWN -> {
-                    lastHit = hit
-                    cumulativeMm = 0f
-                    onLivePreviewLive.value(GizmoDragOverride())
-                }
-                InputEvent.Action.MOVE -> {
-                    val lh = lastHit ?: return@Consumer
-                    val worldDelta = Vector3(hit.x - lh.x, hit.y - lh.y, hit.z - lh.z)
-                    val mmDelta = projectDeltaLive.value(worldDelta) / WORLD_SCALE
-                    cumulativeMm += mmDelta
-                    lastHit = hit
-                    onLivePreviewLive.value(buildOverrideLive.value(cumulativeMm))
-                }
-                InputEvent.Action.UP, InputEvent.Action.CANCEL -> {
-                    if (lastHit != null) {
-                        lastHit = null
-                        val finalOverride = buildOverrideLive.value(cumulativeMm)
-                        onLivePreviewLive.value(null)
-                        onCommitLive.value(finalOverride)
-                    }
-                }
-                else -> {}
+        val ent = entity
+        if (ent == null) {
+            onDispose { }
+        } else {
+            val driver = GizmoRayDragDriver(
+                tag = filename.removeSuffix(".glb"),
+                mappingProvider = { mappingLive.value },
+                onPreview = { onPreviewLive.value(it) },
+                onCommit = { onCommitLive.value(it) },
+            )
+            val executor = androidx.core.content.ContextCompat.getMainExecutor(ctx)
+            val ic = runCatching {
+                InteractableComponent.create(session, executor) { event -> driver.handle(event) }
+            }.onFailure {
+                android.util.Log.e("OrcaXR/gizmo", "handle IC create failed $filename", it)
+            }.getOrNull()
+            val attached = ic != null && !ent.isDisposed &&
+                runCatching { ent.addComponent(ic) }.getOrDefault(false)
+            if (!attached) {
+                android.util.Log.w("OrcaXR/gizmo", "handle IC NOT attached $filename")
+            }
+            onDispose {
+                if (attached && !ent.isDisposed) runCatching { ent.removeComponent(ic!!) }
             }
         }
-        val ic = InteractableComponent.create(session, executor, listener)
-        ent.addComponent(ic)
+    }
+
+    DisposableEffect(Unit) {
         onDispose {
-            // The handle's GltfModelEntity is parented to the gizmo's
-            // GroupEntity; on activity destroy SceneCore cascade-disposes
-            // children before the handle composables' onDispose runs.
-            // Without these guards removeComponent / detach throw
-            // Entity$DisposedException, which aborts the activity teardown
-            // and led to a process restart with empty placedModels.
-            if (!ent.isDisposed) {
-                runCatching { ent.removeComponent(ic) }
-                runCatching { ent.parent = null }
-            }
-        }
-    }
-}
-
-@Composable
-fun GizmoRotHandle(
-    session: Session,
-    ctx: Context,
-    parentEntity: Entity,
-    filename: String,
-    axis: Int,
-    centerWorld: Vector3,
-    gizmoScale: Vector3,
-    generate: (File) -> Unit,
-    buildOverride: (Float) -> GizmoDragOverride,
-    onLivePreview: (GizmoDragOverride?) -> Unit,
-    onCommit: (GizmoDragOverride) -> Unit,
-) {
-    var entity by remember { mutableStateOf<GltfModelEntity?>(null) }
-    val buildOverrideLive = rememberUpdatedState(buildOverride)
-    val onLivePreviewLive = rememberUpdatedState(onLivePreview)
-    val onCommitLive = rememberUpdatedState(onCommit)
-    val centerLive = rememberUpdatedState(centerWorld)
-    val gizmoScaleLive = rememberUpdatedState(gizmoScale)
-
-    LaunchedEffect(session, filename) {
-        // Gotcha #11e/#22: when this handle is first composed during a
-        // 3MF load, the StlPreviewSceneEntity is still rebaking (gotcha
-        // #22 fires writeColoredGlb twice) and the SelectionBboxEntity
-        // is also attaching. Three GltfModelEntity.create calls (one
-        // per handle) racing in at the same time saturate Filament's
-        // material-instance binding queue and crash with
-        // `split_engine_bridge.cc:100 NOT_FOUND: unknown material
-        // instance id`. A 250 ms pre-create delay lets the heavier
-        // bake/attach traffic clear before the gizmo handles try to
-        // claim their own material slots. Keyed only on
-        // (session, filename), so this delay is paid once per handle
-        // per session, not on every recomposition.
-        kotlinx.coroutines.delay(250)
-        val file = File(ctx.cacheDir, filename)
-        if (!file.exists()) generate(file)
-        val bytes = file.readBytes()
-        val uniqueName = "${filename.removeSuffix(".glb")}_${System.currentTimeMillis().toString(36)}.glb"
-        val model = GltfModel.create(session, bytes, uniqueName)
-        val ent = GltfModelEntity.create(session, model)
-        ent.parent = parentEntity
-        // Use scalar scale initially; the updater effect below handles
-        // the non-uniform scale after a frame delay to avoid racing
-        // Filament.
-        ent.setScale(WORLD_SCALE)
-        // Gotcha #11e: assigning `entity = ent` here triggers
-        // DisposableEffect(entity)'s ent.addComponent(ic) on the next
-        // recomposition — but Filament hasn't bound the freshly-created
-        // entity's material yet. Three awaitFrame() lets Filament
-        // settle before the IC attach, mirroring the fix in
-        // SelectionBboxEntity / GlbSceneEntity.
-        kotlinx.coroutines.android.awaitFrame()
-        kotlinx.coroutines.android.awaitFrame()
-        kotlinx.coroutines.android.awaitFrame()
-        if (!ent.isDisposed) entity = ent
-    }
-
-    LaunchedEffect(entity, gizmoScale) {
-        val ent = entity ?: return@LaunchedEffect
-        if (ent.isDisposed) return@LaunchedEffect
-        // Gotcha #10: setScale(Vector3) races material binding on freshly 
-        // created entities. Wait one frame before applying non-uniform scale.
-        kotlinx.coroutines.android.awaitFrame()
-        if (!ent.isDisposed) runCatching { ent.setScale(gizmoScale) }
-    }
-
-    DisposableEffect(entity) {
-        val ent = entity ?: return@DisposableEffect onDispose {}
-        var lastAngle: Float? = null
-        var cumulativeDeg = 0f
-        val executor = androidx.core.content.ContextCompat.getMainExecutor(ctx)
-        val listener = java.util.function.Consumer<InputEvent> { event ->
-            if (!isInteractiveSource(event.source)) return@Consumer
-            val hit = event.hitInfoList.firstOrNull()?.hitPosition ?: return@Consumer
-            val c = centerLive.value
-            val dx = hit.x - c.x
-            val dy = hit.y - c.y
-            val dz = hit.z - c.z
-
-            // Ring planes in WORLD coordinates after WORKSPACE_ROTATION:
-            //   axis=0 (printer X / world X) -> ring lies in world YZ
-            //   axis=1 (printer Y / world -Z) -> ring lies in world XY
-            //   axis=2 (printer Z / world Y) -> ring lies in world XZ
-            // Pick atan2 args from the appropriate plane.
-            val angle = when (axis) {
-                0 -> atan2(dy, dz)
-                1 -> atan2(dy, dx)
-                else -> atan2(dz, dx)
-            }
-
-            when (event.action) {
-                InputEvent.Action.DOWN -> {
-                    lastAngle = angle
-                    cumulativeDeg = 0f
-                    onLivePreviewLive.value(GizmoDragOverride())
-                }
-                InputEvent.Action.MOVE -> {
-                    val la = lastAngle ?: return@Consumer
-                    var delta = angle - la
-                    if (delta > Math.PI) delta -= (2 * Math.PI).toFloat()
-                    if (delta < -Math.PI) delta += (2 * Math.PI).toFloat()
-                    cumulativeDeg += Math.toDegrees(delta.toDouble()).toFloat()
-                    lastAngle = angle
-                    onLivePreviewLive.value(buildOverrideLive.value(cumulativeDeg))
-                }
-                InputEvent.Action.UP, InputEvent.Action.CANCEL -> {
-                    if (lastAngle != null) {
-                        lastAngle = null
-                        val finalOverride = buildOverrideLive.value(cumulativeDeg)
-                        onLivePreviewLive.value(null)
-                        onCommitLive.value(finalOverride)
-                    }
-                }
-                else -> {}
-            }
-        }
-        val ic = InteractableComponent.create(session, executor, listener)
-        ent.addComponent(ic)
-        onDispose {
-            // The handle's GltfModelEntity is parented to the gizmo's
-            // GroupEntity; on activity destroy SceneCore cascade-disposes
-            // children before the handle composables' onDispose runs.
-            // Without these guards removeComponent / detach throw
-            // Entity$DisposedException, which aborts the activity teardown
-            // and led to a process restart with empty placedModels.
-            if (!ent.isDisposed) {
-                runCatching { ent.removeComponent(ic) }
-                runCatching { ent.parent = null }
-            }
+            entity?.let { if (!it.isDisposed) runCatching { it.parent = null } }
+            entity = null
         }
     }
 }
 
 @Composable
-fun GizmoScaleHandle(
+private fun GizmoVisualModel(
     session: Session,
     ctx: Context,
-    parentEntity: Entity,
     filename: String,
-    axis: Int,
-    centerWorld: Vector3,
-    gizmoScale: Vector3,
+    offsetXmm: Float,
+    offsetYmm: Float,
+    offsetZmm: Float,
     generate: (File) -> Unit,
-    buildOverride: (Float) -> GizmoDragOverride,
-    onLivePreview: (GizmoDragOverride?) -> Unit,
-    onCommit: (GizmoDragOverride) -> Unit,
 ) {
-    var entity by remember { mutableStateOf<GltfModelEntity?>(null) }
-    val buildOverrideLive = rememberUpdatedState(buildOverride)
-    val onLivePreviewLive = rememberUpdatedState(onLivePreview)
-    val onCommitLive = rememberUpdatedState(onCommit)
-    val centerLive = rememberUpdatedState(centerWorld)
-    val gizmoScaleLive = rememberUpdatedState(gizmoScale)
+    val glbPathState = remember(filename) { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(session, filename) {
-        // Gotcha #11e/#22: when this handle is first composed during a
-        // 3MF load, the StlPreviewSceneEntity is still rebaking (gotcha
-        // #22 fires writeColoredGlb twice) and the SelectionBboxEntity
-        // is also attaching. Three GltfModelEntity.create calls (one
-        // per handle) racing in at the same time saturate Filament's
-        // material-instance binding queue and crash with
-        // `split_engine_bridge.cc:100 NOT_FOUND: unknown material
-        // instance id`. A 250 ms pre-create delay lets the heavier
-        // bake/attach traffic clear before the gizmo handles try to
-        // claim their own material slots. Keyed only on
-        // (session, filename), so this delay is paid once per handle
-        // per session, not on every recomposition.
-        kotlinx.coroutines.delay(250)
-        val file = File(ctx.cacheDir, filename)
-        if (!file.exists()) generate(file)
-        val bytes = file.readBytes()
-        val uniqueName = "${filename.removeSuffix(".glb")}_${System.currentTimeMillis().toString(36)}.glb"
-        val model = GltfModel.create(session, bytes, uniqueName)
-        val ent = GltfModelEntity.create(session, model)
-        ent.parent = parentEntity
-        // Use scalar scale initially; the updater effect below handles
-        // the non-uniform scale after a frame delay to avoid racing
-        // Filament.
-        ent.setScale(WORLD_SCALE)
-        // Gotcha #11e: assigning `entity = ent` here triggers
-        // DisposableEffect(entity)'s ent.addComponent(ic) on the next
-        // recomposition — but Filament hasn't bound the freshly-created
-        // entity's material yet. Three awaitFrame() lets Filament
-        // settle before the IC attach, mirroring the fix in
-        // SelectionBboxEntity / GlbSceneEntity.
-        kotlinx.coroutines.android.awaitFrame()
-        kotlinx.coroutines.android.awaitFrame()
-        kotlinx.coroutines.android.awaitFrame()
-        if (!ent.isDisposed) entity = ent
-    }
-
-    LaunchedEffect(entity, gizmoScale) {
-        val ent = entity ?: return@LaunchedEffect
-        if (ent.isDisposed) return@LaunchedEffect
-        // Gotcha #10: setScale(Vector3) races material binding on freshly 
-        // created entities. Wait one frame before applying non-uniform scale.
-        kotlinx.coroutines.android.awaitFrame()
-        if (!ent.isDisposed) runCatching { ent.setScale(gizmoScale) }
-    }
-
-    DisposableEffect(entity) {
-        val ent = entity ?: return@DisposableEffect onDispose {}
-        var startProj: Float? = null
-        var lastRatio = 1f
-        val executor = androidx.core.content.ContextCompat.getMainExecutor(ctx)
-        val listener = java.util.function.Consumer<InputEvent> { event ->
-            if (!isInteractiveSource(event.source)) return@Consumer
-            val hit = event.hitInfoList.firstOrNull()?.hitPosition ?: return@Consumer
-            val c = centerLive.value
-            val dx = hit.x - c.x
-            val dy = hit.y - c.y
-            val dz = hit.z - c.z
-            // Project drag offset onto the cube's printer-space axis (in
-            // WORLD coords): printer X = +X, printer Y = -Z, printer Z = +Y.
-            val proj = when (axis) {
-                0 -> dx
-                1 -> -dz
-                else -> dy
-            }
-            when (event.action) {
-                InputEvent.Action.DOWN -> {
-                    startProj = proj
-                    lastRatio = 1f
-                    onLivePreviewLive.value(GizmoDragOverride())
-                }
-                InputEvent.Action.MOVE -> {
-                    val sp = startProj ?: return@Consumer
-                    if (abs(sp) < 0.001f) return@Consumer
-                    val ratio = (proj / sp).coerceIn(0.1f, 10f)
-                    lastRatio = ratio
-                    onLivePreviewLive.value(buildOverrideLive.value(ratio))
-                }
-                InputEvent.Action.UP, InputEvent.Action.CANCEL -> {
-                    if (startProj != null) {
-                        startProj = null
-                        val finalOverride = buildOverrideLive.value(lastRatio)
-                        onLivePreviewLive.value(null)
-                        onCommitLive.value(finalOverride)
-                    }
-                }
-                else -> {}
-            }
-        }
-        val ic = InteractableComponent.create(session, executor, listener)
-        ent.addComponent(ic)
-        onDispose {
-            // The handle's GltfModelEntity is parented to the gizmo's
-            // GroupEntity; on activity destroy SceneCore cascade-disposes
-            // children before the handle composables' onDispose runs.
-            // Without these guards removeComponent / detach throw
-            // Entity$DisposedException, which aborts the activity teardown
-            // and led to a process restart with empty placedModels.
-            if (!ent.isDisposed) {
-                runCatching { ent.removeComponent(ic) }
-                runCatching { ent.parent = null }
-            }
+    LaunchedEffect(filename) {
+        glbPathState.value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val file = File(ctx.cacheDir, filename)
+                if (!file.exists()) generate(file)
+                file.absolutePath
+            }.getOrNull()
         }
     }
+
+    val path = glbPathState.value ?: return
+    SpatialGlbVisual(path, offsetXmm, offsetYmm, offsetZmm)
 }

@@ -7,6 +7,7 @@
 // exists to prove the pipeline end-to-end.
 
 #include <emscripten/bind.h>
+#include <emscripten/heap.h>
 
 #include <pthread.h>
 
@@ -34,6 +35,8 @@ extern "C" int pthread_setname_np(pthread_t, const char *) { return 0; }
 #include "libslic3r/Print.hpp"
 #include "libslic3r/PrintConfig.hpp"
 #include "libslic3r/GCode/GCodeProcessor.hpp"
+#include "libslic3r/MeshBoolean.hpp"
+#include "libslic3r/Format/STL.hpp"
 
 namespace {
 
@@ -130,6 +133,24 @@ std::string slice_stl_to_gcode_inner(const std::string &stl_bytes,
     // The absolute-E fallback stays for profile-less slicing.
     if (overrides_json.empty())
         cfg.set_key_value("use_relative_e_distances", new Slic3r::ConfigOptionBool(false));
+
+    // Consistency guard: relative E requires a per-layer G92 E0 in the
+    // layer-change gcode. If the applied profile ended up without one
+    // (partial profile load, hand-rolled config, …), flip to absolute E
+    // instead of failing validate().
+    {
+        auto contains_g92 = [&cfg](const char *key) {
+            const auto *opt = cfg.option<Slic3r::ConfigOptionString>(key);
+            return opt != nullptr && opt->value.find("G92 E0") != std::string::npos;
+        };
+        const auto *rel = cfg.option<Slic3r::ConfigOptionBool>("use_relative_e_distances");
+        if (rel != nullptr && rel->value &&
+            !contains_g92("layer_change_gcode") &&
+            !contains_g92("before_layer_change_gcode")) {
+            fprintf(stderr, "[orcaxr] relative E without per-layer G92 E0 — forcing absolute E\n");
+            cfg.set_key_value("use_relative_e_distances", new Slic3r::ConfigOptionBool(false));
+        }
+    }
     fprintf(stderr, "[orcaxr] config ready\n");
 
     Slic3r::Print print;
@@ -168,7 +189,8 @@ std::string slice_stl_to_gcode(const std::string &stl_bytes, int max_threads,
                                const std::string &overrides_json)
 {
     if (max_threads < 1) max_threads = 1;
-    fprintf(stderr, "[orcaxr] tbb max parallelism = %d\n", max_threads);
+    fprintf(stderr, "[orcaxr] tbb max parallelism = %d, heap = %zu MB\n",
+            max_threads, emscripten_get_heap_size() / (1024 * 1024));
     tbb::global_control tbb_limit(
         tbb::global_control::max_allowed_parallelism, (size_t)max_threads);
     try {
@@ -180,9 +202,165 @@ std::string slice_stl_to_gcode(const std::string &stl_bytes, int max_threads,
     }
 }
 
+std::string heap_report()
+{
+    char buf[64];
+    snprintf(buf, sizeof buf, "%zu", emscripten_get_heap_size());
+    return std::string(buf);
+}
+
 std::string version_string()
 {
     return std::string("libslic3r/OrcaSlicer WASM feasibility build");
+}
+
+std::string repair_stl_inner(const std::string &stl_bytes)
+{
+    const char *in_path = "/tmp/repair_in.stl";
+    const char *out_path = "/tmp/repair_out.stl";
+    write_all(in_path, stl_bytes);
+
+    Slic3r::Model model;
+    try {
+        model = Slic3r::Model::read_from_file(in_path);
+    } catch (const std::exception &e) {
+        throw std::runtime_error(std::string("read failed: ") + e.what());
+    }
+    if (model.objects.empty()) {
+        throw std::runtime_error("empty model");
+    }
+
+    Slic3r::ModelObject* mo = model.objects.front();
+    Slic3r::TriangleMesh mesh = mo->mesh();
+    if (mesh.empty()) {
+        throw std::runtime_error("mesh empty after aggregation");
+    }
+
+    Slic3r::its_merge_vertices(mesh.its);
+    Slic3r::its_remove_degenerate_faces(mesh.its);
+    Slic3r::its_compactify_vertices(mesh.its);
+
+    if (mesh.its.indices.empty()) {
+        throw std::runtime_error("mesh consumed by cleanup pass");
+    }
+
+    const size_t open_after_admesh = Slic3r::its_num_open_edges(mesh.its);
+    bool self_intersect = false;
+    try {
+        self_intersect = Slic3r::MeshBoolean::cgal::does_self_intersect(mesh);
+    } catch (...) {
+        self_intersect = true;
+    }
+
+    if (open_after_admesh > 0 || self_intersect) {
+        Slic3r::TriangleMesh attempt = mesh;
+        try {
+            Slic3r::MeshBoolean::self_union(attempt);
+            if (!attempt.empty()) {
+                mesh = std::move(attempt);
+            }
+        } catch (...) {
+            // Keep ADMesh result on failure
+        }
+    }
+
+    if (!Slic3r::store_stl(out_path, &mesh, true)) {
+        throw std::runtime_error("store_stl failed");
+    }
+
+    std::string out_bytes = read_all(out_path);
+    std::remove(in_path);
+    std::remove(out_path);
+    return out_bytes;
+}
+
+std::string repair_stl_to_stl(const std::string &stl_bytes, int max_threads)
+{
+    if (max_threads < 1) max_threads = 1;
+    tbb::global_control tbb_limit(
+        tbb::global_control::max_allowed_parallelism, (size_t)max_threads);
+    try {
+        return repair_stl_inner(stl_bytes);
+    } catch (const std::exception &e) {
+        return std::string("ORCAXR_ERROR: ") + e.what();
+    } catch (...) {
+        return std::string("ORCAXR_ERROR: unknown C++ exception");
+    }
+}
+
+std::string mesh_boolean_inner(const std::string &stl_a, const std::string &stl_b, const std::string &op)
+{
+    const char *in_a = "/tmp/bool_a.stl";
+    const char *in_b = "/tmp/bool_b.stl";
+    const char *out_path = "/tmp/bool_out.stl";
+    write_all(in_a, stl_a);
+    write_all(in_b, stl_b);
+
+    Slic3r::Model modelA, modelB;
+    try {
+        modelA = Slic3r::Model::read_from_file(in_a);
+        modelB = Slic3r::Model::read_from_file(in_b);
+    } catch (const std::exception &e) {
+        throw std::runtime_error(std::string("read failed: ") + e.what());
+    }
+
+    if (modelA.objects.empty() || modelB.objects.empty()) {
+        throw std::runtime_error("empty model");
+    }
+
+    Slic3r::TriangleMesh meshA = modelA.objects.front()->mesh();
+    Slic3r::TriangleMesh meshB = modelB.objects.front()->mesh();
+
+    if (!modelA.objects.front()->instances.empty()) {
+        meshA.transform(modelA.objects.front()->instances.front()->get_matrix());
+    }
+    if (!modelB.objects.front()->instances.empty()) {
+        meshB.transform(modelB.objects.front()->instances.front()->get_matrix());
+    }
+
+    std::vector<Slic3r::TriangleMesh> result_meshes;
+    try {
+        Slic3r::MeshBoolean::mcut::make_boolean(meshA, meshB, result_meshes, op.c_str());
+    } catch (const std::exception &e) {
+        throw std::runtime_error(std::string("make_boolean failed: ") + e.what());
+    }
+
+    if (result_meshes.empty()) {
+        throw std::runtime_error("result is empty");
+    }
+
+    Slic3r::TriangleMesh merged = result_meshes.front();
+    for (size_t i = 1; i < result_meshes.size(); ++i) {
+        merged.merge(result_meshes[i]);
+    }
+
+    if (merged.empty()) {
+        throw std::runtime_error("merged result is empty");
+    }
+
+    if (!Slic3r::store_stl(out_path, &merged, true)) {
+        throw std::runtime_error("store_stl failed");
+    }
+
+    std::string out_bytes = read_all(out_path);
+    std::remove(in_a);
+    std::remove(in_b);
+    std::remove(out_path);
+    return out_bytes;
+}
+
+std::string mesh_boolean_to_stl(const std::string &stl_a, const std::string &stl_b, const std::string &op, int max_threads)
+{
+    if (max_threads < 1) max_threads = 1;
+    tbb::global_control tbb_limit(
+        tbb::global_control::max_allowed_parallelism, (size_t)max_threads);
+    try {
+        return mesh_boolean_inner(stl_a, stl_b, op);
+    } catch (const std::exception &e) {
+        return std::string("ORCAXR_ERROR: ") + e.what();
+    } catch (...) {
+        return std::string("ORCAXR_ERROR: unknown C++ exception");
+    }
 }
 
 } // namespace
@@ -234,6 +412,51 @@ std::string poll_slice()
     g_slice_state.store(0);
     return out;
 }
+
+std::atomic<int> g_repair_state{0};
+std::string g_repair_result;
+
+void start_repair(const std::string &stl_bytes, int max_threads)
+{
+    int expected = 0;
+    if (!g_repair_state.compare_exchange_strong(expected, 1)) return;
+    std::thread([stl = stl_bytes, max_threads]() {
+        g_repair_result = repair_stl_to_stl(stl, max_threads);
+        g_repair_state.store(2);
+    }).detach();
+}
+
+std::string poll_repair()
+{
+    if (g_repair_state.load() != 2) return std::string();
+    std::string out = std::move(g_repair_result);
+    g_repair_result.clear();
+    g_repair_state.store(0);
+    return out;
+}
+
+std::atomic<int> g_boolean_state{0};
+std::string g_boolean_result;
+
+void start_boolean(const std::string &stl_a, const std::string &stl_b, const std::string &op, int max_threads)
+{
+    int expected = 0;
+    if (!g_boolean_state.compare_exchange_strong(expected, 1)) return;
+    std::thread([a = stl_a, b = stl_b, op, max_threads]() {
+        g_boolean_result = mesh_boolean_to_stl(a, b, op, max_threads);
+        g_boolean_state.store(2);
+    }).detach();
+}
+
+std::string poll_boolean()
+{
+    if (g_boolean_state.load() != 2) return std::string();
+    std::string out = std::move(g_boolean_result);
+    g_boolean_result.clear();
+    g_boolean_state.store(0);
+    return out;
+}
+
 } // namespace
 
 EMSCRIPTEN_BINDINGS(orcaxr_slic3r)
@@ -242,5 +465,10 @@ EMSCRIPTEN_BINDINGS(orcaxr_slic3r)
     emscripten::function("startSlice", &start_slice);
     emscripten::function("startSliceFile", &start_slice_file);
     emscripten::function("pollSlice", &poll_slice);
+    emscripten::function("startRepair", &start_repair);
+    emscripten::function("pollRepair", &poll_repair);
     emscripten::function("versionString", &version_string);
+    emscripten::function("heapSize", &heap_report);
+    emscripten::function("startBoolean", &start_boolean);
+    emscripten::function("pollBoolean", &poll_boolean);
 }

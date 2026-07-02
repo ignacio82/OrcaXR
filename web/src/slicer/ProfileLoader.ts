@@ -19,18 +19,12 @@ export interface SlicerProfile {
   config: Record<string, string>;
 }
 
-interface Manifest {
-  [brand: string]: { machine: string[]; process: string[]; filament: string[] };
-}
-
-async function fetchJson(url: string): Promise<ProfileJson | null> {
-  try {
-    const r = await fetch(url);
-    if (!r.ok) return null;
-    return (await r.json()) as ProfileJson;
-  } catch {
-    return null;
-  }
+interface Catalog {
+  [brand: string]: {
+    machine: ProfileJson[];
+    process: ProfileJson[];
+    filament: ProfileJson[];
+  };
 }
 
 function str(v: unknown): string {
@@ -41,16 +35,20 @@ function str(v: unknown): string {
 }
 
 function leavesOf(jsons: ProfileJson[]): ProfileJson[] {
+  // OrcaSlicer semantics: `instantiation` decides user-visible presets.
+  // Being inherited-FROM does not disqualify — the ECC "0.4 nozzle"
+  // machine is the base the other nozzle sizes inherit from AND a real
+  // preset (instantiation: "true"). Only fall back to parent-exclusion
+  // for profiles that don't declare the flag at all.
   const parentNames = new Set(
     jsons.map((j) => str(j.inherits)).filter((s) => s.length > 0),
   );
   return jsons.filter((j) => {
     const name = str(j.name);
-    return (
-      name.length > 0 &&
-      !parentNames.has(name) &&
-      str(j.instantiation ?? 'true') !== 'false'
-    );
+    if (!name) return false;
+    const inst = j.instantiation;
+    if (inst !== undefined) return str(inst) !== 'false';
+    return !parentNames.has(name);
   });
 }
 
@@ -82,21 +80,21 @@ export class ProfileCatalog {
   profiles: SlicerProfile[] = [];
 
   async load(): Promise<void> {
-    const manifest = (await fetchJson('/profiles/manifest.json')) as Manifest | null;
-    if (!manifest) return;
-    for (const [brand, cats] of Object.entries(manifest)) {
-      const load = (cat: 'machine' | 'process' | 'filament') =>
-        Promise.all(
-          (cats[cat] ?? []).map((f) =>
-            fetchJson(`/profiles/${brand}/${cat}/${encodeURIComponent(f)}`),
-          ),
-        ).then((list) => list.filter((j): j is ProfileJson => j != null));
-
-      const [machines, processes, filaments] = await Promise.all([
-        load('machine'),
-        load('process'),
-        load('filament'),
-      ]);
+    // Single bundled catalog: one fetch, and no per-file URLs — vite's dev
+    // middleware serves the SPA fallback for filenames containing '@'
+    // (every process/filament profile), which silently gutted profiles.
+    let catalog: Catalog | null = null;
+    try {
+      const r = await fetch('/profiles/catalog.json');
+      if (r.ok) catalog = (await r.json()) as Catalog;
+    } catch {
+      catalog = null;
+    }
+    if (!catalog) return;
+    for (const cats of Object.values(catalog)) {
+      const machines = cats.machine ?? [];
+      const processes = cats.process ?? [];
+      const filaments = cats.filament ?? [];
       const byName = new Map<string, ProfileJson>();
       for (const j of [...machines, ...processes, ...filaments]) {
         const name = str(j.name);

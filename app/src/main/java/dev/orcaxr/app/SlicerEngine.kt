@@ -459,6 +459,13 @@ object SlicerEngine {
         outGcode: File,
         config: Map<String, String> = emptyMap(),
         /**
+         * FullSpectrum virtual-filament remap. Same semantics as
+         * [slice]'s [virtualRemap], applied to every cloned input
+         * before Print::apply so transformed/mobile models honor
+         * virtual mixed-filament mappings too.
+         */
+        virtualRemap: IntArray? = null,
+        /**
          * Phase J in-XR paint state, parallel to [models]. Length must
          * match `models.size` when non-null; entry i = null means "no
          * paint for input i" (embedded 3MF facets pass through). The
@@ -468,6 +475,14 @@ object SlicerEngine {
          * C++ side.
          */
         paintFilamentIndices: List<ByteArray?>? = null,
+        /**
+         * Phase XR_OBJ_8 support paint, parallel to [models]. Same
+         * per-triangle encoding as [slice]'s `supportFlags`: 0 =
+         * unpainted, 1 = ENFORCER, 2 = BLOCKER. Null entries skip
+         * support authoring for that input so embedded 3MF
+         * `supported_facets` pass through.
+         */
+        supportFlagsPerInput: List<ByteArray?>? = null,
         /**
          * Optional 0-based `Model::objects` ordinal per input, parallel
          * to [models]. Length must equal `models.size` when non-null.
@@ -516,6 +531,9 @@ object SlicerEngine {
         }
         require(paintFilamentIndices == null || paintFilamentIndices.size == models.size) {
             "paintFilamentIndices size ${paintFilamentIndices?.size} != models size ${models.size}"
+        }
+        require(supportFlagsPerInput == null || supportFlagsPerInput.size == models.size) {
+            "supportFlagsPerInput size ${supportFlagsPerInput?.size} != models size ${models.size}"
         }
         require(objectOrdinals == null || objectOrdinals.size == models.size) {
             "objectOrdinals size ${objectOrdinals?.size} != models size ${models.size}"
@@ -570,6 +588,9 @@ object SlicerEngine {
         val paintsForJni: Array<ByteArray?>? =
             if (paintFilamentIndices == null) null
             else Array(models.size) { paintFilamentIndices[it] }
+        val supportForJni: Array<ByteArray?>? =
+            if (supportFlagsPerInput == null || supportFlagsPerInput.all { it == null }) null
+            else Array(models.size) { supportFlagsPerInput[it] }
         // A10 — flatten per-input layer-height profiles; null whole-list
         // → null array so the JNI side short-circuits the per-input
         // profile walk entirely.
@@ -633,7 +654,9 @@ object SlicerEngine {
             keys,
             values,
             listener,
+            virtualRemap,
             paintsForJni,
+            supportForJni,
             objectOrdinals,
             lhpsForJni,
             cgZ, cgT, cgE, cgC, cgX,
@@ -1546,6 +1569,15 @@ object SlicerEngine {
         nativeWriteColoredGlb(input.absolutePath, outGlb.absolutePath, paletteRgb, paintFilamentIndex, objectIndex) == 0
     }
 
+    suspend fun writeUvMappedGlb(
+        inputPath: String,
+        outGlbPath: String,
+        objectIndex: Int = -1,
+        progressListener: SlicerProgressListener? = null,
+    ): IntArray? = withContext(dispatcher) {
+        nativeWriteUvMappedGlb(inputPath, outGlbPath, objectIndex, progressListener)
+    }
+
     /**
      * Save [input] (any supported mesh format) plus the active
      * [config] as a single 3MF at [outPath]. The 3MF embeds the
@@ -2310,6 +2342,12 @@ object SlicerEngine {
         inputPath: String,
         outStlPath: String,
     ): Int
+    private external fun nativeWriteUvMappedGlb(
+        inputPath: String,
+        outGlbPath: String,
+        objectIndex: Int,
+        progressListener: SlicerProgressListener?,
+    ): IntArray?
     private external fun nativeWriteVolumeStl(
         inputPath: String,
         outStlPath: String,
@@ -2544,6 +2582,11 @@ object SlicerEngine {
         configValues: Array<String>,
         progressListener: SlicerProgressListener?,
         /**
+         * Optional FullSpectrum virtual-filament remap. Same contract
+         * as [nativeSlice]'s remap array.
+         */
+        virtualRemap: IntArray?,
+        /**
          * Phase J per-input paint state. ByteArray of size == models
          * count; entries are nullable. Null entry → "no paint for
          * this input" (embedded 3MF facets pass through). Whole array
@@ -2551,6 +2594,12 @@ object SlicerEngine {
          * circuits the per-input paint walk entirely.
          */
         paintFilamentIndices: Array<ByteArray?>?,
+        /**
+         * Phase XR_OBJ_8 per-input support paint state. Same outer
+         * shape as [paintFilamentIndices], with per-triangle state
+         * values 1=ENFORCER and 2=BLOCKER.
+         */
+        supportFlagsPerInput: Array<ByteArray?>?,
         /**
          * Optional 0-based ordinal into the source's `Model::objects`
          * vector per input (parallel to [inputPaths]). -1 (or null

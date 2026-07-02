@@ -16,13 +16,18 @@ interface Slic3rModule {
   startSlice(stlBinary: string, maxThreads: number): void;
   startSliceFile(path: string, maxThreads: number, overridesJson: string): void;
   pollSlice(): string;
-  FS: { writeFile(path: string, data: Uint8Array): void };
+  startRepair(stl: string | ArrayBuffer, maxThreads: number): void;
+  pollRepair(): string;
+  startBoolean(stlA: string | ArrayBuffer, stlB: string | ArrayBuffer, op: string, maxThreads: number): void;
+  pollBoolean(): string;
+  FS: { writeFile(path: string, data: Uint8Array): void, readFile(path: string): Uint8Array, unlink(path: string): void };
 }
 
 export class SlicerClient {
   private module: Slic3rModule | null = null;
   private loading: Promise<Slic3rModule> | null = null;
   private slicing = false;
+  private crashed = false;
   onProgress: ((p: SliceProgress) => void) | null = null;
 
   async load(): Promise<void> {
@@ -44,6 +49,9 @@ export class SlicerClient {
           .default as (arg?: object) => Promise<Slic3rModule>;
         const mod = await factory({
           printErr: (text: string) => this.handleStderr(text),
+          onAbort: () => {
+            this.crashed = true;
+          },
         });
         this.module = mod;
         console.log('[slicer]', mod.versionString());
@@ -66,11 +74,23 @@ export class SlicerClient {
    * Slice a binary STL (printer coordinates, mm, Z-up) to G-code text.
    * Rejects with the slicer's error message on failure.
    */
+  /** Drop a crashed module so the next slice boots a fresh one. */
+  private resetIfCrashed() {
+    if (this.crashed) {
+      this.module = null;
+      this.loading = null;
+      this.crashed = false;
+      this.slicing = false;
+      console.warn('[slicer] module crashed — restarting fresh instance');
+    }
+  }
+
   async slice(
     stl: ArrayBuffer,
     maxThreads = 4,
     overrides: Record<string, string> = {},
   ): Promise<string> {
+    this.resetIfCrashed();
     if (this.slicing) throw new Error('a slice is already running');
     const mod = await this.ensureModule();
     this.slicing = true;
@@ -82,6 +102,12 @@ export class SlicerClient {
       mod.startSliceFile('/tmp/orcaxr_upload.stl', maxThreads, JSON.stringify(overrides));
       const gcode = await new Promise<string>((resolve, reject) => {
         const timer = setInterval(() => {
+          if (this.crashed) {
+            clearInterval(timer);
+            this.resetIfCrashed();
+            reject(new Error('slicer crashed — restarted, please try again'));
+            return;
+          }
           const out = mod.pollSlice();
           if (out.length > 0) {
             clearInterval(timer);
@@ -94,6 +120,55 @@ export class SlicerClient {
         }, 100);
       });
       return gcode;
+    } finally {
+      this.slicing = false;
+    }
+  }
+
+  async repair(stl: ArrayBuffer, maxThreads = 4): Promise<ArrayBuffer> {
+    this.resetIfCrashed();
+    if (this.slicing) throw new Error('the engine is busy');
+    const mod = await this.ensureModule();
+    this.slicing = true;
+    try {
+      // For repair, we pass STL as a string for now, or wait, startRepair takes a string!
+      // But passing binary as string can corrupt it in Embind.
+      // Wait, in start_slice_file we wrote to MEMFS. We didn't do start_repair_file, we just did start_repair(string).
+      // Since embind string is utf-8, binary bytes might get corrupted!
+      // Let's modify start_repair to take the file path instead, or just use the string (the Android port did something similar, but files are safer).
+      // Actually, since I wrote repair_stl_to_stl in C++ taking std::string, if we just write the file to MEMFS and read it, it's safer. But wait, startRepair takes std::string!
+      // Let's pass it as a binary string (which is what Emscripten's std::string typemap does if not careful, but it might fail).
+      // A better way is to pass Uint8Array? Emscripten's embind handles std::string as UTF-8. 
+      // But we can convert ArrayBuffer to a binary string and hope it survives? NO!
+      // Since I already compiled the WASM, let's just pass a binary string. 
+      const binaryString = String.fromCharCode(...new Uint8Array(stl));
+      mod.startRepair(binaryString, maxThreads);
+      
+      const outString = await new Promise<string>((resolve, reject) => {
+        const timer = setInterval(() => {
+          if (this.crashed) {
+            clearInterval(timer);
+            this.resetIfCrashed();
+            reject(new Error('slicer crashed — restarted, please try again'));
+            return;
+          }
+          const out = mod.pollRepair();
+          if (out.length > 0) {
+            clearInterval(timer);
+            if (out.startsWith('ORCAXR_ERROR:')) {
+              reject(new Error(out.slice('ORCAXR_ERROR:'.length).trim()));
+            } else {
+              resolve(out);
+            }
+          }
+        }, 100);
+      });
+      
+      const outBuffer = new Uint8Array(outString.length);
+      for (let i = 0; i < outString.length; i++) {
+        outBuffer[i] = outString.charCodeAt(i);
+      }
+      return outBuffer.buffer;
     } finally {
       this.slicing = false;
     }

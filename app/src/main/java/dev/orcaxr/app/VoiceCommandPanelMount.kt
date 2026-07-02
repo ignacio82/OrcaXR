@@ -228,7 +228,7 @@ internal fun VoiceCommandPanelMount(
         id = "voice-panel",
         width = 540.dp,
         height = 720.dp,
-        initialOffset = androidx.xr.runtime.math.Vector3(0.6f, -0.05f, -0.15f),
+        initialOffset = androidx.xr.runtime.math.Vector3(1.12f, -0.05f, -0.15f),
         session = session,
     ) {
         VoiceCommandPanel(

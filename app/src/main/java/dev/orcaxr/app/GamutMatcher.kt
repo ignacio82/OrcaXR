@@ -20,10 +20,10 @@ package dev.orcaxr.app
  *  - A blended recipe only reads as a third color at viewing distance /
  *    on flat top surfaces; on vertical walls it shows as banding. The
  *    matcher does not model geometry — the swatch is an idealization.
- *  - Per project notes, FullSpectrum LayerCycle emission is not yet
- *    landed. A [GamutRecipe.Blend] match is forward-correct (it prints
- *    as the nearest physical until the engine ships, then becomes the
- *    true blend with no re-match) — the UI must flag this.
+ *  - FullSpectrum LayerCycle / Local-Z emission is live, but a blended
+ *    recipe is still an idealized apparent-color target. Geometry,
+ *    surface orientation, and layer cadence can make walls look more
+ *    banded than the dialog swatch.
  */
 object GamutMatcher {
 

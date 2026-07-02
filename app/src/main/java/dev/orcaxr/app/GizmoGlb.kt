@@ -72,14 +72,24 @@ object GizmoGlb {
         ).writeTo(file)
     }
 
-    fun writeArrow(file: File, axis: Int, length: Float, radius: Float, color: FloatArray) {
+    /** [start] pushes the shaft's base out along the axis (default 0 =
+     *  from the gizmo center). Input colliders use it so their volume
+     *  begins OUTSIDE the model body and never shadows the body grab. */
+    fun writeArrow(
+        file: File,
+        axis: Int,
+        length: Float,
+        radius: Float,
+        color: FloatArray,
+        start: Float = 0f,
+    ) {
         val segments = 16
         val positions = ArrayList<Float>()
         val indices = ArrayList<Int>()
 
         val headRatio = 0.2f
         val headRadius = radius * 2.5f
-        val shaftLen = length * (1f - headRatio)
+        val shaftLen = start + (length - start) * (1f - headRatio)
 
         fun addVertex(x: Float, y: Float, z: Float) {
             val vx = when (axis) { 0 -> z; 1 -> x; else -> x }
@@ -93,7 +103,7 @@ object GizmoGlb {
             val u = (i.toFloat() / segments) * 2f * Math.PI.toFloat()
             val cu = kotlin.math.cos(u) * radius
             val su = kotlin.math.sin(u) * radius
-            addVertex(cu, su, 0f)
+            addVertex(cu, su, start)
             addVertex(cu, su, shaftLen)
         }
         for (i in 0 until segments) {
@@ -138,6 +148,39 @@ object GizmoGlb {
             mode = GlbBuilder.MODE_TRIANGLES,
             colors = colorArr,
             doubleSided = true
+        ).writeTo(file)
+    }
+
+    /** Axis-aligned box centered at the origin with per-axis extents —
+     *  used for fat invisible input colliders around the model body. */
+    fun writeBox(file: File, sizeX: Float, sizeY: Float, sizeZ: Float, color: FloatArray) {
+        val hx = sizeX / 2f
+        val hy = sizeY / 2f
+        val hz = sizeZ / 2f
+        val positions = floatArrayOf(
+            -hx, -hy, -hz, hx, -hy, -hz, hx, hy, -hz, -hx, hy, -hz,
+            -hx, -hy, hz, hx, -hy, hz, hx, hy, hz, -hx, hy, hz,
+        )
+        val faceTris = intArrayOf(
+            0, 3, 2, 0, 2, 1,
+            4, 5, 6, 4, 6, 7,
+            0, 1, 5, 0, 5, 4,
+            3, 7, 6, 3, 6, 2,
+            0, 4, 7, 0, 7, 3,
+            1, 2, 6, 1, 6, 5,
+        )
+        val colorArr = FloatArray(positions.size)
+        for (i in 0 until positions.size / 3) {
+            colorArr[i * 3 + 0] = color[0]
+            colorArr[i * 3 + 1] = color[1]
+            colorArr[i * 3 + 2] = color[2]
+        }
+        GlbBuilder(
+            positions = positions,
+            indices = faceTris,
+            mode = GlbBuilder.MODE_TRIANGLES,
+            colors = colorArr,
+            doubleSided = true,
         ).writeTo(file)
     }
 

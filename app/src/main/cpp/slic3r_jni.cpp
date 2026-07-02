@@ -71,6 +71,7 @@ extern "C" {
 #include <libslic3r/Print.hpp>
 #include <libslic3r/PrintConfig.hpp>
 #include <libslic3r/TriangleMesh.hpp>
+#include <libslic3r/AABBTreeIndirect.hpp>
 #include <libslic3r/Format/3mf.hpp>
 #include <libslic3r/Format/bbs_3mf.hpp>
 #include <libslic3r/Semver.hpp>
@@ -996,6 +997,151 @@ static size_t apply_orcaxr_paint(
     return authored;
 }
 
+static size_t max_int_csv(const std::string& s)
+{
+    size_t max_value = 0;
+    size_t start = 0;
+    while (start < s.size()) {
+        size_t end = s.find(',', start);
+        if (end == std::string::npos) end = s.size();
+        const std::string token = s.substr(start, end - start);
+        char* parse_end = nullptr;
+        const long v = std::strtol(token.c_str(), &parse_end, 10);
+        if (parse_end != token.c_str() && v > 0) {
+            max_value = std::max(max_value, static_cast<size_t>(v));
+        }
+        start = end + 1;
+    }
+    return max_value;
+}
+
+static size_t count_csv_values(const std::string& s)
+{
+    size_t count = 0;
+    size_t start = 0;
+    while (start < s.size()) {
+        size_t end = s.find(',', start);
+        if (end == std::string::npos) end = s.size();
+        const std::string token = s.substr(start, end - start);
+        if (token.find_first_not_of(" \t\r\n") != std::string::npos) ++count;
+        start = end + 1;
+    }
+    return count;
+}
+
+static size_t max_mixed_component_id(const std::string& serialized)
+{
+    size_t out = 0;
+    size_t row_start = 0;
+    while (row_start < serialized.size()) {
+        size_t row_end = serialized.find(';', row_start);
+        if (row_end == std::string::npos) row_end = serialized.size();
+        const std::string row = serialized.substr(row_start, row_end - row_start);
+        size_t token_start = 0;
+        for (int token_index = 0; token_index < 2 && token_start <= row.size(); ++token_index) {
+            size_t token_end = row.find(',', token_start);
+            if (token_end == std::string::npos) token_end = row.size();
+            const std::string token = row.substr(token_start, token_end - token_start);
+            char* parse_end = nullptr;
+            const long v = std::strtol(token.c_str(), &parse_end, 10);
+            if (parse_end != token.c_str() && v > 0) {
+                out = std::max(out, static_cast<size_t>(v));
+            }
+            if (token_end == row.size()) break;
+            token_start = token_end + 1;
+        }
+        row_start = row_end + 1;
+    }
+    return out;
+}
+
+static std::vector<int> read_int_array(JNIEnv* env, jintArray arr)
+{
+    std::vector<int> out;
+    if (arr == nullptr) return out;
+    const jsize n = env->GetArrayLength(arr);
+    if (n <= 0) return out;
+    out.assign(static_cast<size_t>(n), 0);
+    std::vector<jint> raw(static_cast<size_t>(n));
+    env->GetIntArrayRegion(arr, 0, n, raw.data());
+    for (jsize i = 0; i < n; ++i) out[static_cast<size_t>(i)] = static_cast<int>(raw[i]);
+    return out;
+}
+
+static size_t physical_count_for_virtual_remap(
+    JNIEnv* env,
+    jobjectArray jConfigKeys,
+    jobjectArray jConfigValues)
+{
+    size_t from_filament_map = 0;
+    size_t from_mixed_rows = 0;
+    size_t diameter_fallback = 0;
+    if (jConfigKeys != nullptr && jConfigValues != nullptr) {
+        const jsize nk = env->GetArrayLength(jConfigKeys);
+        const jsize nv = env->GetArrayLength(jConfigValues);
+        const jsize n = nk < nv ? nk : nv;
+        for (jsize i = 0; i < n; ++i) {
+            jstring jk = static_cast<jstring>(env->GetObjectArrayElement(jConfigKeys, i));
+            jstring jv = static_cast<jstring>(env->GetObjectArrayElement(jConfigValues, i));
+            if (jk == nullptr || jv == nullptr) {
+                if (jk) env->DeleteLocalRef(jk);
+                if (jv) env->DeleteLocalRef(jv);
+                continue;
+            }
+            {
+                ScopedUtf k(env, jk);
+                ScopedUtf v(env, jv);
+                if (std::strcmp(k.c, "filament_map") == 0) {
+                    from_filament_map = std::max(from_filament_map, max_int_csv(v.c));
+                } else if (std::strcmp(k.c, "mixed_filament_definitions") == 0) {
+                    from_mixed_rows = std::max(from_mixed_rows, max_mixed_component_id(v.c));
+                } else if (std::strcmp(k.c, "filament_diameter") == 0) {
+                    diameter_fallback = std::max(diameter_fallback, count_csv_values(v.c));
+                }
+            }
+            env->DeleteLocalRef(jk);
+            env->DeleteLocalRef(jv);
+        }
+    }
+    return std::max<size_t>(1, std::max(std::max(from_filament_map, from_mixed_rows), diameter_fallback));
+}
+
+static size_t apply_virtual_filament_remap(
+    Slic3r::Model& model,
+    const std::vector<int>& virtual_remap,
+    size_t num_physical,
+    const char* log_tag)
+{
+    if (virtual_remap.empty()) return 0;
+    size_t total_rewrites = 0;
+    for (Slic3r::ModelObject* mo : model.objects) {
+        if (mo == nullptr) continue;
+        for (Slic3r::ModelVolume* mv : mo->volumes) {
+            if (mv == nullptr || mv->mmu_segmentation_facets.empty())
+                continue;
+            for (size_t i = 0; i < virtual_remap.size(); ++i) {
+                const int vk = virtual_remap[i];
+                if (vk <= 0) continue;
+                const unsigned int src_state = unsigned(i + 1);
+                const unsigned int dst_state = unsigned(num_physical) + unsigned(vk);
+                if (src_state > unsigned(int(Slic3r::EnforcerBlockerType::ExtruderMax)) ||
+                    dst_state > unsigned(int(Slic3r::EnforcerBlockerType::ExtruderMax))) {
+                    continue;
+                }
+                mv->mmu_segmentation_facets.set_enforcer_block_type_limit(
+                    *mv,
+                    Slic3r::EnforcerBlockerType::ExtruderMax,
+                    Slic3r::EnforcerBlockerType(int(src_state)),
+                    Slic3r::EnforcerBlockerType(int(dst_state)));
+                ++total_rewrites;
+            }
+        }
+    }
+    ORCAXR_LOGI("%s: applied %zu virtual-remap rewrites (num_physical=%zu)",
+                log_tag, total_rewrites, num_physical);
+    return total_rewrites;
+}
+
 // Phase XR_OBJ_8 — author per-triangle support paint onto
 // `mv->supported_facets`. Encoding mirrors `apply_orcaxr_paint` but
 // the state values are EnforcerBlockerType ordinals: NONE=0,
@@ -1857,24 +2003,10 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
     ORCAXR_LOGI("nativeSlice: stl=%s out=%s listener=%s",
                 stl.c, out.c, jProgressListener ? "yes" : "no");
 
-    // Snapshot the virtual remap once so we can apply it after the
-    // model loads. The array is sized to slot_count (project filaments).
-    // virtual_remap[i] == 0 means project filament (i+1) keeps its face
-    // state unchanged — its painted faces print on its assigned physical
-    // extruder via the existing filament_map pipeline. virtual_remap[i] ==
-    // K (>0) means the project filament has been remapped to virtual
-    // mixed-filament slot K — its painted faces get rewritten from state
-    // (i+1) to state (num_physical + K) so PrintApply produces a painted
-    // region tagged with the virtual ID, and ToolOrdering's resolve_mixed_
-    // 1based hook then alternates per layer.
-    std::vector<int> virtual_remap;
-    if (jVirtualRemap != nullptr) {
-        const jsize n = env->GetArrayLength(jVirtualRemap);
-        if (n > 0) {
-            virtual_remap.assign(static_cast<size_t>(n), 0);
-            env->GetIntArrayRegion(jVirtualRemap, 0, n, virtual_remap.data());
-        }
-    }
+    // Snapshot the virtual remap once. It is applied after explicit
+    // OrcaXR paint is authored so imported facets and user paint share
+    // the same FullSpectrum mixed-filament rewrite.
+    std::vector<int> virtual_remap = read_int_array(env, jVirtualRemap);
 
     // Resolve the listener method id once before slicing starts. The
     // global ref keeps the Kotlin object alive across the slice; the
@@ -2113,80 +2245,6 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
             }
         }
 
-        // Apply the FullSpectrum virtual-filament remap before the
-        // print pipeline reads any face state. For each project
-        // filament index i where virtual_remap[i] > 0, walk every
-        // ModelVolume's mmu_segmentation_facets and rewrite the
-        // EnforcerBlocker state from (i+1) → (num_physical + K). We
-        // need num_physical from the caller's filament_diameter —
-        // pull it out of the configKeys array before applying. The
-        // rewrite is idempotent (re-running with the same remap
-        // produces no further changes once the source state is
-        // consumed) and gracefully no-ops when the source state
-        // isn't present in the file.
-        if (!virtual_remap.empty()) {
-            size_t num_physical_for_remap = 0;
-            if (jConfigKeys != nullptr && jConfigValues != nullptr) {
-                const jsize nk = env->GetArrayLength(jConfigKeys);
-                for (jsize i = 0; i < nk; ++i) {
-                    jstring jk = (jstring) env->GetObjectArrayElement(jConfigKeys, i);
-                    if (jk == nullptr) continue;
-                    bool found = false;
-                    {
-                        ScopedUtf k(env, jk);
-                        if (std::strcmp(k.c, "filament_diameter") == 0) {
-                            jstring jv = (jstring) env->GetObjectArrayElement(jConfigValues, i);
-                            if (jv != nullptr) {
-                                // ScopedUtf v's dtor calls
-                                // ReleaseStringUTFChars, which dereferences
-                                // the jstring local ref. Keep that strictly
-                                // ahead of DeleteLocalRef(jv) — gotcha #3.
-                                // The earlier shape (DeleteLocalRef before
-                                // the inner scope ended) tripped CheckJNI
-                                // with "popped reference" mid-slice on the
-                                // single-object dragon.3mf path.
-                                {
-                                    ScopedUtf v(env, jv);
-                                    size_t commas = 0;
-                                    for (const char *p = v.c; *p; ++p) if (*p == ',') ++commas;
-                                    num_physical_for_remap = commas + 1;
-                                }
-                                env->DeleteLocalRef(jv);
-                            }
-                            found = true;
-                        }
-                    }
-                    env->DeleteLocalRef(jk);
-                    if (found) break;
-                }
-            }
-            if (num_physical_for_remap == 0) num_physical_for_remap = 1;
-
-            size_t total_rewrites = 0;
-            for (Slic3r::ModelObject *mo : model.objects) {
-                for (Slic3r::ModelVolume *mv : mo->volumes) {
-                    if (mv == nullptr || mv->mmu_segmentation_facets.empty())
-                        continue;
-                    for (size_t i = 0; i < virtual_remap.size(); ++i) {
-                        const int vk = virtual_remap[i];
-                        if (vk <= 0) continue;
-                        const unsigned int src_state = unsigned(i + 1);
-                        const unsigned int dst_state = unsigned(num_physical_for_remap) + unsigned(vk);
-                        if (dst_state > unsigned(int(Slic3r::EnforcerBlockerType::ExtruderMax)))
-                            continue;
-                        mv->mmu_segmentation_facets.set_enforcer_block_type_limit(
-                            *mv,
-                            Slic3r::EnforcerBlockerType::ExtruderMax,
-                            Slic3r::EnforcerBlockerType(int(src_state)),
-                            Slic3r::EnforcerBlockerType(int(dst_state)));
-                        ++total_rewrites;
-                    }
-                }
-            }
-            ORCAXR_LOGI("nativeSlice: applied %zu virtual-remap rewrites (num_physical=%zu)",
-                        total_rewrites, num_physical_for_remap);
-        }
-
         // Phase J: OrcaXR-authored paint state. The Compose shell hands
         // us a byte array sized to the source mesh's triangle count;
         // every non-zero byte is a filament slot tag (1..32) we serialize
@@ -2208,6 +2266,12 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSlice(
                 }
             }
         }
+
+        apply_virtual_filament_remap(
+            model,
+            virtual_remap,
+            physical_count_for_virtual_remap(env, jConfigKeys, jConfigValues),
+            "nativeSlice");
 
         // Phase XR_OBJ_8 — OrcaXR-authored support paint. Same shape
         // as the color paint above but flows into mv->supported_facets
@@ -2774,7 +2838,20 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
     jobjectArray jConfigKeys,
     jobjectArray jConfigValues,
     jobject      jProgressListener,
+    /**
+     * Optional FullSpectrum virtual-filament remap. Same contract as
+     * nativeSlice's jVirtualRemap; applied after per-input paint is
+     * authored and before Print::apply consumes the merged model.
+     */
+    jintArray    jVirtualRemap,
     jobjectArray jPaintFilamentIndices,
+    /**
+     * Phase XR_OBJ_8 — optional per-input support paint arrays,
+     * parallel to jInputPaths. Null entry = pass through embedded
+     * supported_facets for this input; non-null entry overrides the
+     * primary volume with 1=ENFORCER / 2=BLOCKER states.
+     */
+    jobjectArray jSupportFlagsPerInput,
     /**
      * Optional parallel int[] of 0-based ModelObject ordinals into each
      * source's `Model::objects` vector. Required to correctly slice
@@ -2846,6 +2923,8 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
                     n_inputs, n_inputs * 4, n_inputs * 12);
         return -1;
     }
+
+    std::vector<int> virtual_remap = read_int_array(env, jVirtualRemap);
 
     // Same listener resolution dance as nativeSlice — see comments there.
     jobject  listener_global = nullptr;
@@ -3026,6 +3105,33 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
                                 }
                             }
                             env->DeleteLocalRef(jp_paint);
+                        }
+                    }
+                }
+
+                // Phase XR_OBJ_8 per-input support paint. Same outer
+                // shape as jPaintFilamentIndices, but values author
+                // onto `supported_facets` rather than
+                // `mmu_segmentation_facets`.
+                if (jSupportFlagsPerInput != nullptr) {
+                    const jsize n_support = env->GetArrayLength(jSupportFlagsPerInput);
+                    if (i < n_support) {
+                        jbyteArray jp_support = (jbyteArray) env->GetObjectArrayElement(
+                            jSupportFlagsPerInput, i);
+                        if (jp_support != nullptr) {
+                            const jsize support_len = env->GetArrayLength(jp_support);
+                            if (support_len > 0) {
+                                jbyte* support = env->GetByteArrayElements(jp_support, nullptr);
+                                if (support != nullptr) {
+                                    Slic3r::ModelVolume* mv = mo->volumes.front();
+                                    const size_t authored = apply_orcaxr_support(
+                                        *mv, support, size_t(support_len));
+                                    ORCAXR_LOGI("nativeSliceMulti: model[%d] authored %zu support-painted triangles (override)",
+                                                i, authored);
+                                    env->ReleaseByteArrayElements(jp_support, support, JNI_ABORT);
+                                }
+                            }
+                            env->DeleteLocalRef(jp_support);
                         }
                     }
                 }
@@ -3337,6 +3443,12 @@ Java_dev_orcaxr_app_SlicerEngine_nativeSliceMulti(
                             jCustomGcodeZmm, jCustomGcodeTypes,
                             jCustomGcodeExtruders,
                             jCustomGcodeColors, jCustomGcodeExtras);
+
+        apply_virtual_filament_remap(
+            multi,
+            virtual_remap,
+            physical_count_for_virtual_remap(env, jConfigKeys, jConfigValues),
+            "nativeSliceMulti");
 
         // Sanitize cfg's per-filament list options against the merged
         // model so a multi-color 3MF whose painted faces / per-volume
@@ -7860,5 +7972,239 @@ Java_dev_orcaxr_app_SlicerEngine_nativeBuildPrimitiveStl(
     } catch (...) {
         ORCAXR_LOGE("nativeBuildPrimitiveStl: unknown exception");
         return -2;
+    }
+}
+
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_orcaxr_app_SlicerEngine_nativeWriteUvMappedGlb(
+    JNIEnv* env, jclass,
+    jstring jInputPath, jstring jOutGlbPath,
+    jint jObjectIndex,
+    jobject jProgressListener)
+{
+    ScopedUtf in(env, jInputPath);
+    ScopedUtf out(env, jOutGlbPath);
+    ORCAXR_LOGI("nativeWriteUvMappedGlb: %s -> %s (index=%d)", in.c, out.c, (int)jObjectIndex);
+
+    try {
+        jclass progress_cls = nullptr;
+        jmethodID progress_mid = nullptr;
+        if (jProgressListener) {
+            progress_cls = env->GetObjectClass(jProgressListener);
+            progress_mid = env->GetMethodID(progress_cls, "onProgress", "(ILjava/lang/String;)V");
+
+            if (progress_mid) {
+                jstring msg = env->NewStringUTF("Loading mesh...");
+                env->CallVoidMethod(jProgressListener, progress_mid, 5, msg);
+                env->DeleteLocalRef(msg);
+            }
+        }
+
+        Slic3r::Model model;
+        try {
+            model = load_mesh_container(in.c);
+        } catch (const std::exception& e) {
+            ORCAXR_LOGE("nativeWriteUvMappedGlb: read failed: %s", e.what());
+            return nullptr;
+        }
+
+        if (model.objects.empty()) {
+            ORCAXR_LOGE("nativeWriteUvMappedGlb: model has no objects");
+            return nullptr;
+        }
+
+        std::vector<Slic3r::ModelObject*> objs;
+        if (jObjectIndex >= 0 && (size_t)jObjectIndex < model.objects.size()) {
+            objs.push_back(model.objects[jObjectIndex]);
+        } else {
+            objs.assign(model.objects.begin(), model.objects.end());
+        }
+
+        auto placements = (jObjectIndex >= 0)
+            ? centered_existing_layout(objs, Slic3r::Vec2d(0.0, 0.0))
+            : row_layout(objs, Slic3r::Vec2d(0.0, 0.0));
+
+        indexed_triangle_set original_its;
+        Slic3r::ModelVolume* mv = objs[0]->volumes.front();
+        if (!mv->is_model_part()) return nullptr;
+
+        Slic3r::Transform3d inst_xform = Slic3r::Transform3d::Identity();
+        if (!objs[0]->instances.empty()) inst_xform = objs[0]->instances.front()->get_matrix();
+        Slic3r::Transform3d row_shift = Slic3r::Transform3d::Identity();
+        row_shift.translation() = placements[0].translation;
+        Slic3r::Transform3d vol_xform = row_shift * inst_xform * mv->get_matrix();
+
+        original_its = mv->mesh().its;
+        for (auto& v : original_its.vertices) {
+            Slic3r::Vec3d p = vol_xform * Slic3r::Vec3d(v.x(), v.y(), v.z());
+            v.x() = p.x(); v.y() = p.y(); v.z() = p.z();
+        }
+
+        if (progress_mid) {
+            jstring msg = env->NewStringUTF("Building spatial index...");
+            env->CallVoidMethod(jProgressListener, progress_mid, 10, msg);
+            env->DeleteLocalRef(msg);
+        }
+
+        auto aabb = Slic3r::AABBTreeIndirect::build_aabb_tree_over_indexed_triangle_set(
+            original_its.vertices, original_its.indices);
+
+        indexed_triangle_set decimated_its = original_its;
+
+        if (progress_mid) {
+            jstring msg = env->NewStringUTF("Decimating mesh...");
+            env->CallVoidMethod(jProgressListener, progress_mid, 20, msg);
+            env->DeleteLocalRef(msg);
+        }
+
+        const size_t PREVIEW_TRI_BUDGET = 16000;
+        if (decimated_its.indices.size() > PREVIEW_TRI_BUDGET) {
+            Slic3r::its_quadric_edge_collapse(decimated_its, (uint32_t)PREVIEW_TRI_BUDGET, nullptr, nullptr, nullptr);
+        }
+
+        const size_t num_tris = decimated_its.indices.size();
+        std::vector<float> positions(num_tris * 9);
+        std::vector<float> uvs(num_tris * 6);
+        std::vector<int> indices(num_tris * 3);
+        std::vector<int> mapping(num_tris);
+
+        const int TEX_SIZE = 256;
+
+        if (progress_mid) {
+            jstring msg = env->NewStringUTF("Mapping UV coordinates...");
+            env->CallVoidMethod(jProgressListener, progress_mid, 30, msg);
+            env->DeleteLocalRef(msg);
+        }
+
+        for (size_t i = 0; i < num_tris; ++i) {
+            const auto& t = decimated_its.indices[i];
+            Slic3r::Vec3f v0 = decimated_its.vertices[t[0]];
+            Slic3r::Vec3f v1 = decimated_its.vertices[t[1]];
+            Slic3r::Vec3f v2 = decimated_its.vertices[t[2]];
+
+            Slic3r::Vec3f centroid = (v0 + v1 + v2) / 3.0f;
+
+            size_t min_idx = 0;
+            Slic3r::Vec3f hit_point;
+            Slic3r::AABBTreeIndirect::squared_distance_to_indexed_triangle_set(
+                original_its.vertices, original_its.indices, aabb, centroid, min_idx, hit_point);
+            mapping[i] = (int)min_idx;
+
+            if (progress_mid && (i % 1000 == 0)) {
+                int pct = 30 + (i * 70 / num_tris);
+                jstring msg = env->NewStringUTF("Mapping UV coordinates...");
+                env->CallVoidMethod(jProgressListener, progress_mid, pct, msg);
+                env->DeleteLocalRef(msg);
+            }
+
+            int x = i % TEX_SIZE;
+            int y = i / TEX_SIZE;
+            float u = (x + 0.5f) / TEX_SIZE;
+            float v = (y + 0.5f) / TEX_SIZE;
+
+            int base_v = i * 9;
+            positions[base_v + 0] = v0.x(); positions[base_v + 1] = v0.y(); positions[base_v + 2] = v0.z();
+            positions[base_v + 3] = v1.x(); positions[base_v + 4] = v1.y(); positions[base_v + 5] = v1.z();
+            positions[base_v + 6] = v2.x(); positions[base_v + 7] = v2.y(); positions[base_v + 8] = v2.z();
+
+            int base_u = i * 6;
+            uvs[base_u + 0] = u; uvs[base_u + 1] = v;
+            uvs[base_u + 2] = u; uvs[base_u + 3] = v;
+            uvs[base_u + 4] = u; uvs[base_u + 5] = v;
+
+            int base_i = i * 3;
+            indices[base_i + 0] = i * 3 + 0;
+            indices[base_i + 1] = i * 3 + 1;
+            indices[base_i + 2] = i * 3 + 2;
+        }
+
+        float minX = 1e9f, minY = 1e9f, minZ = 1e9f;
+        float maxX = -1e9f, maxY = -1e9f, maxZ = -1e9f;
+        for (const auto& v : decimated_its.vertices) {
+            if (v.x() < minX) minX = v.x();
+            if (v.y() < minY) minY = v.y();
+            if (v.z() < minZ) minZ = v.z();
+            if (v.x() > maxX) maxX = v.x();
+            if (v.y() > maxY) maxY = v.y();
+            if (v.z() > maxZ) maxZ = v.z();
+        }
+
+        const size_t vertex_count = positions.size() / 3;
+        const size_t index_count = indices.size();
+        const uint32_t positions_bytes = vertex_count * 12;
+        const uint32_t uvs_bytes = vertex_count * 8;
+        const uint32_t indices_bytes = index_count * 4;
+        const uint32_t bin_body_bytes = positions_bytes + uvs_bytes + indices_bytes;
+
+        char json_buf[1024];
+        int json_len = snprintf(json_buf, sizeof(json_buf),
+            "{\"asset\":{\"version\":\"2.0\"},"
+            "\"scene\":0,\"scenes\":[{\"nodes\":[0]}],"
+            "\"nodes\":[{\"mesh\":0}],"
+            "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0,\"TEXCOORD_0\":1},\"indices\":2,\"material\":0}]}],"
+            "\"materials\":[{\"pbrMetallicRoughness\":{\"baseColorFactor\":[1,1,1,1],\"metallicFactor\":0,\"roughnessFactor\":1}}],"
+            "\"accessors\":["
+                "{\"bufferView\":0,\"componentType\":5126,\"count\":%zu,\"type\":\"VEC3\","
+                    "\"min\":[%.6f,%.6f,%.6f],\"max\":[%.6f,%.6f,%.6f]},"
+                "{\"bufferView\":1,\"componentType\":5126,\"count\":%zu,\"type\":\"VEC2\"},"
+                "{\"bufferView\":2,\"componentType\":5125,\"count\":%zu,\"type\":\"SCALAR\"}],"
+            "\"bufferViews\":["
+                "{\"buffer\":0,\"byteOffset\":0,\"byteLength\":%u,\"target\":34962},"
+                "{\"buffer\":0,\"byteOffset\":%u,\"byteLength\":%u,\"target\":34962},"
+                "{\"buffer\":0,\"byteOffset\":%u,\"byteLength\":%u,\"target\":34963}],"
+            "\"buffers\":[{\"byteLength\":%u}]}",
+            vertex_count, minX, minY, minZ, maxX, maxY, maxZ,
+            vertex_count, index_count,
+            positions_bytes,
+            positions_bytes, uvs_bytes,
+            positions_bytes + uvs_bytes, indices_bytes,
+            bin_body_bytes
+        );
+
+        if (json_len < 0 || json_len >= (int)sizeof(json_buf)) {
+            ORCAXR_LOGE("nativeWriteUvMappedGlb: JSON header too large");
+            return nullptr;
+        }
+
+        const uint32_t json_pad = (4 - (json_len % 4)) % 4;
+        const uint32_t json_chunk_len = json_len + json_pad;
+        const uint32_t bin_pad = (4 - (bin_body_bytes % 4)) % 4;
+        const uint32_t bin_chunk_len = bin_body_bytes + bin_pad;
+        const uint32_t total_len = 12 + 8 + json_chunk_len + 8 + bin_chunk_len;
+
+        std::ofstream os(out.c, std::ios::binary | std::ios::trunc);
+        if (!os) return nullptr;
+
+        auto write_u32 = [&](uint32_t v) {
+            char b[4] = {
+                (char)(v & 0xff), (char)((v >> 8) & 0xff),
+                (char)((v >> 16) & 0xff), (char)((v >> 24) & 0xff)
+            };
+            os.write(b, 4);
+        };
+
+        write_u32(0x46546C67); write_u32(2); write_u32(total_len);
+        write_u32(json_chunk_len); write_u32(0x4E4F534A);
+        os.write(json_buf, json_len);
+        for (uint32_t i = 0; i < json_pad; ++i) os.put(' ');
+
+        write_u32(bin_chunk_len); write_u32(0x004E4942);
+        os.write(reinterpret_cast<const char*>(positions.data()), positions_bytes);
+        os.write(reinterpret_cast<const char*>(uvs.data()), uvs_bytes);
+        os.write(reinterpret_cast<const char*>(indices.data()), indices_bytes);
+        for (uint32_t i = 0; i < bin_pad; ++i) os.put(0);
+        os.flush();
+
+        jintArray result = env->NewIntArray(mapping.size());
+        if (result == nullptr) return nullptr;
+        env->SetIntArrayRegion(result, 0, mapping.size(), mapping.data());
+
+        return result;
+
+    } catch (const std::exception& e) {
+        ORCAXR_LOGE("nativeWriteUvMappedGlb: exception %s", e.what());
+        return nullptr;
+    } catch (...) {
+        return nullptr;
     }
 }
