@@ -6,6 +6,7 @@
  */
 import 'xrblocks/addons/simulator/SimulatorAddons.js';
 
+import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { ThreeMFLoader } from 'three/examples/jsm/loaders/3MFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -18,7 +19,7 @@ import { OrcaWorkspace, extract3mfColors } from './workspace/OrcaWorkspace';
 declare global {
   interface Window { ORCAXR_VERSION: string }
 }
-window.ORCAXR_VERSION = 'v29-3mf-probe';
+window.ORCAXR_VERSION = 'v30-3mf-shot';
 
 /** 2D-page UI wiring for standard web slicer mode. */
 function setupDomUI(workspace: OrcaWorkspace) {
@@ -190,6 +191,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Debug handles for remote scene inspection / automated testing via CDP.
   (window as unknown as { __orcaScene: unknown }).__orcaScene = xb.core.scene;
   (window as unknown as { __orcaRenderer: unknown }).__orcaRenderer = xb.core.renderer;
+  (window as unknown as { THREE: unknown }).THREE = THREE;
   (window as unknown as { __orca: unknown }).__orca = workspace;
   setupDomUI(workspace);
 });
