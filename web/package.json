@@ -1,0 +1,29 @@
+{
+  "name": "orcaxr-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OrcaXR pure-web front-end: XR Blocks + three.js workspace with WASM slicing (in progress)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@google/genai": "^2.10.0",
+    "@mediapipe/tasks-audio": "^0.10.35",
+    "@mediapipe/tasks-vision": "^0.10.35",
+    "@sparkjsdev/spark": "^2.1.0",
+    "lit": "^3.3.3",
+    "openai": "^6.45.0",
+    "three": "^0.184.0",
+    "three-mesh-bvh": "^0.9.10",
+    "troika-three-text": "^0.52.4",
+    "xrblocks": "^0.17.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.184.0",
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0"
+  }
+}
