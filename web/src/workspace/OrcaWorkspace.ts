@@ -12,67 +12,125 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { ThreeMFLoader } from 'three/examples/jsm/loaders/3MFLoader.js';
 import * as fflate from 'fflate';
 
+/**
+ * Extract a per-mesh color list for an OrcaSlicer/Bambu 3MF, in the SAME
+ * order (and count) that ThreeMFLoader emits meshes.
+ *
+ * The subtlety that makes the naive approach wrong: the loader drops
+ * zero-triangle objects and produces one mesh per non-empty geometry
+ * object, in build→component order. Orca/Bambu 3MFs routinely carry empty
+ * "parts" (authoring residue), so a colors-per-part list in document order
+ * gets shifted relative to the loader's meshes and paints the wrong
+ * geometry. Here we walk the actual build/component graph, skip empties,
+ * and key color off each geometry object's own extruder assignment — so
+ * colors align by object identity, not by position.
+ */
 export async function extract3mfColors(buf: ArrayBuffer): Promise<string[] | null> {
   try {
-    const fflate = await import('fflate');
     const unzipped = fflate.unzipSync(new Uint8Array(buf));
-    
+    const dec = new TextDecoder();
+
     const projectSettings = unzipped['Metadata/project_settings.config'];
     if (!projectSettings) {
-      console.warn('extract3mfColors: Metadata/project_settings.config not found');
+      console.warn('extract3mfColors: project_settings.config not found');
       return null;
     }
-    const jsonStr = new TextDecoder().decode(projectSettings);
-    const config = JSON.parse(jsonStr);
-    // Part colors follow the FILAMENT loaded in each extruder slot, not the
+    const config = JSON.parse(dec.decode(projectSettings));
+    // Displayed colors follow the FILAMENT loaded in each slot, not the
     // physical extruder color (extruder_colour is often one uniform value).
-    const palette: string[] | undefined = Array.isArray(config.filament_colour)
-      ? config.filament_colour
-      : Array.isArray(config.extruder_colour)
-        ? config.extruder_colour
-        : undefined;
-    if (!palette || palette.length === 0) {
-      console.warn('extract3mfColors: no filament_colour/extruder_colour palette');
+    const palette: string[] | undefined =
+      Array.isArray(config.filament_colour) && config.filament_colour.length
+        ? config.filament_colour
+        : Array.isArray(config.extruder_colour) && config.extruder_colour.length
+          ? config.extruder_colour
+          : undefined;
+    if (!palette) {
+      console.warn('extract3mfColors: no filament/extruder palette');
       return null;
     }
 
+    // objectId → extruder (1-based) from model_settings. Parts and geometry
+    // objects share the same numeric id in Orca/Bambu exports.
+    const extruderOf = new Map<string, number>();
     const modelSettings = unzipped['Metadata/model_settings.config'];
-    if (!modelSettings) {
-      console.warn('extract3mfColors: Metadata/model_settings.config not found');
-      return null;
-    }
-    const xmlStr = new TextDecoder().decode(modelSettings);
-    
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(xmlStr, 'text/xml');
-
-    const colors: string[] = [];
-    // Parts in document order match the loader's mesh traversal order.
-    // Orca extruder metadata is 1-BASED; 0/absent means "inherit from the
-    // object" (whose own 0 means filament 1). Out-of-range slots (project
-    // authored with more filaments than this file carries) wrap.
-    doc.querySelectorAll('object').forEach((obj) => {
-      const objExtruder = parseInt(
-        obj.querySelector(':scope > metadata[key="extruder"]')?.getAttribute('value') ?? '0',
-        10,
-      );
-      obj.querySelectorAll('part').forEach((part) => {
-        let idx = parseInt(
-          part.querySelector('metadata[key="extruder"]')?.getAttribute('value') ?? '0',
+    if (modelSettings) {
+      const doc = new DOMParser().parseFromString(dec.decode(modelSettings), 'text/xml');
+      doc.querySelectorAll('object').forEach((obj) => {
+        const objExtruder = parseInt(
+          obj.querySelector(':scope > metadata[key="extruder"]')?.getAttribute('value') ?? '0',
           10,
         );
-        if (!idx || idx < 1) idx = objExtruder;
-        if (!idx || idx < 1) idx = 1;
-        colors.push(palette[(idx - 1) % palette.length] ?? '#ffffff');
+        obj.querySelectorAll('part').forEach((part) => {
+          const pid = part.getAttribute('id');
+          if (!pid) return;
+          let e = parseInt(
+            part.querySelector('metadata[key="extruder"]')?.getAttribute('value') ?? '0',
+            10,
+          );
+          if (!e || e < 1) e = objExtruder;
+          extruderOf.set(pid, e >= 1 ? e : 1);
+        });
+        // Object-level fallback for single-mesh objects with no <part>.
+        const oid = obj.getAttribute('id');
+        if (oid && objExtruder >= 1 && !extruderOf.has(oid)) extruderOf.set(oid, objExtruder);
       });
+    }
+
+    // Parse every .model file (regex, not DOM — geometry files reach tens of
+    // MB): objectId → { hasTriangles, componentIds }, plus the root build order.
+    interface ObjInfo { hasTris: boolean; components: string[] }
+    const objects = new Map<string, ObjInfo>();
+    let buildOrder: string[] = [];
+    for (const [name, data] of Object.entries(unzipped)) {
+      if (!name.endsWith('.model')) continue;
+      const text = dec.decode(data as Uint8Array);
+      const objRe = /<object[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/object>/g;
+      let m: RegExpExecArray | null;
+      while ((m = objRe.exec(text)) !== null) {
+        const id = m[1];
+        const body = m[2];
+        const components = [...body.matchAll(/<component[^>]*\bobjectid="([^"]+)"/g)].map((c) => c[1]);
+        // Match the <triangle …> child, NOT the empty <triangles> wrapper —
+        // authoring-residue objects carry an empty <triangles/> and must
+        // count as empty (ThreeMFLoader emits no mesh for them).
+        objects.set(id, { hasTris: /<triangle[\s/>]/.test(body), components });
+      }
+      const items = [...text.matchAll(/<item[^>]*\bobjectid="([^"]+)"/g)].map((it) => it[1]);
+      if (items.length) buildOrder = items;
+    }
+
+    // Flatten build → ordered non-empty mesh object ids (loader's mesh order).
+    const ordered: string[] = [];
+    const seen = new Set<string>();
+    const visit = (id: string, depth: number) => {
+      if (depth > 32) return;
+      const info = objects.get(id);
+      if (!info) return;
+      if (info.components.length) {
+        for (const c of info.components) visit(c, depth + 1);
+      } else if (info.hasTris) {
+        ordered.push(id);
+      }
+    };
+    for (const b of buildOrder) visit(b, 0);
+    if (ordered.length === 0) {
+      // No build items resolved — take all non-empty leaf meshes in doc order.
+      for (const [id, info] of objects) {
+        if (!info.components.length && info.hasTris && !seen.has(id)) ordered.push(id);
+      }
+    }
+    if (ordered.length === 0) return null;
+
+    const colors = ordered.map((id) => {
+      const e = extruderOf.get(id) ?? 1;
+      return palette[(Math.max(1, e) - 1) % palette.length] ?? '#ffffff';
     });
-    
-    console.log(`extract3mfColors: Successfully mapped ${colors.length} parts. Colors:`, colors);
-    return colors.length > 0 ? colors : null;
+    console.log(`extract3mfColors: ${colors.length} meshes (order-aligned), palette ${palette.length}`);
+    return colors;
   } catch (e) {
     console.error('Failed to extract 3mf colors', e);
+    return null;
   }
-  return null;
 }
 
 
@@ -697,6 +755,35 @@ export class OrcaWorkspace extends xb.Script {
       this.selectModel(this.models[this.models.length - 1]);
     }
     this.setStatus(`Loaded ${name}.`);
+  }
+
+  /** CDP diagnostic: parse a 3MF and report the loader's mesh structure vs
+   *  the extracted per-part color array — no scene mutation. */
+  async debug3mf(url: string): Promise<any> {
+    const buf = await (await fetch(url)).arrayBuffer();
+    const colors = await extract3mfColors(buf);
+    const group = new ThreeMFLoader().parse(buf.slice(0));
+    group.updateMatrixWorld(true);
+    const meshes: any[] = [];
+    group.traverse((c: any) => {
+      if (c.isMesh && c.geometry) {
+        const mat = Array.isArray(c.material) ? c.material[0] : c.material;
+        meshes.push({
+          verts: c.geometry.attributes.position?.count ?? 0,
+          hasVColor: !!c.geometry.attributes.color,
+          matColor: mat && mat.color ? '#' + mat.color.getHexString() : 'none',
+          matType: mat ? mat.type : 'none',
+          groups: c.geometry.groups?.length ?? 0,
+        });
+      }
+    });
+    return {
+      extractedColors: colors,
+      extractedCount: colors ? colors.length : 0,
+      meshCount: meshes.length,
+      aligned: colors ? colors.length === meshes.length : false,
+      meshes,
+    };
   }
 
   /** Merge a Three.js Group (e.g. from 3MFLoader) into a single model, preserving colors. */
