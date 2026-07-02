@@ -259,23 +259,47 @@ export class OrcaWorkspace extends xb.Script {
     // Head pose isn't valid yet on the session-start callback; recenter on
     // the next update tick.
     this.needsRecenter = true;
+    
+    // The TransformControls plane is infinite and invisible. If left in the scene,
+    // it blocks ALL WebXR hand raycasts. We must physically remove it.
     if (this.transformControls) {
       this.transformControls.enabled = false;
+      this.transformControls.detach();
       this.transformControls.getHelper().visible = false;
+      this.remove(this.transformControls.getHelper());
     }
+    
+    // OrbitControls fights the WebXR camera. Disable it.
+    if (this.orbitControls) {
+      this.orbitControls.enabled = false;
+    }
+
+    // Enable XR drag for models
+    for (const m of this.models) {
+      (m.viewer as any).draggable = true;
+      m.viewer.traverse((o) => { delete (o as any).draggingMode; });
+    }
+
     if (this.panel) this.panel.visible = true;
-    const ui = document.getElementById('ui-container');
-    if (ui) ui.style.display = 'none';
   }
 
   onXRSessionEnded() {
-    if (this.transformControls) {
-      this.transformControls.enabled = true;
-      this.transformControls.getHelper().visible = true;
+    if (this.orbitControls) {
+      this.orbitControls.enabled = true;
     }
+
+    // Disable XR drag for models (rely on TransformControls in 2D)
+    for (const m of this.models) {
+      (m.viewer as any).draggable = false;
+      m.viewer.traverse((o) => { (o as any).draggingMode = xb.DragManager.DO_NOT_DRAG; });
+    }
+
+    // Restore 2D selection
+    if (this.models.length > 0) {
+      this.selectModel(this.models[this.models.length - 1]);
+    }
+
     if (this.panel) this.panel.visible = false;
-    const ui = document.getElementById('ui-container');
-    if (ui) ui.style.display = 'block';
   }
 
   onSimulatorStarted() {
