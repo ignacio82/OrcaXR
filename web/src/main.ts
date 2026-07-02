@@ -20,7 +20,7 @@ import { loadPrinterConfig, probePrinter, savePrinterConfig, sendToPrinter } fro
 declare global {
   interface Window { ORCAXR_VERSION: string }
 }
-window.ORCAXR_VERSION = 'v32-printer';
+window.ORCAXR_VERSION = 'v33-brush-paint';
 
 /** 2D-page UI wiring for standard web slicer mode. */
 function setupDomUI(workspace: OrcaWorkspace) {

@@ -324,6 +324,8 @@ export class OrcaWorkspace extends xb.Script {
 
   private tool: 'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint' = 'move';
   private activePaintColor = new THREE.Color(0xff0000); // Default to red
+  /** Paint brush radius in mm (model space). */
+  public brushRadiusMm = 4;
   /** The set of filament slots — shared by paint, 3MF display, and slicing. */
   public palette = new FilamentPalette();
   private drag: {
@@ -398,21 +400,12 @@ export class OrcaWorkspace extends xb.Script {
       const hits = raycaster.intersectObjects(meshes, false);
       const meshHit = hits[0];
 
-      if (meshHit && meshHit.face) {
-        const geom = meshHit.object.geometry as THREE.BufferGeometry;
-        const colorAttr = geom.getAttribute('color') as THREE.BufferAttribute;
-        
-        // Paint the hit triangle and its neighbors within a small radius (brush size)
-        // For simplicity right now we'll just paint the exact triangle hit.
-        const face = meshHit.face;
-        const r = this.activePaintColor.r;
-        const g = this.activePaintColor.g;
-        const b = this.activePaintColor.b;
-        
-        colorAttr.setXYZ(face.a, r, g, b);
-        colorAttr.setXYZ(face.b, r, g, b);
-        colorAttr.setXYZ(face.c, r, g, b);
-        colorAttr.needsUpdate = true;
+      if (meshHit && meshHit.point) {
+        // meshHit.point is world-space; convert to the mesh's local frame so
+        // the brush radius is in model (mm) units regardless of workspace scale.
+        const mesh = meshHit.object as THREE.Mesh;
+        const localPt = mesh.worldToLocal(meshHit.point.clone());
+        this.paintSphere(mesh, localPt, this.brushRadiusMm, this.activePaintColor);
       }
       return;
     }
@@ -1017,6 +1010,40 @@ export class OrcaWorkspace extends xb.Script {
         target.position.x + dir * 5 * MM * WORKSPACE_SCALE, -halfX, halfX);
       this.setStatus(`x: ${Math.round(target.position.x / (MM * WORKSPACE_SCALE))} mm`);
     }
+  }
+
+  /** Paint every vertex within [radius] (model units) of [localPt] on [mesh]. */
+  private paintSphere(mesh: THREE.Mesh, localPt: THREE.Vector3, radius: number, color: THREE.Color): number {
+    const geom = mesh.geometry as THREE.BufferGeometry;
+    const pos = geom.getAttribute('position') as THREE.BufferAttribute;
+    let colorAttr = geom.getAttribute('color') as THREE.BufferAttribute | undefined;
+    if (!colorAttr) {
+      colorAttr = new THREE.BufferAttribute(new Float32Array(pos.count * 3), 3);
+      geom.setAttribute('color', colorAttr);
+    }
+    const r2 = radius * radius;
+    let painted = 0;
+    const v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      v.set(pos.getX(i), pos.getY(i), pos.getZ(i));
+      if (v.distanceToSquared(localPt) <= r2) {
+        colorAttr.setXYZ(i, color.r, color.g, color.b);
+        painted++;
+      }
+    }
+    if (painted > 0) colorAttr.needsUpdate = true;
+    return painted;
+  }
+
+  /** Test hook: paint a sphere at the model-space centroid with color index. */
+  paintTestAtCenter(colorIndex = 0): number {
+    const entry = this.models[this.models.length - 1];
+    if (!entry) return -1;
+    const geom = entry.raw;
+    geom.computeBoundingBox();
+    const c = geom.boundingBox!.getCenter(new THREE.Vector3());
+    const col = new THREE.Color(this.palette.colorAt(colorIndex));
+    return this.paintSphere(entry.display, c, this.brushRadiusMm * 3, col);
   }
 
   /** Fires when the filament palette changes (2D UI re-renders). */
