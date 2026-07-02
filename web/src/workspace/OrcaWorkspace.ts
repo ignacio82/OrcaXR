@@ -9,6 +9,7 @@
  */
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import { ThreeMFLoader } from 'three/examples/jsm/loaders/3MFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -569,14 +570,29 @@ export class OrcaWorkspace extends xb.Script {
   /** Injected by main.ts: requests the browser to open the file picker. */
   onRequestLoadStl: (() => void) | null = null;
 
-  /** Load an STL by URL into the library (used by tests + built-ins). */
+  /** Load an STL or 3MF by URL into the library (used by tests + built-ins). */
   async loadModelFromUrl(url: string): Promise<void> {
     const t0 = performance.now();
     console.log('[orcaxr-load] fetching', url);
-    const raw = await new STLLoader().loadAsync(url);
-    console.log('[orcaxr-load] parsed in', Math.round(performance.now() - t0), 'ms,',
-      raw.getAttribute('position').count / 3, 'tris');
-    this.loadModelFromGeometry(raw, url.split('/').pop() ?? url);
+    
+    if (url.toLowerCase().endsWith('.3mf')) {
+      const group = await new ThreeMFLoader().loadAsync(url);
+      console.log('[orcaxr-load] parsed 3MF in', Math.round(performance.now() - t0), 'ms');
+      
+      let meshesAdded = 0;
+      group.traverse((child: any) => {
+        if (child.isMesh && child.geometry) {
+          const name = url.split('/').pop() ?? url;
+          this.loadModelFromGeometry(child.geometry.clone(), name + (meshesAdded > 0 ? `_${meshesAdded}` : ''));
+          meshesAdded++;
+        }
+      });
+    } else {
+      const raw = await new STLLoader().loadAsync(url);
+      console.log('[orcaxr-load] parsed STL in', Math.round(performance.now() - t0), 'ms,',
+        raw.getAttribute('position').count / 3, 'tris');
+      this.loadModelFromGeometry(raw, url.split('/').pop() ?? url);
+    }
     console.log('[orcaxr-load] scene setup done at', Math.round(performance.now() - t0), 'ms');
   }
 

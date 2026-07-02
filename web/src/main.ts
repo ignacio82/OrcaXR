@@ -7,6 +7,7 @@
 import 'xrblocks/addons/simulator/SimulatorAddons.js';
 
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import { ThreeMFLoader } from 'three/examples/jsm/loaders/3MFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import * as xb from 'xrblocks';
 // @ts-ignore
@@ -62,8 +63,19 @@ window.addEventListener('error', e => {
     for (const file of files) {
       const buf = await file.arrayBuffer();
       try {
-        const geometry = new STLLoader().parse(buf);
-        workspace.loadModelFromGeometry(geometry, file.name);
+        const lowerName = file.name.toLowerCase();
+        if (lowerName.endsWith('.3mf')) {
+          const group = new ThreeMFLoader().parse(buf);
+          // @ts-ignore
+          group.traverse((child: any) => {
+            if (child.isMesh && child.geometry) {
+              workspace.loadModelFromGeometry(child.geometry.clone(), file.name);
+            }
+          });
+        } else {
+          const geometry = new STLLoader().parse(buf);
+          workspace.loadModelFromGeometry(geometry, file.name);
+        }
       } catch (e) {
         statusText.textContent = `Failed to load: ${(e as Error).message}`;
       }
