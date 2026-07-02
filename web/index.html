@@ -106,6 +106,13 @@
           </div>
           <div id="filament-swatches" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
         </div>
+        <div class="panel" id="printer-panel">
+          <div style="font-size:0.8rem;color:#a0aab5;font-weight:600;margin-bottom:8px;">PRINTER (Moonraker)</div>
+          <input id="printer-host" type="text" placeholder="printer IP (e.g. 192.168.1.50)"
+            style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.3);color:#fff;border:1px solid #ffffff1a;border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;" />
+          <button id="btn-printer-test" class="action-btn" style="margin-bottom:8px;">Test Connection</button>
+          <button id="btn-printer-send" class="action-btn" disabled>Send + Print</button>
+        </div>
         <div class="status-panel">
           <p id="status-text">Ready. Load a model to begin.</p>
         </div>

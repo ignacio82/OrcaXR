@@ -15,11 +15,12 @@ import * as xb from 'xrblocks';
 import * as uikit from '@pmndrs/uikit';
 
 import { OrcaWorkspace, extract3mfColors } from './workspace/OrcaWorkspace';
+import { loadPrinterConfig, probePrinter, savePrinterConfig, sendToPrinter } from './net/PrinterClient';
 
 declare global {
   interface Window { ORCAXR_VERSION: string }
 }
-window.ORCAXR_VERSION = 'v31-filament-palette';
+window.ORCAXR_VERSION = 'v32-printer';
 
 /** 2D-page UI wiring for standard web slicer mode. */
 function setupDomUI(workspace: OrcaWorkspace) {
@@ -161,6 +162,35 @@ window.addEventListener('error', e => {
   btnAddFilament.onclick = () => workspace.palette.add();
   workspace.onPaletteChanged = renderPalette;
   renderPalette();
+
+  // Printer: send sliced G-code to a Moonraker printer (e.g. Centauri Carbon).
+  const printerHost = document.getElementById('printer-host') as HTMLInputElement;
+  const btnPrinterTest = document.getElementById('btn-printer-test') as HTMLButtonElement;
+  const btnPrinterSend = document.getElementById('btn-printer-send') as HTMLButtonElement;
+  const printerCfg = loadPrinterConfig();
+  printerHost.value = printerCfg.host;
+  printerHost.oninput = () => {
+    printerCfg.host = printerHost.value.trim();
+    savePrinterConfig(printerCfg);
+  };
+  btnPrinterTest.onclick = async () => {
+    statusText.textContent = 'Testing printer connection…';
+    const r = await probePrinter(printerCfg);
+    statusText.textContent = r.message;
+  };
+  btnPrinterSend.onclick = async () => {
+    const gcode = workspace.getLastGcode();
+    if (!gcode) { statusText.textContent = 'Slice first, then send.'; return; }
+    statusText.textContent = 'Uploading to printer…';
+    const r = await sendToPrinter(printerCfg, gcode, 'orcaxr.gcode', true);
+    statusText.textContent = r.message;
+  };
+  // Enable Send only once a slice exists.
+  const prevDownloadReady = workspace.onDownloadReady;
+  workspace.onDownloadReady = (ready) => {
+    if (prevDownloadReady) prevDownloadReady(ready);
+    btnPrinterSend.disabled = !ready;
+  };
 
   workspace.onDownloadReady = (ready) => {
     btnDownload.disabled = !ready;
