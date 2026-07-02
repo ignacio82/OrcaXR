@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { ThreeMFLoader } from 'three/examples/jsm/loaders/3MFLoader.js';
+import * as fflate from 'three/examples/jsm/libs/fflate.module.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -34,6 +35,48 @@ const WORKSPACE_SCALE = 1.75;
 /** Fallback pose before the XR session gives us a head pose. */
 const PLATE_Y = 0.8;
 const PLATE_Z = -0.9;
+
+export function extract3mfColors(buf: ArrayBuffer): THREE.Color[] | null {
+  try {
+    const unzipped = fflate.unzipSync(new Uint8Array(buf));
+    let colorsStr = '';
+    let partsStr = '';
+
+    for (const name in unzipped) {
+      if (name.includes('project_settings.config')) {
+        colorsStr = fflate.strFromU8(unzipped[name]);
+      }
+      if (name.includes('model_settings.config')) {
+        partsStr = fflate.strFromU8(unzipped[name]);
+      }
+    }
+
+    if (!colorsStr || !partsStr) return null;
+
+    const colorsMatch = colorsStr.match(/"extruder_colour":\s*\[(.*?)\]/s);
+    const hexColors = colorsMatch ? colorsMatch[1].trim().split(/\s*,\s*/).map((s: string) => s.replace(/"/g, '')) : [];
+
+    const parts = partsStr.split('<part ');
+    const meshColors: THREE.Color[] = [];
+    for (let i = 1; i < parts.length; i++) {
+      const part = parts[i];
+      const extruderMatch = part.match(/<metadata key="extruder" value="([^"]+)"/);
+      let extruderIdx = 0;
+      if (extruderMatch) {
+        extruderIdx = parseInt(extruderMatch[1]) - 1;
+      }
+      if (extruderIdx >= 0 && extruderIdx < hexColors.length) {
+        meshColors.push(new THREE.Color(hexColors[extruderIdx]));
+      } else {
+        meshColors.push(new THREE.Color(0xffffff));
+      }
+    }
+    return meshColors;
+  } catch (e) {
+    console.warn("Failed to extract 3MF colors:", e);
+    return null;
+  }
+}
 
 export class OrcaWorkspace extends xb.Script {
   private uiCore: any;
@@ -576,10 +619,13 @@ export class OrcaWorkspace extends xb.Script {
     console.log('[orcaxr-load] fetching', url);
     
     if (url.toLowerCase().endsWith('.3mf')) {
-      const group = await new ThreeMFLoader().loadAsync(url);
+      const resp = await fetch(url);
+      const buf = await resp.arrayBuffer();
+      const meshColors = extract3mfColors(buf);
+      const group = new ThreeMFLoader().parse(buf);
       console.log('[orcaxr-load] parsed 3MF in', Math.round(performance.now() - t0), 'ms');
       const name = url.split('/').pop() ?? url;
-      this.loadModelFromGroup(group, name);
+      this.loadModelFromGroup(group, name, meshColors);
     } else {
       const raw = await new STLLoader().loadAsync(url);
       console.log('[orcaxr-load] parsed STL in', Math.round(performance.now() - t0), 'ms,',
@@ -601,19 +647,22 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Merge a Three.js Group (e.g. from 3MFLoader) into a single model, preserving colors. */
-  loadModelFromGroup(group: THREE.Object3D, name: string) {
+  loadModelFromGroup(group: THREE.Object3D, name: string, meshColors: THREE.Color[] | null = null) {
     const geometries: THREE.BufferGeometry[] = [];
     group.updateMatrixWorld(true);
+    let meshIndex = 0;
     group.traverse((child: any) => {
       if (child.isMesh && child.geometry) {
         const geom = child.geometry.clone();
         geom.applyMatrix4(child.matrixWorld);
 
+        const targetColor = meshColors && meshIndex < meshColors.length ? meshColors[meshIndex] : null;
+
         // Ensure color attribute exists if material has color
-        if (!geom.hasAttribute('color') && child.material && child.material.color) {
+        if (!geom.hasAttribute('color') && (targetColor || (child.material && child.material.color))) {
           const count = geom.attributes.position.count;
           const colors = new Float32Array(count * 3);
-          const colorObj = child.material.color;
+          const colorObj = targetColor || child.material.color;
           for (let i = 0; i < count * 3; i += 3) {
             colors[i] = colorObj.r;
             colors[i + 1] = colorObj.g;
@@ -627,6 +676,7 @@ export class OrcaWorkspace extends xb.Script {
         }
 
         geometries.push(geom);
+        meshIndex++;
       }
     });
 

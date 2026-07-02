@@ -13,7 +13,7 @@ import * as xb from 'xrblocks';
 // @ts-ignore
 import * as uikit from '@pmndrs/uikit';
 
-import { OrcaWorkspace } from './workspace/OrcaWorkspace';
+import { OrcaWorkspace, extract3mfColors } from './workspace/OrcaWorkspace';
 
 declare global {
   interface Window { ORCAXR_VERSION: string }
@@ -65,8 +65,9 @@ window.addEventListener('error', e => {
       try {
         const lowerName = file.name.toLowerCase();
         if (lowerName.endsWith('.3mf')) {
+          const meshColors = extract3mfColors(buf);
           const group = new ThreeMFLoader().parse(buf);
-          workspace.loadModelFromGroup(group, file.name);
+          workspace.loadModelFromGroup(group, file.name, meshColors);
         } else {
           const geometry = new STLLoader().parse(buf);
           workspace.loadModelFromGeometry(geometry, file.name);
