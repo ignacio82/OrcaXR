@@ -66,12 +66,7 @@ window.addEventListener('error', e => {
         const lowerName = file.name.toLowerCase();
         if (lowerName.endsWith('.3mf')) {
           const group = new ThreeMFLoader().parse(buf);
-          // @ts-ignore
-          group.traverse((child: any) => {
-            if (child.isMesh && child.geometry) {
-              workspace.loadModelFromGeometry(child.geometry.clone(), file.name);
-            }
-          });
+          workspace.loadModelFromGroup(group, file.name);
         } else {
           const geometry = new STLLoader().parse(buf);
           workspace.loadModelFromGeometry(geometry, file.name);

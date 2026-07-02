@@ -578,15 +578,8 @@ export class OrcaWorkspace extends xb.Script {
     if (url.toLowerCase().endsWith('.3mf')) {
       const group = await new ThreeMFLoader().loadAsync(url);
       console.log('[orcaxr-load] parsed 3MF in', Math.round(performance.now() - t0), 'ms');
-      
-      let meshesAdded = 0;
-      group.traverse((child: any) => {
-        if (child.isMesh && child.geometry) {
-          const name = url.split('/').pop() ?? url;
-          this.loadModelFromGeometry(child.geometry.clone(), name + (meshesAdded > 0 ? `_${meshesAdded}` : ''));
-          meshesAdded++;
-        }
-      });
+      const name = url.split('/').pop() ?? url;
+      this.loadModelFromGroup(group, name);
     } else {
       const raw = await new STLLoader().loadAsync(url);
       console.log('[orcaxr-load] parsed STL in', Math.round(performance.now() - t0), 'ms,',
@@ -605,6 +598,44 @@ export class OrcaWorkspace extends xb.Script {
       this.selectModel(this.models[this.models.length - 1]);
     }
     this.setStatus(`Loaded ${name}.`);
+  }
+
+  /** Merge a Three.js Group (e.g. from 3MFLoader) into a single model, preserving colors. */
+  loadModelFromGroup(group: THREE.Object3D, name: string) {
+    const geometries: THREE.BufferGeometry[] = [];
+    group.updateMatrixWorld(true);
+    group.traverse((child: any) => {
+      if (child.isMesh && child.geometry) {
+        const geom = child.geometry.clone();
+        geom.applyMatrix4(child.matrixWorld);
+
+        // Ensure color attribute exists if material has color
+        if (!geom.hasAttribute('color') && child.material && child.material.color) {
+          const count = geom.attributes.position.count;
+          const colors = new Float32Array(count * 3);
+          const colorObj = child.material.color;
+          for (let i = 0; i < count * 3; i += 3) {
+            colors[i] = colorObj.r;
+            colors[i + 1] = colorObj.g;
+            colors[i + 2] = colorObj.b;
+          }
+          geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        }
+
+        if (!geom.hasAttribute('normal')) {
+          geom.computeVertexNormals();
+        }
+
+        geometries.push(geom);
+      }
+    });
+
+    if (geometries.length > 0) {
+      const merged = BufferGeometryUtils.mergeGeometries(geometries, false);
+      if (merged) {
+        this.loadModelFromGeometry(merged, name);
+      }
+    }
   }
 
   private addFromLibrary() {
@@ -628,14 +659,16 @@ export class OrcaWorkspace extends xb.Script {
     raw.computeVertexNormals();
     raw.computeBoundsTree();
 
-    const colors = new Float32Array(raw.attributes.position.count * 3);
-    const colorObj = new THREE.Color(color);
-    for (let i = 0; i < colors.length; i += 3) {
-      colors[i] = colorObj.r;
-      colors[i + 1] = colorObj.g;
-      colors[i + 2] = colorObj.b;
+    if (!raw.hasAttribute('color')) {
+      const colors = new Float32Array(raw.attributes.position.count * 3);
+      const colorObj = new THREE.Color(color);
+      for (let i = 0; i < colors.length; i += 3) {
+        colors[i] = colorObj.r;
+        colors[i + 1] = colorObj.g;
+        colors[i + 2] = colorObj.b;
+      }
+      raw.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     }
-    raw.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     const mesh = new THREE.Mesh(
       raw,
