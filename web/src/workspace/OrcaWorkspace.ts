@@ -879,7 +879,7 @@ export class OrcaWorkspace extends xb.Script {
       return btn;
     };
 
-    const loadBtn = mkAction('Load STL', 'upload_file', false, () => {
+    const loadBtn = mkAction('Load Model', 'upload_file', false, () => {
       if (this.onRequestLoadStl) this.onRequestLoadStl();
     });
     this.loadButtonNode = loadBtn as unknown as THREE.Object3D;
@@ -910,7 +910,7 @@ export class OrcaWorkspace extends xb.Script {
       strokeWidth: 1,
       strokeColor: '#ffffff0d'
     });
-    this.statusText = new UIText('Ready. Load an STL to begin.', { fontSize: 16, color: '#a0aab5' });
+    this.statusText = new UIText('Ready. Load a model to begin.', { fontSize: 16, color: '#a0aab5' });
     statusPanel.add(this.statusText);
     root.add(statusPanel);
     
