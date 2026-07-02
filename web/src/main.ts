@@ -18,7 +18,7 @@ import { OrcaWorkspace, extract3mfColors } from './workspace/OrcaWorkspace';
 declare global {
   interface Window { ORCAXR_VERSION: string }
 }
-window.ORCAXR_VERSION = 'v21-load-instr';
+window.ORCAXR_VERSION = 'v25-steppers';
 
 /** 2D-page UI wiring for standard web slicer mode. */
 function setupDomUI(workspace: OrcaWorkspace) {
@@ -64,10 +64,11 @@ window.addEventListener('error', e => {
       const buf = await file.arrayBuffer();
       try {
         const lowerName = file.name.toLowerCase();
+        console.log(`[main.ts] Uploaded file: ${file.name}, lowerName: ${lowerName}`);
         if (lowerName.endsWith('.3mf')) {
-          const meshColors = extract3mfColors(buf);
+          const colors = await extract3mfColors(buf);
           const group = new ThreeMFLoader().parse(buf);
-          workspace.loadModelFromGroup(group, file.name, meshColors);
+          workspace.loadModelFromGroup(group, file.name, colors || undefined);
         } else {
           const geometry = new STLLoader().parse(buf);
           workspace.loadModelFromGeometry(geometry, file.name);
@@ -92,6 +93,43 @@ window.addEventListener('error', e => {
   btnSlice.onclick = () => {
     void workspace.sliceNow();
   };
+
+  const btnPreview = document.getElementById('btn-preview') as HTMLButtonElement;
+  btnPreview.onclick = () => workspace.togglePreview();
+
+  // Profile pickers: mirror the XR panel's machine/process/filament cyclers.
+  const selMachine = document.getElementById('sel-machine') as HTMLSelectElement;
+  const selProcess = document.getElementById('sel-process') as HTMLSelectElement;
+  const selFilament = document.getElementById('sel-filament') as HTMLSelectElement;
+  const fillSelect = (sel: HTMLSelectElement, items: string[], current: string) => {
+    sel.innerHTML = '';
+    for (const it of items) {
+      const opt = document.createElement('option');
+      opt.value = it;
+      opt.textContent = it;
+      opt.selected = it === current;
+      sel.appendChild(opt);
+    }
+  };
+  const renderProfileSelects = () => {
+    const o = workspace.getProfileOptions();
+    fillSelect(selMachine, o.machines, o.machine);
+    fillSelect(selProcess, o.processes, o.process);
+    fillSelect(selFilament, o.filaments, o.filament);
+  };
+  const applySelects = () => {
+    workspace.setProfileByNames(selMachine.value, selProcess.value, selFilament.value);
+  };
+  selMachine.onchange = () => {
+    // New machine resets compatible process/filament to first choices.
+    const o = workspace.getProfileOptions();
+    void o;
+    workspace.setProfileByNames(selMachine.value, '', '');
+  };
+  selProcess.onchange = applySelects;
+  selFilament.onchange = applySelects;
+  workspace.onProfileChanged = renderProfileSelects;
+  renderProfileSelects();
 
   workspace.onDownloadReady = (ready) => {
     btnDownload.disabled = !ready;

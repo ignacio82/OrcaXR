@@ -87,10 +87,16 @@
       </div>
       <div id="right-sidebar">
         <h2>OrcaXR Web</h2>
+        <div class="panel" id="profile-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+          <select id="sel-machine" class="action-btn" style="text-align:left;"></select>
+          <select id="sel-process" class="action-btn" style="text-align:left;"></select>
+          <select id="sel-filament" class="action-btn" style="text-align:left;"></select>
+        </div>
         <div class="panel">
           <button id="btn-load" class="action-btn">Load Model...</button>
           <input type="file" id="file-input" accept=".stl,.3mf" multiple style="display:none;" />
           <button id="btn-slice" class="action-btn primary">Slice</button>
+          <button id="btn-preview" class="action-btn">Toolpath Preview</button>
           <button id="btn-download" class="action-btn" disabled>Download G-Code</button>
         </div>
         <div class="status-panel">

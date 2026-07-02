@@ -8,6 +8,7 @@
 
 #include <emscripten/bind.h>
 #include <emscripten/heap.h>
+#include <sys/stat.h>
 
 #include <pthread.h>
 
@@ -32,6 +33,7 @@ extern "C" int pthread_setname_np(pthread_t, const char *) { return 0; }
 #include <nlohmann/json.hpp>
 
 #include "libslic3r/Model.hpp"
+#include "libslic3r/Utils.hpp"
 #include "libslic3r/Print.hpp"
 #include "libslic3r/PrintConfig.hpp"
 #include "libslic3r/GCode/GCodeProcessor.hpp"
@@ -85,9 +87,28 @@ void write_all(const char *path, const std::string &bytes)
 /// G-code text. Failures return a sentinel "ORCAXR_ERROR: <message>"
 /// string — a WebAssembly.Exception crossing into JS carries no message,
 /// so errors are passed by value instead.
+static void ensure_resources()
+{
+    static bool done = false;
+    if (done) return;
+    done = true;
+    ::mkdir("/resources", 0777);
+    ::mkdir("/resources/info", 0777);
+    const struct { const char *path; const char *body; } kFiles[] = {
+        {"/resources/info/nozzle_info.json", "{\n    \"version\": \"1.0.0.3\",\n    \"nozzle_hrc\": {\n        \"hardened_steel\": 55,\n        \"stainless_steel\": 20,\n        \"tungsten_carbide\": 85,\n        \"brass\": 2,\n        \"E3D\": 55,\n        \"undefine\": 0\n    }\n}"},
+        {"/resources/info/filament_info.json", "{\n    \"version\": \"1.0.0.4\",\n    \"high_temp_filament\": [\n        \"ABS\",\n        \"ASA\",\n        \"ASA-CF\",\n        \"PC\",\n        \"PA\",\n        \"PA-CF\",\n        \"PA-GF\",\n        \"PA6-CF\",\n        \"PET-CF\",\n        \"PPS\",\n        \"PPS-CF\",\n        \"PPA-CF\",\n        \"PPA-GF\",\n        \"ABS-GF\",\n        \"ASA-AERO\"\n    ],\n    \"low_temp_filament\": [\n        \"PLA\",\n        \"TPU\",\n        \"TPU-AMS\",\n        \"PLA-CF\",\n        \"PLA-AERO\",\n        \"PVA\",\n        \"BVOH\",\n        \"PCTG\",\n        \"PETG\",\n        \"PETG-CF\",\n        \"SBS\"\n    ],\n    \"high_low_compatible_filament\":[\n        \"HIPS\",\n        \"PE\",\n        \"PP\",\n        \"EVA\",\n        \"PE-CF\",\n        \"PP-CF\",\n        \"PP-GF\",\n        \"PHA\"\n    ]\n}"},
+        {"/resources/info/nozzle_incompatibles.json", "{\n    \"incompatible_nozzles\":{\n        \"Standard\":{\n            \"0.2\":[\n                \"Bambu PLA Marble\",\n                \"Bambu PLA Sparkle\",\n                \"Bambu PLA Wood\",\n                \"Bambu PLA Galaxy\",\n                \"Bambu PETG Translucent\"\n            ],\n            \"0.4\":[],\n            \"0.6\":[\n                \"Bambu PLA Silk+\",\n                \"Bambu PLA Silk\",\n                \"Bambu PLA Aero\",\n                \"Bambu ASA-Aero\"\n            ],\n            \"0.8\":[\n                \"Bambu PLA Silk+\",\n                \"Bambu PLA Silk\",\n                \"Bambu PLA Aero\",\n                \"Bambu ASA-Aero\"\n            ]\n        },\n        \"High Flow\":{\n            \"0.4\":[\n                \"Bambu PLA-CF\",\n                \"Bambu PETG-CF\",\n                \"Bambu ASA-CF\",\n                \"Bambu PAHT-CF\",\n                \"Bambu PET-CF\",\n                \"Bambu PA6-CF\",\n                \"Bambu PA6-GF\",\n                \"Bambu PPA-CF\",\n                \"Bambu PPS-CF\"\n            ],\n            \"0.6\":[],\n            \"0.8\":[]\n        }\n    }\n}"},
+    };
+    for (const auto &f : kFiles) {
+        if (FILE *fp = fopen(f.path, "w")) { fputs(f.body, fp); fclose(fp); }
+    }
+    Slic3r::set_resources_dir("/resources");
+}
+
 std::string slice_stl_to_gcode_inner(const std::string &stl_bytes,
                                      const std::string &overrides_json)
 {
+    ensure_resources();
     const char *in_path = "/tmp/orcaxr_in.stl";
     const char *out_path = "/tmp/orcaxr_out.gcode";
     write_all(in_path, stl_bytes);

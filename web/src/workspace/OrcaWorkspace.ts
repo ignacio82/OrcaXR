@@ -10,7 +10,72 @@
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { ThreeMFLoader } from 'three/examples/jsm/loaders/3MFLoader.js';
-import * as fflate from 'three/examples/jsm/libs/fflate.module.js';
+import * as fflate from 'fflate';
+
+export async function extract3mfColors(buf: ArrayBuffer): Promise<string[] | null> {
+  try {
+    const fflate = await import('fflate');
+    const unzipped = fflate.unzipSync(new Uint8Array(buf));
+    
+    const projectSettings = unzipped['Metadata/project_settings.config'];
+    if (!projectSettings) {
+      console.warn('extract3mfColors: Metadata/project_settings.config not found');
+      return null;
+    }
+    const jsonStr = new TextDecoder().decode(projectSettings);
+    const config = JSON.parse(jsonStr);
+    // Part colors follow the FILAMENT loaded in each extruder slot, not the
+    // physical extruder color (extruder_colour is often one uniform value).
+    const palette: string[] | undefined = Array.isArray(config.filament_colour)
+      ? config.filament_colour
+      : Array.isArray(config.extruder_colour)
+        ? config.extruder_colour
+        : undefined;
+    if (!palette || palette.length === 0) {
+      console.warn('extract3mfColors: no filament_colour/extruder_colour palette');
+      return null;
+    }
+
+    const modelSettings = unzipped['Metadata/model_settings.config'];
+    if (!modelSettings) {
+      console.warn('extract3mfColors: Metadata/model_settings.config not found');
+      return null;
+    }
+    const xmlStr = new TextDecoder().decode(modelSettings);
+    
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlStr, 'text/xml');
+
+    const colors: string[] = [];
+    // Parts in document order match the loader's mesh traversal order.
+    // Orca extruder metadata is 1-BASED; 0/absent means "inherit from the
+    // object" (whose own 0 means filament 1). Out-of-range slots (project
+    // authored with more filaments than this file carries) wrap.
+    doc.querySelectorAll('object').forEach((obj) => {
+      const objExtruder = parseInt(
+        obj.querySelector(':scope > metadata[key="extruder"]')?.getAttribute('value') ?? '0',
+        10,
+      );
+      obj.querySelectorAll('part').forEach((part) => {
+        let idx = parseInt(
+          part.querySelector('metadata[key="extruder"]')?.getAttribute('value') ?? '0',
+          10,
+        );
+        if (!idx || idx < 1) idx = objExtruder;
+        if (!idx || idx < 1) idx = 1;
+        colors.push(palette[(idx - 1) % palette.length] ?? '#ffffff');
+      });
+    });
+    
+    console.log(`extract3mfColors: Successfully mapped ${colors.length} parts. Colors:`, colors);
+    return colors.length > 0 ? colors : null;
+  } catch (e) {
+    console.error('Failed to extract 3mf colors', e);
+  }
+  return null;
+}
+
+
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -23,6 +88,7 @@ import * as xb from 'xrblocks';
 // @ts-ignore
 import { UICore, UIPanel, UIText, UIIcon, raycastSortFunction, ManipulationBehavior } from 'xrblocks/addons/uiblocks/src/index.js';
 
+import { parseGcodeToolpath } from '../slicer/GcodeToolpath';
 import { bedSizeFromProfile, ProfileCatalog, SlicerProfile } from '../slicer/ProfileLoader';
 import { SlicerClient } from '../slicer/SlicerClient';
 
@@ -36,47 +102,6 @@ const WORKSPACE_SCALE = 1.75;
 const PLATE_Y = 0.8;
 const PLATE_Z = -0.9;
 
-export function extract3mfColors(buf: ArrayBuffer): THREE.Color[] | null {
-  try {
-    const unzipped = fflate.unzipSync(new Uint8Array(buf));
-    let colorsStr = '';
-    let partsStr = '';
-
-    for (const name in unzipped) {
-      if (name.includes('project_settings.config')) {
-        colorsStr = fflate.strFromU8(unzipped[name]);
-      }
-      if (name.includes('model_settings.config')) {
-        partsStr = fflate.strFromU8(unzipped[name]);
-      }
-    }
-
-    if (!colorsStr || !partsStr) return null;
-
-    const colorsMatch = colorsStr.match(/"extruder_colour":\s*\[(.*?)\]/s);
-    const hexColors = colorsMatch ? colorsMatch[1].trim().split(/\s*,\s*/).map((s: string) => s.replace(/"/g, '')) : [];
-
-    const parts = partsStr.split('<part ');
-    const meshColors: THREE.Color[] = [];
-    for (let i = 1; i < parts.length; i++) {
-      const part = parts[i];
-      const extruderMatch = part.match(/<metadata key="extruder" value="([^"]+)"/);
-      let extruderIdx = 0;
-      if (extruderMatch) {
-        extruderIdx = parseInt(extruderMatch[1]) - 1;
-      }
-      if (extruderIdx >= 0 && extruderIdx < hexColors.length) {
-        meshColors.push(new THREE.Color(hexColors[extruderIdx]));
-      } else {
-        meshColors.push(new THREE.Color(0xffffff));
-      }
-    }
-    return meshColors;
-  } catch (e) {
-    console.warn("Failed to extract 3MF colors:", e);
-    return null;
-  }
-}
 
 export class OrcaWorkspace extends xb.Script {
   private uiCore: any;
@@ -92,6 +117,8 @@ export class OrcaWorkspace extends xb.Script {
   private models: { raw: THREE.BufferGeometry; display: THREE.Mesh; viewer: THREE.Object3D }[] = [];
   private statusText: { text: string } | null = null;
   private lastGcode: string | null = null;
+  private toolpathObj: THREE.LineSegments | null = null;
+  private previewOn = false;
   private needsRecenter = false;
   
   public orbitControls: OrbitControls | null = null;
@@ -394,6 +421,31 @@ export class OrcaWorkspace extends xb.Script {
     )];
   }
 
+  /** Snapshot for pickers: current selection + available choices. */
+  getProfileOptions() {
+    const cur = this.profile;
+    const machine = cur?.machineName ?? '';
+    return {
+      machine,
+      process: cur?.processName ?? '',
+      filament: cur?.filamentName ?? '',
+      machines: this.machineChoices(),
+      processes: this.processChoices(machine),
+      filaments: this.filamentChoices(machine),
+    };
+  }
+
+  /** Select a profile by exact names (2D pickers). Unknown parts keep current. */
+  setProfileByNames(machine: string, process: string, filament: string) {
+    const next = this.catalog.profiles.find(
+      (x) => x.machineName === machine && x.processName === process && x.filamentName === filament,
+    ) ?? this.catalog.find(machine, process, filament);
+    if (next) this.setProfile(next);
+  }
+
+  /** Fires whenever the active profile changes (2D pickers re-render). */
+  public onProfileChanged: (() => void) | null = null;
+
   /** Cycle one dimension of the profile triple (public: panel + tests). */
   cycleProfilePart(part: 'machine' | 'process' | 'filament') {
     const cur = this.profile;
@@ -420,6 +472,7 @@ export class OrcaWorkspace extends xb.Script {
 
   private setProfile(p: SlicerProfile) {
     this.profile = p;
+    if (this.onProfileChanged) this.onProfileChanged();
     this.bedMm = bedSizeFromProfile(p.config);
     this.rebuildPlate();
     this.setStatus(`profile: ${p.displayName}\nbed ${this.bedMm.x}×${this.bedMm.y} mm`);
@@ -621,11 +674,11 @@ export class OrcaWorkspace extends xb.Script {
     if (url.toLowerCase().endsWith('.3mf')) {
       const resp = await fetch(url);
       const buf = await resp.arrayBuffer();
-      const meshColors = extract3mfColors(buf);
+      const colors = await extract3mfColors(buf);
       const group = new ThreeMFLoader().parse(buf);
       console.log('[orcaxr-load] parsed 3MF in', Math.round(performance.now() - t0), 'ms');
       const name = url.split('/').pop() ?? url;
-      this.loadModelFromGroup(group, name, meshColors);
+      this.loadModelFromGroup(group, name, colors ?? undefined);
     } else {
       const raw = await new STLLoader().loadAsync(url);
       console.log('[orcaxr-load] parsed STL in', Math.round(performance.now() - t0), 'ms,',
@@ -647,22 +700,37 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Merge a Three.js Group (e.g. from 3MFLoader) into a single model, preserving colors. */
-  loadModelFromGroup(group: THREE.Object3D, name: string, meshColors: THREE.Color[] | null = null) {
+  loadModelFromGroup(group: THREE.Object3D, name: string, meshColors?: string[]) {
+    console.log(`[orcaxr-load] loadModelFromGroup called with meshColors:`, meshColors);
     const geometries: THREE.BufferGeometry[] = [];
     group.updateMatrixWorld(true);
+
     let meshIndex = 0;
     group.traverse((child: any) => {
       if (child.isMesh && child.geometry) {
-        const geom = child.geometry.clone();
+        let geom = child.geometry.clone();
+        if (geom.index !== null) {
+          geom = geom.toNonIndexed();
+        }
         geom.applyMatrix4(child.matrixWorld);
 
-        const targetColor = meshColors && meshIndex < meshColors.length ? meshColors[meshIndex] : null;
+        // Native 3MF loading (via ThreeMFLoader) uses standard 3MF colors.
+        // It places them in child.material.color OR as vertex colors.
+        // If we have custom meshColors mapped from Orca 3MF configs, use them.
+        // Always rewrite the color attribute so we have uniform vertex colors for merging.
+        const count = geom.attributes.position.count;
+        const colors = new Float32Array(count * 3);
+        
+        let colorObj = (child.material && child.material.color) ? child.material.color : new THREE.Color(0xffffff);
+        if (meshColors && meshColors[meshIndex]) {
+          colorObj = new THREE.Color(meshColors[meshIndex]);
+        } else if (geom.hasAttribute('color')) {
+          // If we don't have custom colors, but the geom already has vertex colors, preserve them.
+          // We'll leave the existing attribute untouched.
+          colorObj = null;
+        }
 
-        // Ensure color attribute exists if material has color
-        if (!geom.hasAttribute('color') && (targetColor || (child.material && child.material.color))) {
-          const count = geom.attributes.position.count;
-          const colors = new Float32Array(count * 3);
-          const colorObj = targetColor || child.material.color;
+        if (colorObj) {
           for (let i = 0; i < count * 3; i += 3) {
             colors[i] = colorObj.r;
             colors[i + 1] = colorObj.g;
@@ -675,15 +743,31 @@ export class OrcaWorkspace extends xb.Script {
           geom.computeVertexNormals();
         }
 
+        // Drop non-essential attributes to prevent mergeGeometries from failing
+        const allowedAttributes = ['position', 'normal', 'color'];
+        for (const attrName of Object.keys(geom.attributes)) {
+          if (!allowedAttributes.includes(attrName)) {
+            geom.deleteAttribute(attrName);
+          }
+        }
+
         geometries.push(geom);
         meshIndex++;
       }
     });
 
     if (geometries.length > 0) {
+      console.log(`Merging ${geometries.length} geometries...`);
+      for (let i = 0; i < geometries.length; i++) {
+        const g = geometries[i];
+        console.log(`Geom ${i}: index=${g.index !== null}, position=${g.attributes.position?.itemSize}, normal=${g.attributes.normal?.itemSize}, color=${g.attributes.color?.itemSize}, attrs=${Object.keys(g.attributes).join(',')}`);
+      }
       const merged = BufferGeometryUtils.mergeGeometries(geometries, false);
       if (merged) {
+        console.log(`Merged successfully! Attributes: ${Object.keys(merged.attributes).join(',')}`);
         this.loadModelFromGeometry(merged, name);
+      } else {
+        console.error("mergeGeometries RETURNED NULL!");
       }
     }
   }
@@ -753,6 +837,75 @@ export class OrcaWorkspace extends xb.Script {
     });
     this.workspace.add(model);
     this.models.push({ raw, display: mesh, viewer: model });
+  }
+
+  /** Build/replace the toolpath preview from sliced G-code and show it. */
+  private showToolpathPreview(gcode: string) {
+    this.clearToolpathPreview();
+    const { geometry, segmentCount } = parseGcodeToolpath(gcode);
+    if (segmentCount === 0) return;
+    const lines = new THREE.LineSegments(
+      geometry,
+      new THREE.LineBasicMaterial({ vertexColors: true }),
+    );
+    lines.name = 'toolpath';
+    lines.raycast = () => {}; // display-only; must never swallow pinches
+    // Printer mm (Z-up, bed-corner origin) → workspace local (Y-up,
+    // bed-center origin, magnified) — the inverse of the bake transform.
+    const vis = MM * WORKSPACE_SCALE;
+    lines.scale.setScalar(vis);
+    lines.rotation.x = -Math.PI / 2;
+    lines.position.set((-this.bedMm.x / 2) * vis, 0, (this.bedMm.y / 2) * vis);
+    this.workspace.add(lines);
+    this.toolpathObj = lines;
+    this.previewOn = true;
+    // Ghost the models so the toolpath reads clearly.
+    for (const m of this.models) m.viewer.visible = false;
+  }
+
+  private clearToolpathPreview() {
+    if (this.toolpathObj) {
+      this.workspace.remove(this.toolpathObj);
+      this.toolpathObj.geometry.dispose();
+      (this.toolpathObj.material as THREE.Material).dispose();
+      this.toolpathObj = null;
+    }
+    this.previewOn = false;
+    for (const m of this.models) m.viewer.visible = true;
+  }
+
+  /** Toggle between toolpath preview and model view (panel + tests). */
+  togglePreview() {
+    if (this.previewOn) {
+      this.clearToolpathPreview();
+      this.setStatus('model view');
+    } else if (this.lastGcode) {
+      this.showToolpathPreview(this.lastGcode);
+      this.setStatus('toolpath preview');
+    } else {
+      this.setStatus('slice first to preview toolpaths');
+    }
+  }
+
+  /** Apply one stepper increment of the active tool to the target model. */
+  nudgeSelected(dir: -1 | 1) {
+    const target: THREE.Object3D | null =
+      (this.transformControls?.object as THREE.Object3D | undefined) ??
+      this.models[this.models.length - 1]?.viewer ?? null;
+    if (!target) { this.setStatus('no model'); return; }
+    if (this.tool === 'rotate') {
+      target.rotation.y += dir * (Math.PI / 12);
+      this.setStatus(`rotation: ${Math.round(THREE.MathUtils.euclideanModulo(THREE.MathUtils.radToDeg(target.rotation.y), 360))}°`);
+    } else if (this.tool === 'scale') {
+      const next = THREE.MathUtils.clamp(target.scale.x * (1 + dir * 0.1), 0.05, 40);
+      target.scale.setScalar(next);
+      this.setStatus(`scale: ${Math.round(next * 100)}%`);
+    } else {
+      const halfX = (this.bedMm.x * MM * WORKSPACE_SCALE) / 2;
+      target.position.x = THREE.MathUtils.clamp(
+        target.position.x + dir * 5 * MM * WORKSPACE_SCALE, -halfX, halfX);
+      this.setStatus(`x: ${Math.round(target.position.x / (MM * WORKSPACE_SCALE))} mm`);
+    }
   }
 
   private toolButtons: { tool: string; btn: UIPanel; iconEl: UIIcon }[] = [];
@@ -825,6 +978,26 @@ export class OrcaWorkspace extends xb.Script {
     addToolBtn('scale', 'open_in_full');
     addToolBtn('lay_on_face', 'flip_to_back');
     addToolBtn('paint', 'format_paint');
+
+    // Numeric steppers: fixed increments of the ACTIVE tool's quantity —
+    // the "enter a number" half of OrcaSlicer-style modal tools.
+    const stepRow = new UIPanel({
+      width: '100%', flexDirection: 'row', justifyContent: 'center', gap: 8,
+    });
+    const mkStep = (icon: string, dir: -1 | 1) => {
+      const btn = new UIPanel({
+        width: 38, height: 38,
+        justifyContent: 'center', alignItems: 'center',
+        cornerRadius: 8, fillColor: '#ffffff14',
+        strokeWidth: 1, strokeColor: '#ffffff1a',
+        onClick: () => { this.nudgeSelected(dir); return true; },
+      });
+      btn.add(new UIIcon(icon, { color: '#cccccc', width: 26, height: 26 }));
+      stepRow.add(btn);
+    };
+    mkStep('remove', -1);
+    mkStep('add', 1);
+    root.add(stepRow);
     
     // Paint options palette
     this.paintOptionsPanel = new UIPanel({
@@ -969,6 +1142,8 @@ export class OrcaWorkspace extends xb.Script {
     root.add(loadBtn);
     
     root.add(mkAction('Slice', 'play_circle', true, () => void this.sliceNow()));
+
+    root.add(mkAction('Preview', 'visibility', false, () => this.togglePreview()));
     
     root.add(mkAction('Download G-Code', 'download', false, () => {
       if (this.lastGcode && this.onDownloadGcode) {
@@ -1172,6 +1347,7 @@ export class OrcaWorkspace extends xb.Script {
       const layers = (gcode.match(/; CHANGE_LAYER|;LAYER_CHANGE/g) ?? []).length;
       this.setStatus(`SLICED in ${ms} ms\n${(gcode.length / 1024).toFixed(0)} KB, ${lines} lines, ${layers} layers`);
       console.log('[orcaxr-web] gcode head:\n' + gcode.slice(0, 600));
+      this.showToolpathPreview(gcode);
     } catch (e) {
       this.setStatus(`slice failed: ${(e as Error).message}`);
     }

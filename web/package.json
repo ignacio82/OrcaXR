@@ -16,6 +16,8 @@
     "@pmndrs/uikit": "^1.0.74",
     "@preact/signals-core": "^1.14.3",
     "@sparkjsdev/spark": "^2.1.0",
+    "fflate": "^0.8.3",
+    "jsdom": "^29.1.1",
     "lit": "^3.3.3",
     "openai": "^6.45.0",
     "puppeteer": "^25.3.0",
