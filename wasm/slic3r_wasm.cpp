@@ -28,12 +28,39 @@ extern "C" int pthread_setname_np(pthread_t, const char *) { return 0; }
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
 
+#include <nlohmann/json.hpp>
+
 #include "libslic3r/Model.hpp"
 #include "libslic3r/Print.hpp"
 #include "libslic3r/PrintConfig.hpp"
 #include "libslic3r/GCode/GCodeProcessor.hpp"
 
 namespace {
+
+/**
+ * Re-attach enum_keys_map to generic-enum options — full_print_config()
+ * seeds them without it and any set_deserialize on such a key derefs a
+ * null map. Ported verbatim from the Android slic3r_jni.cpp (field-
+ * proven fix; covers the nullable variant too).
+ */
+void fixup_enum_keys_map(Slic3r::DynamicPrintConfig &cfg)
+{
+    const Slic3r::ConfigDef *config_def = cfg.def();
+    if (config_def == nullptr) return;
+    for (const auto &kv : config_def->options) {
+        const auto &key = kv.first;
+        const Slic3r::ConfigOptionDef &opt_def = kv.second;
+        if (opt_def.type != Slic3r::coEnums || opt_def.enum_keys_map == nullptr)
+            continue;
+        Slic3r::ConfigOption *opt = cfg.option(key, false);
+        if (opt == nullptr) continue;
+        if (auto *en = dynamic_cast<Slic3r::ConfigOptionEnumsGeneric *>(opt)) {
+            if (en->keys_map == nullptr) en->keys_map = opt_def.enum_keys_map;
+        } else if (auto *enn = dynamic_cast<Slic3r::ConfigOptionEnumsGenericNullable *>(opt)) {
+            if (enn->keys_map == nullptr) enn->keys_map = opt_def.enum_keys_map;
+        }
+    }
+}
 
 std::string read_all(const char *path)
 {
@@ -55,7 +82,8 @@ void write_all(const char *path, const std::string &bytes)
 /// G-code text. Failures return a sentinel "ORCAXR_ERROR: <message>"
 /// string — a WebAssembly.Exception crossing into JS carries no message,
 /// so errors are passed by value instead.
-std::string slice_stl_to_gcode_inner(const std::string &stl_bytes)
+std::string slice_stl_to_gcode_inner(const std::string &stl_bytes,
+                                     const std::string &overrides_json)
 {
     const char *in_path = "/tmp/orcaxr_in.stl";
     const char *out_path = "/tmp/orcaxr_out.gcode";
@@ -69,9 +97,39 @@ std::string slice_stl_to_gcode_inner(const std::string &stl_bytes)
     fprintf(stderr, "[orcaxr] model loaded: %zu object(s)\n", model.objects.size());
 
     Slic3r::DynamicPrintConfig cfg = Slic3r::DynamicPrintConfig::full_print_config();
-    // The stock defaults enable relative extruder addressing without the
-    // matching per-layer G92 E0 reset and fail validate(). Use absolute E.
-    cfg.set_key_value("use_relative_e_distances", new Slic3r::ConfigOptionBool(false));
+    fixup_enum_keys_map(cfg);
+    // Relative E + profile-supplied G92 E0 per layer (mirrors the Android
+    // build; profiles like the ECC/U1 stock chains carry the reset in
+    // their layer-change gcode).
+    cfg.set_key_value("use_relative_e_distances", new Slic3r::ConfigOptionBool(true));
+
+    // Apply flat key=value overrides (a flattened OrcaSlicer profile from
+    // the web ProfileLoader). Rejections are logged, never fatal.
+    if (!overrides_json.empty()) {
+        Slic3r::ConfigSubstitutionContext subs(Slic3r::ForwardCompatibilitySubstitutionRule::Enable);
+        try {
+            auto j = nlohmann::json::parse(overrides_json);
+            size_t applied = 0, rejected = 0;
+            for (auto it = j.begin(); it != j.end(); ++it) {
+                const std::string key = it.key();
+                const std::string value = it.value().is_string()
+                    ? it.value().get<std::string>()
+                    : it.value().dump();
+                if (cfg.set_deserialize_nothrow(key, value, subs)) {
+                    ++applied;
+                } else {
+                    ++rejected;
+                    fprintf(stderr, "[orcaxr] cfg rejected: %s=%s\n", key.c_str(), value.c_str());
+                }
+            }
+            fprintf(stderr, "[orcaxr] profile overrides: %zu applied, %zu rejected\n", applied, rejected);
+        } catch (const std::exception &e) {
+            fprintf(stderr, "[orcaxr] overrides parse failed: %s\n", e.what());
+        }
+    }
+    // The absolute-E fallback stays for profile-less slicing.
+    if (overrides_json.empty())
+        cfg.set_key_value("use_relative_e_distances", new Slic3r::ConfigOptionBool(false));
     fprintf(stderr, "[orcaxr] config ready\n");
 
     Slic3r::Print print;
@@ -106,14 +164,15 @@ std::string slice_stl_to_gcode_inner(const std::string &stl_bytes)
 /// need the JS event loop to spawn — which this synchronous call is
 /// blocking — so an uncapped TBB (one worker per core) deadlocks the
 /// first parallel_for on many-core machines. 1 = fully serial.
-std::string slice_stl_to_gcode(const std::string &stl_bytes, int max_threads)
+std::string slice_stl_to_gcode(const std::string &stl_bytes, int max_threads,
+                               const std::string &overrides_json)
 {
     if (max_threads < 1) max_threads = 1;
     fprintf(stderr, "[orcaxr] tbb max parallelism = %d\n", max_threads);
     tbb::global_control tbb_limit(
         tbb::global_control::max_allowed_parallelism, (size_t)max_threads);
     try {
-        return slice_stl_to_gcode_inner(stl_bytes);
+        return slice_stl_to_gcode_inner(stl_bytes, overrides_json);
     } catch (const std::exception &e) {
         return std::string("ORCAXR_ERROR: ") + e.what();
     } catch (...) {
@@ -142,20 +201,22 @@ void start_slice(const std::string &stl_bytes, int max_threads)
     int expected = 0;
     if (!g_slice_state.compare_exchange_strong(expected, 1)) return;
     std::thread([stl = stl_bytes, max_threads]() {
-        g_slice_result = slice_stl_to_gcode(stl, max_threads);
+        g_slice_result = slice_stl_to_gcode(stl, max_threads, std::string());
         g_slice_state.store(2);
     }).detach();
 }
 
 /// Slice a file already written into MEMFS (e.g. via JS `FS.writeFile`,
 /// which avoids the JS-string marshalling that corrupts binary bytes).
-void start_slice_file(const std::string &path, int max_threads)
+void start_slice_file(const std::string &path, int max_threads,
+                      const std::string &overrides_json)
 {
     int expected = 0;
     if (!g_slice_state.compare_exchange_strong(expected, 1)) return;
-    std::thread([path, max_threads]() {
+    std::thread([path, max_threads, overrides_json]() {
         try {
-            g_slice_result = slice_stl_to_gcode(read_all(path.c_str()), max_threads);
+            g_slice_result =
+                slice_stl_to_gcode(read_all(path.c_str()), max_threads, overrides_json);
         } catch (const std::exception &e) {
             g_slice_result = std::string("ORCAXR_ERROR: ") + e.what();
         }

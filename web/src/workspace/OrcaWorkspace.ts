@@ -9,11 +9,14 @@
  */
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import * as xb from 'xrblocks';
 
+import { bedSizeFromProfile, ProfileCatalog, SlicerProfile } from '../slicer/ProfileLoader';
 import { SlicerClient } from '../slicer/SlicerClient';
 
-/** Default slicer profile bed is 200×200 mm (real profiles land in Phase 3). */
+/** Fallback bed until the profile catalog loads. */
 const PLATE_MM = 200;
 const MM = 0.001;
 /** Visual magnification of the whole workspace: true-scale 3D-print beds
@@ -25,6 +28,10 @@ const PLATE_Z = -0.9;
 
 export class OrcaWorkspace extends xb.Script {
   private slicer = new SlicerClient();
+  private catalog = new ProfileCatalog();
+  private profile: SlicerProfile | null = null;
+  /** Live bed size (mm) — from the active profile's printable_area. */
+  private bedMm = { x: PLATE_MM, y: PLATE_MM };
   private plateAnchor = new THREE.Object3D();
   /** Everything spatial lives in this group: scaled up for legibility and
    *  re-posed in front of the user when the XR session starts. */
@@ -33,6 +40,11 @@ export class OrcaWorkspace extends xb.Script {
   private statusText: { text: string } | null = null;
   private lastGcode: string | null = null;
   private needsRecenter = false;
+  
+  public orbitControls: OrbitControls | null = null;
+  private transformControls: TransformControls | null = null;
+  public onStatusChanged: ((text: string) => void) | null = null;
+  public onDownloadReady: ((ready: boolean) => void) | null = null;
 
   async init() {
     xb.core.input.addReticles();
@@ -46,11 +58,108 @@ export class OrcaWorkspace extends xb.Script {
     await this.addStlModel('/models/cube_20mm.stl', 0x4fc3f7);
     // Warm the slicer module in the background so the first slice is quick.
     this.slicer.load().catch((e) => this.setStatus(`slicer load failed: ${e.message}`));
+    // Load the profile catalog; default to the user's Centauri Carbon.
+    void this.catalog.load().then(() => {
+      const p =
+        this.catalog.find('Centauri Carbon 0.4', '0.20mm Standard @Elegoo CC 0.4', 'PLA Matte') ??
+        this.catalog.profiles[0] ?? null;
+      if (p) this.setProfile(p);
+    });
     this.slicer.onProgress = (p) => this.setStatus(`${p.percent}% ${p.message}`);
 
     this.workspace.position.set(0, PLATE_Y, PLATE_Z);
     xb.core.camera.position.set(0, PLATE_Y + 0.35, PLATE_Z + 0.55);
     xb.core.camera.lookAt(0, PLATE_Y + 0.03, PLATE_Z);
+
+    // To guarantee transient user activation for the file picker, we must
+    // trigger it synchronously from the native WebXR select event, not
+    // from XRBlocks' async loop or SpatialPanel's onTriggered.
+    xb.core.renderer.xr.addEventListener('sessionstart', () => {
+      const session = xb.core.renderer.xr.getSession();
+      session?.addEventListener('select', () => {
+        this.checkLoadButtonAndTrigger();
+      });
+    });
+  }
+
+  public setup2DControls(canvas: HTMLCanvasElement) {
+    this.transformControls = new TransformControls(xb.core.camera, canvas);
+    this.transformControls.addEventListener('dragging-changed', (event) => {
+      if (this.orbitControls) this.orbitControls.enabled = !event.value;
+    });
+    this.add(this.transformControls.getHelper());
+
+    if (this.models.length > 0) {
+      this.selectModel(this.models[this.models.length - 1]);
+    } else {
+      this.unselectModel();
+    }
+
+    this.setupSelectionRaycaster(canvas);
+  }
+
+  public selectModel(entry: { viewer: THREE.Object3D }) {
+    if (this.transformControls && !xb.core.renderer.xr.isPresenting) {
+      this.add(this.transformControls.getHelper());
+      this.transformControls.attach(entry.viewer);
+      this.transformControls.getHelper().visible = true;
+      this.setTool(this.tool);
+      this.setStatus(`Selected model`);
+    }
+  }
+
+  public unselectModel() {
+    if (this.transformControls) {
+      this.transformControls.detach();
+      this.transformControls.getHelper().visible = false;
+      this.remove(this.transformControls.getHelper());
+      this.setStatus('Model unselected');
+    }
+  }
+
+  private setupSelectionRaycaster(canvas: HTMLCanvasElement) {
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    let downX = 0, downY = 0;
+
+    canvas.addEventListener('pointerdown', (event) => {
+      downX = event.clientX;
+      downY = event.clientY;
+    });
+
+    canvas.addEventListener('pointerup', (event) => {
+      if (xb.core.renderer.xr.isPresenting) return;
+      if (this.transformControls && (this.transformControls as unknown as { dragging: boolean }).dragging) return;
+      
+      const dx = event.clientX - downX;
+      const dy = event.clientY - downY;
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) return; // It was a drag
+
+      const rect = canvas.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(pointer, xb.core.camera);
+
+      // Don't unselect if they clicked the transform gizmo directly
+      if (this.transformControls && (this.transformControls as any).axis !== null) {
+        return;
+      }
+
+      let hitModel = false;
+      for (const entry of this.models) {
+        const intersects = raycaster.intersectObject(entry.display, true);
+        if (intersects.length > 0) {
+          hitModel = true;
+          this.selectModel(entry);
+          break;
+        }
+      }
+
+      if (!hitModel) {
+        this.unselectModel();
+      }
+    });
   }
 
   private tool: 'move' | 'rotate' | 'scale' = 'move';
@@ -105,12 +214,13 @@ export class OrcaWorkspace extends xb.Script {
       d.controller.getWorldPosition(new THREE.Vector3()),
     );
     const delta = local.clone().sub(d.startControllerLocal);
-    const half = (PLATE_MM * MM * WORKSPACE_SCALE) / 2;
+    const halfX = (this.bedMm.x * MM * WORKSPACE_SCALE) / 2;
+    const halfZ = (this.bedMm.y * MM * WORKSPACE_SCALE) / 2;
     if (this.tool === 'move') {
       entry.viewer.position.set(
-        THREE.MathUtils.clamp(d.startPos.x + delta.x, -half, half),
+        THREE.MathUtils.clamp(d.startPos.x + delta.x, -halfX, halfX),
         0,
-        THREE.MathUtils.clamp(d.startPos.z + delta.z, -half, half),
+        THREE.MathUtils.clamp(d.startPos.z + delta.z, -halfZ, halfZ),
       );
       this.showValues(`x ${(entry.viewer.position.x / (MM * WORKSPACE_SCALE)).toFixed(1)}  y ${(-entry.viewer.position.z / (MM * WORKSPACE_SCALE)).toFixed(1)} mm`);
     } else if (this.tool === 'rotate') {
@@ -129,18 +239,43 @@ export class OrcaWorkspace extends xb.Script {
   /** After any drag ends, keep models seated on the plate and inside it. */
   onSelectEnd() {
     this.drag = null;
-    const half = (PLATE_MM * MM * WORKSPACE_SCALE) / 2;
+    const halfX = (this.bedMm.x * MM * WORKSPACE_SCALE) / 2;
+    const halfZ = (this.bedMm.y * MM * WORKSPACE_SCALE) / 2;
     for (const { viewer } of this.models) {
       viewer.position.y = 0;
-      viewer.position.x = THREE.MathUtils.clamp(viewer.position.x, -half, half);
-      viewer.position.z = THREE.MathUtils.clamp(viewer.position.z, -half, half);
+      viewer.position.x = THREE.MathUtils.clamp(viewer.position.x, -halfX, halfX);
+      viewer.position.z = THREE.MathUtils.clamp(viewer.position.z, -halfZ, halfZ);
     }
+  }
+
+  private setProfile(p: SlicerProfile) {
+    this.profile = p;
+    this.bedMm = bedSizeFromProfile(p.config);
+    this.rebuildPlate();
+    this.setStatus(`profile: ${p.displayName}\nbed ${this.bedMm.x}×${this.bedMm.y} mm`);
   }
 
   onXRSessionStarted() {
     // Head pose isn't valid yet on the session-start callback; recenter on
     // the next update tick.
     this.needsRecenter = true;
+    if (this.transformControls) {
+      this.transformControls.enabled = false;
+      this.transformControls.getHelper().visible = false;
+    }
+    if (this.panel) this.panel.visible = true;
+    const ui = document.getElementById('ui-container');
+    if (ui) ui.style.display = 'none';
+  }
+
+  onXRSessionEnded() {
+    if (this.transformControls) {
+      this.transformControls.enabled = true;
+      this.transformControls.getHelper().visible = true;
+    }
+    if (this.panel) this.panel.visible = false;
+    const ui = document.getElementById('ui-container');
+    if (ui) ui.style.display = 'block';
   }
 
   onSimulatorStarted() {
@@ -193,35 +328,11 @@ export class OrcaWorkspace extends xb.Script {
     this.add(light);
   }
 
+  private plateParts = new THREE.Group();
+
   private addBuildPlate() {
-    const size = PLATE_MM * MM * WORKSPACE_SCALE;
-    const plate = new THREE.Mesh(
-      new THREE.BoxGeometry(size, 0.006, size),
-      new THREE.MeshStandardMaterial({ color: 0x2a2d31, roughness: 0.8 }),
-    );
-    plate.name = 'plate';
-    plate.position.set(0, -0.003, 0);
-    this.workspace.add(plate);
-
-    const grid = new THREE.GridHelper(size, 8, 0x5a5f66, 0x3a3e44);
-    grid.position.set(0, 0.0002, 0);
-    // Decorative only: line raycasting has a fat threshold and the grid
-    // was swallowing nearly every pinch in the workspace (hit-probe v5).
-    grid.raycast = () => {};
-    this.workspace.add(grid);
-
-    // Grab bar on the front edge: DragManager translates the whole
-    // workspace when it's pinched (draggable object + TRANSLATING child).
-    const bar = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.012, size * 0.5),
-      new THREE.MeshStandardMaterial({ color: 0xff6d00, roughness: 0.4 }),
-    );
-    bar.name = 'grabBar';
-    bar.rotation.z = Math.PI / 2;
-    bar.position.set(0, 0.005, size / 2 + 0.045);
-    (bar as unknown as { draggingMode: unknown }).draggingMode = xb.DragManager.TRANSLATING;
-    this.workspace.add(bar);
-    (this.workspace as unknown as { draggable: boolean }).draggable = true;
+    this.workspace.add(this.plateParts);
+    this.rebuildPlate();
 
     // Anchor at the plate's top-center, carrying the visual magnification:
     // baking relativizes against it, so the scale cancels exactly.
@@ -231,10 +342,49 @@ export class OrcaWorkspace extends xb.Script {
     this.plateAnchor.updateMatrixWorld(true);
   }
 
+  /** (Re)build plate/grid/grab-bar sized to the active profile's bed. */
+  private rebuildPlate() {
+    this.plateParts.clear();
+    const sx = this.bedMm.x * MM * WORKSPACE_SCALE;
+    const sz = this.bedMm.y * MM * WORKSPACE_SCALE;
+
+    const plate = new THREE.Mesh(
+      new THREE.BoxGeometry(sx, 0.006, sz),
+      new THREE.MeshStandardMaterial({ color: 0x2a2d31, roughness: 0.8 }),
+    );
+    plate.name = 'plate';
+    plate.position.set(0, -0.003, 0);
+    this.plateParts.add(plate);
+
+    const grid = new THREE.GridHelper(Math.max(sx, sz), 8, 0x5a5f66, 0x3a3e44);
+    grid.position.set(0, 0.0002, 0);
+    grid.scale.set(sx / Math.max(sx, sz), 1, sz / Math.max(sx, sz));
+    // Decorative only: line raycasting has a fat threshold and the grid
+    // was swallowing nearly every pinch in the workspace (hit-probe v5).
+    grid.raycast = () => {};
+    this.plateParts.add(grid);
+
+    // Grab bar on the front edge: DragManager translates the whole
+    // workspace when it's pinched (draggable object + TRANSLATING child).
+    const bar = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.012, sx * 0.5),
+      new THREE.MeshStandardMaterial({ color: 0xff6d00, roughness: 0.4 }),
+    );
+    bar.name = 'grabBar';
+    bar.rotation.z = Math.PI / 2;
+    bar.position.set(0, 0.005, sz / 2 + 0.045);
+    (bar as unknown as { draggingMode: unknown }).draggingMode = xb.DragManager.TRANSLATING;
+    this.plateParts.add(bar);
+    (this.workspace as unknown as { draggable: boolean }).draggable = true;
+  }
+
   private async addStlModel(url: string, color: number) {
     const raw = await new STLLoader().loadAsync(url);
     this.library.push({ name: 'cube_20mm.stl', geometry: raw });
     this.addModelFromGeometry(raw, color);
+    if (this.transformControls && this.models.length > 0) {
+      this.selectModel(this.models[this.models.length - 1]);
+    }
   }
 
   /** Model library: everything uploaded on the 2D page plus the default
@@ -243,6 +393,8 @@ export class OrcaWorkspace extends xb.Script {
   private libraryIndex = 0;
   /** Injected by main.ts: triggers the browser download of a gcode blob. */
   onDownloadGcode: ((gcode: string) => void) | null = null;
+  /** Injected by main.ts: requests the browser to open the file picker. */
+  onRequestLoadStl: (() => void) | null = null;
 
   /** Replace the current model with [raw] (STL geometry: mm, Z-up). */
   loadModelFromGeometry(raw: THREE.BufferGeometry, name: string) {
@@ -259,6 +411,9 @@ export class OrcaWorkspace extends xb.Script {
     }
     this.models.length = 0;
     this.addModelFromGeometry(entry.geometry, 0x4fc3f7);
+    if (this.transformControls && this.models.length > 0) {
+      this.selectModel(this.models[0]);
+    }
     this.setStatus(
       `model ${this.libraryIndex + 1}/${this.library.length}: ${entry.name}\n` +
       '(swap cycles files loaded on the 2D page)',
@@ -317,6 +472,7 @@ export class OrcaWorkspace extends xb.Script {
 
   private toolButtons: { tool: 'move' | 'rotate' | 'scale'; btn: { fontColor: string | number } }[] = [];
   private valueText: { text: string } | null = null;
+  private loadButtonNode: THREE.Object3D | null = null;
 
   private addControlPanel() {
     // Size via panel options — scaling the panel object desyncs its
@@ -329,12 +485,13 @@ export class OrcaWorkspace extends xb.Script {
     });
     panel.isRoot = true;
     panel.position.set(0.45, PLATE_Y + 0.25, PLATE_Z + 0.1);
+    panel.visible = false; // Hidden in 2D mode by default
     this.add(panel);
     this.panel = panel;
 
     const grid = panel.addGrid();
     this.statusText = grid.addRow({ weight: 0.3 }).addText({
-      text: 'OrcaXR v12 — pick a tool, then\npinch-drag the model.',
+      text: 'OrcaXR v13 — pick a tool, then\npinch-drag the model.',
       fontColor: '#ffffff',
       fontSize: 0.05,
     }) as unknown as { text: string };
@@ -360,20 +517,29 @@ export class OrcaWorkspace extends xb.Script {
     mk('scale', 'open_in_full');
 
     const ctrl = grid.addRow({ weight: 0.22 });
+    const loadButton = ctrl
+      .addCol({ weight: 1 / 5 })
+      .addIconButton({ text: 'upload_file', fontSize: 0.42 });
+    this.loadButtonNode = loadButton as unknown as THREE.Object3D;
+    (loadButton as unknown as { onTriggered: () => void }).onTriggered = () => {
+      // Fallback: mostly ignored because the native select hook catches it first,
+      // but left here in case the user clicks via Desktop simulator (mouse).
+      if (this.onRequestLoadStl) this.onRequestLoadStl();
+    };
     const swapButton = ctrl
-      .addCol({ weight: 1 / 4 })
+      .addCol({ weight: 1 / 5 })
       .addIconButton({ text: 'swap_horiz', fontSize: 0.42 });
     (swapButton as unknown as { onTriggered: () => void }).onTriggered = () => {
       this.cycleModel();
     };
     const sliceButton = ctrl
-      .addCol({ weight: 1 / 4 })
+      .addCol({ weight: 1 / 5 })
       .addIconButton({ text: 'play_circle', fontSize: 0.5 });
     (sliceButton as unknown as { onTriggered: () => void }).onTriggered = () => {
       void this.sliceNow();
     };
     const dlButton = ctrl
-      .addCol({ weight: 1 / 4 })
+      .addCol({ weight: 1 / 5 })
       .addIconButton({ text: 'download', fontSize: 0.42 });
     (dlButton as unknown as { onTriggered: () => void }).onTriggered = () => {
       if (this.lastGcode && this.onDownloadGcode) {
@@ -384,7 +550,7 @@ export class OrcaWorkspace extends xb.Script {
       }
     };
     const exitButton = ctrl
-      .addCol({ weight: 1 / 4 })
+      .addCol({ weight: 1 / 5 })
       .addIconButton({ text: 'logout', fontSize: 0.42 });
     (exitButton as unknown as { onTriggered: () => void }).onTriggered = () => {
       // End the immersive session — back to the 2D page (Load STL /
@@ -395,10 +561,47 @@ export class OrcaWorkspace extends xb.Script {
     this.refreshToolButtons();
   }
 
-  private setTool(tool: 'move' | 'rotate' | 'scale') {
+  public setTool(tool: 'move' | 'rotate' | 'scale') {
     this.tool = tool;
     this.refreshToolButtons();
     this.setStatus(`tool: ${tool} — pinch-drag the model`);
+    
+    if (this.transformControls) {
+      if (tool === 'move') this.transformControls.setMode('translate');
+      else if (tool === 'rotate') this.transformControls.setMode('rotate');
+      else if (tool === 'scale') this.transformControls.setMode('scale');
+    }
+  }
+
+  private checkLoadButtonAndTrigger() {
+    if (!this.loadButtonNode || !this.onRequestLoadStl) return;
+    const input = xb.core.input as unknown as {
+      intersectionsForController: Map<unknown, THREE.Intersection[]>;
+    };
+    for (const ints of input.intersectionsForController.values()) {
+      const hitLoad = ints.some(i => {
+        let o: THREE.Object3D | null = i.object;
+        while (o) {
+          if (o === this.loadButtonNode) return true;
+          o = o.parent;
+        }
+        return false;
+      });
+      if (hitLoad) {
+        // Browsers strictly suppress HTML dialogs like file pickers while inside
+        // an immersive WebXR session. We must end the session to return to the
+        // 2D compositor, then immediately trigger the picker.
+        const session = xb.core.renderer.xr.getSession();
+        if (session) {
+          void session.end().then(() => {
+            this.onRequestLoadStl?.();
+          });
+        } else {
+          this.onRequestLoadStl?.();
+        }
+        return;
+      }
+    }
   }
 
   private refreshToolButtons() {
@@ -415,10 +618,13 @@ export class OrcaWorkspace extends xb.Script {
     if (this.statusText) {
       this.statusText.text = text;
     }
+    if (this.onStatusChanged) {
+      this.onStatusChanged(text);
+    }
     console.log('[orcaxr-web]', text);
   }
 
-  private async sliceNow() {
+  public async sliceNow() {
     if (this.slicer.isSlicing) return;
     const entry = this.models[0];
     if (!entry) return;
@@ -427,9 +633,10 @@ export class OrcaWorkspace extends xb.Script {
       const stl = this.bakeToPrinterStl(entry.display);
       this.setStatus('slicing…');
       const t0 = performance.now();
-      const gcode = await this.slicer.slice(stl);
+      const gcode = await this.slicer.slice(stl, 4, this.profile?.config ?? {});
       const ms = Math.round(performance.now() - t0);
       this.lastGcode = gcode;
+      if (this.onDownloadReady) this.onDownloadReady(true);
       const lines = gcode.split('\n').length;
       const layers = (gcode.match(/; CHANGE_LAYER|;LAYER_CHANGE/g) ?? []).length;
       this.setStatus(`SLICED in ${ms} ms\n${(gcode.length / 1024).toFixed(0)} KB, ${lines} lines, ${layers} layers`);
@@ -457,8 +664,8 @@ export class OrcaWorkspace extends xb.Script {
     // Plate-local meters (Y-up) → printer mm (Z-up):
     // (x, y, z) → (x·1000, −z·1000, y·1000), then shift to bed center.
     const conv = new THREE.Matrix4().set(
-      1000, 0, 0, PLATE_MM / 2,
-      0, 0, -1000, PLATE_MM / 2,
+      1000, 0, 0, this.bedMm.x / 2,
+      0, 0, -1000, this.bedMm.y / 2,
       0, 1000, 0, 0,
       0, 0, 0, 1,
     );

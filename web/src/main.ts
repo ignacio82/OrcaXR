@@ -7,6 +7,7 @@
 import 'xrblocks/addons/simulator/SimulatorAddons.js';
 
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import * as xb from 'xrblocks';
 
 import { OrcaWorkspace } from './workspace/OrcaWorkspace';
@@ -14,33 +15,20 @@ import { OrcaWorkspace } from './workspace/OrcaWorkspace';
 declare global {
   interface Window { ORCAXR_VERSION: string }
 }
-window.ORCAXR_VERSION = 'v12-library-label';
+window.ORCAXR_VERSION = 'v13-real-profiles';
 
-/** 2D-page toolbar: load an STL before entering XR; download the last
- *  G-code after slicing (both impossible from inside the XR session). */
-function setupDomBar(workspace: OrcaWorkspace) {
-  const bar = document.createElement('div');
-  bar.style.cssText =
-    'position:absolute;top:12px;left:12px;z-index:30;display:flex;gap:8px;' +
-    'font-family:sans-serif;';
+/** 2D-page UI wiring for standard web slicer mode. */
+function setupDomUI(workspace: OrcaWorkspace) {
+  const fileInput = document.getElementById('file-input') as HTMLInputElement;
+  const btnLoad = document.getElementById('btn-load') as HTMLButtonElement;
+  const btnSlice = document.getElementById('btn-slice') as HTMLButtonElement;
+  const btnDownload = document.getElementById('btn-download') as HTMLButtonElement;
+  const statusText = document.getElementById('status-text') as HTMLParagraphElement;
+  const btnMove = document.getElementById('btn-move') as HTMLButtonElement;
+  const btnRotate = document.getElementById('btn-rotate') as HTMLButtonElement;
+  const btnScale = document.getElementById('btn-scale') as HTMLButtonElement;
 
-  const fileInput = document.createElement('input');
-  fileInput.type = 'file';
-  fileInput.accept = '.stl';
-  fileInput.multiple = true;
-  fileInput.style.display = 'none';
-
-  const mkButton = (label: string) => {
-    const b = document.createElement('button');
-    b.textContent = label;
-    b.style.cssText =
-      'padding:10px 16px;border:none;border-radius:8px;background:#ff6d00;' +
-      'color:#000;font-size:15px;cursor:pointer;';
-    return b;
-  };
-
-  const loadBtn = mkButton('Load STL…');
-  loadBtn.onclick = () => fileInput.click();
+  btnLoad.onclick = () => fileInput.click();
   fileInput.onchange = async () => {
     const files = Array.from(fileInput.files ?? []);
     for (const file of files) {
@@ -48,9 +36,8 @@ function setupDomBar(workspace: OrcaWorkspace) {
       try {
         const geometry = new STLLoader().parse(buf);
         workspace.loadModelFromGeometry(geometry, file.name);
-        loadBtn.textContent = file.name;
       } catch (e) {
-        loadBtn.textContent = `failed: ${(e as Error).message}`.slice(0, 40);
+        statusText.textContent = `Failed to load: ${(e as Error).message}`;
       }
     }
   };
@@ -64,21 +51,36 @@ function setupDomBar(workspace: OrcaWorkspace) {
     URL.revokeObjectURL(a.href);
   };
   workspace.onDownloadGcode = downloadGcode;
+  workspace.onRequestLoadStl = () => fileInput.click();
 
-  const dlBtn = mkButton('Download G-code');
-  dlBtn.style.background = '#4fc3f7';
-  dlBtn.onclick = () => {
-    const gcode = workspace.getLastGcode();
-    if (!gcode) {
-      dlBtn.textContent = 'No G-code yet — slice first';
-      setTimeout(() => (dlBtn.textContent = 'Download G-code'), 1800);
-      return;
-    }
-    downloadGcode(gcode);
+  btnSlice.onclick = () => {
+    void workspace.sliceNow();
   };
 
-  bar.append(loadBtn, dlBtn, fileInput);
-  document.body.append(bar);
+  workspace.onDownloadReady = (ready) => {
+    btnDownload.disabled = !ready;
+  };
+
+  btnDownload.onclick = () => {
+    const gcode = workspace.getLastGcode();
+    if (gcode) downloadGcode(gcode);
+  };
+
+  workspace.onStatusChanged = (text) => {
+    statusText.textContent = text;
+  };
+
+  const setTool = (tool: 'move' | 'rotate' | 'scale', btn: HTMLButtonElement) => {
+    btnMove.classList.remove('active');
+    btnRotate.classList.remove('active');
+    btnScale.classList.remove('active');
+    btn.classList.add('active');
+    workspace.setTool(tool);
+  };
+
+  btnMove.onclick = () => setTool('move', btnMove);
+  btnRotate.onclick = () => setTool('rotate', btnRotate);
+  btnScale.onclick = () => setTool('scale', btnScale);
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -96,7 +98,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   const workspace = new OrcaWorkspace();
   xb.add(workspace);
   await xb.init(options);
+
+  // Setup OrbitControls for 2D mode navigation
+  const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+  const orbit = new OrbitControls(xb.core.camera, canvas);
+  orbit.target.set(0, 0.8, -0.9); // Target the workspace center
+  orbit.update();
+  workspace.orbitControls = orbit;
+  workspace.setup2DControls(canvas);
+
   // Debug handle for remote scene inspection via CDP.
   (window as unknown as { __orcaScene: unknown }).__orcaScene = xb.core.scene;
-  setupDomBar(workspace);
+  setupDomUI(workspace);
 });

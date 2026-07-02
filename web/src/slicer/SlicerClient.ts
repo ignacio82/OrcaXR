@@ -14,7 +14,7 @@ export interface SliceProgress {
 interface Slic3rModule {
   versionString(): string;
   startSlice(stlBinary: string, maxThreads: number): void;
-  startSliceFile(path: string, maxThreads: number): void;
+  startSliceFile(path: string, maxThreads: number, overridesJson: string): void;
   pollSlice(): string;
   FS: { writeFile(path: string, data: Uint8Array): void };
 }
@@ -66,7 +66,11 @@ export class SlicerClient {
    * Slice a binary STL (printer coordinates, mm, Z-up) to G-code text.
    * Rejects with the slicer's error message on failure.
    */
-  async slice(stl: ArrayBuffer, maxThreads = 4): Promise<string> {
+  async slice(
+    stl: ArrayBuffer,
+    maxThreads = 4,
+    overrides: Record<string, string> = {},
+  ): Promise<string> {
     if (this.slicing) throw new Error('a slice is already running');
     const mod = await this.ensureModule();
     this.slicing = true;
@@ -75,7 +79,7 @@ export class SlicerClient {
       // UTF-8-mangles binary bytes in the browser, so never pass the STL
       // through a JS string.
       mod.FS.writeFile('/tmp/orcaxr_upload.stl', new Uint8Array(stl));
-      mod.startSliceFile('/tmp/orcaxr_upload.stl', maxThreads);
+      mod.startSliceFile('/tmp/orcaxr_upload.stl', maxThreads, JSON.stringify(overrides));
       const gcode = await new Promise<string>((resolve, reject) => {
         const timer = setInterval(() => {
           const out = mod.pollSlice();

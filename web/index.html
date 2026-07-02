@@ -3,6 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <meta name="theme-color" content="#14171a" />
+    <meta name="description" content="OrcaXR pure-web front-end: XR Blocks + three.js workspace" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <title>OrcaXR Web</title>
     <style>
       html,
@@ -11,7 +15,7 @@
         margin: 0;
         padding: 0;
         overflow: hidden;
-        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         background-color: #14171a;
         color: #fff;
         overscroll-behavior: none;
@@ -20,54 +24,80 @@
         cursor: pointer;
         pointer-events: auto;
       }
-      /* XR Blocks injects its Enter-XR UI into #XRButtonWrapper — style it
-         like the official samples so the button is unmissable. */
-      #XRButtonWrapper {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        z-index: 10;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        gap: 2.5rem;
-        text-align: center;
-        pointer-events: none;
+      /* 2D UI Overlay */
+      #ui-container {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        pointer-events: none; z-index: 5;
       }
-      #XRButtonWrapper > * {
+      #left-toolbar {
+        position: absolute; top: 20px; left: 20px;
+        display: flex; flex-direction: column; gap: 10px;
+        background: rgba(20, 23, 26, 0.65); backdrop-filter: blur(16px);
+        padding: 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);
         pointer-events: auto;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
       }
-      #XRButtonWrapper h1 {
-        font-weight: 400;
-        font-size: 2.5rem;
-        margin: 0;
-        color: #ffffff;
-        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+      .tool-btn {
+        background: transparent; color: #ccc; border: none; padding: 12px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; transition: all 0.2s ease;
       }
+      .tool-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+      .tool-btn.active {
+        background: rgba(255, 109, 0, 0.2); color: #ff6d00; border: 1px solid rgba(255, 109, 0, 0.4);
+      }
+      #right-sidebar {
+        position: absolute; top: 20px; right: 20px; width: 320px;
+        background: rgba(20, 23, 26, 0.65); backdrop-filter: blur(16px);
+        padding: 24px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08);
+        pointer-events: auto; display: flex; flex-direction: column; gap: 20px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      }
+      #right-sidebar h2 { margin: 0; font-size: 1.6rem; color: #fff; font-weight: 700; letter-spacing: -0.5px; }
+      .action-btn {
+        background: rgba(255, 255, 255, 0.08); color: white; border: 1px solid rgba(255, 255, 255, 0.1); padding: 14px; border-radius: 10px; font-weight: 600; font-size: 15px; width: 100%; text-align: center; margin-bottom: 12px; transition: all 0.2s ease;
+      }
+      .action-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.15); transform: translateY(-1px); }
+      .action-btn:active:not(:disabled) { transform: translateY(1px); }
+      .action-btn.primary { background: linear-gradient(135deg, #ffb74d 0%, #ff6d00 100%); color: #000; border: none; box-shadow: 0 4px 15px rgba(255, 109, 0, 0.3); }
+      .action-btn.primary:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(255, 109, 0, 0.4); }
+      .action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+      .status-panel { background: rgba(0,0,0,0.3); padding: 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
+      #status-text { margin: 0; font-size: 0.85rem; color: #a0aab5; white-space: pre-wrap; line-height: 1.4; font-family: 'JetBrains Mono', monospace; }
+
+      /* XR Blocks injects its Enter-XR UI into #XRButtonWrapper. Move it to the bottom-right so it doesn't block the 2D Slicer UI. */
+      #XRButtonWrapper {
+        position: absolute !important; bottom: 24px !important; right: 24px !important;
+        top: auto !important; left: auto !important; width: auto !important; height: auto !important;
+        pointer-events: auto !important; z-index: 10;
+      }
+      #XRButtonWrapper h1 { display: none; /* Hide the big title in 2D mode */ }
       .XRButton {
-        background: linear-gradient(135deg, #ffb74d 0%, #ff6d00 100%);
-        color: #000;
-        border: none;
-        border-radius: 9999px;
-        font-weight: 500;
-        font-size: 1.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 26px 48px;
-        min-width: 260px;
-        box-shadow: 0 4px 25px rgba(0, 0, 0, 0.35);
-        transition: transform 0.2s ease;
+        background: rgba(255, 255, 255, 0.1) !important; color: #fff !important; backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.2) !important;
+        border-radius: 9999px; font-weight: 600; font-size: 1rem !important; display: flex; align-items: center; justify-content: center;
+        padding: 16px 28px !important; min-width: auto !important; box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important; transition: all 0.2s ease;
       }
-      .XRButton:hover {
-        transform: scale(1.03);
-      }
+      .XRButton:hover { background: rgba(255, 255, 255, 0.2) !important; transform: scale(1.05); }
     </style>
   </head>
   <body>
+    <div id="ui-container">
+      <div id="left-toolbar">
+        <button id="btn-move" class="tool-btn active">Move</button>
+        <button id="btn-rotate" class="tool-btn">Rotate</button>
+        <button id="btn-scale" class="tool-btn">Scale</button>
+      </div>
+      <div id="right-sidebar">
+        <h2>OrcaXR Web</h2>
+        <div class="panel">
+          <button id="btn-load" class="action-btn">Load STL...</button>
+          <input type="file" id="file-input" accept=".stl" multiple style="display:none;" />
+          <button id="btn-slice" class="action-btn primary">Slice</button>
+          <button id="btn-download" class="action-btn" disabled>Download G-Code</button>
+        </div>
+        <div class="status-panel">
+          <p id="status-text">Ready. Load an STL to begin.</p>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
