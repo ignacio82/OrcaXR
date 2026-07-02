@@ -147,6 +147,7 @@ import * as xb from 'xrblocks';
 import { UICore, UIPanel, UIText, UIIcon, raycastSortFunction, ManipulationBehavior } from 'xrblocks/addons/uiblocks/src/index.js';
 
 import { parseGcodeToolpath } from '../slicer/GcodeToolpath';
+import { FilamentPalette } from './FilamentPalette';
 import { bedSizeFromProfile, ProfileCatalog, SlicerProfile } from '../slicer/ProfileLoader';
 import { SlicerClient } from '../slicer/SlicerClient';
 
@@ -323,6 +324,8 @@ export class OrcaWorkspace extends xb.Script {
 
   private tool: 'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint' = 'move';
   private activePaintColor = new THREE.Color(0xff0000); // Default to red
+  /** The set of filament slots — shared by paint, 3MF display, and slicing. */
+  public palette = new FilamentPalette();
   private drag: {
     controller: THREE.Object3D;
     startControllerLocal: THREE.Vector3;
@@ -733,6 +736,7 @@ export class OrcaWorkspace extends xb.Script {
       const resp = await fetch(url);
       const buf = await resp.arrayBuffer();
       const colors = await extract3mfColors(buf);
+      this.adoptPaletteFrom3mf(buf);
       const group = new ThreeMFLoader().parse(buf);
       console.log('[orcaxr-load] parsed 3MF in', Math.round(performance.now() - t0), 'ms');
       const name = url.split('/').pop() ?? url;
@@ -784,6 +788,26 @@ export class OrcaWorkspace extends xb.Script {
       aligned: colors ? colors.length === meshes.length : false,
       meshes,
     };
+  }
+
+  /** Seed the filament palette from a 3MF's own filament_colour list. */
+  async adoptPaletteFrom3mf(buf: ArrayBuffer) {
+    try {
+      const unzipped = fflate.unzipSync(new Uint8Array(buf));
+      const proj = unzipped['Metadata/project_settings.config'];
+      if (!proj) return;
+      const cfg = JSON.parse(new TextDecoder().decode(proj));
+      const colors: string[] | undefined =
+        Array.isArray(cfg.filament_colour) && cfg.filament_colour.length
+          ? cfg.filament_colour
+          : undefined;
+      const types: string[] | undefined = Array.isArray(cfg.filament_type)
+        ? cfg.filament_type
+        : undefined;
+      if (colors) this.palette.setFrom(colors, types);
+    } catch (e) {
+      console.warn('adoptPaletteFrom3mf failed', e);
+    }
   }
 
   /** Merge a Three.js Group (e.g. from 3MFLoader) into a single model, preserving colors. */
@@ -995,6 +1019,36 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
+  /** Fires when the filament palette changes (2D UI re-renders). */
+  public onPaletteChanged: (() => void) | null = null;
+
+  /** Rebuild the XR paint swatch row from the current filament palette. */
+  private rebuildPaintSwatches() {
+    const panel = this.paintOptionsPanel;
+    if (!panel) return;
+    // Clear existing children.
+    for (const { btn } of this.paintSwatches) {
+      try { panel.remove(btn); } catch { /* ignore */ }
+    }
+    this.paintSwatches = [];
+    this.palette.list().forEach((slot, i) => {
+      const hex = slot.color;
+      const swatch = new UIPanel({
+        width: 35, height: 35,
+        cornerRadius: 4,
+        fillColor: hex,
+        strokeWidth: 2, strokeColor: '#444444',
+        onClick: () => {
+          this.activePaintColor.set(hex);
+          this.setTool('paint');
+          return true;
+        },
+      });
+      this.paintSwatches.push({ c: i, btn: swatch });
+      panel.add(swatch);
+    });
+  }
+
   private toolButtons: { tool: string; btn: UIPanel; iconEl: UIIcon }[] = [];
   private paintOptionsPanel?: UIPanel;
   private paintSwatches: { c: number; btn: UIPanel }[] = [];
@@ -1086,31 +1140,20 @@ export class OrcaWorkspace extends xb.Script {
     mkStep('add', 1);
     root.add(stepRow);
     
-    // Paint options palette
+    // Paint options palette — swatches ARE the filament slots, so painting
+    // uses real filament colors and the palette stays the single source.
     this.paintOptionsPanel = new UIPanel({
       width: '100%',
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: 5
     });
-    const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xffffff, 0x444444];
-    this.paintSwatches = [];
-    for (const c of colors) {
-      const swatch = new UIPanel({
-        width: 35, height: 35,
-        cornerRadius: 4,
-        fillColor: '#' + c.toString(16).padStart(6, '0'),
-        strokeWidth: 2, strokeColor: '#444444',
-        onClick: () => { 
-          this.activePaintColor.setHex(c); 
-          this.setTool('paint'); 
-          return true; 
-        }
-      });
-      this.paintSwatches.push({ c, btn: swatch });
-      this.paintOptionsPanel.add(swatch);
-    }
     root.add(this.paintOptionsPanel);
+    this.rebuildPaintSwatches();
+    this.palette.onChanged = () => {
+      this.rebuildPaintSwatches();
+      if (this.onPaletteChanged) this.onPaletteChanged();
+    };
     
     // Add spacer
     const spacer = new UIPanel({ width: 60, height: 2, fillColor: '#ffffff33' });
@@ -1426,7 +1469,8 @@ export class OrcaWorkspace extends xb.Script {
       const stl = this.bakeToPrinterStl();
       this.setStatus('slicing…');
       const t0 = performance.now();
-      const gcode = await this.slicer.slice(stl, 4, this.profile?.config ?? {});
+      const overrides = { ...(this.profile?.config ?? {}), ...this.palette.toSlicerOverrides() };
+      const gcode = await this.slicer.slice(stl, 4, overrides);
       const ms = Math.round(performance.now() - t0);
       this.lastGcode = gcode;
       if (this.onDownloadReady) this.onDownloadReady(true);

@@ -19,7 +19,7 @@ import { OrcaWorkspace, extract3mfColors } from './workspace/OrcaWorkspace';
 declare global {
   interface Window { ORCAXR_VERSION: string }
 }
-window.ORCAXR_VERSION = 'v30-3mf-shot';
+window.ORCAXR_VERSION = 'v31-filament-palette';
 
 /** 2D-page UI wiring for standard web slicer mode. */
 function setupDomUI(workspace: OrcaWorkspace) {
@@ -131,6 +131,36 @@ window.addEventListener('error', e => {
   selFilament.onchange = applySelects;
   workspace.onProfileChanged = renderProfileSelects;
   renderProfileSelects();
+
+  // Filament palette: color swatches that drive paint + 3MF display + slice.
+  const swatchWrap = document.getElementById('filament-swatches') as HTMLDivElement;
+  const btnAddFilament = document.getElementById('btn-add-filament') as HTMLButtonElement;
+  const renderPalette = () => {
+    swatchWrap.innerHTML = '';
+    workspace.palette.list().forEach((slot, i) => {
+      const cell = document.createElement('div');
+      cell.style.cssText = 'position:relative;';
+      const input = document.createElement('input');
+      input.type = 'color';
+      input.value = slot.color.length === 7 ? slot.color : '#cccccc';
+      input.title = `Filament ${i + 1} (${slot.type})`;
+      input.style.cssText =
+        'width:36px;height:36px;border:2px solid #ffffff33;border-radius:6px;padding:0;background:none;cursor:pointer;';
+      input.oninput = () => workspace.palette.setColor(i, input.value);
+      const del = document.createElement('button');
+      del.textContent = '×';
+      del.title = 'Remove filament';
+      del.style.cssText =
+        'position:absolute;top:-6px;right:-6px;width:16px;height:16px;line-height:14px;border-radius:50%;border:none;background:#333;color:#fff;font-size:11px;cursor:pointer;';
+      del.onclick = () => workspace.palette.remove(i);
+      cell.appendChild(input);
+      if (workspace.palette.count() > 1) cell.appendChild(del);
+      swatchWrap.appendChild(cell);
+    });
+  };
+  btnAddFilament.onclick = () => workspace.palette.add();
+  workspace.onPaletteChanged = renderPalette;
+  renderPalette();
 
   workspace.onDownloadReady = (ready) => {
     btnDownload.disabled = !ready;

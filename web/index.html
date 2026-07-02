@@ -99,6 +99,13 @@
           <button id="btn-preview" class="action-btn">Toolpath Preview</button>
           <button id="btn-download" class="action-btn" disabled>Download G-Code</button>
         </div>
+        <div class="panel" id="filament-panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-size:0.8rem;color:#a0aab5;font-weight:600;">FILAMENTS</span>
+            <button id="btn-add-filament" style="background:rgba(255,255,255,0.1);color:#fff;border:none;border-radius:6px;width:26px;height:26px;font-size:16px;">+</button>
+          </div>
+          <div id="filament-swatches" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+        </div>
         <div class="status-panel">
           <p id="status-text">Ready. Load a model to begin.</p>
         </div>
