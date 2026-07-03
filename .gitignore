@@ -94,3 +94,12 @@ crash_log.txt
 
 # screenshot artifacts (dev workflow only)
 screenshot*.png
+
+# Node modules
+node_modules/
+.npm/
+
+# Web and server scratch/build output
+server/wasm-dist/
+tmp_3mf/
+web/dist/

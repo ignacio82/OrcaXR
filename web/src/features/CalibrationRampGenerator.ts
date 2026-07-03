@@ -1,0 +1,44 @@
+import * as THREE from 'three';
+import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+
+/**
+ * Generates calibration test geometries (printer-frame mm, Z-up, sitting on the
+ * bed) to drop straight onto the plate. Real, printable shapes — not stand-ins.
+ */
+export class CalibrationRampGenerator {
+  /**
+   * A temperature/retraction tower: a central column with a protruding overhang
+   * fin at each segment, so each band prints a visible overhang. `segments`
+   * bands of `segH` mm on a `size` mm square column.
+   */
+  generateTemperatureTower(segments = 8, segH = 10, size = 16): THREE.BufferGeometry {
+    const parts: THREE.BufferGeometry[] = [];
+    const totalH = segments * segH;
+
+    // Central column.
+    const column = new THREE.BoxGeometry(size, size, totalH);
+    column.translate(0, 0, totalH / 2);
+    parts.push(column);
+
+    // One overhang fin per band, protruding in +Y.
+    for (let i = 0; i < segments; i++) {
+      const finDepth = 8;
+      const finH = segH * 0.45;
+      const fin = new THREE.BoxGeometry(size * 0.9, finDepth, finH);
+      const z = i * segH + finH / 2 + segH * 0.1;
+      fin.translate(0, size / 2 + finDepth / 2, z);
+      parts.push(fin);
+    }
+
+    const merged = BufferGeometryUtils.mergeGeometries(parts, false);
+    merged.computeVertexNormals();
+    return merged;
+  }
+
+  /** A 20 mm XYZ calibration cube (dimensional-accuracy check). */
+  generateCalibrationCube(size = 20): THREE.BufferGeometry {
+    const geo = new THREE.BoxGeometry(size, size, size);
+    geo.translate(0, 0, size / 2);
+    return geo;
+  }
+}

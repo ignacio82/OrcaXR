@@ -284,6 +284,37 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
   selWallGenerator.onchange = updateSettings;
   updateSettings();
 
+  // Print settings: supports / layer height / infill / walls. These write into
+  // workspace.customOverrides (merged last into the slice overrides). An empty
+  // numeric field means "use the profile default" (no override).
+  const selSupport = document.getElementById('sel-support') as HTMLSelectElement;
+  const inLayer = document.getElementById('in-layer-height') as HTMLInputElement;
+  const inInfill = document.getElementById('in-infill') as HTMLInputElement;
+  const inWalls = document.getElementById('in-walls') as HTMLInputElement;
+  const chkAdaptive = document.getElementById('chk-adaptive-layers') as HTMLInputElement;
+  const applyPrintSettings = () => {
+    const co = workspace.customOverrides;
+    switch (selSupport.value) {
+      case 'on_build_plate':
+        co['enable_support'] = '1'; co['support_type'] = 'normal(auto)'; co['support_on_build_plate_only'] = '1'; break;
+      case 'everywhere':
+        co['enable_support'] = '1'; co['support_type'] = 'normal(auto)'; co['support_on_build_plate_only'] = '0'; break;
+      case 'tree':
+        co['enable_support'] = '1'; co['support_type'] = 'tree(auto)'; co['support_on_build_plate_only'] = '0'; break;
+      default:
+        co['enable_support'] = '0'; delete co['support_type']; delete co['support_on_build_plate_only'];
+    }
+    if (inLayer.value) co['layer_height'] = inLayer.value; else delete co['layer_height'];
+    if (inInfill.value) co['sparse_infill_density'] = `${inInfill.value}%`; else delete co['sparse_infill_density'];
+    if (inWalls.value) co['wall_loops'] = inWalls.value; else delete co['wall_loops'];
+    // Adaptive layer height: the slicer varies layer height by local curvature.
+    if (chkAdaptive.checked) co['adaptive_layer_height'] = '1'; else delete co['adaptive_layer_height'];
+  };
+  selSupport.onchange = applyPrintSettings;
+  chkAdaptive.onchange = applyPrintSettings;
+  for (const el of [inLayer, inInfill, inWalls]) el.oninput = applyPrintSettings;
+  applyPrintSettings();
+
   // Filament palette: color swatches that drive paint + 3MF display + slice.
   const swatchWrap = document.getElementById('filament-swatches') as HTMLDivElement;
   const btnAddFilament = document.getElementById('btn-add-filament') as HTMLButtonElement;
@@ -416,13 +447,49 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
   };
   // Download / Send become available once a slice exists. The Download button
   // itself is registry-driven; here we only drive the Send form button + store.
+  // Build-plate bar: a chip per plate + an add button. Switching hides the
+  // current plate's models and shows the target's (the workspace owns the sets).
+  const plateBar = document.getElementById('plate-bar') as HTMLDivElement;
+  const renderPlateBar = () => {
+    const plates = workspace.getPlates();
+    plateBar.innerHTML = '';
+    for (const p of plates) {
+      const chip = document.createElement('span');
+      chip.className = 'plate-chip' + (p.active ? ' active' : '');
+      chip.dataset.plateId = String(p.id);
+      chip.onclick = () => workspace.setActivePlate(p.id);
+      const lbl = document.createElement('span');
+      lbl.textContent = `${p.label} · ${p.count}`;
+      chip.appendChild(lbl);
+      if (plates.length > 1) {
+        const del = document.createElement('span');
+        del.className = 'plate-del';
+        del.textContent = '×';
+        del.title = `Delete ${p.label}`;
+        del.onclick = (e) => { e.stopPropagation(); workspace.deletePlate(p.id); };
+        chip.appendChild(del);
+      }
+      plateBar.appendChild(chip);
+    }
+    const add = document.createElement('button');
+    add.className = 'plate-add';
+    add.textContent = '+';
+    add.title = 'Add build plate';
+    add.onclick = () => workspace.addPlate();
+    plateBar.appendChild(add);
+    uiState.update({ plateCount: plates.length, modelCount: workspace.modelCount });
+  };
+  workspace.onPlatesChanged = renderPlateBar;
+  renderPlateBar();
+
   workspace.onDownloadReady = (ready) => {
     btnPrinterSend.disabled = !ready;
     uiState.update({ gcodeReady: ready });
   };
 
   workspace.onSelectionChanged = (hasSelection) => {
-    uiState.update({ hasSelection });
+    uiState.update({ hasSelection, modelCount: workspace.modelCount });
+    renderPlateBar();
   };
 
   workspace.onStatusChanged = (text, percent) => {
@@ -468,6 +535,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // these). Construct now so the store is live and debuggable from the console.
   const uiState = new UiState();
   const actionCtx = new ActionContext(workspace, uiState);
+  // The XR tool card (built eagerly in the workspace ctor) routes clicks through
+  // this at click time, so both shells run identical action handlers.
+  workspace.actionContext = actionCtx;
   (window as unknown as { __orcaUi: unknown }).__orcaUi = uiState;
   (window as unknown as { __orcaCtx: unknown }).__orcaCtx = actionCtx;
 

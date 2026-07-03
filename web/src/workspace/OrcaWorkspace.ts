@@ -137,6 +137,12 @@ export async function extract3mfColors(buf: ArrayBuffer): Promise<string[] | nul
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { SimplifyModifier } from 'three/examples/jsm/modifiers/SimplifyModifier.js';
+import { buildRegistry } from '../actions/catalog';
+import type { Action } from '../actions/ActionRegistry';
+import type { ActionContext } from '../actions/ActionContext';
+import { renderXrActionButton, type XrUiFactory } from '../ui/xr/XrShell';
+import { CalibrationRampGenerator } from '../features/CalibrationRampGenerator';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
@@ -191,7 +197,22 @@ export class OrcaWorkspace extends xb.Script {
   /** Everything spatial lives in this group: scaled up for legibility and
    *  re-posed in front of the user when the XR session starts. */
   private workspace = new THREE.Group();
-  private models: ModelEntry[] = [];
+  /**
+   * Multi-plate: each plate owns its own models. `models` is the ACTIVE plate's
+   * array (a getter, so all the existing `.push`/`.splice`/`.indexOf` on
+   * `this.models` transparently target the active plate). Inactive plates keep
+   * their viewers in the scene graph but hidden.
+   */
+  private plates: { id: number; label: string; models: ModelEntry[] }[] = [
+    { id: 1, label: 'Plate 1', models: [] },
+  ];
+  private activePlateId = 1;
+  private nextPlateId = 2;
+  private get models(): ModelEntry[] {
+    return (this.plates.find((p) => p.id === this.activePlateId) ?? this.plates[0]).models;
+  }
+  /** Fired on plate add/remove/switch so the DOM plate bar can re-render. */
+  public onPlatesChanged: (() => void) | null = null;
   /** The model actions like Repair / Delete / Boolean / Auto-orient act on.
    *  Set by selectModel and auto-selected on load; previously undeclared, which
    *  silently made all those actions no-op ("select a model first"). */
@@ -212,6 +233,17 @@ export class OrcaWorkspace extends xb.Script {
   public customOverrides: Record<string, string> = {};
   /** When true, sliceNow computes wipe_tower_x/y from the plated models. */
   public wipeTowerAuto = false;
+  /**
+   * Opt-in painted (multi-colour) slicing. OFF by default: the derivation +
+   * `startSlicePainted` plumbing is complete and correct, but the current WASM
+   * engine build still OOBs in libslic3r's multi-material tool-ordering
+   * (`reorder_extruders_for_minimum_flush_volume` / `calc_filament_change_info_by_toolorder`)
+   * and the abort poisons the module for the rest of the session. Multi-colour
+   * models therefore slice as a single colour until the engine's multi-material
+   * path is patched (a C++ fix + WASM rebuild, cf. the Arachne patch 0074).
+   * Flip this to true once that ships — no other code change needed.
+   */
+  public paintedSliceEnabled = false;
   /** Fired whenever the pre-flight banner set changes (bed collision, filament rules…). */
   public onPreflight: ((banners: PreflightBanner[]) => void) | null = null;
   private preflightBanners: PreflightBanner[] = [];
@@ -853,6 +885,117 @@ export class OrcaWorkspace extends xb.Script {
     this.setStatus(`Loaded ${name}.`);
   }
 
+  /** Drop a stock primitive on the bed (20 mm, printer-frame Z-up). */
+  public addPrimitive(kind: 'cube' | 'cylinder' | 'sphere') {
+    let geo: THREE.BufferGeometry;
+    switch (kind) {
+      case 'cylinder':
+        geo = new THREE.CylinderGeometry(10, 10, 20, 48);
+        geo.rotateX(Math.PI / 2); // axis Y → printer Z
+        break;
+      case 'sphere':
+        geo = new THREE.SphereGeometry(10, 48, 32);
+        break;
+      default:
+        geo = new THREE.BoxGeometry(20, 20, 20);
+    }
+    this.loadModelFromGeometry(geo.toNonIndexed(), `${kind}.stl`);
+    this.setStatus(`Added ${kind}.`);
+  }
+
+  /** Drop a calibration test model (temperature/overhang tower or XYZ cube). */
+  public addCalibration(kind: 'tower' | 'cube') {
+    const gen = new CalibrationRampGenerator();
+    const geo = kind === 'cube' ? gen.generateCalibrationCube() : gen.generateTemperatureTower();
+    this.loadModelFromGeometry(geo.toNonIndexed(), kind === 'cube' ? 'calibration_cube.stl' : 'temp_tower.stl');
+    this.setStatus(`Added calibration ${kind}.`);
+  }
+
+  // ---- Multi-plate --------------------------------------------------------
+  public get plateCount(): number { return this.plates.length; }
+  public getPlates(): { id: number; label: string; count: number; active: boolean }[] {
+    return this.plates.map((p) => ({
+      id: p.id, label: p.label, count: p.models.length, active: p.id === this.activePlateId,
+    }));
+  }
+
+  /** Create a new empty plate and switch to it. */
+  public addPlate() {
+    const id = this.nextPlateId++;
+    this.plates.push({ id, label: `Plate ${id}`, models: [] });
+    this.setActivePlate(id);
+  }
+
+  /** Switch the active plate; inactive plates' models are hidden, not removed. */
+  public setActivePlate(id: number) {
+    const target = this.plates.find((p) => p.id === id);
+    if (!target) return;
+    if (id === this.activePlateId) { if (this.onPlatesChanged) this.onPlatesChanged(); return; }
+    for (const m of this.models) m.viewer.visible = false; // hide current plate
+    this.unselectModel();
+    this.activePlateId = id;
+    for (const m of this.models) m.viewer.visible = true;  // show target plate
+    this.setStatus(`Switched to ${target.label}.`);
+    this.recomputePreflight();
+    if (this.onSelectionChanged) this.onSelectionChanged(false);
+    if (this.onPlatesChanged) this.onPlatesChanged();
+  }
+
+  /** Delete a plate (defaults to the active one); refuses the last plate. */
+  public deletePlate(id: number = this.activePlateId) {
+    if (this.plates.length <= 1) { this.setStatus('Cannot delete the last plate.'); return; }
+    const idx = this.plates.findIndex((p) => p.id === id);
+    if (idx === -1) return;
+    const wasActive = id === this.activePlateId;
+    for (const m of this.plates[idx].models) {
+      this.workspace.remove(m.viewer);
+      m.display.geometry.dispose();
+    }
+    this.plates.splice(idx, 1);
+    if (wasActive) {
+      const next = this.plates[Math.min(idx, this.plates.length - 1)];
+      this.activePlateId = next.id;
+      this.unselectModel();
+      for (const m of next.models) m.viewer.visible = true;
+      if (this.onSelectionChanged) this.onSelectionChanged(false);
+      this.recomputePreflight();
+      this.setStatus(`Deleted plate; switched to ${next.label}.`);
+    } else {
+      this.setStatus('Plate deleted.');
+    }
+    if (this.onPlatesChanged) this.onPlatesChanged();
+  }
+
+  /**
+   * Decimate the selected model's mesh (quadric-ish edge collapse via THREE's
+   * SimplifyModifier). `keepRatio` is the fraction of vertices to retain.
+   */
+  public simplifySelected(keepRatio = 0.5) {
+    if (!this.selectedModel) { this.setStatus('Select a model to simplify first.'); return; }
+    const entry = this.selectedModel;
+    const before = entry.raw.getAttribute('position').count;
+    const remove = Math.max(0, Math.floor(before * (1 - keepRatio)));
+    try {
+      this.setStatus(`Simplifying ${before} verts…`);
+      const simplified = new SimplifyModifier().modify(entry.raw, remove);
+      if (!simplified.hasAttribute('color')) {
+        const n = simplified.getAttribute('position').count;
+        const colors = new Float32Array(n * 3).fill(0.62);
+        simplified.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      }
+      simplified.computeVertexNormals();
+      simplified.computeBoundsTree();
+      entry.raw = simplified;
+      entry.display.geometry.dispose();
+      entry.display.geometry = simplified;
+      const after = simplified.getAttribute('position').count;
+      this.setStatus(`Simplified: ${before} → ${after} verts.`);
+      this.recomputePreflight();
+    } catch (e) {
+      this.setStatus(`Simplify failed: ${(e as Error).message}`);
+    }
+  }
+
   /** CDP diagnostic: parse a 3MF and report the loader's mesh structure vs
    *  the extracted per-part color array — no scene mutation. */
   async debug3mf(url: string): Promise<any> {
@@ -1180,6 +1323,13 @@ export class OrcaWorkspace extends xb.Script {
     });
   }
 
+  /**
+   * Injected by main.ts after construction. The XR tool card routes button
+   * clicks through this so the immersive shell runs the SAME action handlers as
+   * the DOM shell (structural parity). Read at click time, so it can be set
+   * after the (eagerly-built, hidden) cards are constructed.
+   */
+  public actionContext?: ActionContext;
   private toolButtons: { tool: string; btn: UIPanel; iconEl: UIIcon }[] = [];
   private paintOptionsPanel?: UIPanel;
   private paintSwatches: { c: number; btn: UIPanel }[] = [];
@@ -1231,28 +1381,26 @@ export class OrcaWorkspace extends xb.Script {
     });
     card.add(root);
 
-    const addToolBtn = (tool: 'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint', icon: string) => {
-      const btn = new UIPanel({
-        width: 80, height: 80,
-        justifyContent: 'center', alignItems: 'center',
-        cornerRadius: 8,
-        fillColor: '#ffffff14',
-        strokeWidth: 1, strokeColor: '#ffffff1a',
-        onClick: () => { this.setTool(tool); return true; },
-        onHoverEnter: () => { btn.fillColor = '#ffffff26'; },
-        onHoverExit: () => { this.refreshToolButtons(); }
-      });
-      const iconEl = new UIIcon(icon, { color: '#cccccc', width: 48, height: 48 });
-      btn.add(iconEl);
-      root.add(btn);
-      this.toolButtons.push({ tool, btn, iconEl });
-    };
+    // Tool rail rendered from the shared ActionRegistry — the same catalogue the
+    // DOM shell renders — so the two shells can't drift. Clicks run through the
+    // injected ActionContext (read at click time; set by main.ts after build).
+    const factory: XrUiFactory = { Panel: UIPanel as never, Icon: UIIcon as never };
+    const runAction = (a: Action) => { if (this.actionContext) void a.run(this.actionContext); };
+    const toolbar = buildRegistry().byDisclosure('toolbar');
 
-    addToolBtn('move', 'open_with');
-    addToolBtn('rotate', 'rotate_right');
-    addToolBtn('scale', 'open_in_full');
-    addToolBtn('lay_on_face', 'flip_to_back');
-    addToolBtn('paint', 'format_paint');
+    // Modal tool gizmos (move/rotate/scale/lay-flat/paint) — the `.tool` actions.
+    for (const a of toolbar) {
+      if (!a.tool) continue;
+      const h = renderXrActionButton(a, runAction, factory, {
+        onHoverExit: () => this.refreshToolButtons(),
+      });
+      root.add(h.btn);
+      this.toolButtons.push({
+        tool: a.tool,
+        btn: h.btn as unknown as UIPanel,
+        iconEl: h.iconEl as unknown as UIIcon,
+      });
+    }
 
     // Numeric steppers: fixed increments of the ACTIVE tool's quantity —
     // the "enter a number" half of OrcaSlicer-style modal tools.
@@ -1293,33 +1441,13 @@ export class OrcaWorkspace extends xb.Script {
     const spacer = new UIPanel({ width: 60, height: 2, fillColor: '#ffffff33' });
     root.add(spacer);
 
-    // Auto orient button
-    const orientBtn = new UIPanel({
-      width: 80, height: 80,
-      justifyContent: 'center', alignItems: 'center',
-      cornerRadius: 8,
-      fillColor: '#ffffff14',
-      strokeWidth: 1, strokeColor: '#ffffff1a',
-      onClick: () => { this.autoOrientSelectedModel(); return true; },
-      onHoverEnter: () => { orientBtn.fillColor = '#ffffff26'; },
-      onHoverExit: () => { orientBtn.fillColor = '#ffffff14'; }
-    });
-    orientBtn.add(new UIIcon('explore', { color: '#cccccc', width: 48, height: 48 }));
-    root.add(orientBtn);
-
-    // Delete button
-    const delBtn = new UIPanel({
-      width: 80, height: 80,
-      justifyContent: 'center', alignItems: 'center',
-      cornerRadius: 8,
-      fillColor: '#ffffff14',
-      strokeWidth: 1, strokeColor: '#ff525233',
-      onClick: () => { this.deleteSelectedModel(); return true; },
-      onHoverEnter: () => { delBtn.fillColor = '#ff525226'; },
-      onHoverExit: () => { delBtn.fillColor = '#ffffff14'; }
-    });
-    delBtn.add(new UIIcon('delete', { color: '#ff5252', width: 48, height: 48 }));
-    root.add(delBtn);
+    // Non-tool toolbar actions (auto-orient, delete) at the bottom, in registry
+    // order — same catalogue, same handlers as the DOM rail.
+    for (const a of toolbar) {
+      if (a.tool) continue;
+      const h = renderXrActionButton(a, runAction, factory, { danger: a.id === 'delete_models' });
+      root.add(h.btn);
+    }
   }
 
   private addRightSidebar() {
@@ -1584,7 +1712,14 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
+  private lastStatusText = '';
+  /** Update just the progress bar, keeping the current status text. */
+  private setProgress(percent?: number) {
+    this.setStatus(this.lastStatusText, percent);
+  }
+
   private setStatus(text: string, percent?: number) {
+    this.lastStatusText = text;
     if (this.statusText) {
       (this.statusText as any).setText(text);
     }
@@ -1735,7 +1870,8 @@ export class OrcaWorkspace extends xb.Script {
       await new Promise(r => setTimeout(r, 50)); // let UI paint
       // Painted (multi-colour) input, if the plated models use >1 filament.
       const painted = this.buildPaintedInput();
-      const isPainted = !!painted && painted.distinctCount > 1 && !SlicerClient.useExternalSlicer();
+      const isPainted = this.paintedSliceEnabled && !!painted &&
+        painted.distinctCount > 1 && !SlicerClient.useExternalSlicer();
       this.setStatus(isPainted ? 'slicing (multi-colour)…' : 'slicing…', 0);
       const t0 = performance.now();
       const overrides: Record<string, string> = {
@@ -1753,19 +1889,7 @@ export class OrcaWorkspace extends xb.Script {
         overrides['wipe_tower_x'] = pick.xMm.toFixed(2);
         overrides['wipe_tower_y'] = pick.yMm.toFixed(2);
       }
-      if (isPainted && painted) {
-        // Painted colours = one physical nozzle with N filaments swapped by
-        // colour (MMU / AMS model). single_extruder_multi_material avoids the
-        // per-printer-extruder config lookup that fails on a multi-head profile
-        // (`update_values_to_printer_extruders … extruder_index N`).
-        overrides['single_extruder_multi_material'] = '1';
-        const firstNozzle = (this.profile?.config['nozzle_diameter'] ?? '0.4').split(',')[0] || '0.4';
-        overrides['nozzle_diameter'] = firstNozzle;
-        // Size the per-filament colour list to the volumes we emitted.
-        const colors = this.palette.list().slice(0, painted.filamentCount).map((s) => s.color).join(',');
-        overrides['filament_colour'] = colors;
-        overrides['extruder_colour'] = colors;
-      } else if (this.extruderCount > 1) {
+      if (!isPainted && this.extruderCount > 1) {
         overrides['nozzle_diameter'] = this.headNozzles.join(',');
         // Combine the configs for the selected filaments for each head
         if (this.profile) {
@@ -1780,9 +1904,46 @@ export class OrcaWorkspace extends xb.Script {
           overrides['filament_diameter'] = joinFilamentProp('filament_diameter');
         }
       }
-      const gcode = isPainted && painted
-        ? await this.slicer.slicePainted(painted.positions, painted.triFilament, painted.filamentCount, 4, overrides)
-        : await this.slicer.slice(this.bakeToPrinterStl(), 4, overrides);
+
+      let gcode: string;
+      if (isPainted && painted) {
+        // Painted colours = one physical nozzle with N filaments swapped by
+        // colour (MMU / AMS model). single_extruder_multi_material avoids the
+        // per-printer-extruder config lookup that fails on a multi-head profile,
+        // and a full N×N flush matrix keeps the tool-ordering flush optimiser in
+        // bounds. NOTE: the current WASM build still has multi-material OOB bugs
+        // deeper in tool-ordering (calc_filament_change_info_by_toolorder), so we
+        // fall back to a single-colour slice if the engine can't finish — the
+        // user gets G-code rather than a crash, and painted "just works" once the
+        // engine's multi-material path is patched.
+        const n = painted.filamentCount;
+        const colors = this.palette.list().slice(0, n).map((s) => s.color).join(',');
+        const matrix: number[] = [];
+        for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) matrix.push(i === j ? 0 : 140);
+        const paintedOverrides: Record<string, string> = {
+          ...overrides,
+          single_extruder_multi_material: '1',
+          nozzle_diameter: (this.profile?.config['nozzle_diameter'] ?? '0.4').split(',')[0] || '0.4',
+          filament_colour: colors,
+          extruder_colour: colors,
+          flush_volumes_matrix: matrix.join(','),
+          flush_volumes_vector: Array(n).fill(140).join(','),
+          // Disable the prime/wipe tower and flush optimisation — that's the code
+          // path (reorder_extruders_for_minimum_flush_volume) that OOBs.
+          enable_prime_tower: '0',
+        };
+        try {
+          gcode = await this.slicer.slicePainted(
+            painted.positions, painted.triFilament, painted.filamentCount, 4, paintedOverrides,
+          );
+        } catch (e) {
+          console.warn('[orcaxr] painted slice failed; falling back to single colour:', e);
+          this.setStatus('Multi-colour slicing hit an engine limit — slicing as single colour…', 0);
+          gcode = await this.slicer.slice(this.bakeToPrinterStl(), 4, overrides);
+        }
+      } else {
+        gcode = await this.slicer.slice(this.bakeToPrinterStl(), 4, overrides);
+      }
       const ms = Math.round(performance.now() - t0);
       this.lastGcode = gcode;
       if (this.onDownloadReady) this.onDownloadReady(true);
@@ -2010,9 +2171,10 @@ export class OrcaWorkspace extends xb.Script {
       target.display.geometry.dispose();
       target.display.geometry = raw;
 
-      // Remove the tool model from the workspace
+      // Remove the tool model from the workspace (active plate).
       this.workspace.remove(tool.viewer);
-      this.models = this.models.filter(m => m !== tool);
+      const ti = this.models.indexOf(tool);
+      if (ti !== -1) this.models.splice(ti, 1);
 
       this.setStatus(`Boolean ${op} successful.`);
     } catch (e: any) {

@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- Cross-origin isolation shim: on static hosts (GitHub Pages) that can't
+         send COOP/COEP headers, this service worker adds them so the WASM
+         slicer's SharedArrayBuffer threads work. No-op where headers already
+         make the context isolated (dev/preview). Must run first. -->
+    <script src="/slicer/coi-serviceworker.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <meta name="theme-color" content="#14171a" />
+    <meta name="description" content="OrcaXR pure-web front-end: XR Blocks + three.js workspace" />
+    <link rel="apple-touch-icon" href="/slicer/icon.svg" />
+    <link rel="icon" href="/slicer/icon.svg" type="image/svg+xml" />
+    <title>OrcaXR Slicer</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        background-color: #14171a;
+        color: #fff;
+        overscroll-behavior: none;
+      }
+      button {
+        cursor: pointer;
+        pointer-events: auto;
+      }
+      /* 2D UI Overlay */
+      #ui-container {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        pointer-events: none; z-index: 5;
+      }
+      #left-toolbar {
+        position: absolute; top: 20px; left: 20px;
+        display: flex; flex-direction: column; gap: 10px;
+        background: rgba(20, 23, 26, 0.65); backdrop-filter: blur(16px);
+        padding: 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);
+        pointer-events: auto;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      }
+      .tool-btn {
+        background: transparent; color: #ccc; border: none; padding: 12px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; transition: all 0.2s ease;
+      }
+      .tool-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+      .tool-btn.active {
+        background: rgba(255, 109, 0, 0.2); color: #ff6d00; border: 1px solid rgba(255, 109, 0, 0.4);
+      }
+      #right-sidebar {
+        position: absolute; top: 20px; right: 20px; width: 320px;
+        background: rgba(20, 23, 26, 0.65); backdrop-filter: blur(16px);
+        padding: 24px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08);
+        pointer-events: auto; display: flex; flex-direction: column; gap: 20px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+      }
+      #right-sidebar::-webkit-scrollbar { width: 6px; }
+      #right-sidebar::-webkit-scrollbar-track { background: transparent; }
+      #right-sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+      #right-sidebar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
+      #right-sidebar h2 { margin: 0; font-size: 1.6rem; color: #fff; font-weight: 700; letter-spacing: -0.5px; }
+      /* Collapsible inspector sections — tame the wall of always-open panels. */
+      .insp-section { border-top: 1px solid var(--oxr-color-stroke, #ffffff1a); padding-top: 14px; }
+      .insp-section > summary {
+        cursor: pointer; list-style: none; user-select: none;
+        font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+        color: var(--oxr-color-text-muted, #a0aab5);
+        display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+      }
+      .insp-section > summary::-webkit-details-marker { display: none; }
+      .insp-section > summary::before {
+        content: '\25B8'; font-size: 0.7rem; transition: transform 0.15s ease;
+        color: var(--oxr-color-accent-soft, #ffb74d);
+      }
+      .insp-section[open] > summary::before { transform: rotate(90deg); }
+      .action-btn {
+        background: rgba(255, 255, 255, 0.08); color: white; border: 1px solid rgba(255, 255, 255, 0.1); padding: 14px; border-radius: 10px; font-weight: 600; font-size: 15px; width: 100%; text-align: center; margin-bottom: 12px; transition: all 0.2s ease;
+      }
+      .action-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.15); transform: translateY(-1px); }
+      .action-btn:active:not(:disabled) { transform: translateY(1px); }
+      .action-btn.primary { background: linear-gradient(135deg, #ffb74d 0%, #ff6d00 100%); color: #000; border: none; box-shadow: 0 4px 15px rgba(255, 109, 0, 0.3); }
+      select.action-btn option { background: #333; color: #fff; }
+      .action-btn.primary:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(255, 109, 0, 0.4); }
+      .action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+      .status-panel { background: rgba(0,0,0,0.3); padding: 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
+      #status-text { margin: 0; font-size: 0.85rem; color: #a0aab5; white-space: pre-wrap; line-height: 1.4; font-family: 'JetBrains Mono', monospace; }
+
+      /* XR Blocks injects its Enter-XR UI into #XRButtonWrapper. Move it to the bottom-right so it doesn't block the 2D Slicer UI. */
+      #XRButtonWrapper {
+        position: absolute !important; bottom: 24px !important; right: 24px !important;
+        top: auto !important; left: auto !important; width: auto !important; height: auto !important;
+        pointer-events: auto !important; z-index: 10;
+      }
+      #XRButtonWrapper h1 { display: none; /* Hide the big title in 2D mode */ }
+      .XRButton {
+        background: rgba(255, 255, 255, 0.1) !important; color: #fff !important; backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.2) !important;
+        border-radius: 9999px; font-weight: 600; font-size: 1rem !important; display: flex; align-items: center; justify-content: center;
+        padding: 16px 28px !important; min-width: auto !important; box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important; transition: all 0.2s ease;
+      }
+      .XRButton:hover { background: rgba(255, 255, 255, 0.2) !important; transform: scale(1.05); }
+
+      /* ---- Phase 2 IA: top bar, mode control, Add/Tools menus, palette ---- */
+      #top-bar {
+        position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+        display: flex; align-items: center; gap: 10px;
+        background: var(--oxr-color-bg-card); backdrop-filter: blur(16px);
+        padding: 8px 12px; border-radius: var(--oxr-radius-lg);
+        border: 1px solid var(--oxr-color-stroke); pointer-events: auto;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); z-index: 6;
+      }
+      #app-title { font-weight: 700; font-size: 15px; letter-spacing: -0.3px; padding: 0 6px; }
+      #plate-bar { display: flex; align-items: center; gap: 4px; }
+      .plate-chip {
+        display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+        background: var(--oxr-color-surface); color: var(--oxr-color-text-muted);
+        border: 1px solid var(--oxr-color-stroke); border-radius: 8px;
+        padding: 5px 9px; font-size: 12px; font-weight: 600; transition: all .12s ease;
+      }
+      .plate-chip:hover { background: var(--oxr-color-surface-hover); }
+      .plate-chip.active { background: var(--oxr-color-accent); color: var(--oxr-color-on-accent); border-color: transparent; }
+      .plate-chip .plate-del {
+        cursor: pointer; opacity: .6; font-size: 13px; line-height: 1;
+      }
+      .plate-chip .plate-del:hover { opacity: 1; }
+      .plate-add {
+        cursor: pointer; background: var(--oxr-color-surface); color: var(--oxr-color-text);
+        border: 1px solid var(--oxr-color-stroke); border-radius: 8px;
+        width: 26px; height: 26px; font-size: 15px; line-height: 1;
+      }
+      .plate-add:hover { background: var(--oxr-color-surface-hover); }
+      #mode-control { display: flex; gap: 2px; background: var(--oxr-color-bg-sunken); border-radius: var(--oxr-radius-sm); padding: 3px; }
+      .seg-btn {
+        background: transparent; color: var(--oxr-color-text-muted); border: none;
+        padding: 7px 14px; border-radius: 6px; font-weight: 600; font-size: 13px; transition: all .15s ease;
+      }
+      .seg-btn:hover { color: var(--oxr-color-text); }
+      .seg-btn.active { background: var(--oxr-color-accent); color: var(--oxr-color-on-accent); }
+      .menu-host { position: relative; }
+      .menu-trigger {
+        background: var(--oxr-color-surface); color: var(--oxr-color-text);
+        border: 1px solid var(--oxr-color-stroke); padding: 8px 12px; border-radius: var(--oxr-radius-sm);
+        font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px; transition: background .15s ease;
+      }
+      .menu-trigger:hover { background: var(--oxr-color-surface-hover); }
+      .menu-dropdown {
+        position: absolute; top: calc(100% + 6px); left: 0; min-width: 220px;
+        background: var(--oxr-color-bg-card); backdrop-filter: blur(16px);
+        border: 1px solid var(--oxr-color-stroke); border-radius: var(--oxr-radius-md);
+        padding: 6px; display: none; flex-direction: column; gap: 2px; z-index: 20;
+        box-shadow: 0 12px 40px rgba(0,0,0,.5);
+      }
+      .menu-host.open .menu-dropdown { display: flex; }
+      .menu-item {
+        background: transparent; color: var(--oxr-color-text); border: none; text-align: left;
+        padding: 10px 12px; border-radius: var(--oxr-radius-sm); font-size: 13px;
+        display: flex; align-items: center; gap: 10px; width: 100%;
+      }
+      .menu-item:hover:not(:disabled) { background: var(--oxr-color-surface-hover); }
+      .menu-item:disabled { opacity: .4; cursor: not-allowed; }
+      .menu-item .glyph { width: 18px; text-align: center; opacity: .85; }
+      .icon-btn {
+        background: var(--oxr-color-surface); color: var(--oxr-color-text); border: 1px solid var(--oxr-color-stroke);
+        width: 38px; height: 38px; border-radius: var(--oxr-radius-sm); font-size: 15px; display: flex; align-items: center; justify-content: center;
+      }
+      .icon-btn:hover { background: var(--oxr-color-surface-hover); }
+      /* Command palette overlay */
+      #command-palette {
+        position: fixed; inset: 0; background: rgba(0,0,0,.55); backdrop-filter: blur(4px);
+        display: none; align-items: flex-start; justify-content: center; z-index: 50; pointer-events: auto;
+      }
+      #command-palette.open { display: flex; }
+      .cmd-box {
+        margin-top: 12vh; width: min(560px, 92vw);
+        background: var(--oxr-color-bg-card); backdrop-filter: blur(20px);
+        border: 1px solid var(--oxr-color-stroke-strong); border-radius: var(--oxr-radius-lg);
+        box-shadow: 0 24px 80px rgba(0,0,0,.6); overflow: hidden;
+      }
+      .cmd-input {
+        width: 100%; box-sizing: border-box; background: transparent; color: var(--oxr-color-text);
+        border: none; border-bottom: 1px solid var(--oxr-color-stroke); padding: 18px 20px; font-size: 16px; outline: none;
+      }
+      .cmd-list { max-height: 46vh; overflow-y: auto; padding: 6px; }
+      .cmd-item {
+        display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: var(--oxr-radius-sm); cursor: pointer;
+      }
+      .cmd-item .glyph { width: 20px; text-align: center; opacity: .85; }
+      .cmd-item .cmd-label { font-size: 14px; }
+      .cmd-item .cmd-hint { margin-left: auto; font-size: 11.5px; color: var(--oxr-color-text-muted); }
+      .cmd-item.sel { background: var(--oxr-color-surface-hover); }
+      .cmd-item.disabled { opacity: .4; }
+      .cmd-empty { padding: 20px; color: var(--oxr-color-text-muted); font-size: 13px; text-align: center; }
+    </style>
+    <script type="module" crossorigin src="/slicer/assets/index-BIz0gl25.js"></script>
+  </head>
+  <body>
+    <div id="ui-container">
+      <!-- Top bar: mode control + Add/Tools menus + command palette trigger.
+           Contents filled from the ActionRegistry by DomShell. -->
+      <div id="top-bar">
+        <span id="app-title">OrcaXR</span>
+        <div id="mode-control"></div>
+        <div id="add-menu-host" class="menu-host"></div>
+        <div id="tools-menu-host" class="menu-host"></div>
+        <div id="plate-bar" title="Build plates"></div>
+        <button id="cmd-search-btn" class="icon-btn" title="Command palette (Ctrl/⌘ K)">⌕</button>
+      </div>
+
+      <!-- Command palette overlay (every action, searchable). -->
+      <div id="command-palette">
+        <div class="cmd-box">
+          <input id="cmd-input" class="cmd-input" type="text" placeholder="Search actions…" autocomplete="off" />
+          <div id="cmd-list" class="cmd-list"></div>
+        </div>
+      </div>
+
+      <!-- Loading Modal for heavy synchronous tasks like 3MF parsing -->
+      <div id="loading-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); z-index: 9999; align-items: center; justify-content: center;">
+        <div style="background: var(--oxr-color-bg-card); padding: 32px 40px; border-radius: var(--oxr-radius-lg); border: 1px solid var(--oxr-color-stroke-strong); box-shadow: 0 24px 80px rgba(0,0,0,0.8); width: min(420px, 85vw); text-align: center; display: flex; flex-direction: column; gap: 16px;">
+          <h3 id="loading-modal-title" style="margin: 0; font-size: 20px; color: var(--oxr-color-text); font-weight: 600;">Loading...</h3>
+          <div style="width: 100%; background: rgba(255,255,255,0.08); border-radius: 8px; height: 10px; overflow: hidden; position: relative;">
+            <div id="loading-modal-bar" style="position: absolute; left: 0; top: 0; height: 100%; width: 0%; background: linear-gradient(90deg, #ffb74d, #ff9800); border-radius: 8px; transition: width 0.1s linear;"></div>
+          </div>
+          <p id="loading-modal-text" style="margin: 0; font-size: 14px; color: var(--oxr-color-text-muted);">Please wait</p>
+        </div>
+      </div>
+
+      <!-- Tool rail — rendered from the shared ActionRegistry by DomShell. -->
+      <div id="left-toolbar"></div>
+      <div id="right-sidebar">
+        <h2>OrcaXR Slicer</h2>
+        <div id="preflight-banners" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;"></div>
+        <details class="insp-section" open><summary>Printer &amp; profile</summary>
+        <div class="panel" id="profile-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+          <select id="sel-machine" class="action-btn" style="text-align:left;"></select>
+          <select id="sel-process" class="action-btn" style="text-align:left;"></select>
+          <select id="sel-filament" class="action-btn" style="text-align:left;"></select>
+        </div>
+        <div class="panel" id="heads-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+        </div>
+        </details>
+        <details class="insp-section"><summary>Print settings</summary>
+        <div class="panel" id="settings-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+          <div style="font-size:0.8rem;color:#a0aab5;font-weight:600;">SETTINGS</div>
+          <select id="sel-wall-generator" class="action-btn" style="text-align:left;">
+            <option value="arachne">Wall Generator: Arachne</option>
+            <option value="classic">Wall Generator: Classic (Safe)</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#e0e6ee;cursor:pointer;user-select:none;">
+            <input id="chk-wipe-tower-auto" type="checkbox" style="width:16px;height:16px;accent-color:#ffb74d;cursor:pointer;" />
+            Auto-position wipe tower
+          </label>
+        </div>
+        <div class="panel" id="print-settings-panel" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px;">
+          <div style="font-size:0.8rem;color:var(--oxr-color-text-muted);font-weight:600;">PRINT SETTINGS</div>
+          <select id="sel-support" class="action-btn" style="text-align:left;">
+            <option value="off">Supports: Off</option>
+            <option value="on_build_plate">Supports: On build plate only</option>
+            <option value="everywhere">Supports: Everywhere</option>
+            <option value="tree">Supports: Tree (everywhere)</option>
+          </select>
+          <label style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#e0e6ee;">
+            Layer height (mm)
+            <input id="in-layer-height" type="number" step="0.02" min="0.04" max="0.6"
+              style="width:70px;box-sizing:border-box;background:var(--oxr-color-bg-sunken);color:#fff;border:1px solid var(--oxr-color-stroke);border-radius:6px;padding:6px;font-size:13px;text-align:right;" />
+          </label>
+          <label style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#e0e6ee;">
+            Infill (%)
+            <input id="in-infill" type="number" step="5" min="0" max="100"
+              style="width:70px;box-sizing:border-box;background:var(--oxr-color-bg-sunken);color:#fff;border:1px solid var(--oxr-color-stroke);border-radius:6px;padding:6px;font-size:13px;text-align:right;" />
+          </label>
+          <label style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#e0e6ee;">
+            Walls (loops)
+            <input id="in-walls" type="number" step="1" min="1" max="10"
+              style="width:70px;box-sizing:border-box;background:var(--oxr-color-bg-sunken);color:#fff;border:1px solid var(--oxr-color-stroke);border-radius:6px;padding:6px;font-size:13px;text-align:right;" />
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#e0e6ee;cursor:pointer;user-select:none;">
+            <input id="chk-adaptive-layers" type="checkbox" style="width:16px;height:16px;accent-color:#ffb74d;cursor:pointer;" />
+            Adaptive layer height
+          </label>
+        </div>
+        </details>
+        <!-- Primary + menu actions — rendered from the ActionRegistry by DomShell. -->
+        <div class="panel" id="action-panel">
+          <input type="file" id="file-input" accept=".stl,.3mf" multiple style="display:none;" />
+        </div>
+        <div class="panel" id="filament-panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-size:0.8rem;color:#a0aab5;font-weight:600;">FILAMENTS</span>
+            <button id="btn-add-filament" style="background:rgba(255,255,255,0.1);color:#fff;border:none;border-radius:6px;width:26px;height:26px;font-size:16px;">+</button>
+          </div>
+          <div id="filament-swatches" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+        </div>
+        <details class="insp-section"><summary>Send to printer</summary>
+        <div class="panel" id="printer-panel">
+          <div style="font-size:0.8rem;color:#a0aab5;font-weight:600;margin-bottom:8px;">PRINTER (Moonraker)</div>
+          <input id="printer-host" type="text" placeholder="printer IP (e.g. 192.168.1.50)"
+            style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.3);color:#fff;border:1px solid #ffffff1a;border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;" />
+          <button id="btn-printer-test" class="action-btn" style="margin-bottom:8px;">Test Connection</button>
+          <button id="btn-printer-send" class="action-btn" disabled>Send + Print</button>
+        </div>
+        <div class="panel" id="external-slicer-panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-size:0.8rem;color:#a0aab5;font-weight:600;">EXTERNAL SLICER</span>
+            <span id="external-slicer-status" title="Disconnected" style="font-size:12px;color:#f44336;display:flex;align-items:center;gap:4px;">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f44336;"></span> Offline
+            </span>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <input id="external-slicer-url" type="text" placeholder="URL (e.g. http://localhost:3000)"
+              style="flex:1;box-sizing:border-box;background:rgba(0,0,0,0.3);color:#fff;border:1px solid #ffffff1a;border-radius:8px;padding:10px;font-size:13px;" />
+            <button id="btn-external-slicer-connect" class="action-btn" style="width:auto;margin:0;padding:10px 16px;">Connect</button>
+          </div>
+          <div id="external-slicer-controls" style="display:none;justify-content:space-between;align-items:center;gap:8px;">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#e0e6ee;cursor:pointer;user-select:none;">
+              <input id="external-slicer-enabled" type="checkbox" style="width:16px;height:16px;accent-color:#4caf50;cursor:pointer;" />
+              Use external slicer
+            </label>
+            <button id="btn-external-slicer-delete" class="action-btn"
+              style="width:auto;margin:0;padding:8px 14px;background:#3a1e1e;border:1px solid #f4433655;color:#ff8a80;">Delete</button>
+          </div>
+          <p id="external-slicer-hint" style="display:none;margin:6px 0 0;font-size:12px;color:#8b95a1;">Off — slicing locally in‑browser.</p>
+        </div>
+        </details>
+        <div class="status-panel">
+          <p id="status-text">Ready. Load a model to begin.</p>
+          <div id="progress-container" style="display: none; width: 100%; background-color: rgba(255,255,255,0.1); border-radius: 4px; margin-top: 8px;">
+            <div id="progress-bar" style="width: 0%; height: 6px; background-color: #ffb74d; border-radius: 4px; transition: width 0.1s linear;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

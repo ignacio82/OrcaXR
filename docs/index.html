@@ -47,6 +47,7 @@
                 <a href="#features">Features</a>
                 <a href="#slicing">Spatial slicing</a>
                 <a href="#ai">AI &amp; MCP</a>
+                <a href="#webapp">Web app</a>
                 <a href="#compatibility">Compatibility</a>
                 <a href="https://github.com/ignacio82/OrcaXR" target="_blank" rel="noopener noreferrer">GitHub</a>
                 <a href="#early-access" class="nav-cta">Join beta</a>
@@ -71,11 +72,13 @@
                 </p>
                 <div class="hero-buttons">
                     <a href="#early-access" class="btn btn-primary">Get early access</a>
+                    <a href="https://orcaxr.martinez.fyi/slicer/" class="btn btn-secondary">Open the web app</a>
                     <a href="https://github.com/ignacio82/OrcaXR" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">View on GitHub</a>
                 </div>
                 <div class="hero-highlights" aria-label="Key features">
                     <span>Spatial UI/UX</span>
                     <span>Phone &amp; tablet shell</span>
+                    <span>In-browser web app</span>
                     <span>libslic3r engine</span>
                     <span>Multi-color paint</span>
                     <span>AI-driven paint</span>
@@ -265,6 +268,37 @@
             </div>
         </section>
 
+        <section class="features-section" id="webapp">
+            <div class="container section-shell">
+                <div class="section-heading reveal">
+                    <p class="eyebrow">No install required</p>
+                    <h2>Slice in your browser — desktop or headset.</h2>
+                    <p>OrcaXR also ships as a pure-web app. Open it in any modern browser to plate, paint, and slice with the same <code>libslic3r</code> engine — this time cross-compiled to <strong>WebAssembly</strong> and threaded in the tab. No APK, no account, nothing to install.</p>
+                </div>
+
+                <div class="bento-grid reveal">
+                    <div class="bento-item bento-item-large bento-paint">
+                        <div class="bento-copy">
+                            <span class="card-kicker">Built on XR Blocks</span>
+                            <h3>The same spatial workspace, on the open web</h3>
+                            <p>The web app is built on Google's <a href="https://github.com/google/xrblocks" target="_blank" rel="noopener noreferrer">XR Blocks</a> + three.js, with <code>libslic3r</code> compiled to WebAssembly and run on a worker thread. One shared action registry renders both the desktop overlay and the immersive WebXR shell, so every capability is reachable in either mode.</p>
+                            <a href="https://orcaxr.martinez.fyi/slicer/" class="btn btn-primary">Launch the web app</a>
+                        </div>
+                    </div>
+                    <div class="bento-item">
+                        <span class="card-kicker">Desktop</span>
+                        <h3>Mouse &amp; keyboard</h3>
+                        <p>Orbit, drag, paint, and slice in a normal browser tab. Add primitives and calibration models, tune supports and infill, then download G-code straight to your machine.</p>
+                    </div>
+                    <div class="bento-item">
+                        <span class="card-kicker">Immersive</span>
+                        <h3>WebXR in the headset</h3>
+                        <p>Open the same URL in the Galaxy XR browser and enter XR — the build plate and tool panels float around you, driven by the very same registry as the desktop shell.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <section class="compat-section" id="compatibility">
             <div class="container section-shell">
                 <div class="section-heading reveal">
@@ -370,6 +404,12 @@
                         <a href="https://developer.android.com/jetpack/androidx/releases/xr" target="_blank" rel="noopener noreferrer">
                             <strong>Jetpack XR</strong>
                             <span>Google + Samsung's spatial computing platform for Android.</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/google/xrblocks" target="_blank" rel="noopener noreferrer">
+                            <strong>XR Blocks</strong>
+                            <span>Google's WebXR framework powering the in-browser web app.</span>
                         </a>
                     </li>
                 </ul>

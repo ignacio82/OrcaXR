@@ -2,6 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <!-- Cross-origin isolation shim: on static hosts (GitHub Pages) that can't
+         send COOP/COEP headers, this service worker adds them so the WASM
+         slicer's SharedArrayBuffer threads work. No-op where headers already
+         make the context isolated (dev/preview). Must run first. -->
+    <script src="/coi-serviceworker.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
     <meta name="theme-color" content="#14171a" />
     <meta name="description" content="OrcaXR pure-web front-end: XR Blocks + three.js workspace" />
@@ -58,6 +63,20 @@
       #right-sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
       #right-sidebar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
       #right-sidebar h2 { margin: 0; font-size: 1.6rem; color: #fff; font-weight: 700; letter-spacing: -0.5px; }
+      /* Collapsible inspector sections — tame the wall of always-open panels. */
+      .insp-section { border-top: 1px solid var(--oxr-color-stroke, #ffffff1a); padding-top: 14px; }
+      .insp-section > summary {
+        cursor: pointer; list-style: none; user-select: none;
+        font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+        color: var(--oxr-color-text-muted, #a0aab5);
+        display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+      }
+      .insp-section > summary::-webkit-details-marker { display: none; }
+      .insp-section > summary::before {
+        content: '\25B8'; font-size: 0.7rem; transition: transform 0.15s ease;
+        color: var(--oxr-color-accent-soft, #ffb74d);
+      }
+      .insp-section[open] > summary::before { transform: rotate(90deg); }
       .action-btn {
         background: rgba(255, 255, 255, 0.08); color: white; border: 1px solid rgba(255, 255, 255, 0.1); padding: 14px; border-radius: 10px; font-weight: 600; font-size: 15px; width: 100%; text-align: center; margin-bottom: 12px; transition: all 0.2s ease;
       }
@@ -94,6 +113,25 @@
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); z-index: 6;
       }
       #app-title { font-weight: 700; font-size: 15px; letter-spacing: -0.3px; padding: 0 6px; }
+      #plate-bar { display: flex; align-items: center; gap: 4px; }
+      .plate-chip {
+        display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+        background: var(--oxr-color-surface); color: var(--oxr-color-text-muted);
+        border: 1px solid var(--oxr-color-stroke); border-radius: 8px;
+        padding: 5px 9px; font-size: 12px; font-weight: 600; transition: all .12s ease;
+      }
+      .plate-chip:hover { background: var(--oxr-color-surface-hover); }
+      .plate-chip.active { background: var(--oxr-color-accent); color: var(--oxr-color-on-accent); border-color: transparent; }
+      .plate-chip .plate-del {
+        cursor: pointer; opacity: .6; font-size: 13px; line-height: 1;
+      }
+      .plate-chip .plate-del:hover { opacity: 1; }
+      .plate-add {
+        cursor: pointer; background: var(--oxr-color-surface); color: var(--oxr-color-text);
+        border: 1px solid var(--oxr-color-stroke); border-radius: 8px;
+        width: 26px; height: 26px; font-size: 15px; line-height: 1;
+      }
+      .plate-add:hover { background: var(--oxr-color-surface-hover); }
       #mode-control { display: flex; gap: 2px; background: var(--oxr-color-bg-sunken); border-radius: var(--oxr-radius-sm); padding: 3px; }
       .seg-btn {
         background: transparent; color: var(--oxr-color-text-muted); border: none;
@@ -166,6 +204,7 @@
         <div id="mode-control"></div>
         <div id="add-menu-host" class="menu-host"></div>
         <div id="tools-menu-host" class="menu-host"></div>
+        <div id="plate-bar" title="Build plates"></div>
         <button id="cmd-search-btn" class="icon-btn" title="Command palette (Ctrl/⌘ K)">⌕</button>
       </div>
 
@@ -193,6 +232,7 @@
       <div id="right-sidebar">
         <h2>OrcaXR Slicer</h2>
         <div id="preflight-banners" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;"></div>
+        <details class="insp-section" open><summary>Printer &amp; profile</summary>
         <div class="panel" id="profile-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
           <select id="sel-machine" class="action-btn" style="text-align:left;"></select>
           <select id="sel-process" class="action-btn" style="text-align:left;"></select>
@@ -200,6 +240,8 @@
         </div>
         <div class="panel" id="heads-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
         </div>
+        </details>
+        <details class="insp-section"><summary>Print settings</summary>
         <div class="panel" id="settings-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
           <div style="font-size:0.8rem;color:#a0aab5;font-weight:600;">SETTINGS</div>
           <select id="sel-wall-generator" class="action-btn" style="text-align:left;">
@@ -211,6 +253,35 @@
             Auto-position wipe tower
           </label>
         </div>
+        <div class="panel" id="print-settings-panel" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px;">
+          <div style="font-size:0.8rem;color:var(--oxr-color-text-muted);font-weight:600;">PRINT SETTINGS</div>
+          <select id="sel-support" class="action-btn" style="text-align:left;">
+            <option value="off">Supports: Off</option>
+            <option value="on_build_plate">Supports: On build plate only</option>
+            <option value="everywhere">Supports: Everywhere</option>
+            <option value="tree">Supports: Tree (everywhere)</option>
+          </select>
+          <label style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#e0e6ee;">
+            Layer height (mm)
+            <input id="in-layer-height" type="number" step="0.02" min="0.04" max="0.6"
+              style="width:70px;box-sizing:border-box;background:var(--oxr-color-bg-sunken);color:#fff;border:1px solid var(--oxr-color-stroke);border-radius:6px;padding:6px;font-size:13px;text-align:right;" />
+          </label>
+          <label style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#e0e6ee;">
+            Infill (%)
+            <input id="in-infill" type="number" step="5" min="0" max="100"
+              style="width:70px;box-sizing:border-box;background:var(--oxr-color-bg-sunken);color:#fff;border:1px solid var(--oxr-color-stroke);border-radius:6px;padding:6px;font-size:13px;text-align:right;" />
+          </label>
+          <label style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#e0e6ee;">
+            Walls (loops)
+            <input id="in-walls" type="number" step="1" min="1" max="10"
+              style="width:70px;box-sizing:border-box;background:var(--oxr-color-bg-sunken);color:#fff;border:1px solid var(--oxr-color-stroke);border-radius:6px;padding:6px;font-size:13px;text-align:right;" />
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#e0e6ee;cursor:pointer;user-select:none;">
+            <input id="chk-adaptive-layers" type="checkbox" style="width:16px;height:16px;accent-color:#ffb74d;cursor:pointer;" />
+            Adaptive layer height
+          </label>
+        </div>
+        </details>
         <!-- Primary + menu actions — rendered from the ActionRegistry by DomShell. -->
         <div class="panel" id="action-panel">
           <input type="file" id="file-input" accept=".stl,.3mf" multiple style="display:none;" />
@@ -222,6 +293,7 @@
           </div>
           <div id="filament-swatches" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
         </div>
+        <details class="insp-section"><summary>Send to printer</summary>
         <div class="panel" id="printer-panel">
           <div style="font-size:0.8rem;color:#a0aab5;font-weight:600;margin-bottom:8px;">PRINTER (Moonraker)</div>
           <input id="printer-host" type="text" placeholder="printer IP (e.g. 192.168.1.50)"
@@ -251,6 +323,7 @@
           </div>
           <p id="external-slicer-hint" style="display:none;margin:6px 0 0;font-size:12px;color:#8b95a1;">Off — slicing locally in‑browser.</p>
         </div>
+        </details>
         <div class="status-panel">
           <p id="status-text">Ready. Load a model to begin.</p>
           <div id="progress-container" style="display: none; width: 100%; background-color: rgba(255,255,255,0.1); border-radius: 4px; margin-top: 8px;">

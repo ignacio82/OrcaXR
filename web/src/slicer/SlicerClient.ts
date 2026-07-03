@@ -15,6 +15,7 @@ interface Slic3rModule {
   versionString(): string;
   startSlice(stlBinary: string, maxThreads: number): void;
   startSliceFile(path: string, maxThreads: number, overridesJson: string): void;
+  startSlicePainted(posPath: string, filPath: string, filamentCount: number, maxThreads: number, overridesJson: string): void;
   pollSlice(): string;
   startRepair(stl: string | ArrayBuffer, maxThreads: number): void;
   pollRepair(): string;
@@ -23,12 +24,53 @@ interface Slic3rModule {
   FS: { writeFile(path: string, data: Uint8Array): void, readFile(path: string): Uint8Array, unlink(path: string): void };
 }
 
+const EXTERNAL_URL_KEY = 'external_slicer_url';
+const EXTERNAL_ENABLED_KEY = 'external_slicer_enabled';
+
 export class SlicerClient {
   private module: Slic3rModule | null = null;
   private loading: Promise<Slic3rModule> | null = null;
   private slicing = false;
   private crashed = false;
+  private lastSliceActivity = 0;
   onProgress: ((p: SliceProgress) => void) | null = null;
+
+  // ---- External slicer configuration (shared by the 2D + XR UIs) --------
+  // Two independent pieces of state: the saved URL (survives being turned
+  // off) and an explicit enabled flag. A model is used externally only when
+  // a URL is configured AND the flag is on, so the user can keep a server
+  // saved while slicing locally, and can delete it outright.
+  static getExternalSlicerUrl(): string {
+    return localStorage.getItem(EXTERNAL_URL_KEY) || '';
+  }
+
+  static setExternalSlicerUrl(url: string): void {
+    const v = url.trim();
+    if (v) localStorage.setItem(EXTERNAL_URL_KEY, v);
+    else localStorage.removeItem(EXTERNAL_URL_KEY);
+  }
+
+  static isExternalSlicerEnabled(): boolean {
+    // Default ON when a URL exists but the flag was never written (back-compat
+    // with configs saved before the toggle existed).
+    if (!SlicerClient.getExternalSlicerUrl()) return false;
+    return localStorage.getItem(EXTERNAL_ENABLED_KEY) !== 'false';
+  }
+
+  static setExternalSlicerEnabled(enabled: boolean): void {
+    localStorage.setItem(EXTERNAL_ENABLED_KEY, enabled ? 'true' : 'false');
+  }
+
+  /** Forget the configured external slicer entirely. */
+  static clearExternalSlicer(): void {
+    localStorage.removeItem(EXTERNAL_URL_KEY);
+    localStorage.removeItem(EXTERNAL_ENABLED_KEY);
+  }
+
+  /** True when the next slice will be dispatched to the external server. */
+  static useExternalSlicer(): boolean {
+    return !!SlicerClient.getExternalSlicerUrl() && SlicerClient.isExternalSlicerEnabled();
+  }
 
   async load(): Promise<void> {
     await this.ensureModule();
@@ -43,8 +85,12 @@ export class SlicerClient {
     if (!this.loading) {
       this.loading = (async () => {
         // Runtime-computed URL so vite doesn't try to pre-bundle the
-        // Emscripten module (it lives in /public, served as-is).
-        const moduleUrl = new URL('/slicer/slic3r.mjs', window.location.origin).href;
+        // Emscripten module (it lives in /public/slicer, served as-is). Made
+        // base-aware so it resolves under any deploy base: dev ('/') → it sits
+        // at /slicer/slic3r.mjs; GitHub Pages ('/slicer/') → /slicer/slicer/…
+        // (Emscripten locates slic3r.wasm relative to this .mjs URL.)
+        const base = import.meta.env.BASE_URL; // '/' in dev, '/slicer/' on Pages
+        const moduleUrl = new URL(`${base}slicer/slic3r.mjs`, window.location.origin).href;
         const factory = (await import(/* @vite-ignore */ moduleUrl))
           .default as (arg?: object) => Promise<Slic3rModule>;
         const mod = await factory({
@@ -62,6 +108,9 @@ export class SlicerClient {
   }
 
   private handleStderr(text: string) {
+    // Any engine chatter (progress or the [orcaxr] setup lines) means the
+    // slice thread is alive — reset the stall watchdog.
+    if (text.startsWith('[orcaxr]')) this.lastSliceActivity = Date.now();
     const m = /^\[orcaxr\] (\d+)% (.*)$/.exec(text);
     if (m && this.onProgress) {
       this.onProgress({ percent: Number(m[1]), message: m[2] });
@@ -94,7 +143,7 @@ export class SlicerClient {
     maxThreads = 4,
     overrides: Record<string, string> = {},
   ): Promise<string> {
-    const externalUrl = localStorage.getItem('external_slicer_url');
+    const externalUrl = SlicerClient.useExternalSlicer() ? SlicerClient.getExternalSlicerUrl() : '';
     if (externalUrl) {
       if (this.onProgress) {
         this.onProgress({ percent: 0, message: 'Slicing externally...' });
@@ -114,6 +163,21 @@ export class SlicerClient {
       return await res.text();
     }
 
+    // Preflight: the in-browser engine is a -pthread WASM build and its slice
+    // runs on a Worker thread, which requires SharedArrayBuffer — only
+    // available in a cross-origin-isolated context (COOP+COEP). If isolation
+    // isn't active, the slice thread silently never starts and the slice
+    // "hangs" at 0% forever with no error. Fail fast with an actionable
+    // message instead. (The external-server path above needs none of this.)
+    if (typeof SharedArrayBuffer === 'undefined' || !globalThis.crossOriginIsolated) {
+      throw new Error(
+        'In-browser slicing needs a cross-origin-isolated context (SharedArrayBuffer), ' +
+        'which is not active here (crossOriginIsolated=' + String(globalThis.crossOriginIsolated) +
+        ', SharedArrayBuffer=' + (typeof SharedArrayBuffer !== 'undefined') + '). ' +
+        'Serve the page with COOP/COEP headers and reload, or configure an external slicer server.',
+      );
+    }
+
     this.resetIfCrashed();
     if (this.slicing) throw new Error('a slice is already running');
     const mod = await this.ensureModule();
@@ -122,14 +186,33 @@ export class SlicerClient {
       // Typed-array write into MEMFS: embind's std::string marshalling
       // UTF-8-mangles binary bytes in the browser, so never pass the STL
       // through a JS string.
+      console.log('[slicer] starting local slice: STL', stl.byteLength, 'bytes,',
+        Object.keys(overrides).length, 'overrides, maxThreads', maxThreads);
       mod.FS.writeFile('/tmp/orcaxr_upload.stl', new Uint8Array(stl));
+      this.lastSliceActivity = Date.now();
       mod.startSliceFile('/tmp/orcaxr_upload.stl', maxThreads, JSON.stringify(overrides));
+      let stallWarned = false;
       const gcode = await new Promise<string>((resolve, reject) => {
         const timer = setInterval(() => {
           if (this.crashed) {
             clearInterval(timer);
             this.resetIfCrashed();
             reject(new Error('slicer crashed — restarted, please try again'));
+            return;
+          }
+          // Stall watchdog: a healthy slice emits its first progress line
+          // within a second or two. If nothing has happened for 20s, the
+          // engine thread almost certainly failed to start (threading /
+          // SharedArrayBuffer) — surface it rather than spin forever.
+          const idleMs = Date.now() - this.lastSliceActivity;
+          if (!stallWarned && idleMs > 20000) {
+            stallWarned = true;
+            console.error('[slicer] no engine output for 20s — the slice thread may have failed to start (threading/SharedArrayBuffer). Aborting.');
+            if (this.onProgress) this.onProgress({ percent: 0, message: 'engine stalled (no output) — see console' });
+            clearInterval(timer);
+            this.crashed = true; // force a fresh module next time
+            this.resetIfCrashed();
+            reject(new Error('slicer produced no output for 20s — the engine thread failed to start. Reload the page; if it persists, use an external slicer server.'));
             return;
           }
           const out = mod.pollSlice();
@@ -147,6 +230,77 @@ export class SlicerClient {
     } finally {
       this.slicing = false;
     }
+  }
+
+  /**
+   * Painted (multi-color) slice. `positions` is a Float32 buffer of 9 floats
+   * per triangle (printer coords, mm, Z-up); `triFilament` is one 0-based
+   * filament index per triangle. The engine splits the mesh into a per-filament
+   * volume and emits tool changes — this is how painting a model actually
+   * reaches the G-code. Local WASM only (needs cross-origin isolation).
+   */
+  async slicePainted(
+    positions: Float32Array,
+    triFilament: Int32Array,
+    filamentCount: number,
+    maxThreads = 4,
+    overrides: Record<string, string> = {},
+  ): Promise<string> {
+    if (typeof SharedArrayBuffer === 'undefined' || !globalThis.crossOriginIsolated) {
+      throw new Error(
+        'Painted slicing needs a cross-origin-isolated context (SharedArrayBuffer). ' +
+        'Serve the page with COOP/COEP headers and reload.',
+      );
+    }
+    this.resetIfCrashed();
+    if (this.slicing) throw new Error('a slice is already running');
+    const mod = await this.ensureModule();
+    this.slicing = true;
+    try {
+      const posBytes = new Uint8Array(positions.buffer, positions.byteOffset, positions.byteLength);
+      const filBytes = new Uint8Array(triFilament.buffer, triFilament.byteOffset, triFilament.byteLength);
+      console.log('[slicer] painted slice:', triFilament.length, 'tris,', filamentCount, 'filaments');
+      mod.FS.writeFile('/tmp/orcaxr_painted_pos.bin', posBytes);
+      mod.FS.writeFile('/tmp/orcaxr_painted_fil.bin', filBytes);
+      this.lastSliceActivity = Date.now();
+      mod.startSlicePainted(
+        '/tmp/orcaxr_painted_pos.bin', '/tmp/orcaxr_painted_fil.bin',
+        filamentCount, maxThreads, JSON.stringify(overrides),
+      );
+      return await this.awaitSliceResult(() => mod.pollSlice());
+    } finally {
+      this.slicing = false;
+    }
+  }
+
+  /** Shared poll loop for the async slice path (mono file + painted). */
+  private awaitSliceResult(poll: () => string): Promise<string> {
+    let stallWarned = false;
+    return new Promise<string>((resolve, reject) => {
+      const timer = setInterval(() => {
+        if (this.crashed) {
+          clearInterval(timer);
+          this.resetIfCrashed();
+          reject(new Error('slicer crashed — restarted, please try again'));
+          return;
+        }
+        const idleMs = Date.now() - this.lastSliceActivity;
+        if (!stallWarned && idleMs > 20000) {
+          stallWarned = true;
+          clearInterval(timer);
+          this.crashed = true;
+          this.resetIfCrashed();
+          reject(new Error('slicer produced no output for 20s — the engine thread failed to start.'));
+          return;
+        }
+        const out = poll();
+        if (out.length > 0) {
+          clearInterval(timer);
+          if (out.startsWith('ORCAXR_ERROR:')) reject(new Error(out.slice('ORCAXR_ERROR:'.length).trim()));
+          else resolve(out);
+        }
+      }, 100);
+    });
   }
 
   async repair(stl: ArrayBuffer, maxThreads = 4): Promise<ArrayBuffer> {
@@ -188,6 +342,61 @@ export class SlicerClient {
         }, 100);
       });
       
+      const outBuffer = new Uint8Array(outString.length);
+      for (let i = 0; i < outString.length; i++) {
+        outBuffer[i] = outString.charCodeAt(i);
+      }
+      return outBuffer.buffer;
+    } finally {
+      this.slicing = false;
+    }
+  }
+
+  /**
+   * Boolean CSG (UNION / A_NOT_B / INTERSECTION) of two binary STLs via the
+   * WASM engine's mcut path. Returns the result binary STL. Binary bytes go
+   * through the same binary-string channel as repair() (embind std::string).
+   */
+  async boolean(
+    stlA: ArrayBuffer,
+    stlB: ArrayBuffer,
+    op: 'UNION' | 'A_NOT_B' | 'INTERSECTION',
+    maxThreads = 4,
+  ): Promise<ArrayBuffer> {
+    this.resetIfCrashed();
+    if (this.slicing) throw new Error('the engine is busy');
+    const mod = await this.ensureModule();
+    this.slicing = true;
+    try {
+      const toBinStr = (b: ArrayBuffer) => {
+        const u = new Uint8Array(b);
+        let s = '';
+        // Chunked to avoid blowing the argument stack on large meshes.
+        for (let i = 0; i < u.length; i += 0x8000) {
+          s += String.fromCharCode.apply(null, Array.from(u.subarray(i, i + 0x8000)));
+        }
+        return s;
+      };
+      mod.startBoolean(toBinStr(stlA), toBinStr(stlB), op, maxThreads);
+      const outString = await new Promise<string>((resolve, reject) => {
+        const timer = setInterval(() => {
+          if (this.crashed) {
+            clearInterval(timer);
+            this.resetIfCrashed();
+            reject(new Error('slicer crashed — restarted, please try again'));
+            return;
+          }
+          const out = mod.pollBoolean();
+          if (out.length > 0) {
+            clearInterval(timer);
+            if (out.startsWith('ORCAXR_ERROR:')) {
+              reject(new Error(out.slice('ORCAXR_ERROR:'.length).trim()));
+            } else {
+              resolve(out);
+            }
+          }
+        }, 100);
+      });
       const outBuffer = new Uint8Array(outString.length);
       for (let i = 0; i < outString.length; i++) {
         outBuffer[i] = outString.charCodeAt(i);

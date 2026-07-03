@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  orcaxr-server:
+    build: .
+    container_name: orcaxr-server-container
+    ports:
+      - "3000:3000"
+    environment:
+      # Max memory for the Node.js process and WASM runtime (in MB)
+      # Note: The WebAssembly module itself (wasm32) has a hard architectural limit of 4GB (4096MB)
+      # for its internal heap. Setting this higher allows Node.js to use more memory for
+      # processing large file uploads/downloads, but the slicer core will still cap at 4GB.
+      - MAX_OLD_SPACE_SIZE=4096
+      - PORT=3000
+    restart: unless-stopped

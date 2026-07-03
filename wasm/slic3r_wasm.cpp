@@ -32,7 +32,10 @@ extern "C" int pthread_setname_np(pthread_t, const char *) { return 0; }
 
 #include <nlohmann/json.hpp>
 
+#include <cstring>
+
 #include "libslic3r/Model.hpp"
+#include "libslic3r/TriangleMesh.hpp"
 #include "libslic3r/Utils.hpp"
 #include "libslic3r/Print.hpp"
 #include "libslic3r/PrintConfig.hpp"
@@ -105,23 +108,19 @@ static void ensure_resources()
     Slic3r::set_resources_dir("/resources");
 }
 
-std::string slice_stl_to_gcode_inner(const std::string &stl_bytes,
-                                     const std::string &overrides_json)
+// Shared tail: build config from overrides, slice [model], return G-code.
+// [num_filaments] > 1 sizes the per-filament config vectors up front so
+// volume extruder assignments beyond filament 1 aren't clamped back to 0.
+std::string finish_slice(Slic3r::Model &model, const std::string &overrides_json,
+                         int num_filaments = 1)
 {
-    ensure_resources();
-    const char *in_path = "/tmp/orcaxr_in.stl";
     const char *out_path = "/tmp/orcaxr_out.gcode";
-    write_all(in_path, stl_bytes);
-    fprintf(stderr, "[orcaxr] stl written (%zu bytes)\n", stl_bytes.size());
-
-    Slic3r::Model model = Slic3r::Model::read_from_file(in_path);
-    if (model.objects.empty())
-        throw std::runtime_error("model loaded but contains no objects");
-    model.add_default_instances();
-    fprintf(stderr, "[orcaxr] model loaded: %zu object(s)\n", model.objects.size());
-
     Slic3r::DynamicPrintConfig cfg = Slic3r::DynamicPrintConfig::full_print_config();
     fixup_enum_keys_map(cfg);
+    if (num_filaments > 1) {
+        cfg.set_num_extruders((unsigned int)num_filaments);
+        fprintf(stderr, "[orcaxr] num_filaments = %d\n", num_filaments);
+    }
     // Relative E + profile-supplied G92 E0 per layer (mirrors the Android
     // build; profiles like the ECC/U1 stock chains carry the reset in
     // their layer-change gcode).
@@ -196,9 +195,80 @@ std::string slice_stl_to_gcode_inner(const std::string &stl_bytes,
     fprintf(stderr, "[orcaxr] export done\n");
 
     std::string gcode = read_all(out_path);
-    std::remove(in_path);
     std::remove(out_path);
     return gcode;
+}
+
+std::string slice_stl_to_gcode_inner(const std::string &stl_bytes,
+                                     const std::string &overrides_json)
+{
+    ensure_resources();
+    // Pick the extension by content so Model::read_from_file dispatches the
+    // right parser: a 3MF is a ZIP ("PK\x03\x04"); everything else is STL.
+    const bool is_3mf = stl_bytes.size() > 4 && stl_bytes[0] == 'P' &&
+                        stl_bytes[1] == 'K' && stl_bytes[2] == 0x03 &&
+                        stl_bytes[3] == 0x04;
+    const char *in_path = is_3mf ? "/tmp/orcaxr_in.3mf" : "/tmp/orcaxr_in.stl";
+    write_all(in_path, stl_bytes);
+    fprintf(stderr, "[orcaxr] model written (%zu bytes, %s)\n", stl_bytes.size(),
+            is_3mf ? "3mf" : "stl");
+
+    Slic3r::Model model = Slic3r::Model::read_from_file(in_path);
+    if (model.objects.empty())
+        throw std::runtime_error("model loaded but contains no objects");
+    model.add_default_instances();
+    fprintf(stderr, "[orcaxr] model loaded: %zu object(s)\n", model.objects.size());
+    std::string gcode = finish_slice(model, overrides_json);
+    std::remove(in_path);
+    return gcode;
+}
+
+/**
+ * Slice a PAINTED model: [positions] is a flat Float32 array of triangle
+ * corners in printer space (9 floats/triangle, already baked & bed-dropped);
+ * [tri_filament] gives each triangle's 0-based filament index. Triangles are
+ * split into one ModelVolume per filament, each assigned that extruder, so
+ * libslic3r emits real multi-material tool changes. This sidesteps the Bambu
+ * 3MF loader entirely (which rejects hand-authored files).
+ */
+std::string slice_painted_inner(const std::vector<float> &positions,
+                                const std::vector<int> &tri_filament,
+                                int filament_count,
+                                const std::string &overrides_json)
+{
+    ensure_resources();
+    const size_t num_tris = tri_filament.size();
+    if (num_tris == 0 || positions.size() < num_tris * 9)
+        throw std::runtime_error("painted slice: empty or malformed geometry");
+    if (filament_count < 1) filament_count = 1;
+
+    Slic3r::Model model;
+    Slic3r::ModelObject *obj = model.add_object();
+    obj->name = "painted";
+    int volumes = 0;
+    for (int f = 0; f < filament_count; ++f) {
+        indexed_triangle_set its;
+        for (size_t t = 0; t < num_tris; ++t) {
+            if (tri_filament[t] != f) continue;
+            const int base = (int)its.vertices.size();
+            for (int k = 0; k < 3; ++k) {
+                const size_t o = t * 9 + k * 3;
+                its.vertices.emplace_back(positions[o], positions[o + 1], positions[o + 2]);
+            }
+            its.indices.emplace_back(base, base + 1, base + 2);
+        }
+        if (its.indices.empty()) continue;
+        Slic3r::TriangleMesh mesh(its);
+        Slic3r::ModelVolume *v = obj->add_volume(mesh);
+        v->set_type(Slic3r::ModelVolumeType::MODEL_PART);
+        v->config.set_key_value("extruder", new Slic3r::ConfigOptionInt(f + 1));
+        volumes++;
+    }
+    if (volumes == 0)
+        throw std::runtime_error("painted slice: no triangles assigned");
+    model.add_default_instances();
+    fprintf(stderr, "[orcaxr] painted model: %d volume(s)\n", volumes);
+    return finish_slice(model, overrides_json, filament_count);
 }
 
 /// [max_threads] caps TBB parallelism for this call. Must stay below the
@@ -290,7 +360,7 @@ std::string repair_stl_inner(const std::string &stl_bytes)
     }
 
     std::string out_bytes = read_all(out_path);
-    std::remove(in_path);
+    std::remove(in_path);(void)0;
     std::remove(out_path);
     return out_bytes;
 }
@@ -423,6 +493,39 @@ void start_slice_file(const std::string &path, int max_threads,
     }).detach();
 }
 
+/// Slice a painted model. [pos_path] is a raw little-endian Float32 buffer
+/// of 9 floats/triangle; [fil_path] a raw Int32 buffer of one filament index
+/// per triangle — both written into MEMFS by JS FS.writeFile.
+void start_slice_painted(const std::string &pos_path, const std::string &fil_path,
+                         int filament_count, int max_threads,
+                         const std::string &overrides_json)
+{
+    int expected = 0;
+    if (!g_slice_state.compare_exchange_strong(expected, 1)) return;
+    std::thread([pos_path, fil_path, filament_count, max_threads, overrides_json]() {
+        const int threads = max_threads < 1 ? 1 : max_threads;
+        tbb::global_control tbb_limit(
+            tbb::global_control::max_allowed_parallelism, (size_t)threads);
+        try {
+            std::string pos_bytes = read_all(pos_path.c_str());
+            std::string fil_bytes = read_all(fil_path.c_str());
+            std::vector<float> positions(pos_bytes.size() / sizeof(float));
+            std::memcpy(positions.data(), pos_bytes.data(), positions.size() * sizeof(float));
+            std::vector<int> tri_filament(fil_bytes.size() / sizeof(int));
+            std::memcpy(tri_filament.data(), fil_bytes.data(), tri_filament.size() * sizeof(int));
+            g_slice_result = slice_painted_inner(positions, tri_filament,
+                                                 filament_count, overrides_json);
+        } catch (const std::exception &e) {
+            g_slice_result = std::string("ORCAXR_ERROR: ") + e.what();
+        } catch (...) {
+            g_slice_result = std::string("ORCAXR_ERROR: unknown C++ exception");
+        }
+        std::remove(pos_path.c_str());
+        std::remove(fil_path.c_str());
+        g_slice_state.store(2);
+    }).detach();
+}
+
 /// "" while running; the G-code (or "ORCAXR_ERROR: ...") once done.
 /// Reading the result resets the machine to idle.
 std::string poll_slice()
@@ -485,6 +588,7 @@ EMSCRIPTEN_BINDINGS(orcaxr_slic3r)
     emscripten::function("sliceStlToGcode", &slice_stl_to_gcode);
     emscripten::function("startSlice", &start_slice);
     emscripten::function("startSliceFile", &start_slice_file);
+    emscripten::function("startSlicePainted", &start_slice_painted);
     emscripten::function("pollSlice", &poll_slice);
     emscripten::function("startRepair", &start_repair);
     emscripten::function("pollRepair", &poll_repair);

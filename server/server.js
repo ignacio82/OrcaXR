@@ -11,41 +11,41 @@ app.use(cors());
 
 const upload = multer({ dest: os.tmpdir() });
 
+app.get('/ping', (req, res) => res.send('pong'));
+
 app.post('/slice', upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).send('No file uploaded.');
   }
 
   const overrides = req.body.overrides ? JSON.parse(req.body.overrides) : {};
+  overrides['from'] = 'project'; // Required by OrcaSlicer to accept the json file
   const configPath = req.file.path + '.json';
   
   try {
     // Write overrides to a JSON config file
     await fs.writeFile(configPath, JSON.stringify(overrides, null, 2));
 
-    const outputPath = req.file.path + '.gcode';
+    const modelPath = req.file.path + '.stl';
+    await fs.rename(req.file.path, modelPath);
 
-    // Spawn orca-slicer (must be in PATH)
-    // Note: Official OrcaSlicer CLI uses: orca-slicer --slice [file] --load [config] --output [output]
-    const slicerProcess = spawn('orca-slicer', [
-      '--slice', req.file.path,
-      '--load', configPath,
-      '--output', outputPath
+    const outputPath = req.file.path + '.gcode';
+    
+    const maxSpaceSize = process.env.MAX_OLD_SPACE_SIZE || '4096';
+
+    // Run the WASM slicer in a separate Node.js process to bypass memory limits
+    // --max-old-space-size gives it configured memory
+    const slicerProcess = spawn('node', [
+      `--max-old-space-size=${maxSpaceSize}`,
+      'slice_worker.mjs',
+      modelPath,
+      configPath,
+      outputPath
     ]);
 
-    // We can stream stderr as progress updates to the client using Server-Sent Events,
-    // but for simplicity, we will just wait for it to finish and return the G-Code.
-    // If the client wants progress, we should implement a chunked response or SSE.
-    
-    // To support progress, we will use HTTP chunked transfer encoding (text/plain)
-    // where we emit progress lines, and then finally the G-Code.
-    // But sending mixed content (progress + gcode) in one stream is tricky.
-    // Let's just send the G-code and let the client know it might take a while.
-    
     let stderrData = '';
     slicerProcess.stderr.on('data', (data) => {
       stderrData += data.toString();
-      // Optional: log progress
       const text = data.toString();
       const m = text.match(/(\d+)%/);
       if (m) console.log(`[slicer] ${m[1]}%`);
@@ -65,13 +65,14 @@ app.post('/slice', upload.single('file'), async (req, res) => {
       }
 
       // Cleanup
-      await fs.unlink(req.file.path).catch(() => {});
+      await fs.unlink(modelPath).catch(() => {});
       await fs.unlink(configPath).catch(() => {});
       await fs.unlink(outputPath).catch(() => {});
     });
 
   } catch (err) {
     res.status(500).send(err.message);
+    await fs.unlink(req.file.path + '.stl').catch(() => {});
     await fs.unlink(req.file.path).catch(() => {});
   }
 });
