@@ -67,6 +67,10 @@ export class SlicerClient {
       this.onProgress({ percent: Number(m[1]), message: m[2] });
       return;
     }
+    if (text.includes('uncaught exception') || text.includes('memory access out of bounds')) {
+      console.error('[slicer] caught fatal worker error in stderr:', text);
+      this.crashed = true;
+    }
     console.log('[slicer]', text);
   }
 

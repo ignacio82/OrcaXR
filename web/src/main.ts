@@ -30,6 +30,8 @@ function setupDomUI(workspace: OrcaWorkspace) {
   const btnSlice = document.getElementById('btn-slice') as HTMLButtonElement;
   const btnDownload = document.getElementById('btn-download') as HTMLButtonElement;
   const statusText = document.getElementById('status-text') as HTMLParagraphElement;
+  const progressContainer = document.getElementById('progress-container') as HTMLDivElement;
+  const progressBar = document.getElementById('progress-bar') as HTMLDivElement;
   const btnMove = document.getElementById('btn-move') as HTMLButtonElement;
   const btnRotate = document.getElementById('btn-rotate') as HTMLButtonElement;
   const btnScale = document.getElementById('btn-scale') as HTMLButtonElement;
@@ -265,8 +267,14 @@ function setupDomUI(workspace: OrcaWorkspace) {
     if (gcode) downloadGcode(gcode);
   };
 
-  workspace.onStatusChanged = (text) => {
+  workspace.onStatusChanged = (text, percent) => {
     statusText.textContent = text;
+    if (percent !== undefined && percent >= 0 && percent <= 100) {
+      progressContainer.style.display = 'block';
+      progressBar.style.width = `${percent}%`;
+    } else {
+      progressContainer.style.display = 'none';
+    }
   };
 
   const setTool = (tool: 'move' | 'rotate' | 'scale', btn: HTMLButtonElement) => {

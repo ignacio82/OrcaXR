@@ -182,7 +182,7 @@ export class OrcaWorkspace extends xb.Script {
   
   public orbitControls: OrbitControls | null = null;
   private transformControls: TransformControls | null = null;
-  public onStatusChanged: ((text: string) => void) | null = null;
+  public onStatusChanged: ((text: string, percent?: number) => void) | null = null;
   public onDownloadReady: ((ready: boolean) => void) | null = null;
 
   constructor() {
@@ -220,7 +220,7 @@ export class OrcaWorkspace extends xb.Script {
         this.catalog.profiles[0] ?? null;
       if (p) this.setProfile(p);
     });
-    this.slicer.onProgress = (p) => this.setStatus(`${p.percent}% ${p.message}`);
+    this.slicer.onProgress = (p) => this.setStatus(`Slicing... ${p.message}`, p.percent);
 
     this.workspace.position.set(0, PLATE_Y, PLATE_Z);
     xb.core.camera.position.set(0, PLATE_Y + 0.35, PLATE_Z + 0.55);
@@ -1107,6 +1107,8 @@ export class OrcaWorkspace extends xb.Script {
   private paintOptionsPanel?: UIPanel;
   private paintSwatches: { c: number; btn: UIPanel }[] = [];
   private valueText: any = null;
+  private progressBar: any = null;
+  private progressContainer: any = null;
   private loadButtonNode: THREE.Object3D | null = null;
   private leftToolbarCard: any = null;
   private rightSidebarCard: any = null;
@@ -1360,6 +1362,17 @@ export class OrcaWorkspace extends xb.Script {
     });
     this.statusText = new UIText('Ready. Load a model to begin.', { fontSize: 16, color: '#a0aab5' });
     statusPanel.add(this.statusText);
+    
+    this.progressBar = new UIPanel({
+      width: '0%', height: 4, fillColor: '#ffb74d', cornerRadius: 2
+    });
+    this.progressContainer = new UIPanel({
+      width: '100%', height: 4, fillColor: '#ffffff1a', cornerRadius: 2, margin: { top: 8 }
+    });
+    this.progressContainer.add(this.progressBar);
+    this.progressContainer.visible = false;
+    statusPanel.add(this.progressContainer);
+    
     root.add(statusPanel);
     
     // Value text (for tools)
@@ -1494,12 +1507,20 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
-  private setStatus(text: string) {
-    if (this.statusText && this.rightSidebarCard && !this.rightSidebarCard.visible) {
-      this.statusText.setText(text);
+  private setStatus(text: string, percent?: number) {
+    if (this.statusText) {
+      (this.statusText as any).setText(text);
+    }
+    if (this.progressContainer && this.progressBar) {
+      if (percent !== undefined && percent >= 0 && percent <= 100) {
+        this.progressContainer.visible = true;
+        this.progressBar.width = `${percent}%`;
+      } else {
+        this.progressContainer.visible = false;
+      }
     }
     if (this.onStatusChanged) {
-      this.onStatusChanged(text);
+      this.onStatusChanged(text, percent);
     }
     console.log('[orcaxr-web]', text);
   }
@@ -1632,9 +1653,10 @@ export class OrcaWorkspace extends xb.Script {
       return;
     }
     try {
-      this.setStatus('baking transforms…');
+      this.setStatus('baking transforms…', 0);
+      await new Promise(r => setTimeout(r, 50)); // let UI paint
       const stl = this.bakeToPrinterStl();
-      this.setStatus('slicing…');
+      this.setStatus('slicing…', 0);
       const t0 = performance.now();
       const overrides = { ...(this.profile?.config ?? {}), ...this.palette.toSlicerOverrides() };
       if (this.extruderCount > 1) {
