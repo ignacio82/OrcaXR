@@ -210,13 +210,13 @@ export class OrcaWorkspace extends xb.Script {
     this.add(this.workspace);
     this.addBuildPlate();
     this.addControlPanel();
-    await this.addStlModel('/models/cube_20mm.stl', 0x4fc3f7);
+
     // Warm the slicer module in the background so the first slice is quick.
     this.slicer.load().catch((e) => this.setStatus(`slicer load failed: ${e.message}`));
     // Load the profile catalog; default to the user's Centauri Carbon.
     void this.catalog.load().then(() => {
       const p =
-        this.catalog.find('Centauri Carbon 0.4', '0.20mm Standard @Elegoo CC 0.4', 'PLA Matte') ??
+        this.catalog.find('Snapmaker U1 (0.4 nozzle)', '0.20 Standard', 'Snapmaker PLA') ??
         this.catalog.profiles[0] ?? null;
       if (p) this.setProfile(p);
     });
@@ -328,6 +328,16 @@ export class OrcaWorkspace extends xb.Script {
   public brushRadiusMm = 4;
   /** The set of filament slots — shared by paint, 3MF display, and slicing. */
   public palette = new FilamentPalette();
+  public headFilaments: string[] = [];
+  public headNozzles: string[] = [];
+  private headsContainer: any = null;
+
+  get extruderCount(): number {
+    if (!this.profile) return 1;
+    const n = this.profile.config['nozzle_diameter'];
+    if (!n) return 1;
+    return n.split(',').length;
+  }
   private drag: {
     controller: THREE.Object3D;
     startControllerLocal: THREE.Vector3;
@@ -526,6 +536,11 @@ export class OrcaWorkspace extends xb.Script {
 
   private setProfile(p: SlicerProfile) {
     this.profile = p;
+    const count = this.extruderCount;
+    this.headFilaments = Array(count).fill(p.filamentName);
+    this.headNozzles = (p.config['nozzle_diameter'] ?? '0.4').split(',');
+    this.rebuildHeadsPanel();
+    
     if (this.onProfileChanged) this.onProfileChanged();
     this.bedMm = bedSizeFromProfile(p.config);
     this.rebuildPlate();
@@ -1120,7 +1135,8 @@ export class OrcaWorkspace extends xb.Script {
       padding: 10,
       gap: 10,
       strokeWidth: 1,
-      strokeColor: '#ffffff14'
+      strokeColor: '#ffffff14',
+      overflow: 'scroll'
     });
     card.add(root);
 
@@ -1244,13 +1260,15 @@ export class OrcaWorkspace extends xb.Script {
       padding: 24,
       gap: 20,
       strokeWidth: 1,
-      strokeColor: '#ffffff14'
+      strokeColor: '#ffffff14',
+      overflow: 'scroll',
+      height: '100%'
     });
     card.add(root);
 
     // Header
     const header = new UIPanel({ width: '100%', flexDirection: 'row', alignItems: 'center' });
-    header.add(new UIText('OrcaXR Web', { fontSize: 32, fontWeight: 'bold', color: '#ffffff' }));
+    header.add(new UIText('OrcaXR Slicer', { fontSize: 32, fontWeight: 'bold', color: '#ffffff' }));
     root.add(header);
 
     // Profile selectors
@@ -1273,6 +1291,9 @@ export class OrcaWorkspace extends xb.Script {
     mkProf('process', 'tune');
     mkProf('filament', 'water_drop');
     root.add(profPanel);
+    
+    this.headsContainer = new UIPanel({ width: '100%', flexDirection: 'column', gap: 10 });
+    root.add(this.headsContainer);
 
     // Action buttons
     const mkAction = (text: string, icon: string, primary: boolean, onClick: () => void) => {
@@ -1471,6 +1492,55 @@ export class OrcaWorkspace extends xb.Script {
     console.log('[orcaxr-web]', text);
   }
 
+  public rebuildHeadsPanel() {
+    if (!this.headsContainer) return;
+    const panel = this.headsContainer;
+    panel.children.forEach(c => panel.remove(c));
+    panel.children = [];
+
+    const exCount = this.extruderCount;
+    if (exCount <= 1) return;
+    
+    for (let i = 0; i < exCount; i++) {
+       const row = new UIPanel({ width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 5 });
+       row.add(new UIText(`Head ${i+1}:`, { fontSize: 16, color: '#ffffff' }));
+       
+       const cycleFilament = () => {
+         const choices = this.filamentChoices(this.profile!.machineName);
+         const idx = choices.indexOf(this.headFilaments[i]);
+         this.headFilaments[i] = choices[(idx + 1) % choices.length] ?? this.headFilaments[i];
+         this.rebuildHeadsPanel();
+         return true;
+       };
+       const filBtn = new UIPanel({
+          flexGrow: 1, height: 35, padding: 5,
+          justifyContent: 'center', alignItems: 'center',
+          cornerRadius: 4, fillColor: '#ffffff14', strokeWidth: 1, strokeColor: '#ffffff1a',
+          onClick: cycleFilament
+       });
+       filBtn.add(new UIText(this.headFilaments[i] || 'None', { fontSize: 12, color: '#ffffff' }));
+       row.add(filBtn);
+
+       const cycleNozzle = () => {
+         const choices = ['0.2', '0.4', '0.6', '0.8'];
+         const idx = choices.indexOf(this.headNozzles[i]);
+         this.headNozzles[i] = choices[(idx + 1) % choices.length] ?? this.headNozzles[i];
+         this.rebuildHeadsPanel();
+         return true;
+       };
+       const nozBtn = new UIPanel({
+          width: 60, height: 35,
+          justifyContent: 'center', alignItems: 'center',
+          cornerRadius: 4, fillColor: '#ffffff14', strokeWidth: 1, strokeColor: '#ffffff1a',
+          onClick: cycleNozzle
+       });
+       nozBtn.add(new UIText(this.headNozzles[i] + 'mm', { fontSize: 14, color: '#ffffff' }));
+       row.add(nozBtn);
+
+       panel.add(row);
+    }
+  }
+
   private deleteSelectedModel() {
     if (!this.selectedModel) return;
     const idx = this.models.indexOf(this.selectedModel);
@@ -1497,6 +1567,21 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus('slicing…');
       const t0 = performance.now();
       const overrides = { ...(this.profile?.config ?? {}), ...this.palette.toSlicerOverrides() };
+      if (this.extruderCount > 1) {
+        overrides['nozzle_diameter'] = this.headNozzles.join(',');
+        // Combine the configs for the selected filaments for each head
+        if (this.profile) {
+          const filamentConfigs = this.headFilaments.map(fName => 
+            this.catalog.find(this.profile!.machineName, this.profile!.processName, fName)?.config ?? {}
+          );
+          
+          // Helper to join array-based config properties across the different filaments
+          const joinFilamentProp = (prop: string) => filamentConfigs.map(c => c[prop] ?? '').join(',');
+          
+          overrides['filament_type'] = joinFilamentProp('filament_type');
+          overrides['filament_diameter'] = joinFilamentProp('filament_diameter');
+        }
+      }
       const gcode = await this.slicer.slice(stl, 4, overrides);
       const ms = Math.round(performance.now() - t0);
       this.lastGcode = gcode;

@@ -24,32 +24,7 @@ window.ORCAXR_VERSION = 'v33-brush-paint';
 
 /** 2D-page UI wiring for standard web slicer mode. */
 function setupDomUI(workspace: OrcaWorkspace) {
-// Inject error logger
-const errDiv = document.createElement('div');
-errDiv.style.position = 'fixed';
-errDiv.style.bottom = '0';
-errDiv.style.left = '0';
-errDiv.style.width = '100%';
-errDiv.style.maxHeight = '50%';
-errDiv.style.overflow = 'auto';
-errDiv.style.backgroundColor = 'rgba(100,0,0,0.8)';
-errDiv.style.color = 'white';
-errDiv.style.zIndex = '999999';
-errDiv.style.fontFamily = 'monospace';
-errDiv.style.fontSize = '12px';
-errDiv.style.padding = '10px';
-errDiv.style.pointerEvents = 'none';
-document.body.appendChild(errDiv);
 
-const oldError = console.error;
-console.error = function(...args) {
-  oldError.apply(console, args);
-  const msg = args.map(a => (a && a.stack) ? a.stack : String(a)).join(' ');
-  errDiv.innerHTML += msg + '<br/><hr/>';
-};
-window.addEventListener('error', e => {
-  console.error(e.error ? e.error.stack : e.message);
-});
   const fileInput = document.getElementById('file-input') as HTMLInputElement;
   const btnLoad = document.getElementById('btn-load') as HTMLButtonElement;
   const btnSlice = document.getElementById('btn-slice') as HTMLButtonElement;
@@ -113,11 +88,48 @@ window.addEventListener('error', e => {
       sel.appendChild(opt);
     }
   };
+  const headsPanel = document.getElementById('heads-panel') as HTMLDivElement;
   const renderProfileSelects = () => {
     const o = workspace.getProfileOptions();
     fillSelect(selMachine, o.machines, o.machine);
     fillSelect(selProcess, o.processes, o.process);
     fillSelect(selFilament, o.filaments, o.filament);
+
+    headsPanel.innerHTML = '';
+    const exCount = workspace.extruderCount;
+    if (exCount > 1) {
+      for (let i = 0; i < exCount; i++) {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:4px;';
+        
+        const lbl = document.createElement('span');
+        lbl.textContent = `Head ${i+1}:`;
+        lbl.style.cssText = 'color:#fff;width:55px;font-size:13px;';
+        row.appendChild(lbl);
+        
+        const fSel = document.createElement('select');
+        fSel.className = 'action-btn';
+        fSel.style.cssText = 'flex-grow:1;margin:0;padding:8px;font-size:13px;';
+        fillSelect(fSel, o.filaments, workspace.headFilaments[i] || '');
+        fSel.onchange = () => {
+          workspace.headFilaments[i] = fSel.value;
+          workspace.rebuildHeadsPanel();
+        };
+        row.appendChild(fSel);
+        
+        const nSel = document.createElement('select');
+        nSel.className = 'action-btn';
+        nSel.style.cssText = 'width:70px;margin:0;padding:8px;font-size:13px;';
+        fillSelect(nSel, ['0.2', '0.4', '0.6', '0.8'], workspace.headNozzles[i]);
+        nSel.onchange = () => {
+          workspace.headNozzles[i] = nSel.value;
+          workspace.rebuildHeadsPanel();
+        };
+        row.appendChild(nSel);
+        
+        headsPanel.appendChild(row);
+      }
+    }
   };
   const applySelects = () => {
     workspace.setProfileByNames(selMachine.value, selProcess.value, selFilament.value);
@@ -220,7 +232,7 @@ window.addEventListener('error', e => {
 
 document.addEventListener('DOMContentLoaded', async () => {
   const options = new xb.Options();
-  options.setAppTitle('OrcaXR Web');
+  options.setAppTitle('OrcaXR Slicer');
   options.enableReticles();
   options.enableHands();
   options.hands.enabled = true;
