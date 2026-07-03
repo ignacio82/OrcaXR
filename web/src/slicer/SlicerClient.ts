@@ -94,6 +94,26 @@ export class SlicerClient {
     maxThreads = 4,
     overrides: Record<string, string> = {},
   ): Promise<string> {
+    const externalUrl = localStorage.getItem('external_slicer_url');
+    if (externalUrl) {
+      if (this.onProgress) {
+        this.onProgress({ percent: 0, message: 'Slicing externally...' });
+      }
+      const formData = new FormData();
+      formData.append('file', new Blob([stl]), 'model.stl');
+      formData.append('overrides', JSON.stringify(overrides));
+      
+      const res = await fetch(`${externalUrl}/slice`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`External Slicer Failed: ${err}`);
+      }
+      return await res.text();
+    }
+
     this.resetIfCrashed();
     if (this.slicing) throw new Error('a slice is already running');
     const mod = await this.ensureModule();

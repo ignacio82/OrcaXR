@@ -239,6 +239,13 @@ function setupDomUI(workspace: OrcaWorkspace) {
     printerCfg.host = printerHost.value.trim();
     savePrinterConfig(printerCfg);
   };
+  const externalSlicerUrl = document.getElementById('external-slicer-url') as HTMLInputElement;
+  externalSlicerUrl.value = localStorage.getItem('external_slicer_url') || '';
+  externalSlicerUrl.oninput = () => {
+    const val = externalSlicerUrl.value.trim();
+    if (val) localStorage.setItem('external_slicer_url', val);
+    else localStorage.removeItem('external_slicer_url');
+  };
   btnPrinterTest.onclick = async () => {
     statusText.textContent = 'Testing printer connection…';
     const r = await probePrinter(printerCfg);
