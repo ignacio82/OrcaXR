@@ -15,47 +15,90 @@ import * as xb from 'xrblocks';
 import * as uikit from '@pmndrs/uikit';
 
 import { OrcaWorkspace, extract3mfColors } from './workspace/OrcaWorkspace';
+import { SlicerClient } from './slicer/SlicerClient';
 import { loadPrinterConfig, probePrinter, savePrinterConfig, sendToPrinter } from './net/PrinterClient';
+import { injectTokenCss } from './ui/tokens';
+import { UiState } from './actions/UiState';
+import { ActionContext } from './actions/ActionContext';
+import { buildRegistry } from './actions/catalog';
+import { DomShell } from './ui/dom/DomShell';
+import { CommandPalette } from './ui/dom/CommandPalette';
 
 declare global {
   interface Window { ORCAXR_VERSION: string }
 }
-window.ORCAXR_VERSION = 'v33-brush-paint';
+window.ORCAXR_VERSION = 'v34-xr-recenter';
+
+// In dev, forcibly evict any leftover service worker + caches. vite dev serves
+// index.html for /sw.js (SPA fallback), which is an invalid SW script, so a SW
+// registered by a *previous* `vite preview`/prod visit on this origin can never
+// self-update and gets stuck serving the stale app bundle — masking every code
+// change. Kill it so dev is always fresh. (Prod keeps its autoUpdate SW.)
+if (import.meta.env.DEV && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations()
+    .then((regs) => { if (regs.length) { regs.forEach((r) => r.unregister()); console.warn('[orcaxr] unregistered', regs.length, 'stale service worker(s) — reload for fresh code'); } })
+    .catch(() => {});
+  if (typeof caches !== 'undefined') {
+    caches.keys().then((keys) => keys.forEach((k) => caches.delete(k))).catch(() => {});
+  }
+}
 
 /** 2D-page UI wiring for standard web slicer mode. */
-function setupDomUI(workspace: OrcaWorkspace) {
+function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
 
   const fileInput = document.getElementById('file-input') as HTMLInputElement;
-  const btnLoad = document.getElementById('btn-load') as HTMLButtonElement;
-  const btnSlice = document.getElementById('btn-slice') as HTMLButtonElement;
-  const btnDownload = document.getElementById('btn-download') as HTMLButtonElement;
   const statusText = document.getElementById('status-text') as HTMLParagraphElement;
   const progressContainer = document.getElementById('progress-container') as HTMLDivElement;
   const progressBar = document.getElementById('progress-bar') as HTMLDivElement;
-  const btnMove = document.getElementById('btn-move') as HTMLButtonElement;
-  const btnRotate = document.getElementById('btn-rotate') as HTMLButtonElement;
-  const btnScale = document.getElementById('btn-scale') as HTMLButtonElement;
+  const loadingModal = document.getElementById('loading-modal') as HTMLDivElement;
+  const loadingModalBar = document.getElementById('loading-modal-bar') as HTMLDivElement;
+  const loadingModalText = document.getElementById('loading-modal-text') as HTMLParagraphElement;
 
-  btnLoad.onclick = () => fileInput.click();
   fileInput.onchange = async () => {
     const files = Array.from(fileInput.files ?? []);
+    if (files.length > 0) loadingModal.style.display = 'flex';
+    
+    const updateModal = (text: string, percent: number) => {
+      loadingModalText.textContent = text;
+      loadingModalBar.style.width = `${percent}%`;
+      uiState.update({ status: text, progress: percent });
+    };
+
     for (const file of files) {
+      updateModal(`Reading ${file.name}...`, 10);
+      await new Promise(r => setTimeout(r, 50));
       const buf = await file.arrayBuffer();
       try {
         const lowerName = file.name.toLowerCase();
         console.log(`[main.ts] Uploaded file: ${file.name}, lowerName: ${lowerName}`);
         if (lowerName.endsWith('.3mf')) {
+          updateModal(`Extracting colors...`, 30);
+          await new Promise(r => setTimeout(r, 50));
           const colors = await extract3mfColors(buf);
+          await workspace.adoptPaletteFrom3mf(buf); // seed palette + Bambu import detection
+
+          updateModal(`Parsing 3MF geometry...`, 60);
+          await new Promise(r => setTimeout(r, 50));
           const group = new ThreeMFLoader().parse(buf);
+
+          updateModal(`Building scene...`, 90);
+          await new Promise(r => setTimeout(r, 50));
           workspace.loadModelFromGroup(group, file.name, colors || undefined);
         } else {
+          updateModal(`Parsing STL geometry...`, 50);
+          await new Promise(r => setTimeout(r, 50));
           const geometry = new STLLoader().parse(buf);
+
+          updateModal(`Building scene...`, 90);
+          await new Promise(r => setTimeout(r, 50));
           workspace.loadModelFromGeometry(geometry, file.name);
         }
       } catch (e) {
         statusText.textContent = `Failed to load: ${(e as Error).message}`;
       }
     }
+    loadingModal.style.display = 'none';
+    uiState.update({ modelCount: workspace.modelCount, status: 'Ready', progress: null });
   };
 
   const downloadGcode = (gcode: string) => {
@@ -69,12 +112,34 @@ function setupDomUI(workspace: OrcaWorkspace) {
   workspace.onDownloadGcode = downloadGcode;
   workspace.onRequestLoadStl = () => fileInput.click();
 
-  btnSlice.onclick = () => {
-    void workspace.sliceNow();
+  // Pre-flight banners (Section 1): bed collision, filament rules, top cover,
+  // Bambu import. Blocking (error) banners disable the Slice button.
+  const bannerWrap = document.getElementById('preflight-banners') as HTMLDivElement;
+  workspace.onPreflight = (banners) => {
+    bannerWrap.innerHTML = '';
+    const palette = {
+      error: { bg: '#3a1e1e', border: '#f4433699', fg: '#ff8a80' },
+      warning: { bg: '#3a331e', border: '#ffb74d99', fg: '#ffcc80' },
+      info: { bg: '#1e2a3a', border: '#4fc3f799', fg: '#90caf9' },
+    } as const;
+    for (const b of banners) {
+      const c = palette[b.severity];
+      const el = document.createElement('div');
+      el.dataset.bannerId = b.id;
+      el.dataset.severity = b.severity;
+      el.style.cssText =
+        `background:${c.bg};border:1px solid ${c.border};color:${c.fg};` +
+        `border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.4;`;
+      el.textContent = b.text;
+      bannerWrap.appendChild(el);
+    }
+    // Slice enablement is now driven by the registry via UiState.preflightBlocked.
+    uiState.update({ preflightBlocked: workspace.hasBlockingPreflight() });
   };
 
-  const btnPreview = document.getElementById('btn-preview') as HTMLButtonElement;
-  btnPreview.onclick = () => workspace.togglePreview();
+  // Wipe-tower auto-position toggle (Section 1).
+  const chkWipeTower = document.getElementById('chk-wipe-tower-auto') as HTMLInputElement;
+  chkWipeTower.onchange = () => workspace.setWipeTowerAuto(chkWipeTower.checked);
 
   // Profile pickers: mirror the XR panel's machine/process/filament cyclers.
   const selMachine = document.getElementById('sel-machine') as HTMLSelectElement;
@@ -96,6 +161,7 @@ function setupDomUI(workspace: OrcaWorkspace) {
     fillSelect(selMachine, o.machines, o.machine);
     fillSelect(selProcess, o.processes, o.process);
     fillSelect(selFilament, o.filaments, o.filament);
+    uiState.update({ extruderCount: workspace.extruderCount });
 
     headsPanel.innerHTML = '';
     const exCount = workspace.extruderCount;
@@ -199,6 +265,25 @@ function setupDomUI(workspace: OrcaWorkspace) {
   workspace.onProfileChanged = renderProfileSelects;
   renderProfileSelects();
 
+  const selWallGenerator = document.getElementById('sel-wall-generator') as HTMLSelectElement;
+  const updateSettings = () => {
+    if (selWallGenerator.value === 'classic') {
+      workspace.customOverrides['wall_generator'] = 'classic';
+      workspace.customOverrides['top_surface_pattern'] = 'monotonic';
+      workspace.customOverrides['bottom_surface_pattern'] = 'monotonic';
+      workspace.customOverrides['sparse_infill_pattern'] = 'grid';
+      workspace.customOverrides['internal_solid_infill_pattern'] = 'rectilinear';
+    } else {
+      workspace.customOverrides['wall_generator'] = 'arachne';
+      delete workspace.customOverrides['top_surface_pattern'];
+      delete workspace.customOverrides['bottom_surface_pattern'];
+      delete workspace.customOverrides['sparse_infill_pattern'];
+      delete workspace.customOverrides['internal_solid_infill_pattern'];
+    }
+  };
+  selWallGenerator.onchange = updateSettings;
+  updateSettings();
+
   // Filament palette: color swatches that drive paint + 3MF display + slice.
   const swatchWrap = document.getElementById('filament-swatches') as HTMLDivElement;
   const btnAddFilament = document.getElementById('btn-add-filament') as HTMLButtonElement;
@@ -240,12 +325,83 @@ function setupDomUI(workspace: OrcaWorkspace) {
     savePrinterConfig(printerCfg);
   };
   const externalSlicerUrl = document.getElementById('external-slicer-url') as HTMLInputElement;
-  externalSlicerUrl.value = localStorage.getItem('external_slicer_url') || '';
-  externalSlicerUrl.oninput = () => {
-    const val = externalSlicerUrl.value.trim();
-    if (val) localStorage.setItem('external_slicer_url', val);
-    else localStorage.removeItem('external_slicer_url');
+  const externalSlicerStatus = document.getElementById('external-slicer-status') as HTMLSpanElement;
+  const btnExternalSlicerConnect = document.getElementById('btn-external-slicer-connect') as HTMLButtonElement;
+  const externalSlicerControls = document.getElementById('external-slicer-controls') as HTMLDivElement;
+  const externalSlicerEnabled = document.getElementById('external-slicer-enabled') as HTMLInputElement;
+  const btnExternalSlicerDelete = document.getElementById('btn-external-slicer-delete') as HTMLButtonElement;
+  const externalSlicerHint = document.getElementById('external-slicer-hint') as HTMLParagraphElement;
+  externalSlicerUrl.value = SlicerClient.getExternalSlicerUrl();
+
+  const updateExternalSlicerStatus = (connected: boolean) => {
+    if (connected) {
+      externalSlicerStatus.innerHTML = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4caf50;"></span> Online';
+      externalSlicerStatus.style.color = '#4caf50';
+    } else {
+      externalSlicerStatus.innerHTML = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f44336;"></span> Offline';
+      externalSlicerStatus.style.color = '#f44336';
+    }
   };
+
+  // Show the enable/delete controls only once a server is saved, and keep
+  // the checkbox + hint in sync with the shared SlicerClient state.
+  const refreshExternalSlicerControls = () => {
+    const configured = !!SlicerClient.getExternalSlicerUrl();
+    externalSlicerControls.style.display = configured ? 'flex' : 'none';
+    externalSlicerHint.style.display = configured ? 'block' : 'none';
+    const enabled = SlicerClient.isExternalSlicerEnabled();
+    externalSlicerEnabled.checked = enabled;
+    externalSlicerHint.textContent = enabled
+      ? 'On — models will be sliced on the external server.'
+      : 'Off — slicing locally in‑browser.';
+  };
+
+  externalSlicerEnabled.onchange = () => {
+    SlicerClient.setExternalSlicerEnabled(externalSlicerEnabled.checked);
+    refreshExternalSlicerControls();
+  };
+
+  btnExternalSlicerDelete.onclick = () => {
+    SlicerClient.clearExternalSlicer();
+    externalSlicerUrl.value = '';
+    updateExternalSlicerStatus(false);
+    refreshExternalSlicerControls();
+    statusText.textContent = 'External slicer removed — slicing locally.';
+  };
+
+  btnExternalSlicerConnect.onclick = async () => {
+    const val = externalSlicerUrl.value.trim();
+    if (!val) {
+      SlicerClient.clearExternalSlicer();
+      updateExternalSlicerStatus(false);
+      refreshExternalSlicerControls();
+      return;
+    }
+    btnExternalSlicerConnect.textContent = '...';
+    try {
+      const res = await fetch(`${val}/ping`);
+      if (res.ok) {
+        SlicerClient.setExternalSlicerUrl(val);
+        SlicerClient.setExternalSlicerEnabled(true); // connecting opts in
+        updateExternalSlicerStatus(true);
+      } else {
+        throw new Error('Bad status');
+      }
+    } catch (e) {
+      // Keep the saved server (if any) on a failed reachability check; just
+      // report offline. Deleting is an explicit action via the Delete button.
+      updateExternalSlicerStatus(false);
+    } finally {
+      btnExternalSlicerConnect.textContent = 'Connect';
+      refreshExternalSlicerControls();
+    }
+  };
+
+  refreshExternalSlicerControls();
+  if (externalSlicerUrl.value) {
+    btnExternalSlicerConnect.click(); // auto-connect on load if url exists
+  }
+  
   btnPrinterTest.onclick = async () => {
     statusText.textContent = 'Testing printer connection…';
     const r = await probePrinter(printerCfg);
@@ -258,20 +414,15 @@ function setupDomUI(workspace: OrcaWorkspace) {
     const r = await sendToPrinter(printerCfg, gcode, 'orcaxr.gcode', true);
     statusText.textContent = r.message;
   };
-  // Enable Send only once a slice exists.
-  const prevDownloadReady = workspace.onDownloadReady;
+  // Download / Send become available once a slice exists. The Download button
+  // itself is registry-driven; here we only drive the Send form button + store.
   workspace.onDownloadReady = (ready) => {
-    if (prevDownloadReady) prevDownloadReady(ready);
     btnPrinterSend.disabled = !ready;
+    uiState.update({ gcodeReady: ready });
   };
 
-  workspace.onDownloadReady = (ready) => {
-    btnDownload.disabled = !ready;
-  };
-
-  btnDownload.onclick = () => {
-    const gcode = workspace.getLastGcode();
-    if (gcode) downloadGcode(gcode);
+  workspace.onSelectionChanged = (hasSelection) => {
+    uiState.update({ hasSelection });
   };
 
   workspace.onStatusChanged = (text, percent) => {
@@ -282,22 +433,18 @@ function setupDomUI(workspace: OrcaWorkspace) {
     } else {
       progressContainer.style.display = 'none';
     }
+    uiState.update({
+      status: text,
+      progress: percent !== undefined && percent >= 0 && percent <= 100 ? percent : null,
+    });
   };
-
-  const setTool = (tool: 'move' | 'rotate' | 'scale', btn: HTMLButtonElement) => {
-    btnMove.classList.remove('active');
-    btnRotate.classList.remove('active');
-    btnScale.classList.remove('active');
-    btn.classList.add('active');
-    workspace.setTool(tool);
-  };
-
-  btnMove.onclick = () => setTool('move', btnMove);
-  btnRotate.onclick = () => setTool('rotate', btnRotate);
-  btnScale.onclick = () => setTool('scale', btnScale);
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Design tokens as CSS custom properties — the DOM shell's single source of
+  // truth for colours/spacing (the XR shell reads the same `tokens` object).
+  injectTokenCss();
+
   const options = new xb.Options();
   options.setAppTitle('OrcaXR Slicer');
   options.enableReticles();
@@ -316,6 +463,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const workspace = new OrcaWorkspace();
   (window as any).workspace = workspace;
+
+  // Foundation for the shared-registry UI (Phase 1 renders both shells from
+  // these). Construct now so the store is live and debuggable from the console.
+  const uiState = new UiState();
+  const actionCtx = new ActionContext(workspace, uiState);
+  (window as unknown as { __orcaUi: unknown }).__orcaUi = uiState;
+  (window as unknown as { __orcaCtx: unknown }).__orcaCtx = actionCtx;
+
   xb.add(workspace);
   await xb.init(options);
 
@@ -332,5 +487,29 @@ document.addEventListener('DOMContentLoaded', async () => {
   (window as unknown as { __orcaRenderer: unknown }).__orcaRenderer = xb.core.renderer;
   (window as unknown as { THREE: unknown }).THREE = THREE;
   (window as unknown as { __orca: unknown }).__orca = workspace;
-  setupDomUI(workspace);
+  setupDomUI(workspace, uiState);
+
+  // Render the tool rail, primary bar, Add/Tools menus, and mode control from
+  // the shared registry (the same catalog the XR shell renders). Mounted after
+  // setupDomUI so the file-input + onRequestLoadStl the Load action depends on
+  // is in place.
+  const registry = buildRegistry();
+  const byId = (id: string) => document.getElementById(id) as HTMLElement;
+  const domShell = new DomShell(registry, actionCtx, uiState);
+  domShell.mount({
+    toolbar: byId('left-toolbar'),
+    primary: byId('action-panel'),
+    modeControl: byId('mode-control'),
+    addMenu: byId('add-menu-host'),
+    toolsMenu: byId('tools-menu-host'),
+  });
+
+  // The command palette: every action, searchable, one Ctrl/⌘-K away.
+  const palette = new CommandPalette(registry, actionCtx, uiState);
+  palette.mount(
+    byId('command-palette'),
+    document.getElementById('cmd-input') as HTMLInputElement,
+    byId('cmd-list'),
+    byId('cmd-search-btn'),
+  );
 });

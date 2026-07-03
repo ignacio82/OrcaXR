@@ -150,6 +150,21 @@ import { parseGcodeToolpath } from '../slicer/GcodeToolpath';
 import { FilamentPalette } from './FilamentPalette';
 import { bedSizeFromProfile, ProfileCatalog, SlicerProfile } from '../slicer/ProfileLoader';
 import { SlicerClient } from '../slicer/SlicerClient';
+import { detectBedCollision, bedCollisionBanner } from '../features/BedCollision';
+import {
+  loadFilamentRules, evaluateFilamentRules, bedKeyFor, EMPTY_RULES,
+  type FilamentRules,
+} from '../features/FilamentRules';
+import { evaluateTopCover } from '../features/TopCoverRule';
+import { scoreWipeTower, parseBias, type AabbXY } from '../features/WipeTowerPlacement';
+import { deriveTriangleFilaments } from '../features/PaintedSlice';
+
+/** A single pre-flight banner surfaced to both shells. */
+export interface PreflightBanner {
+  id: string;
+  severity: 'error' | 'warning' | 'info';
+  text: string;
+}
 
 /** Fallback bed until the profile catalog loads. */
 const PLATE_MM = 200;
@@ -162,6 +177,9 @@ const PLATE_Y = 0.8;
 const PLATE_Z = -0.9;
 
 
+/** One plated model: its source geometry, the display mesh, and the grab proxy. */
+type ModelEntry = { raw: THREE.BufferGeometry; display: THREE.Mesh; viewer: THREE.Object3D };
+
 export class OrcaWorkspace extends xb.Script {
   private uiCore: any;
   private slicer = new SlicerClient();
@@ -173,7 +191,13 @@ export class OrcaWorkspace extends xb.Script {
   /** Everything spatial lives in this group: scaled up for legibility and
    *  re-posed in front of the user when the XR session starts. */
   private workspace = new THREE.Group();
-  private models: { raw: THREE.BufferGeometry; display: THREE.Mesh; viewer: THREE.Object3D }[] = [];
+  private models: ModelEntry[] = [];
+  /** The model actions like Repair / Delete / Boolean / Auto-orient act on.
+   *  Set by selectModel and auto-selected on load; previously undeclared, which
+   *  silently made all those actions no-op ("select a model first"). */
+  private selectedModel: ModelEntry | null = null;
+  /** Fired when the selection changes so the UI can enable selection actions. */
+  public onSelectionChanged: ((hasSelection: boolean) => void) | null = null;
   private statusText: { text: string } | null = null;
   private lastGcode: string | null = null;
   private toolpathObj: THREE.LineSegments | null = null;
@@ -184,6 +208,14 @@ export class OrcaWorkspace extends xb.Script {
   private transformControls: TransformControls | null = null;
   public onStatusChanged: ((text: string, percent?: number) => void) | null = null;
   public onDownloadReady: ((ready: boolean) => void) | null = null;
+  /** Extra slicer overrides set from the UI (e.g. wall generator). Merged last. */
+  public customOverrides: Record<string, string> = {};
+  /** When true, sliceNow computes wipe_tower_x/y from the plated models. */
+  public wipeTowerAuto = false;
+  /** Fired whenever the pre-flight banner set changes (bed collision, filament rules…). */
+  public onPreflight: ((banners: PreflightBanner[]) => void) | null = null;
+  private preflightBanners: PreflightBanner[] = [];
+  private filamentRules: FilamentRules = EMPTY_RULES;
 
   constructor() {
     super();
@@ -222,6 +254,12 @@ export class OrcaWorkspace extends xb.Script {
     });
     this.slicer.onProgress = (p) => this.setStatus(`Slicing... ${p.message}`, p.percent);
 
+    // Filament-vs-bed rules for the pre-flight check (falls back to EMPTY).
+    void loadFilamentRules().then((r) => {
+      this.filamentRules = r;
+      this.recomputePreflight();
+    });
+
     this.workspace.position.set(0, PLATE_Y, PLATE_Z);
     xb.core.camera.position.set(0, PLATE_Y + 0.35, PLATE_Z + 0.55);
     xb.core.camera.lookAt(0, PLATE_Y + 0.03, PLATE_Z);
@@ -253,7 +291,10 @@ export class OrcaWorkspace extends xb.Script {
     this.setupSelectionRaycaster(canvas);
   }
 
-  public selectModel(entry: { viewer: THREE.Object3D }) {
+  public selectModel(entry: ModelEntry) {
+    // Track the selection in both shells so Repair / Delete / Boolean /
+    // Auto-orient have a target; the transform gizmo is 2D-only.
+    this.selectedModel = entry;
     if (this.transformControls && !xb.core.renderer.xr.isPresenting) {
       this.add(this.transformControls.getHelper());
       this.transformControls.attach(entry.viewer);
@@ -261,15 +302,18 @@ export class OrcaWorkspace extends xb.Script {
       this.setTool(this.tool);
       this.setStatus(`Selected model`);
     }
+    if (this.onSelectionChanged) this.onSelectionChanged(true);
   }
 
   public unselectModel() {
+    this.selectedModel = null;
     if (this.transformControls) {
       this.transformControls.detach();
       this.transformControls.getHelper().visible = false;
       this.remove(this.transformControls.getHelper());
       this.setStatus('Model unselected');
     }
+    if (this.onSelectionChanged) this.onSelectionChanged(false);
   }
 
   private setupSelectionRaycaster(canvas: HTMLCanvasElement) {
@@ -331,6 +375,11 @@ export class OrcaWorkspace extends xb.Script {
   public headFilaments: string[] = [];
   public headNozzles: string[] = [];
   private headsContainer: any = null;
+
+  /** Number of models currently on the plate. */
+  get modelCount(): number {
+    return this.models.length;
+  }
 
   get extruderCount(): number {
     if (!this.profile) return 1;
@@ -460,6 +509,7 @@ export class OrcaWorkspace extends xb.Script {
       viewer.position.x = THREE.MathUtils.clamp(viewer.position.x, -halfX, halfX);
       viewer.position.z = THREE.MathUtils.clamp(viewer.position.z, -halfZ, halfZ);
     }
+    this.recomputePreflight();
   }
 
   /** Distinct machine names in catalog order. */
@@ -534,7 +584,7 @@ export class OrcaWorkspace extends xb.Script {
     if (next) this.setProfile(next);
   }
 
-  private setProfile(p: SlicerProfile) {
+  public setProfile(p: SlicerProfile) {
     this.profile = p;
     const count = this.extruderCount;
     
@@ -557,6 +607,7 @@ export class OrcaWorkspace extends xb.Script {
     this.bedMm = bedSizeFromProfile(p.config);
     this.rebuildPlate();
     this.setStatus(`profile: ${p.displayName}\nbed ${this.bedMm.x}×${this.bedMm.y} mm`);
+    this.recomputePreflight();
   }
 
   onXRSessionStarted() {
@@ -751,22 +802,43 @@ export class OrcaWorkspace extends xb.Script {
   async loadModelFromUrl(url: string): Promise<void> {
     const t0 = performance.now();
     console.log('[orcaxr-load] fetching', url);
+    const name = url.split('/').pop() ?? url;
     
     if (url.toLowerCase().endsWith('.3mf')) {
+      this.setStatus(`Downloading ${name}...`);
+      this.setProgress(10);
       const resp = await fetch(url);
       const buf = await resp.arrayBuffer();
+
+      this.setStatus(`Extracting colors...`);
+      this.setProgress(30);
+      await new Promise(r => setTimeout(r, 50));
       const colors = await extract3mfColors(buf);
-      this.adoptPaletteFrom3mf(buf);
+      await this.adoptPaletteFrom3mf(buf);
+
+      this.setStatus(`Parsing 3MF geometry...`);
+      this.setProgress(60);
+      await new Promise(r => setTimeout(r, 50));
       const group = new ThreeMFLoader().parse(buf);
       console.log('[orcaxr-load] parsed 3MF in', Math.round(performance.now() - t0), 'ms');
-      const name = url.split('/').pop() ?? url;
+
+      this.setStatus(`Building scene...`);
+      this.setProgress(90);
+      await new Promise(r => setTimeout(r, 50));
       this.loadModelFromGroup(group, name, colors ?? undefined);
     } else {
+      this.setStatus(`Downloading ${name}...`);
+      this.setProgress(10);
       const raw = await new STLLoader().loadAsync(url);
       console.log('[orcaxr-load] parsed STL in', Math.round(performance.now() - t0), 'ms,',
         raw.getAttribute('position').count / 3, 'tris');
-      this.loadModelFromGeometry(raw, url.split('/').pop() ?? url);
+
+      this.setStatus(`Building scene...`);
+      this.setProgress(90);
+      await new Promise(r => setTimeout(r, 50));
+      this.loadModelFromGeometry(raw, name);
     }
+    this.setProgress(undefined);
     console.log('[orcaxr-load] scene setup done at', Math.round(performance.now() - t0), 'ms');
   }
 
@@ -903,7 +975,7 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
-  private addFromLibrary() {
+  public addFromLibrary() {
     if (this.library.length === 0) return;
     this.libraryIndex = (this.libraryIndex + 1) % this.library.length;
     const entry = this.library[this.libraryIndex];
@@ -966,8 +1038,13 @@ export class OrcaWorkspace extends xb.Script {
     model.traverse((o) => {
       (o as unknown as { draggingMode: unknown }).draggingMode = xb.DragManager.DO_NOT_DRAG;
     });
+    const entry: ModelEntry = { raw, display: mesh, viewer: model };
     this.workspace.add(model);
-    this.models.push({ raw, display: mesh, viewer: model });
+    this.models.push(entry);
+    // Auto-select the just-loaded model so Repair / Delete / Auto-orient act on
+    // it immediately (standard slicer behaviour, works in both shells).
+    this.selectModel(entry);
+    this.recomputePreflight();
   }
 
   /** Build/replace the toolpath preview from sliced G-code and show it. */
@@ -1419,7 +1496,7 @@ export class OrcaWorkspace extends xb.Script {
     this.setStatus('Laid on face');
   }
 
-  private autoOrientSelectedModel() {
+  public autoOrientSelectedModel() {
     if (!this.selectedModel) return;
     const entry = this.selectedModel;
     const originalQuat = entry.viewer.quaternion.clone();
@@ -1632,7 +1709,7 @@ export class OrcaWorkspace extends xb.Script {
     panel.add(addBtn);
   }
 
-  private deleteSelectedModel() {
+  public deleteSelectedModel() {
     if (!this.selectedModel) return;
     const idx = this.models.indexOf(this.selectedModel);
     if (idx !== -1) {
@@ -1643,6 +1720,7 @@ export class OrcaWorkspace extends xb.Script {
         this.selectModel(this.models[this.models.length - 1]);
       }
       this.setStatus('Model deleted.');
+      this.recomputePreflight();
     }
   }
 
@@ -1655,26 +1733,56 @@ export class OrcaWorkspace extends xb.Script {
     try {
       this.setStatus('baking transforms…', 0);
       await new Promise(r => setTimeout(r, 50)); // let UI paint
-      const stl = this.bakeToPrinterStl();
-      this.setStatus('slicing…', 0);
+      // Painted (multi-colour) input, if the plated models use >1 filament.
+      const painted = this.buildPaintedInput();
+      const isPainted = !!painted && painted.distinctCount > 1 && !SlicerClient.useExternalSlicer();
+      this.setStatus(isPainted ? 'slicing (multi-colour)…' : 'slicing…', 0);
       const t0 = performance.now();
-      const overrides = { ...(this.profile?.config ?? {}), ...this.palette.toSlicerOverrides() };
-      if (this.extruderCount > 1) {
+      const overrides: Record<string, string> = {
+        ...(this.profile?.config ?? {}),
+        ...this.palette.toSlicerOverrides(),
+        ...this.customOverrides,
+      };
+      if (this.wipeTowerAuto) {
+        const pick = scoreWipeTower(
+          this.printerPartAabbs(),
+          this.bedMm.x,
+          this.bedMm.y,
+          { bias: parseBias(this.profile?.config['wipe_tower_bias']) },
+        );
+        overrides['wipe_tower_x'] = pick.xMm.toFixed(2);
+        overrides['wipe_tower_y'] = pick.yMm.toFixed(2);
+      }
+      if (isPainted && painted) {
+        // Painted colours = one physical nozzle with N filaments swapped by
+        // colour (MMU / AMS model). single_extruder_multi_material avoids the
+        // per-printer-extruder config lookup that fails on a multi-head profile
+        // (`update_values_to_printer_extruders … extruder_index N`).
+        overrides['single_extruder_multi_material'] = '1';
+        const firstNozzle = (this.profile?.config['nozzle_diameter'] ?? '0.4').split(',')[0] || '0.4';
+        overrides['nozzle_diameter'] = firstNozzle;
+        // Size the per-filament colour list to the volumes we emitted.
+        const colors = this.palette.list().slice(0, painted.filamentCount).map((s) => s.color).join(',');
+        overrides['filament_colour'] = colors;
+        overrides['extruder_colour'] = colors;
+      } else if (this.extruderCount > 1) {
         overrides['nozzle_diameter'] = this.headNozzles.join(',');
         // Combine the configs for the selected filaments for each head
         if (this.profile) {
-          const filamentConfigs = this.headFilaments.map(fName => 
+          const filamentConfigs = this.headFilaments.map(fName =>
             this.catalog.find(this.profile!.machineName, this.profile!.processName, fName)?.config ?? {}
           );
-          
+
           // Helper to join array-based config properties across the different filaments
           const joinFilamentProp = (prop: string) => filamentConfigs.map(c => c[prop] ?? '').join(',');
-          
+
           overrides['filament_type'] = joinFilamentProp('filament_type');
           overrides['filament_diameter'] = joinFilamentProp('filament_diameter');
         }
       }
-      const gcode = await this.slicer.slice(stl, 4, overrides);
+      const gcode = isPainted && painted
+        ? await this.slicer.slicePainted(painted.positions, painted.triFilament, painted.filamentCount, 4, overrides)
+        : await this.slicer.slice(this.bakeToPrinterStl(), 4, overrides);
       const ms = Math.round(performance.now() - t0);
       this.lastGcode = gcode;
       if (this.onDownloadReady) this.onDownloadReady(true);
@@ -1693,7 +1801,13 @@ export class OrcaWorkspace extends xb.Script {
    * printer coordinates: mm, Z-up, bed origin at the plate corner with
    * the models dropped onto Z=0.
    */
-  private bakeToPrinterStl(): ArrayBuffer {
+  /**
+   * Each plated model's geometry converted into printer coordinates (mm,
+   * Z-up, bed-centre origin, +X right / +Y back). One geometry per model —
+   * the shared basis for both the slice bake and the pre-flight / wipe-tower
+   * checks, so "what you see is what slices" stays a single transform path.
+   */
+  private printerGeometries(): THREE.BufferGeometry[] {
     this.plateAnchor.updateMatrixWorld(true);
     const plateInverse = new THREE.Matrix4().copy(this.plateAnchor.matrixWorld).invert();
 
@@ -1705,7 +1819,6 @@ export class OrcaWorkspace extends xb.Script {
     );
 
     const geometries: THREE.BufferGeometry[] = [];
-    
     for (const entry of this.models) {
       entry.display.updateMatrixWorld(true);
       const rel = new THREE.Matrix4()
@@ -1717,22 +1830,120 @@ export class OrcaWorkspace extends xb.Script {
       geo.applyMatrix4(conv);
       geometries.push(geo);
     }
-    
-    if (geometries.length === 0) {
-       return new ArrayBuffer(84);
-    }
+    return geometries;
+  }
 
+  /**
+   * All plated models merged into one non-indexed printer-space geometry
+   * (mm, Z-up, dropped onto Z=0). Carries the `color` attribute so the painted
+   * slice can read per-triangle filament from vertex colours. Single source for
+   * the mono bake, the painted bake, and the pre-flight collision check.
+   */
+  private mergedPrinterGeometry(): THREE.BufferGeometry | null {
+    const geometries = this.printerGeometries();
+    if (geometries.length === 0) return null;
     const merged = BufferGeometryUtils.mergeGeometries(geometries, false);
-    if (!merged) return new ArrayBuffer(84);
-
+    if (!merged) return null;
     merged.computeBoundingBox();
-    const minZ = merged.boundingBox!.min.z;
-    merged.translate(0, 0, -minZ);
+    merged.translate(0, 0, -merged.boundingBox!.min.z);
+    return merged.index ? merged.toNonIndexed() : merged;
+  }
 
+  private bakeToPrinterStl(): ArrayBuffer {
+    const merged = this.mergedPrinterGeometry();
+    if (!merged) return new ArrayBuffer(84);
     return writeBinaryStl(merged);
   }
 
-  private async fixSelectedModel() {
+  /**
+   * Build the painted-slice input from the plated models' vertex colours:
+   * raw Float32 positions (9/tri) + a 0-based filament index per triangle.
+   * Returns null when there's nothing to slice. `distinctCount > 1` means the
+   * model is genuinely multi-colour and should take the painted path.
+   */
+  private buildPaintedInput():
+    | { positions: Float32Array; triFilament: Int32Array; filamentCount: number; distinctCount: number }
+    | null {
+    const merged = this.mergedPrinterGeometry();
+    if (!merged) return null;
+    const posAttr = merged.getAttribute('position');
+    if (!posAttr) return null;
+    const colAttr = merged.getAttribute('color');
+    const triCount = Math.floor(posAttr.count / 3);
+    const paletteHex = this.palette.list().map((s) => s.color);
+    const { triFilament, distinctCount } = deriveTriangleFilaments(
+      colAttr?.array as ArrayLike<number> | undefined, triCount, paletteHex,
+    );
+    const posArr = posAttr.array;
+    const positions = posArr instanceof Float32Array ? posArr : new Float32Array(posArr);
+    return { positions, triFilament, filamentCount: paletteHex.length, distinctCount };
+  }
+
+  /**
+   * Per-model XY bounding boxes in printer coordinates — the input the
+   * wipe-tower placement scorer needs. Bed origin is the corner (0..bed),
+   * matching libslic3r's `wipe_tower_x/y` frame.
+   */
+  private printerPartAabbs(): AabbXY[] {
+    const out: AabbXY[] = [];
+    for (const geo of this.printerGeometries()) {
+      geo.computeBoundingBox();
+      const bb = geo.boundingBox;
+      if (!bb) continue;
+      // printerGeometries() centres the bed at origin; shift to corner origin.
+      out.push({
+        xMin: bb.min.x + this.bedMm.x / 2,
+        xMax: bb.max.x + this.bedMm.x / 2,
+        yMin: bb.min.y + this.bedMm.y / 2,
+        yMax: bb.max.y + this.bedMm.y / 2,
+      });
+    }
+    return out;
+  }
+
+  /** Toggle wipe-tower auto-positioning (Section 1 pre-flight). */
+  public setWipeTowerAuto(on: boolean): void {
+    this.wipeTowerAuto = on;
+  }
+
+  /** True when a blocking (error) pre-flight banner is active — gates Slice. */
+  public hasBlockingPreflight(): boolean {
+    return this.preflightBanners.some((b) => b.severity === 'error');
+  }
+
+  /**
+   * Recompute the pre-flight banner set from the live scene: bed collision,
+   * filament-vs-bed rules, and the top-cover hint. Fires `onPreflight`. Cheap
+   * enough to run on load / profile change / transform-end.
+   */
+  public recomputePreflight(): void {
+    const banners: PreflightBanner[] = [];
+
+    if (this.models.length > 0) {
+      const merged = BufferGeometryUtils.mergeGeometries(this.printerGeometries(), false);
+      const pos = merged?.getAttribute('position');
+      if (pos) {
+        const res = detectBedCollision(pos.array as ArrayLike<number>, this.bedMm.x, this.bedMm.y);
+        const text = bedCollisionBanner(res);
+        if (text) banners.push({ id: 'bed-collision', severity: 'error', text });
+      }
+    }
+
+    const cfg = this.profile?.config ?? {};
+    const bedKey = bedKeyFor(cfg['curr_bed_type']);
+    const filamentTypes = this.palette.list().map((s) => s.type);
+    const rule = evaluateFilamentRules(this.filamentRules, bedKey, filamentTypes);
+    if (rule.kind === 'forbidden') banners.push({ id: 'filament-rule', severity: 'error', text: rule.message });
+    else if (rule.kind === 'warning') banners.push({ id: 'filament-rule', severity: 'warning', text: rule.message });
+
+    const topCover = evaluateTopCover(cfg);
+    if (topCover.kind === 'warning') banners.push({ id: 'top-cover', severity: 'info', text: topCover.message });
+
+    this.preflightBanners = banners;
+    if (this.onPreflight) this.onPreflight(banners);
+  }
+
+  public async fixSelectedModel() {
     if (!this.selectedModel) {
       this.setStatus('Select a model to fix first.');
       return;
@@ -1757,7 +1968,7 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
-  private async booleanModels(op: 'UNION' | 'A_NOT_B' | 'INTERSECTION') {
+  public async booleanModels(op: 'UNION' | 'A_NOT_B' | 'INTERSECTION') {
     if (this.models.length < 2) {
       this.setStatus('Requires at least 2 models for boolean operations.');
       return;
