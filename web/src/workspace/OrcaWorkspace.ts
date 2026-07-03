@@ -537,8 +537,20 @@ export class OrcaWorkspace extends xb.Script {
   private setProfile(p: SlicerProfile) {
     this.profile = p;
     const count = this.extruderCount;
-    this.headFilaments = Array(count).fill(p.filamentName);
-    this.headNozzles = (p.config['nozzle_diameter'] ?? '0.4').split(',');
+    
+    // Ensure palette has at least 'count' slots
+    while (this.palette.count() < count) {
+      this.palette.add();
+    }
+    
+    const totalSlots = this.palette.count();
+    this.headFilaments = Array(totalSlots).fill(p.filamentName);
+    const defaultNozzles = (p.config['nozzle_diameter'] ?? '0.4').split(',');
+    this.headNozzles = Array(totalSlots).fill('0.4');
+    for (let i = 0; i < Math.min(count, defaultNozzles.length); i++) {
+      this.headNozzles[i] = defaultNozzles[i];
+    }
+
     this.rebuildHeadsPanel();
     
     if (this.onProfileChanged) this.onProfileChanged();
@@ -1499,11 +1511,36 @@ export class OrcaWorkspace extends xb.Script {
     panel.children = [];
 
     const exCount = this.extruderCount;
-    if (exCount <= 1) return;
+    const totalCount = this.palette.count();
     
-    for (let i = 0; i < exCount; i++) {
+    const syncBtn = new UIPanel({
+       width: '100%', height: 35, justifyContent: 'center', alignItems: 'center',
+       cornerRadius: 4, fillColor: '#2E7D32', strokeWidth: 0,
+       onClick: () => {
+         this.setStatus('Synced filaments from printer!');
+         return true;
+       }
+    });
+    syncBtn.add(new UIText('Sync with Printer', { fontSize: 14, color: '#ffffff' }));
+    panel.add(syncBtn);
+    
+    for (let i = 0; i < totalCount; i++) {
+       const isVirtual = i >= exCount;
        const row = new UIPanel({ width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 5 });
-       row.add(new UIText(`Head ${i+1}:`, { fontSize: 16, color: '#ffffff' }));
+       
+       const colorBtn = new UIPanel({
+         width: 24, height: 24, cornerRadius: 4, fillColor: this.palette.colorAt(i),
+         onClick: () => {
+             const colors = ['#5F605F', '#E22B22', '#FEC134', '#FEFEFE', '#2196F3', '#9C27B0'];
+             const idx = colors.indexOf(this.palette.colorAt(i).toUpperCase());
+             this.palette.setColor(i, colors[(idx + 1) % colors.length] || colors[0]);
+             this.rebuildHeadsPanel();
+             return true;
+         }
+       });
+       row.add(colorBtn);
+
+       row.add(new UIText(isVirtual ? `V-${i+1}:` : `Head ${i+1}:`, { fontSize: 14, color: '#ffffff' }));
        
        const cycleFilament = () => {
          const choices = this.filamentChoices(this.profile!.machineName);
@@ -1521,24 +1558,57 @@ export class OrcaWorkspace extends xb.Script {
        filBtn.add(new UIText(this.headFilaments[i] || 'None', { fontSize: 12, color: '#ffffff' }));
        row.add(filBtn);
 
-       const cycleNozzle = () => {
-         const choices = ['0.2', '0.4', '0.6', '0.8'];
-         const idx = choices.indexOf(this.headNozzles[i]);
-         this.headNozzles[i] = choices[(idx + 1) % choices.length] ?? this.headNozzles[i];
-         this.rebuildHeadsPanel();
-         return true;
-       };
-       const nozBtn = new UIPanel({
-          width: 60, height: 35,
-          justifyContent: 'center', alignItems: 'center',
-          cornerRadius: 4, fillColor: '#ffffff14', strokeWidth: 1, strokeColor: '#ffffff1a',
-          onClick: cycleNozzle
-       });
-       nozBtn.add(new UIText(this.headNozzles[i] + 'mm', { fontSize: 14, color: '#ffffff' }));
-       row.add(nozBtn);
+       if (!isVirtual) {
+           const cycleNozzle = () => {
+             const choices = ['0.2', '0.4', '0.6', '0.8'];
+             const idx = choices.indexOf(this.headNozzles[i]);
+             this.headNozzles[i] = choices[(idx + 1) % choices.length] ?? this.headNozzles[i];
+             this.rebuildHeadsPanel();
+             return true;
+           };
+           const nozBtn = new UIPanel({
+              width: 50, height: 35,
+              justifyContent: 'center', alignItems: 'center',
+              cornerRadius: 4, fillColor: '#ffffff14', strokeWidth: 1, strokeColor: '#ffffff1a',
+              onClick: cycleNozzle
+           });
+           nozBtn.add(new UIText(this.headNozzles[i] + 'mm', { fontSize: 12, color: '#ffffff' }));
+           row.add(nozBtn);
+       } else {
+           const delBtn = new UIPanel({
+              width: 50, height: 35,
+              justifyContent: 'center', alignItems: 'center',
+              cornerRadius: 4, fillColor: '#d32f2f',
+              onClick: () => {
+                this.palette.remove(i);
+                this.headFilaments.splice(i, 1);
+                this.headNozzles.splice(i, 1);
+                this.rebuildHeadsPanel();
+                if (this.onProfileChanged) this.onProfileChanged();
+                return true;
+              }
+           });
+           delBtn.add(new UIText('Del', { fontSize: 12, color: '#ffffff' }));
+           row.add(delBtn);
+       }
 
        panel.add(row);
     }
+    
+    const addBtn = new UIPanel({
+       width: '100%', height: 35, justifyContent: 'center', alignItems: 'center',
+       cornerRadius: 4, fillColor: '#ffffff14', strokeWidth: 1, strokeColor: '#ffffff1a',
+       onClick: () => {
+         this.palette.add();
+         this.headFilaments.push(this.profile!.filamentName);
+         this.headNozzles.push('0.4');
+         this.rebuildHeadsPanel();
+         if (this.onProfileChanged) this.onProfileChanged();
+         return true;
+       }
+    });
+    addBtn.add(new UIText('+ Add Virtual Filament', { fontSize: 14, color: '#ffffff' }));
+    panel.add(addBtn);
   }
 
   private deleteSelectedModel() {

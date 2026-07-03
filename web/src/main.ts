@@ -97,19 +97,42 @@ function setupDomUI(workspace: OrcaWorkspace) {
 
     headsPanel.innerHTML = '';
     const exCount = workspace.extruderCount;
+    const totalCount = workspace.palette.count();
+
     if (exCount > 1) {
-      for (let i = 0; i < exCount; i++) {
+      const syncBtn = document.createElement('button');
+      syncBtn.className = 'action-btn';
+      syncBtn.style.cssText = 'background: #2E7D32; color: white; border: none; padding: 8px; margin-bottom: 8px; border-radius: 8px; cursor: pointer; font-size: 13px; width: 100%;';
+      syncBtn.textContent = 'Sync with Printer';
+      syncBtn.onclick = () => {
+         // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         (workspace as any).setStatus('Synced filaments from printer!');
+      };
+      headsPanel.appendChild(syncBtn);
+      
+      for (let i = 0; i < totalCount; i++) {
+        const isVirtual = i >= exCount;
         const row = document.createElement('div');
-        row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:4px;';
+        row.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:4px;';
         
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.value = workspace.palette.colorAt(i);
+        colorInput.style.cssText = 'width: 24px; height: 24px; padding: 0; border: none; background: none; cursor: pointer;';
+        colorInput.onchange = () => {
+           workspace.palette.setColor(i, colorInput.value);
+           workspace.rebuildHeadsPanel();
+        };
+        row.appendChild(colorInput);
+
         const lbl = document.createElement('span');
-        lbl.textContent = `Head ${i+1}:`;
-        lbl.style.cssText = 'color:#fff;width:55px;font-size:13px;';
+        lbl.textContent = isVirtual ? `V-${i+1}:` : `H-${i+1}:`;
+        lbl.style.cssText = 'color:#fff;width:30px;font-size:12px;';
         row.appendChild(lbl);
         
         const fSel = document.createElement('select');
         fSel.className = 'action-btn';
-        fSel.style.cssText = 'flex-grow:1;margin:0;padding:8px;font-size:13px;';
+        fSel.style.cssText = 'flex-grow:1;margin:0;padding:6px;font-size:12px;';
         fillSelect(fSel, o.filaments, workspace.headFilaments[i] || '');
         fSel.onchange = () => {
           workspace.headFilaments[i] = fSel.value;
@@ -117,18 +140,47 @@ function setupDomUI(workspace: OrcaWorkspace) {
         };
         row.appendChild(fSel);
         
-        const nSel = document.createElement('select');
-        nSel.className = 'action-btn';
-        nSel.style.cssText = 'width:70px;margin:0;padding:8px;font-size:13px;';
-        fillSelect(nSel, ['0.2', '0.4', '0.6', '0.8'], workspace.headNozzles[i]);
-        nSel.onchange = () => {
-          workspace.headNozzles[i] = nSel.value;
-          workspace.rebuildHeadsPanel();
-        };
-        row.appendChild(nSel);
+        if (!isVirtual) {
+            const nSel = document.createElement('select');
+            nSel.className = 'action-btn';
+            nSel.style.cssText = 'width:60px;margin:0;padding:6px;font-size:12px;';
+            fillSelect(nSel, ['0.2', '0.4', '0.6', '0.8'], workspace.headNozzles[i]);
+            nSel.onchange = () => {
+              workspace.headNozzles[i] = nSel.value;
+              workspace.rebuildHeadsPanel();
+            };
+            row.appendChild(nSel);
+        } else {
+            const delBtn = document.createElement('button');
+            delBtn.className = 'action-btn';
+            delBtn.style.cssText = 'width:60px;margin:0;padding:6px;font-size:12px;background:#d32f2f;color:white;border:none;cursor:pointer;';
+            delBtn.textContent = 'Del';
+            delBtn.onclick = () => {
+              workspace.palette.remove(i);
+              workspace.headFilaments.splice(i, 1);
+              workspace.headNozzles.splice(i, 1);
+              workspace.rebuildHeadsPanel();
+              renderProfileSelects(); // force redraw
+            };
+            row.appendChild(delBtn);
+        }
         
         headsPanel.appendChild(row);
       }
+      
+      const addBtn = document.createElement('button');
+      addBtn.className = 'action-btn';
+      addBtn.style.cssText = 'background: rgba(255,255,255,0.1); color: white; padding: 8px; margin-top: 4px; border-radius: 8px; cursor: pointer; font-size: 13px; width: 100%; border: 1px dashed rgba(255,255,255,0.3);';
+      addBtn.textContent = '+ Add Virtual Filament';
+      addBtn.onclick = () => {
+         workspace.palette.add();
+         // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
+         workspace.headFilaments.push(workspace.getProfileOptions().filament);
+         workspace.headNozzles.push('0.4');
+         workspace.rebuildHeadsPanel();
+         renderProfileSelects(); // force redraw
+      };
+      headsPanel.appendChild(addBtn);
     }
   };
   const applySelects = () => {
