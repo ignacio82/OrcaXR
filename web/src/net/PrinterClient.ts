@@ -49,7 +49,7 @@ export async function sendToPrinter(
   form.append('root', 'gcodes');
   if (startPrint) form.append('print', 'true');
 
-  const ports = cfg.port === 7125 && !cfg.host.includes(':') ? [7125, 80] : [cfg.port];
+  const ports = cfg.port === 7125 && !cfg.host.includes(':') ? [7125, 80, 8080] : [cfg.port];
   let lastErrorMsg = '';
 
   for (const port of ports) {
@@ -85,7 +85,7 @@ export async function sendToPrinter(
 export async function probePrinter(cfg: PrinterConfig): Promise<SendResult> {
   if (!cfg.host) return { ok: false, message: 'No printer IP set.' };
   
-  const ports = cfg.port === 7125 && !cfg.host.includes(':') ? [7125, 80] : [cfg.port];
+  const ports = cfg.port === 7125 && !cfg.host.includes(':') ? [7125, 80, 8080] : [cfg.port];
   let lastErrorMsg = '';
 
   for (const port of ports) {

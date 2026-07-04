@@ -60,9 +60,10 @@ export class MoonrakerClient {
         if (this.printer.host.includes(':') && !this.printer.host.startsWith('http')) {
              baseUrls.push(this.baseUrl);
         } else if (this.printer.port === 7125) {
-             // Default Klipper port is 7125, but Snapmaker U1 uses port 80
+             // Default Klipper port is 7125, but Snapmaker U1 uses port 80 or 8080
              baseUrls.push(`${this.baseUrl}:7125`);
              baseUrls.push(this.baseUrl); // port 80 (default http)
+             baseUrls.push(`${this.baseUrl}:8080`); // alternative web interface port
         } else if (this.printer.port === 80 || this.printer.port === 0) {
              baseUrls.push(this.baseUrl);
         } else {
@@ -98,7 +99,11 @@ export class MoonrakerClient {
             }
         }
         
-        throw new Error(`MoonrakerClient error: ${lastError?.message}`);
+        let msg = lastError?.message || 'Unknown error';
+        if (msg === 'Failed to fetch') {
+            msg += ' (Check printer IP, or ensure Moonraker cors_domains includes this app)';
+        }
+        throw new Error(`MoonrakerClient error: ${msg}`);
     }
 
     async ping(): Promise<PrinterInfo> {
