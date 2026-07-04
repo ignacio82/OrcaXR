@@ -46,7 +46,10 @@ class GizmoGlbTest {
 
         // Colors
         for (i in 0 until 432) {
-            val r = buf.float; val g = buf.float; val b = buf.float
+            val r = (buf.get().toInt() and 0xFF) / 255f
+            val g = (buf.get().toInt() and 0xFF) / 255f
+            val b = (buf.get().toInt() and 0xFF) / 255f
+            buf.get() // skip alpha
             assertEquals(1f, r, tol)
             assertEquals(0f, g, tol)
             assertEquals(0f, b, tol)
@@ -88,7 +91,10 @@ class GizmoGlbTest {
 
         // Colors
         for (i in 0 until 49) {
-            val r = buf.float; val g = buf.float; val b = buf.float
+            val r = (buf.get().toInt() and 0xFF) / 255f
+            val g = (buf.get().toInt() and 0xFF) / 255f
+            val b = (buf.get().toInt() and 0xFF) / 255f
+            buf.get() // skip alpha
             assertEquals(0f, r, tol)
             assertEquals(1f, g, tol)
             assertEquals(0f, b, tol)
@@ -129,7 +135,10 @@ class GizmoGlbTest {
 
         // Colors
         for (i in 0 until 8) {
-            val r = buf.float; val g = buf.float; val b = buf.float
+            val r = (buf.get().toInt() and 0xFF) / 255f
+            val g = (buf.get().toInt() and 0xFF) / 255f
+            val b = (buf.get().toInt() and 0xFF) / 255f
+            buf.get() // skip alpha
             assertEquals(0f, r, tol)
             assertEquals(0f, g, tol)
             assertEquals(1f, b, tol)

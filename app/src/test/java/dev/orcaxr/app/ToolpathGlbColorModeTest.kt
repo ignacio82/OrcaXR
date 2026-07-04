@@ -149,10 +149,14 @@ class ToolpathGlbColorModeTest {
         // Skip positions block. Position floats are 4 bytes each.
         val posFloats = totalSegs * 6
         for (i in 0 until posFloats) buf.float
-        // Now at colors. Skip to segment 0's first vertex (index = segmentIndex * 6).
-        val colorOffset = segmentIndex * 6
-        for (i in 0 until colorOffset) buf.float
-        return Triple(buf.float, buf.float, buf.float)
+        // Now at colors. Skip to segment 0's first vertex (index = segmentIndex * 2).
+        val verticesToSkip = segmentIndex * 2
+        for (i in 0 until verticesToSkip * 4) buf.get()
+        val r = (buf.get().toInt() and 0xFF) / 255f
+        val g = (buf.get().toInt() and 0xFF) / 255f
+        val b = (buf.get().toInt() and 0xFF) / 255f
+        buf.get() // skip alpha
+        return Triple(r, g, b)
     }
 
     private fun assertVeryClose(

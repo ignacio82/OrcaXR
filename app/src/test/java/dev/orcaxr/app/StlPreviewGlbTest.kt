@@ -157,9 +157,14 @@ class StlPreviewGlbTest {
         // (v*3 floats), then indices. Skip positions.
         val pos = expectedVertexCount * 3 * 4
         repeat(pos) { buf.get() }
-        // Pull v*3 floats.
+        // Pull v*4 bytes and convert RGB to floats.
         val colors = FloatArray(expectedVertexCount * 3)
-        for (i in colors.indices) colors[i] = buf.float
+        for (i in 0 until expectedVertexCount) {
+            colors[i * 3] = (buf.get().toInt() and 0xFF) / 255f
+            colors[i * 3 + 1] = (buf.get().toInt() and 0xFF) / 255f
+            colors[i * 3 + 2] = (buf.get().toInt() and 0xFF) / 255f
+            buf.get() // skip alpha
+        }
         // Sanity: COLOR_0 in the JSON ensures the writer actually
         // emitted a color attribute.
         assertEquals(true, json.contains("COLOR_0"))
