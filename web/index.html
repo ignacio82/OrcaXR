@@ -83,8 +83,17 @@
       .action-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.15); transform: translateY(-1px); }
       .action-btn:active:not(:disabled) { transform: translateY(1px); }
       .action-btn.primary { background: linear-gradient(135deg, #ffb74d 0%, #ff6d00 100%); color: #000; border: none; box-shadow: 0 4px 15px rgba(255, 109, 0, 0.3); }
-      select.action-btn option { background: #333; color: #fff; }
       .action-btn.primary:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(255, 109, 0, 0.4); }
+      select.action-btn {
+        appearance: none;
+        -webkit-appearance: none;
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 14px center;
+        background-size: 16px;
+        padding-right: 40px;
+      }
+      select.action-btn option { background: #333; color: #fff; }
       .action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
       .status-panel { background: rgba(0,0,0,0.3); padding: 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
       #status-text { margin: 0; font-size: 0.85rem; color: #a0aab5; white-space: pre-wrap; line-height: 1.4; font-family: 'JetBrains Mono', monospace; }
