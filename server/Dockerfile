@@ -23,10 +23,13 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Download the latest Snapmaker OrcaSlicer AppImage
-RUN wget -O Snapmaker.zip "https://github.com/Snapmaker/OrcaSlicer/releases/download/v2.3.4/Snapmaker_Orca_Linux_ubuntu_2404_V2.3.4.zip" && \
+# Official Snapmaker OrcaSlicer — the default slicing engine (SLICER_ENGINE=cli).
+# Bump ORCA_VERSION to pick up new Snapmaker releases; keep it pinned (CLI
+# flags and profile schemas shift between releases — never track "latest").
+ARG ORCA_VERSION=2.3.4
+RUN wget -O Snapmaker.zip "https://github.com/Snapmaker/OrcaSlicer/releases/download/v${ORCA_VERSION}/Snapmaker_Orca_Linux_ubuntu_2404_V${ORCA_VERSION}.zip" && \
     unzip Snapmaker.zip && \
-    mv Snapmaker_Orca_Linux_AppImage_Ubuntu2404_V2.3.4.AppImage OrcaSlicer.AppImage && \
+    mv Snapmaker_Orca_Linux_AppImage_Ubuntu2404_V${ORCA_VERSION}.AppImage OrcaSlicer.AppImage && \
     chmod +x OrcaSlicer.AppImage && \
     ./OrcaSlicer.AppImage --appimage-extract && \
     rm OrcaSlicer.AppImage Snapmaker.zip
@@ -42,7 +45,7 @@ RUN npm install
 COPY wasm-dist /app/wasm/dist
 
 # Copy server code
-COPY server.js slice_worker.mjs ./
+COPY server.js slice_worker.mjs preset_key_types.json ./
 
 EXPOSE 3000
 ENV PORT=3000

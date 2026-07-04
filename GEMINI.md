@@ -725,6 +725,41 @@ Implementation:
   via `lighting` + `annotate` flags work identically inside a
   session.
 
+## External slicer server (`server/`)
+
+Dockerized HTTP endpoint (`POST /slice`, STL + flattened-overrides JSON) the
+web app can offload plain slices to. Two engines, chosen by `SLICER_ENGINE`:
+
+- **`cli` (default)** — official Snapmaker OrcaSlicer AppImage, pinned via
+  `ARG ORCA_VERSION` in the Dockerfile (bump deliberately; never track
+  "latest"). Native 64-bit: no wasm32 4GB cap, real TBB threads, upstream
+  improvements for free. Runs under `xvfb-run` (CLI links GUI libs).
+- **`wasm`** — the browser's patched-libslic3r build in a Node child process;
+  parity/debug fallback. Painted/FullSpectrum slicing never reaches this
+  server (client hard-gates it to local WASM), so the stock CLI losing FS
+  keys is by design.
+
+CLI invocation gotchas (all found empirically against Snapmaker Orca 2.3.4,
+logic verified against `src/OrcaSlicer.cpp` in the submodule):
+
+- `--load-settings` **rejects** `from: project` and a single merged file. It
+  wants typed files: machine + process via `--load-settings a.json;b.json`,
+  filament via `--load-filaments`. `server.js` splits the client's flat
+  config using key sets extracted from `Preset.cpp` into
+  `server/preset_key_types.json` (machine = printer + machine-limits +
+  extruder options; filament list; everything else → process). Mis-binned
+  keys are harmless — the CLI loads with substitution rule `Enable`.
+- The compatibility gate compares process/filament `compatible_printers`
+  against the machine's **system name**, which for a `from: user` machine is
+  its (empty) `inherits` — nothing matches and it exits `-17`. Fix: machine
+  is declared `from: system` (its own name becomes the system name) and the
+  generated process/filament files list it in `compatible_printers`.
+- `wipe_tower_filament: "0"` **segfaults** the 2.3.4 CLI config loader
+  (`CLI_CRASH_KEYS` drops it). If a future profile key crashes the CLI the
+  same way, bisect keys with a probe loop against the container.
+- `--arrange 0 --orient 0` is load-bearing: the client bakes transforms into
+  printer coordinates before upload; arranging would move the parts.
+
 ## Related docs
 
 - [`ROADMAP.md`](ROADMAP.md) — forward-looking feature roadmap (single source of truth for sections A, B, C, E, F, G).
