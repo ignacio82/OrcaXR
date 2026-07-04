@@ -1342,7 +1342,8 @@ export class OrcaWorkspace extends xb.Script {
 
   private addControlPanel() {
     this.addLeftToolbar();
-    this.addRightSidebar();
+    this.addActionPanel();
+    this.addProfilePanel();
     this.refreshToolButtons();
   }
 
