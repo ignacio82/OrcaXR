@@ -52,10 +52,14 @@ export async function sendToPrinter(
   const ports = cfg.port === 7125 && !cfg.host.includes(':') ? [7125, 80, 8080] : [cfg.port];
   let lastErrorMsg = '';
 
+  const isDev = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV;
+  let baseUrls: string[] = [];
   for (const port of ports) {
-    let base = `http://${cfg.host}`;
-    if (port !== 80) base += `:${port}`;
+      if (isDev) baseUrls.push(`${window.location.origin}/moonraker/${cfg.host}:${port}`);
+      baseUrls.push(`http://${cfg.host}${port !== 80 ? ':' + port : ''}`);
+  }
 
+  for (const base of baseUrls) {
     try {
       const resp = await fetch(`${base}/server/files/upload`, {
         method: 'POST',
@@ -88,11 +92,15 @@ export async function probePrinter(cfg: PrinterConfig): Promise<SendResult> {
   const ports = cfg.port === 7125 && !cfg.host.includes(':') ? [7125, 80, 8080] : [cfg.port];
   let lastErrorMsg = '';
 
+  const isDev = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV;
+  let baseUrls: string[] = [];
   for (const port of ports) {
-    let url = `http://${cfg.host}`;
-    if (port !== 80) url += `:${port}`;
-    url += '/printer/info';
-    
+      if (isDev) baseUrls.push(`${window.location.origin}/moonraker/${cfg.host}:${port}`);
+      baseUrls.push(`http://${cfg.host}${port !== 80 ? ':' + port : ''}`);
+  }
+
+  for (const base of baseUrls) {
+    const url = `${base}/printer/info`;
     try {
       const resp = await fetch(url);
       if (!resp.ok) {

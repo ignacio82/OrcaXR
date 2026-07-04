@@ -68,6 +68,28 @@ export default defineConfig({
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'credentialless',
     },
+    proxy: {
+      '^/moonraker/.*': {
+        target: 'http://localhost', // target will be rewritten
+        changeOrigin: true,
+        router: (req) => {
+          const parts = req?.url?.split('/') || [];
+          const target = parts[2];
+          if (!target) return 'http://localhost';
+          return `http://${target}`;
+        },
+        rewrite: (path) => {
+          const parts = path.split('/');
+          return '/' + parts.slice(3).join('/');
+        },
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            // Strip the origin header to avoid Moonraker's CORS check
+            proxyReq.removeHeader('origin');
+          });
+        }
+      }
+    }
   },
   preview: {
     headers: {

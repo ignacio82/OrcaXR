@@ -57,16 +57,29 @@ export class MoonrakerClient {
     private async execute<T>(path: string, options?: RequestInit): Promise<T> {
         let baseUrls: string[] = [];
         
+        const isDev = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV;
+
         if (this.printer.host.includes(':') && !this.printer.host.startsWith('http')) {
+             if (isDev) baseUrls.push(`${window.location.origin}/moonraker/${this.printer.host}`);
              baseUrls.push(this.baseUrl);
         } else if (this.printer.port === 7125) {
              // Default Klipper port is 7125, but Snapmaker U1 uses port 80 or 8080
+             const hostRaw = this.printer.host.trim().replace(/\/$/, '');
+             if (isDev) {
+                 baseUrls.push(`${window.location.origin}/moonraker/${hostRaw}:7125`);
+                 baseUrls.push(`${window.location.origin}/moonraker/${hostRaw}:80`);
+                 baseUrls.push(`${window.location.origin}/moonraker/${hostRaw}:8080`);
+             }
              baseUrls.push(`${this.baseUrl}:7125`);
              baseUrls.push(this.baseUrl); // port 80 (default http)
              baseUrls.push(`${this.baseUrl}:8080`); // alternative web interface port
         } else if (this.printer.port === 80 || this.printer.port === 0) {
+             const hostRaw = this.printer.host.trim().replace(/\/$/, '');
+             if (isDev) baseUrls.push(`${window.location.origin}/moonraker/${hostRaw}:80`);
              baseUrls.push(this.baseUrl);
         } else {
+             const hostRaw = this.printer.host.trim().replace(/\/$/, '');
+             if (isDev) baseUrls.push(`${window.location.origin}/moonraker/${hostRaw}:${this.printer.port}`);
              baseUrls.push(`${this.baseUrl}:${this.printer.port}`);
         }
 
