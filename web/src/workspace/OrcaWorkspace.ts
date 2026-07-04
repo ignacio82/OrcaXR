@@ -164,6 +164,7 @@ import {
 import { evaluateTopCover } from '../features/TopCoverRule';
 import { scoreWipeTower, parseBias, type AabbXY } from '../features/WipeTowerPlacement';
 import { deriveTriangleFilaments } from '../features/PaintedSlice';
+import { extract3mfPaint, applyPaintToPositions, type Paint3mfResult } from '../features/Paint3mf';
 
 /** A single pre-flight banner surfaced to both shells. */
 export interface PreflightBanner {
@@ -858,6 +859,7 @@ export class OrcaWorkspace extends xb.Script {
       this.setProgress(30);
       await new Promise(r => setTimeout(r, 50));
       const colors = await extract3mfColors(buf);
+      const paint = extract3mfPaint(buf);
       await this.adoptPaletteFrom3mf(buf);
 
       this.setStatus(`Parsing 3MF geometry...`);
@@ -869,7 +871,7 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus(`Building scene...`);
       this.setProgress(90);
       await new Promise(r => setTimeout(r, 50));
-      this.loadModelFromGroup(group, name, colors ?? undefined);
+      this.loadModelFromGroup(group, name, colors ?? undefined, paint);
     } else {
       this.setStatus(`Downloading ${name}...`);
       this.setProgress(10);
@@ -1058,8 +1060,14 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Merge a Three.js Group (e.g. from 3MFLoader) into a single model, preserving colors. */
-  loadModelFromGroup(group: THREE.Object3D, name: string, meshColors?: string[]) {
-    console.log(`[orcaxr-load] loadModelFromGroup called with meshColors:`, meshColors);
+  loadModelFromGroup(
+    group: THREE.Object3D,
+    name: string,
+    meshColors?: string[],
+    paint?: Paint3mfResult | null,
+  ) {
+    console.log(`[orcaxr-load] loadModelFromGroup called with meshColors:`, meshColors,
+      'paintedMeshes:', paint ? [...paint.meshes.keys()] : 'none');
     const geometries: THREE.BufferGeometry[] = [];
     group.updateMatrixWorld(true);
 
@@ -1072,15 +1080,38 @@ export class OrcaWorkspace extends xb.Script {
         }
         geom.applyMatrix4(child.matrixWorld);
 
+        // Per-triangle 3MF paint (Orca/Bambu paint_color) wins over the flat
+        // per-object extruder color: subdivide painted triangles and bake the
+        // palette into vertex colors (display + painted slicing both read
+        // vertex colors downstream).
+        const meshPaint = paint?.meshes.get(meshIndex);
+        if (meshPaint) {
+          const baseHex = meshColors?.[meshIndex] ?? '#cccccc';
+          const painted = applyPaintToPositions(
+            geom.attributes.position.array as Float32Array,
+            meshPaint, paint!.palette, baseHex,
+          );
+          if (painted) {
+            const pg = new THREE.BufferGeometry();
+            pg.setAttribute('position', new THREE.BufferAttribute(painted.positions, 3));
+            pg.setAttribute('color', new THREE.BufferAttribute(painted.colors, 3));
+            pg.computeVertexNormals();
+            console.log(`[paint3mf] mesh ${meshIndex}: ${geom.attributes.position.count / 3} tris → ${painted.positions.length / 9} painted tris`);
+            geom = pg;
+          }
+        }
+
         // Native 3MF loading (via ThreeMFLoader) uses standard 3MF colors.
         // It places them in child.material.color OR as vertex colors.
         // If we have custom meshColors mapped from Orca 3MF configs, use them.
         // Always rewrite the color attribute so we have uniform vertex colors for merging.
         const count = geom.attributes.position.count;
         const colors = new Float32Array(count * 3);
-        
+
         let colorObj = (child.material && child.material.color) ? child.material.color : new THREE.Color(0xffffff);
-        if (meshColors && meshColors[meshIndex]) {
+        if (meshPaint && geom.hasAttribute('color')) {
+          colorObj = null; // paint already baked per-vertex colors
+        } else if (meshColors && meshColors[meshIndex]) {
           colorObj = new THREE.Color(meshColors[meshIndex]);
         } else if (geom.hasAttribute('color')) {
           // If we don't have custom colors, but the geom already has vertex colors, preserve them.

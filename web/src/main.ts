@@ -15,6 +15,7 @@ import * as xb from 'xrblocks';
 import * as uikit from '@pmndrs/uikit';
 
 import { OrcaWorkspace, extract3mfColors } from './workspace/OrcaWorkspace';
+import { extract3mfPaint } from './features/Paint3mf';
 import { SlicerClient } from './slicer/SlicerClient';
 import { loadPrinterConfig, probePrinter, savePrinterConfig, sendToPrinter } from './net/PrinterClient';
 import { injectTokenCss } from './ui/tokens';
@@ -75,6 +76,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
           updateModal(`Extracting colors...`, 30);
           await new Promise(r => setTimeout(r, 50));
           const colors = await extract3mfColors(buf);
+          const paint = extract3mfPaint(buf);
           await workspace.adoptPaletteFrom3mf(buf); // seed palette + Bambu import detection
 
           updateModal(`Parsing 3MF geometry...`, 60);
@@ -83,7 +85,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
 
           updateModal(`Building scene...`, 90);
           await new Promise(r => setTimeout(r, 50));
-          workspace.loadModelFromGroup(group, file.name, colors || undefined);
+          workspace.loadModelFromGroup(group, file.name, colors || undefined, paint);
         } else {
           updateModal(`Parsing STL geometry...`, 50);
           await new Promise(r => setTimeout(r, 50));

@@ -725,6 +725,35 @@ Implementation:
   via `lighting` + `annotate` flags work identically inside a
   session.
 
+## Web 3MF paint decoding (`web/src/features/Paint3mf.ts`)
+
+Orca/Bambu 3MFs carry per-triangle painting as `paint_color` attributes
+(PrusaSlicer TriangleSelector bitstream; also `slic3rpe:mmu_segmentation`),
+which three.js's ThreeMFLoader silently drops — painted models used to load
+as one flat extruder color. `Paint3mf.ts` is a pure-TS port of the decoder
+(format documented in its header, ported from `TriangleSelector::
+{serialize,deserialize}` + `FacetsAnnotation::set_triangle_from_string`):
+painted triangles are subdivided per their split tree and the filament
+palette is baked into **vertex colors**, which is the app's lingua franca —
+display renders `vertexColors` and `PaintedSlice.deriveTriangleFilaments`
+maps them back to filament indices for painted slicing, so both work with
+no further plumbing. Load-bearing details:
+
+- Paint state 0 = the volume's base extruder color; state N ≥ 1 =
+  `filament_colour[N-1]` from `Metadata/project_settings.config`.
+- The decoder subdivides on the *loader's* transformed positions (midpoints
+  are affine-invariant), so production-extension component/item transforms
+  never need re-implementing.
+- Mesh alignment relies on ThreeMFLoader preserving triangle file order per
+  object; `applyPaintToPositions` guards with a triangle-count check and
+  skips paint on mismatch rather than mis-coloring.
+- Objects are keyed `(file, id)` — `p:path` components reference objects in
+  other `.model` files and 3MF ids are only unique per file (the older
+  `extract3mfColors` walk keys by bare id and works by luck; don't copy it).
+- Perf on a 125 MB, 1.37M-triangle painted object file: ~0.7 s extract +
+  ~40 ms decode; sub-triangle growth ≈ 1% (paint leaves are mostly whole
+  triangles). Decode failures fall back per-triangle to the base color.
+
 ## External slicer server (`server/`)
 
 Dockerized HTTP endpoint (`POST /slice`, STL + flattened-overrides JSON) the
