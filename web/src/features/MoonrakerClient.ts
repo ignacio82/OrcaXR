@@ -51,17 +51,24 @@ export class MoonrakerClient {
         this.printer = printer;
         const raw = printer.host.trim().replace(/\/$/, '');
         const withScheme = raw.startsWith('http://') || raw.startsWith('https://') ? raw : `http://${raw}`;
-        if (raw.includes(':') && !raw.startsWith('http')) {
-            this.baseUrl = withScheme;
-        } else if (printer.port === 80 || printer.port === 0) {
-            this.baseUrl = withScheme;
-        } else {
-            this.baseUrl = `${withScheme}:${printer.port}`;
-        }
+        this.baseUrl = withScheme; // We will handle ports dynamically in execute
     }
 
     private async execute<T>(path: string, options?: RequestInit): Promise<T> {
-        const url = `${this.baseUrl}${path}`;
+        let baseUrls: string[] = [];
+        
+        if (this.printer.host.includes(':') && !this.printer.host.startsWith('http')) {
+             baseUrls.push(this.baseUrl);
+        } else if (this.printer.port === 7125) {
+             // Default Klipper port is 7125, but Snapmaker U1 uses port 80
+             baseUrls.push(`${this.baseUrl}:7125`);
+             baseUrls.push(this.baseUrl); // port 80 (default http)
+        } else if (this.printer.port === 80 || this.printer.port === 0) {
+             baseUrls.push(this.baseUrl);
+        } else {
+             baseUrls.push(`${this.baseUrl}:${this.printer.port}`);
+        }
+
         const headers: Record<string, string> = {
             'Accept': 'application/json',
             ...((options?.headers as Record<string, string>) || {})
@@ -71,21 +78,27 @@ export class MoonrakerClient {
             headers['X-Api-Key'] = this.printer.apiKey;
         }
 
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
-            const response = await fetch(url, { ...options, headers, signal: controller.signal });
-            clearTimeout(timeoutId);
-            const body = await response.text();
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${body}`);
+        let lastError: any;
+        for (const base of baseUrls) {
+            const url = `${base}${path}`;
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                const response = await fetch(url, { ...options, headers, signal: controller.signal });
+                clearTimeout(timeoutId);
+                const body = await response.text();
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${body}`);
+                }
+                
+                return JSON.parse(body) as T;
+            } catch (e: any) {
+                lastError = e;
             }
-            
-            return JSON.parse(body) as T;
-        } catch (e: any) {
-            throw new Error(`MoonrakerClient error: ${e.message}`);
         }
+        
+        throw new Error(`MoonrakerClient error: ${lastError?.message}`);
     }
 
     async ping(): Promise<PrinterInfo> {

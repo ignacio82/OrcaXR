@@ -42,7 +42,6 @@ export async function sendToPrinter(
   startPrint: boolean,
 ): Promise<SendResult> {
   if (!cfg.host) return { ok: false, message: 'No printer IP set.' };
-  const base = `http://${cfg.host}:${cfg.port}`;
   const safeName = filename.replace(/[^\w.-]/g, '_') || 'orcaxr.gcode';
 
   const form = new FormData();
@@ -50,42 +49,62 @@ export async function sendToPrinter(
   form.append('root', 'gcodes');
   if (startPrint) form.append('print', 'true');
 
-  try {
-    const resp = await fetch(`${base}/server/files/upload`, {
-      method: 'POST',
-      body: form,
-    });
-    if (!resp.ok) {
-      return { ok: false, message: `Printer returned HTTP ${resp.status}.` };
-    }
-    return {
-      ok: true,
-      message: startPrint
-        ? `Uploaded ${safeName} and started print.`
-        : `Uploaded ${safeName} to printer.`,
-    };
-  } catch (e) {
-    // A network/CORS failure lands here with an opaque TypeError.
-    return {
-      ok: false,
-      message:
+  const ports = cfg.port === 7125 && !cfg.host.includes(':') ? [7125, 80] : [cfg.port];
+  let lastErrorMsg = '';
+
+  for (const port of ports) {
+    let base = `http://${cfg.host}`;
+    if (port !== 80) base += `:${port}`;
+
+    try {
+      const resp = await fetch(`${base}/server/files/upload`, {
+        method: 'POST',
+        body: form,
+      });
+      if (!resp.ok) {
+        lastErrorMsg = `Printer returned HTTP ${resp.status}.`;
+        continue;
+      }
+      return {
+        ok: true,
+        message: startPrint
+          ? `Uploaded ${safeName} and started print.`
+          : `Uploaded ${safeName} to printer.`,
+      };
+    } catch (e) {
+      // A network/CORS failure lands here with an opaque TypeError.
+      lastErrorMsg = 
         `Could not reach ${base}. Check the IP, that the printer is on the ` +
-        `same network, and that Moonraker's cors_domains allows this page.`,
-    };
+        `same network, and that Moonraker's cors_domains allows this page.`;
+    }
   }
+  return { ok: false, message: lastErrorMsg };
 }
 
 /** Quick reachability probe: Moonraker's /printer/info. */
 export async function probePrinter(cfg: PrinterConfig): Promise<SendResult> {
   if (!cfg.host) return { ok: false, message: 'No printer IP set.' };
-  const url = `http://${cfg.host}:${cfg.port}/printer/info`;
-  try {
-    const resp = await fetch(url);
-    if (!resp.ok) return { ok: false, message: `HTTP ${resp.status} from printer.` };
-    const info = await resp.json();
-    const state = info?.result?.state ?? 'ready';
-    return { ok: true, message: `Connected — printer ${state}.` };
-  } catch {
-    return { ok: false, message: `No response from ${cfg.host}:${cfg.port}.` };
+  
+  const ports = cfg.port === 7125 && !cfg.host.includes(':') ? [7125, 80] : [cfg.port];
+  let lastErrorMsg = '';
+
+  for (const port of ports) {
+    let url = `http://${cfg.host}`;
+    if (port !== 80) url += `:${port}`;
+    url += '/printer/info';
+    
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        lastErrorMsg = `HTTP ${resp.status} from printer.`;
+        continue;
+      }
+      const info = await resp.json();
+      const state = info?.result?.state ?? 'ready';
+      return { ok: true, message: `Connected — printer ${state}.` };
+    } catch {
+      lastErrorMsg = `No response from ${cfg.host}:${port}.`;
+    }
   }
+  return { ok: false, message: lastErrorMsg };
 }
