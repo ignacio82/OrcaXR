@@ -728,7 +728,17 @@ Implementation:
 ## External slicer server (`server/`)
 
 Dockerized HTTP endpoint (`POST /slice`, STL + flattened-overrides JSON) the
-web app can offload plain slices to. Two engines, chosen by `SLICER_ENGINE`:
+web app can offload plain slices to. `POST /slice?async=1` returns
+`202 {job}` for progress polling (`GET /jobs/:id` →
+`{status, percent, message}`, then `GET /jobs/:id/gcode`); without the flag
+the original synchronous contract is preserved, and a new client against an
+old server degrades gracefully (old server ignores the flag and answers
+`200` + G-code, which the client detects by status code). CLI progress
+comes from orca-slicer's `--pipe <fifo>` option — newline-delimited JSON
+with `total_percent`/`message`; the fifo read end must exist before the CLI
+opens the write end (`O_WRONLY|O_NONBLOCK` fails with ENXIO otherwise and
+the CLI slices on silently after a few retries). Two engines, chosen by
+`SLICER_ENGINE`:
 
 - **`cli` (default)** — official Snapmaker OrcaSlicer AppImage, pinned via
   `ARG ORCA_VERSION` in the Dockerfile (bump deliberately; never track

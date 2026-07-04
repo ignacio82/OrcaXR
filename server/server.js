@@ -2,10 +2,12 @@ import express from 'express';
 import multer from 'multer';
 import cors from 'cors';
 import { spawn } from 'child_process';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, createReadStream } from 'fs';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
+import crypto from 'crypto';
+import readline from 'readline';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -91,6 +93,29 @@ async function writeCliPresets(overrides, dir) {
 }
 
 /**
+ * Stream the CLI's structured progress. orca-slicer's --pipe option writes
+ * newline-delimited JSON ({plate_percent, total_percent, message, …}) to a
+ * named pipe; the read end must exist before the CLI tries to open the
+ * write end (it opens O_WRONLY|O_NONBLOCK, which fails with ENXIO when
+ * nobody is reading — it retries a few times, then slices silently).
+ */
+function watchProgressPipe(fifoPath, onProgress) {
+  const stream = createReadStream(fifoPath);
+  const rl = readline.createInterface({ input: stream });
+  rl.on('line', (line) => {
+    try {
+      const j = JSON.parse(line);
+      const percent = Number(j.total_percent ?? j.plate_percent);
+      if (Number.isFinite(percent)) {
+        onProgress(Math.max(0, Math.min(100, percent)), j.message || '');
+      }
+    } catch { /* partial line or non-JSON chatter — ignore */ }
+  });
+  stream.on('error', () => {});
+  return () => { rl.close(); stream.destroy(); };
+}
+
+/**
  * Slice with the official OrcaSlicer CLI. The uploaded STL already has
  * transforms baked into printer coordinates, so arranging/orienting is
  * explicitly disabled to preserve placement.
@@ -99,12 +124,16 @@ function runCliSlice(modelPath, overrides, onProgress) {
   return new Promise(async (resolve, reject) => {
     const outDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orcaxr-out-'));
     const presets = await writeCliPresets(overrides, outDir);
+    const fifoPath = path.join(outDir, 'progress.pipe');
+    await new Promise((res) => spawn('mkfifo', [fifoPath]).on('close', res));
+    const stopWatching = watchProgressPipe(fifoPath, onProgress);
     const args = [
       '--load-settings', `${presets.machine};${presets.process}`,
       '--load-filaments', presets.filament,
       '--slice', '0',
       '--arrange', '0',
       '--orient', '0',
+      '--pipe', fifoPath,
       '--outputdir', outDir,
       modelPath,
     ];
@@ -114,16 +143,12 @@ function runCliSlice(modelPath, overrides, onProgress) {
 
     const proc = spawn(cmd, cmdArgs);
     let log = '';
-    const onData = (data) => {
-      const text = data.toString();
-      log += text;
-      const m = text.match(/(\d+)%/);
-      if (m) onProgress(Number(m[1]));
-    };
+    const onData = (data) => { log += data.toString(); };
     proc.stdout.on('data', onData);
     proc.stderr.on('data', onData);
-    proc.on('error', (err) => reject(err));
+    proc.on('error', (err) => { stopWatching(); reject(err); });
     proc.on('close', async (code) => {
+      stopWatching();
       try {
         const files = await fs.readdir(outDir);
         const gcodeFile = files.find((f) => f.endsWith('.gcode'));
@@ -160,12 +185,15 @@ function runWasmSlice(modelPath, configPath, outputPath, onProgress) {
       outputPath,
     ]);
     let log = '';
-    proc.stderr.on('data', (data) => {
+    const onData = (data) => {
       const text = data.toString();
       log += text;
-      const m = text.match(/(\d+)%/);
-      if (m) onProgress(Number(m[1]));
-    });
+      // Engine progress lines look like "[orcaxr] 42% Generating walls".
+      const m = text.match(/\[orcaxr\] (\d+)% *([^\n]*)/);
+      if (m) onProgress(Number(m[1]), m[2] || '');
+    };
+    proc.stdout.on('data', onData);
+    proc.stderr.on('data', onData);
     proc.on('error', (err) => reject(err));
     proc.on('close', async (code) => {
       if (code !== 0) {
@@ -180,40 +208,106 @@ function runWasmSlice(modelPath, configPath, outputPath, onProgress) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Job store. POST /slice?async=1 returns a job id immediately; the client
+// polls GET /jobs/:id for {status, percent, message} and fetches the result
+// from GET /jobs/:id/gcode. POST /slice without the flag keeps the original
+// synchronous contract, so old clients keep working against this server and
+// new clients degrade gracefully against old servers (a legacy server
+// ignores the query string and answers 200 + G-code instead of 202).
+// ---------------------------------------------------------------------------
+const jobs = new Map();
+const JOB_TTL_MS = 30 * 60 * 1000;
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, job] of jobs) {
+    if (now - job.createdAt > JOB_TTL_MS) jobs.delete(id);
+  }
+}, 60 * 1000).unref();
+
+async function runSliceJob(job, modelPath, overrides, configPath, outputPath) {
+  const onProgress = (percent, message = '') => {
+    job.percent = percent;
+    job.message = message;
+    console.log(`[slicer:${ENGINE}] ${percent}%${message ? ' ' + message : ''}`);
+  };
+  try {
+    if (ENGINE === 'wasm') {
+      overrides['from'] = 'project'; // the WASM engine's json loader expects it
+      await fs.writeFile(configPath, JSON.stringify(overrides, null, 2));
+      job.gcode = await runWasmSlice(modelPath, configPath, outputPath, onProgress);
+    } else {
+      job.gcode = await runCliSlice(modelPath, overrides, onProgress);
+    }
+    job.percent = 100;
+    job.status = 'done';
+  } catch (err) {
+    console.error(`[slicer:${ENGINE}] slice failed:`, err.message);
+    job.status = 'error';
+    job.error = err.message;
+  } finally {
+    await fs.unlink(modelPath).catch(() => {});
+    await fs.unlink(configPath).catch(() => {});
+    await fs.unlink(outputPath).catch(() => {});
+  }
+}
+
 app.post('/slice', upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).send('No file uploaded.');
   }
 
-  const overrides = req.body.overrides ? JSON.parse(req.body.overrides) : {};
+  let overrides;
+  try {
+    overrides = req.body.overrides ? JSON.parse(req.body.overrides) : {};
+  } catch (e) {
+    await fs.unlink(req.file.path).catch(() => {});
+    return res.status(400).send('Invalid overrides JSON: ' + e.message);
+  }
   const configPath = req.file.path + '.json';
   const modelPath = req.file.path + '.stl';
   const outputPath = req.file.path + '.gcode';
+  await fs.rename(req.file.path, modelPath);
 
-  try {
-    await fs.rename(req.file.path, modelPath);
+  const job = {
+    id: crypto.randomUUID(),
+    status: 'running',
+    percent: 0,
+    message: '',
+    createdAt: Date.now(),
+  };
+  jobs.set(job.id, job);
+  const done = runSliceJob(job, modelPath, overrides, configPath, outputPath);
 
-    const onProgress = (pct) => console.log(`[slicer:${ENGINE}] ${pct}%`);
-    let gcode;
-    if (ENGINE === 'wasm') {
-      overrides['from'] = 'project'; // the WASM engine's json loader expects it
-      await fs.writeFile(configPath, JSON.stringify(overrides, null, 2));
-      gcode = await runWasmSlice(modelPath, configPath, outputPath, onProgress);
-    } else {
-      gcode = await runCliSlice(modelPath, overrides, onProgress);
-    }
-
-    res.setHeader('Content-Type', 'text/plain');
-    res.send(gcode);
-  } catch (err) {
-    console.error(`[slicer:${ENGINE}] slice failed:`, err.message);
-    res.status(500).send(err.message);
-  } finally {
-    await fs.unlink(modelPath).catch(() => {});
-    await fs.unlink(configPath).catch(() => {});
-    await fs.unlink(outputPath).catch(() => {});
-    await fs.unlink(req.file.path).catch(() => {});
+  if (req.query.async === '1') {
+    return res.status(202).json({ job: job.id });
   }
+
+  // Legacy synchronous contract.
+  await done;
+  jobs.delete(job.id);
+  if (job.status === 'done') {
+    res.setHeader('Content-Type', 'text/plain');
+    res.send(job.gcode);
+  } else {
+    res.status(500).send(job.error);
+  }
+});
+
+app.get('/jobs/:id', (req, res) => {
+  const job = jobs.get(req.params.id);
+  if (!job) return res.status(404).send('No such job.');
+  res.json({ status: job.status, percent: job.percent, message: job.message, error: job.error });
+});
+
+app.get('/jobs/:id/gcode', (req, res) => {
+  const job = jobs.get(req.params.id);
+  if (!job) return res.status(404).send('No such job.');
+  if (job.status !== 'done') return res.status(409).send(`Job is ${job.status}.`);
+  res.setHeader('Content-Type', 'text/plain');
+  res.send(job.gcode);
+  jobs.delete(job.id);
 });
 
 const PORT = process.env.PORT || 3000;

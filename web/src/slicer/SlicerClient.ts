@@ -107,6 +107,47 @@ export class SlicerClient {
     return this.loading;
   }
 
+  /**
+   * Poll an external-server slice job until it finishes, forwarding
+   * {percent, message} updates to onProgress, then fetch the G-code.
+   */
+  private async pollExternalJob(externalUrl: string, jobId: string): Promise<string> {
+    let consecutiveFailures = 0;
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 700));
+      let status: { status: string; percent: number; message?: string; error?: string };
+      try {
+        const res = await fetch(`${externalUrl}/jobs/${jobId}`);
+        if (!res.ok) throw new Error(`status ${res.status}: ${await res.text()}`);
+        status = await res.json();
+        consecutiveFailures = 0;
+      } catch (e) {
+        // Tolerate transient network blips, but don't spin forever if the
+        // server vanished mid-slice.
+        if (++consecutiveFailures >= 5) {
+          throw new Error(`External slicer stopped responding: ${(e as Error).message}`);
+        }
+        continue;
+      }
+      if (status.status === 'error') {
+        throw new Error(`External Slicer Failed: ${status.error}`);
+      }
+      if (status.status === 'done') {
+        const res = await fetch(`${externalUrl}/jobs/${jobId}/gcode`);
+        if (!res.ok) {
+          throw new Error(`External Slicer Failed: ${await res.text()}`);
+        }
+        return await res.text();
+      }
+      if (this.onProgress) {
+        this.onProgress({
+          percent: status.percent ?? 0,
+          message: status.message || 'Slicing externally...',
+        });
+      }
+    }
+  }
+
   private handleStderr(text: string) {
     // Any engine chatter (progress or the [orcaxr] setup lines) means the
     // slice thread is alive — reset the stall watchdog.
@@ -151,11 +192,18 @@ export class SlicerClient {
       const formData = new FormData();
       formData.append('file', new Blob([stl]), 'model.stl');
       formData.append('overrides', JSON.stringify(overrides));
-      
-      const res = await fetch(`${externalUrl}/slice`, {
+
+      // Ask for the async job protocol (202 + job id, then progress polling).
+      // A legacy server ignores the query flag and answers 200 + G-code
+      // directly, so both server generations keep working.
+      const res = await fetch(`${externalUrl}/slice?async=1`, {
         method: 'POST',
         body: formData,
       });
+      if (res.status === 202) {
+        const { job } = (await res.json()) as { job: string };
+        return await this.pollExternalJob(externalUrl, job);
+      }
       if (!res.ok) {
         const err = await res.text();
         throw new Error(`External Slicer Failed: ${err}`);
