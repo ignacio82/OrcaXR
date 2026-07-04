@@ -103,3 +103,4 @@ node_modules/
 server/wasm-dist/
 tmp_3mf/
 web/dist/
+docs/slicer/
