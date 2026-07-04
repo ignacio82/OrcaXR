@@ -696,6 +696,7 @@ export class OrcaWorkspace extends xb.Script {
     if (this.leftToolbarCard) this.leftToolbarCard.show();
     if (this.rightSidebarCard) this.rightSidebarCard.show();
     if (this.profileCard) this.profileCard.show();
+    if (this.aiMcpCard) this.aiMcpCard.show();
   }
 
   onXRSessionEnded() {
@@ -717,6 +718,7 @@ export class OrcaWorkspace extends xb.Script {
     if (this.leftToolbarCard) this.leftToolbarCard.hide();
     if (this.rightSidebarCard) this.rightSidebarCard.hide();
     if (this.profileCard) this.profileCard.hide();
+    if (this.aiMcpCard) this.aiMcpCard.hide();
   }
 
   onSimulatorStarted() {
@@ -790,6 +792,15 @@ export class OrcaWorkspace extends xb.Script {
       this.profileCard.position.copy(ppos);
       this.profileCard.rotation.set(0, yaw, 0);
       this.profileCard.updateMatrixWorld(true);
+    }
+    if (this.aiMcpCard) {
+      const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).negate();
+      const ppos = pos.clone().addScaledVector(right, 1.35); // offset further right
+      ppos.y = pos.y + 0.15;
+      ppos.addScaledVector(fwd, 0.15); // Curve more towards user
+      this.aiMcpCard.position.copy(ppos);
+      this.aiMcpCard.rotation.set(0, yaw, 0);
+      this.aiMcpCard.updateMatrixWorld(true);
     }
   }
 
@@ -1408,11 +1419,13 @@ export class OrcaWorkspace extends xb.Script {
   private leftToolbarCard: any = null;
   private rightSidebarCard: any = null;
   private profileCard: any = null;
+  private aiMcpCard: any = null;
 
   private addControlPanel() {
     this.addLeftToolbar();
     this.addActionPanel();
     this.addProfilePanel();
+    this.addAiMcpPanel();
     this.refreshToolButtons();
   }
 
@@ -1598,6 +1611,11 @@ export class OrcaWorkspace extends xb.Script {
     root.add(mkAction('Fix Model (ADMesh)', 'healing', false, () => void this.fixSelectedModel()));
     root.add(mkAction('Union (Merge All)', 'merge', false, () => void this.booleanModels('UNION')));
     root.add(mkAction('Subtract (Cut)', 'content_cut', false, () => void this.booleanModels('A_NOT_B')));
+    root.add(mkAction('Emboss Text', 'title', false, () => { if(this.actionContext) this.actionContext.embossText() }));
+    root.add(mkAction('Add Magnet Hole', 'radio_button_unchecked', false, () => { if(this.actionContext) this.actionContext.addMagnet() }));
+    root.add(mkAction('Auto-place Wipe Tower', 'format_align_justify', false, () => { if(this.actionContext) this.actionContext.autoPlaceWipeTower() }));
+    root.add(mkAction('Scan Subnets', 'wifi', false, () => { if(this.actionContext) this.actionContext.scanNetwork() }));
+    root.add(mkAction('View Webcam', 'videocam', false, () => { if(this.actionContext) this.actionContext.viewWebcam() }));
 
     const exitBtn = mkAction('Exit XR', 'logout', false, () => {
       xb.core.renderer.xr.getSession()?.end();
@@ -1678,12 +1696,12 @@ export class OrcaWorkspace extends xb.Script {
         onHoverEnter: () => { btn.fillColor = '#ffffff26'; },
         onHoverExit: () => { btn.fillColor = '#ffffff14'; }
       });
-      btn.add(new UIIcon(icon, { color: '#ffffff', width: 24, height: 24 }));
+      btn.add(new UIIcon(xrIcon(icon), { color: '#cccccc', width: 24, height: 24 }));
       profPanel.add(btn);
     };
-    mkProf('machine', 'print');
+    mkProf('machine', 'printer');
     mkProf('process', 'tune');
-    mkProf('filament', 'water_drop');
+    mkProf('filament', 'filament');
     root.add(profPanel);
     
     this.headsContainer = new UIPanel({ width: '100%', flexDirection: 'column', gap: 10 });
@@ -2285,6 +2303,86 @@ export class OrcaWorkspace extends xb.Script {
     } catch (e: any) {
       this.setStatus(`Boolean failed: ${e.message}`);
     }
+  }
+
+  private addAiMcpPanel() {
+    const card = this.uiCore.createCard({
+      name: 'AiMcpPanel',
+      sizeX: 0.4,
+      sizeY: 0.6,
+      pixelSize: 0.0012,
+      position: new THREE.Vector3(0.9, PLATE_Y + 0.15, PLATE_Z - 0.25),
+      width: 330,
+      alignItems: 'center',
+      behaviors: [
+        new ManipulationBehavior({
+          draggable: true,
+          faceCamera: true,
+          manipulationMargin: 16,
+          manipulationCornerRadius: 16,
+        })
+      ]
+    });
+    card.visible = false;
+    this.aiMcpCard = card;
+
+    const root = new UIPanel({
+      width: '100%',
+      flexDirection: 'column',
+      fillColor: '#14171aA6',
+      cornerRadius: 16,
+      padding: 24,
+      gap: 20,
+      strokeWidth: 1,
+      strokeColor: '#ffffff14',
+      overflow: 'scroll',
+      height: '100%'
+    });
+    card.add(root);
+
+    const mcpHeader = new UIPanel({ width: '100%', flexDirection: 'row', alignItems: 'center' });
+    mcpHeader.add(new UIText('MCP Server', { fontSize: 24, fontWeight: 'bold', color: '#ffffff' }));
+    root.add(mcpHeader);
+
+    const mcpBtn = new UIPanel({
+      width: '100%', height: 50,
+      justifyContent: 'center', alignItems: 'center',
+      cornerRadius: 8, fillColor: '#ffffff14',
+      strokeWidth: 1, strokeColor: '#ffffff1a',
+      onClick: () => { this.setStatus('MCP Server enabled'); return true; },
+      onHoverEnter: () => { mcpBtn.fillColor = '#ffffff26'; },
+      onHoverExit: () => { mcpBtn.fillColor = '#ffffff14'; }
+    });
+    mcpBtn.add(new UIText('Enable MCP Server', { fontSize: 18, color: '#e0e6ee' }));
+    root.add(mcpBtn);
+
+    const aiHeader = new UIPanel({ width: '100%', flexDirection: 'row', alignItems: 'center', marginTop: 10 });
+    aiHeader.add(new UIText('AI Features', { fontSize: 24, fontWeight: 'bold', color: '#ffffff' }));
+    root.add(aiHeader);
+
+    const makeAiBtn = (label: string, actionMsg: string) => {
+      const btn = new UIPanel({
+        width: '100%', height: 50,
+        justifyContent: 'center', alignItems: 'center',
+        cornerRadius: 8, fillColor: '#ffffff14',
+        strokeWidth: 1, strokeColor: '#ffffff1a',
+        onClick: () => { 
+          if (this.models.length === 0) {
+            this.setStatus('Load a model first');
+          } else {
+            this.setStatus(actionMsg);
+          }
+          return true; 
+        },
+        onHoverEnter: () => { btn.fillColor = '#ffffff26'; },
+        onHoverExit: () => { btn.fillColor = '#ffffff14'; }
+      });
+      btn.add(new UIText(label, { fontSize: 18, color: '#e0e6ee' }));
+      return btn;
+    };
+
+    root.add(makeAiBtn('Smart Paint (AI)', 'Running Smart Paint...'));
+    root.add(makeAiBtn('Semantic Planner', 'Running Semantic Planner...'));
   }
 }
 

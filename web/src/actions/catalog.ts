@@ -7,10 +7,12 @@ import { ActionRegistry } from './ActionRegistry';
 import { sceneActions } from './groups/scene';
 import { sliceActions } from './groups/slice';
 import { outputActions } from './groups/output';
+import { advancedActions } from './groups/advanced';
 
 export function buildRegistry(): ActionRegistry {
   return new ActionRegistry()
     .addAll(sceneActions)
     .addAll(sliceActions)
-    .addAll(outputActions);
+    .addAll(outputActions)
+    .addAll(advancedActions);
 }

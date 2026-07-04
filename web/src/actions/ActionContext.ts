@@ -104,4 +104,22 @@ export class ActionContext {
   addFilament(): void {
     this.palette.add();
   }
+
+  // ---- Advanced Features ----------------------------------------------
+  embossText(): void {
+    this.workspace.setStatus('Emboss Text feature called');
+  }
+  addMagnet(): void {
+    this.workspace.setStatus('Add Magnet feature called');
+  }
+  autoPlaceWipeTower(): void {
+    this.workspace.setWipeTowerAuto(!this.workspace.wipeTowerAuto);
+    this.workspace.setStatus('Auto-place Wipe Tower toggled: ' + this.workspace.wipeTowerAuto);
+  }
+  scanNetwork(): void {
+    this.workspace.setStatus('Scan Network feature called');
+  }
+  viewWebcam(): void {
+    this.workspace.setStatus('View Webcam feature called');
+  }
 }

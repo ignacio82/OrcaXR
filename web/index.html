@@ -371,6 +371,26 @@
           <p id="external-slicer-hint" style="display:none;margin:6px 0 0;font-size:12px;color:#8b95a1;">Off — slicing locally in‑browser.</p>
         </div>
         </details>
+        <details class="insp-section"><summary>AI &amp; MCP Server</summary>
+        <div class="panel" id="mcp-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+          <div style="font-size:0.8rem;color:#a0aab5;font-weight:600;">MCP SERVER</div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#e0e6ee;cursor:pointer;user-select:none;">
+            <input id="chk-mcp-enabled" type="checkbox" style="width:16px;height:16px;accent-color:#ffb74d;cursor:pointer;" />
+            Enable local MCP Server
+          </label>
+          <div id="mcp-controls" style="display:none;flex-direction:column;gap:8px;">
+            <input id="in-mcp-port" type="number" placeholder="Port (e.g. 7080)" value="7080"
+              style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.3);color:#fff;border:1px solid #ffffff1a;border-radius:8px;padding:10px;font-size:13px;" />
+            <button id="btn-mcp-token" class="action-btn" style="margin:0;">Copy Auth Token</button>
+            <button id="btn-mcp-share" class="action-btn" style="margin:0;">Share Connection Snippet</button>
+          </div>
+        </div>
+        <div class="panel" id="ai-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+          <div style="font-size:0.8rem;color:#a0aab5;font-weight:600;">AI FEATURES</div>
+          <button id="btn-ai-smart-paint" class="action-btn" style="margin:0;">Smart Paint (Auto)</button>
+          <button id="btn-ai-semantic" class="action-btn" style="margin:0;">Semantic Planner</button>
+        </div>
+        </details>
         <div class="status-panel">
           <p id="status-text">Ready. Load a model to begin.</p>
           <div id="progress-container" style="display: none; width: 100%; background-color: rgba(255,255,255,0.1); border-radius: 4px; margin-top: 8px;">

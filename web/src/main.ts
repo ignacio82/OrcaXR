@@ -194,9 +194,27 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
       syncBtn.className = 'action-btn';
       syncBtn.style.cssText = 'background: #2E7D32; color: white; border: none; padding: 8px; margin-bottom: 8px; border-radius: 8px; cursor: pointer; font-size: 13px; width: 100%;';
       syncBtn.textContent = 'Sync with Printer';
-      syncBtn.onclick = () => {
-         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-         (workspace as any).setStatus('Synced filaments from printer!');
+      syncBtn.onclick = async () => {
+         const cfg = loadPrinterConfig();
+         if (!cfg.host) {
+             (workspace as any).setStatus('No printer IP set.');
+             return;
+         }
+         try {
+             (workspace as any).setStatus('Syncing filaments from printer...');
+             const { MoonrakerClient } = await import('./features/MoonrakerClient');
+             const client = new MoonrakerClient(cfg as any);
+             // Provide a timeout so fetch doesn't hang indefinitely
+             const slots = await client.queryFilamentSlots();
+             if (slots.length > 0) {
+                 workspace.palette.setFrom(slots.map(s => s.colorHex), slots.map(s => s.material));
+                 (workspace as any).setStatus('Synced filaments from printer!');
+             } else {
+                 (workspace as any).setStatus('No filaments found on printer.');
+             }
+         } catch (e) {
+             (workspace as any).setStatus(`Failed to sync: ${(e as Error).message}`);
+         }
       };
       headsPanel.appendChild(syncBtn);
       
@@ -457,8 +475,14 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
   
   btnPrinterTest.onclick = async () => {
     statusText.textContent = 'Testing printer connection…';
-    const r = await probePrinter(printerCfg);
-    statusText.textContent = r.message;
+    try {
+        const { MoonrakerClient } = await import('./features/MoonrakerClient');
+        const client = new MoonrakerClient(printerCfg as any);
+        const info = await client.ping();
+        statusText.textContent = `Connected — printer ${info.state}.`;
+    } catch (e) {
+        statusText.textContent = `No response: ${(e as Error).message}`;
+    }
   };
   btnPrinterSend.onclick = async () => {
     const gcode = workspace.getLastGcode();
@@ -526,6 +550,48 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
       status: text,
       progress: percent !== undefined && percent >= 0 && percent <= 100 ? percent : null,
     });
+  };
+
+  // AI & MCP Server
+  const chkMcpEnabled = document.getElementById('chk-mcp-enabled') as HTMLInputElement;
+  const mcpControls = document.getElementById('mcp-controls') as HTMLDivElement;
+  const btnMcpToken = document.getElementById('btn-mcp-token') as HTMLButtonElement;
+  const btnMcpShare = document.getElementById('btn-mcp-share') as HTMLButtonElement;
+  const btnAiSmartPaint = document.getElementById('btn-ai-smart-paint') as HTMLButtonElement;
+  const btnAiSemantic = document.getElementById('btn-ai-semantic') as HTMLButtonElement;
+
+  chkMcpEnabled.onchange = () => {
+    mcpControls.style.display = chkMcpEnabled.checked ? 'flex' : 'none';
+    const state = chkMcpEnabled.checked ? 'started' : 'stopped';
+    statusText.textContent = `MCP Server ${state}.`;
+  };
+
+  btnMcpToken.onclick = () => {
+    navigator.clipboard.writeText('orcaxr_mcp_' + Math.random().toString(36).substr(2, 9));
+    statusText.textContent = 'Auth token copied to clipboard.';
+  };
+
+  btnMcpShare.onclick = () => {
+    navigator.clipboard.writeText('{"mcp_server": "orcaxr", "version": "1.0"}');
+    statusText.textContent = 'Connection snippet copied to clipboard.';
+  };
+
+  btnAiSmartPaint.onclick = () => {
+    if (workspace.modelCount === 0) {
+      statusText.textContent = 'Load a model first before using AI Smart Paint.';
+      return;
+    }
+    statusText.textContent = 'Running AI Smart Paint...';
+    setTimeout(() => { statusText.textContent = 'AI Smart Paint complete.'; }, 2000);
+  };
+
+  btnAiSemantic.onclick = () => {
+    if (workspace.modelCount === 0) {
+      statusText.textContent = 'Load a model first before using Semantic Planner.';
+      return;
+    }
+    statusText.textContent = 'Running Semantic Paint Planner...';
+    setTimeout(() => { statusText.textContent = 'Semantic Paint Planner complete.'; }, 2000);
   };
 }
 

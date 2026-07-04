@@ -72,7 +72,10 @@ export class MoonrakerClient {
         }
 
         try {
-            const response = await fetch(url, { ...options, headers });
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const response = await fetch(url, { ...options, headers, signal: controller.signal });
+            clearTimeout(timeoutId);
             const body = await response.text();
             
             if (!response.ok) {
