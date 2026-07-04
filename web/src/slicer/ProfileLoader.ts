@@ -85,7 +85,9 @@ export class ProfileCatalog {
     // (every process/filament profile), which silently gutted profiles.
     let catalog: Catalog | null = null;
     try {
-      const r = await fetch('/profiles/catalog.json');
+      const baseUrl = import.meta.env.BASE_URL;
+      const url = baseUrl.endsWith('/') ? `${baseUrl}profiles/catalog.json` : `${baseUrl}/profiles/catalog.json`;
+      const r = await fetch(url);
       if (r.ok) catalog = (await r.json()) as Catalog;
     } catch {
       catalog = null;

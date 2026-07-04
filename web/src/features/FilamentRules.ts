@@ -21,8 +21,8 @@ export interface FilamentRules {
 
 export const EMPTY_RULES: FilamentRules = { supportByBed: {}, warningByBed: {} };
 
-const ASSET_PATH = '/profiles/Snapmaker/filament/filament_hot_bed_nozzles.json';
-
+const baseUrl = import.meta.env.BASE_URL;
+const ASSET_PATH = baseUrl.endsWith('/') ? `${baseUrl}profiles/Snapmaker/filament/filament_hot_bed_nozzles.json` : `${baseUrl}/profiles/Snapmaker/filament/filament_hot_bed_nozzles.json`;
 /** Parse the rules JSON. Tokens uppercased for case-insensitive substring match. */
 export function parseFilamentRules(text: string): FilamentRules {
   const root = JSON.parse(text) as Record<string, unknown>;
