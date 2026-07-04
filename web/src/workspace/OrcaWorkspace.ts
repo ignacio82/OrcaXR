@@ -1450,13 +1450,13 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
-  private addRightSidebar() {
+  private addActionPanel() {
     const card = this.uiCore.createCard({
-      name: 'RightSidebar',
+      name: 'ActionPanel',
       sizeX: 0.35,
-      sizeY: 0.85,
+      sizeY: 0.8,
       pixelSize: 0.0012,
-      position: new THREE.Vector3(0.45, PLATE_Y + 0.25, PLATE_Z + 0.1),
+      position: new THREE.Vector3(0.5, PLATE_Y + 0.15, PLATE_Z + 0.1),
       width: 290,
       alignItems: 'center',
       behaviors: [
@@ -1469,7 +1469,7 @@ export class OrcaWorkspace extends xb.Script {
       ]
     });
     card.visible = false;
-    this.rightSidebarCard = card;
+    this.rightSidebarCard = card; // Reuse reference for visibility toggling
 
     const root = new UIPanel({
       width: '100%',
@@ -1485,36 +1485,10 @@ export class OrcaWorkspace extends xb.Script {
     });
     card.add(root);
 
-    // Header
     const header = new UIPanel({ width: '100%', flexDirection: 'row', alignItems: 'center' });
-    header.add(new UIText('OrcaXR Slicer', { fontSize: 32, fontWeight: 'bold', color: '#ffffff' }));
+    header.add(new UIText('OrcaXR Actions', { fontSize: 32, fontWeight: 'bold', color: '#ffffff' }));
     root.add(header);
 
-    // Profile selectors
-    const profPanel = new UIPanel({ width: '100%', flexDirection: 'row', justifyContent: 'space-between', gap: 10 });
-    const mkProf = (part: 'machine' | 'process' | 'filament', icon: string) => {
-      const btn = new UIPanel({
-        flexGrow: 1, height: 50,
-        justifyContent: 'center', alignItems: 'center',
-        cornerRadius: 8,
-        fillColor: '#ffffff14',
-        strokeWidth: 1, strokeColor: '#ffffff1a',
-        onClick: () => { this.cycleProfilePart(part); return true; },
-        onHoverEnter: () => { btn.fillColor = '#ffffff26'; },
-        onHoverExit: () => { btn.fillColor = '#ffffff14'; }
-      });
-      btn.add(new UIIcon(icon, { color: '#ffffff', width: 24, height: 24 }));
-      profPanel.add(btn);
-    };
-    mkProf('machine', 'print');
-    mkProf('process', 'tune');
-    mkProf('filament', 'water_drop');
-    root.add(profPanel);
-    
-    this.headsContainer = new UIPanel({ width: '100%', flexDirection: 'column', gap: 10 });
-    root.add(this.headsContainer);
-
-    // Action buttons
     const mkAction = (text: string, icon: string, primary: boolean, onClick: () => void) => {
       const btn = new UIPanel({
         width: '100%', height: 50,
@@ -1539,7 +1513,6 @@ export class OrcaWorkspace extends xb.Script {
     root.add(loadBtn);
     
     root.add(mkAction('Slice', 'play_circle', true, () => void this.sliceNow()));
-
     root.add(mkAction('Preview', 'visibility', false, () => this.togglePreview()));
     
     root.add(mkAction('Download G-Code', 'download', false, () => {
@@ -1556,33 +1529,94 @@ export class OrcaWorkspace extends xb.Script {
     root.add(mkAction('Union (Merge All)', 'merge', false, () => void this.booleanModels('UNION')));
     root.add(mkAction('Subtract (Cut)', 'content_cut', false, () => void this.booleanModels('A_NOT_B')));
 
-    // Status Area
+    const exitBtn = mkAction('Exit XR', 'logout', false, () => {
+      xb.core.renderer.xr.getSession()?.end();
+    });
+    exitBtn.fillColor = '#e53935';
+    exitBtn.strokeColor = 'transparent';
+    exitBtn.onHoverEnter = () => { exitBtn.fillColor = '#ef5350'; };
+    exitBtn.onHoverExit = () => { exitBtn.fillColor = '#e53935'; };
+    root.add(exitBtn);
+
     const statusPanel = new UIPanel({
-      width: '100%',
-      padding: 16,
-      fillColor: '#0000004d',
-      cornerRadius: 8,
-      strokeWidth: 1,
-      strokeColor: '#ffffff0d'
+      width: '100%', padding: 16, fillColor: '#0000004d', cornerRadius: 8, strokeWidth: 1, strokeColor: '#ffffff0d'
     });
     this.statusText = new UIText('Ready. Load a model to begin.', { fontSize: 16, color: '#a0aab5' });
     statusPanel.add(this.statusText);
     
-    this.progressBar = new UIPanel({
-      width: '0%', height: 4, fillColor: '#ffb74d', cornerRadius: 2
-    });
+    this.progressBar = new UIPanel({ width: '0%', height: 4, fillColor: '#ffb74d', cornerRadius: 2 });
     this.progressContainer = new UIPanel({
       width: '100%', height: 4, fillColor: '#ffffff1a', cornerRadius: 2, margin: { top: 8 }
     });
     this.progressContainer.add(this.progressBar);
     this.progressContainer.visible = false;
     statusPanel.add(this.progressContainer);
-    
     root.add(statusPanel);
     
-    // Value text (for tools)
     this.valueText = new UIText(' ', { fontSize: 18, color: '#ffb74d' });
     root.add(this.valueText);
+  }
+
+  private addProfilePanel() {
+    const card = this.uiCore.createCard({
+      name: 'ProfilePanel',
+      sizeX: 0.35,
+      sizeY: 0.7,
+      pixelSize: 0.0012,
+      position: new THREE.Vector3(0.9, PLATE_Y + 0.15, PLATE_Z + 0.25),
+      width: 290,
+      alignItems: 'center',
+      behaviors: [
+        new ManipulationBehavior({
+          draggable: true,
+          faceCamera: true,
+          manipulationMargin: 16,
+          manipulationCornerRadius: 16,
+        })
+      ]
+    });
+    card.visible = false;
+
+    const root = new UIPanel({
+      width: '100%',
+      flexDirection: 'column',
+      fillColor: '#14171aA6',
+      cornerRadius: 16,
+      padding: 24,
+      gap: 20,
+      strokeWidth: 1,
+      strokeColor: '#ffffff14',
+      overflow: 'scroll',
+      height: '100%'
+    });
+    card.add(root);
+
+    const header = new UIPanel({ width: '100%', flexDirection: 'row', alignItems: 'center' });
+    header.add(new UIText('Profiles', { fontSize: 32, fontWeight: 'bold', color: '#ffffff' }));
+    root.add(header);
+
+    const profPanel = new UIPanel({ width: '100%', flexDirection: 'row', justifyContent: 'space-between', gap: 10 });
+    const mkProf = (part: 'machine' | 'process' | 'filament', icon: string) => {
+      const btn = new UIPanel({
+        flexGrow: 1, height: 50,
+        justifyContent: 'center', alignItems: 'center',
+        cornerRadius: 8,
+        fillColor: '#ffffff14',
+        strokeWidth: 1, strokeColor: '#ffffff1a',
+        onClick: () => { this.cycleProfilePart(part); return true; },
+        onHoverEnter: () => { btn.fillColor = '#ffffff26'; },
+        onHoverExit: () => { btn.fillColor = '#ffffff14'; }
+      });
+      btn.add(new UIIcon(icon, { color: '#ffffff', width: 24, height: 24 }));
+      profPanel.add(btn);
+    };
+    mkProf('machine', 'print');
+    mkProf('process', 'tune');
+    mkProf('filament', 'water_drop');
+    root.add(profPanel);
+    
+    this.headsContainer = new UIPanel({ width: '100%', flexDirection: 'column', gap: 10 });
+    root.add(this.headsContainer);
   }
 
   public setTool(tool: 'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint') {
