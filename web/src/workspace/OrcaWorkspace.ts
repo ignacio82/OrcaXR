@@ -669,6 +669,7 @@ export class OrcaWorkspace extends xb.Script {
 
     if (this.leftToolbarCard) this.leftToolbarCard.show();
     if (this.rightSidebarCard) this.rightSidebarCard.show();
+    if (this.profileCard) this.profileCard.show();
   }
 
   onXRSessionEnded() {
@@ -689,6 +690,7 @@ export class OrcaWorkspace extends xb.Script {
 
     if (this.leftToolbarCard) this.leftToolbarCard.hide();
     if (this.rightSidebarCard) this.rightSidebarCard.hide();
+    if (this.profileCard) this.profileCard.hide();
   }
 
   onSimulatorStarted() {
@@ -746,12 +748,22 @@ export class OrcaWorkspace extends xb.Script {
 
     if (this.rightSidebarCard) {
       const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).negate();
-      const ppos = pos.clone().addScaledVector(right, -0.45);
-      ppos.y = pos.y + 0.25;
-      ppos.addScaledVector(fwd, -0.15);
+      const ppos = pos.clone().addScaledVector(right, 0.5);
+      ppos.y = pos.y + 0.15;
+      ppos.addScaledVector(fwd, -0.1);
       this.rightSidebarCard.position.copy(ppos);
       this.rightSidebarCard.rotation.set(0, yaw, 0);
       this.rightSidebarCard.updateMatrixWorld(true);
+    }
+    
+    if (this.profileCard) {
+      const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).negate();
+      const ppos = pos.clone().addScaledVector(right, 0.9);
+      ppos.y = pos.y + 0.15;
+      ppos.addScaledVector(fwd, 0.05); // Curve towards user slightly
+      this.profileCard.position.copy(ppos);
+      this.profileCard.rotation.set(0, yaw, 0);
+      this.profileCard.updateMatrixWorld(true);
     }
   }
 
@@ -1339,6 +1351,7 @@ export class OrcaWorkspace extends xb.Script {
   private loadButtonNode: THREE.Object3D | null = null;
   private leftToolbarCard: any = null;
   private rightSidebarCard: any = null;
+  private profileCard: any = null;
 
   private addControlPanel() {
     this.addLeftToolbar();
@@ -1454,11 +1467,11 @@ export class OrcaWorkspace extends xb.Script {
   private addActionPanel() {
     const card = this.uiCore.createCard({
       name: 'ActionPanel',
-      sizeX: 0.35,
+      sizeX: 0.4,
       sizeY: 0.8,
       pixelSize: 0.0012,
       position: new THREE.Vector3(0.5, PLATE_Y + 0.15, PLATE_Z + 0.1),
-      width: 290,
+      width: 330,
       alignItems: 'center',
       behaviors: [
         new ManipulationBehavior({
@@ -1492,7 +1505,7 @@ export class OrcaWorkspace extends xb.Script {
 
     const mkAction = (text: string, icon: string, primary: boolean, onClick: () => void) => {
       const btn = new UIPanel({
-        width: '100%', height: 50,
+        width: '100%', padding: 12, minHeight: 50,
         flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10,
         cornerRadius: 10,
         fillColor: primary ? '#ffb74d' : '#ffffff14',
@@ -1502,8 +1515,8 @@ export class OrcaWorkspace extends xb.Script {
         onHoverEnter: () => { btn.fillColor = primary ? '#ff6d00' : '#ffffff26'; },
         onHoverExit: () => { btn.fillColor = primary ? '#ffb74d' : '#ffffff14'; }
       });
-      btn.add(new UIIcon(icon, { color: primary ? '#000000' : '#ffffff', width: 24, height: 24 }));
-      btn.add(new UIText(text, { fontSize: 20, fontWeight: 'bold', color: primary ? '#000000' : '#ffffff' }));
+      btn.add(new UIIcon(icon, { color: primary ? '#000000' : '#ffffff', width: 24, height: 24, flexShrink: 0 }));
+      btn.add(new UIText(text, { fontSize: 20, fontWeight: 'bold', color: primary ? '#000000' : '#ffffff', flexShrink: 1 }));
       return btn;
     };
 
@@ -1561,11 +1574,11 @@ export class OrcaWorkspace extends xb.Script {
   private addProfilePanel() {
     const card = this.uiCore.createCard({
       name: 'ProfilePanel',
-      sizeX: 0.35,
+      sizeX: 0.4,
       sizeY: 0.7,
       pixelSize: 0.0012,
       position: new THREE.Vector3(0.9, PLATE_Y + 0.15, PLATE_Z + 0.25),
-      width: 290,
+      width: 330,
       alignItems: 'center',
       behaviors: [
         new ManipulationBehavior({
@@ -1577,6 +1590,7 @@ export class OrcaWorkspace extends xb.Script {
       ]
     });
     card.visible = false;
+    this.profileCard = card;
 
     const root = new UIPanel({
       width: '100%',
