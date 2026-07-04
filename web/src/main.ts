@@ -47,6 +47,15 @@ if (import.meta.env.DEV && 'serviceWorker' in navigator) {
 /** 2D-page UI wiring for standard web slicer mode. */
 function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
 
+  // On phones the sidebar is a bottom sheet; its title toggles collapse so
+  // the 3D view isn't permanently half-covered. No-op on desktop layouts.
+  const sidebar = document.getElementById('right-sidebar') as HTMLDivElement;
+  sidebar.querySelector('h2')?.addEventListener('click', () => {
+    if (window.matchMedia('(max-width: 768px)').matches) {
+      sidebar.classList.toggle('collapsed');
+    }
+  });
+
   const fileInput = document.getElementById('file-input') as HTMLInputElement;
   const statusText = document.getElementById('status-text') as HTMLParagraphElement;
   const progressContainer = document.getElementById('progress-container') as HTMLDivElement;
@@ -149,6 +158,17 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
   const selFilament = document.getElementById('sel-filament') as HTMLSelectElement;
   const fillSelect = (sel: HTMLSelectElement, items: string[], current: string) => {
     sel.innerHTML = '';
+    if (items.length === 0) {
+      // Never leave a select blank — Android renders an empty select as a
+      // dead, label-less box. The placeholder is replaced as soon as the
+      // catalog loads (onProfileChanged → renderProfileSelects).
+      const opt = document.createElement('option');
+      opt.textContent = 'Loading profiles…';
+      opt.disabled = true;
+      opt.selected = true;
+      sel.appendChild(opt);
+      return;
+    }
     for (const it of items) {
       const opt = document.createElement('option');
       opt.value = it;

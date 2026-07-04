@@ -754,6 +754,11 @@ no further plumbing. Load-bearing details:
   ~40 ms decode; sub-triangle growth ≈ 1% (paint leaves are mostly whole
   triangles). Decode failures fall back per-triangle to the base color.
 
+**Web test convention:** `web/src/**/__tests__/*.test.ts` are plain Node
+scripts (`node:assert` + a local `test()` helper) run with `npx tsx <file>`
+— vitest is NOT installed and `npx vitest` mis-reports "No test suite
+found" for all of them. Don't add vitest-style tests.
+
 ## External slicer server (`server/`)
 
 Dockerized HTTP endpoint (`POST /slice`, STL + flattened-overrides JSON) the

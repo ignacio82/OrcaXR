@@ -279,12 +279,37 @@ export class OrcaWorkspace extends xb.Script {
     // Warm the slicer module in the background so the first slice is quick.
     this.slicer.load().catch((e) => this.setStatus(`slicer load failed: ${e.message}`));
     // Load the profile catalog; default to the user's Centauri Carbon.
-    void this.catalog.load().then(() => {
-      const p =
-        this.catalog.find('Snapmaker U1 (0.4 nozzle)', '0.20 Standard', 'Snapmaker PLA') ??
-        this.catalog.profiles[0] ?? null;
-      if (p) this.setProfile(p);
-    });
+    // One flaky fetch (mobile network, the COI service-worker reload racing
+    // the request) used to leave the catalog empty for the whole session —
+    // blank, dead profile dropdowns. Retry with backoff and again when the
+    // browser comes back online.
+    let catalogLoading = false;
+    const loadCatalog = async () => {
+      if (catalogLoading || this.catalog.profiles.length > 0) return;
+      catalogLoading = true;
+      try {
+        for (let attempt = 0; this.catalog.profiles.length === 0 && attempt < 4; attempt++) {
+          if (attempt > 0) {
+            const delay = 1000 * 2 ** (attempt - 1);
+            console.warn(`[orcaxr] profile catalog empty — retry ${attempt} in ${delay} ms`);
+            await new Promise((r) => setTimeout(r, delay));
+          }
+          await this.catalog.load();
+        }
+        if (this.catalog.profiles.length === 0) {
+          this.setStatus('Profile catalog failed to load — check the connection and reload.');
+          return;
+        }
+        const p =
+          this.catalog.find('Snapmaker U1 (0.4 nozzle)', '0.20 Standard', 'Snapmaker PLA') ??
+          this.catalog.profiles[0] ?? null;
+        if (p) this.setProfile(p);
+      } finally {
+        catalogLoading = false;
+      }
+    };
+    void loadCatalog();
+    window.addEventListener('online', () => void loadCatalog());
     this.slicer.onProgress = (p) => this.setStatus(`Slicing... ${p.message}`, p.percent);
 
     // Filament-vs-bed rules for the pre-flight check (falls back to EMPTY).
