@@ -56,10 +56,18 @@ export class MoonrakerClient {
 
     private async execute<T>(path: string, options?: RequestInit): Promise<T> {
         let baseUrls: string[] = [];
-        
-        const isDev = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV;
 
-        if (this.printer.host.includes(':') && !this.printer.host.startsWith('http')) {
+        const isDev = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV;
+        const hasScheme = /^https?:\/\//i.test(this.printer.host.trim());
+
+        if (hasScheme) {
+            // Explicit URL — e.g. a Tailscale Serve endpoint
+            // (https://<name>.ts.net) or any HTTPS reverse proxy in front of
+            // Moonraker. Use it verbatim: don't append ports or fall back to
+            // http. On an https page an https target is the *only* scheme that
+            // isn't mixed-content-blocked, so preserving it exactly matters.
+            baseUrls.push(this.baseUrl);
+        } else if (this.printer.host.includes(':') && !this.printer.host.startsWith('http')) {
              if (isDev) baseUrls.push(`${window.location.origin}/moonraker/${this.printer.host}`);
              baseUrls.push(this.baseUrl);
         } else if (this.printer.port === 7125) {
@@ -114,7 +122,20 @@ export class MoonrakerClient {
         
         let msg = lastError?.message || 'Unknown error';
         if (msg === 'Failed to fetch') {
-            msg += ' (Check printer IP, or ensure Moonraker cors_domains includes this app)';
+            const pageHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+            const origin = typeof window !== 'undefined' ? window.location.origin : 'this app';
+            const targetHttp = this.baseUrl.startsWith('http://');
+            if (pageHttps && targetHttp) {
+                // The real blocker: the browser refuses http requests from an
+                // https page ("mixed content") before CORS is ever checked, so
+                // editing cors_domains can't help here.
+                msg += ` (Mixed content: this HTTPS page (${origin}) can't reach an http:// printer.`
+                    + ` Give Moonraker an HTTPS URL — e.g. Tailscale Serve → https://<name>.ts.net —`
+                    + ` and enter that here.)`;
+            } else {
+                msg += ` (Check the printer URL is reachable on this network, and that`
+                    + ` Moonraker cors_domains includes ${origin})`;
+            }
         }
         throw new Error(`MoonrakerClient error: ${msg}`);
     }

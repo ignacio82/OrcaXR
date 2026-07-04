@@ -759,6 +759,35 @@ scripts (`node:assert` + a local `test()` helper) run with `npx tsx <file>`
 — vitest is NOT installed and `npx vitest` mis-reports "No test suite
 found" for all of them. Don't add vitest-style tests.
 
+## Web → printer connectivity: mixed content, not CORS (`web/src/{features/MoonrakerClient,net/PrinterClient}.ts`)
+
+The hosted web app runs on **https** (`https://orcaxr.martinez.fyi/slicer/`,
+GitHub Pages). A Snapmaker U1 / Klipper printer on the LAN speaks plain
+**http**. Browsers block `https page → http://<ip>` as **mixed content** —
+*before* the request leaves the browser, so before CORS is ever evaluated.
+This is why editing Moonraker `cors_domains` appears to do nothing and the old
+error message ("ensure cors_domains includes this app") sent users down a dead
+end: the request never reaches Moonraker to be CORS-checked. `cors_domains`
+only matters once the transport is https.
+
+The fix is a **browser-trusted https URL for the printer**, entered verbatim in
+the printer-host field. The turnkey path (no cert infra, no cost) is the
+Snapmaker U1 Extended Firmware's built-in **Tailscale**: `tailscale serve
+--bg 80` mints a Let's Encrypt cert and fronts nginx (→ Moonraker) at
+`https://<name>.ts.net/`. Then https app → https printer, no mixed content, and
+`cors_domains: https://orcaxr.martinez.fyi` is honored. The headset must join
+the same tailnet. (A self-hosted https reverse proxy / tunnel works too; the
+client just needs an https URL.)
+
+Client behavior both files now share: if the host carries an explicit
+`http(s)://` scheme it is used **verbatim** — no port probing, no scheme
+fallback (mangling ports onto a real `ts.net` URL would break it, and downgrade
+to http would re-trigger mixed content). Bare IPs keep the legacy
+7125/80/8080 probe. The "Failed to fetch" handler distinguishes the
+mixed-content case (https page + http target) from genuine reachability/CORS
+and only mentions `cors_domains` for the latter. Don't revert to a blanket
+"check cors_domains" message — it's the wrong diagnosis for the common case.
+
 ## External slicer server (`server/`)
 
 Dockerized HTTP endpoint (`POST /slice`, STL + flattened-overrides JSON) the

@@ -343,8 +343,14 @@
         <details class="insp-section"><summary>Send to printer</summary>
         <div class="panel" id="printer-panel">
           <div style="font-size:0.8rem;color:#a0aab5;font-weight:600;margin-bottom:8px;">PRINTER (Moonraker)</div>
-          <input id="printer-host" type="text" placeholder="printer IP (e.g. 192.168.1.50)"
+          <input id="printer-host" type="text" placeholder="192.168.1.50 or https://name.ts.net"
             style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.3);color:#fff;border:1px solid #ffffff1a;border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;" />
+          <p style="font-size:11px;color:#8892a0;margin:0 0 8px;line-height:1.4;">
+            On https, a plain http printer IP is blocked by the browser (mixed content).
+            Enter an <b>HTTPS</b> printer URL — e.g. Tailscale Serve
+            <code>https://name.ts.net</code> — and add this app's origin to Moonraker
+            <code>cors_domains</code>.
+          </p>
           <button id="btn-printer-test" class="action-btn" style="margin-bottom:8px;">Test Connection</button>
           <button id="btn-printer-send" class="action-btn" disabled>Send + Print</button>
         </div>
