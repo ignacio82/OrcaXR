@@ -179,8 +179,8 @@ const MM = 0.001;
  *  read tiny in XR. Uniform, so transform baking cancels it exactly. */
 const WORKSPACE_SCALE = 1.75;
 /** Fallback pose before the XR session gives us a head pose. */
-const PLATE_Y = 0.8;
-const PLATE_Z = -0.9;
+const PLATE_Y = 1.2;
+const PLATE_Z = -0.7;
 
 
 /** One plated model: its source geometry, the display mesh, and the grab proxy. */
@@ -1454,7 +1454,7 @@ export class OrcaWorkspace extends xb.Script {
     const card = this.uiCore.createCard({
       name: 'RightSidebar',
       sizeX: 0.35,
-      sizeY: 0.6,
+      sizeY: 0.85,
       pixelSize: 0.0012,
       position: new THREE.Vector3(0.45, PLATE_Y + 0.25, PLATE_Z + 0.1),
       width: 290,
