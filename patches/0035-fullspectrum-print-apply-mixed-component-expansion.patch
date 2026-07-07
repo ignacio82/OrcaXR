@@ -1,0 +1,143 @@
+Phase 2 (FullSpectrum engine emission, P2G): expand virtual mixed-
+filament IDs into their physical components when collecting
+painting_extruders in Print::apply.
+
+Ported from FS v0.9.9 (`ratdoux/OrcaSlicer-FullSpectrum@v0.9.9` commit
+b3c41fda), `src/libslic3r/PrintApply.cpp` `append_mixed_component_extruders`
++ caller.
+
+Why this matters (correctness fix for painted virtual filaments):
+
+When the user paints triangles with a virtual mixed-filament state
+ID (id > num_physical), our v2.3.2 code at PrintApply.cpp:1772 just
+`painting_extruders.emplace_back(state_idx)`. Downstream the
+per-physical-extruder buffer allocations don't cover the actual
+physical(s) the resolver will pick per layer — so painted regions
+for virtual filaments silently print on T0 only, ignoring the
+LayerCycle / Pointillisme / pattern resolution.
+
+This patch adds two helpers:
+
+- `append_unique_painted_extruder` — dedupes + clamps to physical
+  range.
+- `append_mixed_component_extruders` — when state_id is virtual,
+  emplaces component_a + component_b + every digit in
+  gradient_component_ids + every distinct digit in manual_pattern.
+
+The caller at the `used_facet_states` walk emplaces the literal
+state_idx (preserves prior behavior) AND calls the new helper to
+expand virtual rows into physicals. Physical IDs short-circuit
+inside the helper.
+
+Verified compile-clean via incremental libslic3r rebuild (4/4 objects,
+0 FAILED) + ./gradlew :app:assembleDebug (full APK assembled).
+
+Hard dependencies:
+  - patch 0015 (MixedFilamentManager + MixedFilament definitions)
+  - patch 0017 (m_mixed_filament_mgr member on Print)
+
+Companion to:
+  - 0032 (LayerRegion virtual filament resolution — runs per-layer)
+  - 0034 (PrintRegion infill-filament-override — runs per-preset)
+
+This patch handles paint-state-driven expansion (mm_segmentation
+facets), the missing leg of the trio.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+diff --git a/src/libslic3r/PrintApply.cpp b/src/libslic3r/PrintApply.cpp
+index f924966a38..527d55ae38 100644
+--- a/src/libslic3r/PrintApply.cpp
++++ b/src/libslic3r/PrintApply.cpp
+@@ -1104,6 +1104,66 @@ static PrintObjectRegions* generate_print_object_regions(
+     return out.release();
+ }
+ 
++// OrcaXR Android (FullSpectrum patch 0035). Helpers used by Print::apply
++// to expand a painted facet state ID into the physical filament IDs the
++// mm-segmentation pipeline must allocate target regions for.
++//
++// Without these, a paint state pointing at a virtual mixed filament (id
++// > num_physical) gets emplaced into painting_extruders as-is, and
++// downstream the per-physical-extruder buffer allocations don't cover
++// the actual physical(s) the resolver will pick per layer. End result:
++// painted regions for virtual filaments silently print on T0 only.
++//
++// Mirrors FS v0.9.9 (`ratdoux/OrcaSlicer-FullSpectrum@v0.9.9` commit
++// b3c41fda), src/libslic3r/PrintApply.cpp:1133-1179.
++static inline void append_unique_painted_extruder(std::vector<unsigned int> &painting_extruders,
++                                                  unsigned int                extruder_id,
++                                                  size_t                      num_physical_extruders)
++{
++    if (extruder_id < 1 || extruder_id > num_physical_extruders)
++        return;
++    if (std::find(painting_extruders.begin(), painting_extruders.end(), extruder_id) == painting_extruders.end())
++        painting_extruders.emplace_back(extruder_id);
++}
++
++static void append_mixed_component_extruders(const MixedFilamentManager &mixed_mgr,
++                                             unsigned int                state_id,
++                                             size_t                      num_physical_extruders,
++                                             std::vector<unsigned int>  &painting_extruders)
++{
++    if (state_id <= num_physical_extruders)
++        return;
++
++    const MixedFilament *mixed_row = mixed_mgr.mixed_filament_from_id(state_id, num_physical_extruders);
++    if (mixed_row == nullptr || !mixed_row->enabled)
++        return;
++
++    // Pre-create painted target regions for every physical filament a mixed row
++    // may resolve to. apply_mm_segmentation can then collapse ordinary mixed
++    // channels onto the active physical tool for a layer without losing the
++    // destination region.
++    append_unique_painted_extruder(painting_extruders, mixed_row->component_a, num_physical_extruders);
++    append_unique_painted_extruder(painting_extruders, mixed_row->component_b, num_physical_extruders);
++
++    for (char token : mixed_row->gradient_component_ids) {
++        if (token < '1' || token > '9')
++            continue;
++        append_unique_painted_extruder(painting_extruders, unsigned(token - '0'), num_physical_extruders);
++    }
++
++    for (char token : mixed_row->manual_pattern) {
++        unsigned int extruder_id = 0;
++        if (token == '1')
++            extruder_id = mixed_row->component_a;
++        else if (token == '2')
++            extruder_id = mixed_row->component_b;
++        else if (token >= '3' && token <= '9')
++            extruder_id = unsigned(token - '0');
++
++        append_unique_painted_extruder(painting_extruders, extruder_id, num_physical_extruders);
++    }
++}
++
+ Print::ApplyStatus Print::apply(const Model &model, DynamicPrintConfig new_full_config)
+ {
+ #ifdef _DEBUG
+@@ -1767,9 +1827,24 @@ Print::ApplyStatus Print::apply(const Model &model, DynamicPrintConfig new_full_
+                     used_facet_states[state_idx] |= volume_used_facet_states[state_idx];
+             }
+ 
++            // OrcaXR Android (FullSpectrum patch 0035). Compute the number of
++            // physical extruders from the print config so virtual mixed-
++            // filament IDs (state_idx > num_physical) can be expanded into
++            // their constituent physical components below.
++            const size_t num_physical_extruders = m_config.filament_diameter.size();
+             for (size_t state_idx = static_cast<size_t>(EnforcerBlockerType::Extruder1); state_idx < used_facet_states.size(); ++state_idx) {
+-                if (used_facet_states[state_idx])
++                if (used_facet_states[state_idx]) {
+                     painting_extruders.emplace_back(state_idx);
++                    // When state_idx is a virtual mixed-filament ID, also
++                    // emplace its underlying physical components so the
++                    // per-physical-extruder buffer allocations downstream
++                    // cover all filaments the resolver may pick per layer.
++                    // Mirrors FS v0.9.9 `append_mixed_component_extruders`.
++                    append_mixed_component_extruders(m_mixed_filament_mgr,
++                                                     static_cast<unsigned int>(state_idx),
++                                                     num_physical_extruders,
++                                                     painting_extruders);
++                }
+             }
+         }
+         if (model_object_status.print_object_regions_status == ModelObjectStatus::PrintObjectRegionsStatus::Valid) {

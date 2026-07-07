@@ -1,0 +1,31 @@
+libslic3r: include <sstream> in LocalesUtils.cpp explicitly
+
+LocalesUtils.cpp:79 uses std::stringstream but only the forward
+declaration was available via libc++'s <__fwd/sstream.h>. On
+desktop libstdc++ some other include pulls in <sstream> transitively
+so the code compiles, but NDK libc++ doesn't and the template is
+undefined at the point of use:
+
+    error: implicit instantiation of undefined template
+    'std::basic_stringstream<char>'
+
+One-liner: add `#include <sstream>`. Idiomatic; strictly more correct
+regardless of stdlib.
+
+Retire-if: never — this is a plain bug fix that should go upstream.
+Drop this patch once the same change lands in a tagged OrcaSlicer
+release we bump to.
+
+---
+diff --git a/src/libslic3r/LocalesUtils.cpp b/src/libslic3r/LocalesUtils.cpp
+index d321072335..5379b53e34 100644
+--- a/src/libslic3r/LocalesUtils.cpp
++++ b/src/libslic3r/LocalesUtils.cpp
+@@ -3,6 +3,7 @@
+ #ifdef _WIN32
+     #include <charconv>
+ #endif
++#include <sstream>
+ #include <stdexcept>
+ 
+ #include <fast_float/fast_float.h>

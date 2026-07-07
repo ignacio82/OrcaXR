@@ -1,0 +1,45 @@
+Phase H.2: register requires_top_cover config key
+
+Snapmaker fork branch `feature_top_cover` (PR #284) introduces a
+per-filament `coBools` flag for materials that need the U1's
+magnetic top cover installed (ABS, ASA, PA, PC). The fork hooks
+this into `Print::validate()` to surface a warning when the
+filament has it set + the printer's bed-type hint is "open frame".
+
+OrcaXR Phase H.2 ships only the PrintConfig key registration here
+in C++. The user-visible warning is rendered by the Compose shell
+in `MainActivity.kt` (see `topCoverHint` derived state) — same
+pattern as Phase E's `FilamentRules` (gotcha #28): when the rule
+data is small and the trigger is a per-printer / per-filament
+combination the UI already tracks, the Kotlin side is the
+shorter path. The libslic3r Print::validate() hook would only
+matter if a future code path slices without the UI (CLI tool,
+scripted automation), at which point we'd add the validate-side
+hook then.
+
+Pure additive registration — default false. Profiles that omit
+the key behave exactly as before. Anchors after Phase H.1's
+`filament_is_high_temperature` block so the two patches chain
+cleanly.
+
+diff --git a/src/libslic3r/PrintConfig.cpp b/src/libslic3r/PrintConfig.cpp
+--- a/src/libslic3r/PrintConfig.cpp
++++ b/src/libslic3r/PrintConfig.cpp
+@@ -2770,6 +2770,17 @@
+     def->mode = comAdvanced;
+     def->set_default_value(new ConfigOptionBools { false });
+ 
++    // OrcaXR Phase H.2 (Snapmaker fork PR #284 port). Per-filament
++    // coBools for materials that need the U1's magnetic top cover.
++    // Default false — open-frame-friendly profiles unaffected. The
++    // user-visible warning is rendered Compose-side; see gotcha #28
++    // for why the libslic3r Print::validate() hook is deferred.
++    def = this->add("requires_top_cover", coBools);
++    def->label = L("Requires magnetic top cover");
++    def->tooltip = L("When set, OrcaXR warns if the printer's bed type suggests an open frame. Helps avoid warping on ABS/ASA/PA/PC prints.");
++    def->mode = comAdvanced;
++    def->set_default_value(new ConfigOptionBools { false });
++
+     def = this->add("filament_type", coStrings);
+     def->label = L("Type");
+     def->tooltip = L("The material type of filament.");

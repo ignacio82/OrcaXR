@@ -1,0 +1,30 @@
+Android: disable OpenCV Android sample subprojects
+
+OpenCV 4.6.0 unconditionally adds samples/android/* subdirectories when
+CMAKE_SYSTEM_NAME is Android. Those CMakeLists call add_android_project(),
+a helper that is only defined in a specific OpenCV-Android-SDK setup we
+are not using. Result:
+    CMake Error at samples/android/15-puzzle/CMakeLists.txt:3:
+      Unknown CMake command "add_android_project"
+
+Explicitly disable the two relevant toggles. BUILD_EXAMPLES=OFF alone
+is insufficient — Android projects have their own gate.
+
+Retire-if: upstream bumps OpenCV past a version where these
+subdirectories are gated behind BUILD_EXAMPLES, or we drop OpenCV
+from libslic3r's link set.
+
+---
+diff --git a/deps/OpenCV/OpenCV.cmake b/deps/OpenCV/OpenCV.cmake
+index ad8c0a3585..efeb486f52 100644
+--- a/deps/OpenCV/OpenCV.cmake
++++ b/deps/OpenCV/OpenCV.cmake
+@@ -18,6 +18,8 @@ orcaslicer_add_cmake_project(OpenCV
+        -DBUILD_TESTS=OFF
+        -DBUILD_opencv_python_tests=OFF
+        -DBUILD_EXAMPLES=OFF
++       -DBUILD_ANDROID_PROJECTS=OFF
++       -DBUILD_ANDROID_EXAMPLES=OFF
+        -DBUILD_JASPER=OFF
+        -DBUILD_JAVA=OFF
+        -DBUILD_JPEG=ON

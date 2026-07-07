@@ -1,0 +1,120 @@
+diff --git a/src/libslic3r/PrintApply.cpp b/src/libslic3r/PrintApply.cpp
+--- a/src/libslic3r/PrintApply.cpp
++++ b/src/libslic3r/PrintApply.cpp
+@@ -1117,6 +1117,58 @@
+ 	new_full_config.option("filament_settings_id",         true);
+ 	new_full_config.option("printer_settings_id",          true);
+ 
++    // FullSpectrum mixed-filament integration. The slicing engine needs the
++    // mixed_filament_* and dithering_* keys present on every config view
++    // (incoming, persisted Print, and per-object defaults) so a saved 3MF
++    // round-trips, and so an in-session slice with mixed-filament rows
++    // updates the manager. See patches/0016 for the option definitions and
++    // patches/0017 for the Print-side accessors.
++    new_full_config.option("mixed_filament_definitions",            true);
++    new_full_config.option("mixed_filament_gradient_mode",          true);
++    new_full_config.option("mixed_filament_height_lower_bound",     true);
++    new_full_config.option("mixed_filament_height_upper_bound",     true);
++    new_full_config.option("mixed_filament_advanced_dithering",     true);
++    new_full_config.option("mixed_filament_pointillism_pixel_size", true);
++    new_full_config.option("mixed_filament_pointillism_line_gap",   true);
++    new_full_config.option("mixed_filament_component_bias_enabled", true);
++    new_full_config.option("mixed_filament_surface_indentation",    true);
++    new_full_config.option("mixed_filament_region_collapse",        true);
++    new_full_config.option("dithering_z_step_size",                 true);
++    new_full_config.option("dithering_local_z_mode",                true);
++    new_full_config.option("dithering_local_z_whole_objects",       true);
++    new_full_config.option("dithering_local_z_direct_multicolor",   true);
++    new_full_config.option("dithering_step_painted_zones_only",     true);
++    m_config.option("mixed_filament_definitions",            true);
++    m_config.option("mixed_filament_gradient_mode",          true);
++    m_config.option("mixed_filament_height_lower_bound",     true);
++    m_config.option("mixed_filament_height_upper_bound",     true);
++    m_config.option("mixed_filament_advanced_dithering",     true);
++    m_config.option("mixed_filament_pointillism_pixel_size", true);
++    m_config.option("mixed_filament_pointillism_line_gap",   true);
++    m_config.option("mixed_filament_component_bias_enabled", true);
++    m_config.option("mixed_filament_surface_indentation",    true);
++    m_config.option("mixed_filament_region_collapse",        true);
++    m_config.option("dithering_z_step_size",                 true);
++    m_config.option("dithering_local_z_mode",                true);
++    m_config.option("dithering_local_z_whole_objects",       true);
++    m_config.option("dithering_local_z_direct_multicolor",   true);
++    m_config.option("dithering_step_painted_zones_only",     true);
++    m_default_object_config.option("mixed_filament_definitions",            true);
++    m_default_object_config.option("mixed_filament_gradient_mode",          true);
++    m_default_object_config.option("mixed_filament_height_lower_bound",     true);
++    m_default_object_config.option("mixed_filament_height_upper_bound",     true);
++    m_default_object_config.option("mixed_filament_advanced_dithering",     true);
++    m_default_object_config.option("mixed_filament_pointillism_pixel_size", true);
++    m_default_object_config.option("mixed_filament_pointillism_line_gap",   true);
++    m_default_object_config.option("mixed_filament_component_bias_enabled", true);
++    m_default_object_config.option("mixed_filament_surface_indentation",    true);
++    m_default_object_config.option("mixed_filament_region_collapse",        true);
++    m_default_object_config.option("dithering_z_step_size",                 true);
++    m_default_object_config.option("dithering_local_z_mode",                true);
++    m_default_object_config.option("dithering_local_z_whole_objects",       true);
++    m_default_object_config.option("dithering_local_z_direct_multicolor",   true);
++    m_default_object_config.option("dithering_step_painted_zones_only",     true);
++
+     // BBS
+     std::vector <unsigned int> used_filaments = this->extruders(true);
+     std::unordered_set <unsigned int> used_filament_set(used_filaments.begin(), used_filaments.end());
+@@ -1266,6 +1318,57 @@
+         }
+     }
+ 
++    // FullSpectrum: refresh the mixed-filament manager from the user's
++    // serialized definitions. Keeping it here (after m_config is up to
++    // date with new_full_config and num_extruders is finalized) means
++    // the manager always reflects the latest slice request. Downstream
++    // code (ToolOrdering expansion, 3MF metadata) reads from it; until
++    // those phases land, this is silent state — but persisting it now
++    // means the engine carries everything it needs the moment those
++    // consumers wire up.
++    {
++        std::vector<std::string> physical_filament_colors = m_config.filament_colour.values;
++        physical_filament_colors.resize(num_extruders, std::string("#26A69A"));
++        // Read the FullSpectrum keys off new_full_config — m_config is the
++        // typed PrintConfig struct and these keys aren't materialized as
++        // typed members, only as ConfigOptionDef entries (patch 0016).
++        // new_full_config is the freshest user-supplied DynamicPrintConfig
++        // and exposes the opt_string/opt_int/opt_float helpers.
++        // mixed_filament_gradient_mode + mixed_filament_advanced_dithering
++        // are registered as coBool (PrintConfig.cpp). Calling opt_int on a
++        // ConfigOptionBool dynamic_casts to ConfigOptionInt, gets nullptr,
++        // and SEGVs at the value field offset (0x8). Read them via
++        // opt_bool / option<ConfigOptionBool>() instead.
++        auto opt_bool_or = [&new_full_config](const char *key, bool fallback) {
++            const auto *opt = new_full_config.option<ConfigOptionBool>(key);
++            return opt ? opt->value : fallback;
++        };
++        auto opt_string_or = [&new_full_config](const char *key, std::string fallback) {
++            const auto *opt = new_full_config.option<ConfigOptionString>(key);
++            return opt ? opt->value : fallback;
++        };
++        auto opt_float_or = [&new_full_config](const char *key, double fallback) {
++            const auto *opt = new_full_config.option<ConfigOptionFloat>(key);
++            return opt ? opt->value : fallback;
++        };
++        const std::string mixed_definitions = opt_string_or("mixed_filament_definitions", "");
++        const int   gradient_mode  = opt_bool_or("mixed_filament_gradient_mode", false) ? 1 : 0;
++        const float lower_in       = float(opt_float_or("mixed_filament_height_lower_bound", 0.04));
++        const float upper_in       = float(opt_float_or("mixed_filament_height_upper_bound", 0.16));
++        const float height_lower   = std::max(0.01f, lower_in);
++        const float height_upper   = std::max(height_lower, upper_in);
++        const bool  advanced_dith  = opt_bool_or("mixed_filament_advanced_dithering", false);
++        m_mixed_filament_mgr.clear_custom_entries();
++        m_mixed_filament_mgr.auto_generate(physical_filament_colors);
++        m_mixed_filament_mgr.load_custom_entries(mixed_definitions, physical_filament_colors);
++        m_mixed_filament_mgr.apply_gradient_settings(gradient_mode, height_lower, height_upper, advanced_dith);
++        BOOST_LOG_TRIVIAL(info) << __FUNCTION__
++                                << boost::format(": mixed-filament manager refreshed, total=%1%, enabled=%2%, definitions_len=%3%")
++                                       % m_mixed_filament_mgr.mixed_filaments().size()
++                                       % m_mixed_filament_mgr.enabled_count()
++                                       % mixed_definitions.size();
++    }
++
+     ModelObjectStatusDB model_object_status_db;
+ 
+     // 1) Synchronize model objects.

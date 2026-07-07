@@ -1,0 +1,144 @@
+From: OrcaXR Android port
+Subject: [PATCH] bbs_3mf: virtual-filament-aware max_filament_id clamp (Phase F.3)
+
+Replace the `filament_settings_id`-size-only fallback in
+`load_bbs_3mf`'s per-object/per-volume `extruder` clamp with the
+mixed-filament-aware helper Snapmaker fork ships on
+`feature_mix_filament_sm`. The helper consults `filament_colour`,
+`filament_settings_id`, `filament_ids`, `default_filament_colour`,
+and `nozzle_diameter` (in that priority) for the physical count, then
+asks `MixedFilamentManager` to expand that to include any virtual
+mixed filaments declared via `mixed_filament_definitions`.
+
+**Why land this on Android even though it's a near-no-op today:**
+
+`mixed_filament_definitions` rarely loads on Android because
+libslic3r's `_extract_project_config_from_archive` writes a temp file
+to `Model::get_backup_path()` under a non-writable mount (see
+GEMINI.md gotcha #10b). The Kotlin-side `nativeRead3mfMixedFilamentDefinitions`
+in `slic3r_jni.cpp` covers that path with a direct miniz reader.
+However:
+
+1. The helper still **improves the fallback** even without virtual
+   filaments: `filament_settings_id` isn't always present in the
+   embedded project config (Bambu Studio 3MFs sometimes drop it),
+   leaving the prior code at `INT_MAX` and skipping the clamp
+   entirely. The new helper also consults `filament_colour` and
+   `nozzle_diameter`, both of which OrcaXR injects into every
+   slice via `mergedConfig`.
+2. **Lays infrastructure for Phase F.2** — when the engine emission
+   port lands, this helper is what its CallSite uses to validate
+   per-object filament references.
+
+The recovery target on overflow stays at slot **1** (matching our
+existing v2.3.2 behavior), not Snapmaker's slot **0**, to avoid
+shifting the dragon autotest baseline. Snapmaker's `0` semantically
+means "use the plate default extruder" and is the cleaner choice;
+deferred so this patch is a pure cap-improvement rather than a
+behavior change.
+
+Source for the two helpers: byte-identical (modulo comment
+header) to Snapmaker `feature_mix_filament_sm` HEAD `475aa05`,
+`bbs_3mf.cpp` lines 578–621. Same code in FullSpectrum v0.9.8.
+
+Depends on patch 0015 (MixedFilament.{cpp,hpp}) for
+`MixedFilamentManager` symbol.
+
+diff --git a/src/libslic3r/Format/bbs_3mf.cpp b/src/libslic3r/Format/bbs_3mf.cpp
+index dcbf638483..606356c9d4 100644
+--- a/src/libslic3r/Format/bbs_3mf.cpp
++++ b/src/libslic3r/Format/bbs_3mf.cpp
+@@ -6,6 +6,7 @@
+ #include "../LocalesUtils.hpp"
+ #include "../GCode.hpp"
+ #include "../Geometry.hpp"
++#include "../MixedFilament.hpp"
+ #include "../GCode/ThumbnailData.hpp"
+ #include "../Semver.hpp"
+ #include "../Time.hpp"
+@@ -629,6 +630,70 @@ bool bbs_is_valid_object_type(const std::string& type)
+
+ namespace Slic3r {
+
++// OrcaXR Android (FullSpectrum Phase F.3). Returns the number of
++// physical filament slots described by the loaded project_config,
++// looking at the keys most likely to be authoritative first
++// (filament_colour, filament_settings_id, ...). Mirrors Snapmaker
++// fork's `feature_mix_filament_sm` helper byte-for-byte.
++static size_t physical_filament_count_from_project_config(const DynamicPrintConfig &config)
++{
++    if (const auto *opt = config.option<ConfigOptionStrings>("filament_colour"); opt != nullptr && !opt->values.empty())
++        return opt->values.size();
++    if (const auto *opt = config.option<ConfigOptionStrings>("filament_settings_id"); opt != nullptr && !opt->values.empty())
++        return opt->values.size();
++    if (const auto *opt = config.option<ConfigOptionStrings>("filament_ids"); opt != nullptr && !opt->values.empty())
++        return opt->values.size();
++    if (const auto *opt = config.option<ConfigOptionStrings>("default_filament_colour"); opt != nullptr && !opt->values.empty())
++        return opt->values.size();
++    if (const auto *opt = config.option<ConfigOptionFloats>("nozzle_diameter"); opt != nullptr && !opt->values.empty())
++        return opt->values.size();
++    return 0;
++}
++
++// OrcaXR Android (FullSpectrum Phase F.3). Returns the highest
++// 1-based filament id supported by this project — physical count plus
++// any virtual mixed filaments declared via mixed_filament_definitions.
++// Used to clamp per-object/per-volume `extruder` assignments in 3MFs
++// that reference filament ids beyond what the loaded project supports.
++//
++// On Android the `mixed_filament_definitions` lookup is usually a
++// no-op because libslic3r's project_config extraction writes a temp
++// file under a non-writable mount (see GEMINI.md gotcha #10b), so
++// `mixed_defs_opt` is typically nullptr even for FullSpectrum-painted
++// 3MFs. The Kotlin-side `nativeRead3mfMixedFilamentDefinitions`
++// reader at slic3r_jni.cpp:~1492 covers that path. The helper still
++// improves the fallback over the prior `filament_settings_id`-only
++// clamp by also consulting `filament_colour` / `nozzle_diameter`.
++static int max_supported_filament_id_from_project_config(const DynamicPrintConfig &config)
++{
++    const size_t physical_count = physical_filament_count_from_project_config(config);
++    if (physical_count == 0)
++        return std::numeric_limits<int>::max();
++
++    std::vector<std::string> physical_colors;
++    if (const auto *opt = config.option<ConfigOptionStrings>("filament_colour"); opt != nullptr)
++        physical_colors = opt->values;
++    else if (const auto *opt = config.option<ConfigOptionStrings>("default_filament_colour"); opt != nullptr)
++        physical_colors = opt->values;
++    if (physical_colors.size() < physical_count)
++        physical_colors.resize(physical_count, "#FFFFFF");
++    else if (physical_colors.size() > physical_count)
++        physical_colors.resize(physical_count);
++
++    size_t max_filament_id = physical_count;
++    if (physical_count >= 2) {
++        if (const auto *mixed_defs_opt = config.option<ConfigOptionString>("mixed_filament_definitions");
++            mixed_defs_opt != nullptr && !mixed_defs_opt->value.empty()) {
++            MixedFilamentManager mixed_mgr;
++            mixed_mgr.auto_generate(physical_colors);
++            mixed_mgr.load_custom_entries(mixed_defs_opt->value, physical_colors);
++            max_filament_id = mixed_mgr.total_filaments(physical_count);
++        }
++    }
++
++    return max_filament_id >= size_t(std::numeric_limits<int>::max()) ? std::numeric_limits<int>::max() : int(max_filament_id);
++}
++
+ void PlateData::parse_filament_info(GCodeProcessorResult *result)
+ {
+     if (!result) return;
+@@ -2148,8 +2213,12 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
+             ++object_idx;
+         }
+
+-        const ConfigOptionStrings* filament_ids_opt = config.option<ConfigOptionStrings>("filament_settings_id");
+-        int max_filament_id = filament_ids_opt ? filament_ids_opt->size() : std::numeric_limits<int>::max();
++        // OrcaXR Android (FullSpectrum Phase F.3). Use the
++        // mixed-filament-aware helper above instead of just
++        // filament_settings_id.size() — when virtual mixed filaments
++        // are declared, max_filament_id should include them so a 3MF
++        // referencing virtual ids isn't silently downgraded to slot 1.
++        const int max_filament_id = max_supported_filament_id_from_project_config(config);
+         for (ModelObject* mo : m_model->objects) {
+             const ConfigOptionInt* extruder_opt = dynamic_cast<const ConfigOptionInt*>(mo->config.option("extruder"));
+             int extruder_id = 0;

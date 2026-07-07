@@ -1,0 +1,134 @@
+# Third-party attributions
+
+OrcaXR builds on several upstream projects. Source pinned by submodule
+or by snapshot date in this file.
+
+## OrcaSlicer
+
+`third_party/OrcaSlicer/` is a git submodule pinned to upstream
+`SoftFever/OrcaSlicer` tag **v2.3.2**. Source at
+https://github.com/SoftFever/OrcaSlicer.
+
+License: **GNU AGPL v3.0** (`third_party/OrcaSlicer/LICENSE`). OrcaXR
+links libslic3r and is therefore AGPL-bound.
+
+## u1-slicer-for-android (mobile GL viewer)
+
+`app/src/main/java/dev/orcaxr/app/mobile/viewer/{Camera,ShaderProgram,
+MeshData,BaseGLViewerView,ModelRenderer,ModelViewerView}.kt` and
+`app/src/main/assets/shaders/{model,grid}.{vert,frag}` are ported from
+`taylormadearmy/u1-slicer-for-android`, snapshotted from `main` on
+2026-05-07. Source at
+https://github.com/taylormadearmy/u1-slicer-for-android.
+
+License: **GNU AGPL v3.0**. Slimmed for OrcaXR's mobile shell — bed +
+grid + single mesh + orbit + drag-to-move. The upstream viewer also
+ships a Snapmaker U1 logo texture, a bundled `bed/u1_bed.stl`,
+multi-instance arrange, a wipe-tower box, and per-extruder vertex
+recoloring; OrcaXR drops these (or moves them to the XR shell) and
+generates a rectangular bed mesh at runtime from the active profile's
+`printable_area` so any printer's bed renders without shipping
+per-vendor STLs. Two-light shader constants in `model.vert` match
+upstream byte-for-byte.
+
+## Snapmaker OrcaSlicer profiles
+
+`app/src/main/java/dev/orcaxr/app/SlicerProfile.kt` carries
+`Snapmaker_U1_PLA_Standard` — a flattened profile derived from
+`Snapmaker/OrcaSlicer`'s `resources/profiles/Snapmaker/{machine,
+process, filament}/...` JSON files. Source at
+https://github.com/Snapmaker/OrcaSlicer.
+
+Snapshotted from `main` branch in 2026-04. We do **not** copy the
+verbatim `machine_start_gcode` / `machine_end_gcode` /
+`change_filament_gcode` macro blocks (those reference Snapmaker-stock
+Klipper macros that don't exist on vanilla MainsailOS / FluiddPi).
+What we copy is slicing-relevant scalar data (layer heights, walls,
+infill, temperatures, fan curves, retraction, max accelerations) plus
+factual machine geometry (bed size, nozzle diameter, Z height).
+
+`app/src/main/assets/profiles/Snapmaker/filament/Snapmaker PLA*` are
+byte-identical snapshots of the Snapmaker fork's branded U1 PLA-family
+leaves and their inheritance ancestors (`fdm_filament_common.json`,
+`fdm_filament_pla.json`, `fdm_filament_pla_eco.json`, plus each
+`Snapmaker PLA … @U1 base.json` / `Snapmaker PLA … @U1.json` pair for
+PLA, PLA Matte, PLA Eco, PLA Silk, PLA Metal, PLA-CF). These feed the
+B3 per-slot filament-type override path with material-tuned
+`nozzle_temperature` / `pressure_advance` / `filament_max_volumetric_speed`
+values without rewriting the active machine profile.
+
+`app/src/main/assets/profiles/Snapmaker/machine/Snapmaker U1 (0.{2,8}
+nozzle).json` plus the matching `process/0.{06..14} … (0.2 nozzle)` /
+`0.{24..56} … (0.8 nozzle)` leaves and their `fdm_process_U1_<height>_
+nozzle_<dia>` parents are byte-identical snapshots of Snapmaker fork
+v2.3.1, vendored under F1 to round out the U1 nozzle picker (alongside
+the previously vendored 0.4 + 0.6 sets).
+
+`app/src/main/assets/profiles/Snapmaker/filament/Snapmaker (ABS|ASA|
+PETG|PETG-CF) @U1{,base}.json` plus their `fdm_filament_(abs|asa|
+petg).json` parents are byte-identical snapshots of Snapmaker fork
+v2.3.1, vendored under F2's "second slice" (PLA family was the first
+slice). Adds non-PLA branded leaves to the per-slot dropdown without
+expanding into exotic materials (PA / PC / TPU 95A) that gate on F5's
+`filament_is_high_temperature` consumer.
+
+License: **GNU AGPL v3.0** — same as the upstream OrcaSlicer fork.
+
+## Elegoo Centauri Carbon OrcaSlicer profiles
+
+`app/src/main/assets/profiles/Elegoo/{machine,process,filament}/*.json`
+are byte-identical snapshots of OrcaSlicer's bundled Elegoo profiles
+under `resources/profiles/Elegoo/`, taken from the upstream
+`SoftFever/OrcaSlicer` v2.3.2 tag. Bundled subset:
+
+* **Machines:** Elegoo Centauri Carbon 0.2 nozzle, 0.4 nozzle, plus
+  the `fdm_machine_ecc{,_common}` parents in their `inherits` chain.
+* **Processes:** quality tiers 0.08–0.12 mm for the 0.2 nozzle,
+  0.12–0.28 mm for the 0.4 nozzle, plus the `fdm_process_ecc_*`
+  parents.
+* **Filaments:** Elegoo PLA, PLA-CF, PLA Matte (the user's daily
+  filaments), Generic PLA / PLA Matte / PETG / ABS @Elegoo, plus
+  the `fdm_elegoo_filament_*` and `fdm_filament_*` parents.
+
+License: **GNU AGPL v3.0** — same as the upstream OrcaSlicer fork.
+
+## OkHttp
+
+`com.squareup.okhttp3:okhttp:4.12.0`. License: Apache 2.0. Source at
+https://github.com/square/okhttp. Used by `MoonrakerClient` after
+Android's stock `HttpURLConnection` proved unreliable against
+Mainsail's nginx-fronted Moonraker on the headset's WiFi (see
+Phase 3 commit log).
+
+## Bundled assets
+
+`app/src/main/assets/cube_20mm.stl` is a 20 mm calibration cube. It's
+trivial geometry but for the record it was generated locally in
+April 2026.
+
+`app/src/main/assets/handy_models/` (3DBenchy, Orca Cube v2, Voron
+Design Cube v7, Stanford Bunny, Cali Cat, Orca Tolerance Test, Orca
+String Hell, Autodesk FDM Test) are vendored verbatim from
+`third_party/OrcaSlicer/resources/handy_models/` at upstream tag
+**v2.3.2**. Each model carries the license its original author
+attached upstream — refer to OrcaSlicer's repository for the per-model
+authorship and licensing (3DBenchy is CC-BY-ND, Stanford Bunny is the
+Stanford Computer Graphics Laboratory's reference release, Voron
+Cube v7 is GPL-3.0, the Orca-authored calibration prints follow
+OrcaSlicer's AGPL-3.0). OrcaXR redistributes them unchanged.
+
+`app/src/main/assets/handy_models/calib_*.drc` are the seven core
+calibration meshes from `third_party/OrcaSlicer/resources/calib/`
+(temperature_tower, retraction_tower, pressure_advance_test,
+input_shaping/ringing_tower, vfa, cornering/SCV-V2,
+volumetric_speed/SpeedTestStructure), vendored verbatim from upstream
+v2.3.2. Same AGPL-3.0 license as the rest of OrcaSlicer's calib tree.
+Renamed with a `calib_` prefix on the file system to match the
+HandyModelCatalog id namespace; original mesh data unchanged.
+
+---
+
+OrcaXR's own first-party code (everything under `app/src/main/java/`
+that isn't a snapshot of upstream values) is licensed under AGPL-3.0
+to match libslic3r. The repository as a whole is AGPL-bound the
+moment we link libslic3r — the choice is forced, not chosen.

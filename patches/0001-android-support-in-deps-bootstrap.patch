@@ -1,0 +1,136 @@
+Android support in OrcaSlicer deps/ bootstrap
+
+Three related changes to make `cmake -S deps/` succeed under the Android
+NDK toolchain:
+
+1. Guard GUI- and network-only deps behind `if(NOT ANDROID)`:
+   GLEW, GLFW, OpenCSG (pull OpenGL — unavailable on Android target),
+   wxWidgets (desktop framework), CURL (network — out of Phase 0 scope).
+   None are referenced by libslic3r (verified against
+   src/libslic3r/CMakeLists.txt:576-606 at v2.3.2). Convert their
+   _dep_list entries to _PKG variables that empty out on Android,
+   mirroring the existing ZLIB_PKG/PNG_PKG/EXPAT_PKG pattern.
+
+   OpenVDB and its dep chain (Blosc, OpenEXR) are kept enabled on
+   Android — libslic3r's code (Model.hpp transitively, SLA/Hollowing,
+   TreeSupport3D, CSGMesh/VoxelizeCSGMesh) includes OpenVDB headers
+   unconditionally even though CMake links the target conditionally.
+   Building OpenVDB is lower cost than stubbing out its callers.
+
+2. Derive TOOLCHAIN_PREFIX from CMAKE_ANDROID_ARCH_ABI in deps/CMakeLists.txt.
+   GMP, MPFR, and OpenSSL's recipes assume the toolchain file defines it
+   (OrcaSlicer convention) but the NDK's android.toolchain.cmake does not.
+
+3. GMP: add an ANDROID branch in GMP.cmake so autotools does not guess
+   the build host as x86_64 and link x86_64 .asm files into an aarch64
+   target. `--disable-assembly` forces GMP to use its portable C paths.
+
+Retire-if: upstream gains per-dep ENABLE_* toggles or native Android
+targets in its deps/ bootstrap.
+
+---
+diff --git a/deps/CMakeLists.txt b/deps/CMakeLists.txt
+index a90de994db..8a7ec4497b 100644
+--- a/deps/CMakeLists.txt
++++ b/deps/CMakeLists.txt
+@@ -45,6 +45,23 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_VERSION VERSION_LESS "3.25")
+     set(LINUX ON CACHE BOOL "" FORCE)
+ endif ()
+ 
++# OrcaXR: set TOOLCHAIN_PREFIX for Android so autotools-based deps
++# (GMP, MPFR, OpenSSL) get a correct --host / --cross-compile-prefix.
++# The NDK's android.toolchain.cmake does not set this; several of
++# OrcaSlicer's dep recipes assume it is defined by the toolchain file.
++if (ANDROID AND NOT TOOLCHAIN_PREFIX)
++    if (CMAKE_ANDROID_ARCH_ABI STREQUAL "arm64-v8a")
++        set(TOOLCHAIN_PREFIX "aarch64-linux-android")
++    elseif (CMAKE_ANDROID_ARCH_ABI STREQUAL "armeabi-v7a")
++        set(TOOLCHAIN_PREFIX "armv7a-linux-androideabi")
++    elseif (CMAKE_ANDROID_ARCH_ABI STREQUAL "x86_64")
++        set(TOOLCHAIN_PREFIX "x86_64-linux-android")
++    elseif (CMAKE_ANDROID_ARCH_ABI STREQUAL "x86")
++        set(TOOLCHAIN_PREFIX "i686-linux-android")
++    endif()
++    message(STATUS "OrcaXR Android: TOOLCHAIN_PREFIX=${TOOLCHAIN_PREFIX}")
++endif()
++
+ include(ExternalProject)
+ include(ProcessorCount)
+ 
+@@ -323,10 +340,18 @@ include(Boost/Boost.cmake)
+ # The order of includes respects the dependencies between libraries
+ include(Cereal/Cereal.cmake)
+ include(Qhull/Qhull.cmake)
+-include(GLEW/GLEW.cmake)
+ 
+-include(GLFW/GLFW.cmake)
+-include(OpenCSG/OpenCSG.cmake)
++set(GLEW_PKG "")
++set(GLFW_PKG "")
++set(OPENCSG_PKG "")
++if(NOT ANDROID)
++    include(GLEW/GLEW.cmake)
++    include(GLFW/GLFW.cmake)
++    include(OpenCSG/OpenCSG.cmake)
++    set(GLEW_PKG dep_GLEW)
++    set(GLFW_PKG dep_GLFW)
++    set(OPENCSG_PKG dep_OpenCSG)
++endif()
+ 
+ include(TBB/TBB.cmake)
+ 
+@@ -358,7 +383,7 @@ endif()
+ # so, just don't even bother 
+ # ...i think this is how it works? change if wrong
+ set(CURL_PKG "")
+-if (NOT OPENSSL_FOUND OR NOT CURL_FOUND)
++if ((NOT OPENSSL_FOUND OR NOT CURL_FOUND) AND NOT ANDROID)
+     include(CURL/CURL.cmake)
+     set(CURL_PKG dep_CURL)
+ endif ()
+@@ -371,9 +396,11 @@ endif()
+ 
+ # flatpak builds wxwidgets separately, so it is not included in the deps target
+ set(WXWIDGETS_PKG "")
+-include(wxWidgets/wxWidgets.cmake)
+-if (NOT FLATPAK)
+-    set(WXWIDGETS_PKG "dep_wxWidgets")
++if(NOT ANDROID)
++    include(wxWidgets/wxWidgets.cmake)
++    if (NOT FLATPAK)
++        set(WXWIDGETS_PKG "dep_wxWidgets")
++    endif()
+ endif()
+ 
+ set(FREETYPE_PKG "")
+@@ -409,10 +436,10 @@ set(_dep_list
+     dep_Draco
+     dep_NLopt
+     dep_OpenVDB
+-    dep_OpenCSG
++    ${OPENCSG_PKG}
+     dep_OpenCV
+     dep_CGAL
+-    dep_GLFW
++    ${GLFW_PKG}
+     dep_OCCT
+     ${FREETYPE_PKG}
+     ${PNG_PKG}
+diff --git a/deps/GMP/GMP.cmake b/deps/GMP/GMP.cmake
+index b3ba181753..8a6af74b84 100644
+--- a/deps/GMP/GMP.cmake
++++ b/deps/GMP/GMP.cmake
+@@ -49,6 +49,13 @@ else ()
+             set(_gmp_build_tgt armv7)
+         endif()
+         set(_gmp_build_tgt "--build=${_gmp_build_tgt}-pc-linux-gnu")
++    elseif(ANDROID)
++        # Cross-compiling to Android via NDK. autotools on the build host
++        # otherwise guesses the build machine's arch (x86_64) and tries to
++        # link x86_64 .asm files. Force a conservative generic build:
++        # disable hand-tuned assembly and let config.sub normalize the
++        # host triple from TOOLCHAIN_PREFIX (set in deps/CMakeLists.txt).
++        set(_gmp_build_tgt "--disable-assembly")
+     else ()
+         set(_gmp_build_tgt "") # let it guess
+     endif()

@@ -1,0 +1,193 @@
+diff --git a/src/libslic3r/GCode/WipeTower2.cpp b/src/libslic3r/GCode/WipeTower2.cpp
+index c68a74f8b3..160f498c60 100644
+--- a/src/libslic3r/GCode/WipeTower2.cpp
++++ b/src/libslic3r/GCode/WipeTower2.cpp
+@@ -1253,6 +1253,8 @@ WipeTower2::WipeTower2(const PrintConfig& config, const PrintRegionConfig& defau
+     m_wipe_tower_width(float(config.prime_tower_width)),
+     m_wipe_tower_rotation_angle(float(config.wipe_tower_rotation_angle)),
+     m_wipe_tower_brim_width(float(config.prime_tower_brim_width)),
++    m_prime_tower_brim_chamfer(config.prime_tower_brim_chamfer),
++    m_prime_tower_brim_chamfer_max_width(float(config.prime_tower_brim_chamfer_max_width)),
+     m_wipe_tower_cone_angle(float(config.wipe_tower_cone_angle)),
+     m_extra_flow(float(config.wipe_tower_extra_flow/100.)),
+     m_extra_spacing_wipe(float(config.wipe_tower_extra_spacing/100. * config.wipe_tower_extra_flow/100.)),
+@@ -2109,36 +2111,69 @@ WipeTower::ToolChangeResult WipeTower2::finish_layer()
+         poly = generate_support_rib_wall(writer, wt_box, feedrate, first_layer, m_wall_type == (int)wtwRib, true, false);
+     }
+ 
+-    // brim (first layer only)
+-    if (first_layer) {
+-        writer.append("; WIPE_TOWER_BRIM_START\n");
+-            float brim_width = m_wipe_tower_brim_width;
+-        if (brim_width < 0.f)
+-            brim_width = WipeTower::get_auto_brim_by_height(m_wipe_tower_height);
++    // OrcaXR Phase D.1 (PR #131 port): brim with optional layer-by-layer
++    // chamfer. First layer prints the full brim; subsequent layers reduce
++    // the loop count by `dist_to_1st`, capped at
++    // `m_prime_tower_brim_chamfer_max_width / spacing`. Negative
++    // brim_width still resolves to auto-by-height (upstream OrcaSlicer
++    // behavior preserved). loops_num is held in `int` because the chamfer
++    // arithmetic can subtract past zero before clamping.
++    float brim_width = m_wipe_tower_brim_width;
++    if (brim_width < 0.f)
++        brim_width = WipeTower::get_auto_brim_by_height(m_wipe_tower_height);
++    int loops_num = int((brim_width + spacing / 2.f) / spacing);
++
++    if (brim_width > 0.f) {
++        if (first_layer) {
++            // first layer always prints the full brim
++        } else if (m_prime_tower_brim_chamfer) {
++            const size_t current_idx = size_t(m_layer_info - m_plan.begin());
++            const int    dist_to_1st = int(current_idx) - int(m_first_layer_idx);
++
++            if (m_first_layer_idx == size_t(-1) || m_first_layer_idx >= m_plan.size()) {
++                loops_num = 0;
++            } else {
++                const bool depth_changed = (m_layer_info->depth != m_plan[m_first_layer_idx].depth);
++                if (depth_changed) {
++                    loops_num = 0;
++                } else {
++                    const int chamfer_loops_num = int(m_prime_tower_brim_chamfer_max_width / spacing);
++                    loops_num = std::min(loops_num, chamfer_loops_num) - dist_to_1st;
++                    if (loops_num < 0)
++                        loops_num = 0;
++                }
++            }
++        } else {
++            // chamfer disabled — only the first layer gets a brim
++            loops_num = 0;
++        }
++    } else {
++        loops_num = 0;
++    }
+ 
+-        size_t loops_num = (brim_width + spacing / 2.f) / spacing;
+-        
+-        for (size_t i = 0; i < loops_num; ++ i) {
++    if (loops_num > 0) {
++        writer.append("; WIPE_TOWER_BRIM_START\n");
++        for (int i = 0; i < loops_num; ++i) {
+             poly = offset(poly, scale_(spacing)).front();
+             int cp = poly.closest_point_index(Point::new_scale(writer.x(), writer.y()));
+             writer.travel(unscale(poly.points[cp]).cast<float>());
+-            for (int i=cp+1; true; ++i ) {
+-                if (i==int(poly.points.size()))
+-                    i = 0;
+-                writer.extrude(unscale(poly.points[i]).cast<float>());
+-                if (i == cp)
++            for (int j = cp + 1; true; ++j) {
++                if (j == int(poly.points.size()))
++                    j = 0;
++                writer.extrude(unscale(poly.points[j]).cast<float>());
++                if (j == cp)
+                     break;
+             }
+         }
+         writer.append("; WIPE_TOWER_BRIM_END\n");
+-        // Save actual brim width to be later passed to the Print object, which will use it
+-        // for skirt calculation and pass it to GLCanvas for precise preview box
+-        m_wipe_tower_brim_width_real = loops_num * spacing;
+-
+-        // Compute actual first-layer bounding box from the outermost brim polygon,
+-        // matching how WipeTower::get_bbx() uses m_outer_wall extents.
+-        BoundingBox first_layer_box = get_extents(poly);
+-        m_first_layer_bbx = BoundingBoxf(unscale(first_layer_box.min), unscale(first_layer_box.max));
++        if (first_layer) {
++            // Save actual brim width and bbx only on the first layer — the
++            // Print object uses these for skirt calculation and the GLCanvas
++            // preview box. Chamfer layers should not shrink either value.
++            m_wipe_tower_brim_width_real = loops_num * spacing;
++            BoundingBox first_layer_box = get_extents(poly);
++            m_first_layer_bbx = BoundingBoxf(unscale(first_layer_box.min), unscale(first_layer_box.max));
++        }
+     }
+ 
+     // Now prepare future wipe.
+diff --git a/src/libslic3r/GCode/WipeTower2.hpp b/src/libslic3r/GCode/WipeTower2.hpp
+index 7060eefa4a..003b3843a9 100644
+--- a/src/libslic3r/GCode/WipeTower2.hpp
++++ b/src/libslic3r/GCode/WipeTower2.hpp
+@@ -206,6 +206,9 @@ private:
+ 	float  m_wipe_tower_cone_angle = 0.f;
+     float  m_wipe_tower_brim_width      = 0.f; 	// Width of brim (mm) from config
+     float  m_wipe_tower_brim_width_real = 0.f; 	// Width of brim (mm) after generation
++    // OrcaXR Phase D.1 (PR #131 port): chamfer brim around the prime tower.
++    bool   m_prime_tower_brim_chamfer          = true;   // gradual brim reduction enabled
++    float  m_prime_tower_brim_chamfer_max_width = 4.f;   // mm — taper zone half-width
+     BoundingBoxf m_first_layer_bbx;              // Actual first-layer bounding box (incl. brim/ribs)
+ 	float  m_wipe_tower_rotation_angle = 0.f; // Wipe tower rotation angle in degrees (with respect to x axis)
+     float  m_internal_rotation  = 0.f;
+diff --git a/src/libslic3r/Preset.cpp b/src/libslic3r/Preset.cpp
+index 826d8a1a19..28f0e67b86 100644
+--- a/src/libslic3r/Preset.cpp
++++ b/src/libslic3r/Preset.cpp
+@@ -920,7 +920,7 @@ static std::vector<std::string> s_Preset_print_options {
+     "skin_infill_line_width","skeleton_infill_line_width",
+     "top_surface_line_width", "support_line_width", "infill_wall_overlap","top_bottom_infill_wall_overlap", "bridge_flow", "internal_bridge_flow",
+     "elefant_foot_compensation", "elefant_foot_compensation_layers", "xy_contour_compensation", "xy_hole_compensation", "resolution", "enable_prime_tower", "prime_tower_enable_framework",
+-    "prime_tower_width", "prime_tower_brim_width", "prime_tower_skip_points", "prime_volume",
++    "prime_tower_width", "prime_tower_brim_width", "prime_tower_brim_chamfer", "prime_tower_brim_chamfer_max_width", "prime_tower_skip_points", "prime_volume",
+     "prime_tower_infill_gap",
+     "prime_tower_flat_ironing",
+     "enable_tower_interface_features",
+diff --git a/src/libslic3r/Print.cpp b/src/libslic3r/Print.cpp
+index 2355e697b5..1092665432 100644
+--- a/src/libslic3r/Print.cpp
++++ b/src/libslic3r/Print.cpp
+@@ -315,6 +315,8 @@ bool Print::invalidate_state_by_config_options(const ConfigOptionResolver & /* n
+             || opt_key == "prime_tower_enable_framework"
+             || opt_key == "prime_tower_width"
+             || opt_key == "prime_tower_brim_width"
++            || opt_key == "prime_tower_brim_chamfer"
++            || opt_key == "prime_tower_brim_chamfer_max_width"
+             || opt_key == "wipe_tower_type"
+             || opt_key == "prime_tower_skip_points"
+             || opt_key == "prime_tower_flat_ironing"
+diff --git a/src/libslic3r/PrintConfig.cpp b/src/libslic3r/PrintConfig.cpp
+index 120dc51c1d..dfbdd6c3dd 100644
+--- a/src/libslic3r/PrintConfig.cpp
++++ b/src/libslic3r/PrintConfig.cpp
+@@ -6459,6 +6459,30 @@ void PrintConfigDef::init_fff_params()
+     def->enum_labels.push_back(L("Auto"));
+     def->set_default_value(new ConfigOptionFloat(3.));
+ 
++    // OrcaXR Phase D.1: ported from Snapmaker fork PR #131. Adds two
++    // PrintConfig keys that drive a layer-by-layer brim taper (chamfer)
++    // around the prime tower. Default-on matches Snapmaker fork; user
++    // profiles that don't supply the keys keep chamfer enabled with a
++    // 4 mm reduction zone. The actual taper logic lives in
++    // WipeTower2::finish_layer below.
++    def = this->add("prime_tower_brim_chamfer", coBool);
++    def->label = L("Brim chamfer");
++    def->tooltip = L("Enable gradual layer-by-layer reduction of the brim around the prime tower. "
++                     "This creates a chamfered/tapered effect, reducing material usage while "
++                     "maintaining first layer adhesion.");
++    def->mode = comAdvanced;
++    def->set_default_value(new ConfigOptionBool(true));
++
++    def = this->add("prime_tower_brim_chamfer_max_width", coFloat);
++    def->label = L("Max chamfer width");
++    def->tooltip = L("Maximum width of the chamfer zone measured from the tower perimeter. "
++                     "The brim will reduce within this distance. Larger values create a more "
++                     "gradual taper but take more layers to complete.");
++    def->sidetext = "mm";
++    def->mode = comAdvanced;
++    def->min = 0.;
++    def->set_default_value(new ConfigOptionFloat(4.0));
++
+     def = this->add("wipe_tower_cone_angle", coFloat);
+     def->label = L("Stabilization cone apex angle");
+     def->tooltip = L("Angle at the apex of the cone that is used to stabilize the wipe tower. "
+diff --git a/src/libslic3r/PrintConfig.hpp b/src/libslic3r/PrintConfig.hpp
+index 54c26c312a..b0c296d779 100644
+--- a/src/libslic3r/PrintConfig.hpp
++++ b/src/libslic3r/PrintConfig.hpp
+@@ -1514,6 +1514,8 @@ PRINT_CONFIG_CLASS_DERIVED_DEFINE(
+     ((ConfigOptionFloat,              wipe_tower_per_color_wipe))
+     ((ConfigOptionFloat,              wipe_tower_rotation_angle))
+     ((ConfigOptionFloat,              prime_tower_brim_width))
++    ((ConfigOptionBool,               prime_tower_brim_chamfer))
++    ((ConfigOptionFloat,              prime_tower_brim_chamfer_max_width))
+     ((ConfigOptionPercent,            prime_tower_infill_gap))
+     ((ConfigOptionBool,               prime_tower_skip_points))
+     ((ConfigOptionBool,               prime_tower_flat_ironing))

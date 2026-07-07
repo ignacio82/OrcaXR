@@ -1,0 +1,54 @@
+diff --git a/src/slic3r/GUI/PartPlate.cpp b/src/slic3r/GUI/PartPlate.cpp
+index f80f834..94995e5 100644
+--- a/src/slic3r/GUI/PartPlate.cpp
++++ b/src/slic3r/GUI/PartPlate.cpp
+@@ -1348,6 +1348,12 @@ int PartPlate::picking_id_component(int idx) const
+ 
+ static void expand_plate_extruders(std::vector<int>& ids)
+ {
++	// OrcaXR: the headless CLI has no GUI preset bundle — wxGetApp().
++	// filaments_cnt() dereferences a null preset_bundle and segfaults on
++	// every multi-filament project-3MF `--slice` run. Guard the GUI path;
++	// the CLI route goes through expand_plate_extruders_from_config below.
++	if (wxTheApp == nullptr || wxGetApp().preset_bundle == nullptr)
++		return;
+ 	const size_t num_physical = static_cast<size_t>(std::max(wxGetApp().filaments_cnt(), 0));
+ 	if (num_physical > 0) {
+ 		wxGetApp().preset_bundle->mixed_filaments.expand_virtual_extruder_ids(ids, num_physical);
+@@ -1355,6 +1361,27 @@ static void expand_plate_extruders(std::vector<int>& ids)
+ 		ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+ 	}
+ }
++
++// OrcaXR: CLI-safe variant of expand_plate_extruders — builds the mixed-
++// filament table from the fully-merged print config (project settings)
++// instead of the GUI preset bundle, mirroring PrintApply's manager init
++// (clear + auto_generate + load_custom_entries).
++static void expand_plate_extruders_from_config(std::vector<int>& ids, const DynamicPrintConfig& full_config)
++{
++	const auto *colours = full_config.option<ConfigOptionStrings>("filament_colour");
++	const size_t num_physical = colours == nullptr ? 0 : colours->values.size();
++	if (num_physical == 0)
++		return;
++	MixedFilamentManager mgr;
++	mgr.clear_custom_entries();
++	mgr.auto_generate(colours->values);
++	if (const auto *defs = full_config.option<ConfigOptionString>("mixed_filament_definitions");
++	    defs != nullptr && !defs->value.empty())
++		mgr.load_custom_entries(defs->value, colours->values);
++	mgr.expand_virtual_extruder_ids(ids, num_physical);
++	std::sort(ids.begin(), ids.end());
++	ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
++}
+ std::vector<int> PartPlate::get_extruders(bool conside_custom_gcode) const
+ {
+ 	std::vector<int> plate_extruders;
+@@ -1600,7 +1627,7 @@ std::vector<int> PartPlate::get_extruders_under_cli(bool conside_custom_gcode, D
+     std::sort(plate_extruders.begin(), plate_extruders.end());
+     auto it_end = std::unique(plate_extruders.begin(), plate_extruders.end());
+     plate_extruders.resize(std::distance(plate_extruders.begin(), it_end));
+-    expand_plate_extruders(plate_extruders);
++    expand_plate_extruders_from_config(plate_extruders, full_config);
+     std::ostringstream extruders_list;
+     for (size_t i = 0; i < plate_extruders.size(); ++i) {
+         if (i != 0)

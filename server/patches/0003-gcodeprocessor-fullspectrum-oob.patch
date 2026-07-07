@@ -1,0 +1,21 @@
+diff --git a/src/libslic3r/GCode/GCodeProcessor.cpp b/src/libslic3r/GCode/GCodeProcessor.cpp
+index a91f17e..785c1e1 100644
+--- a/src/libslic3r/GCode/GCodeProcessor.cpp
++++ b/src/libslic3r/GCode/GCodeProcessor.cpp
+@@ -4046,6 +4046,16 @@ void GCodeProcessor::run_post_process()
+     double filament_total_cost = 0.0;
+ 
+     for (const auto& [id, volume] : m_result.print_statistics.total_volumes_per_extruder) {
++        // OrcaXR: total_volumes_per_extruder is a map keyed by filament id and
++        // can carry virtual (FullSpectrum mixed) filament ids that exceed
++        // extruders_count (the physical filament count). filament_mm/cm3/g/cost
++        // and filament_diameters/densities/costs are all sized to the physical
++        // extruder set, so indexing them with a virtual id is out of bounds — a
++        // benign heap-corrupting write on native x86-64, but a hard trap on
++        // wasm32 (the in-browser slicer died silently here). Skip ids past the
++        // physical set; their volume has no physical diameter/density/cost.
++        if (id >= m_result.extruders_count)
++            continue;
+         filament_mm[id] = volume / (static_cast<double>(M_PI) * sqr(0.5 * m_result.filament_diameters[id]));
+         filament_cm3[id] = volume * 0.001;
+         filament_g[id] = filament_cm3[id] * double(m_result.filament_densities[id]);

@@ -1,0 +1,54 @@
+libslic3r: skip GCode::append_full_config in the BBL branch only
+
+Both GCode::_do_export branches (BBL and non-BBL) originally called
+append_full_config unconditionally to dump every print config option as
+a `; key = value` comment block. On Android with no preset bundle
+loaded, one of the enum config options had a null name table and
+ConfigOptionEnumsGenericTempl<false>::serialize_single_value
+null-derefs.
+
+Status as of 2026-05-12 (PEGGY-DBG):
+  * The non-BBL branch is the only branch OrcaXR ever takes — slic3r_jni
+    .cpp forces `print.is_BBL_printer() = false` before _do_export.
+  * `fixup_enum_keys_map(cfg)` runs at slice time and re-attaches the
+    runtime keys_map pointer to every ConfigOptionEnumsGeneric instance,
+    so serialize_single_value no longer null-derefs.
+  * Real bundled profiles are loaded via OrcaProfileLoader on Kotlin
+    side and threaded into the slice config, so there's a full preset
+    chain to serialize.
+
+Net effect: the non-BBL `append_full_config` is now safe AND load-bearing —
+without it the emitted CONFIG_BLOCK contains only the first_layer_*
+SoftFever scalars and downstream tools (including OrcaXR's own 3MF
+re-import path and the user's desktop FullSpectrum gcode-diff baseline)
+can't recover keys like `mixed_filament_definitions`, `filament_colour`,
+`layer_height`, `dithering_local_z_mode`, etc.
+
+The BBL branch (is_BBL_printer()==true) stays disabled because we never
+exercise it and don't want a surprise crash if some other code path
+flips the flag.
+
+Retire-if: a `Print` instance ever legitimately needs the BBL gcode
+header (BBS-format 3MF roundtrip via libslic3r's own slicer surface);
+re-enable the BBL branch then.
+
+---
+diff --git a/src/libslic3r/GCode.cpp b/src/libslic3r/GCode.cpp
+index fe10cbcd41..2fbad6ea1f 100644
+--- a/src/libslic3r/GCode.cpp
++++ b/src/libslic3r/GCode.cpp
+@@ -2571,8 +2571,13 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
+     {
+         if (is_bbl_printers) {
+             file.write("; CONFIG_BLOCK_START\n");
++            // OrcaXR: append_full_config crashes on Android when no preset
++            // bundle is loaded — some enum option's name table is null and
++            // serialize_single_value derefs it. Skip the BBL-branch config
++            // dump; OrcaXR forces is_BBL_printer()=false so this branch is
++            // dead code in our pipeline anyway.
+             std::string full_config;
+-            append_full_config(print, full_config);
++            // append_full_config(print, full_config);
+             if (!full_config.empty())
+                 file.write(full_config);
+

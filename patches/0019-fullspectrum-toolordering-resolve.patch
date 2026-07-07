@@ -1,0 +1,357 @@
+diff --git a/src/libslic3r/GCode/ToolOrdering.cpp b/src/libslic3r/GCode/ToolOrdering.cpp
+--- a/src/libslic3r/GCode/ToolOrdering.cpp
++++ b/src/libslic3r/GCode/ToolOrdering.cpp
+@@ -79,23 +79,45 @@ bool check_filament_printable_after_group(const std::vector<unsigned int> &used_
+     return true;
+ }
+
++// OrcaXR Android (FullSpectrum integration). Resolve a 1-based filament
++// ID through the mixed-filament manager for this LayerTools. Returns the
++// input unchanged when no manager is attached, when the ID is 0 (don't-
++// care), or when the ID refers to a physical filament. For virtual
++// mixed-filament IDs (filament_id > num_physical) this returns the per-
++// layer physical extruder selected by MixedFilamentManager::resolve.
++unsigned int LayerTools::resolve_mixed_1based(unsigned int filament_id) const
++{
++    if (filament_id == 0 || this->mixed_mgr == nullptr || this->num_physical == 0)
++        return filament_id;
++    if (filament_id <= this->num_physical)
++        return filament_id;
++    return this->mixed_mgr->resolve(filament_id,
++                                    this->num_physical,
++                                    this->layer_index,
++                                    float(this->print_z),
++                                    float(this->layer_height_for_mixed));
++}
++
+ // Return a zero based extruder from the region, or extruder_override if overriden.
+ unsigned int LayerTools::wall_filament(const PrintRegion &region) const
+ {
+ 	assert(region.config().wall_filament.value > 0);
+-	return ((this->extruder_override == 0) ? region.config().wall_filament.value : this->extruder_override) - 1;
++	const unsigned int filament_1based = (this->extruder_override == 0) ? region.config().wall_filament.value : this->extruder_override;
++	return this->resolve_mixed_1based(filament_1based) - 1;
+ }
+
+ unsigned int LayerTools::sparse_infill_filament(const PrintRegion &region) const
+ {
+ 	assert(region.config().sparse_infill_filament.value > 0);
+-	return ((this->extruder_override == 0) ? region.config().sparse_infill_filament.value : this->extruder_override) - 1;
++	const unsigned int filament_1based = (this->extruder_override == 0) ? region.config().sparse_infill_filament.value : this->extruder_override;
++	return this->resolve_mixed_1based(filament_1based) - 1;
+ }
+
+ unsigned int LayerTools::solid_infill_filament(const PrintRegion &region) const
+ {
+ 	assert(region.config().solid_infill_filament.value > 0);
+-	return ((this->extruder_override == 0) ? region.config().solid_infill_filament.value : this->extruder_override) - 1;
++	const unsigned int filament_1based = (this->extruder_override == 0) ? region.config().solid_infill_filament.value : this->extruder_override;
++	return this->resolve_mixed_1based(filament_1based) - 1;
+ }
+
+ // Returns a zero based extruder this eec should be printed with, according to PrintRegion config or extruder_override if overriden.
+@@ -117,7 +139,9 @@ unsigned int LayerTools::extruder(const ExtrusionEntityCollection &extrusions, c
+     } else
+         extruder = this->extruder_override;
+
+-    return (extruder == 0) ? 0 : extruder - 1;
++    if (extruder == 0)
++        return 0;
++    return this->resolve_mixed_1based(extruder) - 1;
+ }
+
+ static double calc_max_layer_height(const PrintConfig &config, double max_object_layer_height)
+@@ -384,6 +408,10 @@ ToolOrdering::ToolOrdering(const PrintObject &object, unsigned int first_extrude
+     m_print_full_config = &object.print()->full_print_config();
+     m_print_object_ptr = &object;
+     m_print = const_cast<Print*>(object.print());
++    // OrcaXR Android (FullSpectrum integration). Cache the manager so
++    // collect_extruders / LayerTools resolution paths can find it without
++    // re-walking through the Print on every layer.
++    m_mixed_mgr = &object.print()->mixed_filament_manager();
+     if (object.layers().empty())
+         return;
+
+@@ -429,6 +457,8 @@ ToolOrdering::ToolOrdering(const Print &print, unsigned int first_extruder, bool
+     m_print_full_config = &print.full_print_config();
+     m_print = const_cast<Print *>(&print);  // for update the context of print
+     m_print_config_ptr = &print.config();
++    // OrcaXR Android (FullSpectrum integration).
++    m_mixed_mgr = &print.mixed_filament_manager();
+
+     // Initialize the print layers for all objects and all layers.
+     coordf_t max_layer_height = 0.;
+@@ -656,10 +686,43 @@ void ToolOrdering::collect_extruders(const PrintObject &object, const std::vecto
+     std::vector<int> firstLayerExtruders;
+     firstLayerExtruders.clear();
+
++    // OrcaXR Android (FullSpectrum integration). Pre-compute the
++    // per-Print mixed-filament context so each LayerTools we touch in this
++    // pass can self-resolve virtual filament IDs to physical at G-code
++    // emission time (LayerTools::wall_filament et al).
++    const MixedFilamentManager *mixed_mgr = m_mixed_mgr;
++    const size_t num_physical = (m_print != nullptr)
++        ? m_print->config().filament_diameter.size()
++        : 0;
++    auto resolve_filament_for_layer = [mixed_mgr, num_physical](unsigned int filament_id_1based,
++                                                                 int           layer_idx,
++                                                                 coordf_t      print_z,
++                                                                 coordf_t      layer_h) {
++        if (filament_id_1based == 0 || mixed_mgr == nullptr || num_physical == 0)
++            return filament_id_1based;
++        if (filament_id_1based <= num_physical)
++            return filament_id_1based;
++        return mixed_mgr->resolve(filament_id_1based,
++                                  num_physical,
++                                  layer_idx,
++                                  float(print_z),
++                                  float(layer_h));
++    };
++
+     // Collect the object extruders.
+     for (auto layer : object.layers()) {
+         LayerTools &layer_tools = this->tools_for_layer(layer->print_z);
+
++        // OrcaXR Android (FullSpectrum integration). Stamp the resolve
++        // context onto every LayerTools we visit. layerCount is the 0-
++        // based index inside this PrintObject; combined with print_z and
++        // height it drives the gradient/cycle math in MixedFilamentManager.
++        layer_tools.mixed_mgr = mixed_mgr;
++        layer_tools.num_physical = num_physical;
++        if (layer_tools.layer_index < 0)
++            layer_tools.layer_index = layerCount;
++        layer_tools.layer_height_for_mixed = layer->height;
++
+         // Override extruder with the next
+     	for (; it_per_layer_extruder_override != per_layer_extruder_switches.end() && it_per_layer_extruder_override->first < layer->print_z + EPSILON; ++ it_per_layer_extruder_override)
+     		extruder_override = (int)it_per_layer_extruder_override->second;
+@@ -682,9 +745,11 @@ void ToolOrdering::collect_extruders(const PrintObject &object, const std::vecto
+                 }
+
+                 if (something_nonoverriddable){
+-               		layer_tools.extruders.emplace_back((extruder_override == 0) ? region.config().wall_filament.value : extruder_override);
++                    const unsigned int wall_id = (extruder_override == 0) ? region.config().wall_filament.value : extruder_override;
++                    const unsigned int wall_resolved = resolve_filament_for_layer(wall_id, layerCount, layer->print_z, layer->height);
++                    layer_tools.extruders.emplace_back(wall_resolved);
+                     if (layerCount == 0) {
+-                        firstLayerExtruders.emplace_back((extruder_override == 0) ? region.config().wall_filament.value : extruder_override);
++                        firstLayerExtruders.emplace_back(wall_resolved);
+                     }
+                 }
+
+@@ -712,11 +777,11 @@ void ToolOrdering::collect_extruders(const PrintObject &object, const std::vecto
+             if (something_nonoverriddable || !m_print_config_ptr) {
+             	if (extruder_override == 0) {
+ 	                if (has_solid_infill)
+-	                    layer_tools.extruders.emplace_back(region.config().solid_infill_filament);
++	                    layer_tools.extruders.emplace_back(resolve_filament_for_layer(region.config().solid_infill_filament, layerCount, layer->print_z, layer->height));
+ 	                if (has_infill)
+-	                    layer_tools.extruders.emplace_back(region.config().sparse_infill_filament);
++	                    layer_tools.extruders.emplace_back(resolve_filament_for_layer(region.config().sparse_infill_filament, layerCount, layer->print_z, layer->height));
+             	} else if (has_solid_infill || has_infill)
+-            		layer_tools.extruders.emplace_back(extruder_override);
++            		layer_tools.extruders.emplace_back(resolve_filament_for_layer(extruder_override, layerCount, layer->print_z, layer->height));
+             }
+             if (has_solid_infill || has_infill)
+                 layer_tools.has_object = true;
+diff --git a/src/libslic3r/GCode/ToolOrdering.hpp b/src/libslic3r/GCode/ToolOrdering.hpp
+--- a/src/libslic3r/GCode/ToolOrdering.hpp
++++ b/src/libslic3r/GCode/ToolOrdering.hpp
+@@ -11,6 +11,10 @@
+ #include "../FilamentGroup.hpp"
+ #include "../ExtrusionEntity.hpp"
+ #include "../PrintConfig.hpp"
++// OrcaXR Android (FullSpectrum integration): per-LayerTools resolve
++// hooks below take a MixedFilamentManager pointer; pull the header here
++// rather than at every TU that includes this header.
++#include "../MixedFilament.hpp"
+
+ namespace Slic3r {
+
+@@ -145,6 +149,17 @@ public:
+ 	// Returns a zero based extruder this eec should be printed with, according to PrintRegion config or extruder_override if overriden.
+ 	unsigned int extruder(const ExtrusionEntityCollection &extrusions, const PrintRegion &region) const;
+
++    // OrcaXR Android (FullSpectrum integration). Resolve a 1-based filament
++    // ID through the mixed-filament manager for *this* layer. Returns the
++    // input unchanged when the filament is physical (non-mixed). Returns
++    // the per-layer physical extruder (1-based) when the filament is a
++    // virtual mixed row that this layer should print using component A or
++    // component B in alternation. Used by wall_filament / sparse_infill_
++    // filament / solid_infill_filament / extruder() so painted regions
++    // tagged with a virtual ID get expanded to a real extruder before any
++    // - 1 conversion runs and before G-code emission picks up the value.
++    unsigned int resolve_mixed_1based(unsigned int filament_id) const;
++
+     coordf_t 					print_z	= 0.;
+     bool 						has_object = false;
+     bool						has_support = false;
+@@ -167,6 +182,21 @@ public:
+     // Custom G-code (color change, extruder switch, pause) to be performed before this layer starts to print.
+     const CustomGCode::Item    *custom_gcode = nullptr;
+
++    // OrcaXR Android (FullSpectrum integration). Per-LayerTools context
++    // used by resolve_mixed_1based. mixed_mgr is owned by the Print, so a
++    // raw pointer is fine — the LayerTools lifetime is bounded by the
++    // ToolOrdering it lives in, which is bounded by the slice in progress.
++    const MixedFilamentManager *mixed_mgr = nullptr;
++    // Number of physical extruders. Virtual filament IDs are everything
++    // strictly greater than this value.
++    size_t                      num_physical = 0;
++    // 0-based layer index within the print object. Drives the LayerCycle
++    // alternation in MixedFilamentManager::resolve.
++    int                         layer_index = -1;
++    // Physical layer height in mm (used by gradient / dithering paths;
++    // ignored for plain LayerCycle resolution).
++    coordf_t                    layer_height_for_mixed = 0.;
++
+     WipingExtrusions& wiping_extrusions() {
+         m_wiping_extrusions.set_layer_tools_ptr(this);
+         return m_wiping_extrusions;
+@@ -278,6 +308,11 @@ private:
+     const PrintConfig*         m_print_config_ptr = nullptr;
+     const PrintObject*         m_print_object_ptr = nullptr;
+     Print*                     m_print;
++    // OrcaXR Android (FullSpectrum integration). Pointer to the Print's
++    // MixedFilamentManager, used to populate per-LayerTools resolve hooks
++    // in collect_extruders. nullptr when no Print is attached (handle_
++    // dontcare_extruder paths) — code that reads it must null-check.
++    const MixedFilamentManager *m_mixed_mgr = nullptr;
+     bool                       m_sorted = false;
+
+     FilamentChangeStats        m_stats_by_single_extruder;
+diff --git a/src/libslic3r/MultiMaterialSegmentation.cpp b/src/libslic3r/MultiMaterialSegmentation.cpp
+--- a/src/libslic3r/MultiMaterialSegmentation.cpp
++++ b/src/libslic3r/MultiMaterialSegmentation.cpp
+@@ -2204,7 +2204,13 @@ std::vector<std::vector<ExPolygons>> segmentation_by_painting(const PrintObject
+
+ // Returns multi-material segmentation based on painting in multi-material segmentation gizmo
+ std::vector<std::vector<ExPolygons>> multi_material_segmentation_by_painting(const PrintObject &print_object, const std::function<void()> &throw_on_cancel_callback) {
+-    const size_t num_facets_states  = print_object.print()->config().filament_colour.size() + 1;
++    // OrcaXR Android (FullSpectrum integration). Painted face IDs may
++    // refer to virtual mixed-filament rows beyond num_physical; the
++    // segmentation buffer must be large enough that those slots have
++    // somewhere to land. When no mixed rows are enabled,
++    // total_filaments == num_physical so this is a no-op vs upstream.
++    const size_t num_physical_filaments = print_object.print()->config().filament_colour.size();
++    const size_t num_facets_states      = print_object.print()->mixed_filament_manager().total_filaments(num_physical_filaments) + 1;
+     const float  max_width          = float(print_object.config().mmu_segmented_region_max_width.value);
+     const float  interlocking_depth = float(print_object.config().mmu_segmented_region_interlocking_depth.value);
+     const bool   interlocking_beam  = print_object.config().interlocking_beam.value;
+diff --git a/src/libslic3r/Print.cpp b/src/libslic3r/Print.cpp
+--- a/src/libslic3r/Print.cpp
++++ b/src/libslic3r/Print.cpp
+@@ -444,6 +444,32 @@ std::vector<unsigned int> Print::object_extruders() const
+     std::vector<unsigned int> extruders;
+     extruders.reserve(m_print_regions.size() * m_objects.size() * 3);
+
++    // OrcaXR Android (FullSpectrum integration). Painted face state IDs
++    // and region wall_filament values may reference virtual mixed-filament
++    // rows (id > num_physical). Downstream callers iterate this vector to
++    // size per-extruder buffers and to look up per-extruder config values
++    // (filament_temperature, retraction_length, ...) by index, so virtual
++    // IDs would OOB. Expand a virtual ID into its physical component IDs
++    // (component_a + component_b for the matching MixedFilament row) so
++    // every entry in `extruders` is a real physical extruder.
++    const size_t num_physical = m_config.filament_diameter.size();
++    const MixedFilamentManager &mixed_mgr = this->mixed_filament_manager();
++    auto append_physical_or_expand = [&extruders, num_physical, &mixed_mgr](unsigned int id_1based) {
++        if (id_1based == 0)
++            return;
++        if (id_1based <= num_physical) {
++            extruders.push_back(id_1based - 1);
++            return;
++        }
++        const MixedFilament *mf = mixed_mgr.mixed_filament_from_id(id_1based, num_physical);
++        if (mf != nullptr) {
++            if (mf->component_a >= 1 && mf->component_a <= num_physical)
++                extruders.push_back(mf->component_a - 1);
++            if (mf->component_b >= 1 && mf->component_b <= num_physical && mf->component_b != mf->component_a)
++                extruders.push_back(mf->component_b - 1);
++        }
++    };
++
+     //Orca: Collect extruders from all regions.
+     for (const PrintObject *object : m_objects)
+ 		for (const PrintRegion &region : object->all_regions())
+@@ -455,7 +481,7 @@ std::vector<unsigned int> Print::object_extruders() const
+             std::vector<int> volume_extruders = mv->get_extruders();
+             for (int extruder : volume_extruders) {
+                 assert(extruder > 0);
+-                extruders.push_back(extruder - 1);
++                append_physical_or_expand(static_cast<unsigned int>(extruder));
+             }
+         }
+
+diff --git a/src/libslic3r/PrintObjectSlice.cpp b/src/libslic3r/PrintObjectSlice.cpp
+--- a/src/libslic3r/PrintObjectSlice.cpp
++++ b/src/libslic3r/PrintObjectSlice.cpp
+@@ -915,7 +915,13 @@ static inline void apply_mm_segmentation(PrintObject &print_object, ThrowOnCance
+             double       z              = print_object.get_layer(int(range.begin()))->slice_z;
+             auto         it_layer_range = layer_range_first(layer_ranges, z);
+             // BBS
+-            const size_t num_extruders = print_object.print()->config().filament_diameter.size();
++            // OrcaXR Android (FullSpectrum integration). Iterate up to
++            // total_filaments so painted regions tagged with virtual
++            // mixed-filament IDs > num_physical produce per-virtual-ID
++            // by_extruder cells. With no mixed rows enabled this is the
++            // same num_physical that upstream uses.
++            const size_t num_physical_extruders = print_object.print()->config().filament_diameter.size();
++            const size_t num_extruders          = print_object.print()->mixed_filament_manager().total_filaments(num_physical_extruders);
+
+             struct ByExtruder {
+                 ExPolygons  expolygons;
+diff --git a/src/libslic3r/PrintRegion.cpp b/src/libslic3r/PrintRegion.cpp
+--- a/src/libslic3r/PrintRegion.cpp
++++ b/src/libslic3r/PrintRegion.cpp
+@@ -80,16 +80,46 @@ void PrintRegion::collect_object_printing_extruders(const PrintConfig &print_con
+
+ void PrintRegion::collect_object_printing_extruders(const Print &print, std::vector<unsigned int> &object_extruders) const
+ {
++    // OrcaXR Android (FullSpectrum integration). When painted regions
++    // carry virtual mixed-filament IDs (wall_filament > num_physical),
++    // expand them into their underlying physical components before
++    // letting the upstream helper run — that helper clamps any id >=
++    // num_extruders to 0 (T0), which silently swallows virtual IDs and
++    // makes the region appear to print on T0 only. We instead push each
++    // component A / B (1-based, dedupe) so per-extruder buffer
++    // allocations downstream see the real physicals.
++    const size_t num_physical = print.config().filament_diameter.size();
++    const MixedFilamentManager &mixed_mgr = print.mixed_filament_manager();
++    auto resolve_or_collect_components = [&](unsigned int id_1based) -> unsigned int {
++        if (id_1based == 0 || id_1based <= num_physical)
++            return id_1based;
++        const MixedFilament *mf = mixed_mgr.mixed_filament_from_id(id_1based, num_physical);
++        if (mf == nullptr)
++            return id_1based;
++        // Push the *secondary* component now (component_b unless it
++        // equals component_a). The primary (component_a) becomes the
++        // value we pass to the upstream helper, which adds it via
++        // emplace_extruder.
++        if (mf->component_b >= 1 && mf->component_b <= num_physical && mf->component_b != mf->component_a)
++            object_extruders.emplace_back(mf->component_b - 1);
++        return mf->component_a;
++    };
++
++    PrintRegionConfig effective_cfg = this->config();
++    effective_cfg.wall_filament.value         = static_cast<int>(resolve_or_collect_components(static_cast<unsigned int>(effective_cfg.wall_filament.value)));
++    effective_cfg.sparse_infill_filament.value = static_cast<int>(resolve_or_collect_components(static_cast<unsigned int>(effective_cfg.sparse_infill_filament.value)));
++    effective_cfg.solid_infill_filament.value = static_cast<int>(resolve_or_collect_components(static_cast<unsigned int>(effective_cfg.solid_infill_filament.value)));
++
+     // PrintRegion, if used by some PrintObject, shall have all the extruders set to an existing printer extruder.
+     // If not, then there must be something wrong with the Print::apply() function.
+ #ifndef NDEBUG
+     // BBS
+     auto num_extruders = int(print.config().filament_diameter.size());
+-    assert(this->config().wall_filament    <= num_extruders);
+-    assert(this->config().sparse_infill_filament       <= num_extruders);
+-    assert(this->config().solid_infill_filament <= num_extruders);
++    assert(effective_cfg.wall_filament         <= num_extruders);
++    assert(effective_cfg.sparse_infill_filament <= num_extruders);
++    assert(effective_cfg.solid_infill_filament <= num_extruders);
+ #endif
+-    collect_object_printing_extruders(print.config(), this->config(), print.has_brim(), object_extruders);
++    collect_object_printing_extruders(print.config(), effective_cfg, print.has_brim(), object_extruders);
+ }
+
+ }

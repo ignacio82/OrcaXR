@@ -1,0 +1,185 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+Subject: [PATCH] Toolchanger: null-guard nullable filament option casts
+
+In `update_values_to_printer_extruders_for_multiple_filaments`
+(PrintConfig.cpp:9161), each `case` in the per-key switch does:
+
+    ConfigOptionFloats * opt = this->option<ConfigOptionFloats>(key);
+    ...
+    opt->get_at(variant_index[f_index]);   // null-deref on opt==nullptr
+
+The set of keys (`filament_options_with_variant`, line 7807) includes
+filament-prefixed variants (filament_z_hop_types,
+filament_long_retractions_when_cut, filament_retract_lift_enforce, etc.)
+that init_filament_alias_options registers as their *Nullable* template
+specialisations (lines 6771-6774):
+
+    case coFloats : def->set_default_value(new ConfigOptionFloatsNullable(...));
+    case coBools  : def->set_default_value(new ConfigOptionBoolsNullable(...));
+    case coEnums  : def->set_default_value(new ConfigOptionEnumsGenericNullable(...));
+
+`ConfigOptionFloats` and `ConfigOptionFloatsNullable` are sibling
+instantiations of `ConfigOptionFloatsTempl<NULLABLE>`. A
+`dynamic_cast<ConfigOptionFloats*>` against a Nullable instance returns
+nullptr; the next line dereferences it and SIGSEGVs at fault addr 0x8
+(offset of the inherited std::vector's __begin_ pointer).
+
+The desktop OrcaSlicer GUI never trips this because the toolchanger
+gate (extruder_count > 1 || different_extruder, line 9165) only
+fires once a real toolchanger profile loads via the preset bundle —
+which the GUI populates with carefully-typed options. We slice from
+JSON profiles and set `nozzle_diameter` to a 4-element vector to
+drive multi-tool, hitting this code path with the unfixed nullable
+defaults still in place.
+
+Fix: cast to the common base `ConfigOptionVector<T>*` instead of the
+typed (non-nullable) variant — both the nullable and non-nullable
+instantiations inherit from it, so `values` and `get_at()` remain
+accessible. Add a null-guard so any future key whose registration is
+non-vector or missing is skipped with a warning instead of crashing.
+
+Retire when: upstream fixes the cast to handle nullable variants, or
+moves all filament-prefixed options to non-nullable. Either is unlikely
+without external pressure since the desktop path doesn't hit this.
+
+diff --git a/src/libslic3r/PrintConfig.cpp b/src/libslic3r/PrintConfig.cpp
+index 50be57e0f8..642195c20e 100644
+--- a/src/libslic3r/PrintConfig.cpp
++++ b/src/libslic3r/PrintConfig.cpp
+@@ -9206,6 +9206,19 @@ void DynamicPrintConfig::update_values_to_printer_extruders_for_multiple_filamen
+             BOOST_LOG_TRIVIAL(error) << __FUNCTION__ << boost::format(", Line %1%: can not find config define")%__LINE__;
+             return;
+         }
++        // OrcaXR/Android: filament-prefixed entries in
++        // filament_options_with_variant (filament_z_hop_types,
++        // filament_long_retractions_when_cut, filament_retract_lift_enforce, …)
++        // are dynamically registered above as their *Nullable variants
++        // (PrintConfig.cpp:6771-6774). dynamic_cast<NonNullable*> on a
++        // Nullable instance is a sibling-template cast and returns
++        // nullptr — the original code then null-derefs `opt->get_at` at
++        // offset 0x8 (the values vector). Casting to the shared
++        // ConfigOptionVector<T> base preserves access to `values` for
++        // both the nullable and non-nullable instantiations, so the per-
++        // filament resize works uniformly. The added null-guard skips
++        // any key whose option is missing or has an unexpected type
++        // rather than crashing the slicer.
+         for (auto& key: key_set)
+         {
+             const ConfigOptionDef *optdef  = config_def->get(key);
+@@ -9216,92 +9229,74 @@ void DynamicPrintConfig::update_values_to_printer_extruders_for_multiple_filamen
+             switch (optdef->type) {
+                 case coStrings:
+                 {
+-                    ConfigOptionStrings * opt = this->option<ConfigOptionStrings>(key);
+-                    std::vector<std::string> new_values;
+-
+-                    new_values.resize(filament_count);
++                    auto * opt = dynamic_cast<ConfigOptionVector<std::string>*>(this->option(key));
++                    if (!opt) { BOOST_LOG_TRIVIAL(warning) << __FUNCTION__ << ", missing strings option: " << key; break; }
++                    std::vector<std::string> new_values(filament_count);
+                     for (int f_index = 0; f_index < filament_count; f_index++)
+-                    {
+                         new_values[f_index] = opt->get_at(variant_index[f_index]);
+-                    }
+                     opt->values = new_values;
+                     break;
+                 }
+                 case coInts:
+                 {
+-                    ConfigOptionInts * opt = this->option<ConfigOptionInts>(key);
+-                    std::vector<int> new_values;
+-
+-                    new_values.resize(filament_count);
++                    auto * opt = dynamic_cast<ConfigOptionVector<int>*>(this->option(key));
++                    if (!opt) { BOOST_LOG_TRIVIAL(warning) << __FUNCTION__ << ", missing ints option: " << key; break; }
++                    std::vector<int> new_values(filament_count);
+                     for (int f_index = 0; f_index < filament_count; f_index++)
+-                    {
+                         new_values[f_index] = opt->get_at(variant_index[f_index]);
+-                    }
+                     opt->values = new_values;
+                     break;
+                 }
+                 case coFloats:
+                 {
+-                    ConfigOptionFloats * opt = this->option<ConfigOptionFloats>(key);
+-                    std::vector<double> new_values;
+-
+-                    new_values.resize(filament_count);
++                    auto * opt = dynamic_cast<ConfigOptionVector<double>*>(this->option(key));
++                    if (!opt) { BOOST_LOG_TRIVIAL(warning) << __FUNCTION__ << ", missing floats option: " << key; break; }
++                    std::vector<double> new_values(filament_count);
+                     for (int f_index = 0; f_index < filament_count; f_index++)
+-                    {
+                         new_values[f_index] = opt->get_at(variant_index[f_index]);
+-                    }
+                     opt->values = new_values;
+                     break;
+                 }
+                 case coPercents:
+                 {
+-                    ConfigOptionPercents * opt = this->option<ConfigOptionPercents>(key);
+-                    std::vector<double> new_values;
+-
+-                    new_values.resize(filament_count);
++                    auto * opt = dynamic_cast<ConfigOptionVector<double>*>(this->option(key));
++                    if (!opt) { BOOST_LOG_TRIVIAL(warning) << __FUNCTION__ << ", missing percents option: " << key; break; }
++                    std::vector<double> new_values(filament_count);
+                     for (int f_index = 0; f_index < filament_count; f_index++)
+-                    {
+                         new_values[f_index] = opt->get_at(variant_index[f_index]);
+-                    }
+                     opt->values = new_values;
+                     break;
+                 }
+                 case coFloatsOrPercents:
+                 {
+-                    ConfigOptionFloatsOrPercents * opt = this->option<ConfigOptionFloatsOrPercents>(key);
+-                    std::vector<FloatOrPercent> new_values;
+-
+-                    new_values.resize(filament_count);
++                    auto * opt = dynamic_cast<ConfigOptionVector<FloatOrPercent>*>(this->option(key));
++                    if (!opt) { BOOST_LOG_TRIVIAL(warning) << __FUNCTION__ << ", missing floats-or-percents option: " << key; break; }
++                    std::vector<FloatOrPercent> new_values(filament_count);
+                     for (int f_index = 0; f_index < filament_count; f_index++)
+-                    {
+                         new_values[f_index] = opt->get_at(variant_index[f_index]);
+-                    }
+                     opt->values = new_values;
+                     break;
+                 }
+                 case coBools:
+                 {
+-                    ConfigOptionBools * opt = this->option<ConfigOptionBools>(key);
+-                    std::vector<unsigned char> new_values;
+-
+-                    new_values.resize(filament_count);
++                    auto * opt = dynamic_cast<ConfigOptionVector<unsigned char>*>(this->option(key));
++                    if (!opt) { BOOST_LOG_TRIVIAL(warning) << __FUNCTION__ << ", missing bools option: " << key; break; }
++                    std::vector<unsigned char> new_values(filament_count);
+                     for (int f_index = 0; f_index < filament_count; f_index++)
+-                    {
+                         new_values[f_index] = opt->get_at(variant_index[f_index]);
+-                    }
+                     opt->values = new_values;
+                     break;
+                 }
+                 case coEnums:
+                 {
+-                    ConfigOptionEnumsGeneric * opt = this->option<ConfigOptionEnumsGeneric>(key);
+-                    std::vector<int> new_values;
+-
+-                    new_values.resize(filament_count);
++                    // Both ConfigOptionEnumsGeneric and ConfigOptionEnumsGenericNullable
++                    // inherit from ConfigOptionInts (=ConfigOptionVector<int>), so the
++                    // base-class cast handles both.
++                    auto * opt = dynamic_cast<ConfigOptionVector<int>*>(this->option(key));
++                    if (!opt) { BOOST_LOG_TRIVIAL(warning) << __FUNCTION__ << ", missing enums option: " << key; break; }
++                    std::vector<int> new_values(filament_count);
+                     for (int f_index = 0; f_index < filament_count; f_index++)
+-                    {
+                         new_values[f_index] = opt->get_at(variant_index[f_index]);
+-                    }
+                     opt->values = new_values;
+                     break;
+                 }

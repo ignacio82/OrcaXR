@@ -1,0 +1,106 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+Subject: [PATCH] Default-initialize Print + WipeTower POD members
+
+OrcaSlicer's Print and WipeTower classes carry POD members
+(numeric/struct fields without ctors) that are left uninitialized in
+the headers. On Debug Linux desktop builds the stack happens to land
+on zero so the bug is dormant, but Release Android arm64 builds with
+a different stack layout read garbage on first access. Symptoms
+observed in the wild include nonsense wipe-tower coordinates,
+m_isBBLPrinter flipping arbitrarily true (which then drives our
+nativeSlice into the BBL config-dump path and crashes inside
+ConfigOptionEnumsGeneric — see patch 0011), and stale plate origins.
+
+Patch 0011 already neutralizes the m_isBBLPrinter symptom from JNI
+by force-setting `print.is_BBL_printer() = false` in slic3r_jni.cpp.
+That fix only covers the BBL flag for the slice we drive ourselves;
+this patch fixes all the other dormant fields at the source so any
+future code path is safe (multi-color slicing exercises FakeWipeTower
+heavily, for example).
+
+Catalog of fields initialized:
+
+  src/libslic3r/Print.hpp::FakeWipeTower
+    pos, width, height, layer_height, depth, brim_width,
+    rotation_angle, cone_angle, plate_origin
+    (the std::vector / std::map members already self-initialize,
+     and rib_offset already had {0.f,0.f}.)
+
+  src/libslic3r/Print.hpp::Print
+    m_isBBLPrinter (now redundant with patch 0011's runtime guard
+                    but cheap defense-in-depth)
+    m_origin
+
+  src/libslic3r/GCode/WipeTower.hpp::WipeTower
+    m_cur_layer_id
+
+Independently confirmed in taylormadearmy/u1-slicer-for-android's
+ENGINE_UPGRADE_GUIDE.md (AGPL — same license family as libslic3r),
+where they hit exactly this class of bug on Android NDK release
+builds and traced it to the same fields. They report 436 vs 840
+tool changes on a multi-color H2C Benchy as one symptom.
+
+To retire: when upstream OrcaSlicer (or the Snapmaker fork) lands
+the same default-initializers, delete this file.
+
+diff --git a/src/libslic3r/GCode/WipeTower.hpp b/src/libslic3r/GCode/WipeTower.hpp
+index e03c543903..17125a7cad 100644
+--- a/src/libslic3r/GCode/WipeTower.hpp
++++ b/src/libslic3r/GCode/WipeTower.hpp
+@@ -437,7 +437,7 @@ private:
+     size_t m_first_layer_idx    = size_t(-1);
+ 
+     std::vector<double> m_filaments_change_length;
+-    size_t       m_cur_layer_id;
++    size_t       m_cur_layer_id = 0;
+     NozzleChangeResult m_nozzle_change_result;
+     std::vector<int>   m_filament_map;
+     bool               m_has_tpu_filament{false};
+diff --git a/src/libslic3r/Print.hpp b/src/libslic3r/Print.hpp
+index b98811c8e3..99b33a00b7 100644
+--- a/src/libslic3r/Print.hpp
++++ b/src/libslic3r/Print.hpp
+@@ -591,16 +591,16 @@ private:
+ struct FakeWipeTower
+ {
+     // generate fake extrusion
+-    Vec2f pos;
+-    float width;
+-    float height;
+-    float layer_height;// Due to variable layer height, this parameter may be not right.
+-    float depth;
++    Vec2f pos{0.f, 0.f};
++    float width{0.f};
++    float height{0.f};
++    float layer_height{0.f};// Due to variable layer height, this parameter may be not right.
++    float depth{0.f};
+     std::vector<std::pair<float, float>> z_and_depth_pairs;
+-    float brim_width;
+-    float rotation_angle;
+-    float cone_angle;
+-    Vec2d plate_origin;
++    float brim_width{0.f};
++    float rotation_angle{0.f};
++    float cone_angle{0.f};
++    Vec2d plate_origin{Vec2d::Zero()};
+     Vec2f rib_offset{0.f,0.f};
+     std::map<float , Polylines> outer_wall; //wipe tower's true outer wall and brim
+ 
+@@ -1133,7 +1133,7 @@ private:
+     PrintRegionPtrs                         m_print_regions;
+     
+     //SoftFever
+-    bool m_isBBLPrinter;
++    bool m_isBBLPrinter = false;
+ 
+     // Ordered collections of extrusion paths to build skirt loops and brim.
+     ExtrusionEntityCollection               m_skirt;
+@@ -1163,7 +1163,7 @@ private:
+     std::vector<unsigned int> m_slice_used_filaments_first_layer;
+ 
+     //BBS: plate's origin
+-    Vec3d   m_origin;
++    Vec3d   m_origin = Vec3d::Zero();
+     //BBS: modified_count
+     int     m_modified_count {0};
+     //BBS

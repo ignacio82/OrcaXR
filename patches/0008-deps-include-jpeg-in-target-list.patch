@@ -1,0 +1,29 @@
+Add ${JPEG_PKG} to the deps target list
+
+OrcaSlicer sets JPEG_PKG=dep_JPEG when JPEG isn't already found on the
+system (deps/CMakeLists.txt:~420), but never actually adds it to the
+_dep_list top-level target. On desktop builds, OpenCV's internal
+libjpeg (BUILD_JPEG=ON) covered the need via OpenCV's bundled libs.
+
+On Android, OpenCV is built with -DWITH_JPEG=OFF (per its recipe), so
+no libjpeg is produced anywhere — and libslic3r's
+    find_package(JPEG REQUIRED)   # src/libslic3r/CMakeLists.txt:544
+fails. Add ${JPEG_PKG} to _dep_list so the existing JPEG.cmake recipe
+actually runs.
+
+Retire-if: upstream adds JPEG to _dep_list, or switches libslic3r away
+from find_package(JPEG).
+
+---
+diff --git a/deps/CMakeLists.txt b/deps/CMakeLists.txt
+index d592dac959..202605ce44 100644
+--- a/deps/CMakeLists.txt
++++ b/deps/CMakeLists.txt
+@@ -473,6 +473,7 @@ set(_dep_list
+     ${GLFW_PKG}
+     dep_OCCT
+     ${FREETYPE_PKG}
++    ${JPEG_PKG}
+     ${PNG_PKG}
+     ${ZLIB_PKG}
+     ${EXPAT_PKG}

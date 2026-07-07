@@ -1,0 +1,104 @@
+/**
+ * Calibration group — mirrors Snapmaker Orca's `Calibration` menu. OrcaXR
+ * already generates a temperature/overhang tower and an XYZ cube via
+ * `generate_calibration_ramp`; those back the two wired entries. The remaining
+ * printer-tuning generators (flow-rate, pressure-advance, retraction, max-flow,
+ * VFA, tolerance) are parity placeholders documented in
+ * `docs/orca_parity_plan.md` — each is a fixed-geometry model plus a
+ * per-band config override, so they extend `CalibrationRampGenerator`.
+ */
+import type { Action } from '../ActionRegistry';
+
+export const calibrationActions: Action[] = [
+  {
+    id: 'calib_temperature',
+    mcpTool: 'generate_calibration_ramp',
+    label: 'Temperature Tower',
+    icon: 'calibration',
+    group: 'calibration',
+    disclosure: 'menu',
+    menuSection: 'calibration',
+    hint: 'Generate a temperature-tuning tower',
+    run: (ctx) => ctx.addCalibration('tower'),
+  },
+  {
+    id: 'calib_flow_pass1',
+    label: 'Flow Rate — Pass 1',
+    icon: 'flow',
+    group: 'calibration',
+    disclosure: 'menu',
+    menuSection: 'calibration',
+    hint: 'Coarse flow-rate (extrusion multiplier) calibration plate',
+    run: (ctx) => ctx.addCalibration('flow_pass1'),
+  },
+  {
+    id: 'calib_flow_pass2',
+    label: 'Flow Rate — Pass 2',
+    icon: 'flow',
+    group: 'calibration',
+    disclosure: 'menu',
+    menuSection: 'calibration',
+    hint: 'Fine flow-rate calibration plate',
+    run: (ctx) => ctx.addCalibration('flow_pass2'),
+  },
+  {
+    id: 'calib_flow_yolo',
+    label: 'Flow Rate — YOLO (Recommended)',
+    icon: 'flow',
+    group: 'calibration',
+    disclosure: 'menu',
+    menuSection: 'calibration',
+    hint: 'Single-pass Orca YOLO flow calibration',
+    run: (ctx) => ctx.addCalibration('flow_yolo'),
+  },
+  {
+    id: 'calib_pressure_advance',
+    label: 'Pressure Advance',
+    icon: 'pressure',
+    group: 'calibration',
+    disclosure: 'menu',
+    menuSection: 'calibration',
+    hint: 'Pressure-advance / linear-advance tuning pattern',
+    run: (ctx) => ctx.addCalibration('pressure_advance'),
+  },
+  {
+    id: 'calib_retraction',
+    label: 'Retraction Test',
+    icon: 'retraction',
+    group: 'calibration',
+    disclosure: 'menu',
+    menuSection: 'calibration',
+    hint: 'Retraction-distance stringing test tower',
+    run: (ctx) => ctx.addCalibration('retraction'),
+  },
+  {
+    id: 'calib_max_flow',
+    label: 'Max Flowrate',
+    icon: 'flow',
+    group: 'calibration',
+    disclosure: 'menu',
+    menuSection: 'calibration',
+    hint: 'Maximum volumetric-speed calibration',
+    run: (ctx) => ctx.addCalibration('max_flow'),
+  },
+  {
+    id: 'calib_vfa',
+    label: 'VFA Test',
+    icon: 'vfa',
+    group: 'calibration',
+    disclosure: 'menu',
+    menuSection: 'calibration',
+    hint: 'Vertical Fine Artefact (resonance) test',
+    run: (ctx) => ctx.addCalibration('vfa'),
+  },
+  {
+    id: 'calib_tolerance',
+    label: 'Tolerance Test',
+    icon: 'tolerance',
+    group: 'calibration',
+    disclosure: 'menu',
+    menuSection: 'calibration',
+    hint: 'Dimensional-tolerance fit test',
+    run: (ctx) => ctx.addCalibration('tolerance'),
+  },
+];

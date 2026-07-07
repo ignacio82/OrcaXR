@@ -1,0 +1,70 @@
+Phase 2 (FullSpectrum engine emission): register the 15 FS mixed-
+filament + dithering keys as project-scoped options in
+PresetBundle::s_project_options.
+
+Ported from FS v0.9.9 (`ratdoux/OrcaSlicer-FullSpectrum@v0.9.9` commit
+b3c41fda), `src/libslic3r/PresetBundle.cpp` lines 73-87 — the
+project-options list that decides which keys are persisted in
+`Metadata/project_settings.config` inside a saved 3MF.
+
+Why this matters:
+
+`PresetBundle::project_config.apply_only(config, s_project_options)`
+copies ONLY keys in this list when materializing project config.
+Keys absent from the list silently drop on save — they live in
+DynamicPrintConfig at slice time but aren't persisted to the 3MF.
+
+Without this patch, a user authors a mixed-filament row, saves the
+project as .3mf, reopens it — the virtual rows are GONE. The
+`mixed_filament_definitions` config never made it into the saved
+project_settings.config because it wasn't in `s_project_options`.
+
+Adds the 15 FS keys: mixed_filament_gradient_mode,
+height_lower_bound, height_upper_bound, advanced_dithering,
+component_bias_enabled, surface_indentation, region_collapse,
+definitions, mixed_color_layer_height_a/b, dithering_z_step_size,
+dithering_local_z_mode, dithering_local_z_whole_objects,
+dithering_local_z_direct_multicolor, dithering_step_painted_zones_only.
+
+Verified compile-clean via incremental libslic3r rebuild (2/2, 0
+FAILED) + ./gradlew :app:assembleDebug (full APK built).
+
+Hard dependencies:
+  - patch 0027 (PrintConfig.hpp typed declarations)
+  - patch 0038 (PrintConfig.cpp this->add(...) registrations)
+
+Companion to:
+  - patch 0034 (s_Preset_print_options for the 3 region keys)
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+diff --git a/src/libslic3r/PresetBundle.cpp b/src/libslic3r/PresetBundle.cpp
+index d5244b6bc0..20e0e33fea 100644
+--- a/src/libslic3r/PresetBundle.cpp
++++ b/src/libslic3r/PresetBundle.cpp
+@@ -48,7 +48,25 @@ static std::vector<std::string> s_project_options {
+     "flush_multiplier",
+     "nozzle_volume_type",
+     "filament_map_mode",
+-    "filament_map"
++    "filament_map",
++    // OrcaXR Android (FullSpectrum patch 0043). FS mixed-filament + Local-Z
++    // settings are project-scoped (per 3MF, not per profile), so they
++    // persist into project_settings.config and round-trip with the .3mf.
++    "mixed_filament_gradient_mode",
++    "mixed_filament_height_lower_bound",
++    "mixed_filament_height_upper_bound",
++    "mixed_filament_advanced_dithering",
++    "mixed_filament_component_bias_enabled",
++    "mixed_filament_surface_indentation",
++    "mixed_filament_region_collapse",
++    "mixed_filament_definitions",
++    "mixed_color_layer_height_a",
++    "mixed_color_layer_height_b",
++    "dithering_z_step_size",
++    "dithering_local_z_mode",
++    "dithering_local_z_whole_objects",
++    "dithering_local_z_direct_multicolor",
++    "dithering_step_painted_zones_only",
+ };
+ 
+ //Orca: add custom as default

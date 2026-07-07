@@ -1,0 +1,122 @@
+/**
+ * Edit group — mirrors Snapmaker Orca's `Edit` menu (undo/redo, clipboard,
+ * selection). Delete-selected and deselect-all are wired to the workspace;
+ * the global undo/redo stack, clipboard, clone, and multi-select are parity
+ * placeholders documented in `docs/orca_parity_plan.md`.
+ *
+ * Note: OrcaXR already has a *paint* undo/redo stack (`PaintHistory`). These
+ * Edit entries are the *scene-level* history (transforms, add/delete) Orca
+ * exposes on Ctrl+Z / Ctrl+Y, which OrcaXR has not built yet.
+ */
+import type { Action } from '../ActionRegistry';
+
+export const editActions: Action[] = [
+  {
+    id: 'edit_undo',
+    label: 'Undo',
+    icon: 'undo',
+    group: 'edit',
+    disclosure: 'menu',
+    menuSection: 'edit',
+    hint: 'Undo the last scene edit',
+    run: (ctx) => ctx.undo(),
+  },
+  {
+    id: 'edit_redo',
+    label: 'Redo',
+    icon: 'redo',
+    group: 'edit',
+    disclosure: 'menu',
+    menuSection: 'edit',
+    hint: 'Redo the last undone scene edit',
+    run: (ctx) => ctx.redo(),
+  },
+  {
+    id: 'edit_cut',
+    label: 'Cut',
+    icon: 'cut',
+    group: 'edit',
+    disclosure: 'menu',
+    menuSection: 'edit',
+    hint: 'Cut the selected model to the clipboard',
+    isEnabled: (s) => s.hasSelection,
+    run: (ctx) => ctx.cutSelected(),
+  },
+  {
+    id: 'edit_copy',
+    label: 'Copy',
+    icon: 'copy',
+    group: 'edit',
+    disclosure: 'menu',
+    menuSection: 'edit',
+    hint: 'Copy the selected model to the clipboard',
+    isEnabled: (s) => s.hasSelection,
+    run: (ctx) => ctx.copySelected(),
+  },
+  {
+    id: 'edit_paste',
+    label: 'Paste',
+    icon: 'paste',
+    group: 'edit',
+    disclosure: 'menu',
+    menuSection: 'edit',
+    hint: 'Paste the clipboard model onto the plate',
+    isEnabled: (s) => s.hasClipboard,
+    run: (ctx) => ctx.paste(),
+  },
+  {
+    id: 'edit_duplicate',
+    label: 'Clone Selected',
+    icon: 'duplicate',
+    group: 'edit',
+    disclosure: 'menu',
+    menuSection: 'edit',
+    hint: 'Duplicate the selected model on the plate',
+    isEnabled: (s) => s.hasSelection,
+    run: (ctx) => ctx.cloneSelected(),
+  },
+  {
+    id: 'edit_delete_selected',
+    mcpTool: 'delete_models',
+    label: 'Delete Selected',
+    icon: 'delete',
+    group: 'edit',
+    disclosure: 'menu',
+    menuSection: 'edit',
+    hint: 'Remove the selected model',
+    isEnabled: (s) => s.hasSelection,
+    run: (ctx) => ctx.deleteSelected(),
+  },
+  {
+    id: 'edit_delete_all',
+    label: 'Delete All',
+    icon: 'delete',
+    group: 'edit',
+    disclosure: 'menu',
+    menuSection: 'edit',
+    hint: 'Remove every model on the active plate',
+    isEnabled: (s) => s.modelCount > 0,
+    run: (ctx) => ctx.deleteAll(),
+  },
+  {
+    id: 'edit_select_all',
+    label: 'Select All',
+    icon: 'select_all',
+    group: 'edit',
+    disclosure: 'menu',
+    menuSection: 'edit',
+    hint: 'Select every model on the plate',
+    run: (ctx) => ctx.selectAll(),
+  },
+  {
+    id: 'edit_deselect_all',
+    label: 'Deselect All',
+    icon: 'deselect',
+    group: 'edit',
+    disclosure: 'menu',
+    menuSection: 'edit',
+    hint: 'Clear the current selection',
+    isEnabled: (s) => s.hasSelection,
+    run: (ctx) => ctx.deselectAll(),
+  },
+];

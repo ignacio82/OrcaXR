@@ -1,0 +1,155 @@
+Phase 2 (FullSpectrum Local-Z, LZ3 batch 1): port the first 5 static
+helper functions from FS v0.9.9's PrintObjectSlice.cpp Local-Z planner.
+
+Bottom-up port of the simplest helpers, no FS-only type dependencies
+yet. Each one is a tiny standalone utility:
+
+- `bool_from_full_config(cfg, key, fallback)` — read a bool from a
+  DynamicPrintConfig, tolerant of ConfigOptionInt for the same key.
+
+- `float_from_full_config(cfg, key, fallback)` — read a coordf_t from
+  a DynamicPrintConfig with fallback.
+
+- `segmentation_channel_filament_id(channel_idx)` — MM segmentation
+  reserves channel 0 for the parent/default region. Remaining
+  channels already line up with 1-based filament IDs.
+
+- `mixed_filament_reference_nozzle_mm(mixed_row, nozzle_diameters)` —
+  average of per-component nozzle diameters for a mixed filament row,
+  clamped to a 0.05 mm floor.
+
+- `clamped_mixed_component_surface_offset(...)` — resolve per-component
+  surface offset for a virtual mixed filament at one layer's print_z,
+  then clamp to the per-nozzle maximum so gradient height interpolation
+  can't produce physically impossible offsets.
+
+Also: `#include <numeric>` for `std::accumulate`.
+
+DEAD CODE: nothing calls these yet. The build flag list includes
+`-Wno-unused-function` so static unused helpers don't error.
+
+Ported from FS v0.9.9 (`ratdoux/OrcaSlicer-FullSpectrum@v0.9.9` commit
+b3c41fda), `src/libslic3r/PrintObjectSlice.cpp` lines 873-944.
+
+Verified compile-clean via full libslic3r rebuild (252/252, 0 FAILED)
++ ./gradlew :app:assembleDebug (full APK built).
+
+Continues the Local-Z port started in patch 0044. The remaining ~30
+helpers + build_local_z_plan come in subsequent patches; this is the
+first cleanly-extracted batch with no FS-only type dependencies.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+diff --git a/src/libslic3r/PrintObjectSlice.cpp b/src/libslic3r/PrintObjectSlice.cpp
+index 37fef3cb67..e1f37a17c5 100644
+--- a/src/libslic3r/PrintObjectSlice.cpp
++++ b/src/libslic3r/PrintObjectSlice.cpp
+@@ -14,6 +14,7 @@
+ // don't make it to logcat in our build).
+ #include <android/log.h>
+ #include <chrono>
++#include <numeric>  // std::accumulate for Local-Z helper (patch 0045)
+ 
+ #include <tbb/parallel_for.h>
+ 
+@@ -35,6 +36,101 @@ namespace Slic3r {
+ bool PrintObject::clip_multipart_objects = true;
+ bool PrintObject::infill_only_where_needed = false;
+ 
++// =================================================================
++// OrcaXR Android (FullSpectrum Local-Z, patch 0045 — LZ3 helpers).
++// Bottom-up port of the Local-Z planner helpers from FS v0.9.9
++// (`ratdoux/OrcaSlicer-FullSpectrum@v0.9.9` commit b3c41fda,
++// src/libslic3r/PrintObjectSlice.cpp lines 873-944).
++//
++// These helpers are DEAD CODE until build_local_z_plan (future patch)
++// calls them. Landing them bottom-up lets each helper get a focused
++// compile-clean check without dragging in the full planner.
++// =================================================================
++
++// Read a bool from a DynamicPrintConfig that may not have the option,
++// falling back to a provided default. Tolerant of ConfigOptionInt for
++// the same key (some 3MFs author bool keys as 0/1).
++static bool bool_from_full_config(const DynamicPrintConfig &full_cfg, const char *key, bool fallback)
++{
++    if (!full_cfg.has(key))
++        return fallback;
++    if (const ConfigOptionBool *opt = full_cfg.option<ConfigOptionBool>(key))
++        return opt->value;
++    if (const ConfigOptionInt *opt = full_cfg.option<ConfigOptionInt>(key))
++        return opt->value != 0;
++    return fallback;
++}
++
++// Read a coordf_t (float) from a DynamicPrintConfig with fallback.
++static coordf_t float_from_full_config(const DynamicPrintConfig &full_cfg, const char *key, coordf_t fallback)
++{
++    if (!full_cfg.has(key))
++        return fallback;
++    if (const ConfigOptionFloat *opt = full_cfg.option<ConfigOptionFloat>(key))
++        return coordf_t(opt->value);
++    return coordf_t(full_cfg.opt_float(key));
++}
++
++// MM segmentation reserves channel 0 for the parent/default region.
++// All remaining channels already line up with the 1-based filament IDs.
++static inline unsigned int segmentation_channel_filament_id(size_t channel_idx)
++{
++    return unsigned(channel_idx);
++}
++
++// Average of the per-component nozzle diameters used by a mixed
++// filament row, clamped to a 0.05 mm floor so degenerate / unset
++// configs don't produce zero reference widths.
++static float mixed_filament_reference_nozzle_mm(const MixedFilament &mixed_row, const ConfigOptionFloats &nozzle_diameters)
++{
++    std::vector<float> samples;
++    samples.reserve(2);
++
++    auto append_if_valid = [&samples, &nozzle_diameters](unsigned int component_id) {
++        if (component_id >= 1 && component_id <= nozzle_diameters.size())
++            samples.emplace_back(std::max(0.05f, float(nozzle_diameters.get_at(component_id - 1))));
++    };
++
++    append_if_valid(mixed_row.component_a);
++    append_if_valid(mixed_row.component_b);
++
++    if (samples.empty())
++        return 0.4f;
++    return std::accumulate(samples.begin(), samples.end(), 0.0f) / float(samples.size());
++}
++
++// Resolve the per-component surface offset for a virtual mixed filament
++// at one layer's print_z, then clamp to the per-nozzle maximum so
++// numerical drift from gradient height interpolation can't produce
++// physically impossible offsets.
++static coordf_t clamped_mixed_component_surface_offset(const MixedFilamentManager &mixed_mgr,
++                                                       const PrintConfig          &print_cfg,
++                                                       unsigned int                filament_id,
++                                                       size_t                      num_physical,
++                                                       int                         layer_index,
++                                                       float                       layer_print_z,
++                                                       float                       layer_height,
++                                                       bool                        force_height_weighted = false)
++{
++    const MixedFilament *mixed_row = mixed_mgr.mixed_filament_from_id(filament_id, num_physical);
++    if (mixed_row == nullptr)
++        return 0.f;
++
++    const coordf_t offset_mm = coordf_t(mixed_mgr.component_surface_offset(
++        filament_id,
++        num_physical,
++        layer_index,
++        layer_print_z,
++        layer_height,
++        force_height_weighted));
++    if (std::abs(offset_mm) <= EPSILON)
++        return 0.f;
++
++    const float reference_nozzle = mixed_filament_reference_nozzle_mm(*mixed_row, print_cfg.nozzle_diameter);
++    const coordf_t limit_mm = coordf_t(MixedFilamentManager::max_component_surface_offset_mm(reference_nozzle));
++    return std::clamp(offset_mm, -limit_mm, limit_mm);
++}
++
+ LayerPtrs new_layers(
+     PrintObject                 *print_object,
+     // Object layers (pairs of bottom/top Z coordinate), without the raft.

@@ -1,0 +1,42 @@
+--- a/src/libslic3r/GCode/ToolOrdering.cpp
++++ b/src/libslic3r/GCode/ToolOrdering.cpp
+@@ -1488,8 +1488,24 @@ void ToolOrdering::reorder_extruders_for_minimum_flush_volume(bool reorder_first
+     if (!m_layer_tools.empty())
+         first_layer_filaments = m_layer_tools[0].extruders;
+ 
++    // OrcaXR FullSpectrum (Gap-3 cadence preservation). For an FS
++    // mixed-filament project the per-layer extruder is the deliberate
++    // MixedFilamentManager::resolve() cadence (LayerCycle alternation /
++    // Local-Z pigment sequence) already materialized in lt.extruders
++    // (== layer_filaments) by collect_extruders. The stock reorder DP
++    // would flush-minimise that away (collapsing the per-layer
++    // alternation to a single tool). Pin every layer to its resolved
++    // cadence so the alternation survives into G-code. PeggyPalette
++    // (painted-Local-Z) is gated on per-tool MODEL extrusion, which is
++    // fixed by the painted segmentation regardless of tool *order*;
++    // only conserved wipe-tower purge is redistributed (the 1b4ef8b
++    // non-bug), so this stays GREEN there.
++    const bool fs_preserve =
++        print_config != nullptr && !print_config->mixed_filament_definitions.value.empty();
++
+     // other_layers_seq: the layer_idx and extruder_idx are base on 1
+-    auto get_custom_seq = [&other_layers_seqs, &reorder_first_layer, &first_layer_filaments](int layer_idx, std::vector<int>& out_seq) -> bool {
++    auto get_custom_seq = [&other_layers_seqs, &reorder_first_layer, &first_layer_filaments,
++                           &layer_filaments, fs_preserve](int layer_idx, std::vector<int>& out_seq) -> bool {
+         if (!reorder_first_layer && layer_idx == 0) {
+             out_seq.resize(first_layer_filaments.size());
+             std::transform(first_layer_filaments.begin(), first_layer_filaments.end(), out_seq.begin(), [](auto item) {return item + 1; });
+@@ -1502,6 +1518,13 @@ void ToolOrdering::reorder_extruders_for_minimum_flush_volume(bool reorder_first
+                 return true;
+             }
+         }
++        if (fs_preserve && layer_idx >= 0 && size_t(layer_idx) < layer_filaments.size() &&
++            !layer_filaments[size_t(layer_idx)].empty()) {
++            const auto &lf = layer_filaments[size_t(layer_idx)];
++            out_seq.resize(lf.size());
++            std::transform(lf.begin(), lf.end(), out_seq.begin(), [](auto item) { return int(item) + 1; });
++            return true;
++        }
+         return false;
+         };
+ 

@@ -1,0 +1,302 @@
+diff --git a/src/libslic3r/PrintObjectSlice.cpp b/src/libslic3r/PrintObjectSlice.cpp
+index 04706b251f..3bdb5c2a2d 100644
+--- a/src/libslic3r/PrintObjectSlice.cpp
++++ b/src/libslic3r/PrintObjectSlice.cpp
+@@ -1000,6 +1000,297 @@ static size_t unique_extruder_count(const std::vector<unsigned int> &sequence, s
+     return unique_count;
+ }
+ 
++// =================================================================
++// OrcaXR Android (FullSpectrum Local-Z, patch 0048 — LZ3 helpers batch 4).
++// Pair-cycle planner + direct-multicolor pass distribution. These
++// turn a Local-Z row's gradient ID list into a per-cadence sequence
++// of LocalZActivePair options + multi-component pass height/sequence
++// pairs. All file-local, dead until build_local_z_plan consumes them.
++// Source: FS v0.9.9 PrintObjectSlice.cpp lines 1972-2228.
++// =================================================================
++
++// Appends a single LocalZActivePair option to `out` from a candidate
++// (A, B, weight_a, weight_b) tuple. Skips invalid pairs (zero IDs or
++// A == B). The mix_b_percent is clamped to [1, 99] so the planner
++// never emits a single-component pair via this path.
++static void append_local_z_pair_option(std::vector<LocalZActivePair> &out,
++                                       unsigned int                   component_a,
++                                       unsigned int                   component_b,
++                                       int                            weight_a,
++                                       int                            weight_b)
++{
++    if (component_a == 0 || component_b == 0 || component_a == component_b)
++        return;
++
++    LocalZActivePair pair;
++    pair.component_a = component_a;
++    pair.component_b = component_b;
++    pair.uses_layer_cycle_sequence = true;
++
++    const int safe_weight_a = std::max(0, weight_a);
++    const int safe_weight_b = std::max(0, weight_b);
++    const int pair_total    = std::max(1, safe_weight_a + safe_weight_b);
++    pair.mix_b_percent =
++        std::clamp(int(std::lround(100.0 * double(safe_weight_b) / double(pair_total))), 1, 99);
++    out.emplace_back(pair);
++}
++
++// Builds a per-cadence list of LocalZActivePair options for a Local-Z
++// row that resolves to 3+ gradient components. For 4+ component rows
++// the pairs cycle as (1,2) / (3,4); for 3-component rows all three
++// pairwise combinations cycle. Weights drive Bresenham emission so
++// stronger pairs appear more often per cycle.
++static std::vector<LocalZActivePair> build_local_z_pair_cycle_for_row(const MixedFilament &mf, size_t num_physical)
++{
++    std::vector<LocalZActivePair> pair_options;
++    if (!mf.enabled || num_physical == 0 || mf.distribution_mode == int(MixedFilament::Simple))
++        return pair_options;
++
++    const std::vector<unsigned int> gradient_ids = decode_gradient_component_ids(mf, num_physical);
++    if (gradient_ids.size() < 3)
++        return pair_options;
++
++    std::vector<int> gradient_weights = decode_gradient_component_weights(mf, gradient_ids.size());
++    if (gradient_weights.empty())
++        gradient_weights.assign(gradient_ids.size(), 1);
++
++    std::vector<int> pair_weights;
++    if (gradient_ids.size() >= 4) {
++        append_local_z_pair_option(pair_options, gradient_ids[0], gradient_ids[1], gradient_weights[0], gradient_weights[1]);
++        append_local_z_pair_option(pair_options, gradient_ids[2], gradient_ids[3], gradient_weights[2], gradient_weights[3]);
++        pair_weights.emplace_back(std::max(1, gradient_weights[0] + gradient_weights[1]));
++        pair_weights.emplace_back(std::max(1, gradient_weights[2] + gradient_weights[3]));
++    } else {
++        append_local_z_pair_option(pair_options, gradient_ids[0], gradient_ids[1], gradient_weights[0], gradient_weights[1]);
++        append_local_z_pair_option(pair_options, gradient_ids[0], gradient_ids[2], gradient_weights[0], gradient_weights[2]);
++        append_local_z_pair_option(pair_options, gradient_ids[1], gradient_ids[2], gradient_weights[1], gradient_weights[2]);
++        pair_weights.emplace_back(std::max(1, gradient_weights[0] + gradient_weights[1]));
++        pair_weights.emplace_back(std::max(1, gradient_weights[0] + gradient_weights[2]));
++        pair_weights.emplace_back(std::max(1, gradient_weights[1] + gradient_weights[2]));
++    }
++
++    if (pair_options.size() < 2 || pair_options.size() != pair_weights.size())
++        return {};
++
++    std::vector<unsigned int> pair_ids(pair_options.size(), 0);
++    for (size_t idx = 0; idx < pair_ids.size(); ++idx)
++        pair_ids[idx] = unsigned(idx + 1);
++
++    const size_t max_pair_layers =
++        mf.local_z_max_sublayers >= 2 ? std::max<size_t>(1, size_t(mf.local_z_max_sublayers) / 2) : size_t(0);
++    const std::vector<unsigned int> pair_sequence = build_weighted_gradient_sequence(pair_ids, pair_weights, max_pair_layers);
++    if (pair_sequence.empty())
++        return {};
++
++    std::vector<LocalZActivePair> out;
++    out.reserve(pair_sequence.size());
++    for (const unsigned int pair_token : pair_sequence) {
++        if (pair_token < 1 || pair_token > pair_options.size())
++            continue;
++        out.emplace_back(pair_options[size_t(pair_token - 1)]);
++    }
++    return out;
++}
++
++// Builds pass-height vector for a direct-multicolor Local-Z row.
++// Distributes the nominal layer's vertical budget across N >= 3
++// components by weight, merging the two smallest bins when over the
++// pass cap and splitting the largest bin when under. Falls back to
++// uniform splitting if the bin-based fit can't satisfy [lo, hi].
++static std::vector<double> build_local_z_direct_multicolor_pass_heights(const MixedFilament &mf,
++                                                                        const std::vector<int> &component_weights,
++                                                                        double                  base_height,
++                                                                        double                  lower_bound,
++                                                                        double                  upper_bound,
++                                                                        size_t                  component_count)
++{
++    if (base_height <= EPSILON || component_count == 0)
++        return {};
++
++    const double lo = std::max<double>(0.01, lower_bound);
++    const double hi = std::max<double>(lo, upper_bound);
++    const size_t min_passes = size_t(std::max<double>(1.0, std::ceil((base_height - EPSILON) / hi)));
++    const size_t max_passes = size_t(std::max<double>(1.0, std::floor((base_height + EPSILON) / lo)));
++    if (max_passes == 0)
++        return { base_height };
++
++    std::vector<int> positive_weights;
++    positive_weights.reserve(component_weights.size());
++    for (const int weight : component_weights)
++        if (weight > 0)
++            positive_weights.emplace_back(weight);
++    if (positive_weights.empty())
++        positive_weights.assign(component_count, 1);
++
++    const int total_weight = std::max(1, std::accumulate(positive_weights.begin(), positive_weights.end(), 0));
++    std::vector<double> component_targets;
++    component_targets.reserve(positive_weights.size());
++    size_t ideal_passes = 0;
++    for (const int weight : positive_weights) {
++        const double target = base_height * double(weight) / double(total_weight);
++        component_targets.emplace_back(target);
++        ideal_passes += size_t(std::max<double>(1.0, std::ceil((target - EPSILON) / hi)));
++    }
++
++    size_t pass_limit = max_passes;
++    if (mf.local_z_max_sublayers >= 2)
++        pass_limit = std::min(pass_limit, size_t(std::max(2, mf.local_z_max_sublayers)));
++    pass_limit = std::max(pass_limit, min_passes);
++
++    size_t desired_passes = std::clamp(std::max(component_targets.size(), ideal_passes), min_passes, pass_limit);
++
++    std::vector<double> bins = component_targets;
++    while (bins.size() > desired_passes) {
++        std::sort(bins.begin(), bins.end());
++        const double merged = bins[0] + bins[1];
++        bins.erase(bins.begin(), bins.begin() + 2);
++        bins.emplace_back(merged);
++    }
++
++    while (bins.size() < desired_passes) {
++        auto it = std::max_element(bins.begin(), bins.end());
++        if (it == bins.end())
++            break;
++        const double value = *it;
++        if (value < 2.0 * lo - EPSILON)
++            break;
++        double first = std::clamp(value * 0.5, lo, value - lo);
++        double second = value - first;
++        if (first < lo - EPSILON || second < lo - EPSILON)
++            break;
++        *it = first;
++        bins.emplace_back(second);
++    }
++
++    if (bins.empty())
++        return build_uniform_local_z_pass_heights(base_height, lo, hi, desired_passes);
++
++    std::sort(bins.begin(), bins.end(), std::greater<double>());
++    for (double &value : bins)
++        value = std::clamp(value, lo, hi);
++    if (fit_pass_heights_to_interval(bins, base_height, lo, hi))
++        return bins;
++
++    for (size_t pass_count = desired_passes; pass_count >= min_passes; --pass_count) {
++        std::vector<double> exact = build_uniform_local_z_pass_heights_exact(base_height, lower_bound, upper_bound, pass_count);
++        if (!exact.empty())
++            return exact;
++        if (pass_count == min_passes)
++            break;
++    }
++
++    return build_uniform_local_z_pass_heights(base_height, lo, hi, desired_passes);
++}
++
++// Assigns a per-pass extruder ID for a direct-multicolor Local-Z row.
++// Greedy by remaining need, with a small bias against repeating the
++// last choice so the sequence interleaves colors (improves perceptual
++// blending). Carry-over error feeds back into the next layer's
++// desired_heights so under-emitted components recover over time.
++static std::vector<unsigned int> build_local_z_direct_multicolor_sequence(const std::vector<unsigned int> &component_ids,
++                                                                          const std::vector<int>          &component_weights,
++                                                                          const std::vector<double>       &pass_heights,
++                                                                          std::vector<double>            &carry_error_mm)
++{
++    if (component_ids.empty() || pass_heights.empty())
++        return {};
++
++    std::vector<unsigned int> filtered_ids;
++    std::vector<int>          filtered_weights;
++    filtered_ids.reserve(component_ids.size());
++    filtered_weights.reserve(component_ids.size());
++    for (size_t idx = 0; idx < component_ids.size(); ++idx) {
++        const int weight = idx < component_weights.size() ? std::max(0, component_weights[idx]) : 0;
++        if (weight <= 0)
++            continue;
++        filtered_ids.emplace_back(component_ids[idx]);
++        filtered_weights.emplace_back(weight);
++    }
++    if (filtered_ids.empty()) {
++        filtered_ids = component_ids;
++        filtered_weights.assign(component_ids.size(), 1);
++    }
++    if (filtered_ids.empty())
++        return {};
++
++    if (carry_error_mm.size() != filtered_ids.size())
++        carry_error_mm.assign(filtered_ids.size(), 0.0);
++
++    const double total_height = std::accumulate(pass_heights.begin(), pass_heights.end(), 0.0);
++    const int total_weight = std::max(1, std::accumulate(filtered_weights.begin(), filtered_weights.end(), 0));
++
++    std::vector<double> desired_heights(filtered_ids.size(), 0.0);
++    for (size_t idx = 0; idx < filtered_ids.size(); ++idx)
++        desired_heights[idx] = total_height * double(filtered_weights[idx]) / double(total_weight) + carry_error_mm[idx];
++
++    std::vector<double>       assigned_heights(filtered_ids.size(), 0.0);
++    std::vector<unsigned int> sequence;
++    sequence.reserve(pass_heights.size());
++    int previous_choice = -1;
++
++    for (const double pass_height : pass_heights) {
++        size_t best_idx   = 0;
++        double best_score = -std::numeric_limits<double>::infinity();
++        double best_need  = -std::numeric_limits<double>::infinity();
++        for (size_t idx = 0; idx < filtered_ids.size(); ++idx) {
++            const double remaining_need = desired_heights[idx] - assigned_heights[idx];
++            double       score          = remaining_need;
++            if (int(idx) == previous_choice)
++                score -= 0.35 * pass_height;
++
++            if (score > best_score + 1e-9 ||
++                (std::abs(score - best_score) <= 1e-9 &&
++                 (remaining_need > best_need + 1e-9 ||
++                  (std::abs(remaining_need - best_need) <= 1e-9 && filtered_ids[idx] < filtered_ids[best_idx])))) {
++                best_idx   = idx;
++                best_score = score;
++                best_need  = remaining_need;
++            }
++        }
++
++        assigned_heights[best_idx] += pass_height;
++        previous_choice = int(best_idx);
++        sequence.emplace_back(filtered_ids[best_idx]);
++    }
++
++    for (size_t idx = 0; idx < filtered_ids.size(); ++idx)
++        carry_error_mm[idx] = desired_heights[idx] - assigned_heights[idx];
++
++    const double error_sum = std::accumulate(carry_error_mm.begin(), carry_error_mm.end(), 0.0);
++    if (!carry_error_mm.empty() && std::abs(error_sum) > 1e-9) {
++        const double correction = error_sum / double(carry_error_mm.size());
++        for (double &value : carry_error_mm)
++            value -= correction;
++    }
++
++    return sequence;
++}
++
++// Picks one LocalZActivePair for this nominal layer's cadence index.
++// If a pair_cycle is non-empty, indexes into it modulo the cycle
++// length; otherwise falls back to the row's literal (component_a,
++// component_b, mix_b_percent) so simple A/B rows still emit a pair.
++static LocalZActivePair derive_local_z_active_pair(const MixedFilament               &mf,
++                                                   const std::vector<LocalZActivePair> &pair_cycle,
++                                                   size_t                              num_physical,
++                                                   int                                 cadence_index)
++{
++    (void)num_physical;
++    LocalZActivePair out;
++
++    if (!pair_cycle.empty()) {
++        const int cycle_i = int(pair_cycle.size());
++        const size_t pos  = size_t(((cadence_index % cycle_i) + cycle_i) % cycle_i);
++        return pair_cycle[pos];
++    }
++
++    out.component_a = mf.component_a;
++    out.component_b = mf.component_b;
++    out.mix_b_percent = std::clamp(mf.mix_b_percent, 0, 100);
++    out.uses_layer_cycle_sequence = false;
++    return out;
++}
++
+ LayerPtrs new_layers(
+     PrintObject                 *print_object,
+     // Object layers (pairs of bottom/top Z coordinate), without the raft.

@@ -1,0 +1,66 @@
+Android: use OpenSSL's android-arm64 target, not linux-aarch64
+
+OpenSSL 1.1.1w's ./config script autodetects the build host (x86_64)
+and then rejects our explicit linux-aarch64 target with:
+    target already defined - linux-x86_64 (offending arg: linux-aarch64)
+
+Additionally, the Linux cross-compile path passes
+    --cross-compile-prefix=aarch64-linux-android-
+which expects GNU-style tool names (`aarch64-linux-android-ar`, etc.)
+that don't exist in the NDK — tools are `llvm-ar`, `llvm-ranlib`,
+`llvm-strip`.
+
+OpenSSL has first-class android-* configure targets that handle all of
+this. Route Android builds there: call ./Configure android-arm64 (or
+android-arm / -x86 / -x86_64 by ABI), set both ANDROID_NDK_ROOT AND
+ANDROID_NDK_HOME on the env (1.1.1w's Configure perl checks
+ANDROID_NDK_HOME specifically; newer releases read ANDROID_NDK_ROOT),
+put the NDK's llvm bin dir on PATH, and pass -D__ANDROID_API__=<level>
+parsed from ANDROID_PLATFORM. Skip --cross-compile-prefix entirely.
+
+Leaves existing Apple / Windows / generic-Linux paths unchanged.
+
+Retire-if: upstream bumps OpenSSL to 3.x (native Android handling is
+cleaner), or we replace libslic3r's OpenSSL::Crypto dependency with a
+vendored SHA implementation.
+
+---
+diff --git a/deps/OpenSSL/OpenSSL.cmake b/deps/OpenSSL/OpenSSL.cmake
+index 5f463c14a9..11d84986ee 100644
+--- a/deps/OpenSSL/OpenSSL.cmake
++++ b/deps/OpenSSL/OpenSSL.cmake
+@@ -17,6 +17,34 @@ if(WIN32)
+     set(_cross_comp_prefix_line "")
+     set(_make_cmd nmake)
+     set(_install_cmd nmake install_sw )
++elseif(ANDROID)
++    # OrcaXR: OpenSSL has first-class android-* targets. Do NOT use ./config
++    # (autodetects the build host as x86_64 and rejects an explicit target)
++    # and do NOT pass --cross-compile-prefix (NDK tools are `llvm-ar`, not
++    # `aarch64-linux-android-ar`). ./Configure android-arm64 + ANDROID_NDK_ROOT
++    # + ANDROID_NDK_HOME on env is the documented setup (1.1.1w checks
++    # ANDROID_NDK_HOME specifically inside its perl config; newer OpenSSL
++    # versions read ANDROID_NDK_ROOT).
++    if(CMAKE_ANDROID_ARCH_ABI STREQUAL "arm64-v8a")
++        set(_cross_arch "android-arm64")
++    elseif(CMAKE_ANDROID_ARCH_ABI STREQUAL "armeabi-v7a")
++        set(_cross_arch "android-arm")
++    elseif(CMAKE_ANDROID_ARCH_ABI STREQUAL "x86_64")
++        set(_cross_arch "android-x86_64")
++    elseif(CMAKE_ANDROID_ARCH_ABI STREQUAL "x86")
++        set(_cross_arch "android-x86")
++    endif()
++    string(REGEX REPLACE "^android-" "" _android_api_level "${ANDROID_PLATFORM}")
++    set(_ndk_host_tag "linux-x86_64") # builds assumed to run on linux hosts
++    set(_ndk_bin "${ANDROID_NDK}/toolchains/llvm/prebuilt/${_ndk_host_tag}/bin")
++    set(_conf_cmd env
++        "ANDROID_NDK_ROOT=${ANDROID_NDK}"
++        "ANDROID_NDK_HOME=${ANDROID_NDK}"
++        "PATH=${_ndk_bin}:$ENV{PATH}"
++        "./Configure" "-D__ANDROID_API__=${_android_api_level}")
++    set(_cross_comp_prefix_line "")
++    set(_make_cmd make -j${NPROC})
++    set(_install_cmd make -j${NPROC} install_sw)
+ else()
+     if(APPLE)
+         set(_conf_cmd export MACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET} && ./Configure -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET})

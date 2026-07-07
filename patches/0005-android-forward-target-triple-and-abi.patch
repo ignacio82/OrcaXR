@@ -1,0 +1,162 @@
+Android: forward target triple to autotools + ABI to CMake sub-builds
+
+Two related bugs discovered after deps build completed: most of the
+installed static libraries had the WRONG architecture.
+
+    libgmp.a      → elf64-x86-64     (host!)
+    libtbb.a      → elf32-littlearm  (armeabi-v7a, 32-bit)
+    libboost_*.a  → elf32-littlearm  (armeabi-v7a, 32-bit)
+    libcrypto.a   → elf64-littleaarch64 (correct — patched separately in 0002)
+
+Bug A — autotools deps (GMP, MPFR): the NDK r27+ ships a plain `clang`
+binary and delivers the target triple only via --target, which the NDK
+toolchain file adds on clang invocation. OrcaSlicer's autotools recipes
+bypass CMake and invoke `env CC=${CMAKE_C_COMPILER}` directly, so they
+lose --target and compile for the build HOST. Fix by pointing CC/CXX
+at the NDK's triple-prefixed wrappers (aarch64-linux-android31-clang)
+which bake --target in. New helpers ORCAXR_ANDROID_CC/CXX declared in
+deps/CMakeLists.txt, consumed by GMP.cmake and MPFR.cmake.
+
+Bug B — CMake sub-builds (Boost, TBB, OpenCV, CGAL, OCCT, Qhull, ...):
+ExternalProject_Add spawns fresh CMake configures with empty caches.
+They do get -DCMAKE_TOOLCHAIN_FILE forwarded, but NOT ANDROID_ABI /
+ANDROID_PLATFORM. The NDK toolchain file then defaults ANDROID_ABI to
+armeabi-v7a (32-bit). Add ${_orcaxr_android_args} to orcaslicer_add_cmake_project's
+CMAKE_ARGS, defined to those -D flags on Android and empty elsewhere.
+
+Bug C — CMAKE_FIND_ROOT_PATH_MODE: the NDK toolchain file defaults
+CMAKE_FIND_ROOT_PATH_MODE_PACKAGE to ONLY, restricting find_package to
+the NDK sysroot. Our destdir (where Boost/TBB/etc land) is outside
+that root, so sub-builds like OpenVDB can't find_package(Boost) via
+our BoostConfig.cmake. Also forwarded in _orcaxr_android_args.
+
+After this patch lands a clean rebuild is mandatory — the destdir is
+full of wrong-arch libs (before the ABI fix).
+
+Retire-if: upstream propagates ANDROID_* cache variables via
+orcaslicer_add_cmake_project by default, or switches autotools deps to
+CMake-configurable builds.
+
+---
+diff --git a/deps/CMakeLists.txt b/deps/CMakeLists.txt
+index 8a7ec4497b..b5d9824708 100644
+--- a/deps/CMakeLists.txt
++++ b/deps/CMakeLists.txt
+@@ -62,6 +62,39 @@ if (ANDROID AND NOT TOOLCHAIN_PREFIX)
+     message(STATUS "OrcaXR Android: TOOLCHAIN_PREFIX=${TOOLCHAIN_PREFIX}")
+ endif()
+ 
++# OrcaXR: Android sub-build forwarding.
++# (a) The NDK r27+ provides a plain `clang` binary — the target triple
++#     is delivered via --target on the command line, set by the NDK
++#     toolchain file. Autotools-based deps (GMP, MPFR) bypass CMake and
++#     invoke `env CC=${CMAKE_C_COMPILER}` directly, so they lose --target
++#     and compile for the HOST (x86_64). Point them at the triple-named
++#     wrappers (aarch64-linux-android31-clang) that bake the target in.
++# (b) ExternalProject_Add sub-builds that DO use CMake don't inherit
++#     ANDROID_ABI / ANDROID_PLATFORM cache variables from the parent —
++#     the NDK toolchain file then defaults to armeabi-v7a (32-bit).
++#     Forward them explicitly via _orcaxr_android_args.
++set(ORCAXR_ANDROID_CC "")
++set(ORCAXR_ANDROID_CXX "")
++set(_orcaxr_android_args "")
++if (ANDROID)
++    string(REGEX REPLACE "^android-" "" _orcaxr_android_api "${ANDROID_PLATFORM}")
++    set(_orcaxr_ndk_bin "${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin")
++    set(ORCAXR_ANDROID_CC  "${_orcaxr_ndk_bin}/${TOOLCHAIN_PREFIX}${_orcaxr_android_api}-clang")
++    set(ORCAXR_ANDROID_CXX "${_orcaxr_ndk_bin}/${TOOLCHAIN_PREFIX}${_orcaxr_android_api}-clang++")
++    set(_orcaxr_android_args
++        -DANDROID_ABI:STRING=${ANDROID_ABI}
++        -DANDROID_PLATFORM:STRING=${ANDROID_PLATFORM}
++        # NDK toolchain file sets CMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY
++        # by default, restricting find_package to CMAKE_FIND_ROOT_PATH
++        # (the NDK sysroot). Our destdir (where Boost/TBB/OpenEXR land)
++        # is outside that root. Relax to BOTH so sub-builds like OpenVDB
++        # can find_package(Boost) via our BoostConfig.cmake.
++        -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE:STRING=BOTH
++        -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY:STRING=BOTH
++        -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE:STRING=BOTH)
++    message(STATUS "OrcaXR Android: CC=${ORCAXR_ANDROID_CC}")
++endif()
++
+ include(ExternalProject)
+ include(ProcessorCount)
+ 
+@@ -212,6 +245,7 @@ if (NOT IS_CROSS_COMPILE OR NOT APPLE)
+             -DCMAKE_MODULE_LINKER_FLAGS:STRING=${CMAKE_MODULE_LINKER_FLAGS}
+             -DBUILD_SHARED_LIBS:BOOL=OFF
+             ${_cmake_osx_arch}
++            ${_orcaxr_android_args}
+             "${_configs_line}"
+             ${DEP_CMAKE_OPTS}
+             ${P_ARGS_CMAKE_ARGS}
+@@ -253,6 +287,7 @@ else()
+             -DCMAKE_IGNORE_PREFIX_PATH:STRING=${CMAKE_IGNORE_PREFIX_PATH}
+             -DBUILD_SHARED_LIBS:BOOL=OFF
+             ${_cmake_osx_arch}
++            ${_orcaxr_android_args}
+             "${_configs_line}"
+             ${DEP_CMAKE_OPTS}
+             ${P_ARGS_CMAKE_ARGS}
+diff --git a/deps/GMP/GMP.cmake b/deps/GMP/GMP.cmake
+index 9467f3dc4c..6fec9b93cd 100644
+--- a/deps/GMP/GMP.cmake
++++ b/deps/GMP/GMP.cmake
+@@ -66,13 +66,26 @@ else ()
+         set(_cross_compile_arg --host=${TOOLCHAIN_PREFIX})
+     endif ()
+ 
++    # OrcaXR: on Android, CMAKE_C_COMPILER is plain `clang` and the target
++    # triple is applied only via --target set by the NDK toolchain file.
++    # autotools bypasses CMake and invokes CC=clang directly, so it loses
++    # the target and compiles for the HOST. Use the NDK's triple-prefixed
++    # wrapper (aarch64-linux-android31-clang) which bakes --target in.
++    if (ANDROID)
++        set(_gmp_cc "${ORCAXR_ANDROID_CC}")
++        set(_gmp_cxx "${ORCAXR_ANDROID_CXX}")
++    else()
++        set(_gmp_cc "${CMAKE_C_COMPILER}")
++        set(_gmp_cxx "${CMAKE_CXX_COMPILER}")
++    endif()
++
+     ExternalProject_Add(dep_GMP
+         URL https://github.com/SoftFever/OrcaSlicer_deps/releases/download/gmp-6.2.1/gmp-6.2.1.tar.bz2
+         URL_HASH SHA256=eae9326beb4158c386e39a356818031bd28f3124cf915f8c5b1dc4c7a36b4d7c
+         DOWNLOAD_DIR ${DEP_DOWNLOAD_DIR}/GMP
+         PATCH_COMMAND git apply ${GMP_DIRECTORY_FLAG} --verbose ${CMAKE_CURRENT_LIST_DIR}/0001-GMP_GCC15.patch
+         BUILD_IN_SOURCE ON
+-        CONFIGURE_COMMAND  env "CC=${CMAKE_C_COMPILER}" "CXX=${CMAKE_CXX_COMPILER}" "CFLAGS=${_gmp_ccflags}" "CXXFLAGS=${_gmp_ccflags}" "LDFLAGS=${CMAKE_EXE_LINKER_FLAGS}" ./configure ${_cross_compile_arg} --enable-shared=no --enable-cxx=yes --enable-static=yes "--prefix=${DESTDIR}" ${_gmp_build_tgt}
++        CONFIGURE_COMMAND  env "CC=${_gmp_cc}" "CXX=${_gmp_cxx}" "CFLAGS=${_gmp_ccflags}" "CXXFLAGS=${_gmp_ccflags}" "LDFLAGS=${CMAKE_EXE_LINKER_FLAGS}" ./configure ${_cross_compile_arg} --enable-shared=no --enable-cxx=yes --enable-static=yes "--prefix=${DESTDIR}" ${_gmp_build_tgt}
+         BUILD_COMMAND     make -j MAKEINFO=true
+         INSTALL_COMMAND   make install MAKEINFO=true
+     )
+diff --git a/deps/MPFR/MPFR.cmake b/deps/MPFR/MPFR.cmake
+index 755a769955..3205560156 100644
+--- a/deps/MPFR/MPFR.cmake
++++ b/deps/MPFR/MPFR.cmake
+@@ -24,14 +24,23 @@ else ()
+         set(_cross_compile_arg --host=${TOOLCHAIN_PREFIX})
+     endif ()
+ 
++    # OrcaXR: same target-triple autotools fix as GMP — see GMP.cmake.
++    if (ANDROID)
++        set(_mpfr_cc "${ORCAXR_ANDROID_CC}")
++        set(_mpfr_cxx "${ORCAXR_ANDROID_CXX}")
++    else()
++        set(_mpfr_cc "${CMAKE_C_COMPILER}")
++        set(_mpfr_cxx "${CMAKE_CXX_COMPILER}")
++    endif()
++
+     ExternalProject_Add(dep_MPFR
+         URL https://ftp.gnu.org/gnu/mpfr/mpfr-4.2.2.tar.bz2
+             https://www.mpfr.org/mpfr-4.2.2/mpfr-4.2.2.tar.bz2
+         URL_HASH SHA256=9ad62c7dc910303cd384ff8f1f4767a655124980bb6d8650fe62c815a231bb7b
+         DOWNLOAD_DIR ${DEP_DOWNLOAD_DIR}/MPFR
+         BUILD_IN_SOURCE ON
+-        CONFIGURE_COMMAND autoreconf -f -i && 
+-                          env "CC=${CMAKE_C_COMPILER}" "CXX=${CMAKE_CXX_COMPILER}" "CFLAGS=${_gmp_ccflags}" "CXXFLAGS=${_gmp_ccflags}" "LDFLAGS=${CMAKE_EXE_LINKER_FLAGS}" ./configure ${_cross_compile_arg} --prefix=${DESTDIR} --enable-shared=no --enable-static=yes --with-gmp=${DESTDIR} ${_gmp_build_tgt}
++        CONFIGURE_COMMAND autoreconf -f -i &&
++                          env "CC=${_mpfr_cc}" "CXX=${_mpfr_cxx}" "CFLAGS=${_gmp_ccflags}" "CXXFLAGS=${_gmp_ccflags}" "LDFLAGS=${CMAKE_EXE_LINKER_FLAGS}" ./configure ${_cross_compile_arg} --prefix=${DESTDIR} --enable-shared=no --enable-static=yes --with-gmp=${DESTDIR} ${_gmp_build_tgt}
+         BUILD_COMMAND make -j
+         INSTALL_COMMAND make install
+         DEPENDS dep_GMP

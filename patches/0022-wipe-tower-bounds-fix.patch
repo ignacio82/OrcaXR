@@ -1,0 +1,19 @@
+diff --git a/src/libslic3r/GCode/WipeTower2.cpp b/src/libslic3r/GCode/WipeTower2.cpp
+index a3273873e9..da472dd4f4 100644
+--- a/src/libslic3r/GCode/WipeTower2.cpp
++++ b/src/libslic3r/GCode/WipeTower2.cpp
+@@ -2490,7 +2490,13 @@ void WipeTower2::generate(std::vector<std::vector<WipeTower::ToolChangeResult>>
+         return;
+ 
+ 	plan_tower();
+-#if 1
++// OrcaXR Phase D.3 (PR #134 port): the 5-iteration save_on_last_wipe /
++// plan_tower loop destabilizes depth calculations on Snapmaker U1 4-head
++// toolchanger geometries with `wipe_tower_extra_rib_length` set — depth
++// drifts each pass, m_y_shift changes, and the rotated polygon ends up
++// with negative coordinates that exit the build plate. Bambu Studio
++// has been single-pass since 1.x; matching that here.
++#if 0
+     for (int i=0;i<5;++i) {
+         save_on_last_wipe();
+         plan_tower();

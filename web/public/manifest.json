@@ -1,0 +1,17 @@
+{
+  "name": "OrcaXR Slicer",
+  "short_name": "OrcaXR",
+  "description": "OrcaXR pure-web front-end: XR Blocks + three.js workspace",
+  "theme_color": "#14171a",
+  "background_color": "#14171a",
+  "display": "standalone",
+  "start_url": ".",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

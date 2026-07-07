@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  orcaxr-server:
+    build: .
+    container_name: orcaxr-server-container
+    ports:
+      - "3000:3000"
+    environment:
+      # Slicing engine: "cli" (default) runs the official Snapmaker Orca Slicer 
+      # native binary. This avoids the strict 4GB WebAssembly memory limit of the WASM fork, 
+      # allowing for significantly larger and more complex slices without crashing.
+      # "wasm" runs the same patched-libslic3r WASM build the browser uses.
+      - SLICER_ENGINE=cli
+      # Max memory for the Node.js process and WASM runtime (in MB) — only
+      # relevant when SLICER_ENGINE=wasm. The WebAssembly module (wasm32)
+      # has a hard architectural limit of 4GB (4096MB) for its internal heap.
+      - MAX_OLD_SPACE_SIZE=4096
+      - PORT=3000
+    restart: unless-stopped

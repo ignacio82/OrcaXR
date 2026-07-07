@@ -1,0 +1,47 @@
+Phase H.1: register filament_is_high_temperature config key
+
+Snapmaker fork PR #279 introduces a per-filament `coBools` flag that
+high-temp materials (PA, PA-CF, PC, PEEK, ABS-CF, etc.) can set to
+let the U1 start-gcode precondition heaters before the actual
+M104/M109 sequence. The U1 firmware's PRINT_START macro reads
+`filament_is_high_temperature[initial_extruder]` from the gcode
+header and, when truthy, fires a chamber-warmup phase that bumps
+the chamber heater for ~60s before the cool nozzle starts moving.
+
+OrcaXR's bundled Snapmaker profiles don't set this today (only PLA
++ 0.4 nozzle ships), so default-false is the correct neutral. Once
+Phase B's ABS / PA-CF leaves land, individual filament JSONs can
+flip it to true and the existing start-gcode template picks it up
+without any further code change.
+
+Pure additive registration — no behavior change for profiles that
+omit the key. Default-false matches stock OrcaSlicer's "no
+high-temp pre-heat" assumption, so single-color PLA prints are
+unaffected. Anchored after the `filament_density` block so the
+hunk is stable across the wipe-tower / FullSpectrum patches that
+also touch PrintConfig.cpp earlier in the chain.
+
+Sourced from Snapmaker fork b26745d's `PrintConfig.cpp` (same
+add-block) but inserted at OrcaXR's v2.3.2 line numbers.
+
+diff --git a/src/libslic3r/PrintConfig.cpp b/src/libslic3r/PrintConfig.cpp
+--- a/src/libslic3r/PrintConfig.cpp
++++ b/src/libslic3r/PrintConfig.cpp
+@@ -2759,6 +2759,17 @@
+     def->mode = comAdvanced;
+     def->set_default_value(new ConfigOptionFloats { 0. });
+ 
++    // OrcaXR Phase H.1 (Snapmaker fork PR #279 port). Per-filament
++    // coBools that the U1 start-gcode reads to pre-condition heaters
++    // for high-temp materials (PA, PC, PEEK, ABS-CF). Default false
++    // — single-color PLA prints unaffected. Filament JSONs that need
++    // it set the leaf override; mergedConfig resizes per-tool.
++    def = this->add("filament_is_high_temperature", coBools);
++    def->label = L("High-temperature filament");
++    def->tooltip = L("When set, the printer's start gcode may run a chamber pre-heat / nozzle pre-soak before the print. Use for PA, PC, PEEK, ABS-CF and similar materials.");
++    def->mode = comAdvanced;
++    def->set_default_value(new ConfigOptionBools { false });
++
+     def = this->add("filament_type", coStrings);
+     def->label = L("Type");
+     def->tooltip = L("The material type of filament.");

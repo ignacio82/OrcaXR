@@ -1,0 +1,436 @@
+diff --git a/src/libslic3r/PrintObjectSlice.cpp b/src/libslic3r/PrintObjectSlice.cpp
+index 20d72286a0..04706b251f 100644
+--- a/src/libslic3r/PrintObjectSlice.cpp
++++ b/src/libslic3r/PrintObjectSlice.cpp
+@@ -575,6 +575,431 @@ static std::vector<double> build_local_z_pass_heights(double base_height,
+     return build_uniform_local_z_pass_heights(base_height, lo, hi, max_passes_limit);
+ }
+ 
++// =================================================================
++// OrcaXR Android (FullSpectrum Local-Z, patch 0047 — LZ3 helpers batch 3).
++// Row-sequence decoders: turn a MixedFilament row's manual_pattern /
++// gradient_component_ids / gradient_component_weights strings into
++// per-extruder cycles, plus the LocalZActivePair struct that the
++// build_local_z_pair_cycle_for_row helper (future patch) emits.
++// All helpers static, dead code until later batches consume them.
++// Source: FS v0.9.9 PrintObjectSlice.cpp lines 1597-1971.
++// =================================================================
++
++// Decodes a manual_pattern string ("12112") into a 1-based extruder
++// sequence. '1' / '2' resolve to the row's component_a / component_b;
++// '3'-'9' resolve to direct physical extruder IDs. Invalid tokens
++// (out of [1..num_physical]) are silently skipped.
++static std::vector<unsigned int> decode_manual_pattern_sequence(const MixedFilament &mf, size_t num_physical)
++{
++    std::vector<unsigned int> sequence;
++    if (mf.manual_pattern.empty())
++        return sequence;
++    sequence.reserve(mf.manual_pattern.size());
++
++    for (const char token : mf.manual_pattern) {
++        unsigned int extruder_id = 0;
++        if (token == '1')
++            extruder_id = mf.component_a;
++        else if (token == '2')
++            extruder_id = mf.component_b;
++        else if (token >= '3' && token <= '9')
++            extruder_id = unsigned(token - '0');
++
++        if (extruder_id >= 1 && extruder_id <= num_physical)
++            sequence.emplace_back(extruder_id);
++    }
++    return sequence;
++}
++
++// Decodes the gradient_component_ids string ("345") into a vector of
++// unique 1-based extruder IDs in declaration order. Duplicates and
++// IDs outside [1..num_physical] are dropped.
++static std::vector<unsigned int> decode_gradient_component_ids(const MixedFilament &mf, size_t num_physical)
++{
++    std::vector<unsigned int> ids;
++    if (mf.gradient_component_ids.empty() || num_physical == 0)
++        return ids;
++
++    bool seen[10] = { false };
++    ids.reserve(mf.gradient_component_ids.size());
++    for (const char c : mf.gradient_component_ids) {
++        if (c < '1' || c > '9')
++            continue;
++        const unsigned int id = unsigned(c - '0');
++        if (id == 0 || id > num_physical || seen[id])
++            continue;
++        seen[id] = true;
++        ids.emplace_back(id);
++    }
++    return ids;
++}
++
++// Decodes gradient_component_weights ("3,1,2") into a vector aligned
++// to `expected_components`. Returns empty if the parsed count doesn't
++// match expected or if every weight is zero.
++static std::vector<int> decode_gradient_component_weights(const MixedFilament &mf, size_t expected_components)
++{
++    std::vector<int> out;
++    if (mf.gradient_component_weights.empty() || expected_components == 0)
++        return out;
++
++    std::string token;
++    for (const char c : mf.gradient_component_weights) {
++        if (c >= '0' && c <= '9') {
++            token.push_back(c);
++            continue;
++        }
++        if (!token.empty()) {
++            out.emplace_back(std::max(0, std::atoi(token.c_str())));
++            token.clear();
++        }
++    }
++    if (!token.empty())
++        out.emplace_back(std::max(0, std::atoi(token.c_str())));
++    if (out.size() != expected_components)
++        return {};
++
++    int sum = 0;
++    for (const int v : out)
++        sum += std::max(0, v);
++    if (sum <= 0)
++        return {};
++    return out;
++}
++
++// Reduces a vector of per-component counts so that their sum is at
++// most `cycle_limit`. Preserves ranking: when shrinking, the most-
++// weighted components keep slots and ties break by declaration order.
++// Used to cap gradient cycles at 48 entries (the hardware-feasible
++// maximum for a single nominal layer's toolchanges).
++static void reduce_weight_counts_to_cycle_limit(std::vector<int> &counts, size_t cycle_limit)
++{
++    if (counts.empty() || cycle_limit == 0)
++        return;
++
++    int total = std::accumulate(counts.begin(), counts.end(), 0);
++    if (total <= 0 || size_t(total) <= cycle_limit)
++        return;
++
++    std::vector<size_t> positive_indices;
++    positive_indices.reserve(counts.size());
++    for (size_t i = 0; i < counts.size(); ++i)
++        if (counts[i] > 0)
++            positive_indices.emplace_back(i);
++
++    if (positive_indices.empty()) {
++        counts.assign(counts.size(), 0);
++        return;
++    }
++
++    std::vector<int> reduced(counts.size(), 0);
++    if (cycle_limit < positive_indices.size()) {
++        std::sort(positive_indices.begin(), positive_indices.end(), [&counts](size_t lhs, size_t rhs) {
++            if (counts[lhs] != counts[rhs])
++                return counts[lhs] > counts[rhs];
++            return lhs < rhs;
++        });
++        for (size_t i = 0; i < cycle_limit; ++i)
++            reduced[positive_indices[i]] = 1;
++        counts = std::move(reduced);
++        return;
++    }
++
++    size_t remaining_slots = cycle_limit;
++    for (const size_t idx : positive_indices) {
++        reduced[idx] = 1;
++        --remaining_slots;
++    }
++
++    int total_extras = 0;
++    std::vector<int> extra_counts(counts.size(), 0);
++    for (const size_t idx : positive_indices) {
++        extra_counts[idx] = std::max(0, counts[idx] - 1);
++        total_extras += extra_counts[idx];
++    }
++    if (remaining_slots == 0 || total_extras <= 0) {
++        counts = std::move(reduced);
++        return;
++    }
++
++    std::vector<double> remainders(counts.size(), -1.0);
++    size_t assigned_slots = 0;
++    for (const size_t idx : positive_indices) {
++        if (extra_counts[idx] == 0)
++            continue;
++        const double exact = double(remaining_slots) * double(extra_counts[idx]) / double(total_extras);
++        const int assigned = int(std::floor(exact));
++        reduced[idx] += assigned;
++        assigned_slots += size_t(assigned);
++        remainders[idx] = exact - double(assigned);
++    }
++
++    size_t missing_slots = remaining_slots > assigned_slots ? (remaining_slots - assigned_slots) : size_t(0);
++    while (missing_slots > 0) {
++        size_t best_idx = size_t(-1);
++        double best_remainder = -1.0;
++        int    best_extra = -1;
++        for (const size_t idx : positive_indices) {
++            if (extra_counts[idx] == 0)
++                continue;
++            if (remainders[idx] > best_remainder ||
++                (std::abs(remainders[idx] - best_remainder) <= 1e-9 && extra_counts[idx] > best_extra) ||
++                (std::abs(remainders[idx] - best_remainder) <= 1e-9 && extra_counts[idx] == best_extra && idx < best_idx)) {
++                best_idx = idx;
++                best_remainder = remainders[idx];
++                best_extra = extra_counts[idx];
++            }
++        }
++        if (best_idx == size_t(-1))
++            break;
++        ++reduced[best_idx];
++        remainders[best_idx] = -1.0;
++        --missing_slots;
++    }
++
++    counts = std::move(reduced);
++}
++
++// Builds a Bresenham-distributed sequence of extruder IDs from (id,
++// weight) pairs. Weights are divided by their gcd, then capped to a
++// 48-entry cycle via reduce_weight_counts_to_cycle_limit. Output
++// sequence length equals the sum of (reduced) weights.
++static std::vector<unsigned int> build_weighted_gradient_sequence(const std::vector<unsigned int> &ids,
++                                                                  const std::vector<int>          &weights,
++                                                                  size_t                           max_cycle_limit = 0)
++{
++    if (ids.empty())
++        return {};
++
++    std::vector<unsigned int> filtered_ids;
++    std::vector<int>          counts;
++    filtered_ids.reserve(ids.size());
++    counts.reserve(ids.size());
++    for (size_t i = 0; i < ids.size(); ++i) {
++        const int w = (i < weights.size()) ? std::max(0, weights[i]) : 0;
++        if (w <= 0)
++            continue;
++        filtered_ids.emplace_back(ids[i]);
++        counts.emplace_back(w);
++    }
++    if (filtered_ids.empty()) {
++        filtered_ids = ids;
++        counts.assign(ids.size(), 1);
++    }
++
++    int g = 0;
++    for (const int c : counts)
++        g = std::gcd(g, std::max(1, c));
++    if (g > 1) {
++        for (int &c : counts)
++            c = std::max(1, c / g);
++    }
++
++    constexpr size_t k_max_cycle = 48;
++    const size_t effective_cycle_limit =
++        max_cycle_limit > 0 ? std::min(k_max_cycle, std::max<size_t>(1, max_cycle_limit)) : k_max_cycle;
++    reduce_weight_counts_to_cycle_limit(counts, effective_cycle_limit);
++
++    std::vector<unsigned int> reduced_ids;
++    std::vector<int>          reduced_counts;
++    reduced_ids.reserve(filtered_ids.size());
++    reduced_counts.reserve(counts.size());
++    for (size_t i = 0; i < counts.size(); ++i) {
++        if (counts[i] <= 0)
++            continue;
++        reduced_ids.emplace_back(filtered_ids[i]);
++        reduced_counts.emplace_back(counts[i]);
++    }
++    if (reduced_ids.empty())
++        return {};
++    filtered_ids = std::move(reduced_ids);
++    counts = std::move(reduced_counts);
++
++    const int total = std::accumulate(counts.begin(), counts.end(), 0);
++    if (total <= 0)
++        return {};
++
++    const size_t cycle = size_t(total);
++
++    std::vector<unsigned int> sequence;
++    sequence.reserve(cycle);
++    std::vector<int> emitted(counts.size(), 0);
++    for (size_t pos = 0; pos < cycle; ++pos) {
++        size_t best_idx = 0;
++        double best_score = -1e9;
++        for (size_t i = 0; i < counts.size(); ++i) {
++            const double target = double(pos + 1) * double(counts[i]) / double(total);
++            const double score = target - double(emitted[i]);
++            if (score > best_score) {
++                best_score = score;
++                best_idx = i;
++            }
++        }
++        ++emitted[best_idx];
++        sequence.emplace_back(filtered_ids[best_idx]);
++    }
++    return sequence;
++}
++
++// Returns the SameLayerPointillisme cycle sequence for a row.
++// Currently #if 0-gated upstream (FS keeps the body in source as
++// a reference but disables it pending the perimeter-pixel emitter);
++// we mirror that, returning empty so callers fall back to other
++// distribution modes.
++static std::vector<unsigned int> pointillism_sequence_for_row(const MixedFilament &mf, size_t num_physical)
++{
++#if 0
++    if (!mf.enabled || num_physical == 0)
++        return {};
++
++    if (mf.distribution_mode != int(MixedFilament::SameLayerPointillisme))
++        return {};
++
++    if (!mf.manual_pattern.empty())
++        return decode_manual_pattern_sequence(mf, num_physical);
++
++    const std::vector<unsigned int> selected_gradient_ids = decode_gradient_component_ids(mf, num_physical);
++    if (selected_gradient_ids.size() >= 2) {
++        const std::vector<int> selected_gradient_weights = decode_gradient_component_weights(mf, selected_gradient_ids.size());
++        const std::vector<unsigned int> weighted_sequence =
++            build_weighted_gradient_sequence(selected_gradient_ids,
++                selected_gradient_weights.empty() ? std::vector<int>(selected_gradient_ids.size(), 1) : selected_gradient_weights);
++        if (!weighted_sequence.empty())
++            return weighted_sequence;
++    }
++
++    if (mf.component_a < 1 || mf.component_a > num_physical ||
++        mf.component_b < 1 || mf.component_b > num_physical ||
++        mf.component_a == mf.component_b)
++        return {};
++
++    int ratio_a = std::max(0, mf.ratio_a);
++    int ratio_b = std::max(0, mf.ratio_b);
++    if (ratio_a == 0 && ratio_b == 0)
++        ratio_a = 1;
++    if (ratio_a > 0 && ratio_b > 0) {
++        const int g = std::gcd(ratio_a, ratio_b);
++        if (g > 1) {
++            ratio_a /= g;
++            ratio_b /= g;
++        }
++    }
++
++    constexpr int k_max_cycle = 24;
++    if (ratio_a + ratio_b > k_max_cycle) {
++        const double scale = double(k_max_cycle) / double(ratio_a + ratio_b);
++        ratio_a = std::max(1, int(std::round(double(ratio_a) * scale)));
++        ratio_b = std::max(1, int(std::round(double(ratio_b) * scale)));
++    }
++
++    const int cycle = std::max(1, ratio_a + ratio_b);
++    std::vector<unsigned int> sequence;
++    sequence.reserve(size_t(cycle));
++    for (int pos = 0; pos < cycle; ++pos) {
++        const int b_before = (pos * ratio_b) / cycle;
++        const int b_after  = ((pos + 1) * ratio_b) / cycle;
++        sequence.emplace_back((b_after > b_before) ? mf.component_b : mf.component_a);
++    }
++    bool seen_a = false;
++    bool seen_b = false;
++    for (const unsigned int extruder_id : sequence) {
++        seen_a = seen_a || (extruder_id == mf.component_a);
++        seen_b = seen_b || (extruder_id == mf.component_b);
++        if (seen_a && seen_b)
++            break;
++    }
++    if (!seen_a || !seen_b)
++        return {};
++    return sequence;
++#endif
++    (void)mf;
++    (void)num_physical;
++    return {};
++}
++
++// Local-Z gating predicate: enabled, no manual pattern, and not in
++// SameLayerPointillisme mode. Manual patterns and pointillism have
++// their own distribution semantics that shouldn't be perturbed by
++// Local-Z flow-height modulation.
++static bool local_z_eligible_mixed_row(const MixedFilament &mf)
++{
++    // Local-Z flow-height modulation should apply to all mixed rows that are
++    // resolved as A/B blends on model surfaces, not only custom rows.
++    // Exclude explicit manual patterns and same-layer pointillism rows, which
++    // have their own distribution semantics.
++    return mf.enabled &&
++           mf.manual_pattern.empty() &&
++           mf.distribution_mode != int(MixedFilament::SameLayerPointillisme);
++}
++
++// True when a Local-Z row resolves to 3+ distinct gradient component
++// IDs (e.g. red+yellow+blue), enabling the direct-multicolor purge
++// path in WipeTower2. Optionally publishes the resolved IDs/weights
++// back to the caller for downstream use.
++static bool local_z_direct_multicolor_row(const MixedFilament        &mf,
++                                          size_t                      num_physical,
++                                          std::vector<unsigned int>  *component_ids = nullptr,
++                                          std::vector<int>           *component_weights = nullptr)
++{
++    if (!local_z_eligible_mixed_row(mf))
++        return false;
++
++    const std::vector<unsigned int> ids = decode_gradient_component_ids(mf, num_physical);
++    if (ids.size() < 3)
++        return false;
++
++    if (component_ids != nullptr)
++        *component_ids = ids;
++    if (component_weights != nullptr) {
++        std::vector<int> weights = decode_gradient_component_weights(mf, ids.size());
++        if (weights.empty())
++            weights.assign(ids.size(), 1);
++        *component_weights = std::move(weights);
++    }
++    return true;
++}
++
++// One Local-Z A/B pair option emitted by build_local_z_pair_cycle_for_row
++// (future patch). The planner ranks candidate pairs and picks one per
++// nominal layer; uses_layer_cycle_sequence flags pairs that came from
++// the LayerCycle distribution mode so the gcode emitter can preserve
++// per-layer ordering.
++struct LocalZActivePair
++{
++    unsigned int component_a = 0;
++    unsigned int component_b = 0;
++    int          mix_b_percent = 50;
++    bool         uses_layer_cycle_sequence = false;
++
++    bool valid_pair(size_t num_physical) const
++    {
++        return component_a > 0 && component_a <= num_physical &&
++               component_b > 0 && component_b <= num_physical &&
++               component_a != component_b;
++    }
++};
++
++// Counts the number of distinct 1-based extruder IDs in a sequence,
++// clipping to [1..num_physical]. Used to decide whether a row's
++// gradient cycle still qualifies as multi-color after weight reduction.
++static size_t unique_extruder_count(const std::vector<unsigned int> &sequence, size_t num_physical)
++{
++    if (sequence.empty() || num_physical == 0)
++        return 0;
++
++    std::vector<bool> seen(num_physical + 1, false);
++    size_t            unique_count = 0;
++    for (const unsigned int extruder_id : sequence) {
++        if (extruder_id == 0 || extruder_id > num_physical)
++            continue;
++        if (!seen[extruder_id]) {
++            seen[extruder_id] = true;
++            ++unique_count;
++        }
++    }
++    return unique_count;
++}
++
+ LayerPtrs new_layers(
+     PrintObject                 *print_object,
+     // Object layers (pairs of bottom/top Z coordinate), without the raft.

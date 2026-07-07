@@ -1,0 +1,83 @@
+Phase 2 (FullSpectrum engine emission, P2I): register the FS dithering
++ mixed-filament keys in PrintObject's `invalidate_state_by_config_options`
+key lists so config changes force a re-slice.
+
+Ported from FS v0.9.9 (`ratdoux/OrcaSlicer-FullSpectrum@v0.9.9` commit
+b3c41fda), `src/libslic3r/PrintObject.cpp` +9 LoC across two existing
+invalidation blocks.
+
+Why this matters:
+
+`PrintObject::invalidate_state_by_config_options` is consulted on every
+incremental Print::apply diff — when a key in the lists changes,
+specific PrintObject steps (slice / perimeters / etc.) are invalidated
+and re-executed. Keys NOT in any of the lists silently get treated as
+"no engine effect" and the prior slice state is reused.
+
+Our v2.3.2 had none of the FS dithering / mixed-filament / region-
+override keys in any invalidation list. End user symptom: change the
+Local-Z mode toggle in the UI between slices and the second slice
+silently reuses the first slice's region geometry; the user wonders
+why the print didn't change.
+
+Added two blocks:
+
+1. The `posSlice` block (lines ~1083): adds
+   `dithering_z_step_size`, `dithering_local_z_mode`,
+   `dithering_local_z_whole_objects`,
+   `dithering_local_z_direct_multicolor`,
+   `dithering_step_painted_zones_only`,
+   `mixed_filament_component_bias_enabled`,
+   `mixed_filament_region_collapse`. These affect cadence + region
+   geometry so they force a full slice.
+
+2. The infill-filament block (lines ~1218): adds
+   `enable_infill_filament_override`,
+   `infill_filament_use_base_first_layers`,
+   `infill_filament_use_base_last_layers`. These shift the effective
+   infill filament for boundary layers so they force the infill +
+   perimeter re-run.
+
+Verified compile-clean via incremental libslic3r rebuild (3/3 objects,
+0 FAILED) + ./gradlew :app:assembleDebug.
+
+Hard dependencies:
+  - patch 0027 (PrintRegionConfig + PrintConfig fields declared as
+    typed members)
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+diff --git a/src/libslic3r/PrintObject.cpp b/src/libslic3r/PrintObject.cpp
+index dc3ce14be4..96134c7ee1 100644
+--- a/src/libslic3r/PrintObject.cpp
++++ b/src/libslic3r/PrintObject.cpp
+@@ -1081,6 +1081,16 @@ bool PrintObject::invalidate_state_by_config_options(
+             steps.emplace_back(posPerimeters);
+         } else if (
+                opt_key == "layer_height"
++            // OrcaXR Android (FullSpectrum patch 0037). FS dithering +
++            // mixed-filament keys: changing any of these forces a re-slice
++            // because they affect layer cadence + region geometry.
++            || opt_key == "dithering_z_step_size"
++            || opt_key == "dithering_local_z_mode"
++            || opt_key == "dithering_local_z_whole_objects"
++            || opt_key == "dithering_local_z_direct_multicolor"
++            || opt_key == "dithering_step_painted_zones_only"
++            || opt_key == "mixed_filament_component_bias_enabled"
++            || opt_key == "mixed_filament_region_collapse"
+             || opt_key == "mmu_segmented_region_max_width"
+             || opt_key == "mmu_segmented_region_interlocking_depth"
+             || opt_key == "raft_layers"
+@@ -1205,6 +1215,13 @@ bool PrintObject::invalidate_state_by_config_options(
+             || opt_key == "bottom_shell_thickness"
+             || opt_key == "top_shell_thickness"
+             || opt_key == "minimum_sparse_infill_area"
++            // OrcaXR Android (FullSpectrum patch 0037). FS infill-filament-
++            // override + boundary-layer reverts: changing any of these
++            // forces a re-slice because the effective infill filament for
++            // the first/last N layers shifts.
++            || opt_key == "enable_infill_filament_override"
++            || opt_key == "infill_filament_use_base_first_layers"
++            || opt_key == "infill_filament_use_base_last_layers"
+             || opt_key == "sparse_infill_filament"
+             || opt_key == "solid_infill_filament"
+             || opt_key == "sparse_infill_line_width"

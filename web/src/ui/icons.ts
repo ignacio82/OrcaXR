@@ -1,0 +1,165 @@
+/**
+ * One semantic icon name → a glyph for each shell.
+ *
+ *  - `xr`  is a Material Symbols name consumed by uikit's `UIIcon` (the XR shell
+ *    already renders these, e.g. `open_with`, `format_paint`, `play_circle`).
+ *  - `dom` is a self-contained unicode/emoji glyph so the desktop shell needs no
+ *    web-font download (the page loads no Material Symbols font).
+ *
+ * Keep this the single place icons are chosen so the two shells stay visually
+ * aligned. Unknown keys fall back to a neutral dot.
+ */
+export interface IconGlyph {
+  /** Material Symbols name for the XR `UIIcon`. */
+  xr: string;
+  /** Unicode/emoji glyph for the DOM shell. */
+  dom: string;
+}
+
+const ICONS: Record<string, IconGlyph> = {
+  // Tools
+  move: { xr: 'open_with', dom: '✥' },
+  rotate: { xr: 'rotate_right', dom: '⟳' },
+  scale: { xr: 'open_in_full', dom: '⤢' },
+  lay_on_face: { xr: 'flip_to_back', dom: '⬓' },
+  paint: { xr: 'format_paint', dom: '🖌' },
+  auto_orient: { xr: 'explore', dom: '🧭' },
+  minus: { xr: 'remove', dom: '−' },
+  plus: { xr: 'add', dom: '+' },
+  // Primary
+  load: { xr: 'upload_file', dom: '📂' },
+  slice: { xr: 'play_circle', dom: '▶' },
+  preview: { xr: 'visibility', dom: '👁' },
+  download: { xr: 'download', dom: '⭳' },
+  // Scene menu
+  library: { xr: 'add_circle', dom: '＋' },
+  cube: { xr: 'deployed_code', dom: '◻' },
+  cylinder: { xr: 'database', dom: '⬢' },
+  sphere: { xr: 'circle', dom: '⬤' },
+  repair: { xr: 'healing', dom: '✚' },
+  simplify: { xr: 'compress', dom: '⤡' },
+  calibration: { xr: 'thermostat', dom: '🌡' },
+  plate: { xr: 'grid_view', dom: '▦' },
+  union: { xr: 'merge', dom: '⧉' },
+  subtract: { xr: 'content_cut', dom: '✂' },
+  delete: { xr: 'delete', dom: '🗑' },
+  // Groups
+  scene: { xr: 'view_in_ar', dom: '◈' },
+  slice_group: { xr: 'layers', dom: '≡' },
+  filament: { xr: 'water_drop', dom: '💧' },
+  output: { xr: 'print', dom: '🖨' },
+  advanced: { xr: 'tune', dom: '⚙' },
+  system: { xr: 'settings', dom: '⋯' },
+  search: { xr: 'search', dom: '⌕' },
+  file: { xr: 'folder', dom: '🗀' },
+  edit: { xr: 'edit', dom: '✎' },
+  view: { xr: 'visibility', dom: '👁' },
+  help: { xr: 'help', dom: '?' },
+
+  // File menu
+  new_project: { xr: 'note_add', dom: '🗋' },
+  folder_open: { xr: 'folder_open', dom: '📁' },
+  settings_import: { xr: 'input', dom: '⇥' },
+  settings_export: { xr: 'output', dom: '⤴' },
+  archive: { xr: 'folder_zip', dom: '🗜' },
+  save: { xr: 'save', dom: '💾' },
+  save_as: { xr: 'save_as', dom: '🖫' },
+  file_stl: { xr: 'deployed_code', dom: '⬗' },
+  file_3mf: { xr: 'view_in_ar', dom: '⬖' },
+  file_obj: { xr: 'chair', dom: '⬔' },
+  gcode: { xr: 'code', dom: '⌗' },
+  logs: { xr: 'description', dom: '🗎' },
+
+  // Edit menu
+  undo: { xr: 'undo', dom: '↶' },
+  redo: { xr: 'redo', dom: '↷' },
+  cut: { xr: 'content_cut', dom: '✂' },
+  copy: { xr: 'content_copy', dom: '⧉' },
+  paste: { xr: 'content_paste', dom: '📋' },
+  duplicate: { xr: 'content_copy', dom: '⧉' },
+  select_all: { xr: 'select_all', dom: '▤' },
+  deselect: { xr: 'deselect', dom: '▢' },
+
+  // View menu
+  view_default: { xr: 'home', dom: '⌂' },
+  view_top: { xr: 'vertical_align_top', dom: '⤒' },
+  view_bottom: { xr: 'vertical_align_bottom', dom: '⤓' },
+  view_front: { xr: 'crop_square', dom: '◻' },
+  view_rear: { xr: 'flip_to_back', dom: '▨' },
+  view_left: { xr: 'chevron_left', dom: '◧' },
+  view_right: { xr: 'chevron_right', dom: '◨' },
+  perspective: { xr: 'view_in_ar', dom: '◹' },
+  labels: { xr: 'label', dom: '🏷' },
+  overhang: { xr: 'warning', dom: '⚠' },
+  wireframe: { xr: 'grid_3x3', dom: '▦' },
+  navigator: { xr: 'explore', dom: '🧭' },
+  outline: { xr: 'crop_free', dom: '▱' },
+  printable_box: { xr: 'view_in_ar', dom: '⧉' },
+
+  // Calibration menu
+  flow: { xr: 'water_drop', dom: '🌊' },
+  pressure: { xr: 'speed', dom: '📈' },
+  retraction: { xr: 'straighten', dom: '↔' },
+  vfa: { xr: 'earthquake', dom: '〰' },
+  tolerance: { xr: 'aspect_ratio', dom: '⊹' },
+
+  // Help menu
+  wizard: { xr: 'wand_stars', dom: '🪄' },
+  keyboard: { xr: 'keyboard', dom: '⌨' },
+  school: { xr: 'school', dom: '🎓' },
+  book: { xr: 'menu_book', dom: '📖' },
+  bug: { xr: 'bug_report', dom: '🐛' },
+  info: { xr: 'info', dom: 'ⓘ' },
+  tip: { xr: 'lightbulb', dom: '💡' },
+  update: { xr: 'update', dom: '⟳' },
+
+  // Gizmos & mesh ops
+  intersect: { xr: 'join_inner', dom: '⧩' },
+  arrange: { xr: 'grid_on', dom: '▥' },
+  split_objects: { xr: 'call_split', dom: '⑃' },
+  split_parts: { xr: 'account_tree', dom: '⑂' },
+  support_paint: { xr: 'foundation', dom: '⋔' },
+  seam_paint: { xr: 'timeline', dom: '⌇' },
+  fuzzy_skin: { xr: 'blur_on', dom: '⁙' },
+  brim_ears: { xr: 'hearing', dom: '⊙' },
+  measure: { xr: 'straighten', dom: '📏' },
+  assembly: { xr: 'category', dom: '⊞' },
+  face_detector: { xr: 'change_history', dom: '△' },
+  svg: { xr: 'image', dom: '🖼' },
+  hollow: { xr: 'donut_large', dom: '◍' },
+  modifier: { xr: 'tune', dom: '❖' },
+  support_enforcer: { xr: 'add_box', dom: '⊕' },
+  support_blocker: { xr: 'disabled_by_default', dom: '⊗' },
+  height_range: { xr: 'height', dom: '↕' },
+  negative_part: { xr: 'do_not_disturb_on', dom: '⊖' },
+  layers_edit: { xr: 'layers', dom: '≣' },
+  printer_send: { xr: 'send', dom: '📤' },
+
+  // Advanced tools
+  emboss: { xr: 'title', dom: '🅣' },
+  magnet: { xr: 'commit', dom: '🧲' },
+  wipe_tower: { xr: 'cleaning_services', dom: '🗼' },
+  network: { xr: 'wifi', dom: '📶' },
+  webcam: { xr: 'videocam', dom: '📷' },
+};
+
+const FALLBACK: IconGlyph = { xr: 'radio_button_unchecked', dom: '•' };
+
+export function icon(name: string): IconGlyph {
+  return ICONS[name] ?? FALLBACK;
+}
+
+/** True when `name` has an explicit glyph (not the neutral fallback). */
+export function hasIcon(name: string): boolean {
+  return Object.prototype.hasOwnProperty.call(ICONS, name);
+}
+
+/** Material Symbols name for the XR `UIIcon`. */
+export function xrIcon(name: string): string {
+  return icon(name).xr;
+}
+
+/** Unicode/emoji glyph for the DOM shell. */
+export function domIcon(name: string): string {
+  return icon(name).dom;
+}

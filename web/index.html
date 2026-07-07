@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="manifest" href="manifest.json">
+    <!-- Cross-origin isolation shim: on static hosts (GitHub Pages) that can't
+         send COOP/COEP headers, this service worker adds them so the WASM
+         slicer's SharedArrayBuffer threads work. No-op where headers already
+         make the context isolated (dev/preview). Must run first. -->
+    <script src="%BASE_URL%coi-serviceworker.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <meta name="theme-color" content="#14171a" />
+    <meta name="description" content="OrcaXR pure-web front-end: XR Blocks + three.js workspace" />
+    <link rel="apple-touch-icon" href="%BASE_URL%icon.svg" />
+    <link rel="icon" href="%BASE_URL%icon.svg" type="image/svg+xml" />
+    <title>OrcaXR Slicer</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        background-color: #14171a;
+        color: #fff;
+        overscroll-behavior: none;
+      }
+      button {
+        cursor: pointer;
+        pointer-events: auto;
+      }
+      /* 2D UI Overlay */
+      #ui-container {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        pointer-events: none; z-index: 5;
+      }
+      #left-toolbar {
+        position: absolute; top: 20px; left: 20px;
+        display: flex; flex-direction: column; gap: 10px;
+        background: rgba(20, 23, 26, 0.65); backdrop-filter: blur(16px);
+        padding: 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);
+        pointer-events: auto;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      }
+      .tool-btn {
+        background: transparent; color: #ccc; border: none; padding: 12px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; transition: all 0.2s ease;
+      }
+      .tool-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+      .tool-btn.active {
+        background: rgba(255, 109, 0, 0.2); color: #ff6d00; border: 1px solid rgba(255, 109, 0, 0.4);
+      }
+      #right-sidebar {
+        position: absolute; top: 20px; right: 20px; width: 320px;
+        background: rgba(20, 23, 26, 0.65); backdrop-filter: blur(16px);
+        padding: 24px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08);
+        pointer-events: auto; display: flex; flex-direction: column; gap: 20px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+      }
+      #right-sidebar::-webkit-scrollbar { width: 6px; }
+      #right-sidebar::-webkit-scrollbar-track { background: transparent; }
+      #right-sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+      #right-sidebar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
+      #right-sidebar h2 { margin: 0; font-size: 1.6rem; color: #fff; font-weight: 700; letter-spacing: -0.5px; }
+      /* Collapsible inspector sections — tame the wall of always-open panels. */
+      .insp-section { border-top: 1px solid var(--oxr-color-stroke, #ffffff1a); padding-top: 14px; }
+      .insp-section > summary {
+        cursor: pointer; list-style: none; user-select: none;
+        font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+        color: var(--oxr-color-text-muted, #a0aab5);
+        display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+      }
+      .insp-section > summary::-webkit-details-marker { display: none; }
+      .insp-section > summary::before {
+        content: '\25B8'; font-size: 0.7rem; transition: transform 0.15s ease;
+        color: var(--oxr-color-accent-soft, #ffb74d);
+      }
+      .insp-section[open] > summary::before { transform: rotate(90deg); }
+      .action-btn {
+        background: rgba(255, 255, 255, 0.08); color: white; border: 1px solid rgba(255, 255, 255, 0.1); padding: 14px; border-radius: 10px; font-weight: 600; font-size: 15px; width: 100%; text-align: center; margin-bottom: 12px; transition: all 0.2s ease;
+      }
+      .action-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.15); transform: translateY(-1px); }
+      .action-btn:active:not(:disabled) { transform: translateY(1px); }
+      .action-btn.primary { background: linear-gradient(135deg, #ffb74d 0%, #ff6d00 100%); color: #000; border: none; box-shadow: 0 4px 15px rgba(255, 109, 0, 0.3); }
+      .action-btn.primary:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(255, 109, 0, 0.4); }
+      select.action-btn {
+        appearance: none;
+        -webkit-appearance: none;
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 14px center;
+        background-size: 16px;
+        padding-right: 40px;
+      }
+      select.action-btn option { background: #333; color: #fff; }
+      .action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+      .status-panel { background: rgba(0,0,0,0.3); padding: 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
+      #status-text { margin: 0; font-size: 0.85rem; color: #a0aab5; white-space: pre-wrap; line-height: 1.4; font-family: 'JetBrains Mono', monospace; }
+
+      /* XR Blocks injects its Enter-XR UI into #XRButtonWrapper. Move it to the bottom-right so it doesn't block the 2D Slicer UI. */
+      #XRButtonWrapper {
+        position: absolute !important; bottom: 24px !important; right: 24px !important;
+        top: auto !important; left: auto !important; width: auto !important; height: auto !important;
+        pointer-events: auto !important; z-index: 10;
+      }
+      #XRButtonWrapper h1 { display: none; /* Hide the big title in 2D mode */ }
+      .XRButton {
+        background: rgba(255, 255, 255, 0.1) !important; color: #fff !important; backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.2) !important;
+        border-radius: 9999px; font-weight: 600; font-size: 1rem !important; display: flex; align-items: center; justify-content: center;
+        padding: 16px 28px !important; min-width: auto !important; box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important; transition: all 0.2s ease;
+      }
+      .XRButton:hover { background: rgba(255, 255, 255, 0.2) !important; transform: scale(1.05); }
+
+      /* ---- Phase 2 IA: top bar, mode control, Add/Tools menus, palette ---- */
+      #top-bar {
+        position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+        display: flex; align-items: center; gap: 10px;
+        background: var(--oxr-color-bg-card); backdrop-filter: blur(16px);
+        padding: 8px 12px; border-radius: var(--oxr-radius-lg);
+        border: 1px solid var(--oxr-color-stroke); pointer-events: auto;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); z-index: 6;
+      }
+      #app-title { font-weight: 700; font-size: 15px; letter-spacing: -0.3px; padding: 0 6px; }
+      #plate-bar { display: flex; align-items: center; gap: 4px; }
+      .plate-chip {
+        display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+        background: var(--oxr-color-surface); color: var(--oxr-color-text-muted);
+        border: 1px solid var(--oxr-color-stroke); border-radius: 8px;
+        padding: 5px 9px; font-size: 12px; font-weight: 600; transition: all .12s ease;
+      }
+      .plate-chip:hover { background: var(--oxr-color-surface-hover); }
+      .plate-chip.active { background: var(--oxr-color-accent); color: var(--oxr-color-on-accent); border-color: transparent; }
+      .plate-chip .plate-del {
+        cursor: pointer; opacity: .6; font-size: 13px; line-height: 1;
+      }
+      .plate-chip .plate-del:hover { opacity: 1; }
+      .plate-add {
+        cursor: pointer; background: var(--oxr-color-surface); color: var(--oxr-color-text);
+        border: 1px solid var(--oxr-color-stroke); border-radius: 8px;
+        width: 26px; height: 26px; font-size: 15px; line-height: 1;
+      }
+      .plate-add:hover { background: var(--oxr-color-surface-hover); }
+      #mode-control { display: flex; gap: 2px; background: var(--oxr-color-bg-sunken); border-radius: var(--oxr-radius-sm); padding: 3px; }
+      .seg-btn {
+        background: transparent; color: var(--oxr-color-text-muted); border: none;
+        padding: 7px 14px; border-radius: 6px; font-weight: 600; font-size: 13px; transition: all .15s ease;
+      }
+      .seg-btn:hover { color: var(--oxr-color-text); }
+      .seg-btn.active { background: var(--oxr-color-accent); color: var(--oxr-color-on-accent); }
+      .menu-bar { display: flex; align-items: center; gap: 2px; flex-wrap: nowrap; }
+      .menu-trigger { white-space: nowrap; }
+      .menu-host { position: relative; }
+      .menu-trigger {
+        background: var(--oxr-color-surface); color: var(--oxr-color-text);
+        border: 1px solid var(--oxr-color-stroke); padding: 8px 12px; border-radius: var(--oxr-radius-sm);
+        font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px; transition: background .15s ease;
+      }
+      .menu-trigger:hover { background: var(--oxr-color-surface-hover); }
+      .menu-dropdown {
+        position: absolute; top: calc(100% + 6px); left: 0; min-width: 220px;
+        background: var(--oxr-color-bg-card); backdrop-filter: blur(16px);
+        border: 1px solid var(--oxr-color-stroke); border-radius: var(--oxr-radius-md);
+        padding: 6px; display: none; flex-direction: column; gap: 2px; z-index: 20;
+        box-shadow: 0 12px 40px rgba(0,0,0,.5);
+      }
+      .menu-host.open .menu-dropdown { display: flex; }
+      .menu-item {
+        background: transparent; color: var(--oxr-color-text); border: none; text-align: left;
+        padding: 10px 12px; border-radius: var(--oxr-radius-sm); font-size: 13px;
+        display: flex; align-items: center; gap: 10px; width: 100%;
+      }
+      .menu-item:hover:not(:disabled) { background: var(--oxr-color-surface-hover); }
+      .menu-item:disabled { opacity: .45; cursor: not-allowed; }
+      .menu-item .glyph { width: 18px; text-align: center; opacity: .85; }
+      .menu-item-label { flex: 1; }
+      /* "SOON" badge on parity placeholders — features present in Snapmaker
+         Orca that OrcaXR has not built yet (see docs/orca_parity_plan.md). */
+      .soon-badge {
+        font-size: 9px; font-weight: 700; letter-spacing: .5px; line-height: 1;
+        padding: 3px 5px; border-radius: 4px; margin-left: 8px;
+        background: var(--oxr-color-accent); color: var(--oxr-color-on-accent); opacity: .8;
+      }
+      .icon-btn {
+        background: var(--oxr-color-surface); color: var(--oxr-color-text); border: 1px solid var(--oxr-color-stroke);
+        width: 38px; height: 38px; border-radius: var(--oxr-radius-sm); font-size: 15px; display: flex; align-items: center; justify-content: center;
+      }
+      .icon-btn:hover { background: var(--oxr-color-surface-hover); }
+      /* Command palette overlay */
+      #command-palette {
+        position: fixed; inset: 0; background: rgba(0,0,0,.55); backdrop-filter: blur(4px);
+        display: none; align-items: flex-start; justify-content: center; z-index: 50; pointer-events: auto;
+      }
+      #command-palette.open { display: flex; }
+      .cmd-box {
+        margin-top: 12vh; width: min(560px, 92vw);
+        background: var(--oxr-color-bg-card); backdrop-filter: blur(20px);
+        border: 1px solid var(--oxr-color-stroke-strong); border-radius: var(--oxr-radius-lg);
+        box-shadow: 0 24px 80px rgba(0,0,0,.6); overflow: hidden;
+      }
+      .cmd-input {
+        width: 100%; box-sizing: border-box; background: transparent; color: var(--oxr-color-text);
+        border: none; border-bottom: 1px solid var(--oxr-color-stroke); padding: 18px 20px; font-size: 16px; outline: none;
+      }
+      .cmd-list { max-height: 46vh; overflow-y: auto; padding: 6px; }
+      .cmd-item {
+        display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: var(--oxr-radius-sm); cursor: pointer;
+      }
+      .cmd-item .glyph { width: 20px; text-align: center; opacity: .85; }
+      .cmd-item .cmd-label { font-size: 14px; }
+      .cmd-item .cmd-hint { margin-left: auto; font-size: 11.5px; color: var(--oxr-color-text-muted); }
+      .cmd-item.sel { background: var(--oxr-color-surface-hover); }
+      .cmd-item.disabled { opacity: .4; }
+      .cmd-empty { padding: 20px; color: var(--oxr-color-text-muted); font-size: 13px; text-align: center; }
+
+      /* Tooltip Styles */
+      .u1-tooltip {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        cursor: help;
+      }
+      .u1-tooltip .tooltip-content {
+        visibility: hidden;
+        width: 280px;
+        background-color: #2a2f35;
+        color: #e0e6ee;
+        text-align: left;
+        border-radius: 8px;
+        padding: 12px;
+        position: absolute;
+        z-index: 10000;
+        bottom: 125%;
+        left: 50%;
+        margin-left: -140px;
+        font-size: 11.5px;
+        font-weight: normal;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+        border: 1px solid #4a5568;
+        opacity: 0;
+        transition: opacity 0.2s;
+        pointer-events: none;
+        text-transform: none;
+      }
+      .u1-tooltip:hover .tooltip-content {
+        visibility: visible;
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      /* ---- Mobile layout (phones): the desktop absolute panels overlap on a
+             narrow screen. Top bar wraps full-width, the tool rail becomes a
+             horizontal strip pinned to the bottom edge, and the sidebar turns
+             into a collapsible bottom sheet above it. ---- */
+      @media (max-width: 768px) {
+        #top-bar {
+          left: 8px; right: 8px; top: 8px; transform: none;
+          flex-wrap: wrap; justify-content: center; gap: 6px; padding: 6px 8px;
+        }
+        #app-title { display: none; }
+        .seg-btn { padding: 7px 10px; }
+        /* The 7 Orca menus don't fit one phone row; wrap them so File…Help are
+           all reachable instead of overflowing off both screen edges. */
+        .menu-bar { flex-wrap: wrap; justify-content: center; max-width: 100%; }
+        .menu-trigger { padding: 7px 10px; }
+        #left-toolbar {
+          top: auto; left: 8px; right: 104px; bottom: 8px;
+          flex-direction: row; align-items: center; gap: 4px;
+          overflow-x: auto; padding: 6px;
+          scrollbar-width: none;
+        }
+        #left-toolbar::-webkit-scrollbar { display: none; }
+        .tool-btn { padding: 10px 12px; font-size: 13px; white-space: nowrap; }
+        #right-sidebar {
+          top: auto; left: 8px; right: 8px; bottom: 66px; width: auto;
+          max-height: 46vh; padding: 12px 16px 16px; gap: 14px;
+        }
+        /* The sheet header doubles as its collapse toggle (wired in main.ts). */
+        #right-sidebar h2 { font-size: 1.05rem; cursor: pointer; position: sticky; top: -12px; z-index: 1; background: inherit; padding: 6px 0; margin: -6px 0; }
+        #right-sidebar h2::after { content: ' ▾'; color: #ffb74d; font-size: 0.8em; }
+        #right-sidebar.collapsed { max-height: 46px; overflow: hidden; }
+        #right-sidebar.collapsed h2::after { content: ' ▸'; }
+        /* 16px inputs stop iOS Safari from zooming into focused fields. */
+        .action-btn, .cmd-input { font-size: 16px; }
+        .action-btn { padding: 12px; margin-bottom: 8px; }
+        #XRButtonWrapper { bottom: 10px !important; right: 8px !important; }
+        .XRButton { padding: 13px 16px !important; font-size: .85rem !important; }
+        /* XR Blocks' desktop-simulator settings gear — meaningless on touch
+           devices and it lands on top of the bottom tool rail. */
+        xrblocks-simulator-settings { display: none !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ui-container">
+      <!-- 2D Slice Progress Modal -->
+      <div id="dom-slice-modal" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(10px); z-index:100; justify-content:center; align-items:center;">
+        <div style="background:#1e1e1e; padding:32px; border-radius:16px; border:1px solid rgba(255,255,255,0.1); width:400px; text-align:center; box-shadow:0 16px 40px rgba(0,0,0,0.5);">
+          <h2 style="margin:0 0 16px; font-size:24px; color:#fff;">Slicing in Progress</h2>
+          <p id="dom-slice-text" style="margin:0 0 24px; font-size:15px; color:#a0aab5;">Initializing...</p>
+          <div style="width:100%; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
+            <div id="dom-slice-bar" style="width:0%; height:100%; background:#ffb74d; transition:width 0.1s linear;"></div>
+          </div>
+        </div>
+      </div>
+      <!-- Top bar: mode control + Add/Tools menus + command palette trigger.
+           Contents filled from the ActionRegistry by DomShell. -->
+      <div id="top-bar">
+        <span id="app-title">OrcaXR</span>
+        <!-- Full Snapmaker Orca-style menu bar (File / Edit / View / Add /
+             Tools / Calibration / Help), built from the ActionRegistry. -->
+        <div id="menu-bar-host" class="menu-bar"></div>
+        <div id="mode-control"></div>
+        <div id="plate-bar" title="Build plates"></div>
+        <button id="cmd-search-btn" class="icon-btn" title="Command palette (Ctrl/⌘ K)">⌕</button>
+      </div>
+
+      <!-- Command palette overlay (every action, searchable). -->
+      <div id="command-palette">
+        <div class="cmd-box">
+          <input id="cmd-input" class="cmd-input" type="text" placeholder="Search actions…" autocomplete="off" />
+          <div id="cmd-list" class="cmd-list"></div>
+        </div>
+      </div>
+
+      <!-- Loading Modal for heavy synchronous tasks like 3MF parsing -->
+      <div id="loading-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); z-index: 9999; align-items: center; justify-content: center;">
+        <div style="background: var(--oxr-color-bg-card); padding: 32px 40px; border-radius: var(--oxr-radius-lg); border: 1px solid var(--oxr-color-stroke-strong); box-shadow: 0 24px 80px rgba(0,0,0,0.8); width: min(420px, 85vw); text-align: center; display: flex; flex-direction: column; gap: 16px;">
+          <h3 id="loading-modal-title" style="margin: 0; font-size: 20px; color: var(--oxr-color-text); font-weight: 600;">Loading...</h3>
+          <div style="width: 100%; background: rgba(255,255,255,0.08); border-radius: 8px; height: 10px; overflow: hidden; position: relative;">
+            <div id="loading-modal-bar" style="position: absolute; left: 0; top: 0; height: 100%; width: 0%; background: linear-gradient(90deg, #ffb74d, #ff9800); border-radius: 8px; transition: width 0.1s linear;"></div>
+          </div>
+          <p id="loading-modal-text" style="margin: 0; font-size: 14px; color: var(--oxr-color-text-muted);">Please wait</p>
+        </div>
+      </div>
+
+      <!-- Tool rail — rendered from the shared ActionRegistry by DomShell. -->
+      <div id="left-toolbar"></div>
+      <div id="right-sidebar">
+        <h2>OrcaXR Slicer</h2>
+        <div id="preflight-banners" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;"></div>
+        <details class="insp-section" open><summary>Printer &amp; profile</summary>
+        <div class="panel" id="profile-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+          <select id="sel-machine" class="action-btn" style="text-align:left;"></select>
+          <select id="sel-process" class="action-btn" style="text-align:left;"></select>
+          <select id="sel-filament" class="action-btn" style="text-align:left;"></select>
+        </div>
+        <div class="panel" id="heads-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+        </div>
+        </details>
+        <details class="insp-section"><summary>Print settings</summary>
+        <div class="panel" id="settings-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+          <div style="font-size:0.8rem;color:#a0aab5;font-weight:600;">SETTINGS</div>
+          <select id="sel-wall-generator" class="action-btn" style="text-align:left;">
+            <option value="arachne">Wall Generator: Arachne</option>
+            <option value="classic">Wall Generator: Classic (Safe)</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#e0e6ee;cursor:pointer;user-select:none;">
+            <input id="chk-wipe-tower-auto" type="checkbox" style="width:16px;height:16px;accent-color:#ffb74d;cursor:pointer;" />
+            Auto-position wipe tower
+          </label>
+        </div>
+        <div class="panel" id="print-settings-panel" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px;">
+          <div style="font-size:0.8rem;color:var(--oxr-color-text-muted);font-weight:600;">PRINT SETTINGS</div>
+          <select id="sel-support" class="action-btn" style="text-align:left;">
+            <option value="off">Supports: Off</option>
+            <option value="on_build_plate">Supports: On build plate only</option>
+            <option value="everywhere">Supports: Everywhere</option>
+            <option value="tree">Supports: Tree (everywhere)</option>
+          </select>
+          <label style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#e0e6ee;">
+            Layer height (mm)
+            <input id="in-layer-height" type="number" step="0.02" min="0.04" max="0.6"
+              style="width:70px;box-sizing:border-box;background:var(--oxr-color-bg-sunken);color:#fff;border:1px solid var(--oxr-color-stroke);border-radius:6px;padding:6px;font-size:13px;text-align:right;" />
+          </label>
+          <label style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#e0e6ee;">
+            Infill (%)
+            <input id="in-infill" type="number" step="5" min="0" max="100"
+              style="width:70px;box-sizing:border-box;background:var(--oxr-color-bg-sunken);color:#fff;border:1px solid var(--oxr-color-stroke);border-radius:6px;padding:6px;font-size:13px;text-align:right;" />
+          </label>
+          <label style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#e0e6ee;">
+            Walls (loops)
+            <input id="in-walls" type="number" step="1" min="1" max="10"
+              style="width:70px;box-sizing:border-box;background:var(--oxr-color-bg-sunken);color:#fff;border:1px solid var(--oxr-color-stroke);border-radius:6px;padding:6px;font-size:13px;text-align:right;" />
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#e0e6ee;cursor:pointer;user-select:none;">
+            <input id="chk-adaptive-layers" type="checkbox" style="width:16px;height:16px;accent-color:#ffb74d;cursor:pointer;" />
+            Adaptive layer height
+          </label>
+        </div>
+        </details>
+        <!-- Primary + menu actions — rendered from the ActionRegistry by DomShell. -->
+        <div class="panel" id="action-panel">
+          <input type="file" id="file-input" accept=".stl,.3mf" multiple style="display:none;" />
+        </div>
+        <div class="panel" id="filament-panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-size:0.8rem;color:#a0aab5;font-weight:600;">FILAMENTS</span>
+            <button id="btn-add-filament" style="background:rgba(255,255,255,0.1);color:#fff;border:none;border-radius:6px;width:26px;height:26px;font-size:16px;">+</button>
+          </div>
+          <div id="filament-swatches" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+          <!-- Virtual (mixed) filaments adopted from a FullSpectrum 3MF — read-only. -->
+          <div id="virtual-filament-panel" style="display:none;margin-top:10px;">
+            <div id="virtual-filament-title" style="font-size:0.72rem;color:#a0aab5;font-weight:600;margin-bottom:6px;"></div>
+            <div id="virtual-filament-swatches" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+          </div>
+        </div>
+        <details class="insp-section"><summary>Send to printer</summary>
+        <div class="panel" id="printer-panel">
+          <div style="font-size:0.8rem;color:#a0aab5;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+            PRINTER (Moonraker)
+            <div class="u1-tooltip">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:#ffffff33;color:#fff;font-size:10px;">?</span>
+              <div class="tooltip-content">
+                <b style="color:#ffb74d;">Snapmaker U1 Users:</b><br/>To connect from this web app, you must install the <a href="https://github.com/paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware" target="_blank" style="color:#4db6ac;text-decoration:underline;">Extended Firmware</a>, enable Tailscale, and run this command via SSH as root:<br/><code style="display:block;margin-top:6px;padding:6px;background:#1a1e23;border-radius:4px;color:#81c784;font-family:monospace;">tailscale serve --bg http://127.0.0.1:80</code>
+              </div>
+            </div>
+          </div>
+          <input id="printer-host" type="text" placeholder="192.168.1.50 or https://name.ts.net"
+            style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.3);color:#fff;border:1px solid #ffffff1a;border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;" />
+          <p style="font-size:11px;color:#8892a0;margin:0 0 8px;line-height:1.4;">
+            On https, a plain http printer IP is blocked by the browser (mixed content).
+            Enter an <b>HTTPS</b> printer URL — e.g. Tailscale Serve
+            <code>https://name.ts.net</code> — and add this app's origin to Moonraker
+            <code>cors_domains</code>.
+          </p>
+          <button id="btn-printer-test" class="action-btn" style="margin-bottom:8px;">Test Connection</button>
+          <div style="display:flex; gap:8px;">
+            <button id="btn-printer-send" class="action-btn" style="flex:1;" disabled>Send + Print</button>
+            <button id="btn-printer-webcam" class="action-btn" style="flex:1;">Webcam</button>
+          </div>
+          <div id="webcam-container" style="display:none; margin-top:8px;">
+            <img id="printer-webcam-feed" src="" alt="Webcam Feed" style="width:100%; border-radius:8px; display:block;" />
+          </div>
+        </div>
+        <div class="panel" id="external-slicer-panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div style="font-size:0.8rem;color:#a0aab5;font-weight:600;display:flex;align-items:center;gap:6px;">
+              EXTERNAL SLICER
+              <div class="u1-tooltip">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:#ffffff33;color:#fff;font-size:10px;">?</span>
+                <div class="tooltip-content" style="width:300px;margin-left:-150px;">
+                  <b style="color:#ffb74d;">Why use an external slicer?</b><br/>
+                  The in-browser WebAssembly (WASM) slicer has a hard memory limit of 4GB, which can crash on very large models.<br/><br/>
+                  By running the <a href="https://github.com/ignacio82/OrcaXR/tree/main/server" target="_blank" style="color:#4db6ac;text-decoration:underline;">External Slicer via Docker</a>, you use the <b>official Snapmaker Orca Slicer native binary</b> instead, which avoids this memory limit and slices significantly faster.
+                </div>
+              </div>
+            </div>
+            <span id="external-slicer-status" title="Disconnected" style="font-size:12px;color:#f44336;display:flex;align-items:center;gap:4px;">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f44336;"></span> Offline
+            </span>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <input id="external-slicer-url" type="text" placeholder="URL (e.g. http://localhost:3000)"
+              style="flex:1;box-sizing:border-box;background:rgba(0,0,0,0.3);color:#fff;border:1px solid #ffffff1a;border-radius:8px;padding:10px;font-size:13px;" />
+            <button id="btn-external-slicer-connect" class="action-btn" style="width:auto;margin:0;padding:10px 16px;">Connect</button>
+          </div>
+          <div id="external-slicer-controls" style="display:none;justify-content:space-between;align-items:center;gap:8px;">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#e0e6ee;cursor:pointer;user-select:none;">
+              <input id="external-slicer-enabled" type="checkbox" style="width:16px;height:16px;accent-color:#4caf50;cursor:pointer;" />
+              Use external slicer
+            </label>
+            <button id="btn-external-slicer-delete" class="action-btn"
+              style="width:auto;margin:0;padding:8px 14px;background:#3a1e1e;border:1px solid #f4433655;color:#ff8a80;">Delete</button>
+          </div>
+          <p id="external-slicer-hint" style="display:none;margin:6px 0 0;font-size:12px;color:#8b95a1;">Off — slicing locally in‑browser.</p>
+        </div>
+        </details>
+        <details class="insp-section"><summary>AI &amp; MCP Server</summary>
+        <div class="panel" id="mcp-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+          <div style="font-size:0.8rem;color:#a0aab5;font-weight:600;">MCP SERVER</div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#e0e6ee;cursor:pointer;user-select:none;">
+            <input id="chk-mcp-enabled" type="checkbox" style="width:16px;height:16px;accent-color:#ffb74d;cursor:pointer;" />
+            Enable local MCP Server
+          </label>
+          <div id="mcp-controls" style="display:none;flex-direction:column;gap:8px;">
+            <input id="in-mcp-token" type="text" placeholder="Paste Auth Token" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.3);color:#fff;border:1px solid #ffffff1a;border-radius:8px;padding:10px;font-size:13px;font-family:monospace;" />
+            <button id="btn-mcp-connect" class="action-btn" style="margin:0;">Connect Server</button>
+            <button id="btn-mcp-share" class="action-btn" style="margin:0;">Share Connection Snippet</button>
+          </div>
+        </div>
+        <div class="panel" id="ai-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+          <div style="font-size:0.8rem;color:#a0aab5;font-weight:600;">AI FEATURES</div>
+          <button id="btn-ai-smart-paint" class="action-btn" style="margin:0;">Smart Paint (Auto)</button>
+          <button id="btn-ai-semantic" class="action-btn" style="margin:0;">Semantic Planner</button>
+        </div>
+        </details>
+        <div class="status-panel">
+          <p id="status-text">Ready. Load a model to begin.</p>
+          <div id="progress-container" style="display: none; width: 100%; background-color: rgba(255,255,255,0.1); border-radius: 4px; margin-top: 8px;">
+            <div id="progress-bar" style="width: 0%; height: 6px; background-color: #ffb74d; border-radius: 4px; transition: width 0.1s linear;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

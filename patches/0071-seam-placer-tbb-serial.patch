@@ -1,0 +1,22 @@
+--- a/src/libslic3r/GCode/SeamPlacer.cpp
++++ b/src/libslic3r/GCode/SeamPlacer.cpp
+@@ -1,3 +1,19 @@
++// OrcaXR Android: activate the file-wide TBB serial shim. SeamPlacer
++// runs five parallel_for blocks that populate per-layer deque<Perimeter>
++// containers. Under ARM64's weak memory ordering, scudo (Android's
++// allocator) catches a misaligned-pointer deallocation in ~LayerSeams
++// → ~deque<Perimeter> → __libcpp_operator_delete<Perimeter*> at the
++// end of Print::export_gcode → ~GCode → ~SeamPlacer, aborting the
++// slicer with SIGABRT just AFTER process() succeeded — observed on
++// Pixel 10 Pro XL during a normal-shape slice, no FullSpectrum paint
++// involved. Same class of bug the apply_mm_segmentation /
++// TriangleMeshSlicer / MultiMaterialSegmentation shimming fixed; just
++// add this file to the list. The shim only activates when a TU
++// defines ORCAXR_TBB_SERIAL_ACTIVE BEFORE including any TBB header,
++// so other libslic3r TUs that include SeamPlacer.hpp transitively
++// continue to see real tbb::parallel_for.
++#define ORCAXR_TBB_SERIAL_ACTIVE 1
++
+ #include "SeamPlacer.hpp"
+ 
+ #include "Polygon.hpp"

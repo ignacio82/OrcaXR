@@ -1,0 +1,69 @@
+FullSpectrum P2H: stop clamping wall/infill filament IDs to physicals
+
+`region_config_from_model_volume` in libslic3r's PrintObject.cpp clamps
+`wall_filament`, `sparse_infill_filament`, and `solid_infill_filament`
+to `num_extruders` (i.e. the count of physical filament_diameter
+entries — 4 on Snapmaker U1). Any value above that range is forced
+back to 1.
+
+In a FullSpectrum-aware pipeline that's incorrect: project filament
+IDs > num_physical are perfectly valid — they reference a virtual row
+in MixedFilamentManager's m_mixed vector, and `LayerTools::resolve_
+mixed_1based` (patch 0019) routes them to the right physical extruder
+per layer.
+
+Symptom on the user's PeggyPalette38+Mini+BRYW.3mf (38 named parts
+each with extruder=N where N=1..38): every part with N>4 had its
+wall_filament silently clamped to 1, so every layer's walls printed on
+T0 regardless of what virtual row the model designer assigned. The
+per-tool filament-used totals came out 2088/224/396/1300 mm (slot 1
+dominant) whereas the desktop FullSpectrum reference at identical
+config produced 913/938/816/2154 mm (slot 4 dominant). Visible in the
+gcode as the T0↔T3 anchor inversion this whole investigation chased.
+
+Drop the wall/infill clamps. Bogus IDs (e.g. wall_filament=999 with no
+matching virtual row) still fall through safely:
+`MixedFilamentManager::resolve(999, num_physical=4, ...)` returns
+the unresolved filament_id verbatim if `mixed_index_from_filament_id`
+returns -1, and `LayerTools::resolve_mixed_1based` then returns
+`filament_id - 1` which the gcode writer treats as an out-of-range
+T-command (caught and remapped by our postprocess pass). Better than
+silently rerouting the entire virtual filament library to T0.
+
+The support_filament + support_interface_filament clamps in
+object_config_from_model_object stay — those legitimately must be
+physical (supports use a single material, not a mixed cadence).
+
+Source: FS v0.9.9 `ratdoux/OrcaSlicer-FullSpectrum` strips these
+same three clamps in src/libslic3r/PrintObject.cpp.
+
+Retire-if: libslic3r baseline changes the clamp semantics to be
+aware of virtual filaments, OR the FullSpectrum upstream merges the
+fix into OrcaSlicer mainline.
+
+---
+diff --git a/src/libslic3r/PrintObject.cpp b/src/libslic3r/PrintObject.cpp
+index 0000000..0000001 100644
+--- a/src/libslic3r/PrintObject.cpp
++++ b/src/libslic3r/PrintObject.cpp
+@@ -3414,10 +3414,16 @@ PrintRegionConfig region_config_from_model_volume(const PrintRegionConfig &defau
+         assert(volume.is_model_part());
+     	apply_to_print_region_config(config, *layer_range_config);
+     }
+-    // Clamp invalid extruders to the default extruder (with index 1).
+-    clamp_exturder_to_default(config.sparse_infill_filament,       num_extruders);
+-    clamp_exturder_to_default(config.wall_filament,    num_extruders);
+-    clamp_exturder_to_default(config.solid_infill_filament, num_extruders);
++    // OrcaXR FullSpectrum (patch 0069): do NOT clamp wall_filament /
++    // sparse_infill_filament / solid_infill_filament to num_extruders.
++    // Project filament IDs > num_physical legitimately reference virtual
++    // mixed-filament rows; ToolOrdering::resolve_mixed_1based handles
++    // them per-layer. Bogus IDs (no matching virtual row) fall through
++    // to MixedFilamentManager::resolve's filament_id passthrough and
++    // the gcode postprocess catches out-of-range Tn commands.
++    // clamp_exturder_to_default(config.sparse_infill_filament,       num_extruders);
++    // clamp_exturder_to_default(config.wall_filament,    num_extruders);
++    // clamp_exturder_to_default(config.solid_infill_filament, num_extruders);
+     if (config.sparse_infill_density.value < 0.00011f)
+         // Switch of infill for very low infill rates, also avoid division by zero in infill generator for these very low rates.
+         // See GH issue #5910.

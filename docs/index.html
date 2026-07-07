@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OrcaXR - Spatial 3D Printing Slicer</title>
+    <meta name="description" content="OrcaXR is an XR-native 3D printing slicer that works in your desktop browser or XR device like the Galaxy XR, built with XRBlocks.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="background-effects">
+        <div class="glow-orb orb-1"></div>
+        <div class="glow-orb orb-2"></div>
+    </div>
+    
+    <main class="container">
+        <header class="hero">
+            <div class="badge alpha-badge">Alpha Release</div>
+            <h1 class="title">Orca<span class="gradient-text">XR</span></h1>
+            <p class="subtitle">The spatial 3D printing slicer.</p>
+            
+            <div class="content-card">
+                <p class="description">
+                    Experience slicing in a whole new dimension. OrcaXR is now web-native and works seamlessly in a 
+                    <strong>desktop web browser</strong> or an <strong>XR device</strong> such as the Galaxy XR.
+                </p>
+                <div class="tech-credit">
+                    <p>Powered by <a href="https://xrblocks.github.io/" target="_blank" rel="noopener noreferrer" class="xrblocks-link">XRBlocks</a></p>
+                </div>
+                
+                <div class="action-group">
+                    <a href="slicer/" class="btn primary-btn">
+                        <span class="btn-text">Launch Web App</span>
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </a>
+                    <a href="https://github.com/ignacio82/OrcaXR" target="_blank" class="btn secondary-btn">
+                        View GitHub
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <section class="features">
+            <div class="feature-card">
+                <div class="feature-icon">🌐</div>
+                <h3>Web Native</h3>
+                <p>Run directly in your browser. No installation required, instant access everywhere.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🥽</div>
+                <h3>XR Ready</h3>
+                <p>Immersive spatial computing experience directly on devices like the Samsung Galaxy XR.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h3>Powered by XRBlocks</h3>
+                <p>Built on the robust XRBlocks framework for seamless 3D interactions and UI.</p>
+            </div>
+        </section>
+        <section class="advanced-usage" style="margin-top: 40px; padding: 24px; background: rgba(20,23,26,0.6); border: 1px solid rgba(255,255,255,0.05); border-radius: 16px;">
+            <h2 style="font-family: 'Space Grotesk', sans-serif; font-size: 1.5rem; margin-bottom: 20px; color: #fff;">Advanced Usage</h2>
+            
+            <div style="margin-bottom: 24px;">
+                <h3 style="color: #ffb74d; margin-bottom: 8px; font-family: 'Space Grotesk', sans-serif;">Connecting to a Snapmaker U1</h3>
+                <p style="color: #a0aab5; font-size: 0.95rem; line-height: 1.6; margin-bottom: 12px;">
+                    To bypass browser Mixed Content security policies and connect to your printer over the network:
+                </p>
+                <ol style="color: #a0aab5; font-size: 0.95rem; line-height: 1.6; padding-left: 20px;">
+                    <li>Install the <a href="https://github.com/paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware" target="_blank" style="color: #4db6ac;">Extended Firmware</a> on your printer.</li>
+                    <li>Enable Tailscale on the printer.</li>
+                    <li>SSH into your printer as root and run: <code style="background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px; color: #81c784;">tailscale serve --bg http://127.0.0.1:80</code></li>
+                    <li>In OrcaXR, enter your printer's Tailscale HTTPS address (e.g., <code>https://lava.taild5c213.ts.net</code>).</li>
+                </ol>
+            </div>
+
+            <div>
+                <h3 style="color: #ffb74d; margin-bottom: 8px; font-family: 'Space Grotesk', sans-serif;">External Slicer (Docker)</h3>
+                <p style="color: #a0aab5; font-size: 0.95rem; line-height: 1.6;">
+                    The in-browser WebAssembly (WASM) slicer has a hard memory limit of 4GB, which can cause out-of-memory crashes on extremely large or complex models. 
+                    <br><br>
+                    To solve this, you can run the <strong>External Slicer</strong> via Docker. This offloads slicing to a dedicated server and uses the <strong>official Snapmaker Orca Slicer</strong> native binary instead of the WASM fork. See the <a href="https://github.com/ignacio82/OrcaXR/tree/main/server" target="_blank" style="color: #4db6ac;">/server directory</a> on GitHub for setup instructions.
+                </p>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

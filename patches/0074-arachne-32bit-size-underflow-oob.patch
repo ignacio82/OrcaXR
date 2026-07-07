@@ -1,0 +1,42 @@
+Arachne: fix out-of-bounds crash in SkeletalTrapezoidation::interpolate on
+32-bit targets (wasm32).
+
+SkeletalTrapezoidation::interpolate(const Beading&, double, const Beading&,
+coord_t) walks `left.toolpath_locations` backwards starting from
+`size() - 1`. When `left` is an empty beading (bead_count 0 for a thin
+feature -> compute() returns empty toolpath_locations/bead_widths), the
+loop counter is initialised from `size() - 1`.
+
+`coord_t` is int64_t but `std::vector::size()` returns a 32-bit size_t on
+wasm32. So `0u - 1` evaluates to 0xFFFFFFFF as a 32-bit unsigned, then
+zero-extends into the signed 64-bit coord_t as +4294967295 instead of -1.
+The guard `next_inset_idx >= 0` stays true and the body indexes
+`left.toolpath_locations[4294967295]` -> "memory access out of bounds".
+
+On 64-bit builds size_t is 64-bit, `0 - 1` becomes 0xFFFF...FFFF -> -1, the
+loop is skipped, and the bug is invisible -- which is why native Android
+arm64 and desktop builds never hit it while the WASM slicer crashed in
+propagateBeadingsDownward on essentially every model containing a thin
+region (3DBenchy, logos, ...).
+
+Fix: cast size() to signed coord_t before subtracting so the empty-vector
+case yields -1 on all targets. No behavioural change on 64-bit.
+
+diff --git a/src/libslic3r/Arachne/SkeletalTrapezoidation.cpp b/src/libslic3r/Arachne/SkeletalTrapezoidation.cpp
+index 2d2cf9896d..593b5e4484 100644
+--- a/src/libslic3r/Arachne/SkeletalTrapezoidation.cpp
++++ b/src/libslic3r/Arachne/SkeletalTrapezoidation.cpp
+@@ -1668,7 +1668,12 @@ SkeletalTrapezoidation::Beading SkeletalTrapezoidation::interpolate(const Beadin
+     // TODO: don't use toolpath locations past the middle!
+     // TODO: stretch bead widths and locations of the higher bead count beading to fit in the left over space
+     coord_t next_inset_idx;
+-    for (next_inset_idx = left.toolpath_locations.size() - 1; next_inset_idx >= 0; next_inset_idx--)
++    // NOTE: cast size() to signed coord_t *before* subtracting. On 32-bit targets
++    // (wasm32) size_t is 32-bit, so an empty vector's `size() - 1` underflows to
++    // 0xFFFFFFFF and zero-extends into the 64-bit signed coord_t as +4294967295,
++    // making this loop index far out of bounds. Signed subtraction yields -1 and
++    // the loop is correctly skipped on every target. (No effect on 64-bit builds.)
++    for (next_inset_idx = coord_t(left.toolpath_locations.size()) - 1; next_inset_idx >= 0; next_inset_idx--)
+     {
+         if (switching_radius > left.toolpath_locations[next_inset_idx])
+         {

@@ -1,0 +1,44 @@
+normalize_fdm: don't dereference a missing nozzle_diameter when clamping
+wipe_tower_filament.
+
+DynamicPrintConfig::normalize_fdm runs on PARTIAL configs: the CLI
+normalizes each --load-settings file on its own, and
+PrintObject::object_config_from_model_object normalizes per-object
+configs. wipe_tower_filament is a process key; nozzle_diameter is a
+machine key — so a process preset containing wipe_tower_filament (ANY
+value) hits `this->opt<ConfigOptionFloats>("nozzle_diameter")->size()`
+with a null option and segfaults the config loader.
+
+Reproduced against the 2.3.4 CLI: a process JSON with
+wipe_tower_filament="0" → SIGSEGV; same file plus nozzle_diameter →
+slices fine; wipe_tower_filament="1" without nozzle_diameter → SIGSEGV
+(the value is irrelevant, presence in a partial config is the trigger).
+
+Guard on nozzle_diameter being present; the clamp is re-evaluated later
+during full-config normalization where the nozzle count is known.
+
+Retire-if: upstream Snapmaker Orca guards this block (or normalize_fdm
+stops running on partial configs).
+
+---
+diff --git a/src/libslic3r/PrintConfig.cpp b/src/libslic3r/PrintConfig.cpp
+index c0a2676..198dd33 100644
+--- a/src/libslic3r/PrintConfig.cpp
++++ b/src/libslic3r/PrintConfig.cpp
+@@ -7379,8 +7379,15 @@ void DynamicPrintConfig::normalize_fdm(int used_filaments)
+         }
+     }
+ 
+-    if (this->has("wipe_tower_filament")) {
++    if (this->has("wipe_tower_filament") && this->has("nozzle_diameter")) {
+         // If invalid, replace with 0.
++        // OrcaXR: guard on nozzle_diameter being present — normalize_fdm
++        // also runs on PARTIAL configs (a process preset loaded on its own
++        // by the CLI, a per-object config), where the unguarded
++        // opt("nozzle_diameter")->size() dereferences a null option and
++        // segfaults the config loader. Without the machine's nozzle count
++        // the clamp cannot be evaluated; leave the value for the full-config
++        // normalization to validate.
+         int extruder      = this->opt<ConfigOptionInt>("wipe_tower_filament")->value;
+         int num_extruders = this->opt<ConfigOptionFloats>("nozzle_diameter")->size();
+         if (extruder < 0 || extruder > num_extruders)

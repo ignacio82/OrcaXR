@@ -1,0 +1,108 @@
+Phase 2 (FullSpectrum engine emission, P2K): collect_extruders routes
+infill through the LayerTools FS-aware methods + populates
+object_layer_count + treats 100%-density solid infill as sparse.
+
+Ported from FS v0.9.9 (`ratdoux/OrcaSlicer-FullSpectrum@v0.9.9` commit
+b3c41fda), `src/libslic3r/GCode/ToolOrdering.cpp` `collect_extruders`
+mid-function changes.
+
+Three changes:
+
+1. **Populate `layer_tools.object_layer_count`** from
+   `object.layers().size()` so the boundary-layer infill reversion
+   gate added in patch 0036 (`use_base_infill_filament`) has the
+   total layer count it needs. Without this, `object_layer_count`
+   stays at the default 0 and the last-N-layers gate never fires.
+
+2. **Rename `has_infill` to `has_sparse_infill`** and route
+   `erSolidInfill` at 100% sparse density into the sparse-infill
+   path. Reason: 100% density solid infill behaves identically to
+   regular infill at the same density (same nozzle, same flow), so
+   it should use the sparse_infill_filament selection logic. The
+   prior code routed it to solid_infill_filament which can pick a
+   different physical filament when an infill-filament-override is
+   active.
+
+3. **Switch the override `emplace_back` calls** from
+   `resolve_filament_for_layer(region.config().X_filament, ...)` to
+   `layer_tools.X_filament(region) + 1`. The methods now go through
+   the FS-aware resolution chain (patches 0019 resolver + 0036
+   boundary-layer + grouped manual_pattern), so the
+   `layer_tools.extruders` list reflects the same physical extruder
+   the per-emission code will pick.
+
+Verified compile-clean via incremental libslic3r rebuild (3/3
+objects, 0 FAILED) + ./gradlew :app:assembleDebug.
+
+Hard dependencies:
+  - patch 0028 (LayerTools::object_layer_count member declared)
+  - patch 0036 (LayerTools::sparse_infill_filament + solid_infill_filament
+    FS-aware bodies)
+  - patch 0038 (FS region keys registered in PrintConfigDef)
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+diff --git a/src/libslic3r/GCode/ToolOrdering.cpp b/src/libslic3r/GCode/ToolOrdering.cpp
+index 3eb5330cbb..eaebc63bc4 100644
+--- a/src/libslic3r/GCode/ToolOrdering.cpp
++++ b/src/libslic3r/GCode/ToolOrdering.cpp
+@@ -792,6 +792,11 @@ void ToolOrdering::collect_extruders(const PrintObject &object, const std::vecto
+         layer_tools.num_physical = num_physical;
+         if (layer_tools.layer_index < 0)
+             layer_tools.layer_index = layerCount;
++        // OrcaXR Android (FullSpectrum patch 0039). Populate the object's
++        // total layer count so use_base_infill_filament (patch 0036) can
++        // resolve the last-N-layers gate. Without this object_layer_count
++        // stays at 0 and the boundary-layer reversion never fires.
++        layer_tools.object_layer_count = int(object.layers().size());
+         layer_tools.layer_height_for_mixed = layer->height;
+ 
+         // Override extruder with the next
+@@ -827,17 +832,25 @@ void ToolOrdering::collect_extruders(const PrintObject &object, const std::vecto
+                 layer_tools.has_object = true;
+             }
+ 
+-            bool has_infill       = false;
+-            bool has_solid_infill = false;
++            // OrcaXR Android (FullSpectrum patch 0039). Rename has_infill ->
++            // has_sparse_infill and route 100%-density solid infill through
++            // the sparse path. For the override emit, go through the LayerTools
++            // sparse_infill_filament / solid_infill_filament methods so the
++            // boundary-layer reversion + grouped manual_pattern from patch
++            // 0036 takes effect.
++            bool has_sparse_infill = false;
++            bool has_solid_infill  = false;
+             bool something_nonoverriddable = false;
+             for (const ExtrusionEntity *ee : layerm->fills.entities) {
+                 // fill represents infill extrusions of a single island.
+                 const auto *fill = dynamic_cast<const ExtrusionEntityCollection*>(ee);
+                 ExtrusionRole role = fill->entities.empty() ? erNone : fill->entities.front()->role();
+-                if (is_solid_infill(role))
++                if (role == erSolidInfill && std::abs(region.config().sparse_infill_density.value - 100.) < EPSILON)
++                    has_sparse_infill = true;
++                else if (is_solid_infill(role))
+                     has_solid_infill = true;
+                 else if (role != erNone)
+-                    has_infill = true;
++                    has_sparse_infill = true;
+ 
+                 if (m_print_config_ptr) {
+                     if (! layer_tools.wiping_extrusions().is_overriddable_and_mark(*fill, *m_print_config_ptr, object, region))
+@@ -848,13 +861,13 @@ void ToolOrdering::collect_extruders(const PrintObject &object, const std::vecto
+             if (something_nonoverriddable || !m_print_config_ptr) {
+             	if (extruder_override == 0) {
+ 	                if (has_solid_infill)
+-	                    layer_tools.extruders.emplace_back(resolve_filament_for_layer(region.config().solid_infill_filament, layerCount, layer->print_z, layer->height));
+-	                if (has_infill)
+-	                    layer_tools.extruders.emplace_back(resolve_filament_for_layer(region.config().sparse_infill_filament, layerCount, layer->print_z, layer->height));
+-            	} else if (has_solid_infill || has_infill)
++	                    layer_tools.extruders.emplace_back(layer_tools.solid_infill_filament(region) + 1);
++	                if (has_sparse_infill)
++	                    layer_tools.extruders.emplace_back(layer_tools.sparse_infill_filament(region) + 1);
++            	} else if (has_solid_infill || has_sparse_infill)
+             		layer_tools.extruders.emplace_back(resolve_filament_for_layer(extruder_override, layerCount, layer->print_z, layer->height));
+             }
+-            if (has_solid_infill || has_infill)
++            if (has_solid_infill || has_sparse_infill)
+                 layer_tools.has_object = true;
+         }
+         layerCount++;

@@ -1,0 +1,157 @@
+Phase 2 (FullSpectrum engine emission, P2H): wire infill-filament
+resolution at the LayerTools level — FS override toggle, boundary-
+layer base-reversion, and grouped manual-pattern infill routing.
+
+Ported from FS v0.9.9 (`ratdoux/OrcaSlicer-FullSpectrum@v0.9.9` commit
+b3c41fda), `src/libslic3r/GCode/ToolOrdering.cpp` adds four helpers +
+modifies `LayerTools::sparse_infill_filament` /
+`LayerTools::solid_infill_filament`.
+
+Why this matters (correctness fix paired with patch 0034):
+
+Patch 0034 (PrintRegion) made the FS infill-filament-override toggle
+explicit at preset / extruder-collection time. But sparse_infill_
+filament and solid_infill_filament are ALSO called at LayerTools level
+to pick the per-layer extruder for an emit-time region. Without the
+matching resolution here, the LayerTools picks landed on the raw
+sparse_infill_filament config value regardless of the toggle or the
+boundary-layer reverts.
+
+This patch adds anonymous-namespace helpers:
+- `internal_solid_infill_uses_sparse_filament` — true when solid
+  infill at 100% density should be routed like sparse infill.
+- `use_base_infill_filament` — honors enable_infill_filament_override
+  + infill_filament_use_base_first_layers / _last_layers gates.
+- `sparse_infill_filament_id_1based` — selects wall vs. sparse
+  filament for a given LayerTools + region.
+- `grouped_manual_pattern_infill_filament_1based` — short-circuits
+  through MixedFilamentManager::resolve_perimeter when a configured
+  filament has a grouped manual_pattern (',' separator). Resolves the
+  infill cadence to follow the innermost wall's per-perimeter pick.
+
+`LayerTools::sparse_infill_filament` / `solid_infill_filament` now
+check grouped_manual_pattern_infill_filament_1based first (returns
+non-zero only for grouped patterns); fall back to the existing
+resolve_mixed_1based otherwise.
+
+Verified compile-clean via incremental libslic3r rebuild (3/3
+objects, 0 FAILED) + ./gradlew :app:assembleDebug.
+
+Hard dependencies:
+  - patch 0015 (MixedFilamentManager::resolve_perimeter +
+    is_mixed + mixed_filament_from_id + normalize_manual_pattern)
+  - patch 0019 (LayerTools::mixed_mgr / num_physical / layer_index /
+    print_z / layer_height_for_mixed members + resolve_mixed_1based)
+  - patch 0027 (PrintRegionConfig enable_infill_filament_override +
+    use_base_first_layers / _last_layers typed members)
+  - patch 0028 (LayerTools::object_layer_count member)
+
+Companion to:
+  - 0032 LayerRegion virtual filament resolution (different code path)
+  - 0034 PrintRegion infill-filament-override
+  - 0035 PrintApply mixed-component expansion
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+diff --git a/src/libslic3r/GCode/ToolOrdering.cpp b/src/libslic3r/GCode/ToolOrdering.cpp
+index da250a9a7e..3eb5330cbb 100644
+--- a/src/libslic3r/GCode/ToolOrdering.cpp
++++ b/src/libslic3r/GCode/ToolOrdering.cpp
+@@ -98,6 +98,69 @@ unsigned int LayerTools::resolve_mixed_1based(unsigned int filament_id) const
+                                     float(this->layer_height_for_mixed));
+ }
+ 
++// OrcaXR Android (FullSpectrum patch 0036). Helpers used by
++// LayerTools::sparse_infill_filament / solid_infill_filament to honor
++// the FS enable_infill_filament_override toggle + boundary-layer
++// base-reversion (mirrors PrintRegion patch 0034 at the per-LayerTools
++// granularity, where object_layer_count + layer_index are available)
++// and to short-circuit infill through resolve_perimeter when the
++// configured filament has a grouped manual_pattern.
++
++namespace {
++
++bool internal_solid_infill_uses_sparse_filament(const PrintRegion &region, ExtrusionRole role)
++{
++    return role == erSolidInfill && std::abs(region.config().sparse_infill_density.value - 100.) < EPSILON;
++}
++
++bool use_base_infill_filament(const LayerTools &layer_tools, const PrintRegion &region)
++{
++    const PrintRegionConfig &config = region.config();
++    if (!config.enable_infill_filament_override.value)
++        return true;
++    if (layer_tools.object_layer_count <= 0)
++        return false;
++
++    const int first_layers = std::max(0, config.infill_filament_use_base_first_layers.value);
++    const int last_layers  = std::max(0, config.infill_filament_use_base_last_layers.value);
++    return layer_tools.layer_index < first_layers || layer_tools.layer_index >= layer_tools.object_layer_count - last_layers;
++}
++
++unsigned int sparse_infill_filament_id_1based(const LayerTools &layer_tools, const PrintRegion &region)
++{
++    return use_base_infill_filament(layer_tools, region) ? region.config().wall_filament.value : region.config().sparse_infill_filament.value;
++}
++
++// Returns nonzero when the configured filament 1-based has a grouped
++// manual_pattern (segments separated by ',') — in which case the infill
++// must follow the same per-perimeter cadence the innermost wall picks.
++// Returns 0 otherwise.
++unsigned int grouped_manual_pattern_infill_filament_1based(const LayerTools&  layer_tools,
++                                                           const PrintRegion& region,
++                                                           unsigned int       configured_filament_id_1based)
++{
++    if (layer_tools.mixed_mgr == nullptr || layer_tools.num_physical == 0 || configured_filament_id_1based == 0)
++        return 0;
++    if (!layer_tools.mixed_mgr->is_mixed(configured_filament_id_1based, layer_tools.num_physical))
++        return 0;
++    const MixedFilament *mixed_row = layer_tools.mixed_mgr->mixed_filament_from_id(configured_filament_id_1based, layer_tools.num_physical);
++    if (mixed_row == nullptr)
++        return 0;
++    const std::string normalized = MixedFilamentManager::normalize_manual_pattern(mixed_row->manual_pattern);
++    if (normalized.find(',') == std::string::npos)
++        return 0;
++
++    const int innermost_perimeter_index = std::max(0, region.config().wall_loops.value - 1);
++    return layer_tools.mixed_mgr->resolve_perimeter(configured_filament_id_1based,
++                                                    layer_tools.num_physical,
++                                                    layer_tools.layer_index,
++                                                    innermost_perimeter_index,
++                                                    float(layer_tools.print_z),
++                                                    float(layer_tools.layer_height_for_mixed));
++}
++
++} // namespace
++
+ // Return a zero based extruder from the region, or extruder_override if overriden.
+ unsigned int LayerTools::wall_filament(const PrintRegion &region) const
+ {
+@@ -108,16 +171,24 @@ unsigned int LayerTools::wall_filament(const PrintRegion &region) const
+ 
+ unsigned int LayerTools::sparse_infill_filament(const PrintRegion &region) const
+ {
+-	assert(region.config().sparse_infill_filament.value > 0);
+-	const unsigned int filament_1based = (this->extruder_override == 0) ? region.config().sparse_infill_filament.value : this->extruder_override;
+-	return this->resolve_mixed_1based(filament_1based) - 1;
++	// OrcaXR Android (FullSpectrum patch 0036). Resolve through
++	// sparse_infill_filament_id_1based (honors the FS infill override
++	// + boundary-layer reversion), then check grouped manual_pattern
++	// first, fall back to LayerCycle resolve.
++	assert(region.config().wall_filament.value > 0);
++	const unsigned int filament_1based = (this->extruder_override == 0) ? sparse_infill_filament_id_1based(*this, region) : this->extruder_override;
++	const unsigned int grouped = grouped_manual_pattern_infill_filament_1based(*this, region, filament_1based);
++	return ((grouped != 0) ? grouped : resolve_mixed_1based(filament_1based)) - 1;
+ }
+ 
+ unsigned int LayerTools::solid_infill_filament(const PrintRegion &region) const
+ {
++	// OrcaXR Android (FullSpectrum patch 0036). Same as
++	// sparse_infill_filament — check grouped manual_pattern first.
+ 	assert(region.config().solid_infill_filament.value > 0);
+ 	const unsigned int filament_1based = (this->extruder_override == 0) ? region.config().solid_infill_filament.value : this->extruder_override;
+-	return this->resolve_mixed_1based(filament_1based) - 1;
++	const unsigned int grouped = grouped_manual_pattern_infill_filament_1based(*this, region, filament_1based);
++	return ((grouped != 0) ? grouped : resolve_mixed_1based(filament_1based)) - 1;
+ }
+ 
+ // Returns a zero based extruder this eec should be printed with, according to PrintRegion config or extruder_override if overriden.

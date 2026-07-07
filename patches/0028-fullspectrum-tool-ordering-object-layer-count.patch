@@ -1,0 +1,35 @@
+Phase 2 (FullSpectrum engine emission) prerequisite: add the
+`object_layer_count` member to `LayerTools` in ToolOrdering.hpp.
+
+FS v0.9.9's GCode emission code uses this field (alongside the
+`mixed_mgr`, `num_physical`, `layer_index`, `print_z`,
+`layer_height_for_mixed` members landed in patch 0019) to know the
+total layer count for a print object when resolving virtual-row
+cadence — it's referenced by the layer-cycle planner so the last few
+layers can be biased toward a specific physical filament for clean
+top-surface finishes.
+
+Sole purpose: let the patch 0032 GCode emission port compile against
+our v2.3.2 base. Defaults to 0, in which case
+`LayerTools::resolve_mixed_1based()` (patch 0019) short-circuits to
+identity — no behavior change on existing prints.
+
+diff --git a/src/libslic3r/GCode/ToolOrdering.hpp b/src/libslic3r/GCode/ToolOrdering.hpp
+index f78bf18aec..0acc40e107 100644
+--- a/src/libslic3r/GCode/ToolOrdering.hpp
++++ b/src/libslic3r/GCode/ToolOrdering.hpp
+@@ -168,6 +168,14 @@ public:
+     // If per layer extruder switches are inserted by the G-code preview slider, this value contains the new (1 based) extruder, with which the whole object layer is being printed with.
+     // If not overriden, it is set to 0.
+     unsigned int 				extruder_override = 0;
++    // OrcaXR Android (FullSpectrum integration, patch 0028). Total number
++    // of object layers for the print object whose LayerTools this is —
++    // referenced by the FS v0.9.9 GCode emission patch's per-layer
++    // cadence resolver (matches PrintObject->layers().size() at the
++    // ToolOrdering construction site). Populated alongside layer_index
++    // by the planner; defaults to 0 when no mixed-filament manager is
++    // attached (in which case resolve_mixed_1based() short-circuits).
++    int                         object_layer_count = 0;
+     // Should a skirt be printed at this layer?
+     // Layers are marked for infinite skirt aka draft shield. Not all the layers have to be printed.
+     bool                        has_skirt = false;
