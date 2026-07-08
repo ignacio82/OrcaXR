@@ -26,6 +26,7 @@ import { ActionContext } from './actions/ActionContext';
 import { buildRegistry } from './actions/catalog';
 import { DomShell } from './ui/dom/DomShell';
 import { CommandPalette } from './ui/dom/CommandPalette';
+import { SettingsInspector } from './ui/dom/SettingsInspector';
 
 declare global {
   interface Window { ORCAXR_VERSION: string }
@@ -491,79 +492,12 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
   } catch {}
   renderProfileSelects();
 
-  const selWallGenerator = document.getElementById('sel-wall-generator') as HTMLSelectElement;
-  const updateSettings = () => {
-    if (selWallGenerator.value === 'classic') {
-      workspace.customOverrides['wall_generator'] = 'classic';
-      workspace.customOverrides['top_surface_pattern'] = 'monotonic';
-      workspace.customOverrides['bottom_surface_pattern'] = 'monotonic';
-      workspace.customOverrides['sparse_infill_pattern'] = 'grid';
-      workspace.customOverrides['internal_solid_infill_pattern'] = 'rectilinear';
-    } else {
-      workspace.customOverrides['wall_generator'] = 'arachne';
-      delete workspace.customOverrides['top_surface_pattern'];
-      delete workspace.customOverrides['bottom_surface_pattern'];
-      delete workspace.customOverrides['sparse_infill_pattern'];
-      delete workspace.customOverrides['internal_solid_infill_pattern'];
-    }
-  };
-  selWallGenerator.onchange = updateSettings;
-
-  // Print settings: supports / layer height / infill / walls. These write into
-  // workspace.customOverrides (merged last into the slice overrides). An empty
-  // numeric field means "use the profile default" (no override).
-  const selSupport = document.getElementById('sel-support') as HTMLSelectElement;
-  const inLayer = document.getElementById('in-layer-height') as HTMLInputElement;
-  const inInfill = document.getElementById('in-infill') as HTMLInputElement;
-  const inWalls = document.getElementById('in-walls') as HTMLInputElement;
-  const chkAdaptive = document.getElementById('chk-adaptive-layers') as HTMLInputElement;
-  
-  const applyPrintSettings = () => {
-    const co = workspace.customOverrides;
-    switch (selSupport.value) {
-      case 'on_build_plate':
-        co['enable_support'] = '1'; co['support_type'] = 'normal(auto)'; co['support_on_build_plate_only'] = '1'; break;
-      case 'everywhere':
-        co['enable_support'] = '1'; co['support_type'] = 'normal(auto)'; co['support_on_build_plate_only'] = '0'; break;
-      case 'tree':
-        co['enable_support'] = '1'; co['support_type'] = 'tree(auto)'; co['support_on_build_plate_only'] = '0'; break;
-      default:
-        co['enable_support'] = '0'; delete co['support_type']; delete co['support_on_build_plate_only'];
-    }
-    if (inLayer.value) co['layer_height'] = inLayer.value; else delete co['layer_height'];
-    if (inInfill.value) co['sparse_infill_density'] = `${inInfill.value}%`; else delete co['sparse_infill_density'];
-    if (inWalls.value) co['wall_loops'] = inWalls.value; else delete co['wall_loops'];
-    if (chkAdaptive.checked) co['adaptive_layer_height'] = '1'; else delete co['adaptive_layer_height'];
-
-    try {
-      localStorage.setItem('orcaxr.settings', JSON.stringify({
-        support: selSupport.value, layer: inLayer.value, infill: inInfill.value,
-        walls: inWalls.value, adaptive: chkAdaptive.checked, wallGen: selWallGenerator.value,
-      }));
-    } catch {}
-  };
-
-  try {
-    const raw = localStorage.getItem('orcaxr.settings');
-    if (raw) {
-      const s = JSON.parse(raw);
-      if (s.support) selSupport.value = s.support;
-      if (s.layer !== undefined) inLayer.value = s.layer;
-      if (s.infill !== undefined) inInfill.value = s.infill;
-      if (s.walls !== undefined) inWalls.value = s.walls;
-      if (s.adaptive !== undefined) chkAdaptive.checked = s.adaptive;
-      if (s.wallGen) selWallGenerator.value = s.wallGen;
-    }
-  } catch {}
-
-  updateSettings();
-  selSupport.onchange = applyPrintSettings;
-  chkAdaptive.onchange = applyPrintSettings;
-  for (const el of [inLayer, inInfill, inWalls, selWallGenerator]) el.oninput = () => {
-    if (el === selWallGenerator) updateSettings();
-    applyPrintSettings();
-  };
-  applyPrintSettings();
+  // The new SettingsInspector mounts into the sidebar and drives workspace.customOverrides natively.
+  const settingsHost = document.getElementById('settings-inspector-host');
+  if (settingsHost) {
+    const settingsInspector = new SettingsInspector(settingsHost, workspace);
+    settingsInspector.mount();
+  }
 
   // Filament palette: color swatches that drive paint + 3MF display + slice.
   const swatchWrap = document.getElementById('filament-swatches') as HTMLDivElement;

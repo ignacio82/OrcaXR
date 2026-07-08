@@ -36,10 +36,10 @@
         pointer-events: none; z-index: 5;
       }
       #left-toolbar {
-        position: absolute; top: 20px; left: 20px;
-        display: flex; flex-direction: column; gap: 10px;
-        background: rgba(20, 23, 26, 0.65); backdrop-filter: blur(16px);
-        padding: 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);
+        position: absolute; top: 72px; left: 28px;
+        display: flex; flex-direction: column; gap: 6px;
+        background: var(--oxr-color-bg-card); backdrop-filter: blur(16px);
+        padding: 8px; border-radius: var(--oxr-radius-md); border: 1px solid var(--oxr-color-stroke);
         pointer-events: auto;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
       }
@@ -51,13 +51,17 @@
         background: rgba(255, 109, 0, 0.2); color: #ff6d00; border: 1px solid rgba(255, 109, 0, 0.4);
       }
       #right-sidebar {
-        position: absolute; top: 20px; right: 20px; width: 320px;
-        background: rgba(20, 23, 26, 0.65); backdrop-filter: blur(16px);
-        padding: 24px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08);
+        position: absolute; top: 72px; right: 28px; width: 340px; bottom: 94px;
+        background: var(--oxr-color-bg-card); backdrop-filter: blur(16px);
+        padding: 24px; border-radius: var(--oxr-radius-lg); border: 1px solid var(--oxr-color-stroke);
         pointer-events: auto; display: flex; flex-direction: column; gap: 20px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-        max-height: calc(100vh - 40px);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
         overflow-y: auto;
+        z-index: 20;
+      }
+      #bottom-action-bar {
+        position: absolute; bottom: 28px; right: 28px;
+        display: flex; gap: 12px; z-index: 30; pointer-events: auto;
       }
       #right-sidebar::-webkit-scrollbar { width: 6px; }
       #right-sidebar::-webkit-scrollbar-track { background: transparent; }
@@ -273,7 +277,7 @@
         #left-toolbar::-webkit-scrollbar { display: none; }
         .tool-btn { padding: 10px 12px; font-size: 13px; white-space: nowrap; }
         #right-sidebar {
-          top: auto; left: 8px; right: 8px; bottom: 66px; width: auto;
+          top: auto; left: 8px; right: 8px; bottom: 84px; width: auto;
           max-height: 46vh; padding: 12px 16px 16px; gap: 14px;
         }
         /* The sheet header doubles as its collapse toggle (wired in main.ts). */
@@ -281,6 +285,9 @@
         #right-sidebar h2::after { content: ' ▾'; color: #ffb74d; font-size: 0.8em; }
         #right-sidebar.collapsed { max-height: 46px; overflow: hidden; }
         #right-sidebar.collapsed h2::after { content: ' ▸'; }
+        #bottom-action-bar {
+          bottom: 66px; right: 8px;
+        }
         /* 16px inputs stop iOS Safari from zooming into focused fields. */
         .action-btn, .cmd-input { font-size: 16px; }
         .action-btn { padding: 12px; margin-bottom: 8px; }
@@ -349,51 +356,9 @@
         <div class="panel" id="heads-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
         </div>
         </details>
-        <details class="insp-section"><summary>Print settings</summary>
-        <div class="panel" id="settings-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
-          <div style="font-size:0.8rem;color:#a0aab5;font-weight:600;">SETTINGS</div>
-          <select id="sel-wall-generator" class="action-btn" style="text-align:left;">
-            <option value="arachne">Wall Generator: Arachne</option>
-            <option value="classic">Wall Generator: Classic (Safe)</option>
-          </select>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#e0e6ee;cursor:pointer;user-select:none;">
-            <input id="chk-wipe-tower-auto" type="checkbox" style="width:16px;height:16px;accent-color:#ffb74d;cursor:pointer;" />
-            Auto-position wipe tower
-          </label>
-        </div>
-        <div class="panel" id="print-settings-panel" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px;">
-          <div style="font-size:0.8rem;color:var(--oxr-color-text-muted);font-weight:600;">PRINT SETTINGS</div>
-          <select id="sel-support" class="action-btn" style="text-align:left;">
-            <option value="off">Supports: Off</option>
-            <option value="on_build_plate">Supports: On build plate only</option>
-            <option value="everywhere">Supports: Everywhere</option>
-            <option value="tree">Supports: Tree (everywhere)</option>
-          </select>
-          <label style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#e0e6ee;">
-            Layer height (mm)
-            <input id="in-layer-height" type="number" step="0.02" min="0.04" max="0.6"
-              style="width:70px;box-sizing:border-box;background:var(--oxr-color-bg-sunken);color:#fff;border:1px solid var(--oxr-color-stroke);border-radius:6px;padding:6px;font-size:13px;text-align:right;" />
-          </label>
-          <label style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#e0e6ee;">
-            Infill (%)
-            <input id="in-infill" type="number" step="5" min="0" max="100"
-              style="width:70px;box-sizing:border-box;background:var(--oxr-color-bg-sunken);color:#fff;border:1px solid var(--oxr-color-stroke);border-radius:6px;padding:6px;font-size:13px;text-align:right;" />
-          </label>
-          <label style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#e0e6ee;">
-            Walls (loops)
-            <input id="in-walls" type="number" step="1" min="1" max="10"
-              style="width:70px;box-sizing:border-box;background:var(--oxr-color-bg-sunken);color:#fff;border:1px solid var(--oxr-color-stroke);border-radius:6px;padding:6px;font-size:13px;text-align:right;" />
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#e0e6ee;cursor:pointer;user-select:none;">
-            <input id="chk-adaptive-layers" type="checkbox" style="width:16px;height:16px;accent-color:#ffb74d;cursor:pointer;" />
-            Adaptive layer height
-          </label>
-        </div>
         </details>
-        <!-- Primary + menu actions — rendered from the ActionRegistry by DomShell. -->
-        <div class="panel" id="action-panel">
-          <input type="file" id="file-input" accept=".stl,.3mf" multiple style="display:none;" />
-        </div>
+        <!-- Data-driven Settings Inspector -->
+        <div id="settings-inspector-host" style="flex: 1; display: flex; flex-direction: column; min-height: 200px;"></div>
         <div class="panel" id="filament-panel">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
             <span style="font-size:0.8rem;color:#a0aab5;font-weight:600;">FILAMENTS</span>
@@ -491,6 +456,12 @@
           <div id="progress-container" style="display: none; width: 100%; background-color: rgba(255,255,255,0.1); border-radius: 4px; margin-top: 8px;">
             <div id="progress-bar" style="width: 0%; height: 6px; background-color: #ffb74d; border-radius: 4px; transition: width 0.1s linear;"></div>
           </div>
+        </div>
+      </div>
+      <!-- Primary actions — rendered from the ActionRegistry by DomShell. -->
+      <div id="bottom-action-bar">
+        <div id="action-panel" style="display:flex; gap:12px;">
+          <input type="file" id="file-input" accept=".stl,.3mf" multiple style="display:none;" />
         </div>
       </div>
     </div>
