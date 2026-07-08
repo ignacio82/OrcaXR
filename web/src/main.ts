@@ -968,66 +968,149 @@ document.addEventListener('DOMContentLoaded', async () => {
     actionCtx.setTool('move');
   };
 
-  uiState.subscribe((s) => {
+  let currentSettingsTool = '';
+  const updateToolSettings = () => {
+    const s = uiState.get();
+    const hasSelection = !!workspace.getSelectedModelScale();
+
     if (s.activeTool === 'paint' || s.activeTool === 'support_paint' || s.activeTool === 'seam_paint' || s.activeTool === 'fuzzy_skin') {
       toolSettingsPanel.style.display = 'block';
-      if (s.activeTool === 'paint') {
-        toolSettingsTitle.textContent = 'Color Painting';
-        toolSettingsContent.innerHTML = `
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-size:13px; color:#a0aab5;">Brush Size (mm)</span>
-            <span id="lbl-brush-size" style="font-size:13px;">${workspace.brushRadiusMm.toFixed(1)}</span>
-          </div>
-          <input type="range" id="in-brush-size" min="0.1" max="20" step="0.1" value="${workspace.brushRadiusMm}" style="accent-color:var(--oxr-color-accent);" />
+      if (currentSettingsTool !== s.activeTool) {
+        currentSettingsTool = s.activeTool;
+        if (s.activeTool === 'paint') {
+          toolSettingsTitle.textContent = 'Color Painting';
+          toolSettingsContent.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:13px; color:#a0aab5;">Brush Size (mm)</span>
+              <span id="lbl-brush-size" style="font-size:13px;">${workspace.brushRadiusMm.toFixed(1)}</span>
+            </div>
+            <input type="range" id="in-brush-size" min="0.1" max="20" step="0.1" value="${workspace.brushRadiusMm}" style="accent-color:var(--oxr-color-accent);" />
+            
+            <div style="font-size:13px; color:#a0aab5; margin-top:8px;">Active Color</div>
+            <div id="paint-tool-swatches" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+          `;
           
-          <div style="font-size:13px; color:#a0aab5; margin-top:8px;">Active Color</div>
-          <div id="paint-tool-swatches" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
-        `;
-        
-        const inBrushSize = byId('in-brush-size') as HTMLInputElement;
-        const lblBrushSize = byId('lbl-brush-size');
-        inBrushSize.oninput = () => {
-          const val = parseFloat(inBrushSize.value);
-          workspace.brushRadiusMm = val;
-          lblBrushSize.textContent = val.toFixed(1);
-        };
-        
-        const swatchesContainer = byId('paint-tool-swatches');
-        const activeHex = workspace.getActivePaintColorHex();
-        workspace.palette.list().forEach((slot) => {
-          const btn = document.createElement('button');
-          btn.style.cssText = `width:28px; height:28px; border-radius:14px; border:2px solid ${activeHex === slot.color ? '#fff' : 'transparent'}; background:${slot.color}; cursor:pointer;`;
-          btn.onclick = () => {
-            workspace.setActivePaintColor(slot.color);
-            uiState.update({ ...s });
+          const inBrushSize = byId('in-brush-size') as HTMLInputElement;
+          const lblBrushSize = byId('lbl-brush-size');
+          inBrushSize.oninput = () => {
+            const val = parseFloat(inBrushSize.value);
+            workspace.brushRadiusMm = val;
+            lblBrushSize.textContent = val.toFixed(1);
           };
-          swatchesContainer.appendChild(btn);
-        });
-      } else {
-        let title = 'Tool Settings';
-        if (s.activeTool === 'support_paint') title = 'Support Painting';
-        if (s.activeTool === 'seam_paint') title = 'Seam Painting';
-        if (s.activeTool === 'fuzzy_skin') title = 'Fuzzy-skin Painting';
+          
+          const swatchesContainer = byId('paint-tool-swatches');
+          const activeHex = workspace.getActivePaintColorHex();
+          workspace.palette.list().forEach((slot) => {
+            const btn = document.createElement('button');
+            btn.style.cssText = `width:28px; height:28px; border-radius:14px; border:2px solid ${activeHex === slot.color ? '#fff' : 'transparent'}; background:${slot.color}; cursor:pointer;`;
+            btn.onclick = () => {
+              workspace.setActivePaintColor(slot.color);
+              uiState.update({ ...s });
+            };
+            swatchesContainer.appendChild(btn);
+          });
+        } else {
+          let title = 'Tool Settings';
+          if (s.activeTool === 'support_paint') title = 'Support Painting';
+          if (s.activeTool === 'seam_paint') title = 'Seam Painting';
+          if (s.activeTool === 'fuzzy_skin') title = 'Fuzzy-skin Painting';
+          toolSettingsTitle.textContent = title;
+          toolSettingsContent.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:13px; color:#a0aab5;">Brush Size (mm)</span>
+              <span id="lbl-brush-size" style="font-size:13px;">${workspace.brushRadiusMm.toFixed(1)}</span>
+            </div>
+            <input type="range" id="in-brush-size" min="0.1" max="20" step="0.1" value="${workspace.brushRadiusMm}" style="accent-color:var(--oxr-color-accent);" />
+          `;
+          const inBrushSize = byId('in-brush-size') as HTMLInputElement;
+          const lblBrushSize = byId('lbl-brush-size');
+          inBrushSize.oninput = () => {
+            const val = parseFloat(inBrushSize.value);
+            workspace.brushRadiusMm = val;
+            lblBrushSize.textContent = val.toFixed(1);
+          };
+        }
+      }
+    } else if (hasSelection && (s.activeTool === 'move' || s.activeTool === 'rotate' || s.activeTool === 'scale')) {
+      toolSettingsPanel.style.display = 'block';
+      
+      const pos = workspace.getSelectedModelPosition() || new THREE.Vector3();
+      const rot = workspace.getSelectedModelRotation() || new THREE.Euler();
+      const scl = workspace.getSelectedModelScale() || new THREE.Vector3(1, 1, 1);
+      
+      let xVal = 0, yVal = 0, zVal = 0;
+      if (s.activeTool === 'move') {
+        xVal = pos.x; yVal = pos.y; zVal = pos.z;
+      } else if (s.activeTool === 'rotate') {
+        xVal = THREE.MathUtils.radToDeg(rot.x);
+        yVal = THREE.MathUtils.radToDeg(rot.y);
+        zVal = THREE.MathUtils.radToDeg(rot.z);
+      } else if (s.activeTool === 'scale') {
+        xVal = scl.x * 100; yVal = scl.y * 100; zVal = scl.z * 100;
+      }
+
+      if (currentSettingsTool !== s.activeTool) {
+        currentSettingsTool = s.activeTool;
+        let title = '';
+        if (s.activeTool === 'move') title = 'Move (mm)';
+        else if (s.activeTool === 'rotate') title = 'Rotate (deg)';
+        else if (s.activeTool === 'scale') title = 'Scale (%)';
+        
         toolSettingsTitle.textContent = title;
         toolSettingsContent.innerHTML = `
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-size:13px; color:#a0aab5;">Brush Size (mm)</span>
-            <span id="lbl-brush-size" style="font-size:13px;">${workspace.brushRadiusMm.toFixed(1)}</span>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:13px; color:#a0aab5; width:20px;">X</span>
+              <input type="number" id="ts-x" step="0.1" style="width:100px; background:#1e293b; border:1px solid #334155; color:#fff; padding:4px; border-radius:4px; font-size:13px;" />
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:13px; color:#a0aab5; width:20px;">Y</span>
+              <input type="number" id="ts-y" step="0.1" style="width:100px; background:#1e293b; border:1px solid #334155; color:#fff; padding:4px; border-radius:4px; font-size:13px;" />
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:13px; color:#a0aab5; width:20px;">Z</span>
+              <input type="number" id="ts-z" step="0.1" style="width:100px; background:#1e293b; border:1px solid #334155; color:#fff; padding:4px; border-radius:4px; font-size:13px;" />
+            </div>
           </div>
-          <input type="range" id="in-brush-size" min="0.1" max="20" step="0.1" value="${workspace.brushRadiusMm}" style="accent-color:var(--oxr-color-accent);" />
         `;
-        const inBrushSize = byId('in-brush-size') as HTMLInputElement;
-        const lblBrushSize = byId('lbl-brush-size');
-        inBrushSize.oninput = () => {
-          const val = parseFloat(inBrushSize.value);
-          workspace.brushRadiusMm = val;
-          lblBrushSize.textContent = val.toFixed(1);
+        
+        const inX = byId('ts-x') as HTMLInputElement;
+        const inY = byId('ts-y') as HTMLInputElement;
+        const inZ = byId('ts-z') as HTMLInputElement;
+        
+        const onTransformChange = () => {
+          const x = parseFloat(inX.value) || 0;
+          const y = parseFloat(inY.value) || 0;
+          const z = parseFloat(inZ.value) || 0;
+          if (s.activeTool === 'move') {
+            workspace.setSelectedModelPosition(x, y, z);
+          } else if (s.activeTool === 'rotate') {
+            workspace.setSelectedModelRotation(THREE.MathUtils.degToRad(x), THREE.MathUtils.degToRad(y), THREE.MathUtils.degToRad(z));
+          } else if (s.activeTool === 'scale') {
+            workspace.setSelectedModelScale(x / 100, y / 100, z / 100);
+          }
         };
+        
+        inX.onchange = onTransformChange;
+        inY.onchange = onTransformChange;
+        inZ.onchange = onTransformChange;
       }
+      
+      const inX = byId('ts-x') as HTMLInputElement;
+      const inY = byId('ts-y') as HTMLInputElement;
+      const inZ = byId('ts-z') as HTMLInputElement;
+      if (inX && document.activeElement !== inX) inX.value = xVal.toFixed(2);
+      if (inY && document.activeElement !== inY) inY.value = yVal.toFixed(2);
+      if (inZ && document.activeElement !== inZ) inZ.value = zVal.toFixed(2);
+      
     } else {
       toolSettingsPanel.style.display = 'none';
+      currentSettingsTool = '';
     }
-  });
+  };
+
+  uiState.subscribe(updateToolSettings);
+  workspace.onSelectionTransformChanged = updateToolSettings;
 
   // The command palette: every action, searchable, one Ctrl/⌘-K away.
   const palette = new CommandPalette(registry, actionCtx, uiState);

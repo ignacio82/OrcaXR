@@ -236,6 +236,8 @@ export class OrcaWorkspace extends xb.Script {
   private selectedModel: ModelEntry | null = null;
   /** Fired when the selection changes so the UI can enable selection actions. */
   public onSelectionChanged: ((hasSelection: boolean) => void) | null = null;
+  /** Fired when the selected model is transformed (moved, rotated, scaled). */
+  public onSelectionTransformChanged: (() => void) | null = null;
   public onSliceStateChanged: ((isSlicing: boolean) => void) | null = null;
   private statusText: { text: string } | null = null;
   private sliceModalCard: any = null;
@@ -403,6 +405,9 @@ export class OrcaWorkspace extends xb.Script {
     this.transformControls.addEventListener('dragging-changed', (event) => {
       if (this.orbitControls) this.orbitControls.enabled = !event.value;
     });
+    this.transformControls.addEventListener('change', () => {
+      if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
+    });
     this.add(this.transformControls.getHelper());
 
     if (this.models.length > 0) {
@@ -426,6 +431,37 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus(`Selected model`);
     }
     if (this.onSelectionChanged) this.onSelectionChanged(true);
+  }
+
+  public getSelectedModelPosition(): THREE.Vector3 | null {
+    return this.selectedModel ? this.selectedModel.viewer.position : null;
+  }
+  public getSelectedModelRotation(): THREE.Euler | null {
+    return this.selectedModel ? this.selectedModel.viewer.rotation : null;
+  }
+  public getSelectedModelScale(): THREE.Vector3 | null {
+    return this.selectedModel ? this.selectedModel.viewer.scale : null;
+  }
+  public setSelectedModelPosition(x: number, y: number, z: number) {
+    if (this.selectedModel) {
+      this.selectedModel.viewer.position.set(x, y, z);
+      this.selectedModel.viewer.updateMatrixWorld();
+      if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
+    }
+  }
+  public setSelectedModelRotation(x: number, y: number, z: number) {
+    if (this.selectedModel) {
+      this.selectedModel.viewer.rotation.set(x, y, z);
+      this.selectedModel.viewer.updateMatrixWorld();
+      if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
+    }
+  }
+  public setSelectedModelScale(x: number, y: number, z: number) {
+    if (this.selectedModel) {
+      this.selectedModel.viewer.scale.set(x, y, z);
+      this.selectedModel.viewer.updateMatrixWorld();
+      if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
+    }
   }
 
   public unselectModel() {
