@@ -147,10 +147,9 @@ export class ActionContext {
   }
   setMode(mode: WorkspaceMode): void {
     this.ui.update({ mode });
-    // Prepare/Paint map onto the existing modal-tool machinery; Preview is a
-    // read-only inspection surface that doesn't own a manipulation tool.
-    if (mode === 'paint') this.workspace.setTool('paint');
-    else if (mode === 'prepare') this.workspace.setTool('move');
+    // Prepare maps onto the existing modal-tool machinery; Preview is a
+    // true mode switch in the renderer.
+    if (mode === 'prepare') this.workspace.setTool('move');
   }
 
   // ---- Slice / preview / output --------------------------------------

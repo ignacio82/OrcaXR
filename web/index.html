@@ -346,6 +346,16 @@
 
       <!-- Tool rail — rendered from the shared ActionRegistry by DomShell. -->
       <div id="left-toolbar"></div>
+
+      <!-- Contextual Tool Settings (e.g. Paint Brush size) -->
+      <div id="tool-settings-panel" style="display:none; position:absolute; top:72px; left:90px; width:260px; background:var(--oxr-color-bg-card); backdrop-filter:blur(16px); padding:16px; border-radius:12px; border:1px solid var(--oxr-color-stroke); box-shadow:0 8px 32px rgba(0,0,0,0.4); z-index:20; color:#fff;">
+        <div style="font-size:0.9rem; font-weight:700; margin-bottom:12px; display:flex; justify-content:space-between;">
+          <span id="tool-settings-title">Tool Settings</span>
+          <button id="btn-close-tool-settings" style="background:none; border:none; color:#a0aab5; cursor:pointer; font-size:16px; line-height:1;">×</button>
+        </div>
+        <div id="tool-settings-content" style="display:flex; flex-direction:column; gap:12px;"></div>
+      </div>
+
       <div id="right-sidebar">
         <h2>OrcaXR Slicer</h2>
         <div id="preflight-banners" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;"></div>

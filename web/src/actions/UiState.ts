@@ -12,7 +12,7 @@
  */
 
 /** Which modal surface the workspace is in — drives the tool rail + inspector. */
-export type WorkspaceMode = 'prepare' | 'paint' | 'preview';
+export type WorkspaceMode = 'prepare' | 'preview';
 
 export interface UiStateShape {
   /** Active modal surface. */

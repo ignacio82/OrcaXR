@@ -959,6 +959,76 @@ document.addEventListener('DOMContentLoaded', async () => {
     menuBar: byId('menu-bar-host'),
   });
 
+  const toolSettingsPanel = byId('tool-settings-panel');
+  const toolSettingsTitle = byId('tool-settings-title');
+  const toolSettingsContent = byId('tool-settings-content');
+  const btnCloseToolSettings = byId('btn-close-tool-settings');
+  
+  btnCloseToolSettings.onclick = () => {
+    actionCtx.setTool('move');
+  };
+
+  uiState.subscribe((s) => {
+    if (s.activeTool === 'paint' || s.activeTool === 'support_paint' || s.activeTool === 'seam_paint' || s.activeTool === 'fuzzy_skin') {
+      toolSettingsPanel.style.display = 'block';
+      if (s.activeTool === 'paint') {
+        toolSettingsTitle.textContent = 'Color Painting';
+        toolSettingsContent.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:13px; color:#a0aab5;">Brush Size (mm)</span>
+            <span id="lbl-brush-size" style="font-size:13px;">${workspace.brushRadiusMm.toFixed(1)}</span>
+          </div>
+          <input type="range" id="in-brush-size" min="0.1" max="20" step="0.1" value="${workspace.brushRadiusMm}" style="accent-color:var(--oxr-color-accent);" />
+          
+          <div style="font-size:13px; color:#a0aab5; margin-top:8px;">Active Color</div>
+          <div id="paint-tool-swatches" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+        `;
+        
+        const inBrushSize = byId('in-brush-size') as HTMLInputElement;
+        const lblBrushSize = byId('lbl-brush-size');
+        inBrushSize.oninput = () => {
+          const val = parseFloat(inBrushSize.value);
+          workspace.brushRadiusMm = val;
+          lblBrushSize.textContent = val.toFixed(1);
+        };
+        
+        const swatchesContainer = byId('paint-tool-swatches');
+        const activeHex = workspace.getActivePaintColorHex();
+        workspace.palette.list().forEach((slot) => {
+          const btn = document.createElement('button');
+          btn.style.cssText = `width:28px; height:28px; border-radius:14px; border:2px solid ${activeHex === slot.color ? '#fff' : 'transparent'}; background:${slot.color}; cursor:pointer;`;
+          btn.onclick = () => {
+            workspace.setActivePaintColor(slot.color);
+            uiState.update({ ...s });
+          };
+          swatchesContainer.appendChild(btn);
+        });
+      } else {
+        let title = 'Tool Settings';
+        if (s.activeTool === 'support_paint') title = 'Support Painting';
+        if (s.activeTool === 'seam_paint') title = 'Seam Painting';
+        if (s.activeTool === 'fuzzy_skin') title = 'Fuzzy-skin Painting';
+        toolSettingsTitle.textContent = title;
+        toolSettingsContent.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:13px; color:#a0aab5;">Brush Size (mm)</span>
+            <span id="lbl-brush-size" style="font-size:13px;">${workspace.brushRadiusMm.toFixed(1)}</span>
+          </div>
+          <input type="range" id="in-brush-size" min="0.1" max="20" step="0.1" value="${workspace.brushRadiusMm}" style="accent-color:var(--oxr-color-accent);" />
+        `;
+        const inBrushSize = byId('in-brush-size') as HTMLInputElement;
+        const lblBrushSize = byId('lbl-brush-size');
+        inBrushSize.oninput = () => {
+          const val = parseFloat(inBrushSize.value);
+          workspace.brushRadiusMm = val;
+          lblBrushSize.textContent = val.toFixed(1);
+        };
+      }
+    } else {
+      toolSettingsPanel.style.display = 'none';
+    }
+  });
+
   // The command palette: every action, searchable, one Ctrl/⌘-K away.
   const palette = new CommandPalette(registry, actionCtx, uiState);
   palette.mount(

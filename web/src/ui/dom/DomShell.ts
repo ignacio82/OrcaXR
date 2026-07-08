@@ -28,7 +28,6 @@ interface Bound {
 
 const MODES: { id: WorkspaceMode; label: string }[] = [
   { id: 'prepare', label: 'Prepare' },
-  { id: 'paint', label: 'Paint' },
   { id: 'preview', label: 'Preview' },
 ];
 

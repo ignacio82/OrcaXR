@@ -491,6 +491,12 @@ export class OrcaWorkspace extends xb.Script {
 
   private tool: 'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint' = 'move';
   private activePaintColor = new THREE.Color(0xff0000); // Default to red
+  public setActivePaintColor(hex: string): void {
+    this.activePaintColor.set(hex);
+  }
+  public getActivePaintColorHex(): string {
+    return '#' + this.activePaintColor.getHexString();
+  }
   /** Paint brush radius in mm (model space). */
   public brushRadiusMm = 4;
   /** The set of filament slots — shared by paint, 3MF display, and slicing. */
