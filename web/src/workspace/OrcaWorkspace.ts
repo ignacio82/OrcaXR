@@ -144,6 +144,7 @@ export async function extract3mfColors(buf: ArrayBuffer): Promise<string[] | nul
 
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
+import { ConvexHull } from 'three/examples/jsm/math/ConvexHull.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SimplifyModifier } from 'three/examples/jsm/modifiers/SimplifyModifier.js';
 import { buildRegistry } from '../actions/catalog';
@@ -2415,34 +2416,52 @@ export class OrcaWorkspace extends xb.Script {
   public autoOrientSelectedModel() {
     if (!this.selectedModel) return;
     const entry = this.selectedModel;
-    const originalQuat = entry.viewer.quaternion.clone();
+    const posAttr = entry.raw.attributes.position;
+    if (!posAttr) return;
+
+    this.setStatus('Auto-orienting...');
     
-    const candidates = [
-      new THREE.Quaternion(),
-      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2),
-      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2),
-      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI),
-      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2),
-      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2),
-    ];
-    
-    let bestQuat = originalQuat;
-    let minHeight = Infinity;
-    
-    for (const q of candidates) {
-      entry.viewer.quaternion.copy(q);
-      entry.viewer.updateMatrixWorld();
-      const box = new THREE.Box3().setFromObject(entry.viewer);
-      const height = box.max.y - box.min.y;
-      if (height < minHeight) {
-        minHeight = height;
-        bestQuat = q;
+    // Defer computation slightly to let UI update
+    setTimeout(() => {
+      const scale = entry.viewer.scale;
+      const pts: THREE.Vector3[] = [];
+      const step = Math.max(1, Math.floor(posAttr.count / 100000));
+      for (let i = 0; i < posAttr.count; i += step) {
+        pts.push(new THREE.Vector3(posAttr.getX(i) * scale.x, posAttr.getY(i) * scale.y, posAttr.getZ(i) * scale.z));
       }
-    }
-    
-    entry.viewer.quaternion.copy(bestQuat);
-    this.snapToBed(entry);
-    this.setStatus('Auto-oriented model');
+      
+      const hull = new ConvexHull().setFromPoints(pts);
+      const normalAreas: { normal: THREE.Vector3, area: number }[] = [];
+      
+      for (let i = 0; i < hull.faces.length; i++) {
+        const f = hull.faces[i];
+        const e1 = new THREE.Vector3().subVectors(f.edge.next.vertex.point, f.edge.vertex.point);
+        const e2 = new THREE.Vector3().subVectors(f.edge.prev.vertex.point, f.edge.vertex.point);
+        const area = new THREE.Vector3().crossVectors(e1, e2).length() * 0.5;
+        
+        let found = false;
+        for (const na of normalAreas) {
+          if (na.normal.dot(f.normal) > 0.999) {
+            na.area += area;
+            found = true;
+            break;
+          }
+        }
+        if (!found) normalAreas.push({ normal: f.normal.clone(), area });
+      }
+      
+      if (normalAreas.length > 0) {
+        normalAreas.sort((a, b) => b.area - a.area);
+        const bestNormal = normalAreas[0].normal;
+        
+        const quat = new THREE.Quaternion().setFromUnitVectors(bestNormal, new THREE.Vector3(0, -1, 0));
+        entry.viewer.quaternion.copy(quat);
+        
+        this.snapToBed(entry);
+        if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
+        this.setStatus('Auto-oriented model');
+      }
+    }, 10);
   }
 
   private checkLoadButtonAndTrigger() {
