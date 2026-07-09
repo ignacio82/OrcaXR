@@ -317,3 +317,5 @@ logic verified against `src/OrcaSlicer.cpp` in the submodule):
 ## Web UI UX gotchas
 
 - **Multi-extruder filament selectors:** When the selected printer profile has multiple extruders (e.g., Snapmaker U1), the UI generates individual filament dropdowns for each extruder head (H-1, H-2, etc.). The global `sel-filament` dropdown MUST be hidden in this state (`display: 'none'`) to avoid redundancy and user confusion. Do not reintroduce a visible global filament dropdown alongside the per-head dropdowns.
+
+21. **`normalize_fdm()` crashes with a null-deref when traversing the component graph if no options are set.** Patch `0076-normalize-fdm-null-deref.patch` fixes this for the server backend.

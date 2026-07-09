@@ -27,6 +27,7 @@ import { buildRegistry } from './actions/catalog';
 import { DomShell } from './ui/dom/DomShell';
 import { CommandPalette } from './ui/dom/CommandPalette';
 import { SettingsInspector } from './ui/dom/SettingsInspector';
+import { AiConfigDialog } from './ui/dom/AiConfigDialog';
 
 declare global {
   interface Window { ORCAXR_VERSION: string }
@@ -877,8 +878,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
       statusText.textContent = 'Load a model first before using AI Smart Paint.';
       return;
     }
-    statusText.textContent = 'Running AI Smart Paint...';
-    setTimeout(() => { statusText.textContent = 'AI Smart Paint complete.'; }, 2000);
+    workspace.smartPaint();
   };
 
   btnAiSemantic.onclick = () => {
@@ -886,8 +886,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
       statusText.textContent = 'Load a model first before using Semantic Planner.';
       return;
     }
-    statusText.textContent = 'Running Semantic Paint Planner...';
-    setTimeout(() => { statusText.textContent = 'Semantic Paint Planner complete.'; }, 2000);
+    workspace.smartPaintImage();
   };
 }
 
@@ -965,7 +964,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnCloseToolSettings = byId('btn-close-tool-settings');
   
   btnCloseToolSettings.onclick = () => {
-    actionCtx.setTool('move');
+    actionCtx.setTool('');
   };
 
   let currentSettingsTool = '';
@@ -1114,6 +1113,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // The command palette: every action, searchable, one Ctrl/⌘-K away.
   const palette = new CommandPalette(registry, actionCtx, uiState);
+  
+  AiConfigDialog.init();
+  document.getElementById('cmd-ai-config')?.addEventListener('click', () => {
+    AiConfigDialog.show();
+  });
+
   palette.mount(
     byId('command-palette'),
     document.getElementById('cmd-input') as HTMLInputElement,

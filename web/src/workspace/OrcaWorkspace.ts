@@ -175,6 +175,8 @@ import { evaluateTopCover } from '../features/TopCoverRule';
 import { scoreWipeTower, parseBias, type AabbXY } from '../features/WipeTowerPlacement';
 import { deriveTriangleFilaments } from '../features/PaintedSlice';
 import { splitConnectedComponents } from '../features/MeshSplit';
+import { AiPaintService } from '../features/AiPaintService';
+import { SemanticPaintPlanner } from '../features/SemanticPaintPlanner';
 import { cutByPlane } from '../features/MeshCut';
 import { writeMinimal3mf } from '../features/Write3mf';
 import { writeProject3mf, parseProject3mf, type ProjectMeta, type ProjectObjectMeta } from '../features/Project3mf';
@@ -405,6 +407,10 @@ export class OrcaWorkspace extends xb.Script {
     this.transformControls = new TransformControls(xb.core.camera, canvas);
     this.transformControls.addEventListener('dragging-changed', (event) => {
       if (this.orbitControls) this.orbitControls.enabled = !event.value;
+      if (!event.value && this.selectedModel) {
+        this.snapToBed(this.selectedModel);
+        if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
+      }
     });
     this.transformControls.addEventListener('change', () => {
       if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
@@ -454,6 +460,7 @@ export class OrcaWorkspace extends xb.Script {
     if (this.selectedModel) {
       this.selectedModel.viewer.rotation.set(x, y, z);
       this.selectedModel.viewer.updateMatrixWorld();
+      this.snapToBed(this.selectedModel);
       if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
     }
   }
@@ -461,6 +468,7 @@ export class OrcaWorkspace extends xb.Script {
     if (this.selectedModel) {
       this.selectedModel.viewer.scale.set(x, y, z);
       this.selectedModel.viewer.updateMatrixWorld();
+      this.snapToBed(this.selectedModel);
       if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
     }
   }
@@ -662,7 +670,7 @@ export class OrcaWorkspace extends xb.Script {
     if (this.tool === 'move') {
       entry.viewer.position.set(
         THREE.MathUtils.clamp(d.startPos.x + delta.x, -halfX, halfX),
-        0,
+        d.startPos.y,
         THREE.MathUtils.clamp(d.startPos.z + delta.z, -halfZ, halfZ),
       );
       this.showValues(`x ${(entry.viewer.position.x / (MM * WORKSPACE_SCALE)).toFixed(1)}  y ${(-entry.viewer.position.z / (MM * WORKSPACE_SCALE)).toFixed(1)} mm`);
@@ -684,8 +692,8 @@ export class OrcaWorkspace extends xb.Script {
     this.drag = null;
     const halfX = (this.bedMm.x * MM * WORKSPACE_SCALE) / 2;
     const halfZ = (this.bedMm.y * MM * WORKSPACE_SCALE) / 2;
-    for (const { viewer } of this.models) {
-      viewer.position.y = 0;
+    for (const { viewer, display } of this.models) {
+      this.snapToBed({ viewer, display });
       viewer.position.x = THREE.MathUtils.clamp(viewer.position.x, -halfX, halfX);
       viewer.position.z = THREE.MathUtils.clamp(viewer.position.z, -halfZ, halfZ);
     }
@@ -2390,9 +2398,9 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
-  private snapToBed(entry: { viewer: THREE.Object3D }) {
+  private snapToBed(entry: { viewer: THREE.Object3D; display?: THREE.Object3D }) {
     entry.viewer.updateMatrixWorld();
-    const box = new THREE.Box3().setFromObject(entry.viewer);
+    const box = new THREE.Box3().setFromObject(entry.display || entry.viewer);
     const lowestWorldY = box.min.y;
     const bedWorldY = this.workspace.getWorldPosition(new THREE.Vector3()).y;
     entry.viewer.position.y += (bedWorldY - lowestWorldY);
@@ -3613,6 +3621,99 @@ export class OrcaWorkspace extends xb.Script {
     root.add(makeAiBtn('Smart Paint (AI)', 'Running Smart Paint...'));
     root.add(makeAiBtn('Semantic Planner', 'Running Semantic Planner...'));
   }
+
+  async smartPaint() {
+    if (!this.selectedModel) {
+      this.setStatus('Select a model first to paint');
+      return;
+    }
+    const prompt = window.prompt("Enter what you want to paint (e.g. 'Paint the top surface red')");
+    if (!prompt) return;
+
+    this.setStatus('Generating AI Paint Plan...');
+    try {
+      const plan = await AiPaintService.generatePaintPlan(prompt);
+      await this.applySemanticPaintPlan(plan);
+      this.setStatus('Smart Paint applied successfully');
+    } catch (e: any) {
+      this.setStatus('Smart Paint failed: ' + e.message);
+    }
+  }
+
+  async smartPaintImage() {
+    if (!this.selectedModel) {
+      this.setStatus('Select a model first to paint');
+      return;
+    }
+    const prompt = window.prompt("Enter instructions for painting with an image");
+    if (!prompt) return;
+
+    // Open file picker for image
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64Url = reader.result as string;
+        const base64 = base64Url.split(',')[1]; // remove data:image/...;base64,
+        this.setStatus('Generating AI Paint Plan with Image...');
+        try {
+          const plan = await AiPaintService.generatePaintPlan(prompt, base64);
+          await this.applySemanticPaintPlan(plan);
+          this.setStatus('Smart Paint (Image) applied successfully');
+        } catch (e: any) {
+          this.setStatus('Smart Paint failed: ' + e.message);
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  }
+
+  async applySemanticPaintPlan(plan: any) {
+    if (!this.selectedModel) return;
+    const mesh = this.selectedModel.display;
+    const geometry = mesh.geometry as THREE.BufferGeometry;
+    if (!geometry.boundsTree) {
+       geometry.computeBoundsTree();
+    }
+    
+    // We need a dummy camera spec
+    const camera = {
+        widthPx: 512,
+        heightPx: 512,
+        projMatrixRowMajor: new Float32Array(16),
+        viewMatrixRowMajor: new Float32Array(16)
+    };
+    
+    const palette = this.palette.filaments.map(f => ({ slot: f.id, lab: { l:50, a:0, b:0 } }));
+    
+    const resolved = SemanticPaintPlanner.resolve(geometry.boundsTree, camera, plan, palette);
+    if (!resolved) {
+      this.setStatus('Failed to resolve AI paint plan on mesh.');
+      return;
+    }
+
+    // Convert resolved.perTriangleSlot to colors
+    const colors = new Float32Array(geometry.attributes.position.count * 3);
+    for (let i = 0; i < resolved.perTriangleSlot.length; i++) {
+      const slot = resolved.perTriangleSlot[i];
+      const fil = this.palette.filaments.find(f => f.id === slot) || this.palette.filaments[0];
+      const c = new THREE.Color(fil.color);
+      // set color for 3 vertices of triangle
+      for (let v = 0; v < 3; v++) {
+        colors[(i * 3 + v) * 3] = c.r;
+        colors[(i * 3 + v) * 3 + 1] = c.g;
+        colors[(i * 3 + v) * 3 + 2] = c.b;
+      }
+    }
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    mesh.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
+  }
+
 }
 
 /** Minimal binary STL writer (non-indexed triangles, recomputed normals). */

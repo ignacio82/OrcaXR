@@ -198,6 +198,15 @@ export class ActionContext {
     this.workspace.setStatus('View Webcam feature called');
   }
 
+  smartPaint(): void {
+    this.workspace.smartPaint();
+  }
+
+  smartPaintImage(): void {
+    this.workspace.smartPaintImage();
+  }
+
+
   // ---- Parity placeholders --------------------------------------------
   // edit.ts
   undo(): void { this.workspace.setStatus('Undo called'); }

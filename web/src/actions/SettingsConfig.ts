@@ -23,14 +23,14 @@ export interface SettingSchema {
   printer: SettingGroup[];
 }
 
-const S = (title: string, rows: [string, 'n'|'e'|'b'|'t', string, string][]): SettingSection => ({
+const S = (title: string, rows: [string, 'n'|'e'|'b'|'t', string, string, string?][]): SettingSection => ({
   title,
   rows: rows.map(r => ({
     label: r[0],
     type: r[1],
     defaultValue: r[2],
     unit: r[3],
-    key: r[0].toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+    key: r[4] ?? r[0].toLowerCase().replace(/[^a-z0-9]+/g, '_'),
   })),
 });
 
@@ -59,10 +59,10 @@ export const SettingsConfig: SettingSchema = {
       S('Jerk (XY)', [['Default','n','9','mm/s'],['Outer wall','n','9','mm/s'],['Inner wall','n','9','mm/s'],['Infill','n','9','mm/s'],['Top surface','n','9','mm/s'],['Initial layer','n','9','mm/s'],['Travel','n','12','mm/s']]),
     ]},
     { id:'support', label:'Support', sections:[
-      S('Support', [['Enable support','b','Off',''],['Type','e','Normal (auto)',''],['Style','e','Grid',''],['Threshold angle','n','30','°'],['On build plate only','b','Off',''],['Top Z distance','n','0.2','mm'],['Bottom Z distance','n','0.2','mm'],['Support/object XY distance','n','0.35','mm'],['Base pattern','e','Rectilinear',''],['Base pattern spacing','n','2.5','mm'],['Interface layers','n','2',''],['Interface spacing','n','0.2','mm'],['Remove small overhangs','b','On','']]),
-      S('Raft', [['Raft layers','n','0',''],['Raft contact Z distance','n','0.1','mm'],['Raft expansion','n','1.5','mm'],['First layer density','n','90','%'],['First layer expansion','n','2','mm']]),
-      S('Tree support', [['Tree support wall loops','n','1',''],['Branch angle','n','40','°'],['Branch distance','n','5','mm'],['Branch diameter','n','5','mm'],['Tip diameter','n','0.8','mm'],['Branch density','n','5','%']]),
-      S('Ooze prevention', [['Enable','b','Off',''],['Temperature variation','n','-5','°C']]),
+      S('Support', [['Enable support','b','Off','','enable_support'],['Type','e','Normal (auto)','','support_type'],['Style','e','Grid','','support_style'],['Threshold angle','n','30','°','support_threshold_angle'],['On build plate only','b','Off','','support_on_build_plate_only'],['Top Z distance','n','0.2','mm','support_top_z_distance'],['Bottom Z distance','n','0.2','mm','support_bottom_z_distance'],['Support/object XY distance','n','0.35','mm','support_object_xy_distance'],['Base pattern','e','Rectilinear','','support_base_pattern'],['Base pattern spacing','n','2.5','mm','support_base_pattern_spacing'],['Interface layers','n','2','','support_interface_top_layers'],['Interface spacing','n','0.2','mm','support_interface_spacing'],['Remove small overhangs','b','On','','support_remove_small_overhang']]),
+      S('Raft', [['Raft layers','n','0','','raft_layers'],['Raft contact Z distance','n','0.1','mm','raft_contact_distance'],['Raft expansion','n','1.5','mm','raft_expansion'],['First layer density','n','90','%','raft_first_layer_density'],['First layer expansion','n','2','mm','raft_first_layer_expansion']]),
+      S('Tree support', [['Tree support wall loops','n','1','','tree_support_wall_count'],['Branch angle','n','40','°','tree_support_branch_angle'],['Branch distance','n','5','mm','tree_support_branch_distance'],['Branch diameter','n','5','mm','tree_support_branch_diameter'],['Tip diameter','n','0.8','mm','tree_support_tip_diameter']]),
+      S('Ooze prevention', [['Enable','b','Off','','ooze_prevention'],['Temperature variation','n','-5','°C','standby_temperature_delta']]),
     ]},
     { id:'others', label:'Others', sections:[
       S('Skirt', [['Skirt loops','n','0',''],['Skirt height','n','1','layers'],['Skirt distance','n','2','mm'],['Skirt speed','n','50','mm/s'],['Draft shield','e','Disabled','']]),

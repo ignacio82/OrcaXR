@@ -46,9 +46,11 @@ export function parseGcodeToolpath(gcode: string, filamentColors?: string[]): To
   let z = 0;
   let e = 0;
   let absoluteE = false;
-  let currentColor = (filamentColors && filamentColors.length > 0)
+  let currentFilamentColor = (filamentColors && filamentColors.length > 0)
     ? new THREE.Color(filamentColors[0]).getHex()
     : DEFAULT_COLOR;
+  let currentColor = currentFilamentColor;
+  let currentType = '';
   let layers = 0;
   let segments = 0;
 
@@ -60,8 +62,13 @@ export function parseGcodeToolpath(gcode: string, filamentColors?: string[]): To
 
     if (line.startsWith(';')) {
       if (line.startsWith(';TYPE:')) {
-        if (!filamentColors || filamentColors.length === 0) {
-          currentColor = TYPE_COLORS[line.slice(6).trim()] ?? DEFAULT_COLOR;
+        currentType = line.slice(6).trim();
+        if (currentType === 'Support' || currentType === 'Support interface') {
+          currentColor = TYPE_COLORS[currentType] ?? DEFAULT_COLOR;
+        } else {
+          currentColor = (!filamentColors || filamentColors.length === 0) 
+            ? (TYPE_COLORS[currentType] ?? DEFAULT_COLOR)
+            : currentFilamentColor;
         }
       } else if (line.startsWith('; CHANGE_LAYER') || line.startsWith(';LAYER_CHANGE')) {
         layers += 1;
@@ -74,7 +81,10 @@ export function parseGcodeToolpath(gcode: string, filamentColors?: string[]): To
       if (match) {
         const toolIndex = parseInt(match[1], 10);
         if (toolIndex >= 0 && toolIndex < filamentColors.length) {
-          currentColor = new THREE.Color(filamentColors[toolIndex]).getHex();
+          currentFilamentColor = new THREE.Color(filamentColors[toolIndex]).getHex();
+          if (currentType !== 'Support' && currentType !== 'Support interface') {
+            currentColor = currentFilamentColor;
+          }
         }
       }
       continue;
