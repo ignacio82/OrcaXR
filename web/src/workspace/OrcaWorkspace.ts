@@ -40,12 +40,16 @@ export async function extract3mfColors(buf: ArrayBuffer): Promise<string[] | nul
     const config = JSON.parse(dec.decode(projectSettings));
     // Displayed colors follow the FILAMENT loaded in each slot, not the
     // physical extruder color (extruder_colour is often one uniform value).
-    const palette: string[] | undefined =
+    const rawPalette: string[] | undefined =
       Array.isArray(config.filament_colour) && config.filament_colour.length
         ? config.filament_colour
         : Array.isArray(config.extruder_colour) && config.extruder_colour.length
           ? config.extruder_colour
           : undefined;
+    const palette = rawPalette?.map((c: string) => {
+      let hex = c.startsWith('#') ? c : `#${c}`;
+      return hex.length === 9 ? hex.substring(0, 7) : hex;
+    });
     if (!palette) {
       console.warn('extract3mfColors: no filament/extruder palette');
       return null;
