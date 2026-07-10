@@ -60,10 +60,14 @@ export class FilamentPalette {
   /** Replace all slots (e.g. from a loaded 3MF's filament_colour). */
   setFrom(colors: string[], types?: string[]) {
     if (!colors.length) return;
-    this.slots = colors.map((c, i) => ({
-      color: c.startsWith('#') ? c : `#${c}`,
-      type: types?.[i] ?? 'PLA',
-    }));
+    this.slots = colors.map((c, i) => {
+      let hex = c.startsWith('#') ? c : `#${c}`;
+      if (hex.length === 9) hex = hex.substring(0, 7); // Strip alpha channel if present (#rrggbbaa -> #rrggbb)
+      return {
+        color: hex,
+        type: types?.[i] ?? 'PLA',
+      };
+    });
     this.emit();
   }
 
