@@ -64,15 +64,15 @@
             <h2 style="font-family: 'Space Grotesk', sans-serif; font-size: 1.5rem; margin-bottom: 20px; color: #fff;">Advanced Usage</h2>
             
             <div style="margin-bottom: 24px;">
-                <h3 style="color: #ffb74d; margin-bottom: 8px; font-family: 'Space Grotesk', sans-serif;">Connecting to a Snapmaker U1</h3>
+                <h3 style="color: #ffb74d; margin-bottom: 8px; font-family: 'Space Grotesk', sans-serif;">Connecting to a Printer</h3>
                 <p style="color: #a0aab5; font-size: 0.95rem; line-height: 1.6; margin-bottom: 12px;">
-                    To bypass browser Mixed Content security policies and connect to your printer over the network:
+                    Chrome 142+ can connect directly to local HTTP Moonraker after Local Network Access permission:
                 </p>
                 <ol style="color: #a0aab5; font-size: 0.95rem; line-height: 1.6; padding-left: 20px;">
-                    <li>Install the <a href="https://github.com/paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware" target="_blank" style="color: #4db6ac;">Extended Firmware</a> on your printer.</li>
-                    <li>Enable Tailscale on the printer.</li>
-                    <li>SSH into your printer as root and run: <code style="background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px; color: #81c784;">tailscale serve --bg http://127.0.0.1:80</code></li>
-                    <li>In OrcaXR, enter your printer's Tailscale HTTPS address (e.g., <code>https://lava.taild5c213.ts.net</code>).</li>
+                    <li>Add the OrcaXR page's exact origin to Moonraker <code>cors_domains</code> and restart Moonraker. For this hosted app, use <code>https://orcaxr.martinez.fyi</code>.</li>
+                    <li>Enter the full printer URL, such as <code>http://192.168.1.50</code> or <code>http://printer.local:7125</code>.</li>
+                    <li>Approve Chrome's Local Network Access prompt. Use HTTP only on a trusted LAN because traffic and uploaded G-code are unencrypted.</li>
+                    <li>Fallback: use an HTTPS reverse proxy, or join the headset and printer to the same tailnet and use <a href="https://github.com/paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware" target="_blank" style="color: #4db6ac;">Extended Firmware</a> with <code>tailscale serve --bg http://127.0.0.1:80</code>. Then enter the resulting <code>https://printer.tailnet-name.ts.net</code> URL.</li>
                 </ol>
             </div>
 
@@ -82,6 +82,7 @@
                     The in-browser WebAssembly (WASM) slicer has a hard memory limit of 4GB, which can cause out-of-memory crashes on extremely large or complex models. 
                     <br><br>
                     To solve this, you can run the <strong>External Slicer</strong> via Docker. This offloads slicing to a dedicated server and uses the <strong>official Snapmaker Orca Slicer</strong> native binary instead of the WASM fork. See the <a href="https://github.com/ignacio82/OrcaXR/tree/main/server" target="_blank" style="color: #4db6ac;">/server directory</a> on GitHub for setup instructions.
+                    Chrome 142+ can connect to a trusted-LAN HTTP server after Local Network Access permission; use HTTPS for remote or untrusted networks.
                 </p>
             </div>
         </section>

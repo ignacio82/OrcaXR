@@ -6,10 +6,16 @@
  * `print=true` to start immediately. The browser can't discover the
  * printer (no mDNS), so the IP is entered by the user and remembered.
  *
- * Note the CORS constraint: Moonraker must list this page's origin in its
- * `[authorization] cors_domains` (e.g. `http://127.0.0.1:8081`), otherwise
- * the browser blocks the response. surfaceError() makes that legible.
+ * Moonraker must list this page's origin in `[authorization] cors_domains`.
+ * On current Chromium, Local Network Access can authorize an HTTPS OrcaXR page
+ * to reach a local HTTP printer; other browsers still need HTTPS or a proxy.
  */
+import {
+  fetchLocalNetwork,
+  localNetworkFailureMessage,
+  normalizeHttpEndpoint,
+} from './LocalNetworkAccess';
+
 export interface PrinterConfig {
   host: string; // ip or hostname, no scheme
   port: number; // Moonraker default 7125
@@ -40,43 +46,38 @@ export interface SendResult {
  * If the host carries an explicit http(s):// scheme — e.g. a Tailscale Serve
  * endpoint `https://<name>.ts.net` or any HTTPS reverse proxy in front of
  * Moonraker — it is used verbatim: no port probing, no scheme fallback.
- * Preserving an https target exactly is what lets an https-hosted OrcaXR reach
- * the printer without the browser's mixed-content block. Otherwise we probe the
- * usual Moonraker/Snapmaker ports over http (dev also gets the origin-stripping
- * vite proxy).
+ * Preserving an explicit target exactly avoids accidental scheme changes.
+ * Bare hosts probe the usual Moonraker/Snapmaker HTTP ports (dev also gets the
+ * origin-stripping Vite proxy).
  */
 function printerBaseUrls(host: string, port: number): string[] {
   const clean = host.trim().replace(/\/$/, '');
-  if (/^https?:\/\//i.test(clean)) return [clean];
+  const normalized = normalizeHttpEndpoint(clean);
+  if (!normalized) return [];
+  if (/^https?:\/\//i.test(clean)) return [normalized];
 
   const isDev = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV;
   const urls: string[] = [];
-  if (clean.includes(':')) {
+  const parsed = new URL(normalized);
+  if (parsed.port) {
     // Host already carries a port (e.g. 192.168.1.50:7125) — don't append one.
     if (isDev) urls.push(`${window.location.origin}/moonraker/${clean}`);
-    urls.push(`http://${clean}`);
+    urls.push(normalized);
     return urls;
   }
   const ports = port === 7125 ? [7125, 80, 8080] : [port];
   for (const p of ports) {
     if (isDev) urls.push(`${window.location.origin}/moonraker/${clean}:${p}`);
-    urls.push(`http://${clean}${p !== 80 ? ':' + p : ''}`);
+    const direct = new URL(normalized);
+    direct.port = p === 80 ? '' : String(p);
+    urls.push(direct.toString().replace(/\/$/, ''));
   }
   return urls;
 }
 
-/** Human-readable reason a fetch to `base` failed, distinguishing the
- *  browser's mixed-content block (https page → http printer) from a plain
- *  unreachable/CORS failure — the former can't be fixed with cors_domains. */
+/** Human-readable transport, Local Network Access, and CORS guidance. */
 function describeFetchFailure(base: string): string {
-  const pageHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'this app';
-  if (pageHttps && base.startsWith('http://')) {
-    return `Mixed content: this HTTPS page (${origin}) can't reach ${base} (http). `
-      + `Use an HTTPS printer URL — e.g. Tailscale Serve → https://<name>.ts.net.`;
-  }
-  return `Could not reach ${base}. Check the printer is on this network and that `
-    + `Moonraker cors_domains includes ${origin}.`;
+  return localNetworkFailureMessage(base, 'printer', 'Moonraker cors_domains');
 }
 
 /** Upload G-code to Moonraker; when startPrint, also begins the job. */
@@ -99,7 +100,7 @@ export async function sendToPrinter(
 
   for (const base of baseUrls) {
     try {
-      const resp = await fetch(`${base}/server/files/upload`, {
+      const resp = await fetchLocalNetwork(`${base}/server/files/upload`, {
         method: 'POST',
         body: form,
       });
@@ -131,7 +132,7 @@ export async function probePrinter(cfg: PrinterConfig): Promise<SendResult> {
   for (const base of baseUrls) {
     const url = `${base}/printer/info`;
     try {
-      const resp = await fetch(url);
+      const resp = await fetchLocalNetwork(url);
       if (!resp.ok) {
         lastErrorMsg = `HTTP ${resp.status} from printer.`;
         continue;

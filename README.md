@@ -22,15 +22,21 @@ To launch OrcaXR, simply visit our hosted web application:
 *Note: You do not need to install an APK or compile any native code to run the slicer.*
 
 ### Connecting to a Snapmaker U1
-If you want to connect to a Snapmaker U1 printer over the network from the web app, you must follow these steps to bypass the browser's Mixed Content security policies:
+Chrome 142 and newer can grant the hosted HTTPS app Local Network Access to a printer's HTTP Moonraker endpoint:
 
-1. Install the extended firmware on your printer: [SnapmakerU1-Extended-Firmware](https://github.com/paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware).
-2. Enable Tailscale on the printer.
-3. SSH into your printer as root and run the following command to securely serve Moonraker over HTTPS:
+1. In Moonraker's `[authorization]` section, add the OrcaXR page's exact origin to `cors_domains` and restart Moonraker. For the hosted app, that origin is `https://orcaxr.martinez.fyi`.
+2. In OrcaXR, enter the full local URL, such as `http://192.168.1.50` or `http://printer.local:7125`.
+3. Approve the browser's Local Network Access prompt.
+
+HTTP leaves printer status, API keys, webcam frames, and uploaded G-code unencrypted, so only use it on a trusted LAN. Browsers without Local Network Access support—or users who deny permission—still need a trusted HTTPS endpoint or reverse proxy.
+
+For the Snapmaker U1, the [extended firmware](https://github.com/paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware) can provide an HTTPS fallback through Tailscale. Join the browser or headset and printer to the same tailnet, enable Tailscale, then SSH into the printer as root and run:
+
    ```bash
-   tailscale serve --bg http://127.0.0.1:7125
+   tailscale serve --bg http://127.0.0.1:80
    ```
-4. In OrcaXR, enter your printer's Tailscale HTTPS address (e.g., `https://lava.taild5c213.ts.net`).
+
+Enter the resulting address in OrcaXR, for example `https://lava.taild5c213.ts.net`.
 
 ### External Slicer (Docker)
 OrcaXR runs slicing natively in the browser via WebAssembly (WASM). However, WASM has a hard memory limit of 4GB, which can cause out-of-memory crashes on extremely large or complex models. 
@@ -43,6 +49,8 @@ cd server
 docker compose up -d
 ```
 Then, in the OrcaXR web app, open the **EXTERNAL SLICER** panel and connect to your Docker instance (e.g., `http://localhost:3000`).
+
+From the hosted app, Chrome 142+ can also reach a LAN address such as `http://192.168.1.20:3000` after Local Network Access permission. The Docker server enables CORS; use HTTP only on a trusted LAN and prefer HTTPS for remote access.
 
 ## Project Status
 

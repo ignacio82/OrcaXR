@@ -152,7 +152,7 @@ import { ConvexHull } from 'three/examples/jsm/math/ConvexHull.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SimplifyModifier } from 'three/examples/jsm/modifiers/SimplifyModifier.js';
 import { buildRegistry } from '../actions/catalog';
-import type { Action } from '../actions/ActionRegistry';
+import { ActionRegistry, type Action } from '../actions/ActionRegistry';
 import { MENU_SECTIONS } from '../actions/ActionRegistry';
 import type { ActionContext } from '../actions/ActionContext';
 import { renderXrActionButton, type XrUiFactory } from '../ui/xr/XrShell';
@@ -179,7 +179,6 @@ import { evaluateTopCover } from '../features/TopCoverRule';
 import { scoreWipeTower, parseBias, type AabbXY } from '../features/WipeTowerPlacement';
 import { deriveTriangleFilaments } from '../features/PaintedSlice';
 import { splitConnectedComponents } from '../features/MeshSplit';
-import { AiPaintService } from '../features/AiPaintService';
 import { SemanticPaintPlanner } from '../features/SemanticPaintPlanner';
 import { cutByPlane } from '../features/MeshCut';
 import { writeMinimal3mf } from '../features/Write3mf';
@@ -213,6 +212,8 @@ type ModelEntry = { raw: THREE.BufferGeometry; display: THREE.Mesh; viewer: THRE
 export class OrcaWorkspace extends xb.Script {
   private uiCore: any;
   private slicer = new SlicerClient();
+  /** True once a post-import local-engine warm-up has been scheduled. */
+  private slicerWarmupQueued = false;
   private catalog = new ProfileCatalog();
   private profile: SlicerProfile | null = null;
   /** Live bed size (mm) — from the active profile's printable_area. */
@@ -314,8 +315,9 @@ export class OrcaWorkspace extends xb.Script {
       console.error('[orcaxr] XR control panel failed to build', e);
     }
 
-    // Warm the slicer module in the background so the first slice is quick.
-    this.slicer.load().catch((e) => this.setStatus(`slicer load failed: ${e.message}`));
+    // Do not fetch the large local WASM slicer during first paint. Most first
+    // visits are spent choosing a printer or inspecting the workspace; the
+    // warm-up is scheduled after the first model arrives instead.
     // Load the profile catalog; default to the user's Centauri Carbon.
     // One flaky fetch (mobile network, the COI service-worker reload racing
     // the request) used to leave the catalog empty for the whole session —
@@ -799,6 +801,7 @@ export class OrcaWorkspace extends xb.Script {
     }
 
     this.rebuildHeadsPanel();
+    this.refreshXrProfileValues();
     
     if (this.onProfileChanged) this.onProfileChanged();
     this.bedMm = bedSizeFromProfile(p.config);
@@ -835,9 +838,11 @@ export class OrcaWorkspace extends xb.Script {
 
     if (this.topStripCard) this.topStripCard.show();
     if (this.leftToolbarCard) this.leftToolbarCard.show();
-    if (this.rightSidebarCard) this.rightSidebarCard.show();
-    if (this.profileCard) this.profileCard.show();
-    if (this.aiMcpCard) this.aiMcpCard.show();
+    // Menu/profile surfaces are opt-in. Showing every card on entry obscures
+    // the plate and, worse, exposed the blank menu card before a menu was open.
+    if (this.rightSidebarCard) this.rightSidebarCard.hide();
+    if (this.profileCard) this.profileCard.hide();
+    if (this.aiMcpCard) this.aiMcpCard.hide();
     if (this.bottomBarCard) this.bottomBarCard.show();
   }
 
@@ -880,6 +885,10 @@ export class OrcaWorkspace extends xb.Script {
     
     try {
       for (const card of this.uiCore.cards) {
+        // Hidden uikit cards do not need layout/raycast work every XR frame.
+        // This matters on headset hardware because menu/profile cards can be
+        // large even while intentionally progressive-disclosed.
+        if (!card.visible) continue;
         try {
           card.update(time, frame);
         } catch (e: any) {
@@ -1688,6 +1697,24 @@ export class OrcaWorkspace extends xb.Script {
     // it immediately (standard slicer behaviour, works in both shells).
     this.selectModel(entry);
     this.recomputePreflight();
+    this.warmSlicerAfterFirstModel();
+  }
+
+  /**
+   * Prime the local engine after import has settled, not while the empty
+   * workspace is trying to appear. `SlicerClient` deduplicates this promise,
+   * so an immediate Slice simply joins the same load. An external slicer has
+   * no browser WASM cost and intentionally skips this path.
+   */
+  private warmSlicerAfterFirstModel() {
+    if (this.slicerWarmupQueued || SlicerClient.useExternalSlicer()) return;
+    this.slicerWarmupQueued = true;
+    window.setTimeout(() => {
+      this.slicer.load().catch((e) => {
+        console.warn('[slicer] background warm-up failed; it will retry on Slice:', e);
+        this.slicerWarmupQueued = false;
+      });
+    }, 1200);
   }
 
   /** Build/replace the toolpath preview from sliced G-code and show it. */
@@ -1847,6 +1874,9 @@ export class OrcaWorkspace extends xb.Script {
   private leftToolbarCard: any = null;
   private rightSidebarCard: any = null;
   private profileCard: any = null;
+  /** Live profile values shown in the XR profile picker. Icons alone made it
+   * impossible to know what a click would change without looking back at 2D. */
+  private xrProfileValueLabels: { part: 'machine' | 'process' | 'filament'; value: any }[] = [];
   private aiMcpCard: any = null;
   // Design's top HUD strip (wordmark + mode switch) and bottom action bar.
   private topStripCard: any = null;
@@ -1865,12 +1895,18 @@ export class OrcaWorkspace extends xb.Script {
     // dropdown (addActionPanel → menu panel), shown one section at a time —
     // never as an always-open, floor-length list. recenterInFrontOfUser()
     // anchors each card in its zone.
-    this.addTopStrip();
-    this.addLeftToolbar();
-    this.addActionPanel();   // hidden dropdown panel, populated per menu section
-    this.addProfilePanel();
-    this.addBottomBar();
-    this.addSliceModal();
+    // A malformed optional card must never make immersive editing unusable.
+    // Keep cards independent and identify the failing surface in the console;
+    // this is especially important because uikit validates some props lazily.
+    const build = (name: string, fn: () => void) => {
+      try { fn(); } catch (e) { console.error(`[orcaxr] XR ${name} panel failed to build`, e); }
+    };
+    build('top strip', () => this.addTopStrip());
+    build('tool rail', () => this.addLeftToolbar());
+    build('menu', () => this.addActionPanel()); // hidden dropdown, populated per section
+    build('profile', () => this.addProfilePanel());
+    build('bottom bar', () => this.addBottomBar());
+    build('slice progress', () => this.addSliceModal());
     this.refreshToolButtons();
   }
 
@@ -1946,6 +1982,28 @@ export class OrcaWorkspace extends xb.Script {
       this.xrModeButtons.push({ mode: m.mode, btn, label });
     }
     root.add(track);
+
+    // Keep secondary panels progressive: the plate stays readable until the
+    // maker explicitly opens profile controls. Recenter is deliberately always
+    // one pinch away because room-scale users regularly change where they are
+    // standing relative to the workspace.
+    const utility = (icon: string, hint: string, onClick: () => void) => {
+      const btn = new UIPanel({
+        width: 38, height: 38, cornerRadius: 9, fillColor: '#ffffff14',
+        strokeWidth: 1, strokeColor: '#ffffff1a', justifyContent: 'center', alignItems: 'center',
+        onClick: () => { onClick(); return true; },
+        onHoverEnter: () => { btn.fillColor = '#ffffff26'; },
+        onHoverExit: () => { btn.fillColor = '#ffffff14'; },
+      });
+      (btn as any).userData = { hint };
+      btn.add(new UIIcon(xrIcon(icon), { color: '#dfe4ea', width: 20, height: 20 }));
+      root.add(btn);
+    };
+    utility('tune', 'Profile settings', () => this.toggleProfilePanel());
+    utility('view_default', 'Recenter workspace', () => {
+      this.needsRecenter = true;
+      this.setStatus('Recentering workspace…');
+    });
 
     const exitBtn = new UIPanel({
       paddingLeft: 13, paddingRight: 13, paddingTop: 8, paddingBottom: 8,
@@ -2031,7 +2089,22 @@ export class OrcaWorkspace extends xb.Script {
 
   private setXrMode(mode: 'prepare' | 'paint' | 'preview') {
     this.xrMode = mode;
-    if (this.actionContext) this.actionContext.setMode(mode);
+    if (this.actionContext) {
+      if (mode === 'paint') {
+        // Paint is a modal tool, not a separate renderer mode. The previous
+        // implementation only coloured this tab, leaving the workspace in its
+        // prior tool and making the control feel broken.
+        this.actionContext.setMode('prepare');
+        this.actionContext.setTool('paint');
+        this.setStatus('Paint mode — choose a color, then pinch the model');
+      } else if (mode === 'preview') {
+        this.actionContext.setMode('preview');
+        if (!this.previewOn) this.actionContext.togglePreview();
+      } else {
+        if (this.previewOn) this.actionContext.togglePreview();
+        this.actionContext.setMode('prepare');
+      }
+    }
     this.refreshXrMode();
   }
   private refreshXrMode() {
@@ -2072,6 +2145,7 @@ export class OrcaWorkspace extends xb.Script {
 
     const reg = buildRegistry();
     const runReg = (a: Action) => { if (this.actionContext) void a.run(this.actionContext); };
+    const primaryHandles: { action: Action; btn: UIPanel; icon: UIIcon; primary: boolean; restFill: string }[] = [];
     for (const a of reg.byDisclosure('primary')) {
       const primary = a.id === 'slice_active_plate';
       const restFill = '#ffffff14';
@@ -2080,17 +2154,44 @@ export class OrcaWorkspace extends xb.Script {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
         cornerRadius: 10, fillColor: primary ? '#ffb74d' : restFill,
         strokeWidth: primary ? 0 : 1, strokeColor: primary ? '#ffb74d' : '#ffffff1a',
-        onClick: () => { runReg(a); return true; },
-        onHoverEnter: () => { btn.fillColor = primary ? '#ff6d00' : '#ffffff26'; },
-        onHoverExit: () => { btn.fillColor = primary ? '#ffb74d' : restFill; },
+        onClick: () => {
+          if (!this.actionContext || !ActionRegistry.enabled(a, this.actionContext.ui.get())) {
+            this.setStatus(a.id === 'slice_active_plate' ? 'Load a model to slice.' : (a.hint ?? `${a.label} is not ready yet.`));
+            return true;
+          }
+          runReg(a);
+          return true;
+        },
+        onHoverEnter: () => {
+          if (this.actionContext && ActionRegistry.enabled(a, this.actionContext.ui.get())) {
+            btn.fillColor = primary ? '#ff6d00' : '#ffffff26';
+          }
+        },
+        onHoverExit: () => { /* active-aware color restored by refresh below */ },
       });
-      btn.add(new UIIcon(xrIcon(a.icon), { color: primary ? '#000000' : '#ffffff', width: 22, height: 22, flexShrink: 0 }));
+      const icon = new UIIcon(xrIcon(a.icon), { color: primary ? '#000000' : '#ffffff', width: 22, height: 22, flexShrink: 0 });
+      btn.add(icon);
       btn.add(new UIText(a.label, { fontSize: 18, fontWeight: 'bold', color: primary ? '#000000' : '#ffffff', flexShrink: 0 }));
+      primaryHandles.push({ action: a, btn, icon, primary, restFill });
       // Load must end the immersive session before the file picker (browsers
       // suppress dialogs in XR); the per-frame ray probe watches this node.
       if (a.id === 'load_model_from_path') this.loadButtonNode = btn as unknown as THREE.Object3D;
       btnRow.add(btn);
     }
+    // The immersive bar shares the DOM shell's readiness rules. A bright Slice
+    // button on an empty plate is a false affordance, particularly in-headset
+    // where the status line is farther from the user's focal point.
+    const refreshPrimary = () => {
+      if (!this.actionContext) return;
+      const state = this.actionContext.ui.get();
+      for (const h of primaryHandles) {
+        const enabled = ActionRegistry.enabled(h.action, state);
+        h.btn.opacity = enabled ? 1 : 0.38;
+        h.btn.fillColor = enabled ? (h.primary ? '#ffb74d' : h.restFill) : '#ffffff08';
+        h.icon.color = enabled ? (h.primary ? '#000000' : '#ffffff') : '#8a94a0';
+      }
+    };
+    this.actionContext?.ui.subscribe(refreshPrimary);
 
     // Live status line + slice progress (relocated here from the old action
     // panel so it's always visible, matching the design's bottom status text).
@@ -2119,7 +2220,9 @@ export class OrcaWorkspace extends xb.Script {
         new ManipulationBehavior({ draggable: true, faceCamera: true, constrainToCameraY: false }),
       ],
     });
-    this.uiGroup.add(card);
+    // `createCard` already registers the card with UICore. There is no
+    // separate uiGroup in the web workspace; attempting to add it again used
+    // to throw here and left the XR slice feedback surface half-constructed.
     const root = new UIPanel({
       width: '100%',
       height: '100%',
@@ -2181,7 +2284,10 @@ export class OrcaWorkspace extends xb.Script {
       gap: 6,
       strokeWidth: 1,
       strokeColor: '#ffffff14',
-      overflow: 'scroll'
+      // This rail is intentionally finite: the full action catalogue lives in
+      // the top menu panel. A scrolling column of large spatial buttons is
+      // unusable in-headset and wastes layout work every frame.
+      overflow: 'hidden'
     });
     card.add(root);
 
@@ -2200,6 +2306,8 @@ export class OrcaWorkspace extends xb.Script {
     for (const a of toolbar) {
       if (!a.tool) continue;
       const h = renderXrActionButton(a, runAction, factory, {
+        size: 64,
+        iconSize: 34,
         onHoverExit: () => this.refreshToolButtons(),
       });
       root.add(h.btn);
@@ -2210,44 +2318,23 @@ export class OrcaWorkspace extends xb.Script {
       });
     }
 
-    // Non-tool toolbar actions (auto-orient, delete) — same catalogue/handlers
-    // as the DOM rail, kept in their own group so nothing overlaps the tools.
+    // Keep only the two high-frequency object actions beside the modal tools.
+    // The rest of the toolbar catalogue remains reachable via the top menu,
+    // avoiding a floor-length, overflowing rail in XR.
     root.add(divider());
     for (const a of toolbar) {
-      if (a.tool) continue;
-      const h = renderXrActionButton(a, runAction, factory, { danger: a.id === 'delete_models' });
+      if (a.tool || !['drop_to_bed', 'delete_models'].includes(a.id)) continue;
+      const h = renderXrActionButton(a, runAction, factory, {
+        size: 64,
+        iconSize: 34,
+        danger: a.id === 'delete_models',
+      });
       root.add(h.btn);
     }
 
-    // Numeric steppers: fixed increments of the ACTIVE tool's quantity —
-    // the "enter a number" half of OrcaSlicer-style modal tools.
-    root.add(divider());
-    root.add(heading('NUDGE'));
-    const stepRow = new UIPanel({
-      width: '100%', flexDirection: 'row', justifyContent: 'center', gap: 8,
-    });
-    const mkStep = (icon: string, dir: -1 | 1) => {
-      const btn = new UIPanel({
-        flexGrow: 1, height: 40,
-        justifyContent: 'center', alignItems: 'center',
-        cornerRadius: 8, fillColor: '#ffffff14',
-        strokeWidth: 1, strokeColor: '#ffffff1a',
-        onClick: () => { this.nudgeSelected(dir); return true; },
-        onHoverEnter: () => { btn.fillColor = '#ffffff26'; },
-        onHoverExit: () => { btn.fillColor = '#ffffff14'; },
-      });
-      btn.add(new UIIcon(icon, { color: '#cccccc', width: 24, height: 24 }));
-      stepRow.add(btn);
-    };
-    mkStep('remove', -1);
-    mkStep('add', 1);
-    root.add(stepRow);
-    this.valueText = new UIText(' ', { fontSize: 14, color: '#ffb74d' });
-    root.add(this.valueText);
-
     // Paint colours — the filament slots doubling as the paint palette. Fixed
-    // swatch sizes wrap cleanly at this rail width (no more overlap); the
-    // section is only meaningful when the Paint tool is active.
+    // swatch sizes wrap cleanly at this rail width. It is only visible when
+    // Paint is active, preserving a compact neutral rail.
     root.add(divider());
     root.add(heading('COLORS'));
     this.paintOptionsPanel = new UIPanel({
@@ -2256,6 +2343,7 @@ export class OrcaWorkspace extends xb.Script {
       flexWrap: 'wrap',
       gap: 6,
     });
+    this.paintOptionsPanel.visible = false;
     root.add(this.paintOptionsPanel);
     this.rebuildPaintSwatches();
     this.palette.onChanged = () => {
@@ -2314,7 +2402,7 @@ export class OrcaWorkspace extends xb.Script {
       onHoverEnter: () => { closeBtn.fillColor = '#ffffff26'; },
       onHoverExit: () => { closeBtn.fillColor = '#ffffff14'; },
     });
-    closeBtn.add(new UIText('✕', { fontSize: 18, fontWeight: 'bold', color: '#ffffff' }));
+    closeBtn.add(new UIIcon('close', { color: '#ffffff', width: 18, height: 18 }));
     header.add(closeBtn);
     root.add(header);
 
@@ -2362,11 +2450,13 @@ export class OrcaWorkspace extends xb.Script {
     header.add(new UIText('Profiles', { fontSize: 32, fontWeight: 'bold', color: '#ffffff' }));
     root.add(header);
 
-    const profPanel = new UIPanel({ width: '100%', flexDirection: 'row', justifyContent: 'space-between', gap: 10 });
-    const mkProf = (part: 'machine' | 'process' | 'filament', icon: string) => {
+    const intro = new UIText('Pinch a row to cycle its active profile.', { fontSize: 14, color: '#a0aab5' });
+    root.add(intro);
+    const profPanel = new UIPanel({ width: '100%', flexDirection: 'column', gap: 8 });
+    const mkProf = (part: 'machine' | 'process' | 'filament', icon: string, title: string) => {
       const btn = new UIPanel({
-        flexGrow: 1, height: 50,
-        justifyContent: 'center', alignItems: 'center',
+        width: '100%', minHeight: 58, paddingLeft: 12, paddingRight: 12,
+        justifyContent: 'flex-start', alignItems: 'center', flexDirection: 'row', gap: 12,
         cornerRadius: 8,
         fillColor: '#ffffff14',
         strokeWidth: 1, strokeColor: '#ffffff1a',
@@ -2375,15 +2465,39 @@ export class OrcaWorkspace extends xb.Script {
         onHoverExit: () => { btn.fillColor = '#ffffff14'; }
       });
       btn.add(new UIIcon(xrIcon(icon), { color: '#cccccc', width: 24, height: 24 }));
+      const copy = new UIPanel({ flexDirection: 'column', flexGrow: 1, gap: 2 });
+      copy.add(new UIText(title.toUpperCase(), { fontSize: 11, fontWeight: 'bold', color: '#8a94a0' }));
+      const value = new UIText('Loading...', { fontSize: 16, fontWeight: 'bold', color: '#ffffff', flexShrink: 1 });
+      copy.add(value);
+      btn.add(copy);
+      btn.add(new UIIcon('chevron_right', { color: '#ffb74d', width: 22, height: 22, flexShrink: 0 }));
+      this.xrProfileValueLabels.push({ part, value });
       profPanel.add(btn);
     };
-    mkProf('machine', 'printer');
-    mkProf('process', 'tune');
-    mkProf('filament', 'filament');
+    mkProf('machine', 'printer', 'Printer');
+    mkProf('process', 'tune', 'Process');
+    mkProf('filament', 'filament', 'Filament');
     root.add(profPanel);
     
     this.headsContainer = new UIPanel({ width: '100%', flexDirection: 'column', gap: 10 });
     root.add(this.headsContainer);
+    this.refreshXrProfileValues();
+  }
+
+  private toggleProfilePanel() {
+    if (!this.profileCard) return;
+    const visible = !!this.profileCard.visible;
+    if (visible) this.profileCard.hide(); else this.profileCard.show();
+    this.closeMenu();
+  }
+
+  private refreshXrProfileValues() {
+    const p = this.profile;
+    for (const item of this.xrProfileValueLabels) {
+      const value = !p ? 'Loading...' : item.part === 'machine' ? p.machineName
+        : item.part === 'process' ? p.processName : p.filamentName;
+      item.value.setText(value);
+    }
   }
 
   public setTool(tool: 'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint') {
@@ -2514,6 +2628,7 @@ export class OrcaWorkspace extends xb.Script {
       iconEl.color = active ? '#ffffff' : '#cccccc';
     }
     if (this.paintOptionsPanel) {
+      this.paintOptionsPanel.visible = this.tool === 'paint';
       this.refreshPaintSwatches();
     }
   }
@@ -2541,8 +2656,12 @@ export class OrcaWorkspace extends xb.Script {
   // status lines — e.g. coming-soon parity placeholders and feature stubs.
   public setStatus(text: string, percent?: number) {
     this.lastStatusText = text;
+    // Troika's XR font atlas does not include a few typographic symbols used
+    // by profile display names (notably · and ×). Keep DOM status text intact
+    // but feed the immersive card a supported, equally legible equivalent.
+    const xrText = text.replaceAll('·', '-').replaceAll('×', 'x').replaceAll('…', '...');
     if (this.statusText) {
-      (this.statusText as any).setText(text);
+      (this.statusText as any).setText(xrText);
     }
     if (this.progressContainer && this.progressBar) {
       if (percent !== undefined && percent >= 0 && percent <= 100) {
@@ -2553,7 +2672,7 @@ export class OrcaWorkspace extends xb.Script {
       }
     }
     if (this.sliceModalText) {
-      (this.sliceModalText as any).setText(text);
+      (this.sliceModalText as any).setText(xrText);
     }
     if (this.sliceModalProgressContainer && this.sliceModalBar) {
       if (percent !== undefined && percent >= 0 && percent <= 100) {
@@ -2673,7 +2792,7 @@ export class OrcaWorkspace extends xb.Script {
       for (const vf of this.virtualFilaments) {
         const row = new UIPanel({ width: '100%', flexDirection: 'row', alignItems: 'center', gap: 5 });
         row.add(new UIPanel({ width: 18, height: 18, cornerRadius: 3, fillColor: vf.color }));
-        row.add(new UIText(`F${vf.id} · ${vf.label}`, { fontSize: 11, color: '#ffffff' }));
+        row.add(new UIText(`F${vf.id} - ${vf.label}`, { fontSize: 11, color: '#ffffff' }));
         panel.add(row);
       }
     }
@@ -3636,6 +3755,10 @@ export class OrcaWorkspace extends xb.Script {
 
     this.setStatus('Generating AI Paint Plan...');
     try {
+      // The Gemini SDK is only needed after a maker deliberately invokes an
+      // AI feature. Keeping it out of the startup graph makes initial WebXR
+      // entry and ordinary local slicing faster on constrained headsets.
+      const { AiPaintService } = await import('../features/AiPaintService');
       const plan = await AiPaintService.generatePaintPlan(prompt);
       await this.applySemanticPaintPlan(plan);
       this.setStatus('Smart Paint applied successfully');
@@ -3665,6 +3788,7 @@ export class OrcaWorkspace extends xb.Script {
         const base64 = base64Url.split(',')[1]; // remove data:image/...;base64,
         this.setStatus('Generating AI Paint Plan with Image...');
         try {
+          const { AiPaintService } = await import('../features/AiPaintService');
           const plan = await AiPaintService.generatePaintPlan(prompt, base64);
           await this.applySemanticPaintPlan(plan);
           this.setStatus('Smart Paint (Image) applied successfully');

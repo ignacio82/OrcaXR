@@ -77,7 +77,14 @@ export class DomShell {
     btn.className = 'tool-btn';
     btn.dataset.actionId = a.id;
     btn.title = a.hint ?? a.label;
-    btn.textContent = a.label;
+    btn.setAttribute('aria-label', a.hint ?? a.label);
+    const icon = document.createElement('span');
+    icon.className = 'tool-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = domIcon(a.icon);
+    const label = document.createElement('span');
+    label.textContent = a.label;
+    btn.append(icon, label);
     btn.onclick = () => this.run(a);
     this.bound.push({ el: btn, action: a });
     return btn;
@@ -99,13 +106,17 @@ export class DomShell {
     const trigger = document.createElement('button');
     trigger.className = 'menu-trigger';
     trigger.innerHTML = `${triggerLabel} <span aria-hidden="true">▾</span>`;
+    trigger.setAttribute('aria-haspopup', 'menu');
+    trigger.setAttribute('aria-expanded', 'false');
     const dropdown = document.createElement('div');
     dropdown.className = 'menu-dropdown';
+    dropdown.setAttribute('role', 'menu');
 
     for (const a of actions) {
       const item = document.createElement('button');
       item.className = 'menu-item';
       item.dataset.actionId = a.id;
+      item.setAttribute('role', 'menuitem');
       const soon = Reg.comingSoon(a);
       // Coming-soon parity placeholders carry their reason as the tooltip and a
       // "SOON" badge so the surface reaches parity while staying honest.
@@ -124,12 +135,26 @@ export class DomShell {
       e.stopPropagation();
       const wasOpen = host.classList.contains('open');
       // Close any other open menu, then toggle this one.
-      document.querySelectorAll('.menu-host.open').forEach((m) => m.classList.remove('open'));
+      document.querySelectorAll('.menu-host.open').forEach((m) => {
+        m.classList.remove('open');
+        m.querySelector<HTMLButtonElement>('.menu-trigger')?.setAttribute('aria-expanded', 'false');
+      });
       host.classList.toggle('open', !wasOpen);
+      trigger.setAttribute('aria-expanded', String(!wasOpen));
     };
     // Click-away closes.
     document.addEventListener('click', (e) => {
-      if (!host.contains(e.target as Node)) host.classList.remove('open');
+      if (!host.contains(e.target as Node)) {
+        host.classList.remove('open');
+        trigger.setAttribute('aria-expanded', 'false');
+      }
+    });
+    trigger.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        host.classList.remove('open');
+        trigger.setAttribute('aria-expanded', 'false');
+        trigger.focus();
+      }
     });
 
     host.appendChild(trigger);
@@ -142,6 +167,7 @@ export class DomShell {
       const btn = document.createElement('button');
       btn.className = 'seg-btn';
       btn.dataset.mode = m.id;
+      btn.setAttribute('aria-pressed', String(m.id === this.ui.get().mode));
       btn.textContent = m.label;
       btn.onclick = () => this.ctx.setMode(m.id);
       this.modeButtons.push({ id: m.id, el: btn });
@@ -164,6 +190,7 @@ export class DomShell {
     }
     for (const { id, el } of this.modeButtons) {
       el.classList.toggle('active', s.mode === id);
+      el.setAttribute('aria-pressed', String(s.mode === id));
     }
   }
 }

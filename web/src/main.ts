@@ -4,8 +4,6 @@
  * Phase 2: build-plate workspace with DragManager model manipulation and
  * the libslic3r WASM module slicing the live scene (see OrcaWorkspace).
  */
-import 'xrblocks/addons/simulator/SimulatorAddons.js';
-
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { ThreeMFLoader } from 'three/examples/jsm/loaders/3MFLoader.js';
@@ -18,6 +16,11 @@ import { OrcaWorkspace, extract3mfColors } from './workspace/OrcaWorkspace';
 import { extract3mfPaint } from './features/Paint3mf';
 import { SlicerClient } from './slicer/SlicerClient';
 import { loadPrinterConfig, probePrinter, savePrinterConfig, sendToPrinter } from './net/PrinterClient';
+import {
+  fetchLocalNetwork,
+  localNetworkTargetForRequest,
+  normalizeHttpEndpoint,
+} from './net/LocalNetworkAccess';
 import { registerWorkspaceTools } from './mcp/WorkspaceTools';
 import { registerSystemTools } from './mcp/SystemTools';
 import { injectTokenCss } from './ui/tokens';
@@ -73,6 +76,30 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
   const loadingModal = document.getElementById('loading-modal') as HTMLDivElement;
   const loadingModalBar = document.getElementById('loading-modal-bar') as HTMLDivElement;
   const loadingModalText = document.getElementById('loading-modal-text') as HTMLParagraphElement;
+  const emptyState = document.getElementById('workspace-empty-state') as HTMLElement;
+  const emptyLoadModel = document.getElementById('empty-load-model') as HTMLButtonElement;
+  const domSliceProgress = document.getElementById('dom-slice-progress') as HTMLElement;
+  const uiContainer = document.getElementById('ui-container') as HTMLElement;
+  const leftToolbar = document.getElementById('left-toolbar') as HTMLElement;
+  const toolbarToggle = document.getElementById('toolbar-toggle') as HTMLButtonElement;
+  let hadModels = false;
+
+  emptyLoadModel.onclick = () => fileInput.click();
+  uiState.subscribe((state) => {
+    emptyState.hidden = state.modelCount > 0;
+    uiContainer.classList.toggle('no-model', state.modelCount === 0);
+    toolbarToggle.hidden = state.modelCount === 0;
+    // A newly loaded model should expose the plate and the obvious Slice
+    // action, not a floor-to-ceiling list of rarely-used editing commands.
+    // Preserve the maker's choice after they explicitly open the rail.
+    if (state.modelCount > 0 && !hadModels) leftToolbar.classList.add('collapsed');
+    hadModels = state.modelCount > 0;
+    toolbarToggle.setAttribute('aria-expanded', String(!leftToolbar.classList.contains('collapsed')));
+  });
+  toolbarToggle.onclick = () => {
+    leftToolbar.classList.toggle('collapsed');
+    toolbarToggle.setAttribute('aria-expanded', String(!leftToolbar.classList.contains('collapsed')));
+  };
 
   fileInput.onchange = async () => {
     const files = Array.from(fileInput.files ?? []);
@@ -245,7 +272,39 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
     overlay.onclick = (e) => { if (e.target === overlay) closeModal(); };
     document.body.appendChild(overlay);
   };
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+  document.addEventListener('keydown', (e) => {
+    const target = e.target as HTMLElement | null;
+    const editing = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
+      || target instanceof HTMLSelectElement || !!target?.isContentEditable;
+    if (editing || e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if (e.key === 'Escape') {
+      // Let the command palette own Escape while it is open; otherwise close a
+      // help/setup modal first, then clear the active model selection.
+      if (document.getElementById('command-palette')?.classList.contains('open')) return;
+      if (document.getElementById('oxr-modal-overlay')) {
+        closeModal();
+      } else if (uiState.get().hasSelection) {
+        workspace.unselectModel();
+        uiState.update({ hasSelection: false, status: 'Selection cleared.' });
+      }
+      return;
+    }
+    if (e.key === 'Delete' && uiState.get().hasSelection) {
+      e.preventDefault();
+      workspace.deleteSelectedModel();
+      return;
+    }
+    const toolByKey: Record<string, 'move' | 'rotate' | 'scale'> = {
+      g: 'move', r: 'rotate', s: 'scale',
+    };
+    const tool = toolByKey[e.key.toLowerCase()];
+    if (tool && uiState.get().hasSelection) {
+      e.preventDefault();
+      workspace.setTool(tool);
+      uiState.update({ activeTool: tool });
+    }
+  });
   workspace.onShowModal = ({ title, bodyHtml }) => buildModal(title, bodyHtml);
 
   // Interactive setup wizard: reuse the live profile catalogue.
@@ -612,7 +671,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
   };
 
   btnExternalSlicerConnect.onclick = async () => {
-    const val = externalSlicerUrl.value.trim();
+    const val = normalizeHttpEndpoint(externalSlicerUrl.value);
     if (!val) {
       SlicerClient.clearExternalSlicer();
       updateExternalSlicerStatus(false);
@@ -621,7 +680,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
     }
     btnExternalSlicerConnect.textContent = '...';
     try {
-      const res = await fetch(`${val}/ping`);
+      const res = await fetchLocalNetwork(`${val}/ping`);
       if (res.ok) {
         SlicerClient.setExternalSlicerUrl(val);
         SlicerClient.setExternalSlicerEnabled(true); // connecting opts in
@@ -668,6 +727,9 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
   const webcamFeed = document.getElementById('printer-webcam-feed') as HTMLImageElement;
   let webcamActive = false;
   let webcamInterval: ReturnType<typeof setInterval> | null = null;
+  let webcamObjectUrl: string | null = null;
+  let webcamAbortController: AbortController | null = null;
+  let webcamGeneration = 0;
 
   // Different firmwares and Crowsnest configurations expose the snapshot at different paths
   const snapshotPaths = [
@@ -684,13 +746,13 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
   };
 
   btnPrinterWebcam.onclick = () => {
+    const generation = ++webcamGeneration;
     let host = printerCfg.host.trim();
     if (!host) {
       statusText.textContent = 'Please configure a printer host first.';
       return;
     }
-    // Remove trailing slashes
-    host = host.replace(/\/+$/, '');
+    host = normalizeHttpEndpoint(host);
     
     webcamActive = !webcamActive;
     if (webcamActive) {
@@ -700,15 +762,54 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
       
       // WebGL/uikit cannot render MJPEG streams directly. 
       // We must poll the snapshot endpoint to update the texture.
-      const updateFrame = () => {
-        if (!webcamActive) return;
-        webcamFeed.src = `${host}${snapshotPaths[activePathIndex]}${Date.now()}`;
+      // IP literals and .local names can stay as direct image requests, which
+      // keeps camera endpoints without CORS working. Named HTTP hosts need the
+      // annotated fetch path so Chrome can authorize Local Network Access.
+      const needsAnnotatedFetch =
+        localNetworkTargetForRequest(host, window.isSecureContext) !== null;
+      const updateFrame = async () => {
+        if (!webcamActive || generation !== webcamGeneration) return;
+        const frameUrl = `${host}${snapshotPaths[activePathIndex]}${Date.now()}`;
+        if (!needsAnnotatedFetch) {
+          webcamFeed.src = frameUrl;
+          return;
+        }
+        if (webcamAbortController) return;
+        const controller = new AbortController();
+        webcamAbortController = controller;
+        try {
+          const response = await fetchLocalNetwork(frameUrl, {
+            cache: 'no-store',
+            signal: controller.signal,
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const nextObjectUrl = URL.createObjectURL(await response.blob());
+          if (!webcamActive || generation !== webcamGeneration) {
+            URL.revokeObjectURL(nextObjectUrl);
+            return;
+          }
+          const previousObjectUrl = webcamObjectUrl;
+          webcamObjectUrl = nextObjectUrl;
+          webcamFeed.src = nextObjectUrl;
+          if (previousObjectUrl) URL.revokeObjectURL(previousObjectUrl);
+        } catch {
+          if (webcamActive && generation === webcamGeneration) {
+            activePathIndex = (activePathIndex + 1) % snapshotPaths.length;
+          }
+        } finally {
+          if (webcamAbortController === controller) webcamAbortController = null;
+        }
       };
       
       updateFrame();
       webcamInterval = setInterval(updateFrame, 1000); // 1 FPS
     } else {
       if (webcamInterval) clearInterval(webcamInterval);
+      webcamInterval = null;
+      webcamAbortController?.abort();
+      webcamAbortController = null;
+      if (webcamObjectUrl) URL.revokeObjectURL(webcamObjectUrl);
+      webcamObjectUrl = null;
       webcamFeed.src = '';
       webcamContainer.style.display = 'none';
       btnPrinterWebcam.textContent = 'Webcam';
@@ -771,6 +872,9 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
     if (domSliceModal) {
       domSliceModal.style.display = isSlicing ? 'flex' : 'none';
     }
+    // Drive both DOM and immersive action enablement from the same source.
+    // Without this, Slice could still look ready while a previous job ran.
+    uiState.update({ isSlicing });
   };
 
   workspace.onStatusChanged = (text, percent) => {
@@ -779,6 +883,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
       progressContainer.style.display = 'block';
       progressBar.style.width = `${percent}%`;
       if (domSliceBar) domSliceBar.style.width = `${percent}%`;
+      domSliceProgress?.setAttribute('aria-valuenow', String(Math.round(percent)));
     } else {
       progressContainer.style.display = 'none';
     }
@@ -891,6 +996,15 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // The simulator is a development aid, not a headset runtime dependency. Its
+  // custom controls pull a substantial rendering stack into the initial page;
+  // defer that cost in production unless someone explicitly asks for desktop
+  // simulation (`?simulator=1`). It still loads before `xb.init`, so simulator
+  // behaviour is unchanged for local development and opt-in QA sessions.
+  const wantsSimulator = import.meta.env.DEV
+    || new URLSearchParams(window.location.search).get('simulator') === '1';
+  if (wantsSimulator) await import('xrblocks/addons/simulator/SimulatorAddons.js');
+
   // Design tokens as CSS custom properties — the DOM shell's single source of
   // truth for colours/spacing (the XR shell reads the same `tokens` object).
   injectTokenCss();
@@ -1125,4 +1239,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     byId('cmd-list'),
     byId('cmd-search-btn'),
   );
+
+  // Remove the first-paint readiness surface only after both the workspace and
+  // its actionable shell exist. This avoids a blank / seemingly frozen canvas
+  // on cold headset loads.
+  document.getElementById('app-boot')?.classList.add('ready');
 });

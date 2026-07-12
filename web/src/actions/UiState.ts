@@ -45,7 +45,10 @@ export interface UiStateShape {
 
 const INITIAL: UiStateShape = {
   mode: 'prepare',
-  activeTool: 'move',
+  // A selected model is directly draggable by default. Keep the detailed
+  // transform controls quiet until the maker explicitly chooses Move/Rotate/
+  // Scale, rather than covering the build plate immediately after import.
+  activeTool: '',
   modelCount: 0,
   plateCount: 1,
   hasSelection: false,

@@ -18,19 +18,12 @@ if (typeof window === 'undefined') {
   self.addEventListener('fetch', (event) => {
     const req = event.request;
     
-    // Bypass service worker for local network / Tailscale domains.
-    // Chrome has a bug where Private Network Access (PNA) preflights fail instantly
-    // if initiated from inside a Service Worker. Letting the browser handle these
-    // directly (by not calling respondWith) allows the PNA preflight to succeed.
+    // Let the page own every cross-origin fetch. This is required for Local
+    // Network Access permission (HTTP or HTTPS), and COEP: credentialless
+    // already governs the document's cross-origin subresources.
     try {
       const url = new URL(req.url);
-      if (url.hostname.endsWith('.ts.net') || 
-          url.hostname === 'localhost' || 
-          url.hostname === '127.0.0.1' || 
-          url.hostname.startsWith('192.168.') || 
-          url.hostname.startsWith('10.')) {
-        return;
-      }
+      if (url.origin !== self.location.origin) return;
     } catch (e) {}
 
     // Let the browser handle its own cache-only revalidation requests.

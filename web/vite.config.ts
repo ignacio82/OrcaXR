@@ -9,7 +9,20 @@ const deploy = process.env.ORCAXR_DEPLOY === '1';
 
 export default defineConfig({
   base: deploy ? '/slicer/' : '/',
-  build: deploy ? { outDir: '../docs/slicer', emptyOutDir: true } : {},
+  build: {
+    ...(deploy ? { outDir: '../docs/slicer', emptyOutDir: true } : {}),
+    rollupOptions: {
+      output: {
+        // These SDKs are loaded only from feature-triggered dynamic imports.
+        // Stable names let Workbox leave them out of the first-install cache.
+        // A regular model/slice session should not download AI or Gaussian-splat
+        // rendering code just to become available offline.
+        manualChunks: {
+          genai: ['@google/genai'],
+        },
+      },
+    },
+  },
   plugins: deploy ? [] : [
     VitePWA({
       registerType: 'autoUpdate',
@@ -23,7 +36,14 @@ export default defineConfig({
         // an outdated engine. Keep it OUT of the precache manifest and serve it
         // NetworkFirst instead — always fresh when online, with a cached
         // fallback so offline XR use still works after one online load.
-        globIgnores: ['**/slicer/**'],
+        globIgnores: [
+          '**/slicer/**',
+          // Optional features use normal network-on-demand requests. Keeping
+          // them out of precache protects first launch on headset Wi-Fi.
+          '**/assets/SimulatorAddons-*.js',
+          '**/assets/genai-*.js',
+          '**/assets/spark.module-*.js',
+        ],
         cleanupOutdatedCaches: true,
         runtimeCaching: [
           {

@@ -67,6 +67,135 @@ engine (`libslic3r` via WASM) as the computational core.
 | Slicing core | OrcaSlicer `libslic3r` via WASM in the browser or via the Node.js backend server |
 | Network | fetch / HTTP requests |
 
+## XRBlocks spatial UI contract (load-bearing)
+
+OrcaXR currently resolves **XRBlocks 0.17.0** and **`@pmndrs/uikit`
+1.0.74** through `web/package-lock.json`; the ranges in `web/package.json`
+are not exact pins yet. Treat the installed, lockfile-resolved XRBlocks
+types/source and `web/node_modules/xrblocks/src/addons/uiblocks/SKILL.md` as
+the API authority for that version. Then use the version-matched samples and
+the official [Spatial UI](https://xrblocks.github.io/docs/manual/UI/),
+[UIBlocks](https://xrblocks.github.io/docs/manual/UIBlocks/),
+[Inputs](https://xrblocks.github.io/docs/manual/Inputs/), and
+[Simulator](https://xrblocks.github.io/docs/manual/Simulator/) manuals for
+intent. Generic `@pmndrs/uikit` knowledge and unversioned snippets come last.
+The high-level docs already disagree with 0.17.0 on constructors, defaults,
+color parsing, and behavior property names, so never guess an API. Pin both
+packages exactly before production qualification; on upgrade, inspect the new
+types/source, rerun XR interaction/performance tests, and update this section.
+
+Choose one UI system for each physical panel:
+
+- Use the core `View` family for simple standalone surfaces: `Panel`,
+  `SpatialPanel`, `Grid`/`Row`/`Col`, `ImageView`, `TextView`, pagers,
+  scrolling text, and the virtual keyboard. Core views use relative `x`/`y` in
+  roughly `[-0.5, 0.5]`, fractional `width`/`height`, scene-depth render order,
+  and a centered largest-square local coordinate system exposed through
+  `aspectRatio`, `rangeX`, and `rangeY`. Let the parent run
+  `updateLayoutsBFS()` after structural/layout changes.
+- Use the `uiblocks` addon for production application cards that need nested
+  flex layout, padding/gaps, strokes, gradients, rounded corners, shadows,
+  images, icons, or rich interaction. **Never mix core `Panel`/`SpatialPanel`
+  children with `UIPanel`/`UICard` children on the same physical surface.** A
+  core pager or keyboard must be its own spatial panel.
+
+Core `TextButton`/`IconButton` use `onTriggered` across mouse, controller, and
+pinch. The separate `xrblocks/addons/virtualkeyboard/Keyboard.js` panel exposes
+`onTextChanged`, `onEnterPressed`, and `setText`; its 1.0 m × 0.555 m default at
+`(0, 1.2, -1)` is a starting pose to requalify for OrcaXR, not a fixed layout.
+
+UIBlocks initialization is all-or-nothing: call `options.enableUI()`, call
+`options.uikit.enable(uikit)`, and set
+`xb.core.input.raycaster.sortFunction = raycastSortFunction` during script
+initialization. Missing any one commonly produces visible but non-interactive
+UI. `UICore.createCard()` registers the card and adds it to the owning script;
+do not add it to the scene a second time. `unregister()` and `clear()` remove
+and dispose cards, so use them only when destruction is intended.
+
+Build each independently positioned spatial surface as **one `UICard` pivot**
+with nested `UIPanel`s; do not make every visual section a separate card.
+Always specify the card's physical `sizeX`/`sizeY` in metres and `pixelSize` in
+metres per layout pixel—0.17.0 defaults differ from published guidance. Set an
+explicit flex direction, alignment, padding/gap, and child sizing; use
+`width: 'auto'` plus `alignItems: 'center'` for centered shrink-wrapped content
+when appropriate. Do not use large Z offsets for hierarchy: use stroke/shadow/
+contrast and only a tiny measured offset (about 0.001 m) to resolve real
+z-fighting.
+
+Use the exact 0.17.0 construction and mutation APIs:
+
+- `new UIPanel(options)`, `new UIText(text, options)`,
+  `new UIIcon(iconName, options)`, and `new UIImage(src, options)`.
+- There is no built-in button class. Compose a `UIPanel` with text/icon,
+  `onClick`, and explicit default/hover/pressed/disabled/selected/focus states.
+  The pinned callback is `() => void`; do not depend on returning a boolean to
+  consume an event.
+- Change live state with signal-aware methods such as `setFillColor`,
+  `setStrokeColor`, `setStrokeWidth`, `setCornerRadius`, `setProperties`,
+  `setText`, and `setColor`. Direct assignments such as `.fillColor`, `.color`,
+  or `.opacity` are neither the typed nor reliably reactive API.
+- UIBlocks uses `fillColor`, `strokeWidth`, `strokeColor`, and `cornerRadius`,
+  not CSS-like `backgroundColor`, `borderWidth`, `borderColor`, or
+  `borderRadius`. Prefer portable `#RRGGBB` plus explicit opacity; use alpha hex
+  only where the pinned parser is covered by a test. Avoid `rgba()`/`hsla()`.
+- `UIIcon` loads Material Symbols from a CDN in 0.17.0. Core product UI must
+  instead use bundled, pure-white SVGs through `UIImage` (or a verified local
+  icon wrapper) so icons work offline, under CSP, and without runtime tracking
+  or layout shifts.
+
+The 0.17.0 behavior names and units are exact: `HeadLeashBehavior` takes
+`offset: THREE.Vector3` plus optional `posLerp`/`rotLerp`; `BillboardBehavior`
+takes `mode: 'cylindrical' | 'spherical'` and optional `lerpFactor`;
+`ManipulationBehavior` takes `draggable`, `faceCamera`,
+`manipulationMargin`/`manipulationCornerRadius` in layout pixels;
+`ObjectAnchorBehavior` takes a target, pose mode, and offsets; and
+`ToggleAnimationBehavior` takes scale animations plus duration in seconds.
+Properties seen in older examples such as `constrainToCameraY`, `distance`,
+`heightOffset`, or `lerpSpeed` are invalid for the pinned version. Use gentle
+head leash only for user-critical HUDs, cylindrical billboard for stable
+world panels, and a deliberate header/frame as the manipulation grab target.
+Do not combine pose anchoring with billboarding, or head leash with another
+rotation-owning behavior; they write the same transform each frame.
+
+Design for spatial comfort and inclusion, not a flat desktop UI in 3D:
+
+- Derive placement from `xb.user.height`, `xb.user.panelDistance`, and the
+  safe-space radius. Keep primary controls around eye/chest height and within
+  comfortable arm/ray reach; start body text near 20–28 layout px at roughly
+  1.5–1.75 m only as a testable baseline, never as a universal constant.
+- Use a small token system for `pixelSize`, type scale, spacing, corner shape,
+  depth, and a restrained palette. Passthrough surfaces need sufficiently
+  opaque text backplates, contrast at both ends of every gradient, and
+  stroke/shadow separation. Never communicate state by color alone.
+- Keep motion short and purposeful (about 0.2 s is a starting point), provide
+  visible hover/press/selection feedback, avoid repeated head-locked motion,
+  and add OrcaXR-owned reduced-motion behavior because XRBlocks does not supply
+  the product policy.
+- Every flow must work with simulator mouse, tracked-controller rays, hands,
+  and Android XR gaze/select where available. Validate hit ordering, occlusion,
+  scroll/pager behavior, modal focus, cancel/back, destructive confirmation,
+  tooltips, text entry, and the virtual keyboard on a real headset. XRBlocks'
+  simulator abstracts input but does **not** emulate the WebXR API.
+- UIBlocks has no stable semantic buttons, fields, dialogs, focus order, ARIA/
+  screen-reader bridge, or proven XR scrolling primitive. OrcaXR must own those
+  composites and metadata, keep a complete accessible DOM counterpart, and use
+  paging/search/disclosure until scrolling is proven with ray and hand input.
+  Never use `window.prompt()` in XR or cycle an unknown choice on each pinch;
+  open an explicit labelled list/dialog with confirm, cancel, and keyboard.
+
+`UICard` is itself an XRBlocks script. The scene `ScriptsManager` traverses and
+updates scripts every frame even when their object is hidden. The current
+`OrcaWorkspace.update()` also loops over `uiCore.cards`, so visible cards are
+likely updated twice while hidden cards still receive the scene update. Do not
+add another manual card-update loop or claim `visible = false` removes work.
+P10.10 in `docs/parity.md` owns instrumentation and the fix: establish exactly
+one update owner, prove per-card update counts, pause/detach hidden expensive
+work through a supported lifecycle, and test disposal/listener cleanup. Core
+also dispatches controller events to script callbacks; do not register a second
+`selectstart`/`selectend` path. UI hits must suppress scene manipulation for
+every `UICard` ancestor, and every workspace owner must remove listeners/store
+subscriptions and dispose cards/resources deterministically.
+
 ## Upstream slicer strategy
 
 - **Base:** upstream `OrcaSlicer/OrcaSlicer` on GitHub. NOT Snapmaker's fork or FullSpectrum.
@@ -217,34 +346,34 @@ Each patch verified by incremental `cmake --build` (0 FAILED objects) + `./gradl
 
 2. **Dependency Update Review:** `./gradlew versionCatalogUpdate` updates `gradle/libs.versions.toml`. Always review `git diff gradle/libs.versions.toml` before committing — XR / Compose / Media3 patch bumps occasionally break the build.
 
-## Web → printer connectivity: mixed content, not CORS (`web/src/{features/MoonrakerClient,net/PrinterClient}.ts`)
+## Web → local services: Chrome Local Network Access + CORS
 
-The hosted web app runs on **https** (`https://orcaxr.martinez.fyi/slicer/`,
-GitHub Pages). A Snapmaker U1 / Klipper printer on the LAN speaks plain
-**http**. Browsers block `https page → http://<ip>` as **mixed content** —
-*before* the request leaves the browser, so before CORS is ever evaluated.
-This is why editing Moonraker `cors_domains` appears to do nothing and the old
-error message ("ensure cors_domains includes this app") sent users down a dead
-end: the request never reaches Moonraker to be CORS-checked. `cors_domains`
-only matters once the transport is https.
+The hosted app is HTTPS (`https://orcaxr.martinez.fyi/slicer/`), while
+Moonraker and the optional external slicer commonly expose HTTP on the LAN.
+Chrome 142+ can relax mixed-content blocking after the user grants Local
+Network Access. `web/src/net/LocalNetworkAccess.ts` is the shared seam: API,
+upload, probe, external-slicer polling, and fetched webcam snapshots must use
+`fetchLocalNetwork`. IP literals, localhost, IPv6, and `.local` stay under the
+browser's complete address-space table; HTTP hostnames outside those syntactic
+categories receive an explicit `targetAddressSpace: local`. That declaration
+is needed for custom LAN DNS, while avoiding a wrong declaration for literal
+addresses that Chrome classifies itself. Older browsers ignore the option and
+retain normal mixed-content blocking.
 
-The fix is a **browser-trusted https URL for the printer**, entered verbatim in
-the printer-host field. The turnkey path (no cert infra, no cost) is the
-Snapmaker U1 Extended Firmware's built-in **Tailscale**: `tailscale serve
---bg 80` mints a Let's Encrypt cert and fronts nginx (→ Moonraker) at
-`https://<name>.ts.net/`. Then https app → https printer, no mixed content, and
-`cors_domains: https://orcaxr.martinez.fyi` is honored. The headset must join
-the same tailnet. (A self-hosted https reverse proxy / tunnel works too; the
-client just needs an https URL.)
+The GitHub Pages cross-origin-isolation shim must not own cross-origin fetches:
+`web/public/coi-serviceworker.js` returns without `respondWith` for all of
+them so the page origin can obtain/use Local Network Access permission for HTTP
+or HTTPS targets. Do not restore a hand-written subnet allowlist; Chrome's
+classification includes details that application code should not duplicate.
 
-Client behavior both files now share: if the host carries an explicit
-`http(s)://` scheme it is used **verbatim** — no port probing, no scheme
-fallback (mangling ports onto a real `ts.net` URL would break it, and downgrade
-to http would re-trigger mixed content). Bare IPs keep the legacy
-7125/80/8080 probe. The "Failed to fetch" handler distinguishes the
-mixed-content case (https page + http target) from genuine reachability/CORS
-and only mentions `cors_domains` for the latter. Don't revert to a blanket
-"check cors_domains" message — it's the wrong diagnosis for the common case.
+LNA does **not** bypass CORS. Moonraker still needs
+`cors_domains` must include the page's exact origin (the hosted app uses
+`https://orcaxr.martinez.fyi`); API-key/custom-header requests
+preflight. Explicit `http(s)://` printer URLs remain verbatim and bare printer
+hosts retain 7125/80/8080 probing. Direct HTTP exposes status, API keys, webcam
+frames, and uploaded G-code, so instructions restrict it to trusted LANs.
+Tailscale Serve (`tailscale serve --bg http://127.0.0.1:80`) or another trusted
+HTTPS reverse proxy remains the cross-browser and remote-network fallback.
 
 ## External slicer server (`server/`)
 
@@ -308,13 +437,21 @@ logic verified against `src/OrcaSlicer.cpp` in the submodule):
 
 ## Related docs
 
-- [`ROADMAP.md`](ROADMAP.md) — forward-looking feature roadmap (single source of truth for sections A, B, C, E, F, G).
-- [`ROADMAP-painting-and-editing.md`](ROADMAP-painting-and-editing.md) — sibling roadmap for section D (painting & object editing). Split out under the parent's "<600 lines" rule.
-- [`docs/proposals/smart-auto-paint.md`](docs/proposals/smart-auto-paint.md) — Smart Auto-Paint design (D20): one-action whole-model paint, optional target image, optional FullSpectrum. M1 geometric (`auto_paint`) + M2 image-projection (`ColorScience`, `AutoPaintImageEngine`) + M4 vision-LLM semantic transfer with grade/refine loop (`SemanticPaintPlanner`, `auto_paint_from_reference`) shipped, physical-only. Plus 5 ideas borrowed from `taylormadearmy/u1-slicer-for-android`: `AutoPaintCascade` (metadata-aware: existing paint→shells→geometry, confetti guard, source/alternate; now the default `auto_paint` strategy), `auto_paint_label` (deterministic segmentation + no-spatial-grounding AI naming/recolour), `MultiProviderVisionClient` (Claude/Gemini/OpenAI/OpenRouter/Pollinations behind the existing `VisionApiClient` seam). M3 FullSpectrum (`FullSpectrumGamut` + `FsPaintSupport`, opt-in `use_full_spectrum=true`, experimental) shipped — PeggyPalette gate GREEN via the `1b4ef8b` re-gate; Snapmaker U1 hardware print is the only remaining FS validation step.
+- [`docs/parity.md`](docs/parity.md) — canonical implementation and evidence
+  plan, including the XRBlocks UI foundation and qualification gates in P10.
 - [`DESIGN.md`](DESIGN.md) — XR UX spec and baselines.
 - [`patches/README.md`](patches/README.md) — rules for patches against the OrcaSlicer submodule.
 
 ## Web UI UX gotchas
+
+- **XR tool rail must stay finite.** The left XR card is a compact spatial
+  surface, not a scrollable mirror of the desktop toolbar: render only the
+  five modal tools plus Auto-orient and Delete (64 px tiles); the complete
+  action catalogue stays in the progressive top menu. A previous all-toolbar
+  rail overflowed to the floor and made the compositor spend frame time laying
+  out off-screen buttons. Hidden cards are not automatically free; avoid
+  rebuilding them and use the measured single-owner lifecycle in the XRBlocks
+  contract above rather than a manual `UICard.update` loop.
 
 - **Multi-extruder filament selectors:** When the selected printer profile has multiple extruders (e.g., Snapmaker U1), the UI generates individual filament dropdowns for each extruder head (H-1, H-2, etc.). The global `sel-filament` dropdown MUST be hidden in this state (`display: 'none'`) to avoid redundancy and user confusion. Do not reintroduce a visible global filament dropdown alongside the per-head dropdowns.
 

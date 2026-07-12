@@ -25,6 +25,7 @@ export const SHORTCUTS_HTML = `
     <tr><td><kbd>Ctrl/⌘ K</kbd></td><td>Command palette (every action)</td></tr>
     <tr><td><kbd>Del</kbd></td><td>Delete the selected model</td></tr>
     <tr><td><kbd>Esc</kbd></td><td>Deselect / close this dialog</td></tr>
+    <tr><td><kbd>G</kbd> / <kbd>R</kbd> / <kbd>S</kbd></td><td>Move / Rotate / Scale selected model</td></tr>
     <tr><td>Drag</td><td>Move · Rotate · Scale (pick the tool on the left rail)</td></tr>
   </table>
   <p style="color:var(--oxr-color-text-muted)">More shortcuts arrive as features land.</p>`;

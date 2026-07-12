@@ -40,6 +40,10 @@ jobs:
         run: npm ci
         working-directory: ./web
 
+      - name: Test local-network requests
+        run: npm run test:local-network
+        working-directory: ./web
+
       - name: Build webapp
         run: ORCAXR_DEPLOY=1 npm run build
         working-directory: ./web

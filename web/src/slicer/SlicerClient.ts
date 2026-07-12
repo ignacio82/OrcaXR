@@ -1,3 +1,5 @@
+import {fetchLocalNetwork, normalizeHttpEndpoint} from '../net/LocalNetworkAccess';
+
 /**
  * Browser-side client for the OrcaXR WASM slicer (wasm/dist → /slicer/).
  *
@@ -125,7 +127,7 @@ export class SlicerClient {
       await new Promise((r) => setTimeout(r, 700));
       let status: { status: string; percent: number; message?: string; error?: string };
       try {
-        const res = await fetch(`${externalUrl}/jobs/${jobId}`);
+        const res = await fetchLocalNetwork(`${externalUrl}/jobs/${jobId}`);
         if (!res.ok) throw new Error(`status ${res.status}: ${await res.text()}`);
         status = await res.json();
         consecutiveFailures = 0;
@@ -141,7 +143,7 @@ export class SlicerClient {
         throw new Error(`External Slicer Failed: ${status.error}`);
       }
       if (status.status === 'done') {
-        const res = await fetch(`${externalUrl}/jobs/${jobId}/gcode`);
+        const res = await fetchLocalNetwork(`${externalUrl}/jobs/${jobId}/gcode`);
         if (!res.ok) {
           throw new Error(`External Slicer Failed: ${await res.text()}`);
         }
@@ -192,7 +194,9 @@ export class SlicerClient {
     maxThreads = 4,
     overrides: Record<string, string> = {},
   ): Promise<string> {
-    const externalUrl = SlicerClient.useExternalSlicer() ? SlicerClient.getExternalSlicerUrl() : '';
+    const externalUrl = SlicerClient.useExternalSlicer()
+      ? normalizeHttpEndpoint(SlicerClient.getExternalSlicerUrl())
+      : '';
     if (externalUrl) {
       if (this.onProgress) {
         this.onProgress({ percent: 0, message: 'Slicing externally...' });
@@ -204,7 +208,7 @@ export class SlicerClient {
       // Ask for the async job protocol (202 + job id, then progress polling).
       // A legacy server ignores the query flag and answers 200 + G-code
       // directly, so both server generations keep working.
-      const res = await fetch(`${externalUrl}/slice?async=1`, {
+      const res = await fetchLocalNetwork(`${externalUrl}/slice?async=1`, {
         method: 'POST',
         body: formData,
       });
@@ -301,13 +305,15 @@ export class SlicerClient {
     maxThreads = 4,
     overrides: Record<string, string> = {},
   ): Promise<string> {
-    const externalUrl = SlicerClient.useExternalSlicer() ? SlicerClient.getExternalSlicerUrl() : '';
+    const externalUrl = SlicerClient.useExternalSlicer()
+      ? normalizeHttpEndpoint(SlicerClient.getExternalSlicerUrl())
+      : '';
     if (externalUrl) {
       if (this.onProgress) this.onProgress({ percent: 0, message: 'Slicing project externally...' });
       const formData = new FormData();
       formData.append('file', new Blob([project]), 'project.3mf');
       formData.append('overrides', JSON.stringify(overrides));
-      const res = await fetch(`${externalUrl}/slice?async=1`, { method: 'POST', body: formData });
+      const res = await fetchLocalNetwork(`${externalUrl}/slice?async=1`, { method: 'POST', body: formData });
       if (res.status === 202) {
         const { job } = (await res.json()) as { job: string };
         return await this.pollExternalJob(externalUrl, job);
@@ -591,4 +597,3 @@ export class SlicerClient {
     }
   }
 }
-
