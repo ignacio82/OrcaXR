@@ -7,7 +7,11 @@ import * as fflate from 'fflate';
 import { writeMinimal3mf, build3mfModelXml } from '../Write3mf';
 
 let passed = 0;
-function test(name: string, fn: () => void) { fn(); passed++; console.log('  ✓', name); }
+function test(name: string, fn: () => void) {
+  fn();
+  passed++;
+  console.log('  ✓', name);
+}
 
 const oneTri = new Float32Array([0, 0, 0, 10, 0, 0, 0, 10, 0]);
 
@@ -33,10 +37,7 @@ test('vertex coordinates are preserved', () => {
 });
 
 test('two triangles index 0..5 with two <triangle> rows', () => {
-  const twoTris = new Float32Array([
-    0, 0, 0, 1, 0, 0, 0, 1, 0,
-    2, 0, 0, 3, 0, 0, 2, 1, 0,
-  ]);
+  const twoTris = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0, 0, 3, 0, 0, 2, 1, 0]);
   const xml = build3mfModelXml(twoTris);
   assert.strictEqual((xml.match(/<vertex /g) || []).length, 6);
   assert.match(xml, /v1="3" v2="4" v3="5"/);

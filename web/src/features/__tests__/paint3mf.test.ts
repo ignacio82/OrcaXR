@@ -7,7 +7,11 @@ import assert from 'node:assert';
 import { decodePaintedTriangle, applyPaintToPositions } from '../Paint3mf';
 
 let passed = 0;
-function test(name: string, fn: () => void) { fn(); passed++; console.log('  ✓', name); }
+function test(name: string, fn: () => void) {
+  fn();
+  passed++;
+  console.log('  ✓', name);
+}
 
 type Leaf = { verts: number[]; state: number };
 
@@ -15,11 +19,16 @@ function decode(str: string): Leaf[] {
   const out: Leaf[] = [];
   decodePaintedTriangle(
     str,
-    0, 0, 0, // A
-    4, 0, 0, // B
-    0, 4, 0, // C
-    (ax, ay, az, bx, by, bz, cx, cy, cz, state) =>
-      out.push({ verts: [ax, ay, az, bx, by, bz, cx, cy, cz], state }),
+    0,
+    0,
+    0, // A
+    4,
+    0,
+    0, // B
+    0,
+    4,
+    0, // C
+    (ax, ay, az, bx, by, bz, cx, cy, cz, state) => out.push({ verts: [ax, ay, az, bx, by, bz, cx, cy, cz], state }),
   );
   return out;
 }
@@ -58,8 +67,7 @@ test('three-side split covers the whole triangle', () => {
   // '3' = 3-side split; four leaf children all state 1 → "44443".
   const leaves = decode('44443');
   assert.strictEqual(leaves.length, 4);
-  const area = (v: number[]) =>
-    Math.abs((v[3] - v[0]) * (v[7] - v[1]) - (v[6] - v[0]) * (v[4] - v[1])) / 2;
+  const area = (v: number[]) => Math.abs((v[3] - v[0]) * (v[7] - v[1]) - (v[6] - v[0]) * (v[4] - v[1])) / 2;
   const total = leaves.reduce((s, l) => s + area(l.verts), 0);
   assert.ok(Math.abs(total - 8) < 1e-9, `area ${total} != 8`);
   assert.deepStrictEqual([...new Set(leaves.map((l) => l.state))], [1]);
@@ -81,32 +89,23 @@ test('throws on truncated bitstreams', () => {
 const TRI = new Float32Array([0, 0, 0, 4, 0, 0, 0, 4, 0]);
 
 test('bakes palette colors per state', () => {
-  const res = applyPaintToPositions(
-    TRI, { paint: ['4'], paintedCount: 1 }, ['#ff0000', '#00ff00'], '#0000ff',
-  )!;
+  const res = applyPaintToPositions(TRI, { paint: ['4'], paintedCount: 1 }, ['#ff0000', '#00ff00'], '#0000ff')!;
   assert.deepStrictEqual([...res.positions], [...TRI]);
   // state 1 → palette[0] = red, on all three vertices
   assert.deepStrictEqual([...res.colors], [1, 0, 0, 1, 0, 0, 1, 0, 0]);
 });
 
 test('base color for unpainted triangles and state 0', () => {
-  const res = applyPaintToPositions(
-    TRI, { paint: [null], paintedCount: 1 }, ['#ff0000'], '#0000ff',
-  )!;
+  const res = applyPaintToPositions(TRI, { paint: [null], paintedCount: 1 }, ['#ff0000'], '#0000ff')!;
   assert.deepStrictEqual([...res.colors], [0, 0, 1, 0, 0, 1, 0, 0, 1]);
 });
 
 test('null on triangle-count mismatch', () => {
-  assert.strictEqual(
-    applyPaintToPositions(TRI, { paint: ['4', '4'], paintedCount: 2 }, [], '#fff'),
-    null,
-  );
+  assert.strictEqual(applyPaintToPositions(TRI, { paint: ['4', '4'], paintedCount: 2 }, [], '#fff'), null);
 });
 
 test('malformed paint string degrades to unpainted', () => {
-  const res = applyPaintToPositions(
-    TRI, { paint: ['Z'], paintedCount: 1 }, ['#ff0000'], '#0000ff',
-  )!;
+  const res = applyPaintToPositions(TRI, { paint: ['Z'], paintedCount: 1 }, ['#ff0000'], '#0000ff')!;
   assert.deepStrictEqual([...res.positions], [...TRI]);
   assert.deepStrictEqual([...res.colors], [0, 0, 1, 0, 0, 1, 0, 0, 1]);
 });

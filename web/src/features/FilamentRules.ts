@@ -10,9 +10,7 @@
  */
 
 export type FilamentRuleResult =
-  | { kind: 'ok' }
-  | { kind: 'warning'; message: string }
-  | { kind: 'forbidden'; message: string };
+  { kind: 'ok' } | { kind: 'warning'; message: string } | { kind: 'forbidden'; message: string };
 
 export interface FilamentRules {
   supportByBed: Record<string, Set<string>>;
@@ -21,8 +19,10 @@ export interface FilamentRules {
 
 export const EMPTY_RULES: FilamentRules = { supportByBed: {}, warningByBed: {} };
 
-const baseUrl = import.meta.env.BASE_URL;
-const ASSET_PATH = baseUrl.endsWith('/') ? `${baseUrl}profiles/Snapmaker/filament/filament_hot_bed_nozzles.json` : `${baseUrl}/profiles/Snapmaker/filament/filament_hot_bed_nozzles.json`;
+const baseUrl = import.meta.env?.BASE_URL ?? '/';
+const ASSET_PATH = baseUrl.endsWith('/')
+  ? `${baseUrl}profiles/Snapmaker/filament/filament_hot_bed_nozzles.json`
+  : `${baseUrl}/profiles/Snapmaker/filament/filament_hot_bed_nozzles.json`;
 /** Parse the rules JSON. Tokens uppercased for case-insensitive substring match. */
 export function parseFilamentRules(text: string): FilamentRules {
   const root = JSON.parse(text) as Record<string, unknown>;
@@ -38,7 +38,9 @@ export function parseFilamentRules(text: string): FilamentRules {
       if (!Array.isArray(arr)) return null;
       const set = new Set<string>();
       for (const v of arr) {
-        const s = String(v ?? '').trim().toUpperCase();
+        const s = String(v ?? '')
+          .trim()
+          .toUpperCase();
         if (s) set.add(s);
       }
       return set.size ? set : null;
@@ -83,7 +85,7 @@ export function evaluateFilamentRules(
   bedKey: string | null,
   filamentTypes: string[],
 ): FilamentRuleResult {
-  if (bedKey == null) return { kind: 'ok' };
+  if (bedKey === null) return { kind: 'ok' };
   const support = rules.supportByBed[bedKey];
   if (!support) return { kind: 'ok' };
   const warningSet = rules.warningByBed[bedKey] ?? new Set<string>();

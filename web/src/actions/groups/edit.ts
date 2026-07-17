@@ -8,7 +8,7 @@
  * Edit entries are the *scene-level* history (transforms, add/delete) Orca
  * exposes on Ctrl+Z / Ctrl+Y, which OrcaXR has not built yet.
  */
-import type { Action } from '../ActionRegistry';
+import type { ActionDefinition as Action } from '../ActionRegistry';
 
 export const editActions: Action[] = [
   {
@@ -19,7 +19,6 @@ export const editActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'edit',
     hint: 'Undo the last scene edit',
-    run: (ctx) => ctx.undo(),
   },
   {
     id: 'edit_redo',
@@ -29,7 +28,6 @@ export const editActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'edit',
     hint: 'Redo the last undone scene edit',
-    run: (ctx) => ctx.redo(),
   },
   {
     id: 'edit_cut',
@@ -84,6 +82,7 @@ export const editActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'edit',
     hint: 'Remove the selected model',
+    shortcuts: ['Delete'],
     isEnabled: (s) => s.hasSelection,
     run: (ctx) => ctx.deleteSelected(),
   },
@@ -106,7 +105,6 @@ export const editActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'edit',
     hint: 'Select every model on the plate',
-    run: (ctx) => ctx.selectAll(),
   },
   {
     id: 'edit_deselect_all',
@@ -116,6 +114,7 @@ export const editActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'edit',
     hint: 'Clear the current selection',
+    shortcuts: ['Escape'],
     isEnabled: (s) => s.hasSelection,
     run: (ctx) => ctx.deselectAll(),
   },

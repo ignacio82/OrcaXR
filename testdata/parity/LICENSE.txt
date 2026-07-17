@@ -1,0 +1,11 @@
+SPDX-License-Identifier: CC0-1.0
+
+To the extent possible under law, the OrcaXR contributors have waived all copyright and related
+or neighboring rights to the synthetic parity fixtures and generation recipes in this directory.
+
+The full CC0 1.0 Universal legal text is available at:
+https://creativecommons.org/publicdomain/zero/1.0/legalcode
+
+No third-party model, slicer output, printer profile, trademark artwork, or proprietary sample is
+embedded in these fixtures.
+

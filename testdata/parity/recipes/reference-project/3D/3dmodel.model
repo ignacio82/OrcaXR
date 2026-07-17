@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xml:lang="en-US"
+       xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+       xmlns:ox="https://orcaxr.martinez.fyi/3mf/parity/1">
+  <metadata name="Title">OrcaXR synthetic parity fixture</metadata>
+  <resources>
+    <basematerials id="20">
+      <base name="Physical T0" displaycolor="#EF4444FF"/>
+      <base name="Physical T1" displaycolor="#3B82F6FF"/>
+    </basematerials>
+    <object id="1" type="model" name="Two-part assembly" ox:stable-id="object-assembly">
+      <components>
+        <component objectid="2" transform="1 0 0 0 1 0 0 0 1 0 0 0"/>
+        <component objectid="3" transform="1 0 0 0 1 0 0 0 1 12 0 0"/>
+      </components>
+    </object>
+    <object id="2" type="model" name="Painted tetrahedron" pid="20" pindex="0">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="10" y="0" z="0"/>
+          <vertex x="0" y="10" z="0"/>
+          <vertex x="0" y="0" z="10"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="2" v3="1" paint_color="1F" paint_supports="2" seam="1" fuzzy_skin="1" ox:face-tag="preserve-me"/>
+          <triangle v1="0" v2="1" v3="3"/>
+          <triangle v1="1" v2="2" v3="3"/>
+          <triangle v1="2" v2="0" v3="3"/>
+        </triangles>
+      </mesh>
+    </object>
+    <object id="3" type="model" name="Modifier tetrahedron" pid="20" pindex="1">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="6" y="0" z="0"/>
+          <vertex x="0" y="6" z="0"/>
+          <vertex x="0" y="0" z="6"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="2" v3="1"/>
+          <triangle v1="0" v2="1" v3="3"/>
+          <triangle v1="1" v2="2" v3="3"/>
+          <triangle v1="2" v2="0" v3="3"/>
+        </triangles>
+      </mesh>
+    </object>
+    <object id="4" type="model" name="Negative volume">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="4" y="0" z="0"/>
+          <vertex x="0" y="4" z="0"/>
+          <vertex x="0" y="0" z="4"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="2" v3="1"/>
+          <triangle v1="0" v2="1" v3="3"/>
+          <triangle v1="1" v2="2" v3="3"/>
+          <triangle v1="2" v2="0" v3="3"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1" transform="1 0 0 0 1 0 0 0 1 20 20 0" printable="1" ox:instance-id="instance-a"/>
+    <item objectid="1" transform="1 0 0 0 1 0 0 0 1 60 20 0" printable="1" ox:instance-id="instance-b"/>
+    <item objectid="4" transform="1 0 0 0 1 0 0 0 1 100 20 0" printable="0" ox:instance-id="negative-a"/>
+  </build>
+</model>
+

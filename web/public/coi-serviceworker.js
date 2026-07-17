@@ -3,17 +3,74 @@
  * can't send COOP/COEP response headers (e.g. GitHub Pages), so the WASM
  * slicer's SharedArrayBuffer worker threads can run.
  *
- * COEP is set to `credentialless` (not `require-corp`) so XR Blocks' cross-origin
- * CDN assets keep loading without a CORP header on every response — the same
- * policy the dev/preview server uses.
+ * COEP is set to `credentialless` (not `require-corp`) so explicit printer,
+ * model-catalog, and AI requests remain possible under the same policy used by
+ * the dev/preview server. Product UI assets, including XR icons, are local.
  *
  * Adapted from github.com/gzuidhof/coi-serviceworker (MIT). No caching: it just
  * re-serves each response with the isolation headers added.
  */
 if (typeof window === 'undefined') {
   // ---------- service worker context ----------
-  self.addEventListener('install', () => self.skipWaiting());
-  self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+  const CACHE_PREFIX = 'orcaxr-coi-';
+  const SHELL_CACHE = `${CACHE_PREFIX}shell-v1`;
+  const SLICER_CACHE = `${CACHE_PREFIX}slicer-v1`;
+
+  const withIsolationHeaders = (res) => {
+    if (res.status === 0) return res;
+    const headers = new Headers(res.headers);
+    headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+    headers.set('Cross-Origin-Embedder-Policy', 'credentialless');
+    headers.set('X-Content-Type-Options', 'nosniff');
+    return new Response(res.body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers,
+    });
+  };
+
+  const precacheShell = async () => {
+    const scope = new URL(self.registration.scope);
+    const cache = await caches.open(SHELL_CACHE);
+    const indexRequest = new Request(scope, { credentials: 'same-origin' });
+    const indexResponse = await fetch(indexRequest);
+    if (!indexResponse.ok) throw new Error(`App shell returned ${indexResponse.status}`);
+    await cache.put(indexRequest, indexResponse.clone());
+
+    const html = await indexResponse.text();
+    const resources = new Set([
+      new URL('coi-serviceworker.js', scope).href,
+      new URL('icon.svg', scope).href,
+      new URL('manifest.json', scope).href,
+    ]);
+    for (const match of html.matchAll(/(?:src|href)=["']([^"']+)["']/g)) {
+      const url = new URL(match[1], scope);
+      if (url.origin === scope.origin && !url.href.startsWith('data:')) resources.add(url.href);
+    }
+
+    const iconManifestUrl = new URL('icons/material/manifest.json', scope);
+    const iconManifestResponse = await fetch(iconManifestUrl);
+    if (iconManifestResponse.ok) {
+      const icons = await iconManifestResponse.clone().json();
+      resources.add(iconManifestUrl.href);
+      for (const file of icons) resources.add(new URL(`icons/material/${file}`, scope).href);
+    }
+    await cache.addAll([...resources]);
+  };
+
+  self.addEventListener('install', (event) => {
+    event.waitUntil(precacheShell().then(() => self.skipWaiting()));
+  });
+  self.addEventListener('activate', (event) => {
+    event.waitUntil((async () => {
+      for (const name of await caches.keys()) {
+        if (name.startsWith(CACHE_PREFIX) && ![SHELL_CACHE, SLICER_CACHE].includes(name)) {
+          await caches.delete(name);
+        }
+      }
+      await self.clients.claim();
+    })());
+  });
 
   self.addEventListener('fetch', (event) => {
     const req = event.request;
@@ -29,24 +86,44 @@ if (typeof window === 'undefined') {
     // Let the browser handle its own cache-only revalidation requests.
     if (req.cache === 'only-if-cached' && req.mode !== 'same-origin') return;
 
-    event.respondWith(
-      fetch(req.mode === 'no-cors' ? new Request(req, { credentials: 'omit' }) : req)
-        .then((res) => {
-          if (res.status === 0) return res; // opaque — can't touch headers
-          const headers = new Headers(res.headers);
-          headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-          headers.set('Cross-Origin-Embedder-Policy', 'credentialless');
-          return new Response(res.body, {
-            status: res.status,
-            statusText: res.statusText,
-            headers,
-          });
-        })
-        .catch((err) => {
-          console.error('[coi] fetch failed', err);
-          return fetch(req);
-        }),
-    );
+    if (req.method !== 'GET' || req.headers.has('range')) return;
+
+    // The engine remains NetworkFirst and in its own bounded-by-inventory
+    // cache. Other same-origin resources are also refreshed online and fall
+    // back to the versioned shell/runtime cache when offline.
+    const scope = new URL(self.registration.scope);
+    const slicerPath = new URL('slicer/', scope).pathname;
+    const cacheName = new URL(req.url).pathname.startsWith(slicerPath)
+      ? SLICER_CACHE
+      : SHELL_CACHE;
+    event.respondWith((async () => {
+      const request = req.mode === 'no-cors'
+        ? new Request(req, { credentials: 'omit' })
+        : req;
+      const cache = await caches.open(cacheName);
+      try {
+        const response = await fetch(request);
+        if (response.ok) {
+          await cache.put(req, response.clone());
+          if (cacheName === SLICER_CACHE) {
+            const keys = await cache.keys();
+            for (const stale of keys.slice(0, Math.max(0, keys.length - 4))) {
+              await cache.delete(stale);
+            }
+          }
+        }
+        return withIsolationHeaders(response);
+      } catch (error) {
+        const cached = await cache.match(req, { ignoreSearch: false })
+          || (req.mode === 'navigate' ? await cache.match(scope) : undefined);
+        if (cached) return withIsolationHeaders(cached);
+        console.error('[coi] offline cache miss', error);
+        return new Response('OrcaXR is offline and this resource is not cached.', {
+          status: 503,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        });
+      }
+    })());
   });
 } else {
   // ---------- page context: register + one-time reload ----------

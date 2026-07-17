@@ -23,8 +23,12 @@ RUN apt-get update && apt-get install -y \
 # Bump ORCA_VERSION to pick up new Snapmaker releases; keep it pinned (CLI
 # flags and profile schemas shift between releases — never track "latest").
 ARG ORCA_VERSION=2.3.4
-RUN git clone --depth 1 --branch "v${ORCA_VERSION}" \
-    https://github.com/Snapmaker/OrcaSlicer.git /orca
+ARG ORCA_COMMIT=9fd12ffb2b1b80c9fb4c14564754d2ec1573a626
+RUN git clone --filter=blob:none --no-checkout \
+    https://github.com/Snapmaker/OrcaSlicer.git /orca \
+    && git -C /orca fetch --depth 1 origin "${ORCA_COMMIT}" \
+    && git -C /orca checkout --detach "${ORCA_COMMIT}" \
+    && test "$(git -C /orca rev-parse HEAD)" = "${ORCA_COMMIT}"
 
 WORKDIR /orca
 
@@ -32,7 +36,7 @@ WORKDIR /orca
 # patches only rebuilds the (much cheaper) slicer stage below.
 RUN ./build_linux.sh -dr
 
-COPY patches/ /orca-patches/
+COPY server/patches/ /orca-patches/
 RUN git apply --verbose /orca-patches/*.patch && ./build_linux.sh -sr
 
 # ---- Stage 2: runtime — HTTP slicer server wrapping the patched CLI.
@@ -73,16 +77,25 @@ RUN printf '#!/bin/sh\nexport LD_LIBRARY_PATH="/app/orca/bin:${LD_LIBRARY_PATH}"
         > /usr/local/bin/orca-slicer && chmod +x /usr/local/bin/orca-slicer
 
 # Install server dependencies
-COPY package*.json ./
-RUN npm install
+COPY server/package*.json ./
+RUN npm ci --omit=dev
 
 # Copy WASM module
-COPY wasm-dist /app/wasm/dist
+COPY wasm/dist /app/wasm/dist
 
 # Copy server code
-COPY server.js slice_worker.mjs preset_key_types.json ./
+COPY server/server.js server/security.mjs server/slice_worker.mjs server/preset_key_types.json ./
+
+# The slicer and Node service do not need root. Project/config/output files
+# live in /tmp with per-file 0600 permissions.
+RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin orcaxr \
+    && test -d /home/orcaxr
 
 EXPOSE 3000
 ENV PORT=3000
+ENV HOST=127.0.0.1
+ENV HOME=/home/orcaxr
+
+USER orcaxr
 
 CMD ["node", "server.js"]

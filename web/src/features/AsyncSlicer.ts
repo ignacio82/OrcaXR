@@ -7,7 +7,7 @@ export class AsyncSlicer {
         onProgress(progress);
         if (progress >= 100) {
           clearInterval(interval);
-          resolve("; sliced gcode");
+          resolve('; sliced gcode');
         }
       }, 500);
     });

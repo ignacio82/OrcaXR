@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "generator": "tools/parity-oracles/generate-fixtures.mjs",
+  "deterministicZip": {
+    "compression": "STORE",
+    "memberOrder": "UTF-8 path ascending",
+    "timestamp": "1980-01-01T00:00:00Z"
+  },
+  "artifacts": [
+    {
+      "bytes": 15461,
+      "path": "expected/reference.semantic.json",
+      "sha256": "accc537a729c38acb5c33c968253814f0a9ecb29fe175b3856416eec44e28c4c"
+    },
+    {
+      "bytes": 8189,
+      "path": "fixtures/mutations/changed-setting.3mf",
+      "sha256": "b408d4688719a18e131aecd6509786e5235fb943812f792aae8183b529a917e7"
+    },
+    {
+      "bytes": 8118,
+      "path": "fixtures/mutations/missing-mixed-definition.3mf",
+      "sha256": "9d46fc567d375e1f471745a418b7f4456e2887ea3439c6befa0514050eb56ae8"
+    },
+    {
+      "bytes": 8172,
+      "path": "fixtures/mutations/missing-paint-facet.3mf",
+      "sha256": "29765322feaa7303c9bc4b71bfd64fdc138c3a88408570ed8b6b67f006b4b764"
+    },
+    {
+      "bytes": 8146,
+      "path": "fixtures/mutations/missing-part-assignment.3mf",
+      "sha256": "90a27c683b689465ca32e89948464856496135011151aba43e377a80110ef282"
+    },
+    {
+      "bytes": 603,
+      "path": "fixtures/mutations/missing-tool-change.gcode",
+      "sha256": "d38e62de9f66b7b59f964d1a35073d8dbcf1b17654e30a60d97b5fb3e694b503"
+    },
+    {
+      "bytes": 8189,
+      "path": "fixtures/reference.3mf",
+      "sha256": "4966bbe5824617cc447761798df37bfe63d8fb984f105e5c221b184c679b7879"
+    },
+    {
+      "bytes": 643,
+      "path": "fixtures/reference.gcode",
+      "sha256": "f44348fbe1d44747b7c961ef24262bd550b6525c378a97c108a20975b78b3ded"
+    },
+    {
+      "bytes": 130,
+      "path": "geometry/tetrahedron.obj",
+      "sha256": "d05ff05f1f452b0f4eff94bc336b8497c61b48e33f28ec64a4f65137ca792af0"
+    },
+    {
+      "bytes": 1877,
+      "path": "geometry/tetrahedron.step",
+      "sha256": "a3082fcd446fb8cc41bc01c83fb78c217aaee94f0bbc14229b36721fd9156f8c"
+    },
+    {
+      "bytes": 573,
+      "path": "geometry/tetrahedron.stl",
+      "sha256": "910bf0f4e81638b912a4097a7bd798374dbc838d81dcdbafd6343ead768c13d0"
+    }
+  ],
+  "recipes": {
+    "geometry": "sha256:cdbbcfe2f883aded2c402db2ada53d3d896ddb92fcd5d9be74b3b49a82ef39eb",
+    "mutations": "sha256:c2e31b125d6381ee59588e749fef1a5f295d2c09d8843a81298dedb46905323f",
+    "projectTree": "sha256:545dc92a55a37fa63a139d53e97e5444b02a71e2341429aa4bd14c078f1695ec",
+    "representativeGcode": "sha256:f44348fbe1d44747b7c961ef24262bd550b6525c378a97c108a20975b78b3ded"
+  }
+}

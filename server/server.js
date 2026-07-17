@@ -1,347 +1,1020 @@
-import express from 'express';
-import multer from 'multer';
-import cors from 'cors';
-import { spawn } from 'child_process';
-import { existsSync, readFileSync, createReadStream } from 'fs';
-import fs from 'fs/promises';
-import path from 'path';
-import os from 'os';
-import crypto from 'crypto';
-import readline from 'readline';
-import { fileURLToPath } from 'url';
+import express from "express";
+import multer from "multer";
+import cors from "cors";
+import { spawn } from "node:child_process";
+import { createReadStream, existsSync, readFileSync } from "node:fs";
+import fs from "node:fs/promises";
+import path from "node:path";
+import os from "node:os";
+import crypto from "node:crypto";
+import readline from "node:readline";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  bearerTokenMatches,
+  HttpError,
+  inspect3mf,
+  inspectStl,
+  isLoopbackHost,
+  isOriginAllowed,
+  loadServerConfig,
+  parseOverridesJson,
+  validateServerConfig,
+  WindowRateLimiter,
+} from "./security.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// Slicing engine:
-//   cli  (default) — official Snapmaker OrcaSlicer AppImage (`orca-slicer` in
-//                    PATH). Native x86-64: no wasm32 4GB heap cap, real TBB
-//                    threads, and upstream improvements arrive by bumping
-//                    ORCA_VERSION in the Dockerfile.
-//   wasm           — the same patched-libslic3r WASM build the browser runs,
-//                    kept as a parity/debug fallback (SLICER_ENGINE=wasm).
-const ENGINE = (process.env.SLICER_ENGINE || 'cli').toLowerCase();
-
-// Orca's CLI still links GUI libs and wants a display for some code paths;
-// inside the container we run it under xvfb-run (a virtual framebuffer).
-const XVFB_RUN = ['/usr/bin/xvfb-run', '/usr/local/bin/xvfb-run']
-  .find((p) => existsSync(p));
-
-const app = express();
-app.use(cors());
-
-const upload = multer({ dest: os.tmpdir() });
-
-app.get('/ping', (req, res) => res.send('pong'));
-
-// Which preset type owns each config key, extracted from libslic3r's
-// Preset.cpp (s_Preset_printer_options + machine-limits + extruder options,
-// and s_Preset_filament_options). Everything else rides in the process file
-// — the CLI loads unknown keys with ForwardCompatibilitySubstitutionRule::
-// Enable, so a mis-binned key is tolerated, but each file's `type` must be
-// one the CLI accepts and `from` must be "user" (server.js used to send
-// `from: project`, which --load-settings rejects outright).
+const DEFAULT_ENGINE = (process.env.SLICER_ENGINE || "cli").toLowerCase();
+const XVFB_RUN = ["/usr/bin/xvfb-run", "/usr/local/bin/xvfb-run"].find(
+  (candidate) => existsSync(candidate),
+);
 const KEY_TYPES = JSON.parse(
-  readFileSync(path.join(__dirname, 'preset_key_types.json'), 'utf8'));
+  readFileSync(path.join(__dirname, "preset_key_types.json"), "utf8"),
+);
 const MACHINE_KEYS = new Set(KEY_TYPES.machine);
 const FILAMENT_KEYS = new Set(KEY_TYPES.filament);
-// Keys that crash the CLI config loader. wipe_tower_filament used to live
-// here: normalize_fdm dereferenced a missing nozzle_diameter whenever the
-// key appeared in a partial (process-only) config — fixed at the source by
-// patches/0002-normalize-fdm-partial-config-null-nozzle.patch, applied to
-// the from-source CLI this image builds. FullSpectrum keys (mixed_*,
-// dithering_*, …) pass through: Snapmaker Orca ≥ 2.3.3 supports Full
-// Spectrum natively.
 const CLI_CRASH_KEYS = new Set([]);
+const MAX_LOG_BYTES = 64 * 1024;
+const SLICER_ENV_KEYS = [
+  "DISPLAY",
+  "FONTCONFIG_PATH",
+  "HOME",
+  "LANG",
+  "LC_ALL",
+  "LD_LIBRARY_PATH",
+  "LOGNAME",
+  "ORCAXR_WASM_DIR",
+  "PATH",
+  "SHELL",
+  "TMPDIR",
+  "TZ",
+  "USER",
+  "XAUTHORITY",
+  "XDG_CACHE_HOME",
+  "XDG_CONFIG_HOME",
+  "XDG_RUNTIME_DIR",
+];
 
-/**
- * Split the client's flattened machine+process+filament config
- * (ProfileLoader.ts resolves the `inherits` chains browser-side) back into
- * the three typed preset files the OrcaSlicer CLI expects:
- * --load-settings machine.json;process.json --load-filaments filament.json
- */
-async function writeCliPresets(overrides, dir) {
-  // The CLI's compatibility gate compares the process/filament
-  // `compatible_printers` list against the machine's *system* name — which
-  // for a `from: user` machine is its (empty) `inherits`, so nothing ever
-  // matches. Declaring the machine `from: system` makes its own name the
-  // system name, and the explicit compatible_printers lists satisfy the gate.
-  const cfgs = {
-    machine: { name: 'OrcaXR machine', type: 'machine', from: 'system', inherits: '' },
+function abortReason(signal, fallbackCode = "SLICE_CANCELLED") {
+  if (signal?.reason instanceof Error) return signal.reason;
+  const error = new Error(
+    fallbackCode === "SLICE_TIMEOUT" ? "Slice timed out" : "Slice cancelled",
+  );
+  error.code = fallbackCode;
+  return error;
+}
+
+function boundedLog(current, data) {
+  const next = current + data.toString();
+  return next.length <= MAX_LOG_BYTES ? next : next.slice(-MAX_LOG_BYTES);
+}
+
+function sanitizeProgress(message) {
+  return String(message || "")
+    .replaceAll(os.tmpdir(), "[temporary directory]")
+    .replace(/(?:[A-Za-z]:[\\/]|\/)[^\s"'<>]+/g, "[path]")
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "")
+    .slice(0, 256);
+}
+
+/** Log only a bounded error class/code; engine messages may contain paths, profiles, or secrets. */
+function safeErrorIdentity(error) {
+  const rawName = error instanceof Error ? error.name : "UnknownError";
+  const name = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(rawName)
+    ? rawName
+    : "UnknownError";
+  const rawCode =
+    error && typeof error === "object" ? String(error.code ?? "") : "";
+  const code = /^[A-Z0-9_-]{1,64}$/.test(rawCode) ? rawCode : "UNCLASSIFIED";
+  return `${name} [${code}]`;
+}
+
+function slicerEnvironment(extra = {}) {
+  const env = {};
+  for (const key of SLICER_ENV_KEYS) {
+    if (process.env[key] !== undefined) env[key] = process.env[key];
+  }
+  return { ...env, ...extra };
+}
+
+async function writeCliPresets(overrides, directory) {
+  const configs = {
+    machine: {
+      name: "OrcaXR machine",
+      type: "machine",
+      from: "system",
+      inherits: "",
+    },
     process: {
-      name: 'OrcaXR process', type: 'process', from: 'user', inherits: '',
-      compatible_printers: ['OrcaXR machine'],
+      name: "OrcaXR process",
+      type: "process",
+      from: "user",
+      inherits: "",
+      compatible_printers: ["OrcaXR machine"],
     },
     filament: {
-      name: 'OrcaXR filament', type: 'filament', from: 'user', inherits: '',
-      compatible_printers: ['OrcaXR machine'],
+      name: "OrcaXR filament",
+      type: "filament",
+      from: "user",
+      inherits: "",
+      compatible_printers: ["OrcaXR machine"],
     },
   };
   for (const [key, value] of Object.entries(overrides)) {
-    if (key === 'from' || key === 'name' || key === 'type' || key === 'inherits') continue;
-    if (CLI_CRASH_KEYS.has(key)) continue;
-    const bin = MACHINE_KEYS.has(key) ? 'machine'
-      : FILAMENT_KEYS.has(key) ? 'filament'
-      : 'process';
-    cfgs[bin][key] = value;
+    if (
+      ["from", "name", "type", "inherits"].includes(key) ||
+      CLI_CRASH_KEYS.has(key)
+    )
+      continue;
+    const bin = MACHINE_KEYS.has(key)
+      ? "machine"
+      : FILAMENT_KEYS.has(key)
+        ? "filament"
+        : "process";
+    configs[bin][key] = value;
   }
   const paths = {};
-  for (const [type, cfg] of Object.entries(cfgs)) {
-    paths[type] = path.join(dir, `${type}.json`);
-    await fs.writeFile(paths[type], JSON.stringify(cfg, null, 1));
+  for (const [type, config] of Object.entries(configs)) {
+    paths[type] = path.join(directory, `${type}.json`);
+    await fs.writeFile(paths[type], JSON.stringify(config, null, 1), {
+      mode: 0o600,
+    });
   }
   return paths;
 }
 
-/**
- * Stream the CLI's structured progress. orca-slicer's --pipe option writes
- * newline-delimited JSON ({plate_percent, total_percent, message, …}) to a
- * named pipe; the read end must exist before the CLI tries to open the
- * write end (it opens O_WRONLY|O_NONBLOCK, which fails with ENXIO when
- * nobody is reading — it retries a few times, then slices silently).
- */
 function watchProgressPipe(fifoPath, onProgress) {
   const stream = createReadStream(fifoPath);
-  const rl = readline.createInterface({ input: stream });
-  rl.on('line', (line) => {
+  const lines = readline.createInterface({ input: stream });
+  lines.on("line", (line) => {
     try {
-      const j = JSON.parse(line);
-      const percent = Number(j.total_percent ?? j.plate_percent);
-      if (Number.isFinite(percent)) {
-        onProgress(Math.max(0, Math.min(100, percent)), j.message || '');
-      }
-    } catch { /* partial line or non-JSON chatter — ignore */ }
+      const event = JSON.parse(line);
+      const percent = Number(event.total_percent ?? event.plate_percent);
+      if (Number.isFinite(percent))
+        onProgress(Math.max(0, Math.min(100, percent)), event.message || "");
+    } catch {
+      // A partial/non-JSON progress line is engine chatter, not a request failure.
+    }
   });
-  stream.on('error', () => {});
-  return () => { rl.close(); stream.destroy(); };
+  stream.on("error", () => {});
+  return () => {
+    lines.close();
+    stream.destroy();
+  };
 }
 
-/**
- * Slice with the official OrcaSlicer CLI. The uploaded STL already has
- * transforms baked into printer coordinates, so arranging/orienting is
- * explicitly disabled to preserve placement.
- */
-function runCliSlice(modelPath, overrides, onProgress) {
-  return new Promise(async (resolve, reject) => {
-    const outDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orcaxr-out-'));
-    const fifoPath = path.join(outDir, 'progress.pipe');
-    await new Promise((res) => spawn('mkfifo', [fifoPath]).on('close', res));
-    const stopWatching = watchProgressPipe(fifoPath, onProgress);
-    // Project 3MFs carry their own full config (Metadata/project_settings
-    // .config — including FullSpectrum mixed-filament definitions); slicing
-    // them under generated preset files would fight the embedded settings,
-    // so they slice as-authored, like the desktop app. STLs get the client's
-    // flattened profile split into typed preset files.
-    const is3mf = modelPath.toLowerCase().endsWith('.3mf');
+function signalProcessTree(child, signal) {
+  if (!child?.pid || child.exitCode !== null || child.signalCode !== null)
+    return;
+  try {
+    if (process.platform !== "win32") process.kill(-child.pid, signal);
+    else child.kill(signal);
+  } catch (error) {
+    if (error.code !== "ESRCH") throw error;
+  }
+}
+
+/** Terminate a detached child and all descendants, escalating after a bounded grace period. */
+export async function terminateProcessTree(child, graceMs = 5000) {
+  if (!child?.pid || child.exitCode !== null || child.signalCode !== null)
+    return;
+  const closed = new Promise((resolve) => child.once("close", resolve));
+  signalProcessTree(child, "SIGTERM");
+  const graceful = await Promise.race([
+    closed.then(() => true),
+    new Promise((resolve) => setTimeout(() => resolve(false), graceMs)),
+  ]);
+  if (graceful) return;
+  signalProcessTree(child, "SIGKILL");
+  await Promise.race([
+    closed,
+    new Promise((resolve) => setTimeout(resolve, 1000)),
+  ]);
+}
+
+function spawnDetached(command, args, options = {}) {
+  return spawn(command, args, {
+    ...options,
+    detached: process.platform !== "win32",
+    stdio: options.stdio ?? ["ignore", "pipe", "pipe"],
+  });
+}
+
+function waitForChild(child, signal, onData = () => {}, killGraceMs = 5000) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const settle = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener("abort", onAbort);
+      callback(value);
+    };
+    const onAbort = () => {
+      void terminateProcessTree(child, killGraceMs)
+        .catch(() => {})
+        .finally(() => settle(reject, abortReason(signal)));
+    };
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener("abort", onAbort, { once: true });
+    child.stdout?.on("data", onData);
+    child.stderr?.on("data", onData);
+    child.once("error", (error) => settle(reject, error));
+    child.once("close", (code) => {
+      if (signal?.aborted) settle(reject, abortReason(signal));
+      else settle(resolve, code);
+    });
+  });
+}
+
+async function makeFifo(fifoPath, signal, killGraceMs) {
+  const child = spawnDetached("mkfifo", [fifoPath]);
+  const code = await waitForChild(child, signal, () => {}, killGraceMs);
+  if (code !== 0) {
+    await terminateProcessTree(child, killGraceMs).catch(() => {});
+    throw new Error(`mkfifo exited with code ${code}`);
+  }
+}
+
+async function runCliSlice({
+  modelPath,
+  outputPath,
+  overrides,
+  onProgress,
+  signal,
+  config,
+}) {
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "orcaxr-out-"));
+  const fifoPath = path.join(outDir, "progress.pipe");
+  let stopWatching = () => {};
+  try {
+    await makeFifo(fifoPath, signal, config.childKillGraceMs);
+    stopWatching = watchProgressPipe(fifoPath, onProgress);
     const presetArgs = [];
-    if (!is3mf) {
+    if (!modelPath.toLowerCase().endsWith(".3mf")) {
       const presets = await writeCliPresets(overrides, outDir);
       presetArgs.push(
-        '--load-settings', `${presets.machine};${presets.process}`,
-        '--load-filaments', presets.filament,
+        "--load-settings",
+        `${presets.machine};${presets.process}`,
+        "--load-filaments",
+        presets.filament,
       );
     }
     const args = [
       ...presetArgs,
-      '--slice', '0',
-      '--arrange', '0',
-      '--orient', '0',
-      '--pipe', fifoPath,
-      '--outputdir', outDir,
+      "--slice",
+      "0",
+      "--arrange",
+      "0",
+      "--orient",
+      "0",
+      "--pipe",
+      fifoPath,
+      "--outputdir",
+      outDir,
       modelPath,
     ];
-    const [cmd, cmdArgs] = XVFB_RUN
-      ? [XVFB_RUN, ['-a', 'orca-slicer', ...args]]
-      : ['orca-slicer', args];
-
-    // Project 3MFs are authored by the desktop app whose 3MF format version
-    // (e.g. 2.2.x) is newer than the CLI's SLIC3R_VERSION major, so the CLI's
-    // version gate rejects them with CLI_FILE_VERSION_NOT_SUPPORTED (exit 232).
-    // The desktop GUI doesn't gate; this env var is the fork's official bypass
-    // (Snapmaker_Orca.cpp:1273). Harmless for STLs and same-version 3MFs.
-    const proc = spawn(cmd, cmdArgs, {
-      env: { ...process.env, SNAPMAKER_ORCA_ALLOW_NEWER_FILE: '1' },
+    const [command, commandArgs] = XVFB_RUN
+      ? [XVFB_RUN, ["-a", "orca-slicer", ...args]]
+      : ["orca-slicer", args];
+    const child = spawnDetached(command, commandArgs, {
+      env: slicerEnvironment({ SNAPMAKER_ORCA_ALLOW_NEWER_FILE: "1" }),
     });
-    let log = '';
-    const onData = (data) => { log += data.toString(); };
-    proc.stdout.on('data', onData);
-    proc.stderr.on('data', onData);
-    proc.on('error', (err) => { stopWatching(); reject(err); });
-    proc.on('close', async (code) => {
-      stopWatching();
-      try {
-        const files = await fs.readdir(outDir);
-        const gcodeFile = files.find((f) => f.endsWith('.gcode'));
-        if (gcodeFile) {
-          // Some Orca versions exit non-zero on post-slice warnings even
-          // though the G-code was written — the output file is the truth.
-          const gcode = await fs.readFile(path.join(outDir, gcodeFile));
-          resolve(gcode);
-        } else {
-          reject(new Error(`orca-slicer exited with code ${code}, no G-code produced.\nLog:\n${log}`));
-        }
-      } catch (e) {
-        reject(e);
-      } finally {
-        await fs.rm(outDir, { recursive: true, force: true }).catch(() => {});
-      }
-    });
-  });
+    let log = "";
+    const code = await waitForChild(
+      child,
+      signal,
+      (data) => {
+        log = boundedLog(log, data);
+      },
+      config.childKillGraceMs,
+    );
+    const files = await fs.readdir(outDir);
+    const gcodeFile = files.find((file) => file.endsWith(".gcode"));
+    if (!gcodeFile)
+      throw new Error(
+        `orca-slicer exited with code ${code}; no G-code produced. Log:\n${log}`,
+      );
+    const sourcePath = path.join(outDir, gcodeFile);
+    const stat = await fs.stat(sourcePath);
+    if (stat.size > config.maxGcodeBytes)
+      throw new Error("Slicer output exceeds ORCAXR_MAX_GCODE_BYTES");
+    await fs.copyFile(sourcePath, outputPath);
+  } finally {
+    stopWatching();
+    await fs.rm(outDir, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
-/**
- * Slice with the WASM engine in a child Node process (separate process so
- * --max-old-space-size can exceed the parent's heap; the wasm32 module
- * itself still caps at 4GB).
- */
-function runWasmSlice(modelPath, configPath, outputPath, onProgress) {
-  return new Promise((resolve, reject) => {
-    const maxSpaceSize = process.env.MAX_OLD_SPACE_SIZE || '4096';
-    const proc = spawn('node', [
+async function runWasmSlice({
+  modelPath,
+  configPath,
+  outputPath,
+  overrides,
+  onProgress,
+  signal,
+  config,
+}) {
+  const wasmOverrides = { ...overrides, from: "project" };
+  await fs.writeFile(configPath, JSON.stringify(wasmOverrides, null, 2), {
+    mode: 0o600,
+  });
+  const maxSpaceSize = process.env.MAX_OLD_SPACE_SIZE || "4096";
+  const child = spawnDetached(
+    process.execPath,
+    [
       `--max-old-space-size=${maxSpaceSize}`,
-      'slice_worker.mjs',
+      path.join(__dirname, "slice_worker.mjs"),
       modelPath,
       configPath,
       outputPath,
-    ]);
-    let log = '';
-    const onData = (data) => {
+    ],
+    { cwd: __dirname, env: slicerEnvironment() },
+  );
+  let log = "";
+  const code = await waitForChild(
+    child,
+    signal,
+    (data) => {
       const text = data.toString();
-      log += text;
-      // Engine progress lines look like "[orcaxr] 42% Generating walls".
-      const m = text.match(/\[orcaxr\] (\d+)% *([^\n]*)/);
-      if (m) onProgress(Number(m[1]), m[2] || '');
+      log = boundedLog(log, text);
+      const match = text.match(/\[orcaxr\] (\d+)% *([^\n]*)/);
+      if (match) onProgress(Number(match[1]), match[2] || "");
+    },
+    config.childKillGraceMs,
+  );
+  if (code !== 0)
+    throw new Error(`WASM slicer exited with code ${code}. Log:\n${log}`);
+  const stat = await fs.stat(outputPath);
+  if (stat.size > config.maxGcodeBytes)
+    throw new Error("Slicer output exceeds ORCAXR_MAX_GCODE_BYTES");
+}
+
+class Scheduler {
+  constructor(maxConcurrent, logError) {
+    this.maxConcurrent = maxConcurrent;
+    this.logError = logError;
+    this.active = new Map();
+    this.queue = [];
+  }
+
+  enqueue(job, task, cancelQueued) {
+    let resolveCompletion;
+    const completion = new Promise((resolve) => {
+      resolveCompletion = resolve;
+    });
+    const entry = { job, task, cancelQueued, resolveCompletion };
+    job.completion = completion;
+    if (this.active.size < this.maxConcurrent) this.start(entry);
+    else this.queue.push(entry);
+    return completion;
+  }
+
+  start(entry) {
+    clearTimeout(entry.job.queueTimer);
+    delete entry.job.queueTimer;
+    entry.job.status = "running";
+    entry.job.updatedAt = Date.now();
+    this.active.set(entry.job.id, entry);
+    Promise.resolve()
+      .then(entry.task)
+      .catch((error) =>
+        this.logError(
+          "[slicer] unexpected job wrapper failure:",
+          safeErrorIdentity(error),
+        ),
+      )
+      .finally(() => {
+        this.active.delete(entry.job.id);
+        entry.resolveCompletion();
+        this.drain();
+      });
+  }
+
+  drain() {
+    while (this.active.size < this.maxConcurrent && this.queue.length)
+      this.start(this.queue.shift());
+  }
+
+  cancelQueued(jobId) {
+    const index = this.queue.findIndex((entry) => entry.job.id === jobId);
+    if (index < 0) return false;
+    const [entry] = this.queue.splice(index, 1);
+    Promise.resolve(entry.cancelQueued()).finally(entry.resolveCompletion);
+    return true;
+  }
+
+  get queuedCount() {
+    return this.queue.length;
+  }
+}
+
+function createRateMiddleware(limiter) {
+  return (req, res, next) => {
+    const key = req.socket.remoteAddress || "unknown";
+    const result = limiter.consume(key);
+    res.setHeader("X-RateLimit-Remaining", String(result.remaining));
+    if (!result.allowed) {
+      res.setHeader("Retry-After", String(result.retryAfterSeconds));
+      return sendError(
+        res,
+        new HttpError(
+          429,
+          "RATE_LIMITED",
+          "Too many requests. Try again later.",
+        ),
+      );
+    }
+    next();
+  };
+}
+
+function sendError(res, error) {
+  const known = error instanceof HttpError;
+  const status = known ? error.status : 500;
+  const code = known ? error.code : "INTERNAL_ERROR";
+  const message = known
+    ? error.publicMessage
+    : "The server could not complete the request.";
+  return res.status(status).json({ error: { code, message } });
+}
+
+function normalizeConfig(base, overrides = {}) {
+  const config = { ...base, ...overrides };
+  config.authRequired = Boolean(config.token) || !isLoopbackHost(config.host);
+  config.allowLoopbackOrigins = isLoopbackHost(config.host);
+  return validateServerConfig(config);
+}
+
+function jobError(code, message, status = 500) {
+  return { code, message, status };
+}
+
+/** Create an isolated app/job scheduler. Tests inject a runner without starting OrcaSlicer. */
+export function createSlicerService(options = {}) {
+  const config = normalizeConfig(
+    loadServerConfig(options.env ?? process.env),
+    options.config,
+  );
+  const engine = (options.engine ?? DEFAULT_ENGINE).toLowerCase();
+  if (!["cli", "wasm"].includes(engine))
+    throw new Error(`Unsupported SLICER_ENGINE: ${engine}`);
+  const logger = options.logger ?? console;
+  const runner =
+    options.runner ??
+    ((context) =>
+      engine === "wasm" ? runWasmSlice(context) : runCliSlice(context));
+  const app = express();
+  const jobs = new Map();
+  const scheduler = new Scheduler(config.maxConcurrentJobs, (...args) =>
+    logger.error(...args),
+  );
+  const generalLimiter = new WindowRateLimiter({
+    max: config.maxRequestsPerWindow,
+    windowMs: config.rateWindowMs,
+    maxClients: config.maxRateLimitClients,
+  });
+  const sliceLimiter = new WindowRateLimiter({
+    max: config.maxSliceRequestsPerWindow,
+    windowMs: config.rateWindowMs,
+    maxClients: config.maxRateLimitClients,
+  });
+  let pendingUploads = 0;
+
+  app.disable("x-powered-by");
+  app.set("trust proxy", false);
+  app.use((req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    next();
+  });
+  app.use(createRateMiddleware(generalLimiter));
+  app.use(
+    cors({
+      origin(origin, callback) {
+        if (isOriginAllowed(origin, config)) callback(null, true);
+        else
+          callback(
+            new HttpError(
+              403,
+              "ORIGIN_DENIED",
+              "This browser origin is not allowed.",
+            ),
+          );
+      },
+      methods: ["GET", "POST", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Authorization", "Content-Type"],
+      credentials: false,
+      maxAge: 600,
+    }),
+  );
+  app.use((req, res, next) => {
+    if (req.method === "OPTIONS" || !config.authRequired) return next();
+    if (!bearerTokenMatches(req.get("authorization"), config.token)) {
+      res.setHeader("WWW-Authenticate", 'Bearer realm="OrcaXR slicer"');
+      return sendError(
+        res,
+        new HttpError(
+          401,
+          "AUTH_REQUIRED",
+          "A valid bearer token is required.",
+        ),
+      );
+    }
+    next();
+  });
+  app.use(express.json({ limit: config.maxOverridesBytes, strict: true }));
+
+  const upload = multer({
+    dest: os.tmpdir(),
+    limits: {
+      fileSize: config.maxUploadBytes,
+      files: 1,
+      fields: 1,
+      fieldSize: config.maxOverridesBytes,
+      // Busboy emits LIMIT_PART_COUNT when the configured count is reached,
+      // so three is the strict ceiling that permits our two expected parts.
+      parts: 3,
+    },
+  });
+
+  const cleanupPaths = async (...paths) => {
+    await Promise.all(
+      paths.filter(Boolean).map((file) => fs.unlink(file).catch(() => {})),
+    );
+  };
+
+  const cleanupJob = async (job, includeOutput = false) => {
+    await cleanupPaths(
+      job.modelPath,
+      job.configPath,
+      includeOutput ? job.outputPath : null,
+    );
+  };
+
+  const removeJob = async (job) => {
+    clearTimeout(job.queueTimer);
+    if (!jobs.delete(job.id)) return;
+    await cleanupJob(job, true);
+  };
+
+  const executeJob = async (job) => {
+    const timeout = setTimeout(() => {
+      const error = new Error("Slice exceeded its configured deadline");
+      error.code = "SLICE_TIMEOUT";
+      job.controller.abort(error);
+    }, config.sliceTimeoutMs);
+    timeout.unref();
+    const onProgress = (percent, message = "") => {
+      if (job.status !== "running") return;
+      job.percent = Math.max(0, Math.min(100, Number(percent) || 0));
+      job.message = sanitizeProgress(message);
+      job.updatedAt = Date.now();
     };
-    proc.stdout.on('data', onData);
-    proc.stderr.on('data', onData);
-    proc.on('error', (err) => reject(err));
-    proc.on('close', async (code) => {
-      if (code !== 0) {
-        return reject(new Error(`WASM slicer exited with code ${code}.\nLog:\n${log}`));
+    try {
+      await runner({
+        modelPath: job.modelPath,
+        configPath: job.configPath,
+        outputPath: job.outputPath,
+        overrides: job.overrides,
+        onProgress,
+        signal: job.controller.signal,
+        config,
+      });
+      if (job.controller.signal.aborted)
+        throw abortReason(job.controller.signal);
+      const stat = await fs.lstat(job.outputPath);
+      if (!stat.isFile() || stat.size === 0)
+        throw new Error("Slicer did not produce a regular G-code file");
+      if (stat.size > config.maxGcodeBytes)
+        throw new Error("Slicer output exceeds configured G-code limit");
+      await fs.chmod(job.outputPath, 0o600);
+      job.outputBytes = stat.size;
+      job.percent = 100;
+      job.message = "";
+      job.status = "done";
+    } catch (error) {
+      if (job.controller.signal.aborted) {
+        const reason = abortReason(job.controller.signal);
+        if (reason.code === "SLICE_TIMEOUT") {
+          job.status = "error";
+          job.publicError = jobError(
+            "SLICE_TIMEOUT",
+            "Slicing exceeded the configured time limit.",
+            504,
+          );
+        } else {
+          job.status = "cancelled";
+          job.publicError = jobError(
+            "SLICE_CANCELLED",
+            "Slicing was cancelled.",
+            409,
+          );
+        }
+      } else {
+        logger.error(
+          `[slicer:${engine}] slice failed:`,
+          safeErrorIdentity(error),
+        );
+        job.status = "error";
+        job.publicError = jobError(
+          "SLICE_FAILED",
+          "Slicing failed. Check the server logs.",
+          500,
+        );
       }
+      await cleanupPaths(job.outputPath);
+    } finally {
+      clearTimeout(timeout);
+      job.updatedAt = Date.now();
+      await cleanupJob(job, false);
+      delete job.overrides;
+    }
+  };
+
+  const cancelJob = (job) => {
+    if (job.status === "queued") {
+      clearTimeout(job.queueTimer);
+      job.status =
+        job.publicError?.code === "QUEUE_TIMEOUT" ? "error" : "cancelled";
+      if (!job.publicError)
+        job.publicError = jobError(
+          "SLICE_CANCELLED",
+          "Slicing was cancelled.",
+          409,
+        );
+      job.updatedAt = Date.now();
+      return scheduler.cancelQueued(job.id);
+    }
+    if (job.status === "running") {
+      job.status = "cancelling";
+      job.updatedAt = Date.now();
+      const error = new Error("Slice cancelled by request");
+      error.code = "SLICE_CANCELLED";
+      job.controller.abort(error);
+      return true;
+    }
+    return job.status === "cancelling";
+  };
+
+  const reserveUpload = (req, res, next) => {
+    if (jobs.size + pendingUploads >= config.maxStoredJobs) {
+      return sendError(
+        res,
+        new HttpError(503, "SERVER_BUSY", "The slicer job queue is full."),
+      );
+    }
+    pendingUploads += 1;
+    let released = false;
+    req.releaseAdmission = () => {
+      if (released) return;
+      released = true;
+      pendingUploads -= 1;
+    };
+    res.once("finish", req.releaseAdmission);
+    res.once("close", req.releaseAdmission);
+    next();
+  };
+
+  const asyncRoute = (handler) => (req, res, next) =>
+    Promise.resolve(handler(req, res, next)).catch(next);
+
+  app.get("/ping", (req, res) => res.type("text/plain").send("pong"));
+
+  app.post(
+    "/slice",
+    createRateMiddleware(sliceLimiter),
+    reserveUpload,
+    upload.single("file"),
+    asyncRoute(async (req, res) => {
+      const owned = new Set(req.file?.path ? [req.file.path] : []);
       try {
-        resolve(await fs.readFile(outputPath));
-      } catch (e) {
-        reject(new Error('Failed to read output G-Code: ' + e.message));
+        if (!req.file)
+          throw new HttpError(
+            400,
+            "FILE_REQUIRED",
+            "A model or project file is required.",
+          );
+        const overrides = parseOverridesJson(
+          req.body.overrides,
+          config.maxOverridesBytes,
+        );
+        const stat = await fs.stat(req.file.path);
+        if (stat.size < 5)
+          throw new HttpError(
+            400,
+            "INVALID_MODEL",
+            "The uploaded model file is invalid.",
+          );
+        const handle = await fs.open(req.file.path, "r");
+        const magic = Buffer.alloc(4);
+        try {
+          await handle.read(magic, 0, 4, 0);
+        } finally {
+          await handle.close();
+        }
+        const isZip = magic[0] === 0x50 && magic[1] === 0x4b;
+        if (isZip) await inspect3mf(req.file.path, config);
+        else await inspectStl(req.file.path);
+        await fs.chmod(req.file.path, 0o600);
+        const modelPath = `${req.file.path}${isZip ? ".3mf" : ".stl"}`;
+        const configPath = `${req.file.path}.json`;
+        const outputPath = `${req.file.path}.gcode`;
+        await fs.rename(req.file.path, modelPath);
+        owned.delete(req.file.path);
+        owned.add(modelPath);
+
+        if (
+          scheduler.active.size >= config.maxConcurrentJobs &&
+          scheduler.queuedCount >= config.maxQueuedJobs
+        ) {
+          throw new HttpError(
+            503,
+            "SERVER_BUSY",
+            "The slicer job queue is full.",
+          );
+        }
+        const now = Date.now();
+        const job = {
+          id: crypto.randomUUID(),
+          status: "queued",
+          percent: 0,
+          message: "",
+          createdAt: now,
+          updatedAt: now,
+          controller: new AbortController(),
+          modelPath,
+          configPath,
+          outputPath,
+          overrides,
+        };
+        job.queueTimer = setTimeout(() => {
+          if (job.status !== "queued") return;
+          job.publicError = jobError(
+            "QUEUE_TIMEOUT",
+            "The slice waited too long for an engine slot.",
+            503,
+          );
+          cancelJob(job);
+        }, config.queueTimeoutMs);
+        job.queueTimer.unref();
+        jobs.set(job.id, job);
+        owned.clear();
+        req.releaseAdmission();
+        scheduler.enqueue(
+          job,
+          () => executeJob(job),
+          async () => {
+            job.controller.abort(
+              Object.assign(new Error("Queued slice cancelled"), {
+                code: "SLICE_CANCELLED",
+              }),
+            );
+            if (job.publicError?.code === "QUEUE_TIMEOUT") job.status = "error";
+            else {
+              job.status = "cancelled";
+              job.publicError = jobError(
+                "SLICE_CANCELLED",
+                "Slicing was cancelled.",
+                409,
+              );
+            }
+            job.updatedAt = Date.now();
+            await cleanupJob(job, true);
+            delete job.overrides;
+          },
+        );
+
+        if (req.query.async === "1")
+          return res.status(202).json({ job: job.id });
+
+        const abortOnDisconnect = () => {
+          if (!res.writableEnded && ["queued", "running"].includes(job.status))
+            cancelJob(job);
+        };
+        req.once("aborted", abortOnDisconnect);
+        res.once("close", abortOnDisconnect);
+        await job.completion;
+        req.removeListener("aborted", abortOnDisconnect);
+        res.removeListener("close", abortOnDisconnect);
+        if (res.destroyed && !res.writableEnded) {
+          await removeJob(job);
+          return;
+        }
+        if (job.status !== "done") {
+          const error =
+            job.publicError ??
+            jobError(
+              "SLICE_FAILED",
+              "Slicing failed. Check the server logs.",
+              500,
+            );
+          await removeJob(job);
+          return sendError(
+            res,
+            new HttpError(error.status, error.code, error.message),
+          );
+        }
+        res.type("text/plain");
+        try {
+          await new Promise((resolve, reject) => {
+            res.sendFile(job.outputPath, (error) =>
+              error ? reject(error) : resolve(),
+            );
+          });
+        } finally {
+          await removeJob(job);
+        }
+      } catch (error) {
+        await cleanupPaths(...owned);
+        throw error;
+      } finally {
+        req.releaseAdmission?.();
       }
+    }),
+  );
+
+  app.get("/jobs/:id", (req, res) => {
+    const job = jobs.get(req.params.id);
+    if (!job)
+      return sendError(
+        res,
+        new HttpError(404, "JOB_NOT_FOUND", "No such job."),
+      );
+    res.json({
+      status: job.status,
+      percent: job.percent,
+      message: job.message,
+      error: job.publicError?.message,
+      errorCode: job.publicError?.code,
     });
   });
-}
 
-// ---------------------------------------------------------------------------
-// Job store. POST /slice?async=1 returns a job id immediately; the client
-// polls GET /jobs/:id for {status, percent, message} and fetches the result
-// from GET /jobs/:id/gcode. POST /slice without the flag keeps the original
-// synchronous contract, so old clients keep working against this server and
-// new clients degrade gracefully against old servers (a legacy server
-// ignores the query string and answers 200 + G-code instead of 202).
-// ---------------------------------------------------------------------------
-const jobs = new Map();
-const JOB_TTL_MS = 30 * 60 * 1000;
+  app.get(
+    "/jobs/:id/gcode",
+    asyncRoute(async (req, res) => {
+      const job = jobs.get(req.params.id);
+      if (!job)
+        return sendError(
+          res,
+          new HttpError(404, "JOB_NOT_FOUND", "No such job."),
+        );
+      if (job.status !== "done") {
+        throw new HttpError(409, "JOB_NOT_READY", `Job is ${job.status}.`);
+      }
+      res.type("text/plain");
+      try {
+        await new Promise((resolve, reject) => {
+          res.sendFile(job.outputPath, (error) =>
+            error ? reject(error) : resolve(),
+          );
+        });
+      } finally {
+        await removeJob(job);
+      }
+    }),
+  );
 
-setInterval(() => {
-  const now = Date.now();
-  for (const [id, job] of jobs) {
-    if (now - job.createdAt > JOB_TTL_MS) jobs.delete(id);
-  }
-}, 60 * 1000).unref();
+  app.delete(
+    "/jobs/:id",
+    asyncRoute(async (req, res) => {
+      const job = jobs.get(req.params.id);
+      if (!job)
+        return sendError(
+          res,
+          new HttpError(404, "JOB_NOT_FOUND", "No such job."),
+        );
+      if (!["queued", "running", "cancelling"].includes(job.status)) {
+        throw new HttpError(
+          409,
+          "JOB_NOT_CANCELLABLE",
+          `Job is ${job.status}.`,
+        );
+      }
+      cancelJob(job);
+      const status = job.status;
+      res.status(status === "cancelled" ? 200 : 202).json({ status });
+    }),
+  );
 
-async function runSliceJob(job, modelPath, overrides, configPath, outputPath) {
-  const onProgress = (percent, message = '') => {
-    job.percent = percent;
-    job.message = message;
-    console.log(`[slicer:${ENGINE}] ${percent}%${message ? ' ' + message : ''}`);
-  };
-  try {
-    if (ENGINE === 'wasm') {
-      overrides['from'] = 'project'; // the WASM engine's json loader expects it
-      await fs.writeFile(configPath, JSON.stringify(overrides, null, 2));
-      job.gcode = await runWasmSlice(modelPath, configPath, outputPath, onProgress);
-    } else {
-      job.gcode = await runCliSlice(modelPath, overrides, onProgress);
+  app.use(async (error, req, res, next) => {
+    if (req.file?.path) await cleanupPaths(req.file.path);
+    req.releaseAdmission?.();
+    if (res.headersSent) return next(error);
+    if (error instanceof multer.MulterError) {
+      const oversized = [
+        "LIMIT_FILE_SIZE",
+        "LIMIT_FIELD_VALUE",
+        "LIMIT_PART_COUNT",
+        "LIMIT_FILE_COUNT",
+        "LIMIT_FIELD_COUNT",
+      ].includes(error.code);
+      return sendError(
+        res,
+        new HttpError(
+          oversized ? 413 : 400,
+          oversized ? "UPLOAD_LIMIT" : "INVALID_UPLOAD",
+          oversized
+            ? "The upload exceeds a configured limit."
+            : "The multipart upload is invalid.",
+        ),
+      );
     }
-    job.percent = 100;
-    job.status = 'done';
-  } catch (err) {
-    console.error(`[slicer:${ENGINE}] slice failed:`, err.message);
-    job.status = 'error';
-    job.error = err.message;
-  } finally {
-    await fs.unlink(modelPath).catch(() => {});
-    await fs.unlink(configPath).catch(() => {});
-    await fs.unlink(outputPath).catch(() => {});
-  }
+    if (error?.type === "entity.too.large") {
+      return sendError(
+        res,
+        new HttpError(
+          413,
+          "JSON_LIMIT",
+          "The JSON request exceeds the configured limit.",
+        ),
+      );
+    }
+    if (error?.type === "entity.parse.failed") {
+      return sendError(
+        res,
+        new HttpError(
+          400,
+          "INVALID_JSON",
+          "The request body contains invalid JSON.",
+        ),
+      );
+    }
+    if (!(error instanceof HttpError)) {
+      logger.error("[server] request failed:", safeErrorIdentity(error));
+    }
+    return sendError(res, error);
+  });
+
+  app.use((req, res) =>
+    sendError(res, new HttpError(404, "NOT_FOUND", "No such endpoint.")),
+  );
+
+  const expiryTimer = setInterval(
+    () => {
+      const now = Date.now();
+      for (const job of jobs.values()) {
+        if (!["done", "error", "cancelled"].includes(job.status)) continue;
+        if (now - job.updatedAt > config.jobTtlMs) void removeJob(job);
+      }
+    },
+    Math.min(60_000, Math.max(1000, Math.floor(config.jobTtlMs / 2))),
+  );
+  expiryTimer.unref();
+
+  const start = (port = config.port) => {
+    const server = app.listen({ port, host: config.host }, () => {
+      const address = server.address();
+      const actualPort =
+        typeof address === "object" && address ? address.port : port;
+      logger.log(
+        `OrcaXR External Slicer Server listening on ${config.host}:${actualPort} (engine: ${engine})`,
+      );
+    });
+    server.requestTimeout = config.httpRequestTimeoutMs;
+    server.timeout = config.httpRequestTimeoutMs;
+    server.headersTimeout = Math.min(60_000, config.httpRequestTimeoutMs);
+    server.keepAliveTimeout = 5_000;
+    server.maxHeadersCount = 64;
+    server.maxRequestsPerSocket = 100;
+    server.maxConnections = config.maxConnections;
+    return server;
+  };
+
+  const shutdown = async () => {
+    clearInterval(expiryTimer);
+    for (const job of jobs.values()) cancelJob(job);
+    await Promise.allSettled(
+      [...jobs.values()].map((job) => job.completion).filter(Boolean),
+    );
+    await Promise.allSettled([...jobs.values()].map((job) => removeJob(job)));
+  };
+
+  return { app, config, engine, jobs, scheduler, shutdown, start };
 }
 
-app.post('/slice', upload.single('file'), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).send('No file uploaded.');
-  }
+const defaultService = createSlicerService();
+export const app = defaultService.app;
+export function startServer(port = defaultService.config.port) {
+  return defaultService.start(port);
+}
+export function shutdownServer() {
+  return defaultService.shutdown();
+}
 
-  let overrides;
-  try {
-    overrides = req.body.overrides ? JSON.parse(req.body.overrides) : {};
-  } catch (e) {
-    await fs.unlink(req.file.path).catch(() => {});
-    return res.status(400).send('Invalid overrides JSON: ' + e.message);
-  }
-  const configPath = req.file.path + '.json';
-  // A 3MF is a ZIP ("PK\x03\x04"): project slices (FullSpectrum virtual
-  // filaments, per-part extruders) upload the project file itself so the
-  // CLI slices it with its embedded config — exactly like the desktop app
-  // opening the same file. Everything else is a baked STL.
-  const magic = Buffer.alloc(4);
-  const fh = await fs.open(req.file.path, 'r');
-  await fh.read(magic, 0, 4, 0);
-  await fh.close();
-  const is3mf = magic[0] === 0x50 && magic[1] === 0x4b && magic[2] === 0x03 && magic[3] === 0x04;
-  const modelPath = req.file.path + (is3mf ? '.3mf' : '.stl');
-  const outputPath = req.file.path + '.gcode';
-  await fs.rename(req.file.path, modelPath);
-
-  const job = {
-    id: crypto.randomUUID(),
-    status: 'running',
-    percent: 0,
-    message: '',
-    createdAt: Date.now(),
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
+) {
+  const server = startServer();
+  let stopping = false;
+  const stop = (signal) => {
+    if (stopping) return;
+    stopping = true;
+    console.log(`[server] received ${signal}; cancelling active slices`);
+    server.close(() => {});
+    server.closeIdleConnections?.();
+    void shutdownServer().finally(() => process.exit(0));
+    setTimeout(() => process.exit(1), 15_000).unref();
   };
-  jobs.set(job.id, job);
-  const done = runSliceJob(job, modelPath, overrides, configPath, outputPath);
-
-  if (req.query.async === '1') {
-    return res.status(202).json({ job: job.id });
-  }
-
-  // Legacy synchronous contract.
-  await done;
-  jobs.delete(job.id);
-  if (job.status === 'done') {
-    res.setHeader('Content-Type', 'text/plain');
-    res.send(job.gcode);
-  } else {
-    res.status(500).send(job.error);
-  }
-});
-
-app.get('/jobs/:id', (req, res) => {
-  const job = jobs.get(req.params.id);
-  if (!job) return res.status(404).send('No such job.');
-  res.json({ status: job.status, percent: job.percent, message: job.message, error: job.error });
-});
-
-app.get('/jobs/:id/gcode', (req, res) => {
-  const job = jobs.get(req.params.id);
-  if (!job) return res.status(404).send('No such job.');
-  if (job.status !== 'done') return res.status(409).send(`Job is ${job.status}.`);
-  res.setHeader('Content-Type', 'text/plain');
-  res.send(job.gcode);
-  jobs.delete(job.id);
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`OrcaXR External Slicer Server running on port ${PORT} (engine: ${ENGINE})`);
-  if (ENGINE !== 'wasm') {
-    console.log(`Make sure 'orca-slicer' is available in your PATH.`);
-  }
-});
+  process.once("SIGTERM", () => stop("SIGTERM"));
+  process.once("SIGINT", () => stop("SIGINT"));
+}

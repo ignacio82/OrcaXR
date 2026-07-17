@@ -7,7 +7,7 @@
  * `docs/orca_parity_plan.md` — each is a fixed-geometry model plus a
  * per-band config override, so they extend `CalibrationRampGenerator`.
  */
-import type { Action } from '../ActionRegistry';
+import type { ActionDefinition as Action } from '../ActionRegistry';
 
 export const calibrationActions: Action[] = [
   {

@@ -7,24 +7,36 @@
  * wipe_tower_x/y is the LEFT-FRONT corner of the tower's AABB.
  */
 
-export interface AabbXY { xMin: number; yMin: number; xMax: number; yMax: number; }
+export interface AabbXY {
+  xMin: number;
+  yMin: number;
+  xMax: number;
+  yMax: number;
+}
 
 export function aabbOf(cx: number, cy: number, w: number, d: number): AabbXY {
   return { xMin: cx - w / 2, yMin: cy - d / 2, xMax: cx + w / 2, yMax: cy + d / 2 };
 }
 
-export type WipeTowerBias =
-  | 'back_left' | 'back_right' | 'front_left' | 'front_right' | 'largest_clearance';
+export type WipeTowerBias = 'back_left' | 'back_right' | 'front_left' | 'front_right' | 'largest_clearance';
 
 export function parseBias(name: string | null | undefined): WipeTowerBias {
   if (!name) return 'back_left';
   switch (name.toLowerCase().replace(/-/g, '_')) {
-    case 'back_left': return 'back_left';
-    case 'back_right': return 'back_right';
-    case 'front_left': return 'front_left';
-    case 'front_right': return 'front_right';
-    case 'largest_clearance': case 'largest': case 'max': return 'largest_clearance';
-    default: return 'back_left';
+    case 'back_left':
+      return 'back_left';
+    case 'back_right':
+      return 'back_right';
+    case 'front_left':
+      return 'front_left';
+    case 'front_right':
+      return 'front_right';
+    case 'largest_clearance':
+    case 'largest':
+    case 'max':
+      return 'largest_clearance';
+    default:
+      return 'back_left';
   }
 }
 
@@ -56,12 +68,7 @@ export interface WipeTowerOpts {
 }
 
 /** Score the 8 candidates and return the best placement. */
-export function scoreWipeTower(
-  parts: AabbXY[],
-  bedW: number,
-  bedD: number,
-  opts: WipeTowerOpts = {},
-): WipeTowerPick {
+export function scoreWipeTower(parts: AabbXY[], bedW: number, bedD: number, opts: WipeTowerOpts = {}): WipeTowerPick {
   const towerW = opts.towerW ?? 60;
   const towerD = opts.towerD ?? towerW;
   const safetyMm = opts.safetyMm ?? 5;
@@ -90,23 +97,57 @@ export function scoreWipeTower(
   ];
 
   const biasOrders: Record<WipeTowerBias, string[]> = {
-    back_left: ['back-left', 'back-mid', 'back-right', 'left-mid', 'right-mid', 'front-left', 'front-mid', 'front-right'],
-    back_right: ['back-right', 'back-mid', 'back-left', 'right-mid', 'left-mid', 'front-right', 'front-mid', 'front-left'],
-    front_left: ['front-left', 'front-mid', 'front-right', 'left-mid', 'right-mid', 'back-left', 'back-mid', 'back-right'],
-    front_right: ['front-right', 'front-mid', 'front-left', 'right-mid', 'left-mid', 'back-right', 'back-mid', 'back-left'],
+    back_left: [
+      'back-left',
+      'back-mid',
+      'back-right',
+      'left-mid',
+      'right-mid',
+      'front-left',
+      'front-mid',
+      'front-right',
+    ],
+    back_right: [
+      'back-right',
+      'back-mid',
+      'back-left',
+      'right-mid',
+      'left-mid',
+      'front-right',
+      'front-mid',
+      'front-left',
+    ],
+    front_left: [
+      'front-left',
+      'front-mid',
+      'front-right',
+      'left-mid',
+      'right-mid',
+      'back-left',
+      'back-mid',
+      'back-right',
+    ],
+    front_right: [
+      'front-right',
+      'front-mid',
+      'front-left',
+      'right-mid',
+      'left-mid',
+      'back-right',
+      'back-mid',
+      'back-left',
+    ],
     largest_clearance: [],
   };
   const biasOrder = biasOrders[bias];
 
   const ranked = candidates.map(([label, x, y]) => {
     const tower: AabbXY = { xMin: x, yMin: y, xMax: x + tw, yMax: y + td };
-    const minClearance = parts.length === 0
-      ? Infinity
-      : Math.min(...parts.map((p) => aabbLInfClearance(tower, p)));
+    const minClearance = parts.length === 0 ? Infinity : Math.min(...parts.map((p) => aabbLInfClearance(tower, p)));
     return { label, x, y, clearance: minClearance };
   });
 
-  let best: typeof ranked[number];
+  let best: (typeof ranked)[number];
   if (bias === 'largest_clearance') {
     best = ranked.reduce((a, b) => (b.clearance > a.clearance ? b : a));
   } else {

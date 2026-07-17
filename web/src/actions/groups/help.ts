@@ -9,7 +9,7 @@
  * user-visible filesystem) — it is intentionally represented as a disabled
  * placeholder rather than omitted, so the menu structure stays 1:1 with Orca.
  */
-import type { Action } from '../ActionRegistry';
+import type { ActionDefinition as Action } from '../ActionRegistry';
 
 /** OrcaXR's own website and GitHub — Help links point here, not at upstream. */
 const SITE = 'https://orcaxr.martinez.fyi';
@@ -44,7 +44,6 @@ export const helpActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'help',
     hint: 'Open the on-disk configuration folder',
-    run: (ctx) => ctx.showConfigFolder(),
   },
   {
     id: 'help_tutorial',

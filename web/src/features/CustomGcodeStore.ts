@@ -5,16 +5,16 @@ export interface CustomGcodeEntry {
 
 export class CustomGcodeStore {
   private entries: CustomGcodeEntry[] = [];
-  
+
   addEntry(layer: number, gcode: string) {
     this.entries.push({ layer, gcode });
   }
-  
+
   getEntries(): CustomGcodeEntry[] {
     return this.entries;
   }
-  
+
   applyToGcode(gcode: string): string {
-    return gcode; 
+    return gcode;
   }
 }

@@ -67,11 +67,32 @@ engine (`libslic3r` via WASM) as the computational core.
 | Slicing core | OrcaSlicer `libslic3r` via WASM in the browser or via the Node.js backend server |
 | Network | fetch / HTTP requests |
 
+## Parity implementation invariants
+
+- `docs/parity.md` is the canonical phased plan/evidence policy. The generated
+  `docs/parity/snapmaker-v2.3.4.json` currently maps 1,622 upstream leaves in
+  13 families to a task/adaptation using 17 exact Git blobs. Generate/check it
+  only with `tools/parity/`; never hand-edit it or derive truth from a dirty
+  upstream worktree. A mapped leaf is scope coverage, not implemented parity.
+- `web/src/project/` is the UI-independent canonical graph/history boundary.
+  Domain code must not import DOM, XRBlocks, or Three UI objects; enforce this
+  with `npm --prefix web run architecture:check`. Its transactional import,
+  legacy-v1 migration, and revisioned slice coordinator are headless foundations;
+  until live consumers are adapted, legacy workspace state is only a migration
+  source and must never become a second canonical model. Pinned v2.3.4 mixed
+  recipes reference stable physical-head IDs only, never another virtual row.
+- `ActionRegistry` is the only invocation/availability gateway for DOM, menus,
+  shortcuts, command palette, and XR. `implemented` requires a real handler and
+  evidence mapping; `partial`, `unavailable`, and `blocked` remain visibly and
+  machine-readably honest.
+- `./scripts/quality.sh` is the clean-clone repository gate. Web-only changes
+  must at minimum pass `npm --prefix web run quality`; do not weaken a failing
+  check or claim broad parity before P12.6 is independently verified.
+
 ## XRBlocks spatial UI contract (load-bearing)
 
-OrcaXR currently resolves **XRBlocks 0.17.0** and **`@pmndrs/uikit`
-1.0.74** through `web/package-lock.json`; the ranges in `web/package.json`
-are not exact pins yet. Treat the installed, lockfile-resolved XRBlocks
+OrcaXR exact-pins **XRBlocks 0.17.0** and **`@pmndrs/uikit` 1.0.74** in
+both `web/package.json` and `web/package-lock.json`. Treat the installed XRBlocks
 types/source and `web/node_modules/xrblocks/src/addons/uiblocks/SKILL.md` as
 the API authority for that version. Then use the version-matched samples and
 the official [Spatial UI](https://xrblocks.github.io/docs/manual/UI/),
@@ -80,8 +101,7 @@ the official [Spatial UI](https://xrblocks.github.io/docs/manual/UI/),
 [Simulator](https://xrblocks.github.io/docs/manual/Simulator/) manuals for
 intent. Generic `@pmndrs/uikit` knowledge and unversioned snippets come last.
 The high-level docs already disagree with 0.17.0 on constructors, defaults,
-color parsing, and behavior property names, so never guess an API. Pin both
-packages exactly before production qualification; on upgrade, inspect the new
+color parsing, and behavior property names, so never guess an API. On upgrade, inspect the new
 types/source, rerun XR interaction/performance tests, and update this section.
 
 Choose one UI system for each physical panel:
@@ -183,25 +203,33 @@ Design for spatial comfort and inclusion, not a flat desktop UI in 3D:
   Never use `window.prompt()` in XR or cycle an unknown choice on each pinch;
   open an explicit labelled list/dialog with confirm, cancel, and keyboard.
 
-`UICard` is itself an XRBlocks script. The scene `ScriptsManager` traverses and
-updates scripts every frame even when their object is hidden. The current
-`OrcaWorkspace.update()` also loops over `uiCore.cards`, so visible cards are
-likely updated twice while hidden cards still receive the scene update. Do not
-add another manual card-update loop or claim `visible = false` removes work.
-P10.10 in `docs/parity.md` owns instrumentation and the fix: establish exactly
-one update owner, prove per-card update counts, pause/detach hidden expensive
-work through a supported lifecycle, and test disposal/listener cleanup. Core
-also dispatches controller events to script callbacks; do not register a second
-`selectstart`/`selectend` path. UI hits must suppress scene manipulation for
-every `UICard` ancestor, and every workspace owner must remove listeners/store
-subscriptions and dispose cards/resources deterministically.
+`UICard` is itself an XRBlocks script. The scene `ScriptsManager` is the sole
+per-frame update owner; never restore a manual `UICard.update()` loop. Core is
+also the sole controller select dispatcher, so do not add a second
+`selectstart`/`selectend` path. `OrcaWorkspace` maintains one capability-state
+subscription and its idempotent `dispose()` removes that subscription, window/
+canvas/XR listeners, controls, cards, and owned GPU resources. Any hit beneath
+any `UICard` ancestor suppresses scene manipulation. Hidden scripts can still
+tick, so expensive hidden surfaces must be detached or paused through a measured
+supported lifecycle rather than relying on `visible = false`. P10.10 still
+requires counter instrumentation, repeated-open/close leak checks, and Galaxy XR
+qualification before the lifecycle/performance item is complete.
 
 ## Upstream slicer strategy
 
-- **Base:** upstream `OrcaSlicer/OrcaSlicer` on GitHub. NOT Snapmaker's fork or FullSpectrum.
-- **Vendored as git submodule** at `third_party/OrcaSlicer`, pinned to tag `v2.3.2`.
-- **Patches** under `patches/` are reapplied to a clean v2.3.2 checkout by `scripts/build_native.sh` on every run. Submodule's working tree is expected to be dirty; that's the in-tree application of those patches. Don't commit submodule pointer changes.
-- **FullSpectrum integration:** deferred to Phase 3+. Its libslic3r diffs (virtual mixed-color filaments, bias, dithering) get applied as additional patches *after* upstream compiles cleanly for arm64.
+- **Parity/production base:** Snapmaker OrcaSlicer v2.3.4, exact commit
+  `9fd12ffb2b1b80c9fb4c14564754d2ec1573a626`. Browser WASM, Node/WASM,
+  native server CLI, parity extraction, and oracles must name this same revision.
+- `third_party/SnapmakerOrca` is a developer source checkout. Truth tooling reads
+  exact Git blobs at the pinned commit and never trusts its dirty worktree.
+- `wasm/artifact-provenance.json` records the engine revision, aggregate build-
+  input hash, output hashes, and the only tracked published copies:
+  `wasm/dist` and `web/public/slicer`. `npm --prefix wasm run verify:artifacts`
+  fails on source/patch or copy drift. A hash match proves provenance consistency,
+  not a clean source rebuild; the manual container source-build gate remains.
+- The old upstream-v2.3.2 Android submodule/patch history below is retained only
+  for the retired native-Android implementation. It is not the web parity source
+  and must not drive new browser/server behavior.
 
 ## libslic3r gotchas (load-bearing)
 
@@ -253,7 +281,7 @@ subscriptions and dispose cards/resources deterministically.
     rule is enforced in `FilamentPalette.toSlicerOverrides`,
     `OrcaWorkspace.sliceNow`, and `ProfileLoader`'s `STRING_VECTOR_KEYS`.
 
-19b. **`coord_t` is `int64_t` but `size_t` is 32-bit on wasm32 — `some_vector.size() - 1` assigned to a `coord_t` underflows to `+4294967295`, not `-1`.** This is the WASM slicer's #1 crash class: `SkeletalTrapezoidation::interpolate` (Arachne) did `for (coord_t next_inset_idx = left.toolpath_locations.size() - 1; next_inset_idx >= 0; …)`. When `left` is an empty beading (thin feature → `bead_count 0` → `compute()` returns empty vectors), `0u - 1` is a 32-bit `0xFFFFFFFF` that **zero-extends** into the signed 64-bit `coord_t` as `+4294967295`, so the loop runs and indexes `toolpath_locations[4294967295]` → `RuntimeError: memory access out of bounds` inside `propagateBeadingsDownward`. On 64-bit builds `size_t` is 64-bit so `0-1` → `-1` and the loop is skipped — which is why native Android/desktop never hit it while the WASM slicer crashed on essentially **every** model with a thin region (3DBenchy, logos). Fix: `coord_t(v.size()) - 1` (cast to signed before subtracting). Shipped as `patches/0074-arachne-32bit-size-underflow-oob.patch`. **When auditing the WASM port for crashes, grep for `.size() - 1` / `.size()-1` feeding a signed `coord_t`/`int` index and any other 32-bit-vs-64-bit width assumptions.** **ENGINE SWITCH (2026-07-05): the WASM slicer now builds from the Snapmaker fork** — `third_party/SnapmakerOrca` (gitignored clone of Snapmaker/OrcaSlicer v2.3.4, FullSpectrum-native since 2.3.3), the SAME source the external slicer container's CLI builds, so web and CLI G-code match at the source level. After editing a libslic3r `.cpp`: `ninja -C third_party/SnapmakerOrca/build-wasm libslic3r`, then relink via `wasm/build_wasm_module_snapmaker.sh`, and copy `wasm/dist/{slic3r.mjs,slic3r.wasm}` to `server/wasm-dist/`, `web/public/slicer/`, `web/dist/slicer/` (all four must stay in md5 sync). Full from-clean rebuild recipe + working-tree snapshot: `wasm/patches/README-snapmaker.md` + `snapmaker-fork-wasm-port.diff` (Emscripten gates, Arachne 0074 fix, `init_filament_option_keys()` ctor fix, `normalize_fdm` null-guard, `append_full_config` gate — the fork shares those bugs with upstream; the 0075 BBS multi-extruder OOB family does NOT exist in the fork's older ToolOrdering). The old upstream-v2.3.2 port (patches 0001-0075 + `wasm/build_wasm_module.sh`) remains the ANDROID engine; its wasm build assets were reclaimed by `build_native.sh`'s clean (`wasm/patches/wasm-port-tracked-changes.diff` snapshots it if ever needed again). **FullSpectrum project slicing is LIVE in the web engine**: `startSliceProject` + `SlicerClient.sliceProject` slice a loaded FS 3MF as-authored (embedded mixed_filament_definitions, per-part virtual extruders) — PeggyPalette produces 294 layers / 296 tool changes / T0-T3 in ~43 s (Node) and in-browser; `OrcaWorkspace.sliceNow` routes to it whenever the loaded project defines virtual filaments and the plate still matches the file (add/delete a model → falls back to the geometry paths).
+19b. **`coord_t` is `int64_t` but `size_t` is 32-bit on wasm32 — `some_vector.size() - 1` assigned to a `coord_t` underflows to `+4294967295`, not `-1`.** This is the WASM slicer's #1 crash class: `SkeletalTrapezoidation::interpolate` (Arachne) did `for (coord_t next_inset_idx = left.toolpath_locations.size() - 1; next_inset_idx >= 0; …)`. When `left` is an empty beading (thin feature → `bead_count 0` → `compute()` returns empty vectors), `0u - 1` is a 32-bit `0xFFFFFFFF` that **zero-extends** into the signed 64-bit `coord_t` as `+4294967295`, so the loop runs and indexes `toolpath_locations[4294967295]` → `RuntimeError: memory access out of bounds` inside `propagateBeadingsDownward`. On 64-bit builds `size_t` is 64-bit so `0-1` → `-1` and the loop is skipped — which is why native Android/desktop never hit it while the WASM slicer crashed on essentially **every** model with a thin region (3DBenchy, logos). Fix: `coord_t(v.size()) - 1` (cast to signed before subtracting). Shipped as `patches/0074-arachne-32bit-size-underflow-oob.patch`. **When auditing the WASM port for crashes, grep for `.size() - 1` / `.size()-1` feeding a signed `coord_t`/`int` index and any other 32-bit-vs-64-bit width assumptions.** **ENGINE SWITCH (2026-07-05): the WASM slicer now builds from the Snapmaker fork** — `third_party/SnapmakerOrca` (gitignored clone of Snapmaker/OrcaSlicer v2.3.4, FullSpectrum-native since 2.3.3), the SAME source the external slicer container's CLI builds, so web and CLI G-code match at the source level. After editing a libslic3r `.cpp`: `ninja -C third_party/SnapmakerOrca/build-wasm libslic3r`, then relink via `wasm/build_wasm_module_snapmaker.sh`, publish only `wasm/dist/{slic3r.mjs,slic3r.wasm}` and `web/public/slicer/`, and run `npm --prefix wasm run verify:artifacts`; the server image copies `wasm/dist` and `web/dist/slicer` is generated by the web build. Full from-clean rebuild recipe + working-tree snapshot: `wasm/patches/README-snapmaker.md` + `snapmaker-fork-wasm-port.diff` (Emscripten gates, Arachne 0074 fix, `init_filament_option_keys()` ctor fix, `normalize_fdm` null-guard, `append_full_config` gate — the fork shares those bugs with upstream; the 0075 BBS multi-extruder OOB family does NOT exist in the fork's older ToolOrdering). The old upstream-v2.3.2 port (patches 0001-0075 + `wasm/build_wasm_module.sh`) remains the ANDROID engine; its wasm build assets were reclaimed by `build_native.sh`'s clean (`wasm/patches/wasm-port-tracked-changes.diff` snapshots it if ever needed again). **FullSpectrum project slicing is LIVE in the web engine**: `startSliceProject` + `SlicerClient.sliceProject` slice a loaded FS 3MF as-authored (embedded mixed_filament_definitions, per-part virtual extruders) — PeggyPalette produces 294 layers / 296 tool changes / T0-T3 in ~43 s (Node) and in-browser. `OrcaWorkspace.sliceNow` uses the original bytes only for an exclusive import whose exact semantic snapshot still matches geometry, transforms, plates, paint buffers, profile/config, palette, heads, virtual definitions, and tower controls; any change or non-exclusive import fails closed until canonical live-project slicing is integrated.
 
 19c. **Do NOT precache the slicer WASM in the PWA service worker — serve `/slicer/` NetworkFirst.** `web/vite.config.ts`'s VitePWA once raised `maximumFileSizeToCacheInBytes` to 20 MB specifically to precache the ~16 MB `slic3r.wasm` cache-first. That pins a stale engine: after a libslic3r fix rebuilds the wasm, the browser's SW keeps serving the OLD binary, so a slice **hangs forever with no progress and no error** on the outdated module (verified 2026-07-03 — node + a headless-browser slice of the fresh wasm both completed in ~13–17 s while the user's SW-controlled session hung). Fix in place: `workbox.globIgnores: ['**/slicer/**']` + a `NetworkFirst` `runtimeCaching` route for `/slicer/` (fresh when online, cached fallback for offline XR). **Gotcha within the gotcha:** in dev (`npm run dev`) VitePWA registers no SW, and dev serves the wasm with `Cache-Control: no-cache`, so dev itself is always fresh — BUT a SW registered by a *prior* `vite preview`/prod visit on the **same localhost origin** keeps controlling the page and serving stale cache, and the dev server won't replace it. If a web slice hangs at 0 % with a fixed wasm on disk, suspect a stale SW first: DevTools → Application → Service Workers → Unregister + Clear storage, then reload (on Galaxy XR Chrome: clear site data / `chrome://serviceworker-internals`). Validate SW behaviour against `vite preview` (which serves `sw.js`), not dev.
 
@@ -365,6 +393,11 @@ The GitHub Pages cross-origin-isolation shim must not own cross-origin fetches:
 them so the page origin can obtain/use Local Network Access permission for HTTP
 or HTTPS targets. Do not restore a hand-written subnet allowlist; Chrome's
 classification includes details that application code should not duplicate.
+For same-origin requests it precaches the deploy app shell and bundled XR icons,
+uses NetworkFirst at runtime, keeps the large slicer artifacts in a separate
+four-entry cache, supplies the offline navigation fallback, and restores COOP/
+COEP headers. Update its cache version and offline contract whenever deploy
+assets or worker/schema compatibility changes.
 
 LNA does **not** bypass CORS. Moonraker still needs
 `cors_domains` must include the page's exact origin (the hosted app uses
@@ -408,6 +441,14 @@ the CLI slices on silently after a few retries). Two engines, chosen by
   profile split into typed preset files as before. This is how web FS
   slices offload: `SlicerClient.sliceProject` posts the original 3MF.
 
+The server defaults to loopback. Any non-loopback `HOST` fails startup unless
+`ORCAXR_SERVER_TOKEN` contains at least 32 bytes and
+`ORCAXR_ALLOWED_ORIGINS` contains exact HTTP(S) origins; wildcard CORS is
+forbidden. Upload/JSON/ZIP/output/rate/queue/job/time limits are configurable,
+child process trees are cancelled and reaped, completed jobs expire, and logs
+record only bounded error class/code—not engine messages that may contain paths
+or secrets. Keep the abuse tests green when adding an endpoint or runner.
+
 CLI invocation gotchas (all found empirically against Snapmaker Orca 2.3.4,
 logic verified against `src/OrcaSlicer.cpp` in the submodule):
 
@@ -446,7 +487,7 @@ logic verified against `src/OrcaSlicer.cpp` in the submodule):
 
 - **XR tool rail must stay finite.** The left XR card is a compact spatial
   surface, not a scrollable mirror of the desktop toolbar: render only the
-  five modal tools plus Auto-orient and Delete (64 px tiles); the complete
+  modal tools plus Drop to bed and Delete (64 px tiles); the complete
   action catalogue stays in the progressive top menu. A previous all-toolbar
   rail overflowed to the floor and made the compositor spend frame time laying
   out off-screen buttons. Hidden cards are not automatically free; avoid

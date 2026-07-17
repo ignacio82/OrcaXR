@@ -120,8 +120,11 @@ test('bambu: detect via settings marker', () => {
   assert.ok(detectBambu({ printerModel: '', printerSettingsId: '0.20mm Standard @BBL X1C', filamentTypes: [] }));
 });
 test('bambu: non-bambu passes through unchanged', () => {
-  const r = translateBambu({ nozzle_temperature: '220', wall_loops: '3' },
-    { printerModel: 'Snapmaker U1', printerSettingsId: '', filamentTypes: [] }, 4);
+  const r = translateBambu(
+    { nozzle_temperature: '220', wall_loops: '3' },
+    { printerModel: 'Snapmaker U1', printerSettingsId: '', filamentTypes: [] },
+    4,
+  );
   assert.equal(r.wasBambu, false);
   assert.deepEqual(r.translatedOverrides, { nozzle_temperature: '220', wall_loops: '3' });
 });
@@ -129,7 +132,8 @@ test('bambu: strips filament tunings, keeps object tunings', () => {
   const r = translateBambu(
     { nozzle_temperature: '220', filament_flow_ratio: '0.98', wall_loops: '3' },
     { printerModel: 'Bambu Lab X1 Carbon', printerSettingsId: '', filamentTypes: ['Bambu PLA Basic'] },
-    4);
+    4,
+  );
   assert.equal(r.wasBambu, true);
   assert.ok(!('nozzle_temperature' in r.translatedOverrides));
   assert.ok(!('filament_flow_ratio' in r.translatedOverrides));

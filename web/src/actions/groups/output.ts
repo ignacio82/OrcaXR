@@ -2,7 +2,7 @@
  * Output group — getting the sliced result off the plate. Download today;
  * Moonraker send + print and STL/3MF export are wired in later phases.
  */
-import type { Action } from '../ActionRegistry';
+import type { ActionDefinition as Action } from '../ActionRegistry';
 
 export const outputActions: Action[] = [
   {
@@ -24,6 +24,5 @@ export const outputActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'tools',
     hint: 'Upload the sliced G-code to a Moonraker printer and start the print',
-    run: (ctx) => ctx.sendToPrinter(),
   },
 ];

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rel-model-config" Type="http://schemas.orcaxr.test/relationships/model-config" Target="../Metadata/model_settings.config"/>
+  <Relationship Id="rel-custom-gcode" Type="http://schemas.orcaxr.test/relationships/custom-gcode" Target="../Metadata/custom_gcode_per_layer.xml"/>
+  <Relationship Id="rel-extension" Type="http://schemas.orcaxr.test/relationships/extension" Target="../Extensions/opaque.txt"/>
+</Relationships>

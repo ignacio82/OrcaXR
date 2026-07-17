@@ -53,13 +53,25 @@ const MAX_PAINT_DEPTH = 32; // matches libslic3r's practical split depth bound
  */
 export function decodePaintedTriangle(
   str: string,
-  ax: number, ay: number, az: number,
-  bx: number, by: number, bz: number,
-  cx: number, cy: number, cz: number,
+  ax: number,
+  ay: number,
+  az: number,
+  bx: number,
+  by: number,
+  bz: number,
+  cx: number,
+  cy: number,
+  cz: number,
   emit: (
-    ax: number, ay: number, az: number,
-    bx: number, by: number, bz: number,
-    cx: number, cy: number, cz: number,
+    ax: number,
+    ay: number,
+    az: number,
+    bx: number,
+    by: number,
+    bz: number,
+    cx: number,
+    cy: number,
+    cz: number,
     state: number,
   ) => void,
 ): void {
@@ -73,9 +85,15 @@ export function decodePaintedTriangle(
   };
 
   const walk = (
-    vax: number, vay: number, vaz: number,
-    vbx: number, vby: number, vbz: number,
-    vcx: number, vcy: number, vcz: number,
+    vax: number,
+    vay: number,
+    vaz: number,
+    vbx: number,
+    vby: number,
+    vbz: number,
+    vcx: number,
+    vcy: number,
+    vcz: number,
     depth: number,
   ): void => {
     if (depth > MAX_PAINT_DEPTH) throw new Error('paint split too deep');
@@ -89,31 +107,51 @@ export function decodePaintedTriangle(
     // Rotate so V0 is the special side's first vertex.
     const special = code >> 2;
     const V = [vax, vay, vaz, vbx, vby, vbz, vcx, vcy, vcz];
-    const o0 = (special % 3) * 3, o1 = ((special + 1) % 3) * 3, o2 = ((special + 2) % 3) * 3;
-    const x0 = V[o0], y0 = V[o0 + 1], z0 = V[o0 + 2];
-    const x1 = V[o1], y1 = V[o1 + 1], z1 = V[o1 + 2];
-    const x2 = V[o2], y2 = V[o2 + 1], z2 = V[o2 + 2];
+    const o0 = (special % 3) * 3,
+      o1 = ((special + 1) % 3) * 3,
+      o2 = ((special + 2) % 3) * 3;
+    const x0 = V[o0],
+      y0 = V[o0 + 1],
+      z0 = V[o0 + 2];
+    const x1 = V[o1],
+      y1 = V[o1 + 1],
+      z1 = V[o1 + 2];
+    const x2 = V[o2],
+      y2 = V[o2 + 1],
+      z2 = V[o2 + 2];
 
     // children[i] = 9 floats; stream order is reverse child index.
     let children: number[][];
     if (splitSides === 1) {
-      const mx = (x2 + x1) / 2, my = (y2 + y1) / 2, mz = (z2 + z1) / 2;
+      const mx = (x2 + x1) / 2,
+        my = (y2 + y1) / 2,
+        mz = (z2 + z1) / 2;
       children = [
         [x0, y0, z0, x1, y1, z1, mx, my, mz],
         [mx, my, mz, x2, y2, z2, x0, y0, z0],
       ];
     } else if (splitSides === 2) {
-      const m1x = (x1 + x0) / 2, m1y = (y1 + y0) / 2, m1z = (z1 + z0) / 2;
-      const m2x = (x0 + x2) / 2, m2y = (y0 + y2) / 2, m2z = (z0 + z2) / 2;
+      const m1x = (x1 + x0) / 2,
+        m1y = (y1 + y0) / 2,
+        m1z = (z1 + z0) / 2;
+      const m2x = (x0 + x2) / 2,
+        m2y = (y0 + y2) / 2,
+        m2z = (z0 + z2) / 2;
       children = [
         [x0, y0, z0, m1x, m1y, m1z, m2x, m2y, m2z],
         [m1x, m1y, m1z, x1, y1, z1, m2x, m2y, m2z],
         [x1, y1, z1, x2, y2, z2, m2x, m2y, m2z],
       ];
     } else {
-      const m01x = (x1 + x0) / 2, m01y = (y1 + y0) / 2, m01z = (z1 + z0) / 2;
-      const m12x = (x2 + x1) / 2, m12y = (y2 + y1) / 2, m12z = (z2 + z1) / 2;
-      const m20x = (x0 + x2) / 2, m20y = (y0 + y2) / 2, m20z = (z0 + z2) / 2;
+      const m01x = (x1 + x0) / 2,
+        m01y = (y1 + y0) / 2,
+        m01z = (z1 + z0) / 2;
+      const m12x = (x2 + x1) / 2,
+        m12y = (y2 + y1) / 2,
+        m12z = (z2 + z1) / 2;
+      const m20x = (x0 + x2) / 2,
+        m20y = (y0 + y2) / 2,
+        m20z = (z0 + z2) / 2;
       children = [
         [x0, y0, z0, m01x, m01y, m01z, m20x, m20y, m20z],
         [m01x, m01y, m01z, x1, y1, z1, m12x, m12y, m12z],
@@ -146,18 +184,16 @@ export function applyPaintToPositions(
   const triCount = positions.length / 9;
   if (meshPaint.paint.length !== triCount || meshPaint.paintedCount === 0) {
     if (meshPaint.paint.length !== triCount) {
-      console.warn(`[paint3mf] triangle count mismatch: loader ${triCount}, 3mf ${meshPaint.paint.length} — skipping paint`);
+      console.warn(
+        `[paint3mf] triangle count mismatch: loader ${triCount}, 3mf ${meshPaint.paint.length} — skipping paint`,
+      );
     }
     return null;
   }
 
   const rgb = (hex: string): [number, number, number] => {
     const h = (hex || '#cccccc').replace('#', '');
-    return [
-      parseInt(h.slice(0, 2), 16) / 255,
-      parseInt(h.slice(2, 4), 16) / 255,
-      parseInt(h.slice(4, 6), 16) / 255,
-    ];
+    return [parseInt(h.slice(0, 2), 16) / 255, parseInt(h.slice(2, 4), 16) / 255, parseInt(h.slice(4, 6), 16) / 255];
   };
   const base = rgb(baseHex);
   const stateColor: [number, number, number][] = [base];
@@ -166,9 +202,15 @@ export function applyPaintToPositions(
   const pos: number[] = [];
   const col: number[] = [];
   const emit = (
-    ax: number, ay: number, az: number,
-    bx: number, by: number, bz: number,
-    cx: number, cy: number, cz: number,
+    ax: number,
+    ay: number,
+    az: number,
+    bx: number,
+    by: number,
+    bz: number,
+    cx: number,
+    cy: number,
+    cz: number,
     state: number,
   ) => {
     pos.push(ax, ay, az, bx, by, bz, cx, cy, cz);
@@ -181,27 +223,47 @@ export function applyPaintToPositions(
     const str = meshPaint.paint[t];
     if (!str) {
       emit(
-        positions[o], positions[o + 1], positions[o + 2],
-        positions[o + 3], positions[o + 4], positions[o + 5],
-        positions[o + 6], positions[o + 7], positions[o + 8], 0,
+        positions[o],
+        positions[o + 1],
+        positions[o + 2],
+        positions[o + 3],
+        positions[o + 4],
+        positions[o + 5],
+        positions[o + 6],
+        positions[o + 7],
+        positions[o + 8],
+        0,
       );
       continue;
     }
     try {
       decodePaintedTriangle(
         str,
-        positions[o], positions[o + 1], positions[o + 2],
-        positions[o + 3], positions[o + 4], positions[o + 5],
-        positions[o + 6], positions[o + 7], positions[o + 8],
+        positions[o],
+        positions[o + 1],
+        positions[o + 2],
+        positions[o + 3],
+        positions[o + 4],
+        positions[o + 5],
+        positions[o + 6],
+        positions[o + 7],
+        positions[o + 8],
         emit,
       );
     } catch (e) {
       // Malformed string — keep the triangle, just unpainted.
       console.warn('[paint3mf] bad paint string on triangle', t, e);
       emit(
-        positions[o], positions[o + 1], positions[o + 2],
-        positions[o + 3], positions[o + 4], positions[o + 5],
-        positions[o + 6], positions[o + 7], positions[o + 8], 0,
+        positions[o],
+        positions[o + 1],
+        positions[o + 2],
+        positions[o + 3],
+        positions[o + 4],
+        positions[o + 5],
+        positions[o + 6],
+        positions[o + 7],
+        positions[o + 8],
+        0,
       );
     }
   }
@@ -262,13 +324,11 @@ export function extract3mfPaint(buf: ArrayBuffer): Paint3mfResult | null {
         objects.set(`${name}#${id}`, info);
         if (!byId.has(id)) byId.set(id, info);
       }
-      const items = [...text.matchAll(/<item[^>]*\bobjectid="([^"]+)"/g)]
-        .map((it) => ({ file: name, id: it[1] }));
+      const items = [...text.matchAll(/<item[^>]*\bobjectid="([^"]+)"/g)].map((it) => ({ file: name, id: it[1] }));
       if (items.length) buildOrder = items;
     }
 
-    const resolve = (file: string, id: string): ObjInfo | undefined =>
-      objects.get(`${file}#${id}`) ?? byId.get(id);
+    const resolve = (file: string, id: string): ObjInfo | undefined => objects.get(`${file}#${id}`) ?? byId.get(id);
 
     // Flatten build → leaf mesh objects in loader order.
     const orderedLeaves: ObjInfo[] = [];

@@ -1,69 +1,82 @@
-import * as THREE from 'three';
-import { OrcaWorkspace } from '../workspace/OrcaWorkspace';
+import { OrcaWorkspace, type WorkspaceGizmoTool } from '../workspace/OrcaWorkspace';
+import type { McpToolArguments, McpToolHost } from './McpToolHost';
 
-export function registerWorkspaceTools(mcp: any, workspace: OrcaWorkspace) {
-    mcp.registerTool(
-        'get_workspace_state',
-        'Snapshot the entire in-session workspace.',
-        {},
-        async function() {
-            const plates = workspace.getPlates();
-            const activePlateId = plates.find(p => p.active)?.id || 1;
-            const models = (workspace as any).models || [];
-            
-            const state = {
-                workspace_mode: (workspace as any).previewOn ? 'Preview' : 'Prepare',
-                active_plate_id: activePlateId,
-                gizmo_tool: (workspace as any).tool || 'move',
-                selected_profile: (workspace as any).profile?.id,
-                placed_models_total_all_plates: plates.reduce((sum, p) => sum + p.count, 0),
-                placed_models: models.map((m: any, i: number) => ({
-                    id: m.viewer.uuid,
-                    label: m.viewer.name || `Model ${i}`,
-                    plate_id: activePlateId,
-                    translate_x_mm: m.viewer.position.x,
-                    translate_y_mm: m.viewer.position.y,
-                    translate_z_mm: m.viewer.position.z,
-                    rot_x_deg: THREE.MathUtils.radToDeg(m.viewer.rotation.x),
-                    rot_y_deg: THREE.MathUtils.radToDeg(m.viewer.rotation.y),
-                    rot_z_deg: THREE.MathUtils.radToDeg(m.viewer.rotation.z),
-                    scale_x_pct: m.viewer.scale.x * 100,
-                    scale_y_pct: m.viewer.scale.y * 100,
-                    scale_z_pct: m.viewer.scale.z * 100
-                }))
-            };
+const GIZMO_TOOLS: readonly WorkspaceGizmoTool[] = ['move', 'rotate', 'scale', 'paint', 'lay_on_face'];
 
-            const text = `Workspace: ${state.workspace_mode}\nActive plate: ${state.active_plate_id} (${models.length} models on plate)\nGizmo: ${state.gizmo_tool}\n`;
+function isGizmoTool(value: unknown): value is WorkspaceGizmoTool {
+  return typeof value === 'string' && GIZMO_TOOLS.includes(value as WorkspaceGizmoTool);
+}
 
-            return {
-                content: [{
-                    type: "text",
-                    text: text + "\n```json\n" + JSON.stringify(state, null, 2) + "\n```"
-                }]
-            };
-        }
-    );
+export function registerWorkspaceTools(mcp: McpToolHost, workspace: OrcaWorkspace) {
+  mcp.registerTool(
+    'get_workspace_state',
+    'Snapshot the entire in-session workspace.',
+    { type: 'object', properties: {}, additionalProperties: false },
+    async function () {
+      const snapshot = workspace.getAutomationSnapshot();
+      const state = {
+        workspace_mode: snapshot.workspaceMode,
+        active_plate_id: snapshot.activePlateId,
+        gizmo_tool: snapshot.gizmoTool,
+        selected_profile: snapshot.selectedProfileId,
+        placed_models_total_all_plates: snapshot.placedModelsTotalAllPlates,
+        plates: snapshot.plates,
+        placed_models: snapshot.placedModels.map((model) => ({
+          id: model.id,
+          label: model.label,
+          plate_id: model.plateId,
+          translate_x_mm: model.translateXmm,
+          translate_y_mm: model.translateYmm,
+          translate_z_mm: model.translateZmm,
+          rot_x_deg: model.rotXDeg,
+          rot_y_deg: model.rotYDeg,
+          rot_z_deg: model.rotZDeg,
+          scale_x_pct: model.scaleXPct,
+          scale_y_pct: model.scaleYPct,
+          scale_z_pct: model.scaleZPct,
+        })),
+      };
 
-    mcp.registerTool(
-        'set_gizmo_tool',
-        'Switch the active transform tool. Options: move, rotate, scale, paint, lay_on_face',
-        {
-            tool: {
-                type: 'string',
-                description: 'One of: move, rotate, scale, paint, lay_on_face'
-            }
+      const text = `Workspace: ${state.workspace_mode}\nActive plate: ${state.active_plate_id} (${state.placed_models.length} models on plate)\nGizmo: ${state.gizmo_tool}\n`;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: text + '\n```json\n' + JSON.stringify(state, null, 2) + '\n```',
+          },
+        ],
+      };
+    },
+  );
+
+  mcp.registerTool(
+    'set_gizmo_tool',
+    'Switch the active transform tool. Options: move, rotate, scale, paint, lay_on_face',
+    {
+      type: 'object',
+      properties: {
+        tool: {
+          type: 'string',
+          description: 'The transform or paint tool to activate.',
+          enum: GIZMO_TOOLS,
         },
-        async function(args: any) {
-            const tool = args.tool;
-            if (!['move', 'rotate', 'scale', 'paint', 'lay_on_face'].includes(tool)) {
-                return {
-                    content: [{ type: "text", text: `Error: Unknown tool '${tool}'` }]
-                };
-            }
-            workspace.setTool(tool as any);
-            return {
-                content: [{ type: "text", text: `Gizmo tool set to ${tool}` }]
-            };
-        }
-    );
+      },
+      required: ['tool'],
+      additionalProperties: false,
+    },
+    async function (args: McpToolArguments) {
+      const tool = args.tool;
+      if (!isGizmoTool(tool)) {
+        return {
+          content: [{ type: 'text', text: 'Error: tool must be move, rotate, scale, paint, or lay_on_face.' }],
+          isError: true,
+        };
+      }
+      workspace.setTool(tool);
+      return {
+        content: [{ type: 'text', text: `Gizmo tool set to ${tool}` }],
+      };
+    },
+  );
 }

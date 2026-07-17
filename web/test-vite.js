@@ -12,7 +12,7 @@ async function run() {
           router: (req) => {
             const parts = req.url.split('/');
             const target = parts[2];
-            console.log("Routing to:", target);
+            console.log('Routing to:', target);
             return `http://${target}`;
           },
           rewrite: (path) => {
@@ -22,14 +22,14 @@ async function run() {
           configure: (proxy) => {
             proxy.on('proxyReq', (proxyReq, req, res) => {
               proxyReq.removeHeader('origin');
-              console.log("Proxying to:", proxyReq.path);
+              console.log('Proxying to:', proxyReq.path);
             });
-          }
-        }
-      }
-    }
+          },
+        },
+      },
+    },
   });
   await server.listen();
-  console.log("Listening on 8083");
+  console.log('Listening on 8083');
 }
 run();

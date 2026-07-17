@@ -8,7 +8,7 @@
  * Intentionally omitted OS-shell items (`New Window`, `Quit`, `Open a new
  * PrusaSlicer`) have no meaning in a single-tab web app; see the plan doc.
  */
-import type { Action } from '../ActionRegistry';
+import type { ActionDefinition as Action } from '../ActionRegistry';
 
 export const fileActions: Action[] = [
   {
@@ -105,7 +105,6 @@ export const fileActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'file',
     hint: 'Slice and export G-code for every build plate',
-    run: (ctx) => ctx.exportAllPlates(),
   },
   {
     id: 'file_export_stl',
@@ -147,7 +146,6 @@ export const fileActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'file',
     hint: 'Export the sliced toolpaths as a Wavefront OBJ',
-    run: (ctx) => ctx.exportObj(),
   },
   {
     id: 'file_open_gcode',
@@ -157,7 +155,6 @@ export const fileActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'file',
     hint: 'Open a .gcode file in the standalone toolpath viewer',
-    run: (ctx) => ctx.openGcodeViewer(),
   },
   {
     id: 'file_export_logs',
@@ -167,6 +164,5 @@ export const fileActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'file',
     hint: 'Export application logs as a ZIP for bug reports',
-    run: (ctx) => ctx.exportLogs(),
   },
 ];

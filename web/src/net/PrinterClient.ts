@@ -10,11 +10,7 @@
  * On current Chromium, Local Network Access can authorize an HTTPS OrcaXR page
  * to reach a local HTTP printer; other browsers still need HTTPS or a proxy.
  */
-import {
-  fetchLocalNetwork,
-  localNetworkFailureMessage,
-  normalizeHttpEndpoint,
-} from './LocalNetworkAccess';
+import { fetchLocalNetwork, localNetworkFailureMessage, normalizeHttpEndpoint } from './LocalNetworkAccess';
 
 export interface PrinterConfig {
   host: string; // ip or hostname, no scheme
@@ -27,12 +23,18 @@ export function loadPrinterConfig(): PrinterConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw) as PrinterConfig;
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return { host: '', port: 7125 };
 }
 
 export function savePrinterConfig(cfg: PrinterConfig) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg)); } catch { /* ignore */ }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+  } catch {
+    /* ignore */
+  }
 }
 
 export interface SendResult {
@@ -110,11 +112,9 @@ export async function sendToPrinter(
       }
       return {
         ok: true,
-        message: startPrint
-          ? `Uploaded ${safeName} and started print.`
-          : `Uploaded ${safeName} to printer.`,
+        message: startPrint ? `Uploaded ${safeName} and started print.` : `Uploaded ${safeName} to printer.`,
       };
-    } catch (e) {
+    } catch {
       // A network / mixed-content / CORS failure lands here as an opaque TypeError.
       lastErrorMsg = describeFetchFailure(base);
     }
@@ -125,7 +125,7 @@ export async function sendToPrinter(
 /** Quick reachability probe: Moonraker's /printer/info. */
 export async function probePrinter(cfg: PrinterConfig): Promise<SendResult> {
   if (!cfg.host) return { ok: false, message: 'No printer IP set.' };
-  
+
   const baseUrls = printerBaseUrls(cfg.host, cfg.port);
   let lastErrorMsg = '';
 

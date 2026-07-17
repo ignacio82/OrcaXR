@@ -1,0 +1,244 @@
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+import { app, createSlicerService, terminateProcessTree } from "./server.js";
+import {
+  bearerTokenMatches,
+  HttpError,
+  inspect3mf,
+  inspectStl,
+  isOriginAllowed,
+  loadServerConfig,
+  parseOverridesJson,
+  validateServerConfig,
+  WindowRateLimiter,
+} from "./security.mjs";
+import { buildZip, valid3mf } from "./test-helpers.mjs";
+
+const archiveLimits = {
+  ...loadServerConfig({}),
+  maxArchiveEntries: 20,
+  maxArchiveCentralBytes: 1024 * 1024,
+  maxArchiveEntryBytes: 4 * 1024 * 1024,
+  maxArchiveUncompressedBytes: 8 * 1024 * 1024,
+  maxArchiveCompressionRatio: 200,
+  archiveValidationTimeoutMs: 5000,
+};
+
+async function withArchive(buffer, callback) {
+  const directory = await fs.mkdtemp(
+    path.join(os.tmpdir(), "orcaxr-zip-test-"),
+  );
+  const file = path.join(directory, "project.3mf");
+  await fs.writeFile(file, buffer);
+  try {
+    return await callback(file);
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+}
+
+async function withModel(buffer, callback) {
+  const directory = await fs.mkdtemp(
+    path.join(os.tmpdir(), "orcaxr-stl-test-"),
+  );
+  const file = path.join(directory, "model.stl");
+  await fs.writeFile(file, buffer);
+  try {
+    return await callback(file);
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+}
+
+test("server exports an Express handler without listening on import", () => {
+  assert.equal(typeof app, "function");
+  assert.equal(typeof createSlicerService, "function");
+});
+
+test("deployment config defaults to loopback and fails closed off-loopback", () => {
+  const local = validateServerConfig(loadServerConfig({}));
+  assert.equal(local.host, "127.0.0.1");
+  assert.equal(local.authRequired, false);
+  assert.throws(
+    () =>
+      createSlicerService({
+        env: { HOST: "0.0.0.0", ORCAXR_ALLOWED_ORIGINS: "https://app.example" },
+      }),
+    /requires ORCAXR_SERVER_TOKEN/,
+  );
+  assert.throws(
+    () =>
+      createSlicerService({
+        env: { HOST: "0.0.0.0", ORCAXR_SERVER_TOKEN: "x".repeat(32) },
+      }),
+    /requires an explicit ORCAXR_ALLOWED_ORIGINS/,
+  );
+  assert.throws(
+    () => loadServerConfig({ ORCAXR_ALLOWED_ORIGINS: "*" }),
+    /may not contain/,
+  );
+  assert.throws(
+    () =>
+      createSlicerService({
+        env: { ORCAXR_SERVER_TOKEN: `x${"y".repeat(31)} z` },
+      }),
+    /may not contain whitespace/,
+  );
+});
+
+test("origin and bearer checks are exact", () => {
+  const config = loadServerConfig({
+    ORCAXR_ALLOWED_ORIGINS: "https://app.example",
+  });
+  assert.equal(isOriginAllowed("https://app.example", config), true);
+  assert.equal(isOriginAllowed("https://app.example.evil.test", config), false);
+  assert.equal(isOriginAllowed("http://localhost:5173", config), true);
+  assert.equal(isOriginAllowed("null", config), false);
+  const token = "0123456789abcdef0123456789abcdef";
+  assert.equal(bearerTokenMatches(`Bearer ${token}`, token), true);
+  assert.equal(bearerTokenMatches(`Bearer ${token}x`, token), false);
+  assert.equal(bearerTokenMatches(`Basic ${token}`, token), false);
+});
+
+test("overrides parser bounds structure and rejects prototype keys", () => {
+  assert.deepEqual(parseOverridesJson('{"layer_height":"0.2"}', 1024), {
+    layer_height: "0.2",
+  });
+  assert.throws(
+    () => parseOverridesJson("{", 1024),
+    (error) => error instanceof HttpError && error.code === "INVALID_OVERRIDES",
+  );
+  assert.throws(
+    () => parseOverridesJson('{"__proto__":{"polluted":true}}', 1024),
+    (error) => error instanceof HttpError && error.code === "INVALID_OVERRIDES",
+  );
+  assert.throws(
+    () => parseOverridesJson('{"value":"0123456789"}', 8),
+    (error) =>
+      error instanceof HttpError && error.code === "OVERRIDES_TOO_LARGE",
+  );
+});
+
+test("rate limiter is bounded and reports retry time", () => {
+  const limiter = new WindowRateLimiter({
+    max: 2,
+    windowMs: 1000,
+    maxClients: 2,
+  });
+  assert.equal(limiter.consume("a", 0).allowed, true);
+  assert.equal(limiter.consume("a", 1).allowed, true);
+  const denied = limiter.consume("a", 2);
+  assert.equal(denied.allowed, false);
+  assert.equal(denied.retryAfterSeconds, 1);
+  limiter.consume("b", 2);
+  limiter.consume("c", 2);
+  assert.equal(limiter.clients.size, 2);
+});
+
+test("3MF validator accepts a bounded archive", async () => {
+  await withArchive(valid3mf(), async (file) => {
+    const result = await inspect3mf(file, archiveLimits);
+    assert.equal(result.entries, 2);
+    assert(result.totalUncompressedBytes > 0);
+  });
+});
+
+test("3MF validator rejects traversal and symlinks", async () => {
+  const traversal = valid3mf([{ name: "../escape.txt", data: "bad" }]);
+  await withArchive(traversal, async (file) => {
+    await assert.rejects(
+      () => inspect3mf(file, archiveLimits),
+      (error) => error instanceof HttpError && error.code === "INVALID_3MF",
+    );
+  });
+  const symlink = valid3mf([
+    {
+      name: "Metadata/link",
+      data: "target",
+      externalAttributes: 0xa000 << 16,
+    },
+  ]);
+  await withArchive(symlink, async (file) => {
+    await assert.rejects(
+      () => inspect3mf(file, archiveLimits),
+      (error) => error instanceof HttpError && error.code === "INVALID_3MF",
+    );
+  });
+});
+
+test("3MF validator rejects declared and deceptive expansion bombs", async () => {
+  const declaredBomb = buildZip([
+    { name: "[Content_Types].xml", data: "<Types />" },
+    {
+      name: "3D/3dmodel.model",
+      data: "x",
+      method: 8,
+      declaredUncompressed: 5 * 1024 * 1024,
+    },
+  ]);
+  await withArchive(declaredBomb, async (file) => {
+    await assert.rejects(
+      () => inspect3mf(file, archiveLimits),
+      (error) => error instanceof HttpError && error.code === "ARCHIVE_LIMIT",
+    );
+  });
+
+  const deceptive = buildZip([
+    { name: "[Content_Types].xml", data: "<Types />" },
+    {
+      name: "3D/3dmodel.model",
+      data: Buffer.alloc(2 * 1024 * 1024, 65),
+      method: 8,
+      declaredUncompressed: 64,
+    },
+  ]);
+  await withArchive(deceptive, async (file) => {
+    await assert.rejects(
+      () => inspect3mf(file, archiveLimits),
+      (error) =>
+        error instanceof HttpError &&
+        ["ARCHIVE_LIMIT", "INVALID_3MF"].includes(error.code),
+    );
+  });
+});
+
+test("STL validator accepts exact binary and ASCII forms and rejects arbitrary bytes", async () => {
+  const binary = Buffer.alloc(84);
+  binary.writeUInt32LE(0, 80);
+  await withModel(binary, async (file) => {
+    assert.deepEqual(await inspectStl(file), { format: "binary", facets: 0 });
+  });
+  await withModel(
+    Buffer.from("solid model\nendsolid model\n"),
+    async (file) => {
+      assert.deepEqual(await inspectStl(file), { format: "ascii" });
+    },
+  );
+  await withModel(Buffer.from("this is not a mesh"), async (file) => {
+    await assert.rejects(
+      () => inspectStl(file),
+      (error) => error instanceof HttpError && error.code === "INVALID_STL",
+    );
+  });
+});
+
+test(
+  "child-process termination reaps a detached process",
+  { timeout: 5000 },
+  async () => {
+    const child = spawn(
+      process.execPath,
+      ["-e", "setInterval(() => {}, 1000)"],
+      {
+        detached: process.platform !== "win32",
+        stdio: "ignore",
+      },
+    );
+    await terminateProcessTree(child, 50);
+    assert(child.exitCode !== null || child.signalCode !== null);
+  },
+);

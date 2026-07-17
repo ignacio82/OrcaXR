@@ -26,18 +26,26 @@ function normalize(o: Record<string, unknown>): Record<string, string> {
 }
 
 export function exportConfigJson(b: ConfigBundle): string {
-  return JSON.stringify({
-    orcaxr_config: 1,
-    machineName: b.machineName,
-    processName: b.processName,
-    filamentName: b.filamentName,
-    config: b.config,
-  }, null, 2);
+  return JSON.stringify(
+    {
+      orcaxr_config: 1,
+      machineName: b.machineName,
+      processName: b.processName,
+      filamentName: b.filamentName,
+      config: b.config,
+    },
+    null,
+    2,
+  );
 }
 
 export function parseConfigJson(text: string): ConfigBundle | null {
   let obj: unknown;
-  try { obj = JSON.parse(text); } catch { return null; }
+  try {
+    obj = JSON.parse(text);
+  } catch {
+    return null;
+  }
   if (!obj || typeof obj !== 'object') return null;
   const o = obj as Record<string, unknown>;
 

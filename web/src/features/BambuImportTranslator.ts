@@ -42,23 +42,23 @@ export const BAMBU_FILAMENT_TUNING_STRIP = new Set<string>([
 
 /** filament_type literal → U1 bundled filament profile id. */
 export const FILAMENT_TYPE_TO_U1_PROFILE: Record<string, string> = {
-  'PLA': 'Snapmaker PLA SnapSpeed @U1',
+  PLA: 'Snapmaker PLA SnapSpeed @U1',
   'PLA+': 'Snapmaker PLA SnapSpeed @U1',
   'PLA-CF': 'Snapmaker PLA-CF',
-  'PETG': 'Snapmaker PETG HF',
+  PETG: 'Snapmaker PETG HF',
   'PETG-HF': 'Snapmaker PETG HF',
   'PETG-CF': 'Snapmaker PETG-CF',
-  'ABS': 'Generic ABS',
+  ABS: 'Generic ABS',
   'ABS-GF': 'Generic ABS',
-  'ASA': 'Snapmaker ASA U1',
+  ASA: 'Snapmaker ASA U1',
   'ASA-CF': 'Snapmaker ASA U1',
-  'TPU': 'Generic TPU',
+  TPU: 'Generic TPU',
   'TPU-95A': 'Generic TPU',
-  'PC': 'Generic ABS',
-  'PA': 'Generic ABS',
+  PC: 'Generic ABS',
+  PA: 'Generic ABS',
   'PA-CF': 'Generic ABS',
-  'PVA': 'Generic PVA',
-  'HIPS': 'Generic HIPS',
+  PVA: 'Generic PVA',
+  HIPS: 'Generic HIPS',
 };
 
 const BAMBU_SETTINGS_MARKERS = ['@BBL', '@P1S', '@P1P', '@A1', '@A1M', '@A1 Mini', '@X1', '@X1C', '@X1E', '@H2D'];
@@ -78,10 +78,25 @@ export function normalizeFilamentType(raw: string): string {
   if (!raw || !raw.trim()) return '';
   let s = raw.trim().replace(/"/g, '').toUpperCase();
   if (s.startsWith('BAMBU ')) s = s.slice('BAMBU '.length).trim();
-  const finishMarkers = [' BASIC', ' MATTE', ' SILK', ' METAL', ' WOOD', ' SPARKLE',
-    ' GLOW', ' TOUGH', ' AERO', ' ECO', ' PRO', ' HIGH SPEED'];
+  const finishMarkers = [
+    ' BASIC',
+    ' MATTE',
+    ' SILK',
+    ' METAL',
+    ' WOOD',
+    ' SPARKLE',
+    ' GLOW',
+    ' TOUGH',
+    ' AERO',
+    ' ECO',
+    ' PRO',
+    ' HIGH SPEED',
+  ];
   for (const marker of finishMarkers) {
-    if (s.endsWith(marker)) { s = s.slice(0, -marker.length).trim(); break; }
+    if (s.endsWith(marker)) {
+      s = s.slice(0, -marker.length).trim();
+      break;
+    }
   }
   return s;
 }
@@ -105,7 +120,10 @@ export function translateBambu(
   const dropped: string[] = [];
   const filtered: Record<string, string> = {};
   for (const [k, v] of Object.entries(rawOverrides)) {
-    if (BAMBU_FILAMENT_TUNING_STRIP.has(k)) { dropped.push(k); continue; }
+    if (BAMBU_FILAMENT_TUNING_STRIP.has(k)) {
+      dropped.push(k);
+      continue;
+    }
     filtered[k] = v;
   }
   dropped.sort();

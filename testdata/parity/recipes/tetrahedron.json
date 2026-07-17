@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "name": "OrcaXR_Parity_Tetrahedron",
+  "units": "millimeter",
+  "vertices": [
+    [0, 0, 0],
+    [10, 0, 0],
+    [0, 10, 0],
+    [0, 0, 10]
+  ],
+  "faces": [
+    [0, 2, 1],
+    [0, 1, 3],
+    [1, 2, 3],
+    [2, 0, 3]
+  ]
+}
+

@@ -9,31 +9,30 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { ThreeMFLoader } from 'three/examples/jsm/loaders/3MFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import * as xb from 'xrblocks';
-// @ts-ignore
 import * as uikit from '@pmndrs/uikit';
 
 import { OrcaWorkspace, extract3mfColors } from './workspace/OrcaWorkspace';
 import { extract3mfPaint } from './features/Paint3mf';
 import { SlicerClient } from './slicer/SlicerClient';
-import { loadPrinterConfig, probePrinter, savePrinterConfig, sendToPrinter } from './net/PrinterClient';
-import {
-  fetchLocalNetwork,
-  localNetworkTargetForRequest,
-  normalizeHttpEndpoint,
-} from './net/LocalNetworkAccess';
+import { loadPrinterConfig, savePrinterConfig, sendToPrinter } from './net/PrinterClient';
+import { fetchLocalNetwork, localNetworkTargetForRequest, normalizeHttpEndpoint } from './net/LocalNetworkAccess';
 import { registerWorkspaceTools } from './mcp/WorkspaceTools';
 import { registerSystemTools } from './mcp/SystemTools';
+import { OrcaWebMcpClient, WEBMCP_CLI_PACKAGE, WebMcpConnectionError, type WebMcpStatus } from './mcp/OrcaWebMcpClient';
 import { injectTokenCss } from './ui/tokens';
 import { UiState } from './actions/UiState';
 import { ActionContext } from './actions/ActionContext';
 import { buildRegistry } from './actions/catalog';
+import type { ActionRegistry } from './actions/ActionRegistry';
 import { DomShell } from './ui/dom/DomShell';
 import { CommandPalette } from './ui/dom/CommandPalette';
 import { SettingsInspector } from './ui/dom/SettingsInspector';
 import { AiConfigDialog } from './ui/dom/AiConfigDialog';
 
 declare global {
-  interface Window { ORCAXR_VERSION: string }
+  interface Window {
+    ORCAXR_VERSION: string;
+  }
 }
 window.ORCAXR_VERSION = 'v34-xr-recenter';
 
@@ -43,17 +42,25 @@ window.ORCAXR_VERSION = 'v34-xr-recenter';
 // self-update and gets stuck serving the stale app bundle — masking every code
 // change. Kill it so dev is always fresh. (Prod keeps its autoUpdate SW.)
 if (import.meta.env.DEV && 'serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations()
-    .then((regs) => { if (regs.length) { regs.forEach((r) => r.unregister()); console.warn('[orcaxr] unregistered', regs.length, 'stale service worker(s) — reload for fresh code'); } })
+  navigator.serviceWorker
+    .getRegistrations()
+    .then((regs) => {
+      if (regs.length) {
+        regs.forEach((r) => r.unregister());
+        console.warn('[orcaxr] unregistered', regs.length, 'stale service worker(s) — reload for fresh code');
+      }
+    })
     .catch(() => {});
   if (typeof caches !== 'undefined') {
-    caches.keys().then((keys) => keys.forEach((k) => caches.delete(k))).catch(() => {});
+    caches
+      .keys()
+      .then((keys) => keys.forEach((k) => caches.delete(k)))
+      .catch(() => {});
   }
 }
 
 /** 2D-page UI wiring for standard web slicer mode. */
-function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
-
+function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: ActionContext, registry: ActionRegistry) {
   // On phones the sidebar is a bottom sheet; its title toggles collapse so
   // the 3D view isn't permanently half-covered. No-op on desktop layouts.
   const sidebar = document.getElementById('right-sidebar') as HTMLDivElement;
@@ -104,7 +111,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
   fileInput.onchange = async () => {
     const files = Array.from(fileInput.files ?? []);
     if (files.length > 0) loadingModal.style.display = 'flex';
-    
+
     const updateModal = (text: string, percent: number) => {
       loadingModalText.textContent = text;
       loadingModalBar.style.width = `${percent}%`;
@@ -113,36 +120,36 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
 
     for (const file of files) {
       updateModal(`Reading ${file.name}...`, 10);
-      await new Promise(r => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 50));
       const buf = await file.arrayBuffer();
       try {
         const lowerName = file.name.toLowerCase();
         console.log(`[main.ts] Uploaded file: ${file.name}, lowerName: ${lowerName}`);
         if (lowerName.endsWith('.3mf')) {
           updateModal(`Extracting colors...`, 30);
-          await new Promise(r => setTimeout(r, 50));
+          await new Promise((r) => setTimeout(r, 50));
           const colors = await extract3mfColors(buf);
           const paint = extract3mfPaint(buf);
           await workspace.adoptPaletteFrom3mf(buf); // seed palette + Bambu import detection
 
           updateModal(`Parsing 3MF geometry...`, 60);
-          await new Promise(r => setTimeout(r, 50));
+          await new Promise((r) => setTimeout(r, 50));
           const group = new ThreeMFLoader().parse(buf);
 
           updateModal(`Building scene...`, 90);
-          await new Promise(r => setTimeout(r, 50));
+          await new Promise((r) => setTimeout(r, 50));
           workspace.loadModelFromGroup(group, file.name, colors || undefined, paint);
         } else if (lowerName.endsWith('.zip')) {
           updateModal(`Reading archive...`, 40);
-          await new Promise(r => setTimeout(r, 50));
+          await new Promise((r) => setTimeout(r, 50));
           await workspace.importZipArchive(buf);
         } else {
           updateModal(`Parsing STL geometry...`, 50);
-          await new Promise(r => setTimeout(r, 50));
+          await new Promise((r) => setTimeout(r, 50));
           const geometry = new STLLoader().parse(buf);
 
           updateModal(`Building scene...`, 90);
-          await new Promise(r => setTimeout(r, 50));
+          await new Promise((r) => setTimeout(r, 50));
           workspace.loadModelFromGeometry(geometry, file.name);
         }
       } catch (e) {
@@ -250,9 +257,11 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
     closeModal();
     const overlay = document.createElement('div');
     overlay.id = 'oxr-modal-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);z-index:10001;display:flex;align-items:center;justify-content:center;';
+    overlay.style.cssText =
+      'position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);z-index:10001;display:flex;align-items:center;justify-content:center;';
     const card = document.createElement('div');
-    card.style.cssText = 'background:var(--oxr-color-bg-card);color:var(--oxr-color-text);padding:22px 26px;border-radius:var(--oxr-radius-lg);border:1px solid var(--oxr-color-stroke-strong);box-shadow:0 24px 80px rgba(0,0,0,0.8);width:min(470px,88vw);max-height:82vh;overflow:auto;';
+    card.style.cssText =
+      'background:var(--oxr-color-bg-card);color:var(--oxr-color-text);padding:22px 26px;border-radius:var(--oxr-radius-lg);border:1px solid var(--oxr-color-stroke-strong);box-shadow:0 24px 80px rgba(0,0,0,0.8);width:min(470px,88vw);max-height:82vh;overflow:auto;';
     const head = document.createElement('div');
     head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:16px;';
     const h = document.createElement('h3');
@@ -261,21 +270,28 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
     const x = document.createElement('button');
     x.textContent = '✕';
     x.setAttribute('aria-label', 'Close');
-    x.style.cssText = 'background:none;border:none;color:var(--oxr-color-text-muted);font-size:18px;cursor:pointer;padding:2px 8px;line-height:1;';
+    x.style.cssText =
+      'background:none;border:none;color:var(--oxr-color-text-muted);font-size:18px;cursor:pointer;padding:2px 8px;line-height:1;';
     x.onclick = closeModal;
     head.append(h, x);
     const bodyEl = document.createElement('div');
     bodyEl.style.cssText = 'font-size:14px;line-height:1.55;';
-    if (typeof body === 'string') bodyEl.innerHTML = body; else bodyEl.appendChild(body);
+    if (typeof body === 'string') bodyEl.innerHTML = body;
+    else bodyEl.appendChild(body);
     card.append(head, bodyEl);
     overlay.appendChild(card);
-    overlay.onclick = (e) => { if (e.target === overlay) closeModal(); };
+    overlay.onclick = (e) => {
+      if (e.target === overlay) closeModal();
+    };
     document.body.appendChild(overlay);
   };
   document.addEventListener('keydown', (e) => {
     const target = e.target as HTMLElement | null;
-    const editing = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
-      || target instanceof HTMLSelectElement || !!target?.isContentEditable;
+    const editing =
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement ||
+      !!target?.isContentEditable;
     if (editing || e.metaKey || e.ctrlKey || e.altKey) return;
 
     if (e.key === 'Escape') {
@@ -285,24 +301,24 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
       if (document.getElementById('oxr-modal-overlay')) {
         closeModal();
       } else if (uiState.get().hasSelection) {
-        workspace.unselectModel();
-        uiState.update({ hasSelection: false, status: 'Selection cleared.' });
+        void registry.invoke('edit_deselect_all', 'keyboard', actionCtx, uiState.get());
       }
       return;
     }
     if (e.key === 'Delete' && uiState.get().hasSelection) {
       e.preventDefault();
-      workspace.deleteSelectedModel();
+      void registry.invoke('edit_delete_selected', 'keyboard', actionCtx, uiState.get());
       return;
     }
-    const toolByKey: Record<string, 'move' | 'rotate' | 'scale'> = {
-      g: 'move', r: 'rotate', s: 'scale',
+    const toolByKey: Record<string, string> = {
+      g: 'tool_move',
+      r: 'tool_rotate',
+      s: 'tool_scale',
     };
-    const tool = toolByKey[e.key.toLowerCase()];
-    if (tool && uiState.get().hasSelection) {
+    const actionId = toolByKey[e.key.toLowerCase()];
+    if (actionId && uiState.get().hasSelection) {
       e.preventDefault();
-      workspace.setTool(tool);
-      uiState.update({ activeTool: tool });
+      void registry.invoke(actionId, 'keyboard', actionCtx, uiState.get());
     }
   });
   workspace.onShowModal = ({ title, bodyHtml }) => buildModal(title, bodyHtml);
@@ -319,7 +335,9 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
       sel.innerHTML = '';
       for (const v of values) {
         const o = document.createElement('option');
-        o.value = v; o.textContent = v; if (v === current) o.selected = true;
+        o.value = v;
+        o.textContent = v;
+        if (v === current) o.selected = true;
         sel.appendChild(o);
       }
     };
@@ -328,14 +346,18 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
       wrap.style.cssText = 'display:block;margin:10px 0;font-size:13px;color:var(--oxr-color-text-muted);';
       wrap.textContent = label;
       const sel = document.createElement('select');
-      sel.style.cssText = 'display:block;width:100%;margin-top:4px;padding:8px;border-radius:8px;background:var(--oxr-color-bg);color:var(--oxr-color-text);border:1px solid var(--oxr-color-stroke-strong);font-size:14px;';
+      sel.style.cssText =
+        'display:block;width:100%;margin-top:4px;padding:8px;border-radius:8px;background:var(--oxr-color-bg);color:var(--oxr-color-text);border:1px solid var(--oxr-color-stroke-strong);font-size:14px;';
       wrap.appendChild(sel);
       body.appendChild(wrap);
       return sel;
     };
-    const mSel = mk('Printer'); fill(mSel, opts.machines, opts.machine);
-    const pSel = mk('Process'); fill(pSel, opts.processes, opts.process);
-    const fSel = mk('Filament'); fill(fSel, opts.filaments, opts.filament);
+    const mSel = mk('Printer');
+    fill(mSel, opts.machines, opts.machine);
+    const pSel = mk('Process');
+    fill(pSel, opts.processes, opts.process);
+    const fSel = mk('Filament');
+    fill(fSel, opts.filaments, opts.filament);
     mSel.onchange = () => {
       const ch = workspace.choicesForMachine(mSel.value);
       fill(pSel, ch.processes, ch.processes[0] ?? '');
@@ -344,8 +366,12 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
     const apply = document.createElement('button');
     apply.textContent = 'Apply & Close';
     apply.setAttribute('data-testid', 'wizard-apply');
-    apply.style.cssText = 'margin-top:14px;width:100%;padding:10px;border:none;border-radius:8px;background:linear-gradient(90deg,#ffb74d,#ff9800);color:#1a1a1a;font-weight:600;font-size:14px;cursor:pointer;';
-    apply.onclick = () => { workspace.setProfileByNames(mSel.value, pSel.value, fSel.value); closeModal(); };
+    apply.style.cssText =
+      'margin-top:14px;width:100%;padding:10px;border:none;border-radius:8px;background:linear-gradient(90deg,#ffb74d,#ff9800);color:#1a1a1a;font-weight:600;font-size:14px;cursor:pointer;';
+    apply.onclick = () => {
+      workspace.setProfileByNames(mSel.value, pSel.value, fSel.value);
+      closeModal();
+    };
     body.appendChild(apply);
     buildModal('Setup Wizard', body);
   };
@@ -423,52 +449,57 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
     if (exCount > 1) {
       const syncBtn = document.createElement('button');
       syncBtn.className = 'action-btn';
-      syncBtn.style.cssText = 'background: #2E7D32; color: white; border: none; padding: 8px; margin-bottom: 8px; border-radius: 8px; cursor: pointer; font-size: 13px; width: 100%;';
+      syncBtn.style.cssText =
+        'background: #2E7D32; color: white; border: none; padding: 8px; margin-bottom: 8px; border-radius: 8px; cursor: pointer; font-size: 13px; width: 100%;';
       syncBtn.textContent = 'Sync with Printer';
       syncBtn.onclick = async () => {
-         const cfg = loadPrinterConfig();
-         if (!cfg.host) {
-             (workspace as any).setStatus('No printer IP set.');
-             return;
-         }
-         try {
-             (workspace as any).setStatus('Syncing filaments from printer...');
-             const { MoonrakerClient } = await import('./features/MoonrakerClient');
-             const client = new MoonrakerClient(cfg as any);
-             // Provide a timeout so fetch doesn't hang indefinitely
-             const slots = await client.queryFilamentSlots();
-             if (slots.length > 0) {
-                 workspace.palette.setFrom(slots.map(s => s.colorHex), slots.map(s => s.material));
-                 (workspace as any).setStatus('Synced filaments from printer!');
-             } else {
-                 (workspace as any).setStatus('No filaments found on printer.');
-             }
-         } catch (e) {
-             (workspace as any).setStatus(`Failed to sync: ${(e as Error).message}`);
-         }
+        const cfg = loadPrinterConfig();
+        if (!cfg.host) {
+          (workspace as any).setStatus('No printer IP set.');
+          return;
+        }
+        try {
+          (workspace as any).setStatus('Syncing filaments from printer...');
+          const { MoonrakerClient } = await import('./features/MoonrakerClient');
+          const client = new MoonrakerClient(cfg as any);
+          // Provide a timeout so fetch doesn't hang indefinitely
+          const slots = await client.queryFilamentSlots();
+          if (slots.length > 0) {
+            workspace.palette.setFrom(
+              slots.map((s) => s.colorHex),
+              slots.map((s) => s.material),
+            );
+            (workspace as any).setStatus('Synced filaments from printer!');
+          } else {
+            (workspace as any).setStatus('No filaments found on printer.');
+          }
+        } catch (e) {
+          (workspace as any).setStatus(`Failed to sync: ${(e as Error).message}`);
+        }
       };
       headsPanel.appendChild(syncBtn);
-      
+
       for (let i = 0; i < totalCount; i++) {
         const isVirtual = i >= exCount;
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:4px;';
-        
+
         const colorInput = document.createElement('input');
         colorInput.type = 'color';
         colorInput.value = workspace.palette.colorAt(i);
-        colorInput.style.cssText = 'width: 24px; height: 24px; padding: 0; border: none; background: none; cursor: pointer;';
+        colorInput.style.cssText =
+          'width: 24px; height: 24px; padding: 0; border: none; background: none; cursor: pointer;';
         colorInput.onchange = () => {
-           workspace.palette.setColor(i, colorInput.value);
-           workspace.rebuildHeadsPanel();
+          workspace.palette.setColor(i, colorInput.value);
+          workspace.rebuildHeadsPanel();
         };
         row.appendChild(colorInput);
 
         const lbl = document.createElement('span');
-        lbl.textContent = isVirtual ? `V-${i+1}:` : `H-${i+1}:`;
+        lbl.textContent = isVirtual ? `V-${i + 1}:` : `H-${i + 1}:`;
         lbl.style.cssText = 'color:#fff;width:30px;font-size:12px;';
         row.appendChild(lbl);
-        
+
         const fSel = document.createElement('select');
         fSel.className = 'action-btn';
         fSel.style.cssText = 'flex-grow:1;margin:0;padding:6px;font-size:12px;';
@@ -478,46 +509,47 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
           workspace.rebuildHeadsPanel();
         };
         row.appendChild(fSel);
-        
+
         if (!isVirtual) {
-            const nSel = document.createElement('select');
-            nSel.className = 'action-btn';
-            nSel.style.cssText = 'width:60px;margin:0;padding:6px;font-size:12px;';
-            fillSelect(nSel, ['0.2', '0.4', '0.6', '0.8'], workspace.headNozzles[i]);
-            nSel.onchange = () => {
-              workspace.headNozzles[i] = nSel.value;
-              workspace.rebuildHeadsPanel();
-            };
-            row.appendChild(nSel);
+          const nSel = document.createElement('select');
+          nSel.className = 'action-btn';
+          nSel.style.cssText = 'width:60px;margin:0;padding:6px;font-size:12px;';
+          fillSelect(nSel, ['0.2', '0.4', '0.6', '0.8'], workspace.headNozzles[i]);
+          nSel.onchange = () => {
+            workspace.headNozzles[i] = nSel.value;
+            workspace.rebuildHeadsPanel();
+          };
+          row.appendChild(nSel);
         } else {
-            const delBtn = document.createElement('button');
-            delBtn.className = 'action-btn';
-            delBtn.style.cssText = 'width:60px;margin:0;padding:6px;font-size:12px;background:#d32f2f;color:white;border:none;cursor:pointer;';
-            delBtn.textContent = 'Del';
-            delBtn.onclick = () => {
-              workspace.palette.remove(i);
-              workspace.headFilaments.splice(i, 1);
-              workspace.headNozzles.splice(i, 1);
-              workspace.rebuildHeadsPanel();
-              renderProfileSelects(); // force redraw
-            };
-            row.appendChild(delBtn);
+          const delBtn = document.createElement('button');
+          delBtn.className = 'action-btn';
+          delBtn.style.cssText =
+            'width:60px;margin:0;padding:6px;font-size:12px;background:#d32f2f;color:white;border:none;cursor:pointer;';
+          delBtn.textContent = 'Del';
+          delBtn.onclick = () => {
+            workspace.palette.remove(i);
+            workspace.headFilaments.splice(i, 1);
+            workspace.headNozzles.splice(i, 1);
+            workspace.rebuildHeadsPanel();
+            renderProfileSelects(); // force redraw
+          };
+          row.appendChild(delBtn);
         }
-        
+
         headsPanel.appendChild(row);
       }
-      
+
       const addBtn = document.createElement('button');
       addBtn.className = 'action-btn';
-      addBtn.style.cssText = 'background: rgba(255,255,255,0.1); color: white; padding: 8px; margin-top: 4px; border-radius: 8px; cursor: pointer; font-size: 13px; width: 100%; border: 1px dashed rgba(255,255,255,0.3);';
+      addBtn.style.cssText =
+        'background: rgba(255,255,255,0.1); color: white; padding: 8px; margin-top: 4px; border-radius: 8px; cursor: pointer; font-size: 13px; width: 100%; border: 1px dashed rgba(255,255,255,0.3);';
       addBtn.textContent = '+ Add Virtual Filament';
       addBtn.onclick = () => {
-         workspace.palette.add();
-         // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
-         workspace.headFilaments.push(workspace.getProfileOptions().filament);
-         workspace.headNozzles.push('0.4');
-         workspace.rebuildHeadsPanel();
-         renderProfileSelects(); // force redraw
+        workspace.palette.add();
+        workspace.headFilaments.push(workspace.getProfileOptions().filament);
+        workspace.headNozzles.push('0.4');
+        workspace.rebuildHeadsPanel();
+        renderProfileSelects(); // force redraw
       };
       headsPanel.appendChild(addBtn);
     }
@@ -525,10 +557,17 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
   const applySelects = () => {
     if (selMachine.selectedIndex < 1 || selProcess.selectedIndex < 1 || selFilament.selectedIndex < 1) return;
     try {
-      localStorage.setItem('orcaxr.profiles', JSON.stringify({
-        machine: selMachine.value, process: selProcess.value, filament: selFilament.value
-      }));
-    } catch {}
+      localStorage.setItem(
+        'orcaxr.profiles',
+        JSON.stringify({
+          machine: selMachine.value,
+          process: selProcess.value,
+          filament: selFilament.value,
+        }),
+      );
+    } catch {
+      /* local storage can be unavailable in private/restricted contexts */
+    }
     workspace.setProfileByNames(selMachine.value, selProcess.value, selFilament.value);
   };
   selMachine.onchange = () => {
@@ -549,7 +588,9 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
       if (p.process) selProcess.value = p.process;
       if (p.filament) selFilament.value = p.filament;
     }
-  } catch {}
+  } catch {
+    /* ignore invalid or unavailable saved profile state */
+  }
   renderProfileSelects();
 
   // The new SettingsInspector mounts into the sidebar and drives workspace.customOverrides natively.
@@ -612,7 +653,10 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
   btnAddFilament.onclick = () => workspace.palette.add();
   // A palette change (e.g. adopted from a loaded 3MF) must also refresh the
   // heads panel — its per-head color swatches read the same palette.
-  workspace.onPaletteChanged = () => { renderPalette(); renderProfileSelects(); };
+  workspace.onPaletteChanged = () => {
+    renderPalette();
+    renderProfileSelects();
+  };
   renderPalette();
 
   // Printer: send sliced G-code to a Moonraker printer (e.g. Centauri Carbon).
@@ -636,10 +680,12 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
 
   const updateExternalSlicerStatus = (connected: boolean) => {
     if (connected) {
-      externalSlicerStatus.innerHTML = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4caf50;"></span> Online';
+      externalSlicerStatus.innerHTML =
+        '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4caf50;"></span> Online';
       externalSlicerStatus.style.color = '#4caf50';
     } else {
-      externalSlicerStatus.innerHTML = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f44336;"></span> Offline';
+      externalSlicerStatus.innerHTML =
+        '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f44336;"></span> Offline';
       externalSlicerStatus.style.color = '#f44336';
     }
   };
@@ -688,7 +734,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
       } else {
         throw new Error('Bad status');
       }
-    } catch (e) {
+    } catch {
       // Keep the saved server (if any) on a failed reachability check; just
       // report offline. Deleting is an explicit action via the Delete button.
       updateExternalSlicerStatus(false);
@@ -702,21 +748,24 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
   if (externalSlicerUrl.value) {
     btnExternalSlicerConnect.click(); // auto-connect on load if url exists
   }
-  
+
   btnPrinterTest.onclick = async () => {
     statusText.textContent = 'Testing printer connection…';
     try {
-        const { MoonrakerClient } = await import('./features/MoonrakerClient');
-        const client = new MoonrakerClient(printerCfg as any);
-        const info = await client.ping();
-        statusText.textContent = `Connected — printer ${info.state}.`;
+      const { MoonrakerClient } = await import('./features/MoonrakerClient');
+      const client = new MoonrakerClient(printerCfg as any);
+      const info = await client.ping();
+      statusText.textContent = `Connected — printer ${info.state}.`;
     } catch (e) {
-        statusText.textContent = `No response: ${(e as Error).message}`;
+      statusText.textContent = `No response: ${(e as Error).message}`;
     }
   };
   btnPrinterSend.onclick = async () => {
     const gcode = workspace.getLastGcode();
-    if (!gcode) { statusText.textContent = 'Slice first, then send.'; return; }
+    if (!gcode) {
+      statusText.textContent = 'Slice first, then send.';
+      return;
+    }
     statusText.textContent = 'Uploading to printer…';
     const r = await sendToPrinter(printerCfg, gcode, 'orcaxr.gcode', true);
     statusText.textContent = r.message;
@@ -733,9 +782,9 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
 
   // Different firmwares and Crowsnest configurations expose the snapshot at different paths
   const snapshotPaths = [
-    '/webcam/?action=snapshot&t=',  // Standard Klipper / Mainsail / Fluidd
-    '/webcam/snapshot.jpg?t=',      // Snapmaker U1 Extended Firmware (Internal Camera)
-    '/webcam2/snapshot.jpg?t='      // Snapmaker U1 Extended Firmware (USB Camera)
+    '/webcam/?action=snapshot&t=', // Standard Klipper / Mainsail / Fluidd
+    '/webcam/snapshot.jpg?t=', // Snapmaker U1 Extended Firmware (Internal Camera)
+    '/webcam2/snapshot.jpg?t=', // Snapmaker U1 Extended Firmware (USB Camera)
   ];
   let activePathIndex = 0;
 
@@ -753,20 +802,19 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
       return;
     }
     host = normalizeHttpEndpoint(host);
-    
+
     webcamActive = !webcamActive;
     if (webcamActive) {
       webcamContainer.style.display = 'block';
       btnPrinterWebcam.textContent = 'Hide Webcam';
       statusText.textContent = 'Connecting to webcam feed...';
-      
-      // WebGL/uikit cannot render MJPEG streams directly. 
+
+      // WebGL/uikit cannot render MJPEG streams directly.
       // We must poll the snapshot endpoint to update the texture.
       // IP literals and .local names can stay as direct image requests, which
       // keeps camera endpoints without CORS working. Named HTTP hosts need the
       // annotated fetch path so Chrome can authorize Local Network Access.
-      const needsAnnotatedFetch =
-        localNetworkTargetForRequest(host, window.isSecureContext) !== null;
+      const needsAnnotatedFetch = localNetworkTargetForRequest(host, window.isSecureContext) !== null;
       const updateFrame = async () => {
         if (!webcamActive || generation !== webcamGeneration) return;
         const frameUrl = `${host}${snapshotPaths[activePathIndex]}${Date.now()}`;
@@ -800,8 +848,8 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
           if (webcamAbortController === controller) webcamAbortController = null;
         }
       };
-      
-      updateFrame();
+
+      void updateFrame();
       webcamInterval = setInterval(updateFrame, 1000); // 1 FPS
     } else {
       if (webcamInterval) clearInterval(webcamInterval);
@@ -838,7 +886,10 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
         del.className = 'plate-del';
         del.textContent = '×';
         del.title = `Delete ${p.label}`;
-        del.onclick = (e) => { e.stopPropagation(); workspace.deletePlate(p.id); };
+        del.onclick = (e) => {
+          e.stopPropagation();
+          workspace.deletePlate(p.id);
+        };
         chip.appendChild(del);
       }
       plateBar.appendChild(chip);
@@ -903,87 +954,98 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
   const btnAiSmartPaint = document.getElementById('btn-ai-smart-paint') as HTMLButtonElement;
   const btnAiSemantic = document.getElementById('btn-ai-semantic') as HTMLButtonElement;
 
+  let mcp: OrcaWebMcpClient | null = null;
+
+  const renderMcpStatus = (status: Readonly<WebMcpStatus>) => {
+    statusText.textContent = status.message;
+    const busy = status.state === 'registering' || status.state === 'connecting';
+    const connected = status.state === 'connected' || mcp?.isConnected === true;
+    btnMcpConnect.disabled = busy;
+    inMcpToken.disabled = busy || connected;
+    btnMcpConnect.textContent = connected ? 'Disconnect Server' : busy ? 'Connecting…' : 'Connect Server';
+  };
+
+  const ensureMcpClient = (): OrcaWebMcpClient => {
+    if (mcp) return mcp;
+    mcp = new OrcaWebMcpClient({ onStatus: renderMcpStatus });
+
+    mcp.registerTool(
+      'get_status',
+      'Get current OrcaXR workspace status',
+      { type: 'object', properties: {}, additionalProperties: false },
+      () => ({
+        content: [
+          {
+            type: 'text',
+            text: `Workspace has ${workspace.modelCount} models loaded across ${workspace.getPlates().length} plates.`,
+          },
+        ],
+      }),
+    );
+    registerWorkspaceTools(mcp, workspace);
+    registerSystemTools(mcp);
+    return mcp;
+  };
+
   chkMcpEnabled.onchange = () => {
     mcpControls.style.display = chkMcpEnabled.checked ? 'flex' : 'none';
-    const state = chkMcpEnabled.checked ? 'started' : 'stopped';
-    statusText.textContent = `MCP Server ${state}.`;
-
-    if (chkMcpEnabled.checked && !(window as any).mcp) {
-      statusText.textContent = 'Loading WebMCP...';
-      import(/* @vite-ignore */ 'https://unpkg.com/@jason.today/webmcp@latest/build/webmcp.js')
-        .then((module) => {
-          const WebMCP = module.WebMCP;
-          const mcp = new WebMCP({
-              color: '#ffb74d',
-              position: 'bottom-right',
-              size: '40px',
-              padding: '15px'
-          });
-          (window as any).mcp = mcp;
-          
-          // Register a demo tool
-          mcp.registerTool(
-              'get_status',
-              'Get current OrcaXR workspace status',
-              {},
-              function() {
-                  return {
-                      content: [{
-                          type: "text",
-                          text: `Workspace has ${workspace.modelCount} models loaded across ${workspace.getPlates().length} plates.`
-                      }]
-                  };
-              }
-          );
-          registerWorkspaceTools(mcp, workspace);
-          registerSystemTools(mcp);
-          statusText.textContent = 'WebMCP loaded and ready. Paste your token and click Connect Server.';
-        })
-        .catch(err => {
-          console.error('Failed to load WebMCP module:', err);
-          statusText.textContent = 'Failed to load WebMCP.';
-        });
+    if (chkMcpEnabled.checked) {
+      ensureMcpClient();
+      statusText.textContent = 'WebMCP tools are ready. Paste a local bridge token and connect.';
+    } else {
+      mcp?.disconnect('WebMCP tools disabled.');
     }
   };
 
-  btnMcpConnect.onclick = () => {
+  btnMcpConnect.onclick = async () => {
+    const client = ensureMcpClient();
+    if (client.isConnected) {
+      client.disconnect();
+      return;
+    }
     const token = inMcpToken.value.trim();
     if (!token) {
       statusText.textContent = 'Please paste a token first.';
       return;
     }
-    const mcp = (window as any).mcp;
-    if (mcp) {
-      mcp.connect(token);
-      statusText.textContent = 'Connecting WebMCP...';
-    } else {
-      statusText.textContent = 'WebMCP is not loaded yet.';
+    try {
+      await client.connect(token);
+      // Registration tokens are one-use capabilities; do not retain them in
+      // the DOM, storage, logs, or a globally reachable window property.
+      inMcpToken.value = '';
+    } catch (error) {
+      if (!(error instanceof WebMcpConnectionError && error.code === 'cancelled')) {
+        // The client status callback already rendered its redacted message.
+        inMcpToken.focus();
+      }
     }
   };
 
-  btnMcpShare.onclick = () => {
+  btnMcpShare.onclick = async () => {
     const snippet = {
-      "mcpServers": {
-        "orcaxr_webmcp": {
-          "command": "npx",
-          "args": [
-            "-y",
-            "@jason.today/webmcp@latest",
-            "--mcp"
-          ]
-        }
-      }
+      mcpServers: {
+        orcaxr_webmcp: {
+          command: 'npx',
+          args: ['-y', WEBMCP_CLI_PACKAGE, '--mcp'],
+        },
+      },
     };
-    navigator.clipboard.writeText(JSON.stringify(snippet, null, 2));
-    statusText.textContent = 'Claude Desktop MCP config snippet copied to clipboard.';
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(snippet, null, 2));
+      statusText.textContent = 'Claude Desktop MCP config snippet copied to clipboard.';
+    } catch {
+      statusText.textContent = 'Clipboard access was denied. Copy the MCP snippet from a secure browser context.';
+    }
   };
+
+  window.addEventListener('pagehide', () => mcp?.disconnect(), { once: true });
 
   btnAiSmartPaint.onclick = () => {
     if (workspace.modelCount === 0) {
       statusText.textContent = 'Load a model first before using AI Smart Paint.';
       return;
     }
-    workspace.smartPaint();
+    void workspace.smartPaint();
   };
 
   btnAiSemantic.onclick = () => {
@@ -991,7 +1053,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState) {
       statusText.textContent = 'Load a model first before using Semantic Planner.';
       return;
     }
-    workspace.smartPaintImage();
+    void workspace.smartPaintImage();
   };
 }
 
@@ -1001,8 +1063,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // defer that cost in production unless someone explicitly asks for desktop
   // simulation (`?simulator=1`). It still loads before `xb.init`, so simulator
   // behaviour is unchanged for local development and opt-in QA sessions.
-  const wantsSimulator = import.meta.env.DEV
-    || new URLSearchParams(window.location.search).get('simulator') === '1';
+  const wantsSimulator = import.meta.env.DEV || new URLSearchParams(window.location.search).get('simulator') === '1';
   if (wantsSimulator) await import('xrblocks/addons/simulator/SimulatorAddons.js');
 
   // Design tokens as CSS custom properties — the DOM shell's single source of
@@ -1021,8 +1082,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   options.controllers.visualizeRays = true;
   options.controllers.performRaycastOnUpdate = true;
   options.enableUI();
-  
-  // @ts-ignore
+
   options.uikit.enable(uikit);
 
   const workspace = new OrcaWorkspace();
@@ -1056,13 +1116,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   (window as unknown as { __orcaRenderer: unknown }).__orcaRenderer = xb.core.renderer;
   (window as unknown as { THREE: unknown }).THREE = THREE;
   (window as unknown as { __orca: unknown }).__orca = workspace;
-  setupDomUI(workspace, uiState);
+  const registry = buildRegistry();
+  setupDomUI(workspace, uiState, actionCtx, registry);
 
   // Render the tool rail, primary bar, Add/Tools menus, and mode control from
   // the shared registry (the same catalog the XR shell renders). Mounted after
   // setupDomUI so the file-input + onRequestLoadStl the Load action depends on
   // is in place.
-  const registry = buildRegistry();
   const byId = (id: string) => document.getElementById(id) as HTMLElement;
   const domShell = new DomShell(registry, actionCtx, uiState);
   domShell.mount({
@@ -1076,9 +1136,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const toolSettingsTitle = byId('tool-settings-title');
   const toolSettingsContent = byId('tool-settings-content');
   const btnCloseToolSettings = byId('btn-close-tool-settings');
-  
+
   btnCloseToolSettings.onclick = () => {
-    actionCtx.setTool('');
+    actionCtx.setTool('move');
   };
 
   let currentSettingsTool = '';
@@ -1086,7 +1146,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const s = uiState.get();
     const hasSelection = !!workspace.getSelectedModelScale();
 
-    if (s.activeTool === 'paint' || s.activeTool === 'support_paint' || s.activeTool === 'seam_paint' || s.activeTool === 'fuzzy_skin') {
+    if (
+      s.activeTool === 'paint' ||
+      s.activeTool === 'support_paint' ||
+      s.activeTool === 'seam_paint' ||
+      s.activeTool === 'fuzzy_skin'
+    ) {
       toolSettingsPanel.style.display = 'block';
       if (currentSettingsTool !== s.activeTool) {
         currentSettingsTool = s.activeTool;
@@ -1102,7 +1167,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div style="font-size:13px; color:#a0aab5; margin-top:8px;">Active Color</div>
             <div id="paint-tool-swatches" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
           `;
-          
+
           const inBrushSize = byId('in-brush-size') as HTMLInputElement;
           const lblBrushSize = byId('lbl-brush-size');
           inBrushSize.oninput = () => {
@@ -1110,7 +1175,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             workspace.brushRadiusMm = val;
             lblBrushSize.textContent = val.toFixed(1);
           };
-          
+
           const swatchesContainer = byId('paint-tool-swatches');
           const activeHex = workspace.getActivePaintColorHex();
           workspace.palette.list().forEach((slot) => {
@@ -1146,20 +1211,26 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     } else if (hasSelection && (s.activeTool === 'move' || s.activeTool === 'rotate' || s.activeTool === 'scale')) {
       toolSettingsPanel.style.display = 'block';
-      
+
       const pos = workspace.getSelectedModelPosition() || new THREE.Vector3();
       const rot = workspace.getSelectedModelRotation() || new THREE.Euler();
       const scl = workspace.getSelectedModelScale() || new THREE.Vector3(1, 1, 1);
-      
-      let xVal = 0, yVal = 0, zVal = 0;
+
+      let xVal = 0,
+        yVal = 0,
+        zVal = 0;
       if (s.activeTool === 'move') {
-        xVal = pos.x; yVal = pos.y; zVal = pos.z;
+        xVal = pos.x;
+        yVal = pos.y;
+        zVal = pos.z;
       } else if (s.activeTool === 'rotate') {
         xVal = THREE.MathUtils.radToDeg(rot.x);
         yVal = THREE.MathUtils.radToDeg(rot.y);
         zVal = THREE.MathUtils.radToDeg(rot.z);
       } else if (s.activeTool === 'scale') {
-        xVal = scl.x * 100; yVal = scl.y * 100; zVal = scl.z * 100;
+        xVal = scl.x * 100;
+        yVal = scl.y * 100;
+        zVal = scl.z * 100;
       }
 
       if (currentSettingsTool !== s.activeTool) {
@@ -1168,7 +1239,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (s.activeTool === 'move') title = 'Move (mm)';
         else if (s.activeTool === 'rotate') title = 'Rotate (deg)';
         else if (s.activeTool === 'scale') title = 'Scale (%)';
-        
+
         toolSettingsTitle.textContent = title;
         toolSettingsContent.innerHTML = `
           <div style="display:flex; flex-direction:column; gap:8px;">
@@ -1186,11 +1257,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
           </div>
         `;
-        
+
         const inX = byId('ts-x') as HTMLInputElement;
         const inY = byId('ts-y') as HTMLInputElement;
         const inZ = byId('ts-z') as HTMLInputElement;
-        
+
         const onTransformChange = () => {
           const x = parseFloat(inX.value) || 0;
           const y = parseFloat(inY.value) || 0;
@@ -1198,24 +1269,27 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (s.activeTool === 'move') {
             workspace.setSelectedModelPosition(x, y, z);
           } else if (s.activeTool === 'rotate') {
-            workspace.setSelectedModelRotation(THREE.MathUtils.degToRad(x), THREE.MathUtils.degToRad(y), THREE.MathUtils.degToRad(z));
+            workspace.setSelectedModelRotation(
+              THREE.MathUtils.degToRad(x),
+              THREE.MathUtils.degToRad(y),
+              THREE.MathUtils.degToRad(z),
+            );
           } else if (s.activeTool === 'scale') {
             workspace.setSelectedModelScale(x / 100, y / 100, z / 100);
           }
         };
-        
+
         inX.onchange = onTransformChange;
         inY.onchange = onTransformChange;
         inZ.onchange = onTransformChange;
       }
-      
+
       const inX = byId('ts-x') as HTMLInputElement;
       const inY = byId('ts-y') as HTMLInputElement;
       const inZ = byId('ts-z') as HTMLInputElement;
       if (inX && document.activeElement !== inX) inX.value = xVal.toFixed(2);
       if (inY && document.activeElement !== inY) inY.value = yVal.toFixed(2);
       if (inZ && document.activeElement !== inZ) inZ.value = zVal.toFixed(2);
-      
     } else {
       toolSettingsPanel.style.display = 'none';
       currentSettingsTool = '';
@@ -1227,7 +1301,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // The command palette: every action, searchable, one Ctrl/⌘-K away.
   const palette = new CommandPalette(registry, actionCtx, uiState);
-  
+
   AiConfigDialog.init();
   document.getElementById('cmd-ai-config')?.addEventListener('click', () => {
     AiConfigDialog.show();

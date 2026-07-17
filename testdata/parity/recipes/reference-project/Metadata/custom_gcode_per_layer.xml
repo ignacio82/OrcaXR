@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<custom_gcodes_per_layer>
+  <plate id="1">
+    <code z="2.0" type="pause"><![CDATA[M0 Inspect parity fixture]]></code>
+    <code z="5.0" type="tool-change"><![CDATA[T1]]></code>
+  </plate>
+  <plate id="2">
+    <code z="1.0" type="color-change"><![CDATA[M600]]></code>
+  </plate>
+</custom_gcodes_per_layer>
+

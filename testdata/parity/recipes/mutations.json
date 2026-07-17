@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "threeMf": [
+    {
+      "id": "missing-part-assignment",
+      "member": "Metadata/model_settings.config",
+      "find": "      <metadata key=\"extruder\" value=\"2\"/>\n",
+      "replace": "",
+      "expectedDifference": "/partAssignments"
+    },
+    {
+      "id": "missing-paint-facet",
+      "member": "3D/3dmodel.model",
+      "find": " paint_color=\"1F\"",
+      "replace": "",
+      "expectedDifference": "/facetAnnotations"
+    },
+    {
+      "id": "missing-mixed-definition",
+      "member": "Metadata/project_settings.config",
+      "find": "  <setting key=\"mixed_filament_ratio\" value=\"5=Ratio(1:0.65,2:0.35)\"/>\n",
+      "replace": "",
+      "expectedDifference": "/mixedFilamentDefinitions"
+    },
+    {
+      "id": "changed-setting",
+      "member": "Metadata/project_settings.config",
+      "find": "  <setting key=\"layer_height\" value=\"0.20\"/>",
+      "replace": "  <setting key=\"layer_height\" value=\"0.28\"/>",
+      "expectedDifference": "/settings"
+    }
+  ],
+  "gcode": [
+    {
+      "id": "missing-tool-change",
+      "find": "T1 ; switch to the second physical head\n",
+      "replace": "",
+      "expectedDifference": "/toolOrder"
+    }
+  ]
+}
+

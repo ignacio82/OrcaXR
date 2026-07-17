@@ -6,18 +6,33 @@ import assert from 'node:assert';
 import { cutByPlane } from '../MeshCut';
 
 let passed = 0;
-function test(name: string, fn: () => void) { fn(); passed++; console.log('  ✓', name); }
+function test(name: string, fn: () => void) {
+  fn();
+  passed++;
+  console.log('  ✓', name);
+}
 
 /** Non-indexed 20 mm cube centred at origin (12 triangles, 108 floats). */
 function cube(): Float32Array {
   const h = 10;
   const c: [number, number, number][] = [
-    [-h, -h, -h], [h, -h, -h], [h, h, -h], [-h, h, -h],
-    [-h, -h, h], [h, -h, h], [h, h, h], [-h, h, h],
+    [-h, -h, -h],
+    [h, -h, -h],
+    [h, h, -h],
+    [-h, h, -h],
+    [-h, -h, h],
+    [h, -h, h],
+    [h, h, h],
+    [-h, h, h],
   ];
-  const q = [ // faces as quads (CCW), split into 2 tris each
-    [0, 1, 2, 3], [5, 4, 7, 6], [4, 0, 3, 7],
-    [1, 5, 6, 2], [4, 5, 1, 0], [3, 2, 6, 7],
+  const q = [
+    // faces as quads (CCW), split into 2 tris each
+    [0, 1, 2, 3],
+    [5, 4, 7, 6],
+    [4, 0, 3, 7],
+    [1, 5, 6, 2],
+    [4, 5, 1, 0],
+    [3, 2, 6, 7],
   ];
   const out: number[] = [];
   for (const [a, b, cc, d] of q) {
@@ -43,7 +58,11 @@ test('a cap was added on both halves (cross-section closed)', () => {
     let n = 0;
     for (let t = 0; t < a.length / 9; t++) {
       let onPlane = true;
-      for (let k = 0; k < 3; k++) if (Math.abs(a[t * 9 + k * 3 + 2]) > 1e-4) { onPlane = false; break; }
+      for (let k = 0; k < 3; k++)
+        if (Math.abs(a[t * 9 + k * 3 + 2]) > 1e-4) {
+          onPlane = false;
+          break;
+        }
       if (onPlane) n++;
     }
     return n;

@@ -3,7 +3,7 @@
  * Paint mode is its own tool (scene group); painted multi-color slicing is
  * wired in Phase 3.
  */
-import type { Action } from '../ActionRegistry';
+import type { ActionDefinition as Action } from '../ActionRegistry';
 
 export const sliceActions: Action[] = [
   {

@@ -33,13 +33,22 @@ class DSU {
   find(a: number): number {
     let r = a;
     while (this.parent[r] !== r) r = this.parent[r];
-    while (this.parent[a] !== r) { const n = this.parent[a]; this.parent[a] = r; a = n; }
+    while (this.parent[a] !== r) {
+      const n = this.parent[a];
+      this.parent[a] = r;
+      a = n;
+    }
     return r;
   }
   union(a: number, b: number): void {
-    let ra = this.find(a), rb = this.find(b);
+    let ra = this.find(a),
+      rb = this.find(b);
     if (ra === rb) return;
-    if (this.size[ra] < this.size[rb]) { const t = ra; ra = rb; rb = t; }
+    if (this.size[ra] < this.size[rb]) {
+      const t = ra;
+      ra = rb;
+      rb = t;
+    }
     this.parent[rb] = ra;
     this.size[ra] += this.size[rb];
   }
@@ -65,14 +74,19 @@ export function splitConnectedComponents(
   for (let c = 0; c < triCount * 3; c++) {
     const k = key(positions[c * 3], positions[c * 3 + 1], positions[c * 3 + 2]);
     let rep = weld.get(k);
-    if (rep === undefined) { rep = nextRep++; weld.set(k, rep); }
+    if (rep === undefined) {
+      rep = nextRep++;
+      weld.set(k, rep);
+    }
     cornerRep[c] = rep;
   }
 
   // 2. Union the three welded corners of every triangle.
   const dsu = new DSU(nextRep);
   for (let t = 0; t < triCount; t++) {
-    const a = cornerRep[t * 3], b = cornerRep[t * 3 + 1], d = cornerRep[t * 3 + 2];
+    const a = cornerRep[t * 3],
+      b = cornerRep[t * 3 + 1],
+      d = cornerRep[t * 3 + 2];
     dsu.union(a, b);
     dsu.union(b, d);
   }
@@ -82,7 +96,10 @@ export function splitConnectedComponents(
   for (let t = 0; t < triCount; t++) {
     const root = dsu.find(cornerRep[t * 3]);
     let arr = buckets.get(root);
-    if (!arr) { arr = []; buckets.set(root, arr); }
+    if (!arr) {
+      arr = [];
+      buckets.set(root, arr);
+    }
     arr.push(t);
   }
 

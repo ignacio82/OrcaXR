@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "engine": {
+    "repository": "https://github.com/Snapmaker/OrcaSlicer.git",
+    "tag": "v2.3.4",
+    "commit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626"
+  },
+  "inputs": {
+    "paths": [
+      "wasm/patches",
+      "wasm/shim-include",
+      "wasm/slic3r_wasm.cpp",
+      "wasm/build_wasm_module_snapmaker.sh"
+    ],
+    "aggregateSha256": "fbf32bdc74dee3289dd810dbc83e0d29dc840caaff5e85b1e6fa6cea9185099f"
+  },
+  "outputs": {
+    "slic3r.mjs": "a37ac3888752da651ca412228a8a2feb80db8b9d9ea0f84bfc642501c11697f0",
+    "slic3r.wasm": "da3940122ea5096f75e0b5d9379db235b30e628f37b33a5d8dba08796d2a710d"
+  },
+  "publishedCopies": ["wasm/dist", "web/public/slicer"]
+}

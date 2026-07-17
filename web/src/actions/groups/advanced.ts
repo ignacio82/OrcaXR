@@ -1,4 +1,4 @@
-import type { Action } from '../ActionRegistry';
+import type { ActionDefinition as Action } from '../ActionRegistry';
 
 export const advancedActions: Action[] = [
   {
@@ -10,7 +10,6 @@ export const advancedActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'tools',
     hint: 'Emboss text onto the selected model',
-    run: (ctx) => ctx.embossText(),
   },
   {
     id: 'add_magnet',
@@ -21,7 +20,6 @@ export const advancedActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'tools',
     hint: 'Add a cavity for a magnet',
-    run: (ctx) => ctx.addMagnet(),
   },
   {
     id: 'auto_place_wipe',
@@ -41,7 +39,6 @@ export const advancedActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'tools',
     hint: 'Scan local network for printers',
-    run: (ctx) => ctx.scanNetwork(),
   },
   {
     id: 'view_webcam',
@@ -51,6 +48,5 @@ export const advancedActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'tools',
     hint: 'View the live printer webcam feed',
-    run: (ctx) => ctx.viewWebcam(),
   },
 ];

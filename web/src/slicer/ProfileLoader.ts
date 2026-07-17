@@ -34,12 +34,16 @@ interface Catalog {
  * keep ','. Only the multi-entry string keys in SAFE_KEYS need listing.
  */
 const STRING_VECTOR_KEYS = new Set<string>([
-  'filament_colour', 'extruder_colour', 'filament_type',
-  'filament_start_gcode', 'filament_end_gcode', 'filament_settings_id',
+  'filament_colour',
+  'extruder_colour',
+  'filament_type',
+  'filament_start_gcode',
+  'filament_end_gcode',
+  'filament_settings_id',
 ]);
 
 function str(v: unknown, key?: string): string {
-  if (v == null) return '';
+  if (v === null || v === undefined) return '';
   if (Array.isArray(v)) {
     const sep = key !== undefined && STRING_VECTOR_KEYS.has(key) ? ';' : ',';
     return v.map((x) => `${x}`).join(sep);
@@ -54,9 +58,7 @@ function leavesOf(jsons: ProfileJson[]): ProfileJson[] {
   // machine is the base the other nozzle sizes inherit from AND a real
   // preset (instantiation: "true"). Only fall back to parent-exclusion
   // for profiles that don't declare the flag at all.
-  const parentNames = new Set(
-    jsons.map((j) => str(j.inherits)).filter((s) => s.length > 0),
-  );
+  const parentNames = new Set(jsons.map((j) => str(j.inherits)).filter((s) => s.length > 0));
   return jsons.filter((j) => {
     const name = str(j.name);
     if (!name) return false;
@@ -66,10 +68,7 @@ function leavesOf(jsons: ProfileJson[]): ProfileJson[] {
   });
 }
 
-function flatten(
-  leaf: ProfileJson,
-  byName: Map<string, ProfileJson>,
-): Record<string, string> {
+function flatten(leaf: ProfileJson, byName: Map<string, ProfileJson>): Record<string, string> {
   const chain: ProfileJson[] = [];
   let current: ProfileJson | undefined = leaf;
   let depth = 0;
@@ -106,7 +105,8 @@ export class ProfileCatalog {
       if (r.ok) catalog = (await r.json()) as Catalog;
       else console.error(`[orcaxr] failed to fetch catalog: HTTP ${r.status}`);
     } catch (e) {
-      console.error('[orcaxr] failed to fetch catalog (network/parse error)', e); return;
+      console.error('[orcaxr] failed to fetch catalog (network/parse error)', e);
+      return;
     }
     if (!catalog) return;
     for (const cats of Object.values(catalog)) {

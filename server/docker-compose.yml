@@ -1,9 +1,10 @@
-version: '3.8'
-
 services:
   orcaxr-server:
-    build: .
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
     container_name: orcaxr-server-container
+    init: true
     ports:
       - "3000:3000"
     environment:
@@ -17,4 +18,11 @@ services:
       # has a hard architectural limit of 4GB (4096MB) for its internal heap.
       - MAX_OLD_SPACE_SIZE=4096
       - PORT=3000
+      # Container port publishing requires a non-loopback bind. The server
+      # refuses this mode unless both authentication and an exact browser
+      # origin allowlist are provided by the operator.
+      - HOST=0.0.0.0
+      - ORCAXR_SERVER_TOKEN=${ORCAXR_SERVER_TOKEN:?set a random token of at least 32 bytes}
+      - ORCAXR_ALLOWED_ORIGINS=${ORCAXR_ALLOWED_ORIGINS:?set the exact OrcaXR web origin}
     restart: unless-stopped
+    stop_grace_period: 20s

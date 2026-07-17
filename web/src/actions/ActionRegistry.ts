@@ -3,10 +3,9 @@
  *
  * Both shells render from this list, so an action can never exist in one shell
  * and be missing from the other: parity is structural, not maintained by hand.
- * Each entry declares the Android MCP tool it drives via `mcpTool` (many UI
- * actions may share one tool, e.g. the primitive buttons → `add_primitive`),
- * which lets the parity test assert the web action surface against the canonical
- * 163-tool set.
+ * Presentation metadata and executable capability truth are deliberately
+ * separate. A visible control can therefore describe an unavailable upstream
+ * outcome without pretending that a status message is an implementation.
  *
  * Handlers receive only an {@link ActionContext} — they never touch the
  * workspace, palette, or slicer directly, so the same code path runs whether
@@ -41,7 +40,44 @@ export type GroupId =
  */
 export type Disclosure = 'primary' | 'toolbar' | 'menu' | 'inspector';
 
-export interface Action {
+export type CapabilityStatus = 'implemented' | 'partial' | 'unavailable' | 'blocked';
+
+export type ActionSurface =
+  | 'dom-primary'
+  | 'dom-toolbar'
+  | 'dom-menu'
+  | 'dom-inspector'
+  | 'command-palette'
+  | 'keyboard'
+  | 'xr-primary'
+  | 'xr-toolbar'
+  | 'xr-menu'
+  | 'automation';
+
+export type PrerequisiteId =
+  | 'has-model'
+  | 'has-selection'
+  | 'has-clipboard'
+  | 'has-gcode'
+  | 'has-two-models'
+  | 'has-multiple-plates'
+  | 'not-slicing'
+  | 'preflight-clear';
+
+export interface Capability {
+  status: CapabilityStatus;
+  /** Required unless status is implemented. Shown verbatim when disabled. */
+  reason?: string;
+  surfaces: readonly ActionSurface[];
+  prerequisites: readonly PrerequisiteId[];
+  testIds: readonly string[];
+  helpHref: string;
+}
+
+export type ActionHandler = (ctx: ActionContext) => void | Promise<void>;
+
+/** Source presentation before ActionRegistry attaches validated capability truth. */
+export interface ActionDefinition {
   /** Stable id; matches the MCP tool id where a 1:1 tool exists. */
   id: string;
   label: string;
@@ -66,22 +102,21 @@ export interface Action {
    * of the 163-tool MCP surface, tying the web UI to the canonical catalogue.
    */
   mcpTool?: string;
+  /** Keyboard gestures routed through this same registry entry. */
+  shortcuts?: readonly string[];
   /** Default true. Return false to render disabled for the given state. */
   isEnabled?(s: Readonly<UiStateShape>): boolean;
   /** Default true. Return false to hide entirely for the given state. */
   isVisible?(s: Readonly<UiStateShape>): boolean;
-  /**
-   * Set when the Snapmaker Orca feature this button mirrors is not yet built in
-   * OrcaXR. Such actions ship VISIBLE but permanently disabled ("grayed out")
-   * with this string as the tooltip, so the menu surface achieves parity while
-   * being honest about what runs. Every `comingSoon` action has a matching
-   * entry in `docs/orca_parity_plan.md` with the steps to implement it and the
-   * one-line change to clear this field (which enables the button). See
-   * {@link ActionRegistry.enabled} — a coming-soon action is never enabled.
-   */
-  comingSoon?: string;
-  run(ctx: ActionContext): void | Promise<void>;
+  /** Omitted for unavailable/blocked outcomes. */
+  run?: ActionHandler;
 }
+
+/** Fully normalized entry returned by ActionRegistry. */
+export type Action = ActionDefinition & { readonly capability: Capability };
+
+export type ActionAvailability =
+  { state: 'hidden'; reason: string } | { state: 'disabled'; reason: string } | { state: 'enabled' };
 
 /**
  * Menu-bar sections, in left-to-right order. Mirrors Snapmaker Orca's menu bar
@@ -124,12 +159,158 @@ export const GROUPS: readonly ActionGroup[] = [
   { id: 'system', label: 'System', icon: 'system', order: 11 },
 ];
 
+const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
+  add_emboss: 'Text embossing is not implemented yet; no model will be changed.',
+  add_magnet: 'Magnet-hole geometry is not implemented yet; no model will be changed.',
+  scan_network: 'Local-network printer discovery is not implemented yet.',
+  view_webcam: 'The registry webcam flow is not connected to a configured printer yet.',
+  edit_undo: 'Project-wide command history is not implemented yet.',
+  edit_redo: 'Project-wide command history is not implemented yet.',
+  edit_select_all: 'Multi-selection is not implemented yet.',
+  file_export_all_plates: 'All-plate slicing and export is not implemented yet.',
+  file_export_obj: 'Toolpath OBJ export is not implemented yet.',
+  file_open_gcode: 'Standalone G-code import and viewing is not implemented yet.',
+  file_export_logs: 'A privacy-reviewed diagnostics bundle is not implemented yet.',
+  send_to_printer: 'Printer upload is not connected to the shared action path yet.',
+  help_config_folder: 'Browsers cannot reveal a native config folder; the web adaptation is not implemented yet.',
+  view_perspective_toggle: 'Perspective/orthographic switching is not implemented yet.',
+  view_auto_perspective: 'Automatic perspective switching is not implemented yet.',
+  view_show_navigator: 'The 3D orientation navigator is not implemented yet.',
+  view_show_outline: 'Selection-outline rendering is not implemented yet.',
+  view_show_gcode_window: 'The G-code text inspector is not implemented yet.',
+  split_to_parts: 'Splitting an object into editable parts is not implemented yet.',
+  tool_support_paint: 'Canonical support-facet painting is not implemented yet.',
+  tool_seam_paint: 'Canonical seam-facet painting is not implemented yet.',
+  tool_fuzzy_skin: 'Canonical fuzzy-skin facet painting is not implemented yet.',
+  tool_brim_ears: 'Brim-ear authoring is not implemented yet.',
+  tool_measure: 'The geometry measurement tool is not implemented yet.',
+  tool_assembly: 'Assembly view and constraints are not implemented yet.',
+  tool_face_detector: 'Face detection and selection is not implemented yet.',
+  tool_svg: 'SVG import and embossing is not implemented yet.',
+  tool_hollow: 'Model hollowing is not implemented yet.',
+  add_modifier: 'Parameter-modifier volumes are not implemented yet.',
+  add_support_enforcer: 'Support-enforcer volumes are not implemented yet.',
+  add_support_blocker: 'Support-blocker volumes are not implemented yet.',
+  add_height_range: 'Layer-height-range settings are not implemented yet.',
+  set_negative_part: 'Negative-part volume semantics are not implemented yet.',
+  variable_layer_height: 'Variable layer-height editing is not implemented yet.',
+};
+
+const SELECTION_PREREQUISITES = new Set([
+  'edit_cut',
+  'edit_copy',
+  'edit_duplicate',
+  'edit_delete_selected',
+  'edit_deselect_all',
+  'delete_models',
+  'repair_model',
+  'simplify_model',
+  'drop_to_bed',
+  'tool_move',
+  'tool_rotate',
+  'tool_scale',
+  'tool_lay_on_face',
+  'tool_paint',
+  'tool_cut',
+  'tool_smart_paint',
+  'tool_smart_paint_image',
+]);
+const MODEL_PREREQUISITES = new Set([
+  'edit_delete_all',
+  'file_save_project',
+  'file_save_project_as',
+  'file_export_stl',
+  'file_export_3mf',
+  'view_show_labels',
+  'view_show_overhang',
+  'view_show_wireframe',
+]);
+const GCODE_PREREQUISITES = new Set([
+  'file_export_gcode',
+  'save_gcode_to_downloads',
+  'send_to_printer',
+  'toggle_preview',
+]);
+const TWO_MODEL_PREREQUISITES = new Set(['mesh_boolean_union', 'mesh_boolean_subtract', 'mesh_boolean_intersection']);
+
+function prerequisitesFor(action: ActionDefinition): PrerequisiteId[] {
+  const prerequisites: PrerequisiteId[] = [];
+  if (SELECTION_PREREQUISITES.has(action.id)) prerequisites.push('has-selection');
+  if (MODEL_PREREQUISITES.has(action.id)) prerequisites.push('has-model');
+  if (GCODE_PREREQUISITES.has(action.id)) prerequisites.push('has-gcode');
+  if (TWO_MODEL_PREREQUISITES.has(action.id)) prerequisites.push('has-two-models');
+  if (action.id === 'edit_paste') prerequisites.push('has-clipboard');
+  if (action.id === 'delete_plate') prerequisites.push('has-multiple-plates');
+  if (action.id === 'slice_active_plate') {
+    prerequisites.push('has-model', 'not-slicing', 'preflight-clear');
+  }
+  return [...new Set(prerequisites)];
+}
+
+function surfacesFor(action: ActionDefinition): ActionSurface[] {
+  const surfaces: ActionSurface[] = ['command-palette'];
+  if (action.disclosure === 'primary') surfaces.push('dom-primary', 'xr-primary');
+  else if (action.disclosure === 'toolbar') surfaces.push('dom-toolbar', 'xr-toolbar');
+  else if (action.disclosure === 'menu') surfaces.push('dom-menu', 'xr-menu');
+  else surfaces.push('dom-inspector');
+  if (action.shortcuts?.length) surfaces.push('keyboard');
+  return surfaces;
+}
+
+function capabilityFor(action: ActionDefinition): Capability {
+  const unavailableReason = UNAVAILABLE_REASONS[action.id];
+  const status: CapabilityStatus = unavailableReason ? 'unavailable' : 'partial';
+  return {
+    status,
+    reason:
+      unavailableReason ??
+      'Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate.',
+    surfaces: surfacesFor(action),
+    prerequisites: prerequisitesFor(action),
+    testIds: status === 'unavailable' ? [] : ['actions.registry.enumeration'],
+    helpHref: `docs/parity.md#${action.group}`,
+  };
+}
+
+const PREREQUISITES: Readonly<
+  Record<
+    PrerequisiteId,
+    {
+      met: (state: Readonly<UiStateShape>) => boolean;
+      reason: string;
+    }
+  >
+> = {
+  'has-model': { met: (state) => state.modelCount > 0, reason: 'Load or create a model first.' },
+  'has-selection': { met: (state) => state.hasSelection, reason: 'Select a model first.' },
+  'has-clipboard': { met: (state) => state.hasClipboard, reason: 'Copy or cut a model first.' },
+  'has-gcode': { met: (state) => state.gcodeReady, reason: 'Slice successfully first.' },
+  'has-two-models': { met: (state) => state.modelCount >= 2, reason: 'Add at least two models first.' },
+  'has-multiple-plates': { met: (state) => state.plateCount > 1, reason: 'The only build plate cannot be deleted.' },
+  'not-slicing': { met: (state) => !state.isSlicing, reason: 'Wait for the current slice to finish or cancel it.' },
+  'preflight-clear': { met: (state) => !state.preflightBlocked, reason: 'Resolve blocking preflight errors first.' },
+};
+
 export class ActionRegistry {
   private actions: Action[] = [];
   private byId = new Map<string, Action>();
 
   /** Register one action (throws on duplicate id — a parity/wiring bug). */
-  add(action: Action): this {
+  add(definition: ActionDefinition): this {
+    const capability = capabilityFor(definition);
+    if ((capability.status === 'unavailable' || capability.status === 'blocked') && definition.run) {
+      throw new Error(`ActionRegistry: ${capability.status} action "${definition.id}" must not have a handler`);
+    }
+    if ((capability.status === 'implemented' || capability.status === 'partial') && !definition.run) {
+      throw new Error(`ActionRegistry: executable action "${definition.id}" has no handler`);
+    }
+    if (capability.status !== 'implemented' && !capability.reason?.trim()) {
+      throw new Error(`ActionRegistry: ${capability.status} action "${definition.id}" needs a reason`);
+    }
+    if ((capability.status === 'implemented' || capability.status === 'partial') && capability.testIds.length === 0) {
+      throw new Error(`ActionRegistry: executable action "${definition.id}" needs a test mapping`);
+    }
+    const action: Action = { ...definition, capability };
     if (this.byId.has(action.id)) {
       throw new Error(`ActionRegistry: duplicate action id "${action.id}"`);
     }
@@ -138,7 +319,7 @@ export class ActionRegistry {
     return this;
   }
 
-  addAll(actions: Iterable<Action>): this {
+  addAll(actions: Iterable<ActionDefinition>): this {
     for (const a of actions) this.add(a);
     return this;
   }
@@ -153,25 +334,78 @@ export class ActionRegistry {
 
   /** Actions with a given disclosure, optionally filtered by group. */
   byDisclosure(disclosure: Disclosure, group?: GroupId): Action[] {
-    return this.actions.filter(
-      (a) => a.disclosure === disclosure && (group === undefined || a.group === group),
-    );
+    return this.actions.filter((a) => a.disclosure === disclosure && (group === undefined || a.group === group));
   }
 
   byGroup(group: GroupId): Action[] {
     return this.actions.filter((a) => a.group === group);
   }
 
-  /** Convenience wrappers so shells don't re-implement the default-true logic. */
+  forSurface(surface: ActionSurface): Action[] {
+    return this.actions.filter((action) => action.capability.surfaces.includes(surface));
+  }
+
+  availability(actionOrId: Action | string, surface: ActionSurface, state: Readonly<UiStateShape>): ActionAvailability {
+    const action = typeof actionOrId === 'string' ? this.get(actionOrId) : actionOrId;
+    if (!action) return { state: 'hidden', reason: 'Unknown action.' };
+    if (!action.capability.surfaces.includes(surface)) {
+      return { state: 'hidden', reason: `Not offered on ${surface}.` };
+    }
+    if (action.isVisible && !action.isVisible(state)) {
+      return { state: 'hidden', reason: 'Not applicable in the current workspace state.' };
+    }
+    if (action.capability.status === 'unavailable' || action.capability.status === 'blocked') {
+      return { state: 'disabled', reason: action.capability.reason ?? 'Unavailable.' };
+    }
+    for (const prerequisite of action.capability.prerequisites) {
+      const rule = PREREQUISITES[prerequisite];
+      if (!rule.met(state)) return { state: 'disabled', reason: rule.reason };
+    }
+    if (action.isEnabled && !action.isEnabled(state)) {
+      return { state: 'disabled', reason: 'Not available in the current workspace state.' };
+    }
+    return { state: 'enabled' };
+  }
+
+  async invoke(
+    actionOrId: Action | string,
+    surface: ActionSurface,
+    ctx: ActionContext,
+    state: Readonly<UiStateShape>,
+  ): Promise<boolean> {
+    const action = typeof actionOrId === 'string' ? this.get(actionOrId) : actionOrId;
+    if (!action) return false;
+    const availability = this.availability(action, surface, state);
+    if (availability.state !== 'enabled') {
+      if (availability.state === 'disabled') {
+        ctx.reportCapabilityUnavailable(action.label, availability.reason);
+      }
+      return false;
+    }
+    await action.run?.(ctx);
+    return true;
+  }
+
+  /** Compatibility wrappers for non-rendering callers; prefer availability(). */
   static enabled(a: Action, s: Readonly<UiStateShape>): boolean {
-    if (a.comingSoon) return false; // Parity placeholders are always disabled.
+    if (a.capability.status === 'unavailable' || a.capability.status === 'blocked') return false;
+    for (const prerequisite of a.capability.prerequisites) {
+      if (!PREREQUISITES[prerequisite].met(s)) return false;
+    }
     return a.isEnabled ? a.isEnabled(s) : true;
   }
   static visible(a: Action, s: Readonly<UiStateShape>): boolean {
     return a.isVisible ? a.isVisible(s) : true;
   }
-  /** Reason string when this action is a not-yet-built parity placeholder. */
-  static comingSoon(a: Action): string | undefined {
-    return a.comingSoon;
+  static disabledReason(a: Action, s: Readonly<UiStateShape>): string | undefined {
+    if (a.capability.status === 'unavailable' || a.capability.status === 'blocked') {
+      return a.capability.reason;
+    }
+    for (const prerequisite of a.capability.prerequisites) {
+      const rule = PREREQUISITES[prerequisite];
+      if (!rule.met(s)) return rule.reason;
+    }
+    if (a.isEnabled && !a.isEnabled(s)) return 'Not available in the current workspace state.';
+    return undefined;
   }
 }

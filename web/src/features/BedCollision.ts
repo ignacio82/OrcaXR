@@ -24,7 +24,9 @@ export interface BedCollisionOff {
   worstOverflowXmm: number;
   worstOverflowYmm: number;
 }
-export interface BedCollisionOk { kind: 'ok'; }
+export interface BedCollisionOk {
+  kind: 'ok';
+}
 export type BedCollisionResult = BedCollisionOk | BedCollisionOff;
 
 /**
@@ -47,11 +49,17 @@ export function detectBedCollision(
   const halfX = bedXmm / 2;
   const halfY = bedYmm / 2;
 
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  let minX = Infinity,
+    maxX = -Infinity,
+    minY = Infinity,
+    maxY = -Infinity;
   for (let i = 0; i < positions.length; i += 3) {
-    const x = positions[i], y = positions[i + 1];
-    if (x < minX) minX = x; if (x > maxX) maxX = x;
-    if (y < minY) minY = y; if (y > maxY) maxY = y;
+    const x = positions[i],
+      y = positions[i + 1];
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
   }
   const cx = recenterToBed ? (minX + maxX) / 2 : 0;
   const cy = recenterToBed ? (minY + maxY) / 2 : 0;
@@ -62,7 +70,10 @@ export function detectBedCollision(
   }
 
   const offending: number[] = [];
-  let overflowX = false, overflowY = false, worstX = 0, worstY = 0;
+  let overflowX = false,
+    overflowY = false,
+    worstX = 0,
+    worstY = 0;
   let triIdx = 0;
   for (let i = 0; i < positions.length; i += 9) {
     let triHit = false;
@@ -70,20 +81,24 @@ export function detectBedCollision(
       const x = positions[i + v * 3] - cx;
       const y = positions[i + v * 3 + 1] - cy;
       if (x < -halfX) {
-        triHit = true; overflowX = true;
+        triHit = true;
+        overflowX = true;
         const over = x + halfX; // negative
         if (Math.abs(over) > Math.abs(worstX)) worstX = over;
       } else if (x > halfX) {
-        triHit = true; overflowX = true;
+        triHit = true;
+        overflowX = true;
         const over = x - halfX; // positive
         if (Math.abs(over) > Math.abs(worstX)) worstX = over;
       }
       if (y < -halfY) {
-        triHit = true; overflowY = true;
+        triHit = true;
+        overflowY = true;
         const over = y + halfY;
         if (Math.abs(over) > Math.abs(worstY)) worstY = over;
       } else if (y > halfY) {
-        triHit = true; overflowY = true;
+        triHit = true;
+        overflowY = true;
         const over = y - halfY;
         if (Math.abs(over) > Math.abs(worstY)) worstY = over;
       }
@@ -110,6 +125,8 @@ export function bedCollisionBanner(r: BedCollisionResult): string | null {
   const parts: string[] = [];
   if (r.overflowX) parts.push(`X ${r.worstOverflowXmm > 0 ? '+' : ''}${r.worstOverflowXmm.toFixed(1)} mm`);
   if (r.overflowY) parts.push(`Y ${r.worstOverflowYmm > 0 ? '+' : ''}${r.worstOverflowYmm.toFixed(1)} mm`);
-  return `${r.offendingTriCount} of ${r.totalTriCount} triangles off-bed` +
-    (parts.length ? ` — worst overflow ${parts.join(', ')}` : '');
+  return (
+    `${r.offendingTriCount} of ${r.totalTriCount} triangles off-bed` +
+    (parts.length ? ` — worst overflow ${parts.join(', ')}` : '')
+  );
 }

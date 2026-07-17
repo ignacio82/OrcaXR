@@ -43,8 +43,7 @@ let modulePromise: Promise<Slic3rModule> | null = null;
 function loadModule(moduleUrl: string): Promise<Slic3rModule> {
   if (!modulePromise) {
     modulePromise = (async () => {
-      const factory = (await import(/* @vite-ignore */ moduleUrl))
-        .default as (arg?: object) => Promise<Slic3rModule>;
+      const factory = (await import(/* @vite-ignore */ moduleUrl)).default as (arg?: object) => Promise<Slic3rModule>;
       return factory({
         printErr: (text: string) => {
           const m = /^\[orcaxr\] (\d+)% (.*)$/.exec(text);
@@ -63,7 +62,10 @@ self.onmessage = async (e: MessageEvent<ToWorker>) => {
 
   // A worker context that isn't cross-origin isolated cannot back the module's
   // SharedArrayBuffer pthreads — bail early so the page can fall back.
-  if (typeof SharedArrayBuffer === 'undefined' || !(self as unknown as { crossOriginIsolated: boolean }).crossOriginIsolated) {
+  if (
+    typeof SharedArrayBuffer === 'undefined' ||
+    !(self as unknown as { crossOriginIsolated: boolean }).crossOriginIsolated
+  ) {
     post({ type: 'error', id, error: 'worker is not cross-origin isolated', infra: true });
     return;
   }

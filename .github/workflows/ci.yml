@@ -1,97 +1,159 @@
-# Audit H17 (2026-05-07) — minimum-viable PR gate. Three jobs in parallel:
-#   - test: gradlew :app:testDebugUnitTest (the 800+ unit tests)
-#   - format: ktfmt --kotlinlang-style check
-#   - secrets: gitleaks scan of the diff vs main
-#
-# What we deliberately DON'T do here:
-#   - Build the APK (slow; covered by the assembleDebug job below for main only)
-#   - Run androidTest (needs an Android emulator + 4 GB RAM, dramatically
-#     slower than unit tests; defer to a manual / nightly job)
-#   - Compile the JNI libslic3r against arm64 (requires the NDK + a 30+ min
-#     submodule build; the prebuilt .so under app/src/main/jniLibs/ is the
-#     contract for unit-test consumers)
-#
-# The unit-test corpus already covers the slicer, paint, MCP, and HTTP
-# framing layers via Robolectric-free pure-JVM tests. That's what the
-# audit findings (H1-H9, H19) actually exercised.
-
-name: CI
+name: Parity quality gate
 
 on:
   pull_request:
     branches: [main]
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_container:
+        description: Build the commit-pinned native slicer container
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: parity-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NODE_VERSION: "22"
+
 jobs:
-  test:
-    name: Unit tests (gradlew :app:testDebugUnitTest)
+  web:
+    name: Web quality
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
-          submodules: false  # third_party/OrcaSlicer not needed for unit tests
-      - uses: actions/setup-java@v4
+          submodules: false
+      - uses: actions/setup-node@v6
         with:
-          distribution: temurin
-          java-version: 21
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-read-only: ${{ github.event_name == 'pull_request' }}
-      - name: Run unit tests
-        run: ./gradlew :app:testDebugUnitTest --stacktrace
-      - name: Upload test report on failure
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run quality
+        working-directory: web
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: web
+      - name: Upload browser diagnostics on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: unit-test-report
-          path: app/build/reports/tests/testDebugUnitTest/
+          name: web-quality-diagnostics
+          path: |
+            web/test-results/
+            web/dist/
+          if-no-files-found: ignore
           retention-days: 7
 
-  format:
-    name: ktfmt --kotlinlang-style check
+  parity:
+    name: Upstream parity drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Verify generated manifest and mutation guards
+        run: npm --prefix web run parity:verify
+      - name: Verify structural 3MF and semantic G-code oracles
+        run: npm --prefix web run parity:oracles
+
+  server:
+    name: External slicer service
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+        working-directory: server
+      - run: npm test
+        working-directory: server
+      - run: npm run test:integration
+        working-directory: server
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: server
+      - name: Validate reproducible container definition
+        run: docker compose -f server/docker-compose.yml config --quiet
+        env:
+          ORCAXR_SERVER_TOKEN: 0123456789abcdef0123456789abcdef
+          ORCAXR_ALLOWED_ORIGINS: https://app.example
+
+  wasm:
+    name: Checked-in slicer artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: wasm/package-lock.json
+      - run: npm ci
+        working-directory: wasm
+      - run: npm run verify:artifacts
+        working-directory: wasm
+      - run: npm run test:cube
+        working-directory: wasm
+      - run: npm run test:profile
+        working-directory: wasm
+      - run: npm run test:project
+        working-directory: wasm
+      - run: npm run test:painted
+        working-directory: wasm
+      - run: npm run test:painted-prime-tower
+        working-directory: wasm
+      - run: npm run test:fullspectrum
+        working-directory: wasm
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: wasm
+
+  build-container:
+    name: Build commit-pinned native slicer
+    if: github.event_name == 'workflow_dispatch' && inputs.build_container
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: false
+      - name: Build from the exact Snapmaker source commit
+        run: docker compose -f server/docker-compose.yml build
+        env:
+          ORCAXR_SERVER_TOKEN: 0123456789abcdef0123456789abcdef
+          ORCAXR_ALLOWED_ORIGINS: https://app.example
+
+  secrets:
+    name: Secret scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
+          fetch-depth: 0
           submodules: false
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-read-only: ${{ github.event_name == 'pull_request' }}
-      # `ktfmtCheck` is registered on every subproject by the root
-      # build.gradle.kts. Run on :app explicitly so a future module split
-      # doesn't silently widen the scope (or shrink it).
-      - name: ktfmt check
-        run: ./gradlew :app:ktfmtCheck --stacktrace
-
-  secrets:
-    name: gitleaks (secret scan)
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # gitleaks needs history to scan the diff
-          submodules: false
-      # gitleaks-action mirrors TruffleHog's coverage but is faster on
-      # cold runs. Default config flags AWS / GCP / Slack tokens, generic
-      # "api[_-]?key" patterns, and PEM-encoded private keys. Audit H17
-      # specifically called out the Anthropic key (now encrypted at rest
-      # per H3) — gitleaks adds defense-in-depth in case a key ever lands
-      # in source by mistake.
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

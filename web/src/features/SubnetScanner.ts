@@ -10,7 +10,7 @@ export class SubnetScanner {
     const discovered: DiscoveredPrinter[] = [];
     const total = 254;
     let done = 0;
-    
+
     // In a browser, we are limited by CORS and parallel request limits.
     // We will scan in chunks of 16 to avoid exhausting browser connection limits.
     const chunks = [];
@@ -21,7 +21,7 @@ export class SubnetScanner {
       }
       chunks.push(chunk);
     }
-    
+
     for (const chunk of chunks) {
       const promises = chunk.map(async (lastOctet) => {
         const host = `${subnet}.${lastOctet}`;
@@ -30,7 +30,7 @@ export class SubnetScanner {
           if (res.ok) {
             discovered.push({ host, name: `Printer at ${host}` });
           }
-        } catch (e) {
+        } catch {
           // Ignore timeouts
         }
       });

@@ -7,8 +7,8 @@
  * subscribes to {@link UiState}, so enabled / active / visible state updates
  * automatically — no scattered `btn.disabled = …`.
  */
-import type { Action, ActionRegistry } from '../../actions/ActionRegistry';
-import { ActionRegistry as Reg, MENU_SECTIONS } from '../../actions/ActionRegistry';
+import type { Action, ActionRegistry, ActionSurface } from '../../actions/ActionRegistry';
+import { MENU_SECTIONS } from '../../actions/ActionRegistry';
 import type { ActionContext } from '../../actions/ActionContext';
 import type { UiState, WorkspaceMode } from '../../actions/UiState';
 import { domIcon } from '../icons';
@@ -24,6 +24,7 @@ interface Hosts {
 interface Bound {
   el: HTMLButtonElement;
   action: Action;
+  surface: ActionSurface;
 }
 
 const MODES: { id: WorkspaceMode; label: string }[] = [
@@ -34,6 +35,7 @@ const MODES: { id: WorkspaceMode; label: string }[] = [
 export class DomShell {
   private bound: Bound[] = [];
   private modeButtons: { id: WorkspaceMode; el: HTMLButtonElement }[] = [];
+  private unsubscribe: (() => void) | null = null;
 
   constructor(
     private readonly registry: ActionRegistry,
@@ -42,20 +44,24 @@ export class DomShell {
   ) {}
 
   mount(hosts: Hosts): void {
+    this.unsubscribe?.();
+    this.unsubscribe = null;
+    this.bound = [];
+    this.modeButtons = [];
     // Tool rail
     hosts.toolbar.innerHTML = '';
-    for (const a of this.registry.byDisclosure('toolbar')) {
+    for (const a of this.registry.forSurface('dom-toolbar')) {
       hosts.toolbar.appendChild(this.toolButton(a));
     }
 
     // Primary bar (keep any existing children, e.g. the hidden file input)
-    for (const a of this.registry.byDisclosure('primary')) {
+    for (const a of this.registry.forSurface('dom-primary')) {
       hosts.primary.appendChild(this.actionButton(a, a.id === 'slice_active_plate'));
     }
 
     // Full menu bar — one dropdown per Orca menu section, in bar order. A
     // section with no actions is skipped so the bar stays tidy.
-    const menu = this.registry.byDisclosure('menu');
+    const menu = this.registry.forSurface('dom-menu');
     hosts.menuBar.innerHTML = '';
     for (const section of MENU_SECTIONS) {
       const items = menu.filter((a) => a.menuSection === section.id);
@@ -69,7 +75,15 @@ export class DomShell {
     // Mode control
     this.buildModeControl(hosts.modeControl);
 
-    this.ui.subscribe((s) => this.refresh(s));
+    this.unsubscribe = this.ui.subscribe((s) => this.refresh(s));
+  }
+
+  dispose(): void {
+    this.unsubscribe?.();
+    this.unsubscribe = null;
+    for (const { el } of this.bound) el.onclick = null;
+    this.bound = [];
+    this.modeButtons = [];
   }
 
   private toolButton(a: Action): HTMLButtonElement {
@@ -85,8 +99,8 @@ export class DomShell {
     const label = document.createElement('span');
     label.textContent = a.label;
     btn.append(icon, label);
-    btn.onclick = () => this.run(a);
-    this.bound.push({ el: btn, action: a });
+    btn.onclick = () => this.run(a, 'dom-toolbar');
+    this.bound.push({ el: btn, action: a, surface: 'dom-toolbar' });
     return btn;
   }
 
@@ -96,8 +110,8 @@ export class DomShell {
     btn.dataset.actionId = a.id;
     btn.title = a.hint ?? a.label;
     btn.textContent = `${domIcon(a.icon)}  ${a.label}`;
-    btn.onclick = () => this.run(a);
-    this.bound.push({ el: btn, action: a });
+    btn.onclick = () => this.run(a, 'dom-primary');
+    this.bound.push({ el: btn, action: a, surface: 'dom-primary' });
     return btn;
   }
 
@@ -117,17 +131,15 @@ export class DomShell {
       item.className = 'menu-item';
       item.dataset.actionId = a.id;
       item.setAttribute('role', 'menuitem');
-      const soon = Reg.comingSoon(a);
-      // Coming-soon parity placeholders carry their reason as the tooltip and a
-      // "SOON" badge so the surface reaches parity while staying honest.
-      item.title = soon ?? a.hint ?? a.label;
-      const badge = soon ? '<span class="soon-badge">SOON</span>' : '';
+      const unavailable = a.capability.status === 'unavailable' || a.capability.status === 'blocked';
+      item.title = unavailable ? (a.capability.reason ?? a.label) : (a.hint ?? a.label);
+      const badge = unavailable ? '<span class="soon-badge">UNAVAILABLE</span>' : '';
       item.innerHTML = `<span class="glyph">${domIcon(a.icon)}</span><span class="menu-item-label">${a.label}</span>${badge}`;
       item.onclick = () => {
         host.classList.remove('open');
-        this.run(a);
+        this.run(a, 'dom-menu');
       };
-      this.bound.push({ el: item, action: a });
+      this.bound.push({ el: item, action: a, surface: 'dom-menu' });
       dropdown.appendChild(item);
     }
 
@@ -175,17 +187,18 @@ export class DomShell {
     }
   }
 
-  private run(a: Action): void {
-    if (!Reg.enabled(a, this.ui.get())) return;
-    void Promise.resolve(a.run(this.ctx)).catch((e) =>
-      console.error(`[orcaxr] action "${a.id}" failed:`, e),
-    );
+  private run(a: Action, surface: ActionSurface): void {
+    void this.registry
+      .invoke(a, surface, this.ctx, this.ui.get())
+      .catch((e) => console.error(`[orcaxr] action "${a.id}" failed:`, e));
   }
 
   private refresh(s: Readonly<ReturnType<UiState['get']>>): void {
-    for (const { el, action } of this.bound) {
-      el.style.display = Reg.visible(action, s) ? '' : 'none';
-      el.disabled = !Reg.enabled(action, s);
+    for (const { el, action, surface } of this.bound) {
+      const availability = this.registry.availability(action, surface, s);
+      el.style.display = availability.state === 'hidden' ? 'none' : '';
+      el.disabled = availability.state !== 'enabled';
+      el.title = availability.state === 'disabled' ? availability.reason : (action.hint ?? action.label);
       if (action.tool) el.classList.toggle('active', s.activeTool === action.tool);
     }
     for (const { id, el } of this.modeButtons) {

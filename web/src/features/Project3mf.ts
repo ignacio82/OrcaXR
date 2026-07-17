@@ -17,7 +17,11 @@ export interface ProjectObjectMeta {
   /** Which plate id this object belongs to. */
   plate: number;
   /** Viewer transform (world metres) — the move/rotate/scale placement. */
-  viewer: { position: [number, number, number]; quaternion: [number, number, number, number]; scale: [number, number, number] };
+  viewer: {
+    position: [number, number, number];
+    quaternion: [number, number, number, number];
+    scale: [number, number, number];
+  };
   /** Display-mesh local offset (bbox centring); restored for split/cut fidelity. */
   display: [number, number, number];
 }
@@ -38,7 +42,8 @@ export interface ParsedProject {
 
 function objectXml(id: number, positions: ArrayLike<number>): string {
   const triCount = Math.floor(positions.length / 9);
-  let v = '', t = '';
+  let v = '',
+    t = '';
   for (let i = 0; i < triCount * 3; i++) {
     v += `<vertex x="${f(positions[i * 3])}" y="${f(positions[i * 3 + 1])}" z="${f(positions[i * 3 + 2])}"/>`;
   }
@@ -71,12 +76,20 @@ export function writeProject3mf(objects: { positions: ArrayLike<number> }[], met
  */
 export function parseProject3mf(bytes: Uint8Array): ParsedProject | null {
   let zip: Record<string, Uint8Array>;
-  try { zip = fflate.unzipSync(bytes); } catch { return null; }
+  try {
+    zip = fflate.unzipSync(bytes);
+  } catch {
+    return null;
+  }
   const metaBytes = zip['Metadata/orcaxr_project.json'];
   const modelBytes = zip['3D/3dmodel.model'];
   if (!metaBytes || !modelBytes) return null;
   let meta: ProjectMeta;
-  try { meta = JSON.parse(new TextDecoder().decode(metaBytes)); } catch { return null; }
+  try {
+    meta = JSON.parse(new TextDecoder().decode(metaBytes));
+  } catch {
+    return null;
+  }
 
   const xml = new TextDecoder().decode(modelBytes);
   const geometries: Float32Array[] = [];

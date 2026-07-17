@@ -62,8 +62,12 @@ const clampInt = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo
 
 /** Pigment-style RGB mix, byte-exact port of filament_mixer::lerp. */
 export function filamentMixerLerp(
-  r1: number, g1: number, b1: number,
-  r2: number, g2: number, b2: number,
+  r1: number,
+  g1: number,
+  b1: number,
+  r2: number,
+  g2: number,
+  b2: number,
   t: number,
 ): [number, number, number] {
   if (t <= 0) return [r1, g1, b1];
@@ -222,8 +226,14 @@ function parseGradientWeightTokens(weights: string): number[] {
   const out: number[] = [];
   let token = '';
   for (const c of weights) {
-    if (c >= '0' && c <= '9') { token += c; continue; }
-    if (token) { out.push(Math.max(0, parseInt(token, 10))); token = ''; }
+    if (c >= '0' && c <= '9') {
+      token += c;
+      continue;
+    }
+    if (token) {
+      out.push(Math.max(0, parseInt(token, 10)));
+      token = '';
+    }
   }
   if (token) out.push(Math.max(0, parseInt(token, 10)));
   return out;
@@ -249,7 +259,10 @@ function normalizeWeightVectorToPercent(weights: number[]): number[] {
     let bestRem = -1;
     for (let i = 0; i < remainders.length; i++) {
       if (weights[i] <= 0) continue;
-      if (remainders[i] > bestRem) { bestRem = remainders[i]; bestIdx = i; }
+      if (remainders[i] > bestRem) {
+        bestRem = remainders[i];
+        bestIdx = i;
+      }
     }
     out[bestIdx]++;
     remainders[bestIdx] = 0;
@@ -284,7 +297,10 @@ const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
 const lcm = (a: number, b: number): number => (a / gcd(a, b)) * b;
 
 function decodeManualPatternPreviewToken(
-  token: string, componentA: number, componentB: number, numPhysical: number,
+  token: string,
+  componentA: number,
+  componentB: number,
+  numPhysical: number,
 ): number {
   let extruderId = 0;
   if (token === '1') extruderId = componentA;
@@ -294,7 +310,11 @@ function decodeManualPatternPreviewToken(
 }
 
 function buildGroupedManualPatternPreviewSequence(
-  pattern: string, componentA: number, componentB: number, numPhysical: number, wallLoops: number,
+  pattern: string,
+  componentA: number,
+  componentB: number,
+  numPhysical: number,
+  wallLoops: number,
 ): number[] {
   const sequence: number[] = [];
   if (numPhysical === 0) return sequence;
@@ -316,7 +336,10 @@ function buildGroupedManualPatternPreviewSequence(
   for (const group of groups) {
     if (!group) continue;
     cycle = lcm(cycle, group.length);
-    if (cycle >= K_MAX_PREVIEW_CYCLE) { cycle = K_MAX_PREVIEW_CYCLE; break; }
+    if (cycle >= K_MAX_PREVIEW_CYCLE) {
+      cycle = K_MAX_PREVIEW_CYCLE;
+      break;
+    }
   }
   const previewWallLoops = Math.max(1, wallLoops === 0 ? groups.length : wallLoops);
   for (let layerIdx = 0; layerIdx < cycle; layerIdx++) {
@@ -350,13 +373,19 @@ function effectivePairPreviewRatios(percentB: number): [number, number] {
   }
   if (ratioA > 0 && ratioB > 0) {
     const g = gcd(ratioA, ratioB);
-    if (g > 1) { ratioA /= g; ratioB /= g; }
+    if (g > 1) {
+      ratioA /= g;
+      ratioB /= g;
+    }
   }
   return [Math.max(0, ratioA), Math.max(0, ratioB)];
 }
 
 function buildEffectivePairPreviewSequence(
-  componentA: number, componentB: number, percentB: number, limitCycle: boolean,
+  componentA: number,
+  componentB: number,
+  percentB: number,
+  limitCycle: boolean,
 ): number[] {
   const sequence: number[] = [];
   if (componentA === 0 || componentB === 0 || componentA === componentB) return sequence;
@@ -417,7 +446,10 @@ function buildWeightedGradientSequence(ids: number[], weights: number[]): number
     for (let i = 0; i < counts.length; i++) {
       const target = ((pos + 1) * counts[i]) / cycle;
       const score = target - emitted[i];
-      if (score > bestScore) { bestScore = score; bestIdx = i; }
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = i;
+      }
     }
     emitted[bestIdx]++;
     sequence.push(filteredIds[bestIdx]);
@@ -426,7 +458,10 @@ function buildWeightedGradientSequence(ids: number[], weights: number[]): number
 }
 
 function blendDisplayColorFromSequence(
-  colors: string[], numPhysical: number, sequence: number[], fallback: string,
+  colors: string[],
+  numPhysical: number,
+  sequence: number[],
+  fallback: string,
 ): string {
   if (colors.length === 0 || sequence.length === 0 || numPhysical === 0) return fallback;
   const counts = new Array<number>(numPhysical + 1).fill(0);
@@ -464,7 +499,9 @@ function effectiveMixBPercent(def: MixedFilamentDef): number {
 }
 
 function supportsBiasApparentColor(
-  def: MixedFilamentDef, settings: MixedPreviewSettings, biasModeEnabled: boolean,
+  def: MixedFilamentDef,
+  settings: MixedPreviewSettings,
+  biasModeEnabled: boolean,
 ): boolean {
   if (!biasModeEnabled) return false;
   if (settings.localZMode) return false;
@@ -483,9 +520,7 @@ function referenceNozzleMm(componentA: number, componentB: number, nozzleDiamete
   return samples.reduce((a, b) => a + b, 0) / samples.length;
 }
 
-function apparentMixBPercent(
-  mixBPercent: number, offsetA: number, offsetB: number, referenceWidthMm: number,
-): number {
+function apparentMixBPercent(mixBPercent: number, offsetA: number, offsetB: number, referenceWidthMm: number): number {
   const safeReference = Math.max(0.05, Math.abs(referenceWidthMm));
   const maxBias = clampInt(safeReference, 0.01, 0.35);
   const canonicalBias = offsetB - offsetA; // canonical_signed_bias_value
@@ -508,8 +543,10 @@ export function mixedFilamentDisplayColor(
 
   if (
     supportsBiasApparentColor(def, settings, componentBiasEnabled) &&
-    def.componentA >= 1 && def.componentB >= 1 &&
-    def.componentA <= numPhysical && def.componentB <= numPhysical
+    def.componentA >= 1 &&
+    def.componentB >= 1 &&
+    def.componentA <= numPhysical &&
+    def.componentB <= numPhysical
   ) {
     const baseB = effectiveMixBPercent(def);
     let apparentA = 100 - baseB;
@@ -519,15 +556,17 @@ export function mixedFilamentDisplayColor(
       apparentB = apparentMixBPercent(baseB, def.componentASurfaceOffset, def.componentBSurfaceOffset, ref);
       apparentA = 100 - apparentB;
     }
-    return blendColor(
-      physicalColors[def.componentA - 1], physicalColors[def.componentB - 1], apparentA, apparentB,
-    );
+    return blendColor(physicalColors[def.componentA - 1], physicalColors[def.componentB - 1], apparentA, apparentB);
   }
 
   const normalizedPattern = normalizeManualPattern(def.manualPattern);
   if (normalizedPattern) {
     const sequence = buildGroupedManualPatternPreviewSequence(
-      normalizedPattern, def.componentA, def.componentB, numPhysical, settings.wallLoops,
+      normalizedPattern,
+      def.componentA,
+      def.componentB,
+      numPhysical,
+      settings.wallLoops,
     );
     if (sequence.length > 0) {
       return blendDisplayColorFromSequence(physicalColors, numPhysical, sequence, DISPLAY_FALLBACK);
@@ -539,7 +578,8 @@ export function mixedFilamentDisplayColor(
     if (gradientIds.length >= 3) {
       const gradientWeights = decodeGradientComponentWeights(def.gradientComponentWeights, gradientIds.length);
       const sequence = buildWeightedGradientSequence(
-        gradientIds, gradientWeights.length ? gradientWeights : new Array(gradientIds.length).fill(1),
+        gradientIds,
+        gradientWeights.length ? gradientWeights : new Array(gradientIds.length).fill(1),
       );
       if (sequence.length > 0) {
         return blendDisplayColorFromSequence(physicalColors, numPhysical, sequence, DISPLAY_FALLBACK);
@@ -549,23 +589,16 @@ export function mixedFilamentDisplayColor(
 
   const effectiveMixB = effectiveMixBPercent(def);
   const sameLayerMode = def.distributionMode === DIST_SAME_LAYER_POINTILLISME;
-  const pairSequence = buildEffectivePairPreviewSequence(
-    def.componentA, def.componentB, effectiveMixB, sameLayerMode,
-  );
+  const pairSequence = buildEffectivePairPreviewSequence(def.componentA, def.componentB, effectiveMixB, sameLayerMode);
   if (pairSequence.length > 0) {
     return blendDisplayColorFromSequence(physicalColors, numPhysical, pairSequence, DISPLAY_FALLBACK);
   }
 
-  if (
-    def.componentA === 0 || def.componentB === 0 ||
-    def.componentA > numPhysical || def.componentB > numPhysical
-  ) {
+  if (def.componentA === 0 || def.componentB === 0 || def.componentA > numPhysical || def.componentB > numPhysical) {
     return DISPLAY_FALLBACK;
   }
   const mixB = clampInt(def.mixBPercent, 0, 100);
-  return blendColor(
-    physicalColors[def.componentA - 1], physicalColors[def.componentB - 1], 100 - mixB, mixB,
-  );
+  return blendColor(physicalColors[def.componentA - 1], physicalColors[def.componentB - 1], 100 - mixB, mixB);
 }
 
 // ---------------------------------------------------------------------------
@@ -644,8 +677,14 @@ function parseRowDefinition(row: string): MixedFilamentDef | null {
     const tok = tokens[i];
     if (!tok) continue;
     const head = tok[0].toLowerCase();
-    if (head === 'g') { def.gradientComponentIds = tok.slice(1); continue; }
-    if (head === 'w') { def.gradientComponentWeights = tok.slice(1); continue; }
+    if (head === 'g') {
+      def.gradientComponentIds = tok.slice(1);
+      continue;
+    }
+    if (head === 'w') {
+      def.gradientComponentWeights = tok.slice(1);
+      continue;
+    }
     if (head === 'm') {
       const v = parseIntStrict(tok.slice(1).trim());
       if (v !== null) def.distributionMode = clampInt(v, DIST_LAYER_CYCLE, DIST_SIMPLE);
@@ -688,7 +727,8 @@ function parseRowDefinition(row: string): MixedFilamentDef | null {
 
   def.gradientComponentIds = normalizeGradientComponentIds(def.gradientComponentIds);
   def.gradientComponentWeights = normalizeGradientComponentWeights(
-    def.gradientComponentWeights, def.gradientComponentIds.length,
+    def.gradientComponentWeights,
+    def.gradientComponentIds.length,
   );
   def.manualPattern = normalizeManualPattern(manualPattern);
   if (def.manualPattern) def.mixBPercent = mixPercentFromNormalizedPattern(def.manualPattern);
@@ -732,7 +772,7 @@ export interface VirtualFilament {
 }
 
 const cfgStr = (v: unknown): string => {
-  if (v == null) return '';
+  if (v === null || v === undefined) return '';
   if (Array.isArray(v)) return v.length ? `${v[0]}` : '';
   return `${v}`;
 };
@@ -745,17 +785,22 @@ const cfgStr = (v: unknown): string => {
  * filaments the first enabled row is filament 5.
  */
 export function virtualFilamentsFromConfig(cfg: Record<string, unknown>): VirtualFilament[] {
-  const physical: string[] = Array.isArray(cfg.filament_colour) && cfg.filament_colour.length
-    ? (cfg.filament_colour as string[])
-    : Array.isArray(cfg.extruder_colour) ? (cfg.extruder_colour as string[]) : [];
+  const physical: string[] =
+    Array.isArray(cfg.filament_colour) && cfg.filament_colour.length
+      ? (cfg.filament_colour as string[])
+      : Array.isArray(cfg.extruder_colour)
+        ? (cfg.extruder_colour as string[])
+        : [];
   const serialized = cfgStr(cfg.mixed_filament_definitions);
   if (!serialized || physical.length < 2) return [];
 
   const settings: MixedPreviewSettings = {
     ...DEFAULT_PREVIEW_SETTINGS,
     nominalLayerHeight: parseFloat(cfgStr(cfg.layer_height)) || DEFAULT_PREVIEW_SETTINGS.nominalLayerHeight,
-    mixedLowerBound: parseFloat(cfgStr(cfg.mixed_filament_height_lower_bound)) || DEFAULT_PREVIEW_SETTINGS.mixedLowerBound,
-    mixedUpperBound: parseFloat(cfgStr(cfg.mixed_filament_height_upper_bound)) || DEFAULT_PREVIEW_SETTINGS.mixedUpperBound,
+    mixedLowerBound:
+      parseFloat(cfgStr(cfg.mixed_filament_height_lower_bound)) || DEFAULT_PREVIEW_SETTINGS.mixedLowerBound,
+    mixedUpperBound:
+      parseFloat(cfgStr(cfg.mixed_filament_height_upper_bound)) || DEFAULT_PREVIEW_SETTINGS.mixedUpperBound,
     localZMode: cfgStr(cfg.dithering_local_z_mode) === '1',
     wallLoops: parseInt(cfgStr(cfg.wall_loops), 10) || 1,
   };
@@ -785,8 +830,11 @@ export function virtualFilamentsFromConfig(cfg: Record<string, unknown>): Virtua
  * renders in 4 colors instead of 38.
  */
 export function fullDisplayPalette(cfg: Record<string, unknown>): string[] {
-  const physical: string[] = Array.isArray(cfg.filament_colour) && cfg.filament_colour.length
-    ? (cfg.filament_colour as string[])
-    : Array.isArray(cfg.extruder_colour) ? (cfg.extruder_colour as string[]) : [];
+  const physical: string[] =
+    Array.isArray(cfg.filament_colour) && cfg.filament_colour.length
+      ? (cfg.filament_colour as string[])
+      : Array.isArray(cfg.extruder_colour)
+        ? (cfg.extruder_colour as string[])
+        : [];
   return [...physical, ...virtualFilamentsFromConfig(cfg).map((v) => v.color)];
 }

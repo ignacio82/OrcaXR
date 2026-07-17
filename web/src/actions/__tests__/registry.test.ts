@@ -16,9 +16,19 @@ function test(name: string, fn: () => void) {
 }
 
 const baseState: UiStateShape = {
-  mode: 'prepare', activeTool: 'move', modelCount: 0, plateCount: 1, hasSelection: false,
-  hasClipboard: false, isSlicing: false, gcodeReady: false, extruderCount: 1,
-  hasMultiColorPaint: false, status: '', progress: null, preflightBlocked: false,
+  mode: 'prepare',
+  activeTool: 'move',
+  modelCount: 0,
+  plateCount: 1,
+  hasSelection: false,
+  hasClipboard: false,
+  isSlicing: false,
+  gcodeReady: false,
+  extruderCount: 1,
+  hasMultiColorPaint: false,
+  status: '',
+  progress: null,
+  preflightBlocked: false,
 };
 
 test('catalog builds without duplicate ids', () => {
@@ -28,7 +38,14 @@ test('catalog builds without duplicate ids', () => {
 
 test('duplicate id throws', () => {
   const reg = new ActionRegistry();
-  const a = { id: 'x', label: 'X', icon: 'move', group: 'scene' as GroupId, disclosure: 'menu' as const, run: () => {} };
+  const a = {
+    id: 'x',
+    label: 'X',
+    icon: 'move',
+    group: 'scene' as GroupId,
+    disclosure: 'menu' as const,
+    run: () => {},
+  };
   reg.add(a);
   assert.throws(() => reg.add({ ...a }), /duplicate action id/);
 });
@@ -41,10 +58,14 @@ test('every action has a known group', () => {
 });
 
 test('primary bar has the four expected actions', () => {
-  const ids = buildRegistry().byDisclosure('primary').map((a) => a.id).sort();
-  assert.deepStrictEqual(ids, [
-    'load_model_from_path', 'save_gcode_to_downloads', 'slice_active_plate', 'toggle_preview',
-  ].sort());
+  const ids = buildRegistry()
+    .byDisclosure('primary')
+    .map((a) => a.id)
+    .sort();
+  assert.deepStrictEqual(
+    ids,
+    ['load_model_from_path', 'save_gcode_to_downloads', 'slice_active_plate', 'toggle_preview'].sort(),
+  );
 });
 
 test('every toolbar action declares a tool', () => {
@@ -59,20 +80,19 @@ test('Slice is gated: disabled with no models, enabled with models & clean prefl
   const slice = buildRegistry().get('slice_active_plate')!;
   assert.strictEqual(ActionRegistry.enabled(slice, baseState), false);
   assert.strictEqual(ActionRegistry.enabled(slice, { ...baseState, modelCount: 1 }), true);
-  assert.strictEqual(
-    ActionRegistry.enabled(slice, { ...baseState, modelCount: 1, preflightBlocked: true }), false);
-  assert.strictEqual(
-    ActionRegistry.enabled(slice, { ...baseState, modelCount: 1, isSlicing: true }), false);
+  assert.strictEqual(ActionRegistry.enabled(slice, { ...baseState, modelCount: 1, preflightBlocked: true }), false);
+  assert.strictEqual(ActionRegistry.enabled(slice, { ...baseState, modelCount: 1, isSlicing: true }), false);
 });
 
 test('Download gated on gcodeReady; Repair/Delete gated on selection', () => {
   const reg = buildRegistry();
   assert.strictEqual(ActionRegistry.enabled(reg.get('save_gcode_to_downloads')!, baseState), false);
   assert.strictEqual(
-    ActionRegistry.enabled(reg.get('save_gcode_to_downloads')!, { ...baseState, gcodeReady: true }), true);
+    ActionRegistry.enabled(reg.get('save_gcode_to_downloads')!, { ...baseState, gcodeReady: true }),
+    true,
+  );
   assert.strictEqual(ActionRegistry.enabled(reg.get('repair_model')!, baseState), false);
-  assert.strictEqual(
-    ActionRegistry.enabled(reg.get('repair_model')!, { ...baseState, hasSelection: true }), true);
+  assert.strictEqual(ActionRegistry.enabled(reg.get('repair_model')!, { ...baseState, hasSelection: true }), true);
   assert.strictEqual(ActionRegistry.enabled(reg.get('mesh_boolean_union')!, { ...baseState, modelCount: 1 }), false);
   assert.strictEqual(ActionRegistry.enabled(reg.get('mesh_boolean_union')!, { ...baseState, modelCount: 2 }), true);
 });

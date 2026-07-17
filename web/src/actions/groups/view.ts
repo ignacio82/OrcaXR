@@ -5,7 +5,7 @@
  * API wired yet. `docs/orca_parity_plan.md` lists the camera-preset hook to
  * implement (the OrbitControls target + a canned quaternion per view).
  */
-import type { Action } from '../ActionRegistry';
+import type { ActionDefinition as Action } from '../ActionRegistry';
 
 function cameraView(id: string, label: string): Action {
   return {
@@ -36,7 +36,6 @@ export const viewActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'view',
     hint: 'Toggle between perspective and orthographic projection',
-    run: (ctx) => ctx.togglePerspective(),
   },
   {
     id: 'view_show_labels',
@@ -79,7 +78,6 @@ export const viewActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'view',
     hint: 'Auto-switch orthographic/perspective when changing to top/side views',
-    run: (ctx) => ctx.toggleAutoPerspective(),
   },
   {
     id: 'view_show_navigator',
@@ -89,7 +87,6 @@ export const viewActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'view',
     hint: 'Show the orientation navigator gizmo',
-    run: (ctx) => ctx.toggleNavigator(),
   },
   {
     id: 'view_show_outline',
@@ -99,7 +96,6 @@ export const viewActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'view',
     hint: 'Draw an outline around the selected object',
-    run: (ctx) => ctx.toggleSelectionOutline(),
   },
   {
     id: 'view_show_gcode_window',
@@ -109,7 +105,6 @@ export const viewActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'view',
     hint: 'Show the G-code text window in Preview',
-    run: (ctx) => ctx.toggleGcodeWindow(),
   },
   {
     id: 'view_show_printable_box',

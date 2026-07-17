@@ -1,5 +1,20 @@
 {
+  "name": "orcaxr-wasm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm run verify:artifacts",
+    "build:source": "bash build_wasm_module_snapmaker.sh",
+    "test:cube": "node test_slice_cube.mjs",
+    "test:profile": "node test_slice_profile.mjs",
+    "test:project": "node test_slice_project_fs.mjs",
+    "test:painted": "node test_slice_painted.mjs",
+    "test:painted-prime-tower": "ORCAXR_PRIME_TOWER=1 node test_slice_painted.mjs",
+    "test:fullspectrum": "node test_slice_project_fs.mjs",
+    "verify:artifacts": "node verify_artifacts.mjs"
+  },
   "dependencies": {
-    "fflate": "^0.8.3"
+    "fflate": "0.8.3"
   }
 }

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "license": "CC0-1.0",
+  "sources": [
+    {
+      "id": "analytic-tetrahedron-v1",
+      "kind": "repository-authored synthetic geometry",
+      "description": "Four explicitly listed vertices and four triangular faces; no external asset was copied.",
+      "usedBy": [
+        "geometry/tetrahedron.obj",
+        "geometry/tetrahedron.stl",
+        "geometry/tetrahedron.step",
+        "recipes/reference-project/3D/3dmodel.model"
+      ]
+    },
+    {
+      "id": "synthetic-bbs-semantic-seed-v1",
+      "kind": "repository-authored package recipe",
+      "description": "Minimal 3MF/BBS-shaped metadata authored to exercise the structural oracle, not emitted by Snapmaker Orca.",
+      "usedBy": [
+        "recipes/reference-project",
+        "fixtures/reference.3mf",
+        "fixtures/mutations/*.3mf"
+      ]
+    },
+    {
+      "id": "synthetic-gcode-semantic-seed-v1",
+      "kind": "repository-authored G-code",
+      "description": "Short non-printing semantic parser fixture. It must never be sent to hardware.",
+      "usedBy": [
+        "fixtures/reference.gcode",
+        "fixtures/mutations/missing-tool-change.gcode"
+      ]
+    }
+  ],
+  "parityBaseline": {
+    "repository": "https://github.com/Snapmaker/OrcaSlicer.git",
+    "commit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "relationship": "Target baseline only. These synthetic fixtures are not upstream-generated qualification artifacts."
+  }
+}
+

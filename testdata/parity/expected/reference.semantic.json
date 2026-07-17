@@ -1,0 +1,553 @@
+{
+  "schemaVersion": 1,
+  "threeMf": {
+    "normalizedSha256": "4ba4947538710eacf5773870f615e2f65630153b50bd80c21d3c234111689aba",
+    "archiveMembers": [
+      "_rels/.rels",
+      "[Content_Types].xml",
+      "3D/_rels/3dmodel.model.rels",
+      "3D/3dmodel.model",
+      "Extensions/opaque.txt",
+      "Metadata/custom_gcode_per_layer.xml",
+      "Metadata/model_settings.config",
+      "Metadata/orcaxr_extension.xml",
+      "Metadata/project_settings.config",
+      "Metadata/slice_info.config"
+    ],
+    "relationships": [
+      {
+        "id": "rel-model",
+        "missing": false,
+        "source": "/",
+        "target": "/3D/3dmodel.model",
+        "targetMode": "Internal",
+        "type": "http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel",
+        "resolvedTarget": "3D/3dmodel.model"
+      },
+      {
+        "id": "rel-project-config",
+        "missing": false,
+        "source": "/",
+        "target": "/Metadata/project_settings.config",
+        "targetMode": "Internal",
+        "type": "http://schemas.orcaxr.test/relationships/project-config",
+        "resolvedTarget": "Metadata/project_settings.config"
+      },
+      {
+        "id": "rel-custom-gcode",
+        "missing": false,
+        "source": "3D/3dmodel.model",
+        "target": "../Metadata/custom_gcode_per_layer.xml",
+        "targetMode": "Internal",
+        "type": "http://schemas.orcaxr.test/relationships/custom-gcode",
+        "resolvedTarget": "Metadata/custom_gcode_per_layer.xml"
+      },
+      {
+        "id": "rel-extension",
+        "missing": false,
+        "source": "3D/3dmodel.model",
+        "target": "../Extensions/opaque.txt",
+        "targetMode": "Internal",
+        "type": "http://schemas.orcaxr.test/relationships/extension",
+        "resolvedTarget": "Extensions/opaque.txt"
+      },
+      {
+        "id": "rel-model-config",
+        "missing": false,
+        "source": "3D/3dmodel.model",
+        "target": "../Metadata/model_settings.config",
+        "targetMode": "Internal",
+        "type": "http://schemas.orcaxr.test/relationships/model-config",
+        "resolvedTarget": "Metadata/model_settings.config"
+      }
+    ],
+    "models": [
+      {
+        "path": "3D/3dmodel.model",
+        "attributes": {
+          "lang": "en-US",
+          "unit": "millimeter"
+        },
+        "metadata": [
+          {
+            "name": "Title",
+            "value": "OrcaXR synthetic parity fixture"
+          }
+        ],
+        "objects": [
+          {
+            "attributes": {
+              "id": "1",
+              "name": "Two-part assembly",
+              "stable-id": "object-assembly",
+              "type": "model"
+            },
+            "components": [
+              {
+                "objectid": "2",
+                "transform": "1 0 0 0 1 0 0 0 1 0 0 0"
+              },
+              {
+                "objectid": "3",
+                "transform": "1 0 0 0 1 0 0 0 1 12 0 0"
+              }
+            ],
+            "mesh": null
+          },
+          {
+            "attributes": {
+              "id": "2",
+              "name": "Painted tetrahedron",
+              "pid": "20",
+              "pindex": "0",
+              "type": "model"
+            },
+            "components": [],
+            "mesh": {
+              "triangles": 4,
+              "vertices": 4
+            }
+          },
+          {
+            "attributes": {
+              "id": "3",
+              "name": "Modifier tetrahedron",
+              "pid": "20",
+              "pindex": "1",
+              "type": "model"
+            },
+            "components": [],
+            "mesh": {
+              "triangles": 4,
+              "vertices": 4
+            }
+          },
+          {
+            "attributes": {
+              "id": "4",
+              "name": "Negative volume",
+              "type": "model"
+            },
+            "components": [],
+            "mesh": {
+              "triangles": 4,
+              "vertices": 4
+            }
+          }
+        ],
+        "build": [
+          {
+            "instance-id": "instance-a",
+            "objectid": "1",
+            "printable": "1",
+            "transform": "1 0 0 0 1 0 0 0 1 20 20 0"
+          },
+          {
+            "instance-id": "instance-b",
+            "objectid": "1",
+            "printable": "1",
+            "transform": "1 0 0 0 1 0 0 0 1 60 20 0"
+          },
+          {
+            "instance-id": "negative-a",
+            "objectid": "4",
+            "printable": "0",
+            "transform": "1 0 0 0 1 0 0 0 1 100 20 0"
+          }
+        ]
+      }
+    ],
+    "settings": [
+      {
+        "key": "Title",
+        "path": "3D/3dmodel.model/model[0]/metadata[0]",
+        "value": "OrcaXR synthetic parity fixture"
+      },
+      {
+        "key": "layer_height",
+        "path": "Metadata/model_settings.config/config[0]/object[0]/layer_range[0]/metadata[0]",
+        "value": "0.12"
+      },
+      {
+        "key": "wall_filament",
+        "path": "Metadata/model_settings.config/config[0]/object[0]/layer_range[0]/metadata[1]",
+        "value": "6"
+      },
+      {
+        "key": "name",
+        "path": "Metadata/model_settings.config/config[0]/object[0]/metadata[0]",
+        "value": "Two-part assembly"
+      },
+      {
+        "key": "extruder",
+        "path": "Metadata/model_settings.config/config[0]/object[0]/metadata[1]",
+        "value": "1"
+      },
+      {
+        "key": "extruder",
+        "path": "Metadata/model_settings.config/config[0]/object[0]/part[0]/metadata[0]",
+        "value": "2"
+      },
+      {
+        "key": "wall_filament",
+        "path": "Metadata/model_settings.config/config[0]/object[0]/part[0]/metadata[1]",
+        "value": "5"
+      },
+      {
+        "key": "support_filament",
+        "path": "Metadata/model_settings.config/config[0]/object[0]/part[0]/metadata[2]",
+        "value": "1"
+      },
+      {
+        "key": "sparse_infill_density",
+        "path": "Metadata/model_settings.config/config[0]/object[0]/part[1]/metadata[0]",
+        "value": "35%"
+      },
+      {
+        "key": "name",
+        "path": "Metadata/model_settings.config/config[0]/object[1]/part[0]/metadata[0]",
+        "value": "Subtractive tetrahedron"
+      },
+      {
+        "key": "layer_height",
+        "path": "Metadata/project_settings.config/config[0]/setting[0]",
+        "value": "0.20"
+      },
+      {
+        "key": "printer_model",
+        "path": "Metadata/project_settings.config/config[0]/setting[1]",
+        "value": "Snapmaker U1"
+      },
+      {
+        "key": "filament_colour",
+        "path": "Metadata/project_settings.config/config[0]/setting[2]",
+        "value": "#EF4444;#3B82F6"
+      },
+      {
+        "key": "mixed_filament_ratio",
+        "path": "Metadata/project_settings.config/config[0]/setting[3]",
+        "value": "5=Ratio(1:0.65,2:0.35)"
+      },
+      {
+        "key": "mixed_filament_layer_cycle",
+        "path": "Metadata/project_settings.config/config[0]/setting[4]",
+        "value": "6=LayerCycle(1,2,2)"
+      },
+      {
+        "key": "mixed_filament_gradient",
+        "path": "Metadata/project_settings.config/config[0]/setting[5]",
+        "value": "7=Gradient(1,2,0.10,0.90)"
+      },
+      {
+        "key": "mixed_filament_match_color",
+        "path": "Metadata/project_settings.config/config[0]/setting[6]",
+        "value": "8=MatchColor(#7C3AED;1,2)"
+      },
+      {
+        "key": "mixed_filament_definitions",
+        "path": "Metadata/project_settings.config/config[0]/setting[7]",
+        "value": "5:ratio;6:layer_cycle;7:gradient;8:match_color"
+      },
+      {
+        "key": "before_layer_change_gcode",
+        "path": "Metadata/project_settings.config/config[0]/setting[8]",
+        "value": "G92 E0\n; fixture reset"
+      },
+      {
+        "key": "machine_end_gcode",
+        "path": "Metadata/project_settings.config/config[0]/setting[9]",
+        "value": "M104 S0\nM140 S0"
+      }
+    ],
+    "partAssignments": [
+      {
+        "identity": {
+          "min_z": "2.0",
+          "max_z": "5.0"
+        },
+        "key": "wall_filament",
+        "path": "Metadata/model_settings.config/config[0]/object[0]/layer_range[0]",
+        "scope": "layer_range",
+        "value": "6"
+      },
+      {
+        "identity": {
+          "id": "2",
+          "subtype": "normal_part"
+        },
+        "key": "extruder",
+        "path": "Metadata/model_settings.config/config[0]/object[0]/part[0]",
+        "scope": "part",
+        "value": "2"
+      },
+      {
+        "identity": {
+          "id": "2",
+          "subtype": "normal_part"
+        },
+        "key": "support_filament",
+        "path": "Metadata/model_settings.config/config[0]/object[0]/part[0]",
+        "scope": "part",
+        "value": "1"
+      },
+      {
+        "identity": {
+          "id": "2",
+          "subtype": "normal_part"
+        },
+        "key": "wall_filament",
+        "path": "Metadata/model_settings.config/config[0]/object[0]/part[0]",
+        "scope": "part",
+        "value": "5"
+      },
+      {
+        "identity": {
+          "id": "1"
+        },
+        "key": "extruder",
+        "path": "Metadata/model_settings.config/config[0]/object[0]",
+        "scope": "object",
+        "value": "1"
+      }
+    ],
+    "facetAnnotations": [
+      {
+        "element": "triangle",
+        "path": "3D/3dmodel.model/model[0]/resources[0]/object[1]/mesh[0]/triangles[0]/triangle[0]",
+        "payload": {
+          "fuzzy_skin": "1",
+          "paint_color": "1F",
+          "paint_supports": "2",
+          "seam": "1"
+        },
+        "text": ""
+      }
+    ],
+    "mixedFilamentDefinitions": [
+      {
+        "key": "mixed_filament_ratio",
+        "path": "Metadata/project_settings.config/config[0]/setting[3]",
+        "value": "5=Ratio(1:0.65,2:0.35)"
+      },
+      {
+        "key": "mixed_filament_layer_cycle",
+        "path": "Metadata/project_settings.config/config[0]/setting[4]",
+        "value": "6=LayerCycle(1,2,2)"
+      },
+      {
+        "key": "mixed_filament_gradient",
+        "path": "Metadata/project_settings.config/config[0]/setting[5]",
+        "value": "7=Gradient(1,2,0.10,0.90)"
+      },
+      {
+        "key": "mixed_filament_match_color",
+        "path": "Metadata/project_settings.config/config[0]/setting[6]",
+        "value": "8=MatchColor(#7C3AED;1,2)"
+      },
+      {
+        "key": "mixed_filament_definitions",
+        "path": "Metadata/project_settings.config/config[0]/setting[7]",
+        "value": "5:ratio;6:layer_cycle;7:gradient;8:match_color"
+      }
+    ],
+    "platesSemanticSha256": "28eeaced37e476327a7d05dcf039974db49ef632c8b32d4476292370cb890400",
+    "customGcodeSemanticSha256": "5d30e54ec137481b5ec9f95608cd9e35f9da1c1b17b2c876adac8a89557b45a1",
+    "unknownExtensions": [
+      {
+        "attribute": "instance-id",
+        "kind": "attribute",
+        "namespace": "https://orcaxr.martinez.fyi/3mf/parity/1",
+        "path": "3D/3dmodel.model/model[0]/build[0]/item[0]",
+        "semanticSha256": "b2f0c79065ae8fe94622053e92c0b2e9c7067a1764e7dbaf9d0393209fecc47a"
+      },
+      {
+        "attribute": "instance-id",
+        "kind": "attribute",
+        "namespace": "https://orcaxr.martinez.fyi/3mf/parity/1",
+        "path": "3D/3dmodel.model/model[0]/build[0]/item[1]",
+        "semanticSha256": "ec0d2d4b852122135d796259ba9aa6beaf6e414d3146464842a2d61f02bfd327"
+      },
+      {
+        "attribute": "instance-id",
+        "kind": "attribute",
+        "namespace": "https://orcaxr.martinez.fyi/3mf/parity/1",
+        "path": "3D/3dmodel.model/model[0]/build[0]/item[2]",
+        "semanticSha256": "3dff023e3fa2c042a87c54d250edfc79b5eb8240b3fcca781391d77e2e1126fb"
+      },
+      {
+        "attribute": "stable-id",
+        "kind": "attribute",
+        "namespace": "https://orcaxr.martinez.fyi/3mf/parity/1",
+        "path": "3D/3dmodel.model/model[0]/resources[0]/object[0]",
+        "semanticSha256": "aedf46ce549080a78ed8c98fe90a56f3f6c8ea6c853629d3c842e30989529008"
+      },
+      {
+        "attribute": "face-tag",
+        "kind": "attribute",
+        "namespace": "https://orcaxr.martinez.fyi/3mf/parity/1",
+        "path": "3D/3dmodel.model/model[0]/resources[0]/object[1]/mesh[0]/triangles[0]/triangle[0]",
+        "semanticSha256": "1b788e98390b36848f0f5b7a73d6f389ad812e9161781b2246171478871bb2d6"
+      },
+      {
+        "kind": "member",
+        "path": "Extensions/opaque.txt",
+        "semanticSha256": "f65c625b065b6a12de549631fac378cae2875314d20c996d75f3b055132a92da"
+      },
+      {
+        "kind": "element",
+        "namespace": "https://orcaxr.martinez.fyi/3mf/parity/1",
+        "path": "Metadata/orcaxr_extension.xml/parity[0]/stable-entity[0]",
+        "semanticSha256": "b104bb5c62869143f806fe05d1beddb166b783940694444d8c59575490cb2c2c"
+      },
+      {
+        "kind": "element",
+        "namespace": "https://orcaxr.martinez.fyi/3mf/parity/1",
+        "path": "Metadata/orcaxr_extension.xml/parity[0]",
+        "semanticSha256": "d0d36cc3cfbb480261f411c4f6df639b956a2d6bc2147097c85c6faf8594d535"
+      }
+    ]
+  },
+  "gcode": {
+    "format": "orcaxr-semantic-gcode-v1",
+    "layers": [
+      {
+        "declaredIndex": null,
+        "extrusionTools": [
+          0
+        ],
+        "index": 0,
+        "roles": [
+          "Outer wall",
+          "Sparse infill"
+        ],
+        "tools": [],
+        "z": 0.2
+      },
+      {
+        "declaredIndex": null,
+        "extrusionTools": [
+          1
+        ],
+        "index": 1,
+        "roles": [
+          "Inner wall",
+          "Prime tower"
+        ],
+        "tools": [
+          1
+        ],
+        "z": 0.4
+      }
+    ],
+    "toolOrder": [
+      0,
+      1
+    ],
+    "toolChanges": [
+      {
+        "from": 0,
+        "layer": 1,
+        "to": 1
+      }
+    ],
+    "roles": [
+      "Inner wall",
+      "Outer wall",
+      "Prime tower",
+      "Sparse infill"
+    ],
+    "bounds": {
+      "max": {
+        "x": 12,
+        "y": 12,
+        "z": 0.4
+      },
+      "min": {
+        "x": 0,
+        "y": 0,
+        "z": 0.2
+      }
+    },
+    "extrusionBounds": {
+      "max": {
+        "x": 12,
+        "y": 12,
+        "z": 0.4
+      },
+      "min": {
+        "x": 0,
+        "y": 0,
+        "z": 0.2
+      }
+    },
+    "extrusion": {
+      "byContext": {
+        "model": 7,
+        "tower": 0.5
+      },
+      "byRole": {
+        "Inner wall": 4.5,
+        "Outer wall": 2,
+        "Prime tower": 0.5,
+        "Sparse infill": 0.5
+      },
+      "byTool": {
+        "0": 2.5,
+        "1": 5
+      },
+      "total": 7.5
+    },
+    "temperatures": [
+      {
+        "kind": "nozzle",
+        "tool": 0,
+        "value": 210,
+        "wait": false
+      },
+      {
+        "kind": "nozzle",
+        "tool": 0,
+        "value": 210,
+        "wait": true
+      },
+      {
+        "kind": "bed",
+        "tool": null,
+        "value": 60,
+        "wait": false
+      },
+      {
+        "kind": "bed",
+        "tool": null,
+        "value": 60,
+        "wait": true
+      },
+      {
+        "kind": "nozzle",
+        "tool": 1,
+        "value": 215,
+        "wait": false
+      },
+      {
+        "kind": "chamber",
+        "tool": null,
+        "value": 35,
+        "wait": false
+      },
+      {
+        "kind": "chamber",
+        "tool": null,
+        "value": 35,
+        "wait": true
+      }
+    ],
+    "estimates": {
+      "estimated printing time (normal mode)": 42,
+      "total filament used [g]": 0.02,
+      "total filament used [mm]": 7.5
+    },
+    "warnings": [
+      "WARNING: Synthetic fixture warning"
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ox:parity xmlns:ox="https://orcaxr.martinez.fyi/3mf/parity/1" version="1">
+  <ox:stable-entity id="entity-alpha" payload="unknown fields must survive"/>
+</ox:parity>
+

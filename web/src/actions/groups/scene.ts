@@ -2,7 +2,7 @@
  * Scene group — model import, the modal transform tools, and mesh operations.
  * Every handler routes through {@link ActionContext}; no logic lives here.
  */
-import type { Action } from '../ActionRegistry';
+import type { ActionDefinition as Action } from '../ActionRegistry';
 
 export const sceneActions: Action[] = [
   // ---- Primary ----
@@ -27,6 +27,7 @@ export const sceneActions: Action[] = [
     disclosure: 'toolbar',
     tool: 'move',
     hint: 'Move the selected model on the bed',
+    shortcuts: ['G'],
     run: (ctx) => ctx.setTool('move'),
   },
   {
@@ -38,6 +39,7 @@ export const sceneActions: Action[] = [
     disclosure: 'toolbar',
     tool: 'rotate',
     hint: 'Rotate the selected model',
+    shortcuts: ['R'],
     run: (ctx) => ctx.setTool('rotate'),
   },
   {
@@ -49,6 +51,7 @@ export const sceneActions: Action[] = [
     disclosure: 'toolbar',
     tool: 'scale',
     hint: 'Scale the selected model',
+    shortcuts: ['S'],
     run: (ctx) => ctx.setTool('scale'),
   },
   {

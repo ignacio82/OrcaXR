@@ -7,9 +7,15 @@ import assert from 'node:assert';
 import { hexToRgb01, nearestPaletteIndex, deriveTriangleFilaments } from '../PaintedSlice';
 
 let passed = 0;
-function test(name: string, fn: () => void) { fn(); passed++; console.log('  ✓', name); }
+function test(name: string, fn: () => void) {
+  fn();
+  passed++;
+  console.log('  ✓', name);
+}
 
-const RED = '#ff0000', GREEN = '#00ff00', BLUE = '#0000ff';
+const RED = '#ff0000',
+  GREEN = '#00ff00',
+  BLUE = '#0000ff';
 const PALETTE = [RED, GREEN, BLUE];
 
 test('hexToRgb01 parses with and without #', () => {
@@ -31,14 +37,22 @@ function colorsFor(triColors: [number, number, number][]): number[] {
 }
 
 test('single-colour mesh → distinctCount 1 (mono path)', () => {
-  const colors = colorsFor([[1, 0, 0], [1, 0, 0], [1, 0, 0]]);
+  const colors = colorsFor([
+    [1, 0, 0],
+    [1, 0, 0],
+    [1, 0, 0],
+  ]);
   const { triFilament, distinctCount } = deriveTriangleFilaments(colors, 3, PALETTE);
   assert.strictEqual(distinctCount, 1);
   assert.deepStrictEqual([...triFilament], [0, 0, 0]);
 });
 
 test('two-colour mesh → distinctCount 2 with correct indices', () => {
-  const colors = colorsFor([[1, 0, 0], [0, 1, 0], [0, 0, 1]]);
+  const colors = colorsFor([
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+  ]);
   const { triFilament, distinctCount } = deriveTriangleFilaments(colors, 3, PALETTE);
   assert.strictEqual(distinctCount, 3);
   assert.deepStrictEqual([...triFilament], [0, 1, 2]);
@@ -46,7 +60,8 @@ test('two-colour mesh → distinctCount 2 with correct indices', () => {
 
 test('majority vote resolves mixed-vertex triangles', () => {
   // Triangle with two green verts and one red → green (index 1).
-  const g = hexToRgb01(GREEN), r = hexToRgb01(RED);
+  const g = hexToRgb01(GREEN),
+    r = hexToRgb01(RED);
   const colors = [...g, ...g, ...r];
   const { triFilament } = deriveTriangleFilaments(colors, 1, PALETTE);
   assert.strictEqual(triFilament[0], 1);

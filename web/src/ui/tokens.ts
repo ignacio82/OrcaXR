@@ -25,7 +25,7 @@ export const tokens = {
     strokeStrong: '#ffffff33',
     accent: '#FF6D00',
     accentSoft: '#FFB74D',
-    accent2: '#FF8A3D',        // mid-amber — slice progress bar
+    accent2: '#FF8A3D', // mid-amber — slice progress bar
     danger: '#ff5252',
     dangerSurface: '#ff525233',
     ok: '#4caf50',

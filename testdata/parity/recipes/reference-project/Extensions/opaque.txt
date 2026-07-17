@@ -1,0 +1,3 @@
+OrcaXR unknown-extension sentinel v1
+This payload must not disappear during a structural round trip.
+

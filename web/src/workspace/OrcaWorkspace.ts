@@ -47,7 +47,7 @@ export async function extract3mfColors(buf: ArrayBuffer): Promise<string[] | nul
           ? config.extruder_colour
           : undefined;
     const palette = rawPalette?.map((c: string) => {
-      let hex = c.startsWith('#') ? c : `#${c}`;
+      const hex = c.startsWith('#') ? c : `#${c}`;
       return hex.length === 9 ? hex.substring(0, 7) : hex;
     });
     if (!palette) {
@@ -69,10 +69,7 @@ export async function extract3mfColors(buf: ArrayBuffer): Promise<string[] | nul
         obj.querySelectorAll('part').forEach((part) => {
           const pid = part.getAttribute('id');
           if (!pid) return;
-          let e = parseInt(
-            part.querySelector('metadata[key="extruder"]')?.getAttribute('value') ?? '0',
-            10,
-          );
+          let e = parseInt(part.querySelector('metadata[key="extruder"]')?.getAttribute('value') ?? '0', 10);
           if (!e || e < 1) e = objExtruder;
           extruderOf.set(pid, e >= 1 ? e : 1);
         });
@@ -84,7 +81,10 @@ export async function extract3mfColors(buf: ArrayBuffer): Promise<string[] | nul
 
     // Parse every .model file (regex, not DOM — geometry files reach tens of
     // MB): objectId → { hasTriangles, componentIds }, plus the root build order.
-    interface ObjInfo { hasTris: boolean; components: string[] }
+    interface ObjInfo {
+      hasTris: boolean;
+      components: string[];
+    }
     const objects = new Map<string, ObjInfo>();
     let buildOrder: string[] = [];
     for (const [name, data] of Object.entries(unzipped)) {
@@ -137,7 +137,9 @@ export async function extract3mfColors(buf: ArrayBuffer): Promise<string[] | nul
       const e = Math.max(1, extruderOf.get(id) ?? 1);
       return full[e - 1] ?? palette[(e - 1) % palette.length] ?? '#ffffff';
     });
-    console.log(`extract3mfColors: ${colors.length} meshes (order-aligned), palette ${palette.length}+${virtuals.length} virtual`);
+    console.log(
+      `extract3mfColors: ${colors.length} meshes (order-aligned), palette ${palette.length}+${virtuals.length} virtual`,
+    );
     return colors;
   } catch (e) {
     console.error('Failed to extract 3mf colors', e);
@@ -145,17 +147,16 @@ export async function extract3mfColors(buf: ArrayBuffer): Promise<string[] | nul
   }
 }
 
-
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { ConvexHull } from 'three/examples/jsm/math/ConvexHull.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SimplifyModifier } from 'three/examples/jsm/modifiers/SimplifyModifier.js';
 import { buildRegistry } from '../actions/catalog';
-import { ActionRegistry, type Action } from '../actions/ActionRegistry';
+import type { Action, ActionSurface } from '../actions/ActionRegistry';
 import { MENU_SECTIONS } from '../actions/ActionRegistry';
 import type { ActionContext } from '../actions/ActionContext';
-import { renderXrActionButton, type XrUiFactory } from '../ui/xr/XrShell';
+import { renderXrActionButton, xrToolRailActions, type XrUiFactory } from '../ui/xr/XrShell';
 import { CalibrationRampGenerator } from '../features/CalibrationRampGenerator';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 
@@ -163,16 +164,36 @@ THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 import * as xb from 'xrblocks';
-// @ts-ignore
-import { UICore, UIPanel, UIText, UIIcon, raycastSortFunction, ManipulationBehavior } from 'xrblocks/addons/uiblocks/src/index.js';
+import {
+  UICore,
+  UICard,
+  UIPanel,
+  UIText,
+  UIImage as XRImage,
+  raycastSortFunction,
+  ManipulationBehavior,
+  type UIPanelProperties,
+  type UIImageProperties as XRImageProperties,
+} from 'xrblocks/addons/uiblocks/src/index.js';
 
 import { parseGcodeToolpath } from '../slicer/GcodeToolpath';
 import { FilamentPalette } from './FilamentPalette';
 import { bedSizeFromProfile, ProfileCatalog, SlicerProfile } from '../slicer/ProfileLoader';
 import { SlicerClient } from '../slicer/SlicerClient';
+import {
+  combinedSemanticImportRequiresCanonicalSlice,
+  requireSemanticSlice,
+  sameSemanticProjectSnapshot,
+  selectSemanticSliceRoute,
+  type SemanticBufferSnapshot,
+  type SemanticProjectSnapshot,
+} from '../slicer/SemanticSliceGuard';
 import { detectBedCollision, bedCollisionBanner } from '../features/BedCollision';
 import {
-  loadFilamentRules, evaluateFilamentRules, bedKeyFor, EMPTY_RULES,
+  loadFilamentRules,
+  evaluateFilamentRules,
+  bedKeyFor,
+  EMPTY_RULES,
   type FilamentRules,
 } from '../features/FilamentRules';
 import { evaluateTopCover } from '../features/TopCoverRule';
@@ -205,12 +226,46 @@ const WORKSPACE_SCALE = 1.75;
 const PLATE_Y = 1.2;
 const PLATE_Z = -0.7;
 
+/** Copy an arbitrary ArrayBuffer view into an owned, Blob/File-safe buffer. */
+function ownedArrayBuffer(view: ArrayBufferView<ArrayBufferLike>): ArrayBuffer {
+  const copy = new Uint8Array(view.byteLength);
+  copy.set(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+  return copy.buffer;
+}
 
 /** One plated model: its source geometry, the display mesh, and the grab proxy. */
 type ModelEntry = { raw: THREE.BufferGeometry; display: THREE.Mesh; viewer: THREE.Object3D };
 
+export type WorkspaceGizmoTool = 'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint';
+
+export interface WorkspaceAutomationSnapshot {
+  workspaceMode: 'Prepare' | 'Preview';
+  activePlateId: number;
+  gizmoTool: WorkspaceGizmoTool;
+  selectedProfileId: string | null;
+  placedModelsTotalAllPlates: number;
+  plates: { id: number; label: string; count: number; active: boolean }[];
+  placedModels: {
+    id: string;
+    label: string;
+    plateId: number;
+    translateXmm: number;
+    translateYmm: number;
+    translateZmm: number;
+    rotXDeg: number;
+    rotYDeg: number;
+    rotZDeg: number;
+    scaleXPct: number;
+    scaleYPct: number;
+    scaleZPct: number;
+  }[];
+}
+
 export class OrcaWorkspace extends xb.Script {
-  private uiCore: any;
+  private uiCore: UICore;
+  private readonly lifecycleDisposers: Array<() => void> = [];
+  private disposed = false;
+  private readonly actionRegistry = buildRegistry();
   private slicer = new SlicerClient();
   /** True once a post-import local-engine warm-up has been scheduled. */
   private slicerWarmupQueued = false;
@@ -228,9 +283,7 @@ export class OrcaWorkspace extends xb.Script {
    * `this.models` transparently target the active plate). Inactive plates keep
    * their viewers in the scene graph but hidden.
    */
-  private plates: { id: number; label: string; models: ModelEntry[] }[] = [
-    { id: 1, label: 'Plate 1', models: [] },
-  ];
+  private plates: { id: number; label: string; models: ModelEntry[] }[] = [{ id: 1, label: 'Plate 1', models: [] }];
   private activePlateId = 1;
   private nextPlateId = 2;
   private get models(): ModelEntry[] {
@@ -247,16 +300,16 @@ export class OrcaWorkspace extends xb.Script {
   /** Fired when the selected model is transformed (moved, rotated, scaled). */
   public onSelectionTransformChanged: (() => void) | null = null;
   public onSliceStateChanged: ((isSlicing: boolean) => void) | null = null;
-  private statusText: { text: string } | null = null;
-  private sliceModalCard: any = null;
-  private sliceModalText: any = null;
-  private sliceModalBar: any = null;
-  private sliceModalProgressContainer: any = null;
+  private statusText: UIText | null = null;
+  private sliceModalCard: UICard | null = null;
+  private sliceModalText: UIText | null = null;
+  private sliceModalBar: UIPanel | null = null;
+  private sliceModalProgressContainer: UIPanel | null = null;
   private lastGcode: string | null = null;
   private toolpathObj: THREE.LineSegments | null = null;
   private previewOn = false;
   private needsRecenter = false;
-  
+
   public orbitControls: OrbitControls | null = null;
   private transformControls: TransformControls | null = null;
   public onStatusChanged: ((text: string, percent?: number) => void) | null = null;
@@ -292,14 +345,7 @@ export class OrcaWorkspace extends xb.Script {
       xb.core.input.raycaster.sortFunction = raycastSortFunction;
     }
     xb.core.input.addReticles();
-    
-    // Bind interaction events
-    xb.core.input.controllers.forEach((controller: any) => {
-      controller.addEventListener('selectstart', (e: any) => this.onSelectStart(e));
-      controller.addEventListener('select', (e: any) => this.onSelecting(e));
-      controller.addEventListener('selectend', () => this.onSelectEnd());
-    });
-    
+
     this.addLights();
     // NOTE: the group is NOT scaled — XR Blocks' DragManager (platform
     // translate, rotation cylinder, panel pinch) breaks inside scaled
@@ -342,14 +388,17 @@ export class OrcaWorkspace extends xb.Script {
         }
         const p =
           this.catalog.find('Snapmaker U1 (0.4 nozzle)', '0.20 Standard', 'Snapmaker PLA') ??
-          this.catalog.profiles[0] ?? null;
+          this.catalog.profiles[0] ??
+          null;
         if (p) this.setProfile(p);
       } finally {
         catalogLoading = false;
       }
     };
     void loadCatalog();
-    window.addEventListener('online', () => void loadCatalog());
+    const onOnline = () => void loadCatalog();
+    window.addEventListener('online', onOnline);
+    this.lifecycleDisposers.push(() => window.removeEventListener('online', onOnline));
     this.slicer.onProgress = (p) => this.setStatus(`Slicing... ${p.message}`, p.percent);
 
     // Filament-vs-bed rules for the pre-flight check (falls back to EMPTY).
@@ -365,12 +414,55 @@ export class OrcaWorkspace extends xb.Script {
     // To guarantee transient user activation for the file picker, we must
     // trigger it synchronously from the native WebXR select event, not
     // from XRBlocks' async loop or SpatialPanel's onTriggered.
-    xb.core.renderer.xr.addEventListener('sessionstart', () => {
+    let activeSession: XRSession | null = null;
+    const onSelect = () => this.checkLoadButtonAndTrigger();
+    const onSessionStart = () => {
+      activeSession?.removeEventListener('select', onSelect);
       const session = xb.core.renderer.xr.getSession();
-      session?.addEventListener('select', () => {
-        this.checkLoadButtonAndTrigger();
-      });
+      activeSession = session;
+      session?.addEventListener('select', onSelect);
+    };
+    xb.core.renderer.xr.addEventListener('sessionstart', onSessionStart);
+    this.lifecycleDisposers.push(() => {
+      xb.core.renderer.xr.removeEventListener('sessionstart', onSessionStart);
+      activeSession?.removeEventListener('select', onSelect);
+      activeSession = null;
     });
+  }
+
+  /** Release every listener, subscription, UI card, and owned GPU resource. */
+  override dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+
+    this.actionContext = undefined;
+    this.actionStateRefreshers.clear();
+    for (const dispose of this.lifecycleDisposers.splice(0).reverse()) dispose();
+    this.palette.onChanged = null;
+    this.uiCore.dispose();
+    this.orbitControls?.dispose();
+    this.orbitControls = null;
+    if (this.transformControls) {
+      this.transformControls.detach();
+      this.remove(this.transformControls.getHelper());
+      this.transformControls.dispose();
+      this.transformControls = null;
+    }
+
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+    this.workspace.traverse((object) => {
+      const renderable = object as THREE.Mesh | THREE.LineSegments;
+      if (renderable.geometry) geometries.add(renderable.geometry);
+      if (Array.isArray(renderable.material)) {
+        for (const material of renderable.material) materials.add(material);
+      } else if (renderable.material) {
+        materials.add(renderable.material);
+      }
+    });
+    for (const geometry of geometries) geometry.dispose();
+    for (const material of materials) material.dispose();
+    this.clear();
   }
 
   /** Where 2D navigation should orbit: the build plate's center. Derived
@@ -411,15 +503,22 @@ export class OrcaWorkspace extends xb.Script {
 
   public setup2DControls(canvas: HTMLCanvasElement) {
     this.transformControls = new TransformControls(xb.core.camera, canvas);
-    this.transformControls.addEventListener('dragging-changed', (event) => {
+    const onDraggingChanged = (event: { value: unknown }) => {
       if (this.orbitControls) this.orbitControls.enabled = !event.value;
       if (!event.value && this.selectedModel) {
         this.snapToBed(this.selectedModel);
         if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
       }
-    });
-    this.transformControls.addEventListener('change', () => {
+    };
+    const onTransformChanged = () => {
       if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
+    };
+    this.transformControls.addEventListener('dragging-changed', onDraggingChanged);
+    this.transformControls.addEventListener('change', onTransformChanged);
+    const controls = this.transformControls;
+    this.lifecycleDisposers.push(() => {
+      controls.removeEventListener('dragging-changed', onDraggingChanged);
+      controls.removeEventListener('change', onTransformChanged);
     });
     this.add(this.transformControls.getHelper());
 
@@ -493,17 +592,18 @@ export class OrcaWorkspace extends xb.Script {
   private setupSelectionRaycaster(canvas: HTMLCanvasElement) {
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
-    let downX = 0, downY = 0;
+    let downX = 0,
+      downY = 0;
 
-    canvas.addEventListener('pointerdown', (event) => {
+    const onPointerDown = (event: PointerEvent) => {
       downX = event.clientX;
       downY = event.clientY;
-    });
+    };
 
-    canvas.addEventListener('pointerup', (event) => {
+    const onPointerUp = (event: PointerEvent) => {
       if (xb.core.renderer.xr.isPresenting) return;
       if (this.transformControls && (this.transformControls as unknown as { dragging: boolean }).dragging) return;
-      
+
       const dx = event.clientX - downX;
       const dy = event.clientY - downY;
       if (Math.abs(dx) > 10 || Math.abs(dy) > 10) return; // It was a drag
@@ -515,7 +615,7 @@ export class OrcaWorkspace extends xb.Script {
       raycaster.setFromCamera(pointer, xb.core.camera);
 
       // Don't unselect if they clicked the transform gizmo directly
-      if (this.transformControls && (this.transformControls as any).axis !== null) {
+      if (this.transformControls && (this.transformControls as unknown as { axis: string | null }).axis !== null) {
         return;
       }
 
@@ -537,10 +637,16 @@ export class OrcaWorkspace extends xb.Script {
       if (!hitModel) {
         this.unselectModel();
       }
+    };
+    canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('pointerup', onPointerUp);
+    this.lifecycleDisposers.push(() => {
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointerup', onPointerUp);
     });
   }
 
-  private tool: 'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint' = 'move';
+  private tool: WorkspaceGizmoTool = 'move';
   private activePaintColor = new THREE.Color(0xff0000); // Default to red
   public setActivePaintColor(hex: string): void {
     this.activePaintColor.set(hex);
@@ -556,19 +662,22 @@ export class OrcaWorkspace extends xb.Script {
    *  read-only in the UI; their display colors match the desktop app. */
   public virtualFilaments: VirtualFilament[] = [];
   /** Prime/purge tower setup adopted from the loaded 3MF (null = none). */
-  private projectPrimeTower:
-    | { enabled: boolean; xMm: number; yMm: number; widthMm: number }
-    | null = null;
+  private projectPrimeTower: { enabled: boolean; xMm: number; yMm: number; widthMm: number } | null = null;
   /** The loaded project 3MF's raw bytes — FullSpectrum projects slice from
    *  this file (embedded mixed-filament config), like the desktop app. */
   private originalProject: ArrayBuffer | null = null;
-  /** Model count right after the project loaded; if the plate changed since,
-   *  the as-authored project slice no longer matches what the user sees. */
-  private projectModelCount = -1;
+  /** Exact semantic state represented by originalProject. Null means that an
+   *  as-authored slice cannot safely stand in for the live workspace. */
+  private originalProjectSnapshot: SemanticProjectSnapshot | null = null;
+  private projectSnapshotPending = false;
+  private projectSourceWasExclusive = false;
+  /** Set when multiple imported semantic sources cannot be represented by one
+   * immutable as-authored project. This keeps later geometry routes blocked. */
+  private canonicalSliceRequiredReason: string | null = null;
   private wipeTowerGhost: THREE.Group | null = null;
   public headFilaments: string[] = [];
   public headNozzles: string[] = [];
-  private headsContainer: any = null;
+  private headsContainer: UIPanel | null = null;
 
   /** Number of models currently on the plate. */
   get modelCount(): number {
@@ -596,20 +705,26 @@ export class OrcaWorkspace extends xb.Script {
       intersectionsForController: Map<unknown, THREE.Intersection[]>;
     };
     const ints = input.intersectionsForController.get(event.target) ?? [];
-    
+
     // Do nothing if we hit a UI panel! (Otherwise clicking a UI button unselects the model)
-    const hitUI = ints.some(i => {
-      let isUi = false;
-      i.object.traverseAncestors(a => {
-        if (a.name === 'LeftToolbar' || a.name === 'RightSidebar') isUi = true;
-      });
-      return isUi || i.object.name === 'LeftToolbar' || i.object.name === 'RightSidebar';
+    const cards = new Set<THREE.Object3D>(this.uiCore.cards);
+    const hitUI = ints.some((intersection) => {
+      let object: THREE.Object3D | null = intersection.object;
+      while (object) {
+        if (cards.has(object)) return true;
+        object = object.parent;
+      }
+      return false;
     });
     if (hitUI) return;
 
-    console.log('[orcaxr-hit]', ints.slice(0, 3)
-      .map((i) => `${i.object.name || i.object.type}@${i.distance.toFixed(2)}`)
-      .join(' | ') || 'NOTHING');
+    console.log(
+      '[orcaxr-hit]',
+      ints
+        .slice(0, 3)
+        .map((i) => `${i.object.name || i.object.type}@${i.distance.toFixed(2)}`)
+        .join(' | ') || 'NOTHING',
+    );
     const first = ints[0];
     if (!first) return;
     const entry = this.models.find(({ viewer }) => {
@@ -629,9 +744,7 @@ export class OrcaWorkspace extends xb.Script {
     }
 
     const controller = event.target as THREE.Object3D;
-    const startControllerLocal = this.workspace.worldToLocal(
-      controller.getWorldPosition(new THREE.Vector3()),
-    );
+    const startControllerLocal = this.workspace.worldToLocal(controller.getWorldPosition(new THREE.Vector3()));
     this.drag = {
       controller,
       startControllerLocal,
@@ -649,7 +762,7 @@ export class OrcaWorkspace extends xb.Script {
       raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
       raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
-      const meshes = this.models.map(m => m.viewer.getObjectByName('modelMesh')).filter(Boolean) as THREE.Mesh[];
+      const meshes = this.models.map((m) => m.viewer.getObjectByName('modelMesh')).filter(Boolean) as THREE.Mesh[];
       const hits = raycaster.intersectObjects(meshes, false);
       const meshHit = hits[0];
 
@@ -667,9 +780,7 @@ export class OrcaWorkspace extends xb.Script {
     if (!d || event.target !== d.controller) return;
     const entry = this.models[0];
     if (!entry) return;
-    const local = this.workspace.worldToLocal(
-      d.controller.getWorldPosition(new THREE.Vector3()),
-    );
+    const local = this.workspace.worldToLocal(d.controller.getWorldPosition(new THREE.Vector3()));
     const delta = local.clone().sub(d.startControllerLocal);
     const halfX = (this.bedMm.x * MM * WORKSPACE_SCALE) / 2;
     const halfZ = (this.bedMm.y * MM * WORKSPACE_SCALE) / 2;
@@ -679,11 +790,13 @@ export class OrcaWorkspace extends xb.Script {
         d.startPos.y,
         THREE.MathUtils.clamp(d.startPos.z + delta.z, -halfZ, halfZ),
       );
-      this.showValues(`x ${(entry.viewer.position.x / (MM * WORKSPACE_SCALE)).toFixed(1)}  y ${(-entry.viewer.position.z / (MM * WORKSPACE_SCALE)).toFixed(1)} mm`);
+      this.showValues(
+        `x ${(entry.viewer.position.x / (MM * WORKSPACE_SCALE)).toFixed(1)}  y ${(-entry.viewer.position.z / (MM * WORKSPACE_SCALE)).toFixed(1)} mm`,
+      );
     } else if (this.tool === 'rotate') {
       // Horizontal hand sweep = yaw: 25 cm of travel = a full turn.
       entry.viewer.rotation.y = d.startRotY + (delta.x / 0.25) * Math.PI * 2;
-      this.showValues(`rotZ ${((entry.viewer.rotation.y * 180) / Math.PI % 360).toFixed(0)}°`);
+      this.showValues(`rotZ ${(((entry.viewer.rotation.y * 180) / Math.PI) % 360).toFixed(0)}°`);
     } else if (this.tool === 'scale') {
       // Vertical hand travel = scale: +25 cm doubles, −25 cm halves.
       const f = Math.pow(2, delta.y / 0.25);
@@ -714,19 +827,17 @@ export class OrcaWorkspace extends xb.Script {
   /** Processes compatible with the machine (same nozzle-size token). */
   private processChoices(machine: string): string[] {
     const nozzle = /0\.\d+/.exec(machine)?.[0] ?? '';
-    return [...new Set(
-      this.catalog.profiles
-        .filter((p) => p.machineName === machine && (!nozzle || p.processName.includes(nozzle)))
-        .map((p) => p.processName),
-    )];
+    return [
+      ...new Set(
+        this.catalog.profiles
+          .filter((p) => p.machineName === machine && (!nozzle || p.processName.includes(nozzle)))
+          .map((p) => p.processName),
+      ),
+    ];
   }
 
   private filamentChoices(machine: string): string[] {
-    return [...new Set(
-      this.catalog.profiles
-        .filter((p) => p.machineName === machine)
-        .map((p) => p.filamentName),
-    )];
+    return [...new Set(this.catalog.profiles.filter((p) => p.machineName === machine).map((p) => p.filamentName))];
   }
 
   /** Snapshot for pickers: current selection + available choices. */
@@ -750,9 +861,10 @@ export class OrcaWorkspace extends xb.Script {
 
   /** Select a profile by exact names (2D pickers). Unknown parts keep current. */
   setProfileByNames(machine: string, process: string, filament: string) {
-    const next = this.catalog.profiles.find(
-      (x) => x.machineName === machine && x.processName === process && x.filamentName === filament,
-    ) ?? this.catalog.find(machine, process, filament);
+    const next =
+      this.catalog.profiles.find(
+        (x) => x.machineName === machine && x.processName === process && x.filamentName === filament,
+      ) ?? this.catalog.find(machine, process, filament);
     if (next) this.setProfile(next);
   }
 
@@ -777,21 +889,22 @@ export class OrcaWorkspace extends xb.Script {
     } else {
       filament = cycle(this.filamentChoices(machine), filament);
     }
-    const next = this.catalog.profiles.find(
-      (x) => x.machineName === machine && x.processName === process && x.filamentName === filament,
-    ) ?? this.catalog.find(machine, process, filament);
+    const next =
+      this.catalog.profiles.find(
+        (x) => x.machineName === machine && x.processName === process && x.filamentName === filament,
+      ) ?? this.catalog.find(machine, process, filament);
     if (next) this.setProfile(next);
   }
 
   public setProfile(p: SlicerProfile) {
     this.profile = p;
     const count = this.extruderCount;
-    
+
     // Ensure palette has at least 'count' slots
     while (this.palette.count() < count) {
       this.palette.add();
     }
-    
+
     const totalSlots = this.palette.count();
     this.headFilaments = Array(totalSlots).fill(p.filamentName);
     const defaultNozzles = (p.config['nozzle_diameter'] ?? '0.4').split(',');
@@ -802,7 +915,7 @@ export class OrcaWorkspace extends xb.Script {
 
     this.rebuildHeadsPanel();
     this.refreshXrProfileValues();
-    
+
     if (this.onProfileChanged) this.onProfileChanged();
     this.bedMm = bedSizeFromProfile(p.config);
     this.rebuildPlate();
@@ -815,7 +928,7 @@ export class OrcaWorkspace extends xb.Script {
     // Head pose isn't valid yet on the session-start callback; recenter on
     // the next update tick.
     this.needsRecenter = true;
-    
+
     // The TransformControls plane is infinite and invisible. If left in the scene,
     // it blocks ALL WebXR hand raycasts. We must physically remove it.
     if (this.transformControls) {
@@ -824,7 +937,7 @@ export class OrcaWorkspace extends xb.Script {
       this.transformControls.getHelper().visible = false;
       this.remove(this.transformControls.getHelper());
     }
-    
+
     // OrbitControls fights the WebXR camera. Disable it.
     if (this.orbitControls) {
       this.orbitControls.enabled = false;
@@ -833,7 +946,9 @@ export class OrcaWorkspace extends xb.Script {
     // Enable XR drag for models
     for (const m of this.models) {
       (m.viewer as any).draggable = true;
-      m.viewer.traverse((o) => { delete (o as any).draggingMode; });
+      m.viewer.traverse((o) => {
+        delete (o as any).draggingMode;
+      });
     }
 
     if (this.topStripCard) this.topStripCard.show();
@@ -854,7 +969,9 @@ export class OrcaWorkspace extends xb.Script {
     // Disable XR drag for models (rely on TransformControls in 2D)
     for (const m of this.models) {
       (m.viewer as any).draggable = false;
-      m.viewer.traverse((o) => { (o as any).draggingMode = xb.DragManager.DO_NOT_DRAG; });
+      m.viewer.traverse((o) => {
+        (o as any).draggingMode = xb.DragManager.DO_NOT_DRAG;
+      });
     }
 
     // Restore 2D selection
@@ -874,29 +991,13 @@ export class OrcaWorkspace extends xb.Script {
     this.needsRecenter = true;
   }
 
-  update(time: number, frame: XRFrame) {
+  update(_time: number, _frame: XRFrame) {
     if (this.needsRecenter) {
       const cam = xb.core.camera;
       if (cam.position.lengthSq() > 1e-6) {
         this.needsRecenter = false;
         this.recenterInFrontOfUser();
       }
-    }
-    
-    try {
-      for (const card of this.uiCore.cards) {
-        // Hidden uikit cards do not need layout/raycast work every XR frame.
-        // This matters on headset hardware because menu/profile cards can be
-        // large even while intentionally progressive-disclosed.
-        if (!card.visible) continue;
-        try {
-          card.update(time, frame);
-        } catch (e: any) {
-          console.error('UICard update error:', e);
-        }
-      }
-    } catch (e) {
-      console.error("UI Card update error:", e);
     }
   }
 
@@ -909,8 +1010,7 @@ export class OrcaWorkspace extends xb.Script {
     fwd.y = 0;
     if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, -1);
     fwd.normalize();
-    const pos = cam.getWorldPosition(new THREE.Vector3())
-      .addScaledVector(fwd, 0.85);
+    const pos = cam.getWorldPosition(new THREE.Vector3()).addScaledVector(fwd, 0.85);
     pos.y = Math.max(cam.getWorldPosition(new THREE.Vector3()).y - 0.45, 0.35);
     this.workspace.position.copy(pos);
     const yaw = Math.atan2(fwd.x, fwd.z) + Math.PI;
@@ -939,9 +1039,9 @@ export class OrcaWorkspace extends xb.Script {
     // Left tool rail.
     place(this.leftToolbarCard, left, 0.5, 0.15, -0.12);
     // Right column, curving toward the user as it fans out.
-    place(this.profileCard, right, 0.5, 0.2, -0.08);   // settings inspector (nearest)
+    place(this.profileCard, right, 0.5, 0.2, -0.08); // settings inspector (nearest)
     place(this.rightSidebarCard, right, 0.98, 0.15, 0.06); // all actions / menus
-    place(this.aiMcpCard, right, 1.42, 0.12, 0.16);    // device / AI (farthest)
+    place(this.aiMcpCard, right, 1.42, 0.12, 0.16); // device / AI (farthest)
     // Bottom-centre primary action bar, in front of and below the plate.
     place(this.bottomBarCard, right, 0, -0.35, 0.35);
   }
@@ -976,19 +1076,19 @@ export class OrcaWorkspace extends xb.Script {
 
     const plate = new THREE.Mesh(
       new THREE.BoxGeometry(sx, 0.006, sz),
-      new THREE.MeshStandardMaterial({ 
-        color: 0x0d141c, 
-        roughness: 0.2, 
+      new THREE.MeshStandardMaterial({
+        color: 0x0d141c,
+        roughness: 0.2,
         metalness: 0.8,
         transparent: true,
-        opacity: 0.85
+        opacity: 0.85,
       }),
     );
     plate.name = 'plate';
     plate.position.set(0, -0.003, 0);
     this.plateParts.add(plate);
 
-    const grid = new THREE.GridHelper(maxDim, 10, 0xFF6D00, 0xFF8A3D);
+    const grid = new THREE.GridHelper(maxDim, 10, 0xff6d00, 0xff8a3d);
     grid.position.set(0, 0.0002, 0);
     grid.scale.set(sx / maxDim, 1, sz / maxDim);
     (grid.material as THREE.Material).transparent = true;
@@ -999,7 +1099,7 @@ export class OrcaWorkspace extends xb.Script {
     const createRing = (radius: number, color: number, opacity: number, yOffset: number) => {
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(radius, 0.002, 16, 64),
-        new THREE.MeshBasicMaterial({ color, transparent: true, opacity })
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity }),
       );
       ring.rotation.x = -Math.PI / 2;
       ring.position.y = yOffset;
@@ -1008,13 +1108,13 @@ export class OrcaWorkspace extends xb.Script {
     };
 
     const rBase = maxDim * 0.6;
-    this.plateParts.add(createRing(rBase * 0.5, 0xFF8A3D, 0.5, -0.01));
-    this.plateParts.add(createRing(rBase * 0.75, 0xFFB74D, 0.55, -0.02));
-    this.plateParts.add(createRing(rBase, 0xFF6D00, 0.7, -0.03));
+    this.plateParts.add(createRing(rBase * 0.5, 0xff8a3d, 0.5, -0.01));
+    this.plateParts.add(createRing(rBase * 0.75, 0xffb74d, 0.55, -0.02));
+    this.plateParts.add(createRing(rBase, 0xff6d00, 0.7, -0.03));
 
     const dot = new THREE.Mesh(
       new THREE.CircleGeometry(0.01, 32),
-      new THREE.MeshBasicMaterial({ color: 0xFF6D00, transparent: true, opacity: 0.8 })
+      new THREE.MeshBasicMaterial({ color: 0xff6d00, transparent: true, opacity: 0.8 }),
     );
     dot.rotation.x = -Math.PI / 2;
     dot.position.y = 0.0003;
@@ -1023,11 +1123,11 @@ export class OrcaWorkspace extends xb.Script {
 
     const bar = new THREE.Mesh(
       new THREE.CapsuleGeometry(0.012, sx * 0.5),
-      new THREE.MeshStandardMaterial({ 
-        color: 0xFF6D00, 
+      new THREE.MeshStandardMaterial({
+        color: 0xff6d00,
         roughness: 0.3,
-        emissive: 0xFF6D00,
-        emissiveIntensity: 0.2
+        emissive: 0xff6d00,
+        emissiveIntensity: 0.2,
       }),
     );
     bar.name = 'grabBar';
@@ -1075,7 +1175,11 @@ export class OrcaWorkspace extends xb.Script {
     const box = new THREE.Mesh(
       new THREE.BoxGeometry(w, h, w),
       new THREE.MeshStandardMaterial({
-        color: 0x9e9e9e, roughness: 0.7, transparent: true, opacity: 0.35, depthWrite: false,
+        color: 0x9e9e9e,
+        roughness: 0.7,
+        transparent: true,
+        opacity: 0.35,
+        depthWrite: false,
       }),
     );
     box.raycast = () => {}; // decorative: never swallow picks
@@ -1139,7 +1243,10 @@ export class OrcaWorkspace extends xb.Script {
   /** Download the active config as JSON (File → Export Config). */
   public exportActiveConfig() {
     const json = this.buildConfigJson();
-    if (!json) { this.setStatus('No active profile to export.'); return; }
+    if (!json) {
+      this.setStatus('No active profile to export.');
+      return;
+    }
     if (this.onDownloadFile) this.onDownloadFile('orcaxr_config.json', json, 'application/json');
     this.setStatus('Exported config.');
   }
@@ -1147,7 +1254,10 @@ export class OrcaWorkspace extends xb.Script {
   /** Apply an imported config bundle over the current profile (File → Import Config). */
   public importConfig(text: string): boolean {
     const b = parseConfigJson(text);
-    if (!b) { this.setStatus('Not a valid config file.'); return false; }
+    if (!b) {
+      this.setStatus('Not a valid config file.');
+      return false;
+    }
     // Merge over the current config so a partial bundle still yields a working
     // profile (a full OrcaXR export replaces it outright).
     const merged = { ...(this.profile?.config ?? {}), ...b.config };
@@ -1218,21 +1328,24 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus(`Not a readable zip: ${(e as Error).message}`);
       return 0;
     }
-    const names = Object.keys(entries)
-      .filter((n) => /\.(stl|3mf|obj)$/i.test(n) && !n.startsWith('__MACOSX') && !n.includes('/._'));
+    const names = Object.keys(entries).filter(
+      (n) => /\.(stl|3mf|obj)$/i.test(n) && !n.startsWith('__MACOSX') && !n.includes('/._'),
+    );
     let count = 0;
     for (const n of names) {
       const u8 = entries[n];
-      const ab = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
+      const ab = ownedArrayBuffer(u8);
       try {
         if (await this.loadModelFromBuffer(n.split('/').pop() || n, ab)) count++;
       } catch (e) {
         console.warn('[zip] failed to load', n, e);
       }
     }
-    this.setStatus(count > 0
-      ? `Imported ${count} model${count === 1 ? '' : 's'} from archive.`
-      : 'No STL/3MF/OBJ models found in the archive.');
+    this.setStatus(
+      count > 0
+        ? `Imported ${count} model${count === 1 ? '' : 's'} from archive.`
+        : 'No STL/3MF/OBJ models found in the archive.',
+    );
     return count;
   }
 
@@ -1241,7 +1354,7 @@ export class OrcaWorkspace extends xb.Script {
     const t0 = performance.now();
     console.log('[orcaxr-load] fetching', url);
     const name = url.split('/').pop() ?? url;
-    
+
     if (url.toLowerCase().endsWith('.3mf')) {
       this.setStatus(`Downloading ${name}...`);
       this.setProgress(10);
@@ -1250,31 +1363,36 @@ export class OrcaWorkspace extends xb.Script {
 
       this.setStatus(`Extracting colors...`);
       this.setProgress(30);
-      await new Promise(r => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 50));
       const colors = await extract3mfColors(buf);
       const paint = extract3mfPaint(buf);
       await this.adoptPaletteFrom3mf(buf);
 
       this.setStatus(`Parsing 3MF geometry...`);
       this.setProgress(60);
-      await new Promise(r => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 50));
       const group = new ThreeMFLoader().parse(buf);
       console.log('[orcaxr-load] parsed 3MF in', Math.round(performance.now() - t0), 'ms');
 
       this.setStatus(`Building scene...`);
       this.setProgress(90);
-      await new Promise(r => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 50));
       this.loadModelFromGroup(group, name, colors ?? undefined, paint);
     } else {
       this.setStatus(`Downloading ${name}...`);
       this.setProgress(10);
       const raw = await new STLLoader().loadAsync(url);
-      console.log('[orcaxr-load] parsed STL in', Math.round(performance.now() - t0), 'ms,',
-        raw.getAttribute('position').count / 3, 'tris');
+      console.log(
+        '[orcaxr-load] parsed STL in',
+        Math.round(performance.now() - t0),
+        'ms,',
+        raw.getAttribute('position').count / 3,
+        'tris',
+      );
 
       this.setStatus(`Building scene...`);
       this.setProgress(90);
-      await new Promise(r => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 50));
       this.loadModelFromGeometry(raw, name);
     }
     this.setProgress(undefined);
@@ -1311,32 +1429,98 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Drop a calibration test model (temperature/overhang tower or XYZ cube). */
-  public addCalibration(kind: 'tower' | 'cube' | 'flow_pass1' | 'flow_pass2' | 'flow_yolo' | 'pressure_advance' | 'retraction' | 'max_flow' | 'vfa' | 'tolerance') {
+  public addCalibration(
+    kind:
+      | 'tower'
+      | 'cube'
+      | 'flow_pass1'
+      | 'flow_pass2'
+      | 'flow_yolo'
+      | 'pressure_advance'
+      | 'retraction'
+      | 'max_flow'
+      | 'vfa'
+      | 'tolerance',
+  ) {
     const gen = new CalibrationRampGenerator();
     let geo: THREE.BufferGeometry;
     let filename = `calib_${kind}.stl`;
     switch (kind) {
-      case 'tower': geo = gen.generateTemperatureTower(); filename = 'temp_tower.stl'; break;
-      case 'cube': geo = gen.generateCalibrationCube(); filename = 'calibration_cube.stl'; break;
-      case 'flow_pass1': geo = gen.generateFlowPass1(); break;
-      case 'flow_pass2': geo = gen.generateFlowPass2(); break;
-      case 'flow_yolo': geo = gen.generateFlowYolo(); break;
-      case 'pressure_advance': geo = gen.generatePressureAdvance(); break;
-      case 'retraction': geo = gen.generateRetraction(); break;
-      case 'max_flow': geo = gen.generateMaxFlow(); break;
-      case 'vfa': geo = gen.generateVfa(); break;
-      case 'tolerance': geo = gen.generateTolerance(); break;
+      case 'tower':
+        geo = gen.generateTemperatureTower();
+        filename = 'temp_tower.stl';
+        break;
+      case 'cube':
+        geo = gen.generateCalibrationCube();
+        filename = 'calibration_cube.stl';
+        break;
+      case 'flow_pass1':
+        geo = gen.generateFlowPass1();
+        break;
+      case 'flow_pass2':
+        geo = gen.generateFlowPass2();
+        break;
+      case 'flow_yolo':
+        geo = gen.generateFlowYolo();
+        break;
+      case 'pressure_advance':
+        geo = gen.generatePressureAdvance();
+        break;
+      case 'retraction':
+        geo = gen.generateRetraction();
+        break;
+      case 'max_flow':
+        geo = gen.generateMaxFlow();
+        break;
+      case 'vfa':
+        geo = gen.generateVfa();
+        break;
+      case 'tolerance':
+        geo = gen.generateTolerance();
+        break;
     }
     this.loadModelFromGeometry(geo.toNonIndexed(), filename);
     this.setStatus(`Added calibration ${kind}.`);
   }
 
   // ---- Multi-plate --------------------------------------------------------
-  public get plateCount(): number { return this.plates.length; }
+  public get plateCount(): number {
+    return this.plates.length;
+  }
   public getPlates(): { id: number; label: string; count: number; active: boolean }[] {
     return this.plates.map((p) => ({
-      id: p.id, label: p.label, count: p.models.length, active: p.id === this.activePlateId,
+      id: p.id,
+      label: p.label,
+      count: p.models.length,
+      active: p.id === this.activePlateId,
     }));
+  }
+
+  /** Read-only, serializable boundary used by diagnostics and permissioned automation. */
+  public getAutomationSnapshot(): WorkspaceAutomationSnapshot {
+    const plates = this.getPlates();
+    return {
+      workspaceMode: this.previewOn ? 'Preview' : 'Prepare',
+      activePlateId: this.activePlateId,
+      gizmoTool: this.tool,
+      selectedProfileId: this.profile?.id ?? null,
+      placedModelsTotalAllPlates: plates.reduce((sum, plate) => sum + plate.count, 0),
+      plates,
+      placedModels: this.models.map((model, index) => ({
+        id: model.viewer.uuid,
+        label: model.viewer.name || `Model ${index + 1}`,
+        plateId: this.activePlateId,
+        translateXmm: model.viewer.position.x / (MM * WORKSPACE_SCALE),
+        translateYmm: -model.viewer.position.z / (MM * WORKSPACE_SCALE),
+        translateZmm: model.viewer.position.y / (MM * WORKSPACE_SCALE),
+        rotXDeg: THREE.MathUtils.radToDeg(model.viewer.rotation.x),
+        rotYDeg: THREE.MathUtils.radToDeg(model.viewer.rotation.y),
+        rotZDeg: THREE.MathUtils.radToDeg(model.viewer.rotation.z),
+        scaleXPct: model.viewer.scale.x * 100,
+        scaleYPct: model.viewer.scale.y * 100,
+        scaleZPct: model.viewer.scale.z * 100,
+      })),
+    };
   }
 
   /** Create a new empty plate and switch to it. */
@@ -1375,11 +1559,14 @@ export class OrcaWorkspace extends xb.Script {
   public setActivePlate(id: number) {
     const target = this.plates.find((p) => p.id === id);
     if (!target) return;
-    if (id === this.activePlateId) { if (this.onPlatesChanged) this.onPlatesChanged(); return; }
+    if (id === this.activePlateId) {
+      if (this.onPlatesChanged) this.onPlatesChanged();
+      return;
+    }
     for (const m of this.models) m.viewer.visible = false; // hide current plate
     this.unselectModel();
     this.activePlateId = id;
-    for (const m of this.models) m.viewer.visible = true;  // show target plate
+    for (const m of this.models) m.viewer.visible = true; // show target plate
     this.setStatus(`Switched to ${target.label}.`);
     this.recomputePreflight();
     if (this.onSelectionChanged) this.onSelectionChanged(false);
@@ -1388,7 +1575,10 @@ export class OrcaWorkspace extends xb.Script {
 
   /** Delete a plate (defaults to the active one); refuses the last plate. */
   public deletePlate(id: number = this.activePlateId) {
-    if (this.plates.length <= 1) { this.setStatus('Cannot delete the last plate.'); return; }
+    if (this.plates.length <= 1) {
+      this.setStatus('Cannot delete the last plate.');
+      return;
+    }
     const idx = this.plates.findIndex((p) => p.id === id);
     if (idx === -1) return;
     const wasActive = id === this.activePlateId;
@@ -1416,7 +1606,10 @@ export class OrcaWorkspace extends xb.Script {
    * SimplifyModifier). `keepRatio` is the fraction of vertices to retain.
    */
   public simplifySelected(keepRatio = 0.5) {
-    if (!this.selectedModel) { this.setStatus('Select a model to simplify first.'); return; }
+    if (!this.selectedModel) {
+      this.setStatus('Select a model to simplify first.');
+      return;
+    }
     const entry = this.selectedModel;
     const before = entry.raw.getAttribute('position').count;
     const remove = Math.max(0, Math.floor(before * (1 - keepRatio)));
@@ -1473,59 +1666,71 @@ export class OrcaWorkspace extends xb.Script {
   /** Seed the filament palette from a 3MF's own filament_colour list, adopt
    *  its FullSpectrum virtual filaments, and pick up its prime-tower setup. */
   async adoptPaletteFrom3mf(buf: ArrayBuffer) {
+    // Importing anything after an as-authored project invalidates that source.
+    // A new FullSpectrum source is eligible only when it starts from the one
+    // empty default plate; otherwise its raw bytes omit existing workspace
+    // content and must never be used as a lossy shortcut.
+    const sourceWasExclusive =
+      this.plates.length === 1 && this.plates[0].id === this.activePlateId && this.plates[0].models.length === 0;
+    const hadFullSpectrumSource =
+      this.canonicalSliceRequiredReason !== null || (this.virtualFilaments.length > 0 && this.originalProject !== null);
+
+    let cfg: Record<string, unknown>;
     try {
       const unzipped = fflate.unzipSync(new Uint8Array(buf));
       const proj = unzipped['Metadata/project_settings.config'];
       if (!proj) return;
-      const cfg = JSON.parse(new TextDecoder().decode(proj));
-      const colors: string[] | undefined =
-        Array.isArray(cfg.filament_colour) && cfg.filament_colour.length
-          ? cfg.filament_colour
-          : undefined;
-      const types: string[] | undefined = Array.isArray(cfg.filament_type)
-        ? cfg.filament_type
-        : undefined;
-
-      // Virtual (mixed) filaments — set BEFORE the palette so its single
-      // onChanged notification repaints the UI with both lists in sync.
-      this.virtualFilaments = virtualFilamentsFromConfig(cfg);
-
-      // Prime/purge tower: mirror the project's setup on the plate.
-      const first = (v: unknown): string =>
-        Array.isArray(v) ? `${v[0] ?? ''}` : v == null ? '' : `${v}`;
-      this.projectPrimeTower = {
-        enabled: first(cfg.enable_prime_tower) === '1',
-        xMm: parseFloat(first(cfg.wipe_tower_x)) || 0,
-        yMm: parseFloat(first(cfg.wipe_tower_y)) || 0,
-        widthMm: parseFloat(first(cfg.prime_tower_width)) || 35,
-      };
-
-      if (colors) this.palette.setFrom(colors, types);
-      else if (this.palette.onChanged) this.palette.onChanged();
-      this.rebuildHeadsPanel();
-      this.rebuildWipeTowerGhost();
-
-      // Keep the project file itself: FullSpectrum projects slice from it
-      // (embedded virtual-filament config) — geometry alone can't express
-      // mixed filaments. -2 = "pending": loadModelFromGroup finalizes the
-      // plate-size snapshot once the project's merged model is actually on
-      // the plate (adopt runs before the loader parses the geometry).
-      this.originalProject = buf.slice(0);
-      this.projectModelCount = -2;
+      const parsed = JSON.parse(new TextDecoder().decode(proj));
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Metadata/project_settings.config must contain a JSON object');
+      }
+      cfg = parsed as Record<string, unknown>;
     } catch (e) {
-      console.warn('adoptPaletteFrom3mf failed', e);
+      throw new Error(`Could not read 3MF project settings: ${(e as Error).message}`, { cause: e });
     }
+
+    const colors: string[] | undefined =
+      Array.isArray(cfg.filament_colour) && cfg.filament_colour.length ? (cfg.filament_colour as string[]) : undefined;
+    const types: string[] | undefined = Array.isArray(cfg.filament_type) ? (cfg.filament_type as string[]) : undefined;
+    const virtualFilaments = virtualFilamentsFromConfig(cfg);
+    const first = (value: unknown): string =>
+      Array.isArray(value) ? `${value[0] ?? ''}` : value === null || value === undefined ? '' : `${value}`;
+
+    this.originalProject = buf.slice(0);
+    this.originalProjectSnapshot = null;
+    this.projectSnapshotPending = true;
+    this.projectSourceWasExclusive = sourceWasExclusive;
+    this.virtualFilaments = virtualFilaments;
+    this.projectPrimeTower = {
+      enabled: first(cfg.enable_prime_tower) === '1',
+      xMm: parseFloat(first(cfg.wipe_tower_x)) || 0,
+      yMm: parseFloat(first(cfg.wipe_tower_y)) || 0,
+      widthMm: parseFloat(first(cfg.prime_tower_width)) || 35,
+    };
+    this.canonicalSliceRequiredReason = combinedSemanticImportRequiresCanonicalSlice({
+      sourceWasExclusive,
+      hadFullSpectrumSource,
+      incomingVirtualFilamentCount: virtualFilaments.length,
+    })
+      ? 'Multiple imported project sources include FullSpectrum intent and require canonical live-project slicing.'
+      : null;
+
+    // Virtual rows are committed before the palette notification so both UIs
+    // observe one coherent material snapshot.
+    if (colors) this.palette.setFrom(colors, types);
+    else this.palette.onChanged?.();
+    this.rebuildHeadsPanel();
+    this.rebuildWipeTowerGhost();
   }
 
   /** Merge a Three.js Group (e.g. from 3MFLoader) into a single model, preserving colors. */
-  loadModelFromGroup(
-    group: THREE.Object3D,
-    name: string,
-    meshColors?: string[],
-    paint?: Paint3mfResult | null,
-  ) {
-    console.log(`[orcaxr-load] loadModelFromGroup called with meshColors:`, meshColors,
-      'paintedMeshes:', paint ? [...paint.meshes.keys()] : 'none');
+  loadModelFromGroup(group: THREE.Object3D, name: string, meshColors?: string[], paint?: Paint3mfResult | null) {
+    console.log(
+      `[orcaxr-load] loadModelFromGroup called with meshColors:`,
+      meshColors,
+      'paintedMeshes:',
+      paint ? [...paint.meshes.keys()] : 'none',
+    );
     const geometries: THREE.BufferGeometry[] = [];
     group.updateMatrixWorld(true);
 
@@ -1547,14 +1752,18 @@ export class OrcaWorkspace extends xb.Script {
           const baseHex = meshColors?.[meshIndex] ?? '#cccccc';
           const painted = applyPaintToPositions(
             geom.attributes.position.array as Float32Array,
-            meshPaint, paint!.palette, baseHex,
+            meshPaint,
+            paint!.palette,
+            baseHex,
           );
           if (painted) {
             const pg = new THREE.BufferGeometry();
             pg.setAttribute('position', new THREE.BufferAttribute(painted.positions, 3));
             pg.setAttribute('color', new THREE.BufferAttribute(painted.colors, 3));
             pg.computeVertexNormals();
-            console.log(`[paint3mf] mesh ${meshIndex}: ${geom.attributes.position.count / 3} tris → ${painted.positions.length / 9} painted tris`);
+            console.log(
+              `[paint3mf] mesh ${meshIndex}: ${geom.attributes.position.count / 3} tris → ${painted.positions.length / 9} painted tris`,
+            );
             geom = pg;
           }
         }
@@ -1566,7 +1775,7 @@ export class OrcaWorkspace extends xb.Script {
         const count = geom.attributes.position.count;
         const colors = new Float32Array(count * 3);
 
-        let colorObj = (child.material && child.material.color) ? child.material.color : new THREE.Color(0xffffff);
+        let colorObj = child.material && child.material.color ? child.material.color : new THREE.Color(0xffffff);
         if (meshPaint && geom.hasAttribute('color')) {
           colorObj = null; // paint already baked per-vertex colors
         } else if (meshColors && meshColors[meshIndex]) {
@@ -1607,19 +1816,31 @@ export class OrcaWorkspace extends xb.Script {
       console.log(`Merging ${geometries.length} geometries...`);
       for (let i = 0; i < geometries.length; i++) {
         const g = geometries[i];
-        console.log(`Geom ${i}: index=${g.index !== null}, position=${g.attributes.position?.itemSize}, normal=${g.attributes.normal?.itemSize}, color=${g.attributes.color?.itemSize}, attrs=${Object.keys(g.attributes).join(',')}`);
+        console.log(
+          `Geom ${i}: index=${g.index !== null}, position=${g.attributes.position?.itemSize}, normal=${g.attributes.normal?.itemSize}, color=${g.attributes.color?.itemSize}, attrs=${Object.keys(g.attributes).join(',')}`,
+        );
       }
       const merged = BufferGeometryUtils.mergeGeometries(geometries, false);
       if (merged) {
         console.log(`Merged successfully! Attributes: ${Object.keys(merged.attributes).join(',')}`);
         this.loadModelFromGeometry(merged, name);
-        // Finalize the project snapshot now that its model is on the plate:
-        // the FS project-slice path only engages while the plate still
-        // matches the file (see sliceNow).
-        if (this.projectModelCount === -2) this.projectModelCount = this.models.length;
+        // Finalize only for an exclusive import. An FS file added beside any
+        // existing workspace content remains visible/editable, but slicing it
+        // must wait for the canonical live-project coordinator.
+        if (this.projectSnapshotPending) {
+          this.originalProjectSnapshot = this.projectSourceWasExclusive ? this.captureSemanticProjectSnapshot() : null;
+          this.projectSnapshotPending = false;
+          this.projectSourceWasExclusive = false;
+        }
       } else {
-        console.error("mergeGeometries RETURNED NULL!");
+        console.error('mergeGeometries RETURNED NULL!');
       }
+    }
+    if (this.projectSnapshotPending) {
+      // A source whose geometry failed to load can never become an eligible
+      // snapshot during some later, unrelated group import.
+      this.projectSnapshotPending = false;
+      this.projectSourceWasExclusive = false;
     }
   }
 
@@ -1655,10 +1876,7 @@ export class OrcaWorkspace extends xb.Script {
       raw.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     }
 
-    const mesh = new THREE.Mesh(
-      raw,
-      new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5 }),
-    );
+    const mesh = new THREE.Mesh(raw, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5 }));
     mesh.name = 'modelMesh';
     // STL is mm / Z-up; display is meters / Y-up, magnified.
     const vis = MM * WORKSPACE_SCALE;
@@ -1666,15 +1884,11 @@ export class OrcaWorkspace extends xb.Script {
     mesh.rotation.x = -Math.PI / 2;
     raw.computeBoundingBox();
     const bb = raw.boundingBox!;
-    mesh.position.set(
-      (-(bb.min.x + bb.max.x) / 2) * vis,
-      -bb.min.z * vis,
-      ((bb.min.y + bb.max.y) / 2) * vis,
-    );
+    mesh.position.set((-(bb.min.x + bb.max.x) / 2) * vis, -bb.min.z * vis, ((bb.min.y + bb.max.y) / 2) * vis);
 
     const model = new xb.ModelViewer({});
     model.add(mesh);
-    model.setupBoundingBox();
+    void model.setupBoundingBox();
     // Big cylindrical raycast target around the model — the one grab
     // surface. What a drag DOES is decided by the active tool (modal,
     // like OrcaSlicer's toolbar), so no competing colliders exist.
@@ -1720,14 +1934,13 @@ export class OrcaWorkspace extends xb.Script {
   /** Build/replace the toolpath preview from sliced G-code and show it. */
   private showToolpathPreview(gcode: string) {
     this.clearToolpathPreview();
-    const filamentColors = this.palette.list().map((s) => s.color)
+    const filamentColors = this.palette
+      .list()
+      .map((s) => s.color)
       .concat(this.virtualFilaments.map((v) => v.color));
     const { geometry, segmentCount } = parseGcodeToolpath(gcode, filamentColors);
     if (segmentCount === 0) return;
-    const lines = new THREE.LineSegments(
-      geometry,
-      new THREE.LineBasicMaterial({ vertexColors: true }),
-    );
+    const lines = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ vertexColors: true }));
     lines.name = 'toolpath';
     lines.raycast = () => {}; // display-only; must never swallow pinches
     // Printer mm (Z-up, bed-corner origin) → workspace local (Y-up,
@@ -1771,19 +1984,24 @@ export class OrcaWorkspace extends xb.Script {
   nudgeSelected(dir: -1 | 1) {
     const target: THREE.Object3D | null =
       (this.transformControls?.object as THREE.Object3D | undefined) ??
-      this.models[this.models.length - 1]?.viewer ?? null;
-    if (!target) { this.setStatus('no model'); return; }
+      this.models[this.models.length - 1]?.viewer ??
+      null;
+    if (!target) {
+      this.setStatus('no model');
+      return;
+    }
     if (this.tool === 'rotate') {
       target.rotation.y += dir * (Math.PI / 12);
-      this.setStatus(`rotation: ${Math.round(THREE.MathUtils.euclideanModulo(THREE.MathUtils.radToDeg(target.rotation.y), 360))}°`);
+      this.setStatus(
+        `rotation: ${Math.round(THREE.MathUtils.euclideanModulo(THREE.MathUtils.radToDeg(target.rotation.y), 360))}°`,
+      );
     } else if (this.tool === 'scale') {
       const next = THREE.MathUtils.clamp(target.scale.x * (1 + dir * 0.1), 0.05, 40);
       target.scale.setScalar(next);
       this.setStatus(`scale: ${Math.round(next * 100)}%`);
     } else {
       const halfX = (this.bedMm.x * MM * WORKSPACE_SCALE) / 2;
-      target.position.x = THREE.MathUtils.clamp(
-        target.position.x + dir * 5 * MM * WORKSPACE_SCALE, -halfX, halfX);
+      target.position.x = THREE.MathUtils.clamp(target.position.x + dir * 5 * MM * WORKSPACE_SCALE, -halfX, halfX);
       this.setStatus(`x: ${Math.round(target.position.x / (MM * WORKSPACE_SCALE))} mm`);
     }
   }
@@ -1831,16 +2049,22 @@ export class OrcaWorkspace extends xb.Script {
     if (!panel) return;
     // Clear existing children.
     for (const { btn } of this.paintSwatches) {
-      try { panel.remove(btn); } catch { /* ignore */ }
+      try {
+        panel.remove(btn);
+      } catch {
+        /* ignore */
+      }
     }
     this.paintSwatches = [];
     this.palette.list().forEach((slot, i) => {
       const hex = slot.color;
       const swatch = new UIPanel({
-        width: 35, height: 35,
+        width: 35,
+        height: 35,
         cornerRadius: 4,
         fillColor: hex,
-        strokeWidth: 2, strokeColor: '#444444',
+        strokeWidth: 2,
+        strokeColor: '#444444',
         onClick: () => {
           this.activePaintColor.set(hex);
           this.setTool('paint');
@@ -1858,31 +2082,55 @@ export class OrcaWorkspace extends xb.Script {
    * the DOM shell (structural parity). Read at click time, so it can be set
    * after the (eagerly-built, hidden) cards are constructed.
    */
-  public actionContext?: ActionContext;
-  private toolButtons: { tool: string; btn: UIPanel; iconEl: UIIcon }[] = [];
+  private _actionContext?: ActionContext;
+  private actionStateUnsubscribe: (() => void) | null = null;
+  private readonly actionStateRefreshers = new Set<() => void>();
+
+  public get actionContext(): ActionContext | undefined {
+    return this._actionContext;
+  }
+
+  public set actionContext(value: ActionContext | undefined) {
+    this.actionStateUnsubscribe?.();
+    this.actionStateUnsubscribe = null;
+    this._actionContext = value;
+    if (!value) return;
+    // Exactly one subscription owns all XR capability-state refreshes. Panels
+    // register render callbacks even when they are constructed before main.ts
+    // injects the ActionContext.
+    this.actionStateUnsubscribe = value.ui.subscribe(() => {
+      for (const refresh of this.actionStateRefreshers) refresh();
+    });
+  }
+
+  private registerActionStateRefresher(refresh: () => void): void {
+    this.actionStateRefreshers.add(refresh);
+    if (this.actionContext) refresh();
+  }
+  private toolButtons: { action: Action; btn: UIPanel; iconEl: XRImage }[] = [];
   // Top-bar dropdown menu state (progressive disclosure of the full menu surface).
-  private menuBarButtons: { id: string; btn: any; label: any }[] = [];
+  private menuBarButtons: { id: string; btn: UIPanel; label: UIText }[] = [];
   private openMenuSection: string | null = null;
-  private menuPanelRoot: any = null;
-  private menuPanelTitle: any = null;
+  private menuPanelRoot: UIPanel | null = null;
+  private menuPanelTitle: UIText | null = null;
   private paintOptionsPanel?: UIPanel;
   private paintSwatches: { c: number; btn: UIPanel }[] = [];
-  private valueText: any = null;
-  private progressBar: any = null;
-  private progressContainer: any = null;
+  private valueText: UIText | null = null;
+  private progressBar: UIPanel | null = null;
+  private progressContainer: UIPanel | null = null;
   private loadButtonNode: THREE.Object3D | null = null;
-  private leftToolbarCard: any = null;
-  private rightSidebarCard: any = null;
-  private profileCard: any = null;
+  private leftToolbarCard: UICard | null = null;
+  private rightSidebarCard: UICard | null = null;
+  private profileCard: UICard | null = null;
   /** Live profile values shown in the XR profile picker. Icons alone made it
    * impossible to know what a click would change without looking back at 2D. */
-  private xrProfileValueLabels: { part: 'machine' | 'process' | 'filament'; value: any }[] = [];
-  private aiMcpCard: any = null;
+  private xrProfileValueLabels: { part: 'machine' | 'process' | 'filament'; value: UIText }[] = [];
+  private aiMcpCard: UICard | null = null;
   // Design's top HUD strip (wordmark + mode switch) and bottom action bar.
-  private topStripCard: any = null;
-  private bottomBarCard: any = null;
+  private topStripCard: UICard | null = null;
+  private bottomBarCard: UICard | null = null;
   private xrMode: 'prepare' | 'paint' | 'preview' = 'prepare';
-  private xrModeButtons: { mode: 'prepare' | 'paint' | 'preview'; btn: any; label: any }[] = [];
+  private xrModeButtons: { mode: 'prepare' | 'paint' | 'preview'; btn: UIPanel; label: UIText }[] = [];
 
   private addControlPanel() {
     // Card zones mirror the imported "OrcaXR Slicer" XR design, deliberately
@@ -1899,7 +2147,11 @@ export class OrcaWorkspace extends xb.Script {
     // Keep cards independent and identify the failing surface in the console;
     // this is especially important because uikit validates some props lazily.
     const build = (name: string, fn: () => void) => {
-      try { fn(); } catch (e) { console.error(`[orcaxr] XR ${name} panel failed to build`, e); }
+      try {
+        fn();
+      } catch (e) {
+        console.error(`[orcaxr] XR ${name} panel failed to build`, e);
+      }
     };
     build('top strip', () => this.addTopStrip());
     build('tool rail', () => this.addLeftToolbar());
@@ -1917,21 +2169,34 @@ export class OrcaWorkspace extends xb.Script {
   private addTopStrip() {
     const card = this.uiCore.createCard({
       name: 'TopStrip',
-      sizeX: 1.0, sizeY: 0.085, pixelSize: 0.0012,
+      sizeX: 1.0,
+      sizeY: 0.085,
+      pixelSize: 0.0012,
       position: new THREE.Vector3(0, PLATE_Y + 0.65, PLATE_Z - 0.1),
       width: 1000,
       alignItems: 'center',
       behaviors: [
-        new ManipulationBehavior({ draggable: true, faceCamera: true, manipulationMargin: 12, manipulationCornerRadius: 16 }),
+        new ManipulationBehavior({
+          draggable: true,
+          faceCamera: true,
+          manipulationMargin: 12,
+          manipulationCornerRadius: 16,
+        }),
       ],
     });
     card.visible = false;
     this.topStripCard = card;
 
     const root = new UIPanel({
-      width: '100%', flexDirection: 'row', alignItems: 'center',
-      fillColor: '#0d141cE6', cornerRadius: 14, padding: 12, gap: 12,
-      strokeWidth: 1, strokeColor: '#FF6D0066',
+      width: '100%',
+      flexDirection: 'row',
+      alignItems: 'center',
+      fillColor: '#0d141cE6',
+      cornerRadius: 14,
+      padding: 12,
+      gap: 12,
+      strokeWidth: 1,
+      strokeColor: '#FF6D0066',
     });
     card.add(root);
 
@@ -1945,13 +2210,25 @@ export class OrcaWorkspace extends xb.Script {
     // section's items. This is the full menu surface, progressively disclosed.
     const menuBar = new UIPanel({ flexDirection: 'row', alignItems: 'center', gap: 2 });
     this.menuBarButtons = [];
-    const reg = buildRegistry();
+    const reg = this.actionRegistry;
     for (const sec of MENU_SECTIONS) {
-      if (!reg.byDisclosure('menu').some((x) => x.menuSection === sec.id)) continue;
+      const hasMenuItems = reg.forSurface('xr-menu').some((x) => x.menuSection === sec.id);
+      const hasToolOverflow =
+        sec.id === 'tools' && reg.forSurface('xr-toolbar').some((action) => !xrToolRailActions([action]).length);
+      if (!hasMenuItems && !hasToolOverflow) continue;
       const btn = new UIPanel({
-        paddingLeft: 11, paddingRight: 11, paddingTop: 8, paddingBottom: 8,
-        cornerRadius: 8, fillColor: '#00000000', justifyContent: 'center', alignItems: 'center',
-        onClick: () => { this.toggleMenu(sec.id); return true; },
+        paddingLeft: 11,
+        paddingRight: 11,
+        paddingTop: 8,
+        paddingBottom: 8,
+        cornerRadius: 8,
+        fillColor: '#00000000',
+        justifyContent: 'center',
+        alignItems: 'center',
+        onClick: () => {
+          this.toggleMenu(sec.id);
+          return true;
+        },
       });
       const label = new UIText(sec.label, { fontSize: 15, fontWeight: 'bold', color: '#ffffff' });
       btn.add(label);
@@ -1963,18 +2240,33 @@ export class OrcaWorkspace extends xb.Script {
     root.add(new UIPanel({ flexGrow: 1 })); // spacer pushes mode switch + exit right
 
     const track = new UIPanel({
-      flexDirection: 'row', alignItems: 'center', gap: 4,
-      fillColor: '#0000004d', cornerRadius: 10, padding: 4,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      fillColor: '#0000004d',
+      cornerRadius: 10,
+      padding: 4,
     });
     const modes: { mode: 'prepare' | 'paint' | 'preview'; label: string }[] = [
-      { mode: 'prepare', label: 'Prepare' }, { mode: 'paint', label: 'Paint' }, { mode: 'preview', label: 'Preview' },
+      { mode: 'prepare', label: 'Prepare' },
+      { mode: 'paint', label: 'Paint' },
+      { mode: 'preview', label: 'Preview' },
     ];
     this.xrModeButtons = [];
     for (const m of modes) {
       const btn = new UIPanel({
-        paddingLeft: 14, paddingRight: 14, paddingTop: 8, paddingBottom: 8,
-        cornerRadius: 8, fillColor: '#00000000', justifyContent: 'center', alignItems: 'center',
-        onClick: () => { this.setXrMode(m.mode); return true; },
+        paddingLeft: 14,
+        paddingRight: 14,
+        paddingTop: 8,
+        paddingBottom: 8,
+        cornerRadius: 8,
+        fillColor: '#00000000',
+        justifyContent: 'center',
+        alignItems: 'center',
+        onClick: () => {
+          this.setXrMode(m.mode);
+          return true;
+        },
       });
       const label = new UIText(m.label, { fontSize: 16, fontWeight: 'bold', color: '#ffffff' });
       btn.add(label);
@@ -1989,14 +2281,27 @@ export class OrcaWorkspace extends xb.Script {
     // standing relative to the workspace.
     const utility = (icon: string, hint: string, onClick: () => void) => {
       const btn = new UIPanel({
-        width: 38, height: 38, cornerRadius: 9, fillColor: '#ffffff14',
-        strokeWidth: 1, strokeColor: '#ffffff1a', justifyContent: 'center', alignItems: 'center',
-        onClick: () => { onClick(); return true; },
-        onHoverEnter: () => { btn.fillColor = '#ffffff26'; },
-        onHoverExit: () => { btn.fillColor = '#ffffff14'; },
+        width: 38,
+        height: 38,
+        cornerRadius: 9,
+        fillColor: '#ffffff14',
+        strokeWidth: 1,
+        strokeColor: '#ffffff1a',
+        justifyContent: 'center',
+        alignItems: 'center',
+        onClick: () => {
+          onClick();
+          return true;
+        },
+        onHoverEnter: () => {
+          btn.setFillColor('#ffffff26');
+        },
+        onHoverExit: () => {
+          btn.setFillColor('#ffffff14');
+        },
       });
       (btn as any).userData = { hint };
-      btn.add(new UIIcon(xrIcon(icon), { color: '#dfe4ea', width: 20, height: 20 }));
+      btn.add(new XRImage(xrIcon(icon), { color: '#dfe4ea', width: 20, height: 20 }));
       root.add(btn);
     };
     utility('tune', 'Profile settings', () => this.toggleProfilePanel());
@@ -2006,14 +2311,30 @@ export class OrcaWorkspace extends xb.Script {
     });
 
     const exitBtn = new UIPanel({
-      paddingLeft: 13, paddingRight: 13, paddingTop: 8, paddingBottom: 8,
-      cornerRadius: 8, fillColor: '#e5393526', strokeWidth: 1, strokeColor: '#e5393559',
-      flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center',
-      onClick: () => { xb.core.renderer.xr.getSession()?.end(); return true; },
-      onHoverEnter: () => { exitBtn.fillColor = '#e5393559'; },
-      onHoverExit: () => { exitBtn.fillColor = '#e5393526'; },
+      paddingLeft: 13,
+      paddingRight: 13,
+      paddingTop: 8,
+      paddingBottom: 8,
+      cornerRadius: 8,
+      fillColor: '#e5393526',
+      strokeWidth: 1,
+      strokeColor: '#e5393559',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      justifyContent: 'center',
+      onClick: () => {
+        void xb.core.renderer.xr.getSession()?.end();
+        return true;
+      },
+      onHoverEnter: () => {
+        exitBtn.setFillColor('#e5393559');
+      },
+      onHoverExit: () => {
+        exitBtn.setFillColor('#e5393526');
+      },
     });
-    exitBtn.add(new UIIcon(xrIcon('logout'), { color: '#ff8a80', width: 18, height: 18, flexShrink: 0 }));
+    exitBtn.add(new XRImage(xrIcon('logout'), { color: '#ff8a80', width: 18, height: 18, flexShrink: 0 }));
     exitBtn.add(new UIText('Exit', { fontSize: 15, fontWeight: 'bold', color: '#ff8a80', flexShrink: 0 }));
     root.add(exitBtn);
 
@@ -2024,14 +2345,17 @@ export class OrcaWorkspace extends xb.Script {
   /** Open the dropdown for `id` (or close it if already open). Only one section
    *  is ever visible — the panel is short and anchored just under the menu bar. */
   private toggleMenu(id: string) {
-    if (this.openMenuSection === id) { this.closeMenu(); return; }
+    if (this.openMenuSection === id) {
+      this.closeMenu();
+      return;
+    }
     this.openMenuSection = id;
     this.populateMenuPanel(id);
     const c = this.rightSidebarCard;
     if (c && this.topStripCard) {
       // Anchor the dropdown just below the top strip, matching its facing, but pop it out slightly in Z.
       c.position.copy(this.topStripCard.position);
-      c.position.y -= 0.40;
+      c.position.y -= 0.4;
       c.position.z += 0.05;
       c.quaternion.copy(this.topStripCard.quaternion);
       c.updateMatrixWorld(true);
@@ -2049,8 +2373,8 @@ export class OrcaWorkspace extends xb.Script {
   private refreshMenuBar() {
     for (const m of this.menuBarButtons) {
       const active = m.id === this.openMenuSection;
-      m.btn.fillColor = active ? '#ff6d0033' : '#00000000';
-      m.label.color = active ? '#FFB74D' : '#ffffff';
+      m.btn.setFillColor(active ? '#ff6d0033' : '#00000000');
+      m.label.setColor(active ? '#FFB74D' : '#ffffff');
     }
   }
 
@@ -2058,31 +2382,71 @@ export class OrcaWorkspace extends xb.Script {
   private populateMenuPanel(id: string) {
     const root = this.menuPanelRoot;
     if (!root) return;
-    for (const c of [...root.children]) { try { root.remove(c); } catch { /* detached */ } }
+    for (const c of [...root.children]) {
+      try {
+        root.remove(c);
+      } catch {
+        /* detached */
+      }
+    }
     const sec = MENU_SECTIONS.find((s) => s.id === id);
     if (this.menuPanelTitle) this.menuPanelTitle.setText(sec ? sec.label : 'Menu');
-    const reg = buildRegistry();
-    const items = reg.byDisclosure('menu').filter((x) => x.menuSection === id);
-    for (const a of items) {
-      const soon = !!a.comingSoon;
-      const restFill = soon ? '#ffffff08' : '#ffffff12';
+    const reg = this.actionRegistry;
+    const entries: { action: Action; surface: ActionSurface }[] = reg
+      .forSurface('xr-menu')
+      .filter((action) => action.menuSection === id)
+      .map((action) => ({ action, surface: 'xr-menu' as const }));
+    if (id === 'tools') {
+      for (const action of reg.forSurface('xr-toolbar')) {
+        if (xrToolRailActions([action]).length === 0) {
+          entries.push({ action, surface: 'xr-toolbar' });
+        }
+      }
+    }
+    for (const { action: a, surface } of entries) {
+      const availability = this.actionContext
+        ? reg.availability(a, surface, this.actionContext.ui.get())
+        : { state: 'disabled' as const, reason: 'Workspace is still initializing.' };
+      const enabled = availability.state === 'enabled';
+      const unavailable = a.capability.status === 'unavailable' || a.capability.status === 'blocked';
+      const restFill = enabled ? '#ffffff12' : '#ffffff08';
       const btn = new UIPanel({
-        width: '100%', paddingLeft: 12, paddingRight: 12, paddingTop: 11, paddingBottom: 11,
-        flexDirection: 'row', alignItems: 'center', gap: 12, cornerRadius: 9,
-        fillColor: restFill, opacity: soon ? 0.5 : 1,
-        strokeWidth: 1, strokeColor: '#ffffff12',
+        width: '100%',
+        paddingLeft: 12,
+        paddingRight: 12,
+        paddingTop: 11,
+        paddingBottom: 11,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        cornerRadius: 9,
+        fillColor: restFill,
+        opacity: enabled ? 1 : 0.5,
+        strokeWidth: 1,
+        strokeColor: '#ffffff12',
         onClick: () => {
-          if (soon) return true;
-          this.closeMenu();
-          if (this.actionContext) void a.run(this.actionContext);
+          if (enabled) this.closeMenu();
+          if (this.actionContext) {
+            void reg.invoke(a, surface, this.actionContext, this.actionContext.ui.get());
+          }
           return true;
         },
-        onHoverEnter: () => { if (!soon) btn.fillColor = '#ffffff24'; },
-        onHoverExit: () => { if (!soon) btn.fillColor = restFill; },
+        onHoverEnter: () => {
+          if (enabled) btn.setFillColor('#ffffff24');
+        },
+        onHoverExit: () => {
+          btn.setFillColor(restFill);
+        },
       });
-      btn.add(new UIIcon(xrIcon(a.icon), { color: soon ? '#8a94a0' : '#dfe4ea', width: 20, height: 20, flexShrink: 0 }));
-      btn.add(new UIText(a.label, { fontSize: 17, color: soon ? '#8a94a0' : '#eef2f6', flexGrow: 1, flexShrink: 1 }));
-      if (soon) btn.add(new UIText('SOON', { fontSize: 11, fontWeight: 'bold', color: '#ffb74d', flexShrink: 0 }));
+      btn.userData.hint = availability.state === 'disabled' ? availability.reason : a.hint;
+      btn.add(
+        new XRImage(xrIcon(a.icon), { color: enabled ? '#dfe4ea' : '#8a94a0', width: 20, height: 20, flexShrink: 0 }),
+      );
+      btn.add(
+        new UIText(a.label, { fontSize: 17, color: enabled ? '#eef2f6' : '#8a94a0', flexGrow: 1, flexShrink: 1 }),
+      );
+      if (unavailable)
+        btn.add(new UIText('UNAVAILABLE', { fontSize: 10, fontWeight: 'bold', color: '#ffb74d', flexShrink: 0 }));
       root.add(btn);
     }
   }
@@ -2110,8 +2474,8 @@ export class OrcaWorkspace extends xb.Script {
   private refreshXrMode() {
     for (const m of this.xrModeButtons) {
       const active = m.mode === this.xrMode;
-      m.btn.fillColor = active ? '#FF6D00' : '#00000000';
-      m.label.color = active ? '#000000' : '#ffffff';
+      m.btn.setFillColor(active ? '#FF6D00' : '#00000000');
+      m.label.setColor(active ? '#000000' : '#ffffff');
     }
   }
 
@@ -2120,58 +2484,100 @@ export class OrcaWorkspace extends xb.Script {
   private addBottomBar() {
     const card = this.uiCore.createCard({
       name: 'BottomBar',
-      sizeX: 0.66, sizeY: 0.17, pixelSize: 0.0012,
+      sizeX: 0.66,
+      sizeY: 0.17,
+      pixelSize: 0.0012,
       position: new THREE.Vector3(0, PLATE_Y - 0.25, PLATE_Z + 0.15),
       width: 640,
       alignItems: 'center',
       behaviors: [
-        new ManipulationBehavior({ draggable: true, faceCamera: true, manipulationMargin: 12, manipulationCornerRadius: 16 }),
+        new ManipulationBehavior({
+          draggable: true,
+          faceCamera: true,
+          manipulationMargin: 12,
+          manipulationCornerRadius: 16,
+        }),
       ],
     });
     card.visible = false;
     this.bottomBarCard = card;
 
     const root = new UIPanel({
-      width: '100%', flexDirection: 'column', alignItems: 'stretch', gap: 8,
-      fillColor: '#0d141cE6', cornerRadius: 18, padding: 12,
-      strokeWidth: 1, strokeColor: '#ffffff14',
+      width: '100%',
+      flexDirection: 'column',
+      alignItems: 'stretch',
+      gap: 8,
+      fillColor: '#0d141cE6',
+      cornerRadius: 18,
+      padding: 12,
+      strokeWidth: 1,
+      strokeColor: '#ffffff14',
     });
     card.add(root);
 
     const btnRow = new UIPanel({
-      width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+      width: '100%',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
     });
     root.add(btnRow);
 
-    const reg = buildRegistry();
-    const runReg = (a: Action) => { if (this.actionContext) void a.run(this.actionContext); };
-    const primaryHandles: { action: Action; btn: UIPanel; icon: UIIcon; primary: boolean; restFill: string }[] = [];
-    for (const a of reg.byDisclosure('primary')) {
+    const reg = this.actionRegistry;
+    const runReg = (a: Action) => {
+      if (this.actionContext) {
+        void reg.invoke(a, 'xr-primary', this.actionContext, this.actionContext.ui.get());
+      }
+    };
+    const primaryHandles: { action: Action; btn: UIPanel; icon: XRImage; primary: boolean; restFill: string }[] = [];
+    for (const a of reg.forSurface('xr-primary')) {
       const primary = a.id === 'slice_active_plate';
       const restFill = '#ffffff14';
       const btn = new UIPanel({
-        paddingLeft: 18, paddingRight: 18, paddingTop: 12, paddingBottom: 12,
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-        cornerRadius: 10, fillColor: primary ? '#ffb74d' : restFill,
-        strokeWidth: primary ? 0 : 1, strokeColor: primary ? '#ffb74d' : '#ffffff1a',
+        paddingLeft: 18,
+        paddingRight: 18,
+        paddingTop: 12,
+        paddingBottom: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        cornerRadius: 10,
+        fillColor: primary ? '#ffb74d' : restFill,
+        strokeWidth: primary ? 0 : 1,
+        strokeColor: primary ? '#ffb74d' : '#ffffff1a',
         onClick: () => {
-          if (!this.actionContext || !ActionRegistry.enabled(a, this.actionContext.ui.get())) {
-            this.setStatus(a.id === 'slice_active_plate' ? 'Load a model to slice.' : (a.hint ?? `${a.label} is not ready yet.`));
-            return true;
-          }
           runReg(a);
           return true;
         },
         onHoverEnter: () => {
-          if (this.actionContext && ActionRegistry.enabled(a, this.actionContext.ui.get())) {
-            btn.fillColor = primary ? '#ff6d00' : '#ffffff26';
+          if (
+            this.actionContext &&
+            reg.availability(a, 'xr-primary', this.actionContext.ui.get()).state === 'enabled'
+          ) {
+            btn.setFillColor(primary ? '#ff6d00' : '#ffffff26');
           }
         },
-        onHoverExit: () => { /* active-aware color restored by refresh below */ },
+        onHoverExit: () => {
+          /* active-aware color restored by refresh below */
+        },
       });
-      const icon = new UIIcon(xrIcon(a.icon), { color: primary ? '#000000' : '#ffffff', width: 22, height: 22, flexShrink: 0 });
+      const icon = new XRImage(xrIcon(a.icon), {
+        color: primary ? '#000000' : '#ffffff',
+        width: 22,
+        height: 22,
+        flexShrink: 0,
+      });
       btn.add(icon);
-      btn.add(new UIText(a.label, { fontSize: 18, fontWeight: 'bold', color: primary ? '#000000' : '#ffffff', flexShrink: 0 }));
+      btn.add(
+        new UIText(a.label, {
+          fontSize: 18,
+          fontWeight: 'bold',
+          color: primary ? '#000000' : '#ffffff',
+          flexShrink: 0,
+        }),
+      );
       primaryHandles.push({ action: a, btn, icon, primary, restFill });
       // Load must end the immersive session before the file picker (browsers
       // suppress dialogs in XR); the per-frame ray probe watches this node.
@@ -2185,13 +2591,13 @@ export class OrcaWorkspace extends xb.Script {
       if (!this.actionContext) return;
       const state = this.actionContext.ui.get();
       for (const h of primaryHandles) {
-        const enabled = ActionRegistry.enabled(h.action, state);
-        h.btn.opacity = enabled ? 1 : 0.38;
-        h.btn.fillColor = enabled ? (h.primary ? '#ffb74d' : h.restFill) : '#ffffff08';
-        h.icon.color = enabled ? (h.primary ? '#000000' : '#ffffff') : '#8a94a0';
+        const enabled = reg.availability(h.action, 'xr-primary', state).state === 'enabled';
+        h.btn.setProperties({ opacity: enabled ? 1 : 0.38 });
+        h.btn.setFillColor(enabled ? (h.primary ? '#ffb74d' : h.restFill) : '#ffffff08');
+        h.icon.setColor(enabled ? (h.primary ? '#000000' : '#ffffff') : '#8a94a0');
       }
     };
-    this.actionContext?.ui.subscribe(refreshPrimary);
+    this.registerActionStateRefresher(refreshPrimary);
 
     // Live status line + slice progress (relocated here from the old action
     // panel so it's always visible, matching the design's bottom status text).
@@ -2216,9 +2622,7 @@ export class OrcaWorkspace extends xb.Script {
       width: 500,
       alignItems: 'center',
       justifyContent: 'center',
-      behaviors: [
-        new ManipulationBehavior({ draggable: true, faceCamera: true, constrainToCameraY: false }),
-      ],
+      behaviors: [new ManipulationBehavior({ draggable: true, faceCamera: true })],
     });
     // `createCard` already registers the card with UICore. There is no
     // separate uiGroup in the web workspace; attempting to add it again used
@@ -2230,10 +2634,10 @@ export class OrcaWorkspace extends xb.Script {
       flexDirection: 'column',
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: '#1e1e1eed', // dark glassmorphism
+      fillColor: '#1e1e1eed', // dark glassmorphism
       cornerRadius: 16,
-      borderWidth: 1,
-      borderColor: '#ffffff1a',
+      strokeWidth: 1,
+      strokeColor: '#ffffff1a',
       gap: 16,
     });
     card.add(root);
@@ -2243,7 +2647,13 @@ export class OrcaWorkspace extends xb.Script {
     this.sliceModalText = new UIText('Initializing...', { fontSize: 16, color: '#a0aab5', textAlign: 'center' });
     root.add(this.sliceModalText);
 
-    this.sliceModalProgressContainer = new UIPanel({ width: '100%', height: 8, fillColor: '#ffffff1a', cornerRadius: 4, marginTop: 12 });
+    this.sliceModalProgressContainer = new UIPanel({
+      width: '100%',
+      height: 8,
+      fillColor: '#ffffff1a',
+      cornerRadius: 4,
+      marginTop: 12,
+    });
     this.sliceModalBar = new UIPanel({ width: '0%', height: 8, fillColor: '#ffb74d', cornerRadius: 4 });
     this.sliceModalProgressContainer.add(this.sliceModalBar);
     this.sliceModalProgressContainer.visible = false;
@@ -2268,8 +2678,8 @@ export class OrcaWorkspace extends xb.Script {
           faceCamera: true,
           manipulationMargin: 10,
           manipulationCornerRadius: 12,
-        })
-      ]
+        }),
+      ],
     });
     card.visible = false;
     this.leftToolbarCard = card;
@@ -2287,7 +2697,7 @@ export class OrcaWorkspace extends xb.Script {
       // This rail is intentionally finite: the full action catalogue lives in
       // the top menu panel. A scrolling column of large spatial buttons is
       // unusable in-headset and wastes layout work every frame.
-      overflow: 'hidden'
+      overflow: 'hidden',
     });
     card.add(root);
 
@@ -2297,9 +2707,16 @@ export class OrcaWorkspace extends xb.Script {
     // Tool rail rendered from the shared ActionRegistry — the same catalogue the
     // DOM shell renders — so the two shells can't drift. Clicks run through the
     // injected ActionContext (read at click time; set by main.ts after build).
-    const factory: XrUiFactory = { Panel: UIPanel as never, Icon: UIIcon as never };
-    const runAction = (a: Action) => { if (this.actionContext) void a.run(this.actionContext); };
-    const toolbar = buildRegistry().byDisclosure('toolbar');
+    const factory: XrUiFactory<UIPanel, XRImage> = {
+      createPanel: (properties) => new UIPanel(properties as UIPanelProperties),
+      createIcon: (icon, properties) => new XRImage(icon, properties as XRImageProperties),
+    };
+    const runAction = (a: Action) => {
+      if (this.actionContext) {
+        void this.actionRegistry.invoke(a, 'xr-toolbar', this.actionContext, this.actionContext.ui.get());
+      }
+    };
+    const toolbar = xrToolRailActions(this.actionRegistry.forSurface('xr-toolbar'));
 
     // Modal tool gizmos (move/rotate/scale/lay-flat/paint) — the `.tool` actions.
     root.add(heading('TOOLS'));
@@ -2308,13 +2725,16 @@ export class OrcaWorkspace extends xb.Script {
       const h = renderXrActionButton(a, runAction, factory, {
         size: 64,
         iconSize: 34,
+        enabled: this.actionContext
+          ? this.actionRegistry.availability(a, 'xr-toolbar', this.actionContext.ui.get()).state === 'enabled'
+          : false,
         onHoverExit: () => this.refreshToolButtons(),
       });
       root.add(h.btn);
       this.toolButtons.push({
-        tool: a.tool,
-        btn: h.btn as unknown as UIPanel,
-        iconEl: h.iconEl as unknown as UIIcon,
+        action: a,
+        btn: h.btn,
+        iconEl: h.iconEl,
       });
     }
 
@@ -2328,8 +2748,12 @@ export class OrcaWorkspace extends xb.Script {
         size: 64,
         iconSize: 34,
         danger: a.id === 'delete_models',
+        enabled: this.actionContext
+          ? this.actionRegistry.availability(a, 'xr-toolbar', this.actionContext.ui.get()).state === 'enabled'
+          : false,
       });
       root.add(h.btn);
+      this.toolButtons.push({ action: a, btn: h.btn, iconEl: h.iconEl });
     }
 
     // Paint colours — the filament slots doubling as the paint palette. Fixed
@@ -2350,6 +2774,7 @@ export class OrcaWorkspace extends xb.Script {
       this.rebuildPaintSwatches();
       if (this.onPaletteChanged) this.onPaletteChanged();
     };
+    this.registerActionStateRefresher(() => this.refreshToolButtons());
   }
 
   /** The dropdown panel the top-bar menu triggers populate one section at a
@@ -2370,8 +2795,8 @@ export class OrcaWorkspace extends xb.Script {
           faceCamera: true,
           manipulationMargin: 16,
           manipulationCornerRadius: 16,
-        })
-      ]
+        }),
+      ],
     });
     card.visible = false;
     this.rightSidebarCard = card; // reused as the toggled dropdown panel
@@ -2386,23 +2811,38 @@ export class OrcaWorkspace extends xb.Script {
       strokeWidth: 1,
       strokeColor: '#ffffff14',
       overflow: 'scroll',
-      height: '100%'
+      height: '100%',
     });
     card.add(root);
 
     const header = new UIPanel({
-      width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 4,
+      width: '100%',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingBottom: 4,
     });
     this.menuPanelTitle = new UIText('Menu', { fontSize: 22, fontWeight: 'bold', color: '#ffffff' });
     header.add(this.menuPanelTitle);
     const closeBtn = new UIPanel({
-      width: 34, height: 34, justifyContent: 'center', alignItems: 'center',
-      cornerRadius: 8, fillColor: '#ffffff14',
-      onClick: () => { this.closeMenu(); return true; },
-      onHoverEnter: () => { closeBtn.fillColor = '#ffffff26'; },
-      onHoverExit: () => { closeBtn.fillColor = '#ffffff14'; },
+      width: 34,
+      height: 34,
+      justifyContent: 'center',
+      alignItems: 'center',
+      cornerRadius: 8,
+      fillColor: '#ffffff14',
+      onClick: () => {
+        this.closeMenu();
+        return true;
+      },
+      onHoverEnter: () => {
+        closeBtn.setFillColor('#ffffff26');
+      },
+      onHoverExit: () => {
+        closeBtn.setFillColor('#ffffff14');
+      },
     });
-    closeBtn.add(new UIIcon('close', { color: '#ffffff', width: 18, height: 18 }));
+    closeBtn.add(new XRImage(xrIcon('close'), { color: '#ffffff', width: 18, height: 18 }));
     header.add(closeBtn);
     root.add(header);
 
@@ -2426,8 +2866,8 @@ export class OrcaWorkspace extends xb.Script {
           faceCamera: true,
           manipulationMargin: 16,
           manipulationCornerRadius: 16,
-        })
-      ]
+        }),
+      ],
     });
     card.visible = false;
     this.profileCard = card;
@@ -2442,7 +2882,7 @@ export class OrcaWorkspace extends xb.Script {
       strokeWidth: 1,
       strokeColor: '#ffffff14',
       overflow: 'scroll',
-      height: '100%'
+      height: '100%',
     });
     card.add(root);
 
@@ -2455,22 +2895,36 @@ export class OrcaWorkspace extends xb.Script {
     const profPanel = new UIPanel({ width: '100%', flexDirection: 'column', gap: 8 });
     const mkProf = (part: 'machine' | 'process' | 'filament', icon: string, title: string) => {
       const btn = new UIPanel({
-        width: '100%', minHeight: 58, paddingLeft: 12, paddingRight: 12,
-        justifyContent: 'flex-start', alignItems: 'center', flexDirection: 'row', gap: 12,
+        width: '100%',
+        minHeight: 58,
+        paddingLeft: 12,
+        paddingRight: 12,
+        justifyContent: 'flex-start',
+        alignItems: 'center',
+        flexDirection: 'row',
+        gap: 12,
         cornerRadius: 8,
         fillColor: '#ffffff14',
-        strokeWidth: 1, strokeColor: '#ffffff1a',
-        onClick: () => { this.cycleProfilePart(part); return true; },
-        onHoverEnter: () => { btn.fillColor = '#ffffff26'; },
-        onHoverExit: () => { btn.fillColor = '#ffffff14'; }
+        strokeWidth: 1,
+        strokeColor: '#ffffff1a',
+        onClick: () => {
+          this.cycleProfilePart(part);
+          return true;
+        },
+        onHoverEnter: () => {
+          btn.setFillColor('#ffffff26');
+        },
+        onHoverExit: () => {
+          btn.setFillColor('#ffffff14');
+        },
       });
-      btn.add(new UIIcon(xrIcon(icon), { color: '#cccccc', width: 24, height: 24 }));
+      btn.add(new XRImage(xrIcon(icon), { color: '#cccccc', width: 24, height: 24 }));
       const copy = new UIPanel({ flexDirection: 'column', flexGrow: 1, gap: 2 });
       copy.add(new UIText(title.toUpperCase(), { fontSize: 11, fontWeight: 'bold', color: '#8a94a0' }));
       const value = new UIText('Loading...', { fontSize: 16, fontWeight: 'bold', color: '#ffffff', flexShrink: 1 });
       copy.add(value);
       btn.add(copy);
-      btn.add(new UIIcon('chevron_right', { color: '#ffb74d', width: 22, height: 22, flexShrink: 0 }));
+      btn.add(new XRImage(xrIcon('chevron_right'), { color: '#ffb74d', width: 22, height: 22, flexShrink: 0 }));
       this.xrProfileValueLabels.push({ part, value });
       profPanel.add(btn);
     };
@@ -2478,7 +2932,7 @@ export class OrcaWorkspace extends xb.Script {
     mkProf('process', 'tune', 'Process');
     mkProf('filament', 'filament', 'Filament');
     root.add(profPanel);
-    
+
     this.headsContainer = new UIPanel({ width: '100%', flexDirection: 'column', gap: 10 });
     root.add(this.headsContainer);
     this.refreshXrProfileValues();
@@ -2487,27 +2941,33 @@ export class OrcaWorkspace extends xb.Script {
   private toggleProfilePanel() {
     if (!this.profileCard) return;
     const visible = !!this.profileCard.visible;
-    if (visible) this.profileCard.hide(); else this.profileCard.show();
+    if (visible) this.profileCard.hide();
+    else this.profileCard.show();
     this.closeMenu();
   }
 
   private refreshXrProfileValues() {
     const p = this.profile;
     for (const item of this.xrProfileValueLabels) {
-      const value = !p ? 'Loading...' : item.part === 'machine' ? p.machineName
-        : item.part === 'process' ? p.processName : p.filamentName;
+      const value = !p
+        ? 'Loading...'
+        : item.part === 'machine'
+          ? p.machineName
+          : item.part === 'process'
+            ? p.processName
+            : p.filamentName;
       item.value.setText(value);
     }
   }
 
-  public setTool(tool: 'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint') {
+  public setTool(tool: WorkspaceGizmoTool) {
     this.tool = tool;
     this.refreshToolButtons();
     if (this.tool === 'lay_on_face') {
       this.setStatus('Select a face on the model to lay flat');
     } else {
       this.setStatus(`tool: ${tool} - pinch-drag the model`);
-      
+
       if (this.transformControls) {
         if (tool === 'move') this.transformControls.setMode('translate');
         else if (tool === 'rotate') this.transformControls.setMode('rotate');
@@ -2521,19 +2981,23 @@ export class OrcaWorkspace extends xb.Script {
     const box = new THREE.Box3().setFromObject(entry.display || entry.viewer);
     const lowestWorldY = box.min.y;
     const bedWorldY = this.workspace.getWorldPosition(new THREE.Vector3()).y;
-    entry.viewer.position.y += (bedWorldY - lowestWorldY);
+    entry.viewer.position.y += bedWorldY - lowestWorldY;
   }
 
-  private layOnFace(entry: { viewer: THREE.Object3D, display: THREE.Mesh }, faceNormal: THREE.Vector3, hitObject: THREE.Object3D) {
+  private layOnFace(
+    entry: { viewer: THREE.Object3D; display: THREE.Mesh },
+    faceNormal: THREE.Vector3,
+    hitObject: THREE.Object3D,
+  ) {
     const normalMatrix = new THREE.Matrix3().getNormalMatrix(hitObject.matrixWorld);
     const worldNormal = faceNormal.clone().applyMatrix3(normalMatrix).normalize();
     const targetNormal = new THREE.Vector3(0, -1, 0);
     const q = new THREE.Quaternion().setFromUnitVectors(worldNormal, targetNormal);
-    
+
     const workspaceWorldQuat = this.workspace.getWorldQuaternion(new THREE.Quaternion());
     const workspaceInvQuat = workspaceWorldQuat.clone().invert();
     const localQ = workspaceInvQuat.clone().multiply(q).multiply(workspaceWorldQuat);
-    
+
     entry.viewer.quaternion.premultiply(localQ);
     this.snapToBed(entry);
     this.setStatus('Laid on face');
@@ -2546,7 +3010,7 @@ export class OrcaWorkspace extends xb.Script {
     if (!posAttr) return;
 
     this.setStatus('Auto-orienting...');
-    
+
     // Defer computation slightly to let UI update
     setTimeout(() => {
       const scale = entry.viewer.scale;
@@ -2555,16 +3019,16 @@ export class OrcaWorkspace extends xb.Script {
       for (let i = 0; i < posAttr.count; i += step) {
         pts.push(new THREE.Vector3(posAttr.getX(i) * scale.x, posAttr.getY(i) * scale.y, posAttr.getZ(i) * scale.z));
       }
-      
+
       const hull = new ConvexHull().setFromPoints(pts);
-      const normalAreas: { normal: THREE.Vector3, area: number }[] = [];
-      
+      const normalAreas: { normal: THREE.Vector3; area: number }[] = [];
+
       for (let i = 0; i < hull.faces.length; i++) {
         const f = hull.faces[i];
         const e1 = new THREE.Vector3().subVectors(f.edge.next.vertex.point, f.edge.vertex.point);
         const e2 = new THREE.Vector3().subVectors(f.edge.prev.vertex.point, f.edge.vertex.point);
         const area = new THREE.Vector3().crossVectors(e1, e2).length() * 0.5;
-        
+
         let found = false;
         for (const na of normalAreas) {
           if (na.normal.dot(f.normal) > 0.999) {
@@ -2575,14 +3039,14 @@ export class OrcaWorkspace extends xb.Script {
         }
         if (!found) normalAreas.push({ normal: f.normal.clone(), area });
       }
-      
+
       if (normalAreas.length > 0) {
         normalAreas.sort((a, b) => b.area - a.area);
         const bestNormal = normalAreas[0].normal;
-        
+
         const quat = new THREE.Quaternion().setFromUnitVectors(bestNormal, new THREE.Vector3(0, -1, 0));
         entry.viewer.quaternion.copy(quat);
-        
+
         this.snapToBed(entry);
         if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
         this.setStatus('Auto-oriented model');
@@ -2596,7 +3060,7 @@ export class OrcaWorkspace extends xb.Script {
       intersectionsForController: Map<unknown, THREE.Intersection[]>;
     };
     for (const ints of input.intersectionsForController.values()) {
-      const hitLoad = ints.some(i => {
+      const hitLoad = ints.some((i) => {
         let o: THREE.Object3D | null = i.object;
         while (o) {
           if (o === this.loadButtonNode) return true;
@@ -2622,10 +3086,13 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   private refreshToolButtons() {
-    for (const { tool, btn, iconEl } of this.toolButtons) {
-      const active = this.tool === tool;
-      btn.fillColor = active ? '#ffffff4d' : '#ffffff14';
-      iconEl.color = active ? '#ffffff' : '#cccccc';
+    const state = this.actionContext?.ui.get();
+    for (const { action, btn, iconEl } of this.toolButtons) {
+      const enabled = state ? this.actionRegistry.availability(action, 'xr-toolbar', state).state === 'enabled' : false;
+      const active = enabled && Boolean(action.tool) && this.tool === action.tool;
+      btn.setProperties({ opacity: enabled ? 1 : 0.38 });
+      btn.setFillColor(enabled ? (active ? '#ffffff4d' : '#ffffff14') : '#ffffff08');
+      iconEl.setColor(enabled ? (active ? '#ffffff' : '#cccccc') : '#8a94a0');
     }
     if (this.paintOptionsPanel) {
       this.paintOptionsPanel.visible = this.tool === 'paint';
@@ -2636,7 +3103,7 @@ export class OrcaWorkspace extends xb.Script {
   private refreshPaintSwatches() {
     const activeHex = this.activePaintColor.getHex();
     for (const { c, btn } of this.paintSwatches) {
-      btn.strokeColor = (c === activeHex) ? '#ffffff' : '#444444';
+      btn.setStrokeColor(c === activeHex ? '#ffffff' : '#444444');
     }
   }
 
@@ -2661,23 +3128,23 @@ export class OrcaWorkspace extends xb.Script {
     // but feed the immersive card a supported, equally legible equivalent.
     const xrText = text.replaceAll('·', '-').replaceAll('×', 'x').replaceAll('…', '...');
     if (this.statusText) {
-      (this.statusText as any).setText(xrText);
+      this.statusText.setText(xrText);
     }
     if (this.progressContainer && this.progressBar) {
       if (percent !== undefined && percent >= 0 && percent <= 100) {
         this.progressContainer.visible = true;
-        this.progressBar.width = `${percent}%`;
+        this.progressBar.setProperties({ width: `${percent}%` });
       } else {
         this.progressContainer.visible = false;
       }
     }
     if (this.sliceModalText) {
-      (this.sliceModalText as any).setText(xrText);
+      this.sliceModalText.setText(xrText);
     }
     if (this.sliceModalProgressContainer && this.sliceModalBar) {
       if (percent !== undefined && percent >= 0 && percent <= 100) {
         this.sliceModalProgressContainer.visible = true;
-        this.sliceModalBar.width = `${percent}%`;
+        this.sliceModalBar.setProperties({ width: `${percent}%` });
       } else {
         this.sliceModalProgressContainer.visible = false;
       }
@@ -2695,92 +3162,124 @@ export class OrcaWorkspace extends xb.Script {
     // every other child, and force-assigning children = [] leaves orphans
     // whose .parent still points here → uikit "parent mismatch" on update.
     for (const c of [...panel.children]) {
-      try { panel.remove(c); } catch { /* already detached */ }
+      try {
+        panel.remove(c);
+      } catch {
+        /* already detached */
+      }
     }
 
     const exCount = this.extruderCount;
     const totalCount = this.palette.count();
-    
+
     const syncBtn = new UIPanel({
-       width: '100%', height: 35, justifyContent: 'center', alignItems: 'center',
-       cornerRadius: 4, fillColor: '#2E7D32', strokeWidth: 0,
-       onClick: () => {
-         this.setStatus('Synced filaments from printer!');
-         return true;
-       }
+      width: '100%',
+      height: 35,
+      justifyContent: 'center',
+      alignItems: 'center',
+      cornerRadius: 4,
+      fillColor: '#2E7D32',
+      strokeWidth: 0,
+      onClick: () => {
+        this.setStatus('Synced filaments from printer!');
+        return true;
+      },
     });
     syncBtn.add(new UIText('Sync with Printer', { fontSize: 14, color: '#ffffff' }));
     panel.add(syncBtn);
-    
+
     for (let i = 0; i < totalCount; i++) {
-       const isVirtual = i >= exCount;
-       const row = new UIPanel({ width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 5 });
-       
-       const colorBtn = new UIPanel({
-         width: 24, height: 24, cornerRadius: 4, fillColor: this.palette.colorAt(i),
-         onClick: () => {
-             const colors = ['#5F605F', '#E22B22', '#FEC134', '#FEFEFE', '#2196F3', '#9C27B0'];
-             const idx = colors.indexOf(this.palette.colorAt(i).toUpperCase());
-             this.palette.setColor(i, colors[(idx + 1) % colors.length] || colors[0]);
-             this.rebuildHeadsPanel();
-             return true;
-         }
-       });
-       row.add(colorBtn);
+      const isVirtual = i >= exCount;
+      const row = new UIPanel({
+        width: '100%',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 5,
+      });
 
-       row.add(new UIText(isVirtual ? `V-${i+1}:` : `Head ${i+1}:`, { fontSize: 14, color: '#ffffff' }));
-       
-       const cycleFilament = () => {
-         const choices = this.filamentChoices(this.profile!.machineName);
-         const idx = choices.indexOf(this.headFilaments[i]);
-         this.headFilaments[i] = choices[(idx + 1) % choices.length] ?? this.headFilaments[i];
-         this.rebuildHeadsPanel();
-         return true;
-       };
-       const filBtn = new UIPanel({
-          flexGrow: 1, height: 35, padding: 5,
-          justifyContent: 'center', alignItems: 'center',
-          cornerRadius: 4, fillColor: '#ffffff14', strokeWidth: 1, strokeColor: '#ffffff1a',
-          onClick: cycleFilament
-       });
-       filBtn.add(new UIText(this.headFilaments[i] || 'None', { fontSize: 12, color: '#ffffff' }));
-       row.add(filBtn);
+      const colorBtn = new UIPanel({
+        width: 24,
+        height: 24,
+        cornerRadius: 4,
+        fillColor: this.palette.colorAt(i),
+        onClick: () => {
+          const colors = ['#5F605F', '#E22B22', '#FEC134', '#FEFEFE', '#2196F3', '#9C27B0'];
+          const idx = colors.indexOf(this.palette.colorAt(i).toUpperCase());
+          this.palette.setColor(i, colors[(idx + 1) % colors.length] || colors[0]);
+          this.rebuildHeadsPanel();
+          return true;
+        },
+      });
+      row.add(colorBtn);
 
-       if (!isVirtual) {
-           const cycleNozzle = () => {
-             const choices = ['0.2', '0.4', '0.6', '0.8'];
-             const idx = choices.indexOf(this.headNozzles[i]);
-             this.headNozzles[i] = choices[(idx + 1) % choices.length] ?? this.headNozzles[i];
-             this.rebuildHeadsPanel();
-             return true;
-           };
-           const nozBtn = new UIPanel({
-              width: 50, height: 35,
-              justifyContent: 'center', alignItems: 'center',
-              cornerRadius: 4, fillColor: '#ffffff14', strokeWidth: 1, strokeColor: '#ffffff1a',
-              onClick: cycleNozzle
-           });
-           nozBtn.add(new UIText(this.headNozzles[i] + 'mm', { fontSize: 12, color: '#ffffff' }));
-           row.add(nozBtn);
-       } else {
-           const delBtn = new UIPanel({
-              width: 50, height: 35,
-              justifyContent: 'center', alignItems: 'center',
-              cornerRadius: 4, fillColor: '#d32f2f',
-              onClick: () => {
-                this.palette.remove(i);
-                this.headFilaments.splice(i, 1);
-                this.headNozzles.splice(i, 1);
-                this.rebuildHeadsPanel();
-                if (this.onProfileChanged) this.onProfileChanged();
-                return true;
-              }
-           });
-           delBtn.add(new UIText('Del', { fontSize: 12, color: '#ffffff' }));
-           row.add(delBtn);
-       }
+      row.add(new UIText(isVirtual ? `V-${i + 1}:` : `Head ${i + 1}:`, { fontSize: 14, color: '#ffffff' }));
 
-       panel.add(row);
+      const cycleFilament = () => {
+        const choices = this.filamentChoices(this.profile!.machineName);
+        const idx = choices.indexOf(this.headFilaments[i]);
+        this.headFilaments[i] = choices[(idx + 1) % choices.length] ?? this.headFilaments[i];
+        this.rebuildHeadsPanel();
+        return true;
+      };
+      const filBtn = new UIPanel({
+        flexGrow: 1,
+        height: 35,
+        padding: 5,
+        justifyContent: 'center',
+        alignItems: 'center',
+        cornerRadius: 4,
+        fillColor: '#ffffff14',
+        strokeWidth: 1,
+        strokeColor: '#ffffff1a',
+        onClick: cycleFilament,
+      });
+      filBtn.add(new UIText(this.headFilaments[i] || 'None', { fontSize: 12, color: '#ffffff' }));
+      row.add(filBtn);
+
+      if (!isVirtual) {
+        const cycleNozzle = () => {
+          const choices = ['0.2', '0.4', '0.6', '0.8'];
+          const idx = choices.indexOf(this.headNozzles[i]);
+          this.headNozzles[i] = choices[(idx + 1) % choices.length] ?? this.headNozzles[i];
+          this.rebuildHeadsPanel();
+          return true;
+        };
+        const nozBtn = new UIPanel({
+          width: 50,
+          height: 35,
+          justifyContent: 'center',
+          alignItems: 'center',
+          cornerRadius: 4,
+          fillColor: '#ffffff14',
+          strokeWidth: 1,
+          strokeColor: '#ffffff1a',
+          onClick: cycleNozzle,
+        });
+        nozBtn.add(new UIText(this.headNozzles[i] + 'mm', { fontSize: 12, color: '#ffffff' }));
+        row.add(nozBtn);
+      } else {
+        const delBtn = new UIPanel({
+          width: 50,
+          height: 35,
+          justifyContent: 'center',
+          alignItems: 'center',
+          cornerRadius: 4,
+          fillColor: '#d32f2f',
+          onClick: () => {
+            this.palette.remove(i);
+            this.headFilaments.splice(i, 1);
+            this.headNozzles.splice(i, 1);
+            this.rebuildHeadsPanel();
+            if (this.onProfileChanged) this.onProfileChanged();
+            return true;
+          },
+        });
+        delBtn.add(new UIText('Del', { fontSize: 12, color: '#ffffff' }));
+        row.add(delBtn);
+      }
+
+      panel.add(row);
     }
 
     // Virtual (mixed) filaments from the loaded FullSpectrum project —
@@ -2798,16 +3297,22 @@ export class OrcaWorkspace extends xb.Script {
     }
 
     const addBtn = new UIPanel({
-       width: '100%', height: 35, justifyContent: 'center', alignItems: 'center',
-       cornerRadius: 4, fillColor: '#ffffff14', strokeWidth: 1, strokeColor: '#ffffff1a',
-       onClick: () => {
-         this.palette.add();
-         this.headFilaments.push(this.profile!.filamentName);
-         this.headNozzles.push('0.4');
-         this.rebuildHeadsPanel();
-         if (this.onProfileChanged) this.onProfileChanged();
-         return true;
-       }
+      width: '100%',
+      height: 35,
+      justifyContent: 'center',
+      alignItems: 'center',
+      cornerRadius: 4,
+      fillColor: '#ffffff14',
+      strokeWidth: 1,
+      strokeColor: '#ffffff1a',
+      onClick: () => {
+        this.palette.add();
+        this.headFilaments.push(this.profile!.filamentName);
+        this.headNozzles.push('0.4');
+        this.rebuildHeadsPanel();
+        if (this.onProfileChanged) this.onProfileChanged();
+        return true;
+      },
     });
     addBtn.add(new UIText('+ Add Virtual Filament', { fontSize: 14, color: '#ffffff' }));
     panel.add(addBtn);
@@ -2830,7 +3335,10 @@ export class OrcaWorkspace extends xb.Script {
 
   /** Delete every model on the ACTIVE plate (Orca's Edit → Delete all). */
   public deleteAllModels() {
-    if (this.models.length === 0) { this.setStatus('Nothing to delete.'); return; }
+    if (this.models.length === 0) {
+      this.setStatus('Nothing to delete.');
+      return;
+    }
     for (const m of [...this.models]) {
       this.workspace.remove(m.viewer);
       m.display.geometry.dispose();
@@ -2846,7 +3354,7 @@ export class OrcaWorkspace extends xb.Script {
   /**
    * New Project — clear every model on every plate, reset to a single empty
    * plate, and drop any slice output / preview. The fresh-start action from
-   * Snapmaker Orca's File menu. (docs/orca_parity_plan.md)
+   * Snapmaker Orca's File menu. (docs/parity.md)
    */
   public newProject() {
     for (const plate of this.plates) {
@@ -2858,6 +3366,15 @@ export class OrcaWorkspace extends xb.Script {
     this.plates = [{ id: 1, label: 'Plate 1', models: [] }];
     this.nextPlateId = 2;
     this.activePlateId = 1;
+    this.originalProject = null;
+    this.originalProjectSnapshot = null;
+    this.projectSnapshotPending = false;
+    this.projectSourceWasExclusive = false;
+    this.canonicalSliceRequiredReason = null;
+    this.virtualFilaments = [];
+    this.projectPrimeTower = null;
+    this.palette.onChanged?.();
+    this.rebuildHeadsPanel();
     this.unselectModel();
     this.lastGcode = null;
     if (this.previewOn) this.togglePreview();
@@ -2873,7 +3390,10 @@ export class OrcaWorkspace extends xb.Script {
    * hidden under the original. Mirrors Orca's Edit → Clone selected.
    */
   public cloneSelectedModel() {
-    if (!this.selectedModel) { this.setStatus('Select a model to clone first.'); return; }
+    if (!this.selectedModel) {
+      this.setStatus('Select a model to clone first.');
+      return;
+    }
     // raw.clone() carries the vertex `color` attribute, so painted colours copy.
     // The copy lands centred on the bed (coincident with the original, like
     // loading a second model) and is auto-selected — use Move to reposition it.
@@ -2888,13 +3408,19 @@ export class OrcaWorkspace extends xb.Script {
    * boolean-union of two separated solids splits cleanly back apart.
    */
   public splitSelectedToObjects() {
-    if (!this.selectedModel) { this.setStatus('Select a model to split first.'); return; }
+    if (!this.selectedModel) {
+      this.setStatus('Select a model to split first.');
+      return;
+    }
     const src = this.selectedModel;
     const g = src.raw.index ? src.raw.toNonIndexed() : src.raw;
     const positions = g.getAttribute('position').array as ArrayLike<number>;
     const colorAttr = g.getAttribute('color');
     const comps = splitConnectedComponents(positions, colorAttr ? (colorAttr.array as ArrayLike<number>) : null);
-    if (comps.length <= 1) { this.setStatus('Already a single connected body — nothing to split.'); return; }
+    if (comps.length <= 1) {
+      this.setStatus('Already a single connected body — nothing to split.');
+      return;
+    }
 
     // Capture the original placement so every body lands where it was.
     const meshPos = src.display.position.clone();
@@ -2904,7 +3430,10 @@ export class OrcaWorkspace extends xb.Script {
 
     // Remove the original (bypass deleteSelectedModel's auto-select).
     const idx = this.models.indexOf(src);
-    if (idx !== -1) { this.workspace.remove(src.viewer); this.models.splice(idx, 1); }
+    if (idx !== -1) {
+      this.workspace.remove(src.viewer);
+      this.models.splice(idx, 1);
+    }
     this.unselectModel();
 
     for (const comp of comps) {
@@ -2931,7 +3460,10 @@ export class OrcaWorkspace extends xb.Script {
    * Paint colours are not carried across the cut (geometry-only op).
    */
   public cutSelectedByPlane() {
-    if (!this.selectedModel) { this.setStatus('Select a model to cut first.'); return; }
+    if (!this.selectedModel) {
+      this.setStatus('Select a model to cut first.');
+      return;
+    }
     const src = this.selectedModel;
     const g = src.raw.index ? src.raw.toNonIndexed() : src.raw;
     g.computeBoundingBox();
@@ -2939,7 +3471,10 @@ export class OrcaWorkspace extends xb.Script {
     const cz = (bb.min.z + bb.max.z) / 2; // raw is Z-up mm → horizontal mid-cut
     const positions = g.getAttribute('position').array as ArrayLike<number>;
     const res = cutByPlane(positions, 0, 0, 1, cz);
-    if (!res.didCut) { this.setStatus('Cut plane missed the model.'); return; }
+    if (!res.didCut) {
+      this.setStatus('Cut plane missed the model.');
+      return;
+    }
 
     const meshPos = src.display.position.clone();
     const vPos = src.viewer.position.clone();
@@ -2947,7 +3482,10 @@ export class OrcaWorkspace extends xb.Script {
     const vScale = src.viewer.scale.clone();
 
     const idx = this.models.indexOf(src);
-    if (idx !== -1) { this.workspace.remove(src.viewer); this.models.splice(idx, 1); }
+    if (idx !== -1) {
+      this.workspace.remove(src.viewer);
+      this.models.splice(idx, 1);
+    }
     this.unselectModel();
 
     for (const half of [res.positive, res.negative]) {
@@ -2968,11 +3506,16 @@ export class OrcaWorkspace extends xb.Script {
   // --- Edit clipboard (Orca Edit → Cut / Copy / Paste) -----------------
   /** Single-slot geometry clipboard for Cut/Copy/Paste. */
   private clipboard: THREE.BufferGeometry | null = null;
-  public get hasClipboard(): boolean { return this.clipboard !== null; }
+  public get hasClipboard(): boolean {
+    return this.clipboard !== null;
+  }
 
   /** Copy the selected model's geometry into the clipboard. */
   public copySelectedModel(): boolean {
-    if (!this.selectedModel) { this.setStatus('Select a model to copy first.'); return false; }
+    if (!this.selectedModel) {
+      this.setStatus('Select a model to copy first.');
+      return false;
+    }
     this.clipboard?.dispose();
     // Clone carries the vertex `color` attribute, so painted colours survive.
     this.clipboard = this.selectedModel.raw.clone();
@@ -2990,7 +3533,10 @@ export class OrcaWorkspace extends xb.Script {
 
   /** Add a fresh copy of the clipboard geometry, centred + auto-selected. */
   public pasteClipboard() {
-    if (!this.clipboard) { this.setStatus('Clipboard is empty.'); return; }
+    if (!this.clipboard) {
+      this.setStatus('Clipboard is empty.');
+      return;
+    }
     this.addModelFromGeometry(this.clipboard.clone(), 0x4fc3f7);
     this.setStatus('Pasted from clipboard — use Move to reposition.');
   }
@@ -3032,16 +3578,20 @@ export class OrcaWorkspace extends xb.Script {
   /** A camera-facing text billboard for one model. */
   private makeLabelSprite(text: string): THREE.Sprite {
     const canvas = document.createElement('canvas');
-    canvas.width = 256; canvas.height = 64;
+    canvas.width = 256;
+    canvas.height = 64;
     const ctx = canvas.getContext('2d')!;
     ctx.fillStyle = 'rgba(20,24,28,0.82)';
     ctx.fillRect(0, 0, 256, 64);
     ctx.fillStyle = '#e8eaed';
     ctx.font = 'bold 34px sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     ctx.fillText(text, 128, 34);
     const mat = new THREE.SpriteMaterial({
-      map: new THREE.CanvasTexture(canvas), depthTest: false, transparent: true,
+      map: new THREE.CanvasTexture(canvas),
+      depthTest: false,
+      transparent: true,
     });
     const sp = new THREE.Sprite(mat);
     sp.scale.set(0.14, 0.035, 1);
@@ -3085,11 +3635,19 @@ export class OrcaWorkspace extends xb.Script {
     const pos = g.getAttribute('position');
     const n = pos.count;
     const out: number[] = [];
-    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
-    const ab = new THREE.Vector3(), ac = new THREE.Vector3(), nor = new THREE.Vector3();
+    const a = new THREE.Vector3(),
+      b = new THREE.Vector3(),
+      c = new THREE.Vector3();
+    const ab = new THREE.Vector3(),
+      ac = new THREE.Vector3(),
+      nor = new THREE.Vector3();
     for (let t = 0; t < n; t += 3) {
-      a.fromBufferAttribute(pos, t); b.fromBufferAttribute(pos, t + 1); c.fromBufferAttribute(pos, t + 2);
-      ab.subVectors(b, a); ac.subVectors(c, a); nor.crossVectors(ab, ac).normalize();
+      a.fromBufferAttribute(pos, t);
+      b.fromBufferAttribute(pos, t + 1);
+      c.fromBufferAttribute(pos, t + 2);
+      ab.subVectors(b, a);
+      ac.subVectors(c, a);
+      nor.crossVectors(ab, ac).normalize();
       if (nor.z < -0.5) out.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z); // ~>60° down
     }
     if (out.length === 0) return null;
@@ -3097,7 +3655,9 @@ export class OrcaWorkspace extends xb.Script {
     og.setAttribute('position', new THREE.BufferAttribute(new Float32Array(out), 3));
     og.computeVertexNormals();
     const mat = new THREE.MeshBasicMaterial({ color: 0xff3b30, transparent: true, opacity: 0.6, depthWrite: false });
-    mat.polygonOffset = true; mat.polygonOffsetFactor = -1; mat.polygonOffsetUnits = -1;
+    mat.polygonOffset = true;
+    mat.polygonOffsetFactor = -1;
+    mat.polygonOffsetUnits = -1;
     const mesh = new THREE.Mesh(og, mat);
     mesh.name = 'overhangOverlay';
     mesh.raycast = () => {};
@@ -3163,7 +3723,10 @@ export class OrcaWorkspace extends xb.Script {
    */
   public arrangePlate() {
     const n = this.models.length;
-    if (n === 0) { this.setStatus('Nothing to arrange.'); return; }
+    if (n === 0) {
+      this.setStatus('Nothing to arrange.');
+      return;
+    }
     const vis = MM * WORKSPACE_SCALE;
     // Footprint of each model in world units: its mm bed extent (raw X/Y, since
     // display rotates Z-up mm onto the bed) × magnification × per-model scale.
@@ -3195,11 +3758,14 @@ export class OrcaWorkspace extends xb.Script {
    */
   public exportPlateStl() {
     const merged = this.mergedPrinterGeometry();
-    if (!merged) { this.setStatus('Nothing to export — add a model first.'); return; }
+    if (!merged) {
+      this.setStatus('Nothing to export — add a model first.');
+      return;
+    }
     const mesh = new THREE.Mesh(merged, new THREE.MeshBasicMaterial());
     const stl = new STLExporter().parse(mesh, { binary: true }) as DataView;
     merged.dispose();
-    if (this.onDownloadFile) this.onDownloadFile('orcaxr_plate.stl', stl, 'model/stl');
+    if (this.onDownloadFile) this.onDownloadFile('orcaxr_plate.stl', ownedArrayBuffer(stl), 'model/stl');
     this.setStatus('Exported plate as STL.');
   }
 
@@ -3218,9 +3784,16 @@ export class OrcaWorkspace extends xb.Script {
   /** Export the plate as a generic (geometry-only) 3MF (Orca File → Export 3MF). */
   public exportPlate3mf() {
     const bytes = this.build3mfBytes();
-    if (!bytes) { this.setStatus('Nothing to export — add a model first.'); return; }
+    if (!bytes) {
+      this.setStatus('Nothing to export — add a model first.');
+      return;
+    }
     if (this.onDownloadFile) {
-      this.onDownloadFile('orcaxr_plate.3mf', bytes, 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml');
+      this.onDownloadFile(
+        'orcaxr_plate.3mf',
+        ownedArrayBuffer(bytes),
+        'application/vnd.ms-package.3dmanufacturing-3dmodel+xml',
+      );
     }
     this.setStatus('Exported plate as 3MF.');
   }
@@ -3259,12 +3832,75 @@ export class OrcaWorkspace extends xb.Script {
     return writeProject3mf(objects, meta);
   }
 
+  /**
+   * Exact guard for the immutable FullSpectrum source. The lightweight
+   * OrcaXR writer captures geometry/transforms/plates but not vertex paint or
+   * every slicer control, so those are included alongside its bytes.
+   */
+  private captureSemanticProjectSnapshot(): SemanticProjectSnapshot | null {
+    const projectBytes = this.buildProjectBytes();
+    if (!projectBytes) return null;
+
+    const colorBuffers: Array<SemanticBufferSnapshot | null> = [];
+    for (const plate of this.plates) {
+      for (const model of plate.models) {
+        const color = model.raw.getAttribute('color');
+        if (!color) {
+          colorBuffers.push(null);
+          continue;
+        }
+        const array = color.array as unknown as ArrayBufferView;
+        const bytes = new Uint8Array(array.byteLength);
+        bytes.set(new Uint8Array(array.buffer, array.byteOffset, array.byteLength));
+        colorBuffers.push({
+          arrayType: (array as unknown as { constructor: { name: string } }).constructor.name,
+          itemSize: color.itemSize,
+          normalized: color.normalized,
+          bytes,
+        });
+      }
+    }
+
+    const sortedEntries = (record: Record<string, string>) =>
+      Object.entries(record).sort(([left], [right]) => left.localeCompare(right));
+    const controls = JSON.stringify({
+      version: 1,
+      palette: this.palette.list(),
+      virtualFilaments: this.virtualFilaments,
+      projectPrimeTower: this.projectPrimeTower,
+      profile: this.profile
+        ? {
+            id: this.profile.id,
+            displayName: this.profile.displayName,
+            machineName: this.profile.machineName,
+            processName: this.profile.processName,
+            filamentName: this.profile.filamentName,
+            config: sortedEntries(this.profile.config),
+          }
+        : null,
+      customOverrides: sortedEntries(this.customOverrides),
+      wipeTowerAuto: this.wipeTowerAuto,
+      paintedSliceEnabled: this.paintedSliceEnabled,
+      headFilaments: [...this.headFilaments],
+      headNozzles: [...this.headNozzles],
+    });
+
+    return { projectBytes, colorBuffers, controls };
+  }
+
   /** Save the project as a downloadable OrcaXR .3mf (File → Save Project). */
   public saveProject() {
     const bytes = this.buildProjectBytes();
-    if (!bytes) { this.setStatus('Nothing to save — add a model first.'); return; }
+    if (!bytes) {
+      this.setStatus('Nothing to save — add a model first.');
+      return;
+    }
     if (this.onDownloadFile) {
-      this.onDownloadFile('orcaxr_project.3mf', bytes, 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml');
+      this.onDownloadFile(
+        'orcaxr_project.3mf',
+        ownedArrayBuffer(bytes),
+        'application/vnd.ms-package.3dmanufacturing-3dmodel+xml',
+      );
     }
     this.setStatus('Project saved.');
   }
@@ -3272,7 +3908,10 @@ export class OrcaWorkspace extends xb.Script {
   /** Restore a scene from OrcaXR project bytes (File → Open Project). */
   public openProject(bytes: ArrayBuffer): boolean {
     const parsed = parseProject3mf(new Uint8Array(bytes));
-    if (!parsed) { this.setStatus('Not an OrcaXR project file (use Import for plain models).'); return false; }
+    if (!parsed) {
+      this.setStatus('Not an OrcaXR project file (use Import for plain models).');
+      return false;
+    }
     const { meta, geometries } = parsed;
     this.newProject();
     if (meta.profile) this.setProfileByNames(meta.profile.machine, meta.profile.process, meta.profile.filament);
@@ -3297,7 +3936,12 @@ export class OrcaWorkspace extends xb.Script {
       this.addModelFromGeometry(geo, 0x4fc3f7);
       const added = this.models[this.models.length - 1];
       added.viewer.position.set(om.viewer.position[0], om.viewer.position[1], om.viewer.position[2]);
-      added.viewer.quaternion.set(om.viewer.quaternion[0], om.viewer.quaternion[1], om.viewer.quaternion[2], om.viewer.quaternion[3]);
+      added.viewer.quaternion.set(
+        om.viewer.quaternion[0],
+        om.viewer.quaternion[1],
+        om.viewer.quaternion[2],
+        om.viewer.quaternion[3],
+      );
       added.viewer.scale.set(om.viewer.scale[0], om.viewer.scale[1], om.viewer.scale[2]);
       added.display.position.set(om.display[0], om.display[1], om.display[2]);
     });
@@ -3307,7 +3951,9 @@ export class OrcaWorkspace extends xb.Script {
     if (this.onSelectionChanged) this.onSelectionChanged(false);
     if (this.onPlatesChanged) this.onPlatesChanged();
     this.recomputePreflight();
-    this.setStatus(`Opened project — ${meta.objects.length} model${meta.objects.length === 1 ? '' : 's'}, ${savedPlates.length} plate${savedPlates.length === 1 ? '' : 's'}.`);
+    this.setStatus(
+      `Opened project — ${meta.objects.length} model${meta.objects.length === 1 ? '' : 's'}, ${savedPlates.length} plate${savedPlates.length === 1 ? '' : 's'}.`,
+    );
     return true;
   }
 
@@ -3321,11 +3967,18 @@ export class OrcaWorkspace extends xb.Script {
       if (this.onSliceStateChanged) this.onSliceStateChanged(true);
       if (this.sliceModalCard) this.sliceModalCard.show();
       this.setStatus('baking transforms…', 0);
-      await new Promise(r => setTimeout(r, 50)); // let UI paint
+      await new Promise((r) => setTimeout(r, 50)); // let UI paint
+      const fsProject = this.canonicalSliceRequiredReason !== null || this.virtualFilaments.length > 0;
       // Painted (multi-colour) input, if the plated models use >1 filament.
       const painted = this.buildPaintedInput();
-      const isPainted = this.paintedSliceEnabled && !!painted &&
-        painted.distinctCount > 1 && !SlicerClient.useExternalSlicer();
+      const sliceRoute = selectSemanticSliceRoute({
+        hasFullSpectrumSource: fsProject,
+        paintedInputAvailable: painted !== null,
+        distinctPaintAssignments: painted?.distinctCount ?? 0,
+        paintedEngineEnabled: this.paintedSliceEnabled,
+        externalGeometryEndpoint: SlicerClient.useExternalSlicer(),
+      });
+      const isPainted = sliceRoute === 'painted';
       this.setStatus(isPainted ? 'slicing (multi-colour)…' : 'slicing…', 0);
       const t0 = performance.now();
       const overrides: Record<string, string> = {
@@ -3334,12 +3987,9 @@ export class OrcaWorkspace extends xb.Script {
         ...this.customOverrides,
       };
       if (this.wipeTowerAuto) {
-        const pick = scoreWipeTower(
-          this.printerPartAabbs(),
-          this.bedMm.x,
-          this.bedMm.y,
-          { bias: parseBias(this.profile?.config['wipe_tower_bias']) },
-        );
+        const pick = scoreWipeTower(this.printerPartAabbs(), this.bedMm.x, this.bedMm.y, {
+          bias: parseBias(this.profile?.config['wipe_tower_bias']),
+        });
         overrides['wipe_tower_x'] = pick.xMm.toFixed(2);
         overrides['wipe_tower_y'] = pick.yMm.toFixed(2);
         if (this.projectPrimeTower?.enabled) {
@@ -3352,13 +4002,13 @@ export class OrcaWorkspace extends xb.Script {
         overrides['nozzle_diameter'] = this.headNozzles.join(',');
         // Combine the configs for the selected filaments for each head
         if (this.profile) {
-          const filamentConfigs = this.headFilaments.map(fName =>
-            this.catalog.find(this.profile!.machineName, this.profile!.processName, fName)?.config ?? {}
+          const filamentConfigs = this.headFilaments.map(
+            (fName) => this.catalog.find(this.profile!.machineName, this.profile!.processName, fName)?.config ?? {},
           );
 
           // Helper to join array-based config properties across the different filaments
           const joinFilamentProp = (prop: string, sep: ',' | ';') =>
-            filamentConfigs.map(c => c[prop] ?? '').join(sep);
+            filamentConfigs.map((c) => c[prop] ?? '').join(sep);
 
           // String vectors split on ';' in libslic3r; numeric vectors on ','
           // (gotcha #19 — a comma-joined string list parses as ONE value).
@@ -3368,18 +4018,28 @@ export class OrcaWorkspace extends xb.Script {
       }
 
       let gcode: string;
-      // FullSpectrum project: the loaded 3MF defines virtual (mixed)
-      // filaments — geometry + flat overrides cannot express those, so the
-      // project file itself is sliced (embedded config, per-part virtual
-      // extruders), exactly like desktop Snapmaker Orca opening it. Applies
-      // while the plate still matches the file as loaded; add/delete a model
-      // and the slice falls back to the geometry paths below.
-      const fsProject = this.virtualFilaments.length > 0 &&
-        this.originalProject !== null &&
-        this.models.length === this.projectModelCount;
-      if (fsProject) {
+      // FullSpectrum geometry cannot express the embedded mixed-filament
+      // definitions on its own. Slice the original bytes only while every
+      // slice-relevant value is exactly as loaded; edits fail closed until the
+      // canonical live-project coordinator can serialize them without loss.
+      if (sliceRoute === 'fullspectrum') {
         this.setStatus('slicing FullSpectrum project (as authored)…', 0);
-        gcode = await this.slicer.sliceProject(this.originalProject!, 4, {});
+        gcode = await requireSemanticSlice('fullspectrum', async () => {
+          if (this.canonicalSliceRequiredReason) {
+            throw new Error(this.canonicalSliceRequiredReason);
+          }
+          const current = this.captureSemanticProjectSnapshot();
+          if (
+            !current ||
+            !this.originalProjectSnapshot ||
+            !sameSemanticProjectSnapshot(this.originalProjectSnapshot, current)
+          ) {
+            throw new Error(
+              'The FullSpectrum workspace differs from its imported source; canonical live-project slicing is required.',
+            );
+          }
+          return this.slicer.sliceProject(this.originalProject!, 4, {});
+        });
       } else if (isPainted && painted) {
         // Painted colours = one physical nozzle with N filaments swapped by
         // colour (MMU / AMS model). single_extruder_multi_material avoids the
@@ -3387,12 +4047,17 @@ export class OrcaWorkspace extends xb.Script {
         // and a full N×N flush matrix keeps the tool-ordering flush optimiser
         // in bounds. The engine's historical multi-material OOBs
         // (calc_filament_change_info_by_toolorder & friends) are fixed by
-        // patch 0075 + the shim's post-override filament-vector normalization;
-        // the single-colour fallback below stays as a safety net.
+        // patch 0075 + the shim's post-override filament-vector normalization.
+        // Failure is intentionally terminal for this attempt: substituting the
+        // geometry route would silently erase the user's material intent.
         const n = painted.filamentCount;
         // ';' separator: ConfigOptionStrings parses a comma-joined list as
         // ONE color, silently shrinking the engine's filament count.
-        const colors = this.palette.list().slice(0, n).map((s) => s.color).join(';');
+        const colors = this.palette
+          .list()
+          .slice(0, n)
+          .map((s) => s.color)
+          .join(';');
         const matrix: number[] = [];
         for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) matrix.push(i === j ? 0 : 140);
         const paintedOverrides: Record<string, string> = {
@@ -3404,15 +4069,9 @@ export class OrcaWorkspace extends xb.Script {
           flush_volumes_matrix: matrix.join(','),
           flush_volumes_vector: Array(n).fill(140).join(','),
         };
-        try {
-          gcode = await this.slicer.slicePainted(
-            painted.positions, painted.triFilament, painted.filamentCount, 4, paintedOverrides,
-          );
-        } catch (e) {
-          console.warn('[orcaxr] painted slice failed; falling back to single colour:', e);
-          this.setStatus('Multi-colour slicing hit an engine limit — slicing as single colour…', 0);
-          gcode = await this.slicer.slice(this.bakeToPrinterStl(), 4, overrides);
-        }
+        gcode = await requireSemanticSlice('painted', () =>
+          this.slicer.slicePainted(painted.positions, painted.triFilament, painted.filamentCount, 4, paintedOverrides),
+        );
       } else {
         gcode = await this.slicer.slice(this.bakeToPrinterStl(), 4, overrides);
       }
@@ -3448,10 +4107,22 @@ export class OrcaWorkspace extends xb.Script {
     const plateInverse = new THREE.Matrix4().copy(this.plateAnchor.matrixWorld).invert();
 
     const conv = new THREE.Matrix4().set(
-      1000, 0, 0, this.bedMm.x / 2,
-      0, 0, -1000, this.bedMm.y / 2,
-      0, 1000, 0, 0,
-      0, 0, 0, 1,
+      1000,
+      0,
+      0,
+      this.bedMm.x / 2,
+      0,
+      0,
+      -1000,
+      this.bedMm.y / 2,
+      0,
+      1000,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
     );
 
     const geometries: THREE.BufferGeometry[] = [];
@@ -3462,9 +4133,7 @@ export class OrcaWorkspace extends xb.Script {
       // the first at the bed edge (off-bed pre-flight, blocked slicing).
       entry.viewer.updateMatrixWorld(true);
       entry.display.updateMatrixWorld(true);
-      const rel = new THREE.Matrix4()
-        .copy(plateInverse)
-        .multiply(entry.display.matrixWorld);
+      const rel = new THREE.Matrix4().copy(plateInverse).multiply(entry.display.matrixWorld);
 
       const geo = (entry.display.geometry as THREE.BufferGeometry).clone();
       geo.applyMatrix4(rel);
@@ -3502,9 +4171,12 @@ export class OrcaWorkspace extends xb.Script {
    * Returns null when there's nothing to slice. `distinctCount > 1` means the
    * model is genuinely multi-colour and should take the painted path.
    */
-  private buildPaintedInput():
-    | { positions: Float32Array; triFilament: Int32Array; filamentCount: number; distinctCount: number }
-    | null {
+  private buildPaintedInput(): {
+    positions: Float32Array;
+    triFilament: Int32Array;
+    filamentCount: number;
+    distinctCount: number;
+  } | null {
     const merged = this.mergedPrinterGeometry();
     if (!merged) return null;
     const posAttr = merged.getAttribute('position');
@@ -3513,7 +4185,9 @@ export class OrcaWorkspace extends xb.Script {
     const triCount = Math.floor(posAttr.count / 3);
     const paletteHex = this.palette.list().map((s) => s.color);
     const { triFilament, distinctCount } = deriveTriangleFilaments(
-      colAttr?.array as ArrayLike<number> | undefined, triCount, paletteHex,
+      colAttr?.array as ArrayLike<number> | undefined,
+      triCount,
+      paletteHex,
     );
     const posArr = posAttr.array;
     const positions = posArr instanceof Float32Array ? posArr : new Float32Array(posArr);
@@ -3597,15 +4271,15 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus('Fixing model (ADMesh + CGAL)...');
       const stlBuf = writeBinaryStl(entry.raw);
       const repaired = await this.slicer.repair(stlBuf);
-      
+
       const raw = new STLLoader().parse(repaired);
       entry.raw = raw;
       entry.raw.computeVertexNormals();
       entry.raw.computeBoundsTree();
-      
+
       entry.display.geometry.dispose();
       entry.display.geometry = raw;
-      
+
       this.setStatus('Model repaired successfully.');
     } catch (e: any) {
       this.setStatus(`Repair failed: ${e.message}`);
@@ -3618,7 +4292,7 @@ export class OrcaWorkspace extends xb.Script {
       return;
     }
     let target = this.selectedModel;
-    let tool = this.models.find(m => m !== target);
+    let tool = this.models.find((m) => m !== target);
 
     if (!target) {
       target = this.models[0];
@@ -3629,7 +4303,7 @@ export class OrcaWorkspace extends xb.Script {
 
     try {
       this.setStatus(`Running boolean ${op}...`);
-      
+
       // We must bake the transforms into the STL so mcut sees world space overlaps
       const targetGeom = target.raw.clone();
       targetGeom.applyMatrix4(target.viewer.matrixWorld);
@@ -3642,7 +4316,7 @@ export class OrcaWorkspace extends xb.Script {
       const resultStl = await this.slicer.boolean(targetStl, toolStl, op);
 
       const raw = new STLLoader().parse(resultStl);
-      
+
       // Inverse the target's matrixWorld so the resulting mesh stays in the target's local space
       const invMatrix = target.viewer.matrixWorld.clone().invert();
       raw.applyMatrix4(invMatrix);
@@ -3680,8 +4354,8 @@ export class OrcaWorkspace extends xb.Script {
           faceCamera: true,
           manipulationMargin: 16,
           manipulationCornerRadius: 16,
-        })
-      ]
+        }),
+      ],
     });
     card.visible = false;
     this.aiMcpCard = card;
@@ -3696,7 +4370,7 @@ export class OrcaWorkspace extends xb.Script {
       strokeWidth: 1,
       strokeColor: '#ffffff14',
       overflow: 'scroll',
-      height: '100%'
+      height: '100%',
     });
     card.add(root);
 
@@ -3705,13 +4379,24 @@ export class OrcaWorkspace extends xb.Script {
     root.add(mcpHeader);
 
     const mcpBtn = new UIPanel({
-      width: '100%', height: 50,
-      justifyContent: 'center', alignItems: 'center',
-      cornerRadius: 8, fillColor: '#ffffff14',
-      strokeWidth: 1, strokeColor: '#ffffff1a',
-      onClick: () => { this.setStatus('MCP Server enabled'); return true; },
-      onHoverEnter: () => { mcpBtn.fillColor = '#ffffff26'; },
-      onHoverExit: () => { mcpBtn.fillColor = '#ffffff14'; }
+      width: '100%',
+      height: 50,
+      justifyContent: 'center',
+      alignItems: 'center',
+      cornerRadius: 8,
+      fillColor: '#ffffff14',
+      strokeWidth: 1,
+      strokeColor: '#ffffff1a',
+      onClick: () => {
+        this.setStatus('MCP Server enabled');
+        return true;
+      },
+      onHoverEnter: () => {
+        mcpBtn.setFillColor('#ffffff26');
+      },
+      onHoverExit: () => {
+        mcpBtn.setFillColor('#ffffff14');
+      },
     });
     mcpBtn.add(new UIText('Enable MCP Server', { fontSize: 18, color: '#e0e6ee' }));
     root.add(mcpBtn);
@@ -3722,20 +4407,28 @@ export class OrcaWorkspace extends xb.Script {
 
     const makeAiBtn = (label: string, actionMsg: string) => {
       const btn = new UIPanel({
-        width: '100%', height: 50,
-        justifyContent: 'center', alignItems: 'center',
-        cornerRadius: 8, fillColor: '#ffffff14',
-        strokeWidth: 1, strokeColor: '#ffffff1a',
-        onClick: () => { 
+        width: '100%',
+        height: 50,
+        justifyContent: 'center',
+        alignItems: 'center',
+        cornerRadius: 8,
+        fillColor: '#ffffff14',
+        strokeWidth: 1,
+        strokeColor: '#ffffff1a',
+        onClick: () => {
           if (this.models.length === 0) {
             this.setStatus('Load a model first');
           } else {
             this.setStatus(actionMsg);
           }
-          return true; 
+          return true;
         },
-        onHoverEnter: () => { btn.fillColor = '#ffffff26'; },
-        onHoverExit: () => { btn.fillColor = '#ffffff14'; }
+        onHoverEnter: () => {
+          btn.setFillColor('#ffffff26');
+        },
+        onHoverExit: () => {
+          btn.setFillColor('#ffffff14');
+        },
       });
       btn.add(new UIText(label, { fontSize: 18, color: '#e0e6ee' }));
       return btn;
@@ -3772,7 +4465,7 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus('Select a model first to paint');
       return;
     }
-    const prompt = window.prompt("Enter instructions for painting with an image");
+    const prompt = window.prompt('Enter instructions for painting with an image');
     if (!prompt) return;
 
     // Open file picker for image
@@ -3806,19 +4499,23 @@ export class OrcaWorkspace extends xb.Script {
     const mesh = this.selectedModel.display;
     const geometry = mesh.geometry as THREE.BufferGeometry;
     if (!geometry.boundsTree) {
-       geometry.computeBoundsTree();
+      geometry.computeBoundsTree();
     }
-    
+
     // We need a dummy camera spec
     const camera = {
-        widthPx: 512,
-        heightPx: 512,
-        projMatrixRowMajor: new Float32Array(16),
-        viewMatrixRowMajor: new Float32Array(16)
+      widthPx: 512,
+      heightPx: 512,
+      projMatrixRowMajor: new Float32Array(16),
+      viewMatrixRowMajor: new Float32Array(16),
     };
-    
-    const palette = this.palette.filaments.map(f => ({ slot: f.id, lab: { l:50, a:0, b:0 } }));
-    
+
+    const filamentSlots = this.palette.list();
+    const palette = filamentSlots.map((_filament, index) => ({
+      slot: index + 1,
+      lab: { l: 50, a: 0, b: 0 },
+    }));
+
     const resolved = SemanticPaintPlanner.resolve(geometry.boundsTree, camera, plan, palette);
     if (!resolved) {
       this.setStatus('Failed to resolve AI paint plan on mesh.');
@@ -3829,7 +4526,8 @@ export class OrcaWorkspace extends xb.Script {
     const colors = new Float32Array(geometry.attributes.position.count * 3);
     for (let i = 0; i < resolved.perTriangleSlot.length; i++) {
       const slot = resolved.perTriangleSlot[i];
-      const fil = this.palette.filaments.find(f => f.id === slot) || this.palette.filaments[0];
+      const fil = filamentSlots[slot - 1] ?? filamentSlots[0];
+      if (!fil) continue;
       const c = new THREE.Color(fil.color);
       // set color for 3 vertices of triangle
       for (let v = 0; v < 3; v++) {
@@ -3841,7 +4539,6 @@ export class OrcaWorkspace extends xb.Script {
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     mesh.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
   }
-
 }
 
 /** Minimal binary STL writer (non-indexed triangles, recomputed normals). */

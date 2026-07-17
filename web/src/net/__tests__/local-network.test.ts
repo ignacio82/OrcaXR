@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import { readFileSync } from 'node:fs';
 import {
   browserClassifiesAddressSpace,
   createLocalNetworkRequest,
@@ -30,15 +30,11 @@ assert.equal(normalizeHttpEndpoint('http://'), '');
 assert.equal(normalizeHttpEndpoint(''), '');
 
 const nativeRequest = Object.getOwnPropertyDescriptor(globalThis, 'Request');
-let capturedInit: (RequestInit & {targetAddressSpace?: string}) | undefined;
+let capturedInit: (RequestInit & { targetAddressSpace?: string }) | undefined;
 class CapturingRequest {
   readonly url: string;
   constructor(input: RequestInfo | URL, init: RequestInit = {}) {
-    this.url = typeof input === 'string'
-      ? input
-      : input instanceof URL
-        ? input.href
-        : input.url;
+    this.url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     capturedInit = init;
   }
 }
@@ -51,24 +47,21 @@ try {
   const controller = new AbortController();
   const request = createLocalNetworkRequest(
     'http://printer.home.arpa/server/info',
-    {method: 'POST', headers: {'X-Test': 'yes'}, body: 'payload', signal: controller.signal},
+    { method: 'POST', headers: { 'X-Test': 'yes' }, body: 'payload', signal: controller.signal },
     true,
   );
   assert.equal((request as unknown as CapturingRequest).url, 'http://printer.home.arpa/server/info');
   assert.ok(capturedInit);
   assert.equal(capturedInit.targetAddressSpace, 'local');
   assert.equal(capturedInit.method, 'POST');
-  assert.deepEqual(capturedInit.headers, {'X-Test': 'yes'});
+  assert.deepEqual(capturedInit.headers, { 'X-Test': 'yes' });
   assert.equal(capturedInit.body, 'payload');
   assert.equal(capturedInit.signal, controller.signal);
 } finally {
   if (nativeRequest) Object.defineProperty(globalThis, 'Request', nativeRequest);
 }
 
-const serviceWorker = readFileSync(
-  new URL('../../../public/coi-serviceworker.js', import.meta.url),
-  'utf8',
-);
+const serviceWorker = readFileSync(new URL('../../../public/coi-serviceworker.js', import.meta.url), 'utf8');
 assert.match(
   serviceWorker,
   /if \(url\.origin !== self\.location\.origin\) return;/,

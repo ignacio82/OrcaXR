@@ -17,16 +17,8 @@ export function browserClassifiesAddressSpace(hostname: string): boolean {
   const host = normalizedHostname(hostname);
   if (!host) return false;
   const ipv4 = host.split('.');
-  const isIpv4 = ipv4.length === 4 && ipv4.every((part) =>
-    /^\d{1,3}$/.test(part) && Number(part) <= 255
-  );
-  return (
-    isIpv4 ||
-    host.includes(':') ||
-    host === 'localhost' ||
-    host.endsWith('.localhost') ||
-    host.endsWith('.local')
-  );
+  const isIpv4 = ipv4.length === 4 && ipv4.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255);
+  return isIpv4 || host.includes(':') || host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local');
 }
 
 export function localNetworkTargetForRequest(
@@ -61,18 +53,13 @@ export function createLocalNetworkRequest(
   secureContext = globalThis.isSecureContext === true,
 ): Request {
   const url = requestUrl(input);
-  const targetAddressSpace = url
-    ? localNetworkTargetForRequest(url, secureContext)
-    : null;
+  const targetAddressSpace = url ? localNetworkTargetForRequest(url, secureContext) : null;
   if (!targetAddressSpace) return new Request(input, init);
-  const localInit: LocalNetworkRequestInit = {...init, targetAddressSpace};
+  const localInit: LocalNetworkRequestInit = { ...init, targetAddressSpace };
   return new Request(input, localInit);
 }
 
-export function fetchLocalNetwork(
-  input: RequestInfo | URL,
-  init: RequestInit = {},
-): Promise<Response> {
+export function fetchLocalNetwork(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
   return fetch(createLocalNetworkRequest(input, init));
 }
 
@@ -83,11 +70,7 @@ export function normalizeHttpEndpoint(value: string): string {
   const hasScheme = /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed);
   const colonCount = (trimmed.match(/:/g) || []).length;
   const bareIpv6 = !hasScheme && colonCount > 1 && !trimmed.startsWith('[');
-  const candidate = hasScheme
-    ? trimmed
-    : bareIpv6
-      ? `http://[${trimmed}]`
-      : `http://${trimmed}`;
+  const candidate = hasScheme ? trimmed : bareIpv6 ? `http://[${trimmed}]` : `http://${trimmed}`;
   try {
     const parsed = new URL(candidate);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
@@ -97,11 +80,7 @@ export function normalizeHttpEndpoint(value: string): string {
   return candidate.replace(/\/+$/, '');
 }
 
-export function localNetworkFailureMessage(
-  endpoint: string,
-  service: string,
-  corsSetting: string,
-): string {
+export function localNetworkFailureMessage(endpoint: string, service: string, corsSetting: string): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'this app';
   if (globalThis.isSecureContext && /^http:\/\//i.test(endpoint)) {
     return `Could not reach ${endpoint}. Allow OrcaXR Local Network Access, then check ${corsSetting} includes ${origin}. If permission is unavailable or denied, use an HTTPS ${service} URL (for example Tailscale Serve).`;

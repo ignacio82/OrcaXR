@@ -6,7 +6,11 @@ import assert from 'node:assert';
 import { splitConnectedComponents } from '../MeshSplit';
 
 let passed = 0;
-function test(name: string, fn: () => void) { fn(); passed++; console.log('  ✓', name); }
+function test(name: string, fn: () => void) {
+  fn();
+  passed++;
+  console.log('  ✓', name);
+}
 
 /** One triangle at an x offset (three verts, 9 floats). */
 function tri(dx: number): number[] {
@@ -49,8 +53,8 @@ test('components come back largest-first', () => {
 test('vertex colors travel with their triangles', () => {
   const pos = new Float32Array([...tri(0), ...tri(100)]);
   const col = new Float32Array(18);
-  for (let i = 0; i < 9; i++) col[i] = 1;          // first tri red-ish (all 1s)
-  for (let i = 9; i < 18; i++) col[i] = 0;         // second tri black
+  for (let i = 0; i < 9; i++) col[i] = 1; // first tri red-ish (all 1s)
+  for (let i = 9; i < 18; i++) col[i] = 0; // second tri black
   const comps = splitConnectedComponents(pos, col);
   assert.strictEqual(comps.length, 2);
   // Largest-first tie (both 1 tri) is stable insertion order → first body first.

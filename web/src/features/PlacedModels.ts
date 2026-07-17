@@ -36,7 +36,7 @@ export function autoArrangeModels(models: PlacedModel[], gapMm: number = 5): Pla
     if (models[0].translateXmm === 0 && models[0].translateYmm === 0) return models;
     return [{ ...models[0], translateXmm: 0, translateYmm: 0 }];
   }
-  const widths = models.map(m => 50 * (m.scaleXPct / 100));
+  const widths = models.map((m) => 50 * (m.scaleXPct / 100));
   const total = widths.reduce((a, b) => a + b, 0) + gapMm * (models.length - 1);
   let cursor = -total / 2;
   return models.map((m, i) => {

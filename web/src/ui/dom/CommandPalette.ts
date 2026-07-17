@@ -6,7 +6,6 @@
  * the {@link ActionRegistry}, so new actions appear here for free.
  */
 import type { Action, ActionRegistry } from '../../actions/ActionRegistry';
-import { ActionRegistry as Reg } from '../../actions/ActionRegistry';
 import type { ActionContext } from '../../actions/ActionContext';
 import type { UiState } from '../../actions/UiState';
 import { domIcon } from '../icons';
@@ -35,7 +34,8 @@ export class CommandPalette {
     window.addEventListener('keydown', (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        this.isOpen() ? this.close() : this.open();
+        if (this.isOpen()) this.close();
+        else this.open();
       } else if (e.key === 'Escape' && this.isOpen()) {
         this.close();
       }
@@ -85,8 +85,8 @@ export class CommandPalette {
     const q = this.input.value.trim().toLowerCase();
     const state = this.ui.get();
     this.matches = this.registry
-      .all()
-      .filter((a) => Reg.visible(a, state))
+      .forSurface('command-palette')
+      .filter((a) => this.registry.availability(a, 'command-palette', state).state !== 'hidden')
       .filter((a) => {
         if (!q) return true;
         return (
@@ -110,35 +110,44 @@ export class CommandPalette {
       return;
     }
     this.matches.forEach((a, i) => {
-      const enabled = Reg.enabled(a, state);
+      const availability = this.registry.availability(a, 'command-palette', state);
+      const enabled = availability.state === 'enabled';
       const row = document.createElement('div');
       row.className = `cmd-item${i === this.sel ? ' sel' : ''}${enabled ? '' : ' disabled'}`;
       row.dataset.actionId = a.id;
-      const soon = Reg.comingSoon(a);
-      const hint = soon ?? a.hint;
+      const unavailable = a.capability.status === 'unavailable' || a.capability.status === 'blocked';
+      const hint = availability.state === 'disabled' ? availability.reason : a.hint;
       row.innerHTML =
         `<span class="glyph">${domIcon(a.icon)}</span>` +
         `<span class="cmd-label">${escapeHtml(a.label)}</span>` +
-        (soon ? '<span class="soon-badge">SOON</span>' : '') +
+        (unavailable ? '<span class="soon-badge">UNAVAILABLE</span>' : '') +
         (hint ? `<span class="cmd-hint">${escapeHtml(hint)}</span>` : '');
-      row.addEventListener('mouseenter', () => { this.sel = i; this.paint(); });
-      row.addEventListener('click', () => { this.sel = i; this.runSelected(); });
+      row.addEventListener('mouseenter', () => {
+        this.sel = i;
+        this.paint();
+      });
+      row.addEventListener('click', () => {
+        this.sel = i;
+        this.runSelected();
+      });
       this.list.appendChild(row);
     });
   }
 
   private runSelected(): void {
     const a = this.matches[this.sel];
-    if (!a || !Reg.enabled(a, this.ui.get())) return;
-    this.close();
-    void Promise.resolve(a.run(this.ctx)).catch((e) =>
-      console.error(`[orcaxr] action "${a.id}" failed:`, e),
-    );
+    if (!a) return;
+    const availability = this.registry.availability(a, 'command-palette', this.ui.get());
+    if (availability.state === 'enabled') this.close();
+    void this.registry
+      .invoke(a, 'command-palette', this.ctx, this.ui.get())
+      .catch((e) => console.error(`[orcaxr] action "${a.id}" failed:`, e));
   }
 }
 
 function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string),
+  return s.replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string,
   );
 }

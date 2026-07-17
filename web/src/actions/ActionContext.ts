@@ -65,7 +65,19 @@ export class ActionContext {
   simplifySelected(): void {
     this.workspace.simplifySelected();
   }
-  addCalibration(kind: 'tower' | 'cube' | 'flow_pass1' | 'flow_pass2' | 'flow_yolo' | 'pressure_advance' | 'retraction' | 'max_flow' | 'vfa' | 'tolerance'): void {
+  addCalibration(
+    kind:
+      | 'tower'
+      | 'cube'
+      | 'flow_pass1'
+      | 'flow_pass2'
+      | 'flow_yolo'
+      | 'pressure_advance'
+      | 'retraction'
+      | 'max_flow'
+      | 'vfa'
+      | 'tolerance',
+  ): void {
     this.workspace.addCalibration(kind);
   }
   addPlate(): void {
@@ -181,84 +193,21 @@ export class ActionContext {
   }
 
   // ---- Advanced Features ----------------------------------------------
-  embossText(): void {
-    this.workspace.setStatus('Emboss Text feature called');
-  }
-  addMagnet(): void {
-    this.workspace.setStatus('Add Magnet feature called');
-  }
   autoPlaceWipeTower(): void {
     this.workspace.setWipeTowerAuto(!this.workspace.wipeTowerAuto);
     this.workspace.setStatus('Auto-place Wipe Tower toggled: ' + this.workspace.wipeTowerAuto);
   }
-  scanNetwork(): void {
-    this.workspace.setStatus('Scan Network feature called');
-  }
-  viewWebcam(): void {
-    this.workspace.setStatus('View Webcam feature called');
-  }
-
   smartPaint(): void {
-    this.workspace.smartPaint();
+    void this.workspace.smartPaint();
   }
 
   smartPaintImage(): void {
-    this.workspace.smartPaintImage();
+    void this.workspace.smartPaintImage();
   }
 
-
-  // ---- Parity placeholders --------------------------------------------
-  // edit.ts
-  undo(): void { this.workspace.setStatus('Undo called'); }
-  redo(): void { this.workspace.setStatus('Redo called'); }
-  selectAll(): void { this.workspace.setStatus('Select All called'); }
-
-  // file.ts
-  exportAllPlates(): void { this.workspace.setStatus('Export All Plates called'); }
-  exportObj(): void { this.workspace.setStatus('Export OBJ called'); }
-  openGcodeViewer(): void { this.workspace.setStatus('Open G-code Viewer called'); }
-  exportLogs(): void { this.workspace.setStatus('Export Logs called'); }
-
-  // output.ts
-  sendToPrinter(): void { this.workspace.setStatus('Send to Printer called'); }
-
-  // help.ts
-  showConfigFolder(): void { this.workspace.setStatus('Show Config Folder called'); }
-
-  // view.ts
-  togglePerspective(): void { this.workspace.setStatus('Toggle Perspective called'); }
-  toggleAutoPerspective(): void { this.workspace.setStatus('Toggle Auto Perspective called'); }
-  toggleNavigator(): void { this.workspace.setStatus('Toggle Navigator called'); }
-  toggleSelectionOutline(): void { this.workspace.setStatus('Toggle Selection Outline called'); }
-  toggleGcodeWindow(): void { this.workspace.setStatus('Toggle G-code Window called'); }
-
-  // gizmos.ts
-  splitToParts(): void { this.workspace.setStatus('Split to Parts called'); }
-  supportPaint(): void { this.workspace.setStatus('Support Paint called'); }
-  seamPaint(): void { this.workspace.setStatus('Seam Paint called'); }
-  fuzzySkin(): void { this.workspace.setStatus('Fuzzy Skin called'); }
-  brimEars(): void { this.workspace.setStatus('Brim Ears called'); }
-  measureTool(): void { this.workspace.setStatus('Measure Tool called'); }
-  assemblyView(): void { this.workspace.setStatus('Assembly View called'); }
-  faceDetector(): void { this.workspace.setStatus('Face Detector called'); }
-  svgEmboss(): void { this.workspace.setStatus('SVG Emboss called'); }
-  hollowModel(): void { this.workspace.setStatus('Hollow Model called'); }
-  addModifier(): void { this.workspace.setStatus('Add Modifier called'); }
-  addSupportEnforcer(): void { this.workspace.setStatus('Add Support Enforcer called'); }
-  addSupportBlocker(): void { this.workspace.setStatus('Add Support Blocker called'); }
-  addHeightRange(): void { this.workspace.setStatus('Add Height Range called'); }
-  setNegativePart(): void { this.workspace.setStatus('Set Negative Part called'); }
-  variableLayerHeight(): void { this.workspace.setStatus('Variable Layer Height called'); }
-
-  /**
-   * Fallback handler for actions that mirror a Snapmaker Orca command OrcaXR
-   * hasn't built yet. These actions carry `comingSoon`, so the shells render
-   * them disabled and this never fires from a click — but the command palette
-   * and any programmatic caller land here safely. See
-   * `docs/orca_parity_plan.md` for the per-feature implementation steps.
-   */
-  comingSoon(feature: string): void {
-    this.workspace.setStatus(`${feature} isn't available yet — see docs/orca_parity_plan.md`);
+  /** Report a registry-controlled disabled reason without invoking a feature handler. */
+  reportCapabilityUnavailable(label: string, reason: string): void {
+    this.workspace.setStatus(`${label}: ${reason}`);
   }
 
   /** Check the PWA service worker for a newer OrcaXR build (Help → Check for Update). */
@@ -275,19 +224,27 @@ export class ActionContext {
         return;
       }
       await reg.update();
-      this.workspace.setStatus(reg.waiting
-        ? 'A new OrcaXR version is ready — reload to update.'
-        : 'OrcaXR is up to date.');
+      this.workspace.setStatus(
+        reg.waiting ? 'A new OrcaXR version is ready — reload to update.' : 'OrcaXR is up to date.',
+      );
     } catch (e) {
       this.workspace.setStatus(`Update check failed: ${(e as Error).message}`);
     }
   }
 
   // ---- Help modals (informational) -----------------------------------
-  showAbout(): void { this.workspace.showModal('About OrcaXR', ABOUT_HTML); }
-  showShortcuts(): void { this.workspace.showModal('Keyboard Shortcuts', SHORTCUTS_HTML); }
-  showTutorial(): void { this.workspace.showModal('Getting Started', TUTORIAL_HTML); }
-  showTip(): void { this.workspace.showModal('Tip of the Day', tipOfTheDayHtml()); }
+  showAbout(): void {
+    this.workspace.showModal('About OrcaXR', ABOUT_HTML);
+  }
+  showShortcuts(): void {
+    this.workspace.showModal('Keyboard Shortcuts', SHORTCUTS_HTML);
+  }
+  showTutorial(): void {
+    this.workspace.showModal('Getting Started', TUTORIAL_HTML);
+  }
+  showTip(): void {
+    this.workspace.showModal('Tip of the Day', tipOfTheDayHtml());
+  }
   /** Interactive printer / filament setup wizard (built by the DOM shell). */
   setupWizard(): void {
     if (this.workspace.onShowSetupWizard) this.workspace.onShowSetupWizard();

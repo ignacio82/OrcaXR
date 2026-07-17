@@ -1,8 +1,8 @@
 /**
  * One semantic icon name → a glyph for each shell.
  *
- *  - `xr`  is a Material Symbols name consumed by uikit's `UIIcon` (the XR shell
- *    already renders these, e.g. `open_with`, `format_paint`, `play_circle`).
+ *  - `xr` is a Material Symbols name resolved to a checked-in SVG. XR never
+ *    uses UIBlocks' CDN-backed `UIIcon`.
  *  - `dom` is a self-contained unicode/emoji glyph so the desktop shell needs no
  *    web-font download (the page loads no Material Symbols font).
  *
@@ -10,7 +10,7 @@
  * aligned. Unknown keys fall back to a neutral dot.
  */
 export interface IconGlyph {
-  /** Material Symbols name for the XR `UIIcon`. */
+  /** Material Symbols name for the bundled XR image. */
   xr: string;
   /** Unicode/emoji glyph for the DOM shell. */
   dom: string;
@@ -23,6 +23,8 @@ const ICONS: Record<string, IconGlyph> = {
   scale: { xr: 'open_in_full', dom: '⤢' },
   lay_on_face: { xr: 'flip_to_back', dom: '⬓' },
   paint: { xr: 'format_paint', dom: '🖌' },
+  smart_paint: { xr: 'wand_stars', dom: '✦' },
+  smart_paint_image: { xr: 'image_search', dom: '▧' },
   auto_orient: { xr: 'explore', dom: '🧭' },
   minus: { xr: 'remove', dom: '−' },
   plus: { xr: 'add', dom: '+' },
@@ -112,6 +114,9 @@ const ICONS: Record<string, IconGlyph> = {
   info: { xr: 'info', dom: 'ⓘ' },
   tip: { xr: 'lightbulb', dom: '💡' },
   update: { xr: 'update', dom: '⟳' },
+  logout: { xr: 'logout', dom: '⇥' },
+  close: { xr: 'close', dom: '×' },
+  chevron_right: { xr: 'chevron_right', dom: '›' },
 
   // Gizmos & mesh ops
   intersect: { xr: 'join_inner', dom: '⧩' },
@@ -154,9 +159,10 @@ export function hasIcon(name: string): boolean {
   return Object.prototype.hasOwnProperty.call(ICONS, name);
 }
 
-/** Material Symbols name for the XR `UIIcon`. */
+/** URL for an offline, build-owned SVG suitable for UIBlocks `UIImage`. */
 export function xrIcon(name: string): string {
-  return icon(name).xr;
+  const base = import.meta.env?.BASE_URL ?? '/';
+  return `${base}icons/material/${icon(name).xr}.svg`;
 }
 
 /** Unicode/emoji glyph for the DOM shell. */

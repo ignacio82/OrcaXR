@@ -15,14 +15,14 @@ const TYPE_COLORS: Record<string, number> = {
   'Internal solid infill': 0xf07dc2,
   'Top surface': 0xf25844,
   'Bottom surface': 0x3a6df0,
-  'Ironing': 0x3a6df0,
+  Ironing: 0x3a6df0,
   Bridge: 0x4d80ff,
   'Gap infill': 0xffffff,
   Skirt: 0x7dd4c0,
   Brim: 0x7dd4c0,
-  'Support': 0x00ff7f,
+  Support: 0x00ff7f,
   'Support interface': 0x00c060,
-  'Custom': 0x888888,
+  Custom: 0x888888,
 };
 const DEFAULT_COLOR = 0x66d9ef;
 
@@ -46,15 +46,14 @@ export function parseGcodeToolpath(gcode: string, filamentColors?: string[]): To
   let z = 0;
   let e = 0;
   let absoluteE = false;
-  let currentFilamentColor = (filamentColors && filamentColors.length > 0)
-    ? new THREE.Color(filamentColors[0]).getHex()
-    : DEFAULT_COLOR;
+  let currentFilamentColor =
+    filamentColors && filamentColors.length > 0 ? new THREE.Color(filamentColors[0]).getHex() : DEFAULT_COLOR;
   let currentColor = currentFilamentColor;
   let currentType = '';
   let layers = 0;
   let segments = 0;
 
-  for (let start = 0; start < gcode.length && segments < MAX_SEGMENTS; ) {
+  for (let start = 0; start < gcode.length && segments < MAX_SEGMENTS;) {
     let end = gcode.indexOf('\n', start);
     if (end < 0) end = gcode.length;
     const line = gcode.slice(start, end);
@@ -66,9 +65,10 @@ export function parseGcodeToolpath(gcode: string, filamentColors?: string[]): To
         if (currentType === 'Support' || currentType === 'Support interface') {
           currentColor = TYPE_COLORS[currentType] ?? DEFAULT_COLOR;
         } else {
-          currentColor = (!filamentColors || filamentColors.length === 0) 
-            ? (TYPE_COLORS[currentType] ?? DEFAULT_COLOR)
-            : currentFilamentColor;
+          currentColor =
+            !filamentColors || filamentColors.length === 0
+              ? (TYPE_COLORS[currentType] ?? DEFAULT_COLOR)
+              : currentFilamentColor;
         }
       } else if (line.startsWith('; CHANGE_LAYER') || line.startsWith(';LAYER_CHANGE')) {
         layers += 1;
@@ -96,8 +96,14 @@ export function parseGcodeToolpath(gcode: string, filamentColors?: string[]): To
       if (em) e = Number(em[1]);
       continue;
     }
-    if (line.startsWith('M82')) { absoluteE = true; continue; }
-    if (line.startsWith('M83')) { absoluteE = false; continue; }
+    if (line.startsWith('M82')) {
+      absoluteE = true;
+      continue;
+    }
+    if (line.startsWith('M83')) {
+      absoluteE = false;
+      continue;
+    }
     if (!(line.startsWith('G1') || line.startsWith('G0'))) continue;
 
     let nx = x;
@@ -105,10 +111,13 @@ export function parseGcodeToolpath(gcode: string, filamentColors?: string[]): To
     let nz = z;
     let de = 0;
     // Tokenize: G1 X1.2 Y3 E0.5 F1200 ; comment
-    for (let i = 2; i < line.length; ) {
+    for (let i = 2; i < line.length;) {
       const c = line.charCodeAt(i);
       if (c === 59 /* ; */) break;
-      if (c === 32 /* space */) { i += 1; continue; }
+      if (c === 32 /* space */) {
+        i += 1;
+        continue;
+      }
       const letter = line[i];
       let j = i + 1;
       while (j < line.length && line.charCodeAt(j) !== 32 && line.charCodeAt(j) !== 59) j += 1;
@@ -129,7 +138,9 @@ export function parseGcodeToolpath(gcode: string, filamentColors?: string[]): To
       colors.push(color.r, color.g, color.b, color.r, color.g, color.b);
       segments += 1;
     }
-    x = nx; y = ny; z = nz;
+    x = nx;
+    y = ny;
+    z = nz;
   }
 
   const geometry = new THREE.BufferGeometry();

@@ -5,14 +5,15 @@
  * U1's magnetic top cover, surfaces a non-blocking amber hint.
  */
 
-export type TopCoverResult =
-  | { kind: 'ok' }
-  | { kind: 'warning'; slots: number[]; message: string };
+export type TopCoverResult = { kind: 'ok' } | { kind: 'warning'; slots: number[]; message: string };
 
 export function evaluateTopCover(profileConfig: Record<string, string>): TopCoverResult {
   const raw = profileConfig['requires_top_cover']?.trim();
   if (!raw) return { kind: 'ok' };
-  const tokens = raw.split(/[,;]/).map((t) => t.trim()).filter((t) => t.length > 0);
+  const tokens = raw
+    .split(/[,;]/)
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
   const flagged: number[] = [];
   tokens.forEach((v, i) => {
     if (v === '1' || v.toLowerCase() === 'true') flagged.push(i);

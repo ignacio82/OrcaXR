@@ -13,16 +13,14 @@
 export function hexToRgb01(hex: string): [number, number, number] {
   const h = hex.replace('#', '').trim();
   const n = h.length >= 6 ? h : 'cccccc';
-  return [
-    parseInt(n.slice(0, 2), 16) / 255,
-    parseInt(n.slice(2, 4), 16) / 255,
-    parseInt(n.slice(4, 6), 16) / 255,
-  ];
+  return [parseInt(n.slice(0, 2), 16) / 255, parseInt(n.slice(2, 4), 16) / 255, parseInt(n.slice(4, 6), 16) / 255];
 }
 
 /** Index of the palette color nearest (squared RGB distance) to (r,g,b). */
 export function nearestPaletteIndex(
-  r: number, g: number, b: number,
+  r: number,
+  g: number,
+  b: number,
   palette: ReadonlyArray<readonly [number, number, number]>,
 ): number {
   let best = 0;
@@ -30,7 +28,10 @@ export function nearestPaletteIndex(
   for (let i = 0; i < palette.length; i++) {
     const [pr, pg, pb] = palette[i];
     const d = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
-    if (d < bestD) { bestD = d; best = i; }
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
   }
   return best;
 }

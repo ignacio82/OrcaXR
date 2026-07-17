@@ -58,8 +58,12 @@ export class CalibrationRampGenerator {
     return merged;
   }
 
-  generateFlowPass2(): THREE.BufferGeometry { return this.generateFlowPass1(); }
-  generateFlowYolo(): THREE.BufferGeometry { return this.generateFlowPass1(); }
+  generateFlowPass2(): THREE.BufferGeometry {
+    return this.generateFlowPass1();
+  }
+  generateFlowYolo(): THREE.BufferGeometry {
+    return this.generateFlowPass1();
+  }
 
   generatePressureAdvance(): THREE.BufferGeometry {
     return this.generateTemperatureTower(10, 5, 20);
@@ -79,7 +83,13 @@ export class CalibrationRampGenerator {
     return merged;
   }
 
-  generateMaxFlow(): THREE.BufferGeometry { return this.generateCalibrationCube(); }
-  generateVfa(): THREE.BufferGeometry { return this.generateCalibrationCube(); }
-  generateTolerance(): THREE.BufferGeometry { return this.generateCalibrationCube(); }
+  generateMaxFlow(): THREE.BufferGeometry {
+    return this.generateCalibrationCube();
+  }
+  generateVfa(): THREE.BufferGeometry {
+    return this.generateCalibrationCube();
+  }
+  generateTolerance(): THREE.BufferGeometry {
+    return this.generateCalibrationCube();
+  }
 }

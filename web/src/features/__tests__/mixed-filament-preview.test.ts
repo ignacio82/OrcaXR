@@ -112,7 +112,10 @@ const PEGGY_CFG = {
 test('virtuals: only enabled rows get IDs, continuing after physical', () => {
   const v = virtualFilamentsFromConfig(PEGGY_CFG);
   assert.equal(v.length, 3); // two deleted auto rows skipped
-  assert.deepEqual(v.map((x) => x.id), [5, 6, 7]);
+  assert.deepEqual(
+    v.map((x) => x.id),
+    [5, 6, 7],
+  );
 });
 test('fullDisplayPalette: physical + virtual display colors', () => {
   const full = fullDisplayPalette(PEGGY_CFG);

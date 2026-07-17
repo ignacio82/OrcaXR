@@ -4,37 +4,69 @@
  * shell does — click routing, icons, and active-tool restyle — with no browser.
  */
 import assert from 'node:assert';
-import { renderXrActionButton, refreshXrToolActive, type XrUiFactory } from '../XrShell';
+import { renderXrActionButton, refreshXrToolActive, xrToolRailActions, type XrUiFactory } from '../XrShell';
 import { buildRegistry } from '../../../actions/catalog';
 import { xrIcon } from '../../icons';
 import { tokens } from '../../tokens';
 
 let passed = 0;
-function test(name: string, fn: () => void) { fn(); passed++; console.log('  ✓', name); }
+function test(name: string, fn: () => void) {
+  fn();
+  passed++;
+  console.log('  ✓', name);
+}
 
 // Fake uikit: records constructor opts, exposes fillColor/color + onClick.
 class FakePanel {
   fillColor: string;
   opts: Record<string, unknown>;
   children: unknown[] = [];
-  constructor(opts: Record<string, unknown>) { this.opts = opts; this.fillColor = opts.fillColor as string; }
-  add(c: unknown) { this.children.push(c); }
-  click() { return (this.opts.onClick as () => boolean)(); }
+  constructor(opts: Record<string, unknown>) {
+    this.opts = opts;
+    this.fillColor = opts.fillColor as string;
+  }
+  add(c: unknown) {
+    this.children.push(c);
+  }
+  setFillColor(color: string) {
+    this.fillColor = color;
+  }
+  setProperties(props: { opacity?: number }) {
+    Object.assign(this.opts, props);
+  }
+  click() {
+    return (this.opts.onClick as () => boolean)();
+  }
 }
 class FakeIcon {
   color: string;
-  constructor(public name: string, opts: Record<string, unknown>) { this.color = opts.color as string; }
+  name: string;
+  constructor(name: string, opts: Record<string, unknown>) {
+    this.name = name;
+    this.color = opts.color as string;
+  }
+  setColor(color: string) {
+    this.color = color;
+  }
 }
-const factory: XrUiFactory = { Panel: FakePanel as never, Icon: FakeIcon as never };
+const factory: XrUiFactory<FakePanel, FakeIcon> = {
+  createPanel: (opts) => new FakePanel(opts),
+  createIcon: (name, opts) => new FakeIcon(name, opts),
+};
 
 const registry = buildRegistry();
-const toolbar = registry.byDisclosure('toolbar');
+const toolbar = xrToolRailActions(registry.byDisclosure('toolbar'));
 
 test('registry exposes the expected toolbar action set (incl. paint)', () => {
   const ids = toolbar.map((a) => a.id).sort();
   assert.deepStrictEqual(ids, [
-    'delete_models', 'drop_to_bed', 'tool_lay_on_face',
-    'tool_move', 'tool_paint', 'tool_rotate', 'tool_scale',
+    'delete_models',
+    'drop_to_bed',
+    'tool_lay_on_face',
+    'tool_move',
+    'tool_paint',
+    'tool_rotate',
+    'tool_scale',
   ]);
 });
 
@@ -42,9 +74,16 @@ test('each toolbar action renders a button with its XR icon', () => {
   for (const a of toolbar) {
     const h = renderXrActionButton(a, () => {}, factory);
     assert.ok(h.iconEl instanceof FakeIcon);
-    assert.strictEqual((h.iconEl as unknown as FakeIcon).name, xrIcon(a.icon),
-      `${a.id} icon mismatch`);
+    assert.strictEqual((h.iconEl as unknown as FakeIcon).name, xrIcon(a.icon), `${a.id} icon mismatch`);
     assert.strictEqual((h.btn as unknown as FakePanel).children.length, 1, 'button has icon child');
+  }
+});
+
+test('XR icons resolve only to app-owned offline assets', () => {
+  for (const action of registry.all()) {
+    const url = xrIcon(action.icon);
+    assert.match(url, /icons\/material\/[a-z0-9_]+\.svg$/);
+    assert.ok(!/^https?:/i.test(url), `${action.id} must not fetch an icon at runtime`);
   }
 });
 
@@ -52,8 +91,8 @@ test('clicking a button runs exactly that action', () => {
   const runs: string[] = [];
   const move = toolbar.find((a) => a.id === 'tool_move')!;
   const h = renderXrActionButton(move, (a) => runs.push(a.id), factory);
-  const consumed = (h.btn as unknown as FakePanel).click();
-  assert.strictEqual(consumed, true, 'onClick consumes the event');
+  const callbackResult = (h.btn as unknown as FakePanel).click();
+  assert.strictEqual(callbackResult, undefined, 'UIBlocks callbacks do not control bubbling');
   assert.deepStrictEqual(runs, ['tool_move']);
 });
 

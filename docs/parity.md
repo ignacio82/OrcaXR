@@ -9,7 +9,7 @@
 |---|---|
 | Parity target | Snapmaker OrcaSlicer v2.3.4, commit `9fd12ffb2b1b80c9fb4c14564754d2ec1573a626` |
 | Initial repository audit | 2026-07-12 UTC |
-| Overall status | `NOT_STARTED`; useful partial code exists, but P0 truth/quality gates are not green |
+| Overall status | `IN_PROGRESS`; the truth/quality/domain foundation tranche is implemented, while manual P0 qualification and P1–P12 product parity remain open |
 | Broad parity claim | **Not permitted** until P12.6 is `[x]` |
 | Primary targets | Snapmaker U1, Elegoo Centauri Carbon; desktop/mobile web and Galaxy XR |
 
@@ -159,6 +159,29 @@ CLI; imported as-authored 3MF can use project slicing; mixed-filament preview ma
 mesh split, paint decoding, painted slicing, and project/config tests already cover useful
 building blocks. They are inputs to the work below, not reasons to skip it.
 
+### Implemented foundation tranche (2026-07-17)
+
+The historical table above remains the reproducible starting observation. The current worktree
+adds the following dependency-safe foundation; checkbox state and residual qualification gaps in
+P0/P1/P6/P10/P11 remain authoritative:
+
+- A deterministic exact-blob extractor maps 1,622 upstream leaves in 13 families from 17 pinned
+  source blobs. Duplicate, missing, stale, and synthetic action/setting mutations fail closed.
+- All local actions now use one capability registry. The 34 audited status-only placeholders are
+  explicitly unavailable; every other action is conservatively partial until its workflow gate
+  passes. DOM, menus, shortcuts, command palette, and XR invoke the same availability guard.
+- `web/src/project/` supplies a UI-independent canonical graph, immutable assets, stable IDs,
+  inheritance/validation, selection, bounded transactional history, revision guards, staged
+  import, legacy-v1 migration, canonical slice coordination, ports, and a deterministic
+  BBS-compatible 3MF adapter. The live legacy workspace has not migrated yet.
+- The 3MF/G-code oracle corpus, generated engine-option schema, local XR icon bundle, CSP/offline
+  contracts, production browser/axe smoke tests, artifact provenance checks, and bounded external
+  server test harness now run through the repository quality interface.
+
+This tranche does not complete the downstream Objects, FullSpectrum authoring, paint, prepare,
+settings UI, preview, calibration, printer, or release-qualification phases. Headless Objects,
+filament/recipe, facet-annotation, and settings-editor foundations below are not live product UI.
+
 ## 4. Target architecture and invariants
 
 Build parity around one canonical, serializable project graph. UI meshes, tree rows, worker
@@ -249,7 +272,7 @@ Local starting seams: [`ActionContext.ts`](../web/src/actions/ActionContext.ts),
 [`parity.test.ts`](../web/src/actions/__tests__/parity.test.ts),
 [`package.json`](../web/package.json), and [current CI](../.github/workflows/ci.yml).
 
-- [ ] **P0.1 — Generate an upstream parity manifest.** Add a pinned extractor under
+- [~] **P0.1 — Generate an upstream parity manifest.** Add a pinned extractor under
   `tools/parity/` that records source commit, menu/action identifiers, gizmos, setting keys,
   setting modes, preset types, calibration flows, supported import/export filters, preview
   color/filter modes, and device pages. Store deterministic JSON in `docs/parity/`.
@@ -265,8 +288,10 @@ Local starting seams: [`ActionContext.ts`](../web/src/actions/ActionContext.ts),
   - **Accept:** two consecutive generations are byte-identical; mutation fixtures prove that
     adding a fake upstream action/setting fails CI; a reviewer checks a sample from each family
     against the official binary/manual.
+  - **Current:** extraction, exact source anchors, dispositions, determinism, and fail-closed
+    mutation tests pass for 1,622 leaves. The official binary/manual sample review is pending.
 
-- [ ] **P0.2 — Replace boolean/implicit action availability with a capability registry.** Each
+- [~] **P0.2 — Replace boolean/implicit action availability with a capability registry.** Each
   action declares status, reason, supported surfaces, prerequisites, handler, test IDs, and
   help link. Menus, keyboard shortcuts, command palette, DOM toolbar, and XR menus consume it.
   - Convert the status-only handlers in `ActionContext` and helper-generated gizmos to
@@ -278,8 +303,11 @@ Local starting seams: [`ActionContext.ts`](../web/src/actions/ActionContext.ts),
   - **Accept:** registry tests enumerate every action and surface; a UI test proves unavailable
     actions cannot produce false success; the 34+ known placeholders are either implemented or
     truthfully classified.
+  - **Current:** one registry and invocation guard serves every current surface; 34 placeholders
+    are unavailable and the remainder are partial. Upstream leaf-to-local reachability and full
+    browser interaction coverage remain open under P11.2/P12.
 
-- [ ] **P0.3 — Establish one green web quality command and CI job.** Add pinned scripts for
+- [~] **P0.3 — Establish one green web quality command and CI job.** Add pinned scripts for
   `typecheck`, unit/integration tests, lint/format check, build, parity drift, and end-to-end
   smoke tests; `npm test` must work after `npm ci` without global `tsx`.
   - Fix existing TypeScript failures rather than excluding files: AI response typing, remote
@@ -291,8 +319,11 @@ Local starting seams: [`ActionContext.ts`](../web/src/actions/ActionContext.ts),
     check that the checked-in WASM matches its source build.
   - **Accept:** a clean clone passes the single documented command and all required CI jobs;
     intentional type/test/parity failures make the job fail.
+  - **Current:** `./scripts/quality.sh` and split web/server/WASM/parity CI jobs exist; typecheck,
+    tests, production E2E/axe/offline checks, CSP, size, audits, and artifact hashes are gated.
+    A clean-clone CI run and the optional native source container build are still required.
 
-- [ ] **P0.4 — Build the parity fixture corpus and oracle harness.** Commit only redistributable,
+- [~] **P0.4 — Build the parity fixture corpus and oracle harness.** Commit only redistributable,
   compact fixtures plus generation recipes for: multi-object/multi-part/multi-instance 3MF;
   object/part/layer overrides; each annotation type; physical and mixed assignments; all four
   FullSpectrum modes; modifiers/negative volumes; multiple plates; custom G-code; STEP/STL/OBJ;
@@ -305,12 +336,17 @@ Local starting seams: [`ActionContext.ts`](../web/src/actions/ActionContext.ts),
     command/profile/source hashes; do not rely on opaque screenshots alone.
   - **Accept:** the harness detects a deliberately removed part assignment, paint facet, mixed
     definition, setting, and tool change.
+  - **Current:** the redistributable synthetic corpus and all five required semantic mutations
+    pass structural 3MF and semantic G-code self-tests. Snapmaker-generated references, large/
+    hostile variants, and remaining comparator semantics are not yet qualified.
 
-- [ ] **P0.5 — Add a lightweight architecture boundary before feature expansion.** Define
+- [x] **P0.5 — Add a lightweight architecture boundary before feature expansion.** Define
   interfaces for project store, command/history, selection, serializer, slice adapter, and
   surface adapters. Add dependency rules so domain code cannot import DOM/XR/Three UI objects.
   - **Accept:** a headless test can create, mutate, serialize, reopen, and slice a tiny project
     without constructing `OrcaWorkspace` or a browser shell.
+  - **Verified:** the boundary checker and headless add → transform → serialize → reopen → slice
+    session pass without browser, Three, XRBlocks, or workspace construction (`EVID-003`).
 
 P0 exit gate: all P0 items pass, baseline manifests are committed, CI is green from a clean
 clone, and no placeholder is presented as complete.
@@ -327,7 +363,7 @@ Local starting seams: [`Project3mf.ts`](../web/src/features/Project3mf.ts),
 [`OrcaWorkspace.ts`](../web/src/workspace/OrcaWorkspace.ts), and
 [`SlicerClient.ts`](../web/src/slicer/SlicerClient.ts).
 
-- [ ] **P1.1 — Implement typed project entities and invariants from §4.** Include plates,
+- [x] **P1.1 — Implement typed project entities and invariants from §4.** Include plates,
   objects, volumes/parts with semantic type, instances, layer ranges, configs, facet fields,
   physical/mixed filaments, custom G-code, thumbnails, source assets, and extension blobs.
   - Keep source geometry separate from Three.js render objects; reference transferable/indexed
@@ -338,8 +374,11 @@ Local starting seams: [`Project3mf.ts`](../web/src/features/Project3mf.ts),
     incompatible modifiers, out-of-range tool IDs, and cyclic mixed definitions.
   - **Accept:** property tests generate graphs and verify validation, clone/instance semantics,
     inheritance, stable IDs, and deterministic serialization.
+  - **Verified:** the canonical model includes every listed entity, separate immutable assets,
+    resolvers, validation, stable branded IDs, and deterministic generated-graph tests
+    (`EVID-003`). Live application adoption is separately tracked by P1.6.
 
-- [ ] **P1.2 — Introduce command history and dirty-state tracking.** All editor mutations,
+- [~] **P1.2 — Introduce command history and dirty-state tracking.** All editor mutations,
   including paint strokes, assignment remaps, settings changes, tree reorder, and plate moves,
   use atomic commands.
   - Support transaction/coalescing for drags, paint strokes, and multi-selection; bound memory;
@@ -348,8 +387,11 @@ Local starting seams: [`Project3mf.ts`](../web/src/features/Project3mf.ts),
     match upstream intent.
   - **Accept:** undo/redo round-trips every command class, restores selection and derived views,
     and reaches byte-equivalent serialized state after undoing to a checkpoint.
+  - **Current:** the bounded command bus proves atomic transactions, drag coalescing, rollback,
+    checkpoints, independent dirty categories, and revision guards. Legacy workspace mutations
+    and the full paint/settings/assignment/tree command catalogue do not use it yet.
 
-- [ ] **P1.3 — Replace geometry-only export with BBS-compatible 3MF read/write.** Map every
+- [~] **P1.3 — Replace geometry-only export with BBS-compatible 3MF read/write.** Map every
   supported entity to upstream 3MF model/config structures used by `load_bbs_3mf`.
   - Preferred implementation is a narrow worker/WASM or sidecar-native adapter around the pinned
     libslic3r BBS 3MF loader/writer, with a versioned project DTO, rather than an independently
@@ -365,14 +407,23 @@ Local starting seams: [`Project3mf.ts`](../web/src/features/Project3mf.ts),
   - **Accept:** each P0 corpus file passes Orca → OrcaXR → Orca and OrcaXR → Orca → OrcaXR
     structural comparison with no supported semantic loss; official Orca opens the outputs
     without repair warnings.
+  - **Current:** the deterministic browser adapter emits BBS core/model/project/layer structures,
+    round-trips the canonical envelope, preserves unknown safe entries/relationships/attributes,
+    and rejects traversal, corruption, bombs, and cancellation. Some BBS projections still use
+    the OrcaXR envelope, and official Snapmaker open/save interoperability remains unverified.
 
-- [ ] **P1.4 — Make import transactional and diagnosable.** Parse/validate in a worker, preview
+- [~] **P1.4 — Make import transactional and diagnosable.** Parse/validate in a worker, preview
   conflicts and unit corrections, then commit once. Cancellation or failure leaves the project
   unchanged. Detect duplicate assets and preserve source filename/provenance.
   - **Accept:** malformed and cancelled imports do not mutate history; very large archives keep
     UI/XR frames responsive; warnings identify each repaired/dropped unsupported field.
+  - **Current:** the headless coordinator passes cloned state/assets to an injected parser,
+    validates and deduplicates its staged result, preserves import provenance, exposes explicit
+    repair/conflict/drop diagnostics and acknowledgement, rejects cancellation/stale previews,
+    and commits project/assets/selection as one undoable command. Concrete STL/3MF workers,
+    interactive conflict policy, large-archive responsiveness, and UI/corpus qualification remain.
 
-- [ ] **P1.5 — Slice only canonical project state.** Build an in-memory or temporary compatible
+- [~] **P1.5 — Slice only canonical project state.** Build an in-memory or temporary compatible
   3MF for every edited project and use `startSliceProject`/external project slicing. Eliminate
   the edited-geometry metadata-loss fallback.
   - Version the worker protocol and transfer project/slice snapshots immutably. A slice result
@@ -380,14 +431,24 @@ Local starting seams: [`Project3mf.ts`](../web/src/features/Project3mf.ts),
   - **Accept:** changing a part filament, paint facet, layer override, mixed recipe, instance,
     or plate is reflected in G-code and preview; stale slice completion never replaces a newer
     result.
+  - **Current:** the headless coordinator serializes one immutable canonical BBS 3MF snapshot,
+    proves that each listed edit changes submitted bytes, records project/profile/engine and
+    input/output hashes, supports current/all plates, retry/recovery/timeout/cancel, and rejects
+    stale or superseded publication. The legacy workspace and real WASM/server routes are not
+    adapted to it yet, so live semantic/oracle/UI/hardware acceptance remains open.
 
-- [ ] **P1.6 — Migrate existing workspace data incrementally.** Write adapters from flat
+- [~] **P1.6 — Migrate existing workspace data incrementally.** Write adapters from flat
   `ModelEntry`, `PlateStore`, `FilamentPalette`, and existing OrcaXR JSON into `ProjectState`,
   then move render, save, slice, and selection consumers to projections of the store.
   - Delete legacy sources only after fixtures prove equivalent behavior; add a migration note
     and recovery path for locally saved projects.
   - **Accept:** existing sample models/projects still open, arrange, save, slice, and preview;
     no second mutable model list remains.
+  - **Current:** explicit Project3mf-v1 and flat ModelEntry/PlateStore/FilamentPalette adapters
+    create deterministic IDs and immutable deduplicated assets, convert legacy units/axes,
+    validate/repair canonical output, preserve provenance, and retain rejected/unmapped values in
+    a recovery payload. Workspace wiring, recovery persistence/UI, indexed/facet-rich legacy data,
+    and the no-second-model-list exit condition remain open.
 
 P1 exit gate: the golden project corpus round-trips through official Orca and every edit uses
 the canonical graph and history.
@@ -404,7 +465,7 @@ disconnected [`PlacedModels.ts`](../web/src/features/PlacedModels.ts),
 [`FilamentPalette.ts`](../web/src/workspace/FilamentPalette.ts), and
 [`SettingsInspector.ts`](../web/src/ui/dom/SettingsInspector.ts).
 
-- [ ] **P2.1 — Build the hierarchical Objects panel.** Render plate, object, volume/part,
+- [~] **P2.1 — Build the hierarchical Objects panel.** Render plate, object, volume/part,
   instance root/instance, settings, layer root/layer range, and info/error rows with stable IDs.
   Show printable, filament/color, support/color-paint, sinking, and editable-state indicators
   where applicable.
@@ -415,8 +476,14 @@ disconnected [`PlacedModels.ts`](../web/src/features/PlacedModels.ts),
     the inspector and viewport. Hidden/collapsed rows do not lose selection.
   - **Accept:** Playwright covers pointer, keyboard, and touch navigation over every row type;
     10,000 rows remain responsive; DOM semantics form a valid accessible tree/grid.
+  - **Current:** a headless projection over canonical `ProjectState` emits every listed row type
+    with stable keys/IDs, assignment/paint/printable/editability indicators, ancestor-preserving
+    filtering, retained expansion, entity replace/toggle/range selection, keyboard focus
+    navigation, tree accessibility metadata, and an O(1) fixed-row virtual window. DOM/XR
+    rendering, pointer/touch/context actions, rename/reveal/scene synchronization, Playwright,
+    and measured 10,000-row browser/device performance remain open.
 
-- [ ] **P2.2 — Implement object/part/instance lifecycle.** Add, import as object/part, rename,
+- [~] **P2.2 — Implement object/part/instance lifecycle.** Add, import as object/part, rename,
   delete, internal cut/copy/paste, duplicate/clone, create instance, fill bed with instances,
   split to objects, split to parts, merge, assemble/disassemble, reload/replace mesh, and move to
   another plate; toggle printable state at object/instance scope. Browser system-clipboard
@@ -427,8 +494,14 @@ disconnected [`PlacedModels.ts`](../web/src/features/PlacedModels.ts),
   - Show confirmation and annotation/config impact before topology-changing split/merge/reload.
   - **Accept:** operation sequences round-trip in 3MF and undo/redo; official Orca reports the
     same object/part/instance counts and transforms.
+  - **Current:** canonical commands cover object/instance rename, printable state, subtree-aware
+    delete, independent duplicate with collision-checked injected IDs, shared instance
+    create/delete, precomputed multi-instance placement as one transaction, cross-plate move,
+    no-op suppression, selection repair, and byte-exact undo/redo without deleting shared assets.
+    UI/action wiring, bed-fill placement, topology operations, asset GC, 3MF/oracle, and official
+    Orca qualification remain open.
 
-- [ ] **P2.3 — Implement per-object, part, and layer-range filament assignment.** The selector includes
+- [~] **P2.3 — Implement per-object, part, and layer-range filament assignment.** The selector includes
   every physical head and enabled virtual/mixed filament with badge, name, recipe, material,
   preset, color/gradient, compatibility warnings, and inherited/effective state.
   - Selecting an object assigns its default. Selecting one or multiple parts or height ranges
@@ -441,6 +514,12 @@ disconnected [`PlacedModels.ts`](../web/src/features/PlacedModels.ts),
   - **Accept:** a multi-part fixture assigns physical tools and each mixed mode to individual
     parts; save/reopen and official Orca preserve it; G-code semantic comparison sees the
     expected tool/mix behavior.
+  - **Current:** canonical commands assign or clear stable physical/mixed IDs at object, volume,
+    and layer-range scope, validate enabled destinations and ownership, batch heterogeneous
+    scopes atomically, and provide byte-reversible undo/redo; the headless Objects tree projects
+    inherited/effective badges. Selector UX, compatibility detail, legacy workspace/scene
+    propagation, wipe/preview updates, official 3MF round-trip, and G-code behavior oracles remain
+    open.
 
 - [ ] **P2.4 — Add semantic volumes.** Support ordinary part, parameter modifier, negative
   volume, support enforcer, support blocker, and other upstream volume roles. Provide “Add
@@ -484,7 +563,7 @@ Local starting seams: [`MixedFilamentStore.ts`](../web/src/features/MixedFilamen
 [`GamutMatcher.ts`](../web/src/features/GamutMatcher.ts), and
 [`FilamentPalette.ts`](../web/src/workspace/FilamentPalette.ts).
 
-- [ ] **P3.1 — Replace palette indexes with a stable filament library.** Physical entries store
+- [~] **P3.1 — Replace palette indexes with a stable filament library.** Physical entries store
   head/tool identity, profile reference/hash, material/type, vendor, display color, nozzle and
   temperature compatibility, loaded/unloaded state, and optional device mapping. Virtual
   entries reference stable physical IDs and cannot recursively reference virtual entries unless
@@ -497,8 +576,14 @@ Local starting seams: [`MixedFilamentStore.ts`](../web/src/features/MixedFilamen
     tombstones so rebuilding that transient numbering never changes project intent.
   - **Accept:** reordering/replacing physical tools does not alter object, part, facet, mixed,
     or G-code intent; invalid recipes become actionable warnings rather than dangling IDs.
+  - **Current:** the canonical graph stores stable physical/mixed IDs plus tool, preset/hash,
+    material/vendor, color, nozzle, config, and enabled state; validated reversible commands
+    cover assignment, remap, referenced-definition tombstoning, and mixed add/edit/duplicate/
+    enable lifecycle without palette indexes. Loaded/device mapping, upstream auto-row/tombstone
+    parity, reorder/replace dependency UX, the transient engine namespace, persistence migration,
+    live surfaces, and G-code/oracle qualification remain open.
 
-- [ ] **P3.2 — Implement the “Add Virtual Filament” dialog and complete CRUD lifecycle.** The
+- [~] **P3.2 — Implement the “Add Virtual Filament” dialog and complete CRUD lifecycle.** The
   dialog has Ratio, Cycle, Match, and Gradient modes; two/three component choice where allowed;
   component add/remove/swap; live badge/preview; validation; cancel without mutation; add; edit;
   duplicate; merge/apply; and delete with dependency review.
@@ -517,6 +602,14 @@ Local starting seams: [`MixedFilamentStore.ts`](../web/src/features/MixedFilamen
     state distinct from temporary UI expansion/filtering.
   - **Accept:** all dialog paths, validation boundaries, keyboard/touch interaction, undo, and
     save/reopen pass; serialization is compared field-by-field with official v2.3.4 output.
+  - **Current:** canonical commands add, rename/edit, duplicate, enable/disable, and safely
+    remove stable-ID recipes with exact undo/redo, defensive input snapshots, deterministic
+    dependency paths, no-op suppression, and tombstones for referenced definitions. Ratio,
+    Cycle, Match, and Gradient state is validated without silently normalizing user values, and
+    authoring is restricted to enabled physical components as required by the pinned engine.
+    The dialog, complete upstream field model/wire format, auto-pair origin/regeneration rules,
+    merge/apply flow, compatibility warnings, preview, persistence, DOM/touch/XR interaction,
+    and official field-by-field qualification remain open.
 
 - [ ] **P3.3 — Implement Ratio mode faithfully.** Offer two- and three-filament selection,
   two-color ratio slider/numeric input, the three-color triangle picker used by the reference,
@@ -609,7 +702,7 @@ Local starting seams: [`Paint3mf.ts`](../web/src/features/Paint3mf.ts),
 [`AiPaintEngine.ts`](../web/src/features/AiPaintEngine.ts), and the live paint path in
 [`OrcaWorkspace.ts`](../web/src/workspace/OrcaWorkspace.ts).
 
-- [ ] **P4.1 — Store semantic, topology-aware facet annotations.** Replace vertex display-color
+- [~] **P4.1 — Store semantic, topology-aware facet annotations.** Replace vertex display-color
   mutation as the editing source of truth with separate sparse fields for color/MMU state,
   support state, seam state, fuzzy-skin state, and brim-ear geometry/anchors per model volume.
   - Implement the upstream triangle-selector state model and subdivision encoding needed for
@@ -620,8 +713,14 @@ Local starting seams: [`Paint3mf.ts`](../web/src/features/Paint3mf.ts),
   - **Accept:** imported official facet fixtures decode and re-encode to identical semantic
     states; overlapping channels remain independent; no vertex-sharing artifact changes a
     neighboring face.
+  - **Current:** canonical volumes own independent sparse color, support, seam, fuzzy-skin, and
+    brim channels tied to topology revision. Headless normalization/validation rejects stale
+    topology, invalid values, duplicate/out-of-range faces, and deterministically preserves
+    overlapping channels. Upstream subdivision encoding, brim geometry/anchors, render-overlay
+    adoption, mesh face-map workflows, official fixtures, and Orca round-trip equivalence remain
+    open.
 
-- [ ] **P4.2 — Build a common paint engine and command model.** Share ray casting, section
+- [~] **P4.2 — Build a common paint engine and command model.** Share ray casting, section
   clipping, face visibility, brush sampling, triangle subdivision, edge adjacency, filters,
   preview overlays, stroke transactions, and undo/redo across all paint channels.
   - A stroke starts on pointer/controller down, streams previews, and commits one history command
@@ -631,6 +730,11 @@ Local starting seams: [`Paint3mf.ts`](../web/src/features/Paint3mf.ts),
     suppression, XR ray and direct touch, dominant-hand switching, and haptic/visual feedback.
   - **Accept:** deterministic input traces yield the same facets on every surface; undo/redo and
     cancel are exact; painting a large mesh stays within P10 frame/worker budgets.
+  - **Current:** a channel-generic headless stroke operation implements paint/erase/reset and a
+    guarded command commits one atomic history entry with exact undo/redo, cancellation/no-op
+    behavior, defensive snapshots, and project/topology stale-result rejection. Ray/brush/fill
+    geometry, clipping/visibility/adjacency, preview overlays, pointer/touch/XR input, haptics,
+    worker routing, deterministic surface traces, and performance qualification remain open.
 
 - [ ] **P4.3 — Implement all six color-paint tools.** Provide Circle, Sphere, Triangle, Height
   Range, Fill, and Gap Fill with the upstream-visible parameters and cursor/overlay feedback.
@@ -652,7 +756,7 @@ Local starting seams: [`Paint3mf.ts`](../web/src/features/Paint3mf.ts),
   - **Accept:** physical and each FullSpectrum mode can be painted on separate facets, survives
     save/open, and produces expected segmentation/tool behavior.
 
-- [ ] **P4.5 — Implement explicit filament remapping.** Present every currently referenced
+- [~] **P4.5 — Implement explicit filament remapping.** Present every currently referenced
   source filament and a destination selector supporting identity and many-to-one mappings.
   Preview affected objects/parts/facets and warnings before applying one undoable transaction.
   - Remap state `0`/default using upstream semantics; update object/part assignments, triangle
@@ -662,6 +766,13 @@ Local starting seams: [`Paint3mf.ts`](../web/src/features/Paint3mf.ts),
     the first color.
   - **Accept:** remap fixtures cover sparse IDs, virtual IDs, many-to-one, default state, deleted
     recipes, cancellation, undo/redo, save/reopen, and G-code comparison.
+  - **Current:** one canonical command performs validated many-to-one stable-ID remaps across
+    object/part/layer assignments, color facets, wipe-tower assignment, and physical recipe
+    components, coalesces collided facet/component data, preserves source definitions, rejects
+    self/disabled destinations and virtual destinations for physical-only recipe components, and
+    round-trips through history. Reference discovery/preview UX,
+    default-state and deletion/reorder hooks, cancellation flow, tombstone retention policy,
+    live legends/surfaces, save/reopen, and G-code comparison remain open.
 
 - [ ] **P4.6 — Implement support painting.** Support enforcer, blocker, and reset/erase states;
   brush/smart-fill behavior; clipping and visibility; clear all; rendering; 3MF annotation; and
@@ -690,11 +801,17 @@ Local starting seams: [`Paint3mf.ts`](../web/src/features/Paint3mf.ts),
   - **Accept:** deterministic mocked-service tests, privacy/error tests, and manual correction of
     the generated mask all pass. AI remains outside core parity completion.
 
-- [ ] **P4.10 — Remove unsafe paint fallback.** If painted project generation or engine slicing
+- [~] **P4.10 — Remove unsafe paint fallback.** If painted project generation or engine slicing
   fails, show a blocking, actionable error and retain the last valid result. Never report success
   after silently slicing monochrome.
   - **Accept:** injected encoder/worker/engine failures cannot yield a downloadable/sendable
     mislabeled monochrome job.
+  - **Current:** painted engine failure, a disabled painted engine, and the geometry-only external
+    route now fail closed and retain the prior valid result. As-authored FullSpectrum bytes require
+    an exact semantic snapshot match across project bytes, paint buffers, profiles, overrides,
+    palette, heads, virtual definitions, and tower controls; edits and non-exclusive imports fail
+    closed rather than using stale or flattened input. Fault-injected end-to-end download/send UI
+    coverage and canonical edited-project routing remain open.
 
 P4 exit gate: every official painting channel and color tool is authorable on DOM, touch, and
 XR; color remapping includes mixed filaments; facet state round-trips and drives verified G-code.
@@ -823,7 +940,7 @@ Local starting seams: [`SettingsConfig.ts`](../web/src/actions/SettingsConfig.ts
 [`ConfigIO.ts`](../web/src/features/ConfigIO.ts), and
 [`SettingsBackup.ts`](../web/src/features/SettingsBackup.ts).
 
-- [ ] **P6.1 — Generate a complete typed option schema from the pinned engine.** Extract key,
+- [~] **P6.1 — Generate a complete typed option schema from the pinned engine.** Extract key,
   storage type, scalar/vector shape, enum domain/labels, nullable/percent semantics, units,
   default, min/max, mode, category, tooltip, CLI name, technology/printer applicability,
   aliases/deprecations, and serialization delimiter.
@@ -837,8 +954,13 @@ Local starting seams: [`SettingsConfig.ts`](../web/src/actions/SettingsConfig.ts
     as display values currently present in `profileKeys.ts`.
   - **Accept:** every upstream config entry and explicitly placed tab option is represented or in
     an approved internal-only exclusion; schema generation is deterministic and drift-tested.
+  - **Current:** the exact-blob generator emits 816 definitions/809 unique runtime keys with
+    types, defaults, bounds, enum maps, presentation metadata, applicability, provenance, and
+    serialization rules; a strict runtime loader and eight mutation guards pass. Tab/page/group
+    layout, predicates, widget/reset/scope semantics, runtime C++ dump comparison, and locale
+    catalogs remain open, so the generated schema labels itself `foundation-partial`.
 
-- [ ] **P6.2 — Implement the complete settings editor.** Cover Process pages Quality, Strength,
+- [~] **P6.2 — Implement the complete settings editor.** Cover Process pages Quality, Strength,
   Speed, Support, Multimaterial, and Others; Filament pages Filament, Cooling, Advanced,
   Multimaterial, Dependencies, and Notes; Printer basics, machine G-code, motion limits,
   multimaterial, and per-extruder pages.
@@ -857,6 +979,12 @@ Local starting seams: [`SettingsConfig.ts`](../web/src/actions/SettingsConfig.ts
     cover every widget/type. Differential family fixtures and targeted critical-option cases
     prove engine effect. An option cannot be classified implemented solely because its key is
     present or passed to the worker.
+  - **Current:** a headless editor derives fields only from the generated catalog, projects
+    deterministic mode/technology/search state, classifies ambiguous/read-only/unknown/special
+    definitions unavailable, parses and validates supported scalar/vector families, exposes
+    inherited/default/changed/compare/reset state, and commits drafts atomically. Generated GUI
+    layout/dependencies/scope, special widgets, persistence, engine-effect proofs, DOM/XR, locale,
+    and cross-surface qualification remain open.
 
 - [ ] **P6.3 — Implement preset semantics.** Support system, user, and project presets for
   printer/process/filament; inheritance; compatibility expressions; multiple filament slots;
@@ -891,11 +1019,15 @@ Local starting seams: [`SettingsConfig.ts`](../web/src/actions/SettingsConfig.ts
   - **Accept:** preferences survive reload and migration, respect OS signals, do not leak into
     project config, and can be restored without clearing projects/presets.
 
-- [ ] **P6.7 — Correct config serialization at every boundary.** String vectors use semicolons;
+- [~] **P6.7 — Correct config serialization at every boundary.** String vectors use semicolons;
   numeric vectors use commas as required by this port. Preserve escaping, percent/absolute
   distinction, nullable values, enum tokens, and G-code text.
   - **Accept:** generated round-trip tests cover every schema type through browser worker,
     project 3MF, config import/export, and external server; delimiter mutation tests fail.
+  - **Current:** the schema-driven codec fail-closes delimiter drift and round-trips bool, integer,
+    float, percent/absolute, string, enum, point, nullable, and supported vector values using the
+    generated separator contract. Escaping/special shapes and browser-worker/3MF/server boundary
+    matrices remain open.
 
 P6 exit gate: the generated schema has complete disposition, all supported settings reach the
 engine at each valid scope, and profiles/preferences have tested lifecycle behavior.
@@ -912,7 +1044,7 @@ Local starting seams: [`SlicerClient.ts`](../web/src/slicer/SlicerClient.ts),
 [`slic3r_wasm.cpp`](../wasm/slic3r_wasm.cpp), [`server.js`](../server/server.js), and
 [`slice_worker.mjs`](../server/slice_worker.mjs).
 
-- [ ] **P7.1 — Make slicing a cancellable, revisioned job pipeline.** Support current/all plates,
+- [~] **P7.1 — Make slicing a cancellable, revisioned job pipeline.** Support current/all plates,
   browser WASM and external engine routing, explicit queue state, progress phases, cancellation,
   retry, timeouts, worker recovery, and stale-result rejection.
   - Snapshot canonical project and effective profiles. Record engine commit/artifact hash, input
@@ -922,6 +1054,14 @@ Local starting seams: [`SlicerClient.ts`](../web/src/slicer/SlicerClient.ts),
     `/tmp/in.stl` and invoking mono slicing.
   - **Accept:** cancellation terminates work and child processes promptly; current/all-plate jobs
     stay isolated; identical supported inputs meet the semantic oracle across WASM/CLI.
+  - **Current:** a headless coordinator snapshots canonical state/assets once, serializes only a
+    compatible project 3MF, isolates current/all printable plates, exposes queued/serializing/
+    submit/retry terminal state, and supports cancellation, per-attempt timeouts, retry/recovery,
+    revision and overlapping-job supersession guards. Its versioned route contract records
+    engine commit/artifact, profile identities, input revision/hash, SHA-256 project/output
+    hashes, warnings, statistics, and route. Live WASM/server adapters and progress projection,
+    legacy workspace adoption, prompt worker/process termination, the server project-entry fix,
+    WASM/CLI semantic-oracle equivalence, and device qualification remain open.
 
 - [ ] **P7.2 — Implement complete preflight and actionable errors.** Validate printable objects,
   plate bounds/collisions, manifold/repair status, profile/nozzle/printer compatibility, settings,
@@ -1143,9 +1283,8 @@ and the external [`server`](../server/).
 
 This contract is part of every XR acceptance gate, not optional styling guidance.
 
-- **Version and authority:** the audited lockfile resolves `xrblocks@0.17.0` and
-  `@pmndrs/uikit@1.0.74`, while `package.json` still permits newer compatible versions. P10.9
-  must exact-pin the qualified pair. For any implementation, use this precedence: installed
+- **Version and authority:** `package.json` and the lockfile exact-pin `xrblocks@0.17.0` and
+  `@pmndrs/uikit@1.0.74`. For any implementation, use this precedence: installed
   version's types/source and `src/addons/uiblocks/SKILL.md`; version-matched source/samples;
   official XRBlocks manual; generic UIKit knowledge. Prose examples conflict with 0.17.0 on
   constructors, card defaults, colors, callback propagation, and behavior properties. Never
@@ -1203,14 +1342,13 @@ This contract is part of every XR acceptance gate, not optional styling guidance
   combining behaviors that both own rotation; prefer cylindrical billboarding for upright world
   panels, gentle head leash only for critical HUDs, object anchors for contextual UI, and a
   visible header/frame for manipulation.
-- **Lifecycle and performance:** `UICard` is an XR script and the scene `ScriptsManager` updates
-  scripts every frame regardless of object visibility. The audited `OrcaWorkspace` also updates
-  visible cards manually, likely double-ticking them while hidden cards still auto-tick. P10.10
-  must instrument and establish exactly one update and input owner, remove duplicate controller
-  dispatch, avoid per-frame signal/layout writes, keep hidden/off-screen catalog nodes out of the
-  live hierarchy where safe, and prove recursive cleanup. Do not claim a visibility optimization
-  without traces. Record cards/panels/scripts, draw calls, ray intersections, CPU/GPU frame time,
-  memory, open/close growth, and input-to-feedback latency on the target headset.
+- **Lifecycle and performance:** `ScriptsManager` is now the sole per-frame card update owner and
+  XRBlocks is the sole select dispatcher. `OrcaWorkspace` owns one capability subscription; its
+  idempotent disposal removes cards, subscriptions, controls, listeners, and owned GPU resources,
+  and any descendant card hit suppresses scene manipulation. Hidden scripts can still auto-tick.
+  P10.10 must instrument counts, keep hidden expensive nodes out of the live hierarchy where safe,
+  prove recursive cleanup/open-close stability, and record draw/raycast/frame/memory/input metrics
+  on the target headset. Do not claim a visibility optimization without traces.
 - **Comfort, visuals, access, and assets:** derive placement from `xb.user.height`,
   `xb.user.panelDistance`, and safe-space bounds. Use eye/chest-height, relaxed-field-of-view,
   arm/ray-reachable composition and validate physical type/target sizes at the actual density and
@@ -1235,7 +1373,7 @@ This contract is part of every XR acceptance gate, not optional styling guidance
     paint/remap, slice/inspect, and send require no more steps/time than reference without a
     documented usability benefit; visual review approves all state/viewports.
 
-- [ ] **P10.2 — Meet WCAG 2.2 AA and robust input semantics.** Semantic HTML/ARIA, full keyboard
+- [~] **P10.2 — Meet WCAG 2.2 AA and robust input semantics.** Semantic HTML/ARIA, full keyboard
   menus/tree/dialogs/sliders/gizmos, visible focus, focus trapping/restoration, screen-reader
   labels/live regions, non-color cues, accessible charts/legends, 44×44 CSS-pixel targets,
   reduced motion, high contrast, and 200% text/zoom are release gates.
@@ -1243,6 +1381,8 @@ This contract is part of every XR acceptance gate, not optional styling guidance
     keyboard-only, switch/touch, color-vision, and high-contrast checks remain required.
   - **Accept:** accessibility test matrix covers every canonical workflow and error state. Any
     inaccessible alternative reopens its feature item.
+  - **Current:** a production-build axe smoke gate passes with no serious/critical findings.
+    Canonical workflow coverage and all required manual assistive/input reviews remain open.
 
 - [ ] **P10.3 — Complete shortcuts and command discovery.** Generate the shortcut catalog from
   action capabilities; cover global, Prepare, gizmos, Objects, and Preview behavior; allow safe
@@ -1272,7 +1412,7 @@ This contract is part of every XR acceptance gate, not optional styling guidance
     frames meet the device refresh interval during representative edit/paint/preview workloads;
     headset review finds no unreadable, unreachable, ambiguous, or fatiguing critical control.
 
-- [ ] **P10.6 — Enforce performance and resource budgets.** Establish reference devices and
+- [~] **P10.6 — Enforce performance and resource budgets.** Establish reference devices and
   record startup/interactive times, main-thread long tasks, frame time, GPU/JS/WASM memory,
   import/save, paint/fill, preview, slice, cancellation, network, and bundle/chunk sizes.
   - Initial gates: interaction tasks under 50 ms; no retained growth after repeated
@@ -1282,8 +1422,10 @@ This contract is part of every XR acceptance gate, not optional styling guidance
     NetworkFirst and outside precache; route before predictable WASM OOM with an explicit choice.
   - **Accept:** CI size/perf smoke gates and repeatable device traces exist; memory/OOM tests
     leave the project recoverable and disclose external routing.
+  - **Current:** deterministic production chunk-size budgets run in CI. Route splitting, runtime
+    latency/memory budgets, cancellation/OOM recovery, and reference-device traces remain open.
 
-- [ ] **P10.7 — Harden client, external slicer, and file pipeline.** Bundle and pin WebMCP rather
+- [~] **P10.7 — Harden client, external slicer, and file pipeline.** Bundle and pin WebMCP rather
   than executing `@latest`; define CSP compatible with COOP/COEP; validate archives/XML/G-code;
   sanitize model/catalog metadata; minimize AI/printer secrets and permissions.
   - External server defaults to localhost or authenticated deployment; restrict origins; limit
@@ -1294,15 +1436,22 @@ This contract is part of every XR acceptance gate, not optional styling guidance
     printers, remote slicer, third-party model/AI services, and hostile projects.
   - **Accept:** abuse tests cover auth/CORS, traversal/ZIP bomb, oversized input, injection,
     cancellation/timeouts, secret/log leakage, SSRF/untrusted webcam URL, and resource exhaustion.
+  - **Current:** WebMCP is exact-pinned/local/typed; CSP and local assets are gated; the server
+    defaults to loopback, fails closed for non-loopback auth/origins, bounds uploads/JSON/ZIP/
+    queue/jobs/rates/time, cancels process trees, and redacts public responses and logs. The full
+    hostile XML/G-code/client SSRF/license/static-scan matrix and production threat review remain.
 
-- [ ] **P10.8 — Add offline/PWA and recovery guarantees.** App shell, profiles, help, local
+- [~] **P10.8 — Add offline/PWA and recovery guarantees.** App shell, profiles, help, local
   editing, save/export, and already-downloaded assets work offline; slicer update caching follows
   the repository's NetworkFirst rule. Autosave uses versioned snapshots with quota handling,
   crash recovery preview, explicit discard, and corruption fallback.
   - **Accept:** offline reload completes supported work; update never mixes incompatible worker/
     WASM/schema versions; forced crash/quota/corruption restores or clearly reports last safe data.
+  - **Current:** app-shell/icons are precached; runtime content is NetworkFirst; slicer artifacts
+    use a separate bounded cache; production offline reload is tested. Autosave, quota/corruption
+    recovery, and worker/WASM/schema atomic-update guarantees remain open.
 
-- [ ] **P10.9 — Build a version-pinned XRBlocks design system and typed adapter.** Exact-pin the
+- [~] **P10.9 — Build a version-pinned XRBlocks design system and typed adapter.** Exact-pin the
   qualified XRBlocks/UIKit pair and isolate addon imports behind a typed, mockable adapter. Remove
   UIBlocks `any`/`@ts-ignore`, fake mutable-field interfaces, invalid `backgroundColor`/`border*`/
   `constrainToCameraY` options, and every direct reactive-property assignment. Build the product
@@ -1316,8 +1465,11 @@ This contract is part of every XR acceptance gate, not optional styling guidance
     visual tests cover every composite/state/token; all critical icons/fonts render with network
     disabled and CSP enforced; design/accessibility review approves the gallery in DOM, simulator,
     and Galaxy XR without API suppressions or runtime asset fetches.
+  - **Current:** XRBlocks/UIKit and 97 Material SVGs are exact/local; typed signal setters, shared
+    capability state, a seven-action finite rail plus menu overflow, CSP, and offline icon tests
+    pass. The complete composite adapter/gallery, visual review, and Galaxy XR review remain open.
 
-- [ ] **P10.10 — Qualify XRBlocks input, lifecycle, cleanup, and headset performance.** Instrument
+- [~] **P10.10 — Qualify XRBlocks input, lifecycle, cleanup, and headset performance.** Instrument
   script/card update counts and input dispatch, then leave exactly one update owner and one select
   lifecycle path. Make any hit beneath any `UICard` suppress workspace gestures; prove modal
   isolation, release-off-target behavior, overlap ordering, disabled guards, and simultaneous
@@ -1333,6 +1485,9 @@ This contract is part of every XR acceptance gate, not optional styling guidance
     repeated-open/close tests show no retained growth or stale handler; no UI hit mutates the scene;
     all input/comfort/offline cases pass in simulator and Galaxy XR, with the P10.5 frame target and
     recorded evidence for budgets, screenshots/video, physical dimensions, and reviewer findings.
+  - **Current:** duplicate manual card updates/select handlers are removed, UI ancestry blocks
+    scene gestures, and disposal is deterministic and idempotent. Counter/snapshot automation,
+    retained-growth traces, simultaneous-input cases, and simulator/Galaxy XR evidence remain.
 
 P10 exit gate: all canonical flows pass the viewport/input/accessibility/XR/performance/security
 matrices and independent visual/interaction review rates them at least official quality.
@@ -1381,7 +1536,7 @@ Local starting seams: the [`action groups`](../web/src/actions/groups/),
   - **Accept:** injected failures are diagnosable; redaction tests prove known secret/PII patterns
     absent; export logs action is no longer a placeholder.
 
-- [ ] **P11.5 — Make automation/MCP honest and safe.** Expose typed project/action APIs over the
+- [~] **P11.5 — Make automation/MCP honest and safe.** Expose typed project/action APIs over the
   same command/capability layer with permission scopes, confirmation for destructive/send/print
   operations, cancellation, revision checks, audit trail, and schema/version negotiation.
   - Voice and AI actions resolve to capability IDs and canonical commands; they cannot bypass
@@ -1389,8 +1544,12 @@ Local starting seams: the [`action groups`](../web/src/actions/groups/),
   - **Accept:** contract tests cover every exposed tool, permission denial, malicious arguments,
     stale revision, cancellation, undo, and capability parity. Automation is an enhancement and
     cannot substitute for missing manual UI.
+  - **Current:** the WebMCP client is local, exact-versioned, loopback-by-default, bearer-protected,
+    schema-checked, timeout/size bounded, and avoids CDN/eval/global injection. Canonical command
+    routing, per-tool permissions/confirmation, audit, revision/cancellation, and full contracts
+    remain open.
 
-- [ ] **P11.6 — Reconcile canonical repository documentation and licensing.** Update `GEMINI.md`,
+- [~] **P11.6 — Reconcile canonical repository documentation and licensing.** Update `GEMINI.md`,
   `README.md`, `CONTRIBUTING.md`, `DESIGN.md`, CI/deploy instructions, engine provenance, commands,
   architecture, supported targets, limitations, and missing/stale roadmap references as facts
   change. Add the root license files/notices required by declared dependencies and distribution.
@@ -1398,6 +1557,8 @@ Local starting seams: the [`action groups`](../web/src/actions/groups/),
     and canonical context must not contradict each other.
   - **Accept:** clean-clone setup/build/test/deploy/server/WASM instructions work; docs/link/license
     checks pass; no current claim references removed Android paths as the production app.
+  - **Current:** this plan and `GEMINI.md` now describe the foundation and gates. Repository-wide
+    README/DESIGN/contributing/license cleanup and clean-clone documentation qualification remain.
 
 - [ ] **P11.7 — Maintain the platform adaptation register.** For each native/cloud-only feature,
   record upstream outcome, parity class, web replacement, user-visible difference, risk, owner,
@@ -1471,37 +1632,37 @@ leaf-level authority and may expand it. “Baseline” is an audited observation
 status. No row is complete until all mapped tasks and applicable cross-cutting P10/P12 gates are
 `[x]`.
 
-| Feature family / required outcome | Primary tasks | 2026-07-12 baseline |
+| Feature family / required outcome | Primary tasks | 2026-07-17 baseline |
 |---|---:|---|
-| Upstream actions/settings/gizmos/formats/calibrations inventory and drift | P0.1, P12.1 | Missing; old plan counts are stale |
-| Truthful menu/toolbar/context/shortcut/XR capability state | P0.2, P11.2 | Broken: 34+ enabled status-only handlers |
-| Clean-clone typecheck/test/build/CI and reproducible engine artifacts | P0.3, P12.3 | Build only; typecheck/tests/CI fail |
-| Golden 3MF/config/G-code/security fixture oracle | P0.4 | Missing |
-| Shared domain/action/surface boundaries | P0.5, P1.1–P1.2 | Partial and workspace-centric |
-| New/open/recent/save/save-as/dirty prompts/recovery | P1.3–P1.6, P11.1 | Partial; current project format is lossy |
-| BBS 3MF project and generic 3MF round-trip | P1.3 | Partial geometry/OrcaXR metadata only |
-| Project/plate/object/volume/instance/layer-range model | P1.1, P2.1 | Missing in live workspace |
-| Selection set and synchronized scene/Object tree | P1.2, P2.1, P5.1 | Single selected flat model |
-| Object/part/instance add, clone, split, merge, move, reload | P2.2 | Split-to-objects partial; most missing |
-| Per-object/per-part/per-height filament selection and inheritance | P2.3, P2.5 | Missing |
+| Upstream actions/settings/gizmos/formats/calibrations inventory and drift | P0.1, P12.1 | Exact pinned extractor maps 1,622 leaves/13 families from 17 Git blobs; manual upstream workflow sampling remains |
+| Truthful menu/toolbar/context/shortcut/XR capability state | P0.2, P11.2 | One guarded registry reports 77 partial and 34 unavailable actions; full upstream reachability remains |
+| Clean-clone typecheck/test/build/CI and reproducible engine artifacts | P0.3, P12.3 | Aggregate local gate and artifact provenance pass; clean-clone CI/native rebuild qualification remains |
+| Golden 3MF/config/G-code/security fixture oracle | P0.4 | Structural 3MF, semantic G-code, and hostile server fixtures pass; official Snapmaker corpus remains |
+| Shared domain/action/surface boundaries | P0.5, P1.1–P1.2 | Canonical project/history and guarded action boundaries exist; legacy live workspace migration remains |
+| New/open/recent/save/save-as/dirty prompts/recovery | P1.3–P1.6, P11.1 | Transactional import, migration, session, and deterministic save foundations exist; live/recovery UX remains |
+| BBS 3MF project and generic 3MF round-trip | P1.3 | Deterministic BBS core plus lossless envelope exists; complete official Orca round-trip remains |
+| Project/plate/object/volume/instance/layer-range model | P1.1, P2.1 | Canonical graph and headless tree exist; live workspace adoption is missing |
+| Selection set and synchronized scene/Object tree | P1.2, P2.1, P5.1 | Canonical entity selection and headless accessible tree/navigation exist; DOM/scene sync is missing |
+| Object/part/instance add, clone, split, merge, move, reload | P2.2 | Canonical lifecycle subset covers rename/delete/duplicate/instances/move; topology/UI/oracle work remains |
+| Per-object/per-part/per-height filament selection and inheritance | P2.3, P2.5 | Canonical stable-ID assignment/inheritance commands exist; selector/live propagation/oracles are missing |
 | Solid/modifier/negative/support-enforcer/blocker volume roles | P2.4 | UI actions are placeholders |
 | Per-object/part/layer settings | P2.5, P6.5 | Missing |
-| Physical filament/tool/profile lifecycle and stable mapping | P3.1 | Palette exists; index-based/partial |
-| Virtual filament add/edit/duplicate/delete/remap | P3.2, P3.8 | Read-only imported rows; Add is misleading |
+| Physical filament/tool/profile lifecycle and stable mapping | P3.1 | Canonical stable-ID definitions and reversible lifecycle commands exist; live/device/engine mapping is missing |
+| Virtual filament add/edit/duplicate/delete/remap | P3.2, P3.8 | Canonical physical-component CRUD/tombstone/removal commands exist; full field model/dialog/live integration remains |
 | FullSpectrum Ratio authoring and slicing | P3.3, P3.9 | Preview/parser building blocks only |
 | FullSpectrum Cycle authoring and slicing | P3.4, P3.9 | Preview/parser building blocks only |
 | FullSpectrum Match authoring and gamut search | P3.5, P3.9 | Disconnected/mock helpers only |
 | FullSpectrum Gradient authoring and Local-Z output | P3.6–P3.7, P3.9 | Imported project path only |
-| Virtual filaments in parts, painting, legends, preview, persistence | P2.3, P3.8, P4.4 | Missing |
-| Canonical independent facet channels | P4.1–P4.2 | Imported paint decode; live vertex color only |
+| Virtual filaments in parts, painting, legends, preview, persistence | P2.3, P3.8, P4.4 | Canonical part/range assignment accepts enabled mixed IDs; paint/legend/preview/live persistence is missing |
+| Canonical independent facet channels | P4.1–P4.2 | Five topology-aware sparse channels and guarded stroke history exist; live paint/subdivision/oracles are missing |
 | Color Circle/Sphere/Triangle/Height/Fill/Gap Fill | P4.3 | Radius vertex brush only |
 | Physical + virtual color palette, erase, clipping, filters | P4.3–P4.4 | Physical radius/color/size only |
-| Filament source→destination paint remapping | P4.5 | Missing |
+| Filament source→destination paint remapping | P4.5 | Canonical atomic many-to-one remap exists; preview/UI/default/deletion/oracle flows are missing |
 | Support painting | P4.6 | Placeholder |
 | Seam painting | P4.7 | Placeholder |
 | Fuzzy-skin painting and brim ears | P4.8 | Placeholders |
 | AI-assisted painting through canonical annotations | P4.9 | Scaffolded, typed/logic defects |
-| Safe painted slicing without monochrome fallback | P4.10, P7.1 | Unsafe fallback exists |
+| Safe painted slicing without monochrome fallback | P4.10, P7.1 | Fail-closed guard and canonical revisioned slice coordinator exist; live route/fault/send gate is pending |
 | Move/rotate/scale/mirror/lay/auto-orient/numeric transforms | P5.1 | Core subset present; scope/selection incomplete |
 | Cut/split/Boolean/repair/simplify | P5.2 | Useful partial implementations |
 | Measure/assembly/emboss/SVG/simplify/brim gizmos | P5.3 | Mostly placeholders or disconnected code |
@@ -1511,15 +1672,15 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Export project/core/sliced 3MF, STL variants, G-code, OBJ, bundles/logs | P5.7 | Partial; several actions placeholders |
 | Primitives, text/SVG, handy/URL model sources | P5.8 | Primitives/catalog partial |
 | Variable/adaptive layer-height profile editor | P5.9 | Action is a placeholder; helper is disconnected |
-| Complete generated engine settings schema | P6.1 | Hand-authored approximation |
-| Process Quality/Strength/Speed/Support/Multimaterial/Others | P6.2 | Partial controls, some no backend behavior |
-| Filament pages and printer/extruder/machine-G-code pages | P6.2 | Partial controls |
+| Complete generated engine settings schema | P6.1 | Deterministic 816-definition/809-key foundation exists; GUI layout/runtime dump/dispositions remain |
+| Process Quality/Strength/Speed/Support/Multimaterial/Others | P6.2 | Headless generated-schema editor supports core field families; GUI layout/special widgets/engine proofs are missing |
+| Filament pages and printer/extruder/machine-G-code pages | P6.2 | Headless schema fields exist without complete generated pages, special widgets, live UI, or engine proofs |
 | System/user/project preset inheritance/compatibility/lifecycle | P6.3 | Profile load/select partial |
 | Setup/custom printer/custom filament/bundle import/export | P6.4 | Profile files exist; lifecycle missing |
-| Settings search/modes/dependencies/validation/reset/compare | P6.2–P6.5 | Mostly missing; enum UI incomplete |
+| Settings search/modes/dependencies/validation/reset/compare | P6.2–P6.5 | Headless modes/search/validation/inheritance/reset/compare exist; dependencies/scopes/live surfaces are missing |
 | Application preferences, storage migration, secret handling | P6.6 | Fragmented local storage; no full dialog |
-| Correct config types/vector delimiters across boundaries | P6.7 | Known numeric-vector defect |
-| Revisioned current/all plate slice, cancel, progress, route parity | P7.1 | Slice works; cancel/revision/route gaps |
+| Correct config types/vector delimiters across boundaries | P6.7 | Generated-schema codec fail-closes delimiter drift for supported families; special/boundary matrix remains |
+| Revisioned current/all plate slice, cancel, progress, route parity | P7.1 | Headless canonical coordinator covers current/all, cancel/retry/timeout/revision/provenance; live progress/routes/oracle remain |
 | Preflight and actionable engine/project/device errors | P7.2 | Partial |
 | Rich G-code parsing and standalone G-code open | P7.3, P7.7 | Minimal line parser; open missing |
 | All preview color modes/move filters/legends | P7.4 | Missing |
@@ -1529,18 +1690,18 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Calibration generators and real per-band output | P8.1–P8.3 | Some geometry generators; effect unverified |
 | Connected calibration wizard, save/history | P8.4–P8.6 | Missing |
 | Secure Moonraker connection and multi-printer setup | P9.1–P9.2 | Basic clients/probe only |
-| Pre-print validation/tool mapping/upload/start | P9.3–P9.4 | Basic DOM flow; registry/XR false actions |
+| Pre-print validation/tool mapping/upload/start | P9.3–P9.4 | Basic DOM flow and truthful capability gates exist; complete preflight/tool mapping/hardware flow remains |
 | Live status/control/storage/queue/history | P9.4–P9.5 | Missing |
 | Camera/console/macros/history | P9.6 | Snapshot scaffold; rest missing |
 | Responsive desktop/tablet/mobile IA and complete states | P10.1 | Useful recent shell work; parity unverified |
-| WCAG AA, keyboard, screen reader, non-color states | P10.2–P10.3 | Partial; no complete gate |
+| WCAG AA, keyboard, screen reader, non-color states | P10.2–P10.3 | Axe smoke and headless tree semantics pass; complete workflows and manual assistive review remain |
 | Localization/pseudo-localization/RTL-safe layout | P10.4 | Missing |
-| XRBlocks typed design system, correct reactive API, local assets | P10.9 | Direct mutations/invalid props/fake types; no qualified component kit |
+| XRBlocks typed design system, correct reactive API, local assets | P10.9 | Exact pins, local icons, and audited UI/UIBlocks contract exist; full qualified component kit remains |
 | Complete XR workflows and common capability gating | P2.6, P10.5, P10.9–P10.10 | Shell exists; many workflows and input modes missing |
-| XR update/input ownership, cleanup, comfort, headset budgets | P10.10 | Likely double updates/dispatch; hidden work and disposal unproven |
-| Bundle/frame/memory/worker/WASM resource budgets | P10.6, P10.10 | Large chunks; no enforced budgets |
-| Client/server/archive/printer/AI security | P10.7 | Material known gaps |
-| PWA offline, coherent updates, autosave/crash recovery | P10.8 | Basic service worker; recovery missing |
+| XR update/input ownership, cleanup, comfort, headset budgets | P10.10 | Duplicate owners removed and disposal is idempotent; instrumentation/headset budgets remain |
+| Bundle/frame/memory/worker/WASM resource budgets | P10.6, P10.10 | Production chunk budgets pass; runtime/frame/memory/device budgets remain |
+| Client/server/archive/printer/AI security | P10.7 | Bounded authenticated server/archive abuse suite passes; full threat/device/AI review remains |
+| PWA offline, coherent updates, autosave/crash recovery | P10.8 | Offline/CSP/update contract and production reload smoke pass; autosave/crash recovery UX remains |
 | Complete menus/cameras/views/shortcuts/help/preferences | P11.2–P11.3 | Broad shell, many false or missing behaviors |
 | Diagnostics/log export and privacy preview | P11.4 | Placeholder |
 | Typed permissioned MCP/voice/AI automation | P11.5 | Scaffolds; remote/unpinned risk |
@@ -1625,7 +1786,18 @@ Evidence: EVID-nnn or Pending
 | Evidence ID | Task(s) | Local commit | Upstream/engine hash | Date | Commands and fixtures | Browser/device/printer | Result/artifact | Reviewer |
 |---|---|---|---|---|---|---|---|---|
 | `EVID-000` | Baseline audit only; no completion credit | Pending current worktree commit | `9fd12ff...` | 2026-07-12 | `npm run build`; typecheck; 13 TS test-file audit; painted WASM test | Local Chromium-capable dev host; no hardware | Build passed; typecheck and 4 test files failed; see §3 | Codex audit; independent review pending |
-| `EVID-___` |  |  |  |  |  |  |  |  |
+| `EVID-001` | P0.1 | Uncommitted worktree; commit pending | `9fd12ffb2b1b80c9fb4c14564754d2ec1573a626` | 2026-07-17 | `npm --prefix web run parity:verify`; generated manifest/disposition mutations | Node 22.21.0 | Pass: 1,622 leaves, 13 families, 17 exact blobs; deterministic and action/setting/stale/duplicate mutations rejected | Codex automated review; official binary/manual sample pending |
+| `EVID-002` | P0.4 | Uncommitted worktree; commit pending | `9fd12ff...` | 2026-07-17 | `npm --prefix web run parity:oracles`; 11 CC0 artifacts and five required mutations | Node 22.21.0 | Pass: structural 3MF and semantic G-code mutations, relationships/extensions, ZIP normalization/tolerances | Codex automated review; Snapmaker-generated reference pending |
+| `EVID-003` | P0.5, P1.1–P1.3 | Uncommitted worktree; commit pending | `9fd12ff...` | 2026-07-17 | `npm --prefix web run architecture:check`; `npm --prefix web run test:project`; structural parity 3MF | Node 22.21.0; headless | Pass: boundaries; 9 domain, 8 history, 3 session, and 4 BBS serializer tests | Codex review; P0.5/P1.1 verified; P1.2/P1.3 residuals documented |
+| `EVID-004` | P0.2, P11.2 | Uncommitted worktree; commit pending | `9fd12ff...` | 2026-07-17 | `npm --prefix web run test:unit`; registry/XR capability fixtures | Node 22.21.0 | Pass: 111 actions = 77 partial + 34 unavailable; guards/surfaces/seven-action XR rail verified; zero false implemented | Codex automated review; full upstream reachability pending |
+| `EVID-005` | P0.3, P10.2, P10.6, P10.8–P10.10 | Uncommitted worktree; commit pending | `9fd12ff...` | 2026-07-17 | `npm --prefix web run quality`; production build/E2E/offline/axe/size/CSP/icons | Chrome for Testing 150.0.7871.24; desktop/mobile emulation; no headset | Pass: 20/20 unit files, 3 integration files, production capability smoke, offline reload, 24 axe rules, 97 local XR icons, bundle budgets | Codex automated review; manual browser/AT/headset matrices pending |
+| `EVID-006` | P6.1 | Uncommitted worktree; commit pending | `9fd12ff...` | 2026-07-17 | `npm --prefix web run settings:verify`; runtime loader test | Node 22.21.0 | Pass: deterministic 816 definitions/809 keys; eight fail-closed mutations; strict loader | Codex automated review; GUI/runtime C++ qualification pending |
+| `EVID-007` | P10.7, P11.5 | Uncommitted worktree; commit pending | `9fd12ff...` | 2026-07-17 | `npm --prefix server test`; WebMCP tests; Compose config; CSP/security contract | Node 22.21.0; Docker 28.3.1; loopback/non-loopback fixtures | Pass: 20 server tests covering auth/CORS/bounds/bombs/rates/queue/cancel/timeouts/log redaction; typed local WebMCP contract | Codex automated review; production threat/static/license review pending |
+| `EVID-008` | P0.3, P3.9, P7.1 | Uncommitted worktree; commit pending | artifact ledger `9fd12ff...` | 2026-07-17 | `npm --prefix wasm run verify:artifacts`; cube/profile/project/painted/prime-tower/FullSpectrum smokes | Node 22.21.0 WASM; no printer | Pass: exact output/input provenance; FullSpectrum 15.0 MB G-code, 1,944 layers, 1,188 tool changes, T0–T3 | Codex automated review; clean rebuild/native/printer parity pending |
+| `EVID-009` | P0.3 aggregate | Uncommitted worktree; commit pending | `9fd12ff...` | 2026-07-17 | `./scripts/quality.sh` | Node 22.21.0; Chrome 150; Docker 28.3.1; no hardware | Pass: complete repository wrapper including all package installs/gates and three zero-vulnerability production audits | Codex automated review; clean-clone CI execution pending |
+| `EVID-010` | P1.4–P1.6, P2.1–P2.3, P3.1–P3.2, P4.1–P4.2, P4.5, P6.2, P6.7, P7.1 | Uncommitted worktree; commit pending | `9fd12ff...` | 2026-07-17 | `npm --prefix web run test:project`; `npm --prefix web run test:settings`; typecheck; architecture check; pinned `MixedFilament.hpp` source audit | Node 22.21.0; headless | Pass: 12/12 project files (67 tests), 2/2 settings files (5 tests), pure boundaries, physical-only recipe components, exact undo/cancel/stale/no-op guards | Codex automated review; live UI/engine/official-Orca/device qualification pending |
+| `EVID-011` | P0.3, P0.5, P4.10, P6.1–P6.2, P10.2, P10.6, P10.8–P10.10 | Uncommitted worktree; commit pending | `9fd12ff...` | 2026-07-17 | `npm --prefix web run quality` | Node 22.21.0; Chrome 150; desktop/mobile emulation; no headset | Pass: 30/30 unit files, 3/3 integration files, 12/12 project files, 2/2 settings files, exact parity/schema/oracles, production/offline/axe/size gates | Codex automated review; manual browser/AT/headset and official workflow matrices pending |
+| `EVID-012` | P0.3 aggregate; supersedes `EVID-009` for this worktree | Uncommitted worktree; commit pending | `9fd12ff...` | 2026-07-17 | `./scripts/quality.sh` | Node 22.21.0; Chrome 150; Docker 28.3.1; WASM; no hardware | Pass: clean installs, web/server/WASM suites, real cube/profile/project/paint/prime-tower/FullSpectrum slices, Compose validation, and three zero-vulnerability production audits. One earlier browser-ready timeout was followed by four direct offline passes and this complete wrapper pass. | Codex automated review; clean-clone CI/headset/printer/native rebuild pending |
 
 Store large reports, normalized comparison JSON, traces, screenshots, videos, and hardware photos
 under the CI artifact URL named in the row; do not bloat Git with generated G-code. Small golden
@@ -1653,65 +1825,53 @@ has no equivalent, add a `BLOCK-*` row rather than calling it done or Not applic
 | 2026-07-12 | Pin initial parity target to Snapmaker v2.3.4 / `9fd12ff...`; supersede `orca_parity_plan.md` | Latest audited Snapmaker release; old plan measures visible actions and has false positives | All | Initial planning decision; product/engineering confirmation pending |
 | 2026-07-12 | Treat same-layer pointillisme as enhancement, not v2.3.4 parity | Upstream executor is compiled out at pinned commit | `E-FS-01`, P3 | Initial source audit; review on baseline bump |
 | 2026-07-12 | Use version-pinned UIBlocks for rich production cards and core Spatial UI only for separate lightweight panels; one card per spatial pivot | XRBlocks explicitly forbids mixing the systems on one panel; UIBlocks supplies nested Yoga layout while card-per-section increases cost and transform/depth drift | P10.5, P10.9–P10.10 | Documentation/source audit; headset review pending |
+| 2026-07-17 | Make exact Git-blob extraction and generated dispositions the scope authority | Dirty worktrees and visible-action counts cannot prove upstream coverage; deterministic source anchors and mutations can detect drift | P0.1, P6.1, P12.1 | Automated review complete; official binary/manual sample pending |
+| 2026-07-17 | Make the canonical project graph/history and action capability registry the only new domain/invocation boundaries | UI-owned mutable lists and direct handlers caused metadata loss, stale async results, and false success across surfaces | P0.2, P0.5, P1 | Foundation tests complete; live migration pending |
+| 2026-07-17 | Use a deterministic browser BBS-core projection plus a versioned lossless OrcaXR envelope as the P1.3 adapter foundation | It permits safe incremental migration and byte-preservation of unknown entries without claiming guessed TypeScript XML is officially interoperable | P1.3 | Structural oracle passes; official Orca round-trip pending |
+| 2026-07-17 | Bundle XR icons locally and leave `ScriptsManager`/XRBlocks as the sole frame/input owners | CDN icons violate offline/CSP/privacy requirements; duplicate lifecycle ownership caused double work and stale handlers | P10.8–P10.10 | Browser tests complete; headset/performance review pending |
+| 2026-07-17 | Fail closed instead of slicing stale FullSpectrum bytes or flattening painted semantics | Exact semantic snapshots and canonical revision/hash guards prevent a successful but mislabeled monochrome or stale artifact | P1.5, P4.10, P7.1 | Fault/unit tests complete; live download/send and engine-route qualification pending |
+| 2026-07-17 | Restrict authored mixed-filament components and component remaps to stable physical-head IDs | Pinned `MixedFilament.hpp` defines `component_a`, `component_b`, and gradient IDs as 1-based physical filament IDs; nested virtual recipes have no v2.3.4 engine semantics | P3.1–P3.2, P4.5 | Type/runtime/command tests complete; official serializer/UI qualification pending |
 | YYYY-MM-DD |  |  |  |  |
 
 ## 21. Verification interface and matrices
 
-P0.3 must make the following the documented clean-clone interface. The scripts do **not** all
-exist yet; adding them and making them green is work, not evidence already earned.
+The clean-clone repository interface now exists. It installs exact lockfiles and runs web,
+server, WASM, provenance, parity, oracle, security, offline, browser, accessibility, and audit
+gates in dependency order:
 
 ```bash
-# Complete required local/CI gate.
-npm --prefix web ci
-npm --prefix web run format:check
-npm --prefix web run lint
-npm --prefix web run typecheck
-npm --prefix web run test:unit
-npm --prefix web run test:integration
-npm --prefix web run test:e2e
-npm --prefix web run test:a11y
-npm --prefix web run test:xr
-npm --prefix web run build
-npm --prefix web run size:check
-
-npm --prefix server ci
-npm --prefix server run test
-npm --prefix server run test:integration
-docker compose -f server/docker-compose.yml build
-
-npm --prefix wasm ci
-npm --prefix wasm run build
-npm --prefix wasm run test:cube
-npm --prefix wasm run test:profile
-npm --prefix wasm run test:project
-npm --prefix wasm run test:painted
-npm --prefix wasm run test:painted-prime-tower
-npm --prefix wasm run test:fullspectrum
-npm --prefix wasm run verify:artifacts
-
-npm --prefix web run parity:extract
-npm --prefix web run parity:verify
-python3 scripts/gcode_parity_compare.py \
-  test-artifacts/orcaxr.gcode test-artifacts/snapmaker-v2.3.4.gcode 2.0
+./scripts/quality.sh
 ```
 
-The final root CI wrapper should run these in dependency order and produce a single evidence
-index. Tests use committed/generated fixtures, never `~/Downloads` or removed Android paths.
-Engine tests must assert that distributed browser/server/WASM copies match the recorded build
-hash and pinned source plus reviewed patch set.
+CI splits the same contract into web, parity, server, WASM, and secret-scan jobs. For targeted
+iteration use the package contracts rather than bypassing their subchecks:
 
-Current audited baseline, to be replaced by the green P0 gate:
+```bash
+npm --prefix web run quality
+npm --prefix web run test:project
+npm --prefix web run test:settings
+npm --prefix server test
+npm --prefix wasm run verify:artifacts
+npm --prefix web run parity:verify
+npm --prefix web run settings:verify
+npm --prefix web run parity:oracles
+```
 
-- `cd web && npm run build` passes but does not typecheck and warns about large chunks.
-- `cd web && npm exec -- tsc --noEmit` fails with 41 errors.
-- Of 13 directly audited TypeScript test files, 9 pass and 4 fail: token case, deleted Android
-  parity tree, Vite-only `import.meta.env`, and stale XR toolbar expectation.
-- No real UIBlocks component, XRBlocks automation/snapshot, update/input lifecycle, disposal, or
-  headset performance test exists; the current XR shell test uses fake mutable-field interfaces.
-- `node wasm/test_slice_painted.mjs` passes (100 layers, two tool changes).
-- Other WASM scripts reference a removed cube path or developer-local FullSpectrum fixture and
-  are not reproducible from a clean clone.
-- CI invokes missing Gradle/application paths and is not a valid web release gate.
+The native Snapmaker CLI image is intentionally an explicit, long-running source-build gate. A
+real deployment token and exact browser origin are required by the fail-closed Compose contract:
+
+```bash
+ORCAXR_BUILD_CONTAINER=1 \
+ORCAXR_SERVER_TOKEN='<at-least-32-random-bytes>' \
+ORCAXR_ALLOWED_ORIGINS='https://exact-app-origin.example' \
+./scripts/quality.sh
+```
+
+Artifact verification proves that the two checked-in WASM copies match the recorded engine,
+source/patch-input aggregate, and output hashes. It does not replace the native source build.
+Tests use committed/generated fixtures, never developer downloads or removed Android paths. The
+remaining manual official-Orca, browser-matrix, headset, printer, and independent-review rows are
+release evidence, not steps silently implied by this automated command.
 
 ### Golden fixture matrix
 

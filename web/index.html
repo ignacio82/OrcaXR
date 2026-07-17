@@ -2,6 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' data: blob: http: https: ws: wss:; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <link rel="manifest" href="manifest.json">
     <!-- Cross-origin isolation shim: on static hosts (GitHub Pages) that can't
          send COOP/COEP headers, this service worker adds them so the WASM
@@ -434,7 +436,7 @@
       <!-- Command palette overlay (every action, searchable). -->
       <div id="command-palette">
         <div class="cmd-box">
-          <input id="cmd-input" class="cmd-input" type="text" placeholder="Search actions…" autocomplete="off" />
+          <input id="cmd-input" class="cmd-input" type="text" aria-label="Search actions" placeholder="Search actions…" autocomplete="off" />
           <div id="cmd-list" class="cmd-list"></div>
         </div>
       </div>
@@ -452,7 +454,7 @@
 
       <!-- Tool rail — rendered from the shared ActionRegistry by DomShell. -->
       <button id="toolbar-toggle" type="button" aria-controls="left-toolbar" aria-expanded="false" hidden>☷ Tools</button>
-      <div id="left-toolbar"></div>
+      <div id="left-toolbar" role="toolbar" aria-label="Model tools" tabindex="0"></div>
 
       <section id="workspace-empty-state" aria-labelledby="empty-state-title">
         <div class="empty-state-mark" aria-hidden="true">◈</div>
@@ -480,9 +482,9 @@
         <div id="preflight-banners" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;"></div>
         <details class="insp-section" open><summary>Printer &amp; profile</summary>
         <div class="panel" id="profile-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
-          <select id="sel-machine" class="action-btn" style="text-align:left;"></select>
-          <select id="sel-process" class="action-btn" style="text-align:left;"></select>
-          <select id="sel-filament" class="action-btn" style="text-align:left;"></select>
+          <select id="sel-machine" aria-label="Printer profile" class="action-btn" style="text-align:left;"></select>
+          <select id="sel-process" aria-label="Process profile" class="action-btn" style="text-align:left;"></select>
+          <select id="sel-filament" aria-label="Filament profile" class="action-btn" style="text-align:left;"></select>
         </div>
         <div class="panel" id="heads-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
         </div>
@@ -582,7 +584,7 @@
             Enable local MCP Server
           </label>
           <div id="mcp-controls" style="display:none;flex-direction:column;gap:8px;">
-            <input id="in-mcp-token" type="text" placeholder="Paste Auth Token" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.3);color:#fff;border:1px solid #ffffff1a;border-radius:8px;padding:10px;font-size:13px;font-family:monospace;" />
+            <input id="in-mcp-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="One-use WebMCP connection token" placeholder="Paste Auth Token" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.3);color:#fff;border:1px solid #ffffff1a;border-radius:8px;padding:10px;font-size:13px;font-family:monospace;" />
             <button id="btn-mcp-connect" class="action-btn" style="margin:0;">Connect Server</button>
             <button id="btn-mcp-share" class="action-btn" style="margin:0;">Share Connection Snippet</button>
           </div>

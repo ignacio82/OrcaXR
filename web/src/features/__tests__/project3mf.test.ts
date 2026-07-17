@@ -7,7 +7,11 @@ import { writeProject3mf, parseProject3mf, type ProjectMeta } from '../Project3m
 import { writeMinimal3mf } from '../Write3mf';
 
 let passed = 0;
-function test(name: string, fn: () => void) { fn(); passed++; console.log('  ✓', name); }
+function test(name: string, fn: () => void) {
+  fn();
+  passed++;
+  console.log('  ✓', name);
+}
 
 const triA = new Float32Array([0, 0, 0, 10, 0, 0, 0, 10, 0]);
 const triB = new Float32Array([1, 1, 1, 2, 1, 1, 1, 2, 1]);
@@ -16,9 +20,16 @@ const meta: ProjectMeta = {
   version: 1,
   profile: { machine: 'Snapmaker U1', process: '0.20 Standard', filament: 'PLA' },
   activePlate: 2,
-  plates: [{ id: 1, label: 'Plate 1' }, { id: 2, label: 'Plate 2' }],
+  plates: [
+    { id: 1, label: 'Plate 1' },
+    { id: 2, label: 'Plate 2' },
+  ],
   objects: [
-    { plate: 1, viewer: { position: [0.1, 0, -0.2], quaternion: [0, 0, 0, 1], scale: [1, 1, 1] }, display: [0, 0.01, 0] },
+    {
+      plate: 1,
+      viewer: { position: [0.1, 0, -0.2], quaternion: [0, 0, 0, 1], scale: [1, 1, 1] },
+      display: [0, 0.01, 0],
+    },
     { plate: 2, viewer: { position: [0, 0, 0], quaternion: [0, 0, 0, 1], scale: [2, 2, 2] }, display: [1, 2, 3] },
   ],
 };

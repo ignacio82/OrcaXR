@@ -5,7 +5,11 @@ import assert from 'node:assert';
 import { exportConfigJson, parseConfigJson, type ConfigBundle } from '../ConfigIO';
 
 let passed = 0;
-function test(name: string, fn: () => void) { fn(); passed++; console.log('  ✓', name); }
+function test(name: string, fn: () => void) {
+  fn();
+  passed++;
+  console.log('  ✓', name);
+}
 
 const bundle: ConfigBundle = {
   machineName: 'Snapmaker U1 (0.4 nozzle)',
