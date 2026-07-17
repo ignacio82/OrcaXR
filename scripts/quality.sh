@@ -15,7 +15,7 @@ npm --prefix web run quality
 
 npm --prefix server test
 npm --prefix server run test:integration
-ORCAXR_SERVER_TOKEN=0123456789abcdef0123456789abcdef \
+ORCAXR_SERVER_TOKEN=test-only-token-00000000000000000 \
 ORCAXR_ALLOWED_ORIGINS=https://app.example \
   docker compose -f server/docker-compose.yml config --quiet
 

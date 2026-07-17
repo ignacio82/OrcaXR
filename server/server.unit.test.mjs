@@ -98,7 +98,7 @@ test("origin and bearer checks are exact", () => {
   assert.equal(isOriginAllowed("https://app.example.evil.test", config), false);
   assert.equal(isOriginAllowed("http://localhost:5173", config), true);
   assert.equal(isOriginAllowed("null", config), false);
-  const token = "0123456789abcdef0123456789abcdef";
+  const token = "test-only-token-00000000000000000";
   assert.equal(bearerTokenMatches(`Bearer ${token}`, token), true);
   assert.equal(bearerTokenMatches(`Bearer ${token}x`, token), false);
   assert.equal(bearerTokenMatches(`Basic ${token}`, token), false);

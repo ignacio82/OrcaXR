@@ -131,7 +131,7 @@ test("sync and async slicing preserve G-code delivery semantics", async () => {
 });
 
 test("CORS is exact and non-loopback service requires bearer auth", async () => {
-  const token = "0123456789abcdef0123456789abcdef";
+  const token = "test-only-token-00000000000000000";
   const instance = await fixture({
     config: {
       host: "0.0.0.0",

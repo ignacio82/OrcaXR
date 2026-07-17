@@ -1,0 +1,17 @@
+title = "OrcaXR Gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+  [[rules.allowlists]]
+  description = "Generated Snapmaker travel-point option identifiers are schema keys, not credentials."
+  condition = "AND"
+  regexTarget = "secret"
+  regexes = ['''^travel_point_[1-3]_[xy]$''']
+  paths = [
+    '''^docs/parity/snapmaker-v2\.3\.4\.json$''',
+    '''^web/src/settings/generated/engine-options\.schema\.json$''',
+  ]
