@@ -54,6 +54,21 @@ test('round-trips the metadata (plates, profile, transforms)', () => {
   assert.deepStrictEqual(m.objects[1].display, [1, 2, 3]);
 });
 
+test('writes byte-identical archives at different wall-clock times', () => {
+  // fflate uses Date.now() when an entry has no explicit mtime. Simulate two
+  // archive creations a decade apart without making the test actually wait.
+  const realNow = Date.now;
+  try {
+    Date.now = () => new Date(2026, 0, 2, 3, 4, 5).getTime();
+    const first = writeProject3mf([{ positions: triA }, { positions: triB }], meta);
+    Date.now = () => new Date(2036, 6, 8, 9, 10, 11).getTime();
+    const second = writeProject3mf([{ positions: triA }, { positions: triB }], meta);
+    assert.deepStrictEqual(second, first);
+  } finally {
+    Date.now = realNow;
+  }
+});
+
 test('a plain (non-project) 3MF returns null', () => {
   // A zip without the sidecar isn't an OrcaXR project.
   assert.strictEqual(parseProject3mf(writeMinimal3mf(triA)), null);

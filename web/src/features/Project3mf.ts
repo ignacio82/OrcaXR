@@ -13,6 +13,12 @@
 import * as fflate from 'fflate';
 import { CONTENT_TYPES, RELS, fmtCoord as f } from './Write3mf';
 
+const PROJECT_ZIP_MTIME = new Date(1980, 0, 1, 0, 0, 0, 0);
+
+function deterministicZipEntry(bytes: Uint8Array): fflate.ZippableFile {
+  return [bytes, { mtime: PROJECT_ZIP_MTIME }];
+}
+
 export interface ProjectObjectMeta {
   /** Which plate id this object belongs to. */
   plate: number;
@@ -62,10 +68,10 @@ export function writeProject3mf(objects: { positions: ArrayLike<number> }[], met
 </model>`;
   const enc = new TextEncoder();
   return fflate.zipSync({
-    '[Content_Types].xml': enc.encode(CONTENT_TYPES),
-    '_rels/.rels': enc.encode(RELS),
-    '3D/3dmodel.model': enc.encode(model),
-    'Metadata/orcaxr_project.json': enc.encode(JSON.stringify(meta)),
+    '[Content_Types].xml': deterministicZipEntry(enc.encode(CONTENT_TYPES)),
+    '_rels/.rels': deterministicZipEntry(enc.encode(RELS)),
+    '3D/3dmodel.model': deterministicZipEntry(enc.encode(model)),
+    'Metadata/orcaxr_project.json': deterministicZipEntry(enc.encode(JSON.stringify(meta))),
   });
 }
 

@@ -46,6 +46,144 @@ export interface BbsCoreBuild {
   warnings: string[];
 }
 
+/**
+ * Lightweight view of BBS/Orca plate membership used while the legacy live
+ * workspace is being migrated onto ProjectState. Build item indices are in
+ * the exact order of the core 3MF <build>, which is also the order emitted by
+ * ThreeMFLoader at its root.
+ */
+export interface BbsPlateLayout {
+  buildItemCount: number;
+  bedSizeMm?: { x: number; y: number };
+  plates: Array<{
+    sourceId: number;
+    name: string;
+    buildItemIndices: number[];
+    originMm?: { x: number; y: number };
+  }>;
+  unassignedBuildItemIndices: number[];
+}
+
+export type BbsPlateLayoutExtraction =
+  | { status: 'absent'; layout: null }
+  | { status: 'invalid'; layout: null }
+  | { status: 'valid'; layout: BbsPlateLayout };
+
+/**
+ * Read official Orca/BBS multi-plate membership without decoding the meshes.
+ * Membership lives in Metadata/model_settings.config as
+ * (object_id, instance_id) pairs; it must not be guessed from thumbnails or
+ * the spatial clusters in the core model.
+ */
+export function extractBbsPlateLayout(files: ReadonlyMap<string, Uint8Array>): BbsPlateLayout | null {
+  return extractBbsPlateLayoutResult(files).layout;
+}
+
+/** Distinguish an ordinary file with no plate declarations from metadata we cannot trust. */
+export function extractBbsPlateLayoutResult(files: ReadonlyMap<string, Uint8Array>): BbsPlateLayoutExtraction {
+  const settingsBytes = files.get(MODEL_SETTINGS_PATH);
+  if (!settingsBytes) return { status: 'absent', layout: null };
+
+  let declaredPlateCount: number;
+  try {
+    const settingsXml = decodeText(settingsBytes, MODEL_SETTINGS_PATH);
+    declaredPlateCount = [...settingsXml.matchAll(/<plate\b/gi)].length;
+  } catch {
+    return { status: 'invalid', layout: null };
+  }
+  if (declaredPlateCount === 0) return { status: 'absent', layout: null };
+
+  try {
+    const layout = extractBbsPlateLayoutUnchecked(files);
+    if (!layout || layout.plates.length !== declaredPlateCount) return { status: 'invalid', layout: null };
+    return { status: 'valid', layout };
+  } catch {
+    return { status: 'invalid', layout: null };
+  }
+}
+
+function extractBbsPlateLayoutUnchecked(files: ReadonlyMap<string, Uint8Array>): BbsPlateLayout | null {
+  const modelBytes = files.get(CORE_MODEL_PATH);
+  const settingsBytes = files.get(MODEL_SETTINGS_PATH);
+  if (!modelBytes || !settingsBytes) return null;
+
+  const modelXml = decodeText(modelBytes, CORE_MODEL_PATH);
+  const buildBody = /<build\b[^>]*>([\s\S]*?)<\/build>/i.exec(modelXml)?.[1];
+  if (buildBody === undefined) return null;
+  const buildObjectIds = [...buildBody.matchAll(/<item\b([^>]*)\/?\s*>/gi)].map((item) => {
+    const objectId = Number(parseAttributes(item[1]).objectid);
+    return Number.isInteger(objectId) && objectId >= 1 ? objectId : undefined;
+  });
+  if (buildObjectIds.length === 0 || buildObjectIds.some((objectId) => objectId === undefined)) return null;
+
+  const metadata = parseModelSettings(settingsBytes);
+  if (metadata.plates.length === 0) return null;
+  const orderedMetadata = [...metadata.plates].sort((left, right) => left.sourceId - right.sourceId);
+  const plates: BbsPlateLayout['plates'] = orderedMetadata.map((plate, index) => ({
+    sourceId: plate.sourceId,
+    name: plate.name || `Plate ${index + 1}`,
+    buildItemIndices: [],
+  }));
+
+  const assignmentByInstance = new Map<string, number>();
+  const conflictingAssignments = new Set<string>();
+  const assignmentPlatesByObject = new Map<number, Set<number>>();
+  orderedMetadata.forEach((plate, plateIndex) => {
+    for (const assignment of plate.assignments) {
+      const key = `${assignment.objectId}:${assignment.instanceIndex}`;
+      const previousPlate = assignmentByInstance.get(key);
+      if (previousPlate === undefined && !conflictingAssignments.has(key)) assignmentByInstance.set(key, plateIndex);
+      else if (previousPlate !== undefined && previousPlate !== plateIndex) {
+        assignmentByInstance.delete(key);
+        conflictingAssignments.add(key);
+      }
+      const objectPlates = assignmentPlatesByObject.get(assignment.objectId) ?? new Set<number>();
+      objectPlates.add(plateIndex);
+      assignmentPlatesByObject.set(assignment.objectId, objectPlates);
+    }
+  });
+
+  const instanceIndexByObject = new Map<number, number>();
+  const unassignedBuildItemIndices: number[] = [];
+  buildObjectIds.forEach((objectIdValue, buildItemIndex) => {
+    const objectId = objectIdValue!;
+    const instanceIndex = instanceIndexByObject.get(objectId) ?? 0;
+    instanceIndexByObject.set(objectId, instanceIndex + 1);
+    let plateIndex = assignmentByInstance.get(`${objectId}:${instanceIndex}`);
+    // Some producers omit or renumber instance_id while still assigning every
+    // occurrence of an object to one plate. Use that unambiguous object-level
+    // fallback, but never guess when an object spans multiple plates.
+    if (plateIndex === undefined) {
+      const candidates = assignmentPlatesByObject.get(objectId);
+      if (candidates?.size === 1) plateIndex = candidates.values().next().value;
+    }
+    if (plateIndex === undefined || !plates[plateIndex]) unassignedBuildItemIndices.push(buildItemIndex);
+    else plates[plateIndex].buildItemIndices.push(buildItemIndex);
+  });
+
+  const project = parseProjectSettings(files.get(PROJECT_SETTINGS_PATH));
+  const bedSizeMm = printableAreaSize(project.config.printable_area);
+  if (bedSizeMm) {
+    const sourcePlateCount = Math.max(plates.length, ...plates.map((plate) => plate.sourceId));
+    const columns = Math.ceil(Math.sqrt(sourcePlateCount));
+    plates.forEach((plate) => {
+      const sourceIndex = Math.max(0, plate.sourceId - 1);
+      const row = Math.floor(sourceIndex / columns);
+      plate.originMm = {
+        x: (sourceIndex % columns) * bedSizeMm.x * 1.2,
+        y: row === 0 ? 0 : -row * bedSizeMm.y * 1.2,
+      };
+    });
+  }
+
+  return {
+    buildItemCount: buildObjectIds.length,
+    ...(bedSizeMm ? { bedSizeMm } : {}),
+    plates,
+    unassignedBuildItemIndices,
+  };
+}
+
 interface VolumeMapping {
   volume: ProjectVolume;
   numericId: number;
@@ -907,6 +1045,7 @@ interface ParsedModelMetadata {
   partData: Map<number, { role: VolumeRole; name?: string; config: ConfigMap }>;
   layerRanges: Map<number, Array<Omit<LayerRange, 'id'>>>;
   plates: Array<{
+    sourceId: number;
     name: string;
     printable: boolean;
     config: ConfigMap;
@@ -1336,6 +1475,29 @@ function parseProjectSettings(bytes: Uint8Array | undefined): {
   };
 }
 
+function printableAreaSize(value: JsonValue | undefined): { x: number; y: number } | undefined {
+  const entries = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(/[,;]/).map((entry) => entry.trim())
+      : [];
+  const points: Array<{ x: number; y: number }> = [];
+  for (const entry of entries) {
+    if (typeof entry !== 'string') continue;
+    const match = /^\s*(-?(?:\d+(?:\.\d*)?|\.\d+))\s*x\s*(-?(?:\d+(?:\.\d*)?|\.\d+))\s*$/i.exec(entry);
+    if (!match) continue;
+    const x = Number(match[1]);
+    const y = Number(match[2]);
+    if (Number.isFinite(x) && Number.isFinite(y)) points.push({ x, y });
+  }
+  if (points.length < 2) return undefined;
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const x = Math.max(...xs) - Math.min(...xs);
+  const y = Math.max(...ys) - Math.min(...ys);
+  return x > 0 && y > 0 ? { x, y } : undefined;
+}
+
 function parseModelSettings(bytes: Uint8Array | undefined): ParsedModelMetadata {
   const result: ParsedModelMetadata = {
     objectConfig: new Map(),
@@ -1390,11 +1552,14 @@ function parseModelSettings(bytes: Uint8Array | undefined): ParsedModelMetadata 
       '',
     );
     const config = parseMetadataConfig(plateConfigXml);
+    const parsedSourceId = Number(attrs.id ?? config.plater_id);
+    const sourceId =
+      Number.isInteger(parsedSourceId) && parsedSourceId >= 1 ? parsedSourceId : result.plates.length + 1;
     const assignments: Array<{ objectId: number; instanceIndex: number }> = [];
     for (const instance of plateMatch[2].matchAll(
-      /<model_instance\b([^>]*)\/?\s*>([\s\S]*?)<\/model_instance>|<model_instance\b([^>]*)\/>/gi,
+      /<model_instance\b([^>]*?)(?:\/\s*>|>([\s\S]*?)<\/model_instance>)/gi,
     )) {
-      const direct = parseAttributes(instance[1] ?? instance[3] ?? '');
+      const direct = parseAttributes(instance[1] ?? '');
       const nested = parseMetadataConfig(instance[2] ?? '');
       const objectId = Number(direct.object_id ?? nested.object_id);
       const instanceIndex = Number(direct.instance_id ?? nested.instance_id ?? 0);
@@ -1403,6 +1568,7 @@ function parseModelSettings(bytes: Uint8Array | undefined): ParsedModelMetadata 
       }
     }
     result.plates.push({
+      sourceId,
       name: String(attrs.name ?? config.plater_name ?? `Plate ${result.plates.length + 1}`),
       printable: String(attrs.printable ?? config.printable ?? '1') !== '0',
       config: plateConfig(config, attrs),

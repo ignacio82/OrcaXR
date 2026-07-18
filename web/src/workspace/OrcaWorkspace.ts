@@ -13,6 +13,23 @@ import { ThreeMFLoader } from 'three/examples/jsm/loaders/3MFLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
 import * as fflate from 'fflate';
+import {
+  extractBbsPlateLayoutResult,
+  type BbsPlateLayout,
+  type BbsPlateLayoutExtraction,
+} from '../project/serialization/bbsCore';
+import { unzip3mfPackage, type ThreeMfEntries } from '../features/ThreeMfPackage';
+
+/** Read official Orca/BBS plate membership from an in-memory 3MF package. */
+export function extract3mfPlateLayout(buf: ArrayBuffer, entries?: ThreeMfEntries): BbsPlateLayoutExtraction {
+  try {
+    const unzipped = entries ?? unzip3mfPackage(buf);
+    return extractBbsPlateLayoutResult(new Map(Object.entries(unzipped)));
+  } catch (error) {
+    console.warn('extract3mfPlateLayout: could not read plate metadata', error);
+    return { status: 'invalid', layout: null };
+  }
+}
 
 /**
  * Extract a per-mesh color list for an OrcaSlicer/Bambu 3MF, in the SAME
@@ -27,9 +44,9 @@ import * as fflate from 'fflate';
  * and key color off each geometry object's own extruder assignment — so
  * colors align by object identity, not by position.
  */
-export async function extract3mfColors(buf: ArrayBuffer): Promise<string[] | null> {
+export async function extract3mfColors(buf: ArrayBuffer, entries?: ThreeMfEntries): Promise<string[] | null> {
   try {
-    const unzipped = fflate.unzipSync(new Uint8Array(buf));
+    const unzipped = entries ?? unzip3mfPackage(buf);
     const dec = new TextDecoder();
 
     const projectSettings = unzipped['Metadata/project_settings.config'];
@@ -177,7 +194,7 @@ import {
 } from 'xrblocks/addons/uiblocks/src/index.js';
 
 import { parseGcodeToolpath } from '../slicer/GcodeToolpath';
-import { FilamentPalette } from './FilamentPalette';
+import { FilamentPalette, type FilamentSlot } from './FilamentPalette';
 import { bedSizeFromProfile, ProfileCatalog, SlicerProfile } from '../slicer/ProfileLoader';
 import { SlicerClient } from '../slicer/SlicerClient';
 import {
@@ -206,6 +223,31 @@ import { writeMinimal3mf } from '../features/Write3mf';
 import { writeProject3mf, parseProject3mf, type ProjectMeta, type ProjectObjectMeta } from '../features/Project3mf';
 import { exportConfigJson, parseConfigJson } from '../features/ConfigIO';
 import { extract3mfPaint, applyPaintToPositions, type Paint3mfResult } from '../features/Paint3mf';
+
+/** Decode the compact project settings while the shared inflated entries live. */
+function projectConfigFrom3mfEntries(entries: ThreeMfEntries): Record<string, unknown> | null {
+  const projectSettings = entries['Metadata/project_settings.config'];
+  if (!projectSettings) return null;
+  const parsed: unknown = JSON.parse(new TextDecoder().decode(projectSettings));
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Metadata/project_settings.config must contain a JSON object');
+  }
+  return parsed as Record<string, unknown>;
+}
+
+/** Metadata needed by the live importer, decoded from one shared inflation. */
+export async function extract3mfImportMetadata(buf: ArrayBuffer) {
+  const entries = unzip3mfPackage(buf);
+  const colors = await extract3mfColors(buf, entries);
+  const plateMetadata = extract3mfPlateLayout(buf, entries);
+  return {
+    projectConfig: projectConfigFrom3mfEntries(entries),
+    colors,
+    paint: extract3mfPaint(buf, entries),
+    plateLayout: plateMetadata.layout,
+    plateLayoutStatus: plateMetadata.status,
+  };
+}
 import { virtualFilamentsFromConfig, type VirtualFilament } from '../features/MixedFilamentPreview';
 import { xrIcon } from '../ui/icons';
 
@@ -235,6 +277,29 @@ function ownedArrayBuffer(view: ArrayBufferView<ArrayBufferLike>): ArrayBuffer {
 
 /** One plated model: its source geometry, the display mesh, and the grab proxy. */
 type ModelEntry = { raw: THREE.BufferGeometry; display: THREE.Mesh; viewer: THREE.Object3D };
+
+interface GeometryLoadOptions {
+  preservePrinterXY?: boolean;
+  preservePrinterZ?: boolean;
+  deferPostAdd?: boolean;
+  deferBoundsTree?: boolean;
+}
+
+type ProjectPrimeTower = { enabled: boolean; xMm: number; yMm: number; widthMm: number };
+
+/** State changed by 3MF project-settings adoption, held until geometry commits. */
+interface SemanticImportCheckpoint {
+  originalProject: ArrayBuffer | null;
+  originalProjectSnapshot: SemanticProjectSnapshot | null;
+  projectSnapshotPending: boolean;
+  projectSourceWasExclusive: boolean;
+  canonicalSliceRequiredReason: string | null;
+  virtualFilaments: VirtualFilament[];
+  projectPrimeTower: ProjectPrimeTower | null;
+  palette: FilamentSlot[];
+  headFilaments: string[];
+  headNozzles: string[];
+}
 
 export type WorkspaceGizmoTool = 'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint';
 
@@ -662,7 +727,7 @@ export class OrcaWorkspace extends xb.Script {
    *  read-only in the UI; their display colors match the desktop app. */
   public virtualFilaments: VirtualFilament[] = [];
   /** Prime/purge tower setup adopted from the loaded 3MF (null = none). */
-  private projectPrimeTower: { enabled: boolean; xMm: number; yMm: number; widthMm: number } | null = null;
+  private projectPrimeTower: ProjectPrimeTower | null = null;
   /** The loaded project 3MF's raw bytes — FullSpectrum projects slice from
    *  this file (embedded mixed-filament config), like the desktop app. */
   private originalProject: ArrayBuffer | null = null;
@@ -674,6 +739,8 @@ export class OrcaWorkspace extends xb.Script {
   /** Set when multiple imported semantic sources cannot be represented by one
    * immutable as-authored project. This keeps later geometry routes blocked. */
   private canonicalSliceRequiredReason: string | null = null;
+  /** Rollback point spanning project-settings adoption and geometry commit. */
+  private pendingSemanticImportCheckpoint: SemanticImportCheckpoint | null = null;
   private wipeTowerGhost: THREE.Group | null = null;
   public headFilaments: string[] = [];
   public headNozzles: string[] = [];
@@ -1162,6 +1229,7 @@ export class OrcaWorkspace extends xb.Script {
     for (const geo of this.printerGeometries()) {
       geo.computeBoundingBox();
       if (geo.boundingBox) heightMm = Math.max(heightMm, geo.boundingBox.max.z);
+      geo.dispose();
     }
     if (heightMm <= 0) heightMm = 30;
     const h = heightMm * vis;
@@ -1295,10 +1363,17 @@ export class OrcaWorkspace extends xb.Script {
       return true;
     }
     if (lower.endsWith('.3mf')) {
-      const colors = await extract3mfColors(buf);
-      const paint = extract3mfPaint(buf);
-      await this.adoptPaletteFrom3mf(buf);
-      this.loadModelFromGroup(new ThreeMFLoader().parse(buf), name, colors ?? undefined, paint);
+      const metadata = await extract3mfImportMetadata(buf);
+      const group = new ThreeMFLoader().parse(buf);
+      await this.adoptPaletteFrom3mf(buf, metadata.projectConfig);
+      this.loadModelFromGroup(
+        group,
+        name,
+        metadata.colors ?? undefined,
+        metadata.paint,
+        metadata.plateLayout,
+        metadata.plateLayoutStatus,
+      );
       return true;
     }
     if (lower.endsWith('.obj')) {
@@ -1364,9 +1439,7 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus(`Extracting colors...`);
       this.setProgress(30);
       await new Promise((r) => setTimeout(r, 50));
-      const colors = await extract3mfColors(buf);
-      const paint = extract3mfPaint(buf);
-      await this.adoptPaletteFrom3mf(buf);
+      const metadata = await extract3mfImportMetadata(buf);
 
       this.setStatus(`Parsing 3MF geometry...`);
       this.setProgress(60);
@@ -1377,7 +1450,16 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus(`Building scene...`);
       this.setProgress(90);
       await new Promise((r) => setTimeout(r, 50));
-      this.loadModelFromGroup(group, name, colors ?? undefined, paint);
+      // No task boundary may sit between this checkpoint and geometry commit.
+      await this.adoptPaletteFrom3mf(buf, metadata.projectConfig);
+      this.loadModelFromGroup(
+        group,
+        name,
+        metadata.colors ?? undefined,
+        metadata.paint,
+        metadata.plateLayout,
+        metadata.plateLayoutStatus,
+      );
     } else {
       this.setStatus(`Downloading ${name}...`);
       this.setProgress(10);
@@ -1400,14 +1482,13 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Replace the current model with [raw] (STL geometry: mm, Z-up). */
-  loadModelFromGeometry(raw: THREE.BufferGeometry, name: string) {
+  loadModelFromGeometry(raw: THREE.BufferGeometry, name: string, options: GeometryLoadOptions = {}) {
     this.library.push({ name, geometry: raw });
     this.libraryIndex = this.library.length - 1;
-    this.addModelFromGeometry(raw, 0x4fc3f7);
-    if (this.transformControls && this.models.length > 0) {
-      this.selectModel(this.models[this.models.length - 1]);
-    }
-    this.setStatus(`Loaded ${name}.`);
+    this.addModelFromGeometry(raw, 0x4fc3f7, options);
+    const added = this.models[this.models.length - 1];
+    if (added) added.viewer.name = name;
+    if (!options.deferPostAdd) this.setStatus(`Loaded ${name}.`);
   }
 
   /** Drop a stock primitive on the bed (20 mm, printer-frame Z-up). */
@@ -1665,28 +1746,27 @@ export class OrcaWorkspace extends xb.Script {
 
   /** Seed the filament palette from a 3MF's own filament_colour list, adopt
    *  its FullSpectrum virtual filaments, and pick up its prime-tower setup. */
-  async adoptPaletteFrom3mf(buf: ArrayBuffer) {
+  async adoptPaletteFrom3mf(buf: ArrayBuffer, projectConfig?: Record<string, unknown> | null) {
     // Importing anything after an as-authored project invalidates that source.
     // A new FullSpectrum source is eligible only when it starts from the one
     // empty default plate; otherwise its raw bytes omit existing workspace
     // content and must never be used as a lossy shortcut.
     const sourceWasExclusive =
       this.plates.length === 1 && this.plates[0].id === this.activePlateId && this.plates[0].models.length === 0;
-    const hadFullSpectrumSource =
-      this.canonicalSliceRequiredReason !== null || (this.virtualFilaments.length > 0 && this.originalProject !== null);
+    const hadFullSpectrumSource = this.canonicalSliceRequiredReason !== null || this.virtualFilaments.length > 0;
 
-    let cfg: Record<string, unknown>;
+    let cfg: Record<string, unknown> | null;
     try {
-      const unzipped = fflate.unzipSync(new Uint8Array(buf));
-      const proj = unzipped['Metadata/project_settings.config'];
-      if (!proj) return;
-      const parsed = JSON.parse(new TextDecoder().decode(proj));
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        throw new Error('Metadata/project_settings.config must contain a JSON object');
-      }
-      cfg = parsed as Record<string, unknown>;
+      cfg = projectConfig === undefined ? projectConfigFrom3mfEntries(unzip3mfPackage(buf)) : projectConfig;
     } catch (e) {
       throw new Error(`Could not read 3MF project settings: ${(e as Error).message}`, { cause: e });
+    }
+
+    if (!cfg) {
+      // Plate validation during geometry commit may need to mutate a semantic
+      // blocker even when this archive has no project settings of its own.
+      this.beginSemanticImportCheckpoint();
+      return;
     }
 
     const colors: string[] | undefined =
@@ -1696,41 +1776,132 @@ export class OrcaWorkspace extends xb.Script {
     const first = (value: unknown): string =>
       Array.isArray(value) ? `${value[0] ?? ''}` : value === null || value === undefined ? '' : `${value}`;
 
-    this.originalProject = buf.slice(0);
-    this.originalProjectSnapshot = null;
-    this.projectSnapshotPending = true;
-    this.projectSourceWasExclusive = sourceWasExclusive;
-    this.virtualFilaments = virtualFilaments;
-    this.projectPrimeTower = {
-      enabled: first(cfg.enable_prime_tower) === '1',
-      xMm: parseFloat(first(cfg.wipe_tower_x)) || 0,
-      yMm: parseFloat(first(cfg.wipe_tower_y)) || 0,
-      widthMm: parseFloat(first(cfg.prime_tower_width)) || 35,
-    };
-    this.canonicalSliceRequiredReason = combinedSemanticImportRequiresCanonicalSlice({
-      sourceWasExclusive,
-      hadFullSpectrumSource,
-      incomingVirtualFilamentCount: virtualFilaments.length,
-    })
-      ? 'Multiple imported project sources include FullSpectrum intent and require canonical live-project slicing.'
-      : null;
+    this.beginSemanticImportCheckpoint();
+    try {
+      // Only FullSpectrum's immutable slicing route needs the source archive.
+      // Plain 3MFs avoid retaining a second copy during the heavy mesh import.
+      this.originalProject = virtualFilaments.length > 0 ? buf.slice(0) : null;
+      this.originalProjectSnapshot = null;
+      this.projectSnapshotPending = true;
+      this.projectSourceWasExclusive = sourceWasExclusive;
+      this.virtualFilaments = virtualFilaments;
+      this.projectPrimeTower = {
+        enabled: first(cfg.enable_prime_tower) === '1',
+        xMm: parseFloat(first(cfg.wipe_tower_x)) || 0,
+        yMm: parseFloat(first(cfg.wipe_tower_y)) || 0,
+        widthMm: parseFloat(first(cfg.prime_tower_width)) || 35,
+      };
+      this.canonicalSliceRequiredReason = combinedSemanticImportRequiresCanonicalSlice({
+        sourceWasExclusive,
+        hadFullSpectrumSource,
+        incomingVirtualFilamentCount: virtualFilaments.length,
+      })
+        ? 'Multiple imported project sources include FullSpectrum intent and require canonical live-project slicing.'
+        : null;
 
-    // Virtual rows are committed before the palette notification so both UIs
-    // observe one coherent material snapshot.
-    if (colors) this.palette.setFrom(colors, types);
-    else this.palette.onChanged?.();
-    this.rebuildHeadsPanel();
-    this.rebuildWipeTowerGhost();
+      // Virtual rows are committed before the palette notification so both UIs
+      // observe one coherent material snapshot.
+      if (colors) this.palette.setFrom(colors, types);
+      else this.palette.onChanged?.();
+      this.rebuildHeadsPanel();
+      this.rebuildWipeTowerGhost();
+    } catch (error) {
+      this.rollbackPendingImportSemantics();
+      throw error;
+    }
   }
 
-  /** Merge a Three.js Group (e.g. from 3MFLoader) into a single model, preserving colors. */
-  loadModelFromGroup(group: THREE.Object3D, name: string, meshColors?: string[], paint?: Paint3mfResult | null) {
+  /**
+   * Load a Three.js 3MF group, preserving official Orca/BBS plate membership
+   * when available. A root build item remains one selectable workspace model;
+   * its component meshes are merged only within that item.
+   */
+  loadModelFromGroup(
+    group: THREE.Object3D,
+    name: string,
+    meshColors?: string[],
+    paint?: Paint3mfResult | null,
+    plateLayout?: BbsPlateLayout | null,
+    plateLayoutStatus: BbsPlateLayoutExtraction['status'] = plateLayout ? 'valid' : 'absent',
+  ) {
     console.log(
       `[orcaxr-load] loadModelFromGroup called with meshColors:`,
       meshColors,
       'paintedMeshes:',
       paint ? [...paint.meshes.keys()] : 'none',
     );
+    const hasMultiPlateMetadata = Boolean(plateLayout && plateLayout.plates.length > 1);
+    const hasCompletePlateMapping = Boolean(
+      plateLayout &&
+      plateLayout.buildItemCount === group.children.length &&
+      plateLayout.unassignedBuildItemIndices.length === 0,
+    );
+    const canPreservePlateLayout = Boolean(hasMultiPlateMetadata && hasCompletePlateMapping);
+    const hasUncertainPlateMapping =
+      plateLayoutStatus === 'invalid' || (plateLayoutStatus === 'valid' && !hasCompletePlateMapping);
+
+    try {
+      if (canPreservePlateLayout) {
+        if (this.virtualFilaments.length > 0) {
+          // The current WASM project route cannot select one source plate;
+          // plate_id=0 loads every globally-offset plate. Keep the editable
+          // scene, but never claim its raw archive can slice the active plate.
+          this.invalidatePendingImportedProjectSnapshot(
+            'Multi-plate FullSpectrum projects require canonical per-plate slicing, which is not available yet.',
+          );
+        }
+        this.loadMultiPlateGroup(group, name, meshColors, paint, plateLayout!);
+        this.finalizeImportedProjectSnapshot();
+        return;
+      }
+
+      if (hasUncertainPlateMapping) {
+        console.warn(
+          plateLayoutStatus === 'invalid'
+            ? '[orcaxr-load] Declared plate metadata could not be interpreted safely; using the single-model fallback.'
+            : '[orcaxr-load] Plate metadata did not map every parsed build item exactly; using the safe single-model fallback.',
+        );
+        // A flattened fallback is editable, but cannot safely stand in for the
+        // source archive when choosing an immutable project-slice route.
+        this.invalidatePendingImportedProjectSnapshot(
+          this.virtualFilaments.length > 0
+            ? 'The imported FullSpectrum plate mapping is incomplete; canonical live-project slicing is required.'
+            : undefined,
+        );
+      }
+
+      const merged = this.mergeGroupGeometry(group, meshColors, paint);
+      if (!merged) throw new Error(`3MF ${name} contains no mergeable geometry.`);
+      const previousModelCount = this.models.length;
+      const previousLibraryLength = this.library.length;
+      const previousLibraryIndex = this.libraryIndex;
+      const previousSelectedModel = this.selectedModel;
+      try {
+        this.loadModelFromGeometry(merged, name);
+        this.finalizeImportedProjectSnapshot();
+      } catch (error) {
+        const addedModels = this.models.slice(previousModelCount);
+        for (const model of addedModels) this.disposeDetachedModel(model);
+        this.models.length = previousModelCount;
+        this.library.length = previousLibraryLength;
+        this.libraryIndex = previousLibraryIndex;
+        if (!addedModels.some((model) => model.raw === merged)) merged.dispose();
+        if (previousSelectedModel) this.selectModel(previousSelectedModel);
+        else this.unselectModel();
+        this.recomputePreflight();
+        throw error;
+      }
+    } catch (error) {
+      this.rollbackPendingImportSemantics();
+      throw error;
+    }
+  }
+
+  private mergeGroupGeometry(
+    group: THREE.Object3D,
+    meshColors?: string[],
+    paint?: Paint3mfResult | null,
+  ): THREE.BufferGeometry | null {
     const geometries: THREE.BufferGeometry[] = [];
     group.updateMatrixWorld(true);
 
@@ -1739,7 +1910,9 @@ export class OrcaWorkspace extends xb.Script {
       if (child.isMesh && child.geometry) {
         let geom = child.geometry.clone();
         if (geom.index !== null) {
+          const indexed = geom;
           geom = geom.toNonIndexed();
+          indexed.dispose();
         }
         geom.applyMatrix4(child.matrixWorld);
 
@@ -1764,6 +1937,7 @@ export class OrcaWorkspace extends xb.Script {
             console.log(
               `[paint3mf] mesh ${meshIndex}: ${geom.attributes.position.count / 3} tris → ${painted.positions.length / 9} painted tris`,
             );
+            geom.dispose();
             geom = pg;
           }
         }
@@ -1812,36 +1986,341 @@ export class OrcaWorkspace extends xb.Script {
       }
     });
 
-    if (geometries.length > 0) {
-      console.log(`Merging ${geometries.length} geometries...`);
-      for (let i = 0; i < geometries.length; i++) {
-        const g = geometries[i];
-        console.log(
-          `Geom ${i}: index=${g.index !== null}, position=${g.attributes.position?.itemSize}, normal=${g.attributes.normal?.itemSize}, color=${g.attributes.color?.itemSize}, attrs=${Object.keys(g.attributes).join(',')}`,
-        );
+    if (geometries.length === 0) return null;
+    console.log(`Merging ${geometries.length} geometries...`);
+    const merged = BufferGeometryUtils.mergeGeometries(geometries, false);
+    for (const geometry of geometries) geometry.dispose();
+    if (!merged) {
+      console.error('mergeGeometries RETURNED NULL!');
+      return null;
+    }
+    console.log(`Merged successfully! Attributes: ${Object.keys(merged.attributes).join(',')}`);
+    return merged;
+  }
+
+  private loadMultiPlateGroup(
+    group: THREE.Object3D,
+    name: string,
+    meshColors: string[] | undefined,
+    paint: Paint3mfResult | null | undefined,
+    layout: BbsPlateLayout,
+  ): void {
+    group.updateMatrixWorld(true);
+    const meshIndexBySource = new WeakMap<THREE.Object3D, number>();
+    let globalMeshIndex = 0;
+    group.traverse((child: any) => {
+      if (child.isMesh && child.geometry) meshIndexBySource.set(child, globalMeshIndex++);
+    });
+
+    const fallbackBed = layout.bedSizeMm ?? this.bedMm;
+    const sourcePlateCount = Math.max(layout.plates.length, ...layout.plates.map((plate) => plate.sourceId));
+    const columns = Math.ceil(Math.sqrt(sourcePlateCount));
+
+    const stagedPlates: Array<{
+      sourceId: number;
+      name: string;
+      items: Array<{ geometry: THREE.BufferGeometry; name: string }>;
+    }> = [];
+    let stagedItemCount = 0;
+
+    try {
+      for (const sourcePlate of layout.plates) {
+        const stagedPlate = {
+          sourceId: sourcePlate.sourceId,
+          name: sourcePlate.name,
+          items: [],
+        } as (typeof stagedPlates)[number];
+        stagedPlates.push(stagedPlate);
+        const sourceIndex = Math.max(0, sourcePlate.sourceId - 1);
+        const origin = sourcePlate.originMm ?? {
+          x: (sourceIndex % columns) * fallbackBed.x * 1.2,
+          y: -Math.floor(sourceIndex / columns) * fallbackBed.y * 1.2,
+        };
+
+        for (const buildItemIndex of sourcePlate.buildItemIndices) {
+          const sourceRoot = group.children[buildItemIndex];
+          if (!sourceRoot) throw new Error(`3MF build item ${buildItemIndex + 1} is missing from the parsed scene.`);
+          const sourceMeshIndices: number[] = [];
+          sourceRoot.traverse((child: any) => {
+            const index = meshIndexBySource.get(child);
+            if (index !== undefined) sourceMeshIndices.push(index);
+          });
+
+          const itemGroup = new THREE.Group();
+          const clonedRoot = sourceRoot.clone(true);
+          // Preserve the source root's complete transform even if a caller gave
+          // us a parsed group nested under another transform owner.
+          clonedRoot.matrix.copy(sourceRoot.matrixWorld);
+          clonedRoot.matrix.decompose(clonedRoot.position, clonedRoot.quaternion, clonedRoot.scale);
+          itemGroup.add(clonedRoot);
+          itemGroup.position.set(-origin.x, -origin.y, 0);
+          const itemColors = meshColors ? sourceMeshIndices.map((index) => meshColors[index]) : undefined;
+          const itemPaint: Paint3mfResult | null = paint ? { palette: paint.palette, meshes: new Map() } : null;
+          if (itemPaint) {
+            sourceMeshIndices.forEach((sourceIndex, localIndex) => {
+              const meshPaint = paint!.meshes.get(sourceIndex);
+              if (meshPaint) itemPaint.meshes.set(localIndex, meshPaint);
+            });
+          }
+
+          const merged = this.mergeGroupGeometry(itemGroup, itemColors, itemPaint);
+          if (!merged) throw new Error(`3MF build item ${buildItemIndex + 1} contains no mergeable geometry.`);
+          const itemName = sourceRoot.name || `${name} · object ${buildItemIndex + 1}`;
+          stagedPlate.items.push({ geometry: merged, name: itemName });
+          stagedItemCount++;
+        }
       }
-      const merged = BufferGeometryUtils.mergeGeometries(geometries, false);
-      if (merged) {
-        console.log(`Merged successfully! Attributes: ${Object.keys(merged.attributes).join(',')}`);
-        this.loadModelFromGeometry(merged, name);
-        // Finalize only for an exclusive import. An FS file added beside any
-        // existing workspace content remains visible/editable, but slicing it
-        // must wait for the canonical live-project coordinator.
-        if (this.projectSnapshotPending) {
-          this.originalProjectSnapshot = this.projectSourceWasExclusive ? this.captureSemanticProjectSnapshot() : null;
-          this.projectSnapshotPending = false;
-          this.projectSourceWasExclusive = false;
+      if (stagedItemCount !== layout.buildItemCount) {
+        throw new Error(`3MF plate metadata staged ${stagedItemCount} of ${layout.buildItemCount} build items.`);
+      }
+    } catch (error) {
+      for (const plate of stagedPlates) {
+        for (const item of plate.items) item.geometry.dispose();
+      }
+      throw error;
+    }
+
+    // Commit only after every expected item has merged. The old workspace
+    // state remains intact until this point, and the catch block restores it
+    // if model attachment itself unexpectedly fails.
+    const previousPlates = this.plates;
+    const previousActivePlateId = this.activePlateId;
+    const previousNextPlateId = this.nextPlateId;
+    const previousSelectedModel = this.selectedModel;
+    const previousLibraryLength = this.library.length;
+    const previousLibraryIndex = this.libraryIndex;
+    const previousModels = new Set(previousPlates.flatMap((plate) => plate.models));
+    const canReuseDefaultPlate =
+      previousPlates.length === 1 &&
+      previousPlates[0].id === previousActivePlateId &&
+      previousPlates[0].models.length === 0;
+    let plannedNextPlateId = this.nextPlateId;
+    const targetPlates = stagedPlates.map((sourcePlate, index) => ({
+      id: index === 0 && canReuseDefaultPlate ? previousPlates[0].id : plannedNextPlateId++,
+      label: sourcePlate.name || `Plate ${sourcePlate.sourceId}`,
+      models: [] as ModelEntry[],
+    }));
+
+    try {
+      this.unselectModel();
+      this.plates = [...(canReuseDefaultPlate ? [] : previousPlates), ...targetPlates];
+      this.nextPlateId = plannedNextPlateId;
+
+      stagedPlates.forEach((sourcePlate, plateIndex) => {
+        const targetPlate = targetPlates[plateIndex];
+        this.activePlateId = targetPlate.id;
+        for (const item of sourcePlate.items) {
+          const before = targetPlate.models.length;
+          this.loadModelFromGeometry(item.geometry, item.name, {
+            preservePrinterXY: true,
+            preservePrinterZ: true,
+            deferPostAdd: true,
+            deferBoundsTree: true,
+          });
+          const added = targetPlate.models[before];
+          if (!added) throw new Error(`Could not attach ${item.name} to ${targetPlate.label}.`);
+          added.viewer.visible = false;
+        }
+      });
+
+      const firstImportedPlate = targetPlates[0];
+      this.activePlateId = firstImportedPlate.id;
+      for (const plate of this.plates) {
+        const visible = plate.id === this.activePlateId;
+        for (const model of plate.models) model.viewer.visible = visible;
+      }
+      if (firstImportedPlate.models[0]) this.selectModel(firstImportedPlate.models[0]);
+      this.recomputePreflight();
+      this.queueBoundsTreeBuild(targetPlates.flatMap((plate) => plate.models));
+      this.warmSlicerAfterFirstModel();
+      this.onPlatesChanged?.();
+      this.setStatus(
+        `Loaded ${name} — ${stagedItemCount} model${stagedItemCount === 1 ? '' : 's'} across ${targetPlates.length} plates.`,
+      );
+    } catch (error) {
+      const disposedGeometries = new Set<THREE.BufferGeometry>();
+      for (const plate of this.plates) {
+        for (const model of plate.models) {
+          if (!previousModels.has(model)) {
+            disposedGeometries.add(model.raw);
+            this.disposeDetachedModel(model);
+          }
+        }
+      }
+      for (const plate of stagedPlates) {
+        for (const item of plate.items) {
+          if (!disposedGeometries.has(item.geometry)) item.geometry.dispose();
+        }
+      }
+      this.plates = previousPlates;
+      this.activePlateId = previousActivePlateId;
+      this.nextPlateId = previousNextPlateId;
+      this.library.length = previousLibraryLength;
+      this.libraryIndex = previousLibraryIndex;
+      for (const plate of this.plates) {
+        const visible = plate.id === this.activePlateId;
+        for (const model of plate.models) model.viewer.visible = visible;
+      }
+      if (previousSelectedModel) this.selectModel(previousSelectedModel);
+      else this.unselectModel();
+      this.recomputePreflight();
+      this.onPlatesChanged?.();
+      throw error;
+    }
+  }
+
+  /** Release every GPU resource owned by a model that will not rejoin the scene. */
+  private disposeDetachedModel(entry: ModelEntry) {
+    this.workspace.remove(entry.viewer);
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+    const textures = new Set<THREE.Texture>();
+    entry.viewer.traverse((object) => {
+      const renderable = object as THREE.Mesh | THREE.LineSegments | THREE.Sprite;
+      if ('geometry' in renderable && renderable.geometry) geometries.add(renderable.geometry);
+      const objectMaterials = Array.isArray(renderable.material)
+        ? renderable.material
+        : renderable.material
+          ? [renderable.material]
+          : [];
+      for (const material of objectMaterials) {
+        materials.add(material);
+        for (const value of Object.values(material)) {
+          if (value instanceof THREE.Texture) textures.add(value);
+        }
+      }
+    });
+    for (const texture of textures) texture.dispose();
+    for (const material of materials) material.dispose();
+    for (const geometry of geometries) geometry.dispose();
+  }
+
+  private finalizeImportedProjectSnapshot() {
+    if (this.projectSnapshotPending) {
+      // Finalize once after the complete multi-plate batch. An FS file added
+      // beside existing workspace content remains editable but cannot use the
+      // immutable source bytes as a lossy slicing shortcut.
+      const isFullSpectrumProject = this.virtualFilaments.length > 0;
+      const canUseImmutableSource = isFullSpectrumProject && this.projectSourceWasExclusive;
+      if (canUseImmutableSource) {
+        try {
+          this.originalProjectSnapshot = this.captureSemanticProjectSnapshot();
+          if (!this.originalProjectSnapshot) {
+            throw new Error('the imported scene could not be serialized for comparison');
+          }
+        } catch (error) {
+          // Geometry is already committed. Keep its incoming material state
+          // coherent and make slicing fail closed instead of rolling semantics
+          // back underneath the new scene.
+          console.warn('[orcaxr-load] Could not establish the FullSpectrum source guard.', error);
+          this.originalProject = null;
+          this.originalProjectSnapshot = null;
+          this.canonicalSliceRequiredReason =
+            'The imported FullSpectrum source could not be checkpointed; canonical live-project slicing is required.';
         }
       } else {
-        console.error('mergeGeometries RETURNED NULL!');
+        this.originalProjectSnapshot = null;
+        // Geometry/painted routes and combined semantic imports never consume
+        // immutable source bytes, so do not retain a useless giant archive.
+        this.originalProject = null;
       }
-    }
-    if (this.projectSnapshotPending) {
-      // A source whose geometry failed to load can never become an eligible
-      // snapshot during some later, unrelated group import.
       this.projectSnapshotPending = false;
       this.projectSourceWasExclusive = false;
     }
+    this.pendingSemanticImportCheckpoint = null;
+  }
+
+  private invalidatePendingImportedProjectSnapshot(reason?: string) {
+    if (reason) this.canonicalSliceRequiredReason = reason;
+    if (!this.projectSnapshotPending) return;
+    this.originalProject = null;
+    this.originalProjectSnapshot = null;
+    this.projectSnapshotPending = false;
+    this.projectSourceWasExclusive = false;
+  }
+
+  private beginSemanticImportCheckpoint() {
+    if (this.pendingSemanticImportCheckpoint) {
+      throw new Error('Another 3MF import is still waiting for its geometry to commit.');
+    }
+    this.pendingSemanticImportCheckpoint = {
+      originalProject: this.originalProject,
+      originalProjectSnapshot: this.originalProjectSnapshot,
+      projectSnapshotPending: this.projectSnapshotPending,
+      projectSourceWasExclusive: this.projectSourceWasExclusive,
+      canonicalSliceRequiredReason: this.canonicalSliceRequiredReason,
+      virtualFilaments: this.virtualFilaments.map((filament) => ({
+        ...filament,
+        def: { ...filament.def },
+      })),
+      projectPrimeTower: this.projectPrimeTower ? { ...this.projectPrimeTower } : null,
+      palette: this.palette.list(),
+      headFilaments: [...this.headFilaments],
+      headNozzles: [...this.headNozzles],
+    };
+  }
+
+  /** Restore project-level material state when the matching geometry fails. */
+  private rollbackPendingImportSemantics() {
+    const checkpoint = this.pendingSemanticImportCheckpoint;
+    if (!checkpoint) {
+      this.invalidatePendingImportedProjectSnapshot();
+      return;
+    }
+    this.pendingSemanticImportCheckpoint = null;
+    this.originalProject = checkpoint.originalProject;
+    this.originalProjectSnapshot = checkpoint.originalProjectSnapshot;
+    this.projectSnapshotPending = checkpoint.projectSnapshotPending;
+    this.projectSourceWasExclusive = checkpoint.projectSourceWasExclusive;
+    this.canonicalSliceRequiredReason = checkpoint.canonicalSliceRequiredReason;
+    this.virtualFilaments = checkpoint.virtualFilaments;
+    this.projectPrimeTower = checkpoint.projectPrimeTower;
+    this.headFilaments = checkpoint.headFilaments;
+    this.headNozzles = checkpoint.headNozzles;
+
+    const refresh = (label: string, operation: () => void) => {
+      try {
+        operation();
+      } catch (error) {
+        console.warn(`[orcaxr-load] Could not refresh ${label} after import rollback.`, error);
+      }
+    };
+    refresh('filament palette', () =>
+      this.palette.setFrom(
+        checkpoint.palette.map((slot) => slot.color),
+        checkpoint.palette.map((slot) => slot.type),
+      ),
+    );
+    refresh('tool heads', () => this.rebuildHeadsPanel());
+    refresh('preflight state', () => this.recomputePreflight());
+  }
+
+  /**
+   * Large project imports should become interactive before every raycast BVH
+   * is built. The patched raycaster safely falls back to Three.js while a
+   * model waits; build one tree per task so rendering and input can breathe.
+   */
+  private queueBoundsTreeBuild(entries: ModelEntry[]) {
+    const pending = [...entries];
+    const buildNext = () => {
+      if (this.disposed) return;
+      const entry = pending.shift();
+      if (!entry) return;
+      const isStillPlaced = this.plates.some((plate) => plate.models.includes(entry));
+      if (isStillPlaced && !(entry.raw as THREE.BufferGeometry & { boundsTree?: unknown }).boundsTree) {
+        try {
+          // Indirect mode keeps vertex/triangle order immutable. That matters
+          // for FullSpectrum's exact semantic snapshot, which is captured
+          // before this deferred task runs.
+          entry.raw.computeBoundsTree({ indirect: true });
+        } catch (error) {
+          // Raycasting already has a correct (slower) non-BVH fallback.
+          console.warn('[orcaxr-load] Deferred raycast acceleration failed:', error);
+        }
+      }
+      if (pending.length > 0) window.setTimeout(buildNext, 0);
+    };
+    if (pending.length > 0) window.setTimeout(buildNext, 0);
   }
 
   public addFromLibrary() {
@@ -1861,9 +2340,9 @@ export class OrcaWorkspace extends xb.Script {
     return this.lastGcode;
   }
 
-  private addModelFromGeometry(raw: THREE.BufferGeometry, color: number) {
-    raw.computeVertexNormals();
-    raw.computeBoundsTree();
+  private addModelFromGeometry(raw: THREE.BufferGeometry, color: number, options: GeometryLoadOptions = {}) {
+    if (!raw.hasAttribute('normal')) raw.computeVertexNormals();
+    if (!options.deferBoundsTree) raw.computeBoundsTree();
 
     if (!raw.hasAttribute('color')) {
       const colors = new Float32Array(raw.attributes.position.count * 3);
@@ -1894,6 +2373,13 @@ export class OrcaWorkspace extends xb.Script {
     // like OrcaSlicer's toolbar), so no competing colliders exist.
     model.setupRaycastCylinder();
     model.position.set(0, 0, 0);
+    if (options.preservePrinterXY) {
+      const centerX = (bb.min.x + bb.max.x) / 2;
+      const centerY = (bb.min.y + bb.max.y) / 2;
+      model.position.x = (centerX - this.bedMm.x / 2) * vis;
+      model.position.z = (this.bedMm.y / 2 - centerY) * vis;
+    }
+    if (options.preservePrinterZ) model.position.y = bb.min.z * vis;
     // Disable XR Blocks' own drag semantics on the model — the modal
     // tool logic in onSelectStart/onSelecting owns manipulation.
     (model as unknown as { draggable: boolean }).draggable = false;
@@ -1907,11 +2393,13 @@ export class OrcaWorkspace extends xb.Script {
     if (this.wireframeOn) this.applyWireframe(entry, true);
     if (this.labelsOn) this.applyLabel(entry, this.models.length - 1, true);
     if (this.overhangOn) this.applyOverhang(entry, true);
-    // Auto-select the just-loaded model so Repair / Delete / Auto-orient act on
-    // it immediately (standard slicer behaviour, works in both shells).
-    this.selectModel(entry);
-    this.recomputePreflight();
-    this.warmSlicerAfterFirstModel();
+    if (!options.deferPostAdd) {
+      // Auto-select the just-loaded model so Repair / Delete / Auto-orient act
+      // on it immediately (standard slicer behaviour, works in both shells).
+      this.selectModel(entry);
+      this.recomputePreflight();
+      this.warmSlicerAfterFirstModel();
+    }
   }
 
   /**
@@ -3370,6 +3858,7 @@ export class OrcaWorkspace extends xb.Script {
     this.originalProjectSnapshot = null;
     this.projectSnapshotPending = false;
     this.projectSourceWasExclusive = false;
+    this.pendingSemanticImportCheckpoint = null;
     this.canonicalSliceRequiredReason = null;
     this.virtualFilaments = [];
     this.projectPrimeTower = null;
@@ -4098,7 +4587,7 @@ export class OrcaWorkspace extends xb.Script {
    */
   /**
    * Each plated model's geometry converted into printer coordinates (mm,
-   * Z-up, bed-centre origin, +X right / +Y back). One geometry per model —
+   * Z-up, bed-corner origin, +X right / +Y back). One geometry per model —
    * the shared basis for both the slice bake and the pre-flight / wipe-tower
    * checks, so "what you see is what slices" stays a single transform path.
    */
@@ -4153,16 +4642,22 @@ export class OrcaWorkspace extends xb.Script {
     const geometries = this.printerGeometries();
     if (geometries.length === 0) return null;
     const merged = BufferGeometryUtils.mergeGeometries(geometries, false);
+    for (const geometry of geometries) geometry.dispose();
     if (!merged) return null;
     merged.computeBoundingBox();
     merged.translate(0, 0, -merged.boundingBox!.min.z);
-    return merged.index ? merged.toNonIndexed() : merged;
+    if (!merged.index) return merged;
+    const nonIndexed = merged.toNonIndexed();
+    merged.dispose();
+    return nonIndexed;
   }
 
   private bakeToPrinterStl(): ArrayBuffer {
     const merged = this.mergedPrinterGeometry();
     if (!merged) return new ArrayBuffer(84);
-    return writeBinaryStl(merged);
+    const bytes = writeBinaryStl(merged);
+    merged.dispose();
+    return bytes;
   }
 
   /**
@@ -4180,7 +4675,10 @@ export class OrcaWorkspace extends xb.Script {
     const merged = this.mergedPrinterGeometry();
     if (!merged) return null;
     const posAttr = merged.getAttribute('position');
-    if (!posAttr) return null;
+    if (!posAttr) {
+      merged.dispose();
+      return null;
+    }
     const colAttr = merged.getAttribute('color');
     const triCount = Math.floor(posAttr.count / 3);
     const paletteHex = this.palette.list().map((s) => s.color);
@@ -4191,6 +4689,7 @@ export class OrcaWorkspace extends xb.Script {
     );
     const posArr = posAttr.array;
     const positions = posArr instanceof Float32Array ? posArr : new Float32Array(posArr);
+    merged.dispose();
     return { positions, triFilament, filamentCount: paletteHex.length, distinctCount };
   }
 
@@ -4204,14 +4703,16 @@ export class OrcaWorkspace extends xb.Script {
     for (const geo of this.printerGeometries()) {
       geo.computeBoundingBox();
       const bb = geo.boundingBox;
-      if (!bb) continue;
-      // printerGeometries() centres the bed at origin; shift to corner origin.
-      out.push({
-        xMin: bb.min.x + this.bedMm.x / 2,
-        xMax: bb.max.x + this.bedMm.x / 2,
-        yMin: bb.min.y + this.bedMm.y / 2,
-        yMax: bb.max.y + this.bedMm.y / 2,
-      });
+      if (bb) {
+        // printerGeometries() already returns corner-origin XY coordinates.
+        out.push({
+          xMin: bb.min.x,
+          xMax: bb.max.x,
+          yMin: bb.min.y,
+          yMax: bb.max.y,
+        });
+      }
+      geo.dispose();
     }
     return out;
   }
@@ -4238,13 +4739,16 @@ export class OrcaWorkspace extends xb.Script {
     const banners: PreflightBanner[] = [];
 
     if (this.models.length > 0) {
-      const merged = BufferGeometryUtils.mergeGeometries(this.printerGeometries(), false);
+      const geometries = this.printerGeometries();
+      const merged = BufferGeometryUtils.mergeGeometries(geometries, false);
+      for (const geometry of geometries) geometry.dispose();
       const pos = merged?.getAttribute('position');
       if (pos) {
         const res = detectBedCollision(pos.array as ArrayLike<number>, this.bedMm.x, this.bedMm.y);
         const text = bedCollisionBanner(res);
         if (text) banners.push({ id: 'bed-collision', severity: 'error', text });
       }
+      merged?.dispose();
     }
 
     const cfg = this.profile?.config ?? {};

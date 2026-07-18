@@ -11,8 +11,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import * as xb from 'xrblocks';
 import * as uikit from '@pmndrs/uikit';
 
-import { OrcaWorkspace, extract3mfColors } from './workspace/OrcaWorkspace';
-import { extract3mfPaint } from './features/Paint3mf';
+import { OrcaWorkspace, extract3mfImportMetadata } from './workspace/OrcaWorkspace';
 import { SlicerClient } from './slicer/SlicerClient';
 import { loadPrinterConfig, savePrinterConfig, sendToPrinter } from './net/PrinterClient';
 import { fetchLocalNetwork, localNetworkTargetForRequest, normalizeHttpEndpoint } from './net/LocalNetworkAccess';
@@ -128,9 +127,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
         if (lowerName.endsWith('.3mf')) {
           updateModal(`Extracting colors...`, 30);
           await new Promise((r) => setTimeout(r, 50));
-          const colors = await extract3mfColors(buf);
-          const paint = extract3mfPaint(buf);
-          await workspace.adoptPaletteFrom3mf(buf); // seed palette + Bambu import detection
+          const metadata = await extract3mfImportMetadata(buf);
 
           updateModal(`Parsing 3MF geometry...`, 60);
           await new Promise((r) => setTimeout(r, 50));
@@ -138,7 +135,17 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
 
           updateModal(`Building scene...`, 90);
           await new Promise((r) => setTimeout(r, 50));
-          workspace.loadModelFromGroup(group, file.name, colors || undefined, paint);
+          // Keep semantic adoption and synchronous geometry commit adjacent so
+          // no user action can interleave with the import checkpoint.
+          await workspace.adoptPaletteFrom3mf(buf, metadata.projectConfig); // seed palette + Bambu import detection
+          workspace.loadModelFromGroup(
+            group,
+            file.name,
+            metadata.colors || undefined,
+            metadata.paint,
+            metadata.plateLayout,
+            metadata.plateLayoutStatus,
+          );
         } else if (lowerName.endsWith('.zip')) {
           updateModal(`Reading archive...`, 40);
           await new Promise((r) => setTimeout(r, 50));

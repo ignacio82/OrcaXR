@@ -25,8 +25,8 @@
  *
  * Pure functions, no THREE — unit-testable in isolation.
  */
-import * as fflate from 'fflate';
 import { virtualFilamentsFromConfig } from './MixedFilamentPreview';
+import { unzip3mfPackage, type ThreeMfEntries } from './ThreeMfPackage';
 
 /** Per-mesh paint info, aligned with ThreeMFLoader's mesh traversal order. */
 export interface MeshPaint {
@@ -277,9 +277,9 @@ export function applyPaintToPositions(
  * (file, id) — the production extension's `p:path` components reference
  * objects in other .model files and ids are only unique per file.
  */
-export function extract3mfPaint(buf: ArrayBuffer): Paint3mfResult | null {
+export function extract3mfPaint(buf: ArrayBuffer, entries?: ThreeMfEntries): Paint3mfResult | null {
   try {
-    const unzipped = fflate.unzipSync(new Uint8Array(buf));
+    const unzipped = entries ?? unzip3mfPackage(buf);
     const dec = new TextDecoder();
 
     let palette: string[] = [];

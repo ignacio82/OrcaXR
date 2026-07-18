@@ -247,7 +247,7 @@ qualification before the lifecycle/performance item is complete.
 
 7. **`update_values_to_printer_extruders_for_multiple_filaments` null-derefs on filament-prefixed nullable options.** Patch `0013-toolchanger-handle-nullable-cast.patch` fixes this.
 
-8. **3MF loader dispatch is BBS-leaning and breaks on Prusa / MakerWorld files.** Use `Model::read_from_archive` which sniffs Prusa-vs-BBS.
+8. **3MF loader dispatch is BBS-leaning and breaks on Prusa / MakerWorld files.** Use `Model::read_from_archive` which sniffs Prusa-vs-BBS. In browser imports, official BBS multi-plate membership lives in `Metadata/model_settings.config` as `(object_id, instance_id)` pairs; `ThreeMFLoader` root children follow core `<build>` order, whose transforms use the global 1.2×-bed plate grid, so split by that sidecar and subtract each source plate origin rather than merging the root group or guessing from thumbnails/spatial clusters.
 
 9. **`load_bbs_3mf` requires `LoadStrategy::LoadModel | LoadConfig | AddDefaultInstances`.** DO NOT add `LoadAuxiliary` (=16) as it fails on Android's read-only filesystem.
 
