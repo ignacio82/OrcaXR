@@ -105,6 +105,29 @@ try {
     await page.$eval('#cmd-list [data-action-id="edit_undo"]', (node) => node.classList.contains('disabled')),
     true,
   );
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !globalThis.document.querySelector('#command-palette.open'));
+
+  // Menus expose keyboard navigation, and informational dialogs own focus,
+  // trap Tab/Escape, then restore focus to the menu trigger that opened them.
+  await page.$eval('[data-action-id="help_about"]', (item) => {
+    const trigger = item.closest('.menu-host')?.querySelector('.menu-trigger');
+    trigger?.focus();
+    trigger?.dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+  });
+  assert.equal(await page.$eval('[role="menuitem"]:focus', (item) => item.getAttribute('role')), 'menuitem');
+  await page.click('[data-action-id="help_about"]');
+  await page.waitForSelector('#oxr-modal-overlay [role="dialog"][aria-modal="true"]');
+  assert.equal(
+    await page.$eval('#oxr-modal-overlay', (overlay) => overlay.contains(globalThis.document.activeElement)),
+    true,
+  );
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !globalThis.document.getElementById('oxr-modal-overlay'));
+  assert.equal(
+    await page.$eval('.menu-trigger:focus', (trigger) => trigger.textContent.trim().startsWith('Help')),
+    true,
+  );
 
   await page.setViewport({ width: 390, height: 844 });
   await page.evaluate(() => globalThis.dispatchEvent(new globalThis.Event('resize')));

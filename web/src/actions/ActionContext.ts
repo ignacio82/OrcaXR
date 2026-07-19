@@ -189,7 +189,7 @@ export class ActionContext {
 
   // ---- Filament / paint ----------------------------------------------
   addFilament(): void {
-    this.palette.add();
+    this.workspace.addFilamentSlot();
   }
 
   // ---- Advanced Features ----------------------------------------------
@@ -203,6 +203,10 @@ export class ActionContext {
 
   smartPaintImage(): void {
     void this.workspace.smartPaintImage();
+  }
+
+  recreateModelColorsWithFullSpectrum(): ReturnType<OrcaWorkspace['recreateModelColorsWithFullSpectrum']> {
+    return this.workspace.recreateModelColorsWithFullSpectrum();
   }
 
   /** Report a registry-controlled disabled reason without invoking a feature handler. */

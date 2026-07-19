@@ -49,4 +49,18 @@ export const advancedActions: Action[] = [
     menuSection: 'tools',
     hint: 'View the live printer webcam feed',
   },
+  {
+    id: 'recreate_model_colors_fullspectrum',
+    mcpTool: 'recreate_model_colors_fullspectrum',
+    label: 'Recreate Model Colors (Full-Spectrum)',
+    icon: 'palette',
+    group: 'advanced',
+    disclosure: 'menu',
+    menuSection: 'tools',
+    hint: 'Recreate model colors using printer filaments via Full-Spectrum dithering',
+    isEnabled: (s) => s.modelCount > 0,
+    run: (ctx) => {
+      ctx.recreateModelColorsWithFullSpectrum();
+    },
+  },
 ];

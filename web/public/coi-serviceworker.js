@@ -7,8 +7,9 @@
  * model-catalog, and AI requests remain possible under the same policy used by
  * the dev/preview server. Product UI assets, including XR icons, are local.
  *
- * Adapted from github.com/gzuidhof/coi-serviceworker (MIT). No caching: it just
- * re-serves each response with the isolation headers added.
+ * Adapted from github.com/gzuidhof/coi-serviceworker (MIT). Same-origin app
+ * resources use versioned shell/runtime caches, while slicer artifacts use a
+ * separate bounded cache. Cross-origin requests bypass this worker.
  */
 if (typeof window === 'undefined') {
   // ---------- service worker context ----------

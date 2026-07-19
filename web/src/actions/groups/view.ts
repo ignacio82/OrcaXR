@@ -1,9 +1,8 @@
 /**
  * View group — mirrors Snapmaker Orca's `View` menu (camera presets, projection
- * mode, scene-display toggles). All entries are parity placeholders today:
- * OrcaXR uses XR Blocks' OrbitControls with no preset-view or display-toggle
- * API wired yet. `docs/orca_parity_plan.md` lists the camera-preset hook to
- * implement (the OrbitControls target + a canned quaternion per view).
+ * mode, scene-display toggles). Some entries have local alpha handlers and
+ * others remain unavailable. Their acceptance status is tracked in
+ * `docs/parity.md`.
  */
 import type { ActionDefinition as Action } from '../ActionRegistry';
 

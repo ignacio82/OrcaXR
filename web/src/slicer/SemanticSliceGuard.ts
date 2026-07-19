@@ -37,6 +37,42 @@ export interface SemanticProjectSnapshot {
   readonly controls: string;
 }
 
+/**
+ * Holds an output together with the exact semantic input that produced it.
+ * Reads fail closed when current project intent differs, while keeping the
+ * prior value available if undo later restores the byte-identical snapshot.
+ */
+export class SemanticSliceArtifact<T> {
+  private value: T | null = null;
+  private source: SemanticProjectSnapshot | null = null;
+
+  publish(value: T, source: SemanticProjectSnapshot): void {
+    this.value = value;
+    this.source = cloneSemanticProjectSnapshot(source);
+  }
+
+  /** Publish only when the live project is still the submitted project. */
+  publishIfCurrent(value: T, submitted: SemanticProjectSnapshot, current: SemanticProjectSnapshot): boolean {
+    if (!sameSemanticProjectSnapshot(submitted, current)) return false;
+    this.publish(value, submitted);
+    return true;
+  }
+
+  read(current: SemanticProjectSnapshot): T | null {
+    if (this.value === null || this.source === null) return null;
+    return sameSemanticProjectSnapshot(this.source, current) ? this.value : null;
+  }
+
+  clear(): void {
+    this.value = null;
+    this.source = null;
+  }
+
+  get hasArtifact(): boolean {
+    return this.value !== null && this.source !== null;
+  }
+}
+
 export type SemanticSliceRoute = 'fullspectrum' | 'painted' | 'geometry';
 
 export interface SemanticSliceRouteInput {
@@ -108,6 +144,23 @@ export function sameSemanticProjectSnapshot(left: SemanticProjectSnapshot, right
     }
   }
   return true;
+}
+
+function cloneSemanticProjectSnapshot(source: SemanticProjectSnapshot): SemanticProjectSnapshot {
+  return {
+    projectBytes: source.projectBytes.slice(),
+    colorBuffers: source.colorBuffers.map((buffer) =>
+      buffer
+        ? {
+            arrayType: buffer.arrayType,
+            itemSize: buffer.itemSize,
+            normalized: buffer.normalized,
+            bytes: buffer.bytes.slice(),
+          }
+        : null,
+    ),
+    controls: source.controls,
+  };
 }
 
 export async function requireSemanticSlice<T>(

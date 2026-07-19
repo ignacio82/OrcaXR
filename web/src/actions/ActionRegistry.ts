@@ -13,6 +13,12 @@
  * command palette.
  */
 import type { ActionContext } from './ActionContext';
+import {
+  parityHelpHrefForTask,
+  parityTaskForAction,
+  registryMetadataTestId,
+  type ParityTaskId,
+} from './CapabilityEvidence';
 import type { UiStateShape } from './UiState';
 
 /** Top-level taxonomy. Powers the Add/Tools menus, inspector, command palette. */
@@ -70,7 +76,14 @@ export interface Capability {
   reason?: string;
   surfaces: readonly ActionSurface[];
   prerequisites: readonly PrerequisiteId[];
+  /**
+   * Evidence IDs for this declared status. `actions.registry.metadata-only.*`
+   * proves registry metadata/reachability only, never behavioral acceptance.
+   */
   testIds: readonly string[];
+  /** Exact owning task in the pinned parity plan. */
+  parityTaskId: ParityTaskId;
+  /** Link to the owning task's real, linkable phase heading. */
   helpHref: string;
 }
 
@@ -260,15 +273,17 @@ function surfacesFor(action: ActionDefinition): ActionSurface[] {
 function capabilityFor(action: ActionDefinition): Capability {
   const unavailableReason = UNAVAILABLE_REASONS[action.id];
   const status: CapabilityStatus = unavailableReason ? 'unavailable' : 'partial';
+  const parityTaskId = parityTaskForAction(action.id);
   return {
     status,
     reason:
       unavailableReason ??
-      'Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate.',
+      `Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by ${parityTaskId}.`,
     surfaces: surfacesFor(action),
     prerequisites: prerequisitesFor(action),
-    testIds: status === 'unavailable' ? [] : ['actions.registry.enumeration'],
-    helpHref: `docs/parity.md#${action.group}`,
+    testIds: status === 'unavailable' ? [] : [registryMetadataTestId(action.id, parityTaskId)],
+    parityTaskId,
+    helpHref: parityHelpHrefForTask(parityTaskId),
   };
 }
 

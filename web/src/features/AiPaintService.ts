@@ -1,8 +1,9 @@
 import { GoogleGenAI } from '@google/genai';
+import { getAiSessionSecret, redactAiSecrets } from '../security/AiSessionSecrets';
 
 export class AiPaintService {
   static async generatePaintPlan(prompt: string, imageBase64?: string): Promise<any> {
-    const apiKey = localStorage.getItem('orca_gemini_key');
+    const apiKey = getAiSessionSecret('gemini');
     if (!apiKey) {
       throw new Error('No Gemini API Key configured.');
     }
@@ -34,9 +35,9 @@ export class AiPaintService {
       const text = response.text;
       if (!text) throw new Error('Empty response from AI');
       return JSON.parse(text);
-    } catch (e: any) {
-      console.error('AI Paint failed', e);
-      throw e;
+    } catch (error: unknown) {
+      const detail = redactAiSecrets(error instanceof Error ? error.message : 'Unknown provider error');
+      throw new Error(`AI paint request failed: ${detail}`, { cause: error });
     }
   }
 }

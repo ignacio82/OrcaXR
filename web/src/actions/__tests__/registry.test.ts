@@ -4,7 +4,7 @@
  * disclosure is a build-time failure, not a runtime surprise in one shell.
  */
 import assert from 'node:assert';
-import { ActionRegistry, GROUPS, type GroupId } from '../ActionRegistry';
+import { ActionRegistry, GROUPS } from '../ActionRegistry';
 import { buildRegistry } from '../catalog';
 import type { UiStateShape } from '../UiState';
 
@@ -38,16 +38,24 @@ test('catalog builds without duplicate ids', () => {
 
 test('duplicate id throws', () => {
   const reg = new ActionRegistry();
-  const a = {
-    id: 'x',
-    label: 'X',
-    icon: 'move',
-    group: 'scene' as GroupId,
-    disclosure: 'menu' as const,
-    run: () => {},
-  };
+  const a = buildRegistry().get('tool_move')!;
   reg.add(a);
   assert.throws(() => reg.add({ ...a }), /duplicate action id/);
+});
+
+test('an action without an explicit parity-task owner fails closed', () => {
+  assert.throws(
+    () =>
+      new ActionRegistry().add({
+        id: 'unmapped_action_fixture',
+        label: 'Unmapped fixture',
+        icon: 'move',
+        group: 'scene',
+        disclosure: 'menu',
+        run: () => {},
+      }),
+    /has no parity-task owner/,
+  );
 });
 
 test('every action has a known group', () => {

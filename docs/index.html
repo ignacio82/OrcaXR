@@ -24,8 +24,9 @@
             
             <div class="content-card">
                 <p class="description">
-                    Experience slicing in a whole new dimension. OrcaXR is now web-native and works seamlessly in a 
-                    <strong>desktop web browser</strong> or an <strong>XR device</strong> such as the Galaxy XR.
+                    OrcaXR is web-native: use it in a <strong>desktop web browser</strong> or try the experimental
+                    spatial shell on an <strong>XR device</strong> such as the Galaxy XR. XR input and workflow
+                    qualification is still in progress.
                 </p>
                 <div class="tech-credit">
                     <p>Powered by <a href="https://xrblocks.github.io/" target="_blank" rel="noopener noreferrer" class="xrblocks-link">XRBlocks</a></p>
@@ -51,8 +52,8 @@
             </div>
             <div class="feature-card">
                 <div class="feature-icon">🥽</div>
-                <h3>XR Ready</h3>
-                <p>Immersive spatial computing experience directly on devices like the Samsung Galaxy XR.</p>
+                <h3>Experimental XR Shell</h3>
+                <p>Try spatial controls on devices like the Samsung Galaxy XR while input and workflow qualification continues.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon">⚡</div>
@@ -81,7 +82,7 @@
                 <p style="color: #a0aab5; font-size: 0.95rem; line-height: 1.6;">
                     The in-browser WebAssembly (WASM) slicer has a hard memory limit of 4GB, which can cause out-of-memory crashes on extremely large or complex models. 
                     <br><br>
-                    To solve this, you can run the <strong>External Slicer</strong> via Docker. This offloads slicing to a dedicated server and uses the <strong>official Snapmaker Orca Slicer</strong> native binary instead of the WASM fork. See the <a href="https://github.com/ignacio82/OrcaXR/tree/main/server" target="_blank" style="color: #4db6ac;">/server directory</a> on GitHub for setup instructions.
+                    To solve this, you can run the <strong>External Slicer</strong> via Docker. This offloads slicing to a dedicated server and uses a native CLI built from the pinned Snapmaker Orca v2.3.4 source instead of the browser WASM runtime. See the <a href="https://github.com/ignacio82/OrcaXR/tree/main/server" target="_blank" style="color: #4db6ac;">/server directory</a> on GitHub for setup instructions.
                     Chrome 142+ can connect to a trusted-LAN HTTP server after Local Network Access permission; use HTTPS for remote or untrusted networks.
                 </p>
             </div>

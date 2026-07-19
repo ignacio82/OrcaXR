@@ -1,9 +1,8 @@
 /**
  * Help group — mirrors Snapmaker Orca's `Help` menu. "Report a bug" and
  * "Documentation" open the relevant web pages (real, working equivalents of
- * Orca's desktop links). The setup wizard, keyboard-shortcut sheet, config
- * folder, tutorial, and about dialog are parity placeholders documented in
- * `docs/orca_parity_plan.md` (most need a modal OrcaXR hasn't built).
+ * Orca's desktop links). Browser adaptations and their acceptance status are
+ * documented in `docs/parity.md`.
  *
  * "Show Configuration Folder" has no web equivalent (the browser sandbox has no
  * user-visible filesystem) — it is intentionally represented as a disabled

@@ -1,9 +1,9 @@
 /**
  * File group — mirrors Snapmaker Orca's `File` menu (New / Open / Save project,
  * Import, Export). Import-model and Export-G-code are wired to OrcaXR's existing
- * load/download paths; project (.3mf) save/restore and the STL/3MF/config
- * exporters are parity placeholders (`comingSoon`) documented in
- * `docs/orca_parity_plan.md`.
+ * load/download paths. Several project and export paths have local alpha
+ * implementations whose remaining acceptance work is tracked in
+ * `docs/parity.md`.
  *
  * Intentionally omitted OS-shell items (`New Window`, `Quit`, `Open a new
  * PrusaSlicer`) have no meaning in a single-tab web app; see the plan doc.
@@ -40,7 +40,7 @@ export const fileActions: Action[] = [
     group: 'file',
     disclosure: 'menu',
     menuSection: 'file',
-    hint: 'Import an STL / 3MF / STEP / OBJ model',
+    hint: 'Import an STL or 3MF model',
     run: (ctx) => ctx.loadModel(),
   },
   {

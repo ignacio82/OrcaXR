@@ -6,10 +6,9 @@
  *
  * OrcaXR's manipulation gizmos (move / rotate / scale / lay-flat / color paint)
  * live in `scene.ts` on the tool rail; the mesh booleans and repair/simplify
- * live in `scene.ts`'s Tools menu. Everything here is an Orca capability OrcaXR
- * has not built — so all but the boolean-intersection completion ship as
- * `comingSoon` placeholders. Each has a matching entry in
- * `docs/orca_parity_plan.md`.
+ * live in `scene.ts`'s Tools menu. Some actions have local alpha
+ * implementations and others remain unavailable; acceptance status is tracked
+ * in `docs/parity.md`.
  */
 import type { ActionDefinition as Action } from '../ActionRegistry';
 

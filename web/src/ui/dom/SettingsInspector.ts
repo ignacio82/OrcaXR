@@ -116,9 +116,9 @@ export class SettingsInspector {
     const controlWrapper = document.createElement('div');
     controlWrapper.style.cssText = 'display: flex; align-items: center; gap: 6px;';
 
-    // Currently we hook into workspace.customOverrides, but only a few keys are supported in main.ts.
+    // The live workspace currently supports only this bounded override seam.
     // For unsupported keys, we just show them as UI without backend logic for now.
-    const currentValue = this.workspace.customOverrides[row.key] || row.defaultValue;
+    const currentValue = this.workspace.getCustomOverride(row.key) || row.defaultValue;
 
     if (row.type === 'b') {
       const chk = document.createElement('input');
@@ -127,7 +127,7 @@ export class SettingsInspector {
       chk.style.cssText =
         'width: 16px; height: 16px; accent-color: var(--oxr-color-accent, #ffb74d); cursor: pointer; margin: 0;';
       chk.onchange = () => {
-        this.workspace.customOverrides[row.key] = chk.checked ? '1' : '0';
+        this.workspace.setCustomOverride(row.key, chk.checked ? '1' : '0');
       };
       controlWrapper.appendChild(chk);
     } else if (row.type === 'n') {
@@ -141,7 +141,7 @@ export class SettingsInspector {
         if (row.unit === '%' && val && !val.endsWith('%')) {
           val += '%';
         }
-        this.workspace.customOverrides[row.key] = val;
+        this.workspace.setCustomOverride(row.key, val);
       };
       controlWrapper.appendChild(input);
       if (row.unit) {
@@ -164,7 +164,7 @@ export class SettingsInspector {
         select.appendChild(opt2);
       }
       select.onchange = () => {
-        this.workspace.customOverrides[row.key] = select.value;
+        this.workspace.setCustomOverride(row.key, select.value);
       };
       controlWrapper.appendChild(select);
     } else {

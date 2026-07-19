@@ -7,6 +7,8 @@
  * Pure text-in / text-out so the format is unit-testable without a workspace.
  */
 
+import { serializePrintConfigArray } from '../settings/configSerialization';
+
 export interface ConfigBundle {
   machineName: string;
   processName: string;
@@ -15,11 +17,11 @@ export interface ConfigBundle {
   config: Record<string, string>;
 }
 
-/** Coerce an arbitrary object into a flat string map (arrays → ';'-joined). */
+/** Coerce an arbitrary object into a flat string map using PrintConfig wire types. */
 function normalize(o: Record<string, unknown>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(o)) {
-    if (Array.isArray(v)) out[k] = v.map((x) => String(x)).join(';');
+    if (Array.isArray(v)) out[k] = serializePrintConfigArray(k, v);
     else if (v !== null && v !== undefined && typeof v !== 'object') out[k] = String(v);
   }
   return out;

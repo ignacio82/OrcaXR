@@ -9,20 +9,23 @@ const SITE = 'https://orcaxr.martinez.fyi';
 const GITHUB = 'https://github.com/ignacio82/OrcaXR';
 
 export const ABOUT_HTML = `
-  <p><strong>OrcaXR</strong> — an XR-first 3D-print slicer with full-parity DOM and
-  spatial (XR) shells, driven by one shared action registry.</p>
-  <p>Slicing is powered by a WebAssembly build of the OrcaSlicer / Snapmaker Orca
-  engine, running entirely in your browser.</p>
+  <p><strong>OrcaXR</strong> — an XR-first 3D-print slicer with DOM and experimental
+  spatial (XR) shells driven by one shared action registry.</p>
+  <p>Slicing is powered by a WebAssembly build of the Snapmaker Orca engine and runs
+  in your browser by default. Snapmaker Orca v2.3.4 workflow parity and XR input
+  qualification are still in progress.</p>
   <p style="color:var(--oxr-color-text-muted)">
     <a href="${SITE}" target="_blank" rel="noopener">orcaxr.martinez.fyi</a> ·
-    <a href="${GITHUB}" target="_blank" rel="noopener">GitHub</a>
+    <a href="${GITHUB}" target="_blank" rel="noopener">GitHub</a> ·
+    <a href="${GITHUB}/blob/main/docs/parity.md" target="_blank" rel="noopener">Parity status</a>
   </p>`;
 
 export const SHORTCUTS_HTML = `
   <p>OrcaXR is command-first — press <kbd>Ctrl</kbd>/<kbd>⌘</kbd> <kbd>K</kbd> to open
-  the command palette and run <em>any</em> action by name.</p>
+  the command palette and find any catalogued action by name. Actions that are not
+  available in the current build remain disabled.</p>
   <table style="width:100%;border-collapse:collapse;font-size:13px">
-    <tr><td><kbd>Ctrl/⌘ K</kbd></td><td>Command palette (every action)</td></tr>
+    <tr><td><kbd>Ctrl/⌘ K</kbd></td><td>Command palette (action catalogue)</td></tr>
     <tr><td><kbd>Del</kbd></td><td>Delete the selected model</td></tr>
     <tr><td><kbd>Esc</kbd></td><td>Deselect / close this dialog</td></tr>
     <tr><td><kbd>G</kbd> / <kbd>R</kbd> / <kbd>S</kbd></td><td>Move / Rotate / Scale selected model</td></tr>
@@ -31,6 +34,7 @@ export const SHORTCUTS_HTML = `
   <p style="color:var(--oxr-color-text-muted)">More shortcuts arrive as features land.</p>`;
 
 export const TUTORIAL_HTML = `
+  <p>This is the basic browser workflow in the current alpha:</p>
   <ol style="margin:0;padding-left:20px;line-height:1.7">
     <li><strong>Import</strong> a model (File → Import) or drop in a primitive (Add).</li>
     <li><strong>Place</strong> it with Move / Rotate / Scale, or hit Auto-arrange.</li>
@@ -38,10 +42,12 @@ export const TUTORIAL_HTML = `
     <li><strong>Slice</strong>, then <strong>Preview</strong> the toolpaths.</li>
     <li><strong>Export</strong> the G-code or send it to your printer.</li>
   </ol>
-  <p style="color:var(--oxr-color-text-muted)">Everything here also works hands-free in the XR shell.</p>`;
+  <p style="color:var(--oxr-color-text-muted)">The XR shell shares the action catalogue,
+  but end-to-end controller, hand, and gaze workflows are still being qualified.
+  <a href="${GITHUB}/blob/main/docs/parity.md" target="_blank" rel="noopener">See current parity status.</a></p>`;
 
 const TIPS = [
-  'Press Ctrl/⌘ K to run any command by name — it lists every action in the app.',
+  'Press Ctrl/⌘ K to find any catalogued action by name; unavailable actions stay disabled.',
   'Auto-arrange (Tools) lays every model out on the plate so nothing overlaps.',
   'Split to Objects (Tools) separates a multi-body import into independent models.',
   'Cut (Tools) bisects a model horizontally and caps both halves.',

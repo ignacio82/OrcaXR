@@ -6,6 +6,7 @@
  * consumes. Key filtering (META_KEYS skip + SAFE_KEYS whitelist)
  * mirrors the Android implementation — see profileKeys.ts.
  */
+import { serializePrintConfigArray } from '../settings/configSerialization';
 import { MAX_INHERITANCE_DEPTH, META_KEYS, SAFE_KEYS } from './profileKeys';
 
 type ProfileJson = Record<string, unknown>;
@@ -27,27 +28,9 @@ interface Catalog {
   };
 }
 
-/**
- * libslic3r string-vector options (coStrings) split on ';' — flattening a
- * profile's array value with ',' makes the engine parse it as ONE entry,
- * silently shrinking e.g. the filament count (gotcha #19). Numeric vectors
- * keep ','. Only the multi-entry string keys in SAFE_KEYS need listing.
- */
-const STRING_VECTOR_KEYS = new Set<string>([
-  'filament_colour',
-  'extruder_colour',
-  'filament_type',
-  'filament_start_gcode',
-  'filament_end_gcode',
-  'filament_settings_id',
-]);
-
 function str(v: unknown, key?: string): string {
   if (v === null || v === undefined) return '';
-  if (Array.isArray(v)) {
-    const sep = key !== undefined && STRING_VECTOR_KEYS.has(key) ? ';' : ',';
-    return v.map((x) => `${x}`).join(sep);
-  }
+  if (Array.isArray(v)) return key === undefined ? v.map((x) => `${x}`).join(',') : serializePrintConfigArray(key, v);
   if (typeof v === 'object') return JSON.stringify(v);
   return `${v}`;
 }

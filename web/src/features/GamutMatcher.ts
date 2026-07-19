@@ -220,17 +220,42 @@ export class GamutMatcher {
     return `#${r}${g}${b}`.toUpperCase();
   }
 
-  static mockDistance(hex1: string, hex2: string): number {
-    // Very basic Euclidean distance in RGB just for the TS implementation
-    const c1 = GamutMatcher.normalizeHex(hex1).substring(1);
-    const c2 = GamutMatcher.normalizeHex(hex2).substring(1);
-    const r1 = parseInt(c1.substring(0, 2), 16);
-    const g1 = parseInt(c1.substring(2, 4), 16);
-    const b1 = parseInt(c1.substring(4, 6), 16);
-    const r2 = parseInt(c2.substring(0, 2), 16);
-    const g2 = parseInt(c2.substring(2, 4), 16);
-    const b2 = parseInt(c2.substring(4, 6), 16);
+  static hexToLab(hex: string): [number, number, number] {
+    const norm = GamutMatcher.normalizeHex(hex).substring(1);
+    const rByte = parseInt(norm.substring(0, 2), 16);
+    const gByte = parseInt(norm.substring(2, 4), 16);
+    const bByte = parseInt(norm.substring(4, 6), 16);
 
-    return Math.sqrt(Math.pow(r1 - r2, 2) + Math.pow(g1 - g2, 2) + Math.pow(b1 - b2, 2)) / 25.5; // Roughly scale to 0-10
+    const srgbToLinear = (c: number) => {
+      const s = c / 255.0;
+      return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    };
+
+    const r = srgbToLinear(rByte);
+    const g = srgbToLinear(gByte);
+    const b = srgbToLinear(bByte);
+
+    // D65 illuminant 2° observer
+    const x = (r * 0.4124564 + g * 0.3575761 + b * 0.1804375) / 0.95047;
+    const y = (r * 0.2126729 + g * 0.7151522 + b * 0.072175) / 1.0;
+    const z = (r * 0.0193339 + g * 0.119192 + b * 0.9503041) / 1.08883;
+
+    const f = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+
+    const fx = f(x);
+    const fy = f(y);
+    const fz = f(z);
+
+    const L = 116 * fy - 16;
+    const A = 500 * (fx - fy);
+    const B = 200 * (fy - fz);
+
+    return [L, A, B];
+  }
+
+  static mockDistance(hex1: string, hex2: string): number {
+    const [l1, a1, b1] = GamutMatcher.hexToLab(hex1);
+    const [l2, a2, b2] = GamutMatcher.hexToLab(hex2);
+    return Math.sqrt(Math.pow(l1 - l2, 2) + Math.pow(a1 - a2, 2) + Math.pow(b1 - b2, 2));
   }
 }

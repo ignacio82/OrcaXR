@@ -1,6 +1,6 @@
 # OrcaXR
 
-**OrcaXR** is an XR-native 3D printing slicer, now reimagined entirely for the web.
+**OrcaXR** is an XR-first 3D printing slicer, now reimagined entirely for the web.
 
 Originally built as a native Android app, OrcaXR has been rewritten to be a fully web-native application. The native Android app is now **deprecated**.
 
@@ -11,7 +11,7 @@ Originally built as a native Android app, OrcaXR has been rewritten to be a full
 ## Highlights
 
 *   **Web Native**: Access the slicer directly from your browser. No installation necessary.
-*   **XR Ready**: Dive into an immersive spatial computing experience. OrcaXR works seamlessly in a **desktop web browser** or an **XR device** such as the Samsung Galaxy XR.
+*   **Experimental XR Shell**: Use the desktop web app or enter the spatial shell on an **XR device** such as the Samsung Galaxy XR. End-to-end controller, hand, and gaze qualification is still in progress.
 *   **Powered by XRBlocks**: Built using the [XRBlocks](https://xrblocks.github.io/) framework for fluid 3D interactions, UI, and spatial environment understanding.
 
 ## Getting Started
@@ -39,9 +39,9 @@ For the Snapmaker U1, the [extended firmware](https://github.com/paxx12-snapmake
 Enter the resulting address in OrcaXR, for example `https://lava.taild5c213.ts.net`.
 
 ### External Slicer (Docker)
-OrcaXR runs slicing natively in the browser via WebAssembly (WASM). However, WASM has a hard memory limit of 4GB, which can cause out-of-memory crashes on extremely large or complex models. 
+OrcaXR runs slicing locally in the browser via WebAssembly (WASM). However, WASM has a hard memory limit of 4GB, which can cause out-of-memory crashes on extremely large or complex models.
 
-To solve this, you can run the **External Slicer** via Docker. This offloads slicing to a dedicated server and uses the **official Snapmaker Orca Slicer** native binary instead of the WASM fork.
+To solve this, you can run the **External Slicer** via Docker. This offloads slicing to a dedicated server and uses a native CLI built from the pinned Snapmaker Orca v2.3.4 source instead of the browser WASM runtime.
 
 To start the external slicer:
 ```bash
@@ -63,7 +63,7 @@ Contributions are always welcome. Feel free to open issues or pull requests to i
 
 ## License
 
-OrcaXR is open source software. Please see the `LICENSE` file for more details.
+OrcaXR is licensed under the [GNU Affero General Public License v3.0](https://www.gnu.org/licenses/agpl-3.0.html). See [NOTICE.md](NOTICE.md) for source and third-party attributions.
 
 ---
 *Built with ❤️ for the future of spatial making.*

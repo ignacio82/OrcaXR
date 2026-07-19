@@ -4,6 +4,7 @@ import {
   requireSemanticSlice,
   sameSemanticProjectSnapshot,
   selectSemanticSliceRoute,
+  SemanticSliceArtifact,
   SemanticSliceError,
   type SemanticProjectSnapshot,
 } from '../SemanticSliceGuard';
@@ -95,6 +96,25 @@ const changedControls: SemanticProjectSnapshot = {
   controls: '{"profile":"edited"}',
 };
 assert.equal(sameSemanticProjectSnapshot(baseline, changedControls), false);
+
+const artifact = new SemanticSliceArtifact<string>();
+const publishedSource = cloneSnapshot(baseline);
+artifact.publish('G1 X1 E1', publishedSource);
+publishedSource.projectBytes[0] ^= 0xff;
+publishedSource.colorBuffers[0]!.bytes[0] ^= 0xff;
+assert.equal(artifact.hasArtifact, true);
+assert.equal(artifact.read(cloneSnapshot(baseline)), 'G1 X1 E1');
+assert.equal(artifact.read(changedProject), null);
+assert.equal(artifact.read(changedColor), null);
+assert.equal(artifact.read(changedControls), null);
+assert.equal(artifact.read(cloneSnapshot(baseline)), 'G1 X1 E1');
+assert.equal(artifact.publishIfCurrent('stale output', baseline, changedProject), false);
+assert.equal(artifact.read(cloneSnapshot(baseline)), 'G1 X1 E1');
+assert.equal(artifact.publishIfCurrent('fresh output', baseline, cloneSnapshot(baseline)), true);
+assert.equal(artifact.read(cloneSnapshot(baseline)), 'fresh output');
+artifact.clear();
+assert.equal(artifact.hasArtifact, false);
+assert.equal(artifact.read(cloneSnapshot(baseline)), null);
 
 const routeInput = {
   hasFullSpectrumSource: false,

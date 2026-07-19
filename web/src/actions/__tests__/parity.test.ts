@@ -1,10 +1,16 @@
 /** Capability truth and cross-surface registry tests. */
 import assert from 'node:assert';
-import { readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { ActionContext } from '../ActionContext';
 import type { ActionSurface } from '../ActionRegistry';
 import { GROUPS } from '../ActionRegistry';
+import {
+  ACTION_IDS_BY_PARITY_TASK,
+  parityHelpHrefForTask,
+  parityPhaseForTask,
+  registryMetadataTestId,
+} from '../CapabilityEvidence';
 import { buildRegistry } from '../catalog';
 import { hasIcon } from '../../ui/icons';
 import { xrToolRailActions } from '../../ui/xr/XrShell';
@@ -18,6 +24,28 @@ function test(name: string, fn: () => void) {
 
 const registry = buildRegistry();
 const actions = registry.all();
+const parityDocument = readFileSync(fileURLToPath(new URL('../../../../docs/parity.md', import.meta.url)), 'utf8');
+
+function githubHeadingSlug(heading: string): string {
+  return heading
+    .trim()
+    .toLowerCase()
+    .replace(/<[^>]+>/g, '')
+    .replace(/[^\p{L}\p{N}\s_-]/gu, '')
+    .replace(/\s/g, '-');
+}
+
+const parityHeadingFragments = new Set(
+  [...parityDocument.matchAll(/^#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$/gm)].map((match) => `#${githubHeadingSlug(match[1])}`),
+);
+const parityTaskPhases = new Map<string, string>();
+let currentPhase: string | undefined;
+for (const line of parityDocument.split('\n')) {
+  const phase = /^## \d+\. (P\d+) —/.exec(line);
+  if (phase) currentPhase = phase[1];
+  const task = /\*\*(P\d+\.\d+)\s+—/.exec(line);
+  if (task && currentPhase) parityTaskPhases.set(task[1], currentPhase);
+}
 
 const UNAVAILABLE_IDS = [
   'add_emboss',
@@ -88,7 +116,28 @@ test('unavailable capabilities have a reason and no executable handler', () => {
   }
 });
 
-test('every executable capability has a handler and test mapping', () => {
+test('workflow ownership covers every registry action exactly once', () => {
+  const mappedIds = Object.values(ACTION_IDS_BY_PARITY_TASK).flat();
+  assert.strictEqual(new Set(mappedIds).size, mappedIds.length, 'an action has multiple parity-task owners');
+  assert.deepStrictEqual([...mappedIds].sort(), actions.map((action) => action.id).sort());
+});
+
+test('every task mapping exists in the plan and links to its real containing phase heading', () => {
+  for (const action of actions) {
+    const { helpHref, parityTaskId } = action.capability;
+    const documentedPhase = parityTaskPhases.get(parityTaskId);
+    assert.ok(documentedPhase, `${action.id} maps to missing task ${parityTaskId}`);
+    assert.strictEqual(parityPhaseForTask(parityTaskId), documentedPhase, `${action.id} maps across phases`);
+    assert.strictEqual(helpHref, parityHelpHrefForTask(parityTaskId), `${action.id} has a noncanonical help link`);
+
+    const [path, fragment] = helpHref.split('#');
+    assert.strictEqual(path, 'docs/parity.md', `${action.id} help must target the canonical parity plan`);
+    assert.ok(fragment, `${action.id} help link has no anchor`);
+    assert.ok(parityHeadingFragments.has(`#${fragment}`), `${action.id} help anchor #${fragment} does not exist`);
+  }
+});
+
+test('every executable capability has status-appropriate evidence metadata', () => {
   for (const action of actions.filter(
     (item) => item.capability.status === 'implemented' || item.capability.status === 'partial',
   )) {
@@ -96,9 +145,32 @@ test('every executable capability has a handler and test mapping', () => {
     assert.ok(action.capability.testIds.length > 0, `${action.id} has no test mapping`);
     if (action.capability.status === 'partial') {
       assert.ok(action.capability.reason?.trim(), `${action.id} has no partial reason`);
+      assert.ok(action.capability.reason?.includes(action.capability.parityTaskId), `${action.id} reason omits owner`);
+      assert.deepStrictEqual(action.capability.testIds, [
+        registryMetadataTestId(action.id, action.capability.parityTaskId),
+      ]);
+    } else {
+      assert.ok(
+        action.capability.testIds.every((id) => !id.includes('.metadata-only.')),
+        `${action.id} implemented status relies on metadata-only evidence`,
+      );
     }
   }
+  assert.ok(
+    actions.every((action) => !action.capability.testIds.includes('actions.registry.enumeration')),
+    'generic enumeration must not masquerade as per-action evidence',
+  );
 });
+
+for (const action of actions.filter((item) => item.capability.status === 'partial')) {
+  const metadataTestId = registryMetadataTestId(action.id, action.capability.parityTaskId);
+  test(metadataTestId, () => {
+    assert.deepStrictEqual(action.capability.testIds, [metadataTestId]);
+    assert.strictEqual(typeof action.run, 'function');
+    assert.ok(action.capability.surfaces.includes('command-palette'));
+    assert.strictEqual(action.capability.helpHref, parityHelpHrefForTask(action.capability.parityTaskId));
+  });
+}
 
 test('every action declares command-palette plus its presentation surfaces', () => {
   const presentation: Record<string, readonly ActionSurface[]> = {

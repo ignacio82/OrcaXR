@@ -1,8 +1,8 @@
 /**
  * Edit group — mirrors Snapmaker Orca's `Edit` menu (undo/redo, clipboard,
- * selection). Delete-selected and deselect-all are wired to the workspace;
- * the global undo/redo stack, clipboard, clone, and multi-select are parity
- * placeholders documented in `docs/orca_parity_plan.md`.
+ * selection). Several workspace-local operations are wired, while integration
+ * with the canonical global history and selection model remains in progress;
+ * see `docs/parity.md`.
  *
  * Note: OrcaXR already has a *paint* undo/redo stack (`PaintHistory`). These
  * Edit entries are the *scene-level* history (transforms, add/delete) Orca

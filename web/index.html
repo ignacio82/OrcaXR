@@ -267,7 +267,7 @@
       .menu-item .glyph { width: 18px; text-align: center; opacity: .85; }
       .menu-item-label { flex: 1; }
       /* "SOON" badge on parity placeholders — features present in Snapmaker
-         Orca that OrcaXR has not built yet (see docs/orca_parity_plan.md). */
+         Orca that OrcaXR has not built yet (see docs/parity.md). */
       .soon-badge {
         font-size: 9px; font-weight: 700; letter-spacing: .5px; line-height: 1;
         padding: 3px 5px; border-radius: 4px; margin-left: 8px;
@@ -531,11 +531,8 @@
           </p>
           <button id="btn-printer-test" class="action-btn" style="margin-bottom:8px;">Test Connection</button>
           <div style="display:flex; gap:8px;">
-            <button id="btn-printer-send" class="action-btn" style="flex:1;" disabled>Send + Print</button>
-            <button id="btn-printer-webcam" class="action-btn" style="flex:1;">Webcam</button>
-          </div>
-          <div id="webcam-container" style="display:none; margin-top:8px;">
-            <img id="printer-webcam-feed" src="" alt="Webcam Feed" style="width:100%; border-radius:8px; display:block;" />
+            <button id="btn-printer-send" class="action-btn" style="flex:1;" disabled>Send unavailable</button>
+            <button id="btn-printer-webcam" class="action-btn" style="flex:1;" disabled>Webcam unavailable</button>
           </div>
         </div>
         <div class="panel" id="external-slicer-panel">
@@ -591,8 +588,7 @@
         </div>
         <div class="panel" id="ai-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
           <div style="font-size:0.8rem;color:#a0aab5;font-weight:600;">AI FEATURES</div>
-          <button id="btn-ai-smart-paint" class="action-btn" style="margin:0;">Smart Paint (Auto)</button>
-          <button id="btn-ai-semantic" class="action-btn" style="margin:0;">Semantic Planner</button>
+          <p style="margin:0;color:#a0aab5;font-size:12px;line-height:1.4;">Configure a session-only key with the header gear, then use Smart Paint from the shared Tools menu.</p>
         </div>
         </details>
         <div class="status-panel">

@@ -17,6 +17,10 @@ import {
   WindowRateLimiter,
 } from "./security.mjs";
 import { buildZip, valid3mf } from "./test-helpers.mjs";
+import {
+  detectSliceInputKind,
+  startSliceInput,
+} from "./slice_worker.mjs";
 
 const archiveLimits = {
   ...loadServerConfig({}),
@@ -57,6 +61,67 @@ async function withModel(buffer, callback) {
 test("server exports an Express handler without listening on import", () => {
   assert.equal(typeof app, "function");
   assert.equal(typeof createSlicerService, "function");
+});
+
+test("WASM worker preserves project 3MF semantics and keeps STL on the model entry point", () => {
+  const writes = [];
+  const calls = [];
+  const module = {
+    FS: {
+      writeFile(inputPath, bytes) {
+        writes.push({ inputPath, bytes: Buffer.from(bytes) });
+      },
+    },
+    startSliceProject(...args) {
+      calls.push(["project", ...args]);
+    },
+    startSliceFile(...args) {
+      calls.push(["model", ...args]);
+    },
+  };
+  const project = valid3mf();
+  const stl = Buffer.from("solid model\nendsolid model\n");
+
+  assert.deepEqual(
+    startSliceInput(module, "/upload/job.3mf", project, '{"from":"project"}', 3),
+    { kind: "project", inputPath: "/tmp/in.3mf" },
+  );
+  assert.deepEqual(calls.shift(), [
+    "project",
+    "/tmp/in.3mf",
+    3,
+    '{"from":"project"}',
+  ]);
+  assert.deepEqual(writes.shift(), {
+    inputPath: "/tmp/in.3mf",
+    bytes: project,
+  });
+
+  assert.deepEqual(
+    startSliceInput(module, "/upload/job.stl", stl, "{}", 4),
+    { kind: "model", inputPath: "/tmp/in.stl" },
+  );
+  assert.deepEqual(calls.shift(), ["model", "/tmp/in.stl", 4, "{}"]);
+  assert.deepEqual(writes.shift(), { inputPath: "/tmp/in.stl", bytes: stl });
+});
+
+test("WASM worker rejects extension/signature mismatches instead of flattening projects", () => {
+  const project = valid3mf();
+  const stl = Buffer.from("solid model\nendsolid model\n");
+  assert.equal(detectSliceInputKind("project.3mf", project), "project");
+  assert.equal(detectSliceInputKind("model.stl", stl), "model");
+  assert.throws(
+    () => detectSliceInputKind("project.3mf", stl),
+    /does not have a ZIP signature/,
+  );
+  assert.throws(
+    () => detectSliceInputKind("project.stl", project),
+    /validated \.3mf route/,
+  );
+  assert.throws(
+    () => detectSliceInputKind("model.obj", stl),
+    /Unsupported slicer input extension/,
+  );
 });
 
 test("deployment config defaults to loopback and fails closed off-loopback", () => {

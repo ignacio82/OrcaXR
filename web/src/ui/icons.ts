@@ -23,6 +23,7 @@ const ICONS: Record<string, IconGlyph> = {
   scale: { xr: 'open_in_full', dom: '⤢' },
   lay_on_face: { xr: 'flip_to_back', dom: '⬓' },
   paint: { xr: 'format_paint', dom: '🖌' },
+  palette: { xr: 'palette', dom: '🎨' },
   smart_paint: { xr: 'wand_stars', dom: '✦' },
   smart_paint_image: { xr: 'image_search', dom: '▧' },
   auto_orient: { xr: 'explore', dom: '🧭' },

@@ -174,6 +174,7 @@ import type { Action, ActionSurface } from '../actions/ActionRegistry';
 import { MENU_SECTIONS } from '../actions/ActionRegistry';
 import type { ActionContext } from '../actions/ActionContext';
 import { renderXrActionButton, xrToolRailActions, type XrUiFactory } from '../ui/xr/XrShell';
+import { SceneGestureGuard } from '../ui/xr/SceneGestureGuard';
 import { CalibrationRampGenerator } from '../features/CalibrationRampGenerator';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 
@@ -200,6 +201,7 @@ import { SlicerClient } from '../slicer/SlicerClient';
 import {
   combinedSemanticImportRequiresCanonicalSlice,
   requireSemanticSlice,
+  SemanticSliceArtifact,
   sameSemanticProjectSnapshot,
   selectSemanticSliceRoute,
   type SemanticBufferSnapshot,
@@ -249,6 +251,8 @@ export async function extract3mfImportMetadata(buf: ArrayBuffer) {
   };
 }
 import { virtualFilamentsFromConfig, type VirtualFilament } from '../features/MixedFilamentPreview';
+import { GamutMatcher, type GamutMatch } from '../features/GamutMatcher';
+import { MixedFilamentStore, type MixedFilamentEntry } from '../features/MixedFilamentStore';
 import { xrIcon } from '../ui/icons';
 
 /** A single pre-flight banner surfaced to both shells. */
@@ -370,7 +374,7 @@ export class OrcaWorkspace extends xb.Script {
   private sliceModalText: UIText | null = null;
   private sliceModalBar: UIPanel | null = null;
   private sliceModalProgressContainer: UIPanel | null = null;
-  private lastGcode: string | null = null;
+  private readonly gcodeArtifact = new SemanticSliceArtifact<string>();
   private toolpathObj: THREE.LineSegments | null = null;
   private previewOn = false;
   private needsRecenter = false;
@@ -380,7 +384,7 @@ export class OrcaWorkspace extends xb.Script {
   public onStatusChanged: ((text: string, percent?: number) => void) | null = null;
   public onDownloadReady: ((ready: boolean) => void) | null = null;
   /** Extra slicer overrides set from the UI (e.g. wall generator). Merged last. */
-  public customOverrides: Record<string, string> = {};
+  private readonly customOverrides: Record<string, string> = {};
   /** When true, sliceNow computes wipe_tower_x/y from the plated models. */
   public wipeTowerAuto = false;
   /**
@@ -403,6 +407,20 @@ export class OrcaWorkspace extends xb.Script {
   constructor() {
     super();
     this.uiCore = new UICore(this);
+    this.palette.onChanged = () => {
+      this.synchronizeHeadSlotLengths();
+      this.markPublishedGcodeStale();
+      this.rebuildPaintSwatches();
+      this.onPaletteChanged?.();
+    };
+  }
+
+  private synchronizeHeadSlotLengths(): void {
+    const target = this.palette.count();
+    this.headFilaments.length = Math.min(this.headFilaments.length, target);
+    this.headNozzles.length = Math.min(this.headNozzles.length, target);
+    while (this.headFilaments.length < target) this.headFilaments.push(this.profile?.filamentName ?? '');
+    while (this.headNozzles.length < target) this.headNozzles.push('0.4');
   }
 
   async init() {
@@ -572,18 +590,20 @@ export class OrcaWorkspace extends xb.Script {
       if (this.orbitControls) this.orbitControls.enabled = !event.value;
       if (!event.value && this.selectedModel) {
         this.snapToBed(this.selectedModel);
+        this.revalidatePublishedGcode();
         if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
       }
     };
     const onTransformChanged = () => {
+      this.markPublishedGcodeStale();
       if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
     };
     this.transformControls.addEventListener('dragging-changed', onDraggingChanged);
-    this.transformControls.addEventListener('change', onTransformChanged);
+    this.transformControls.addEventListener('objectChange', onTransformChanged);
     const controls = this.transformControls;
     this.lifecycleDisposers.push(() => {
       controls.removeEventListener('dragging-changed', onDraggingChanged);
-      controls.removeEventListener('change', onTransformChanged);
+      controls.removeEventListener('objectChange', onTransformChanged);
     });
     this.add(this.transformControls.getHelper());
 
@@ -623,6 +643,7 @@ export class OrcaWorkspace extends xb.Script {
     if (this.selectedModel) {
       this.selectedModel.viewer.position.set(x, y, z);
       this.selectedModel.viewer.updateMatrixWorld();
+      this.revalidatePublishedGcode();
       if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
     }
   }
@@ -631,6 +652,7 @@ export class OrcaWorkspace extends xb.Script {
       this.selectedModel.viewer.rotation.set(x, y, z);
       this.selectedModel.viewer.updateMatrixWorld();
       this.snapToBed(this.selectedModel);
+      this.revalidatePublishedGcode();
       if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
     }
   }
@@ -639,6 +661,7 @@ export class OrcaWorkspace extends xb.Script {
       this.selectedModel.viewer.scale.set(x, y, z);
       this.selectedModel.viewer.updateMatrixWorld();
       this.snapToBed(this.selectedModel);
+      this.revalidatePublishedGcode();
       if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
     }
   }
@@ -742,8 +765,8 @@ export class OrcaWorkspace extends xb.Script {
   /** Rollback point spanning project-settings adoption and geometry commit. */
   private pendingSemanticImportCheckpoint: SemanticImportCheckpoint | null = null;
   private wipeTowerGhost: THREE.Group | null = null;
-  public headFilaments: string[] = [];
-  public headNozzles: string[] = [];
+  private headFilaments: string[] = [];
+  private headNozzles: string[] = [];
   private headsContainer: UIPanel | null = null;
 
   /** Number of models currently on the plate. */
@@ -757,13 +780,73 @@ export class OrcaWorkspace extends xb.Script {
     if (!n) return 1;
     return n.split(',').length;
   }
+
+  public getHeadFilament(index: number): string {
+    return this.headFilaments[index] ?? '';
+  }
+
+  public getHeadNozzle(index: number): string {
+    return this.headNozzles[index] ?? '0.4';
+  }
+
+  public setHeadFilament(index: number, filament: string): void {
+    if (index < 0 || index >= this.headFilaments.length || this.headFilaments[index] === filament) return;
+    this.headFilaments[index] = filament;
+    this.markPublishedGcodeStale();
+    this.rebuildHeadsPanel();
+  }
+
+  public setHeadNozzle(index: number, nozzle: string): void {
+    if (index < 0 || index >= this.headNozzles.length || this.headNozzles[index] === nozzle) return;
+    this.headNozzles[index] = nozzle;
+    this.markPublishedGcodeStale();
+    this.rebuildHeadsPanel();
+  }
+
+  public addFilamentSlot(): void {
+    if (this.palette.count() >= 16) {
+      this.setStatus('The 16-slot filament limit has been reached.');
+      return;
+    }
+    this.headFilaments.push(this.profile?.filamentName ?? '');
+    this.headNozzles.push('0.4');
+    this.palette.add();
+    this.rebuildHeadsPanel();
+    this.onProfileChanged?.();
+  }
+
+  public removeAuxiliaryFilamentSlot(index: number): void {
+    if (index < this.extruderCount || index >= this.palette.count()) return;
+    this.headFilaments.splice(index, 1);
+    this.headNozzles.splice(index, 1);
+    this.palette.remove(index);
+    this.rebuildHeadsPanel();
+    this.onProfileChanged?.();
+  }
   private drag: {
     controller: THREE.Object3D;
+    entry: ModelEntry;
     startControllerLocal: THREE.Vector3;
     startPos: THREE.Vector3;
     startRotY: number;
     startScale: number;
   } | null = null;
+  private readonly sceneGestureGuard = new SceneGestureGuard<unknown>();
+
+  private controllerHitsUi(controller: unknown): boolean {
+    const input = xb.core.input as unknown as {
+      intersectionsForController: Map<unknown, THREE.Intersection[]>;
+    };
+    const cards = new Set<THREE.Object3D>(this.uiCore.cards);
+    return (input.intersectionsForController.get(controller) ?? []).some((intersection) => {
+      let object: THREE.Object3D | null = intersection.object;
+      while (object) {
+        if (cards.has(object)) return true;
+        object = object.parent;
+      }
+      return false;
+    });
+  }
 
   /** Modal manipulation: a pinch that lands anywhere on the model starts
    *  a drag whose meaning is the active tool (OrcaSlicer-style). */
@@ -773,17 +856,11 @@ export class OrcaWorkspace extends xb.Script {
     };
     const ints = input.intersectionsForController.get(event.target) ?? [];
 
-    // Do nothing if we hit a UI panel! (Otherwise clicking a UI button unselects the model)
-    const cards = new Set<THREE.Object3D>(this.uiCore.cards);
-    const hitUI = ints.some((intersection) => {
-      let object: THREE.Object3D | null = intersection.object;
-      while (object) {
-        if (cards.has(object)) return true;
-        object = object.parent;
-      }
-      return false;
-    });
-    if (hitUI) return;
+    if (this.drag?.controller === event.target) this.drag = null;
+    // A select that lands on UI owns the complete gesture. Remember that
+    // decision so later `selecting` frames cannot paint/manipulate through the
+    // card after doing their own model-only raycast.
+    if (!this.sceneGestureGuard.begin(event.target, this.controllerHitsUi(event.target))) return;
 
     console.log(
       '[orcaxr-hit]',
@@ -814,6 +891,7 @@ export class OrcaWorkspace extends xb.Script {
     const startControllerLocal = this.workspace.worldToLocal(controller.getWorldPosition(new THREE.Vector3()));
     this.drag = {
       controller,
+      entry,
       startControllerLocal,
       startPos: entry.viewer.position.clone(),
       startRotY: entry.viewer.rotation.y,
@@ -822,14 +900,18 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   onSelecting(event: { target: unknown }) {
+    if (!this.sceneGestureGuard.allow(event.target, this.controllerHitsUi(event.target))) return;
+
     if (this.tool === 'paint') {
+      const d = this.drag;
+      if (!d || event.target !== d.controller || !this.models.includes(d.entry)) return;
       const controller = event.target as THREE.Object3D;
       const raycaster = new THREE.Raycaster();
       const tempMatrix = new THREE.Matrix4().extractRotation(controller.matrixWorld);
       raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
       raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
-      const meshes = this.models.map((m) => m.viewer.getObjectByName('modelMesh')).filter(Boolean) as THREE.Mesh[];
+      const meshes = [d.entry.viewer.getObjectByName('modelMesh')].filter(Boolean) as THREE.Mesh[];
       const hits = raycaster.intersectObjects(meshes, false);
       const meshHit = hits[0];
 
@@ -845,12 +927,13 @@ export class OrcaWorkspace extends xb.Script {
 
     const d = this.drag;
     if (!d || event.target !== d.controller) return;
-    const entry = this.models[0];
-    if (!entry) return;
+    const entry = d.entry;
+    if (!this.models.includes(entry)) return;
     const local = this.workspace.worldToLocal(d.controller.getWorldPosition(new THREE.Vector3()));
     const delta = local.clone().sub(d.startControllerLocal);
     const halfX = (this.bedMm.x * MM * WORKSPACE_SCALE) / 2;
     const halfZ = (this.bedMm.y * MM * WORKSPACE_SCALE) / 2;
+    let changed = false;
     if (this.tool === 'move') {
       entry.viewer.position.set(
         THREE.MathUtils.clamp(d.startPos.x + delta.x, -halfX, halfX),
@@ -860,21 +943,29 @@ export class OrcaWorkspace extends xb.Script {
       this.showValues(
         `x ${(entry.viewer.position.x / (MM * WORKSPACE_SCALE)).toFixed(1)}  y ${(-entry.viewer.position.z / (MM * WORKSPACE_SCALE)).toFixed(1)} mm`,
       );
+      changed = true;
     } else if (this.tool === 'rotate') {
       // Horizontal hand sweep = yaw: 25 cm of travel = a full turn.
       entry.viewer.rotation.y = d.startRotY + (delta.x / 0.25) * Math.PI * 2;
       this.showValues(`rotZ ${(((entry.viewer.rotation.y * 180) / Math.PI) % 360).toFixed(0)}°`);
+      changed = true;
     } else if (this.tool === 'scale') {
       // Vertical hand travel = scale: +25 cm doubles, −25 cm halves.
       const f = Math.pow(2, delta.y / 0.25);
       const sNew = THREE.MathUtils.clamp(d.startScale * f, 0.05, 20);
       entry.viewer.scale.setScalar(sNew);
       this.showValues(`scale ${(sNew * 100).toFixed(0)}%`);
+      changed = true;
     }
+    if (changed) this.markPublishedGcodeStale();
   }
 
   /** After any drag ends, keep models seated on the plate and inside it. */
-  onSelectEnd() {
+  onSelectEnd(event?: { target: unknown }) {
+    if (event) this.sceneGestureGuard.end(event.target);
+    else this.sceneGestureGuard.clear();
+    const endedDrag = this.drag;
+    if (!endedDrag || (event && event.target !== endedDrag.controller)) return;
     this.drag = null;
     const halfX = (this.bedMm.x * MM * WORKSPACE_SCALE) / 2;
     const halfZ = (this.bedMm.y * MM * WORKSPACE_SCALE) / 2;
@@ -1024,7 +1115,6 @@ export class OrcaWorkspace extends xb.Script {
     // the plate and, worse, exposed the blank menu card before a menu was open.
     if (this.rightSidebarCard) this.rightSidebarCard.hide();
     if (this.profileCard) this.profileCard.hide();
-    if (this.aiMcpCard) this.aiMcpCard.hide();
     if (this.bottomBarCard) this.bottomBarCard.show();
   }
 
@@ -1050,7 +1140,6 @@ export class OrcaWorkspace extends xb.Script {
     if (this.leftToolbarCard) this.leftToolbarCard.hide();
     if (this.rightSidebarCard) this.rightSidebarCard.hide();
     if (this.profileCard) this.profileCard.hide();
-    if (this.aiMcpCard) this.aiMcpCard.hide();
     if (this.bottomBarCard) this.bottomBarCard.hide();
   }
 
@@ -1108,7 +1197,6 @@ export class OrcaWorkspace extends xb.Script {
     // Right column, curving toward the user as it fans out.
     place(this.profileCard, right, 0.5, 0.2, -0.08); // settings inspector (nearest)
     place(this.rightSidebarCard, right, 0.98, 0.15, 0.06); // all actions / menus
-    place(this.aiMcpCard, right, 1.42, 0.12, 0.16); // device / AI (farthest)
     // Bottom-centre primary action bar, in front of and below the plate.
     place(this.bottomBarCard, right, 0, -0.35, 0.35);
   }
@@ -1668,6 +1756,7 @@ export class OrcaWorkspace extends xb.Script {
       m.display.geometry.dispose();
     }
     this.plates.splice(idx, 1);
+    this.revalidatePublishedGcode();
     if (wasActive) {
       const next = this.plates[Math.min(idx, this.plates.length - 1)];
       this.activePlateId = next.id;
@@ -2337,7 +2426,38 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   getLastGcode(): string | null {
-    return this.lastGcode;
+    if (!this.gcodeArtifact.hasArtifact) return null;
+    return this.revalidatePublishedGcode();
+  }
+
+  /** Immediately withdraw output controls after a known semantic mutation. */
+  private markPublishedGcodeStale(): void {
+    if (!this.gcodeArtifact.hasArtifact) return;
+    if (this.previewOn) this.clearToolpathPreview();
+    this.onDownloadReady?.(false);
+  }
+
+  /** Re-evaluate an artifact at a stable mutation boundary (for exact undo). */
+  private revalidatePublishedGcode(): string | null {
+    if (!this.gcodeArtifact.hasArtifact) return null;
+    const current = this.captureSemanticProjectSnapshot();
+    const gcode = current ? this.gcodeArtifact.read(current) : null;
+    if (!gcode) {
+      if (this.previewOn) this.clearToolpathPreview();
+    }
+    this.onDownloadReady?.(gcode !== null);
+    return gcode;
+  }
+
+  /** Update one engine override and invalidate any output from prior intent. */
+  public setCustomOverride(key: string, value: string): void {
+    if (this.customOverrides[key] === value) return;
+    this.customOverrides[key] = value;
+    this.markPublishedGcodeStale();
+  }
+
+  public getCustomOverride(key: string): string | undefined {
+    return this.customOverrides[key];
   }
 
   private addModelFromGeometry(raw: THREE.BufferGeometry, color: number, options: GeometryLoadOptions = {}) {
@@ -2460,11 +2580,18 @@ export class OrcaWorkspace extends xb.Script {
     if (this.previewOn) {
       this.clearToolpathPreview();
       this.setStatus('model view');
-    } else if (this.lastGcode) {
-      this.showToolpathPreview(this.lastGcode);
-      this.setStatus('toolpath preview');
     } else {
-      this.setStatus('slice first to preview toolpaths');
+      const gcode = this.getLastGcode();
+      if (!gcode) {
+        this.setStatus(
+          this.gcodeArtifact.hasArtifact
+            ? 'project changed — slice again to preview current toolpaths'
+            : 'slice first to preview toolpaths',
+        );
+        return;
+      }
+      this.showToolpathPreview(gcode);
+      this.setStatus('toolpath preview');
     }
   }
 
@@ -2492,6 +2619,7 @@ export class OrcaWorkspace extends xb.Script {
       target.position.x = THREE.MathUtils.clamp(target.position.x + dir * 5 * MM * WORKSPACE_SCALE, -halfX, halfX);
       this.setStatus(`x: ${Math.round(target.position.x / (MM * WORKSPACE_SCALE))} mm`);
     }
+    this.revalidatePublishedGcode();
   }
 
   /** Paint every vertex within [radius] (model units) of [localPt] on [mesh]. */
@@ -2513,7 +2641,10 @@ export class OrcaWorkspace extends xb.Script {
         painted++;
       }
     }
-    if (painted > 0) colorAttr.needsUpdate = true;
+    if (painted > 0) {
+      colorAttr.needsUpdate = true;
+      this.markPublishedGcodeStale();
+    }
     return painted;
   }
 
@@ -2613,7 +2744,6 @@ export class OrcaWorkspace extends xb.Script {
   /** Live profile values shown in the XR profile picker. Icons alone made it
    * impossible to know what a click would change without looking back at 2D. */
   private xrProfileValueLabels: { part: 'machine' | 'process' | 'filament'; value: UIText }[] = [];
-  private aiMcpCard: UICard | null = null;
   // Design's top HUD strip (wordmark + mode switch) and bottom action bar.
   private topStripCard: UICard | null = null;
   private bottomBarCard: UICard | null = null;
@@ -3258,10 +3388,6 @@ export class OrcaWorkspace extends xb.Script {
     this.paintOptionsPanel.visible = false;
     root.add(this.paintOptionsPanel);
     this.rebuildPaintSwatches();
-    this.palette.onChanged = () => {
-      this.rebuildPaintSwatches();
-      if (this.onPaletteChanged) this.onPaletteChanged();
-    };
     this.registerActionStateRefresher(() => this.refreshToolButtons());
   }
 
@@ -3644,6 +3770,7 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public rebuildHeadsPanel() {
+    this.revalidatePublishedGcode();
     if (!this.headsContainer) return;
     const panel = this.headsContainer;
     // Remove over a COPY: removing while forEach-ing the live array skips
@@ -3666,14 +3793,11 @@ export class OrcaWorkspace extends xb.Script {
       justifyContent: 'center',
       alignItems: 'center',
       cornerRadius: 4,
-      fillColor: '#2E7D32',
-      strokeWidth: 0,
-      onClick: () => {
-        this.setStatus('Synced filaments from printer!');
-        return true;
-      },
+      fillColor: '#ffffff08',
+      strokeWidth: 1,
+      strokeColor: '#ffffff12',
     });
-    syncBtn.add(new UIText('Sync with Printer', { fontSize: 14, color: '#ffffff' }));
+    syncBtn.add(new UIText('Printer sync unavailable in XR', { fontSize: 11, color: '#9aa4af' }));
     panel.add(syncBtn);
 
     for (let i = 0; i < totalCount; i++) {
@@ -3706,8 +3830,7 @@ export class OrcaWorkspace extends xb.Script {
       const cycleFilament = () => {
         const choices = this.filamentChoices(this.profile!.machineName);
         const idx = choices.indexOf(this.headFilaments[i]);
-        this.headFilaments[i] = choices[(idx + 1) % choices.length] ?? this.headFilaments[i];
-        this.rebuildHeadsPanel();
+        this.setHeadFilament(i, choices[(idx + 1) % choices.length] ?? this.headFilaments[i]);
         return true;
       };
       const filBtn = new UIPanel({
@@ -3729,8 +3852,7 @@ export class OrcaWorkspace extends xb.Script {
         const cycleNozzle = () => {
           const choices = ['0.2', '0.4', '0.6', '0.8'];
           const idx = choices.indexOf(this.headNozzles[i]);
-          this.headNozzles[i] = choices[(idx + 1) % choices.length] ?? this.headNozzles[i];
-          this.rebuildHeadsPanel();
+          this.setHeadNozzle(i, choices[(idx + 1) % choices.length] ?? this.headNozzles[i]);
           return true;
         };
         const nozBtn = new UIPanel({
@@ -3755,11 +3877,7 @@ export class OrcaWorkspace extends xb.Script {
           cornerRadius: 4,
           fillColor: '#d32f2f',
           onClick: () => {
-            this.palette.remove(i);
-            this.headFilaments.splice(i, 1);
-            this.headNozzles.splice(i, 1);
-            this.rebuildHeadsPanel();
-            if (this.onProfileChanged) this.onProfileChanged();
+            this.removeAuxiliaryFilamentSlot(i);
             return true;
           },
         });
@@ -3790,19 +3908,11 @@ export class OrcaWorkspace extends xb.Script {
       justifyContent: 'center',
       alignItems: 'center',
       cornerRadius: 4,
-      fillColor: '#ffffff14',
+      fillColor: '#ffffff08',
       strokeWidth: 1,
-      strokeColor: '#ffffff1a',
-      onClick: () => {
-        this.palette.add();
-        this.headFilaments.push(this.profile!.filamentName);
-        this.headNozzles.push('0.4');
-        this.rebuildHeadsPanel();
-        if (this.onProfileChanged) this.onProfileChanged();
-        return true;
-      },
+      strokeColor: '#ffffff12',
     });
-    addBtn.add(new UIText('+ Add Virtual Filament', { fontSize: 14, color: '#ffffff' }));
+    addBtn.add(new UIText('Virtual filament authoring unavailable', { fontSize: 11, color: '#9aa4af' }));
     panel.add(addBtn);
   }
 
@@ -3865,7 +3975,7 @@ export class OrcaWorkspace extends xb.Script {
     this.palette.onChanged?.();
     this.rebuildHeadsPanel();
     this.unselectModel();
-    this.lastGcode = null;
+    this.gcodeArtifact.clear();
     if (this.previewOn) this.togglePreview();
     this.rebuildPlate();
     if (this.onPlatesChanged) this.onPlatesChanged();
@@ -4453,6 +4563,10 @@ export class OrcaWorkspace extends xb.Script {
       return;
     }
     try {
+      // Revalidate any prior output before a new attempt. An edited project
+      // must not leave stale G-code enabled while the replacement is running
+      // or after that replacement fails.
+      if (this.gcodeArtifact.hasArtifact) this.getLastGcode();
       if (this.onSliceStateChanged) this.onSliceStateChanged(true);
       if (this.sliceModalCard) this.sliceModalCard.show();
       this.setStatus('baking transforms…', 0);
@@ -4507,6 +4621,13 @@ export class OrcaWorkspace extends xb.Script {
       }
 
       let gcode: string;
+      let submittedSource: SemanticProjectSnapshot | null = null;
+      const captureSubmission = (): SemanticProjectSnapshot => {
+        const source = this.captureSemanticProjectSnapshot();
+        if (!source) throw new Error('The project could not be snapshotted before slicing.');
+        submittedSource = source;
+        return source;
+      };
       // FullSpectrum geometry cannot express the embedded mixed-filament
       // definitions on its own. Slice the original bytes only while every
       // slice-relevant value is exactly as loaded; edits fail closed until the
@@ -4517,12 +4638,8 @@ export class OrcaWorkspace extends xb.Script {
           if (this.canonicalSliceRequiredReason) {
             throw new Error(this.canonicalSliceRequiredReason);
           }
-          const current = this.captureSemanticProjectSnapshot();
-          if (
-            !current ||
-            !this.originalProjectSnapshot ||
-            !sameSemanticProjectSnapshot(this.originalProjectSnapshot, current)
-          ) {
+          const current = captureSubmission();
+          if (!this.originalProjectSnapshot || !sameSemanticProjectSnapshot(this.originalProjectSnapshot, current)) {
             throw new Error(
               'The FullSpectrum workspace differs from its imported source; canonical live-project slicing is required.',
             );
@@ -4558,14 +4675,28 @@ export class OrcaWorkspace extends xb.Script {
           flush_volumes_matrix: matrix.join(','),
           flush_volumes_vector: Array(n).fill(140).join(','),
         };
+        captureSubmission();
         gcode = await requireSemanticSlice('painted', () =>
           this.slicer.slicePainted(painted.positions, painted.triFilament, painted.filamentCount, 4, paintedOverrides),
         );
       } else {
-        gcode = await this.slicer.slice(this.bakeToPrinterStl(), 4, overrides);
+        const stl = this.bakeToPrinterStl();
+        captureSubmission();
+        gcode = await this.slicer.slice(stl, 4, overrides);
       }
       const ms = Math.round(performance.now() - t0);
-      this.lastGcode = gcode;
+      const completedSource = this.captureSemanticProjectSnapshot();
+      if (
+        !submittedSource ||
+        !completedSource ||
+        !this.gcodeArtifact.publishIfCurrent(gcode, submittedSource, completedSource)
+      ) {
+        // Preserve an older artifact only if it happens to match the new live
+        // state; the just-completed result belongs to a superseded project and
+        // must never replace it.
+        if (this.gcodeArtifact.hasArtifact) this.getLastGcode();
+        throw new Error('The project changed while slicing; the stale result was discarded. Slice again.');
+      }
       if (this.onDownloadReady) this.onDownloadReady(true);
       const lines = gcode.split('\n').length;
       const layers = (gcode.match(/; CHANGE_LAYER|;LAYER_CHANGE/g) ?? []).length;
@@ -4719,7 +4850,9 @@ export class OrcaWorkspace extends xb.Script {
 
   /** Toggle wipe-tower auto-positioning (Section 1 pre-flight). */
   public setWipeTowerAuto(on: boolean): void {
+    if (this.wipeTowerAuto === on) return;
     this.wipeTowerAuto = on;
+    this.markPublishedGcodeStale();
   }
 
   /** True when a blocking (error) pre-flight banner is active — gates Slice. */
@@ -4733,6 +4866,7 @@ export class OrcaWorkspace extends xb.Script {
    * enough to run on load / profile change / transform-end.
    */
   public recomputePreflight(): void {
+    this.revalidatePublishedGcode();
     // The tower ghost's height tracks the tallest plated model; this runs on
     // every load / delete / transform-end, which is exactly when that changes.
     this.rebuildWipeTowerGhost();
@@ -4763,6 +4897,160 @@ export class OrcaWorkspace extends xb.Script {
 
     this.preflightBanners = banners;
     if (this.onPreflight) this.onPreflight(banners);
+  }
+
+  /** Get unique hex colors present in the models on the active plate. */
+  public getModelColors(): string[] {
+    const hexSet = new Set<string>();
+    for (const model of this.models) {
+      const geo = model.display.geometry as THREE.BufferGeometry;
+      const colAttr = geo?.getAttribute('color');
+      if (colAttr && colAttr.array) {
+        const arr = colAttr.array as Float32Array;
+        const step = Math.max(3, Math.floor(arr.length / 3000) * 3);
+        for (let i = 0; i < arr.length; i += step) {
+          const r = Math.round(arr[i] * 255);
+          const g = Math.round(arr[i + 1] * 255);
+          const b = Math.round(arr[i + 2] * 255);
+          const hex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()}`;
+          hexSet.add(hex);
+        }
+      } else if ((model.display.material as THREE.MeshStandardMaterial)?.color) {
+        const c = (model.display.material as THREE.MeshStandardMaterial).color;
+        const hex = `#${c.getHexString().toUpperCase()}`;
+        hexSet.add(hex);
+      }
+    }
+    return Array.from(hexSet);
+  }
+
+  /** True if model colors do not match installed printer filaments (exact physical match). */
+  public hasNonMatchingModelColors(): boolean {
+    if (this.models.length === 0) return false;
+    const physicalColors = this.palette.list().map((s) => s.color);
+    if (physicalColors.length === 0) return false;
+    const modelColors = this.getModelColors();
+    if (modelColors.length === 0) return false;
+
+    const matches = GamutMatcher.matchModelColors(modelColors, physicalColors);
+    return matches.some((m) => m.recipe.type !== 'Physical' || m.deltaE > 1.0);
+  }
+
+  /**
+   * One-click feature: Recreate model colors using the printer's installed filaments
+   * via Full-Spectrum gamut matching and dithering definitions.
+   */
+  public recreateModelColorsWithFullSpectrum(): {
+    recreatedCount: number;
+    physicalCount: number;
+    blendCount: number;
+    matches: GamutMatch[];
+  } {
+    const physicalColors = this.palette.list().map((s) => s.color);
+    if (physicalColors.length === 0) {
+      this.setStatus('No installed filaments in printer palette.');
+      return { recreatedCount: 0, physicalCount: 0, blendCount: 0, matches: [] };
+    }
+
+    const modelColors = this.getModelColors();
+    if (modelColors.length === 0) {
+      this.setStatus('No model colors detected to recreate.');
+      return { recreatedCount: 0, physicalCount: 0, blendCount: 0, matches: [] };
+    }
+
+    const matches = GamutMatcher.matchModelColors(modelColors, physicalColors);
+
+    let physicalCount = 0;
+    let blendCount = 0;
+    const newVirtualRows: MixedFilamentEntry[] = [];
+    const colorRemap = new Map<string, string>();
+
+    matches.forEach((m) => {
+      colorRemap.set(m.sourceHex.toUpperCase(), m.targetHex.toUpperCase());
+      if (m.recipe.type === 'Physical') {
+        physicalCount++;
+      } else if (m.recipe.type === 'Blend') {
+        blendCount++;
+        const a1 = m.recipe.componentA1;
+        const b1 = m.recipe.componentB1;
+        const mixB = m.recipe.mixBPercent;
+        const existing = newVirtualRows.find(
+          (r) => r.componentA === a1 && r.componentB === b1 && r.mixBPercent === mixB,
+        );
+        if (!existing) {
+          newVirtualRows.push({
+            id: `match_${a1}_${b1}_${mixB}`,
+            componentA: a1,
+            componentB: b1,
+            mixBPercent: mixB,
+            distributionMode: 0,
+            enabled: true,
+            custom: true,
+            displayColor: m.targetHex,
+          });
+        }
+      }
+    });
+
+    const store = new MixedFilamentStore();
+    const serializedDefs = store.serializeMixedFilamentDefinitions(newVirtualRows);
+
+    if (serializedDefs) {
+      this.customOverrides['mixed_filament_definitions'] = serializedDefs;
+      this.customOverrides['mixed_filament_advanced_dithering'] = '1';
+      this.customOverrides['dithering_step_painted_zones_only'] = '1';
+
+      const cfg = {
+        filament_colour: physicalColors,
+        mixed_filament_definitions: serializedDefs,
+        dithering_local_z_mode: 0,
+      };
+      this.virtualFilaments = virtualFilamentsFromConfig(cfg);
+    }
+
+    // Remap model vertex/material colors to target colors
+    for (const model of this.models) {
+      const geo = model.display.geometry as THREE.BufferGeometry;
+      const colAttr = geo?.getAttribute('color');
+      if (colAttr && colAttr.array) {
+        const arr = colAttr.array as Float32Array;
+        for (let i = 0; i < arr.length; i += 3) {
+          const r = Math.round(arr[i] * 255);
+          const g = Math.round(arr[i + 1] * 255);
+          const b = Math.round(arr[i + 2] * 255);
+          const srcHex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()}`;
+          const targetHex = colorRemap.get(srcHex);
+          if (targetHex) {
+            const targetColor = new THREE.Color(targetHex);
+            arr[i] = targetColor.r;
+            arr[i + 1] = targetColor.g;
+            arr[i + 2] = targetColor.b;
+          }
+        }
+        colAttr.needsUpdate = true;
+      } else if ((model.display.material as THREE.MeshStandardMaterial)?.color) {
+        const mat = model.display.material as THREE.MeshStandardMaterial;
+        const srcHex = `#${mat.color.getHexString().toUpperCase()}`;
+        const targetHex = colorRemap.get(srcHex);
+        if (targetHex) {
+          mat.color.set(targetHex);
+        }
+      }
+    }
+
+    this.markPublishedGcodeStale();
+    this.recomputePreflight();
+    this.palette.onChanged?.();
+
+    const msg = `Recreated ${matches.length} model color${matches.length === 1 ? '' : 's'} using Full-Spectrum (${physicalCount} physical, ${blendCount} Full-Spectrum blends).`;
+    this.setStatus(msg);
+
+    return {
+      recreatedCount: matches.length,
+      physicalCount,
+      blendCount,
+      matches,
+    };
   }
 
   public async fixSelectedModel() {
@@ -4841,105 +5129,6 @@ export class OrcaWorkspace extends xb.Script {
     } catch (e: any) {
       this.setStatus(`Boolean failed: ${e.message}`);
     }
-  }
-
-  private addAiMcpPanel() {
-    const card = this.uiCore.createCard({
-      name: 'AiMcpPanel',
-      sizeX: 0.4,
-      sizeY: 0.6,
-      pixelSize: 0.0012,
-      position: new THREE.Vector3(0.95, PLATE_Y + 0.15, PLATE_Z - 0.3),
-      width: 330,
-      alignItems: 'center',
-      behaviors: [
-        new ManipulationBehavior({
-          draggable: true,
-          faceCamera: true,
-          manipulationMargin: 16,
-          manipulationCornerRadius: 16,
-        }),
-      ],
-    });
-    card.visible = false;
-    this.aiMcpCard = card;
-
-    const root = new UIPanel({
-      width: '100%',
-      flexDirection: 'column',
-      fillColor: '#14171aA6',
-      cornerRadius: 16,
-      padding: 24,
-      gap: 20,
-      strokeWidth: 1,
-      strokeColor: '#ffffff14',
-      overflow: 'scroll',
-      height: '100%',
-    });
-    card.add(root);
-
-    const mcpHeader = new UIPanel({ width: '100%', flexDirection: 'row', alignItems: 'center' });
-    mcpHeader.add(new UIText('MCP Server', { fontSize: 24, fontWeight: 'bold', color: '#ffffff' }));
-    root.add(mcpHeader);
-
-    const mcpBtn = new UIPanel({
-      width: '100%',
-      height: 50,
-      justifyContent: 'center',
-      alignItems: 'center',
-      cornerRadius: 8,
-      fillColor: '#ffffff14',
-      strokeWidth: 1,
-      strokeColor: '#ffffff1a',
-      onClick: () => {
-        this.setStatus('MCP Server enabled');
-        return true;
-      },
-      onHoverEnter: () => {
-        mcpBtn.setFillColor('#ffffff26');
-      },
-      onHoverExit: () => {
-        mcpBtn.setFillColor('#ffffff14');
-      },
-    });
-    mcpBtn.add(new UIText('Enable MCP Server', { fontSize: 18, color: '#e0e6ee' }));
-    root.add(mcpBtn);
-
-    const aiHeader = new UIPanel({ width: '100%', flexDirection: 'row', alignItems: 'center', marginTop: 10 });
-    aiHeader.add(new UIText('AI Features', { fontSize: 24, fontWeight: 'bold', color: '#ffffff' }));
-    root.add(aiHeader);
-
-    const makeAiBtn = (label: string, actionMsg: string) => {
-      const btn = new UIPanel({
-        width: '100%',
-        height: 50,
-        justifyContent: 'center',
-        alignItems: 'center',
-        cornerRadius: 8,
-        fillColor: '#ffffff14',
-        strokeWidth: 1,
-        strokeColor: '#ffffff1a',
-        onClick: () => {
-          if (this.models.length === 0) {
-            this.setStatus('Load a model first');
-          } else {
-            this.setStatus(actionMsg);
-          }
-          return true;
-        },
-        onHoverEnter: () => {
-          btn.setFillColor('#ffffff26');
-        },
-        onHoverExit: () => {
-          btn.setFillColor('#ffffff14');
-        },
-      });
-      btn.add(new UIText(label, { fontSize: 18, color: '#e0e6ee' }));
-      return btn;
-    };
-
-    root.add(makeAiBtn('Smart Paint (AI)', 'Running Smart Paint...'));
-    root.add(makeAiBtn('Semantic Planner', 'Running Semantic Planner...'));
   }
 
   async smartPaint() {

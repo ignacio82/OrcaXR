@@ -36,6 +36,7 @@ export class DomShell {
   private bound: Bound[] = [];
   private modeButtons: { id: WorkspaceMode; el: HTMLButtonElement }[] = [];
   private unsubscribe: (() => void) | null = null;
+  private eventDisposers: Array<() => void> = [];
 
   constructor(
     private readonly registry: ActionRegistry,
@@ -44,10 +45,7 @@ export class DomShell {
   ) {}
 
   mount(hosts: Hosts): void {
-    this.unsubscribe?.();
-    this.unsubscribe = null;
-    this.bound = [];
-    this.modeButtons = [];
+    this.dispose();
     // Tool rail
     hosts.toolbar.innerHTML = '';
     for (const a of this.registry.forSurface('dom-toolbar')) {
@@ -81,6 +79,7 @@ export class DomShell {
   dispose(): void {
     this.unsubscribe?.();
     this.unsubscribe = null;
+    for (const dispose of this.eventDisposers.splice(0).reverse()) dispose();
     for (const { el } of this.bound) el.onclick = null;
     this.bound = [];
     this.modeButtons = [];
@@ -137,6 +136,7 @@ export class DomShell {
       item.innerHTML = `<span class="glyph">${domIcon(a.icon)}</span><span class="menu-item-label">${a.label}</span>${badge}`;
       item.onclick = () => {
         host.classList.remove('open');
+        trigger.setAttribute('aria-expanded', 'false');
         this.run(a, 'dom-menu');
       };
       this.bound.push({ el: item, action: a, surface: 'dom-menu' });
@@ -155,19 +155,56 @@ export class DomShell {
       trigger.setAttribute('aria-expanded', String(!wasOpen));
     };
     // Click-away closes.
-    document.addEventListener('click', (e) => {
+    const onDocumentClick = (e: MouseEvent) => {
       if (!host.contains(e.target as Node)) {
         host.classList.remove('open');
         trigger.setAttribute('aria-expanded', 'false');
       }
-    });
-    trigger.addEventListener('keydown', (e) => {
+    };
+    document.addEventListener('click', onDocumentClick);
+    this.eventDisposers.push(() => document.removeEventListener('click', onDocumentClick));
+
+    const enabledItems = () =>
+      [...dropdown.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].filter((item) => !item.disabled);
+    const onTriggerKeydown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         host.classList.remove('open');
         trigger.setAttribute('aria-expanded', 'false');
         trigger.focus();
+      } else if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        host.classList.add('open');
+        trigger.setAttribute('aria-expanded', 'true');
+        enabledItems()[0]?.focus();
       }
-    });
+    };
+    trigger.addEventListener('keydown', onTriggerKeydown);
+    this.eventDisposers.push(() => trigger.removeEventListener('keydown', onTriggerKeydown));
+
+    const onMenuKeydown = (e: KeyboardEvent) => {
+      const items = enabledItems();
+      const current = items.indexOf(e.target as HTMLButtonElement);
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        host.classList.remove('open');
+        trigger.setAttribute('aria-expanded', 'false');
+        trigger.focus();
+      } else if (e.key === 'ArrowDown' && items.length > 0) {
+        e.preventDefault();
+        items[(current + 1 + items.length) % items.length]?.focus();
+      } else if (e.key === 'ArrowUp' && items.length > 0) {
+        e.preventDefault();
+        items[(current - 1 + items.length) % items.length]?.focus();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        items[0]?.focus();
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        items.at(-1)?.focus();
+      }
+    };
+    dropdown.addEventListener('keydown', onMenuKeydown);
+    this.eventDisposers.push(() => dropdown.removeEventListener('keydown', onMenuKeydown));
 
     host.appendChild(trigger);
     host.appendChild(dropdown);

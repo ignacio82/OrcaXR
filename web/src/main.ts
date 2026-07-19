@@ -13,8 +13,8 @@ import * as uikit from '@pmndrs/uikit';
 
 import { OrcaWorkspace, extract3mfImportMetadata } from './workspace/OrcaWorkspace';
 import { SlicerClient } from './slicer/SlicerClient';
-import { loadPrinterConfig, savePrinterConfig, sendToPrinter } from './net/PrinterClient';
-import { fetchLocalNetwork, localNetworkTargetForRequest, normalizeHttpEndpoint } from './net/LocalNetworkAccess';
+import { loadPrinterConfig, savePrinterConfig } from './net/PrinterClient';
+import { fetchLocalNetwork, normalizeHttpEndpoint } from './net/LocalNetworkAccess';
 import { registerWorkspaceTools } from './mcp/WorkspaceTools';
 import { registerSystemTools } from './mcp/SystemTools';
 import { OrcaWebMcpClient, WEBMCP_CLI_PACKAGE, WebMcpConnectionError, type WebMcpStatus } from './mcp/OrcaWebMcpClient';
@@ -150,7 +150,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
           updateModal(`Reading archive...`, 40);
           await new Promise((r) => setTimeout(r, 50));
           await workspace.importZipArchive(buf);
-        } else {
+        } else if (lowerName.endsWith('.stl')) {
           updateModal(`Parsing STL geometry...`, 50);
           await new Promise((r) => setTimeout(r, 50));
           const geometry = new STLLoader().parse(buf);
@@ -158,6 +158,8 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
           updateModal(`Building scene...`, 90);
           await new Promise((r) => setTimeout(r, 50));
           workspace.loadModelFromGeometry(geometry, file.name);
+        } else {
+          throw new Error(`Unsupported model format for ${file.name}. Choose an STL or 3MF file.`);
         }
       } catch (e) {
         statusText.textContent = `Failed to load: ${(e as Error).message}`;
@@ -259,22 +261,39 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   workspace.onRequestLoadConfig = () => cfgInput.click();
 
   // --- Modal framework (Help menu + setup wizard) --------------------------
-  const closeModal = () => document.getElementById('oxr-modal-overlay')?.remove();
+  let modalReturnFocus: HTMLElement | null = null;
+  const closeModal = () => {
+    const overlay = document.getElementById('oxr-modal-overlay');
+    if (!overlay) return;
+    overlay.remove();
+    const returnFocus = modalReturnFocus;
+    modalReturnFocus = null;
+    if (returnFocus?.isConnected) returnFocus.focus();
+  };
   const buildModal = (title: string, body: HTMLElement | string): void => {
     closeModal();
+    const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    modalReturnFocus = active?.closest('.menu-host')?.querySelector<HTMLElement>('.menu-trigger') ?? active;
     const overlay = document.createElement('div');
     overlay.id = 'oxr-modal-overlay';
     overlay.style.cssText =
       'position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);z-index:10001;display:flex;align-items:center;justify-content:center;';
     const card = document.createElement('div');
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-modal', 'true');
+    card.setAttribute('aria-labelledby', 'oxr-modal-title');
+    card.setAttribute('aria-describedby', 'oxr-modal-body');
+    card.tabIndex = -1;
     card.style.cssText =
       'background:var(--oxr-color-bg-card);color:var(--oxr-color-text);padding:22px 26px;border-radius:var(--oxr-radius-lg);border:1px solid var(--oxr-color-stroke-strong);box-shadow:0 24px 80px rgba(0,0,0,0.8);width:min(470px,88vw);max-height:82vh;overflow:auto;';
     const head = document.createElement('div');
     head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:16px;';
     const h = document.createElement('h3');
+    h.id = 'oxr-modal-title';
     h.textContent = title;
     h.style.cssText = 'margin:0;font-size:19px;font-weight:600;';
     const x = document.createElement('button');
+    x.type = 'button';
     x.textContent = '✕';
     x.setAttribute('aria-label', 'Close');
     x.style.cssText =
@@ -282,6 +301,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     x.onclick = closeModal;
     head.append(h, x);
     const bodyEl = document.createElement('div');
+    bodyEl.id = 'oxr-modal-body';
     bodyEl.style.cssText = 'font-size:14px;line-height:1.55;';
     if (typeof body === 'string') bodyEl.innerHTML = body;
     else bodyEl.appendChild(body);
@@ -290,7 +310,34 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     overlay.onclick = (e) => {
       if (e.target === overlay) closeModal();
     };
+    overlay.onkeydown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        closeModal();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const focusable = [
+        ...card.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]'),
+      ].filter((element) => element.tabIndex >= 0 && !element.hasAttribute('disabled') && !element.hidden);
+      if (focusable.length === 0) {
+        e.preventDefault();
+        card.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     document.body.appendChild(overlay);
+    (card.querySelector<HTMLElement>('button, [href], input, select, textarea, [tabindex]') ?? card).focus();
   };
   document.addEventListener('keydown', (e) => {
     const target = e.target as HTMLElement | null;
@@ -510,10 +557,9 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
         const fSel = document.createElement('select');
         fSel.className = 'action-btn';
         fSel.style.cssText = 'flex-grow:1;margin:0;padding:6px;font-size:12px;';
-        fillSelect(fSel, o.filaments, workspace.headFilaments[i] || '');
+        fillSelect(fSel, o.filaments, workspace.getHeadFilament(i));
         fSel.onchange = () => {
-          workspace.headFilaments[i] = fSel.value;
-          workspace.rebuildHeadsPanel();
+          workspace.setHeadFilament(i, fSel.value);
         };
         row.appendChild(fSel);
 
@@ -521,10 +567,9 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
           const nSel = document.createElement('select');
           nSel.className = 'action-btn';
           nSel.style.cssText = 'width:60px;margin:0;padding:6px;font-size:12px;';
-          fillSelect(nSel, ['0.2', '0.4', '0.6', '0.8'], workspace.headNozzles[i]);
+          fillSelect(nSel, ['0.2', '0.4', '0.6', '0.8'], workspace.getHeadNozzle(i));
           nSel.onchange = () => {
-            workspace.headNozzles[i] = nSel.value;
-            workspace.rebuildHeadsPanel();
+            workspace.setHeadNozzle(i, nSel.value);
           };
           row.appendChild(nSel);
         } else {
@@ -534,10 +579,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
             'width:60px;margin:0;padding:6px;font-size:12px;background:#d32f2f;color:white;border:none;cursor:pointer;';
           delBtn.textContent = 'Del';
           delBtn.onclick = () => {
-            workspace.palette.remove(i);
-            workspace.headFilaments.splice(i, 1);
-            workspace.headNozzles.splice(i, 1);
-            workspace.rebuildHeadsPanel();
+            workspace.removeAuxiliaryFilamentSlot(i);
             renderProfileSelects(); // force redraw
           };
           row.appendChild(delBtn);
@@ -549,15 +591,11 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       const addBtn = document.createElement('button');
       addBtn.className = 'action-btn';
       addBtn.style.cssText =
-        'background: rgba(255,255,255,0.1); color: white; padding: 8px; margin-top: 4px; border-radius: 8px; cursor: pointer; font-size: 13px; width: 100%; border: 1px dashed rgba(255,255,255,0.3);';
-      addBtn.textContent = '+ Add Virtual Filament';
-      addBtn.onclick = () => {
-        workspace.palette.add();
-        workspace.headFilaments.push(workspace.getProfileOptions().filament);
-        workspace.headNozzles.push('0.4');
-        workspace.rebuildHeadsPanel();
-        renderProfileSelects(); // force redraw
-      };
+        'background: rgba(255,255,255,0.05); color: #9aa4af; padding: 8px; margin-top: 4px; border-radius: 8px; cursor: not-allowed; font-size: 13px; width: 100%; border: 1px dashed rgba(255,255,255,0.18);';
+      addBtn.textContent = 'Virtual filament authoring unavailable';
+      addBtn.title =
+        'Mixed-filament import and preview are available, but creating or editing virtual filaments is not implemented yet.';
+      addBtn.disabled = true;
       headsPanel.appendChild(addBtn);
     }
   };
@@ -600,7 +638,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   }
   renderProfileSelects();
 
-  // The new SettingsInspector mounts into the sidebar and drives workspace.customOverrides natively.
+  // The settings inspector writes through the workspace's invalidating override API.
   const settingsHost = document.getElementById('settings-inspector-host');
   if (settingsHost) {
     const settingsInspector = new SettingsInspector(settingsHost, workspace);
@@ -627,9 +665,9 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       del.title = 'Remove filament';
       del.style.cssText =
         'position:absolute;top:-6px;right:-6px;width:16px;height:16px;line-height:14px;border-radius:50%;border:none;background:#333;color:#fff;font-size:11px;cursor:pointer;';
-      del.onclick = () => workspace.palette.remove(i);
+      del.onclick = () => workspace.removeAuxiliaryFilamentSlot(i);
       cell.appendChild(input);
-      if (workspace.palette.count() > 1) cell.appendChild(del);
+      if (i >= workspace.extruderCount) cell.appendChild(del);
       swatchWrap.appendChild(cell);
     });
 
@@ -657,7 +695,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       vWrap.appendChild(chip);
     }
   };
-  btnAddFilament.onclick = () => workspace.palette.add();
+  btnAddFilament.onclick = () => workspace.addFilamentSlot();
   // A palette change (e.g. adopted from a loaded 3MF) must also refresh the
   // heads panel — its per-head color swatches read the same palette.
   workspace.onPaletteChanged = () => {
@@ -767,113 +805,16 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       statusText.textContent = `No response: ${(e as Error).message}`;
     }
   };
-  btnPrinterSend.onclick = async () => {
-    const gcode = workspace.getLastGcode();
-    if (!gcode) {
-      statusText.textContent = 'Slice first, then send.';
-      return;
-    }
-    statusText.textContent = 'Uploading to printer…';
-    const r = await sendToPrinter(printerCfg, gcode, 'orcaxr.gcode', true);
-    statusText.textContent = r.message;
-  };
-
   const btnPrinterWebcam = document.getElementById('btn-printer-webcam') as HTMLButtonElement;
-  const webcamContainer = document.getElementById('webcam-container') as HTMLDivElement;
-  const webcamFeed = document.getElementById('printer-webcam-feed') as HTMLImageElement;
-  let webcamActive = false;
-  let webcamInterval: ReturnType<typeof setInterval> | null = null;
-  let webcamObjectUrl: string | null = null;
-  let webcamAbortController: AbortController | null = null;
-  let webcamGeneration = 0;
+  const printerMutationReason =
+    'Unavailable until printer mapping, preflight, confirmation, integrity, and reconnect handling are complete.';
+  btnPrinterSend.disabled = true;
+  btnPrinterSend.title = printerMutationReason;
+  btnPrinterWebcam.disabled = true;
+  btnPrinterWebcam.title = 'Unavailable until webcam discovery is routed through the shared printer connection.';
 
-  // Different firmwares and Crowsnest configurations expose the snapshot at different paths
-  const snapshotPaths = [
-    '/webcam/?action=snapshot&t=', // Standard Klipper / Mainsail / Fluidd
-    '/webcam/snapshot.jpg?t=', // Snapmaker U1 Extended Firmware (Internal Camera)
-    '/webcam2/snapshot.jpg?t=', // Snapmaker U1 Extended Firmware (USB Camera)
-  ];
-  let activePathIndex = 0;
-
-  webcamFeed.onerror = () => {
-    if (!webcamActive) return;
-    // On error, advance to the next known path. The next interval tick will attempt it.
-    activePathIndex = (activePathIndex + 1) % snapshotPaths.length;
-  };
-
-  btnPrinterWebcam.onclick = () => {
-    const generation = ++webcamGeneration;
-    let host = printerCfg.host.trim();
-    if (!host) {
-      statusText.textContent = 'Please configure a printer host first.';
-      return;
-    }
-    host = normalizeHttpEndpoint(host);
-
-    webcamActive = !webcamActive;
-    if (webcamActive) {
-      webcamContainer.style.display = 'block';
-      btnPrinterWebcam.textContent = 'Hide Webcam';
-      statusText.textContent = 'Connecting to webcam feed...';
-
-      // WebGL/uikit cannot render MJPEG streams directly.
-      // We must poll the snapshot endpoint to update the texture.
-      // IP literals and .local names can stay as direct image requests, which
-      // keeps camera endpoints without CORS working. Named HTTP hosts need the
-      // annotated fetch path so Chrome can authorize Local Network Access.
-      const needsAnnotatedFetch = localNetworkTargetForRequest(host, window.isSecureContext) !== null;
-      const updateFrame = async () => {
-        if (!webcamActive || generation !== webcamGeneration) return;
-        const frameUrl = `${host}${snapshotPaths[activePathIndex]}${Date.now()}`;
-        if (!needsAnnotatedFetch) {
-          webcamFeed.src = frameUrl;
-          return;
-        }
-        if (webcamAbortController) return;
-        const controller = new AbortController();
-        webcamAbortController = controller;
-        try {
-          const response = await fetchLocalNetwork(frameUrl, {
-            cache: 'no-store',
-            signal: controller.signal,
-          });
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const nextObjectUrl = URL.createObjectURL(await response.blob());
-          if (!webcamActive || generation !== webcamGeneration) {
-            URL.revokeObjectURL(nextObjectUrl);
-            return;
-          }
-          const previousObjectUrl = webcamObjectUrl;
-          webcamObjectUrl = nextObjectUrl;
-          webcamFeed.src = nextObjectUrl;
-          if (previousObjectUrl) URL.revokeObjectURL(previousObjectUrl);
-        } catch {
-          if (webcamActive && generation === webcamGeneration) {
-            activePathIndex = (activePathIndex + 1) % snapshotPaths.length;
-          }
-        } finally {
-          if (webcamAbortController === controller) webcamAbortController = null;
-        }
-      };
-
-      void updateFrame();
-      webcamInterval = setInterval(updateFrame, 1000); // 1 FPS
-    } else {
-      if (webcamInterval) clearInterval(webcamInterval);
-      webcamInterval = null;
-      webcamAbortController?.abort();
-      webcamAbortController = null;
-      if (webcamObjectUrl) URL.revokeObjectURL(webcamObjectUrl);
-      webcamObjectUrl = null;
-      webcamFeed.src = '';
-      webcamContainer.style.display = 'none';
-      btnPrinterWebcam.textContent = 'Webcam';
-      statusText.textContent = 'Webcam closed.';
-    }
-  };
-
-  // Download / Send become available once a slice exists. The Download button
-  // itself is registry-driven; here we only drive the Send form button + store.
+  // Download availability is registry-driven. Printer mutation stays blocked
+  // independently until the complete P9 safety workflow is wired.
   // Build-plate bar: a chip per plate + an add button. Switching hides the
   // current plate's models and shows the target's (the workspace owns the sets).
   const plateBar = document.getElementById('plate-bar') as HTMLDivElement;
@@ -913,7 +854,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   renderPlateBar();
 
   workspace.onDownloadReady = (ready) => {
-    btnPrinterSend.disabled = !ready;
+    btnPrinterSend.disabled = true;
     uiState.update({ gcodeReady: ready });
   };
 
@@ -958,8 +899,6 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   const inMcpToken = document.getElementById('in-mcp-token') as HTMLInputElement;
   const btnMcpConnect = document.getElementById('btn-mcp-connect') as HTMLButtonElement;
   const btnMcpShare = document.getElementById('btn-mcp-share') as HTMLButtonElement;
-  const btnAiSmartPaint = document.getElementById('btn-ai-smart-paint') as HTMLButtonElement;
-  const btnAiSemantic = document.getElementById('btn-ai-semantic') as HTMLButtonElement;
 
   let mcp: OrcaWebMcpClient | null = null;
 
@@ -1046,22 +985,6 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   };
 
   window.addEventListener('pagehide', () => mcp?.disconnect(), { once: true });
-
-  btnAiSmartPaint.onclick = () => {
-    if (workspace.modelCount === 0) {
-      statusText.textContent = 'Load a model first before using AI Smart Paint.';
-      return;
-    }
-    void workspace.smartPaint();
-  };
-
-  btnAiSemantic.onclick = () => {
-    if (workspace.modelCount === 0) {
-      statusText.textContent = 'Load a model first before using Semantic Planner.';
-      return;
-    }
-    void workspace.smartPaintImage();
-  };
 }
 
 document.addEventListener('DOMContentLoaded', async () => {

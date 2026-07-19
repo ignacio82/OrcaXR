@@ -1,11 +1,8 @@
 /**
  * Calibration group — mirrors Snapmaker Orca's `Calibration` menu. OrcaXR
- * already generates a temperature/overhang tower and an XYZ cube via
- * `generate_calibration_ramp`; those back the two wired entries. The remaining
- * printer-tuning generators (flow-rate, pressure-advance, retraction, max-flow,
- * VFA, tolerance) are parity placeholders documented in
- * `docs/orca_parity_plan.md` — each is a fixed-geometry model plus a
- * per-band config override, so they extend `CalibrationRampGenerator`.
+ * has a shared alpha geometry generator behind these actions, but the complete
+ * per-band setting effects and validated workflows are still in progress. The
+ * acceptance work is tracked in `docs/parity.md`.
  */
 import type { ActionDefinition as Action } from '../ActionRegistry';
 
