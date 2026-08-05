@@ -25,6 +25,6 @@ export const sliceActions: Action[] = [
     disclosure: 'primary',
     hint: 'Toggle the sliced toolpath preview',
     isEnabled: (s) => s.modelCount > 0,
-    run: (ctx) => ctx.togglePreview(),
+    run: (ctx) => ctx.applyTogglePreview(),
   },
 ];

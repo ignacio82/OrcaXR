@@ -1,7 +1,7 @@
 import type { JsonValue, ProjectState } from '../domain/model';
 import type { PlateId } from '../domain/ids';
 import type { ProjectArchiveSnapshot } from '../ports';
-import type { ProjectRevisionGuard } from '../store';
+import type { SlicePreflightIssue } from './preflight';
 
 export const SLICE_PROTOCOL_VERSION = 1 as const;
 export type SliceProtocolVersion = typeof SLICE_PROTOCOL_VERSION;
@@ -22,11 +22,28 @@ export interface SliceRouteMetadata {
 
 export type SliceProfileKind = 'printer' | 'process' | 'filament';
 
-export interface SliceProfileReference {
-  readonly kind: SliceProfileKind;
+export interface SlicePrinterProfileReference {
+  readonly kind: 'printer';
   readonly id: string;
   readonly hash: string;
 }
+
+export interface SliceProcessProfileReference {
+  readonly kind: 'process';
+  readonly id: string;
+  readonly hash: string;
+}
+
+export interface SliceFilamentProfileReference {
+  readonly kind: 'filament';
+  readonly id: string;
+  readonly hash: string;
+  /** Exact zero-based filament slot submitted to the slicing engine. */
+  readonly tool: number;
+}
+
+export type SliceProfileReference =
+  SlicePrinterProfileReference | SliceProcessProfileReference | SliceFilamentProfileReference;
 
 /**
  * Immutable identity of the effective profile set used for one plate. The
@@ -42,9 +59,19 @@ export interface SliceProfileResolverPort {
   capture(state: ProjectState, plateId: PlateId): SliceProfileSnapshot | Promise<SliceProfileSnapshot>;
 }
 
+export interface CanonicalProjectSliceGuard {
+  readonly sourceRevision: number;
+  readonly sourceHash: string;
+  readonly sourceAssetHash: string;
+}
+
+export interface CanonicalProjectSliceSnapshot extends ProjectArchiveSnapshot {
+  readonly sourceAssetHash: string;
+}
+
 export interface CanonicalProjectSliceSourcePort {
-  capture(): ProjectArchiveSnapshot;
-  isCurrent(guard: ProjectRevisionGuard): boolean;
+  capture(): CanonicalProjectSliceSnapshot;
+  isCurrent(guard: CanonicalProjectSliceGuard): boolean;
 }
 
 export interface SliceRouteProjectInput {
@@ -54,6 +81,7 @@ export interface SliceRouteProjectInput {
   readonly inputHash: string;
   readonly sourceRevision: number;
   readonly sourceHash: string;
+  readonly sourceAssetHash: string;
 }
 
 export interface SliceRouteRequest {
@@ -77,6 +105,11 @@ export interface SliceRouteResponse {
   readonly statistics: Readonly<Record<string, JsonValue>>;
 }
 
+export interface SliceRouteProgress {
+  readonly percent?: number;
+  readonly message?: string;
+}
+
 export type SliceRecoveryReason = 'retryable-error' | 'timeout';
 
 export interface SliceRouteRecoveryContext {
@@ -89,14 +122,36 @@ export interface SliceRouteRecoveryContext {
 /** One adapter instance represents one semantic route; retries may not switch it. */
 export interface SliceRouteAdapterPort {
   readonly metadata: SliceRouteMetadata;
-  execute(request: SliceRouteRequest, signal: AbortSignal): Promise<SliceRouteResponse>;
+  /**
+   * When present, abort is terminal only after execute settles with an explicit
+   * SliceRouteCancellationError or this cleanup bound expires.
+   */
+  readonly cancellation?: {
+    readonly mode: 'confirmed-cleanup';
+    readonly cleanupTimeoutMs: number;
+  };
+  execute(
+    request: SliceRouteRequest,
+    signal: AbortSignal,
+    onProgress?: (progress: SliceRouteProgress) => void,
+  ): Promise<SliceRouteResponse>;
   isRetryable?(error: unknown): boolean;
   recover?(context: SliceRouteRecoveryContext, signal: AbortSignal): Promise<void>;
 }
 
 export type SliceJobScope = 'current-plate' | 'all-plates';
 export type SliceJobPhase =
-  'queued' | 'serializing' | 'submitting' | 'retrying' | 'completed' | 'cancelled' | 'timed-out' | 'stale' | 'failed';
+  | 'queued'
+  | 'preflighting'
+  | 'serializing'
+  | 'submitting'
+  | 'retrying'
+  | 'cancelling'
+  | 'completed'
+  | 'cancelled'
+  | 'timed-out'
+  | 'stale'
+  | 'failed';
 
 export interface SliceJobStatus {
   readonly id: string;
@@ -104,11 +159,15 @@ export interface SliceJobStatus {
   readonly phase: SliceJobPhase;
   readonly sourceRevision: number;
   readonly sourceHash: string;
+  readonly sourceAssetHash: string;
   readonly plateIds: readonly PlateId[];
   readonly completedPlateCount: number;
   readonly totalPlateCount: number;
   readonly activePlateId?: PlateId;
   readonly attempt: number;
+  readonly progressPercent?: number;
+  readonly progressMessage?: string;
+  readonly cancellationConfirmed?: boolean;
   readonly errorName?: string;
 }
 
@@ -117,6 +176,8 @@ export interface SlicePlateResult {
   readonly projectInputHash: string;
   readonly outputHash: string;
   readonly profiles: SliceProfileSnapshot;
+  readonly preflightIssues: readonly SlicePreflightIssue[];
+  readonly serializerWarnings: readonly string[];
   readonly gcode: Uint8Array;
   readonly warnings: readonly string[];
   readonly statistics: Readonly<Record<string, JsonValue>>;
@@ -129,8 +190,8 @@ export interface CanonicalSliceJobResult {
   readonly scope: SliceJobScope;
   readonly sourceRevision: number;
   readonly sourceHash: string;
+  readonly sourceAssetHash: string;
   readonly route: SliceRouteMetadata;
-  readonly projectInputHash: string;
   readonly serializerWarnings: readonly string[];
   readonly warnings: readonly string[];
   readonly plates: readonly SlicePlateResult[];
@@ -144,6 +205,7 @@ export interface SliceResultPublisherPort {
 export interface SliceJobOptions {
   /** Attempts per plate, including the initial attempt. */
   readonly maxAttempts?: number;
+  readonly preflightTimeoutMs?: number;
   /** Per route attempt. */
   readonly attemptTimeoutMs?: number;
   readonly serializationTimeoutMs?: number;

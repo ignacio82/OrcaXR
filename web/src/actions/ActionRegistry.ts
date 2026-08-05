@@ -7,12 +7,20 @@
  * separate. A visible control can therefore describe an unavailable upstream
  * outcome without pretending that a status message is an implementation.
  *
- * Handlers receive only an {@link ActionContext} — they never touch the
- * workspace, palette, or slicer directly, so the same code path runs whether
- * the action was triggered from a DOM button, an XR uikit panel, or the
- * command palette.
+ * Handlers receive an {@link ActionContext} plus bounded transient invocation
+ * data — they never touch presentation nodes, so the same guarded code path
+ * runs from DOM, XR, keyboard, automation, or the command palette.
  */
 import type { ActionContext } from './ActionContext';
+import type { FilamentId, PlateId } from '../project/domain/ids';
+import type { ConfigMap } from '../project/domain/model';
+import type { ObjectTreeEntityRef } from '../project/objects';
+import type {
+  CanonicalFilamentAssignableEntityRef,
+  CanonicalSemanticLayerRangeRequest,
+  CanonicalSemanticVolumeRoleRequest,
+  CanonicalVirtualFilamentMutationRequest,
+} from '../workspace/CanonicalWorkspaceController';
 import {
   parityHelpHrefForTask,
   parityTaskForAction,
@@ -63,12 +71,14 @@ export type ActionSurface =
 export type PrerequisiteId =
   | 'has-model'
   | 'has-selection'
+  | 'has-instance-selection'
   | 'has-clipboard'
   | 'has-gcode'
   | 'has-two-models'
   | 'has-multiple-plates'
   | 'not-slicing'
-  | 'preflight-clear';
+  | 'preflight-clear'
+  | 'projection-healthy';
 
 export interface Capability {
   status: CapabilityStatus;
@@ -87,7 +97,72 @@ export interface Capability {
   helpHref: string;
 }
 
-export type ActionHandler = (ctx: ActionContext) => void | Promise<void>;
+/** Transient, non-canonical target data supplied by a presentation surface. */
+export interface ActionInvocation {
+  /** Exact plate selected by a plate-local control; omitted for the active plate. */
+  plateId?: PlateId;
+  /** Revision-bound target emitted by the canonical plate manager. */
+  plateTarget?: {
+    readonly plateId: PlateId;
+    readonly sourceRevision: number;
+  };
+  /** Bounded canonical plate rename request. */
+  plateRename?: {
+    readonly plateId: PlateId;
+    readonly nextName: string;
+    readonly sourceRevision: number;
+  };
+  /** Complete ordered plate-ID permutation from one canonical snapshot. */
+  plateReorder?: {
+    readonly orderedPlateIds: readonly PlateId[];
+    readonly sourceRevision: number;
+  };
+  /** Canonical include/exclude request for one plate. */
+  platePrintable?: {
+    readonly plateId: PlateId;
+    readonly printable: boolean;
+    readonly sourceRevision: number;
+  };
+  /** Complete raw engine-wire settings maps guarded by their canonical source. */
+  projectSettingsApply?: {
+    readonly inheritedConfig: Readonly<ConfigMap>;
+    readonly overrides: Readonly<ConfigMap>;
+    readonly sourceRevision: number;
+    readonly sourceHash: string;
+  };
+  /** Exact canonical entity set requested by an Objects surface. */
+  objectsSelection?: {
+    readonly refs: readonly ObjectTreeEntityRef[];
+    readonly primary?: ObjectTreeEntityRef;
+  };
+  /** Bounded canonical rename request from an inline Objects editor. */
+  objectsRename?: {
+    readonly entity: Extract<ObjectTreeEntityRef, { kind: 'object' | 'volume' }>;
+    readonly name: string;
+  };
+  /** Canonical row requested by an Objects reveal control. */
+  objectsReveal?: ObjectTreeEntityRef;
+  /** Revision-guarded stable-ID assignment requested by an Objects inspector. */
+  objectsFilamentAssignment?: {
+    readonly entities: readonly CanonicalFilamentAssignableEntityRef[];
+    readonly filamentId: FilamentId | null;
+    readonly sourceRevision: number;
+    readonly sourceHash: string;
+  };
+  /** Revision/hash/object-bound conversion of one existing semantic volume. */
+  semanticVolumeRole?: CanonicalSemanticVolumeRoleRequest;
+  /** Revision/hash/object-bound height-range lifecycle request. */
+  semanticLayerRange?: CanonicalSemanticLayerRangeRequest;
+  /** Complete revision/hash-guarded FullSpectrum add/edit/duplicate/toggle/delete request. */
+  virtualFilamentMutation?: CanonicalVirtualFilamentMutationRequest;
+  /** Explicit app preference plus the pinned count-bound confirmation, when required. */
+  fullSpectrumAutoPairPreference?: {
+    readonly enabled: boolean;
+    readonly confirmedPhysicalCount?: number;
+  };
+}
+
+export type ActionHandler = (ctx: ActionContext, invocation: Readonly<ActionInvocation>) => void | Promise<void>;
 
 /** Source presentation before ActionRegistry attaches validated capability truth. */
 export interface ActionDefinition {
@@ -172,14 +247,55 @@ export const GROUPS: readonly ActionGroup[] = [
   { id: 'system', label: 'System', icon: 'system', order: 11 },
 ];
 
+const CANONICAL_CUTOVER_GATED_REASONS = {
+  file_import_zip:
+    'ZIP import is disabled until every member can be parsed, previewed, and committed through one transactional canonical import.',
+  file_export_3mf:
+    'Generic geometry 3MF export is disabled because the current exporter drops canonical project metadata and stable identities.',
+  edit_cut:
+    'Cut is disabled because the legacy clipboard drops canonical object metadata and cannot delete through the same atomic command.',
+  edit_copy:
+    'Copy is disabled because the legacy clipboard does not preserve the complete canonical object and instance graph.',
+  edit_paste:
+    'Paste is disabled until clipboard content can be validated and inserted through one canonical command with fresh stable IDs.',
+  edit_delete_all:
+    'Delete All is disabled until active-plate instances can be removed through one reversible canonical transaction.',
+  tool_lay_on_face:
+    'Lay Flat is disabled until face orientation is computed from canonical assets and committed through a reversible transform command.',
+  repair_model:
+    'Mesh repair is disabled until topology replacement invalidates facet metadata and commits through a guarded canonical command.',
+  simplify_model:
+    'Mesh simplification is disabled until topology replacement invalidates facet metadata and commits through a guarded canonical command.',
+  mesh_boolean_union:
+    'Mesh union is disabled until topology-changing booleans preserve canonical metadata and commit atomically.',
+  mesh_boolean_subtract:
+    'Mesh subtraction is disabled until topology-changing booleans preserve canonical metadata and commit atomically.',
+  mesh_boolean_intersection:
+    'Mesh intersection is disabled until topology-changing booleans preserve canonical metadata and commit atomically.',
+  arrange_all:
+    'Auto-arrange is disabled until placements are computed from canonical assets and committed as one reversible transaction.',
+  tool_cut:
+    'Plane cutting is disabled until canonical topology, annotations, assets, and stable IDs can be replaced atomically.',
+  tool_paint:
+    'Color painting is disabled until live strokes use canonical facet annotations with guarded undo, persistence, and slicing.',
+  tool_smart_paint:
+    'Smart Paint is disabled until asynchronous results are revision-guarded canonical facet-annotation commands.',
+  tool_smart_paint_image:
+    'Image Smart Paint is disabled until asynchronous results are revision-guarded canonical facet-annotation commands.',
+  auto_place_wipe:
+    'Wipe-tower auto-placement is disabled until its position is computed and stored through canonical project commands.',
+} as const satisfies Readonly<Record<string, string>>;
+
+const CANONICAL_CUTOVER_GATED_IDS = new Set<string>(Object.keys(CANONICAL_CUTOVER_GATED_REASONS));
+
 const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
+  ...CANONICAL_CUTOVER_GATED_REASONS,
   add_emboss: 'Text embossing is not implemented yet; no model will be changed.',
   add_magnet: 'Magnet-hole geometry is not implemented yet; no model will be changed.',
   scan_network: 'Local-network printer discovery is not implemented yet.',
   view_webcam: 'The registry webcam flow is not connected to a configured printer yet.',
-  edit_undo: 'Project-wide command history is not implemented yet.',
-  edit_redo: 'Project-wide command history is not implemented yet.',
-  edit_select_all: 'Multi-selection is not implemented yet.',
+  recreate_model_colors_fullspectrum:
+    'Canonical Full-Spectrum color recreation with facet assignments, preview, undo, persistence, and slice validation is not implemented yet.',
   file_export_all_plates: 'All-plate slicing and export is not implemented yet.',
   file_export_obj: 'Toolpath OBJ export is not implemented yet.',
   file_open_gcode: 'Standalone G-code import and viewing is not implemented yet.',
@@ -209,16 +325,16 @@ const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
   variable_layer_height: 'Variable layer-height editing is not implemented yet.',
 };
 
-const SELECTION_PREREQUISITES = new Set([
+const INSTANCE_SELECTION_PREREQUISITES = new Set([
   'edit_cut',
   'edit_copy',
   'edit_duplicate',
   'edit_delete_selected',
-  'edit_deselect_all',
   'delete_models',
   'repair_model',
   'simplify_model',
   'drop_to_bed',
+  'split_to_objects',
   'tool_move',
   'tool_rotate',
   'tool_scale',
@@ -228,6 +344,7 @@ const SELECTION_PREREQUISITES = new Set([
   'tool_smart_paint',
   'tool_smart_paint_image',
 ]);
+const SELECTION_PREREQUISITES = new Set(['edit_deselect_all']);
 const MODEL_PREREQUISITES = new Set([
   'edit_delete_all',
   'file_save_project',
@@ -248,14 +365,18 @@ const TWO_MODEL_PREREQUISITES = new Set(['mesh_boolean_union', 'mesh_boolean_sub
 
 function prerequisitesFor(action: ActionDefinition): PrerequisiteId[] {
   const prerequisites: PrerequisiteId[] = [];
-  if (SELECTION_PREREQUISITES.has(action.id)) prerequisites.push('has-selection');
+  if (INSTANCE_SELECTION_PREREQUISITES.has(action.id)) prerequisites.push('has-instance-selection');
+  else if (SELECTION_PREREQUISITES.has(action.id)) prerequisites.push('has-selection');
   if (MODEL_PREREQUISITES.has(action.id)) prerequisites.push('has-model');
   if (GCODE_PREREQUISITES.has(action.id)) prerequisites.push('has-gcode');
   if (TWO_MODEL_PREREQUISITES.has(action.id)) prerequisites.push('has-two-models');
   if (action.id === 'edit_paste') prerequisites.push('has-clipboard');
   if (action.id === 'delete_plate') prerequisites.push('has-multiple-plates');
+  if (action.id === 'file_save_project' || action.id === 'file_save_project_as') {
+    prerequisites.push('projection-healthy');
+  }
   if (action.id === 'slice_active_plate') {
-    prerequisites.push('has-model', 'not-slicing', 'preflight-clear');
+    prerequisites.push('has-model', 'not-slicing', 'preflight-clear', 'projection-healthy');
   }
   return [...new Set(prerequisites)];
 }
@@ -267,6 +388,7 @@ function surfacesFor(action: ActionDefinition): ActionSurface[] {
   else if (action.disclosure === 'menu') surfaces.push('dom-menu', 'xr-menu');
   else surfaces.push('dom-inspector');
   if (action.shortcuts?.length) surfaces.push('keyboard');
+  if (action.mcpTool) surfaces.push('automation');
   return surfaces;
 }
 
@@ -298,12 +420,21 @@ const PREREQUISITES: Readonly<
 > = {
   'has-model': { met: (state) => state.modelCount > 0, reason: 'Load or create a model first.' },
   'has-selection': { met: (state) => state.hasSelection, reason: 'Select a model first.' },
+  'has-instance-selection': {
+    met: (state) => state.hasInstanceSelection,
+    reason: 'Select a model instance for this action.',
+  },
   'has-clipboard': { met: (state) => state.hasClipboard, reason: 'Copy or cut a model first.' },
   'has-gcode': { met: (state) => state.gcodeReady, reason: 'Slice successfully first.' },
   'has-two-models': { met: (state) => state.modelCount >= 2, reason: 'Add at least two models first.' },
   'has-multiple-plates': { met: (state) => state.plateCount > 1, reason: 'The only build plate cannot be deleted.' },
   'not-slicing': { met: (state) => !state.isSlicing, reason: 'Wait for the current slice to finish or cancel it.' },
   'preflight-clear': { met: (state) => !state.preflightBlocked, reason: 'Resolve blocking preflight errors first.' },
+  'projection-healthy': {
+    met: (state) => state.projectionHealthy,
+    reason:
+      'The 3D project projection failed for this revision; recover or reopen the project before saving or slicing.',
+  },
 };
 
 export class ActionRegistry {
@@ -313,7 +444,12 @@ export class ActionRegistry {
   /** Register one action (throws on duplicate id — a parity/wiring bug). */
   add(definition: ActionDefinition): this {
     const capability = capabilityFor(definition);
-    if ((capability.status === 'unavailable' || capability.status === 'blocked') && definition.run) {
+    const canonicalCutoverGate = CANONICAL_CUTOVER_GATED_IDS.has(definition.id);
+    if (
+      (capability.status === 'unavailable' || capability.status === 'blocked') &&
+      definition.run &&
+      !canonicalCutoverGate
+    ) {
       throw new Error(`ActionRegistry: ${capability.status} action "${definition.id}" must not have a handler`);
     }
     if ((capability.status === 'implemented' || capability.status === 'partial') && !definition.run) {
@@ -325,7 +461,14 @@ export class ActionRegistry {
     if ((capability.status === 'implemented' || capability.status === 'partial') && capability.testIds.length === 0) {
       throw new Error(`ActionRegistry: executable action "${definition.id}" needs a test mapping`);
     }
-    const action: Action = { ...definition, capability };
+    // Keep legacy implementations unreachable during the store-first cutover.
+    // The registry is the invocation boundary, and only this exact audited set
+    // may have a catalog handler deliberately stripped at registration time.
+    const action: Action = {
+      ...definition,
+      ...(canonicalCutoverGate ? { run: undefined } : {}),
+      capability,
+    };
     if (this.byId.has(action.id)) {
       throw new Error(`ActionRegistry: duplicate action id "${action.id}"`);
     }
@@ -387,6 +530,7 @@ export class ActionRegistry {
     surface: ActionSurface,
     ctx: ActionContext,
     state: Readonly<UiStateShape>,
+    invocation: Readonly<ActionInvocation> = {},
   ): Promise<boolean> {
     const action = typeof actionOrId === 'string' ? this.get(actionOrId) : actionOrId;
     if (!action) return false;
@@ -397,7 +541,7 @@ export class ActionRegistry {
       }
       return false;
     }
-    await action.run?.(ctx);
+    await action.run?.(ctx, invocation);
     return true;
   }
 

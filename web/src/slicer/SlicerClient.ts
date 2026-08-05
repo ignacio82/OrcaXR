@@ -13,6 +13,35 @@ export interface SliceProgress {
   message: string;
 }
 
+export type SlicerClientProjectRoute =
+  { readonly kind: 'browser-wasm' } | { readonly kind: 'external-server'; readonly endpoint: string };
+
+export interface SlicerClientProjectSliceOptions {
+  readonly maxThreads?: number;
+  readonly overrides?: Readonly<Record<string, string>>;
+  readonly signal?: AbortSignal;
+  readonly onProgress?: (progress: SliceProgress) => void;
+  /**
+   * The legacy project path may fall back to a synchronous main-thread slice.
+   * A canonical route disables this because it cannot honestly cancel work
+   * once the synchronous engine call starts.
+   */
+  readonly allowUncancellableMainThreadFallback?: boolean;
+  /** Test seam; production polling remains deliberately modest. */
+  readonly externalPollIntervalMs?: number;
+  readonly externalCancellationTimeoutMs?: number;
+}
+
+export class SlicerClientCancellationError extends Error {
+  constructor(
+    message: string,
+    readonly cancellationConfirmed: boolean,
+  ) {
+    super(message);
+    this.name = 'SlicerClientCancellationError';
+  }
+}
+
 interface Slic3rModule {
   versionString(): string;
   startSlice(stlBinary: string, maxThreads: number): void;
@@ -42,6 +71,7 @@ const EXTERNAL_URL_KEY = 'external_slicer_url';
 const EXTERNAL_ENABLED_KEY = 'external_slicer_enabled';
 
 export class SlicerClient {
+  private static externalConnectionEpoch = 0;
   private module: Slic3rModule | null = null;
   private loading: Promise<Slic3rModule> | null = null;
   private slicing = false;
@@ -52,8 +82,16 @@ export class SlicerClient {
   // Dedicated worker that hosts a second module instance for FullSpectrum
   // PROJECT slices (async, off the UI thread — see sliceProject / sliceWorker).
   private projectWorker: Worker | null = null;
-  private workerJobs = new Map<number, { resolve: (g: string) => void; reject: (e: Error) => void }>();
+  private workerJobs = new Map<
+    number,
+    {
+      resolve: (g: string) => void;
+      reject: (e: Error) => void;
+      removeAbortListener: () => void;
+    }
+  >();
   private workerJobSeq = 0;
+  private projectProgress: ((progress: SliceProgress) => void) | null = null;
 
   // ---- External slicer configuration (shared by the 2D + XR UIs) --------
   // Two independent pieces of state: the saved URL (survives being turned
@@ -64,25 +102,28 @@ export class SlicerClient {
     return localStorage.getItem(EXTERNAL_URL_KEY) || '';
   }
 
-  static setExternalSlicerUrl(url: string): void {
+  private static setExternalSlicerUrl(url: string): void {
     const v = url.trim();
     if (v) localStorage.setItem(EXTERNAL_URL_KEY, v);
     else localStorage.removeItem(EXTERNAL_URL_KEY);
   }
 
   static isExternalSlicerEnabled(): boolean {
-    // Default ON when a URL exists but the flag was never written (back-compat
-    // with configs saved before the toggle existed).
     if (!SlicerClient.getExternalSlicerUrl()) return false;
-    return localStorage.getItem(EXTERNAL_ENABLED_KEY) !== 'false';
+    // Fail closed for legacy URL-only preferences. An external endpoint may
+    // receive model geometry, so only an explicit, persisted opt-in is valid.
+    return localStorage.getItem(EXTERNAL_ENABLED_KEY) === 'true';
   }
 
-  static setExternalSlicerEnabled(enabled: boolean): void {
-    localStorage.setItem(EXTERNAL_ENABLED_KEY, enabled ? 'true' : 'false');
+  /** Route all slices locally and invalidate any connection probe in flight. */
+  static disableExternalSlicer(): void {
+    SlicerClient.externalConnectionEpoch += 1;
+    localStorage.setItem(EXTERNAL_ENABLED_KEY, 'false');
   }
 
   /** Forget the configured external slicer entirely. */
   static clearExternalSlicer(): void {
+    SlicerClient.externalConnectionEpoch += 1;
     localStorage.removeItem(EXTERNAL_URL_KEY);
     localStorage.removeItem(EXTERNAL_ENABLED_KEY);
   }
@@ -90,6 +131,49 @@ export class SlicerClient {
   /** True when the next slice will be dispatched to the external server. */
   static useExternalSlicer(): boolean {
     return !!SlicerClient.getExternalSlicerUrl() && SlicerClient.isExternalSlicerEnabled();
+  }
+
+  /** Capture one immutable semantic route. Callers must not re-decide mid-job. */
+  static captureProjectRoute(): SlicerClientProjectRoute {
+    const endpoint = SlicerClient.useExternalSlicer()
+      ? canonicalExternalEndpoint(SlicerClient.getExternalSlicerUrl())
+      : '';
+    return endpoint ? { kind: 'external-server', endpoint } : { kind: 'browser-wasm' };
+  }
+
+  /**
+   * Verify a user-selected endpoint before making it the active slice route.
+   *
+   * The current route is disabled before probing. This keeps a failed attempt
+   * to replace endpoint A with candidate B from leaving A silently active
+   * while the UI reports B as offline. The last configured URL remains saved so
+   * the UI can restore it, but slicing stays local after any failed probe.
+   */
+  static async connectExternalSlicer(
+    candidate: string,
+    probe: (url: string) => Promise<{ ok: boolean }> = (url) => fetchLocalNetwork(url),
+  ): Promise<string> {
+    SlicerClient.disableExternalSlicer();
+    const connectionEpoch = SlicerClient.externalConnectionEpoch;
+    let endpoint: string;
+    try {
+      endpoint = canonicalExternalEndpoint(candidate);
+    } catch (error) {
+      throw new Error('Enter a plain HTTP or HTTPS external slicer URL without credentials, query, or fragment.', {
+        cause: error,
+      });
+    }
+
+    const response = await probe(`${endpoint}/ping`);
+    if (!response.ok) throw new Error('The external slicer did not accept the connection.');
+    if (connectionEpoch !== SlicerClient.externalConnectionEpoch) {
+      throw new Error('The external slicer connection attempt was superseded.');
+    }
+
+    SlicerClient.setExternalSlicerUrl(endpoint);
+    // This is intentionally the sole code path that writes enabled=true.
+    localStorage.setItem(EXTERNAL_ENABLED_KEY, 'true');
+    return endpoint;
   }
 
   async load(): Promise<void> {
@@ -109,7 +193,7 @@ export class SlicerClient {
         // base-aware so it resolves under any deploy base: dev ('/') → it sits
         // at /slicer/slic3r.mjs; GitHub Pages ('/slicer/') → /slicer/slicer/…
         // (Emscripten locates slic3r.wasm relative to this .mjs URL.)
-        const base = import.meta.env.BASE_URL; // '/' in dev, '/slicer/' on Pages
+        const base = import.meta.env?.BASE_URL ?? '/'; // '/' in dev/tests, '/slicer/' on Pages
         const moduleUrl = new URL(`${base}slicer/slic3r.mjs`, window.location.origin).href;
         const factory = (await import(/* @vite-ignore */ moduleUrl)).default as (arg?: object) => Promise<Slic3rModule>;
         const mod = await factory({
@@ -126,43 +210,132 @@ export class SlicerClient {
     return this.loading;
   }
 
-  /**
-   * Poll an external-server slice job until it finishes, forwarding
-   * {percent, message} updates to onProgress, then fetch the G-code.
-   */
-  private async pollExternalJob(externalUrl: string, jobId: string): Promise<string> {
+  /** Poll an external job, and confirm server-side cancellation on abort. */
+  private async pollExternalJob(
+    externalUrl: string,
+    jobId: string,
+    options: Pick<
+      SlicerClientProjectSliceOptions,
+      'signal' | 'onProgress' | 'externalPollIntervalMs' | 'externalCancellationTimeoutMs'
+    > = {},
+  ): Promise<string> {
+    const pollIntervalMs = positiveInteger(options.externalPollIntervalMs, 700, 'externalPollIntervalMs');
     let consecutiveFailures = 0;
-    for (;;) {
-      await new Promise((r) => setTimeout(r, 700));
-      let status: { status: string; percent: number; message?: string; error?: string };
+    try {
+      for (;;) {
+        await delayWithSignal(pollIntervalMs, options.signal);
+        let status: { status: string; percent: number; message?: string; error?: string };
+        try {
+          const res = await fetchLocalNetwork(`${externalUrl}/jobs/${jobId}`, { signal: options.signal });
+          if (!res.ok) throw new Error(`status ${res.status}: ${await res.text()}`);
+          status = await res.json();
+          consecutiveFailures = 0;
+        } catch (error) {
+          if (options.signal?.aborted) throw error;
+          if (++consecutiveFailures >= 5) {
+            throw new Error(`External slicer stopped responding: ${errorMessage(error)}`, { cause: error });
+          }
+          continue;
+        }
+        if (status.status === 'error') {
+          throw new Error(`External Slicer Failed: ${status.error}`);
+        }
+        if (status.status === 'cancelled') {
+          throw new SlicerClientCancellationError('The external slicer job was cancelled.', true);
+        }
+        if (status.status === 'done') {
+          const gcode = await fetchLocalNetwork(`${externalUrl}/jobs/${jobId}/gcode`, { signal: options.signal });
+          if (!gcode.ok) {
+            throw new Error(`External Slicer Failed: ${await gcode.text()}`);
+          }
+          return await gcode.text();
+        }
+        this.emitProjectProgress(
+          {
+            percent: status.percent ?? 0,
+            message: status.message || 'Slicing externally...',
+          },
+          options.onProgress,
+        );
+      }
+    } catch (error) {
+      if (options.signal?.aborted) {
+        if (!(error instanceof SlicerClientCancellationError && error.cancellationConfirmed)) {
+          await this.confirmExternalCancellation(
+            externalUrl,
+            jobId,
+            positiveInteger(options.externalCancellationTimeoutMs, 30_000, 'externalCancellationTimeoutMs'),
+            pollIntervalMs,
+          );
+        }
+        throw signalReason(options.signal);
+      }
+      throw error;
+    }
+  }
+
+  private async confirmExternalCancellation(
+    externalUrl: string,
+    jobId: string,
+    timeoutMs: number,
+    pollIntervalMs: number,
+  ): Promise<void> {
+    let response: Response;
+    try {
+      response = await fetchLocalNetwork(`${externalUrl}/jobs/${jobId}`, { method: 'DELETE' });
+    } catch (error) {
+      throw new SlicerClientCancellationError(
+        `Could not confirm external slice cancellation: ${errorMessage(error)}`,
+        false,
+      );
+    }
+    if (!response.ok) {
+      throw new SlicerClientCancellationError(
+        `External slice cancellation was not accepted (HTTP ${response.status}).`,
+        false,
+      );
+    }
+    const body = (await response.json().catch(() => ({}))) as { status?: string };
+    if (body.status === 'cancelled') return;
+
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      await delayWithoutSignal(pollIntervalMs);
       try {
-        const res = await fetchLocalNetwork(`${externalUrl}/jobs/${jobId}`);
-        if (!res.ok) throw new Error(`status ${res.status}: ${await res.text()}`);
-        status = await res.json();
-        consecutiveFailures = 0;
-      } catch (e) {
-        // Tolerate transient network blips, but don't spin forever if the
-        // server vanished mid-slice.
-        if (++consecutiveFailures >= 5) {
-          throw new Error(`External slicer stopped responding: ${(e as Error).message}`, { cause: e });
+        const statusResponse = await fetchLocalNetwork(`${externalUrl}/jobs/${jobId}`);
+        if (!statusResponse.ok) {
+          throw new Error(`HTTP ${statusResponse.status}`);
         }
-        continue;
-      }
-      if (status.status === 'error') {
-        throw new Error(`External Slicer Failed: ${status.error}`);
-      }
-      if (status.status === 'done') {
-        const res = await fetchLocalNetwork(`${externalUrl}/jobs/${jobId}/gcode`);
-        if (!res.ok) {
-          throw new Error(`External Slicer Failed: ${await res.text()}`);
+        const status = (await statusResponse.json()) as { status?: string };
+        if (status.status === 'cancelled') return;
+        if (status.status === 'done' || status.status === 'error') {
+          throw new SlicerClientCancellationError(
+            `External slice reached ${status.status} before cancellation was confirmed.`,
+            false,
+          );
         }
-        return await res.text();
+      } catch (error) {
+        if (error instanceof SlicerClientCancellationError) throw error;
+        throw new SlicerClientCancellationError(
+          `Could not confirm external slice cancellation: ${errorMessage(error)}`,
+          false,
+        );
       }
-      if (this.onProgress) {
-        this.onProgress({
-          percent: status.percent ?? 0,
-          message: status.message || 'Slicing externally...',
-        });
+    }
+    throw new SlicerClientCancellationError('External slice cancellation confirmation timed out.', false);
+  }
+
+  private emitProjectProgress(progress: SliceProgress, perCall?: (progress: SliceProgress) => void): void {
+    try {
+      perCall?.(progress);
+    } catch {
+      // Progress observers are informational and cannot change slice semantics.
+    }
+    if (this.onProgress && this.onProgress !== perCall) {
+      try {
+        this.onProgress(progress);
+      } catch {
+        // The legacy global observer has the same non-semantic contract.
       }
     }
   }
@@ -172,8 +345,8 @@ export class SlicerClient {
     // slice thread is alive — reset the stall watchdog.
     if (text.startsWith('[orcaxr]')) this.lastSliceActivity = Date.now();
     const m = /^\[orcaxr\] (\d+)% (.*)$/.exec(text);
-    if (m && this.onProgress) {
-      this.onProgress({ percent: Number(m[1]), message: m[2] });
+    if (m) {
+      this.emitProjectProgress({ percent: Number(m[1]), message: m[2] }, this.projectProgress ?? undefined);
       return;
     }
     if (text.includes('uncaught exception') || text.includes('memory access out of bounds')) {
@@ -321,21 +494,85 @@ export class SlicerClient {
    * engine's startSliceProject loads model AND config via load_bbs_3mf.
    */
   async sliceProject(project: ArrayBuffer, maxThreads = 4, overrides: Record<string, string> = {}): Promise<string> {
-    const externalUrl = SlicerClient.useExternalSlicer()
-      ? normalizeHttpEndpoint(SlicerClient.getExternalSlicerUrl())
-      : '';
-    if (externalUrl) {
-      if (this.onProgress) this.onProgress({ percent: 0, message: 'Slicing project externally...' });
+    return this.sliceProjectWithRoute(project, SlicerClient.captureProjectRoute(), {
+      maxThreads,
+      overrides,
+      allowUncancellableMainThreadFallback: true,
+    });
+  }
+
+  /**
+   * Slice through one previously captured route. This is the canonical seam:
+   * it cannot silently switch between the browser and a server on retry.
+   */
+  async sliceProjectWithRoute(
+    project: ArrayBuffer,
+    route: SlicerClientProjectRoute,
+    options: SlicerClientProjectSliceOptions = {},
+  ): Promise<string> {
+    throwIfAborted(options.signal);
+    const maxThreads = positiveInteger(options.maxThreads, 4, 'maxThreads');
+    const overrides = { ...(options.overrides ?? {}) };
+
+    if (route.kind === 'external-server') {
+      const externalUrl = canonicalExternalEndpoint(route.endpoint);
+      const enabledEndpoint = SlicerClient.captureProjectRoute();
+      if (enabledEndpoint.kind !== 'external-server' || enabledEndpoint.endpoint !== externalUrl) {
+        throw new Error('External slicer consent or endpoint changed after the route was captured.');
+      }
+      this.emitProjectProgress({ percent: 0, message: 'Slicing project externally...' }, options.onProgress);
       const formData = new FormData();
       formData.append('file', new Blob([project]), 'project.3mf');
       formData.append('overrides', JSON.stringify(overrides));
-      const res = await fetchLocalNetwork(`${externalUrl}/slice?async=1`, { method: 'POST', body: formData });
-      if (res.status === 202) {
-        const { job } = (await res.json()) as { job: string };
-        return await this.pollExternalJob(externalUrl, job);
+
+      // Do not abort this POST: once an async server has accepted the upload,
+      // losing its response also loses the only job ID needed by DELETE. If an
+      // abort arrives while it is in flight, wait for the ID and cancel there.
+      let response: Response;
+      try {
+        response = await fetchLocalNetwork(`${externalUrl}/slice?async=1`, {
+          method: 'POST',
+          body: formData,
+        });
+      } catch (error) {
+        if (options.signal?.aborted) {
+          throw new SlicerClientCancellationError(
+            `External upload ended before a cancellable job ID was received: ${errorMessage(error)}`,
+            false,
+          );
+        }
+        throw error;
       }
-      if (!res.ok) throw new Error(`External Slicer Failed: ${await res.text()}`);
-      return await res.text();
+      if (response.status === 202) {
+        const { job } = (await response.json()) as { job?: unknown };
+        if (typeof job !== 'string' || !job) {
+          if (options.signal?.aborted) {
+            throw new SlicerClientCancellationError(
+              'External slicer returned no usable job ID, so cancellation could not be confirmed.',
+              false,
+            );
+          }
+          throw new Error('External slicer returned an invalid async job ID.');
+        }
+        if (options.signal?.aborted) {
+          await this.confirmExternalCancellation(
+            externalUrl,
+            job,
+            positiveInteger(options.externalCancellationTimeoutMs, 30_000, 'externalCancellationTimeoutMs'),
+            positiveInteger(options.externalPollIntervalMs, 700, 'externalPollIntervalMs'),
+          );
+          throw signalReason(options.signal);
+        }
+        return this.pollExternalJob(externalUrl, job, options);
+      }
+      if (options.signal?.aborted) {
+        throw new SlicerClientCancellationError(
+          'The external response did not provide a cancellable job ID before abort.',
+          false,
+        );
+      }
+      if (!response.ok) throw new Error(`External Slicer Failed: ${await response.text()}`);
+      return await response.text();
     }
 
     if (typeof SharedArrayBuffer === 'undefined' || !globalThis.crossOriginIsolated) {
@@ -346,11 +583,13 @@ export class SlicerClient {
     }
     if (this.slicing) throw new Error('a slice is already running');
     this.slicing = true;
+    this.projectProgress = options.onProgress ?? null;
     try {
       console.log('[slicer] starting local PROJECT slice:', project.byteLength, 'bytes');
-      if (this.onProgress) {
-        this.onProgress({ percent: 0, message: 'Slicing FullSpectrum project…' });
-      }
+      this.emitProjectProgress(
+        { percent: 0, message: 'Slicing FullSpectrum project…' },
+        this.projectProgress ?? undefined,
+      );
       // FullSpectrum project slices run on a DEDICATED worker (sliceWorker.ts)
       // via the synchronous sliceProjectSync — this keeps the heavy slice off
       // the page's UI thread (async, non-blocking) while running it on the
@@ -360,13 +599,20 @@ export class SlicerClient {
       // cross-origin isolation inside the worker, or module load fails), fall
       // back to a synchronous main-thread slice — correct, but briefly busy.
       try {
-        return await this.sliceProjectInWorker(project, maxThreads, overrides);
+        return await this.sliceProjectInWorker(project, maxThreads, overrides, options.signal);
       } catch (e) {
+        if (options.signal?.aborted) throw signalReason(options.signal);
         if (!(e instanceof Error) || !e.message.startsWith('WORKER_INFRA:')) throw e;
+        if (options.allowUncancellableMainThreadFallback !== true) {
+          throw new Error(`Cancellable worker route unavailable: ${e.message.slice('WORKER_INFRA:'.length)}`, {
+            cause: e,
+          });
+        }
         console.warn('[slicer] project worker unavailable, falling back to main-thread slice:', e.message);
         return await this.sliceProjectOnMainThread(project, maxThreads, overrides);
       }
     } finally {
+      this.projectProgress = null;
       this.slicing = false;
     }
   }
@@ -376,13 +622,24 @@ export class SlicerClient {
     project: ArrayBuffer,
     maxThreads: number,
     overrides: Record<string, string>,
+    signal?: AbortSignal,
   ): Promise<string> {
+    throwIfAborted(signal);
     const worker = this.ensureProjectWorker();
-    const base = import.meta.env.BASE_URL; // '/' in dev, '/slicer/' on Pages
+    const base = import.meta.env?.BASE_URL ?? '/'; // '/' in dev/tests, '/slicer/' on Pages
     const moduleUrl = new URL(`${base}slicer/slic3r.mjs`, self.location.origin).href;
     const id = ++this.workerJobSeq;
     return new Promise<string>((resolve, reject) => {
-      this.workerJobs.set(id, { resolve, reject });
+      const abort = () => {
+        const reason = signalReason(signal!);
+        this.terminateProjectWorker(reason);
+      };
+      signal?.addEventListener('abort', abort, { once: true });
+      this.workerJobs.set(id, {
+        resolve,
+        reject,
+        removeAbortListener: () => signal?.removeEventListener('abort', abort),
+      });
       // No transfer: the caller keeps `project` (originalProject) for re-slices;
       // structured clone copies the 3.4 MB buffer, which is negligible.
       worker.postMessage({ type: 'slice', id, moduleUrl, project, maxThreads, overrides });
@@ -395,12 +652,13 @@ export class SlicerClient {
     worker.onmessage = (e: MessageEvent) => {
       const msg = e.data;
       if (msg.type === 'progress') {
-        if (this.onProgress) this.onProgress({ percent: msg.percent, message: msg.message });
+        this.emitProjectProgress({ percent: msg.percent, message: msg.message }, this.projectProgress ?? undefined);
         return;
       }
       const job = this.workerJobs.get(msg.id);
       if (!job) return;
       this.workerJobs.delete(msg.id);
+      job.removeAbortListener();
       if (msg.type === 'done') job.resolve(msg.gcode);
       else if (msg.type === 'error') job.reject(new Error((msg.infra ? 'WORKER_INFRA:' : '') + msg.error));
     };
@@ -408,12 +666,20 @@ export class SlicerClient {
       // The worker itself crashed — reject everything pending as infra failure
       // so callers fall back, and drop it so the next slice recreates it.
       const err = new Error('WORKER_INFRA:slice worker crashed: ' + (e.message || 'unknown'));
-      for (const [, job] of this.workerJobs) job.reject(err);
-      this.workerJobs.clear();
-      this.projectWorker = null;
+      this.terminateProjectWorker(err);
     };
     this.projectWorker = worker;
     return worker;
+  }
+
+  private terminateProjectWorker(error: Error): void {
+    this.projectWorker?.terminate();
+    this.projectWorker = null;
+    for (const [, job] of this.workerJobs) {
+      job.removeAbortListener();
+      job.reject(error);
+    }
+    this.workerJobs.clear();
   }
 
   /** Synchronous main-thread project slice (fallback; briefly blocks the UI). */
@@ -425,9 +691,10 @@ export class SlicerClient {
     this.resetIfCrashed();
     const mod = await this.ensureModule();
     mod.FS.writeFile('/tmp/orcaxr_upload.3mf', new Uint8Array(project));
-    if (this.onProgress) {
-      this.onProgress({ percent: 0, message: 'Slicing FullSpectrum project (this can take a while)…' });
-    }
+    this.emitProjectProgress(
+      { percent: 0, message: 'Slicing FullSpectrum project (this can take a while)…' },
+      this.projectProgress ?? undefined,
+    );
     await new Promise((r) => setTimeout(r, 0)); // let the status paint first
     const out = mod.sliceProjectSync('/tmp/orcaxr_upload.3mf', maxThreads, JSON.stringify(overrides));
     if (out.startsWith('ORCAXR_ERROR:')) throw new Error(out.slice('ORCAXR_ERROR:'.length).trim());
@@ -619,4 +886,54 @@ export class SlicerClient {
       this.slicing = false;
     }
   }
+}
+
+function positiveInteger(value: number | undefined, fallback: number, name: string): number {
+  const resolved = value ?? fallback;
+  if (!Number.isSafeInteger(resolved) || resolved <= 0) throw new Error(`${name} must be a positive integer.`);
+  return resolved;
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw signalReason(signal);
+}
+
+function signalReason(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) return signal.reason;
+  const error = new Error(String(signal.reason ?? 'Slicer operation cancelled.'));
+  error.name = 'AbortError';
+  return error;
+}
+
+function delayWithSignal(timeoutMs: number, signal: AbortSignal | undefined): Promise<void> {
+  throwIfAborted(signal);
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', abort);
+      resolve();
+    }, timeoutMs);
+    const abort = () => {
+      clearTimeout(timer);
+      reject(signalReason(signal!));
+    };
+    signal?.addEventListener('abort', abort, { once: true });
+  });
+}
+
+function delayWithoutSignal(timeoutMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, timeoutMs));
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function canonicalExternalEndpoint(value: string): string {
+  const normalized = normalizeHttpEndpoint(value);
+  if (!normalized) throw new Error('The captured external slicer endpoint is invalid.');
+  const endpoint = new URL(normalized);
+  if (endpoint.username || endpoint.password || endpoint.search || endpoint.hash || /[?#]/.test(normalized)) {
+    throw new Error('Canonical external slicer URLs cannot contain credentials, query parameters, or fragments.');
+  }
+  return normalized;
 }

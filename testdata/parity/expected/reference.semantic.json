@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "threeMf": {
-    "normalizedSha256": "4ba4947538710eacf5773870f615e2f65630153b50bd80c21d3c234111689aba",
+    "normalizedSha256": "f0a852191bf51abaa295037ef733356b8d1d16228902e501ea236660a4fefc5d",
     "archiveMembers": [
       "_rels/.rels",
       "[Content_Types].xml",
@@ -146,7 +146,7 @@
             "instance-id": "instance-b",
             "objectid": "1",
             "printable": "1",
-            "transform": "1 0 0 0 1 0 0 0 1 60 20 0"
+            "transform": "1 0 0 0 1 0 0 0 1 300 20 0"
           },
           {
             "instance-id": "negative-a",
@@ -219,44 +219,49 @@
         "value": "Snapmaker U1"
       },
       {
-        "key": "filament_colour",
+        "key": "machine_end_gcode",
+        "path": "Metadata/project_settings.config/config[0]/setting[10]",
+        "value": "M104 S0\nM140 S0"
+      },
+      {
+        "key": "printable_area",
         "path": "Metadata/project_settings.config/config[0]/setting[2]",
+        "value": "0x0;200x0;200x200;0x200"
+      },
+      {
+        "key": "filament_colour",
+        "path": "Metadata/project_settings.config/config[0]/setting[3]",
         "value": "#EF4444;#3B82F6"
       },
       {
         "key": "mixed_filament_ratio",
-        "path": "Metadata/project_settings.config/config[0]/setting[3]",
+        "path": "Metadata/project_settings.config/config[0]/setting[4]",
         "value": "5=Ratio(1:0.65,2:0.35)"
       },
       {
         "key": "mixed_filament_layer_cycle",
-        "path": "Metadata/project_settings.config/config[0]/setting[4]",
+        "path": "Metadata/project_settings.config/config[0]/setting[5]",
         "value": "6=LayerCycle(1,2,2)"
       },
       {
         "key": "mixed_filament_gradient",
-        "path": "Metadata/project_settings.config/config[0]/setting[5]",
+        "path": "Metadata/project_settings.config/config[0]/setting[6]",
         "value": "7=Gradient(1,2,0.10,0.90)"
       },
       {
         "key": "mixed_filament_match_color",
-        "path": "Metadata/project_settings.config/config[0]/setting[6]",
+        "path": "Metadata/project_settings.config/config[0]/setting[7]",
         "value": "8=MatchColor(#7C3AED;1,2)"
       },
       {
         "key": "mixed_filament_definitions",
-        "path": "Metadata/project_settings.config/config[0]/setting[7]",
+        "path": "Metadata/project_settings.config/config[0]/setting[8]",
         "value": "5:ratio;6:layer_cycle;7:gradient;8:match_color"
       },
       {
         "key": "before_layer_change_gcode",
-        "path": "Metadata/project_settings.config/config[0]/setting[8]",
-        "value": "G92 E0\n; fixture reset"
-      },
-      {
-        "key": "machine_end_gcode",
         "path": "Metadata/project_settings.config/config[0]/setting[9]",
-        "value": "M104 S0\nM140 S0"
+        "value": "G92 E0\n; fixture reset"
       }
     ],
     "partAssignments": [
@@ -326,32 +331,32 @@
     "mixedFilamentDefinitions": [
       {
         "key": "mixed_filament_ratio",
-        "path": "Metadata/project_settings.config/config[0]/setting[3]",
+        "path": "Metadata/project_settings.config/config[0]/setting[4]",
         "value": "5=Ratio(1:0.65,2:0.35)"
       },
       {
         "key": "mixed_filament_layer_cycle",
-        "path": "Metadata/project_settings.config/config[0]/setting[4]",
+        "path": "Metadata/project_settings.config/config[0]/setting[5]",
         "value": "6=LayerCycle(1,2,2)"
       },
       {
         "key": "mixed_filament_gradient",
-        "path": "Metadata/project_settings.config/config[0]/setting[5]",
+        "path": "Metadata/project_settings.config/config[0]/setting[6]",
         "value": "7=Gradient(1,2,0.10,0.90)"
       },
       {
         "key": "mixed_filament_match_color",
-        "path": "Metadata/project_settings.config/config[0]/setting[6]",
+        "path": "Metadata/project_settings.config/config[0]/setting[7]",
         "value": "8=MatchColor(#7C3AED;1,2)"
       },
       {
         "key": "mixed_filament_definitions",
-        "path": "Metadata/project_settings.config/config[0]/setting[7]",
+        "path": "Metadata/project_settings.config/config[0]/setting[8]",
         "value": "5:ratio;6:layer_cycle;7:gradient;8:match_color"
       }
     ],
     "platesSemanticSha256": "28eeaced37e476327a7d05dcf039974db49ef632c8b32d4476292370cb890400",
-    "customGcodeSemanticSha256": "5d30e54ec137481b5ec9f95608cd9e35f9da1c1b17b2c876adac8a89557b45a1",
+    "customGcodeSemanticSha256": "d2e23089151f8fa91795b8104b267361970af553b0f1b4a31c4a6f40f0326574",
     "unknownExtensions": [
       {
         "attribute": "instance-id",

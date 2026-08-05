@@ -19,7 +19,7 @@ export const fileActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'file',
     hint: 'Clear the plate and start a fresh project',
-    isEnabled: (s) => s.modelCount > 0 || s.plateCount > 1,
+    isEnabled: (s) => s.dirty || s.modelCount > 0 || s.plateCount > 1,
     run: (ctx) => ctx.newProject(),
   },
   {
@@ -108,12 +108,12 @@ export const fileActions: Action[] = [
   },
   {
     id: 'file_export_stl',
-    label: 'Export as STL…',
+    label: 'Export as one STL…',
     icon: 'file_stl',
     group: 'file',
     disclosure: 'menu',
     menuSection: 'file',
-    hint: 'Export the plated geometry as STL',
+    hint: 'Export selected models, or every model on the active plate, from canonical geometry',
     isEnabled: (s) => s.modelCount > 0,
     run: (ctx) => ctx.exportStl(),
   },

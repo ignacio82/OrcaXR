@@ -10,8 +10,18 @@
  */
 import type { OrcaWorkspace } from '../workspace/OrcaWorkspace';
 import type { FilamentPalette } from '../workspace/FilamentPalette';
+import type { FilamentId, PlateId } from '../project/domain/ids';
+import type { ConfigMap } from '../project/domain/model';
+import type { ObjectTreeEntityRef } from '../project/objects';
+import type {
+  CanonicalFilamentAssignableEntityRef,
+  CanonicalSemanticLayerRangeRequest,
+  CanonicalSemanticVolumeRoleRequest,
+  CanonicalVirtualFilamentMutationRequest,
+} from '../workspace/CanonicalWorkspaceController';
+import type { ActionRegistry, ActionSurface } from './ActionRegistry';
 import type { UiState, WorkspaceMode } from './UiState';
-import { ABOUT_HTML, SHORTCUTS_HTML, TUTORIAL_HTML, tipOfTheDayHtml } from './helpContent';
+import { ABOUT_HTML, TUTORIAL_HTML, shortcutsHtml, tipOfTheDayHtml } from './helpContent';
 
 export type BooleanOp = 'UNION' | 'A_NOT_B' | 'INTERSECTION';
 export type ToolName = 'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint';
@@ -20,10 +30,19 @@ export class ActionContext {
   constructor(
     readonly workspace: OrcaWorkspace,
     readonly ui: UiState,
+    private readonly registry: ActionRegistry,
   ) {}
 
   get palette(): FilamentPalette {
     return this.workspace.palette;
+  }
+
+  undo(): void {
+    this.workspace.undo();
+  }
+
+  redo(): void {
+    this.workspace.redo();
   }
 
   // ---- Scene ----------------------------------------------------------
@@ -49,9 +68,57 @@ export class ActionContext {
   autoOrient(): void {
     this.workspace.autoOrientSelectedModel();
   }
+  dropToBed(): void {
+    this.workspace.dropSelectedToBed();
+  }
   deselectAll(): void {
     this.workspace.unselectModel();
-    this.ui.update({ hasSelection: false });
+    this.ui.update({ hasSelection: false, hasInstanceSelection: false });
+  }
+  selectAll(): void {
+    this.workspace.selectAllModels();
+    this.ui.update({
+      hasSelection: this.workspace.modelCount > 0,
+      hasInstanceSelection: this.workspace.modelCount > 0,
+    });
+  }
+  selectObjectsTreeEntities(refs: readonly ObjectTreeEntityRef[], primary?: ObjectTreeEntityRef): void {
+    this.workspace.setObjectsTreeSelection(refs, primary);
+  }
+  renameObjectsTreeEntity(entity: Extract<ObjectTreeEntityRef, { kind: 'object' | 'volume' }>, name: string): void {
+    this.workspace.renameObjectsTreeEntity(entity, name);
+  }
+  revealObjectsTreeEntity(entity: ObjectTreeEntityRef): void {
+    this.workspace.revealObjectsTreeEntity(entity);
+  }
+  assignObjectsTreeFilament(
+    entities: readonly CanonicalFilamentAssignableEntityRef[],
+    filamentId: FilamentId | null,
+    guard: Readonly<{ sourceRevision: number; sourceHash: string }>,
+  ): void {
+    this.workspace.setFilamentAssignments(entities, filamentId, guard);
+  }
+  convertSemanticVolumeRole(request: CanonicalSemanticVolumeRoleRequest): void {
+    this.workspace.convertSemanticVolumeRole(request);
+  }
+  editSemanticLayerRange(request: CanonicalSemanticLayerRangeRequest): void {
+    this.workspace.editSemanticLayerRange(request);
+  }
+  applyProjectSettings(
+    inheritedConfig: Readonly<ConfigMap>,
+    overrides: Readonly<ConfigMap>,
+    guard: Readonly<{ sourceRevision: number; sourceHash: string }>,
+  ): void {
+    this.workspace.setProjectSettingsOverrides(inheritedConfig, overrides, guard);
+  }
+  mutateVirtualFilament(request: CanonicalVirtualFilamentMutationRequest): void {
+    this.workspace.mutateVirtualFilament(request);
+  }
+  configureFullSpectrumAutoPairs(enabled: boolean, confirmedPhysicalCount?: number): void {
+    this.workspace.configureFullSpectrumAutoPairs(
+      enabled,
+      confirmedPhysicalCount === undefined ? undefined : { confirmedPhysicalCount },
+    );
   }
   repairSelected(): Promise<void> {
     return this.workspace.fixSelectedModel();
@@ -83,14 +150,26 @@ export class ActionContext {
   addPlate(): void {
     this.workspace.addPlate();
   }
-  deletePlate(): void {
-    this.workspace.deletePlate();
+  activatePlate(id: PlateId, expectedRevision?: number): void {
+    this.workspace.setActivePlate(id, expectedRevision);
   }
-  newProject(): void {
-    this.workspace.newProject();
+  deletePlate(id?: PlateId, expectedRevision?: number): void {
+    this.workspace.deletePlate(id, expectedRevision);
+  }
+  renamePlate(id: PlateId, name: string, expectedRevision: number): void {
+    this.workspace.renamePlate(id, name, expectedRevision);
+  }
+  reorderPlates(ids: readonly PlateId[], expectedRevision: number): void {
+    this.workspace.reorderPlates(ids, expectedRevision);
+  }
+  setPlatePrintable(id: PlateId, printable: boolean, expectedRevision: number): void {
+    this.workspace.setPlatePrintable(id, printable, expectedRevision);
+  }
+  async newProject(): Promise<void> {
+    const created = await this.workspace.newProject();
     // Model/plate/selection counts are refreshed by the workspace's
     // onPlatesChanged / onSelectionChanged callbacks; clear the slice output.
-    this.ui.update({ gcodeReady: false });
+    if (created) this.ui.update({ gcodeReady: false });
   }
   cloneSelected(): void {
     this.workspace.cloneSelectedModel();
@@ -112,8 +191,8 @@ export class ActionContext {
   export3mf(): void {
     this.workspace.exportPlate3mf();
   }
-  saveProject(): void {
-    this.workspace.saveProject();
+  saveProject(): Promise<void> {
+    return this.workspace.saveProject();
   }
   openProject(): void {
     this.workspace.onRequestLoadProject?.();
@@ -139,37 +218,57 @@ export class ActionContext {
   arrangePlate(): void {
     this.workspace.arrangePlate();
   }
-  duplicatePlate(): void {
-    this.workspace.duplicateCurrentPlate();
+  duplicatePlate(id?: PlateId, expectedRevision?: number): void {
+    this.workspace.duplicatePlate(id, expectedRevision);
   }
-  splitToObjects(): void {
-    this.workspace.splitSelectedToObjects();
+  async splitToObjects(): Promise<void> {
+    await this.workspace.splitSelectedToObjects();
   }
   cutPlane(): void {
     this.workspace.cutSelectedByPlane();
   }
 
   // ---- Tools / modes --------------------------------------------------
-  setTool(tool: ToolName): void {
+  /** Registry handler seam. Presentation callers must use setTool(). */
+  applyTool(tool: ToolName): void {
     this.workspace.setTool(tool);
     this.ui.update({ activeTool: tool });
+  }
+
+  /**
+   * Compatibility gateway for the legacy XR mode card. Its calls still pass
+   * through the composition-root registry, including unavailable-tool guards.
+   */
+  setTool(tool: ToolName): void {
+    const actionId = `tool_${tool}`;
+    this.invokeFromXr(actionId, 'xr-toolbar');
   }
   nudge(dir: -1 | 1): void {
     this.workspace.nudgeSelected(dir);
   }
   setMode(mode: WorkspaceMode): void {
-    this.ui.update({ mode });
-    // Prepare maps onto the existing modal-tool machinery; Preview is a
-    // true mode switch in the renderer.
-    if (mode === 'prepare') this.workspace.setTool('move');
+    const current = this.ui.get().mode;
+    if (mode === current) return;
+    // The legacy XR card follows a Preview request with togglePreview(), and
+    // exits Preview before its final Prepare notification. Paint is the one
+    // branch that asks for Prepare first, so close an active preview through
+    // the guarded action here and let its subsequent tool request stand alone.
+    if (mode === 'prepare' && current === 'preview') this.togglePreview();
   }
 
   // ---- Slice / preview / output --------------------------------------
   slice(): Promise<void> {
     return this.workspace.sliceNow();
   }
-  togglePreview(): void {
+  /** Registry handler seam. Presentation callers must use togglePreview(). */
+  applyTogglePreview(): void {
     this.workspace.togglePreview();
+    const workspaceMode = this.workspace.getAutomationSnapshot().workspaceMode;
+    this.ui.update({ mode: workspaceMode === 'Preview' ? 'preview' : 'prepare' });
+  }
+  /** Compatibility gateway for the legacy XR mode card. */
+  togglePreview(): void {
+    this.invokeFromXr('toggle_preview', 'xr-primary');
   }
   downloadGcode(): void {
     const gcode = this.workspace.getLastGcode();
@@ -177,6 +276,12 @@ export class ActionContext {
   }
   getLastGcode(): string | null {
     return this.workspace.getLastGcode();
+  }
+
+  private invokeFromXr(actionId: string, surface: ActionSurface): void {
+    void this.registry
+      .invoke(actionId, surface, this, this.ui.get())
+      .catch((error) => this.workspace.setStatus(`Action failed: ${(error as Error).message}`));
   }
 
   // ---- Profile --------------------------------------------------------
@@ -192,6 +297,14 @@ export class ActionContext {
     this.workspace.addFilamentSlot();
   }
 
+  testPrinterConnection(): Promise<void> {
+    return this.workspace.testPrinterConnection();
+  }
+
+  inspectPrinterFilaments(): Promise<void> {
+    return this.workspace.inspectPrinterFilaments();
+  }
+
   // ---- Advanced Features ----------------------------------------------
   autoPlaceWipeTower(): void {
     this.workspace.setWipeTowerAuto(!this.workspace.wipeTowerAuto);
@@ -203,10 +316,6 @@ export class ActionContext {
 
   smartPaintImage(): void {
     void this.workspace.smartPaintImage();
-  }
-
-  recreateModelColorsWithFullSpectrum(): ReturnType<OrcaWorkspace['recreateModelColorsWithFullSpectrum']> {
-    return this.workspace.recreateModelColorsWithFullSpectrum();
   }
 
   /** Report a registry-controlled disabled reason without invoking a feature handler. */
@@ -241,7 +350,7 @@ export class ActionContext {
     this.workspace.showModal('About OrcaXR', ABOUT_HTML);
   }
   showShortcuts(): void {
-    this.workspace.showModal('Keyboard Shortcuts', SHORTCUTS_HTML);
+    this.workspace.showModal('Keyboard Shortcuts', shortcutsHtml(this.registry.all()));
   }
   showTutorial(): void {
     this.workspace.showModal('Getting Started', TUTORIAL_HTML);

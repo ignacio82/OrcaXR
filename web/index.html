@@ -480,6 +480,28 @@
       <div id="right-sidebar">
         <h2>OrcaXR Slicer</h2>
         <div id="preflight-banners" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;"></div>
+        <div id="objects-panel-host" class="panel" style="min-height:0;padding:10px;margin-bottom:12px;"></div>
+        <details class="insp-section"><summary>Semantic object editing</summary>
+          <div id="semantic-object-editor-host" class="panel" style="min-height:0;padding:10px;margin-bottom:12px;"></div>
+        </details>
+        <details class="insp-section"><summary>Filament assignment</summary>
+          <div id="filament-assignment-host" class="panel" style="min-height:0;padding:10px;margin-bottom:12px;"></div>
+        </details>
+        <details id="virtual-filament-library-section" class="insp-section">
+          <summary>Virtual filaments</summary>
+          <div class="panel" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;padding:10px;">
+            <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;color:#e0e6ee;cursor:pointer;user-select:none;">
+              <input id="chk-full-spectrum-auto-pairs" type="checkbox" style="width:16px;height:16px;accent-color:#ffb74d;cursor:pointer;margin-top:1px;" />
+              Generate automatic physical-filament pairs
+            </label>
+            <p id="full-spectrum-auto-pairs-status" aria-live="polite" style="margin:0;color:#a0aab5;font-size:11px;line-height:1.35;"></p>
+            <button id="btn-confirm-full-spectrum-auto-pairs" type="button" class="action-btn" style="display:none;text-align:left;font-size:12px;"></button>
+          </div>
+          <div id="virtual-filament-library-host" class="panel" style="min-height:0;padding:10px;margin-bottom:12px;"></div>
+        </details>
+        <details class="insp-section"><summary>Plate manager</summary>
+          <div id="plate-manager-host" class="panel" style="min-height:0;padding:10px;margin-bottom:12px;"></div>
+        </details>
         <details class="insp-section" open><summary>Printer &amp; profile</summary>
         <div class="panel" id="profile-panel" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
           <select id="sel-machine" aria-label="Printer profile" class="action-btn" style="text-align:left;"></select>
@@ -503,7 +525,7 @@
             <button id="btn-add-filament" style="background:rgba(255,255,255,0.1);color:#fff;border:none;border-radius:6px;width:26px;height:26px;font-size:16px;">+</button>
           </div>
           <div id="filament-swatches" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
-          <!-- Virtual (mixed) filaments adopted from a FullSpectrum 3MF — read-only. -->
+          <!-- Legacy-only preview fallback; canonical mixed rows live in the editor above. -->
           <div id="virtual-filament-panel" style="display:none;margin-top:10px;">
             <div id="virtual-filament-title" style="font-size:0.72rem;color:#a0aab5;font-weight:600;margin-bottom:6px;"></div>
             <div id="virtual-filament-swatches" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
@@ -521,6 +543,10 @@
             </div>
           </div>
           <input id="printer-host" type="text" placeholder="http://192.168.1.50 or https://printer.tailnet-name.ts.net"
+            aria-label="Moonraker endpoint" autocomplete="url"
+            style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.3);color:#fff;border:1px solid #ffffff1a;border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;" />
+          <label for="printer-api-key" style="display:block;font-size:11px;color:#a0aab5;margin-bottom:4px;">Session API key (optional)</label>
+          <input id="printer-api-key" type="password" autocomplete="off" placeholder="Held only in this tab"
             style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.3);color:#fff;border:1px solid #ffffff1a;border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;" />
           <p style="font-size:11px;color:#8892a0;margin:0 0 8px;line-height:1.4;">
             Chrome 142+: enter a full <code>http://</code> LAN URL, approve Local Network
@@ -601,7 +627,7 @@
       <!-- Primary actions — rendered from the ActionRegistry by DomShell. -->
       <div id="bottom-action-bar">
         <div id="action-panel" style="display:flex; gap:12px;">
-          <input type="file" id="file-input" accept=".stl,.3mf" multiple style="display:none;" />
+          <input type="file" id="file-input" accept=".stl" style="display:none;" />
         </div>
       </div>
     </div>

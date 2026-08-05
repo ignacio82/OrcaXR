@@ -1,6 +1,6 @@
 import type { FilamentId, ObjectId, PlateId } from '../domain/ids';
 import type { ProjectState, VolumeRole } from '../domain/model';
-import type { SelectionRef, SelectionSnapshot } from '../selection';
+import type { SelectionRef } from '../selection';
 
 export type ObjectTreeEntityRef = Exclude<SelectionRef, { kind: 'project' } | { kind: 'filament' }>;
 
@@ -111,10 +111,15 @@ export interface ObjectTreeView {
   readonly filterActive: boolean;
 }
 
+export interface ObjectTreeSelectionSnapshot {
+  readonly refs: readonly SelectionRef[];
+  readonly primary?: SelectionRef;
+}
+
 export interface ObjectTreeViewOptions {
   readonly expandedKeys?: ReadonlySet<ObjectTreeRowKey>;
   readonly filterQuery?: string;
-  readonly selection?: SelectionSnapshot;
+  readonly selection?: ObjectTreeSelectionSnapshot;
   readonly focusedKey?: ObjectTreeRowKey;
 }
 

@@ -14,11 +14,13 @@ import { outputActions } from './groups/output';
 import { calibrationActions } from './groups/calibration';
 import { advancedActions } from './groups/advanced';
 import { helpActions } from './groups/help';
+import { objectsActions } from './groups/objects';
 
 export function buildRegistry(): ActionRegistry {
   return new ActionRegistry()
     .addAll(fileActions)
     .addAll(editActions)
+    .addAll(objectsActions)
     .addAll(viewActions)
     .addAll(sceneActions)
     .addAll(gizmoActions)

@@ -24,7 +24,11 @@ export type DirtyCategory = 'projectData' | 'presets' | 'printerDevice';
 export type Vec3 = readonly [number, number, number];
 export type Quaternion = readonly [number, number, number, number];
 
-/** Plain printer-space transform. Translation is always millimetres. */
+/**
+ * Plain plate-local printer-space transform in millimetres: X/Y use the
+ * active bed's corner origin and Z uses the bed plane. BBS core build items
+ * may add a virtual multi-plate grid origin only at the serialization edge.
+ */
 export interface Transform {
   translationMm: Vec3;
   rotation: Quaternion;
@@ -171,20 +175,56 @@ export interface PhysicalFilament {
 export interface MixedComponent {
   /** Snapmaker v2.3.4 recipes resolve only to physical heads, never another virtual row. */
   filamentId: PhysicalFilamentId;
+  /** Zero is valid at the Ratio endpoints; at least one recipe component must remain positive. */
   weight: number;
 }
 
 export type MixedDistribution =
   | { mode: 'ratio' }
-  | { mode: 'cycle'; cycleLengthMm: number }
+  | { mode: 'cycle'; cycleLengthMm?: number }
   | { mode: 'match'; targetColor: string }
   | {
       mode: 'gradient';
-      startZMm: number;
-      endZMm: number;
+      /** Legacy OrcaXR range metadata; the pinned row applies its gradient over the effective Z domain. */
+      startZMm?: number;
+      endZMm?: number;
       startWeights: number[];
       endWeights: number[];
     };
+
+/**
+ * Stable-ID form of every field persisted by Snapmaker Orca v2.3.4's
+ * `MixedFilamentManager`. Physical row numbers are deliberately absent: the
+ * BBS/slicer adapter derives them from the current physical-tool order.
+ */
+export interface FullSpectrumRecipeState {
+  schemaVersion: 1;
+  /** Unsigned 64-bit decimal text; JSON numbers cannot represent every upstream stable ID. */
+  upstreamStableId: string;
+  /** -1 is the upstream legacy/unknown value; authored rows use 0..3. */
+  uiMode: -1 | 0 | 1 | 2 | 3;
+  componentAId: PhysicalFilamentId;
+  componentBId: PhysicalFilamentId;
+  ratioA: number;
+  ratioB: number;
+  mixBPercent: number;
+  /** Exact comma-separated perimeter groups represented with stable physical IDs. */
+  manualPatternGroups: PhysicalFilamentId[][];
+  gradientComponentIds: PhysicalFilamentId[];
+  gradientComponentWeights: number[];
+  /** Pointillisme is compiled out in the pinned engine and must remain false. */
+  pointillismAllFilaments: false;
+  distributionMode: 0 | 2;
+  localZMaxSublayers: number;
+  gradientEnabled: boolean;
+  gradientStart: number;
+  gradientEnd: number;
+  componentASurfaceOffsetMm: number;
+  componentBSurfaceOffsetMm: number;
+  deleted: boolean;
+  custom: boolean;
+  originAuto: boolean;
+}
 
 export interface MixedFilament {
   id: MixedFilamentId;
@@ -192,6 +232,7 @@ export interface MixedFilament {
   displayColor: string;
   components: MixedComponent[];
   distribution: MixedDistribution;
+  fullSpectrum?: FullSpectrumRecipeState;
   config: ConfigMap;
   enabled: boolean;
   extensionData?: Record<string, JsonValue>;
@@ -232,6 +273,14 @@ export interface ProjectState {
     profileHash?: string;
     toolCount: number;
   };
+  /**
+   * Inherited profile/project settings before explicit overrides. Legacy and
+   * foreign states omit both settings fields and use `config` as this base.
+   */
+  settingsBaseConfig?: ConfigMap;
+  /** Explicit user-authored project setting overrides. Missing means empty. */
+  settingsOverrides?: ConfigMap;
+  /** Effective engine configuration (`settingsBaseConfig` plus overrides). */
   config: ConfigMap;
   activePlateId: PlateId;
   plates: ProjectPlate[];

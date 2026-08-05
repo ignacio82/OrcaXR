@@ -4,6 +4,8 @@
  * hands these strings to `workspace.showModal`, which each shell renders its own
  * way (the DOM shell as an overlay card; XR falls back to the status line).
  */
+import type { Action } from './ActionRegistry';
+import { shortcutHelpRows } from './ShortcutCatalog';
 
 const SITE = 'https://orcaxr.martinez.fyi';
 const GITHUB = 'https://github.com/ignacio82/OrcaXR';
@@ -20,18 +22,27 @@ export const ABOUT_HTML = `
     <a href="${GITHUB}/blob/main/docs/parity.md" target="_blank" rel="noopener">Parity status</a>
   </p>`;
 
-export const SHORTCUTS_HTML = `
-  <p>OrcaXR is command-first — press <kbd>Ctrl</kbd>/<kbd>⌘</kbd> <kbd>K</kbd> to open
-  the command palette and find any catalogued action by name. Actions that are not
-  available in the current build remain disabled.</p>
-  <table style="width:100%;border-collapse:collapse;font-size:13px">
-    <tr><td><kbd>Ctrl/⌘ K</kbd></td><td>Command palette (action catalogue)</td></tr>
-    <tr><td><kbd>Del</kbd></td><td>Delete the selected model</td></tr>
-    <tr><td><kbd>Esc</kbd></td><td>Deselect / close this dialog</td></tr>
-    <tr><td><kbd>G</kbd> / <kbd>R</kbd> / <kbd>S</kbd></td><td>Move / Rotate / Scale selected model</td></tr>
-    <tr><td>Drag</td><td>Move · Rotate · Scale (pick the tool on the left rail)</td></tr>
-  </table>
-  <p style="color:var(--oxr-color-text-muted)">More shortcuts arrive as features land.</p>`;
+export function shortcutsHtml(actions: readonly Action[]): string {
+  const rows = shortcutHelpRows(actions)
+    .map(
+      (row) =>
+        `<tr><td>${row.displays.map((display) => `<kbd>${escapeHtml(display)}</kbd>`).join(' / ')}</td>` +
+        `<td>${escapeHtml(row.actionLabel)}${row.unavailable ? ' (unavailable)' : ''}</td></tr>`,
+    )
+    .join('');
+  return `
+    <p>OrcaXR is command-first — press <kbd>Ctrl+K</kbd> or <kbd>⌘+K</kbd> to open
+    the command palette and find any catalogued action by name. Actions that are not
+    available in the current build remain disabled.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr><th scope="col" style="text-align:left">Shortcut</th><th scope="col" style="text-align:left">Action</th></tr></thead>
+      <tbody>
+        <tr><td><kbd>Ctrl+K</kbd> / <kbd>⌘+K</kbd></td><td>Command palette</td></tr>
+        ${rows}
+      </tbody>
+    </table>
+    <p style="color:var(--oxr-color-text-muted)">This list is generated from the shared action catalogue.</p>`;
+}
 
 export const TUTORIAL_HTML = `
   <p>This is the basic browser workflow in the current alpha:</p>
@@ -61,4 +72,11 @@ export function tipOfTheDayHtml(): string {
   const day = Math.floor(Date.now() / 86_400_000);
   const tip = TIPS[day % TIPS.length];
   return `<p style="font-size:15px;line-height:1.6">💡 ${tip}</p>`;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(
+    /[&<>"']/g,
+    (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] as string,
+  );
 }

@@ -86,8 +86,8 @@ export const gizmoActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'tools',
     hint: 'Clone the active build plate and its models onto a new plate',
-    isEnabled: (s) => s.modelCount > 0,
-    run: (ctx) => ctx.duplicatePlate(),
+    run: (ctx, invocation) =>
+      ctx.duplicatePlate(invocation.plateTarget?.plateId ?? invocation.plateId, invocation.plateTarget?.sourceRevision),
   },
   {
     id: 'split_to_objects',
@@ -97,7 +97,7 @@ export const gizmoActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'tools',
     hint: 'Split a multi-body mesh into separate objects',
-    isEnabled: (s) => s.hasSelection,
+    isEnabled: (s) => s.hasInstanceSelection,
     run: (ctx) => ctx.splitToObjects(),
   },
   tool(
@@ -116,7 +116,7 @@ export const gizmoActions: Action[] = [
     group: 'scene',
     disclosure: 'toolbar',
     hint: 'Cut the selected model in two with a horizontal plane',
-    isEnabled: (s) => s.hasSelection,
+    isEnabled: (s) => s.hasInstanceSelection,
     run: (ctx) => ctx.cutPlane(),
   },
   tool(

@@ -1,176 +1,55 @@
 /**
  * OrcaXR Web — Phase 2 workspace.
  *
- * A build plate with a manipulable model (XR Blocks DragManager: pinch
- * the platform to move, the model to rotate, two hands to scale) and a
- * spatial panel that drives the WASM slicer. On "slice" the model's
- * CURRENT world pose is baked into printer coordinates and sliced —
- * what you see is exactly what slices.
+ * A build plate whose Three/XR scene is a one-way projection of the canonical
+ * project controller. Manipulation commits stable-ID commands back to that
+ * controller; save and slice serialize the same canonical state.
  */
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
-import { ThreeMFLoader } from 'three/examples/jsm/loaders/3MFLoader.js';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
-import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
-import * as fflate from 'fflate';
+import type { FilamentId, InstanceId, LayerRangeId, ObjectId, PlateId, VolumeId } from '../project/domain/ids';
+import { entityId, UuidIdSource } from '../project/domain/ids';
+import type { ConfigMap, Transform } from '../project/domain/model';
+import type { FullSpectrumAutoPairGenerationPreferences } from '../project/filaments/autoPairReconciliation';
+import type { ImportCommitConfirmation, ProjectImportPreview } from '../project/import/types';
+import type { ObjectTreeEntityRef } from '../project/objects';
 import {
-  extractBbsPlateLayoutResult,
-  type BbsPlateLayout,
-  type BbsPlateLayoutExtraction,
-} from '../project/serialization/bbsCore';
-import { unzip3mfPackage, type ThreeMfEntries } from '../features/ThreeMfPackage';
-
-/** Read official Orca/BBS plate membership from an in-memory 3MF package. */
-export function extract3mfPlateLayout(buf: ArrayBuffer, entries?: ThreeMfEntries): BbsPlateLayoutExtraction {
-  try {
-    const unzipped = entries ?? unzip3mfPackage(buf);
-    return extractBbsPlateLayoutResult(new Map(Object.entries(unzipped)));
-  } catch (error) {
-    console.warn('extract3mfPlateLayout: could not read plate metadata', error);
-    return { status: 'invalid', layout: null };
-  }
-}
-
-/**
- * Extract a per-mesh color list for an OrcaSlicer/Bambu 3MF, in the SAME
- * order (and count) that ThreeMFLoader emits meshes.
- *
- * The subtlety that makes the naive approach wrong: the loader drops
- * zero-triangle objects and produces one mesh per non-empty geometry
- * object, in build→component order. Orca/Bambu 3MFs routinely carry empty
- * "parts" (authoring residue), so a colors-per-part list in document order
- * gets shifted relative to the loader's meshes and paints the wrong
- * geometry. Here we walk the actual build/component graph, skip empties,
- * and key color off each geometry object's own extruder assignment — so
- * colors align by object identity, not by position.
- */
-export async function extract3mfColors(buf: ArrayBuffer, entries?: ThreeMfEntries): Promise<string[] | null> {
-  try {
-    const unzipped = entries ?? unzip3mfPackage(buf);
-    const dec = new TextDecoder();
-
-    const projectSettings = unzipped['Metadata/project_settings.config'];
-    if (!projectSettings) {
-      console.warn('extract3mfColors: project_settings.config not found');
-      return null;
-    }
-    const config = JSON.parse(dec.decode(projectSettings));
-    // Displayed colors follow the FILAMENT loaded in each slot, not the
-    // physical extruder color (extruder_colour is often one uniform value).
-    const rawPalette: string[] | undefined =
-      Array.isArray(config.filament_colour) && config.filament_colour.length
-        ? config.filament_colour
-        : Array.isArray(config.extruder_colour) && config.extruder_colour.length
-          ? config.extruder_colour
-          : undefined;
-    const palette = rawPalette?.map((c: string) => {
-      const hex = c.startsWith('#') ? c : `#${c}`;
-      return hex.length === 9 ? hex.substring(0, 7) : hex;
-    });
-    if (!palette) {
-      console.warn('extract3mfColors: no filament/extruder palette');
-      return null;
-    }
-
-    // objectId → extruder (1-based) from model_settings. Parts and geometry
-    // objects share the same numeric id in Orca/Bambu exports.
-    const extruderOf = new Map<string, number>();
-    const modelSettings = unzipped['Metadata/model_settings.config'];
-    if (modelSettings) {
-      const doc = new DOMParser().parseFromString(dec.decode(modelSettings), 'text/xml');
-      doc.querySelectorAll('object').forEach((obj) => {
-        const objExtruder = parseInt(
-          obj.querySelector(':scope > metadata[key="extruder"]')?.getAttribute('value') ?? '0',
-          10,
-        );
-        obj.querySelectorAll('part').forEach((part) => {
-          const pid = part.getAttribute('id');
-          if (!pid) return;
-          let e = parseInt(part.querySelector('metadata[key="extruder"]')?.getAttribute('value') ?? '0', 10);
-          if (!e || e < 1) e = objExtruder;
-          extruderOf.set(pid, e >= 1 ? e : 1);
-        });
-        // Object-level fallback for single-mesh objects with no <part>.
-        const oid = obj.getAttribute('id');
-        if (oid && objExtruder >= 1 && !extruderOf.has(oid)) extruderOf.set(oid, objExtruder);
-      });
-    }
-
-    // Parse every .model file (regex, not DOM — geometry files reach tens of
-    // MB): objectId → { hasTriangles, componentIds }, plus the root build order.
-    interface ObjInfo {
-      hasTris: boolean;
-      components: string[];
-    }
-    const objects = new Map<string, ObjInfo>();
-    let buildOrder: string[] = [];
-    for (const [name, data] of Object.entries(unzipped)) {
-      if (!name.endsWith('.model')) continue;
-      const text = dec.decode(data as Uint8Array);
-      const objRe = /<object[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/object>/g;
-      let m: RegExpExecArray | null;
-      while ((m = objRe.exec(text)) !== null) {
-        const id = m[1];
-        const body = m[2];
-        const components = [...body.matchAll(/<component[^>]*\bobjectid="([^"]+)"/g)].map((c) => c[1]);
-        // Match the <triangle …> child, NOT the empty <triangles> wrapper —
-        // authoring-residue objects carry an empty <triangles/> and must
-        // count as empty (ThreeMFLoader emits no mesh for them).
-        objects.set(id, { hasTris: /<triangle[\s/>]/.test(body), components });
-      }
-      const items = [...text.matchAll(/<item[^>]*\bobjectid="([^"]+)"/g)].map((it) => it[1]);
-      if (items.length) buildOrder = items;
-    }
-
-    // Flatten build → ordered non-empty mesh object ids (loader's mesh order).
-    const ordered: string[] = [];
-    const seen = new Set<string>();
-    const visit = (id: string, depth: number) => {
-      if (depth > 32) return;
-      const info = objects.get(id);
-      if (!info) return;
-      if (info.components.length) {
-        for (const c of info.components) visit(c, depth + 1);
-      } else if (info.hasTris) {
-        ordered.push(id);
-      }
-    };
-    for (const b of buildOrder) visit(b, 0);
-    if (ordered.length === 0) {
-      // No build items resolved — take all non-empty leaf meshes in doc order.
-      for (const [id, info] of objects) {
-        if (!info.components.length && info.hasTris && !seen.has(id)) ordered.push(id);
-      }
-    }
-    if (ordered.length === 0) return null;
-
-    // FullSpectrum projects assign parts to VIRTUAL filament IDs past the
-    // physical count (mixed_filament_definitions rows). Extend the palette
-    // with their pigment-blended display colors so extruder 23 renders as
-    // its mix, not wrapped modulo-N onto some physical filament.
-    const virtuals = virtualFilamentsFromConfig(config).map((v) => v.color);
-    const full = [...palette, ...virtuals];
-    const colors = ordered.map((id) => {
-      const e = Math.max(1, extruderOf.get(id) ?? 1);
-      return full[e - 1] ?? palette[(e - 1) % palette.length] ?? '#ffffff';
-    });
-    console.log(
-      `extract3mfColors: ${colors.length} meshes (order-aligned), palette ${palette.length}+${virtuals.length} virtual`,
-    );
-    return colors;
-  } catch (e) {
-    console.error('Failed to extract 3mf colors', e);
-    return null;
-  }
-}
+  SlicePreflightError,
+  type CanonicalProjectSliceGuard,
+  type CanonicalSlicePreflightResult,
+  type SliceJobStatus,
+} from '../project/slicing';
+import type { ProjectSettingsOverrideGuard, ProjectSettingsOverrideSnapshot } from '../project/settingsOverrides';
+import { CURRENT_THREE_WORLD_UNITS_PER_MM, getThreeProjectEntity } from '../project/surfaces/ThreeProjectSurface';
+import {
+  CanonicalWorkspaceController,
+  type CanonicalFilamentAssignableEntityRef,
+  type CanonicalFilamentAssignmentSnapshot,
+  type CanonicalAutoPairReconciliationConfirmation,
+  type CanonicalAutoPairReconciliationResult,
+  type CanonicalAutoPairPolicySnapshot,
+  type CanonicalObjectsTreeSnapshot,
+  type CanonicalSemanticLayerRangeRequest,
+  type CanonicalSemanticObjectEditorSnapshot,
+  type CanonicalSemanticVolumeRoleRequest,
+  type CanonicalSplitToObjectsConfirmation,
+  type CanonicalVirtualFilamentLibrarySnapshot,
+  type CanonicalVirtualFilamentMutationRequest,
+  type CanonicalWorkspaceSummary,
+} from './CanonicalWorkspaceController';
+import { runCanonicalSplitToObjectsFlow } from './CanonicalSplitToObjectsFlow';
+import { CanonicalWorkspaceSlicer } from './CanonicalWorkspaceSlicer';
+import {
+  projectMultiInstancePrimaryTransform,
+  projectMultiInstanceTransform,
+  type MultiInstanceTransformMode,
+  type MultiInstanceTransformOrigin,
+} from './multiInstanceTransform';
+import { deriveLiveProfilePreflightConstraints, LiveProfileSlicePreflight } from './ProfilePreflightConstraints';
 
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
-import { ConvexHull } from 'three/examples/jsm/math/ConvexHull.js';
-import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { SimplifyModifier } from 'three/examples/jsm/modifiers/SimplifyModifier.js';
-import { buildRegistry } from '../actions/catalog';
-import type { Action, ActionSurface } from '../actions/ActionRegistry';
+import type { Action, ActionRegistry, ActionSurface } from '../actions/ActionRegistry';
 import { MENU_SECTIONS } from '../actions/ActionRegistry';
 import type { ActionContext } from '../actions/ActionContext';
 import { renderXrActionButton, xrToolRailActions, type XrUiFactory } from '../ui/xr/XrShell';
@@ -195,71 +74,38 @@ import {
 } from 'xrblocks/addons/uiblocks/src/index.js';
 
 import { parseGcodeToolpath } from '../slicer/GcodeToolpath';
-import { FilamentPalette, type FilamentSlot } from './FilamentPalette';
-import { bedSizeFromProfile, ProfileCatalog, SlicerProfile } from '../slicer/ProfileLoader';
+import { FilamentPalette } from './FilamentPalette';
+import { bedSizeFromProfile, ProfileCatalog, type SlicerProfile } from '../slicer/ProfileLoader';
 import { SlicerClient } from '../slicer/SlicerClient';
-import {
-  combinedSemanticImportRequiresCanonicalSlice,
-  requireSemanticSlice,
-  SemanticSliceArtifact,
-  sameSemanticProjectSnapshot,
-  selectSemanticSliceRoute,
-  type SemanticBufferSnapshot,
-  type SemanticProjectSnapshot,
-} from '../slicer/SemanticSliceGuard';
-import { detectBedCollision, bedCollisionBanner } from '../features/BedCollision';
-import {
-  loadFilamentRules,
-  evaluateFilamentRules,
-  bedKeyFor,
-  EMPTY_RULES,
-  type FilamentRules,
-} from '../features/FilamentRules';
-import { evaluateTopCover } from '../features/TopCoverRule';
-import { scoreWipeTower, parseBias, type AabbXY } from '../features/WipeTowerPlacement';
-import { deriveTriangleFilaments } from '../features/PaintedSlice';
-import { splitConnectedComponents } from '../features/MeshSplit';
-import { SemanticPaintPlanner } from '../features/SemanticPaintPlanner';
-import { cutByPlane } from '../features/MeshCut';
-import { writeMinimal3mf } from '../features/Write3mf';
-import { writeProject3mf, parseProject3mf, type ProjectMeta, type ProjectObjectMeta } from '../features/Project3mf';
 import { exportConfigJson, parseConfigJson } from '../features/ConfigIO';
-import { extract3mfPaint, applyPaintToPositions, type Paint3mfResult } from '../features/Paint3mf';
-
-/** Decode the compact project settings while the shared inflated entries live. */
-function projectConfigFrom3mfEntries(entries: ThreeMfEntries): Record<string, unknown> | null {
-  const projectSettings = entries['Metadata/project_settings.config'];
-  if (!projectSettings) return null;
-  const parsed: unknown = JSON.parse(new TextDecoder().decode(projectSettings));
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('Metadata/project_settings.config must contain a JSON object');
-  }
-  return parsed as Record<string, unknown>;
-}
-
-/** Metadata needed by the live importer, decoded from one shared inflation. */
-export async function extract3mfImportMetadata(buf: ArrayBuffer) {
-  const entries = unzip3mfPackage(buf);
-  const colors = await extract3mfColors(buf, entries);
-  const plateMetadata = extract3mfPlateLayout(buf, entries);
-  return {
-    projectConfig: projectConfigFrom3mfEntries(entries),
-    colors,
-    paint: extract3mfPaint(buf, entries),
-    plateLayout: plateMetadata.layout,
-    plateLayoutStatus: plateMetadata.status,
-  };
-}
 import { virtualFilamentsFromConfig, type VirtualFilament } from '../features/MixedFilamentPreview';
-import { GamutMatcher, type GamutMatch } from '../features/GamutMatcher';
-import { MixedFilamentStore, type MixedFilamentEntry } from '../features/MixedFilamentStore';
 import { xrIcon } from '../ui/icons';
 
-/** A single pre-flight banner surfaced to both shells. */
-export interface PreflightBanner {
-  id: string;
-  severity: 'error' | 'warning' | 'info';
-  text: string;
+export type WorkspacePresetId = NonNullable<SlicerProfile['machinePresetId']>;
+
+export interface WorkspacePresetOption {
+  readonly id: WorkspacePresetId;
+  /** Exact canonical preset name. */
+  readonly name: string;
+  /** Compact, disambiguated picker label. */
+  readonly label: string;
+}
+
+export interface WorkspaceProfileSelectionRequest {
+  readonly machinePresetId?: WorkspacePresetId;
+  readonly processPresetId?: WorkspacePresetId;
+  readonly filamentPresetIds?: readonly (WorkspacePresetId | undefined)[];
+}
+
+export interface WorkspaceProfileSelectionFeedback {
+  readonly applied: boolean;
+  readonly severity: 'info' | 'warning' | 'error';
+  readonly messages: readonly string[];
+}
+
+interface HeadFilamentSelection {
+  readonly presetId?: WorkspacePresetId;
+  readonly name: string;
 }
 
 /** Fallback bed until the profile catalog loads. */
@@ -279,8 +125,130 @@ function ownedArrayBuffer(view: ArrayBufferView<ArrayBufferLike>): ArrayBuffer {
   return copy.buffer;
 }
 
+function cryptographicRandomWord(): number {
+  if (!globalThis.crypto?.getRandomValues) {
+    throw new Error('Cryptographically secure project ID generation is unavailable');
+  }
+  const word = new Uint32Array(1);
+  globalThis.crypto.getRandomValues(word);
+  return word[0] / 0x1_0000_0000;
+}
+
+function matchPresetOption(
+  options: readonly WorkspacePresetOption[],
+  query: string,
+): WorkspacePresetOption | undefined {
+  const normalized = query.trim().toLocaleLowerCase('en-US');
+  if (!normalized) return undefined;
+  const exactLabels = options.filter((option) => option.label.toLocaleLowerCase('en-US') === normalized);
+  if (exactLabels.length === 1) return exactLabels[0];
+  const exactNames = options.filter((option) => option.name.toLocaleLowerCase('en-US') === normalized);
+  if (exactNames.length === 1) return exactNames[0];
+  const partial = options.filter(
+    (option) =>
+      option.name.toLocaleLowerCase('en-US').includes(normalized) ||
+      option.label.toLocaleLowerCase('en-US').includes(normalized),
+  );
+  return partial.length === 1 ? partial[0] : undefined;
+}
+
+function disambiguatePresetOptionLabels(options: readonly WorkspacePresetOption[]): WorkspacePresetOption[] {
+  const labelCounts = new Map<string, number>();
+  const nameCounts = new Map<string, number>();
+  for (const option of options) {
+    labelCounts.set(option.label, (labelCounts.get(option.label) ?? 0) + 1);
+    nameCounts.set(option.name, (nameCounts.get(option.name) ?? 0) + 1);
+  }
+  return options.map((option) =>
+    labelCounts.get(option.label) === 1
+      ? option
+      : Object.freeze({
+          ...option,
+          label:
+            nameCounts.get(option.name) === 1
+              ? option.name
+              : `${option.name} — ${presetVendorName(option.id) ?? 'another vendor'}`,
+        }),
+  );
+}
+
+function presetVendorName(id: WorkspacePresetId): string | undefined {
+  const encoded = id.split(':')[1];
+  if (!encoded) return undefined;
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    return undefined;
+  }
+}
+
+function unambiguousProfileScalar(value: string | undefined): string | undefined {
+  if (!value?.trim() || /[;,]/.test(value)) return undefined;
+  return value.trim();
+}
+
+function profileNozzleForTool(profile: SlicerProfile | null, toolId: number): string {
+  const nozzles = profile?.config['nozzle_diameter']
+    ?.split(/[;,]/)
+    .map((value) => value.trim())
+    .filter((value) => Number.isFinite(Number(value)) && Number(value) > 0);
+  if (nozzles?.[toolId]) return nozzles[toolId];
+  const singleExtruderMultiMaterial =
+    unambiguousProfileScalar(profile?.config['single_extruder_multi_material'])?.toLowerCase() === '1' ||
+    unambiguousProfileScalar(profile?.config['single_extruder_multi_material'])?.toLowerCase() === 'true';
+  return nozzles?.length === 1 && singleExtruderMultiMaterial ? nozzles[0] : '0.4';
+}
+
+function canonicalPreflightUnavailable(plateId: PlateId, error: unknown): CanonicalSlicePreflightResult {
+  const detail = (error instanceof Error ? error.message : String(error))
+    .replaceAll(/[\r\n\t]+/g, ' ')
+    .trim()
+    .slice(0, 240);
+  const issue = Object.freeze({
+    id: 'slice-preflight:invalid-project-state:canonical-source-unavailable',
+    code: 'invalid-project-state' as const,
+    detailCode: 'canonical-source-unavailable',
+    severity: 'error' as const,
+    message: `Canonical slice preflight is unavailable${detail ? `: ${detail}` : '.'}`,
+    help: 'Resolve the canonical project or projection error before slicing. The scene projection is never used as fallback validation.',
+    entities: Object.freeze([{ kind: 'project' as const }]),
+    actions: Object.freeze([]),
+  });
+  return Object.freeze({
+    plateId,
+    canSlice: false,
+    blockingCount: 1,
+    issues: Object.freeze([issue]),
+    printableInstanceIds: Object.freeze([]),
+    usedFilamentIds: Object.freeze([]),
+  });
+}
+
+function transformFromObject(object: THREE.Object3D): Transform {
+  const quaternion = object.quaternion.clone().normalize();
+  return {
+    translationMm: [object.position.x, object.position.y, object.position.z],
+    rotation: [quaternion.x, quaternion.y, quaternion.z, quaternion.w],
+    scale: [object.scale.x, object.scale.y, object.scale.z],
+  };
+}
+
 /** One plated model: its source geometry, the display mesh, and the grab proxy. */
-type ModelEntry = { raw: THREE.BufferGeometry; display: THREE.Mesh; viewer: THREE.Object3D };
+type ProjectedModelEntry = {
+  instanceId: InstanceId;
+  objectId: ObjectId;
+  plateId: PlateId;
+  volumeId: VolumeId;
+  raw: THREE.BufferGeometry;
+  display: THREE.Mesh;
+  viewer: THREE.Object3D;
+};
+
+interface ActiveTransformGesture {
+  readonly id: string;
+  readonly origins: readonly MultiInstanceTransformOrigin[];
+  readonly initialPivotTransform: Transform;
+}
 
 interface GeometryLoadOptions {
   preservePrinterXY?: boolean;
@@ -291,33 +259,19 @@ interface GeometryLoadOptions {
 
 type ProjectPrimeTower = { enabled: boolean; xMm: number; yMm: number; widthMm: number };
 
-/** State changed by 3MF project-settings adoption, held until geometry commits. */
-interface SemanticImportCheckpoint {
-  originalProject: ArrayBuffer | null;
-  originalProjectSnapshot: SemanticProjectSnapshot | null;
-  projectSnapshotPending: boolean;
-  projectSourceWasExclusive: boolean;
-  canonicalSliceRequiredReason: string | null;
-  virtualFilaments: VirtualFilament[];
-  projectPrimeTower: ProjectPrimeTower | null;
-  palette: FilamentSlot[];
-  headFilaments: string[];
-  headNozzles: string[];
-}
-
 export type WorkspaceGizmoTool = 'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint';
 
 export interface WorkspaceAutomationSnapshot {
   workspaceMode: 'Prepare' | 'Preview';
-  activePlateId: number;
+  activePlateId: PlateId;
   gizmoTool: WorkspaceGizmoTool;
   selectedProfileId: string | null;
   placedModelsTotalAllPlates: number;
-  plates: { id: number; label: string; count: number; active: boolean }[];
+  plates: { id: PlateId; label: string; count: number; active: boolean }[];
   placedModels: {
     id: string;
     label: string;
-    plateId: number;
+    plateId: PlateId;
     translateXmm: number;
     translateYmm: number;
     translateZmm: number;
@@ -330,61 +284,88 @@ export interface WorkspaceAutomationSnapshot {
   }[];
 }
 
+export interface OrcaWorkspaceOptions {
+  readonly fullSpectrumAutoPairPreferences?: FullSpectrumAutoPairGenerationPreferences;
+}
+
 export class OrcaWorkspace extends xb.Script {
   private uiCore: UICore;
   private readonly lifecycleDisposers: Array<() => void> = [];
   private disposed = false;
-  private readonly actionRegistry = buildRegistry();
   private slicer = new SlicerClient();
   /** True once a post-import local-engine warm-up has been scheduled. */
   private slicerWarmupQueued = false;
   private catalog = new ProfileCatalog();
   private profile: SlicerProfile | null = null;
+  /** Prevent the asynchronous catalog default from overwriting an import's
+   * canonical slicing configuration while its preview is open or after commit. */
+  private projectImportInProgress = false;
+  private importedProjectOwnsSlicingConfiguration = false;
   /** Live bed size (mm) — from the active profile's printable_area. */
   private bedMm = { x: PLATE_MM, y: PLATE_MM };
   private plateAnchor = new THREE.Object3D();
   /** Everything spatial lives in this group: scaled up for legibility and
    *  re-posed in front of the user when the XR session starts. */
   private workspace = new THREE.Group();
-  /**
-   * Multi-plate: each plate owns its own models. `models` is the ACTIVE plate's
-   * array (a getter, so all the existing `.push`/`.splice`/`.indexOf` on
-   * `this.models` transparently target the active plate). Inactive plates keep
-   * their viewers in the scene graph but hidden.
-   */
-  private plates: { id: number; label: string; models: ModelEntry[] }[] = [{ id: 1, label: 'Plate 1', models: [] }];
-  private activePlateId = 1;
-  private nextPlateId = 2;
-  private get models(): ModelEntry[] {
-    return (this.plates.find((p) => p.id === this.activePlateId) ?? this.plates[0]).models;
+  /** Sole mutable owner of project/model/plate/selection/history state. */
+  private readonly canonicalProject: CanonicalWorkspaceController;
+  private activeCanonicalSlicer: CanonicalWorkspaceSlicer | null = null;
+
+  /** Read-only compatibility projection while the surrounding shell migrates. */
+  private get plates(): ReadonlyArray<{
+    id: PlateId;
+    label: string;
+    models: readonly ProjectedModelEntry[];
+  }> {
+    const summary = this.canonicalProject.getSummary();
+    return summary.plates.map((plate) => ({
+      id: plate.id,
+      label: plate.name,
+      models: this.projectedModels(plate.id),
+    }));
+  }
+
+  private get activePlateId(): PlateId {
+    return this.canonicalProject.getSummary().activePlateId;
+  }
+
+  private get models(): ProjectedModelEntry[] {
+    return this.projectedModels(this.activePlateId);
   }
   /** Fired on plate add/remove/switch so the DOM plate bar can re-render. */
   public onPlatesChanged: (() => void) | null = null;
   /** The model actions like Repair / Delete / Boolean / Auto-orient act on.
    *  Set by selectModel and auto-selected on load; previously undeclared, which
    *  silently made all those actions no-op ("select a model first"). */
-  private selectedModel: ModelEntry | null = null;
+  private get selectedModel(): ProjectedModelEntry | null {
+    const selected = this.canonicalProject.getSummary().primaryInstanceId;
+    if (!selected) return null;
+    return this.projectedModels().find((entry) => entry.instanceId === selected) ?? null;
+  }
   /** Fired when the selection changes so the UI can enable selection actions. */
   public onSelectionChanged: ((hasSelection: boolean) => void) | null = null;
   /** Fired when the selected model is transformed (moved, rotated, scaled). */
   public onSelectionTransformChanged: (() => void) | null = null;
+  /** Canonical revision/history/health snapshot for both UI shells. */
+  public onCanonicalStateChanged: ((summary: CanonicalWorkspaceSummary) => void) | null = null;
   public onSliceStateChanged: ((isSlicing: boolean) => void) | null = null;
   private statusText: UIText | null = null;
   private sliceModalCard: UICard | null = null;
   private sliceModalText: UIText | null = null;
   private sliceModalBar: UIPanel | null = null;
   private sliceModalProgressContainer: UIPanel | null = null;
-  private readonly gcodeArtifact = new SemanticSliceArtifact<string>();
+  private publishedGcode: { readonly gcode: string; readonly guard: CanonicalProjectSliceGuard } | null = null;
   private toolpathObj: THREE.LineSegments | null = null;
   private previewOn = false;
   private needsRecenter = false;
 
   public orbitControls: OrbitControls | null = null;
   private transformControls: TransformControls | null = null;
+  private readonly transformProxy = new THREE.Object3D();
+  private transformGestureSequence = 0;
+  private activeTransformGesture: ActiveTransformGesture | undefined;
   public onStatusChanged: ((text: string, percent?: number) => void) | null = null;
   public onDownloadReady: ((ready: boolean) => void) | null = null;
-  /** Extra slicer overrides set from the UI (e.g. wall generator). Merged last. */
-  private readonly customOverrides: Record<string, string> = {};
   /** When true, sliceNow computes wipe_tower_x/y from the plated models. */
   public wipeTowerAuto = false;
   /**
@@ -399,28 +380,260 @@ export class OrcaWorkspace extends xb.Script {
    * (wasm/test_slice_painted.mjs) with and without a prime tower.
    */
   public paintedSliceEnabled = true;
-  /** Fired whenever the pre-flight banner set changes (bed collision, filament rules…). */
-  public onPreflight: ((banners: PreflightBanner[]) => void) | null = null;
-  private preflightBanners: PreflightBanner[] = [];
-  private filamentRules: FilamentRules = EMPTY_RULES;
+  /** Fired whenever canonical active-plate preflight evidence changes. */
+  public onPreflight: ((result: CanonicalSlicePreflightResult) => void) | null = null;
+  private preflightResult: CanonicalSlicePreflightResult | null = null;
+  private preflightRecomputeQueued = false;
 
-  constructor() {
+  constructor(
+    private readonly actionRegistry: ActionRegistry,
+    options: OrcaWorkspaceOptions = {},
+  ) {
     super();
+    this.canonicalProject = CanonicalWorkspaceController.createEmpty({
+      idSource: new UuidIdSource(cryptographicRandomWord),
+      clock: () => new Date(),
+      parent: this.workspace,
+      mapping: {
+        bedSizeMm: [PLATE_MM, PLATE_MM],
+        worldUnitsPerMm: CURRENT_THREE_WORLD_UNITS_PER_MM,
+      },
+      initialProjectConfig: {
+        printable_area: [`0x0`, `${PLATE_MM}x0`, `${PLATE_MM}x${PLATE_MM}`, `0x${PLATE_MM}`],
+      },
+      ...(options.fullSpectrumAutoPairPreferences
+        ? { fullSpectrumAutoPairPreferences: options.fullSpectrumAutoPairPreferences }
+        : {}),
+    });
     this.uiCore = new UICore(this);
     this.palette.onChanged = () => {
       this.synchronizeHeadSlotLengths();
-      this.markPublishedGcodeStale();
+      this.applyLiveSlicingConfiguration();
       this.rebuildPaintSwatches();
       this.onPaletteChanged?.();
+      this.recomputePreflight();
     };
+    const unsubscribeCanonical = this.canonicalProject.subscribe(
+      (change) => {
+        if (change.sources.includes('project')) {
+          this.markPublishedGcodeStale();
+          this.revalidatePublishedGcode();
+          this.onPlatesChanged?.();
+          this.queuePreflightRecompute();
+        }
+        if (change.sources.includes('selection') || change.sources.includes('project')) {
+          if (!this.activeTransformGesture) this.syncTransformProxy();
+          this.onSelectionChanged?.(this.canonicalProject.getObjectsTree().selection.refs.length > 0);
+        }
+        this.onCanonicalStateChanged?.(change.current);
+      },
+      { emitCurrent: false },
+    );
+    this.lifecycleDisposers.push(unsubscribeCanonical);
+  }
+
+  private queuePreflightRecompute(): void {
+    if (this.disposed || this.preflightRecomputeQueued || this.activeTransformGesture || this.drag) return;
+    this.preflightRecomputeQueued = true;
+    queueMicrotask(() => {
+      this.preflightRecomputeQueued = false;
+      if (this.disposed || this.activeTransformGesture || this.drag) return;
+      this.recomputePreflight();
+    });
+  }
+
+  /** Stable-ID scene projection; never a mutable model authority. */
+  private projectedModels(plateId?: PlateId): ProjectedModelEntry[] {
+    const entries: ProjectedModelEntry[] = [];
+    for (const viewer of this.canonicalProject.surface.root.children) {
+      const instance = getThreeProjectEntity(viewer);
+      if (!instance || instance.kind !== 'instance' || (plateId && instance.plateId !== plateId)) continue;
+      const display = viewer.children.find((child): child is THREE.Mesh => {
+        const entity = getThreeProjectEntity(child);
+        return child instanceof THREE.Mesh && entity?.kind === 'volume';
+      });
+      const volume = display ? getThreeProjectEntity(display) : undefined;
+      if (!display || !volume?.volumeId) continue;
+      entries.push({
+        instanceId: instance.instanceId,
+        objectId: instance.objectId,
+        plateId: instance.plateId,
+        volumeId: volume.volumeId,
+        raw: display.geometry,
+        display,
+        viewer,
+      });
+    }
+    return entries;
+  }
+
+  /** Read-only live boundary for diagnostics/E2E; returned summaries are immutable. */
+  public getCanonicalSummary() {
+    return this.canonicalProject.getSummary();
+  }
+
+  /** Read-only canonical hierarchy/selection snapshot for DOM and XR Objects surfaces. */
+  public getObjectsTreeSnapshot(): CanonicalObjectsTreeSnapshot {
+    return this.canonicalProject.getObjectsTree();
+  }
+
+  /** Observe canonical command boundaries without exposing mutable stores. */
+  public subscribeCanonicalState(listener: () => void): () => void {
+    return this.canonicalProject.subscribe(() => listener(), { emitCurrent: false });
+  }
+
+  /** Commit a typed Objects-tree selection through the canonical selection owner. */
+  public setObjectsTreeSelection(
+    refs: readonly ObjectTreeEntityRef[],
+    primary: ObjectTreeEntityRef | undefined = refs.at(-1),
+  ): void {
+    this.canonicalProject.setObjectsTreeSelection(refs, primary);
+  }
+
+  /** Revision-bound filament options/effective assignments for the current Objects selection. */
+  public getFilamentAssignmentSnapshot(refs?: readonly ObjectTreeEntityRef[]): CanonicalFilamentAssignmentSnapshot {
+    return this.canonicalProject.getFilamentAssignmentSnapshot(refs);
+  }
+
+  /** Commit one guarded stable-ID assignment transaction across heterogeneous scopes. */
+  public setFilamentAssignments(
+    entities: readonly CanonicalFilamentAssignableEntityRef[],
+    filamentId: FilamentId | null,
+    guard: Readonly<{ sourceRevision: number; sourceHash: string }>,
+  ): boolean {
+    return this.canonicalProject.setFilamentAssignments(entities, filamentId, guard);
+  }
+
+  /** Revision-bound physical/virtual library for the shared FullSpectrum editor. */
+  public getVirtualFilamentLibrarySnapshot(): CanonicalVirtualFilamentLibrarySnapshot {
+    return this.canonicalProject.getVirtualFilamentLibrarySnapshot();
+  }
+
+  /** One registry-routed, guarded canonical FullSpectrum lifecycle request. */
+  public mutateVirtualFilament(request: CanonicalVirtualFilamentMutationRequest): void {
+    const result = this.canonicalProject.mutateVirtualFilament(request);
+    this.revalidatePublishedGcode();
+    this.onSelectionChanged?.(false);
+    this.setStatus(
+      result.operation === 'delete'
+        ? result.outcome === 'tombstoned'
+          ? 'Deleted the virtual filament as a reference-preserving tombstone.'
+          : 'Deleted the virtual filament.'
+        : result.operation === 'set-enabled'
+          ? 'Updated virtual filament availability.'
+          : result.operation === 'edit'
+            ? 'Updated the virtual filament recipe.'
+            : result.operation === 'duplicate'
+              ? 'Duplicated the virtual filament recipe.'
+              : 'Added the virtual filament recipe.',
+    );
+  }
+
+  /** Apply the explicit app-level auto-pair preference through canonical reconciliation. */
+  public configureFullSpectrumAutoPairs(
+    enabled: boolean,
+    confirmation?: CanonicalAutoPairReconciliationConfirmation,
+  ): CanonicalAutoPairReconciliationResult {
+    const result = this.canonicalProject.setFullSpectrumAutoPairGenerationEnabled(enabled, confirmation);
+    this.setStatus(
+      !enabled
+        ? 'Automatic virtual-filament pairs are off; existing recipes were preserved.'
+        : result.status === 'confirmation-required'
+          ? `Confirm generation of ${result.projectedPairCount} automatic pairs for ${result.physicalCount} physical filaments.`
+          : result.status === 'reconciled'
+            ? `Generated the complete ${result.projectedPairCount}-pair virtual-filament set.`
+            : 'Automatic virtual-filament pairs are enabled and already current.',
+    );
+    return result;
+  }
+
+  public getFullSpectrumAutoPairPolicySnapshot(): CanonicalAutoPairPolicySnapshot {
+    return this.canonicalProject.getFullSpectrumAutoPairPolicySnapshot();
+  }
+
+  /** Semantic role/range projection for the current typed Objects selection. */
+  public getSemanticObjectEditorSnapshot(): CanonicalSemanticObjectEditorSnapshot | undefined {
+    return this.canonicalProject.getSemanticObjectEditorSnapshot();
+  }
+
+  public createLayerRangeId(): LayerRangeId {
+    return this.canonicalProject.createLayerRangeId();
+  }
+
+  public convertSemanticVolumeRole(request: CanonicalSemanticVolumeRoleRequest): void {
+    this.canonicalProject.convertSemanticVolumeRole(request);
+    this.revalidatePublishedGcode();
+    this.setStatus('Updated the selected part role.');
+  }
+
+  public editSemanticLayerRange(request: CanonicalSemanticLayerRangeRequest): void {
+    this.canonicalProject.editSemanticLayerRange(request);
+    this.revalidatePublishedGcode();
+    this.onSelectionChanged?.(false);
+    this.setStatus('Updated the selected object height ranges.');
+  }
+
+  /** Rename only entity kinds with a canonical editable-name command. */
+  public renameObjectsTreeEntity(
+    entity: Extract<ObjectTreeEntityRef, { kind: 'object' | 'volume' }>,
+    name: string,
+  ): void {
+    if (entity.kind === 'object') this.canonicalProject.renameObject(entity.id, name);
+    else this.canonicalProject.renameVolume(entity.id, name);
+  }
+
+  /** Select, activate the owning plate, and frame an Objects row in the DOM scene. */
+  public revealObjectsTreeEntity(entity: ObjectTreeEntityRef): void {
+    const tree = this.canonicalProject.getObjectsTree().projection;
+    const rowKey = tree.entityRowKeys.get(`${entity.kind}:${entity.id}`);
+    let row = rowKey ? tree.rowsByKey.get(rowKey) : undefined;
+    let plateId: PlateId | undefined;
+    let objectId: ObjectId | undefined;
+    while (row) {
+      if (row.entity?.kind === 'plate') plateId = row.entity.id;
+      if (row.entity?.kind === 'object') objectId = row.entity.id;
+      row = row.parentKey ? tree.rowsByKey.get(row.parentKey) : undefined;
+    }
+    if (!plateId) throw new Error(`Objects row ${entity.kind}:${entity.id} has no owning plate`);
+    if (this.canonicalProject.getSummary().activePlateId !== plateId) this.canonicalProject.activatePlate(plateId);
+    this.canonicalProject.setObjectsTreeSelection([entity], entity);
+
+    const targets: THREE.Object3D[] = [];
+    if (entity.kind === 'instance') {
+      const instance = this.canonicalProject.surface.getInstanceGroup(entity.id);
+      if (instance) targets.push(instance);
+    } else {
+      for (const model of this.projectedModels(plateId)) {
+        if (entity.kind === 'object' && model.objectId !== entity.id) continue;
+        if (entity.kind === 'volume' && model.volumeId !== entity.id) continue;
+        if (entity.kind === 'layer-range' && model.objectId !== objectId) continue;
+        targets.push(entity.kind === 'volume' ? model.display : model.viewer);
+      }
+    }
+    if (this.orbitControls && targets.length > 0) {
+      const bounds = new THREE.Box3();
+      for (const target of targets) {
+        target.updateWorldMatrix(true, true);
+        bounds.expandByObject(target, true);
+      }
+      if (!bounds.isEmpty()) {
+        this.orbitControls.target.copy(bounds.getCenter(new THREE.Vector3()));
+        this.orbitControls.update();
+      }
+    }
+    this.setStatus(`Revealed ${tree.rowsByKey.get(rowKey!)?.label ?? entity.kind} in the scene.`);
   }
 
   private synchronizeHeadSlotLengths(): void {
     const target = this.palette.count();
     this.headFilaments.length = Math.min(this.headFilaments.length, target);
     this.headNozzles.length = Math.min(this.headNozzles.length, target);
-    while (this.headFilaments.length < target) this.headFilaments.push(this.profile?.filamentName ?? '');
-    while (this.headNozzles.length < target) this.headNozzles.push('0.4');
+    while (this.headFilaments.length < target) {
+      this.headFilaments.push(this.headSelectionFromProfile(this.profile));
+    }
+    while (this.headNozzles.length < target) {
+      this.headNozzles.push(profileNozzleForTool(this.profile, this.headNozzles.length));
+    }
   }
 
   async init() {
@@ -469,11 +682,7 @@ export class OrcaWorkspace extends xb.Script {
           this.setStatus('Profile catalog failed to load — check the connection and reload.');
           return;
         }
-        const p =
-          this.catalog.find('Snapmaker U1 (0.4 nozzle)', '0.20 Standard', 'Snapmaker PLA') ??
-          this.catalog.profiles[0] ??
-          null;
-        if (p) this.setProfile(p);
+        this.applyCatalogDefaultProfile();
       } finally {
         catalogLoading = false;
       }
@@ -483,12 +692,6 @@ export class OrcaWorkspace extends xb.Script {
     window.addEventListener('online', onOnline);
     this.lifecycleDisposers.push(() => window.removeEventListener('online', onOnline));
     this.slicer.onProgress = (p) => this.setStatus(`Slicing... ${p.message}`, p.percent);
-
-    // Filament-vs-bed rules for the pre-flight check (falls back to EMPTY).
-    void loadFilamentRules().then((r) => {
-      this.filamentRules = r;
-      this.recomputePreflight();
-    });
 
     this.workspace.position.set(0, PLATE_Y, PLATE_Z);
     xb.core.camera.position.set(0, PLATE_Y + 0.35, PLATE_Z + 0.55);
@@ -522,6 +725,9 @@ export class OrcaWorkspace extends xb.Script {
     this.actionStateRefreshers.clear();
     for (const dispose of this.lifecycleDisposers.splice(0).reverse()) dispose();
     this.palette.onChanged = null;
+    this.activeCanonicalSlicer?.dispose();
+    this.activeCanonicalSlicer = null;
+    this.canonicalProject.dispose();
     this.uiCore.dispose();
     this.orbitControls?.dispose();
     this.orbitControls = null;
@@ -588,15 +794,39 @@ export class OrcaWorkspace extends xb.Script {
     this.transformControls = new TransformControls(xb.core.camera, canvas);
     const onDraggingChanged = (event: { value: unknown }) => {
       if (this.orbitControls) this.orbitControls.enabled = !event.value;
-      if (!event.value && this.selectedModel) {
-        this.snapToBed(this.selectedModel);
+      if (event.value) {
+        this.transformGestureSequence += 1;
+        this.syncTransformProxy();
+        const selection = this.captureSelectedInstanceOrigins();
+        this.activeTransformGesture = selection
+          ? {
+              id: `transform-controls:${this.transformGestureSequence}`,
+              origins: selection.origins,
+              initialPivotTransform: transformFromObject(this.transformProxy),
+            }
+          : undefined;
+      } else {
+        this.activeTransformGesture = undefined;
+        this.syncTransformProxy();
         this.revalidatePublishedGcode();
-        if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
+        this.recomputePreflight();
+        this.onSelectionTransformChanged?.();
       }
     };
     const onTransformChanged = () => {
-      this.markPublishedGcodeStale();
-      if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
+      const selected = this.selectedModel;
+      if (!selected) return;
+      const gesture = this.activeTransformGesture;
+      const current = transformFromObject(this.transformProxy);
+      if (gesture && gesture.origins.length > 1) {
+        this.canonicalProject.setInstanceTransforms(
+          projectMultiInstanceTransform(gesture.origins, gesture.initialPivotTransform, current, this.transformMode()),
+          gesture.id,
+        );
+      } else {
+        this.canonicalProject.setInstanceTransform(selected.instanceId, current, gesture?.id);
+      }
+      this.onSelectionTransformChanged?.();
     };
     this.transformControls.addEventListener('dragging-changed', onDraggingChanged);
     this.transformControls.addEventListener('objectChange', onTransformChanged);
@@ -605,6 +835,7 @@ export class OrcaWorkspace extends xb.Script {
       controls.removeEventListener('dragging-changed', onDraggingChanged);
       controls.removeEventListener('objectChange', onTransformChanged);
     });
+    this.canonicalProject.surface.root.add(this.transformProxy);
     this.add(this.transformControls.getHelper());
 
     if (this.models.length > 0) {
@@ -616,58 +847,144 @@ export class OrcaWorkspace extends xb.Script {
     this.setupSelectionRaycaster(canvas);
   }
 
-  public selectModel(entry: ModelEntry) {
+  public selectModel(entry: ProjectedModelEntry, extendSelection = false) {
     // Track the selection in both shells so Repair / Delete / Boolean /
     // Auto-orient have a target; the transform gizmo is 2D-only.
-    this.selectedModel = entry;
-    if (this.transformControls && !xb.core.renderer.xr.isPresenting) {
+    if (extendSelection) {
+      const selected = this.canonicalProject.getSummary().selectedInstanceIds;
+      const next = selected.includes(entry.instanceId)
+        ? selected.filter((instanceId) => instanceId !== entry.instanceId)
+        : [...selected, entry.instanceId];
+      this.canonicalProject.setObjectsTreeSelection(
+        next.map((instanceId) => ({ kind: 'instance', id: instanceId })),
+        next.length > 0 ? { kind: 'instance', id: next.at(-1)! } : undefined,
+      );
+    } else {
+      this.canonicalProject.selectInstance(entry.instanceId);
+    }
+    this.syncTransformProxy();
+    if (this.transformControls && !xb.core.renderer.xr.isPresenting && this.selectedModel) {
       this.add(this.transformControls.getHelper());
-      this.transformControls.attach(entry.viewer);
+      this.transformControls.attach(this.transformProxy);
       this.transformControls.getHelper().visible = true;
       this.setTool(this.tool);
       this.setStatus(`Selected model`);
+    } else if (this.transformControls && !this.selectedModel) {
+      this.transformControls.detach();
+      this.transformControls.getHelper().visible = false;
+      this.remove(this.transformControls.getHelper());
     }
-    if (this.onSelectionChanged) this.onSelectionChanged(true);
+    if (this.onSelectionChanged) this.onSelectionChanged(this.selectedModel !== null);
+  }
+
+  /** Select every visible instance on the active plate by stable identity. */
+  public selectAllModels(): void {
+    const entries = this.models;
+    if (entries.length === 0) {
+      this.unselectModel();
+      return;
+    }
+    const refs = entries.map((entry) => ({ kind: 'instance' as const, id: entry.instanceId }));
+    this.canonicalProject.setObjectsTreeSelection(refs, refs.at(-1));
+    this.syncTransformProxy();
+    if (this.transformControls && !xb.core.renderer.xr.isPresenting) {
+      this.add(this.transformControls.getHelper());
+      this.transformControls.attach(this.transformProxy);
+      this.transformControls.getHelper().visible = true;
+      this.setTool(this.tool);
+    }
+    this.setStatus(`Selected ${entries.length} model${entries.length === 1 ? '' : 's'}`);
+    this.onSelectionChanged?.(true);
+  }
+
+  /** Drop every selected active-plate instance independently onto canonical Z=0. */
+  public dropSelectedToBed(): void {
+    const selection = this.captureSelectedInstanceOrigins();
+    if (!selection) {
+      this.setStatus('Select a model instance to drop to the bed.');
+      return;
+    }
+    const result = this.canonicalProject.dropInstancesToBed(selection.origins.map((origin) => origin.instanceId));
+    this.syncTransformProxy();
+    this.revalidatePublishedGcode();
+    this.recomputePreflight();
+    this.onSelectionTransformChanged?.();
+    const moved = result.instances.filter((instance) => instance.deltaZMm !== 0).length;
+    this.setStatus(
+      moved === 0
+        ? result.instances.length === 1
+          ? 'The selected model is already on the bed.'
+          : 'The selected models are already on the bed.'
+        : `Dropped ${moved} model${moved === 1 ? '' : 's'} to the bed.`,
+    );
   }
 
   public getSelectedModelPosition(): THREE.Vector3 | null {
-    return this.selectedModel ? this.selectedModel.viewer.position : null;
+    const selected = this.selectedModel;
+    const instance = selected ? this.canonicalProject.getInstance(selected.instanceId) : undefined;
+    return instance ? new THREE.Vector3().fromArray(instance.transform.translationMm) : null;
   }
   public getSelectedModelRotation(): THREE.Euler | null {
-    return this.selectedModel ? this.selectedModel.viewer.rotation : null;
+    const selected = this.selectedModel;
+    const instance = selected ? this.canonicalProject.getInstance(selected.instanceId) : undefined;
+    return instance
+      ? new THREE.Euler().setFromQuaternion(new THREE.Quaternion().fromArray(instance.transform.rotation))
+      : null;
   }
   public getSelectedModelScale(): THREE.Vector3 | null {
-    return this.selectedModel ? this.selectedModel.viewer.scale : null;
+    const selected = this.selectedModel;
+    const instance = selected ? this.canonicalProject.getInstance(selected.instanceId) : undefined;
+    return instance ? new THREE.Vector3().fromArray(instance.transform.scale) : null;
   }
   public setSelectedModelPosition(x: number, y: number, z: number) {
-    if (this.selectedModel) {
-      this.selectedModel.viewer.position.set(x, y, z);
-      this.selectedModel.viewer.updateMatrixWorld();
-      this.revalidatePublishedGcode();
-      if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
-    }
+    const selected = this.selectedModel;
+    const instance = selected ? this.canonicalProject.getInstance(selected.instanceId) : undefined;
+    if (!selected || !instance) return;
+    this.commitSelectedPrimaryTransform(
+      {
+        ...instance.transform,
+        translationMm: [x, y, z],
+      },
+      'move',
+    );
+    this.syncTransformProxy();
+    this.revalidatePublishedGcode();
+    this.onSelectionTransformChanged?.();
   }
   public setSelectedModelRotation(x: number, y: number, z: number) {
-    if (this.selectedModel) {
-      this.selectedModel.viewer.rotation.set(x, y, z);
-      this.selectedModel.viewer.updateMatrixWorld();
-      this.snapToBed(this.selectedModel);
-      this.revalidatePublishedGcode();
-      if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
-    }
+    const selected = this.selectedModel;
+    const instance = selected ? this.canonicalProject.getInstance(selected.instanceId) : undefined;
+    if (!selected || !instance) return;
+    const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z)).normalize();
+    this.commitSelectedPrimaryTransform(
+      {
+        ...instance.transform,
+        rotation: [quaternion.x, quaternion.y, quaternion.z, quaternion.w],
+      },
+      'rotate',
+    );
+    this.syncTransformProxy();
+    this.revalidatePublishedGcode();
+    this.onSelectionTransformChanged?.();
   }
   public setSelectedModelScale(x: number, y: number, z: number) {
-    if (this.selectedModel) {
-      this.selectedModel.viewer.scale.set(x, y, z);
-      this.selectedModel.viewer.updateMatrixWorld();
-      this.snapToBed(this.selectedModel);
-      this.revalidatePublishedGcode();
-      if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
-    }
+    const selected = this.selectedModel;
+    const instance = selected ? this.canonicalProject.getInstance(selected.instanceId) : undefined;
+    if (!selected || !instance) return;
+    this.commitSelectedPrimaryTransform(
+      {
+        ...instance.transform,
+        scale: [x, y, z],
+      },
+      'scale',
+    );
+    this.syncTransformProxy();
+    this.revalidatePublishedGcode();
+    this.onSelectionTransformChanged?.();
   }
 
   public unselectModel() {
-    this.selectedModel = null;
+    this.canonicalProject.clearSelection();
     if (this.transformControls) {
       this.transformControls.detach();
       this.transformControls.getHelper().visible = false;
@@ -675,6 +992,71 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus('Model unselected');
     }
     if (this.onSelectionChanged) this.onSelectionChanged(false);
+  }
+
+  private syncTransformProxy(): void {
+    const selection = this.captureSelectedInstanceOrigins();
+    if (!selection) return;
+    if (selection.origins.length > 1) {
+      const bounds = this.canonicalProject.getInstanceBounds(selection.origins.map((origin) => origin.instanceId));
+      this.transformProxy.position.set(
+        (bounds.min[0] + bounds.max[0]) / 2,
+        (bounds.min[1] + bounds.max[1]) / 2,
+        (bounds.min[2] + bounds.max[2]) / 2,
+      );
+      this.transformProxy.quaternion.identity();
+      this.transformProxy.scale.setScalar(1);
+    } else {
+      const instance = this.canonicalProject.getInstance(selection.primaryInstanceId);
+      if (!instance) return;
+      this.transformProxy.position.fromArray(instance.transform.translationMm);
+      this.transformProxy.quaternion.fromArray(instance.transform.rotation).normalize();
+      this.transformProxy.scale.fromArray(instance.transform.scale);
+    }
+    this.transformProxy.updateMatrix();
+    this.transformProxy.updateMatrixWorld(true);
+  }
+
+  private captureSelectedInstanceOrigins():
+    | {
+        readonly primaryInstanceId: InstanceId;
+        readonly origins: readonly MultiInstanceTransformOrigin[];
+      }
+    | undefined {
+    const summary = this.canonicalProject.getSummary();
+    const primaryInstanceId = summary.primaryInstanceId;
+    if (!primaryInstanceId) return undefined;
+    const primary = this.canonicalProject.getInstance(primaryInstanceId);
+    if (!primary) return undefined;
+    const selectedIds = summary.selectedInstanceIds.includes(primaryInstanceId)
+      ? summary.selectedInstanceIds
+      : [primaryInstanceId];
+    const origins = selectedIds.flatMap((instanceId) => {
+      const instance = this.canonicalProject.getInstance(instanceId);
+      return instance && instance.plateId === primary.plateId ? [{ instanceId, transform: instance.transform }] : [];
+    });
+    return origins.length > 0 ? { primaryInstanceId, origins: Object.freeze(origins) } : undefined;
+  }
+
+  private commitSelectedPrimaryTransform(currentPrimaryTransform: Transform, mode: MultiInstanceTransformMode): void {
+    const selection = this.captureSelectedInstanceOrigins();
+    if (!selection) return;
+    if (selection.origins.length === 1) {
+      this.canonicalProject.setInstanceTransform(selection.primaryInstanceId, currentPrimaryTransform);
+      return;
+    }
+    this.canonicalProject.setInstanceTransforms(
+      projectMultiInstancePrimaryTransform(
+        selection.origins,
+        selection.primaryInstanceId,
+        currentPrimaryTransform,
+        mode,
+      ),
+    );
+  }
+
+  private transformMode(): MultiInstanceTransformMode {
+    return this.tool === 'rotate' ? 'rotate' : this.tool === 'scale' ? 'scale' : 'move';
   }
 
   private setupSelectionRaycaster(canvas: HTMLCanvasElement) {
@@ -712,12 +1094,7 @@ export class OrcaWorkspace extends xb.Script {
         const intersects = raycaster.intersectObject(entry.display, true);
         if (intersects.length > 0) {
           hitModel = true;
-          if (this.tool === 'lay_on_face' && intersects[0].face) {
-            this.layOnFace(entry, intersects[0].face.normal, intersects[0].object);
-            this.setTool('move');
-          } else {
-            this.selectModel(entry);
-          }
+          this.selectModel(entry, event.shiftKey || event.ctrlKey || event.metaKey);
           break;
         }
       }
@@ -751,22 +1128,10 @@ export class OrcaWorkspace extends xb.Script {
   public virtualFilaments: VirtualFilament[] = [];
   /** Prime/purge tower setup adopted from the loaded 3MF (null = none). */
   private projectPrimeTower: ProjectPrimeTower | null = null;
-  /** The loaded project 3MF's raw bytes — FullSpectrum projects slice from
-   *  this file (embedded mixed-filament config), like the desktop app. */
-  private originalProject: ArrayBuffer | null = null;
-  /** Exact semantic state represented by originalProject. Null means that an
-   *  as-authored slice cannot safely stand in for the live workspace. */
-  private originalProjectSnapshot: SemanticProjectSnapshot | null = null;
-  private projectSnapshotPending = false;
-  private projectSourceWasExclusive = false;
-  /** Set when multiple imported semantic sources cannot be represented by one
-   * immutable as-authored project. This keeps later geometry routes blocked. */
-  private canonicalSliceRequiredReason: string | null = null;
-  /** Rollback point spanning project-settings adoption and geometry commit. */
-  private pendingSemanticImportCheckpoint: SemanticImportCheckpoint | null = null;
   private wipeTowerGhost: THREE.Group | null = null;
-  private headFilaments: string[] = [];
+  private headFilaments: HeadFilamentSelection[] = [];
   private headNozzles: string[] = [];
+  private applyingProfile = false;
   private headsContainer: UIPanel | null = null;
 
   /** Number of models currently on the plate. */
@@ -782,7 +1147,11 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public getHeadFilament(index: number): string {
-    return this.headFilaments[index] ?? '';
+    return this.headFilaments[index]?.name ?? '';
+  }
+
+  public getHeadFilamentPresetId(index: number): WorkspacePresetId | undefined {
+    return this.headFilaments[index]?.presetId;
   }
 
   public getHeadNozzle(index: number): string {
@@ -790,16 +1159,33 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public setHeadFilament(index: number, filament: string): void {
-    if (index < 0 || index >= this.headFilaments.length || this.headFilaments[index] === filament) return;
-    this.headFilaments[index] = filament;
-    this.markPublishedGcodeStale();
-    this.rebuildHeadsPanel();
+    const option = this.getProfileOptions().filamentOptions.find(
+      (candidate) => candidate.name === filament || candidate.label === filament,
+    );
+    if (!option) {
+      this.publishProfileSelectionFeedback({
+        applied: false,
+        severity: 'error',
+        messages: [`Filament preset ${JSON.stringify(filament)} is unavailable for the active printer and process.`],
+      });
+      return;
+    }
+    this.setHeadFilamentPreset(index, option.id);
+  }
+
+  public setHeadFilamentPreset(index: number, filamentPresetId: WorkspacePresetId): void {
+    if (index < 0 || index >= this.headFilaments.length) return;
+    if (this.headFilaments[index]?.presetId === filamentPresetId) return;
+    const filamentPresetIds = this.headFilaments.map((selection) => selection.presetId);
+    filamentPresetIds[index] = filamentPresetId;
+    this.selectProfilePresets({ filamentPresetIds });
   }
 
   public setHeadNozzle(index: number, nozzle: string): void {
     if (index < 0 || index >= this.headNozzles.length || this.headNozzles[index] === nozzle) return;
     this.headNozzles[index] = nozzle;
-    this.markPublishedGcodeStale();
+    this.applyLiveSlicingConfiguration();
+    this.recomputePreflight();
     this.rebuildHeadsPanel();
   }
 
@@ -808,9 +1194,10 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus('The 16-slot filament limit has been reached.');
       return;
     }
-    this.headFilaments.push(this.profile?.filamentName ?? '');
-    this.headNozzles.push('0.4');
+    this.headFilaments.push(this.headSelectionFromProfile(this.profile));
+    this.headNozzles.push(profileNozzleForTool(this.profile, this.headNozzles.length));
     this.palette.add();
+    this.applyLiveSlicingConfiguration();
     this.rebuildHeadsPanel();
     this.onProfileChanged?.();
   }
@@ -820,16 +1207,16 @@ export class OrcaWorkspace extends xb.Script {
     this.headFilaments.splice(index, 1);
     this.headNozzles.splice(index, 1);
     this.palette.remove(index);
+    this.applyLiveSlicingConfiguration();
     this.rebuildHeadsPanel();
     this.onProfileChanged?.();
   }
   private drag: {
     controller: THREE.Object3D;
-    entry: ModelEntry;
+    entry: ProjectedModelEntry;
     startControllerLocal: THREE.Vector3;
-    startPos: THREE.Vector3;
-    startRotY: number;
-    startScale: number;
+    startTransform: Transform;
+    gestureId: string;
   } | null = null;
   private readonly sceneGestureGuard = new SceneGestureGuard<unknown>();
 
@@ -881,49 +1268,23 @@ export class OrcaWorkspace extends xb.Script {
     });
     if (!entry) return;
 
-    if (this.tool === 'lay_on_face' && first.face) {
-      this.layOnFace(entry, first.face.normal, first.object);
-      this.setTool('move');
-      return;
-    }
-
     const controller = event.target as THREE.Object3D;
+    this.selectModel(entry);
+    const instance = this.canonicalProject.getInstance(entry.instanceId);
+    if (!instance) return;
+    this.transformGestureSequence += 1;
     const startControllerLocal = this.workspace.worldToLocal(controller.getWorldPosition(new THREE.Vector3()));
     this.drag = {
       controller,
       entry,
       startControllerLocal,
-      startPos: entry.viewer.position.clone(),
-      startRotY: entry.viewer.rotation.y,
-      startScale: entry.viewer.scale.x,
+      startTransform: instance.transform,
+      gestureId: `xr-transform:${this.transformGestureSequence}`,
     };
   }
 
   onSelecting(event: { target: unknown }) {
     if (!this.sceneGestureGuard.allow(event.target, this.controllerHitsUi(event.target))) return;
-
-    if (this.tool === 'paint') {
-      const d = this.drag;
-      if (!d || event.target !== d.controller || !this.models.includes(d.entry)) return;
-      const controller = event.target as THREE.Object3D;
-      const raycaster = new THREE.Raycaster();
-      const tempMatrix = new THREE.Matrix4().extractRotation(controller.matrixWorld);
-      raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-      raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-
-      const meshes = [d.entry.viewer.getObjectByName('modelMesh')].filter(Boolean) as THREE.Mesh[];
-      const hits = raycaster.intersectObjects(meshes, false);
-      const meshHit = hits[0];
-
-      if (meshHit && meshHit.point) {
-        // meshHit.point is world-space; convert to the mesh's local frame so
-        // the brush radius is in model (mm) units regardless of workspace scale.
-        const mesh = meshHit.object as THREE.Mesh;
-        const localPt = mesh.worldToLocal(meshHit.point.clone());
-        this.paintSphere(mesh, localPt, this.brushRadiusMm, this.activePaintColor);
-      }
-      return;
-    }
 
     const d = this.drag;
     if (!d || event.target !== d.controller) return;
@@ -931,33 +1292,42 @@ export class OrcaWorkspace extends xb.Script {
     if (!this.models.includes(entry)) return;
     const local = this.workspace.worldToLocal(d.controller.getWorldPosition(new THREE.Vector3()));
     const delta = local.clone().sub(d.startControllerLocal);
-    const halfX = (this.bedMm.x * MM * WORKSPACE_SCALE) / 2;
-    const halfZ = (this.bedMm.y * MM * WORKSPACE_SCALE) / 2;
-    let changed = false;
+    const printerDelta = new THREE.Vector3(
+      delta.x / CURRENT_THREE_WORLD_UNITS_PER_MM,
+      -delta.z / CURRENT_THREE_WORLD_UNITS_PER_MM,
+      delta.y / CURRENT_THREE_WORLD_UNITS_PER_MM,
+    );
+    let next: Transform | undefined;
     if (this.tool === 'move') {
-      entry.viewer.position.set(
-        THREE.MathUtils.clamp(d.startPos.x + delta.x, -halfX, halfX),
-        d.startPos.y,
-        THREE.MathUtils.clamp(d.startPos.z + delta.z, -halfZ, halfZ),
-      );
-      this.showValues(
-        `x ${(entry.viewer.position.x / (MM * WORKSPACE_SCALE)).toFixed(1)}  y ${(-entry.viewer.position.z / (MM * WORKSPACE_SCALE)).toFixed(1)} mm`,
-      );
-      changed = true;
+      next = {
+        ...d.startTransform,
+        translationMm: [
+          THREE.MathUtils.clamp(d.startTransform.translationMm[0] + printerDelta.x, 0, this.bedMm.x),
+          THREE.MathUtils.clamp(d.startTransform.translationMm[1] + printerDelta.y, 0, this.bedMm.y),
+          Math.max(0, d.startTransform.translationMm[2] + printerDelta.z),
+        ],
+      };
+      this.showValues(`x ${next.translationMm[0].toFixed(1)}  y ${next.translationMm[1].toFixed(1)} mm`);
     } else if (this.tool === 'rotate') {
       // Horizontal hand sweep = yaw: 25 cm of travel = a full turn.
-      entry.viewer.rotation.y = d.startRotY + (delta.x / 0.25) * Math.PI * 2;
-      this.showValues(`rotZ ${(((entry.viewer.rotation.y * 180) / Math.PI) % 360).toFixed(0)}°`);
-      changed = true;
+      const angle = (delta.x / 0.25) * Math.PI * 2;
+      const rotation = new THREE.Quaternion()
+        .setFromAxisAngle(new THREE.Vector3(0, 0, 1), angle)
+        .multiply(new THREE.Quaternion().fromArray(d.startTransform.rotation))
+        .normalize();
+      next = {
+        ...d.startTransform,
+        rotation: [rotation.x, rotation.y, rotation.z, rotation.w],
+      };
+      this.showValues(`rotZ ${THREE.MathUtils.radToDeg(angle).toFixed(0)}°`);
     } else if (this.tool === 'scale') {
       // Vertical hand travel = scale: +25 cm doubles, −25 cm halves.
       const f = Math.pow(2, delta.y / 0.25);
-      const sNew = THREE.MathUtils.clamp(d.startScale * f, 0.05, 20);
-      entry.viewer.scale.setScalar(sNew);
+      const sNew = THREE.MathUtils.clamp(d.startTransform.scale[0] * f, 0.05, 20);
+      next = { ...d.startTransform, scale: [sNew, sNew, sNew] };
       this.showValues(`scale ${(sNew * 100).toFixed(0)}%`);
-      changed = true;
     }
-    if (changed) this.markPublishedGcodeStale();
+    if (next) this.canonicalProject.setInstanceTransform(entry.instanceId, next, d.gestureId);
   }
 
   /** After any drag ends, keep models seated on the plate and inside it. */
@@ -967,109 +1337,367 @@ export class OrcaWorkspace extends xb.Script {
     const endedDrag = this.drag;
     if (!endedDrag || (event && event.target !== endedDrag.controller)) return;
     this.drag = null;
-    const halfX = (this.bedMm.x * MM * WORKSPACE_SCALE) / 2;
-    const halfZ = (this.bedMm.y * MM * WORKSPACE_SCALE) / 2;
-    for (const { viewer, display } of this.models) {
-      this.snapToBed({ viewer, display });
-      viewer.position.x = THREE.MathUtils.clamp(viewer.position.x, -halfX, halfX);
-      viewer.position.z = THREE.MathUtils.clamp(viewer.position.z, -halfZ, halfZ);
-    }
     this.recomputePreflight();
   }
 
-  /** Distinct machine names in catalog order. */
-  private machineChoices(): string[] {
-    return [...new Set(this.catalog.profiles.map((p) => p.machineName))];
+  /** Complete printers in deterministic catalog order, keyed by canonical graph ID. */
+  private machinePresetChoices(): WorkspacePresetOption[] {
+    const choices = new Map<WorkspacePresetId, WorkspacePresetOption>();
+    for (const profile of this.catalog.profiles) {
+      if (!profile.machinePresetId || choices.has(profile.machinePresetId)) continue;
+      choices.set(
+        profile.machinePresetId,
+        Object.freeze({
+          id: profile.machinePresetId,
+          name: profile.machineName,
+          label: profile.machineName,
+        }),
+      );
+    }
+    return disambiguatePresetOptionLabels([...choices.values()]);
   }
 
-  /** Processes compatible with the machine (same nozzle-size token). */
-  private processChoices(machine: string): string[] {
-    const nozzle = /0\.\d+/.exec(machine)?.[0] ?? '';
-    return [
-      ...new Set(
-        this.catalog.profiles
-          .filter((p) => p.machineName === machine && (!nozzle || p.processName.includes(nozzle)))
-          .map((p) => p.processName),
-      ),
-    ];
+  /** Compatibility-filtered processes for one exact printer preset. */
+  private processPresetChoices(machinePresetId: WorkspacePresetId | undefined): WorkspacePresetOption[] {
+    if (!machinePresetId) return [];
+    const choices = new Map<WorkspacePresetId, WorkspacePresetOption>();
+    for (const profile of this.catalog.profiles) {
+      if (
+        profile.machinePresetId !== machinePresetId ||
+        !profile.processPresetId ||
+        choices.has(profile.processPresetId)
+      ) {
+        continue;
+      }
+      choices.set(
+        profile.processPresetId,
+        Object.freeze({
+          id: profile.processPresetId,
+          name: profile.processName,
+          label: profile.processName,
+        }),
+      );
+    }
+    return disambiguatePresetOptionLabels([...choices.values()]);
   }
 
-  private filamentChoices(machine: string): string[] {
-    return [...new Set(this.catalog.profiles.filter((p) => p.machineName === machine).map((p) => p.filamentName))];
+  /** Compatibility-filtered filaments for one exact printer/process pair. */
+  private filamentPresetChoices(
+    machinePresetId: WorkspacePresetId | undefined,
+    processPresetId: WorkspacePresetId | undefined,
+  ): WorkspacePresetOption[] {
+    if (!machinePresetId || !processPresetId) return [];
+    const choices = new Map<WorkspacePresetId, WorkspacePresetOption>();
+    for (const profile of this.catalog.profiles) {
+      if (
+        profile.machinePresetId !== machinePresetId ||
+        profile.processPresetId !== processPresetId ||
+        !profile.filamentPresetId ||
+        choices.has(profile.filamentPresetId)
+      ) {
+        continue;
+      }
+      choices.set(
+        profile.filamentPresetId,
+        Object.freeze({
+          id: profile.filamentPresetId,
+          name: profile.filamentPresetName ?? profile.filamentName,
+          label: profile.filamentName,
+        }),
+      );
+    }
+    return disambiguatePresetOptionLabels([...choices.values()]);
+  }
+
+  private applyCatalogDefaultProfile(): void {
+    if (this.profile || this.projectImportInProgress || this.importedProjectOwnsSlicingConfiguration) return;
+    const fallback =
+      this.catalog.find('Snapmaker U1 (0.4 nozzle)', '0.20 Standard', 'Snapmaker PLA') ??
+      this.catalog.profiles[0] ??
+      null;
+    if (!fallback) return;
+    if (fallback.machinePresetId && fallback.processPresetId && fallback.filamentPresetId) {
+      this.selectProfilePresets({
+        machinePresetId: fallback.machinePresetId,
+        processPresetId: fallback.processPresetId,
+        filamentPresetIds: [fallback.filamentPresetId],
+      });
+    } else {
+      this.setProfile(fallback);
+    }
   }
 
   /** Snapshot for pickers: current selection + available choices. */
   getProfileOptions() {
     const cur = this.profile;
-    const machine = cur?.machineName ?? '';
+    const machinePresetId = cur?.machinePresetId;
+    const processPresetId = cur?.processPresetId;
+    const machineOptions = this.machinePresetChoices();
+    const processOptions = this.processPresetChoices(machinePresetId);
+    const filamentOptions = this.filamentPresetChoices(machinePresetId, processPresetId);
     return {
-      machine,
+      machine: cur?.machineName ?? '',
       process: cur?.processName ?? '',
       filament: cur?.filamentName ?? '',
-      machines: this.machineChoices(),
-      processes: this.processChoices(machine),
-      filaments: this.filamentChoices(machine),
+      machinePresetId,
+      processPresetId,
+      filamentPresetIds: Object.freeze(this.headFilaments.map((selection) => selection.presetId)),
+      machineOptions: Object.freeze(machineOptions),
+      processOptions: Object.freeze(processOptions),
+      filamentOptions: Object.freeze(filamentOptions),
+      machines: machineOptions.map((choice) => choice.label),
+      processes: processOptions.map((choice) => choice.label),
+      filaments: filamentOptions.map((choice) => choice.label),
+      unavailableReasons: Object.freeze(
+        this.catalog.diagnostics
+          .filter((diagnostic) => diagnostic.severity === 'error')
+          .map((diagnostic) => diagnostic.message),
+      ),
     };
   }
 
   /** Process + filament choices for an arbitrary machine (setup wizard). */
-  choicesForMachine(machine: string) {
-    return { processes: this.processChoices(machine), filaments: this.filamentChoices(machine) };
+  choicesForMachine(machine: string, process = '') {
+    const machineOption = matchPresetOption(this.machinePresetChoices(), machine);
+    const processOptions = this.processPresetChoices(machineOption?.id);
+    const processOption = matchPresetOption(processOptions, process) ?? processOptions[0];
+    const filamentOptions = this.filamentPresetChoices(machineOption?.id, processOption?.id);
+    return {
+      processPresetId: processOption?.id,
+      processOptions: Object.freeze(processOptions),
+      filamentOptions: Object.freeze(filamentOptions),
+      processes: processOptions.map((choice) => choice.label),
+      filaments: filamentOptions.map((choice) => choice.label),
+    };
   }
 
-  /** Select a profile by exact names (2D pickers). Unknown parts keep current. */
+  /** Legacy name adapter. Exact scoped matches reconcile through stable IDs. */
   setProfileByNames(machine: string, process: string, filament: string) {
-    const next =
-      this.catalog.profiles.find(
-        (x) => x.machineName === machine && x.processName === process && x.filamentName === filament,
-      ) ?? this.catalog.find(machine, process, filament);
-    if (next) this.setProfile(next);
+    const machineOption = machine.trim() ? matchPresetOption(this.machinePresetChoices(), machine) : undefined;
+    if (machine.trim() && !machineOption) {
+      return this.publishProfileSelectionFeedback({
+        applied: false,
+        severity: 'error',
+        messages: [`Printer preset ${JSON.stringify(machine)} is unavailable.`],
+      });
+    }
+    const machinePresetId = machineOption?.id ?? this.profile?.machinePresetId;
+    const processOptions = this.processPresetChoices(machinePresetId);
+    const processOption = process.trim() ? matchPresetOption(processOptions, process) : undefined;
+    if (process.trim() && !processOption) {
+      return this.publishProfileSelectionFeedback({
+        applied: false,
+        severity: 'error',
+        messages: [`Process preset ${JSON.stringify(process)} is unavailable for the selected printer.`],
+      });
+    }
+    const processPresetId = processOption?.id ?? this.profile?.processPresetId;
+    const filamentOptions = this.filamentPresetChoices(machinePresetId, processPresetId);
+    const filamentOption = filament.trim() ? matchPresetOption(filamentOptions, filament) : undefined;
+    if (filament.trim() && !filamentOption) {
+      return this.publishProfileSelectionFeedback({
+        applied: false,
+        severity: 'error',
+        messages: [`Filament preset ${JSON.stringify(filament)} is unavailable for the selected printer and process.`],
+      });
+    }
+    const filamentPresetIds = this.headFilaments.map((selection) => selection.presetId);
+    if (filamentOption) filamentPresetIds[0] = filamentOption.id;
+    return this.selectProfilePresets({
+      ...(machinePresetId ? { machinePresetId } : {}),
+      ...(processPresetId ? { processPresetId } : {}),
+      filamentPresetIds,
+    });
   }
 
   /** Fires whenever the active profile changes (2D pickers re-render). */
   public onProfileChanged: (() => void) | null = null;
+  /** Reconciliation feedback for DOM/XR substitution and unavailable notices. */
+  public onProfileSelectionResult: ((feedback: WorkspaceProfileSelectionFeedback) => void) | null = null;
+  public onRequestNewProjectConfirmation: ((dirty: boolean) => boolean | Promise<boolean>) | null = null;
+  /** Composition-root review of the canonical object and every affected instance. */
+  public onRequestSplitToObjectsConfirmation:
+    ((confirmation: CanonicalSplitToObjectsConfirmation) => boolean | Promise<boolean>) | null = null;
 
   /** Cycle one dimension of the profile triple (public: panel + tests). */
   cycleProfilePart(part: 'machine' | 'process' | 'filament') {
-    const cur = this.profile;
-    if (!cur) return;
-    const cycle = (list: string[], val: string) =>
-      list[(Math.max(0, list.indexOf(val)) + 1) % Math.max(1, list.length)] ?? val;
-    let machine = cur.machineName;
-    let process = cur.processName;
-    let filament = cur.filamentName;
+    const current = this.getProfileOptions();
+    if (!current.machinePresetId || !current.processPresetId) return;
+    const cycle = (list: readonly WorkspacePresetOption[], id: WorkspacePresetId | undefined) => {
+      const index = list.findIndex((choice) => choice.id === id);
+      return list[index < 0 ? 0 : (index + 1) % list.length];
+    };
     if (part === 'machine') {
-      machine = cycle(this.machineChoices(), machine);
-      process = this.processChoices(machine)[0] ?? process;
-      filament = this.filamentChoices(machine)[0] ?? filament;
+      const next = cycle(current.machineOptions, current.machinePresetId);
+      if (next) this.selectProfilePresets({ machinePresetId: next.id });
     } else if (part === 'process') {
-      process = cycle(this.processChoices(machine), process);
+      const next = cycle(current.processOptions, current.processPresetId);
+      if (next) this.selectProfilePresets({ processPresetId: next.id });
     } else {
-      filament = cycle(this.filamentChoices(machine), filament);
+      const next = cycle(current.filamentOptions, current.filamentPresetIds[0]);
+      if (!next) return;
+      const filamentPresetIds = [...current.filamentPresetIds];
+      filamentPresetIds[0] = next.id;
+      this.selectProfilePresets({ filamentPresetIds });
     }
-    const next =
-      this.catalog.profiles.find(
-        (x) => x.machineName === machine && x.processName === process && x.filamentName === filament,
-      ) ?? this.catalog.find(machine, process, filament);
-    if (next) this.setProfile(next);
+  }
+
+  /**
+   * Reconcile exact graph identities and commit only a complete
+   * printer/process/all-slot result. Compatible process and filament choices
+   * survive printer/process changes; resolver substitutions are reported.
+   */
+  public selectProfilePresets(request: WorkspaceProfileSelectionRequest): WorkspaceProfileSelectionFeedback {
+    const machinePresetId = request.machinePresetId ?? this.profile?.machinePresetId;
+    if (!machinePresetId) {
+      return this.publishProfileSelectionFeedback({
+        applied: false,
+        severity: 'error',
+        messages: ['Choose an available printer before selecting process or filament presets.'],
+      });
+    }
+    const processPresetId = request.processPresetId ?? this.profile?.processPresetId;
+    const filamentPresetIds = request.filamentPresetIds ?? this.headFilaments.map((selection) => selection.presetId);
+    const resolution = this.catalog.reconcileSelection({
+      printerId: machinePresetId,
+      ...(processPresetId ? { processId: processPresetId } : {}),
+      filamentIds: filamentPresetIds,
+    });
+    if (!resolution.selection) {
+      return this.publishProfileSelectionFeedback({
+        applied: false,
+        severity: 'error',
+        messages: [resolution.unavailableReason ?? 'The requested profile selection is unavailable.'],
+      });
+    }
+
+    const resolved = resolution.selection;
+    const messages = this.profileReconciliationMessages(resolved);
+    if (!resolved.complete || !resolved.process || resolved.filaments.some((filament) => !filament)) {
+      return this.publishProfileSelectionFeedback({
+        applied: false,
+        severity: 'error',
+        messages:
+          messages.length > 0
+            ? messages
+            : ['No complete compatible process and filament selection exists for this printer.'],
+      });
+    }
+
+    const profiles = resolved.filaments.map((filament) =>
+      filament
+        ? this.catalog.profiles.find(
+            (profile) =>
+              profile.machinePresetId === resolved.printer.id &&
+              profile.processPresetId === resolved.process?.id &&
+              profile.filamentPresetId === filament.id,
+          )
+        : undefined,
+    );
+    const primary = profiles[0];
+    if (!primary || profiles.some((profile) => !profile)) {
+      return this.publishProfileSelectionFeedback({
+        applied: false,
+        severity: 'error',
+        messages: [
+          'The resolver produced a combination that is absent from the validated slicing catalog; the prior selection was preserved.',
+        ],
+      });
+    }
+
+    this.applyResolvedProfile(
+      primary,
+      profiles.map((profile) => this.headSelectionFromProfile(profile)),
+    );
+    return this.publishProfileSelectionFeedback({
+      applied: true,
+      severity: messages.length > 0 ? 'warning' : 'info',
+      messages: messages.length > 0 ? messages : ['Profile selection is compatible.'],
+    });
+  }
+
+  private profileReconciliationMessages(
+    resolved: NonNullable<ReturnType<ProfileCatalog['reconcileSelection']>['selection']>,
+  ): string[] {
+    const messages: string[] = [];
+    for (const substitution of resolved.substitutions) {
+      const nextName = substitution.nextId ? this.presetDisplayName(substitution.kind, substitution.nextId) : undefined;
+      const previousName = substitution.previousId
+        ? this.presetDisplayName(substitution.kind, substitution.previousId)
+        : undefined;
+      if (substitution.kind === 'process') {
+        if (nextName) {
+          messages.push(
+            previousName
+              ? `${previousName} is unavailable for ${resolved.printer.name}; substituted ${nextName}.`
+              : `Selected ${nextName} for ${resolved.printer.name}.`,
+          );
+        } else {
+          messages.push(`No compatible process preset is available for ${resolved.printer.name}.`);
+        }
+        continue;
+      }
+      const slot = `Filament slot ${(substitution.slot ?? 0) + 1}`;
+      if (nextName) {
+        messages.push(
+          previousName
+            ? `${slot}: ${previousName} is unavailable for ${resolved.printer.name} / ${resolved.process?.name ?? 'the selected process'}; substituted ${nextName}.`
+            : `${slot}: selected ${nextName}.`,
+        );
+      } else {
+        messages.push(
+          `${slot}: no compatible filament preset is available for ${resolved.printer.name} / ${resolved.process?.name ?? 'the selected process'}.`,
+        );
+      }
+    }
+    messages.push(...resolved.diagnostics.map((diagnostic) => diagnostic.message));
+    return [...new Set(messages)];
+  }
+
+  private presetDisplayName(kind: 'process' | 'filament', id: WorkspacePresetId): string {
+    const profile = this.catalog.profiles.find((candidate) =>
+      kind === 'process' ? candidate.processPresetId === id : candidate.filamentPresetId === id,
+    );
+    if (!profile) return 'The previous preset';
+    return kind === 'process' ? profile.processName : (profile.filamentPresetName ?? profile.filamentName);
+  }
+
+  private publishProfileSelectionFeedback(
+    feedback: WorkspaceProfileSelectionFeedback,
+  ): WorkspaceProfileSelectionFeedback {
+    const frozen = Object.freeze({
+      ...feedback,
+      messages: Object.freeze([...feedback.messages]),
+    });
+    if (feedback.severity !== 'info') this.setStatus(feedback.messages.join('\n'));
+    this.onProfileSelectionResult?.(frozen);
+    return frozen;
   }
 
   public setProfile(p: SlicerProfile) {
-    this.profile = p;
-    const count = this.extruderCount;
+    this.applyResolvedProfile(p, []);
+  }
 
-    // Ensure palette has at least 'count' slots
-    while (this.palette.count() < count) {
-      this.palette.add();
-    }
+  private applyResolvedProfile(p: SlicerProfile, resolvedHeads: readonly HeadFilamentSelection[]) {
+    this.importedProjectOwnsSlicingConfiguration = false;
+    this.applyingProfile = true;
+    try {
+      this.profile = p;
+      const count = this.extruderCount;
 
-    const totalSlots = this.palette.count();
-    this.headFilaments = Array(totalSlots).fill(p.filamentName);
-    const defaultNozzles = (p.config['nozzle_diameter'] ?? '0.4').split(',');
-    this.headNozzles = Array(totalSlots).fill('0.4');
-    for (let i = 0; i < Math.min(count, defaultNozzles.length); i++) {
-      this.headNozzles[i] = defaultNozzles[i];
+      // Ensure palette has at least 'count' slots.
+      while (this.palette.count() < count) this.palette.add();
+
+      const totalSlots = this.palette.count();
+      this.headFilaments = Array.from(
+        { length: totalSlots },
+        (_, index) => resolvedHeads[index] ?? this.headSelectionFromProfile(p),
+      );
+      this.headNozzles = Array.from({ length: totalSlots }, (_, toolId) => profileNozzleForTool(p, toolId));
+    } finally {
+      this.applyingProfile = false;
     }
+    this.applyLiveSlicingConfiguration();
 
     this.rebuildHeadsPanel();
     this.refreshXrProfileValues();
@@ -1080,6 +1708,150 @@ export class OrcaWorkspace extends xb.Script {
     this.rebuildWipeTowerGhost();
     this.setStatus(`profile: ${p.displayName}\nbed ${this.bedMm.x}×${this.bedMm.y} mm`);
     this.recomputePreflight();
+  }
+
+  private headSelectionFromProfile(profile: SlicerProfile | null | undefined): HeadFilamentSelection {
+    if (!profile) return Object.freeze({ name: '' });
+    return Object.freeze({
+      ...(profile.filamentPresetId ? { presetId: profile.filamentPresetId } : {}),
+      name: profile.filamentName,
+    });
+  }
+
+  private exactCatalogPrimaryProfile(): SlicerProfile | undefined {
+    const profile = this.profile;
+    if (
+      !profile?.machinePresetId ||
+      !profile.processPresetId ||
+      !profile.filamentPresetId ||
+      !this.catalog.profiles.includes(profile)
+    ) {
+      return undefined;
+    }
+    return profile;
+  }
+
+  private exactLiveFilamentProfiles(toolCount: number): readonly (SlicerProfile | undefined)[] {
+    const primary = this.exactCatalogPrimaryProfile();
+    if (!primary?.machinePresetId || !primary.processPresetId) {
+      return Object.freeze(new Array<SlicerProfile | undefined>(toolCount).fill(undefined));
+    }
+    return Object.freeze(
+      Array.from({ length: toolCount }, (_, toolId) => {
+        const filamentPresetId = this.headFilaments[toolId]?.presetId;
+        if (!filamentPresetId) return undefined;
+        return this.catalog.profiles.find(
+          (candidate) =>
+            candidate.machinePresetId === primary.machinePresetId &&
+            candidate.processPresetId === primary.processPresetId &&
+            candidate.filamentPresetId === filamentPresetId,
+        );
+      }),
+    );
+  }
+
+  private createLiveProfilePreflight(): LiveProfileSlicePreflight {
+    const toolCount = this.canonicalProject.getSlicingConfiguration().printer.toolCount;
+    return new LiveProfileSlicePreflight(
+      deriveLiveProfilePreflightConstraints({
+        primaryProfile: this.exactCatalogPrimaryProfile(),
+        filamentProfiles: this.exactLiveFilamentProfiles(toolCount),
+        toolCount,
+      }),
+    );
+  }
+
+  /** Commit the exact profile/filament state consumed by canonical save and slice. */
+  private applyLiveSlicingConfiguration(): void {
+    const profile = this.profile;
+    if (!profile || this.applyingProfile || this.disposed) return;
+    this.synchronizeHeadSlotLengths();
+    const slots = this.palette.list();
+    const previous = this.canonicalProject.getSlicingConfiguration();
+    const previousPhysicalByTool = new Map(previous.filaments.physical.map((filament) => [filament.toolId, filament]));
+    const config = {
+      ...profile.config,
+      ...this.palette.toSlicerOverrides(),
+      printer_settings_id: profile.machineName,
+      print_settings_id: profile.processName,
+    };
+    const physical = slots.map((slot, index) => {
+      const filamentSelection = this.headFilaments[index] ?? this.headSelectionFromProfile(profile);
+      const filamentName = filamentSelection.name || profile.filamentName;
+      const exactFilamentProfile =
+        profile.machinePresetId && profile.processPresetId && filamentSelection.presetId
+          ? this.catalog.profiles.find(
+              (candidate) =>
+                candidate.machinePresetId === profile.machinePresetId &&
+                candidate.processPresetId === profile.processPresetId &&
+                candidate.filamentPresetId === filamentSelection.presetId,
+            )
+          : undefined;
+      const filamentProfile =
+        exactFilamentProfile ?? this.catalog.find(profile.machineName, profile.processName, filamentName) ?? profile;
+      const exactMaterial = exactFilamentProfile
+        ? unambiguousProfileScalar(exactFilamentProfile.config['filament_type'])
+        : undefined;
+      const nozzle = Number(this.headNozzles[index] ?? '0.4');
+      return {
+        id:
+          previousPhysicalByTool.get(index)?.id ??
+          entityId<'physical-filament'>(`import:live:filament-slot-${index + 1}`),
+        name: filamentName || `Filament ${index + 1}`,
+        toolId: index,
+        presetId: filamentSelection.presetId ?? (filamentName || undefined),
+        material: (exactMaterial ?? slot.type) || 'Unknown',
+        color: slot.color,
+        ...(Number.isFinite(nozzle) && nozzle > 0 ? { nozzleDiameterMm: nozzle } : {}),
+        config: { ...filamentProfile.config },
+        enabled: true,
+      };
+    });
+    const availableFilaments = new Set([
+      ...physical.map((filament) => filament.id),
+      ...previous.filaments.mixed.map((filament) => filament.id),
+    ]);
+    const orphanedComponent = previous.filaments.mixed
+      .flatMap((filament) => filament.components)
+      .find((component) => !availableFilaments.has(component.filamentId));
+    if (orphanedComponent) {
+      throw new Error(
+        `The selected profile would orphan mixed-filament component ${orphanedComponent.filamentId}; remap it before changing profiles.`,
+      );
+    }
+    this.canonicalProject.setSlicingConfiguration({
+      printer: {
+        profileId: profile.machineName,
+        toolCount: Math.max(1, slots.length),
+      },
+      config,
+      filaments: {
+        physical,
+        mixed: previous.filaments.mixed,
+      },
+    });
+    this.bedMm = bedSizeFromProfile(profile.config);
+    this.canonicalProject.setPrinterSpaceMapping({
+      bedSizeMm: [this.bedMm.x, this.bedMm.y],
+      worldUnitsPerMm: CURRENT_THREE_WORLD_UNITS_PER_MM,
+    });
+  }
+
+  private synchronizePrinterMappingFromCanonicalConfig(): void {
+    const printableArea = this.canonicalProject.getSlicingConfiguration().config.printable_area;
+    const serialized =
+      typeof printableArea === 'string'
+        ? printableArea
+        : Array.isArray(printableArea) && printableArea.every((value) => typeof value === 'string')
+          ? printableArea.join(',')
+          : '';
+    this.bedMm = bedSizeFromProfile({ printable_area: serialized });
+    this.canonicalProject.setPrinterSpaceMapping({
+      bedSizeMm: [this.bedMm.x, this.bedMm.y],
+      worldUnitsPerMm: CURRENT_THREE_WORLD_UNITS_PER_MM,
+    });
+    this.rebuildPlate();
+    this.rebuildWipeTowerGhost();
   }
 
   onXRSessionStarted() {
@@ -1360,7 +2132,7 @@ export class OrcaWorkspace extends xb.Script {
   private async addStlModel(url: string, color: number) {
     const raw = await new STLLoader().loadAsync(url);
     this.library.push({ name: 'cube_20mm.stl', geometry: raw });
-    this.addModelFromGeometry(raw, color);
+    this.addModelFromGeometry(raw, color, {}, url.split('/').pop() ?? 'Imported model');
     if (this.transformControls && this.models.length > 0) {
       this.selectModel(this.models[this.models.length - 1]);
     }
@@ -1374,6 +2146,8 @@ export class OrcaWorkspace extends xb.Script {
   onDownloadGcode: ((gcode: string) => void) | null = null;
   /** Generic file save (STL/3MF export). Wired to a browser download in main.ts. */
   onDownloadFile: ((name: string, data: BlobPart, mime: string) => void) | null = null;
+  /** Composition-root confirmation for the immutable worker import preview. */
+  onProjectImportPreview: ((preview: ProjectImportPreview) => Promise<ImportCommitConfirmation | null>) | null = null;
   /** Injected by main.ts: requests the browser to open the file picker. */
   onRequestLoadStl: (() => void) | null = null;
   /** Injected by main.ts: opens a .zip-filtered picker (Import Zip Archive). */
@@ -1382,6 +2156,26 @@ export class OrcaWorkspace extends xb.Script {
   onRequestLoadProject: (() => void) | null = null;
   /** Injected by main.ts: opens a .json picker for Import Config. */
   onRequestLoadConfig: (() => void) | null = null;
+  /** Injected by the live typed printer composition root. */
+  onRequestPrinterConnectionTest: (() => Promise<void>) | null = null;
+  /** Injected by the live typed printer composition root. */
+  onRequestPrinterFilamentInspection: (() => Promise<void>) | null = null;
+
+  public async testPrinterConnection(): Promise<void> {
+    if (!this.onRequestPrinterConnectionTest) {
+      this.setStatus('Printer connection is unavailable in this shell.');
+      return;
+    }
+    await this.onRequestPrinterConnectionTest();
+  }
+
+  public async inspectPrinterFilaments(): Promise<void> {
+    if (!this.onRequestPrinterFilamentInspection) {
+      this.setStatus('Printer filament inspection is unavailable in this shell.');
+      return;
+    }
+    await this.onRequestPrinterFilamentInspection();
+  }
 
   // --- Import / Export Config (Orca File → Import / Export Config) -----
   /** Serialise the active profile's config to a JSON bundle string (or null). */
@@ -1446,37 +2240,11 @@ export class OrcaWorkspace extends xb.Script {
    */
   async loadModelFromBuffer(name: string, buf: ArrayBuffer): Promise<boolean> {
     const lower = name.toLowerCase();
-    if (lower.endsWith('.stl')) {
-      this.loadModelFromGeometry(new STLLoader().parse(buf), name);
-      return true;
+    if (!lower.endsWith('.stl')) {
+      throw new Error('Canonical model import currently accepts one STL; use Open Project for a 3MF archive.');
     }
-    if (lower.endsWith('.3mf')) {
-      const metadata = await extract3mfImportMetadata(buf);
-      const group = new ThreeMFLoader().parse(buf);
-      await this.adoptPaletteFrom3mf(buf, metadata.projectConfig);
-      this.loadModelFromGroup(
-        group,
-        name,
-        metadata.colors ?? undefined,
-        metadata.paint,
-        metadata.plateLayout,
-        metadata.plateLayoutStatus,
-      );
-      return true;
-    }
-    if (lower.endsWith('.obj')) {
-      const group = new OBJLoader().parse(new TextDecoder().decode(new Uint8Array(buf)));
-      let any = false;
-      group.traverse((o) => {
-        const mesh = o as THREE.Mesh;
-        if ((mesh as unknown as { isMesh?: boolean }).isMesh && mesh.geometry) {
-          this.loadModelFromGeometry(mesh.geometry as THREE.BufferGeometry, name);
-          any = true;
-        }
-      });
-      return any;
-    }
-    return false;
+    this.loadModelFromGeometry(new STLLoader().parse(buf), name);
+    return true;
   }
 
   /**
@@ -1484,32 +2252,8 @@ export class OrcaWorkspace extends xb.Script {
    * Import Zip Archive). Returns how many models loaded.
    */
   async importZipArchive(buf: ArrayBuffer): Promise<number> {
-    let entries: Record<string, Uint8Array>;
-    try {
-      entries = fflate.unzipSync(new Uint8Array(buf));
-    } catch (e) {
-      this.setStatus(`Not a readable zip: ${(e as Error).message}`);
-      return 0;
-    }
-    const names = Object.keys(entries).filter(
-      (n) => /\.(stl|3mf|obj)$/i.test(n) && !n.startsWith('__MACOSX') && !n.includes('/._'),
-    );
-    let count = 0;
-    for (const n of names) {
-      const u8 = entries[n];
-      const ab = ownedArrayBuffer(u8);
-      try {
-        if (await this.loadModelFromBuffer(n.split('/').pop() || n, ab)) count++;
-      } catch (e) {
-        console.warn('[zip] failed to load', n, e);
-      }
-    }
-    this.setStatus(
-      count > 0
-        ? `Imported ${count} model${count === 1 ? '' : 's'} from archive.`
-        : 'No STL/3MF/OBJ models found in the archive.',
-    );
-    return count;
+    void buf;
+    throw new Error('ZIP model import is unavailable until the whole archive can commit atomically.');
   }
 
   /** Load an STL or 3MF by URL into the library (used by tests + built-ins). */
@@ -1519,35 +2263,7 @@ export class OrcaWorkspace extends xb.Script {
     const name = url.split('/').pop() ?? url;
 
     if (url.toLowerCase().endsWith('.3mf')) {
-      this.setStatus(`Downloading ${name}...`);
-      this.setProgress(10);
-      const resp = await fetch(url);
-      const buf = await resp.arrayBuffer();
-
-      this.setStatus(`Extracting colors...`);
-      this.setProgress(30);
-      await new Promise((r) => setTimeout(r, 50));
-      const metadata = await extract3mfImportMetadata(buf);
-
-      this.setStatus(`Parsing 3MF geometry...`);
-      this.setProgress(60);
-      await new Promise((r) => setTimeout(r, 50));
-      const group = new ThreeMFLoader().parse(buf);
-      console.log('[orcaxr-load] parsed 3MF in', Math.round(performance.now() - t0), 'ms');
-
-      this.setStatus(`Building scene...`);
-      this.setProgress(90);
-      await new Promise((r) => setTimeout(r, 50));
-      // No task boundary may sit between this checkpoint and geometry commit.
-      await this.adoptPaletteFrom3mf(buf, metadata.projectConfig);
-      this.loadModelFromGroup(
-        group,
-        name,
-        metadata.colors ?? undefined,
-        metadata.paint,
-        metadata.plateLayout,
-        metadata.plateLayoutStatus,
-      );
+      throw new Error('3MF URLs must use the canonical project-open preview flow.');
     } else {
       this.setStatus(`Downloading ${name}...`);
       this.setProgress(10);
@@ -1573,9 +2289,7 @@ export class OrcaWorkspace extends xb.Script {
   loadModelFromGeometry(raw: THREE.BufferGeometry, name: string, options: GeometryLoadOptions = {}) {
     this.library.push({ name, geometry: raw });
     this.libraryIndex = this.library.length - 1;
-    this.addModelFromGeometry(raw, 0x4fc3f7, options);
-    const added = this.models[this.models.length - 1];
-    if (added) added.viewer.name = name;
+    this.addModelFromGeometry(raw, 0x4fc3f7, options, name);
     if (!options.deferPostAdd) this.setStatus(`Loaded ${name}.`);
   }
 
@@ -1654,14 +2368,14 @@ export class OrcaWorkspace extends xb.Script {
 
   // ---- Multi-plate --------------------------------------------------------
   public get plateCount(): number {
-    return this.plates.length;
+    return this.canonicalProject.getSummary().plates.length;
   }
-  public getPlates(): { id: number; label: string; count: number; active: boolean }[] {
-    return this.plates.map((p) => ({
-      id: p.id,
-      label: p.label,
-      count: p.models.length,
-      active: p.id === this.activePlateId,
+  public getPlates(): { id: PlateId; label: string; count: number; active: boolean }[] {
+    return this.canonicalProject.getSummary().plates.map((plate) => ({
+      id: plate.id,
+      label: plate.name,
+      count: plate.instanceCount,
+      active: plate.active,
     }));
   }
 
@@ -1675,741 +2389,106 @@ export class OrcaWorkspace extends xb.Script {
       selectedProfileId: this.profile?.id ?? null,
       placedModelsTotalAllPlates: plates.reduce((sum, plate) => sum + plate.count, 0),
       plates,
-      placedModels: this.models.map((model, index) => ({
-        id: model.viewer.uuid,
-        label: model.viewer.name || `Model ${index + 1}`,
-        plateId: this.activePlateId,
-        translateXmm: model.viewer.position.x / (MM * WORKSPACE_SCALE),
-        translateYmm: -model.viewer.position.z / (MM * WORKSPACE_SCALE),
-        translateZmm: model.viewer.position.y / (MM * WORKSPACE_SCALE),
-        rotXDeg: THREE.MathUtils.radToDeg(model.viewer.rotation.x),
-        rotYDeg: THREE.MathUtils.radToDeg(model.viewer.rotation.y),
-        rotZDeg: THREE.MathUtils.radToDeg(model.viewer.rotation.z),
-        scaleXPct: model.viewer.scale.x * 100,
-        scaleYPct: model.viewer.scale.y * 100,
-        scaleZPct: model.viewer.scale.z * 100,
-      })),
+      placedModels: this.models.map((model, index) => {
+        const instance = this.canonicalProject.getInstance(model.instanceId)!;
+        const rotation = new THREE.Euler().setFromQuaternion(
+          new THREE.Quaternion().fromArray(instance.transform.rotation),
+        );
+        return {
+          id: model.instanceId,
+          label: instance.name || `Model ${index + 1}`,
+          plateId: instance.plateId,
+          translateXmm: instance.transform.translationMm[0],
+          translateYmm: instance.transform.translationMm[1],
+          translateZmm: instance.transform.translationMm[2],
+          rotXDeg: THREE.MathUtils.radToDeg(rotation.x),
+          rotYDeg: THREE.MathUtils.radToDeg(rotation.y),
+          rotZDeg: THREE.MathUtils.radToDeg(rotation.z),
+          scaleXPct: instance.transform.scale[0] * 100,
+          scaleYPct: instance.transform.scale[1] * 100,
+          scaleZPct: instance.transform.scale[2] * 100,
+        };
+      }),
     };
   }
 
   /** Create a new empty plate and switch to it. */
   public addPlate() {
-    const id = this.nextPlateId++;
-    this.plates.push({ id, label: `Plate ${id}`, models: [] });
-    this.setActivePlate(id);
+    const id = this.canonicalProject.addPlate();
+    this.setStatus(`Added ${this.canonicalProject.getSummary().plates.find((plate) => plate.id === id)?.name}.`);
+    return id;
   }
 
-  /**
-   * Duplicate the active plate: create a new plate and deep-copy every model
-   * (geometry + its move/rotate/scale transform) onto it (Orca top toolbar →
-   * Duplicate Plate). Snapshots the source before switching plates, since
-   * `this.models` follows the active plate.
-   */
-  public duplicateCurrentPlate() {
-    const snap = this.models.map((m) => ({
-      raw: m.raw.clone(), // clone carries the vertex-colour paint
-      pos: m.viewer.position.clone(),
-      quat: m.viewer.quaternion.clone(),
-      scale: m.viewer.scale.clone(),
-    }));
-    this.addPlate(); // creates + switches to a new empty plate
-    for (const s of snap) {
-      this.addModelFromGeometry(s.raw, 0x4fc3f7);
-      const added = this.models[this.models.length - 1];
-      added.viewer.position.copy(s.pos);
-      added.viewer.quaternion.copy(s.quat);
-      added.viewer.scale.copy(s.scale);
-    }
-    this.recomputePreflight();
-    this.setStatus(`Duplicated plate — ${snap.length} model${snap.length === 1 ? '' : 's'} copied.`);
+  /** Duplicate one complete canonical plate graph and activate the copy. */
+  public duplicatePlate(id: PlateId = this.activePlateId, expectedRevision?: number): PlateId {
+    const duplicateId = this.canonicalProject.duplicatePlate(id, expectedRevision);
+    this.revalidatePublishedGcode();
+    this.onSelectionChanged?.(false);
+    this.onPlatesChanged?.();
+    const duplicate = this.canonicalProject.getSummary().plates.find((plate) => plate.id === duplicateId);
+    this.setStatus(`Duplicated ${duplicate?.name ?? 'build plate'}.`);
+    return duplicateId;
+  }
+
+  /** @deprecated Use duplicatePlate() with the displayed canonical revision. */
+  public duplicateCurrentPlate(): PlateId {
+    return this.duplicatePlate();
   }
 
   /** Switch the active plate; inactive plates' models are hidden, not removed. */
-  public setActivePlate(id: number) {
-    const target = this.plates.find((p) => p.id === id);
-    if (!target) return;
+  public setActivePlate(id: PlateId, expectedRevision?: number) {
+    const target = this.canonicalProject.getSummary().plates.find((plate) => plate.id === id);
     if (id === this.activePlateId) {
-      if (this.onPlatesChanged) this.onPlatesChanged();
+      this.canonicalProject.activatePlate(id, expectedRevision);
+      this.onPlatesChanged?.();
       return;
     }
-    for (const m of this.models) m.viewer.visible = false; // hide current plate
-    this.unselectModel();
-    this.activePlateId = id;
-    for (const m of this.models) m.viewer.visible = true; // show target plate
-    this.setStatus(`Switched to ${target.label}.`);
-    this.recomputePreflight();
-    if (this.onSelectionChanged) this.onSelectionChanged(false);
-    if (this.onPlatesChanged) this.onPlatesChanged();
+    this.canonicalProject.activatePlate(id, expectedRevision);
+    this.setStatus(`Switched to ${target?.name ?? 'build plate'}.`);
+    this.onSelectionChanged?.(false);
+    this.onPlatesChanged?.();
   }
 
   /** Delete a plate (defaults to the active one); refuses the last plate. */
-  public deletePlate(id: number = this.activePlateId) {
-    if (this.plates.length <= 1) {
-      this.setStatus('Cannot delete the last plate.');
-      return;
-    }
-    const idx = this.plates.findIndex((p) => p.id === id);
-    if (idx === -1) return;
-    const wasActive = id === this.activePlateId;
-    for (const m of this.plates[idx].models) {
-      this.workspace.remove(m.viewer);
-      m.display.geometry.dispose();
-    }
-    this.plates.splice(idx, 1);
+  public deletePlate(id: PlateId = this.activePlateId, expectedRevision?: number) {
+    const before = this.canonicalProject.getSummary();
+    const wasActive = id === before.activePlateId;
+    this.canonicalProject.deletePlate(id, expectedRevision);
     this.revalidatePublishedGcode();
     if (wasActive) {
-      const next = this.plates[Math.min(idx, this.plates.length - 1)];
-      this.activePlateId = next.id;
       this.unselectModel();
-      for (const m of next.models) m.viewer.visible = true;
-      if (this.onSelectionChanged) this.onSelectionChanged(false);
-      this.recomputePreflight();
-      this.setStatus(`Deleted plate; switched to ${next.label}.`);
+      const next = this.canonicalProject.getSummary().plates.find((plate) => plate.active)!;
+      this.onSelectionChanged?.(false);
+      this.setStatus(`Deleted plate; switched to ${next.name}.`);
     } else {
       this.setStatus('Plate deleted.');
     }
-    if (this.onPlatesChanged) this.onPlatesChanged();
+    this.onPlatesChanged?.();
   }
 
-  /**
-   * Decimate the selected model's mesh (quadric-ish edge collapse via THREE's
-   * SimplifyModifier). `keepRatio` is the fraction of vertices to retain.
-   */
+  public renamePlate(id: PlateId, name: string, expectedRevision?: number): void {
+    this.canonicalProject.renamePlate(id, name, expectedRevision);
+    this.setStatus(`Renamed build plate to ${name.trim()}.`);
+    this.onPlatesChanged?.();
+  }
+
+  public reorderPlates(ids: readonly PlateId[], expectedRevision?: number): void {
+    this.canonicalProject.reorderPlates(ids, expectedRevision);
+    this.setStatus('Reordered build plates.');
+    this.onPlatesChanged?.();
+  }
+
+  public setPlatePrintable(id: PlateId, printable: boolean, expectedRevision?: number): void {
+    this.canonicalProject.setPlatePrintable(id, printable, expectedRevision);
+    this.revalidatePublishedGcode();
+    this.setStatus(printable ? 'Included build plate in print output.' : 'Excluded build plate from print output.');
+    this.onPlatesChanged?.();
+  }
+
+  /** Projection-only simplification is forbidden until a canonical topology command owns it. */
   public simplifySelected(keepRatio = 0.5) {
-    if (!this.selectedModel) {
-      this.setStatus('Select a model to simplify first.');
-      return;
-    }
-    const entry = this.selectedModel;
-    const before = entry.raw.getAttribute('position').count;
-    const remove = Math.max(0, Math.floor(before * (1 - keepRatio)));
-    try {
-      this.setStatus(`Simplifying ${before} verts…`);
-      const simplified = new SimplifyModifier().modify(entry.raw, remove);
-      if (!simplified.hasAttribute('color')) {
-        const n = simplified.getAttribute('position').count;
-        const colors = new Float32Array(n * 3).fill(0.62);
-        simplified.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      }
-      simplified.computeVertexNormals();
-      simplified.computeBoundsTree();
-      entry.raw = simplified;
-      entry.display.geometry.dispose();
-      entry.display.geometry = simplified;
-      const after = simplified.getAttribute('position').count;
-      this.setStatus(`Simplified: ${before} → ${after} verts.`);
-      this.recomputePreflight();
-    } catch (e) {
-      this.setStatus(`Simplify failed: ${(e as Error).message}`);
-    }
-  }
-
-  /** CDP diagnostic: parse a 3MF and report the loader's mesh structure vs
-   *  the extracted per-part color array — no scene mutation. */
-  async debug3mf(url: string): Promise<any> {
-    const buf = await (await fetch(url)).arrayBuffer();
-    const colors = await extract3mfColors(buf);
-    const group = new ThreeMFLoader().parse(buf.slice(0));
-    group.updateMatrixWorld(true);
-    const meshes: any[] = [];
-    group.traverse((c: any) => {
-      if (c.isMesh && c.geometry) {
-        const mat = Array.isArray(c.material) ? c.material[0] : c.material;
-        meshes.push({
-          verts: c.geometry.attributes.position?.count ?? 0,
-          hasVColor: !!c.geometry.attributes.color,
-          matColor: mat && mat.color ? '#' + mat.color.getHexString() : 'none',
-          matType: mat ? mat.type : 'none',
-          groups: c.geometry.groups?.length ?? 0,
-        });
-      }
-    });
-    return {
-      extractedColors: colors,
-      extractedCount: colors ? colors.length : 0,
-      meshCount: meshes.length,
-      aligned: colors ? colors.length === meshes.length : false,
-      meshes,
-    };
-  }
-
-  /** Seed the filament palette from a 3MF's own filament_colour list, adopt
-   *  its FullSpectrum virtual filaments, and pick up its prime-tower setup. */
-  async adoptPaletteFrom3mf(buf: ArrayBuffer, projectConfig?: Record<string, unknown> | null) {
-    // Importing anything after an as-authored project invalidates that source.
-    // A new FullSpectrum source is eligible only when it starts from the one
-    // empty default plate; otherwise its raw bytes omit existing workspace
-    // content and must never be used as a lossy shortcut.
-    const sourceWasExclusive =
-      this.plates.length === 1 && this.plates[0].id === this.activePlateId && this.plates[0].models.length === 0;
-    const hadFullSpectrumSource = this.canonicalSliceRequiredReason !== null || this.virtualFilaments.length > 0;
-
-    let cfg: Record<string, unknown> | null;
-    try {
-      cfg = projectConfig === undefined ? projectConfigFrom3mfEntries(unzip3mfPackage(buf)) : projectConfig;
-    } catch (e) {
-      throw new Error(`Could not read 3MF project settings: ${(e as Error).message}`, { cause: e });
-    }
-
-    if (!cfg) {
-      // Plate validation during geometry commit may need to mutate a semantic
-      // blocker even when this archive has no project settings of its own.
-      this.beginSemanticImportCheckpoint();
-      return;
-    }
-
-    const colors: string[] | undefined =
-      Array.isArray(cfg.filament_colour) && cfg.filament_colour.length ? (cfg.filament_colour as string[]) : undefined;
-    const types: string[] | undefined = Array.isArray(cfg.filament_type) ? (cfg.filament_type as string[]) : undefined;
-    const virtualFilaments = virtualFilamentsFromConfig(cfg);
-    const first = (value: unknown): string =>
-      Array.isArray(value) ? `${value[0] ?? ''}` : value === null || value === undefined ? '' : `${value}`;
-
-    this.beginSemanticImportCheckpoint();
-    try {
-      // Only FullSpectrum's immutable slicing route needs the source archive.
-      // Plain 3MFs avoid retaining a second copy during the heavy mesh import.
-      this.originalProject = virtualFilaments.length > 0 ? buf.slice(0) : null;
-      this.originalProjectSnapshot = null;
-      this.projectSnapshotPending = true;
-      this.projectSourceWasExclusive = sourceWasExclusive;
-      this.virtualFilaments = virtualFilaments;
-      this.projectPrimeTower = {
-        enabled: first(cfg.enable_prime_tower) === '1',
-        xMm: parseFloat(first(cfg.wipe_tower_x)) || 0,
-        yMm: parseFloat(first(cfg.wipe_tower_y)) || 0,
-        widthMm: parseFloat(first(cfg.prime_tower_width)) || 35,
-      };
-      this.canonicalSliceRequiredReason = combinedSemanticImportRequiresCanonicalSlice({
-        sourceWasExclusive,
-        hadFullSpectrumSource,
-        incomingVirtualFilamentCount: virtualFilaments.length,
-      })
-        ? 'Multiple imported project sources include FullSpectrum intent and require canonical live-project slicing.'
-        : null;
-
-      // Virtual rows are committed before the palette notification so both UIs
-      // observe one coherent material snapshot.
-      if (colors) this.palette.setFrom(colors, types);
-      else this.palette.onChanged?.();
-      this.rebuildHeadsPanel();
-      this.rebuildWipeTowerGhost();
-    } catch (error) {
-      this.rollbackPendingImportSemantics();
-      throw error;
-    }
-  }
-
-  /**
-   * Load a Three.js 3MF group, preserving official Orca/BBS plate membership
-   * when available. A root build item remains one selectable workspace model;
-   * its component meshes are merged only within that item.
-   */
-  loadModelFromGroup(
-    group: THREE.Object3D,
-    name: string,
-    meshColors?: string[],
-    paint?: Paint3mfResult | null,
-    plateLayout?: BbsPlateLayout | null,
-    plateLayoutStatus: BbsPlateLayoutExtraction['status'] = plateLayout ? 'valid' : 'absent',
-  ) {
-    console.log(
-      `[orcaxr-load] loadModelFromGroup called with meshColors:`,
-      meshColors,
-      'paintedMeshes:',
-      paint ? [...paint.meshes.keys()] : 'none',
-    );
-    const hasMultiPlateMetadata = Boolean(plateLayout && plateLayout.plates.length > 1);
-    const hasCompletePlateMapping = Boolean(
-      plateLayout &&
-      plateLayout.buildItemCount === group.children.length &&
-      plateLayout.unassignedBuildItemIndices.length === 0,
-    );
-    const canPreservePlateLayout = Boolean(hasMultiPlateMetadata && hasCompletePlateMapping);
-    const hasUncertainPlateMapping =
-      plateLayoutStatus === 'invalid' || (plateLayoutStatus === 'valid' && !hasCompletePlateMapping);
-
-    try {
-      if (canPreservePlateLayout) {
-        if (this.virtualFilaments.length > 0) {
-          // The current WASM project route cannot select one source plate;
-          // plate_id=0 loads every globally-offset plate. Keep the editable
-          // scene, but never claim its raw archive can slice the active plate.
-          this.invalidatePendingImportedProjectSnapshot(
-            'Multi-plate FullSpectrum projects require canonical per-plate slicing, which is not available yet.',
-          );
-        }
-        this.loadMultiPlateGroup(group, name, meshColors, paint, plateLayout!);
-        this.finalizeImportedProjectSnapshot();
-        return;
-      }
-
-      if (hasUncertainPlateMapping) {
-        console.warn(
-          plateLayoutStatus === 'invalid'
-            ? '[orcaxr-load] Declared plate metadata could not be interpreted safely; using the single-model fallback.'
-            : '[orcaxr-load] Plate metadata did not map every parsed build item exactly; using the safe single-model fallback.',
-        );
-        // A flattened fallback is editable, but cannot safely stand in for the
-        // source archive when choosing an immutable project-slice route.
-        this.invalidatePendingImportedProjectSnapshot(
-          this.virtualFilaments.length > 0
-            ? 'The imported FullSpectrum plate mapping is incomplete; canonical live-project slicing is required.'
-            : undefined,
-        );
-      }
-
-      const merged = this.mergeGroupGeometry(group, meshColors, paint);
-      if (!merged) throw new Error(`3MF ${name} contains no mergeable geometry.`);
-      const previousModelCount = this.models.length;
-      const previousLibraryLength = this.library.length;
-      const previousLibraryIndex = this.libraryIndex;
-      const previousSelectedModel = this.selectedModel;
-      try {
-        this.loadModelFromGeometry(merged, name);
-        this.finalizeImportedProjectSnapshot();
-      } catch (error) {
-        const addedModels = this.models.slice(previousModelCount);
-        for (const model of addedModels) this.disposeDetachedModel(model);
-        this.models.length = previousModelCount;
-        this.library.length = previousLibraryLength;
-        this.libraryIndex = previousLibraryIndex;
-        if (!addedModels.some((model) => model.raw === merged)) merged.dispose();
-        if (previousSelectedModel) this.selectModel(previousSelectedModel);
-        else this.unselectModel();
-        this.recomputePreflight();
-        throw error;
-      }
-    } catch (error) {
-      this.rollbackPendingImportSemantics();
-      throw error;
-    }
-  }
-
-  private mergeGroupGeometry(
-    group: THREE.Object3D,
-    meshColors?: string[],
-    paint?: Paint3mfResult | null,
-  ): THREE.BufferGeometry | null {
-    const geometries: THREE.BufferGeometry[] = [];
-    group.updateMatrixWorld(true);
-
-    let meshIndex = 0;
-    group.traverse((child: any) => {
-      if (child.isMesh && child.geometry) {
-        let geom = child.geometry.clone();
-        if (geom.index !== null) {
-          const indexed = geom;
-          geom = geom.toNonIndexed();
-          indexed.dispose();
-        }
-        geom.applyMatrix4(child.matrixWorld);
-
-        // Per-triangle 3MF paint (Orca/Bambu paint_color) wins over the flat
-        // per-object extruder color: subdivide painted triangles and bake the
-        // palette into vertex colors (display + painted slicing both read
-        // vertex colors downstream).
-        const meshPaint = paint?.meshes.get(meshIndex);
-        if (meshPaint) {
-          const baseHex = meshColors?.[meshIndex] ?? '#cccccc';
-          const painted = applyPaintToPositions(
-            geom.attributes.position.array as Float32Array,
-            meshPaint,
-            paint!.palette,
-            baseHex,
-          );
-          if (painted) {
-            const pg = new THREE.BufferGeometry();
-            pg.setAttribute('position', new THREE.BufferAttribute(painted.positions, 3));
-            pg.setAttribute('color', new THREE.BufferAttribute(painted.colors, 3));
-            pg.computeVertexNormals();
-            console.log(
-              `[paint3mf] mesh ${meshIndex}: ${geom.attributes.position.count / 3} tris → ${painted.positions.length / 9} painted tris`,
-            );
-            geom.dispose();
-            geom = pg;
-          }
-        }
-
-        // Native 3MF loading (via ThreeMFLoader) uses standard 3MF colors.
-        // It places them in child.material.color OR as vertex colors.
-        // If we have custom meshColors mapped from Orca 3MF configs, use them.
-        // Always rewrite the color attribute so we have uniform vertex colors for merging.
-        const count = geom.attributes.position.count;
-        const colors = new Float32Array(count * 3);
-
-        let colorObj = child.material && child.material.color ? child.material.color : new THREE.Color(0xffffff);
-        if (meshPaint && geom.hasAttribute('color')) {
-          colorObj = null; // paint already baked per-vertex colors
-        } else if (meshColors && meshColors[meshIndex]) {
-          colorObj = new THREE.Color(meshColors[meshIndex]);
-        } else if (geom.hasAttribute('color')) {
-          // If we don't have custom colors, but the geom already has vertex colors, preserve them.
-          // We'll leave the existing attribute untouched.
-          colorObj = null;
-        }
-
-        if (colorObj) {
-          for (let i = 0; i < count * 3; i += 3) {
-            colors[i] = colorObj.r;
-            colors[i + 1] = colorObj.g;
-            colors[i + 2] = colorObj.b;
-          }
-          geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-        }
-
-        if (!geom.hasAttribute('normal')) {
-          geom.computeVertexNormals();
-        }
-
-        // Drop non-essential attributes to prevent mergeGeometries from failing
-        const allowedAttributes = ['position', 'normal', 'color'];
-        for (const attrName of Object.keys(geom.attributes)) {
-          if (!allowedAttributes.includes(attrName)) {
-            geom.deleteAttribute(attrName);
-          }
-        }
-
-        geometries.push(geom);
-        meshIndex++;
-      }
-    });
-
-    if (geometries.length === 0) return null;
-    console.log(`Merging ${geometries.length} geometries...`);
-    const merged = BufferGeometryUtils.mergeGeometries(geometries, false);
-    for (const geometry of geometries) geometry.dispose();
-    if (!merged) {
-      console.error('mergeGeometries RETURNED NULL!');
-      return null;
-    }
-    console.log(`Merged successfully! Attributes: ${Object.keys(merged.attributes).join(',')}`);
-    return merged;
-  }
-
-  private loadMultiPlateGroup(
-    group: THREE.Object3D,
-    name: string,
-    meshColors: string[] | undefined,
-    paint: Paint3mfResult | null | undefined,
-    layout: BbsPlateLayout,
-  ): void {
-    group.updateMatrixWorld(true);
-    const meshIndexBySource = new WeakMap<THREE.Object3D, number>();
-    let globalMeshIndex = 0;
-    group.traverse((child: any) => {
-      if (child.isMesh && child.geometry) meshIndexBySource.set(child, globalMeshIndex++);
-    });
-
-    const fallbackBed = layout.bedSizeMm ?? this.bedMm;
-    const sourcePlateCount = Math.max(layout.plates.length, ...layout.plates.map((plate) => plate.sourceId));
-    const columns = Math.ceil(Math.sqrt(sourcePlateCount));
-
-    const stagedPlates: Array<{
-      sourceId: number;
-      name: string;
-      items: Array<{ geometry: THREE.BufferGeometry; name: string }>;
-    }> = [];
-    let stagedItemCount = 0;
-
-    try {
-      for (const sourcePlate of layout.plates) {
-        const stagedPlate = {
-          sourceId: sourcePlate.sourceId,
-          name: sourcePlate.name,
-          items: [],
-        } as (typeof stagedPlates)[number];
-        stagedPlates.push(stagedPlate);
-        const sourceIndex = Math.max(0, sourcePlate.sourceId - 1);
-        const origin = sourcePlate.originMm ?? {
-          x: (sourceIndex % columns) * fallbackBed.x * 1.2,
-          y: -Math.floor(sourceIndex / columns) * fallbackBed.y * 1.2,
-        };
-
-        for (const buildItemIndex of sourcePlate.buildItemIndices) {
-          const sourceRoot = group.children[buildItemIndex];
-          if (!sourceRoot) throw new Error(`3MF build item ${buildItemIndex + 1} is missing from the parsed scene.`);
-          const sourceMeshIndices: number[] = [];
-          sourceRoot.traverse((child: any) => {
-            const index = meshIndexBySource.get(child);
-            if (index !== undefined) sourceMeshIndices.push(index);
-          });
-
-          const itemGroup = new THREE.Group();
-          const clonedRoot = sourceRoot.clone(true);
-          // Preserve the source root's complete transform even if a caller gave
-          // us a parsed group nested under another transform owner.
-          clonedRoot.matrix.copy(sourceRoot.matrixWorld);
-          clonedRoot.matrix.decompose(clonedRoot.position, clonedRoot.quaternion, clonedRoot.scale);
-          itemGroup.add(clonedRoot);
-          itemGroup.position.set(-origin.x, -origin.y, 0);
-          const itemColors = meshColors ? sourceMeshIndices.map((index) => meshColors[index]) : undefined;
-          const itemPaint: Paint3mfResult | null = paint ? { palette: paint.palette, meshes: new Map() } : null;
-          if (itemPaint) {
-            sourceMeshIndices.forEach((sourceIndex, localIndex) => {
-              const meshPaint = paint!.meshes.get(sourceIndex);
-              if (meshPaint) itemPaint.meshes.set(localIndex, meshPaint);
-            });
-          }
-
-          const merged = this.mergeGroupGeometry(itemGroup, itemColors, itemPaint);
-          if (!merged) throw new Error(`3MF build item ${buildItemIndex + 1} contains no mergeable geometry.`);
-          const itemName = sourceRoot.name || `${name} · object ${buildItemIndex + 1}`;
-          stagedPlate.items.push({ geometry: merged, name: itemName });
-          stagedItemCount++;
-        }
-      }
-      if (stagedItemCount !== layout.buildItemCount) {
-        throw new Error(`3MF plate metadata staged ${stagedItemCount} of ${layout.buildItemCount} build items.`);
-      }
-    } catch (error) {
-      for (const plate of stagedPlates) {
-        for (const item of plate.items) item.geometry.dispose();
-      }
-      throw error;
-    }
-
-    // Commit only after every expected item has merged. The old workspace
-    // state remains intact until this point, and the catch block restores it
-    // if model attachment itself unexpectedly fails.
-    const previousPlates = this.plates;
-    const previousActivePlateId = this.activePlateId;
-    const previousNextPlateId = this.nextPlateId;
-    const previousSelectedModel = this.selectedModel;
-    const previousLibraryLength = this.library.length;
-    const previousLibraryIndex = this.libraryIndex;
-    const previousModels = new Set(previousPlates.flatMap((plate) => plate.models));
-    const canReuseDefaultPlate =
-      previousPlates.length === 1 &&
-      previousPlates[0].id === previousActivePlateId &&
-      previousPlates[0].models.length === 0;
-    let plannedNextPlateId = this.nextPlateId;
-    const targetPlates = stagedPlates.map((sourcePlate, index) => ({
-      id: index === 0 && canReuseDefaultPlate ? previousPlates[0].id : plannedNextPlateId++,
-      label: sourcePlate.name || `Plate ${sourcePlate.sourceId}`,
-      models: [] as ModelEntry[],
-    }));
-
-    try {
-      this.unselectModel();
-      this.plates = [...(canReuseDefaultPlate ? [] : previousPlates), ...targetPlates];
-      this.nextPlateId = plannedNextPlateId;
-
-      stagedPlates.forEach((sourcePlate, plateIndex) => {
-        const targetPlate = targetPlates[plateIndex];
-        this.activePlateId = targetPlate.id;
-        for (const item of sourcePlate.items) {
-          const before = targetPlate.models.length;
-          this.loadModelFromGeometry(item.geometry, item.name, {
-            preservePrinterXY: true,
-            preservePrinterZ: true,
-            deferPostAdd: true,
-            deferBoundsTree: true,
-          });
-          const added = targetPlate.models[before];
-          if (!added) throw new Error(`Could not attach ${item.name} to ${targetPlate.label}.`);
-          added.viewer.visible = false;
-        }
-      });
-
-      const firstImportedPlate = targetPlates[0];
-      this.activePlateId = firstImportedPlate.id;
-      for (const plate of this.plates) {
-        const visible = plate.id === this.activePlateId;
-        for (const model of plate.models) model.viewer.visible = visible;
-      }
-      if (firstImportedPlate.models[0]) this.selectModel(firstImportedPlate.models[0]);
-      this.recomputePreflight();
-      this.queueBoundsTreeBuild(targetPlates.flatMap((plate) => plate.models));
-      this.warmSlicerAfterFirstModel();
-      this.onPlatesChanged?.();
-      this.setStatus(
-        `Loaded ${name} — ${stagedItemCount} model${stagedItemCount === 1 ? '' : 's'} across ${targetPlates.length} plates.`,
-      );
-    } catch (error) {
-      const disposedGeometries = new Set<THREE.BufferGeometry>();
-      for (const plate of this.plates) {
-        for (const model of plate.models) {
-          if (!previousModels.has(model)) {
-            disposedGeometries.add(model.raw);
-            this.disposeDetachedModel(model);
-          }
-        }
-      }
-      for (const plate of stagedPlates) {
-        for (const item of plate.items) {
-          if (!disposedGeometries.has(item.geometry)) item.geometry.dispose();
-        }
-      }
-      this.plates = previousPlates;
-      this.activePlateId = previousActivePlateId;
-      this.nextPlateId = previousNextPlateId;
-      this.library.length = previousLibraryLength;
-      this.libraryIndex = previousLibraryIndex;
-      for (const plate of this.plates) {
-        const visible = plate.id === this.activePlateId;
-        for (const model of plate.models) model.viewer.visible = visible;
-      }
-      if (previousSelectedModel) this.selectModel(previousSelectedModel);
-      else this.unselectModel();
-      this.recomputePreflight();
-      this.onPlatesChanged?.();
-      throw error;
-    }
-  }
-
-  /** Release every GPU resource owned by a model that will not rejoin the scene. */
-  private disposeDetachedModel(entry: ModelEntry) {
-    this.workspace.remove(entry.viewer);
-    const geometries = new Set<THREE.BufferGeometry>();
-    const materials = new Set<THREE.Material>();
-    const textures = new Set<THREE.Texture>();
-    entry.viewer.traverse((object) => {
-      const renderable = object as THREE.Mesh | THREE.LineSegments | THREE.Sprite;
-      if ('geometry' in renderable && renderable.geometry) geometries.add(renderable.geometry);
-      const objectMaterials = Array.isArray(renderable.material)
-        ? renderable.material
-        : renderable.material
-          ? [renderable.material]
-          : [];
-      for (const material of objectMaterials) {
-        materials.add(material);
-        for (const value of Object.values(material)) {
-          if (value instanceof THREE.Texture) textures.add(value);
-        }
-      }
-    });
-    for (const texture of textures) texture.dispose();
-    for (const material of materials) material.dispose();
-    for (const geometry of geometries) geometry.dispose();
-  }
-
-  private finalizeImportedProjectSnapshot() {
-    if (this.projectSnapshotPending) {
-      // Finalize once after the complete multi-plate batch. An FS file added
-      // beside existing workspace content remains editable but cannot use the
-      // immutable source bytes as a lossy slicing shortcut.
-      const isFullSpectrumProject = this.virtualFilaments.length > 0;
-      const canUseImmutableSource = isFullSpectrumProject && this.projectSourceWasExclusive;
-      if (canUseImmutableSource) {
-        try {
-          this.originalProjectSnapshot = this.captureSemanticProjectSnapshot();
-          if (!this.originalProjectSnapshot) {
-            throw new Error('the imported scene could not be serialized for comparison');
-          }
-        } catch (error) {
-          // Geometry is already committed. Keep its incoming material state
-          // coherent and make slicing fail closed instead of rolling semantics
-          // back underneath the new scene.
-          console.warn('[orcaxr-load] Could not establish the FullSpectrum source guard.', error);
-          this.originalProject = null;
-          this.originalProjectSnapshot = null;
-          this.canonicalSliceRequiredReason =
-            'The imported FullSpectrum source could not be checkpointed; canonical live-project slicing is required.';
-        }
-      } else {
-        this.originalProjectSnapshot = null;
-        // Geometry/painted routes and combined semantic imports never consume
-        // immutable source bytes, so do not retain a useless giant archive.
-        this.originalProject = null;
-      }
-      this.projectSnapshotPending = false;
-      this.projectSourceWasExclusive = false;
-    }
-    this.pendingSemanticImportCheckpoint = null;
-  }
-
-  private invalidatePendingImportedProjectSnapshot(reason?: string) {
-    if (reason) this.canonicalSliceRequiredReason = reason;
-    if (!this.projectSnapshotPending) return;
-    this.originalProject = null;
-    this.originalProjectSnapshot = null;
-    this.projectSnapshotPending = false;
-    this.projectSourceWasExclusive = false;
-  }
-
-  private beginSemanticImportCheckpoint() {
-    if (this.pendingSemanticImportCheckpoint) {
-      throw new Error('Another 3MF import is still waiting for its geometry to commit.');
-    }
-    this.pendingSemanticImportCheckpoint = {
-      originalProject: this.originalProject,
-      originalProjectSnapshot: this.originalProjectSnapshot,
-      projectSnapshotPending: this.projectSnapshotPending,
-      projectSourceWasExclusive: this.projectSourceWasExclusive,
-      canonicalSliceRequiredReason: this.canonicalSliceRequiredReason,
-      virtualFilaments: this.virtualFilaments.map((filament) => ({
-        ...filament,
-        def: { ...filament.def },
-      })),
-      projectPrimeTower: this.projectPrimeTower ? { ...this.projectPrimeTower } : null,
-      palette: this.palette.list(),
-      headFilaments: [...this.headFilaments],
-      headNozzles: [...this.headNozzles],
-    };
-  }
-
-  /** Restore project-level material state when the matching geometry fails. */
-  private rollbackPendingImportSemantics() {
-    const checkpoint = this.pendingSemanticImportCheckpoint;
-    if (!checkpoint) {
-      this.invalidatePendingImportedProjectSnapshot();
-      return;
-    }
-    this.pendingSemanticImportCheckpoint = null;
-    this.originalProject = checkpoint.originalProject;
-    this.originalProjectSnapshot = checkpoint.originalProjectSnapshot;
-    this.projectSnapshotPending = checkpoint.projectSnapshotPending;
-    this.projectSourceWasExclusive = checkpoint.projectSourceWasExclusive;
-    this.canonicalSliceRequiredReason = checkpoint.canonicalSliceRequiredReason;
-    this.virtualFilaments = checkpoint.virtualFilaments;
-    this.projectPrimeTower = checkpoint.projectPrimeTower;
-    this.headFilaments = checkpoint.headFilaments;
-    this.headNozzles = checkpoint.headNozzles;
-
-    const refresh = (label: string, operation: () => void) => {
-      try {
-        operation();
-      } catch (error) {
-        console.warn(`[orcaxr-load] Could not refresh ${label} after import rollback.`, error);
-      }
-    };
-    refresh('filament palette', () =>
-      this.palette.setFrom(
-        checkpoint.palette.map((slot) => slot.color),
-        checkpoint.palette.map((slot) => slot.type),
-      ),
-    );
-    refresh('tool heads', () => this.rebuildHeadsPanel());
-    refresh('preflight state', () => this.recomputePreflight());
-  }
-
-  /**
-   * Large project imports should become interactive before every raycast BVH
-   * is built. The patched raycaster safely falls back to Three.js while a
-   * model waits; build one tree per task so rendering and input can breathe.
-   */
-  private queueBoundsTreeBuild(entries: ModelEntry[]) {
-    const pending = [...entries];
-    const buildNext = () => {
-      if (this.disposed) return;
-      const entry = pending.shift();
-      if (!entry) return;
-      const isStillPlaced = this.plates.some((plate) => plate.models.includes(entry));
-      if (isStillPlaced && !(entry.raw as THREE.BufferGeometry & { boundsTree?: unknown }).boundsTree) {
-        try {
-          // Indirect mode keeps vertex/triangle order immutable. That matters
-          // for FullSpectrum's exact semantic snapshot, which is captured
-          // before this deferred task runs.
-          entry.raw.computeBoundsTree({ indirect: true });
-        } catch (error) {
-          // Raycasting already has a correct (slower) non-BVH fallback.
-          console.warn('[orcaxr-load] Deferred raycast acceleration failed:', error);
-        }
-      }
-      if (pending.length > 0) window.setTimeout(buildNext, 0);
-    };
-    if (pending.length > 0) window.setTimeout(buildNext, 0);
+    void keepRatio;
+    this.setStatus('Simplify is unavailable until topology and annotation remapping commit canonically.');
   }
 
   public addFromLibrary() {
@@ -2426,22 +2505,24 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   getLastGcode(): string | null {
-    if (!this.gcodeArtifact.hasArtifact) return null;
+    if (!this.publishedGcode) return null;
     return this.revalidatePublishedGcode();
   }
 
   /** Immediately withdraw output controls after a known semantic mutation. */
   private markPublishedGcodeStale(): void {
-    if (!this.gcodeArtifact.hasArtifact) return;
+    if (!this.publishedGcode) return;
     if (this.previewOn) this.clearToolpathPreview();
     this.onDownloadReady?.(false);
   }
 
   /** Re-evaluate an artifact at a stable mutation boundary (for exact undo). */
   private revalidatePublishedGcode(): string | null {
-    if (!this.gcodeArtifact.hasArtifact) return null;
-    const current = this.captureSemanticProjectSnapshot();
-    const gcode = current ? this.gcodeArtifact.read(current) : null;
+    const published = this.publishedGcode;
+    if (!published) return null;
+    const gcode = this.canonicalProject.createCanonicalSliceSource().isCurrent(published.guard)
+      ? published.gcode
+      : null;
     if (!gcode) {
       if (this.previewOn) this.clearToolpathPreview();
     }
@@ -2449,66 +2530,49 @@ export class OrcaWorkspace extends xb.Script {
     return gcode;
   }
 
-  /** Update one engine override and invalidate any output from prior intent. */
-  public setCustomOverride(key: string, value: string): void {
-    if (this.customOverrides[key] === value) return;
-    this.customOverrides[key] = value;
-    this.markPublishedGcodeStale();
+  /** Frozen canonical base/override/effective settings projection for editor adapters. */
+  public getProjectSettingsOverrideSnapshot(): ProjectSettingsOverrideSnapshot {
+    return this.canonicalProject.getProjectSettingsOverrideSnapshot();
   }
 
-  public getCustomOverride(key: string): string | undefined {
-    return this.customOverrides[key];
+  /** One revision/hash-guarded settings history boundary; no shadow UI state exists. */
+  public setProjectSettingsOverrides(
+    inheritedConfig: Readonly<ConfigMap>,
+    overrides: Readonly<ConfigMap>,
+    guard: ProjectSettingsOverrideGuard,
+  ): ProjectSettingsOverrideSnapshot {
+    const result = this.canonicalProject.setProjectSettingsOverrides({ inheritedConfig, overrides }, guard);
+    this.revalidatePublishedGcode();
+    return result;
   }
 
-  private addModelFromGeometry(raw: THREE.BufferGeometry, color: number, options: GeometryLoadOptions = {}) {
-    if (!raw.hasAttribute('normal')) raw.computeVertexNormals();
-    if (!options.deferBoundsTree) raw.computeBoundsTree();
-
-    if (!raw.hasAttribute('color')) {
-      const colors = new Float32Array(raw.attributes.position.count * 3);
-      const colorObj = new THREE.Color(color);
-      for (let i = 0; i < colors.length; i += 3) {
-        colors[i] = colorObj.r;
-        colors[i + 1] = colorObj.g;
-        colors[i + 2] = colorObj.b;
-      }
-      raw.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    }
-
-    const mesh = new THREE.Mesh(raw, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5 }));
-    mesh.name = 'modelMesh';
-    // STL is mm / Z-up; display is meters / Y-up, magnified.
-    const vis = MM * WORKSPACE_SCALE;
-    mesh.scale.setScalar(vis);
-    mesh.rotation.x = -Math.PI / 2;
+  private addModelFromGeometry(
+    raw: THREE.BufferGeometry,
+    _color: number,
+    options: GeometryLoadOptions = {},
+    name?: string,
+  ) {
     raw.computeBoundingBox();
     const bb = raw.boundingBox!;
-    mesh.position.set((-(bb.min.x + bb.max.x) / 2) * vis, -bb.min.z * vis, ((bb.min.y + bb.max.y) / 2) * vis);
-
-    const model = new xb.ModelViewer({});
-    model.add(mesh);
-    void model.setupBoundingBox();
-    // Big cylindrical raycast target around the model — the one grab
-    // surface. What a drag DOES is decided by the active tool (modal,
-    // like OrcaSlicer's toolbar), so no competing colliders exist.
-    model.setupRaycastCylinder();
-    model.position.set(0, 0, 0);
-    if (options.preservePrinterXY) {
-      const centerX = (bb.min.x + bb.max.x) / 2;
-      const centerY = (bb.min.y + bb.max.y) / 2;
-      model.position.x = (centerX - this.bedMm.x / 2) * vis;
-      model.position.z = (this.bedMm.y / 2 - centerY) * vis;
-    }
-    if (options.preservePrinterZ) model.position.y = bb.min.z * vis;
-    // Disable XR Blocks' own drag semantics on the model — the modal
-    // tool logic in onSelectStart/onSelecting owns manipulation.
-    (model as unknown as { draggable: boolean }).draggable = false;
-    model.traverse((o) => {
-      (o as unknown as { draggingMode: unknown }).draggingMode = xb.DragManager.DO_NOT_DRAG;
+    if (!bb || bb.isEmpty()) throw new Error('Imported geometry has no finite bounds');
+    const centerX = (bb.min.x + bb.max.x) / 2;
+    const centerY = (bb.min.y + bb.max.y) / 2;
+    const transform: Transform = {
+      translationMm: [
+        options.preservePrinterXY ? 0 : this.bedMm.x / 2 - centerX,
+        options.preservePrinterXY ? 0 : this.bedMm.y / 2 - centerY,
+        options.preservePrinterZ ? 0 : -bb.min.z,
+      ],
+      rotation: [0, 0, 0, 1],
+      scale: [1, 1, 1],
+    };
+    const imported = this.canonicalProject.importBufferGeometry(raw, {
+      name,
+      sourceFilename: name,
+      transform,
     });
-    const entry: ModelEntry = { raw, display: mesh, viewer: model };
-    this.workspace.add(model);
-    this.models.push(entry);
+    const entry = this.projectedModels().find((candidate) => candidate.instanceId === imported.instanceId);
+    if (!entry) throw new Error('Canonical model projection did not produce the imported instance');
     // Keep new models consistent with active View overlays.
     if (this.wireframeOn) this.applyWireframe(entry, true);
     if (this.labelsOn) this.applyLabel(entry, this.models.length - 1, true);
@@ -2520,6 +2584,7 @@ export class OrcaWorkspace extends xb.Script {
       this.recomputePreflight();
       this.warmSlicerAfterFirstModel();
     }
+    return entry;
   }
 
   /**
@@ -2584,7 +2649,7 @@ export class OrcaWorkspace extends xb.Script {
       const gcode = this.getLastGcode();
       if (!gcode) {
         this.setStatus(
-          this.gcodeArtifact.hasArtifact
+          this.publishedGcode
             ? 'project changed — slice again to preview current toolpaths'
             : 'slice first to preview toolpaths',
         );
@@ -2597,66 +2662,32 @@ export class OrcaWorkspace extends xb.Script {
 
   /** Apply one stepper increment of the active tool to the target model. */
   nudgeSelected(dir: -1 | 1) {
-    const target: THREE.Object3D | null =
-      (this.transformControls?.object as THREE.Object3D | undefined) ??
-      this.models[this.models.length - 1]?.viewer ??
-      null;
-    if (!target) {
+    const selected = this.selectedModel;
+    const instance = selected ? this.canonicalProject.getInstance(selected.instanceId) : undefined;
+    if (!selected || !instance) {
       this.setStatus('no model');
       return;
     }
+    let transform = instance.transform;
+    let mode: MultiInstanceTransformMode = 'move';
     if (this.tool === 'rotate') {
-      target.rotation.y += dir * (Math.PI / 12);
-      this.setStatus(
-        `rotation: ${Math.round(THREE.MathUtils.euclideanModulo(THREE.MathUtils.radToDeg(target.rotation.y), 360))}°`,
-      );
+      const delta = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), dir * (Math.PI / 12));
+      const rotation = delta.multiply(new THREE.Quaternion().fromArray(transform.rotation)).normalize();
+      transform = { ...transform, rotation: [rotation.x, rotation.y, rotation.z, rotation.w] };
+      mode = 'rotate';
+      this.setStatus(`rotation step: ${dir > 0 ? '+' : '-'}15°`);
     } else if (this.tool === 'scale') {
-      const next = THREE.MathUtils.clamp(target.scale.x * (1 + dir * 0.1), 0.05, 40);
-      target.scale.setScalar(next);
+      const next = THREE.MathUtils.clamp(transform.scale[0] * (1 + dir * 0.1), 0.05, 40);
+      transform = { ...transform, scale: [next, next, next] };
+      mode = 'scale';
       this.setStatus(`scale: ${Math.round(next * 100)}%`);
     } else {
-      const halfX = (this.bedMm.x * MM * WORKSPACE_SCALE) / 2;
-      target.position.x = THREE.MathUtils.clamp(target.position.x + dir * 5 * MM * WORKSPACE_SCALE, -halfX, halfX);
-      this.setStatus(`x: ${Math.round(target.position.x / (MM * WORKSPACE_SCALE))} mm`);
+      const x = THREE.MathUtils.clamp(transform.translationMm[0] + dir * 5, 0, this.bedMm.x);
+      transform = { ...transform, translationMm: [x, transform.translationMm[1], transform.translationMm[2]] };
+      this.setStatus(`x: ${Math.round(x)} mm`);
     }
-    this.revalidatePublishedGcode();
-  }
-
-  /** Paint every vertex within [radius] (model units) of [localPt] on [mesh]. */
-  private paintSphere(mesh: THREE.Mesh, localPt: THREE.Vector3, radius: number, color: THREE.Color): number {
-    const geom = mesh.geometry as THREE.BufferGeometry;
-    const pos = geom.getAttribute('position') as THREE.BufferAttribute;
-    let colorAttr = geom.getAttribute('color') as THREE.BufferAttribute | undefined;
-    if (!colorAttr) {
-      colorAttr = new THREE.BufferAttribute(new Float32Array(pos.count * 3), 3);
-      geom.setAttribute('color', colorAttr);
-    }
-    const r2 = radius * radius;
-    let painted = 0;
-    const v = new THREE.Vector3();
-    for (let i = 0; i < pos.count; i++) {
-      v.set(pos.getX(i), pos.getY(i), pos.getZ(i));
-      if (v.distanceToSquared(localPt) <= r2) {
-        colorAttr.setXYZ(i, color.r, color.g, color.b);
-        painted++;
-      }
-    }
-    if (painted > 0) {
-      colorAttr.needsUpdate = true;
-      this.markPublishedGcodeStale();
-    }
-    return painted;
-  }
-
-  /** Test hook: paint a sphere at the model-space centroid with color index. */
-  paintTestAtCenter(colorIndex = 0): number {
-    const entry = this.models[this.models.length - 1];
-    if (!entry) return -1;
-    const geom = entry.raw;
-    geom.computeBoundingBox();
-    const c = geom.boundingBox!.getCenter(new THREE.Vector3());
-    const col = new THREE.Color(this.palette.colorAt(colorIndex));
-    return this.paintSphere(entry.display, c, this.brushRadiusMm * 3, col);
+    this.commitSelectedPrimaryTransform(transform, mode);
+    this.syncTransformProxy();
   }
 
   /** Fires when the filament palette changes (2D UI re-renders). */
@@ -3575,101 +3606,36 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public setTool(tool: WorkspaceGizmoTool) {
+    if (tool === 'lay_on_face' || tool === 'paint') {
+      this.setStatus(
+        tool === 'paint'
+          ? 'Color painting is unavailable until facet assignments are canonical.'
+          : 'Lay on face is unavailable until the orientation result commits canonically.',
+      );
+      return;
+    }
     this.tool = tool;
     this.refreshToolButtons();
-    if (this.tool === 'lay_on_face') {
-      this.setStatus('Select a face on the model to lay flat');
-    } else {
-      this.setStatus(`tool: ${tool} - pinch-drag the model`);
-
-      if (this.transformControls) {
-        if (tool === 'move') this.transformControls.setMode('translate');
-        else if (tool === 'rotate') this.transformControls.setMode('rotate');
-        else if (tool === 'scale') this.transformControls.setMode('scale');
-      }
+    this.setStatus(`tool: ${tool} - pinch-drag the model`);
+    if (this.transformControls) {
+      if (tool === 'move') this.transformControls.setMode('translate');
+      else if (tool === 'rotate') this.transformControls.setMode('rotate');
+      else if (tool === 'scale') this.transformControls.setMode('scale');
     }
   }
 
-  private snapToBed(entry: { viewer: THREE.Object3D; display?: THREE.Object3D }) {
-    entry.viewer.updateMatrixWorld();
-    const box = new THREE.Box3().setFromObject(entry.display || entry.viewer);
-    const lowestWorldY = box.min.y;
-    const bedWorldY = this.workspace.getWorldPosition(new THREE.Vector3()).y;
-    entry.viewer.position.y += bedWorldY - lowestWorldY;
-  }
-
-  private layOnFace(
-    entry: { viewer: THREE.Object3D; display: THREE.Mesh },
-    faceNormal: THREE.Vector3,
-    hitObject: THREE.Object3D,
-  ) {
-    const normalMatrix = new THREE.Matrix3().getNormalMatrix(hitObject.matrixWorld);
-    const worldNormal = faceNormal.clone().applyMatrix3(normalMatrix).normalize();
-    const targetNormal = new THREE.Vector3(0, -1, 0);
-    const q = new THREE.Quaternion().setFromUnitVectors(worldNormal, targetNormal);
-
-    const workspaceWorldQuat = this.workspace.getWorldQuaternion(new THREE.Quaternion());
-    const workspaceInvQuat = workspaceWorldQuat.clone().invert();
-    const localQ = workspaceInvQuat.clone().multiply(q).multiply(workspaceWorldQuat);
-
-    entry.viewer.quaternion.premultiply(localQ);
-    this.snapToBed(entry);
-    this.setStatus('Laid on face');
-  }
-
   public autoOrientSelectedModel() {
-    if (!this.selectedModel) return;
-    const entry = this.selectedModel;
-    const posAttr = entry.raw.attributes.position;
-    if (!posAttr) return;
-
-    this.setStatus('Auto-orienting...');
-
-    // Defer computation slightly to let UI update
-    setTimeout(() => {
-      const scale = entry.viewer.scale;
-      const pts: THREE.Vector3[] = [];
-      const step = Math.max(1, Math.floor(posAttr.count / 100000));
-      for (let i = 0; i < posAttr.count; i += step) {
-        pts.push(new THREE.Vector3(posAttr.getX(i) * scale.x, posAttr.getY(i) * scale.y, posAttr.getZ(i) * scale.z));
-      }
-
-      const hull = new ConvexHull().setFromPoints(pts);
-      const normalAreas: { normal: THREE.Vector3; area: number }[] = [];
-
-      for (let i = 0; i < hull.faces.length; i++) {
-        const f = hull.faces[i];
-        const e1 = new THREE.Vector3().subVectors(f.edge.next.vertex.point, f.edge.vertex.point);
-        const e2 = new THREE.Vector3().subVectors(f.edge.prev.vertex.point, f.edge.vertex.point);
-        const area = new THREE.Vector3().crossVectors(e1, e2).length() * 0.5;
-
-        let found = false;
-        for (const na of normalAreas) {
-          if (na.normal.dot(f.normal) > 0.999) {
-            na.area += area;
-            found = true;
-            break;
-          }
-        }
-        if (!found) normalAreas.push({ normal: f.normal.clone(), area });
-      }
-
-      if (normalAreas.length > 0) {
-        normalAreas.sort((a, b) => b.area - a.area);
-        const bestNormal = normalAreas[0].normal;
-
-        const quat = new THREE.Quaternion().setFromUnitVectors(bestNormal, new THREE.Vector3(0, -1, 0));
-        entry.viewer.quaternion.copy(quat);
-
-        this.snapToBed(entry);
-        if (this.onSelectionTransformChanged) this.onSelectionTransformChanged();
-        this.setStatus('Auto-oriented model');
-      }
-    }, 10);
+    this.setStatus('Auto-orient is unavailable until its analysis commits a canonical transform.');
   }
-
   private checkLoadButtonAndTrigger() {
     if (!this.loadButtonNode || !this.onRequestLoadStl) return;
+    const invokeLoadAction = () => {
+      const ctx = this.actionContext;
+      if (!ctx) return;
+      void this.actionRegistry
+        .invoke('load_model_from_path', 'xr-primary', ctx, ctx.ui.get())
+        .catch((error) => console.error('[orcaxr] XR load action failed:', error));
+    };
     const input = xb.core.input as unknown as {
       intersectionsForController: Map<unknown, THREE.Intersection[]>;
     };
@@ -3689,10 +3655,12 @@ export class OrcaWorkspace extends xb.Script {
         const session = xb.core.renderer.xr.getSession();
         if (session) {
           void session.end().then(() => {
-            this.onRequestLoadStl?.();
+            invokeLoadAction();
           });
         } else {
-          this.onRequestLoadStl?.();
+          // `ActionRegistry.invoke` reaches the synchronous load handler before
+          // its first await, preserving the native select's user activation.
+          invokeLoadAction();
         }
         return;
       }
@@ -3828,9 +3796,10 @@ export class OrcaWorkspace extends xb.Script {
       row.add(new UIText(isVirtual ? `V-${i + 1}:` : `Head ${i + 1}:`, { fontSize: 14, color: '#ffffff' }));
 
       const cycleFilament = () => {
-        const choices = this.filamentChoices(this.profile!.machineName);
-        const idx = choices.indexOf(this.headFilaments[i]);
-        this.setHeadFilament(i, choices[(idx + 1) % choices.length] ?? this.headFilaments[i]);
+        const choices = this.getProfileOptions().filamentOptions;
+        const idx = choices.findIndex((choice) => choice.id === this.headFilaments[i]?.presetId);
+        const next = choices[idx < 0 ? 0 : (idx + 1) % choices.length];
+        if (next) this.setHeadFilamentPreset(i, next.id);
         return true;
       };
       const filBtn = new UIPanel({
@@ -3845,7 +3814,7 @@ export class OrcaWorkspace extends xb.Script {
         strokeColor: '#ffffff1a',
         onClick: cycleFilament,
       });
-      filBtn.add(new UIText(this.headFilaments[i] || 'None', { fontSize: 12, color: '#ffffff' }));
+      filBtn.add(new UIText(this.headFilaments[i]?.name || 'None', { fontSize: 12, color: '#ffffff' }));
       row.add(filBtn);
 
       if (!isVirtual) {
@@ -3916,37 +3885,35 @@ export class OrcaWorkspace extends xb.Script {
     panel.add(addBtn);
   }
 
-  public deleteSelectedModel() {
-    if (!this.selectedModel) return;
-    const idx = this.models.indexOf(this.selectedModel);
-    if (idx !== -1) {
-      this.workspace.remove(this.selectedModel.viewer);
-      this.models.splice(idx, 1);
-      this.unselectModel();
-      if (this.models.length > 0) {
-        this.selectModel(this.models[this.models.length - 1]);
-      }
-      this.setStatus('Model deleted.');
-      this.recomputePreflight();
+  public undo(): boolean {
+    const changed = this.canonicalProject.undo();
+    if (changed) {
+      this.syncTransformProxy();
+      this.revalidatePublishedGcode();
+      this.setStatus('Undid the last project edit.');
     }
+    return changed;
+  }
+
+  public redo(): boolean {
+    const changed = this.canonicalProject.redo();
+    if (changed) {
+      this.syncTransformProxy();
+      this.revalidatePublishedGcode();
+      this.setStatus('Redid the project edit.');
+    }
+    return changed;
+  }
+
+  public deleteSelectedModel() {
+    const deleted = this.canonicalProject.deleteSelectedInstance();
+    if (!deleted) return;
+    this.setStatus(deleted.scope === 'object' ? 'Model deleted.' : 'Model instance deleted.');
   }
 
   /** Delete every model on the ACTIVE plate (Orca's Edit → Delete all). */
   public deleteAllModels() {
-    if (this.models.length === 0) {
-      this.setStatus('Nothing to delete.');
-      return;
-    }
-    for (const m of [...this.models]) {
-      this.workspace.remove(m.viewer);
-      m.display.geometry.dispose();
-    }
-    this.models.length = 0;
-    this.unselectModel();
-    if (this.onSelectionChanged) this.onSelectionChanged(false);
-    if (this.onPlatesChanged) this.onPlatesChanged();
-    this.recomputePreflight();
-    this.setStatus('All models deleted.');
+    this.setStatus('Delete All is unavailable until it is one canonical transaction.');
   }
 
   /**
@@ -3954,34 +3921,23 @@ export class OrcaWorkspace extends xb.Script {
    * plate, and drop any slice output / preview. The fresh-start action from
    * Snapmaker Orca's File menu. (docs/parity.md)
    */
-  public newProject() {
-    for (const plate of this.plates) {
-      for (const m of plate.models) {
-        this.workspace.remove(m.viewer);
-        m.display.geometry.dispose();
+  public async newProject(): Promise<boolean> {
+    const dirty = this.canonicalProject.getSummary().dirty;
+    if (dirty) {
+      const confirm = this.onRequestNewProjectConfirmation;
+      if (!confirm || !(await confirm(true))) {
+        this.setStatus('New Project cancelled; the current project was not changed.');
+        return false;
       }
     }
-    this.plates = [{ id: 1, label: 'Plate 1', models: [] }];
-    this.nextPlateId = 2;
-    this.activePlateId = 1;
-    this.originalProject = null;
-    this.originalProjectSnapshot = null;
-    this.projectSnapshotPending = false;
-    this.projectSourceWasExclusive = false;
-    this.pendingSemanticImportCheckpoint = null;
-    this.canonicalSliceRequiredReason = null;
-    this.virtualFilaments = [];
-    this.projectPrimeTower = null;
-    this.palette.onChanged?.();
-    this.rebuildHeadsPanel();
-    this.unselectModel();
-    this.gcodeArtifact.clear();
-    if (this.previewOn) this.togglePreview();
-    this.rebuildPlate();
-    if (this.onPlatesChanged) this.onPlatesChanged();
-    if (this.onSelectionChanged) this.onSelectionChanged(false);
-    this.recomputePreflight();
-    this.setStatus('New project — plate cleared.');
+    this.canonicalProject.resetProject();
+    this.clearToolpathPreview();
+    this.publishedGcode = null;
+    this.onDownloadReady?.(false);
+    this.onSelectionChanged?.(false);
+    this.onPlatesChanged?.();
+    this.setStatus('Started a new project.');
+    return true;
   }
 
   /**
@@ -3993,159 +3949,48 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus('Select a model to clone first.');
       return;
     }
-    // raw.clone() carries the vertex `color` attribute, so painted colours copy.
-    // The copy lands centred on the bed (coincident with the original, like
-    // loading a second model) and is auto-selected — use Move to reposition it.
-    this.addModelFromGeometry(this.selectedModel.raw.clone(), 0x4fc3f7);
+    this.canonicalProject.duplicateSelectedInstance();
     this.setStatus('Model cloned — use the Move tool to reposition the copy.');
   }
 
-  /**
-   * Split the selected model into its connected components, one new model per
-   * body (Orca right-click → Split to Objects). Each body keeps the exact place
-   * it held inside the original (same display offset + viewer transform), so a
-   * boolean-union of two separated solids splits cleanly back apart.
-   */
-  public splitSelectedToObjects() {
-    if (!this.selectedModel) {
-      this.setStatus('Select a model to split first.');
-      return;
-    }
-    const src = this.selectedModel;
-    const g = src.raw.index ? src.raw.toNonIndexed() : src.raw;
-    const positions = g.getAttribute('position').array as ArrayLike<number>;
-    const colorAttr = g.getAttribute('color');
-    const comps = splitConnectedComponents(positions, colorAttr ? (colorAttr.array as ArrayLike<number>) : null);
-    if (comps.length <= 1) {
-      this.setStatus('Already a single connected body — nothing to split.');
-      return;
-    }
-
-    // Capture the original placement so every body lands where it was.
-    const meshPos = src.display.position.clone();
-    const vPos = src.viewer.position.clone();
-    const vQuat = src.viewer.quaternion.clone();
-    const vScale = src.viewer.scale.clone();
-
-    // Remove the original (bypass deleteSelectedModel's auto-select).
-    const idx = this.models.indexOf(src);
-    if (idx !== -1) {
-      this.workspace.remove(src.viewer);
-      this.models.splice(idx, 1);
-    }
-    this.unselectModel();
-
-    for (const comp of comps) {
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(comp.positions, 3));
-      if (comp.colors) geo.setAttribute('color', new THREE.BufferAttribute(comp.colors, 3));
-      this.addModelFromGeometry(geo, 0x4fc3f7);
-      const added = this.models[this.models.length - 1];
-      // addModelFromGeometry recentres each body on its own bbox; overwrite that
-      // with the ORIGINAL display offset + transform so bodies keep their layout.
-      added.display.position.copy(meshPos);
-      added.viewer.position.copy(vPos);
-      added.viewer.quaternion.copy(vQuat);
-      added.viewer.scale.copy(vScale);
-    }
-    this.recomputePreflight();
-    this.setStatus(`Split into ${comps.length} objects.`);
+  public async splitSelectedToObjects(): Promise<boolean> {
+    const result = await runCanonicalSplitToObjectsFlow(
+      this.canonicalProject,
+      this.onRequestSplitToObjectsConfirmation,
+      (message) => this.setStatus(message),
+    );
+    if (!result) return false;
+    this.syncTransformProxy();
+    return true;
   }
 
-  /**
-   * Cut the selected model in two with a horizontal plane through its mid-height
-   * (Orca gizmo → Cut). Both halves are capped and land in the model's original
-   * place (like Split to Objects) so they read as the source until moved apart.
-   * Paint colours are not carried across the cut (geometry-only op).
-   */
   public cutSelectedByPlane() {
-    if (!this.selectedModel) {
-      this.setStatus('Select a model to cut first.');
-      return;
-    }
-    const src = this.selectedModel;
-    const g = src.raw.index ? src.raw.toNonIndexed() : src.raw;
-    g.computeBoundingBox();
-    const bb = g.boundingBox!;
-    const cz = (bb.min.z + bb.max.z) / 2; // raw is Z-up mm → horizontal mid-cut
-    const positions = g.getAttribute('position').array as ArrayLike<number>;
-    const res = cutByPlane(positions, 0, 0, 1, cz);
-    if (!res.didCut) {
-      this.setStatus('Cut plane missed the model.');
-      return;
-    }
-
-    const meshPos = src.display.position.clone();
-    const vPos = src.viewer.position.clone();
-    const vQuat = src.viewer.quaternion.clone();
-    const vScale = src.viewer.scale.clone();
-
-    const idx = this.models.indexOf(src);
-    if (idx !== -1) {
-      this.workspace.remove(src.viewer);
-      this.models.splice(idx, 1);
-    }
-    this.unselectModel();
-
-    for (const half of [res.positive, res.negative]) {
-      if (half.length === 0) continue;
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(half, 3));
-      this.addModelFromGeometry(geo, 0x4fc3f7);
-      const added = this.models[this.models.length - 1];
-      added.display.position.copy(meshPos);
-      added.viewer.position.copy(vPos);
-      added.viewer.quaternion.copy(vQuat);
-      added.viewer.scale.copy(vScale);
-    }
-    this.recomputePreflight();
-    this.setStatus('Cut into 2 halves.');
+    this.setStatus('Cut is unavailable until topology and annotations commit atomically.');
   }
-
-  // --- Edit clipboard (Orca Edit → Cut / Copy / Paste) -----------------
-  /** Single-slot geometry clipboard for Cut/Copy/Paste. */
-  private clipboard: THREE.BufferGeometry | null = null;
+  // --- Edit clipboard (canonical implementation pending) ----------------
   public get hasClipboard(): boolean {
-    return this.clipboard !== null;
+    return false;
   }
 
-  /** Copy the selected model's geometry into the clipboard. */
   public copySelectedModel(): boolean {
-    if (!this.selectedModel) {
-      this.setStatus('Select a model to copy first.');
-      return false;
-    }
-    this.clipboard?.dispose();
-    // Clone carries the vertex `color` attribute, so painted colours survive.
-    this.clipboard = this.selectedModel.raw.clone();
-    this.setStatus('Copied to clipboard.');
-    return true;
+    this.setStatus('Copy is unavailable until the canonical clipboard preserves full object semantics.');
+    return false;
   }
 
-  /** Copy the selection, then delete it (Cut). */
   public cutSelectedModel(): boolean {
-    if (!this.copySelectedModel()) return false;
-    this.deleteSelectedModel();
-    this.setStatus('Cut to clipboard.');
-    return true;
+    this.setStatus('Cut is unavailable until the canonical clipboard preserves full object semantics.');
+    return false;
   }
 
-  /** Add a fresh copy of the clipboard geometry, centred + auto-selected. */
   public pasteClipboard() {
-    if (!this.clipboard) {
-      this.setStatus('Clipboard is empty.');
-      return;
-    }
-    this.addModelFromGeometry(this.clipboard.clone(), 0x4fc3f7);
-    this.setStatus('Pasted from clipboard — use Move to reposition.');
+    this.setStatus('Paste is unavailable until the canonical clipboard preserves full object semantics.');
   }
-
   // --- View overlays (Orca View → Show Wireframe / Printable Box) ------
   private wireframeOn = false;
   private printableBox: THREE.LineSegments | null = null;
 
   /** Add/remove a wireframe overlay child on one model's display mesh. */
-  private applyWireframe(entry: ModelEntry, on: boolean) {
+  private applyWireframe(entry: ProjectedModelEntry, on: boolean) {
     const existing = entry.display.getObjectByName('wireframeOverlay') as THREE.LineSegments | undefined;
     if (on && !existing) {
       // WireframeGeometry(raw) lives in the same coord space as display.geometry,
@@ -4199,7 +4044,7 @@ export class OrcaWorkspace extends xb.Script {
     return sp;
   }
 
-  private applyLabel(entry: ModelEntry, idx: number, on: boolean) {
+  private applyLabel(entry: ProjectedModelEntry, idx: number, on: boolean) {
     const existing = entry.viewer.getObjectByName('objectLabel') as THREE.Sprite | undefined;
     if (on && !existing) {
       const sp = this.makeLabelSprite(`Model ${idx + 1}`);
@@ -4264,7 +4109,7 @@ export class OrcaWorkspace extends xb.Script {
     return mesh;
   }
 
-  private applyOverhang(entry: ModelEntry, on: boolean) {
+  private applyOverhang(entry: ProjectedModelEntry, on: boolean) {
     const existing = entry.display.getObjectByName('overhangOverlay') as THREE.Mesh | undefined;
     if (on && !existing) {
       const o = this.buildOverhangOverlay(entry.raw);
@@ -4313,414 +4158,203 @@ export class OrcaWorkspace extends xb.Script {
     return true;
   }
 
-  /**
-   * Auto-arrange every model on the active plate into a centred grid so nothing
-   * overlaps (Orca top toolbar → Arrange). Cell size is the largest model
-   * footprint plus a 10 mm gap; the grid is centred on the bed. Models that
-   * still fall outside the bed (too many / too large) surface in the off-bed
-   * pre-flight, exactly as a manual layout would.
-   */
   public arrangePlate() {
-    const n = this.models.length;
-    if (n === 0) {
-      this.setStatus('Nothing to arrange.');
-      return;
-    }
-    const vis = MM * WORKSPACE_SCALE;
-    // Footprint of each model in world units: its mm bed extent (raw X/Y, since
-    // display rotates Z-up mm onto the bed) × magnification × per-model scale.
-    let cell = 0;
-    for (const m of this.models) {
-      m.raw.computeBoundingBox();
-      const bb = m.raw.boundingBox!;
-      const foot = Math.max(bb.max.x - bb.min.x, bb.max.y - bb.min.y) * vis * m.viewer.scale.x;
-      cell = Math.max(cell, foot);
-    }
-    cell += 10 * vis; // 10 mm gap between cells
-    const cols = Math.ceil(Math.sqrt(n));
-    const rows = Math.ceil(n / cols);
-    const x0 = -((cols - 1) / 2) * cell;
-    const z0 = -((rows - 1) / 2) * cell;
-    this.models.forEach((m, i) => {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      m.viewer.position.set(x0 + col * cell, 0, z0 + row * cell);
-    });
-    this.recomputePreflight();
-    this.setStatus(`Arranged ${n} model${n > 1 ? 's' : ''} in a ${cols}×${rows} grid.`);
+    this.setStatus('Arrange is unavailable until placement commits as one canonical transaction.');
   }
 
-  /**
-   * Export every plated model, merged in printer coordinates (mm, Z-up, dropped
-   * onto the bed), as a binary STL — the same "what you see is what slices"
-   * geometry the slicer bakes. Orca's File → Export as STL.
-   */
   public exportPlateStl() {
-    const merged = this.mergedPrinterGeometry();
-    if (!merged) {
-      this.setStatus('Nothing to export — add a model first.');
-      return;
-    }
-    const mesh = new THREE.Mesh(merged, new THREE.MeshBasicMaterial());
-    const stl = new STLExporter().parse(mesh, { binary: true }) as DataView;
-    merged.dispose();
-    if (this.onDownloadFile) this.onDownloadFile('orcaxr_plate.stl', ownedArrayBuffer(stl), 'model/stl');
-    this.setStatus('Exported plate as STL.');
-  }
-
-  /** Merged-plate geometry serialised to minimal 3MF package bytes (or null). */
-  public build3mfBytes(): Uint8Array | null {
-    const merged = this.mergedPrinterGeometry();
-    if (!merged) return null;
-    const nonIndexed = merged.index ? merged.toNonIndexed() : merged;
-    const positions = nonIndexed.getAttribute('position').array as ArrayLike<number>;
-    const bytes = writeMinimal3mf(positions);
-    if (nonIndexed !== merged) nonIndexed.dispose();
-    merged.dispose();
-    return bytes;
-  }
-
-  /** Export the plate as a generic (geometry-only) 3MF (Orca File → Export 3MF). */
-  public exportPlate3mf() {
-    const bytes = this.build3mfBytes();
-    if (!bytes) {
-      this.setStatus('Nothing to export — add a model first.');
-      return;
-    }
-    if (this.onDownloadFile) {
-      this.onDownloadFile(
-        'orcaxr_plate.3mf',
-        ownedArrayBuffer(bytes),
-        'application/vnd.ms-package.3dmanufacturing-3dmodel+xml',
+    const summary = this.canonicalProject.getSummary();
+    const selected = summary.selectedInstanceIds.filter(
+      (instanceId) => this.canonicalProject.getInstance(instanceId)?.plateId === summary.activePlateId,
+    );
+    const instanceIds = selected.length > 0 ? selected : this.models.map((model) => model.instanceId);
+    try {
+      const exported = this.canonicalProject.exportCanonicalStl(instanceIds);
+      this.onDownloadFile?.(exported.suggestedFilename, ownedArrayBuffer(exported.bytes), exported.mediaType);
+      this.setStatus(
+        `Exported ${exported.instanceCount} model${exported.instanceCount === 1 ? '' : 's'} as ${exported.triangleCount.toLocaleString()} STL triangle${exported.triangleCount === 1 ? '' : 's'}.`,
       );
+    } catch (error) {
+      this.setStatus(`STL export failed: ${(error as Error).message}`);
+      throw error;
     }
-    this.setStatus('Exported plate as 3MF.');
   }
 
+  public build3mfBytes(): Uint8Array | null {
+    this.setStatus('Geometry-only 3MF export is unavailable; use canonical project save.');
+    return null;
+  }
+
+  public exportPlate3mf() {
+    this.setStatus('Geometry-only 3MF export is unavailable; use canonical project save.');
+  }
   // --- Save / Open Project (Orca File → Save / Open Project) -----------
-  /** Serialise the whole scene (all plates + transforms + profile) to project bytes. */
-  public buildProjectBytes(): Uint8Array | null {
-    const objects: { positions: Float32Array }[] = [];
-    const objMeta: ProjectObjectMeta[] = [];
-    for (const plate of this.plates) {
-      for (const m of plate.models) {
-        const g = m.raw.index ? m.raw.toNonIndexed() : m.raw;
-        const arr = g.getAttribute('position').array;
-        objects.push({ positions: arr instanceof Float32Array ? arr : new Float32Array(arr as ArrayLike<number>) });
-        const v = m.viewer;
-        objMeta.push({
-          plate: plate.id,
-          viewer: {
-            position: [v.position.x, v.position.y, v.position.z],
-            quaternion: [v.quaternion.x, v.quaternion.y, v.quaternion.z, v.quaternion.w],
-            scale: [v.scale.x, v.scale.y, v.scale.z],
-          },
-          display: [m.display.position.x, m.display.position.y, m.display.position.z],
-        });
-      }
-    }
-    if (objects.length === 0) return null;
-    const opts = this.getProfileOptions();
-    const meta: ProjectMeta = {
-      version: 1,
-      profile: { machine: opts.machine, process: opts.process, filament: opts.filament },
-      activePlate: this.activePlateId,
-      plates: this.plates.map((p) => ({ id: p.id, label: p.label })),
-      objects: objMeta,
-    };
-    return writeProject3mf(objects, meta);
-  }
-
-  /**
-   * Exact guard for the immutable FullSpectrum source. The lightweight
-   * OrcaXR writer captures geometry/transforms/plates but not vertex paint or
-   * every slicer control, so those are included alongside its bytes.
-   */
-  private captureSemanticProjectSnapshot(): SemanticProjectSnapshot | null {
-    const projectBytes = this.buildProjectBytes();
-    if (!projectBytes) return null;
-
-    const colorBuffers: Array<SemanticBufferSnapshot | null> = [];
-    for (const plate of this.plates) {
-      for (const model of plate.models) {
-        const color = model.raw.getAttribute('color');
-        if (!color) {
-          colorBuffers.push(null);
-          continue;
-        }
-        const array = color.array as unknown as ArrayBufferView;
-        const bytes = new Uint8Array(array.byteLength);
-        bytes.set(new Uint8Array(array.buffer, array.byteOffset, array.byteLength));
-        colorBuffers.push({
-          arrayType: (array as unknown as { constructor: { name: string } }).constructor.name,
-          itemSize: color.itemSize,
-          normalized: color.normalized,
-          bytes,
-        });
-      }
-    }
-
-    const sortedEntries = (record: Record<string, string>) =>
-      Object.entries(record).sort(([left], [right]) => left.localeCompare(right));
-    const controls = JSON.stringify({
-      version: 1,
-      palette: this.palette.list(),
-      virtualFilaments: this.virtualFilaments,
-      projectPrimeTower: this.projectPrimeTower,
-      profile: this.profile
-        ? {
-            id: this.profile.id,
-            displayName: this.profile.displayName,
-            machineName: this.profile.machineName,
-            processName: this.profile.processName,
-            filamentName: this.profile.filamentName,
-            config: sortedEntries(this.profile.config),
-          }
-        : null,
-      customOverrides: sortedEntries(this.customOverrides),
-      wipeTowerAuto: this.wipeTowerAuto,
-      paintedSliceEnabled: this.paintedSliceEnabled,
-      headFilaments: [...this.headFilaments],
-      headNozzles: [...this.headNozzles],
-    });
-
-    return { projectBytes, colorBuffers, controls };
-  }
-
   /** Save the project as a downloadable OrcaXR .3mf (File → Save Project). */
-  public saveProject() {
-    const bytes = this.buildProjectBytes();
-    if (!bytes) {
+  public async saveProject(): Promise<void> {
+    if (this.canonicalProject.getSummary().objectCount === 0) {
       this.setStatus('Nothing to save — add a model first.');
       return;
     }
-    if (this.onDownloadFile) {
-      this.onDownloadFile(
-        'orcaxr_project.3mf',
-        ownedArrayBuffer(bytes),
-        'application/vnd.ms-package.3dmanufacturing-3dmodel+xml',
-      );
+    try {
+      const saved = await this.canonicalProject.saveCanonical3mf();
+      this.onDownloadFile?.(saved.suggestedFilename, ownedArrayBuffer(saved.bytes), saved.mediaType);
+      const warnings = saved.warnings?.length ?? 0;
+      this.setStatus(`Project saved${warnings > 0 ? ` (${warnings} compatibility warning(s))` : ''}.`);
+    } catch (error) {
+      this.setStatus(`Project save failed: ${(error as Error).message}`);
+      throw error;
     }
-    this.setStatus('Project saved.');
   }
 
   /** Restore a scene from OrcaXR project bytes (File → Open Project). */
-  public openProject(bytes: ArrayBuffer): boolean {
-    const parsed = parseProject3mf(new Uint8Array(bytes));
-    if (!parsed) {
-      this.setStatus('Not an OrcaXR project file (use Import for plain models).');
-      return false;
-    }
-    const { meta, geometries } = parsed;
-    this.newProject();
-    if (meta.profile) this.setProfileByNames(meta.profile.machine, meta.profile.process, meta.profile.filament);
-
-    // Map saved plate ids onto freshly-created plates (newProject left plate 1).
-    const savedPlates = meta.plates?.length ? meta.plates : [{ id: 1, label: 'Plate 1' }];
-    const plateMap = new Map<number, number>();
-    const first = this.plates[0];
-    first.label = savedPlates[0].label;
-    plateMap.set(savedPlates[0].id, first.id);
-    for (let i = 1; i < savedPlates.length; i++) {
-      this.addPlate();
-      const created = this.plates[this.plates.length - 1];
-      created.label = savedPlates[i].label;
-      plateMap.set(savedPlates[i].id, created.id);
-    }
-
-    meta.objects.forEach((om, i) => {
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(geometries[i] ?? new Float32Array(0), 3));
-      this.setActivePlate(plateMap.get(om.plate) ?? first.id);
-      this.addModelFromGeometry(geo, 0x4fc3f7);
-      const added = this.models[this.models.length - 1];
-      added.viewer.position.set(om.viewer.position[0], om.viewer.position[1], om.viewer.position[2]);
-      added.viewer.quaternion.set(
-        om.viewer.quaternion[0],
-        om.viewer.quaternion[1],
-        om.viewer.quaternion[2],
-        om.viewer.quaternion[3],
+  public async openProject(bytes: ArrayBuffer, filename = 'project.3mf'): Promise<boolean> {
+    if (bytes.byteLength === 0) throw new Error('The selected project is empty.');
+    if (this.projectImportInProgress) throw new Error('Another project import preview is already open.');
+    this.projectImportInProgress = true;
+    try {
+      const prepared = await this.canonicalProject.prepareCanonical3mfImport(new Uint8Array(bytes), {
+        filename,
+        mediaType: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml',
+      });
+      const preview = prepared.preview;
+      const confirm = this.onProjectImportPreview;
+      if (!confirm) {
+        prepared.cancel('no import confirmation surface');
+        throw new Error('Project import needs an explicit preview confirmation surface.');
+      }
+      let committed = false;
+      try {
+        const decision = await confirm(preview);
+        if (preview.blocked) {
+          const errors = preview.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+          throw new Error(
+            `The project import preview is blocked by ${errors.length || 1} unresolved problem${errors.length === 1 ? '' : 's'}.`,
+          );
+        }
+        if (!decision) {
+          this.setStatus('Project open cancelled.');
+          return false;
+        }
+        prepared.confirm(decision);
+        committed = true;
+      } finally {
+        if (!committed) prepared.cancel('project open did not commit');
+      }
+      this.importedProjectOwnsSlicingConfiguration = true;
+      this.profile = null;
+      const slicing = this.canonicalProject.getSlicingConfiguration();
+      const physical = [...slicing.filaments.physical].sort((left, right) => left.toolId - right.toolId);
+      this.headFilaments = physical.map((filament) =>
+        Object.freeze({
+          name: filament.name,
+          ...(filament.presetId?.startsWith('preset:') ? { presetId: filament.presetId as WorkspacePresetId } : {}),
+        }),
       );
-      added.viewer.scale.set(om.viewer.scale[0], om.viewer.scale[1], om.viewer.scale[2]);
-      added.display.position.set(om.display[0], om.display[1], om.display[2]);
-    });
-
-    this.setActivePlate(plateMap.get(meta.activePlate) ?? first.id);
-    this.unselectModel();
-    if (this.onSelectionChanged) this.onSelectionChanged(false);
-    if (this.onPlatesChanged) this.onPlatesChanged();
-    this.recomputePreflight();
-    this.setStatus(
-      `Opened project — ${meta.objects.length} model${meta.objects.length === 1 ? '' : 's'}, ${savedPlates.length} plate${savedPlates.length === 1 ? '' : 's'}.`,
-    );
-    return true;
+      this.headNozzles = physical.map((filament) => String(filament.nozzleDiameterMm ?? 0.4));
+      this.virtualFilaments = virtualFilamentsFromConfig({
+        ...slicing.config,
+        filament_colour: physical.map((filament) => filament.color),
+      });
+      this.projectPrimeTower = null;
+      if (physical.length > 0) {
+        this.palette.setFrom(
+          physical.map((filament) => filament.color),
+          physical.map((filament) => filament.material),
+        );
+      }
+      this.synchronizePrinterMappingFromCanonicalConfig();
+      this.unselectModel();
+      this.onProfileChanged?.();
+      this.recomputePreflight();
+      const summary = this.canonicalProject.getSummary();
+      this.setStatus(
+        `Opened ${summary.projectName} — ${summary.objectCount} model${summary.objectCount === 1 ? '' : 's'}, ${summary.plates.length} plate${summary.plates.length === 1 ? '' : 's'}.`,
+      );
+      return true;
+    } finally {
+      this.projectImportInProgress = false;
+      this.applyCatalogDefaultProfile();
+    }
   }
 
   public async sliceNow() {
-    if (this.slicer.isSlicing) return;
-    if (this.models.length === 0) {
+    if (this.activeCanonicalSlicer) return;
+    const activePlate = this.canonicalProject.getSummary().plates.find((plate) => plate.id === this.activePlateId);
+    if (!activePlate || activePlate.instanceCount === 0) {
       this.setStatus('No models to slice.');
       return;
     }
+    if (SlicerClient.useExternalSlicer()) {
+      this.setStatus(
+        'slice failed: external canonical slicing needs independently attested engine provenance; disable the external slicer to use the verified browser engine.',
+      );
+      return;
+    }
+    const startedAt = performance.now();
+    const preflight = this.createLiveProfilePreflight();
+    const slicer = new CanonicalWorkspaceSlicer({
+      workspace: this.canonicalProject,
+      client: this.slicer,
+      route: { kind: 'browser-wasm' },
+      maxThreads: 4,
+      preflight,
+    });
+    this.activeCanonicalSlicer = slicer;
+    const unsubscribe = slicer.subscribe((status) => this.renderCanonicalSliceStatus(status));
     try {
-      // Revalidate any prior output before a new attempt. An edited project
-      // must not leave stale G-code enabled while the replacement is running
-      // or after that replacement fails.
-      if (this.gcodeArtifact.hasArtifact) this.getLastGcode();
-      if (this.onSliceStateChanged) this.onSliceStateChanged(true);
-      if (this.sliceModalCard) this.sliceModalCard.show();
-      this.setStatus('baking transforms…', 0);
-      await new Promise((r) => setTimeout(r, 50)); // let UI paint
-      const fsProject = this.canonicalSliceRequiredReason !== null || this.virtualFilaments.length > 0;
-      // Painted (multi-colour) input, if the plated models use >1 filament.
-      const painted = this.buildPaintedInput();
-      const sliceRoute = selectSemanticSliceRoute({
-        hasFullSpectrumSource: fsProject,
-        paintedInputAvailable: painted !== null,
-        distinctPaintAssignments: painted?.distinctCount ?? 0,
-        paintedEngineEnabled: this.paintedSliceEnabled,
-        externalGeometryEndpoint: SlicerClient.useExternalSlicer(),
-      });
-      const isPainted = sliceRoute === 'painted';
-      this.setStatus(isPainted ? 'slicing (multi-colour)…' : 'slicing…', 0);
-      const t0 = performance.now();
-      const overrides: Record<string, string> = {
-        ...(this.profile?.config ?? {}),
-        ...this.palette.toSlicerOverrides(),
-        ...this.customOverrides,
+      this.markPublishedGcodeStale();
+      this.onSliceStateChanged?.(true);
+      this.sliceModalCard?.show();
+      const result = await slicer.startCurrentPlate().completion;
+      const plate = result.plates[0];
+      if (!plate) throw new Error('The canonical slicer returned no active-plate output.');
+      const gcode = new TextDecoder('utf-8', { fatal: true }).decode(plate.gcode);
+      this.publishedGcode = {
+        gcode,
+        guard: {
+          sourceRevision: result.sourceRevision,
+          sourceHash: result.sourceHash,
+          sourceAssetHash: result.sourceAssetHash,
+        },
       };
-      if (this.wipeTowerAuto) {
-        const pick = scoreWipeTower(this.printerPartAabbs(), this.bedMm.x, this.bedMm.y, {
-          bias: parseBias(this.profile?.config['wipe_tower_bias']),
-        });
-        overrides['wipe_tower_x'] = pick.xMm.toFixed(2);
-        overrides['wipe_tower_y'] = pick.yMm.toFixed(2);
-        if (this.projectPrimeTower?.enabled) {
-          this.projectPrimeTower.xMm = pick.xMm;
-          this.projectPrimeTower.yMm = pick.yMm;
-          this.rebuildWipeTowerGhost();
-        }
-      }
-      if (!isPainted && this.extruderCount > 1) {
-        overrides['nozzle_diameter'] = this.headNozzles.join(',');
-        // Combine the configs for the selected filaments for each head
-        if (this.profile) {
-          const filamentConfigs = this.headFilaments.map(
-            (fName) => this.catalog.find(this.profile!.machineName, this.profile!.processName, fName)?.config ?? {},
-          );
-
-          // Helper to join array-based config properties across the different filaments
-          const joinFilamentProp = (prop: string, sep: ',' | ';') =>
-            filamentConfigs.map((c) => c[prop] ?? '').join(sep);
-
-          // String vectors split on ';' in libslic3r; numeric vectors on ','
-          // (gotcha #19 — a comma-joined string list parses as ONE value).
-          overrides['filament_type'] = joinFilamentProp('filament_type', ';');
-          overrides['filament_diameter'] = joinFilamentProp('filament_diameter', ',');
-        }
-      }
-
-      let gcode: string;
-      let submittedSource: SemanticProjectSnapshot | null = null;
-      const captureSubmission = (): SemanticProjectSnapshot => {
-        const source = this.captureSemanticProjectSnapshot();
-        if (!source) throw new Error('The project could not be snapshotted before slicing.');
-        submittedSource = source;
-        return source;
-      };
-      // FullSpectrum geometry cannot express the embedded mixed-filament
-      // definitions on its own. Slice the original bytes only while every
-      // slice-relevant value is exactly as loaded; edits fail closed until the
-      // canonical live-project coordinator can serialize them without loss.
-      if (sliceRoute === 'fullspectrum') {
-        this.setStatus('slicing FullSpectrum project (as authored)…', 0);
-        gcode = await requireSemanticSlice('fullspectrum', async () => {
-          if (this.canonicalSliceRequiredReason) {
-            throw new Error(this.canonicalSliceRequiredReason);
-          }
-          const current = captureSubmission();
-          if (!this.originalProjectSnapshot || !sameSemanticProjectSnapshot(this.originalProjectSnapshot, current)) {
-            throw new Error(
-              'The FullSpectrum workspace differs from its imported source; canonical live-project slicing is required.',
-            );
-          }
-          return this.slicer.sliceProject(this.originalProject!, 4, {});
-        });
-      } else if (isPainted && painted) {
-        // Painted colours = one physical nozzle with N filaments swapped by
-        // colour (MMU / AMS model). single_extruder_multi_material avoids the
-        // per-printer-extruder config lookup that fails on a multi-head profile,
-        // and a full N×N flush matrix keeps the tool-ordering flush optimiser
-        // in bounds. The engine's historical multi-material OOBs
-        // (calc_filament_change_info_by_toolorder & friends) are fixed by
-        // patch 0075 + the shim's post-override filament-vector normalization.
-        // Failure is intentionally terminal for this attempt: substituting the
-        // geometry route would silently erase the user's material intent.
-        const n = painted.filamentCount;
-        // ';' separator: ConfigOptionStrings parses a comma-joined list as
-        // ONE color, silently shrinking the engine's filament count.
-        const colors = this.palette
-          .list()
-          .slice(0, n)
-          .map((s) => s.color)
-          .join(';');
-        const matrix: number[] = [];
-        for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) matrix.push(i === j ? 0 : 140);
-        const paintedOverrides: Record<string, string> = {
-          ...overrides,
-          single_extruder_multi_material: '1',
-          nozzle_diameter: (this.profile?.config['nozzle_diameter'] ?? '0.4').split(',')[0] || '0.4',
-          filament_colour: colors,
-          extruder_colour: colors,
-          flush_volumes_matrix: matrix.join(','),
-          flush_volumes_vector: Array(n).fill(140).join(','),
-        };
-        captureSubmission();
-        gcode = await requireSemanticSlice('painted', () =>
-          this.slicer.slicePainted(painted.positions, painted.triFilament, painted.filamentCount, 4, paintedOverrides),
-        );
-      } else {
-        const stl = this.bakeToPrinterStl();
-        captureSubmission();
-        gcode = await this.slicer.slice(stl, 4, overrides);
-      }
-      const ms = Math.round(performance.now() - t0);
-      const completedSource = this.captureSemanticProjectSnapshot();
-      if (
-        !submittedSource ||
-        !completedSource ||
-        !this.gcodeArtifact.publishIfCurrent(gcode, submittedSource, completedSource)
-      ) {
-        // Preserve an older artifact only if it happens to match the new live
-        // state; the just-completed result belongs to a superseded project and
-        // must never replace it.
-        if (this.gcodeArtifact.hasArtifact) this.getLastGcode();
+      if (!this.revalidatePublishedGcode()) {
         throw new Error('The project changed while slicing; the stale result was discarded. Slice again.');
       }
-      if (this.onDownloadReady) this.onDownloadReady(true);
+      const elapsedMs = Math.round(performance.now() - startedAt);
       const lines = gcode.split('\n').length;
       const layers = (gcode.match(/; CHANGE_LAYER|;LAYER_CHANGE/g) ?? []).length;
-      this.setStatus(`SLICED in ${ms} ms\n${(gcode.length / 1024).toFixed(0)} KB, ${lines} lines, ${layers} layers`);
-      console.log('[orcaxr-web] gcode head:\n' + gcode.slice(0, 600));
+      const warningSuffix = result.warnings.length > 0 ? `, ${result.warnings.length} warning(s)` : '';
+      this.setStatus(
+        `SLICED in ${elapsedMs} ms\n${(plate.gcode.byteLength / 1024).toFixed(0)} KB, ${lines} lines, ${layers} layers${warningSuffix}`,
+      );
       this.showToolpathPreview(gcode);
+      return;
     } catch (e) {
+      if (e instanceof SlicePreflightError) this.publishPreflightResult(e.result);
       this.setStatus(`slice failed: ${(e as Error).message}`);
+      this.revalidatePublishedGcode();
     } finally {
-      if (this.onSliceStateChanged) this.onSliceStateChanged(false);
-      if (this.sliceModalCard) this.sliceModalCard.hide();
+      unsubscribe();
+      slicer.dispose();
+      if (this.activeCanonicalSlicer === slicer) this.activeCanonicalSlicer = null;
+      this.onSliceStateChanged?.(false);
+      this.sliceModalCard?.hide();
     }
   }
 
+  public cancelSlice(): void {
+    this.activeCanonicalSlicer?.cancelAll('Cancelled by user');
+  }
+
+  private renderCanonicalSliceStatus(status: SliceJobStatus): void {
+    const message = status.progressMessage ?? status.phase.replaceAll('-', ' ');
+    const percent = status.progressPercent ?? Math.round((status.completedPlateCount / status.totalPlateCount) * 100);
+    this.setStatus(`Slicing: ${message}`, percent);
+  }
+
   /**
-   * Bake the display meshes' CURRENT world poses into a binary STL in
-   * printer coordinates: mm, Z-up, bed origin at the plate corner with
-   * the models dropped onto Z=0.
-   */
-  /**
-   * Each plated model's geometry converted into printer coordinates (mm,
-   * Z-up, bed-corner origin, +X right / +Y back). One geometry per model —
-   * the shared basis for both the slice bake and the pre-flight / wipe-tower
-   * checks, so "what you see is what slices" stays a single transform path.
+   * Projection helper retained only for explicit geometry STL export.
+   * Canonical slicing and preflight read the immutable graph/assets directly.
    */
   private printerGeometries(): THREE.BufferGeometry[] {
     this.plateAnchor.updateMatrixWorld(true);
@@ -4749,8 +4383,7 @@ export class OrcaWorkspace extends xb.Script {
     for (const entry of this.models) {
       // Update the viewer (parent) FIRST: display.updateMatrixWorld reads
       // viewer.matrixWorld as-is, and for a model added since the last render
-      // frame that world matrix is still stale — which placed every model past
-      // the first at the bed edge (off-bed pre-flight, blocked slicing).
+      // frame that world matrix is still stale, which misplaces exported models.
       entry.viewer.updateMatrixWorld(true);
       entry.display.updateMatrixWorld(true);
       const rel = new THREE.Matrix4().copy(plateInverse).multiply(entry.display.matrixWorld);
@@ -4763,504 +4396,48 @@ export class OrcaWorkspace extends xb.Script {
     return geometries;
   }
 
-  /**
-   * All plated models merged into one non-indexed printer-space geometry
-   * (mm, Z-up, dropped onto Z=0). Carries the `color` attribute so the painted
-   * slice can read per-triangle filament from vertex colours. Single source for
-   * the mono bake, the painted bake, and the pre-flight collision check.
-   */
-  private mergedPrinterGeometry(): THREE.BufferGeometry | null {
-    const geometries = this.printerGeometries();
-    if (geometries.length === 0) return null;
-    const merged = BufferGeometryUtils.mergeGeometries(geometries, false);
-    for (const geometry of geometries) geometry.dispose();
-    if (!merged) return null;
-    merged.computeBoundingBox();
-    merged.translate(0, 0, -merged.boundingBox!.min.z);
-    if (!merged.index) return merged;
-    const nonIndexed = merged.toNonIndexed();
-    merged.dispose();
-    return nonIndexed;
-  }
-
-  private bakeToPrinterStl(): ArrayBuffer {
-    const merged = this.mergedPrinterGeometry();
-    if (!merged) return new ArrayBuffer(84);
-    const bytes = writeBinaryStl(merged);
-    merged.dispose();
-    return bytes;
-  }
-
-  /**
-   * Build the painted-slice input from the plated models' vertex colours:
-   * raw Float32 positions (9/tri) + a 0-based filament index per triangle.
-   * Returns null when there's nothing to slice. `distinctCount > 1` means the
-   * model is genuinely multi-colour and should take the painted path.
-   */
-  private buildPaintedInput(): {
-    positions: Float32Array;
-    triFilament: Int32Array;
-    filamentCount: number;
-    distinctCount: number;
-  } | null {
-    const merged = this.mergedPrinterGeometry();
-    if (!merged) return null;
-    const posAttr = merged.getAttribute('position');
-    if (!posAttr) {
-      merged.dispose();
-      return null;
-    }
-    const colAttr = merged.getAttribute('color');
-    const triCount = Math.floor(posAttr.count / 3);
-    const paletteHex = this.palette.list().map((s) => s.color);
-    const { triFilament, distinctCount } = deriveTriangleFilaments(
-      colAttr?.array as ArrayLike<number> | undefined,
-      triCount,
-      paletteHex,
-    );
-    const posArr = posAttr.array;
-    const positions = posArr instanceof Float32Array ? posArr : new Float32Array(posArr);
-    merged.dispose();
-    return { positions, triFilament, filamentCount: paletteHex.length, distinctCount };
-  }
-
-  /**
-   * Per-model XY bounding boxes in printer coordinates — the input the
-   * wipe-tower placement scorer needs. Bed origin is the corner (0..bed),
-   * matching libslic3r's `wipe_tower_x/y` frame.
-   */
-  private printerPartAabbs(): AabbXY[] {
-    const out: AabbXY[] = [];
-    for (const geo of this.printerGeometries()) {
-      geo.computeBoundingBox();
-      const bb = geo.boundingBox;
-      if (bb) {
-        // printerGeometries() already returns corner-origin XY coordinates.
-        out.push({
-          xMin: bb.min.x,
-          xMax: bb.max.x,
-          yMin: bb.min.y,
-          yMax: bb.max.y,
-        });
-      }
-      geo.dispose();
-    }
-    return out;
-  }
-
   /** Toggle wipe-tower auto-positioning (Section 1 pre-flight). */
   public setWipeTowerAuto(on: boolean): void {
-    if (this.wipeTowerAuto === on) return;
-    this.wipeTowerAuto = on;
-    this.markPublishedGcodeStale();
+    void on;
+    this.setStatus('Automatic wipe-tower placement is unavailable until canonical collision placement lands.');
   }
 
-  /** True when a blocking (error) pre-flight banner is active — gates Slice. */
+  /** Fail closed until canonical active-plate validation has produced evidence. */
   public hasBlockingPreflight(): boolean {
-    return this.preflightBanners.some((b) => b.severity === 'error');
+    return !this.preflightResult?.canSlice;
   }
 
-  /**
-   * Recompute the pre-flight banner set from the live scene: bed collision,
-   * filament-vs-bed rules, and the top-cover hint. Fires `onPreflight`. Cheap
-   * enough to run on load / profile change / transform-end.
-   */
+  /** Recompute the same canonical/profile-aware preflight used by slicing. */
   public recomputePreflight(): void {
     this.revalidatePublishedGcode();
-    // The tower ghost's height tracks the tallest plated model; this runs on
-    // every load / delete / transform-end, which is exactly when that changes.
     this.rebuildWipeTowerGhost();
-    const banners: PreflightBanner[] = [];
-
-    if (this.models.length > 0) {
-      const geometries = this.printerGeometries();
-      const merged = BufferGeometryUtils.mergeGeometries(geometries, false);
-      for (const geometry of geometries) geometry.dispose();
-      const pos = merged?.getAttribute('position');
-      if (pos) {
-        const res = detectBedCollision(pos.array as ArrayLike<number>, this.bedMm.x, this.bedMm.y);
-        const text = bedCollisionBanner(res);
-        if (text) banners.push({ id: 'bed-collision', severity: 'error', text });
-      }
-      merged?.dispose();
-    }
-
-    const cfg = this.profile?.config ?? {};
-    const bedKey = bedKeyFor(cfg['curr_bed_type']);
-    const filamentTypes = this.palette.list().map((s) => s.type);
-    const rule = evaluateFilamentRules(this.filamentRules, bedKey, filamentTypes);
-    if (rule.kind === 'forbidden') banners.push({ id: 'filament-rule', severity: 'error', text: rule.message });
-    else if (rule.kind === 'warning') banners.push({ id: 'filament-rule', severity: 'warning', text: rule.message });
-
-    const topCover = evaluateTopCover(cfg);
-    if (topCover.kind === 'warning') banners.push({ id: 'top-cover', severity: 'info', text: topCover.message });
-
-    this.preflightBanners = banners;
-    if (this.onPreflight) this.onPreflight(banners);
-  }
-
-  /** Get unique hex colors present in the models on the active plate. */
-  public getModelColors(): string[] {
-    const hexSet = new Set<string>();
-    for (const model of this.models) {
-      const geo = model.display.geometry as THREE.BufferGeometry;
-      const colAttr = geo?.getAttribute('color');
-      if (colAttr && colAttr.array) {
-        const arr = colAttr.array as Float32Array;
-        const step = Math.max(3, Math.floor(arr.length / 3000) * 3);
-        for (let i = 0; i < arr.length; i += step) {
-          const r = Math.round(arr[i] * 255);
-          const g = Math.round(arr[i + 1] * 255);
-          const b = Math.round(arr[i + 2] * 255);
-          const hex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()}`;
-          hexSet.add(hex);
-        }
-      } else if ((model.display.material as THREE.MeshStandardMaterial)?.color) {
-        const c = (model.display.material as THREE.MeshStandardMaterial).color;
-        const hex = `#${c.getHexString().toUpperCase()}`;
-        hexSet.add(hex);
-      }
-    }
-    return Array.from(hexSet);
-  }
-
-  /** True if model colors do not match installed printer filaments (exact physical match). */
-  public hasNonMatchingModelColors(): boolean {
-    if (this.models.length === 0) return false;
-    const physicalColors = this.palette.list().map((s) => s.color);
-    if (physicalColors.length === 0) return false;
-    const modelColors = this.getModelColors();
-    if (modelColors.length === 0) return false;
-
-    const matches = GamutMatcher.matchModelColors(modelColors, physicalColors);
-    return matches.some((m) => m.recipe.type !== 'Physical' || m.deltaE > 1.0);
-  }
-
-  /**
-   * One-click feature: Recreate model colors using the printer's installed filaments
-   * via Full-Spectrum gamut matching and dithering definitions.
-   */
-  public recreateModelColorsWithFullSpectrum(): {
-    recreatedCount: number;
-    physicalCount: number;
-    blendCount: number;
-    matches: GamutMatch[];
-  } {
-    const physicalColors = this.palette.list().map((s) => s.color);
-    if (physicalColors.length === 0) {
-      this.setStatus('No installed filaments in printer palette.');
-      return { recreatedCount: 0, physicalCount: 0, blendCount: 0, matches: [] };
-    }
-
-    const modelColors = this.getModelColors();
-    if (modelColors.length === 0) {
-      this.setStatus('No model colors detected to recreate.');
-      return { recreatedCount: 0, physicalCount: 0, blendCount: 0, matches: [] };
-    }
-
-    const matches = GamutMatcher.matchModelColors(modelColors, physicalColors);
-
-    let physicalCount = 0;
-    let blendCount = 0;
-    const newVirtualRows: MixedFilamentEntry[] = [];
-    const colorRemap = new Map<string, string>();
-
-    matches.forEach((m) => {
-      colorRemap.set(m.sourceHex.toUpperCase(), m.targetHex.toUpperCase());
-      if (m.recipe.type === 'Physical') {
-        physicalCount++;
-      } else if (m.recipe.type === 'Blend') {
-        blendCount++;
-        const a1 = m.recipe.componentA1;
-        const b1 = m.recipe.componentB1;
-        const mixB = m.recipe.mixBPercent;
-        const existing = newVirtualRows.find(
-          (r) => r.componentA === a1 && r.componentB === b1 && r.mixBPercent === mixB,
-        );
-        if (!existing) {
-          newVirtualRows.push({
-            id: `match_${a1}_${b1}_${mixB}`,
-            componentA: a1,
-            componentB: b1,
-            mixBPercent: mixB,
-            distributionMode: 0,
-            enabled: true,
-            custom: true,
-            displayColor: m.targetHex,
-          });
-        }
-      }
-    });
-
-    const store = new MixedFilamentStore();
-    const serializedDefs = store.serializeMixedFilamentDefinitions(newVirtualRows);
-
-    if (serializedDefs) {
-      this.customOverrides['mixed_filament_definitions'] = serializedDefs;
-      this.customOverrides['mixed_filament_advanced_dithering'] = '1';
-      this.customOverrides['dithering_step_painted_zones_only'] = '1';
-
-      const cfg = {
-        filament_colour: physicalColors,
-        mixed_filament_definitions: serializedDefs,
-        dithering_local_z_mode: 0,
-      };
-      this.virtualFilaments = virtualFilamentsFromConfig(cfg);
-    }
-
-    // Remap model vertex/material colors to target colors
-    for (const model of this.models) {
-      const geo = model.display.geometry as THREE.BufferGeometry;
-      const colAttr = geo?.getAttribute('color');
-      if (colAttr && colAttr.array) {
-        const arr = colAttr.array as Float32Array;
-        for (let i = 0; i < arr.length; i += 3) {
-          const r = Math.round(arr[i] * 255);
-          const g = Math.round(arr[i + 1] * 255);
-          const b = Math.round(arr[i + 2] * 255);
-          const srcHex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()}`;
-          const targetHex = colorRemap.get(srcHex);
-          if (targetHex) {
-            const targetColor = new THREE.Color(targetHex);
-            arr[i] = targetColor.r;
-            arr[i + 1] = targetColor.g;
-            arr[i + 2] = targetColor.b;
-          }
-        }
-        colAttr.needsUpdate = true;
-      } else if ((model.display.material as THREE.MeshStandardMaterial)?.color) {
-        const mat = model.display.material as THREE.MeshStandardMaterial;
-        const srcHex = `#${mat.color.getHexString().toUpperCase()}`;
-        const targetHex = colorRemap.get(srcHex);
-        if (targetHex) {
-          mat.color.set(targetHex);
-        }
-      }
-    }
-
-    this.markPublishedGcodeStale();
-    this.recomputePreflight();
-    this.palette.onChanged?.();
-
-    const msg = `Recreated ${matches.length} model color${matches.length === 1 ? '' : 's'} using Full-Spectrum (${physicalCount} physical, ${blendCount} Full-Spectrum blends).`;
-    this.setStatus(msg);
-
-    return {
-      recreatedCount: matches.length,
-      physicalCount,
-      blendCount,
-      matches,
-    };
-  }
-
-  public async fixSelectedModel() {
-    if (!this.selectedModel) {
-      this.setStatus('Select a model to fix first.');
-      return;
-    }
-    const entry = this.selectedModel;
     try {
-      this.setStatus('Fixing model (ADMesh + CGAL)...');
-      const stlBuf = writeBinaryStl(entry.raw);
-      const repaired = await this.slicer.repair(stlBuf);
-
-      const raw = new STLLoader().parse(repaired);
-      entry.raw = raw;
-      entry.raw.computeVertexNormals();
-      entry.raw.computeBoundsTree();
-
-      entry.display.geometry.dispose();
-      entry.display.geometry = raw;
-
-      this.setStatus('Model repaired successfully.');
-    } catch (e: any) {
-      this.setStatus(`Repair failed: ${e.message}`);
+      const snapshot = this.canonicalProject.createCanonicalSliceSource().capture();
+      const result = this.createLiveProfilePreflight().evaluate(snapshot, this.activePlateId);
+      this.publishPreflightResult(result);
+    } catch (error) {
+      this.publishPreflightResult(canonicalPreflightUnavailable(this.activePlateId, error));
     }
   }
 
-  public async booleanModels(op: 'UNION' | 'A_NOT_B' | 'INTERSECTION') {
-    if (this.models.length < 2) {
-      this.setStatus('Requires at least 2 models for boolean operations.');
-      return;
-    }
-    let target = this.selectedModel;
-    let tool = this.models.find((m) => m !== target);
-
-    if (!target) {
-      target = this.models[0];
-      tool = this.models[1];
-    }
-
-    if (!target || !tool) return;
-
-    try {
-      this.setStatus(`Running boolean ${op}...`);
-
-      // We must bake the transforms into the STL so mcut sees world space overlaps
-      const targetGeom = target.raw.clone();
-      targetGeom.applyMatrix4(target.viewer.matrixWorld);
-      const toolGeom = tool.raw.clone();
-      toolGeom.applyMatrix4(tool.viewer.matrixWorld);
-
-      const targetStl = writeBinaryStl(targetGeom);
-      const toolStl = writeBinaryStl(toolGeom);
-
-      const resultStl = await this.slicer.boolean(targetStl, toolStl, op);
-
-      const raw = new STLLoader().parse(resultStl);
-
-      // Inverse the target's matrixWorld so the resulting mesh stays in the target's local space
-      const invMatrix = target.viewer.matrixWorld.clone().invert();
-      raw.applyMatrix4(invMatrix);
-
-      target.raw = raw;
-      target.raw.computeVertexNormals();
-      target.raw.computeBoundsTree();
-
-      target.display.geometry.dispose();
-      target.display.geometry = raw;
-
-      // Remove the tool model from the workspace (active plate).
-      this.workspace.remove(tool.viewer);
-      const ti = this.models.indexOf(tool);
-      if (ti !== -1) this.models.splice(ti, 1);
-
-      this.setStatus(`Boolean ${op} successful.`);
-    } catch (e: any) {
-      this.setStatus(`Boolean failed: ${e.message}`);
-    }
+  private publishPreflightResult(result: CanonicalSlicePreflightResult): void {
+    this.preflightResult = result;
+    this.onPreflight?.(result);
   }
 
-  async smartPaint() {
-    if (!this.selectedModel) {
-      this.setStatus('Select a model first to paint');
-      return;
-    }
-    const prompt = window.prompt("Enter what you want to paint (e.g. 'Paint the top surface red')");
-    if (!prompt) return;
-
-    this.setStatus('Generating AI Paint Plan...');
-    try {
-      // The Gemini SDK is only needed after a maker deliberately invokes an
-      // AI feature. Keeping it out of the startup graph makes initial WebXR
-      // entry and ordinary local slicing faster on constrained headsets.
-      const { AiPaintService } = await import('../features/AiPaintService');
-      const plan = await AiPaintService.generatePaintPlan(prompt);
-      await this.applySemanticPaintPlan(plan);
-      this.setStatus('Smart Paint applied successfully');
-    } catch (e: any) {
-      this.setStatus('Smart Paint failed: ' + e.message);
-    }
+  public async fixSelectedModel(): Promise<void> {
+    this.setStatus('Repair is unavailable until topology and annotations commit atomically.');
   }
 
-  async smartPaintImage() {
-    if (!this.selectedModel) {
-      this.setStatus('Select a model first to paint');
-      return;
-    }
-    const prompt = window.prompt('Enter instructions for painting with an image');
-    if (!prompt) return;
-
-    // Open file picker for image
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64Url = reader.result as string;
-        const base64 = base64Url.split(',')[1]; // remove data:image/...;base64,
-        this.setStatus('Generating AI Paint Plan with Image...');
-        try {
-          const { AiPaintService } = await import('../features/AiPaintService');
-          const plan = await AiPaintService.generatePaintPlan(prompt, base64);
-          await this.applySemanticPaintPlan(plan);
-          this.setStatus('Smart Paint (Image) applied successfully');
-        } catch (e: any) {
-          this.setStatus('Smart Paint failed: ' + e.message);
-        }
-      };
-      reader.readAsDataURL(file);
-    };
-    input.click();
+  public async booleanModels(op: 'UNION' | 'A_NOT_B' | 'INTERSECTION'): Promise<void> {
+    this.setStatus(`Boolean ${op} is unavailable until topology and annotations commit atomically.`);
   }
 
-  async applySemanticPaintPlan(plan: any) {
-    if (!this.selectedModel) return;
-    const mesh = this.selectedModel.display;
-    const geometry = mesh.geometry as THREE.BufferGeometry;
-    if (!geometry.boundsTree) {
-      geometry.computeBoundsTree();
-    }
-
-    // We need a dummy camera spec
-    const camera = {
-      widthPx: 512,
-      heightPx: 512,
-      projMatrixRowMajor: new Float32Array(16),
-      viewMatrixRowMajor: new Float32Array(16),
-    };
-
-    const filamentSlots = this.palette.list();
-    const palette = filamentSlots.map((_filament, index) => ({
-      slot: index + 1,
-      lab: { l: 50, a: 0, b: 0 },
-    }));
-
-    const resolved = SemanticPaintPlanner.resolve(geometry.boundsTree, camera, plan, palette);
-    if (!resolved) {
-      this.setStatus('Failed to resolve AI paint plan on mesh.');
-      return;
-    }
-
-    // Convert resolved.perTriangleSlot to colors
-    const colors = new Float32Array(geometry.attributes.position.count * 3);
-    for (let i = 0; i < resolved.perTriangleSlot.length; i++) {
-      const slot = resolved.perTriangleSlot[i];
-      const fil = filamentSlots[slot - 1] ?? filamentSlots[0];
-      if (!fil) continue;
-      const c = new THREE.Color(fil.color);
-      // set color for 3 vertices of triangle
-      for (let v = 0; v < 3; v++) {
-        colors[(i * 3 + v) * 3] = c.r;
-        colors[(i * 3 + v) * 3 + 1] = c.g;
-        colors[(i * 3 + v) * 3 + 2] = c.b;
-      }
-    }
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    mesh.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
+  async smartPaint(): Promise<void> {
+    this.setStatus('Smart Paint is unavailable until results commit as canonical facet annotations.');
   }
-}
 
-/** Minimal binary STL writer (non-indexed triangles, recomputed normals). */
-function writeBinaryStl(geometry: THREE.BufferGeometry): ArrayBuffer {
-  const geo = geometry.index ? geometry.toNonIndexed() : geometry;
-  const pos = geo.getAttribute('position');
-  const triCount = pos.count / 3;
-  const buf = new ArrayBuffer(84 + triCount * 50);
-  const dv = new DataView(buf);
-  dv.setUint32(80, triCount, true);
-
-  const a = new THREE.Vector3();
-  const b = new THREE.Vector3();
-  const c = new THREE.Vector3();
-  const n = new THREE.Vector3();
-  let off = 84;
-  for (let t = 0; t < triCount; t++) {
-    a.fromBufferAttribute(pos, t * 3);
-    b.fromBufferAttribute(pos, t * 3 + 1);
-    c.fromBufferAttribute(pos, t * 3 + 2);
-    n.copy(b).sub(a).cross(c.clone().sub(a)).normalize();
-    for (const v of [n, a, b, c]) {
-      dv.setFloat32(off, v.x, true);
-      dv.setFloat32(off + 4, v.y, true);
-      dv.setFloat32(off + 8, v.z, true);
-      off += 12;
-    }
-    dv.setUint16(off, 0, true);
-    off += 2;
+  async smartPaintImage(): Promise<void> {
+    this.setStatus('Image Smart Paint is unavailable until results commit as canonical facet annotations.');
   }
-  return buf;
 }

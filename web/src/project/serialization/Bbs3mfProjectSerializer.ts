@@ -11,10 +11,13 @@ import {
   MODEL_RELS_PATH,
   MODEL_SETTINGS_PATH,
   PROJECT_SETTINGS_PATH,
+  BbsPlateCoordinateError,
   buildBbsCore,
   importBbsCore,
 } from './bbsCore';
 import { readSafeZip, validatePackagePath, writeDeterministicZip, type ZipSafetyLimits } from './deterministicZip';
+
+export { BbsPlateCoordinateError, type BbsPlateCoordinateErrorCode } from './bbsCore';
 
 export const ORCAXR_EXTENSION_PATH = 'Metadata/orcaxr/project-v1.json';
 export const ORCAXR_EXTENSION_FORMAT = 'https://orcaxr.martinez.fyi/3mf/project/1';
@@ -158,10 +161,18 @@ export class Bbs3mfProjectSerializer implements ProjectSerializerPort {
 
     const owned = new Set<string>([...GENERATED_STANDARD_PATHS, ORCAXR_EXTENSION_PATH, ...mappings.values()]);
     const preserveOriginalPaths = new Set<string>();
-    const regenerated = buildBbsCore(
-      state,
-      new Map(repository.list().map((payload) => [payload.descriptor.id, payload])),
-    ).files;
+    let regenerated: ReadonlyMap<string, Uint8Array> = new Map();
+    try {
+      regenerated = buildBbsCore(
+        state,
+        new Map(repository.list().map((payload) => [payload.descriptor.id, payload])),
+      ).files;
+    } catch (error) {
+      if (!(error instanceof BbsPlateCoordinateError)) throw error;
+      warnings.push(
+        `Opened the canonical OrcaXR envelope safely, but standard BBS metadata cannot be regenerated until its plate coordinates are resolvable: ${error.message}`,
+      );
+    }
     const declaredBlobPaths = new Set(state.extensionBlobs.map((blob) => blob.path));
     for (const path of PRESERVABLE_GENERATED_METADATA) {
       const packageBytes = files.get(path);

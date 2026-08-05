@@ -1,9 +1,12 @@
 #!/usr/bin/env node
+/* global console */
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+
+import { inspectLiveCanonicalBoundaries, selfTestLiveCanonicalBoundaries } from './live-canonical-boundaries.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const protectedRoots = [path.join(root, 'src/project/domain'), path.join(root, 'src/project/history')];
@@ -33,13 +36,14 @@ const failures = [];
 for (const directory of protectedRoots) {
   for (const file of walk(directory)) inspect(file);
 }
+failures.push(...inspectLiveCanonicalBoundaries(root), ...selfTestLiveCanonicalBoundaries());
 
 if (failures.length > 0) {
-  console.error('Project import boundary violations:');
+  console.error('Architecture boundary violations:');
   for (const failure of failures) console.error(`  ${failure}`);
   process.exitCode = 1;
 } else {
-  console.log('Project import boundaries: domain/history are platform-neutral.');
+  console.log('Architecture boundaries: domain/history are platform-neutral and live project I/O is canonical.');
 }
 
 function inspect(file) {

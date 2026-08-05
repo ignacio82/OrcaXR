@@ -1,0 +1,2251 @@
+{
+  "schemaVersion": 1,
+  "upstream": {
+    "repository": "https://github.com/Snapmaker/OrcaSlicer.git",
+    "commit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "tree": "612a77a60f923a2b117de7fd695512e5451a179f"
+  },
+  "modeSource": {
+    "sourceId": "calib-mode",
+    "path": "src/libslic3r/calib.hpp",
+    "blob": "d7db10fd81bad818de9e76aee9408709b4815c85",
+    "parityPath": "docs/parity/snapmaker-v2.3.4.json",
+    "parityTask": "P8.1",
+    "excludedMode": "Calib_None",
+    "count": 11
+  },
+  "modes": [
+    {
+      "name": "Calib_PA_Line",
+      "value": 1
+    },
+    {
+      "name": "Calib_PA_Pattern",
+      "value": 2
+    },
+    {
+      "name": "Calib_PA_Tower",
+      "value": 3
+    },
+    {
+      "name": "Calib_Flow_Rate",
+      "value": 4
+    },
+    {
+      "name": "Calib_Temp_Tower",
+      "value": 5
+    },
+    {
+      "name": "Calib_Vol_speed_Tower",
+      "value": 6
+    },
+    {
+      "name": "Calib_VFA_Tower",
+      "value": 7
+    },
+    {
+      "name": "Calib_Retraction_tower",
+      "value": 8
+    },
+    {
+      "name": "Calib_Input_shaping_freq",
+      "value": 9
+    },
+    {
+      "name": "Calib_Input_shaping_damp",
+      "value": 10
+    },
+    {
+      "name": "Calib_Junction_Deviation",
+      "value": 11
+    }
+  ],
+  "sources": [
+    {
+      "id": "calib-mode",
+      "path": "src/libslic3r/calib.hpp",
+      "blob": "d7db10fd81bad818de9e76aee9408709b4815c85",
+      "role": "enum"
+    },
+    {
+      "id": "main-menu",
+      "path": "src/slic3r/GUI/MainFrame.cpp",
+      "blob": "96b1b08a3af019308d157f8339378433f8db0038",
+      "role": "menu"
+    },
+    {
+      "id": "dialogs",
+      "path": "src/slic3r/GUI/calib_dlg.cpp",
+      "blob": "e36073ea452dbe10c1c81e956e8cf0ab67f20103",
+      "role": "dialog"
+    },
+    {
+      "id": "plater-workflows",
+      "path": "src/slic3r/GUI/Plater.cpp",
+      "blob": "94ad6c3b2357c2f0bd2476265e83ea68babd6a9b",
+      "role": "workflow"
+    },
+    {
+      "id": "layer-gcode",
+      "path": "src/libslic3r/GCode.cpp",
+      "blob": "946a89e0949df043e63ca3ad571392fd7990909d",
+      "role": "gcode"
+    },
+    {
+      "id": "calib-core",
+      "path": "src/libslic3r/calib.cpp",
+      "blob": "e7cc7a893267fbe30433b2cf88c3d91ab15e749c",
+      "role": "gcode"
+    },
+    {
+      "id": "calib-utils",
+      "path": "src/slic3r/Utils/CalibUtils.cpp",
+      "blob": "aa548df4f80c5406abbbc57ddeb9d4efc63d2c9e",
+      "role": "workflow"
+    },
+    {
+      "id": "device-start-gates",
+      "path": "src/slic3r/GUI/CalibrationWizardStartPage.cpp",
+      "blob": "3622d290eec2afd7e8f9a8104d7604ec285152fb",
+      "role": "device-gate"
+    },
+    {
+      "id": "device-preset-gates",
+      "path": "src/slic3r/GUI/CalibrationWizardPresetPage.cpp",
+      "blob": "581b9153bb263d667884d338c0065dad3332e875",
+      "role": "device-gate"
+    },
+    {
+      "id": "device-firmware-gate",
+      "path": "src/slic3r/GUI/CalibrationWizardPage.cpp",
+      "blob": "f3ff77313b5cbe4bee6121ab0577855f32878aea",
+      "role": "device-gate"
+    },
+    {
+      "id": "wizard-results",
+      "path": "src/slic3r/GUI/CalibrationWizardSavePage.cpp",
+      "blob": "5e7dd3f49319713dde07e46485dafe1e06681162",
+      "role": "results"
+    },
+    {
+      "id": "tolerance-doc",
+      "path": "doc/calibration/tolerance-calib.md",
+      "blob": "23f948de474e6c156215e4aeb04cdf26534342de",
+      "role": "extension"
+    },
+    {
+      "id": "handy-model-menu",
+      "path": "src/slic3r/GUI/GUI_Factories.cpp",
+      "blob": "87a6d909cb5024cce51b505aa5c5d5c48426a4a1",
+      "role": "extension"
+    }
+  ],
+  "effectCategories": [
+    {
+      "id": "per-height",
+      "description": "The calibration value changes by print height or layer in the normal slicer G-code path."
+    },
+    {
+      "id": "per-object",
+      "description": "Objects or their effective print settings carry distinct calibration behavior."
+    },
+    {
+      "id": "generated-gcode",
+      "description": "A dedicated generator emits standalone or custom calibration G-code."
+    }
+  ],
+  "workflows": [
+    {
+      "id": "temperature-tower",
+      "origin": "pinned-menu",
+      "label": "Temperature",
+      "enumMode": "Calib_Temp_Tower",
+      "menu": {
+        "path": [
+          "Calibration",
+          "Temperature"
+        ],
+        "label": "Temperature",
+        "invocation": "Temp_Calibration_Dlg → Plater::calib_temp"
+      },
+      "parameters": [
+        {
+          "key": "filamentType",
+          "label": "Filament type",
+          "kind": "choice",
+          "unit": null,
+          "default": "PLA",
+          "choices": [
+            "PLA",
+            "ABS/ASA",
+            "PETG",
+            "PCTG",
+            "TPU",
+            "PA-CF",
+            "PET-CF",
+            "Custom"
+          ],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": []
+        },
+        {
+          "key": "start",
+          "label": "Start temp",
+          "kind": "number",
+          "unit": "°C",
+          "default": {
+            "PLA": 230,
+            "ABS/ASA": 270,
+            "PETG": 250,
+            "PCTG": 280,
+            "TPU": 240,
+            "PA-CF": 320,
+            "PET-CF": 320,
+            "Custom": 230
+          },
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "unsigned integer",
+            "start <= 350",
+            "focus loss clamps to 170..350 and floors to a multiple of 5"
+          ]
+        },
+        {
+          "key": "end",
+          "label": "End temp",
+          "kind": "number",
+          "unit": "°C",
+          "default": {
+            "PLA": 190,
+            "ABS/ASA": 230,
+            "PETG": 230,
+            "PCTG": 240,
+            "TPU": 210,
+            "PA-CF": 280,
+            "PET-CF": 280,
+            "Custom": 190
+          },
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "unsigned integer",
+            "end >= 170",
+            "end <= start - 5",
+            "focus loss clamps to 170..350 and floors to a multiple of 5"
+          ]
+        },
+        {
+          "key": "step",
+          "label": "Temp step",
+          "kind": "number",
+          "unit": "°C",
+          "default": 5,
+          "choices": [],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": [
+            "fixed at 5"
+          ]
+        }
+      ],
+      "resources": [
+        {
+          "path": "resources/calib/temperature_tower/temperature_tower.stl",
+          "blob": "7430437e881e23d4fb1bf56f5d1b61be862b034b",
+          "role": "model"
+        }
+      ],
+      "effects": [
+        {
+          "category": "per-height",
+          "detail": "Sets nozzle temperature to start - floor(print_z / 10.001) × 5."
+        },
+        {
+          "category": "per-object",
+          "detail": "Cuts the pinned tower to the selected range and applies calibration brim/seam settings."
+        }
+      ],
+      "resultFields": [
+        {
+          "key": "bestNozzleTemperatureC",
+          "label": "Selected nozzle temperature",
+          "unit": "°C",
+          "required": true
+        }
+      ],
+      "presetTargets": [
+        {
+          "scope": "filament",
+          "key": "nozzle_temperature",
+          "application": "manual"
+        },
+        {
+          "scope": "filament",
+          "key": "nozzle_temperature_initial_layer",
+          "application": "manual"
+        }
+      ],
+      "localBinding": {
+        "actionId": "calib_temperature",
+        "argument": "tower",
+        "status": "alpha-geometry-only",
+        "detail": "The action only adds CalibrationRampGenerator geometry; pinned resources, dialog validation, calibration effects, result capture, and preset application are not implemented."
+      },
+      "deviceGating": {
+        "automation": "manual-only",
+        "requirements": [],
+        "orcaxrStatus": "local-generation-does-not-require-device"
+      },
+      "sourceRefs": [
+        "main-menu",
+        "dialogs",
+        "plater-workflows",
+        "layer-gcode"
+      ],
+      "notes": []
+    },
+    {
+      "id": "flow-pass-1",
+      "origin": "pinned-menu",
+      "label": "Flow rate — Pass 1",
+      "enumMode": "Calib_Flow_Rate",
+      "menu": {
+        "path": [
+          "Calibration",
+          "Flow rate",
+          "Pass 1"
+        ],
+        "label": "Pass 1",
+        "invocation": "Plater::calib_flowrate(false, 1)"
+      },
+      "parameters": [
+        {
+          "key": "linearMode",
+          "label": "Linear mode",
+          "kind": "boolean",
+          "unit": null,
+          "default": false,
+          "choices": [],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": []
+        },
+        {
+          "key": "pass",
+          "label": "Pass",
+          "kind": "number",
+          "unit": null,
+          "default": 1,
+          "choices": [],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": []
+        }
+      ],
+      "resources": [
+        {
+          "path": "resources/calib/filament_flow/flowrate-test-pass1.3mf",
+          "blob": "20c997da020fc8b4d0b3481c04efa44454049c6e",
+          "role": "template"
+        }
+      ],
+      "effects": [
+        {
+          "category": "per-object",
+          "detail": "Reads each flowrate_* object modifier and sets print_flow_ratio to 1 + modifier / 100."
+        }
+      ],
+      "resultFields": [
+        {
+          "key": "flowRatio",
+          "label": "Flow ratio",
+          "unit": null,
+          "required": true
+        }
+      ],
+      "presetTargets": [
+        {
+          "scope": "filament",
+          "key": "filament_flow_ratio",
+          "application": "manual"
+        }
+      ],
+      "localBinding": {
+        "actionId": "calib_flow_pass1",
+        "argument": "flow_pass1",
+        "status": "alpha-geometry-only",
+        "detail": "The action only adds CalibrationRampGenerator geometry; pinned resources, dialog validation, calibration effects, result capture, and preset application are not implemented."
+      },
+      "deviceGating": {
+        "automation": "bambu-proprietary-auto",
+        "requirements": [
+          "A selected connected upstream MachineObject",
+          "Supported Bambu printer series and calibration firmware version",
+          "MachineObject.is_support_flow_calibration == true",
+          "Vendor device protocol, result retrieval, and save workflow"
+        ],
+        "orcaxrStatus": "blocked-proprietary-auto"
+      },
+      "sourceRefs": [
+        "main-menu",
+        "plater-workflows",
+        "calib-utils",
+        "device-start-gates",
+        "wizard-results"
+      ],
+      "notes": [
+        "The pinned menu workflow has no parameter dialog."
+      ]
+    },
+    {
+      "id": "flow-pass-2",
+      "origin": "pinned-menu",
+      "label": "Flow rate — Pass 2",
+      "enumMode": "Calib_Flow_Rate",
+      "menu": {
+        "path": [
+          "Calibration",
+          "Flow rate",
+          "Pass 2"
+        ],
+        "label": "Pass 2",
+        "invocation": "Plater::calib_flowrate(false, 2)"
+      },
+      "parameters": [
+        {
+          "key": "linearMode",
+          "label": "Linear mode",
+          "kind": "boolean",
+          "unit": null,
+          "default": false,
+          "choices": [],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": []
+        },
+        {
+          "key": "pass",
+          "label": "Pass",
+          "kind": "number",
+          "unit": null,
+          "default": 2,
+          "choices": [],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": []
+        }
+      ],
+      "resources": [
+        {
+          "path": "resources/calib/filament_flow/flowrate-test-pass2.3mf",
+          "blob": "97978494050f01e29cd2ffe7c7f4e0a74d70c295",
+          "role": "template"
+        }
+      ],
+      "effects": [
+        {
+          "category": "per-object",
+          "detail": "Reads each flowrate_* object modifier and sets print_flow_ratio to 1 + modifier / 100."
+        }
+      ],
+      "resultFields": [
+        {
+          "key": "flowRatio",
+          "label": "Flow ratio",
+          "unit": null,
+          "required": true
+        }
+      ],
+      "presetTargets": [
+        {
+          "scope": "filament",
+          "key": "filament_flow_ratio",
+          "application": "manual"
+        }
+      ],
+      "localBinding": {
+        "actionId": "calib_flow_pass2",
+        "argument": "flow_pass2",
+        "status": "alpha-geometry-only",
+        "detail": "The action only adds CalibrationRampGenerator geometry; pinned resources, dialog validation, calibration effects, result capture, and preset application are not implemented."
+      },
+      "deviceGating": {
+        "automation": "bambu-proprietary-auto",
+        "requirements": [
+          "A selected connected upstream MachineObject",
+          "Supported Bambu printer series and calibration firmware version",
+          "MachineObject.is_support_flow_calibration == true",
+          "Vendor device protocol, result retrieval, and save workflow"
+        ],
+        "orcaxrStatus": "blocked-proprietary-auto"
+      },
+      "sourceRefs": [
+        "main-menu",
+        "plater-workflows",
+        "calib-utils",
+        "device-start-gates",
+        "wizard-results"
+      ],
+      "notes": [
+        "The pinned menu workflow has no parameter dialog."
+      ]
+    },
+    {
+      "id": "flow-yolo",
+      "origin": "pinned-menu",
+      "label": "Flow rate — YOLO (Recommended)",
+      "enumMode": "Calib_Flow_Rate",
+      "menu": {
+        "path": [
+          "Calibration",
+          "Flow rate",
+          "YOLO (Recommended)"
+        ],
+        "label": "YOLO (Recommended)",
+        "invocation": "Plater::calib_flowrate(true, 1)"
+      },
+      "parameters": [
+        {
+          "key": "linearMode",
+          "label": "Linear mode",
+          "kind": "boolean",
+          "unit": null,
+          "default": true,
+          "choices": [],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": []
+        },
+        {
+          "key": "pass",
+          "label": "Pass",
+          "kind": "number",
+          "unit": null,
+          "default": 1,
+          "choices": [],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": []
+        },
+        {
+          "key": "modifierStep",
+          "label": "Flow-ratio step",
+          "kind": "number",
+          "unit": null,
+          "default": 0.01,
+          "choices": [],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": []
+        }
+      ],
+      "resources": [
+        {
+          "path": "resources/calib/filament_flow/Orca-LinearFlow.3mf",
+          "blob": "8be217beb575eb277abefb6b63c1cfc06d1891be",
+          "role": "template"
+        }
+      ],
+      "effects": [
+        {
+          "category": "per-object",
+          "detail": "Reads each flowrate_* object modifier and sets print_flow_ratio to (current filament flow ratio + modifier) / current filament flow ratio."
+        }
+      ],
+      "resultFields": [
+        {
+          "key": "flowRatio",
+          "label": "Flow ratio",
+          "unit": null,
+          "required": true
+        }
+      ],
+      "presetTargets": [
+        {
+          "scope": "filament",
+          "key": "filament_flow_ratio",
+          "application": "manual"
+        }
+      ],
+      "localBinding": {
+        "actionId": "calib_flow_yolo",
+        "argument": "flow_yolo",
+        "status": "alpha-geometry-only",
+        "detail": "The action only adds CalibrationRampGenerator geometry; pinned resources, dialog validation, calibration effects, result capture, and preset application are not implemented."
+      },
+      "deviceGating": {
+        "automation": "bambu-proprietary-auto",
+        "requirements": [
+          "A selected connected upstream MachineObject",
+          "Supported Bambu printer series and calibration firmware version",
+          "MachineObject.is_support_flow_calibration == true",
+          "Vendor device protocol, result retrieval, and save workflow"
+        ],
+        "orcaxrStatus": "blocked-proprietary-auto"
+      },
+      "sourceRefs": [
+        "main-menu",
+        "plater-workflows",
+        "device-start-gates",
+        "wizard-results"
+      ],
+      "notes": [
+        "The pinned menu tooltip identifies a 0.01 step; there is no parameter dialog."
+      ]
+    },
+    {
+      "id": "flow-yolo-perfectionist",
+      "origin": "pinned-menu",
+      "label": "Flow rate — YOLO (perfectionist version)",
+      "enumMode": "Calib_Flow_Rate",
+      "menu": {
+        "path": [
+          "Calibration",
+          "Flow rate",
+          "YOLO (perfectionist version)"
+        ],
+        "label": "YOLO (perfectionist version)",
+        "invocation": "Plater::calib_flowrate(true, 2)"
+      },
+      "parameters": [
+        {
+          "key": "linearMode",
+          "label": "Linear mode",
+          "kind": "boolean",
+          "unit": null,
+          "default": true,
+          "choices": [],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": []
+        },
+        {
+          "key": "pass",
+          "label": "Pass",
+          "kind": "number",
+          "unit": null,
+          "default": 2,
+          "choices": [],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": []
+        },
+        {
+          "key": "modifierStep",
+          "label": "Flow-ratio step",
+          "kind": "number",
+          "unit": null,
+          "default": 0.005,
+          "choices": [],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": []
+        }
+      ],
+      "resources": [
+        {
+          "path": "resources/calib/filament_flow/Orca-LinearFlow_fine.3mf",
+          "blob": "94f8e62fbf4d0a11f891562b1e8ddab8c616c1aa",
+          "role": "template"
+        }
+      ],
+      "effects": [
+        {
+          "category": "per-object",
+          "detail": "Reads each flowrate_* object modifier and sets print_flow_ratio to (current filament flow ratio + modifier) / current filament flow ratio."
+        }
+      ],
+      "resultFields": [
+        {
+          "key": "flowRatio",
+          "label": "Flow ratio",
+          "unit": null,
+          "required": true
+        }
+      ],
+      "presetTargets": [
+        {
+          "scope": "filament",
+          "key": "filament_flow_ratio",
+          "application": "manual"
+        }
+      ],
+      "localBinding": {
+        "actionId": null,
+        "argument": null,
+        "status": "unbound",
+        "detail": "No current ActionRegistry action exposes this distinct pinned workflow."
+      },
+      "deviceGating": {
+        "automation": "bambu-proprietary-auto",
+        "requirements": [
+          "A selected connected upstream MachineObject",
+          "Supported Bambu printer series and calibration firmware version",
+          "MachineObject.is_support_flow_calibration == true",
+          "Vendor device protocol, result retrieval, and save workflow"
+        ],
+        "orcaxrStatus": "blocked-proprietary-auto"
+      },
+      "sourceRefs": [
+        "main-menu",
+        "plater-workflows",
+        "device-start-gates",
+        "wizard-results"
+      ],
+      "notes": [
+        "The pinned menu tooltip identifies a 0.005 step; there is no parameter dialog."
+      ]
+    },
+    {
+      "id": "pressure-advance-tower",
+      "origin": "pinned-menu",
+      "label": "Pressure advance — PA Tower",
+      "enumMode": "Calib_PA_Tower",
+      "menu": {
+        "path": [
+          "Calibration",
+          "Pressure advance",
+          "PA Tower"
+        ],
+        "label": "PA Tower",
+        "invocation": "PA_Calibration_Dlg → Plater::calib_pa(Calib_PA_Tower)"
+      },
+      "parameters": [
+        {
+          "key": "extruderType",
+          "label": "Extruder type",
+          "kind": "choice",
+          "unit": null,
+          "default": "DDE",
+          "choices": [
+            "DDE",
+            "Bowden"
+          ],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": []
+        },
+        {
+          "key": "method",
+          "label": "Method",
+          "kind": "choice",
+          "unit": null,
+          "default": "PA Tower",
+          "choices": [
+            "PA Tower"
+          ],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": []
+        },
+        {
+          "key": "start",
+          "label": "Start PA",
+          "kind": "number",
+          "unit": null,
+          "default": 0,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "start >= 0"
+          ]
+        },
+        {
+          "key": "end",
+          "label": "End PA",
+          "kind": "number",
+          "unit": null,
+          "default": {
+            "DDE": 0.1,
+            "Bowden": 1
+          },
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "end >= start + step"
+          ]
+        },
+        {
+          "key": "step",
+          "label": "PA step",
+          "kind": "number",
+          "unit": null,
+          "default": {
+            "DDE": 0.002,
+            "Bowden": 0.02
+          },
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "step >= EPSILON"
+          ]
+        },
+        {
+          "key": "printNumbers",
+          "label": "Print numbers",
+          "kind": "boolean",
+          "unit": null,
+          "default": false,
+          "choices": [],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": []
+        },
+        {
+          "key": "accelerations",
+          "label": "Accelerations",
+          "kind": "positive-integer-list",
+          "unit": "mm/s²",
+          "default": [],
+          "choices": [],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": [
+            "comma-separated integers",
+            "values > 0",
+            "empty uses current outer/inner/default acceleration"
+          ]
+        },
+        {
+          "key": "speeds",
+          "label": "Speeds",
+          "kind": "positive-integer-list",
+          "unit": "mm/s",
+          "default": [],
+          "choices": [],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": [
+            "comma-separated integers",
+            "values > 0",
+            "empty uses calculated optimal PA speed"
+          ]
+        }
+      ],
+      "resources": [
+        {
+          "path": "resources/calib/pressure_advance/tower_with_seam.stl",
+          "blob": "7e14536c7d6cc6c7e5edbbb4d8a123aa1a1248b8",
+          "role": "model"
+        }
+      ],
+      "effects": [
+        {
+          "category": "per-height",
+          "detail": "Sets pressure advance to start + integer(print_z) × step."
+        },
+        {
+          "category": "per-object",
+          "detail": "Cuts the tower to the sweep height and applies pinned wall, seam, and brim settings."
+        }
+      ],
+      "resultFields": [
+        {
+          "key": "pressureAdvanceK",
+          "label": "Factor K",
+          "unit": null,
+          "required": true
+        },
+        {
+          "key": "adaptivePressureAdvanceN",
+          "label": "Factor N",
+          "unit": null,
+          "required": false
+        }
+      ],
+      "presetTargets": [
+        {
+          "scope": "filament",
+          "key": "enable_pressure_advance",
+          "application": "manual"
+        },
+        {
+          "scope": "filament",
+          "key": "pressure_advance",
+          "application": "manual"
+        }
+      ],
+      "localBinding": {
+        "actionId": "calib_pressure_advance",
+        "argument": "pressure_advance",
+        "status": "alpha-geometry-only",
+        "detail": "The action only adds CalibrationRampGenerator geometry; pinned resources, dialog validation, calibration effects, result capture, and preset application are not implemented."
+      },
+      "deviceGating": {
+        "automation": "bambu-proprietary-auto",
+        "requirements": [
+          "A selected connected upstream MachineObject",
+          "Supported Bambu printer series and calibration firmware version",
+          "MachineObject.is_support_pa_calibration == true",
+          "Vendor device protocol, result retrieval, and save workflow"
+        ],
+        "orcaxrStatus": "blocked-proprietary-auto"
+      },
+      "sourceRefs": [
+        "main-menu",
+        "dialogs",
+        "plater-workflows",
+        "layer-gcode",
+        "device-start-gates",
+        "wizard-results"
+      ],
+      "notes": [
+        "The implementation accepts step >= EPSILON although its validation message says step >= 0.001."
+      ]
+    },
+    {
+      "id": "pressure-advance-line",
+      "origin": "pinned-menu",
+      "label": "Pressure advance — PA Line",
+      "enumMode": "Calib_PA_Line",
+      "menu": {
+        "path": [
+          "Calibration",
+          "Pressure advance",
+          "PA Line"
+        ],
+        "label": "PA Line",
+        "invocation": "PA_Calibration_Dlg → Plater::calib_pa(Calib_PA_Line)"
+      },
+      "parameters": [
+        {
+          "key": "extruderType",
+          "label": "Extruder type",
+          "kind": "choice",
+          "unit": null,
+          "default": "DDE",
+          "choices": [
+            "DDE",
+            "Bowden"
+          ],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": []
+        },
+        {
+          "key": "method",
+          "label": "Method",
+          "kind": "choice",
+          "unit": null,
+          "default": "PA Line",
+          "choices": [
+            "PA Line"
+          ],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": []
+        },
+        {
+          "key": "start",
+          "label": "Start PA",
+          "kind": "number",
+          "unit": null,
+          "default": 0,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "start >= 0"
+          ]
+        },
+        {
+          "key": "end",
+          "label": "End PA",
+          "kind": "number",
+          "unit": null,
+          "default": {
+            "DDE": 0.1,
+            "Bowden": 1
+          },
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "end >= start + step"
+          ]
+        },
+        {
+          "key": "step",
+          "label": "PA step",
+          "kind": "number",
+          "unit": null,
+          "default": {
+            "DDE": 0.002,
+            "Bowden": 0.02
+          },
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "step >= EPSILON"
+          ]
+        },
+        {
+          "key": "printNumbers",
+          "label": "Print numbers",
+          "kind": "boolean",
+          "unit": null,
+          "default": true,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": []
+        },
+        {
+          "key": "accelerations",
+          "label": "Accelerations",
+          "kind": "positive-integer-list",
+          "unit": "mm/s²",
+          "default": [],
+          "choices": [],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": [
+            "comma-separated integers",
+            "values > 0",
+            "empty uses current outer/inner/default acceleration"
+          ]
+        },
+        {
+          "key": "speeds",
+          "label": "Speeds",
+          "kind": "positive-integer-list",
+          "unit": "mm/s",
+          "default": [],
+          "choices": [],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": [
+            "comma-separated integers",
+            "values > 0",
+            "empty uses calculated optimal PA speed"
+          ]
+        }
+      ],
+      "resources": [
+        {
+          "path": "resources/calib/pressure_advance/pressure_advance_test.stl",
+          "blob": "0df26de76a59b0bd97fa4103495cd67c5329d14b",
+          "role": "model"
+        }
+      ],
+      "effects": [
+        {
+          "category": "generated-gcode",
+          "detail": "CalibPressureAdvanceLine generates labelled line-test G-code over the selected PA range."
+        }
+      ],
+      "resultFields": [
+        {
+          "key": "pressureAdvanceK",
+          "label": "Factor K",
+          "unit": null,
+          "required": true
+        },
+        {
+          "key": "adaptivePressureAdvanceN",
+          "label": "Factor N",
+          "unit": null,
+          "required": false
+        }
+      ],
+      "presetTargets": [
+        {
+          "scope": "filament",
+          "key": "enable_pressure_advance",
+          "application": "manual"
+        },
+        {
+          "scope": "filament",
+          "key": "pressure_advance",
+          "application": "manual"
+        }
+      ],
+      "localBinding": {
+        "actionId": "calib_pressure_advance",
+        "argument": "pressure_advance",
+        "status": "alpha-geometry-only",
+        "detail": "The action only adds CalibrationRampGenerator geometry; pinned resources, dialog validation, calibration effects, result capture, and preset application are not implemented."
+      },
+      "deviceGating": {
+        "automation": "bambu-proprietary-auto",
+        "requirements": [
+          "A selected connected upstream MachineObject",
+          "Supported Bambu printer series and calibration firmware version",
+          "MachineObject.is_support_pa_calibration == true",
+          "Vendor device protocol, result retrieval, and save workflow"
+        ],
+        "orcaxrStatus": "blocked-proprietary-auto"
+      },
+      "sourceRefs": [
+        "main-menu",
+        "dialogs",
+        "plater-workflows",
+        "calib-core",
+        "device-start-gates",
+        "wizard-results"
+      ],
+      "notes": [
+        "The implementation accepts step >= EPSILON although its validation message says step >= 0.001."
+      ]
+    },
+    {
+      "id": "pressure-advance-pattern",
+      "origin": "pinned-menu",
+      "label": "Pressure advance — PA Pattern",
+      "enumMode": "Calib_PA_Pattern",
+      "menu": {
+        "path": [
+          "Calibration",
+          "Pressure advance",
+          "PA Pattern"
+        ],
+        "label": "PA Pattern",
+        "invocation": "PA_Calibration_Dlg → Plater::calib_pa(Calib_PA_Pattern)"
+      },
+      "parameters": [
+        {
+          "key": "extruderType",
+          "label": "Extruder type",
+          "kind": "choice",
+          "unit": null,
+          "default": "DDE",
+          "choices": [
+            "DDE",
+            "Bowden"
+          ],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": []
+        },
+        {
+          "key": "method",
+          "label": "Method",
+          "kind": "choice",
+          "unit": null,
+          "default": "PA Pattern",
+          "choices": [
+            "PA Pattern"
+          ],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": []
+        },
+        {
+          "key": "start",
+          "label": "Start PA",
+          "kind": "number",
+          "unit": null,
+          "default": 0,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "start >= 0"
+          ]
+        },
+        {
+          "key": "end",
+          "label": "End PA",
+          "kind": "number",
+          "unit": null,
+          "default": {
+            "DDE": 0.08,
+            "Bowden": 1
+          },
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "end >= start + step"
+          ]
+        },
+        {
+          "key": "step",
+          "label": "PA step",
+          "kind": "number",
+          "unit": null,
+          "default": {
+            "DDE": 0.005,
+            "Bowden": 0.05
+          },
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "step >= EPSILON"
+          ]
+        },
+        {
+          "key": "printNumbers",
+          "label": "Print numbers",
+          "kind": "boolean",
+          "unit": null,
+          "default": true,
+          "choices": [],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": []
+        },
+        {
+          "key": "accelerations",
+          "label": "Accelerations",
+          "kind": "positive-integer-list",
+          "unit": "mm/s²",
+          "default": [],
+          "choices": [],
+          "editable": true,
+          "enabledWhen": "method == PA Pattern",
+          "constraints": [
+            "comma-separated integers",
+            "values > 0",
+            "empty uses current outer/inner/default acceleration"
+          ]
+        },
+        {
+          "key": "speeds",
+          "label": "Speeds",
+          "kind": "positive-integer-list",
+          "unit": "mm/s",
+          "default": [],
+          "choices": [],
+          "editable": true,
+          "enabledWhen": "method == PA Pattern",
+          "constraints": [
+            "comma-separated integers",
+            "values > 0",
+            "empty uses calculated optimal PA speed"
+          ]
+        }
+      ],
+      "resources": [
+        {
+          "path": "resources/calib/pressure_advance/pa_pattern.3mf",
+          "blob": "01e3d443960010dac2e56af32545f1b0a32df769",
+          "role": "device-template"
+        }
+      ],
+      "effects": [
+        {
+          "category": "per-object",
+          "detail": "Creates and arranges anchor objects with optional per-object speed and acceleration."
+        },
+        {
+          "category": "generated-gcode",
+          "detail": "CalibPressureAdvancePattern generates and merges custom G-code for every pattern."
+        }
+      ],
+      "resultFields": [
+        {
+          "key": "pressureAdvanceK",
+          "label": "Factor K",
+          "unit": null,
+          "required": true
+        },
+        {
+          "key": "adaptivePressureAdvanceN",
+          "label": "Factor N",
+          "unit": null,
+          "required": false
+        }
+      ],
+      "presetTargets": [
+        {
+          "scope": "filament",
+          "key": "enable_pressure_advance",
+          "application": "manual"
+        },
+        {
+          "scope": "filament",
+          "key": "pressure_advance",
+          "application": "manual"
+        }
+      ],
+      "localBinding": {
+        "actionId": "calib_pressure_advance",
+        "argument": "pressure_advance",
+        "status": "alpha-geometry-only",
+        "detail": "The action only adds CalibrationRampGenerator geometry; pinned resources, dialog validation, calibration effects, result capture, and preset application are not implemented."
+      },
+      "deviceGating": {
+        "automation": "bambu-proprietary-auto",
+        "requirements": [
+          "A selected connected upstream MachineObject",
+          "Supported Bambu printer series and calibration firmware version",
+          "MachineObject.is_support_pa_calibration == true",
+          "Vendor device protocol, result retrieval, and save workflow"
+        ],
+        "orcaxrStatus": "blocked-proprietary-auto"
+      },
+      "sourceRefs": [
+        "main-menu",
+        "dialogs",
+        "plater-workflows",
+        "calib-core",
+        "calib-utils",
+        "device-start-gates",
+        "wizard-results"
+      ],
+      "notes": [
+        "The manual menu path generates pattern geometry/G-code; the pinned pa_pattern.3mf is used by the device-oriented CalibUtils path.",
+        "The implementation accepts step >= EPSILON although its validation message says step >= 0.001."
+      ]
+    },
+    {
+      "id": "retraction-tower",
+      "origin": "pinned-menu",
+      "label": "Retraction test",
+      "enumMode": "Calib_Retraction_tower",
+      "menu": {
+        "path": [
+          "Calibration",
+          "Retraction test"
+        ],
+        "label": "Retraction test",
+        "invocation": "Retraction_Test_Dlg → Plater::calib_retraction"
+      },
+      "parameters": [
+        {
+          "key": "start",
+          "label": "Start retraction length",
+          "kind": "number",
+          "unit": "mm",
+          "default": 0,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "start >= 0"
+          ]
+        },
+        {
+          "key": "end",
+          "label": "End retraction length",
+          "kind": "number",
+          "unit": "mm",
+          "default": 2,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "end >= start + step"
+          ]
+        },
+        {
+          "key": "step",
+          "label": "Step",
+          "kind": "number",
+          "unit": "mm",
+          "default": 0.1,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "step > 0"
+          ]
+        }
+      ],
+      "resources": [
+        {
+          "path": "resources/calib/retraction/retraction_tower.stl",
+          "blob": "bae70d5924f3be85978f7580419d8354f1d8fc6d",
+          "role": "model"
+        }
+      ],
+      "effects": [
+        {
+          "category": "per-height",
+          "detail": "Sets retraction_length to start + floor(max(0, print_z - 0.4)) × step."
+        },
+        {
+          "category": "per-object",
+          "detail": "Cuts the tower to the sweep height and applies two-wall, hollow calibration settings."
+        }
+      ],
+      "resultFields": [
+        {
+          "key": "retractionLengthMm",
+          "label": "Selected retraction length",
+          "unit": "mm",
+          "required": true
+        }
+      ],
+      "presetTargets": [
+        {
+          "scope": "printer",
+          "key": "retraction_length",
+          "application": "manual"
+        }
+      ],
+      "localBinding": {
+        "actionId": "calib_retraction",
+        "argument": "retraction",
+        "status": "alpha-geometry-only",
+        "detail": "The action only adds CalibrationRampGenerator geometry; pinned resources, dialog validation, calibration effects, result capture, and preset application are not implemented."
+      },
+      "deviceGating": {
+        "automation": "manual-only",
+        "requirements": [],
+        "orcaxrStatus": "local-generation-does-not-require-device"
+      },
+      "sourceRefs": [
+        "main-menu",
+        "dialogs",
+        "plater-workflows",
+        "layer-gcode"
+      ],
+      "notes": [
+        "The implementation permits start == 0 and requires step > 0 despite the dialog message wording."
+      ]
+    },
+    {
+      "id": "max-volumetric-speed",
+      "origin": "pinned-menu",
+      "label": "Max flowrate",
+      "enumMode": "Calib_Vol_speed_Tower",
+      "menu": {
+        "path": [
+          "Calibration",
+          "Max flowrate"
+        ],
+        "label": "Max flowrate",
+        "invocation": "MaxVolumetricSpeed_Test_Dlg → Plater::calib_max_vol_speed"
+      },
+      "parameters": [
+        {
+          "key": "start",
+          "label": "Start volumetric speed",
+          "kind": "number",
+          "unit": "mm³/s",
+          "default": 5,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "start > 0"
+          ]
+        },
+        {
+          "key": "end",
+          "label": "End volumetric speed",
+          "kind": "number",
+          "unit": "mm³/s",
+          "default": 20,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "end >= start + step"
+          ]
+        },
+        {
+          "key": "step",
+          "label": "Step",
+          "kind": "number",
+          "unit": "mm³/s",
+          "default": 0.5,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "step > 0"
+          ]
+        }
+      ],
+      "resources": [
+        {
+          "path": "resources/calib/volumetric_speed/SpeedTestStructure.step",
+          "blob": "87aa053957155918f9ad9468483cac1bf4bcc323",
+          "role": "model"
+        }
+      ],
+      "effects": [
+        {
+          "category": "per-height",
+          "detail": "Converts the volumetric sweep through line flow and sets rounded outer_wall_speed to start + print_z × step."
+        },
+        {
+          "category": "per-object",
+          "detail": "Scales/cuts the tower for the bed and applies single-wall spiral calibration settings."
+        }
+      ],
+      "resultFields": [
+        {
+          "key": "maxVolumetricSpeedMm3PerS",
+          "label": "Maximum acceptable volumetric speed",
+          "unit": "mm³/s",
+          "required": true
+        }
+      ],
+      "presetTargets": [
+        {
+          "scope": "filament",
+          "key": "filament_max_volumetric_speed",
+          "application": "manual"
+        }
+      ],
+      "localBinding": {
+        "actionId": "calib_max_flow",
+        "argument": "max_flow",
+        "status": "alpha-geometry-only",
+        "detail": "The action only adds CalibrationRampGenerator geometry; pinned resources, dialog validation, calibration effects, result capture, and preset application are not implemented."
+      },
+      "deviceGating": {
+        "automation": "manual-only",
+        "requirements": [],
+        "orcaxrStatus": "local-generation-does-not-require-device"
+      },
+      "sourceRefs": [
+        "main-menu",
+        "dialogs",
+        "plater-workflows",
+        "layer-gcode"
+      ],
+      "notes": [
+        "The implementation requires step > 0 despite the dialog message saying step >= 0."
+      ]
+    },
+    {
+      "id": "junction-deviation",
+      "origin": "pinned-menu",
+      "label": "Junction Deviation",
+      "enumMode": "Calib_Junction_Deviation",
+      "menu": {
+        "path": [
+          "Calibration",
+          "Cornering",
+          "Junction Deviation"
+        ],
+        "label": "Junction Deviation",
+        "invocation": "Junction_Deviation_Test_Dlg → Plater::calib_junction_deviation"
+      },
+      "parameters": [
+        {
+          "key": "testModel",
+          "label": "Test model",
+          "kind": "choice",
+          "unit": null,
+          "default": "Ringing Tower",
+          "choices": [
+            "Ringing Tower",
+            "Fast Tower"
+          ],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": []
+        },
+        {
+          "key": "start",
+          "label": "Start junction deviation",
+          "kind": "number",
+          "unit": "mm",
+          "default": 0,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "start >= 0",
+            "start < end"
+          ]
+        },
+        {
+          "key": "end",
+          "label": "End junction deviation",
+          "kind": "number",
+          "unit": "mm",
+          "default": 0.25,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "end < 1",
+            "end > start",
+            "end > 0.3 displays a layer-shift warning"
+          ]
+        }
+      ],
+      "resources": [
+        {
+          "path": "resources/calib/input_shaping/ringing_tower.stl",
+          "blob": "70cae09ea63db2411493f22ab8c4677f64f7467f",
+          "role": "model"
+        },
+        {
+          "path": "resources/calib/input_shaping/fast_tower_test.stl",
+          "blob": "e2fd5cd370c4404744b0faecef41f07902cafed9",
+          "role": "model"
+        }
+      ],
+      "effects": [
+        {
+          "category": "per-height",
+          "detail": "Interpolates junction deviation from start to end using layer index / layer count."
+        },
+        {
+          "category": "per-object",
+          "detail": "Applies single-wall spiral settings and disables competing PA/resonance effects."
+        }
+      ],
+      "resultFields": [
+        {
+          "key": "junctionDeviationMm",
+          "label": "Selected junction deviation",
+          "unit": "mm",
+          "required": true
+        }
+      ],
+      "presetTargets": [
+        {
+          "scope": "process",
+          "key": "default_junction_deviation",
+          "application": "manual"
+        }
+      ],
+      "localBinding": {
+        "actionId": null,
+        "argument": null,
+        "status": "unbound",
+        "detail": "No current ActionRegistry action exposes this distinct pinned workflow."
+      },
+      "deviceGating": {
+        "automation": "manual-only",
+        "requirements": [],
+        "orcaxrStatus": "local-generation-does-not-require-device"
+      },
+      "sourceRefs": [
+        "main-menu",
+        "dialogs",
+        "plater-workflows",
+        "layer-gcode"
+      ],
+      "notes": []
+    },
+    {
+      "id": "input-shaping-frequency",
+      "origin": "pinned-menu",
+      "label": "Input Shaping Frequency",
+      "enumMode": "Calib_Input_shaping_freq",
+      "menu": {
+        "path": [
+          "Calibration",
+          "Input Shaping",
+          "Input Shaping Frequency"
+        ],
+        "label": "Input Shaping Frequency",
+        "invocation": "Input_Shaping_Freq_Test_Dlg → Plater::calib_input_shaping_freq"
+      },
+      "parameters": [
+        {
+          "key": "testModel",
+          "label": "Test model",
+          "kind": "choice",
+          "unit": null,
+          "default": "Ringing Tower",
+          "choices": [
+            "Ringing Tower",
+            "Fast Tower"
+          ],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": []
+        },
+        {
+          "key": "freqStartX",
+          "label": "X start",
+          "kind": "number",
+          "unit": "Hz",
+          "default": 15,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "freqStartX >= 0",
+            "freqStartX < freqEndX"
+          ]
+        },
+        {
+          "key": "freqEndX",
+          "label": "X end",
+          "kind": "number",
+          "unit": "Hz",
+          "default": 110,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "freqEndX <= 500",
+            "freqEndX > freqStartX"
+          ]
+        },
+        {
+          "key": "freqStartY",
+          "label": "Y start",
+          "kind": "number",
+          "unit": "Hz",
+          "default": 15,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "freqStartY >= 0",
+            "freqStartY < freqEndY"
+          ]
+        },
+        {
+          "key": "freqEndY",
+          "label": "Y end",
+          "kind": "number",
+          "unit": "Hz",
+          "default": 110,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "freqEndY > freqStartY",
+            "pinned implementation accidentally rechecks freqEndX, so freqEndY has no enforced 500 Hz ceiling"
+          ]
+        },
+        {
+          "key": "damping",
+          "label": "Damp",
+          "kind": "number",
+          "unit": null,
+          "default": 0.15,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "damping >= 0",
+            "damping < 1"
+          ]
+        }
+      ],
+      "resources": [
+        {
+          "path": "resources/calib/input_shaping/ringing_tower.stl",
+          "blob": "70cae09ea63db2411493f22ab8c4677f64f7467f",
+          "role": "model"
+        },
+        {
+          "path": "resources/calib/input_shaping/fast_tower_test.stl",
+          "blob": "e2fd5cd370c4404744b0faecef41f07902cafed9",
+          "role": "model"
+        }
+      ],
+      "effects": [
+        {
+          "category": "per-height",
+          "detail": "Emits the damping setup on layer 1, then linearly interpolates X/Y (or combined A) shaping frequency."
+        },
+        {
+          "category": "per-object",
+          "detail": "Applies single-wall spiral settings and disables competing PA/resonance effects."
+        }
+      ],
+      "resultFields": [
+        {
+          "key": "frequencyXHz",
+          "label": "Selected X input-shaper frequency",
+          "unit": "Hz",
+          "required": true
+        },
+        {
+          "key": "frequencyYHz",
+          "label": "Selected Y input-shaper frequency",
+          "unit": "Hz",
+          "required": true
+        }
+      ],
+      "presetTargets": [
+        {
+          "scope": "firmware",
+          "key": "input_shaper.frequency_x",
+          "application": "manual-transfer"
+        },
+        {
+          "scope": "firmware",
+          "key": "input_shaper.frequency_y",
+          "application": "manual-transfer"
+        }
+      ],
+      "localBinding": {
+        "actionId": null,
+        "argument": null,
+        "status": "unbound",
+        "detail": "No current ActionRegistry action exposes this distinct pinned workflow."
+      },
+      "deviceGating": {
+        "automation": "manual-only",
+        "requirements": [],
+        "orcaxrStatus": "local-generation-does-not-require-device"
+      },
+      "sourceRefs": [
+        "main-menu",
+        "dialogs",
+        "plater-workflows",
+        "layer-gcode"
+      ],
+      "notes": [
+        "The dialog recommends damping 0 but initializes 0.15.",
+        "The implementation accepts a zero start frequency and damping 0, contrary to its warning text."
+      ]
+    },
+    {
+      "id": "input-shaping-damping",
+      "origin": "pinned-menu",
+      "label": "Input Shaping Damping/zeta factor",
+      "enumMode": "Calib_Input_shaping_damp",
+      "menu": {
+        "path": [
+          "Calibration",
+          "Input Shaping",
+          "Input Shaping Damping/zeta factor"
+        ],
+        "label": "Input Shaping Damping/zeta factor",
+        "invocation": "Input_Shaping_Damp_Test_Dlg → Plater::calib_input_shaping_damp"
+      },
+      "parameters": [
+        {
+          "key": "testModel",
+          "label": "Test model",
+          "kind": "choice",
+          "unit": null,
+          "default": "Ringing Tower",
+          "choices": [
+            "Ringing Tower",
+            "Fast Tower"
+          ],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": []
+        },
+        {
+          "key": "frequencyX",
+          "label": "Frequency X",
+          "kind": "number",
+          "unit": "Hz",
+          "default": 30,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "0 <= frequencyX <= 500"
+          ]
+        },
+        {
+          "key": "frequencyY",
+          "label": "Frequency Y",
+          "kind": "number",
+          "unit": "Hz",
+          "default": 30,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "0 <= frequencyY <= 500"
+          ]
+        },
+        {
+          "key": "start",
+          "label": "Damp start",
+          "kind": "number",
+          "unit": null,
+          "default": 0,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "start >= 0",
+            "start < end"
+          ]
+        },
+        {
+          "key": "end",
+          "label": "Damp end",
+          "kind": "number",
+          "unit": null,
+          "default": 0.4,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "end <= 1",
+            "end > start"
+          ]
+        }
+      ],
+      "resources": [
+        {
+          "path": "resources/calib/input_shaping/ringing_tower.stl",
+          "blob": "70cae09ea63db2411493f22ab8c4677f64f7467f",
+          "role": "model"
+        },
+        {
+          "path": "resources/calib/input_shaping/fast_tower_test.stl",
+          "blob": "e2fd5cd370c4404744b0faecef41f07902cafed9",
+          "role": "model"
+        }
+      ],
+      "effects": [
+        {
+          "category": "per-height",
+          "detail": "Emits fixed X/Y frequencies on layer 1, then linearly interpolates the combined damping factor."
+        },
+        {
+          "category": "per-object",
+          "detail": "Applies single-wall spiral settings and disables competing PA/resonance effects."
+        }
+      ],
+      "resultFields": [
+        {
+          "key": "dampingRatio",
+          "label": "Selected damping/zeta factor",
+          "unit": null,
+          "required": true
+        }
+      ],
+      "presetTargets": [
+        {
+          "scope": "firmware",
+          "key": "input_shaper.damping_ratio",
+          "application": "manual-transfer"
+        }
+      ],
+      "localBinding": {
+        "actionId": null,
+        "argument": null,
+        "status": "unbound",
+        "detail": "No current ActionRegistry action exposes this distinct pinned workflow."
+      },
+      "deviceGating": {
+        "automation": "manual-only",
+        "requirements": [],
+        "orcaxrStatus": "local-generation-does-not-require-device"
+      },
+      "sourceRefs": [
+        "main-menu",
+        "dialogs",
+        "plater-workflows",
+        "layer-gcode"
+      ],
+      "notes": [
+        "Zero frequency is accepted by the implementation despite the dialog warning text."
+      ]
+    },
+    {
+      "id": "vfa",
+      "origin": "pinned-menu",
+      "label": "VFA",
+      "enumMode": "Calib_VFA_Tower",
+      "menu": {
+        "path": [
+          "Calibration",
+          "VFA"
+        ],
+        "label": "VFA",
+        "invocation": "VFA_Test_Dlg → Plater::calib_VFA"
+      },
+      "parameters": [
+        {
+          "key": "start",
+          "label": "Start speed",
+          "kind": "number",
+          "unit": "mm/s",
+          "default": 40,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "start > 10"
+          ]
+        },
+        {
+          "key": "end",
+          "label": "End speed",
+          "kind": "number",
+          "unit": "mm/s",
+          "default": 200,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "end >= start + step"
+          ]
+        },
+        {
+          "key": "step",
+          "label": "Step",
+          "kind": "number",
+          "unit": "mm/s",
+          "default": 10,
+          "choices": [],
+          "editable": true,
+          "enabledWhen": null,
+          "constraints": [
+            "finite number",
+            "step > 0"
+          ]
+        }
+      ],
+      "resources": [
+        {
+          "path": "resources/calib/vfa/VFA.stl",
+          "blob": "460a1191e93084691e6292d75d021adb065862ea",
+          "role": "model"
+        }
+      ],
+      "effects": [
+        {
+          "category": "per-height",
+          "detail": "Sets rounded outer_wall_speed to start + floor(print_z / 5) × step."
+        },
+        {
+          "category": "per-object",
+          "detail": "Cuts the VFA model and applies single-wall spiral calibration settings."
+        }
+      ],
+      "resultFields": [
+        {
+          "key": "artifactFreeSpeedMinMmPerS",
+          "label": "Artifact-free speed range minimum",
+          "unit": "mm/s",
+          "required": true
+        },
+        {
+          "key": "artifactFreeSpeedMaxMmPerS",
+          "label": "Artifact-free speed range maximum",
+          "unit": "mm/s",
+          "required": true
+        }
+      ],
+      "presetTargets": [
+        {
+          "scope": "process",
+          "key": "outer_wall_speed",
+          "application": "manual"
+        },
+        {
+          "scope": "process",
+          "key": "inner_wall_speed",
+          "application": "manual"
+        }
+      ],
+      "localBinding": {
+        "actionId": "calib_vfa",
+        "argument": "vfa",
+        "status": "alpha-geometry-only",
+        "detail": "The action only adds CalibrationRampGenerator geometry; pinned resources, dialog validation, calibration effects, result capture, and preset application are not implemented."
+      },
+      "deviceGating": {
+        "automation": "manual-only",
+        "requirements": [],
+        "orcaxrStatus": "local-generation-does-not-require-device"
+      },
+      "sourceRefs": [
+        "main-menu",
+        "dialogs",
+        "plater-workflows",
+        "layer-gcode"
+      ],
+      "notes": [
+        "The implementation requires step > 0 despite the dialog message saying step >= 0."
+      ]
+    },
+    {
+      "id": "tolerance-extension",
+      "origin": "documented-extension",
+      "label": "Orca Tolerance Test",
+      "enumMode": null,
+      "menu": null,
+      "parameters": [
+        {
+          "key": "testClearances",
+          "label": "Model clearances",
+          "kind": "number-list",
+          "unit": "mm",
+          "default": [
+            0,
+            0.05,
+            0.1,
+            0.2,
+            0.3,
+            0.4
+          ],
+          "choices": [],
+          "editable": false,
+          "enabledWhen": null,
+          "constraints": [
+            "fixed by the documented model"
+          ]
+        }
+      ],
+      "resources": [
+        {
+          "path": "resources/handy_models/OrcaToleranceTest.stl",
+          "blob": "3f4e87eb9436d000b15b6f853675c262f821f45f",
+          "role": "model"
+        }
+      ],
+      "effects": [
+        {
+          "category": "per-object",
+          "detail": "Prints a documented six-clearance fit model; no CalibMode or calibration G-code effect exists."
+        }
+      ],
+      "resultFields": [
+        {
+          "key": "passingClearanceMm",
+          "label": "Smallest freely fitting clearance",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "xyHoleCompensationMm",
+          "label": "Derived X-Y hole compensation",
+          "unit": "mm",
+          "required": false
+        },
+        {
+          "key": "xyContourCompensationMm",
+          "label": "Derived X-Y contour compensation",
+          "unit": "mm",
+          "required": false
+        }
+      ],
+      "presetTargets": [
+        {
+          "scope": "process",
+          "key": "xy_hole_compensation",
+          "application": "manual"
+        },
+        {
+          "scope": "process",
+          "key": "xy_contour_compensation",
+          "application": "manual"
+        }
+      ],
+      "localBinding": {
+        "actionId": "calib_tolerance",
+        "argument": "tolerance",
+        "status": "alpha-geometry-only",
+        "detail": "The action only adds CalibrationRampGenerator geometry; pinned resources, dialog validation, calibration effects, result capture, and preset application are not implemented."
+      },
+      "deviceGating": {
+        "automation": "manual-only",
+        "requirements": [],
+        "orcaxrStatus": "local-generation-does-not-require-device"
+      },
+      "sourceRefs": [
+        "tolerance-doc",
+        "handy-model-menu"
+      ],
+      "notes": [
+        "This is deliberately outside CalibMode and the 14 pinned Calibration-menu variants.",
+        "Upstream exposes the model through Add Handy Model and documents manual caliper/fit evaluation."
+      ]
+    }
+  ],
+  "deviceAutomation": {
+    "orcaxrPolicy": "manual-only",
+    "supportedTransport": "moonraker",
+    "unavailableTransports": [
+      "vendor-cloud",
+      "serial",
+      "usb"
+    ],
+    "targetPrinters": [
+      "Snapmaker U1",
+      "Elegoo Centauri Carbon"
+    ],
+    "gates": [
+      {
+        "id": "pressure-advance-auto",
+        "workflowIds": [
+          "pressure-advance-tower",
+          "pressure-advance-line",
+          "pressure-advance-pattern"
+        ],
+        "upstreamRequirements": [
+          "selected connected MachineObject",
+          "Bambu X1 printer series for the automatic control",
+          "is_support_pa_calibration",
+          "compatible cali_version / firmware",
+          "vendor result retrieval and save APIs"
+        ],
+        "orcaxrDecision": "Unavailable: OrcaXR has no Bambu vendor-cloud/device protocol and must not present this automatic path as supported."
+      },
+      {
+        "id": "flow-rate-auto",
+        "workflowIds": [
+          "flow-pass-1",
+          "flow-pass-2",
+          "flow-yolo",
+          "flow-yolo-perfectionist"
+        ],
+        "upstreamRequirements": [
+          "selected connected MachineObject",
+          "Bambu X1 printer series for the automatic control",
+          "is_support_flow_calibration",
+          "compatible cali_version / firmware",
+          "Micro-Lidar-compatible material and vendor result APIs"
+        ],
+        "orcaxrDecision": "Unavailable: OrcaXR has no Bambu Micro-Lidar/vendor result protocol; manual model workflows remain separate."
+      },
+      {
+        "id": "device-print-dispatch",
+        "workflowIds": [],
+        "upstreamRequirements": [
+          "connected and idle printer",
+          "printer not upgrading or force-upgrade blocked",
+          "compatible filament",
+          "SD card when the printer or LAN path requires it"
+        ],
+        "orcaxrDecision": "Not inherited: any future Moonraker calibration dispatch requires OrcaXR-owned P9 safety and capability checks."
+      }
+    ]
+  },
+  "localImplementation": {
+    "actionSource": "src/actions/groups/calibration.ts",
+    "workspaceSource": "src/workspace/OrcaWorkspace.ts",
+    "generatorSource": "src/features/CalibrationRampGenerator.ts",
+    "statusMeaning": {
+      "alpha-geometry-only": "A real action adds locally generated geometry, but does not implement the pinned calibration workflow.",
+      "unbound": "No distinct current ActionRegistry binding exists."
+    }
+  }
+}

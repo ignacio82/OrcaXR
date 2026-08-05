@@ -7,9 +7,16 @@
  * mirrors the Android implementation — see profileKeys.ts.
  */
 import { serializePrintConfigArray } from '../settings/configSerialization';
-import { MAX_INHERITANCE_DEPTH, META_KEYS, SAFE_KEYS } from './profileKeys';
-
-type ProfileJson = Record<string, unknown>;
+import {
+  PINNED_PRESET_SEMANTICS,
+  PresetGraph,
+  PresetGraphError,
+  type PresetId,
+  type PresetNode,
+  type PresetSelectionRequest,
+  type ResolvedPresetSelection,
+} from '../settings/presets/PresetGraph';
+import { META_KEYS, SAFE_KEYS } from './profileKeys';
 
 export interface SlicerProfile {
   id: string;
@@ -17,15 +24,55 @@ export interface SlicerProfile {
   machineName: string;
   processName: string;
   filamentName: string;
+  /** Full logical filament preset name before the compact picker label. */
+  filamentPresetName?: string;
+  /** Canonical graph identities; absent only on ad-hoc imported configs. */
+  machinePresetId?: PresetId;
+  processPresetId?: PresetId;
+  filamentPresetId?: PresetId;
   config: Record<string, string>;
 }
 
-interface Catalog {
-  [brand: string]: {
-    machine: ProfileJson[];
-    process: ProfileJson[];
-    filament: ProfileJson[];
-  };
+export interface ProfileCatalogDiagnostic {
+  readonly code:
+    | 'profile-corpus-pinned-overlay'
+    | 'invalid-preset-graph'
+    | 'no-compatible-process'
+    | 'no-compatible-filament'
+    | 'unresolved-compatibility';
+  readonly severity: 'warning' | 'error';
+  readonly message: string;
+  readonly machineName?: string;
+  readonly processName?: string;
+  readonly presetId?: PresetId;
+}
+
+export interface ProfileCatalogProvenance {
+  readonly compatibilitySemanticsCommit: typeof PINNED_PRESET_SEMANTICS.commit;
+  /**
+   * Same-path profiles are exact Git blobs from the semantics pin; target
+   * profiles absent upstream are separately SHA-256 locked by the profile
+   * overlay gate.
+   */
+  readonly profileCorpus: 'pinned-v2.3.4-overlay-with-locked-adaptations';
+}
+
+export interface ProfileCatalogSelectionResolution {
+  /** Present only when the requested printer exists in the validated graph. */
+  readonly selection?: ResolvedPresetSelection;
+  /** Actionable fail-closed reason when no selection can be resolved. */
+  readonly unavailableReason?: string;
+}
+
+export class ProfileCatalogLoadError extends Error {
+  constructor(
+    message: string,
+    readonly diagnostics: readonly ProfileCatalogDiagnostic[],
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = 'ProfileCatalogLoadError';
+  }
 }
 
 function str(v: unknown, key?: string): string {
@@ -35,95 +82,84 @@ function str(v: unknown, key?: string): string {
   return `${v}`;
 }
 
-function leavesOf(jsons: ProfileJson[]): ProfileJson[] {
-  // OrcaSlicer semantics: `instantiation` decides user-visible presets.
-  // Being inherited-FROM does not disqualify — the ECC "0.4 nozzle"
-  // machine is the base the other nozzle sizes inherit from AND a real
-  // preset (instantiation: "true"). Only fall back to parent-exclusion
-  // for profiles that don't declare the flag at all.
-  const parentNames = new Set(jsons.map((j) => str(j.inherits)).filter((s) => s.length > 0));
-  return jsons.filter((j) => {
-    const name = str(j.name);
-    if (!name) return false;
-    const inst = j.instantiation;
-    if (inst !== undefined) return str(inst) !== 'false';
-    return !parentNames.has(name);
-  });
-}
-
-function flatten(leaf: ProfileJson, byName: Map<string, ProfileJson>): Record<string, string> {
-  const chain: ProfileJson[] = [];
-  let current: ProfileJson | undefined = leaf;
-  let depth = 0;
-  while (current && depth < MAX_INHERITANCE_DEPTH) {
-    chain.push(current);
-    const parent = str(current.inherits);
-    current = parent ? byName.get(parent) : undefined;
-    depth += 1;
-  }
+function flatten(node: PresetNode): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const json of chain.reverse()) {
-    for (const [key, value] of Object.entries(json)) {
-      if (META_KEYS.has(key)) continue;
-      if (!SAFE_KEYS.has(key)) continue;
-      out[key] = str(value, key);
-    }
+  for (const [key, value] of Object.entries(node.effective)) {
+    if (META_KEYS.has(key)) continue;
+    if (!SAFE_KEYS.has(key)) continue;
+    out[key] = str(value, key);
   }
   return out;
 }
 
 export class ProfileCatalog {
-  profiles: SlicerProfile[] = [];
+  profiles: readonly SlicerProfile[] = Object.freeze([]);
+  diagnostics: readonly ProfileCatalogDiagnostic[] = Object.freeze([]);
+  readonly provenance: ProfileCatalogProvenance = Object.freeze({
+    compatibilitySemanticsCommit: PINNED_PRESET_SEMANTICS.commit,
+    profileCorpus: 'pinned-v2.3.4-overlay-with-locked-adaptations',
+  });
+  private graph?: PresetGraph;
+
+  static fromRaw(catalog: unknown): ProfileCatalog {
+    const result = new ProfileCatalog();
+    result.replaceFromRaw(catalog);
+    return result;
+  }
 
   async load(): Promise<void> {
     // Single bundled catalog: one fetch, and no per-file URLs — vite's dev
     // middleware serves the SPA fallback for filenames containing '@'
     // (every process/filament profile), which silently gutted profiles.
-    let catalog: Catalog | null = null;
+    let catalog: unknown;
     try {
       const baseUrl = import.meta.env.BASE_URL;
       const url = baseUrl.endsWith('/') ? `${baseUrl}profiles/catalog.json` : `${baseUrl}/profiles/catalog.json`;
       const cacheBustUrl = `${url}?t=${Date.now()}`;
       const r = await fetch(cacheBustUrl, { cache: 'no-store' });
-      if (r.ok) catalog = (await r.json()) as Catalog;
-      else console.error(`[orcaxr] failed to fetch catalog: HTTP ${r.status}`);
+      if (!r.ok) {
+        console.error(`[orcaxr] failed to fetch catalog: HTTP ${r.status}`);
+        return;
+      }
+      catalog = await r.json();
     } catch (e) {
       console.error('[orcaxr] failed to fetch catalog (network/parse error)', e);
       return;
     }
-    if (!catalog) return;
-    for (const cats of Object.values(catalog)) {
-      const machines = cats.machine ?? [];
-      const processes = cats.process ?? [];
-      const filaments = cats.filament ?? [];
-      const byName = new Map<string, ProfileJson>();
-      for (const j of [...machines, ...processes, ...filaments]) {
-        const name = str(j.name);
-        if (name) byName.set(name, j);
+    try {
+      this.replaceFromRaw(catalog);
+      const blocking = this.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+      if (blocking.length > 0) {
+        console.error(
+          `[orcaxr] omitted incompatible profile combinations (${blocking.length} catalog diagnostics)`,
+          blocking,
+        );
       }
-      for (const machine of leavesOf(machines)) {
-        const machineCfg = flatten(machine, byName);
-        for (const process of leavesOf(processes)) {
-          const processCfg = flatten(process, byName);
-          for (const filament of leavesOf(filaments)) {
-            const filamentCfg = flatten(filament, byName);
-            const machineName = str(machine.name);
-            const processName = str(process.name);
-            const filamentName = str(filament.name);
-            const processShort = processName.split('@')[0].trim();
-            const filamentShort = filamentName.split('@')[0].trim();
-            this.profiles.push({
-              id: `${machineName}|${processName}|${filamentName}`,
-              displayName: `${machineName} · ${processShort} · ${filamentShort}`,
-              machineName,
-              processName,
-              filamentName: filamentShort,
-              config: { ...machineCfg, ...processCfg, ...filamentCfg },
-            });
-          }
-        }
-      }
+      console.warn(`[orcaxr] ${this.diagnostics[0]?.message ?? 'Profile corpus provenance is unverified.'}`);
+    } catch (error) {
+      console.error('[orcaxr] profile catalog failed compatibility validation', error);
     }
+  }
+
+  /**
+   * Atomically replace the catalog after the complete graph validates. A bad
+   * replacement never exposes a partial Cartesian product or mutates the last
+   * known-good catalog.
+   */
+  replaceFromRaw(catalog: unknown): void {
+    let graph: PresetGraph;
+    try {
+      graph = PresetGraph.build(catalog);
+    } catch (error) {
+      const diagnostics = graphErrorDiagnostics(error);
+      throw new ProfileCatalogLoadError('Profile catalog failed canonical graph validation', diagnostics, {
+        cause: error,
+      });
+    }
+    const compiled = compileProfiles(graph);
+    this.graph = graph;
+    this.profiles = Object.freeze(compiled.profiles);
+    this.diagnostics = Object.freeze(compiled.diagnostics);
   }
 
   /** First profile whose parts all substring-match (case-insensitive). */
@@ -140,6 +176,201 @@ export class ProfileCatalog {
       ) ?? null
     );
   }
+
+  /**
+   * Explain why a requested triple is unavailable without guessing a
+   * replacement. UI surfaces can present this message before invoking
+   * `find`, while legacy callers keep the existing nullable contract.
+   */
+  explainUnavailable(machine: string, process: string, filament: string): string | null {
+    if (this.find(machine, process, filament)) return null;
+    const graph = this.graph;
+    if (!graph) return 'The profile catalog has not loaded or failed validation.';
+    const machineNode = findNode(graph.selectable('machine'), machine);
+    if (!machineNode) return `Unknown printer profile ${JSON.stringify(machine)}.`;
+    const compatibleProcesses = graph.compatibleProcesses(machineNode.id);
+    const processNode = process.trim() ? findNode(graph.selectable('process'), process) : compatibleProcesses[0];
+    if (!processNode) return `Unknown process profile ${JSON.stringify(process)} for ${machineNode.name}.`;
+    if (!compatibleProcesses.some((candidate) => candidate.id === processNode.id)) {
+      return `${processNode.name} is not compatible with ${machineNode.name}.`;
+    }
+    const compatibleFilaments = graph.compatibleFilaments(machineNode.id, processNode.id);
+    const filamentNode = filament.trim() ? findNode(graph.selectable('filament'), filament) : compatibleFilaments[0];
+    if (!filamentNode) return `Unknown filament profile ${JSON.stringify(filament)} for ${machineNode.name}.`;
+    if (!compatibleFilaments.some((candidate) => candidate.id === filamentNode.id)) {
+      return `${filamentNode.name} is not compatible with ${machineNode.name} and ${processNode.name}.`;
+    }
+    return 'The requested profile combination is unavailable.';
+  }
+
+  /**
+   * Reconcile one printer/process/multi-filament request using the pinned
+   * PresetGraph policy. The graph remains encapsulated and an unloaded or
+   * stale printer identity fails closed instead of exposing a guessed profile.
+   */
+  reconcileSelection(request: PresetSelectionRequest): ProfileCatalogSelectionResolution {
+    const graph = this.graph;
+    if (!graph) {
+      return Object.freeze({
+        unavailableReason: 'The profile catalog has not loaded or failed validation.',
+      });
+    }
+    try {
+      return Object.freeze({ selection: graph.resolveSelection(request) });
+    } catch {
+      return Object.freeze({
+        unavailableReason: 'The selected printer preset is no longer available in the validated profile catalog.',
+      });
+    }
+  }
+}
+
+function compileProfiles(graph: PresetGraph): {
+  profiles: SlicerProfile[];
+  diagnostics: ProfileCatalogDiagnostic[];
+} {
+  const profiles: SlicerProfile[] = [];
+  const diagnostics: ProfileCatalogDiagnostic[] = [
+    {
+      code: 'profile-corpus-pinned-overlay',
+      severity: 'warning',
+      message:
+        'Profile corpus uses exact same-path blobs from the pinned engine tree plus SHA-256-locked OrcaXR target-printer adaptations.',
+    },
+  ];
+
+  for (const machine of graph.selectable('machine')) {
+    const processes: PresetNode[] = [];
+    for (const process of graph.selectable('process')) {
+      const assessment = graph.assessPrinterCompatibility(process.id, machine.id);
+      if (assessment.status === 'compatible') {
+        processes.push(process);
+      } else if (assessment.status === 'unresolved') {
+        diagnostics.push({
+          code: 'unresolved-compatibility',
+          severity: 'error',
+          presetId: process.id,
+          machineName: machine.name,
+          processName: process.name,
+          message:
+            `Compatibility for process ${process.name} on ${machine.name} depends on an engine expression ` +
+            'that the browser catalog cannot evaluate.',
+        });
+      }
+    }
+    if (processes.length === 0) {
+      diagnostics.push({
+        code: 'no-compatible-process',
+        severity: 'error',
+        machineName: machine.name,
+        message: `${machine.name} has no visible compatible process preset in the installed profile corpus.`,
+      });
+      continue;
+    }
+
+    const machineConfig = flatten(machine);
+    for (const process of processes) {
+      const filaments: PresetNode[] = [];
+      for (const filament of graph.selectable('filament')) {
+        const printerAssessment = graph.assessPrinterCompatibility(filament.id, machine.id);
+        const printAssessment =
+          printerAssessment.status === 'compatible'
+            ? graph.assessPrintCompatibility(filament.id, process.id, machine.id)
+            : undefined;
+        if (printerAssessment.status === 'compatible' && printAssessment?.status === 'compatible') {
+          filaments.push(filament);
+        } else if (printerAssessment.status === 'unresolved' || printAssessment?.status === 'unresolved') {
+          diagnostics.push({
+            code: 'unresolved-compatibility',
+            severity: 'error',
+            presetId: filament.id,
+            machineName: machine.name,
+            processName: process.name,
+            message:
+              `Compatibility for filament ${filament.name} with ${machine.name} / ${process.name} ` +
+              'depends on an engine expression that the browser catalog cannot evaluate.',
+          });
+        }
+      }
+      if (filaments.length === 0) {
+        diagnostics.push({
+          code: 'no-compatible-filament',
+          severity: 'error',
+          machineName: machine.name,
+          processName: process.name,
+          message:
+            `${machine.name} / ${process.name} has no visible compatible filament preset in the installed ` +
+            'profile corpus.',
+        });
+        continue;
+      }
+
+      const processConfig = flatten(process);
+      for (const filament of filaments) {
+        const filamentConfig = flatten(filament);
+        const processShort = process.name.split('@')[0].trim();
+        const filamentShort = filament.name.split('@')[0].trim();
+        profiles.push(
+          Object.freeze({
+            id: `${machine.name}|${process.name}|${filament.name}`,
+            displayName: `${machine.name} · ${processShort} · ${filamentShort}`,
+            machineName: machine.name,
+            processName: process.name,
+            filamentName: filamentShort,
+            filamentPresetName: filament.name,
+            machinePresetId: machine.id,
+            processPresetId: process.id,
+            filamentPresetId: filament.id,
+            config: Object.freeze({ ...machineConfig, ...processConfig, ...filamentConfig }),
+          }),
+        );
+      }
+    }
+  }
+  return {
+    profiles,
+    diagnostics: deduplicateDiagnostics(diagnostics),
+  };
+}
+
+function graphErrorDiagnostics(error: unknown): ProfileCatalogDiagnostic[] {
+  if (!(error instanceof PresetGraphError)) {
+    return [
+      {
+        code: 'invalid-preset-graph',
+        severity: 'error',
+        message: error instanceof Error ? error.message : 'Profile catalog is not valid JSON preset data.',
+      },
+    ];
+  }
+  return error.issues.map((issue) => ({
+    code: 'invalid-preset-graph',
+    severity: 'error',
+    message: `${issue.path}: ${issue.message}`,
+  }));
+}
+
+function deduplicateDiagnostics(diagnostics: readonly ProfileCatalogDiagnostic[]): ProfileCatalogDiagnostic[] {
+  const unique = new Map<string, ProfileCatalogDiagnostic>();
+  for (const diagnostic of diagnostics) {
+    const key = [
+      diagnostic.code,
+      diagnostic.machineName ?? '',
+      diagnostic.processName ?? '',
+      diagnostic.presetId ?? '',
+    ].join('|');
+    unique.set(key, Object.freeze({ ...diagnostic }));
+  }
+  return [...unique.values()];
+}
+
+function findNode(nodes: readonly PresetNode[], query: string): PresetNode | undefined {
+  const normalized = query.trim().toLocaleLowerCase('en-US');
+  if (!normalized) return nodes[0];
+  return (
+    nodes.find((node) => node.name.toLocaleLowerCase('en-US') === normalized) ??
+    nodes.find((node) => node.name.toLocaleLowerCase('en-US').includes(normalized))
+  );
 }
 
 /** Bed size (mm) from a flattened profile's printable_area polygon. */

@@ -17,7 +17,11 @@ import type {
   TriangleAssignments,
   VolumeRole,
 } from '../domain/model';
-import { emptyFacetAnnotations, identityTransform } from '../domain/model';
+import { emptyFacetAnnotations } from '../domain/model';
+import { importFullSpectrumDefinitions } from '../filaments/fullSpectrumImport';
+import { serializeFullSpectrumDefinition } from '../filaments/fullSpectrumRecipe';
+import { decodeIndexedMeshAsset, type DecodedIndexedMesh } from '../meshCodec';
+import { validatePackagePath } from './deterministicZip';
 
 export const CORE_MODEL_PATH = '3D/3dmodel.model';
 export const MODEL_RELS_PATH = '3D/_rels/3dmodel.model.rels';
@@ -30,6 +34,28 @@ const CORE_OBJECT_ATTRIBUTES_KEY = `${ORCAXR_CORE_NAMESPACE}/core-object-attribu
 const CORE_COMPONENT_ATTRIBUTES_KEY = `${ORCAXR_CORE_NAMESPACE}/core-component-attributes`;
 const CORE_BUILD_ATTRIBUTES_KEY = `${ORCAXR_CORE_NAMESPACE}/core-build-attributes`;
 const CORE_FACET_ATTRIBUTES_KEY = `${ORCAXR_CORE_NAMESPACE}/core-facet-attributes`;
+const BBS_PLATE_GAP_RATIO = 0.2;
+const PRODUCTION_NAMESPACE = 'http://schemas.microsoft.com/3dmanufacturing/production/2015/06';
+const MAX_COMPONENT_GRAPH_DEPTH = 64;
+const MAX_COMPONENT_GRAPH_EXPANSION = 16_384;
+
+export type BbsPlateCoordinateErrorCode = 'invalid-plate-metadata' | 'missing-printable-area' | 'unassigned-build-item';
+
+/**
+ * A BBS archive declared virtual plates, but their global build coordinates
+ * could not be converted to canonical plate-local printer coordinates safely.
+ */
+export class BbsPlateCoordinateError extends Error {
+  override readonly name = 'BbsPlateCoordinateError';
+
+  constructor(
+    readonly code: BbsPlateCoordinateErrorCode,
+    message: string,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+  }
+}
 
 export const GENERATED_STANDARD_PATHS = new Set([
   '[Content_Types].xml',
@@ -119,6 +145,9 @@ function extractBbsPlateLayoutUnchecked(files: ReadonlyMap<string, Uint8Array>):
   const metadata = parseModelSettings(settingsBytes);
   if (metadata.plates.length === 0) return null;
   const orderedMetadata = [...metadata.plates].sort((left, right) => left.sourceId - right.sourceId);
+  if (orderedMetadata.some((plate, index) => !plate.sourceIdValid || plate.sourceId !== index + 1)) {
+    throw new Error('BBS plater_id values must be unique and contiguous from 1');
+  }
   const plates: BbsPlateLayout['plates'] = orderedMetadata.map((plate, index) => ({
     sourceId: plate.sourceId,
     name: plate.name || `Plate ${index + 1}`,
@@ -164,16 +193,12 @@ function extractBbsPlateLayoutUnchecked(files: ReadonlyMap<string, Uint8Array>):
   const project = parseProjectSettings(files.get(PROJECT_SETTINGS_PATH));
   const bedSizeMm = printableAreaSize(project.config.printable_area);
   if (bedSizeMm) {
-    const sourcePlateCount = Math.max(plates.length, ...plates.map((plate) => plate.sourceId));
-    const columns = Math.ceil(Math.sqrt(sourcePlateCount));
-    plates.forEach((plate) => {
-      const sourceIndex = Math.max(0, plate.sourceId - 1);
-      const row = Math.floor(sourceIndex / columns);
-      plate.originMm = {
-        x: (sourceIndex % columns) * bedSizeMm.x * 1.2,
-        y: row === 0 ? 0 : -row * bedSizeMm.y * 1.2,
-      };
+    const origins = bbsVirtualPlateOrigins(plates.length, bedSizeMm);
+    plates.forEach((plate, index) => {
+      plate.originMm = origins[index];
     });
+  } else if (plates.length === 1) {
+    plates[0].originMm = { x: 0, y: 0 };
   }
 
   return {
@@ -187,20 +212,16 @@ function extractBbsPlateLayoutUnchecked(files: ReadonlyMap<string, Uint8Array>):
 interface VolumeMapping {
   volume: ProjectVolume;
   numericId: number;
-  mesh?: DecodedMesh;
+  mesh?: DecodedIndexedMesh;
 }
 
 interface ObjectMapping {
   object: ProjectObject;
   plate: ProjectPlate;
+  plateOriginMm: { x: number; y: number };
   ordinal: number;
   parentId: number;
   volumes: VolumeMapping[];
-}
-
-interface DecodedMesh {
-  vertices: Array<readonly [number, number, number]>;
-  triangles: Array<readonly [number, number, number]>;
 }
 
 interface ExtensionAttribute {
@@ -214,24 +235,46 @@ interface FacetExtensionAttributes {
   attributes: ExtensionAttribute[];
 }
 
+function canonicalPlateOrigins(
+  state: ProjectState,
+  orderedPlates: readonly ProjectPlate[],
+): Array<{ x: number; y: number }> {
+  if (orderedPlates.length <= 1) return orderedPlates.map(() => ({ x: 0, y: 0 }));
+  const bedSizeMm = printableAreaSize(state.config.printable_area);
+  const needsVirtualOrigin = orderedPlates.some(
+    (plate, index) => index > 0 && plate.objects.some((object) => object.instances.length > 0),
+  );
+  if (!bedSizeMm) {
+    if (needsVirtualOrigin) {
+      throw new BbsPlateCoordinateError(
+        'missing-printable-area',
+        `Cannot project ${orderedPlates.length} canonical plates into BBS global build coordinates: project config has no valid printable_area`,
+      );
+    }
+    return orderedPlates.map(() => ({ x: 0, y: 0 }));
+  }
+  return bbsVirtualPlateOrigins(orderedPlates.length, bedSizeMm);
+}
+
 export function buildBbsCore(state: ProjectState, assets: ReadonlyMap<string, AssetPayload>): BbsCoreBuild {
   const warnings: string[] = [];
   const mappings: ObjectMapping[] = [];
   let nextNumericId = 1;
   let ordinal = 0;
   const orderedPlates = [...state.plates].sort((left, right) => left.order - right.order);
-  for (const plate of orderedPlates) {
+  const plateOrigins = canonicalPlateOrigins(state, orderedPlates);
+  for (const [plateIndex, plate] of orderedPlates.entries()) {
     for (const object of plate.objects) {
       ordinal += 1;
       const volumes: VolumeMapping[] = object.volumes.map((volume) => {
         const numericId = nextNumericId++;
         const payload = assets.get(volume.source.assetId);
-        let mesh: DecodedMesh | undefined;
+        let mesh: DecodedIndexedMesh | undefined;
         if (!payload) {
           warnings.push(`Volume ${volume.id} has no source asset; omitted from standard 3MF core`);
         } else {
           try {
-            mesh = decodeIndexedMesh(payload);
+            mesh = decodeIndexedMeshAsset(payload);
           } catch (error) {
             warnings.push(
               `Volume ${volume.id} could not be projected into standard 3MF: ${
@@ -242,7 +285,14 @@ export function buildBbsCore(state: ProjectState, assets: ReadonlyMap<string, As
         }
         return { volume, numericId, mesh };
       });
-      mappings.push({ object, plate, ordinal, parentId: nextNumericId++, volumes });
+      mappings.push({
+        object,
+        plate,
+        plateOriginMm: plateOrigins[plateIndex],
+        ordinal,
+        parentId: nextNumericId++,
+        volumes,
+      });
     }
   }
 
@@ -285,7 +335,7 @@ export function buildBbsCore(state: ProjectState, assets: ReadonlyMap<string, As
   const materialId = nextNumericId;
   const files = new Map<string, Uint8Array>();
   files.set(CORE_MODEL_PATH, encodeText(buildCoreModel(state, mappings, materialRows, materialId, filamentSlots)));
-  files.set(MODEL_SETTINGS_PATH, encodeText(buildModelSettings(mappings, filamentSlots)));
+  files.set(MODEL_SETTINGS_PATH, encodeText(buildModelSettings(orderedPlates, mappings, filamentSlots)));
   files.set(PROJECT_SETTINGS_PATH, encodeText(buildProjectSettings(state, filamentSlots, warnings)));
   const layerRanges = buildLayerRanges(mappings, filamentSlots);
   if (layerRanges) files.set(LAYER_RANGES_PATH, encodeText(layerRanges));
@@ -421,6 +471,7 @@ function buildCoreModel(
       lines.push(
         `  <item objectid="${mapping.parentId}" transform="${transform3mf(
           instance.transform,
+          mapping.plateOriginMm,
         )}" printable="${instance.printable ? 1 : 0}" ox:instance-id="${xmlAttribute(
           instance.id,
         )}"${renderExtensionAttributes(
@@ -436,7 +487,11 @@ function buildCoreModel(
   return lines.join('\n');
 }
 
-function buildModelSettings(mappings: ObjectMapping[], filamentSlots: ReadonlyMap<FilamentId, number>): string {
+function buildModelSettings(
+  orderedPlates: readonly ProjectPlate[],
+  mappings: ObjectMapping[],
+  filamentSlots: ReadonlyMap<FilamentId, number>,
+): string {
   const lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<config>'];
   for (const mapping of mappings) {
     if (!mapping.volumes.some((entry) => entry.mesh)) continue;
@@ -463,9 +518,6 @@ function buildModelSettings(mappings: ObjectMapping[], filamentSlots: ReadonlyMa
     lines.push(' </object>');
   }
   let identifyId = 1;
-  const orderedPlates = [...new Set(mappings.map((mapping) => mapping.plate))].sort(
-    (left, right) => left.order - right.order,
-  );
   for (const plate of orderedPlates) {
     lines.push(' <plate>');
     lines.push(metadataLine('plater_id', plate.order + 1, 2));
@@ -578,55 +630,6 @@ function buildLayerRanges(
   }
   lines.push('</objects>', '');
   return lines.join('\n');
-}
-
-function decodeIndexedMesh(payload: AssetPayload): DecodedMesh {
-  const mesh = payload.descriptor.mesh;
-  if (payload.descriptor.kind !== 'mesh' || !mesh) throw new Error('asset is not an indexed mesh');
-  if (mesh.positions.componentType !== 'float32' || mesh.positions.componentCount < 3) {
-    throw new Error('positions must be float32 vectors with at least three components');
-  }
-  const view = new DataView(payload.bytes.buffer, payload.bytes.byteOffset, payload.bytes.byteLength);
-  const vertices: Array<readonly [number, number, number]> = [];
-  const positionStride = mesh.positions.byteStride ?? mesh.positions.componentCount * 4;
-  for (let index = 0; index < mesh.positions.count; index += 1) {
-    const offset = mesh.positions.byteOffset + index * positionStride;
-    const vertex: readonly [number, number, number] = [
-      view.getFloat32(offset, true),
-      view.getFloat32(offset + 4, true),
-      view.getFloat32(offset + 8, true),
-    ];
-    if (vertex.some((coordinate) => !Number.isFinite(coordinate))) {
-      throw new Error('mesh contains a non-finite vertex');
-    }
-    vertices.push(vertex);
-  }
-  const indices: number[] = [];
-  if (mesh.indices) {
-    const componentBytes = mesh.indices.componentType === 'uint16' ? 2 : 4;
-    if (mesh.indices.componentType !== 'uint16' && mesh.indices.componentType !== 'uint32') {
-      throw new Error('indices must be uint16 or uint32');
-    }
-    const stride = mesh.indices.byteStride ?? componentBytes;
-    for (let index = 0; index < mesh.indices.count; index += 1) {
-      const offset = mesh.indices.byteOffset + index * stride;
-      indices.push(componentBytes === 2 ? view.getUint16(offset, true) : view.getUint32(offset, true));
-    }
-  } else {
-    for (let index = 0; index < vertices.length; index += 1) indices.push(index);
-  }
-  if (indices.length % 3 !== 0 || indices.length / 3 !== mesh.triangleCount) {
-    throw new Error('index count does not match the declared triangle count');
-  }
-  const triangles: Array<readonly [number, number, number]> = [];
-  for (let index = 0; index < indices.length; index += 3) {
-    const triangle: readonly [number, number, number] = [indices[index], indices[index + 1], indices[index + 2]];
-    if (triangle.some((vertex) => vertex < 0 || vertex >= vertices.length)) {
-      throw new Error('mesh index is outside the vertex buffer');
-    }
-    triangles.push(triangle);
-  }
-  return { vertices, triangles };
 }
 
 function annotationAttributes(
@@ -805,6 +808,10 @@ function serializeMixedDefinitions(state: ProjectState, warnings: string[]): str
   const physical = new Map<FilamentId, number>(state.filaments.physical.map((entry, index) => [entry.id, index + 1]));
   const rows: string[] = [];
   state.filaments.mixed.forEach((mixed) => {
+    if (mixed.fullSpectrum) {
+      rows.push(serializeFullSpectrumDefinition(mixed, state.filaments.physical));
+      return;
+    }
     const ids = mixed.components.map((component) => physical.get(component.filamentId));
     if (ids.some((id) => id === undefined) || ids.length < 2) {
       warnings.push(
@@ -865,8 +872,8 @@ function serializeMixedDefinitions(state: ProjectState, warnings: string[]): str
   return rows.join(';');
 }
 
-function transform3mf(transform: Transform): string {
-  const matrix = transformMatrix(transform);
+function transform3mf(transform: Transform, translationOffsetMm: { x: number; y: number } = { x: 0, y: 0 }): string {
+  const matrix = transformMatrix(transform, translationOffsetMm);
   return [
     matrix[0],
     matrix[4],
@@ -889,7 +896,10 @@ function matrix4(transform: Transform): string {
   return transformMatrix(transform).map(formatNumber).join(' ');
 }
 
-function transformMatrix(transform: Transform): number[] {
+function transformMatrix(
+  transform: Transform,
+  translationOffsetMm: { x: number; y: number } = { x: 0, y: 0 },
+): number[] {
   let [x, y, z, w] = transform.rotation;
   const norm = Math.hypot(x, y, z, w);
   x /= norm;
@@ -901,11 +911,11 @@ function transformMatrix(transform: Transform): number[] {
     (1 - 2 * (y * y + z * z)) * sx,
     2 * (x * y - z * w) * sy,
     2 * (x * z + y * w) * sz,
-    transform.translationMm[0],
+    transform.translationMm[0] + translationOffsetMm.x,
     2 * (x * y + z * w) * sx,
     (1 - 2 * (x * x + z * z)) * sy,
     2 * (y * z - x * w) * sz,
-    transform.translationMm[1],
+    transform.translationMm[1] + translationOffsetMm.y,
     2 * (x * z - y * w) * sx,
     2 * (y * z + x * w) * sy,
     (1 - 2 * (x * x + y * y)) * sz,
@@ -1018,13 +1028,14 @@ function compareText(left: string, right: string): number {
 // domain/history remain independent of XML, ZIP, BBS numeric IDs, and fflate.
 
 interface ParsedMeshObject {
+  modelPath: string;
   numericId: number;
   name: string;
   materialIndex?: number;
-  mesh?: DecodedMesh;
+  mesh?: DecodedIndexedMesh;
   components: Array<{
-    objectId: number;
-    transform: Transform;
+    reference: ParsedObjectReference;
+    transform: Matrix4;
     extensionAttributes: ExtensionAttribute[];
   }>;
   annotations: FacetAnnotations;
@@ -1032,20 +1043,59 @@ interface ParsedMeshObject {
   facetExtensionAttributes: FacetExtensionAttributes[];
 }
 
-interface ParsedBuildItem {
+interface ParsedObjectReference {
+  modelPath: string;
   objectId: number;
+}
+
+interface ParsedBuildItem {
+  reference: ParsedObjectReference;
   transform: Transform;
   printable: boolean;
+  extensionAttributes: ExtensionAttribute[];
+}
+
+type Matrix4 = readonly [
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+];
+
+interface ParsedCorePackage {
+  title: string;
+  materials: Array<{ name: string; color: string }>;
+  objects: Map<string, ParsedMeshObject>;
+  build: ParsedBuildItem[];
+  externalModelPaths: string[];
+}
+
+interface ResolvedMeshComponent {
+  object: ParsedMeshObject;
+  transform: Transform;
   extensionAttributes: ExtensionAttribute[];
 }
 
 interface ParsedModelMetadata {
   objectConfig: Map<number, ConfigMap>;
   objectNames: Map<number, string>;
-  partData: Map<number, { role: VolumeRole; name?: string; config: ConfigMap }>;
+  partData: Map<number, Map<number, { role: VolumeRole; name?: string; config: ConfigMap }>>;
   layerRanges: Map<number, Array<Omit<LayerRange, 'id'>>>;
   plates: Array<{
     sourceId: number;
+    sourceIdValid: boolean;
     name: string;
     printable: boolean;
     config: ConfigMap;
@@ -1060,13 +1110,120 @@ export interface ImportedCoreProject {
   warnings: string[];
 }
 
+interface ImportedPlateCoordinates {
+  plateDefinitions: ParsedModelMetadata['plates'];
+  plateIndexByBuildItem: number[];
+  originsMm: Array<{ x: number; y: number }>;
+  normalizedBuildItemCount: number;
+}
+
+function importedPlateCoordinates(
+  files: ReadonlyMap<string, Uint8Array>,
+  metadata: ParsedModelMetadata,
+  buildItemCount: number,
+): ImportedPlateCoordinates {
+  const extraction = extractBbsPlateLayoutResult(files);
+  if (extraction.status === 'invalid') {
+    throw new BbsPlateCoordinateError(
+      'invalid-plate-metadata',
+      'Cannot establish BBS plate-local coordinates: model_settings.config contains invalid or contradictory plate membership',
+    );
+  }
+  if (metadata.plates.length === 0) {
+    return {
+      plateDefinitions: [
+        { sourceId: 1, sourceIdValid: true, name: 'Plate 1', printable: true, config: {}, assignments: [] },
+      ],
+      plateIndexByBuildItem: Array.from({ length: buildItemCount }, () => 0),
+      originsMm: [{ x: 0, y: 0 }],
+      normalizedBuildItemCount: 0,
+    };
+  }
+
+  const plateDefinitions = [...metadata.plates].sort((left, right) => left.sourceId - right.sourceId);
+  if (plateDefinitions.some((plate, index) => !plate.sourceIdValid || plate.sourceId !== index + 1)) {
+    throw new BbsPlateCoordinateError(
+      'invalid-plate-metadata',
+      'Cannot establish BBS plate-local coordinates: plater_id values must be unique and contiguous from 1',
+    );
+  }
+  if (extraction.status !== 'valid' || extraction.layout.buildItemCount !== buildItemCount) {
+    throw new BbsPlateCoordinateError(
+      'invalid-plate-metadata',
+      'Cannot establish BBS plate-local coordinates: plate membership does not match the core build list',
+    );
+  }
+  const { layout } = extraction;
+  if (
+    layout.plates.length !== plateDefinitions.length ||
+    layout.plates.some((plate, index) => plate.sourceId !== plateDefinitions[index].sourceId)
+  ) {
+    throw new BbsPlateCoordinateError(
+      'invalid-plate-metadata',
+      'Cannot establish BBS plate-local coordinates: parsed plate order does not match plater_id metadata',
+    );
+  }
+
+  const plateIndexByBuildItem = Array.from({ length: buildItemCount }, () => -1);
+  for (const [plateIndex, plate] of layout.plates.entries()) {
+    for (const buildItemIndex of plate.buildItemIndices) {
+      if (buildItemIndex < 0 || buildItemIndex >= buildItemCount || plateIndexByBuildItem[buildItemIndex] !== -1) {
+        throw new BbsPlateCoordinateError(
+          'invalid-plate-metadata',
+          `Cannot establish BBS plate-local coordinates: build item ${buildItemIndex} has contradictory plate membership`,
+        );
+      }
+      plateIndexByBuildItem[buildItemIndex] = plateIndex;
+    }
+  }
+
+  if (plateDefinitions.length === 1) {
+    plateIndexByBuildItem.fill(0);
+  } else {
+    const unassigned = plateIndexByBuildItem.flatMap((plateIndex, buildItemIndex) =>
+      plateIndex === -1 ? [buildItemIndex] : [],
+    );
+    if (unassigned.length > 0 || layout.unassignedBuildItemIndices.length > 0) {
+      const indices = [...new Set([...unassigned, ...layout.unassignedBuildItemIndices])].sort((a, b) => a - b);
+      throw new BbsPlateCoordinateError(
+        'unassigned-build-item',
+        `Cannot establish BBS plate-local coordinates: core build item${indices.length === 1 ? '' : 's'} ${indices.join(
+          ', ',
+        )} ${indices.length === 1 ? 'is' : 'are'} unassigned or conflicting in model_settings.config`,
+      );
+    }
+  }
+
+  const originsMm = layout.plates.map((plate, plateIndex) => {
+    if (plate.originMm) return plate.originMm;
+    if (plateIndex === 0 || plate.buildItemIndices.length === 0) return { x: 0, y: 0 };
+    throw new BbsPlateCoordinateError(
+      'missing-printable-area',
+      `Cannot establish BBS plate-local coordinates for plate ${plate.sourceId}: project_settings.config has no valid printable_area`,
+    );
+  });
+  const normalizedBuildItemCount = layout.plates.reduce((count, plate, plateIndex) => {
+    const origin = originsMm[plateIndex];
+    return count + (origin.x !== 0 || origin.y !== 0 ? plate.buildItemIndices.length : 0);
+  }, 0);
+  return { plateDefinitions, plateIndexByBuildItem, originsMm, normalizedBuildItemCount };
+}
+
+function plateLocalTransform(transform: Transform, originMm: { x: number; y: number }): Transform {
+  const x = transform.translationMm[0] - originMm.x;
+  const y = transform.translationMm[1] - originMm.y;
+  return {
+    translationMm: [Object.is(x, -0) ? 0 : x, Object.is(y, -0) ? 0 : y, transform.translationMm[2]],
+    rotation: [transform.rotation[0], transform.rotation[1], transform.rotation[2], transform.rotation[3]],
+    scale: [transform.scale[0], transform.scale[1], transform.scale[2]],
+  };
+}
+
 export function importBbsCore(files: ReadonlyMap<string, Uint8Array>, archiveHash: string): ImportedCoreProject {
-  const modelBytes = files.get(CORE_MODEL_PATH);
-  if (!modelBytes) throw new Error(`3MF is missing ${CORE_MODEL_PATH}`);
-  const modelXml = decodeText(modelBytes, CORE_MODEL_PATH);
-  const parsed = parseCoreModel(modelXml);
+  const parsed = parseCorePackage(files);
   const projectConfig = parseProjectSettings(files.get(PROJECT_SETTINGS_PATH));
   const modelMetadata = parseModelSettings(files.get(MODEL_SETTINGS_PATH));
+  const plateCoordinates = importedPlateCoordinates(files, modelMetadata, parsed.build.length);
   const layerRanges = parseLayerRanges(files.get(LAYER_RANGES_PATH));
   const warnings = [
     'Imported a 3MF without OrcaXR canonical metadata. Core geometry, transforms, basic BBS settings, plates, and simple whole-facet annotations were recovered; unsupported BBS fields remain preserved as opaque package entries.',
@@ -1089,33 +1246,86 @@ export function importBbsCore(files: ReadonlyMap<string, Uint8Array>, archiveHas
     config: {},
     enabled: true,
   }));
+  const mixedImport = projectConfig.mixedDefinitions
+    ? importFullSpectrumDefinitions(projectConfig.mixedDefinitions, physical, {
+        createId: (rowIndex, upstreamStableId) => makeId('mixed-filament', `${rowIndex + 1}-${upstreamStableId}`),
+        mixedMaterials: parsed.materials.slice(physical.length),
+      })
+    : { filaments: [], issues: [] };
+  const mixed = [...mixedImport.filaments];
+  for (const issue of mixedImport.issues) {
+    warnings.push(`FullSpectrum row ${issue.rowIndex + 1} ${issue.severity}: ${issue.message}`);
+  }
+  const assignmentFilaments = [...physical, ...mixed.filter((filament) => filament.enabled)];
   for (const object of parsed.objects.values()) {
     object.annotations.color = object.annotations.color.flatMap((assignment) => {
       const match = /^import:3mf:paint-slot-(\d+)$/.exec(assignment.value);
-      const filament = match ? physical[Number(match[1]) - 1] : undefined;
+      const filament = match ? assignmentFilaments[Number(match[1]) - 1] : undefined;
       return filament ? [{ ...assignment, value: filament.id }] : [];
     });
   }
-  if (projectConfig.mixedDefinitions) {
+  if (projectConfig.mixedDefinitions && mixed.length === 0) {
     warnings.push(
-      'Imported FullSpectrum definitions remain in project config and opaque source metadata; canonical mixed-row reconstruction is deferred to the native BBS adapter.',
+      'No valid canonical FullSpectrum rows could be reconstructed; raw definitions remain preserved in config.',
+    );
+  }
+  if (plateCoordinates.normalizedBuildItemCount > 0) {
+    warnings.push(
+      `Normalized ${plateCoordinates.normalizedBuildItemCount} BBS build transform${
+        plateCoordinates.normalizedBuildItemCount === 1 ? '' : 's'
+      } from the virtual multi-plate grid into plate-local printer coordinates`,
+    );
+  }
+  if (parsed.externalModelPaths.length > 0) {
+    warnings.push(
+      `Resolved ${parsed.externalModelPaths.length} referenced 3MF Production Extension model part${
+        parsed.externalModelPaths.length === 1 ? '' : 's'
+      }; the original split members remain preserved as opaque package entries`,
     );
   }
 
+  const buildByObject = new Map<
+    string,
+    {
+      reference: ParsedObjectReference;
+      rows: Array<{ item: ParsedBuildItem; buildItemIndex: number; originalIndex: number }>;
+    }
+  >();
+  const occurrenceByObject = new Map<string, number>();
+  parsed.build.forEach((item, buildItemIndex) => {
+    const key = objectReferenceKey(item.reference);
+    const originalIndex = occurrenceByObject.get(key) ?? 0;
+    occurrenceByObject.set(key, originalIndex + 1);
+    const group = buildByObject.get(key) ?? { reference: item.reference, rows: [] };
+    group.rows.push({ item, buildItemIndex, originalIndex });
+    buildByObject.set(key, group);
+  });
+  assertUnambiguousTopLevelMetadata(buildByObject, modelMetadata);
+  const resolvedComponents = resolveComponentGraphs(
+    parsed.objects,
+    [...buildByObject.values()].map((group) => group.reference),
+  );
+  const reachableMeshKeys = new Set(
+    [...resolvedComponents.values()].flatMap((components) =>
+      components.map((component) => objectReferenceKey(component.object)),
+    ),
+  );
+
   const assets: AssetPayload[] = [];
   const sourceAssets: SourceAssetDescriptor[] = [];
-  const meshAssetIds = new Map<number, SourceAssetDescriptor['id']>();
+  const meshAssetIds = new Map<string, SourceAssetDescriptor['id']>();
   for (const object of parsed.objects.values()) {
-    if (!object.mesh) continue;
+    const referenceKey = objectReferenceKey(object);
+    if (!object.mesh || !reachableMeshKeys.has(referenceKey)) continue;
     const bytes = encodeMeshAsset(object.mesh);
-    const id = makeId('asset', String(object.numericId));
+    const id = makeId('asset', objectReferenceToken(object));
     const descriptor: SourceAssetDescriptor = {
       id,
       kind: 'mesh',
       digest: contentDigest(bytes),
       byteLength: bytes.byteLength,
       mediaType: 'application/vnd.orcaxr.indexed-mesh',
-      provenance: { source: 'import', uri: `3mf:${CORE_MODEL_PATH}#${object.numericId}` },
+      provenance: { source: 'import', uri: `3mf:${object.modelPath}#${object.numericId}` },
       mesh: {
         positions: {
           byteOffset: 0,
@@ -1134,15 +1344,12 @@ export function importBbsCore(files: ReadonlyMap<string, Uint8Array>, archiveHas
         triangleCount: object.mesh.triangles.length,
       },
     };
-    meshAssetIds.set(object.numericId, id);
+    meshAssetIds.set(referenceKey, id);
     sourceAssets.push(descriptor);
     assets.push({ descriptor, bytes });
   }
 
-  const plateDefinitions =
-    modelMetadata.plates.length > 0
-      ? modelMetadata.plates
-      : [{ name: 'Plate 1', printable: true, config: {}, assignments: [] }];
+  const plateDefinitions = plateCoordinates.plateDefinitions;
   const plateIds = plateDefinitions.map((_plate, index) => makeId('plate', String(index + 1)));
   const plates: ProjectPlate[] = plateDefinitions.map((plate, index) => ({
     id: plateIds[index],
@@ -1153,56 +1360,43 @@ export function importBbsCore(files: ReadonlyMap<string, Uint8Array>, archiveHas
     objects: [],
   }));
 
-  const assignments = new Map<string, number>();
-  plateDefinitions.forEach((plate, plateIndex) => {
-    plate.assignments.forEach((assignment) => {
-      assignments.set(`${assignment.objectId}:${assignment.instanceIndex}`, plateIndex);
-    });
-  });
-  const buildByObject = new Map<number, ParsedBuildItem[]>();
-  parsed.build.forEach((item) => {
-    const list = buildByObject.get(item.objectId) ?? [];
-    list.push(item);
-    buildByObject.set(item.objectId, list);
-  });
   let sourceObjectOrdinal = 0;
-  for (const [parentId, buildItems] of buildByObject) {
-    const parent = parsed.objects.get(parentId);
-    if (!parent) continue;
+  for (const [parentKey, group] of buildByObject) {
+    const parent = parsed.objects.get(parentKey);
+    if (!parent) throw new Error(`3MF build references missing object ${describeObjectReference(group.reference)}`);
+    const parentId = parent.numericId;
+    const parentToken = objectReferenceToken(group.reference);
+    const componentRows = resolvedComponents.get(parentKey) ?? [];
     sourceObjectOrdinal += 1;
-    const byPlate = new Map<number, Array<{ item: ParsedBuildItem; originalIndex: number }>>();
-    buildItems.forEach((item, originalIndex) => {
-      const plateIndex = assignments.get(`${parentId}:${originalIndex}`) ?? 0;
+    const byPlate = new Map<number, Array<{ item: ParsedBuildItem; buildItemIndex: number; originalIndex: number }>>();
+    group.rows.forEach((row) => {
+      const plateIndex = plateCoordinates.plateIndexByBuildItem[row.buildItemIndex] ?? 0;
       const list = byPlate.get(plateIndex) ?? [];
-      list.push({ item, originalIndex });
+      list.push(row);
       byPlate.set(plateIndex, list);
     });
     for (const [plateIndex, itemRows] of byPlate) {
       const plate = plates[plateIndex] ?? plates[0];
-      const objectId = makeId('object', `${parentId}-${plateIndex + 1}`);
-      const componentRows =
-        parent.components.length > 0
-          ? parent.components
-          : [{ objectId: parentId, transform: identityTransform(), extensionAttributes: [] }];
+      const objectId = makeId('object', `${parentToken}-${plateIndex + 1}`);
       const volumes: ProjectVolume[] = [];
-      for (const component of componentRows) {
-        const leaf = parsed.objects.get(component.objectId);
-        const assetId = meshAssetIds.get(component.objectId);
-        if (!leaf?.mesh || !assetId) continue;
-        const part = modelMetadata.partData.get(component.objectId);
+      for (const [componentIndex, component] of componentRows.entries()) {
+        const leaf = component.object;
+        const assetId = meshAssetIds.get(objectReferenceKey(leaf));
+        if (!leaf.mesh || !assetId) continue;
+        const part = modelMetadata.partData.get(parentId)?.get(leaf.numericId);
         let role = part?.role ?? 'model';
         if (componentRows.length === 1 && role !== 'model') {
           role = 'model';
           warnings.push(
-            `Standalone BBS part ${component.objectId} had role ${part?.role}; imported as a model volume to preserve canonical object invariants`,
+            `Standalone BBS part ${leaf.numericId} had role ${part?.role}; imported as a model volume to preserve canonical object invariants`,
           );
         }
         const volumeConfig = cloneJson(part?.config ?? {});
         const requestedSlot = Number(volumeConfig.extruder);
         const filament = Number.isInteger(requestedSlot)
-          ? physical[requestedSlot - 1]
+          ? assignmentFilaments[requestedSlot - 1]
           : leaf.materialIndex !== undefined
-            ? physical[leaf.materialIndex]
+            ? assignmentFilaments[leaf.materialIndex]
             : undefined;
         if (filament) delete volumeConfig.extruder;
         const supportsFilament = role === 'model' || role === 'parameter-modifier';
@@ -1220,8 +1414,8 @@ export function importBbsCore(files: ReadonlyMap<string, Uint8Array>, archiveHas
           }));
         }
         volumes.push({
-          id: makeId('volume', `${parentId}-${component.objectId}-${plateIndex + 1}`),
-          name: part?.name ?? leaf.name ?? `Part ${component.objectId}`,
+          id: makeId('volume', `${parentToken}-${objectReferenceToken(leaf)}-${componentIndex + 1}-${plateIndex + 1}`),
+          name: part?.name ?? leaf.name ?? `Part ${leaf.numericId}`,
           role,
           source: {
             assetId,
@@ -1241,11 +1435,11 @@ export function importBbsCore(files: ReadonlyMap<string, Uint8Array>, archiveHas
       const ranges = importedRanges.map((range, index) => {
         const copy = cloneJson(range);
         const extruder = Number(copy.config.extruder);
-        const filamentId = Number.isInteger(extruder) ? physical[extruder - 1]?.id : undefined;
+        const filamentId = Number.isInteger(extruder) ? assignmentFilaments[extruder - 1]?.id : undefined;
         if (filamentId) delete copy.config.extruder;
         return {
           ...copy,
-          id: makeId('layer-range', `${parentId}-${plateIndex + 1}-${index + 1}`),
+          id: makeId('layer-range', `${parentToken}-${plateIndex + 1}-${index + 1}`),
           ...(filamentId ? { filamentId } : {}),
         };
       });
@@ -1255,8 +1449,8 @@ export function importBbsCore(files: ReadonlyMap<string, Uint8Array>, archiveHas
         config: objectConfig,
         volumes,
         instances: itemRows.map(({ item, originalIndex }) => ({
-          id: makeId('instance', `${parentId}-${plateIndex + 1}-${originalIndex + 1}`),
-          transform: item.transform,
+          id: makeId('instance', `${parentToken}-${plateIndex + 1}-${originalIndex + 1}`),
+          transform: plateLocalTransform(item.transform, plateCoordinates.originsMm[plateIndex]),
           printable: item.printable,
           ...(item.extensionAttributes.length > 0
             ? {
@@ -1276,8 +1470,8 @@ export function importBbsCore(files: ReadonlyMap<string, Uint8Array>, archiveHas
           : {}),
       };
       const extruder = Number(objectConfig.extruder);
-      if (Number.isInteger(extruder) && physical[extruder - 1]) {
-        object.filamentId = physical[extruder - 1].id;
+      if (Number.isInteger(extruder) && assignmentFilaments[extruder - 1]) {
+        object.filamentId = assignmentFilaments[extruder - 1].id;
         delete object.config.extruder;
       }
       plate.objects.push(object);
@@ -1293,7 +1487,7 @@ export function importBbsCore(files: ReadonlyMap<string, Uint8Array>, archiveHas
     config: projectConfig.config,
     activePlateId: plates[0].id,
     plates,
-    filaments: { physical, mixed: [] },
+    filaments: { physical, mixed },
     sourceAssets,
     customGcode: [],
     thumbnails: [],
@@ -1306,17 +1500,72 @@ export function importBbsCore(files: ReadonlyMap<string, Uint8Array>, archiveHas
   return { state, assets, consumedPaths, warnings };
 }
 
-function parseCoreModel(xml: string): {
+interface ParsedModelPart {
   title: string;
   materials: Array<{ name: string; color: string }>;
   objects: Map<number, ParsedMeshObject>;
   build: ParsedBuildItem[];
-} {
-  const namespaceMatch = /<model\b([^>]*)>/i.exec(xml);
-  if (!namespaceMatch) throw new Error('3MF core is missing its model element');
+}
+
+function parseCorePackage(files: ReadonlyMap<string, Uint8Array>): ParsedCorePackage {
+  const rootBytes = files.get(CORE_MODEL_PATH);
+  if (!rootBytes) throw new Error(`3MF is missing ${CORE_MODEL_PATH}`);
+  const root = parseModelPart(decodeText(rootBytes, CORE_MODEL_PATH), CORE_MODEL_PATH, true);
+  const referencedPaths = new Set<string>();
+  for (const object of root.objects.values()) {
+    for (const component of object.components) {
+      if (component.reference.modelPath !== CORE_MODEL_PATH) referencedPaths.add(component.reference.modelPath);
+    }
+  }
+  for (const item of root.build) {
+    if (item.reference.modelPath !== CORE_MODEL_PATH) referencedPaths.add(item.reference.modelPath);
+  }
+
+  const parts = new Map<string, ParsedModelPart>([[CORE_MODEL_PATH, root]]);
+  for (const path of [...referencedPaths].sort(compareText)) {
+    const bytes = files.get(path);
+    if (!bytes) throw new Error(`3MF Production Extension references missing model part ${path}`);
+    parts.set(path, parseModelPart(decodeText(bytes, path), path, false));
+  }
+
+  const objects = new Map<string, ParsedMeshObject>();
+  for (const part of parts.values()) {
+    for (const object of part.objects.values()) objects.set(objectReferenceKey(object), object);
+  }
+  for (const object of objects.values()) {
+    for (const component of object.components) {
+      if (!objects.has(objectReferenceKey(component.reference))) {
+        throw new Error(`3MF component references missing object ${describeObjectReference(component.reference)}`);
+      }
+    }
+  }
+  for (const item of root.build) {
+    if (!objects.has(objectReferenceKey(item.reference))) {
+      throw new Error(`3MF build references missing object ${describeObjectReference(item.reference)}`);
+    }
+  }
+  return {
+    title: root.title,
+    materials: root.materials,
+    objects,
+    build: root.build,
+    externalModelPaths: [...referencedPaths].sort(compareText),
+  };
+}
+
+function parseModelPart(xml: string, modelPath: string, root: boolean): ParsedModelPart {
+  const markup = validatedXmlMarkup(xml, modelPath);
+  const namespaceMatch = /<model\b([^>]*)>/i.exec(markup);
+  if (!namespaceMatch) throw new Error(`${modelPath} is missing its 3MF model element`);
   const namespaces = parseNamespaces(namespaceMatch[1]);
-  const title = decodeXml(/<metadata\b[^>]*name=["']Title["'][^>]*>([\s\S]*?)<\/metadata>/i.exec(xml)?.[1] ?? '');
-  const materials = [...xml.matchAll(/<base\b([^>]*)\/?\s*>/gi)].map((base, index) => {
+  const modelAttributes = parseAttributes(namespaceMatch[1]);
+  const unitScaleMm = modelUnitScaleMm(modelAttributes.unit, modelPath);
+  const title = decodeXml(/<metadata\b[^>]*name=["']Title["'][^>]*>([\s\S]*?)<\/metadata>/i.exec(markup)?.[1] ?? '');
+  const resourcesMatch = /<resources\b[^>]*>([\s\S]*?)<\/resources>/i.exec(markup);
+  const emptyResources = /<resources\b[^>]*\/\s*>/i.test(markup);
+  if (!resourcesMatch && !emptyResources) throw new Error(`${modelPath} is missing its 3MF resources element`);
+  const resourcesBody = resourcesMatch?.[1] ?? '';
+  const materials = [...resourcesBody.matchAll(/<base\b([^>]*)\/?\s*>/gi)].map((base, index) => {
     const attributes = parseAttributes(base[1]);
     return {
       name: attributes.name ? decodeXml(attributes.name) : `Imported tool ${index + 1}`,
@@ -1324,28 +1573,46 @@ function parseCoreModel(xml: string): {
     };
   });
   const objects = new Map<number, ParsedMeshObject>();
-  for (const match of xml.matchAll(/<object\b([^>]*)>([\s\S]*?)<\/object>/gi)) {
+  for (const match of resourcesBody.matchAll(/<object\b([^>]*)>([\s\S]*?)<\/object>/gi)) {
     const attributes = parseAttributes(match[1]);
     const numericId = Number(attributes.id);
     if (!Number.isInteger(numericId) || numericId < 1 || objects.has(numericId)) {
-      throw new Error(`Invalid or duplicate 3MF object ID ${attributes.id ?? ''}`);
+      throw new Error(`${modelPath} contains invalid or duplicate 3MF object ID ${attributes.id ?? ''}`);
     }
     const body = match[2];
-    const meshMatch = /<mesh\b[^>]*>([\s\S]*?)<\/mesh>/i.exec(body);
-    const mesh = meshMatch ? parseMesh(meshMatch[1], namespaces) : undefined;
-    const components = [...body.matchAll(/<component\b([^>]*)\/?\s*>/gi)].map((component) => {
+    const meshMatches = [...body.matchAll(/<mesh\b[^>]*>([\s\S]*?)<\/mesh>/gi)];
+    const componentsMatch = /<components\b[^>]*>([\s\S]*?)<\/components>/i.exec(body);
+    if (meshMatches.length + (componentsMatch ? 1 : 0) !== 1) {
+      throw new Error(`${modelPath} object ${numericId} must contain exactly one mesh or components element`);
+    }
+    const mesh = meshMatches[0] ? parseMesh(meshMatches[0][1], namespaces, unitScaleMm) : undefined;
+    const components = [...(componentsMatch?.[1] ?? '').matchAll(/<component\b([^>]*)\/?\s*>/gi)].map((component) => {
       const attrs = parseAttributes(component[1]);
       const objectId = Number(attrs.objectid);
       if (!Number.isInteger(objectId) || objectId < 1) {
-        throw new Error(`3MF component references invalid object ID ${attrs.objectid ?? ''}`);
+        throw new Error(`${modelPath} component references invalid object ID ${attrs.objectid ?? ''}`);
       }
+      const productionPath = productionPathAttribute(component[1], namespaces);
+      if (!root && productionPath !== undefined) {
+        throw new Error(
+          `${modelPath} contains p:path on a non-root component; the 3MF Production Extension permits external paths only in the root model part`,
+        );
+      }
+      const targetPath =
+        productionPath === undefined ? modelPath : normalizeProductionModelPath(productionPath, modelPath);
       return {
-        objectId,
-        transform: parseTransform3mf(attrs.transform),
-        extensionAttributes: parseExtensionAttributes(component[1], namespaces, ['objectid', 'transform']),
+        reference: { modelPath: targetPath, objectId },
+        transform: parseTransformMatrix3mf(attrs.transform, unitScaleMm),
+        extensionAttributes: withoutProductionPath(
+          parseExtensionAttributes(component[1], namespaces, ['objectid', 'transform']),
+        ),
       };
     });
+    if (componentsMatch && components.length === 0) {
+      throw new Error(`${modelPath} object ${numericId} has an empty components graph`);
+    }
     objects.set(numericId, {
+      modelPath,
       numericId,
       name: attributes.name ? decodeXml(attributes.name) : `Object ${numericId}`,
       ...(Number.isInteger(Number(attributes.pindex)) && Number(attributes.pindex) >= 0
@@ -1366,44 +1633,185 @@ function parseCoreModel(xml: string): {
       facetExtensionAttributes: mesh?.facetExtensionAttributes ?? [],
     });
   }
-  const buildBody = /<build\b[^>]*>([\s\S]*?)<\/build>/i.exec(xml)?.[1] ?? '';
-  const build = [...buildBody.matchAll(/<item\b([^>]*)\/?\s*>/gi)].map((item) => {
+
+  const pairedBuild = /<build\b[^>]*>([\s\S]*?)<\/build>/i.exec(markup);
+  const emptyBuild = /<build\b[^>]*\/\s*>/i.test(markup);
+  if (!pairedBuild && !emptyBuild) throw new Error(`${modelPath} is missing its 3MF build element`);
+  const build = [...(pairedBuild?.[1] ?? '').matchAll(/<item\b([^>]*)\/?\s*>/gi)].map((item) => {
     const attributes = parseAttributes(item[1]);
     const objectId = Number(attributes.objectid);
     if (!Number.isInteger(objectId) || objectId < 1) {
-      throw new Error(`3MF build item references invalid object ID ${attributes.objectid ?? ''}`);
+      throw new Error(`${modelPath} build item references invalid object ID ${attributes.objectid ?? ''}`);
     }
+    const productionPath = productionPathAttribute(item[1], namespaces);
+    if (!root && productionPath !== undefined) {
+      throw new Error(`${modelPath} contains p:path in a non-root build section`);
+    }
+    const targetPath =
+      productionPath === undefined ? modelPath : normalizeProductionModelPath(productionPath, modelPath);
     return {
-      objectId,
-      transform: parseTransform3mf(attributes.transform),
+      reference: { modelPath: targetPath, objectId },
+      transform: decomposeMatrix(parseTransformMatrix3mf(attributes.transform, unitScaleMm)),
       printable: attributes.printable !== '0',
-      extensionAttributes: parseExtensionAttributes(item[1], namespaces, ['objectid', 'transform', 'printable']),
+      extensionAttributes: withoutProductionPath(
+        parseExtensionAttributes(item[1], namespaces, ['objectid', 'transform', 'printable']),
+      ),
     };
   });
-  if (!/<build\b/i.test(xml)) throw new Error('3MF core is missing its build element');
-  for (const object of objects.values()) {
-    for (const component of object.components) {
-      if (!objects.has(component.objectId)) {
-        throw new Error(`3MF component references missing object ${component.objectId}`);
+  return { title, materials, objects, build: root ? build : [] };
+}
+
+function resolveComponentGraphs(
+  objects: ReadonlyMap<string, ParsedMeshObject>,
+  roots: readonly ParsedObjectReference[],
+): Map<string, ResolvedMeshComponent[]> {
+  const result = new Map<string, ResolvedMeshComponent[]>();
+  let expansion = 0;
+  for (const root of roots) {
+    const rootKey = objectReferenceKey(root);
+    if (result.has(rootKey)) continue;
+    const resolved: ResolvedMeshComponent[] = [];
+    const stack = new Set<string>();
+    const visit = (
+      reference: ParsedObjectReference,
+      transform: Matrix4,
+      edgeAttributes: ExtensionAttribute[],
+      depth: number,
+    ): void => {
+      if (depth > MAX_COMPONENT_GRAPH_DEPTH) {
+        throw new Error(
+          `3MF component graph rooted at ${describeObjectReference(root)} exceeds the maximum depth of ${MAX_COMPONENT_GRAPH_DEPTH}`,
+        );
       }
+      expansion += 1;
+      if (expansion > MAX_COMPONENT_GRAPH_EXPANSION) {
+        throw new Error(`3MF component graph expansion exceeds the limit of ${MAX_COMPONENT_GRAPH_EXPANSION} objects`);
+      }
+      const key = objectReferenceKey(reference);
+      if (stack.has(key)) {
+        throw new Error(`3MF component graph contains a cycle through ${describeObjectReference(reference)}`);
+      }
+      const object = objects.get(key);
+      if (!object) throw new Error(`3MF component references missing object ${describeObjectReference(reference)}`);
+      if (object.mesh) {
+        resolved.push({
+          object,
+          transform: decomposeMatrix(transform),
+          extensionAttributes: edgeAttributes.map((attribute) => ({ ...attribute })),
+        });
+        return;
+      }
+      stack.add(key);
+      for (const component of object.components) {
+        visit(
+          component.reference,
+          multiplyMatrices(transform, component.transform),
+          component.extensionAttributes,
+          depth + 1,
+        );
+      }
+      stack.delete(key);
+    };
+    visit(root, identityMatrix(), [], 0);
+    if (resolved.length === 0) {
+      throw new Error(`3MF component graph rooted at ${describeObjectReference(root)} resolves to no mesh objects`);
+    }
+    result.set(rootKey, resolved);
+  }
+  return result;
+}
+
+function assertUnambiguousTopLevelMetadata(
+  groups: ReadonlyMap<string, { reference: ParsedObjectReference }>,
+  metadata: ParsedModelMetadata,
+): void {
+  const referencesById = new Map<number, Set<string>>();
+  for (const [key, group] of groups) {
+    const references = referencesById.get(group.reference.objectId) ?? new Set<string>();
+    references.add(key);
+    referencesById.set(group.reference.objectId, references);
+  }
+  for (const [objectId, references] of referencesById) {
+    if (
+      references.size > 1 &&
+      (metadata.objectConfig.has(objectId) ||
+        metadata.objectNames.has(objectId) ||
+        metadata.partData.has(objectId) ||
+        metadata.layerRanges.has(objectId))
+    ) {
+      throw new Error(
+        `${MODEL_SETTINGS_PATH} object ID ${objectId} is ambiguous across multiple Production Extension model parts`,
+      );
     }
   }
-  for (const item of build) {
-    if (!objects.has(item.objectId)) throw new Error(`3MF build references missing object ${item.objectId}`);
+}
+
+function objectReferenceKey(reference: ParsedObjectReference | ParsedMeshObject): string {
+  const objectId = 'objectId' in reference ? reference.objectId : reference.numericId;
+  return `${reference.modelPath}\u0000${objectId}`;
+}
+
+function objectReferenceToken(reference: ParsedObjectReference | ParsedMeshObject): string {
+  const objectId = 'objectId' in reference ? reference.objectId : reference.numericId;
+  return `${fnv1a64(encodeText(reference.modelPath))}-${objectId}`;
+}
+
+function describeObjectReference(reference: ParsedObjectReference): string {
+  return `${reference.modelPath}#${reference.objectId}`;
+}
+
+function normalizeProductionModelPath(rawPath: string, sourcePath: string): string {
+  if (!rawPath || rawPath.startsWith('//')) {
+    throw new Error(`${sourcePath} contains an invalid 3MF Production Extension path ${JSON.stringify(rawPath)}`);
   }
-  return { title, materials, objects, build };
+  const path = rawPath.startsWith('/') ? rawPath.slice(1) : rawPath;
+  try {
+    validatePackagePath(path);
+  } catch (error) {
+    throw new Error(`${sourcePath} contains an invalid 3MF Production Extension path ${JSON.stringify(rawPath)}`, {
+      cause: error,
+    });
+  }
+  if (!/\.model$/i.test(path)) {
+    throw new Error(`${sourcePath} Production Extension path ${rawPath} does not reference a .model package part`);
+  }
+  if (path === CORE_MODEL_PATH) {
+    throw new Error(`${sourcePath} Production Extension path conflicts with the root model part`);
+  }
+  return path;
+}
+
+function productionPathAttribute(source: string, namespaces: ReadonlyMap<string, string>): string | undefined {
+  const values: string[] = [];
+  for (const [qualifiedName, value] of Object.entries(parseAttributes(source))) {
+    const colon = qualifiedName.indexOf(':');
+    if (colon < 0 || qualifiedName.slice(colon + 1) !== 'path') continue;
+    const namespace = namespaces.get(qualifiedName.slice(0, colon));
+    if (namespace === PRODUCTION_NAMESPACE) values.push(value);
+  }
+  if (values.length > 1) throw new Error('3MF element contains conflicting Production Extension path attributes');
+  return values[0];
+}
+
+function withoutProductionPath(attributes: ExtensionAttribute[]): ExtensionAttribute[] {
+  return attributes.filter((attribute) => attribute.namespace !== PRODUCTION_NAMESPACE || attribute.name !== 'path');
 }
 
 function parseMesh(
   body: string,
   namespaces: ReadonlyMap<string, string>,
-): DecodedMesh & {
+  unitScaleMm = 1,
+): DecodedIndexedMesh & {
   annotations: FacetAnnotations;
   facetExtensionAttributes: FacetExtensionAttributes[];
 } {
   const vertices = [...body.matchAll(/<vertex\b([^>]*)\/?\s*>/gi)].map((vertex) => {
     const attrs = parseAttributes(vertex[1]);
-    const value: readonly [number, number, number] = [Number(attrs.x), Number(attrs.y), Number(attrs.z)];
+    const value: readonly [number, number, number] = [
+      Number(attrs.x) * unitScaleMm,
+      Number(attrs.y) * unitScaleMm,
+      Number(attrs.z) * unitScaleMm,
+    ];
     if (value.some((coordinate) => !Number.isFinite(coordinate))) {
       throw new Error('3MF vertex has a non-finite coordinate');
     }
@@ -1498,6 +1906,22 @@ function printableAreaSize(value: JsonValue | undefined): { x: number; y: number
   return x > 0 && y > 0 ? { x, y } : undefined;
 }
 
+/** Mirrors PartPlateList::compute_origin and LOGICAL_PART_PLATE_GAP in Snapmaker Orca v2.3.4. */
+function bbsVirtualPlateOrigins(
+  plateCount: number,
+  bedSizeMm: { x: number; y: number },
+): Array<{ x: number; y: number }> {
+  const columns = Math.ceil(Math.sqrt(plateCount));
+  return Array.from({ length: plateCount }, (_, index) => {
+    const row = Math.floor(index / columns);
+    const column = index % columns;
+    return {
+      x: column * bedSizeMm.x * (1 + BBS_PLATE_GAP_RATIO),
+      y: row === 0 ? 0 : -row * bedSizeMm.y * (1 + BBS_PLATE_GAP_RATIO),
+    };
+  });
+}
+
 function parseModelSettings(bytes: Uint8Array | undefined): ParsedModelMetadata {
   const result: ParsedModelMetadata = {
     objectConfig: new Map(),
@@ -1512,6 +1936,14 @@ function parseModelSettings(bytes: Uint8Array | undefined): ParsedModelMetadata 
     const attrs = parseAttributes(objectMatch[1]);
     const objectId = Number(attrs.id);
     if (!Number.isInteger(objectId)) continue;
+    if (
+      result.objectConfig.has(objectId) ||
+      result.objectNames.has(objectId) ||
+      result.partData.has(objectId) ||
+      result.layerRanges.has(objectId)
+    ) {
+      throw new Error(`${MODEL_SETTINGS_PATH} contains duplicate object ID ${objectId}`);
+    }
     const body = objectMatch[2];
     const objectPrefix = body.split(/<part\b/i, 1)[0];
     const config = parseMetadataConfig(objectPrefix);
@@ -1520,20 +1952,25 @@ function parseModelSettings(bytes: Uint8Array | undefined): ParsedModelMetadata 
       delete config.name;
     }
     result.objectConfig.set(objectId, config);
+    const parts = new Map<number, { role: VolumeRole; name?: string; config: ConfigMap }>();
     for (const partMatch of body.matchAll(/<part\b([^>]*)>([\s\S]*?)<\/part>/gi)) {
       const partAttrs = parseAttributes(partMatch[1]);
       const partId = Number(partAttrs.id);
       if (!Number.isInteger(partId)) continue;
+      if (parts.has(partId)) {
+        throw new Error(`${MODEL_SETTINGS_PATH} object ${objectId} contains duplicate part ID ${partId}`);
+      }
       const partConfig = parseMetadataConfig(partMatch[2]);
       const name = typeof partConfig.name === 'string' ? partConfig.name : undefined;
       delete partConfig.name;
       delete partConfig.matrix;
-      result.partData.set(partId, {
+      parts.set(partId, {
         role: roleFromSubtype(partAttrs.subtype),
         name,
         config: partConfig,
       });
     }
+    if (parts.size > 0) result.partData.set(objectId, parts);
     const ranges: Array<Omit<LayerRange, 'id'>> = [];
     for (const rangeMatch of body.matchAll(/<layer_range\b([^>]*)>([\s\S]*?)<\/layer_range>/gi)) {
       const rangeAttrs = parseAttributes(rangeMatch[1]);
@@ -1552,9 +1989,14 @@ function parseModelSettings(bytes: Uint8Array | undefined): ParsedModelMetadata 
       '',
     );
     const config = parseMetadataConfig(plateConfigXml);
-    const parsedSourceId = Number(attrs.id ?? config.plater_id);
-    const sourceId =
-      Number.isInteger(parsedSourceId) && parsedSourceId >= 1 ? parsedSourceId : result.plates.length + 1;
+    const attributeSourceId = attrs.id === undefined ? undefined : Number(attrs.id);
+    const configSourceId = config.plater_id === undefined ? undefined : Number(config.plater_id);
+    const sourceIdCandidate = attributeSourceId ?? configSourceId;
+    const sourceId = sourceIdCandidate ?? result.plates.length + 1;
+    const sourceIdValid =
+      Number.isInteger(sourceId) &&
+      sourceId >= 1 &&
+      (attributeSourceId === undefined || configSourceId === undefined || attributeSourceId === configSourceId);
     const assignments: Array<{ objectId: number; instanceIndex: number }> = [];
     for (const instance of plateMatch[2].matchAll(
       /<model_instance\b([^>]*?)(?:\/\s*>|>([\s\S]*?)<\/model_instance>)/gi,
@@ -1569,6 +2011,7 @@ function parseModelSettings(bytes: Uint8Array | undefined): ParsedModelMetadata 
     }
     result.plates.push({
       sourceId,
+      sourceIdValid,
       name: String(attrs.name ?? config.plater_name ?? `Plate ${result.plates.length + 1}`),
       printable: String(attrs.printable ?? config.printable ?? '1') !== '0',
       config: plateConfig(config, attrs),
@@ -1625,7 +2068,7 @@ function parseMetadataConfig(xml: string): ConfigMap {
   return config;
 }
 
-function encodeMeshAsset(mesh: DecodedMesh): Uint8Array {
+function encodeMeshAsset(mesh: DecodedIndexedMesh): Uint8Array {
   const positionBytes = mesh.vertices.length * 12;
   const bytes = new Uint8Array(positionBytes + mesh.triangles.length * 12);
   const view = new DataView(bytes.buffer);
@@ -1644,34 +2087,50 @@ function encodeMeshAsset(mesh: DecodedMesh): Uint8Array {
   return bytes;
 }
 
-function parseTransform3mf(value: string | undefined): Transform {
-  if (!value) return identityTransform();
+function parseTransformMatrix3mf(value: string | undefined, unitScaleMm = 1): Matrix4 {
+  if (!value) return identityMatrix();
   const parts = value.trim().split(/\s+/).map(Number);
   if (parts.length !== 12 || parts.some((part) => !Number.isFinite(part))) {
     throw new Error('Invalid 3MF transform');
   }
-  const matrix = [
+  return [
     parts[0],
     parts[3],
     parts[6],
-    parts[9],
+    parts[9] * unitScaleMm,
     parts[1],
     parts[4],
     parts[7],
-    parts[10],
+    parts[10] * unitScaleMm,
     parts[2],
     parts[5],
     parts[8],
-    parts[11],
+    parts[11] * unitScaleMm,
     0,
     0,
     0,
     1,
   ];
-  return decomposeMatrix(matrix);
 }
 
-function decomposeMatrix(matrix: number[]): Transform {
+function identityMatrix(): Matrix4 {
+  return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+}
+
+function multiplyMatrices(left: Matrix4, right: Matrix4): Matrix4 {
+  const output = Array.from({ length: 16 }, () => 0);
+  for (let row = 0; row < 4; row += 1) {
+    for (let column = 0; column < 4; column += 1) {
+      for (let inner = 0; inner < 4; inner += 1) {
+        output[row * 4 + column] += left[row * 4 + inner] * right[inner * 4 + column];
+      }
+    }
+  }
+  if (output.some((value) => !Number.isFinite(value))) throw new Error('3MF transform composition overflowed');
+  return output as unknown as Matrix4;
+}
+
+function decomposeMatrix(matrix: readonly number[]): Transform {
   let sx = Math.hypot(matrix[0], matrix[4], matrix[8]);
   const sy = Math.hypot(matrix[1], matrix[5], matrix[9]);
   const sz = Math.hypot(matrix[2], matrix[6], matrix[10]);
@@ -1722,11 +2181,34 @@ function decomposeMatrix(matrix: number[]): Transform {
     y = (m12 + m21) / s;
     z = 0.25 * s;
   }
+  const quaternionNorm = Math.hypot(x, y, z, w);
+  if (!Number.isFinite(quaternionNorm) || quaternionNorm < 1e-12) {
+    throw new Error('3MF transform has an invalid rotation');
+  }
   return {
     translationMm: [matrix[3], matrix[7], matrix[11]],
-    rotation: [x, y, z, w],
+    rotation: [x / quaternionNorm, y / quaternionNorm, z / quaternionNorm, w / quaternionNorm],
     scale: [sx, sy, sz],
   };
+}
+
+function modelUnitScaleMm(unit: string | undefined, path: string): number {
+  switch ((unit ?? 'millimeter').toLowerCase()) {
+    case 'micron':
+      return 0.001;
+    case 'millimeter':
+      return 1;
+    case 'centimeter':
+      return 10;
+    case 'inch':
+      return 25.4;
+    case 'foot':
+      return 304.8;
+    case 'meter':
+      return 1000;
+    default:
+      throw new Error(`${path} declares unsupported 3MF unit ${unit}`);
+  }
 }
 
 function importSimpleFacet<T extends JsonValue>(
@@ -1746,6 +2228,217 @@ function decodeSimpleFacetState(encoded: string | undefined): number {
   if ((code & 3) !== 0) return 0;
   if ((code & 0xc) === 0xc) return reversed.length === 2 ? reversed[1] + 3 : 0;
   return reversed.length === 1 ? code >> 2 : 0;
+}
+
+interface XmlOpeningTag {
+  name: string;
+  selfClosing: boolean;
+  attributes: Array<{ name: string; value: string }>;
+}
+
+/**
+ * Validate the XML before the deliberately small 3MF regex projection reads
+ * it. Comments, processing instructions, and CDATA are blanked so markup-like
+ * text in those constructs cannot be mistaken for geometry or resources.
+ */
+function validatedXmlMarkup(xml: string, path: string): string {
+  assertXmlValue(xml, path);
+  if (/<!DOCTYPE\b|<!ENTITY\b/i.test(xml)) {
+    throw new Error(`${path} contains a prohibited XML DTD or entity declaration`);
+  }
+  const stack: Array<{ name: string; namespaces: Map<string, string> }> = [];
+  const baseNamespaces = new Map<string, string>([['xml', 'http://www.w3.org/XML/1998/namespace']]);
+  const sanitized: string[] = [];
+  let sanitizedCursor = 0;
+  let index = 0;
+  let rootCount = 0;
+  while (index < xml.length) {
+    const open = xml.indexOf('<', index);
+    if (open < 0) {
+      validateXmlText(xml.slice(index), stack.length > 0, path);
+      break;
+    }
+    validateXmlText(xml.slice(index, open), stack.length > 0, path);
+    if (xml.startsWith('<!--', open)) {
+      const end = xml.indexOf('-->', open + 4);
+      if (end < 0 || xml.slice(open + 4, end).includes('--'))
+        throw new Error(`${path} contains an invalid XML comment`);
+      const after = end + 3;
+      sanitized.push(xml.slice(sanitizedCursor, open), ' '.repeat(after - open));
+      sanitizedCursor = after;
+      index = after;
+      continue;
+    }
+    if (xml.startsWith('<![CDATA[', open)) {
+      if (stack.length === 0) throw new Error(`${path} contains XML CDATA outside the model element`);
+      const end = xml.indexOf(']]>', open + 9);
+      if (end < 0) throw new Error(`${path} contains unterminated XML CDATA`);
+      const after = end + 3;
+      sanitized.push(xml.slice(sanitizedCursor, open), ' '.repeat(after - open));
+      sanitizedCursor = after;
+      index = after;
+      continue;
+    }
+    if (xml.startsWith('<?', open)) {
+      const end = xml.indexOf('?>', open + 2);
+      if (end < 0) throw new Error(`${path} contains an unterminated XML processing instruction`);
+      const after = end + 2;
+      sanitized.push(xml.slice(sanitizedCursor, open), ' '.repeat(after - open));
+      sanitizedCursor = after;
+      index = after;
+      continue;
+    }
+    if (xml.startsWith('<!', open)) throw new Error(`${path} contains an unsupported XML declaration`);
+    const end = findXmlTagEnd(xml, open + 1, path);
+    const source = xml.slice(open + 1, end);
+    if (source.startsWith('/')) {
+      const name = source.slice(1).trim();
+      assertXmlName(name, path);
+      const current = stack.pop();
+      if (!current || current.name !== name) {
+        throw new Error(`${path} contains mismatched XML closing tag ${name}`);
+      }
+    } else {
+      const tag = parseXmlOpeningTag(source, path);
+      const namespaces = new Map(stack.at(-1)?.namespaces ?? baseNamespaces);
+      for (const attribute of tag.attributes) {
+        if (attribute.name === 'xmlns') namespaces.set('', attribute.value);
+        else if (attribute.name.startsWith('xmlns:')) {
+          const prefix = attribute.name.slice(6);
+          if (!attribute.value) throw new Error(`${path} undeclares XML namespace prefix ${prefix}`);
+          namespaces.set(prefix, attribute.value);
+        }
+      }
+      assertBoundXmlName(tag.name, namespaces, path);
+      for (const attribute of tag.attributes) {
+        if (attribute.name !== 'xmlns' && !attribute.name.startsWith('xmlns:')) {
+          assertBoundXmlName(attribute.name, namespaces, path, true);
+        }
+      }
+      if (stack.length === 0) {
+        rootCount += 1;
+        if (rootCount > 1) throw new Error(`${path} contains multiple XML root elements`);
+      }
+      if (!tag.selfClosing) stack.push({ name: tag.name, namespaces });
+    }
+    index = end + 1;
+  }
+  if (stack.length > 0) throw new Error(`${path} contains an unclosed XML element ${stack.at(-1)!.name}`);
+  if (rootCount !== 1) throw new Error(`${path} must contain exactly one XML root element`);
+  sanitized.push(xml.slice(sanitizedCursor));
+  return sanitized.join('');
+}
+
+function findXmlTagEnd(xml: string, start: number, path: string): number {
+  let quote = '';
+  for (let index = start; index < xml.length; index += 1) {
+    const character = xml[index];
+    if (quote) {
+      if (character === quote) quote = '';
+      else if (character === '<' || character === '>') {
+        throw new Error(`${path} contains a tag delimiter inside an XML attribute`);
+      }
+    } else if (character === '"' || character === "'") quote = character;
+    else if (character === '>') return index;
+  }
+  throw new Error(`${path} contains an unterminated XML tag`);
+}
+
+function parseXmlOpeningTag(source: string, path: string): XmlOpeningTag {
+  let cursor = 0;
+  const skipWhitespace = () => {
+    while (/\s/.test(source[cursor] ?? '')) cursor += 1;
+  };
+  skipWhitespace();
+  const nameStart = cursor;
+  while (cursor < source.length && !/[\s/]/.test(source[cursor])) cursor += 1;
+  const name = source.slice(nameStart, cursor);
+  assertXmlName(name, path);
+  const attributes: XmlOpeningTag['attributes'] = [];
+  const names = new Set<string>();
+  let selfClosing = false;
+  while (cursor < source.length) {
+    skipWhitespace();
+    if (cursor >= source.length) break;
+    if (source[cursor] === '/') {
+      cursor += 1;
+      skipWhitespace();
+      if (cursor !== source.length) throw new Error(`${path} contains characters after an XML self-closing marker`);
+      selfClosing = true;
+      break;
+    }
+    const attributeStart = cursor;
+    while (cursor < source.length && !/[\s=]/.test(source[cursor])) cursor += 1;
+    const attributeName = source.slice(attributeStart, cursor);
+    assertXmlName(attributeName, path);
+    if (names.has(attributeName)) throw new Error(`${path} contains duplicate XML attribute ${attributeName}`);
+    names.add(attributeName);
+    skipWhitespace();
+    if (source[cursor] !== '=') throw new Error(`${path} XML attribute ${attributeName} has no value`);
+    cursor += 1;
+    skipWhitespace();
+    const quote = source[cursor];
+    if (quote !== '"' && quote !== "'") throw new Error(`${path} XML attribute ${attributeName} is not quoted`);
+    cursor += 1;
+    const valueStart = cursor;
+    const valueEnd = source.indexOf(quote, cursor);
+    if (valueEnd < 0) throw new Error(`${path} XML attribute ${attributeName} is unterminated`);
+    const value = source.slice(valueStart, valueEnd);
+    validateXmlEntities(value, path);
+    attributes.push({ name: attributeName, value: decodeXml(value) });
+    cursor = valueEnd + 1;
+  }
+  return { name, selfClosing, attributes };
+}
+
+function validateXmlText(value: string, insideRoot: boolean, path: string): void {
+  if (!insideRoot && value.trim()) throw new Error(`${path} contains text outside its XML root element`);
+  if (value.includes(']]>')) throw new Error(`${path} contains an invalid XML CDATA terminator`);
+  validateXmlEntities(value, path);
+}
+
+function validateXmlEntities(value: string, path: string): void {
+  let cursor = value.indexOf('&');
+  while (cursor >= 0) {
+    const match = /^&(?:amp|lt|gt|quot|apos|#(\d+)|#x([0-9a-f]+));/i.exec(value.slice(cursor));
+    if (!match) throw new Error(`${path} contains an invalid or undeclared XML entity`);
+    if (match[1] || match[2]) {
+      const codePoint = match[1] ? Number(match[1]) : Number.parseInt(match[2], 16);
+      if (!isXmlCodePoint(codePoint)) throw new Error(`${path} contains an invalid numeric XML entity`);
+    }
+    cursor = value.indexOf('&', cursor + match[0].length);
+  }
+}
+
+function isXmlCodePoint(value: number): boolean {
+  return (
+    value === 0x9 ||
+    value === 0xa ||
+    value === 0xd ||
+    (value >= 0x20 && value <= 0xd7ff) ||
+    (value >= 0xe000 && value <= 0xfffd) ||
+    (value >= 0x1_0000 && value <= 0x10_ffff)
+  );
+}
+
+function assertXmlName(name: string, path: string): void {
+  if (!/^[A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?$/.test(name)) {
+    throw new Error(`${path} contains invalid XML name ${JSON.stringify(name)}`);
+  }
+}
+
+function assertBoundXmlName(
+  name: string,
+  namespaces: ReadonlyMap<string, string>,
+  path: string,
+  attribute = false,
+): void {
+  const colon = name.indexOf(':');
+  if (colon < 0) return;
+  const prefix = name.slice(0, colon);
+  if (!namespaces.has(prefix)) {
+    throw new Error(`${path} ${attribute ? 'attribute' : 'element'} ${name} uses an undeclared namespace prefix`);
+  }
 }
 
 function parseAttributes(source: string): Record<string, string> {

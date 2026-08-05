@@ -42,10 +42,12 @@ test('blendColor: pigment blend, not sRGB average (blue+yellow is green)', () =>
 });
 
 // ---- manual patterns --------------------------------------------------------
-test('pattern: digits and a/b aliases normalize; junk invalidates', () => {
+test('pattern: pinned compact/bracket syntax and slash authoring normalize canonically', () => {
   assert.equal(normalizeManualPattern('14343434'), '14343434');
-  assert.equal(normalizeManualPattern('Ab'), '12');
+  assert.equal(normalizeManualPattern('[10]/2'), '[10]2');
   assert.equal(normalizeManualPattern('12,21'), '12,21');
+  assert.equal(normalizeManualPattern('Ab'), '');
+  assert.equal(normalizeManualPattern('1 2'), '');
   assert.equal(normalizeManualPattern('1q2'), '');
   assert.equal(normalizeManualPattern('12,'), '');
 });

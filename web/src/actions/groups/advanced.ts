@@ -2,6 +2,48 @@ import type { ActionDefinition as Action } from '../ActionRegistry';
 
 export const advancedActions: Action[] = [
   {
+    id: 'filament_virtual_mutate',
+    label: 'Edit virtual filament library',
+    icon: 'filament',
+    group: 'filament',
+    disclosure: 'inspector',
+    hint: 'Add, edit, duplicate, enable, or delete one stable FullSpectrum recipe',
+    run: (ctx, invocation) => {
+      if (invocation.fullSpectrumAutoPairPreference) {
+        const request = invocation.fullSpectrumAutoPairPreference;
+        ctx.configureFullSpectrumAutoPairs(request.enabled, request.confirmedPhysicalCount);
+        return;
+      }
+      if (!invocation.virtualFilamentMutation) {
+        ctx.reportCapabilityUnavailable(
+          'Edit virtual filament library',
+          'Open the virtual filament editor and submit a complete validated recipe.',
+        );
+        return;
+      }
+      ctx.mutateVirtualFilament(invocation.virtualFilamentMutation);
+    },
+  },
+  {
+    id: 'settings_apply_project',
+    label: 'Apply project settings',
+    icon: 'settings',
+    group: 'advanced',
+    disclosure: 'inspector',
+    hint: 'Apply validated generated settings as one canonical project override command',
+    run: (ctx, invocation) => {
+      const request = invocation.projectSettingsApply;
+      if (!request) {
+        ctx.reportCapabilityUnavailable('Apply project settings', 'Review and apply a settings draft first.');
+        return;
+      }
+      ctx.applyProjectSettings(request.inheritedConfig, request.overrides, {
+        sourceRevision: request.sourceRevision,
+        sourceHash: request.sourceHash,
+      });
+    },
+  },
+  {
     id: 'add_emboss',
     mcpTool: 'emboss_model',
     label: 'Emboss Text',
@@ -41,6 +83,24 @@ export const advancedActions: Action[] = [
     hint: 'Scan local network for printers',
   },
   {
+    id: 'printer_test_connection',
+    label: 'Test Printer Connection',
+    icon: 'network',
+    group: 'advanced',
+    disclosure: 'inspector',
+    hint: 'Connect to the configured Moonraker endpoint and verify its typed capabilities',
+    run: (ctx) => ctx.testPrinterConnection(),
+  },
+  {
+    id: 'printer_inspect_filaments',
+    label: 'Inspect Printer Filaments',
+    icon: 'filament',
+    group: 'filament',
+    disclosure: 'inspector',
+    hint: 'Read loaded filament slots without changing project or profile mappings',
+    run: (ctx) => ctx.inspectPrinterFilaments(),
+  },
+  {
     id: 'view_webcam',
     label: 'View Webcam',
     icon: 'webcam',
@@ -51,16 +111,11 @@ export const advancedActions: Action[] = [
   },
   {
     id: 'recreate_model_colors_fullspectrum',
-    mcpTool: 'recreate_model_colors_fullspectrum',
     label: 'Recreate Model Colors (Full-Spectrum)',
     icon: 'palette',
     group: 'advanced',
     disclosure: 'menu',
     menuSection: 'tools',
     hint: 'Recreate model colors using printer filaments via Full-Spectrum dithering',
-    isEnabled: (s) => s.modelCount > 0,
-    run: (ctx) => {
-      ctx.recreateModelColorsWithFullSpectrum();
-    },
   },
 ];

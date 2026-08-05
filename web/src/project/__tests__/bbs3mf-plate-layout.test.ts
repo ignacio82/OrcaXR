@@ -127,4 +127,19 @@ test('distinguishes declared plate metadata that cannot be parsed safely', () =>
   assert.deepStrictEqual(extractBbsPlateLayoutResult(files(MODEL, malformed)), { status: 'invalid', layout: null });
 });
 
+test('rejects duplicate, non-contiguous, and contradictory source plate IDs', () => {
+  const duplicate = `<config>
+    <plate id="1"><model_instance object_id="7" instance_id="0"/></plate>
+    <plate id="1"><model_instance object_id="7" instance_id="1"/></plate>
+  </config>`;
+  const contradictory = `<config>
+    <plate id="1"><metadata key="plater_id" value="2"/><model_instance object_id="7" instance_id="0"/></plate>
+  </config>`;
+  assert.deepStrictEqual(extractBbsPlateLayoutResult(files(MODEL, duplicate)), { status: 'invalid', layout: null });
+  assert.deepStrictEqual(extractBbsPlateLayoutResult(files(MODEL, contradictory)), {
+    status: 'invalid',
+    layout: null,
+  });
+});
+
 console.log(`\nBBS plate layout: ${passed} tests passed.`);

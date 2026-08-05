@@ -1,12 +1,7 @@
 /**
  * Edit group — mirrors Snapmaker Orca's `Edit` menu (undo/redo, clipboard,
- * selection). Several workspace-local operations are wired, while integration
- * with the canonical global history and selection model remains in progress;
- * see `docs/parity.md`.
- *
- * Note: OrcaXR already has a *paint* undo/redo stack (`PaintHistory`). These
- * Edit entries are the *scene-level* history (transforms, add/delete) Orca
- * exposes on Ctrl+Z / Ctrl+Y, which OrcaXR has not built yet.
+ * selection). Undo/redo is backed by the canonical project command history;
+ * scene-only mutations remain capability-gated until they gain commands.
  */
 import type { ActionDefinition as Action } from '../ActionRegistry';
 
@@ -19,6 +14,9 @@ export const editActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'edit',
     hint: 'Undo the last scene edit',
+    shortcuts: ['Ctrl+Z', 'Meta+Z'],
+    isEnabled: (s) => s.canUndo,
+    run: (ctx) => ctx.undo(),
   },
   {
     id: 'edit_redo',
@@ -28,6 +26,9 @@ export const editActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'edit',
     hint: 'Redo the last undone scene edit',
+    shortcuts: ['Ctrl+Shift+Z', 'Meta+Shift+Z', 'Ctrl+Y'],
+    isEnabled: (s) => s.canRedo,
+    run: (ctx) => ctx.redo(),
   },
   {
     id: 'edit_cut',
@@ -37,7 +38,7 @@ export const editActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'edit',
     hint: 'Cut the selected model to the clipboard',
-    isEnabled: (s) => s.hasSelection,
+    isEnabled: (s) => s.hasInstanceSelection,
     run: (ctx) => ctx.cutSelected(),
   },
   {
@@ -48,7 +49,7 @@ export const editActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'edit',
     hint: 'Copy the selected model to the clipboard',
-    isEnabled: (s) => s.hasSelection,
+    isEnabled: (s) => s.hasInstanceSelection,
     run: (ctx) => ctx.copySelected(),
   },
   {
@@ -70,7 +71,7 @@ export const editActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'edit',
     hint: 'Duplicate the selected model on the plate',
-    isEnabled: (s) => s.hasSelection,
+    isEnabled: (s) => s.hasInstanceSelection,
     run: (ctx) => ctx.cloneSelected(),
   },
   {
@@ -83,7 +84,7 @@ export const editActions: Action[] = [
     menuSection: 'edit',
     hint: 'Remove the selected model',
     shortcuts: ['Delete'],
-    isEnabled: (s) => s.hasSelection,
+    isEnabled: (s) => s.hasInstanceSelection,
     run: (ctx) => ctx.deleteSelected(),
   },
   {
@@ -105,6 +106,8 @@ export const editActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'edit',
     hint: 'Select every model on the plate',
+    isEnabled: (s) => s.modelCount > 0,
+    run: (ctx) => ctx.selectAll(),
   },
   {
     id: 'edit_deselect_all',

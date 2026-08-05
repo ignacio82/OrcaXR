@@ -14,6 +14,7 @@
  * Pure functions, no THREE — unit-testable in isolation.
  */
 import { COEF, INTERCEPT, N_FEATURES, N_INPUTS, POWERS } from './filamentMixerModel';
+import { normalizeManualCyclePattern } from '../project/filaments/manualCyclePattern';
 
 export interface MixedFilamentDef {
   componentA: number;
@@ -147,40 +148,8 @@ export function blendColorMulti(colorPercents: [string, number][]): string {
 // Manual pattern / gradient helpers
 // ---------------------------------------------------------------------------
 
-const isPatternSeparator = (c: string) =>
-  /\s/.test(c) || c === '/' || c === '-' || c === '_' || c === '|' || c === ':' || c === ';' || c === ',';
-
-function decodePatternStep(c: string): string | null {
-  if (c >= '1' && c <= '9') return c;
-  const lower = c.toLowerCase();
-  if (lower === 'a') return '1';
-  if (lower === 'b') return '2';
-  return null;
-}
-
-/** MixedFilamentManager::normalize_manual_pattern. */
-export function normalizeManualPattern(pattern: string): string {
-  let normalized = '';
-  let currentGroupHasSteps = false;
-  for (const c of pattern) {
-    const step = decodePatternStep(c);
-    if (step !== null) {
-      normalized += step;
-      currentGroupHasSteps = true;
-      continue;
-    }
-    if (c === ',') {
-      if (!currentGroupHasSteps) return '';
-      normalized += ',';
-      currentGroupHasSteps = false;
-      continue;
-    }
-    if (isPatternSeparator(c)) continue;
-    return ''; // unknown token => invalid pattern
-  }
-  if (normalized.endsWith(',')) return '';
-  return normalized;
-}
+/** Canonical pinned-engine manual Cycle-pattern normalization. */
+export const normalizeManualPattern = normalizeManualCyclePattern;
 
 function splitManualPatternGroups(pattern: string): string[] {
   return pattern.split(',').filter((g) => g.length > 0);

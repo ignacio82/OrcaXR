@@ -65,7 +65,7 @@ engine (`libslic3r` via WASM) as the computational core.
 | UI | HTML/JS/CSS |
 | 3D & XR | XRBlocks for Spatial UI, 3D interaction, WebXR |
 | Slicing core | OrcaSlicer `libslic3r` via WASM in the browser or via the Node.js backend server |
-| Network | fetch / HTTP requests |
+| Network | `fetchLocalNetwork`; typed Moonraker HTTP/WebSocket boundary (live read-only handshake/slot inspection) |
 
 ## Parity implementation invariants
 
@@ -74,17 +74,19 @@ engine (`libslic3r` via WASM) as the computational core.
   13 families to a task/adaptation using 17 exact Git blobs. Generate/check it
   only with `tools/parity/`; never hand-edit it or derive truth from a dirty
   upstream worktree. A mapped leaf is scope coverage, not implemented parity.
-- `web/src/project/` is the UI-independent canonical graph/history boundary.
-  Domain code must not import DOM, XRBlocks, or Three UI objects; enforce this
-  with `npm --prefix web run architecture:check`. Its transactional import,
-  legacy-v1 migration, and revisioned slice coordinator are headless foundations;
-  until live consumers are adapted, legacy workspace state is only a migration
-  source and must never become a second canonical model. Pinned v2.3.4 mixed
-  recipes reference stable physical-head IDs only, never another virtual row.
-- `ActionRegistry` is the only invocation/availability gateway for DOM, menus,
-  shortcuts, command palette, and XR. `implemented` requires a real handler and
-  evidence mapping; `partial`, `unavailable`, and `blocked` remain visibly and
-  machine-readably honest.
+- `web/src/project/` is the UI-independent canonical graph/history boundary;
+  domain code must not import DOM, XRBlocks, or Three UI objects. Enforce it
+  with `npm --prefix web run architecture:check`. The explicit Three browser
+  adapter stays in `project/surfaces`, is direct-imported, and is not exported
+  by the headless project index. Transactional import and the per-plate revision/
+  asset-guarded slice coordinator remain headless; live legacy state is only a
+  migration source, never a second canonical model. Published G-code is bound
+  to the exact submitted semantic snapshot; preview/download/send fail closed
+  after drift; printer mutation stays disabled until P9 safety. Mixed recipes use stable physical-head IDs, never virtual rows; live Match uses a bounded worker, while auto-pair generation defaults off and requires count-bound confirmation above four physical filaments. Refined facet selection uses the version-1 root/source-face and child-path encoding: source vertices precede float32 shared midpoints, commit applies leaf targets before recursively collapsing homogeneous children, and malformed/deep/shared trees fail closed. Live UI and slicing share exact catalog-backed canonical preflight; ambiguous profile/build/nozzle mappings block, and Three/display defaults are never safety inputs. Preview projections consume rich typed columns and must return explicit unsupported metadata for missing exact filament colors or authoritative layer durations rather than inventing palette/time values. Split-to-objects must capture the exact revision/hash/selection/object scope before confirmation, revalidate it at commit, and leave canonical state untouched on cancel, stale input, unsupported metadata, or topology failure. Calibration requests bind exact definition version/fingerprint plus printer/nozzle/filament/process/firmware prerequisites; vendor automatic execution and any unsafe/stale/unbounded plan fail closed before canonical mutation. G-code inspection derives layer, move, tick, tool, source-window, and focus state from unrenumbered rich record IDs, retains only bounded source text, exposes incomplete prefixes, and never treats headless projection as proof of live controls. Official statistics require a same-export engine sidecar plus an opaque rich-source handle created by streaming SHA-256 over the exact UTF-8 G-code; source/source-asset identities use canonical FNV-1a64, project/config/output/artifact identities use SHA-256, and job/plate/revision/engine bindings also match. Sidecars are exact-key JSON with canonical dense capped arrays and finite bounded arithmetic; `plannerBlockCount` bounds float32 partitions and move subsets, `volumeSampleCount` bounds double material reconciliation, nonempty ordered custom segments cover planner total while a synthetic tail remains conditional, and sparse role-by-tool volumes equal model + support + wipe tower with flush excluded. Rich columns remain observations, missing assumptions propagate unavailable, detected conflicts are non-exhaustive/partial, and all-plate sums group by tool plus profile, expose partial silent coverage, retain a sole known cost unit while affected totals stay unavailable, and never reuse first-plate metadata.
+- `ActionRegistry` is constructed once at the composition root and is the only
+  invocation/availability gateway for DOM, menus, shortcuts, command palette,
+  XR, and contextual Objects selection/rename/reveal. `implemented` requires a real
+  handler/evidence mapping; all other states remain visibly and machine-readably honest. Generate shortcut matching and Help rows from registry declarations through the strict conflict-rejecting catalog; do not add a second hand-maintained shortcut list.
 - `./scripts/quality.sh` is the clean-clone repository gate. Web-only changes
   must at minimum pass `npm --prefix web run quality`; do not weaken a failing
   check or claim broad parity before P12.6 is independently verified.
@@ -205,15 +207,15 @@ Design for spatial comfort and inclusion, not a flat desktop UI in 3D:
 
 `UICard` is itself an XRBlocks script. The scene `ScriptsManager` is the sole
 per-frame update owner; never restore a manual `UICard.update()` loop. Core is
-also the sole controller select dispatcher, so do not add a second
-`selectstart`/`selectend` path. `OrcaWorkspace` maintains one capability-state
-subscription and its idempotent `dispose()` removes that subscription, window/
-canvas/XR listeners, controls, cards, and owned GPU resources. Any hit beneath
-any `UICard` ancestor suppresses scene manipulation. Hidden scripts can still
-tick, so expensive hidden surfaces must be detached or paused through a measured
-supported lifecycle rather than relying on `visible = false`. P10.10 still
-requires counter instrumentation, repeated-open/close leak checks, and Galaxy XR
-qualification before the lifecycle/performance item is complete.
+the sole scene-gesture dispatcher; do not add another `selectstart`/`selectend`
+manipulation path. The only native `XRSession` `select` exception is
+`OrcaWorkspace`'s synchronous file-picker activation listener; it is lifecycle-
+disposed and must never manipulate the scene. Its idempotent `dispose()` also
+removes the sole capability subscription, window/canvas/XR listeners, controls,
+cards, and owned GPU resources. A gesture starting beneath any `UICard` stays
+suppressed through release for that controller; controllers remain independent.
+Hidden scripts need a measured detach/pause lifecycle, not `visible = false`.
+P10.10 still requires counters, repeated lifecycle leak checks, and Galaxy XR qualification.
 
 ## Upstream slicer strategy
 
@@ -247,7 +249,7 @@ qualification before the lifecycle/performance item is complete.
 
 7. **`update_values_to_printer_extruders_for_multiple_filaments` null-derefs on filament-prefixed nullable options.** Patch `0013-toolchanger-handle-nullable-cast.patch` fixes this.
 
-8. **3MF loader dispatch is BBS-leaning and breaks on Prusa / MakerWorld files.** Use `Model::read_from_archive` which sniffs Prusa-vs-BBS. In browser imports, official BBS multi-plate membership lives in `Metadata/model_settings.config` as `(object_id, instance_id)` pairs; `ThreeMFLoader` root children follow core `<build>` order, whose transforms use the global 1.2×-bed plate grid, so split by that sidecar and subtract each source plate origin rather than merging the root group or guessing from thumbnails/spatial clusters.
+8. **3MF loader dispatch is BBS-leaning and breaks on Prusa / MakerWorld files.** Use `Model::read_from_archive` which sniffs Prusa-vs-BBS. In browser imports, official BBS multi-plate membership lives in `Metadata/model_settings.config` as `(object_id, instance_id)` pairs; core `<build>` transforms use the global 1.2×-bed plate grid, so resolve exact membership and `printable_area` or fail closed, then subtract the source origin. Canonical transforms stay plate-local; only standard BBS export re-adds that virtual origin. Never guess from thumbnails or spatial clusters. Production-extension `p:path` IDs are model-part-local: key references by normalized package path plus ID, permit external paths only from the root model, recursively compose same-part child components including repeats, and reject missing/conflicting paths or IDs, traversal, cycles, depth over 64, and expansion over 16,384 nodes. Preserve original split `.model` members opaquely, but remove `p:path` from the generated flattened core. A read-only `MarbleRunTube_V7.3mf` smoke resolved 26 external parts into 5 plates/28 objects/29 volumes/28 instances and passed in-memory canonical save/reopen; this is headless evidence, not official GUI qualification. Do not add a blanket affine-shear rejection: that real Orca archive contains such build matrices, while arbitrary shear remains an explicit residual of the canonical TRS projection.
 
 9. **`load_bbs_3mf` requires `LoadStrategy::LoadModel | LoadConfig | AddDefaultInstances`.** DO NOT add `LoadAuxiliary` (=16) as it fails on Android's read-only filesystem.
 
@@ -271,17 +273,15 @@ qualification before the lifecycle/performance item is complete.
 
 18. **`tbb::scalable_malloc` is broken on Android arm64.** We wrap it to libc malloc/free at link-time.
 
-19. **Multi-color config keys MUST use `;` as separator, not `,`.** This is
-    type-dependent: `coStrings` options (`filament_colour`, `extruder_colour`,
-    `filament_type`, `filament_start/end_gcode`, `filament_settings_id`) split
-    on `;`; numeric vectors (`filament_diameter`, `flush_volumes_matrix`,
-    `nozzle_diameter`) split on `,`. A comma-joined color list parses as ONE
-    color, silently shrinking the engine's filament count — which was the
-    trigger for the whole patch-0075 crash family (see 19d). Web-side the
-    rule is enforced in `FilamentPalette.toSlicerOverrides`,
-    `OrcaWorkspace.sliceNow`, and `ProfileLoader`'s `STRING_VECTOR_KEYS`.
+19. **PrintConfig collection delimiters are type-dependent.** Every `coStrings`
+    option uses `;`; every other vector option uses `,`. A comma-joined color
+    list parses as one color and can silently shrink the engine's filament
+    count—the trigger for patch 0075 (see 19d). Web's shared
+    `web/src/settings/configSerialization.ts` classifier is used by ConfigIO
+    and ProfileLoader; its 26 unique `coStrings` keys are checked against all
+    174 generated PrintConfig vector definitions; direct overrides follow it too.
 
-19b. **`coord_t` is `int64_t` but `size_t` is 32-bit on wasm32 — `some_vector.size() - 1` assigned to a `coord_t` underflows to `+4294967295`, not `-1`.** This is the WASM slicer's #1 crash class: `SkeletalTrapezoidation::interpolate` (Arachne) did `for (coord_t next_inset_idx = left.toolpath_locations.size() - 1; next_inset_idx >= 0; …)`. When `left` is an empty beading (thin feature → `bead_count 0` → `compute()` returns empty vectors), `0u - 1` is a 32-bit `0xFFFFFFFF` that **zero-extends** into the signed 64-bit `coord_t` as `+4294967295`, so the loop runs and indexes `toolpath_locations[4294967295]` → `RuntimeError: memory access out of bounds` inside `propagateBeadingsDownward`. On 64-bit builds `size_t` is 64-bit so `0-1` → `-1` and the loop is skipped — which is why native Android/desktop never hit it while the WASM slicer crashed on essentially **every** model with a thin region (3DBenchy, logos). Fix: `coord_t(v.size()) - 1` (cast to signed before subtracting). Shipped as `patches/0074-arachne-32bit-size-underflow-oob.patch`. **When auditing the WASM port for crashes, grep for `.size() - 1` / `.size()-1` feeding a signed `coord_t`/`int` index and any other 32-bit-vs-64-bit width assumptions.** **ENGINE SWITCH (2026-07-05): the WASM slicer now builds from the Snapmaker fork** — `third_party/SnapmakerOrca` (gitignored clone of Snapmaker/OrcaSlicer v2.3.4, FullSpectrum-native since 2.3.3), the SAME source the external slicer container's CLI builds, so web and CLI G-code match at the source level. After editing a libslic3r `.cpp`: `ninja -C third_party/SnapmakerOrca/build-wasm libslic3r`, then relink via `wasm/build_wasm_module_snapmaker.sh`, publish only `wasm/dist/{slic3r.mjs,slic3r.wasm}` and `web/public/slicer/`, and run `npm --prefix wasm run verify:artifacts`; the server image copies `wasm/dist` and `web/dist/slicer` is generated by the web build. Full from-clean rebuild recipe + working-tree snapshot: `wasm/patches/README-snapmaker.md` + `snapmaker-fork-wasm-port.diff` (Emscripten gates, Arachne 0074 fix, `init_filament_option_keys()` ctor fix, `normalize_fdm` null-guard, `append_full_config` gate — the fork shares those bugs with upstream; the 0075 BBS multi-extruder OOB family does NOT exist in the fork's older ToolOrdering). The old upstream-v2.3.2 port (patches 0001-0075 + `wasm/build_wasm_module.sh`) remains the ANDROID engine; its wasm build assets were reclaimed by `build_native.sh`'s clean (`wasm/patches/wasm-port-tracked-changes.diff` snapshots it if ever needed again). **FullSpectrum project slicing is LIVE in the web engine**: `startSliceProject` + `SlicerClient.sliceProject` slice a loaded FS 3MF as-authored (embedded mixed_filament_definitions, per-part virtual extruders) — PeggyPalette produces 294 layers / 296 tool changes / T0-T3 in ~43 s (Node) and in-browser. `OrcaWorkspace.sliceNow` uses the original bytes only for an exclusive import whose exact semantic snapshot still matches geometry, transforms, plates, paint buffers, profile/config, palette, heads, virtual definitions, and tower controls; any change or non-exclusive import fails closed until canonical live-project slicing is integrated.
+19b. **`coord_t` is `int64_t` but `size_t` is 32-bit on wasm32 — `some_vector.size() - 1` assigned to a `coord_t` underflows to `+4294967295`, not `-1`.** This is the WASM slicer's #1 crash class: `SkeletalTrapezoidation::interpolate` (Arachne) did `for (coord_t next_inset_idx = left.toolpath_locations.size() - 1; next_inset_idx >= 0; …)`. When `left` is an empty beading (thin feature → `bead_count 0` → `compute()` returns empty vectors), `0u - 1` is a 32-bit `0xFFFFFFFF` that **zero-extends** into the signed 64-bit `coord_t` as `+4294967295`, so the loop runs and indexes `toolpath_locations[4294967295]` → `RuntimeError: memory access out of bounds` inside `propagateBeadingsDownward`. On 64-bit builds `size_t` is 64-bit so `0-1` → `-1` and the loop is skipped — which is why native Android/desktop never hit it while the WASM slicer crashed on essentially **every** model with a thin region (3DBenchy, logos). Fix: `coord_t(v.size()) - 1` (cast to signed before subtracting). Shipped as `patches/0074-arachne-32bit-size-underflow-oob.patch`. **When auditing the WASM port for crashes, grep for `.size() - 1` / `.size()-1` feeding a signed `coord_t`/`int` index and any other 32-bit-vs-64-bit width assumptions.** **ENGINE SWITCH (2026-07-05): the WASM slicer now builds from the Snapmaker fork** — `third_party/SnapmakerOrca` (gitignored clone of Snapmaker/OrcaSlicer v2.3.4, FullSpectrum-native since 2.3.3), the SAME source the external slicer container's CLI builds, so web and CLI G-code match at the source level. After editing a libslic3r `.cpp`: `ninja -C third_party/SnapmakerOrca/build-wasm libslic3r`, then relink via `wasm/build_wasm_module_snapmaker.sh`, publish only `wasm/dist/{slic3r.mjs,slic3r.wasm}` and `web/public/slicer/`, and run `npm --prefix wasm run verify:artifacts`; the server image copies `wasm/dist` and `web/dist/slicer` is generated by the web build. Full from-clean rebuild recipe + working-tree snapshot: `wasm/patches/README-snapmaker.md` + `snapmaker-fork-wasm-port.diff` (Emscripten gates, Arachne 0074 fix, `init_filament_option_keys()` ctor fix, `normalize_fdm` null-guard, `append_full_config` gate — the fork shares those bugs with upstream; the 0075 BBS multi-extruder OOB family does NOT exist in the fork's older ToolOrdering). The old upstream-v2.3.2 port (patches 0001-0075 + `wasm/build_wasm_module.sh`) remains the ANDROID engine; its wasm build assets were reclaimed by `build_native.sh`'s clean (`wasm/patches/wasm-port-tracked-changes.diff` snapshots it if ever needed again). **FullSpectrum project slicing is LIVE in the web engine**: `startSliceProject` + `SlicerClient.sliceProject` slice a loaded FS 3MF as-authored (embedded mixed_filament_definitions, per-part virtual extruders) — PeggyPalette produces 294 layers / 296 tool changes / T0-T3 in ~43 s (Node) and in-browser. `OrcaWorkspace.sliceNow` now captures the live canonical state, serializes the active plate to BBS 3MF through `CanonicalWorkspaceSlicer`, and publishes only a revision/project-hash/asset-hash guarded browser-WASM result. Scene-baked STL and immutable raw-source fallbacks were deleted; configured external slicing fails closed until independent engine-provenance attestation exists.
 
 19c. **Do NOT precache the slicer WASM in the PWA service worker — serve `/slicer/` NetworkFirst.** `web/vite.config.ts`'s VitePWA once raised `maximumFileSizeToCacheInBytes` to 20 MB specifically to precache the ~16 MB `slic3r.wasm` cache-first. That pins a stale engine: after a libslic3r fix rebuilds the wasm, the browser's SW keeps serving the OLD binary, so a slice **hangs forever with no progress and no error** on the outdated module (verified 2026-07-03 — node + a headless-browser slice of the fresh wasm both completed in ~13–17 s while the user's SW-controlled session hung). Fix in place: `workbox.globIgnores: ['**/slicer/**']` + a `NetworkFirst` `runtimeCaching` route for `/slicer/` (fresh when online, cached fallback for offline XR). **Gotcha within the gotcha:** in dev (`npm run dev`) VitePWA registers no SW, and dev serves the wasm with `Cache-Control: no-cache`, so dev itself is always fresh — BUT a SW registered by a *prior* `vite preview`/prod visit on the **same localhost origin** keeps controlling the page and serving stale cache, and the dev server won't replace it. If a web slice hangs at 0 % with a fixed wasm on disk, suspect a stale SW first: DevTools → Application → Service Workers → Unregister + Clear storage, then reload (on Galaxy XR Chrome: clear site data / `chrome://serviceworker-internals`). Validate SW behaviour against `vite preview` (which serves `sw.js`), not dev.
 
@@ -376,6 +376,8 @@ Each patch verified by incremental `cmake --build` (0 FAILED objects) + `./gradl
 
 ## Web → local services: Chrome Local Network Access + CORS
 
+`web/src/printer/` is the single Moonraker boundary: explicit endpoint normalization without scheme/port probing, typed HTTP/WebSocket handshake/state/capabilities, cancellation/timeouts, stale-event rejection, reconnect/heartbeat, and bounded redacted diagnostics. `main.ts` uses it through `ActionRegistry` for live connection tests and read-only filament-slot inspection; sparse physical slot IDs are preserved and never auto-applied to project mappings. Only endpoint/port persist, legacy stored API keys are purged, and credentials stay per-instance memory only. Legacy printer clients are retired; printer mutation stays disabled until P9 mapping/preflight/confirmation/integrity/reconnect lands. Web AI keys are likewise tab-memory only; `AiSessionSecrets` purges legacy `orca_gemini_key`/`orca_openai_key` plaintext storage instead of migrating it. External-slicer URLs may persist, but routing activates only after a successful probe backed by explicit opt-in; failed replacement, disable, or clear fail closed to local slicing.
+
 The hosted app is HTTPS (`https://orcaxr.martinez.fyi/slicer/`), while
 Moonraker and the optional external slicer commonly expose HTTP on the LAN.
 Chrome 142+ can relax mixed-content blocking after the user grants Local
@@ -399,18 +401,17 @@ four-entry cache, supplies the offline navigation fallback, and restores COOP/
 COEP headers. Update its cache version and offline contract whenever deploy
 assets or worker/schema compatibility changes.
 
-LNA does **not** bypass CORS. Moonraker still needs
-`cors_domains` must include the page's exact origin (the hosted app uses
-`https://orcaxr.martinez.fyi`); API-key/custom-header requests
-preflight. Explicit `http(s)://` printer URLs remain verbatim and bare printer
-hosts retain 7125/80/8080 probing. Direct HTTP exposes status, API keys, webcam
-frames, and uploaded G-code, so instructions restrict it to trusted LANs.
-Tailscale Serve (`tailscale serve --bg http://127.0.0.1:80`) or another trusted
-HTTPS reverse proxy remains the cross-browser and remote-network fallback.
+LNA does **not** bypass CORS. Moonraker's `cors_domains` must include the
+page's exact origin (the hosted app uses `https://orcaxr.martinez.fyi`);
+API-key/custom-header requests preflight. The typed boundary requires one
+explicit endpoint and never probes alternative schemes or ports. Direct
+HTTP exposes status, credentials, webcam frames, and uploaded G-code, so use it
+only on trusted LANs. Tailscale Serve or another trusted HTTPS reverse proxy
+remains the cross-browser and remote-network fallback.
 
 ## External slicer server (`server/`)
 
-Dockerized HTTP endpoint (`POST /slice`, STL + flattened-overrides JSON) the
+Dockerized HTTP endpoint (`POST /slice`, STL or signature-validated project 3MF plus flattened-overrides JSON) the
 web app can offload plain slices to. `POST /slice?async=1` returns
 `202 {job}` for progress polling (`GET /jobs/:id` →
 `{status, percent, message}`, then `GET /jobs/:id/gcode`); without the flag
@@ -495,5 +496,5 @@ logic verified against `src/OrcaSlicer.cpp` in the submodule):
   contract above rather than a manual `UICard.update` loop.
 
 - **Multi-extruder filament selectors:** When the selected printer profile has multiple extruders (e.g., Snapmaker U1), the UI generates individual filament dropdowns for each extruder head (H-1, H-2, etc.). The global `sel-filament` dropdown MUST be hidden in this state (`display: 'none'`) to avoid redundancy and user confusion. Do not reintroduce a visible global filament dropdown alongside the per-head dropdowns.
-
+- **The web profile corpus is a verified pinned overlay, not an editable copy.** `npm --prefix web run profiles:verify` requires `third_party/SnapmakerOrca` HEAD `9fd12ffb2b1b80c9fb4c14564754d2ec1573a626`, proves every same-path Snapmaker/Elegoo profile byte-identical to that Git tree, checks the imported inheritance closure, SHA-256-locks OrcaXR-only target adaptations in `web/scripts/profile-overlays.lock.json`, and verifies deterministic `catalog.json` ordering. Use `profiles:sync` deliberately after reviewing source/profile changes; never hand-edit a mirrored leaf or describe the local Elegoo adaptations as upstream-pinned. The calibration catalog is likewise generated from exact pinned Git blobs: use `calibration:verify` in normal gates and `calibration:sync` only after reviewing upstream source/resource or local-binding changes; never hand-edit its generated JSON.
 21. **`normalize_fdm()` crashes with a null-deref when traversing the component graph if no options are set.** Patch `0076-normalize-fdm-null-deref.patch` fixes this for the server backend.

@@ -1,4 +1,10 @@
-import { InMemoryAssetRepository, contentDigest, type AssetPayload, type AssetRepositorySnapshot } from '../assets';
+import {
+  InMemoryAssetRepository,
+  assetBundleFingerprint,
+  contentDigest,
+  type AssetPayload,
+  type AssetRepositorySnapshot,
+} from '../assets';
 import { canonicalStringify, cloneJson, cloneProjectState, deepFreeze } from '../domain/canonical';
 import type { AssetId } from '../domain/ids';
 import type { JsonValue, ProjectState, SourceAssetDescriptor } from '../domain/model';
@@ -57,7 +63,7 @@ export class ProjectImportCoordinator {
     this.now = options.now ?? (() => new Date().toISOString());
   }
 
-  async prepare(request: ProjectImportRequest): Promise<PreparedProjectImport> {
+  async prepare(request: ProjectImportRequest, onSettled?: () => void): Promise<PreparedProjectImport> {
     const source = normalizeSource(request.source, this.now);
     throwIfCancelled(request.cancellation);
 
@@ -137,6 +143,7 @@ export class ProjectImportCoordinator {
       { state: normalized.state, assets: normalized.assets },
       baseAssetHash,
       request.cancellation,
+      onSettled,
     );
   }
 }
@@ -145,6 +152,7 @@ export class PreparedProjectImport {
   private status: 'prepared' | 'committed' | 'cancelled' = 'prepared';
   private staged?: StagedBundle;
   private cancellationReason?: string;
+  private settlementPublished = false;
 
   constructor(
     private readonly commands: CommandBus,
@@ -152,6 +160,7 @@ export class PreparedProjectImport {
     staged: StagedBundle,
     private readonly baseAssetHash: string,
     private readonly cancellation?: ProjectImportRequest['cancellation'],
+    private readonly onSettled?: () => void,
   ) {
     this.staged = {
       state: cloneProjectState(staged.state),
@@ -165,6 +174,7 @@ export class PreparedProjectImport {
     this.status = 'cancelled';
     this.cancellationReason = reason;
     this.staged = undefined;
+    this.publishSettlement();
   }
 
   confirm(confirmation: ImportCommitConfirmation): ImportCommitResult {
@@ -204,11 +214,18 @@ export class PreparedProjectImport {
     );
     this.status = 'committed';
     this.staged = undefined;
+    this.publishSettlement();
     return {
       project: context.project.getSnapshot(),
       history: this.commands.getHistorySnapshot(),
       diagnostics: this.preview.diagnostics.map((item) => cloneJson(item)),
     };
+  }
+
+  private publishSettlement(): void {
+    if (this.settlementPublished) return;
+    this.settlementPublished = true;
+    this.onSettled?.();
   }
 }
 
@@ -585,14 +602,6 @@ function throwIfCancelled(cancellation?: ProjectImportRequest['cancellation']): 
 
 function cloneAssetPayloads(assets: readonly AssetPayload[]): AssetPayload[] {
   return assets.map((asset) => ({ descriptor: cloneJson(asset.descriptor), bytes: asset.bytes.slice() }));
-}
-
-function assetBundleFingerprint(assets: readonly AssetPayload[]): string {
-  return canonicalStringify(
-    [...assets]
-      .map((asset) => ({ descriptor: asset.descriptor, content: contentDigest(asset.bytes) }))
-      .sort((left, right) => left.descriptor.id.localeCompare(right.descriptor.id)),
-  );
 }
 
 function assetSemanticKey(descriptor: SourceAssetDescriptor): string {

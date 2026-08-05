@@ -66,30 +66,6 @@
     "filament_minimal_purge_on_wipe_tower": [
         "15"
     ],
-    "filament_loading_speed": [
-        "25"
-    ],
-    "filament_loading_speed_start": [
-        "3"
-    ],
-    "filament_unloading_speed": [
-        "25"
-    ],
-    "filament_unloading_speed_start": [
-        "3"
-    ],
-    "filament_toolchange_delay": [
-        "0"
-    ],
-    "filament_cooling_moves": [
-        "0"
-    ],
-    "filament_cooling_initial_speed": [
-        "2.2"
-    ],
-    "filament_cooling_final_speed": [
-        "3.4"
-    ],
     "filament_retract_before_wipe": [
         "nil"
     ],

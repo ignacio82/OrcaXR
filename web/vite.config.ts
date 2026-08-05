@@ -22,12 +22,17 @@ export default defineConfig({
     ...(deploy ? { outDir: '../docs/slicer', emptyOutDir: true } : {}),
     rollupOptions: {
       output: {
-        // These SDKs are loaded only from feature-triggered dynamic imports.
-        // Stable names let Workbox leave them out of the first-install cache.
+        // Stable vendor chunk names keep the entry budget independent from
+        // shared runtimes and let Workbox omit optional SDKs from first install.
         // A regular model/slice session should not download AI or Gaussian-splat
         // rendering code just to become available offline.
         manualChunks: {
           genai: ['@google/genai'],
+          // Keep the shared renderer/runtime out of the application entry.
+          // This chunk is still precached for offline/XR startup, but feature
+          // growth in canonical project handling no longer inflates the entry
+          // script past its independently enforced budget.
+          three: ['three', 'three-mesh-bvh'],
         },
       },
     },
@@ -37,9 +42,10 @@ export default defineConfig({
     : [
         VitePWA({
           registerType: 'autoUpdate',
-          includeAssets: ['icon.svg', 'icons/material/*.svg'],
+          includeAssets: ['icon.svg', 'icons/material/*.svg', 'profiles/catalog.json'],
           workbox: {
             maximumFileSizeToCacheInBytes: 20 * 1024 * 1024,
+            ignoreURLParametersMatching: [/^t$/],
             // The slicer WASM module (slic3r.mjs + the ~16 MB slic3r.wasm) is
             // rebuilt whenever libslic3r changes. Precaching it cache-first pins a
             // stale copy: the browser keeps serving the old binary even after the

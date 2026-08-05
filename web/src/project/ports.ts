@@ -61,8 +61,29 @@ export interface SliceAdapterPort {
 
 /** Thin DOM/XR/headless projections consume the same store/session snapshots. */
 export interface EditorSurfacePort {
+  /** Bounded human-readable identity used only for projection diagnostics. */
+  readonly projectionLabel?: string;
   renderProject(snapshot: ProjectSnapshot): void;
   renderSelection(snapshot: SelectionSnapshot): void;
   renderHistory?(snapshot: CommandHistorySnapshot): void;
   dispose?(): void;
 }
+
+export interface ProjectProjectionFailure {
+  /** Stable only for this attachment's lifetime. */
+  readonly surfaceId: number;
+  readonly surfaceLabel: string;
+  readonly projectRevision: number;
+  readonly message: string;
+}
+
+/** Read-only health of every attached surface's latest project projection. */
+export interface ProjectProjectionHealthSnapshot {
+  readonly healthy: boolean;
+  readonly projectFailures: readonly ProjectProjectionFailure[];
+}
+
+export type ProjectProjectionHealthSubscriber = (
+  current: ProjectProjectionHealthSnapshot,
+  previous: ProjectProjectionHealthSnapshot,
+) => void;

@@ -23,8 +23,17 @@ export interface UiStateShape {
   modelCount: number;
   /** Number of build plates. */
   plateCount: number;
-  /** Whether a model is currently selected. */
+  /** Whether any canonical Objects entity is currently selected. */
   hasSelection: boolean;
+  /** Whether the primary selection is an independently transformable instance. */
+  hasInstanceSelection: boolean;
+  /** Canonical command-history availability. */
+  canUndo: boolean;
+  canRedo: boolean;
+  /** Whether the canonical project differs from its last save/open checkpoint. */
+  dirty: boolean;
+  /** False when any attached project projection failed for the current revision. */
+  projectionHealthy: boolean;
   /** Whether the Edit clipboard holds a copied/cut model (enables Paste). */
   hasClipboard: boolean;
   /** A slice is running. */
@@ -52,6 +61,11 @@ const INITIAL: UiStateShape = {
   modelCount: 0,
   plateCount: 1,
   hasSelection: false,
+  hasInstanceSelection: false,
+  canUndo: false,
+  canRedo: false,
+  dirty: false,
+  projectionHealthy: true,
   hasClipboard: false,
   isSlicing: false,
   gcodeReady: false,

@@ -274,6 +274,7 @@ export const SAFE_KEYS = new Set<string>([
   'dithering_z_step_size',
   'dithering_local_z_mode',
   'dithering_local_z_whole_objects',
+  'dithering_local_z_infill',
   'dithering_local_z_direct_multicolor',
   'dithering_step_painted_zones_only',
   'local_z_wipe_tower_purge_lines',

@@ -6,6 +6,7 @@ import {
   RenameProjectCommand,
   SetInstanceTransformCommand,
   StaleProjectResultError,
+  UnhealthyProjectProjectionError,
   UuidIdSource,
   createEmptyProject,
   identityTransform,
@@ -16,6 +17,9 @@ import {
   type SliceAdapterPort,
   type SliceRequest,
   type SliceResult,
+  type EditorSurfacePort,
+  type CommandHistorySnapshot,
+  type ProjectProjectionHealthSnapshot,
 } from '..';
 import { createProjectFixture } from './fixtures';
 
@@ -27,7 +31,10 @@ async function test(name: string, run: () => Promise<void>): Promise<void> {
 }
 
 class MemorySerializer implements ProjectSerializerPort {
+  serializeCalls = 0;
+
   async serialize(snapshot: ProjectArchiveSnapshot): Promise<SerializedProject> {
+    this.serializeCalls += 1;
     const bytes = new TextEncoder().encode(
       JSON.stringify({
         state: snapshot.state,
@@ -67,8 +74,10 @@ class MemorySerializer implements ProjectSerializerPort {
 
 class VerifyingSlicer implements SliceAdapterPort {
   lastRequest?: SliceRequest;
+  sliceCalls = 0;
 
   async slice(request: SliceRequest): Promise<SliceResult> {
+    this.sliceCalls += 1;
     this.lastRequest = request;
     const translation = request.state.plates[0]?.objects[0]?.instances[0]?.transform.translationMm[0] ?? -1;
     return {
@@ -164,6 +173,40 @@ await test('rejects a slice that completes after the canonical project revision 
   session.dispose();
 });
 
+await test('rejects a slice that completes after source asset bytes drift', async () => {
+  const fixture = createProjectFixture();
+  const assets = new InMemoryAssetRepository();
+  assets.put(fixture.asset.descriptor, fixture.asset.bytes);
+  let finish!: (result: SliceResult) => void;
+  let request!: SliceRequest;
+  const slicer: SliceAdapterPort = {
+    slice(next) {
+      request = next;
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    },
+  };
+  const session = new EditorSession({
+    initialState: fixture.state,
+    assets,
+    serializer: new MemorySerializer(),
+    slicer,
+  });
+  const pending = session.slice();
+  assets.remove(fixture.ids.asset);
+  finish({
+    sourceRevision: request.sourceRevision,
+    sourceHash: request.sourceHash,
+    plateId: request.plateId,
+    gcode: new Uint8Array(),
+    warnings: [],
+    statistics: {},
+  });
+  await assert.rejects(pending, StaleProjectResultError);
+  session.dispose();
+});
+
 await test('rejects serializer output whose revision/hash guard does not match its request', async () => {
   const fixture = createProjectFixture();
   const assets = new InMemoryAssetRepository();
@@ -184,6 +227,163 @@ await test('rejects serializer output whose revision/hash guard does not match i
   });
   await assert.rejects(session.save(), StaleProjectResultError);
   assert.equal(session.commands.isDirty(), false);
+  session.dispose();
+});
+
+await test('relays direct command-bus history changes once and permits slicer-free composition', async () => {
+  const fixture = createProjectFixture();
+  const assets = new InMemoryAssetRepository();
+  assets.put(fixture.asset.descriptor, fixture.asset.bytes);
+  const session = new EditorSession({
+    initialState: fixture.state,
+    assets,
+    serializer: new MemorySerializer(),
+  });
+  const history: CommandHistorySnapshot[] = [];
+  const surface: EditorSurfacePort = {
+    renderProject() {},
+    renderSelection() {},
+    renderHistory(snapshot) {
+      history.push(snapshot);
+    },
+  };
+  session.attachSurface(surface);
+  assert.equal(history.length, 1);
+
+  session.commands.execute(new RenameProjectCommand('Direct command'));
+  assert.equal(history.length, 2);
+  assert.equal(history.at(-1)?.undoCount, 1);
+  assert.deepEqual(history.at(-1)?.dirtyCategories, ['projectData']);
+
+  session.commands.transaction('Direct transaction', () => {
+    session.commands.execute(new RenameProjectCommand('Transaction one'));
+    session.commands.execute(new RenameProjectCommand('Transaction two'));
+  });
+  assert.equal(history.length, 3);
+  assert.equal(history.at(-1)?.undoCount, 2);
+  assert.equal(session.commands.undo(), true);
+  assert.equal(history.length, 4);
+  assert.equal(history.at(-1)?.redoCount, 1);
+  assert.equal(session.commands.redo(), true);
+  assert.equal(history.length, 5);
+
+  session.commands.markCheckpoint();
+  assert.equal(history.length, 6);
+  assert.deepEqual(history.at(-1)?.dirtyCategories, []);
+  session.commands.clearHistory();
+  assert.equal(history.length, 7);
+  assert.equal(history.at(-1)?.undoCount, 0);
+
+  await session.save();
+  await assert.rejects(session.slice(), /CanonicalSliceJobCoordinator/);
+  session.dispose();
+});
+
+await test('observes failed project projections and blocks save and slice until a later render succeeds', async () => {
+  const fixture = createProjectFixture();
+  const assets = new InMemoryAssetRepository();
+  assets.put(fixture.asset.descriptor, fixture.asset.bytes);
+  const serializer = new MemorySerializer();
+  const slicer = new VerifyingSlicer();
+  const session = new EditorSession({
+    initialState: fixture.state,
+    assets,
+    serializer,
+    slicer,
+  });
+  let shouldFail = false;
+  const surface: EditorSurfacePort = {
+    projectionLabel: 'Primary project view',
+    renderProject() {
+      if (shouldFail) throw new Error(`Renderer\nfailed ${'x'.repeat(300)}`);
+    },
+    renderSelection() {},
+  };
+  session.attachSurface(surface);
+  const transitions: Array<{
+    current: ProjectProjectionHealthSnapshot;
+    previous: ProjectProjectionHealthSnapshot;
+  }> = [];
+  session.subscribeProjectionHealth((current, previous) => {
+    transitions.push({ current, previous });
+  });
+
+  shouldFail = true;
+  session.execute(new RenameProjectCommand('Committed despite projection failure'));
+  assert.equal(session.project.getSnapshot().state.name, 'Committed despite projection failure');
+  const failedHealth = session.getProjectionHealthSnapshot();
+  assert.equal(failedHealth.healthy, false);
+  assert.equal(failedHealth.projectFailures.length, 1);
+  assert.equal(failedHealth.projectFailures[0]?.surfaceLabel, 'Primary project view');
+  assert.equal(failedHealth.projectFailures[0]?.projectRevision, session.project.getSnapshot().revision);
+  assert.match(failedHealth.projectFailures[0]?.message ?? '', /^Error: Renderer failed/);
+  assert.ok((failedHealth.projectFailures[0]?.message.length ?? 0) <= 160);
+  assert.equal(transitions.length, 1);
+  assert.equal(transitions[0]?.previous.healthy, true);
+  assert.equal(transitions[0]?.current.healthy, false);
+
+  await assert.rejects(session.save(), (error: unknown) => {
+    assert.ok(error instanceof UnhealthyProjectProjectionError);
+    assert.equal(error.operation, 'save');
+    assert.equal(error.health.projectFailures.length, 1);
+    assert.ok(error.message.length <= 120);
+    return true;
+  });
+  await assert.rejects(session.slice(), (error: unknown) => {
+    assert.ok(error instanceof UnhealthyProjectProjectionError);
+    assert.equal(error.operation, 'slice');
+    return true;
+  });
+  assert.equal(serializer.serializeCalls, 0);
+  assert.equal(slicer.sliceCalls, 0);
+
+  shouldFail = false;
+  session.execute(new RenameProjectCommand('Recovered projection'));
+  assert.equal(session.getProjectionHealthSnapshot().healthy, true);
+  assert.equal(transitions.length, 2);
+  assert.equal(transitions[1]?.previous.healthy, false);
+  assert.equal(transitions[1]?.current.healthy, true);
+
+  await session.save();
+  await session.slice();
+  assert.equal(serializer.serializeCalls, 1);
+  assert.equal(slicer.sliceCalls, 1);
+  session.dispose();
+});
+
+await test('clears a surface projection failure when that surface detaches', async () => {
+  const fixture = createProjectFixture();
+  const assets = new InMemoryAssetRepository();
+  assets.put(fixture.asset.descriptor, fixture.asset.bytes);
+  const serializer = new MemorySerializer();
+  const slicer = new VerifyingSlicer();
+  const session = new EditorSession({
+    initialState: fixture.state,
+    assets,
+    serializer,
+    slicer,
+  });
+  let disposeCalls = 0;
+  const detach = session.attachSurface({
+    projectionLabel: 'Broken view',
+    renderProject() {
+      throw new Error('No GPU context');
+    },
+    renderSelection() {},
+    dispose() {
+      disposeCalls += 1;
+    },
+  });
+  assert.equal(session.getProjectionHealthSnapshot().healthy, false);
+
+  detach();
+  detach();
+  assert.equal(session.getProjectionHealthSnapshot().healthy, true);
+  assert.equal(disposeCalls, 1);
+  await session.save();
+  await session.slice();
+  assert.equal(serializer.serializeCalls, 1);
+  assert.equal(slicer.sliceCalls, 1);
   session.dispose();
 });
 

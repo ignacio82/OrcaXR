@@ -65,8 +65,7 @@
   </resources>
   <build>
     <item objectid="1" transform="1 0 0 0 1 0 0 0 1 20 20 0" printable="1" ox:instance-id="instance-a"/>
-    <item objectid="1" transform="1 0 0 0 1 0 0 0 1 60 20 0" printable="1" ox:instance-id="instance-b"/>
+    <item objectid="1" transform="1 0 0 0 1 0 0 0 1 300 20 0" printable="1" ox:instance-id="instance-b"/>
     <item objectid="4" transform="1 0 0 0 1 0 0 0 1 100 20 0" printable="0" ox:instance-id="negative-a"/>
   </build>
 </model>
-

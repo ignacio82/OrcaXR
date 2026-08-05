@@ -26,6 +26,16 @@ export function contentDigest(bytes: Uint8Array): string {
   return `fnv1a64:${fnv1a64(bytes)}`;
 }
 
+/** Deterministic identity of descriptors and their actual immutable bytes. */
+export function assetBundleFingerprint(assets: readonly AssetPayload[]): string {
+  const canonical = canonicalStringify(
+    [...assets]
+      .map((asset) => ({ descriptor: asset.descriptor, content: contentDigest(asset.bytes) }))
+      .sort((left, right) => left.descriptor.id.localeCompare(right.descriptor.id)),
+  );
+  return `fnv1a64:${fnv1a64(new TextEncoder().encode(canonical))}`;
+}
+
 /**
  * Immutable-by-contract byte repository. Reads and snapshots return copies;
  * replacing an existing ID with different metadata or bytes is rejected.

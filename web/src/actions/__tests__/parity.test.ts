@@ -1,6 +1,6 @@
 /** Capability truth and cross-surface registry tests. */
 import assert from 'node:assert';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { ActionContext } from '../ActionContext';
 import type { ActionSurface } from '../ActionRegistry';
@@ -48,13 +48,29 @@ for (const line of parityDocument.split('\n')) {
 }
 
 const UNAVAILABLE_IDS = [
+  'file_import_zip',
+  'file_export_3mf',
+  'edit_cut',
+  'edit_copy',
+  'edit_paste',
+  'edit_delete_all',
+  'tool_lay_on_face',
+  'repair_model',
+  'simplify_model',
+  'mesh_boolean_union',
+  'mesh_boolean_subtract',
+  'mesh_boolean_intersection',
+  'arrange_all',
+  'tool_cut',
+  'tool_paint',
+  'tool_smart_paint',
+  'tool_smart_paint_image',
+  'auto_place_wipe',
   'add_emboss',
   'add_magnet',
   'scan_network',
   'view_webcam',
-  'edit_undo',
-  'edit_redo',
-  'edit_select_all',
+  'recreate_model_colors_fullspectrum',
   'file_export_all_plates',
   'file_export_obj',
   'file_open_gcode',
@@ -84,17 +100,81 @@ const UNAVAILABLE_IDS = [
   'variable_layer_height',
 ].sort();
 
+const CANONICAL_CUTOVER_GATED_IDS = [
+  'file_import_zip',
+  'file_export_3mf',
+  'edit_cut',
+  'edit_copy',
+  'edit_paste',
+  'edit_delete_all',
+  'tool_lay_on_face',
+  'repair_model',
+  'simplify_model',
+  'mesh_boolean_union',
+  'mesh_boolean_subtract',
+  'mesh_boolean_intersection',
+  'arrange_all',
+  'tool_cut',
+  'tool_paint',
+  'tool_smart_paint',
+  'tool_smart_paint_image',
+  'auto_place_wipe',
+] as const;
+
+const CANONICAL_ACTIONS_LEFT_ENABLED = [
+  'file_new_project',
+  'file_open_project',
+  'file_import_model',
+  'file_save_project',
+  'file_save_project_as',
+  'edit_undo',
+  'edit_redo',
+  'edit_duplicate',
+  'edit_delete_selected',
+  'edit_select_all',
+  'load_model_from_path',
+  'tool_move',
+  'tool_rotate',
+  'tool_scale',
+  'split_to_objects',
+  'delete_models',
+  'add_handy_model',
+  'add_primitive_cube',
+  'add_primitive_cylinder',
+  'add_primitive_sphere',
+  'add_calibration_tower',
+  'add_calibration_cube',
+  'calib_temperature',
+  'calib_flow_pass1',
+  'calib_flow_pass2',
+  'calib_flow_yolo',
+  'calib_pressure_advance',
+  'calib_retraction',
+  'calib_max_flow',
+  'calib_vfa',
+  'calib_tolerance',
+  'add_plate',
+  'delete_plate',
+  'duplicate_plate',
+  'slice_active_plate',
+] as const;
+
 const FULL_STATE = {
   mode: 'prepare',
   activeTool: 'move',
   modelCount: 3,
   plateCount: 2,
   hasSelection: true,
+  hasInstanceSelection: true,
   hasClipboard: true,
   isSlicing: false,
   gcodeReady: true,
   extruderCount: 4,
   hasMultiColorPaint: true,
+  canUndo: true,
+  canRedo: true,
+  dirty: true,
+  projectionHealthy: true,
   status: 'ready',
   progress: null,
   preflightBlocked: false,
@@ -113,6 +193,30 @@ test('unavailable capabilities have a reason and no executable handler', () => {
     assert.ok(action.capability.reason?.trim(), `${action.id} has no disabled reason`);
     assert.strictEqual(action.run, undefined, `${action.id} must not retain a handler`);
     assert.deepStrictEqual(action.capability.testIds, []);
+  }
+});
+
+test('legacy mutating and lossy actions fail closed throughout the canonical cutover', () => {
+  for (const id of CANONICAL_CUTOVER_GATED_IDS) {
+    const action = registry.get(id);
+    assert.ok(action, `${id} is missing`);
+    assert.strictEqual(action.capability.status, 'unavailable', `${id} is not gated`);
+    assert.match(action.capability.reason ?? '', /canonical/i, `${id} lacks an honest canonical reason`);
+    assert.strictEqual(action.run, undefined, `${id} retained a legacy mutation handler`);
+    assert.deepStrictEqual(registry.availability(action, 'command-palette', FULL_STATE), {
+      state: 'disabled',
+      reason: action.capability.reason,
+    });
+  }
+});
+
+test('store-backed actions needed by the live cutover remain executable', () => {
+  for (const id of CANONICAL_ACTIONS_LEFT_ENABLED) {
+    const action = registry.get(id);
+    assert.ok(action, `${id} is missing`);
+    assert.notStrictEqual(action.capability.status, 'unavailable', `${id} was incorrectly gated`);
+    assert.notStrictEqual(action.capability.status, 'blocked', `${id} was incorrectly blocked`);
+    assert.strictEqual(typeof action.run, 'function', `${id} lost its canonical handler`);
   }
 });
 
@@ -207,16 +311,22 @@ test('registry guard explains unavailable actions without invoking a handler', (
   const ctx = {
     reportCapabilityUnavailable: (label: string, reason: string) => reports.push(`${label}: ${reason}`),
   } as unknown as ActionContext;
-  void registry.invoke('edit_undo', 'dom-menu', ctx, FULL_STATE);
+  void registry.invoke('repair_model', 'dom-menu', ctx, FULL_STATE);
   assert.strictEqual(reports.length, 1);
-  assert.ok(reports[0].includes('Project-wide command history'));
+  assert.match(reports[0], /guarded canonical command/i);
 });
 
 test('prerequisite evaluator gives actionable disabled reasons', () => {
-  const empty = { ...FULL_STATE, modelCount: 0, hasSelection: false, gcodeReady: false };
+  const empty = {
+    ...FULL_STATE,
+    modelCount: 0,
+    hasSelection: false,
+    hasInstanceSelection: false,
+    gcodeReady: false,
+  };
   assert.deepStrictEqual(registry.availability('tool_move', 'dom-toolbar', empty), {
     state: 'disabled',
-    reason: 'Select a model first.',
+    reason: 'Select a model instance for this action.',
   });
   assert.deepStrictEqual(registry.availability('toggle_preview', 'dom-primary', empty), {
     state: 'disabled',
@@ -355,6 +465,65 @@ test('no orphaned legacy *Panel.ts workspace views remain', () => {
     readdirSync(wsDir).filter((file) => file.endsWith('Panel.ts')),
     [],
   );
+});
+
+test('live printer reads use the registry and retired clients stay absent', () => {
+  const mainSource = readFileSync(fileURLToPath(new URL('../../main.ts', import.meta.url)), 'utf8');
+  assert.match(mainSource, /registry\.invoke\('printer_test_connection',\s*'dom-inspector'/);
+  assert.match(mainSource, /registry\.invoke\('printer_inspect_filaments',\s*'dom-inspector'/);
+  assert.doesNotMatch(mainSource, /MoonrakerClient|PrinterClient|PrintSendFlow|SubnetScanner/);
+
+  for (const relativePath of [
+    '../../features/MoonrakerClient.ts',
+    '../../features/PrintSendFlow.ts',
+    '../../features/SubnetScanner.ts',
+    '../../net/PrinterClient.ts',
+  ]) {
+    assert.strictEqual(existsSync(fileURLToPath(new URL(relativePath, import.meta.url))), false, relativePath);
+  }
+});
+
+test('composition root injects one registry into the workspace and DOM shell', () => {
+  const mainSource = readFileSync(fileURLToPath(new URL('../../main.ts', import.meta.url)), 'utf8');
+  const workspaceSource = readFileSync(
+    fileURLToPath(new URL('../../workspace/OrcaWorkspace.ts', import.meta.url)),
+    'utf8',
+  );
+  const domShellSource = readFileSync(fileURLToPath(new URL('../../ui/dom/DomShell.ts', import.meta.url)), 'utf8');
+  const workspaceToolsSource = readFileSync(
+    fileURLToPath(new URL('../../mcp/WorkspaceTools.ts', import.meta.url)),
+    'utf8',
+  );
+
+  assert.doesNotMatch(workspaceSource, /from ['"]\.\.\/actions\/catalog['"]/);
+  assert.doesNotMatch(workspaceSource, /\bbuildRegistry\s*\(/);
+  assert.match(workspaceSource, /constructor\(\s*private readonly actionRegistry: ActionRegistry,/);
+
+  const registryConstruction = mainSource.indexOf('const registry = buildRegistry();');
+  const workspaceConstruction = mainSource.indexOf('new OrcaWorkspace(registry');
+  const domShellConstruction = mainSource.indexOf('new DomShell(registry, actionCtx, uiState)');
+  assert.ok(registryConstruction >= 0, 'main must construct the registry');
+  assert.ok(workspaceConstruction > registryConstruction, 'workspace must receive the composition-root registry');
+  assert.ok(domShellConstruction > workspaceConstruction, 'DOM shell must receive that same registry variable');
+  assert.strictEqual(mainSource.match(/\bbuildRegistry\s*\(/g)?.length, 1, 'main must construct exactly one registry');
+  assert.match(mainSource, /setupDomUI\(workspace, uiState, actionCtx, registry\)/);
+  assert.match(mainSource, /new ActionContext\(workspace, uiState, registry\)/);
+  assert.match(mainSource, /registerWorkspaceTools\(mcp, workspace, registry, actionCtx\)/);
+
+  assert.match(mainSource, /emptyLoadModel\.onclick[\s\S]*?\.invoke\('load_model_from_path', 'dom-primary'/);
+  assert.match(mainSource, /add\.onclick[\s\S]*?\.invoke\('add_plate', 'dom-menu'/);
+  assert.match(mainSource, /btnCloseToolSettings\.onclick[\s\S]*?\.invoke\('tool_move', 'dom-toolbar'/);
+  assert.match(
+    mainSource,
+    /chip\.onclick[\s\S]*?\.invoke\('activate_plate', 'dom-inspector', actionCtx, uiState\.get\(\), \{ plateId: p\.id \}\)/,
+  );
+  assert.match(mainSource, /\.invoke\('delete_plate', 'dom-menu', actionCtx, uiState\.get\(\), \{ plateId: p\.id \}\)/);
+  assert.doesNotMatch(mainSource, /actionCtx\.activatePlate\(|workspace\.setWipeTowerAuto\(/);
+  assert.doesNotMatch(workspaceToolsSource, /workspace\.setTool\(/);
+  assert.match(workspaceToolsSource, /registry\.invoke\(actionId, 'automation'/);
+  assert.doesNotMatch(domShellSource, /ctx\.setMode\(/);
+  assert.match(domShellSource, /this\.run\(preview, 'dom-primary'\)/);
+  assert.match(workspaceSource, /\.invoke\('load_model_from_path', 'xr-primary'/);
 });
 
 const counts = Object.fromEntries(

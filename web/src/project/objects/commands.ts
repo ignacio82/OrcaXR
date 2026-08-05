@@ -8,7 +8,7 @@ import {
   type VolumeId,
 } from '../domain/ids';
 import type { JsonValue, ProjectInstance, ProjectObject, ProjectState, Transform } from '../domain/model';
-import { findInstance, findObject } from '../domain/selectors';
+import { findInstance, findObject, findVolume } from '../domain/selectors';
 import type { CommandBusPort } from '../history/commandBus';
 import type { CommandContext, ProjectCommand } from '../history/command';
 import type { SelectionRef, SelectionSnapshot } from '../selection';
@@ -53,6 +53,41 @@ export class RenameObjectCommand extends ObjectLifecycleCommand {
     if (this.previousName === undefined) throw new Error('RenameObjectCommand has not been applied');
     const state = cloneProjectState(context.project.getSnapshot().state);
     requireObject(state, this.objectId).object.name = this.previousName;
+    replaceProject(context, state, `revert:${this.type}`);
+  }
+}
+
+export class RenameVolumeCommand extends ObjectLifecycleCommand {
+  readonly type = 'rename-volume';
+  readonly label: string;
+  private previousName?: string;
+
+  constructor(
+    private readonly volumeId: VolumeId,
+    private readonly nextName: string,
+  ) {
+    super();
+    if (!nextName.trim()) throw new Error('Volume name cannot be empty');
+    this.nextName = nextName.trim();
+    this.label = `Rename volume to ${this.nextName}`;
+  }
+
+  isNoop(context: CommandContext): boolean {
+    return requireVolume(context.project.getSnapshot().state, this.volumeId).volume.name === this.nextName;
+  }
+
+  apply(context: CommandContext): void {
+    const state = cloneProjectState(context.project.getSnapshot().state);
+    const found = requireVolume(state, this.volumeId);
+    this.previousName = found.volume.name;
+    found.volume.name = this.nextName;
+    replaceProject(context, state, this.type);
+  }
+
+  revert(context: CommandContext): void {
+    if (this.previousName === undefined) throw new Error('RenameVolumeCommand has not been applied');
+    const state = cloneProjectState(context.project.getSnapshot().state);
+    requireVolume(state, this.volumeId).volume.name = this.previousName;
     replaceProject(context, state, `revert:${this.type}`);
   }
 }
@@ -494,6 +529,12 @@ function requireObject(state: ProjectState, id: ObjectId): NonNullable<ReturnTyp
 function requireInstance(state: ProjectState, id: InstanceId): NonNullable<ReturnType<typeof findInstance>> {
   const found = findInstance(state, id);
   if (!found) throw new Error(`Unknown instance ${id}`);
+  return found;
+}
+
+function requireVolume(state: ProjectState, id: VolumeId): NonNullable<ReturnType<typeof findVolume>> {
+  const found = findVolume(state, id);
+  if (!found) throw new Error(`Unknown volume ${id}`);
   return found;
 }
 

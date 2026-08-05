@@ -10,6 +10,7 @@ import {
   ProjectStore,
   RenameInstanceCommand,
   RenameObjectCommand,
+  RenameVolumeCommand,
   SelectionStore,
   SetInstancePrintableCommand,
   UuidIdSource,
@@ -71,25 +72,29 @@ function projectBytes(project: ProjectStore): string {
   return canonicalStringify(project.getSnapshot().state);
 }
 
-test('renames objects/instances and toggles printable state with exact undo and real no-ops', () => {
+test('renames objects/volumes/instances and toggles printable state with exact undo and real no-ops', () => {
   const { fixture, project, selection, bus } = harness();
   selection.set([{ kind: 'instance', id: fixture.ids.instance }]);
   const original = projectBytes(project);
   const selectionBefore = selection.getSnapshot();
 
   bus.execute(new RenameObjectCommand(fixture.ids.object, fixture.object.name));
+  bus.execute(new RenameVolumeCommand(fixture.ids.volume, fixture.object.volumes[0].name));
   assert.equal(bus.getHistorySnapshot().undoCount, 0);
   assert.equal(project.getSnapshot().revision, 0);
 
   bus.execute(new RenameObjectCommand(fixture.ids.object, 'Renamed object'));
+  bus.execute(new RenameVolumeCommand(fixture.ids.volume, ' Renamed part '));
   bus.execute(new RenameInstanceCommand(fixture.ids.instance, 'Copy A'));
   bus.execute(new SetInstancePrintableCommand(fixture.ids.instance, false));
   const object = project.getSnapshot().state.plates[0].objects[0];
   assert.equal(object.name, 'Renamed object');
+  assert.equal(object.volumes[0].name, 'Renamed part');
   assert.equal(object.instances[0].name, 'Copy A');
   assert.equal(object.instances[0].printable, false);
   assert.deepEqual(selection.getSnapshot(), selectionBefore);
 
+  assert.equal(bus.undo(), true);
   assert.equal(bus.undo(), true);
   assert.equal(bus.undo(), true);
   assert.equal(bus.undo(), true);

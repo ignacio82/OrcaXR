@@ -8,29 +8,29 @@
   },
   "artifacts": [
     {
-      "bytes": 15461,
+      "bytes": 15629,
       "path": "expected/reference.semantic.json",
-      "sha256": "accc537a729c38acb5c33c968253814f0a9ecb29fe175b3856416eec44e28c4c"
+      "sha256": "12a799d1297401920bb85028a7adef0a382995648646b68dc9aabd19b62648bf"
     },
     {
-      "bytes": 8189,
+      "bytes": 8254,
       "path": "fixtures/mutations/changed-setting.3mf",
-      "sha256": "b408d4688719a18e131aecd6509786e5235fb943812f792aae8183b529a917e7"
+      "sha256": "eb381d93cc6f057dc8b3a0792d365b5a7068e8c43e018a3c1a3bd583ad8124c1"
     },
     {
-      "bytes": 8118,
+      "bytes": 8183,
       "path": "fixtures/mutations/missing-mixed-definition.3mf",
-      "sha256": "9d46fc567d375e1f471745a418b7f4456e2887ea3439c6befa0514050eb56ae8"
+      "sha256": "13a0bd8d7087273263426c293bbd8788fc6d6073df9cc3be129b89f07523f65f"
     },
     {
-      "bytes": 8172,
+      "bytes": 8237,
       "path": "fixtures/mutations/missing-paint-facet.3mf",
-      "sha256": "29765322feaa7303c9bc4b71bfd64fdc138c3a88408570ed8b6b67f006b4b764"
+      "sha256": "8f88a4002923064c01f1e5f4040894c4ae278de992fa907799d2e39a59e83d11"
     },
     {
-      "bytes": 8146,
+      "bytes": 8211,
       "path": "fixtures/mutations/missing-part-assignment.3mf",
-      "sha256": "90a27c683b689465ca32e89948464856496135011151aba43e377a80110ef282"
+      "sha256": "4aa2085e95cbb76de871ef8f280c2bc618c24730cf489ab7d497ae62e59bf177"
     },
     {
       "bytes": 603,
@@ -38,9 +38,9 @@
       "sha256": "d38e62de9f66b7b59f964d1a35073d8dbcf1b17654e30a60d97b5fb3e694b503"
     },
     {
-      "bytes": 8189,
+      "bytes": 8254,
       "path": "fixtures/reference.3mf",
-      "sha256": "4966bbe5824617cc447761798df37bfe63d8fb984f105e5c221b184c679b7879"
+      "sha256": "b75e0004939e2d63f288c4cbc6af1be2d491d595a6a06102986304f93c583dee"
     },
     {
       "bytes": 643,
@@ -66,7 +66,7 @@
   "recipes": {
     "geometry": "sha256:cdbbcfe2f883aded2c402db2ada53d3d896ddb92fcd5d9be74b3b49a82ef39eb",
     "mutations": "sha256:c2e31b125d6381ee59588e749fef1a5f295d2c09d8843a81298dedb46905323f",
-    "projectTree": "sha256:545dc92a55a37fa63a139d53e97e5444b02a71e2341429aa4bd14c078f1695ec",
+    "projectTree": "sha256:9cae7d2b15178e98d4100ddd3a48d3cd9491f04ff2b5d756e4d25bc8008b22a7",
     "representativeGcode": "sha256:f44348fbe1d44747b7c961ef24262bd550b6525c378a97c108a20975b78b3ded"
   }
 }

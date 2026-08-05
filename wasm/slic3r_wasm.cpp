@@ -40,6 +40,7 @@ extern "C" int pthread_setname_np(pthread_t, const char *) { return 0; }
 #include "libslic3r/Print.hpp"
 #include "libslic3r/PrintConfig.hpp"
 #include "libslic3r/GCode/GCodeProcessor.hpp"
+#include "libslic3r/GCode/GCodeStatisticsExporter.hpp"
 #include "libslic3r/MeshBoolean.hpp"
 #include "libslic3r/Format/STL.hpp"
 #include "libslic3r/Format/bbs_3mf.hpp"
@@ -139,7 +140,7 @@ void apply_overrides_json(Slic3r::DynamicPrintConfig &cfg, const std::string &ov
 // Slice [model] with the fully-resolved [cfg]: apply → validate → process →
 // export, returning the G-code text.
 std::string run_print(Slic3r::Model &model, Slic3r::DynamicPrintConfig &cfg,
-                      const char *out_path)
+                      const char *out_path, std::string *statistics_json = nullptr)
 {
     Slic3r::Print print;
     print.apply(model, cfg);
@@ -161,6 +162,8 @@ std::string run_print(Slic3r::Model &model, Slic3r::DynamicPrintConfig &cfg,
 
     Slic3r::GCodeProcessorResult result;
     print.export_gcode(out_path, &result, nullptr);
+    if (statistics_json != nullptr)
+        *statistics_json = Slic3r::GCodeStatisticsExporter::capture(print, result).dump();
     fprintf(stderr, "[orcaxr] export done\n");
 
     std::string gcode = read_all(out_path);
@@ -313,7 +316,8 @@ std::string slice_painted_inner(const std::vector<float> &positions,
  * the project config (empty = pure project settings).
  */
 std::string slice_project_inner(const std::string &bytes,
-                                const std::string &overrides_json)
+                                const std::string &overrides_json,
+                                std::string *statistics_json = nullptr)
 {
     ensure_resources();
     const char *in_path = "/tmp/orcaxr_proj.3mf";
@@ -383,7 +387,7 @@ std::string slice_project_inner(const std::string &bytes,
     // m_print_config.normalize_fdm()).
     cfg.normalize_fdm();
     fprintf(stderr, "[orcaxr] project config ready\n");
-    return run_print(model, cfg, "/tmp/orcaxr_out.gcode");
+    return run_print(model, cfg, "/tmp/orcaxr_out.gcode", statistics_json);
 }
 
 /// [max_threads] caps TBB parallelism for this call. Must stay below the
@@ -627,6 +631,29 @@ std::string slice_project_sync(const std::string &path, int max_threads,
     }
 }
 
+/// Structured same-export project result used by the canonical browser route.
+/// Keeping G-code and JSON in separate JS string properties avoids escaping and
+/// duplicating a potentially large G-code body inside one JSON envelope.
+emscripten::val slice_project_export_sync(const std::string &path, int max_threads,
+                                          const std::string &overrides_json)
+{
+    const int threads = max_threads < 1 ? 1 : max_threads;
+    tbb::global_control tbb_limit(
+        tbb::global_control::max_allowed_parallelism, (size_t)threads);
+    emscripten::val output = emscripten::val::object();
+    try {
+        std::string statistics_json;
+        std::string gcode = slice_project_inner(read_all(path.c_str()), overrides_json, &statistics_json);
+        output.set("gcode", std::move(gcode));
+        output.set("statisticsJson", std::move(statistics_json));
+    } catch (const std::exception &e) {
+        output.set("error", std::string(e.what()));
+    } catch (...) {
+        output.set("error", std::string("unknown C++ exception"));
+    }
+    return output;
+}
+
 /// Slice a project 3MF (model + embedded project config) already written
 /// into MEMFS. See slice_project_inner.
 void start_slice_project(const std::string &path, int max_threads,
@@ -747,6 +774,7 @@ EMSCRIPTEN_BINDINGS(orcaxr_slic3r)
     emscripten::function("startSlicePainted", &start_slice_painted);
     emscripten::function("startSliceProject", &start_slice_project);
     emscripten::function("sliceProjectSync", &slice_project_sync);
+    emscripten::function("sliceProjectExportSync", &slice_project_export_sync);
     emscripten::function("pollSlice", &poll_slice);
     emscripten::function("startRepair", &start_repair);
     emscripten::function("pollRepair", &poll_repair);

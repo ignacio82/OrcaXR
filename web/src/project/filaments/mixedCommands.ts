@@ -1,8 +1,16 @@
 import { canonicalStringify, cloneJson, cloneProjectState } from '../domain/canonical';
 import { isStableEntityId, type FilamentId, type MixedFilamentId, type PhysicalFilamentId } from '../domain/ids';
-import type { ConfigMap, MixedComponent, MixedDistribution, MixedFilament, ProjectState } from '../domain/model';
+import type {
+  ConfigMap,
+  FullSpectrumRecipeState,
+  MixedComponent,
+  MixedDistribution,
+  MixedFilament,
+  ProjectState,
+} from '../domain/model';
 import { assertValidProjectState } from '../domain/validation';
 import type { CommandContext, ProjectCommand } from '../history/command';
+import { fullSpectrumStableNumericId } from './fullSpectrumRecipe';
 
 abstract class MixedSnapshotCommand implements ProjectCommand {
   abstract readonly type: string;
@@ -73,6 +81,7 @@ export interface EditMixedFilamentPatch {
   displayColor?: string;
   components?: readonly MixedComponent[];
   distribution?: MixedDistribution;
+  fullSpectrum?: FullSpectrumRecipeState;
   config?: ConfigMap;
 }
 
@@ -104,6 +113,7 @@ export class EditMixedFilamentCommand extends MixedSnapshotCommand {
     if (this.patch.name !== undefined) filament.name = this.patch.name;
     if (this.patch.displayColor !== undefined) filament.displayColor = this.patch.displayColor;
     if (this.patch.distribution !== undefined) filament.distribution = cloneJson(this.patch.distribution);
+    if (this.patch.fullSpectrum !== undefined) filament.fullSpectrum = cloneJson(this.patch.fullSpectrum);
     if (this.patch.config !== undefined) filament.config = cloneJson(this.patch.config);
     validateRecipeShape(filament);
   }
@@ -150,6 +160,12 @@ export class DuplicateMixedFilamentCommand extends MixedSnapshotCommand {
     const duplicate = cloneJson(source);
     duplicate.id = this.duplicateId;
     duplicate.name = this.duplicateName?.trim() ?? `${source.name} copy`;
+    if (duplicate.fullSpectrum) {
+      duplicate.fullSpectrum.upstreamStableId = fullSpectrumStableNumericId(this.duplicateId);
+      duplicate.fullSpectrum.custom = true;
+      duplicate.fullSpectrum.originAuto = false;
+      duplicate.fullSpectrum.deleted = false;
+    }
     const sourceIndex = state.filaments.mixed.findIndex((candidate) => candidate.id === source.id);
     state.filaments.mixed.splice(sourceIndex + 1, 0, duplicate);
   }
@@ -173,13 +189,15 @@ export class SetMixedFilamentEnabledCommand extends MixedSnapshotCommand {
     if (this.enabled) {
       validateNewRecipeComponents(state, filament.components);
       validateRecipeShape(filament);
+      if (filament.fullSpectrum) filament.fullSpectrum.deleted = false;
     }
     filament.enabled = this.enabled;
     if (this.enabled) {
       if (filament.extensionData?.orcaxrFilamentLifecycle !== undefined) {
         const extensionData = { ...filament.extensionData };
         delete extensionData.orcaxrFilamentLifecycle;
-        filament.extensionData = Object.keys(extensionData).length > 0 ? extensionData : undefined;
+        if (Object.keys(extensionData).length > 0) filament.extensionData = extensionData;
+        else delete filament.extensionData;
       }
     } else {
       filament.extensionData = {
@@ -203,6 +221,33 @@ export class DisableMixedFilamentCommand extends SetMixedFilamentEnabledCommand 
 export class EnableMixedFilamentCommand extends SetMixedFilamentEnabledCommand {
   constructor(filamentId: MixedFilamentId) {
     super(filamentId, true);
+  }
+}
+
+/** Preserve identity and references while making an upstream-compatible deleted tombstone. */
+export class TombstoneMixedFilamentCommand extends MixedSnapshotCommand {
+  readonly type = 'tombstone-mixed-filament';
+  readonly label = 'Delete mixed filament';
+
+  constructor(
+    private readonly filamentId: MixedFilamentId,
+    private readonly reason = 'user-delete',
+  ) {
+    super();
+  }
+
+  protected mutate(state: ProjectState): void {
+    const filament = requireMixedFilament(state, this.filamentId);
+    filament.enabled = false;
+    if (filament.fullSpectrum) filament.fullSpectrum.deleted = true;
+    filament.extensionData = {
+      ...filament.extensionData,
+      orcaxrFilamentLifecycle: {
+        state: 'deleted',
+        reason: this.reason,
+        semantics: 'tombstone-preserve-references-and-auto-pair-origin',
+      },
+    };
   }
 }
 
@@ -311,7 +356,10 @@ function validateRecipeShape(filament: MixedFilament): void {
   if (!filament.displayColor.trim()) throw new Error('Mixed filament display color cannot be empty');
   const distribution = filament.distribution;
   if (distribution.mode === 'cycle') {
-    if (!Number.isFinite(distribution.cycleLengthMm) || distribution.cycleLengthMm <= 0) {
+    if (
+      distribution.cycleLengthMm !== undefined &&
+      (!Number.isFinite(distribution.cycleLengthMm) || distribution.cycleLengthMm <= 0)
+    ) {
       throw new Error('Mixed filament cycle length must be greater than zero');
     }
     return;
@@ -322,10 +370,13 @@ function validateRecipeShape(filament: MixedFilament): void {
   }
   if (distribution.mode !== 'gradient') return;
   if (
-    !Number.isFinite(distribution.startZMm) ||
-    !Number.isFinite(distribution.endZMm) ||
-    distribution.startZMm < 0 ||
-    distribution.endZMm <= distribution.startZMm
+    (distribution.startZMm === undefined) !== (distribution.endZMm === undefined) ||
+    (distribution.startZMm !== undefined &&
+      distribution.endZMm !== undefined &&
+      (!Number.isFinite(distribution.startZMm) ||
+        !Number.isFinite(distribution.endZMm) ||
+        distribution.startZMm < 0 ||
+        distribution.endZMm <= distribution.startZMm))
   ) {
     throw new Error('Mixed filament gradient range must satisfy 0 <= startZMm < endZMm');
   }

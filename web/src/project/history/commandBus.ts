@@ -35,13 +35,18 @@ export interface CommandHistorySnapshot {
   readonly dirtyCategories: readonly DirtyCategory[];
 }
 
+export type CommandHistorySubscriber = (current: CommandHistorySnapshot, previous: CommandHistorySnapshot) => void;
+
+type SynchronousTransactionResult<T> = T extends PromiseLike<unknown> ? never : T;
+
 export interface CommandBusPort {
   execute(command: ProjectCommand, options?: { coalesce?: boolean }): void;
   undo(): boolean;
   redo(): boolean;
-  transaction<T>(label: string, operation: () => T): T;
+  transaction<T>(label: string, operation: () => SynchronousTransactionResult<T>): SynchronousTransactionResult<T>;
   markCheckpoint(): void;
   getHistorySnapshot(): CommandHistorySnapshot;
+  subscribeHistory(subscriber: CommandHistorySubscriber): () => void;
 }
 
 interface ActiveTransaction {
@@ -62,6 +67,7 @@ export class CommandBus implements CommandBusPort {
   private checkpointTokens = emptyDirtyTokens();
   private tokenClock = 0;
   private activeTransaction?: ActiveTransaction;
+  private readonly historySubscribers = new Set<CommandHistorySubscriber>();
 
   constructor(
     readonly context: CommandContext,
@@ -72,6 +78,7 @@ export class CommandBus implements CommandBusPort {
   }
 
   execute(command: ProjectCommand, options: { coalesce?: boolean } = {}): void {
+    const historyBefore = this.activeTransaction ? undefined : this.getHistorySnapshot();
     const beforeSelection = this.context.selection.getSnapshot();
     const beforeDirty = cloneTokens(this.dirtyTokens);
     const atomic = this.captureAtomic();
@@ -115,10 +122,12 @@ export class CommandBus implements CommandBusPort {
         previous.afterDirty = entry.afterDirty;
         previous.estimatedBytes = Math.max(1, merged.estimateBytes?.() ?? 1);
         this.trimHistory();
+        this.emitHistory(historyBefore!);
         return;
       }
 
       this.pushEntry(entry);
+      this.emitHistory(historyBefore!);
     } catch (error) {
       this.undoEntries = undoBefore;
       this.redoEntries = redoBefore;
@@ -135,6 +144,7 @@ export class CommandBus implements CommandBusPort {
     if (this.activeTransaction) throw new Error('Cannot undo during a transaction');
     const entry = this.undoEntries.at(-1);
     if (!entry) return false;
+    const historyBefore = this.getHistorySnapshot();
     const atomic = this.captureAtomic();
     try {
       entry.command.revert(this.context);
@@ -146,6 +156,7 @@ export class CommandBus implements CommandBusPort {
     this.undoEntries.pop();
     this.redoEntries.push(entry);
     this.dirtyTokens = cloneTokens(entry.beforeDirty);
+    this.emitHistory(historyBefore);
     return true;
   }
 
@@ -153,6 +164,7 @@ export class CommandBus implements CommandBusPort {
     if (this.activeTransaction) throw new Error('Cannot redo during a transaction');
     const entry = this.redoEntries.at(-1);
     if (!entry) return false;
+    const historyBefore = this.getHistorySnapshot();
     const atomic = this.captureAtomic();
     try {
       entry.command.apply(this.context);
@@ -164,11 +176,13 @@ export class CommandBus implements CommandBusPort {
     this.redoEntries.pop();
     this.undoEntries.push(entry);
     this.dirtyTokens = cloneTokens(entry.afterDirty);
+    this.emitHistory(historyBefore);
     return true;
   }
 
-  transaction<T>(label: string, operation: () => T): T {
+  transaction<T>(label: string, operation: () => SynchronousTransactionResult<T>): SynchronousTransactionResult<T> {
     if (this.activeTransaction) return operation();
+    const historyBefore = this.getHistorySnapshot();
     const transaction: ActiveTransaction = {
       label,
       atomic: this.captureAtomic(),
@@ -179,29 +193,12 @@ export class CommandBus implements CommandBusPort {
     this.activeTransaction = transaction;
     try {
       const result = operation();
+      if (isPromiseLike(result)) {
+        throw new Error('Command transactions must be synchronous; stage asynchronous work before committing');
+      }
       this.commitTransaction(transaction);
-      return result;
-    } catch (error) {
-      this.rollbackTransaction(transaction);
-      throw error;
-    } finally {
       this.activeTransaction = undefined;
-    }
-  }
-
-  async transactionAsync<T>(label: string, operation: () => Promise<T>): Promise<T> {
-    if (this.activeTransaction) return operation();
-    const transaction: ActiveTransaction = {
-      label,
-      atomic: this.captureAtomic(),
-      beforeSelection: this.context.selection.getSnapshot(),
-      beforeDirty: cloneTokens(this.dirtyTokens),
-      commands: [],
-    };
-    this.activeTransaction = transaction;
-    try {
-      const result = await operation();
-      this.commitTransaction(transaction);
+      this.emitHistory(historyBefore);
       return result;
     } catch (error) {
       this.rollbackTransaction(transaction);
@@ -212,7 +209,9 @@ export class CommandBus implements CommandBusPort {
   }
 
   markCheckpoint(): void {
+    const historyBefore = this.getHistorySnapshot();
     this.checkpointTokens = cloneTokens(this.dirtyTokens);
+    if (!this.activeTransaction) this.emitHistory(historyBefore);
   }
 
   dirtyCategories(): DirtyCategory[] {
@@ -226,9 +225,11 @@ export class CommandBus implements CommandBusPort {
   }
 
   clearHistory(options: { markCheckpoint?: boolean } = {}): void {
+    const historyBefore = this.getHistorySnapshot();
     this.undoEntries = [];
     this.redoEntries = [];
-    if (options.markCheckpoint ?? true) this.markCheckpoint();
+    if (options.markCheckpoint ?? true) this.checkpointTokens = cloneTokens(this.dirtyTokens);
+    if (!this.activeTransaction) this.emitHistory(historyBefore);
   }
 
   getHistorySnapshot(): CommandHistorySnapshot {
@@ -239,6 +240,11 @@ export class CommandBus implements CommandBusPort {
       redoLabel: this.redoEntries.at(-1)?.command.label,
       dirtyCategories: this.dirtyCategories(),
     };
+  }
+
+  subscribeHistory(subscriber: CommandHistorySubscriber): () => void {
+    this.historySubscribers.add(subscriber);
+    return () => this.historySubscribers.delete(subscriber);
   }
 
   private commitTransaction(transaction: ActiveTransaction): void {
@@ -296,6 +302,25 @@ export class CommandBus implements CommandBusPort {
     this.context.project.restoreState(snapshot.state, reason);
     this.context.selection.restore(snapshot.selection);
   }
+
+  private emitHistory(previous: CommandHistorySnapshot): void {
+    const current = this.getHistorySnapshot();
+    if (historySnapshotsEqual(current, previous)) return;
+    for (const subscriber of [...this.historySubscribers]) {
+      try {
+        subscriber(current, previous);
+      } catch {
+        // History observers cannot veto an already committed command.
+      }
+    }
+  }
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    ((typeof value === 'object' && value !== null) || typeof value === 'function') &&
+    typeof (value as { then?: unknown }).then === 'function'
+  );
 }
 
 function emptyDirtyTokens(): DirtyTokens {
@@ -320,4 +345,15 @@ function cloneHistoryEntry(entry: HistoryEntry): HistoryEntry {
     beforeDirty: cloneTokens(entry.beforeDirty),
     afterDirty: cloneTokens(entry.afterDirty),
   };
+}
+
+function historySnapshotsEqual(left: CommandHistorySnapshot, right: CommandHistorySnapshot): boolean {
+  return (
+    left.undoCount === right.undoCount &&
+    left.redoCount === right.redoCount &&
+    left.undoLabel === right.undoLabel &&
+    left.redoLabel === right.redoLabel &&
+    left.dirtyCategories.length === right.dirtyCategories.length &&
+    left.dirtyCategories.every((category, index) => category === right.dirtyCategories[index])
+  );
 }

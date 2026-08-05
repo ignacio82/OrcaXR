@@ -1,0 +1,533 @@
+{
+  "schemaVersion": 1,
+  "upstream": {
+    "repository": "Snapmaker/SnapmakerOrca",
+    "commit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "profileRoot": "resources/profiles"
+  },
+  "policy": {
+    "exactMirrors": "Every local profile with the same vendor/category/filename as the pinned tree is byte-for-byte identical.",
+    "localAdaptations": "Profiles absent at the same path in the pinned tree are explicit OrcaXR target-printer adaptations locked by SHA-256."
+  },
+  "exactMirrors": [
+    "Elegoo/filament/Generic ABS @Elegoo.json",
+    "Elegoo/filament/Generic ASA @Elegoo.json",
+    "Elegoo/filament/Generic PETG @Elegoo.json",
+    "Elegoo/filament/Generic PLA @Elegoo.json",
+    "Elegoo/filament/Generic PLA Matte @Elegoo.json",
+    "Elegoo/filament/fdm_filament_abs.json",
+    "Elegoo/filament/fdm_filament_asa.json",
+    "Elegoo/filament/fdm_filament_common.json",
+    "Elegoo/filament/fdm_filament_pet.json",
+    "Elegoo/filament/fdm_filament_pla.json",
+    "Snapmaker/filament/Generic ABS @base.json",
+    "Snapmaker/filament/Generic ABS.json",
+    "Snapmaker/filament/Generic PETG @base.json",
+    "Snapmaker/filament/Generic PETG.json",
+    "Snapmaker/filament/Generic PLA @base.json",
+    "Snapmaker/filament/Generic PLA-CF @base.json",
+    "Snapmaker/filament/Generic PLA.json",
+    "Snapmaker/filament/Snapmaker ABS @U1 base.json",
+    "Snapmaker/filament/Snapmaker ABS @U1.json",
+    "Snapmaker/filament/Snapmaker ASA @U1 base.json",
+    "Snapmaker/filament/Snapmaker ASA @U1.json",
+    "Snapmaker/filament/Snapmaker PETG @U1 base.json",
+    "Snapmaker/filament/Snapmaker PETG @U1.json",
+    "Snapmaker/filament/Snapmaker PETG-CF @U1 base.json",
+    "Snapmaker/filament/Snapmaker PETG-CF @U1.json",
+    "Snapmaker/filament/Snapmaker PLA @U1 base.json",
+    "Snapmaker/filament/Snapmaker PLA @U1.json",
+    "Snapmaker/filament/Snapmaker PLA Basic @U1 base.json",
+    "Snapmaker/filament/Snapmaker PLA Eco @U1 base.json",
+    "Snapmaker/filament/Snapmaker PLA Eco @U1.json",
+    "Snapmaker/filament/Snapmaker PLA Matte @U1 base.json",
+    "Snapmaker/filament/Snapmaker PLA Matte @U1.json",
+    "Snapmaker/filament/Snapmaker PLA Metal @U1 base.json",
+    "Snapmaker/filament/Snapmaker PLA Metal @U1.json",
+    "Snapmaker/filament/Snapmaker PLA Silk @U1 base.json",
+    "Snapmaker/filament/Snapmaker PLA Silk @U1.json",
+    "Snapmaker/filament/Snapmaker PLA-CF @U1 base.json",
+    "Snapmaker/filament/Snapmaker PLA-CF @U1.json",
+    "Snapmaker/filament/fdm_filament_abs.json",
+    "Snapmaker/filament/fdm_filament_abs_generic.json",
+    "Snapmaker/filament/fdm_filament_asa.json",
+    "Snapmaker/filament/fdm_filament_common.json",
+    "Snapmaker/filament/fdm_filament_common_generic.json",
+    "Snapmaker/filament/fdm_filament_pet_generic.json",
+    "Snapmaker/filament/fdm_filament_petg.json",
+    "Snapmaker/filament/fdm_filament_pla.json",
+    "Snapmaker/filament/fdm_filament_pla_eco.json",
+    "Snapmaker/filament/fdm_filament_pla_generic.json",
+    "Snapmaker/filament/filament_hot_bed_nozzles.json",
+    "Snapmaker/machine/Snapmaker U1 (0.2 nozzle).json",
+    "Snapmaker/machine/Snapmaker U1 (0.4 nozzle).json",
+    "Snapmaker/machine/Snapmaker U1 (0.6 nozzle).json",
+    "Snapmaker/machine/Snapmaker U1 (0.8 nozzle).json",
+    "Snapmaker/machine/fdm_U1.json",
+    "Snapmaker/machine/fdm_klipper.json",
+    "Snapmaker/machine/fdm_toolchanger.json",
+    "Snapmaker/process/0.06 High Quality @Snapmaker U1 (0.2 nozzle).json",
+    "Snapmaker/process/0.06 Standard @Snapmaker U1 (0.2 nozzle).json",
+    "Snapmaker/process/0.08 High Quality @Snapmaker U1 (0.2 nozzle).json",
+    "Snapmaker/process/0.08 Standard @Snapmaker U1 (0.2 nozzle).json",
+    "Snapmaker/process/0.10 High Quality @Snapmaker U1 (0.2 nozzle).json",
+    "Snapmaker/process/0.10 Standard @Snapmaker U1 (0.2 nozzle).json",
+    "Snapmaker/process/0.12 Fine @Snapmaker U1 (0.4 nozzle).json",
+    "Snapmaker/process/0.12 Standard @Snapmaker U1 (0.2 nozzle).json",
+    "Snapmaker/process/0.14 Standard @Snapmaker U1 (0.2 nozzle).json",
+    "Snapmaker/process/0.18 Standard @Snapmaker U1 (0.6 nozzle).json",
+    "Snapmaker/process/0.20 Standard @Snapmaker U1 (0.4 nozzle).json",
+    "Snapmaker/process/0.24 Standard @Snapmaker U1 (0.8 nozzle).json",
+    "Snapmaker/process/0.28 Extra Draft @Snapmaker U1 (0.4 nozzle).json",
+    "Snapmaker/process/0.30 Standard @Snapmaker U1 (0.6 nozzle).json",
+    "Snapmaker/process/0.32 Standard @Snapmaker U1 (0.8 nozzle).json",
+    "Snapmaker/process/0.40 Standard @Snapmaker U1 (0.8 nozzle).json",
+    "Snapmaker/process/0.42 Standard @Snapmaker U1 (0.6 nozzle).json",
+    "Snapmaker/process/0.48 Standard @Snapmaker U1 (0.8 nozzle).json",
+    "Snapmaker/process/0.56 Standard @Snapmaker U1 (0.8 nozzle).json",
+    "Snapmaker/process/fdm_process_U1.json",
+    "Snapmaker/process/fdm_process_U1_0.06_nozzle_0.2.json",
+    "Snapmaker/process/fdm_process_U1_0.08_nozzle_0.2.json",
+    "Snapmaker/process/fdm_process_U1_0.10_nozzle_0.2.json",
+    "Snapmaker/process/fdm_process_U1_0.12.json",
+    "Snapmaker/process/fdm_process_U1_0.12_nozzle_0.2.json",
+    "Snapmaker/process/fdm_process_U1_0.14_nozzle_0.2.json",
+    "Snapmaker/process/fdm_process_U1_0.18_nozzle_0.6.json",
+    "Snapmaker/process/fdm_process_U1_0.20.json",
+    "Snapmaker/process/fdm_process_U1_0.24_nozzle_0.8.json",
+    "Snapmaker/process/fdm_process_U1_0.28.json",
+    "Snapmaker/process/fdm_process_U1_0.30_nozzle_0.6.json",
+    "Snapmaker/process/fdm_process_U1_0.32_nozzle_0.8.json",
+    "Snapmaker/process/fdm_process_U1_0.40_nozzle_0.8.json",
+    "Snapmaker/process/fdm_process_U1_0.42_nozzle_0.6.json",
+    "Snapmaker/process/fdm_process_U1_0.48_nozzle_0.8.json",
+    "Snapmaker/process/fdm_process_U1_0.56_nozzle_0.8.json",
+    "Snapmaker/process/fdm_process_U1_common.json"
+  ],
+  "localAdaptations": [
+    {
+      "path": "Elegoo/filament/Elegoo ABS @0.2 nozzle.json",
+      "sha256": "8cb919ade3d43f4a2759c9cb56425ac104bb26ffb4c8a6777b2fff1466d2c947"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo ABS @ECC.json",
+      "sha256": "3d20a576a8ebf72437ce5bba7b709ab70a01fb120a9f5b76f25b8779b87a8d57"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo ABS @base.json",
+      "sha256": "3bfdcbc56519158a972ec7a756160a82948b949165fc806cf9797fea6ec1355a"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo ASA @0.2 nozzle.json",
+      "sha256": "110b7156fec7a987f5baed6543a404d3b05589590600302f7cef13483498f5de"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo ASA @ECC.json",
+      "sha256": "aecb78b2e4faabd39fa9d9b59fbc740d0609a04962b7dcc42bb768b7b55a842d"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo ASA @base.json",
+      "sha256": "4fc75e73104915658a82b6ff111b7707277ab479279f0026f638061d5b680a6a"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PAHT @base.json",
+      "sha256": "f86ec754b47f4bfadb30b057c92c5c7983bbc29a9d274358940fff6a50cf83e8"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PAHT-CF @ECC.json",
+      "sha256": "620234d32dd6b8938ec05e5aae60df7fcb114f17ef2eb42a9c45368f720d7562"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PC @0.2 nozzle.json",
+      "sha256": "9975b26eabd5493db2c63094ed3a7c159e019ae7f73f8700a054639a3a1ee2f1"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PC @ECC.json",
+      "sha256": "5d0f49371a36824693bd025734f7c63d0b9c48905a75a274a45b7db833732cb0"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PC @base.json",
+      "sha256": "06bcac421a80f1b2d34bd73ad93c8b9a257b57110e32abde105c3c61f374d95f"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PC-FR @0.2 nozzle.json",
+      "sha256": "25475d120318cd4ca5fef5cfe725bbb8c5ce0bd3195072dc92b60774728b0f87"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PC-FR @ECC.json",
+      "sha256": "22c3f524ebdc3fe1ac0add962cc2108e163dd802eda044e21783459242a8c284"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PETG @0.2 nozzle.json",
+      "sha256": "ac1d827bf0e9cf1f229ab7cdd3fa62e0b2c0000464d0589f46d94f7c5937ff72"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PETG @ECC.json",
+      "sha256": "1a1d7f6d24f9aa3a11afdc965fdcb610a6760121dface40e647d8536dd8ccd16"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PETG @base.json",
+      "sha256": "ddd1043a4e5a87904cf67c7267ded12de4189a28258a870447bcc2c4674b3fcf"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PETG PRO @0.2 nozzle.json",
+      "sha256": "4d879c41c9dbee7a27e9e60be00fe0134d259d47cf3f35480c0b08b57ac7c854"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PETG PRO @ECC.json",
+      "sha256": "e7d9c8fa99aa0e1da7f0aad0fe58909dd7f260a7af8146ccdc6da78ea5d49672"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PETG Translucent @0.2 nozzle.json",
+      "sha256": "9e48cbb328ee80074e3e235ecf4701581ef369a4e78c56d0f5afc4826ef717f6"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PETG Translucent @ECC.json",
+      "sha256": "0d87fa5f0b6db7666c5d8f1aa5b28af41a46bfed775d426bee7a1acf6902144e"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PETG-CF @ECC.json",
+      "sha256": "6aee3e5651d12a7647cfd08f63ba00ef31f33a04f2c9996880ee9f60340153cc"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PETG-GF @ECC.json",
+      "sha256": "bd13c1a611d3a36af30d99bede46e21debd30c46c8290fb1b193cdcb7785ba05"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA @0.2 nozzle.json",
+      "sha256": "69b7d6f0aecd276ecb053947acc95130a1d193594bf93e0ebcc7e7f067fc4995"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA @ECC.json",
+      "sha256": "9a230144f9b32a72328800c0e3c6d2b00d741d25f81b140345147f1fbe5b3be7"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA @base.json",
+      "sha256": "4fa3c38239d29fd51be389c0fce42c25e67b13230662eeb9c125819ad61823ad"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA Basic @0.2 nozzle.json",
+      "sha256": "4a42fdc4058b242e1cd764fe076926565ac368664540e0854b40f9fad331c079"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA Basic @ECC.json",
+      "sha256": "0efd800be0a8a19659ae11d94a9cb57274d89ee2115eb1b440e6de9e383f3445"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA Galaxy @ECC.json",
+      "sha256": "5ead943b5be68abe7dd8846d48aa22dbd12e6478cdca507013f6db19dfe84b5d"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA Marble @ECC.json",
+      "sha256": "54626ada14abf46692d38ae7396924ee86ef188dbccadf743e9ab9e341dc8d80"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA Matte @0.2 nozzle.json",
+      "sha256": "5b63d79ac278273fd03f00bebb08cad82af1bc4e1c395a5904f157d3c4fb6c4f"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA Matte @ECC.json",
+      "sha256": "5c6b489e1fb7188fb924ffd32fbfe84507b33bc560eeb3d9b4cc0950028d0ebb"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA Matte @base.json",
+      "sha256": "348817b665b4a5002454bf58dcb05b400cb3a84a64a08cf1fc87769f07292f42"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA PRO @0.2 nozzle.json",
+      "sha256": "97743d47a22800896d62e50cc7a5a718f5c648f04b3b05db9d9d90c0575449a6"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA PRO @ECC.json",
+      "sha256": "3be2fadbb7eb718e10be06d8918185e0322c2b13dcb38ec25f1d2d7331afca87"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA Silk @0.2 nozzle.json",
+      "sha256": "2d53c0545e3685a2e95100068258e939a3cd7ac6c549bc8d63fdae2a67708da0"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA Silk @ECC.json",
+      "sha256": "44e0b5686e261c19c30aabea1df43cb706268dfa8446207e6c1ec06c0043cb26"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA Sparkle @ECC.json",
+      "sha256": "3a9f4db675ed469e9cb82af69bc71f59a9d9a04a69eb36646dec883b8b5d884f"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA Wood @ECC.json",
+      "sha256": "1bc71d68f4b444dcba8410336d242fd388b6d4c7e6d13f2021a055cac188a426"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA+ @0.2 nozzle.json",
+      "sha256": "fb7d888c440229a04dc18db437cab8eb6c48952cb4b9a9bb5be767221f5d633e"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA+ @ECC.json",
+      "sha256": "a15035b37ed6cee056a8a604cd62620efd76be5c505d23b7280c35457ee6b6d2"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA-CF @ECC.json",
+      "sha256": "c9f0fd68d8541d0cc6337f6331c3e60e9723a5d7dc25735db6d0ede8c2f5009c"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo PLA-CF @base.json",
+      "sha256": "9b1b99c570565bb54238b29fcf2939b264da0ee6c3f83bd621749957adc15c6b"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo RAPID PETG @0.2 nozzle.json",
+      "sha256": "c05b1bf570e0bd29983ff041d0f3ac0e9ca920a379273fff00de3016c86ffe7c"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo RAPID PETG @ECC.json",
+      "sha256": "0d5b53761815e99564c2bf44561548e0e02c42cf83b2ff657a6c88e7c0096bb7"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo RAPID PLA+ @0.2 nozzle.json",
+      "sha256": "a21ee237d60383cf9342e496fe83f3ba94859c87dee1a5b8140d0346f2aca274"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo RAPID PLA+ @ECC.json",
+      "sha256": "b137997628b64daf7952fca1e14003a4cb703ff3581389041087959aa199475e"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo RAPID TPU 95A @ECC.json",
+      "sha256": "3c247c3a9899634c0840da4856d93c02a81e86f294bce71533c1643b9d161bc1"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo TPU 95A @ECC.json",
+      "sha256": "a20910c74a1532d45a6b979d678668ac900e8c9f14005df3d4e5154dec6621bb"
+    },
+    {
+      "path": "Elegoo/filament/Elegoo TPU @base.json",
+      "sha256": "520d8a8fd8a174c389faca6aa179216cf500953660433f91b0aa976af4177f02"
+    },
+    {
+      "path": "Elegoo/filament/Generic ABS @Elegoo Centauri.json",
+      "sha256": "f73ab2906ffbf6ce4e0790c699736a6e246468331f55c4a978dd85a4522d97e0"
+    },
+    {
+      "path": "Elegoo/filament/Generic ABS @base.json",
+      "sha256": "71f74d34fff275ebd3a32f794e2f1202f722af771070ec1909c84d442bfd3fd7"
+    },
+    {
+      "path": "Elegoo/filament/Generic ABS-CF @Elegoo Centauri.json",
+      "sha256": "be49e038d8d71bc9242991be8f54166fe5a825e4c42e67cc4cde1d2e78c31fb6"
+    },
+    {
+      "path": "Elegoo/filament/Generic ASA @base.json",
+      "sha256": "c24e9a4ef9fc7f2a3e0f7853da2cefe6fe151f1b63e48c2412b838b72386bdfa"
+    },
+    {
+      "path": "Elegoo/filament/Generic ASA-CF @Elegoo Centauri.json",
+      "sha256": "60d9263f30f03656adf157691dc1ba29e72ba778b196995e672137bbbe2ebe92"
+    },
+    {
+      "path": "Elegoo/filament/Generic PA @Elegoo.json",
+      "sha256": "8791bfa780e15ee26daa8edc501454cf01c3ada84d3ec5a461374df1a0db1122"
+    },
+    {
+      "path": "Elegoo/filament/Generic PA @base.json",
+      "sha256": "acb0b6579850b841cf43e547a478b6cd6a5130b0a00fc3bbd0d9bda90b4a3d5b"
+    },
+    {
+      "path": "Elegoo/filament/Generic PA6-CF @Elegoo.json",
+      "sha256": "3c901295131c72360ac7d8de53dfe59a5a01380bdfe8c193b3b288d53aed77a2"
+    },
+    {
+      "path": "Elegoo/filament/Generic PC @Elegoo.json",
+      "sha256": "3586513eaa327e9d685267daf0fd1598b8142ebb7f2b54d0ab8315b5c74c6803"
+    },
+    {
+      "path": "Elegoo/filament/Generic PC @base.json",
+      "sha256": "c00f7096d8fb139b9ee59dec6e2abf8a418c10b8135dbea79c2c6005f7777128"
+    },
+    {
+      "path": "Elegoo/filament/Generic PC-CF @Elegoo.json",
+      "sha256": "6cd62d2441a49111df1a604a873492a39c5f61f612bebd1bf18d654c0d666aaa"
+    },
+    {
+      "path": "Elegoo/filament/Generic PET @Elegoo Centauri.json",
+      "sha256": "e51fba2500fbcee36e5e83661c1e86b3ba74b3e232e09fcc5abfd7930ba1668a"
+    },
+    {
+      "path": "Elegoo/filament/Generic PET @base.json",
+      "sha256": "04a2f1790da088f24103ae500adbccec50eb539c63bc6e14ab14857b85bf2be9"
+    },
+    {
+      "path": "Elegoo/filament/Generic PET-CF @Elegoo Centauri.json",
+      "sha256": "44e2a878f50ba09ec20aee044b9cb52068081b44516927e17d92a9f07b312a9a"
+    },
+    {
+      "path": "Elegoo/filament/Generic PETG @base.json",
+      "sha256": "acaca23bd48f8a9080efcf6fae255323e2ee51d0aa53e7966bbf514ad8fe0dc8"
+    },
+    {
+      "path": "Elegoo/filament/Generic PETG-CF @Elegoo Centauri.json",
+      "sha256": "73b146907a7e13fbcc465ef34c7d7cb5fb6faf724a9676066eb5ac979e749143"
+    },
+    {
+      "path": "Elegoo/filament/Generic PLA @base.json",
+      "sha256": "1b74b3359ccdcdfa522d4eda197eacec468f55273e503fc4154b0bc02ea9e0e0"
+    },
+    {
+      "path": "Elegoo/filament/fdm_elegoo_filament_common.json",
+      "sha256": "d167059b2a9421973852b5ba3471b90b8bb70cd4123e1f864a7a9dcd5fbc814b"
+    },
+    {
+      "path": "Elegoo/filament/fdm_elegoo_filament_pla.json",
+      "sha256": "ac9ca03d3ff57180da316154069a9db0baefbbb11836b375455f95310417a670"
+    },
+    {
+      "path": "Elegoo/filament/fdm_filament_hips.json",
+      "sha256": "0f3dc5e4d2f65e1bfcb7d95313b189a690163e1d2080a5d6c428a6713371b4ac"
+    },
+    {
+      "path": "Elegoo/filament/fdm_filament_pa.json",
+      "sha256": "fb870e7ba19acea15ed440410f7b72b2ae6b114f4ea128f3514795538ba7f568"
+    },
+    {
+      "path": "Elegoo/filament/fdm_filament_paht.json",
+      "sha256": "37366be18de1b6a64947b4cfac2f32b6849f69b81f8b6b135dce45ea11a0dfce"
+    },
+    {
+      "path": "Elegoo/filament/fdm_filament_pc.json",
+      "sha256": "b8ab5e13eea591db164f21998c7c1040b80ce553545113542a9cbc8aae8ab2fa"
+    },
+    {
+      "path": "Elegoo/filament/fdm_filament_tpu.json",
+      "sha256": "0a0e04f51b787edb19f511b542a7106c0786f781e6f537c160d06fd25d3cc4b0"
+    },
+    {
+      "path": "Elegoo/machine/Elegoo Centauri Carbon 0.2 nozzle.json",
+      "sha256": "defb9ed304dda7aff134a3380af21fb402a821381b9edbde0e3d4e515adc1676"
+    },
+    {
+      "path": "Elegoo/machine/Elegoo Centauri Carbon 0.4 nozzle.json",
+      "sha256": "c49fa6a36db504d1e14e3b09184ac3d2c01bbb02ef24c93588c21efa6ab3c93b"
+    },
+    {
+      "path": "Elegoo/machine/Elegoo Centauri Carbon 0.6 nozzle.json",
+      "sha256": "1a34b00c5779b44ea99ddd6d7450068d5ab427229b3ed5df28df267cb73729b8"
+    },
+    {
+      "path": "Elegoo/machine/Elegoo Centauri Carbon 0.8 nozzle.json",
+      "sha256": "b958c41437ea154a2a2d960db1febec4811fa2ad4b0f8f4477a2e916c2349152"
+    },
+    {
+      "path": "Elegoo/machine/fdm_machine_ecc.json",
+      "sha256": "9887debebbeaa9cd1fea65ff04c15aafb33aac08292431f057bceec99e3596f4"
+    },
+    {
+      "path": "Elegoo/machine/fdm_machine_ecc_common.json",
+      "sha256": "394b88883db4edf25cdc2c155b136d52e763c6f63456c8155393c03e997b18d1"
+    },
+    {
+      "path": "Elegoo/process/0.08mm Optimal @Elegoo CC 0.2 nozzle.json",
+      "sha256": "fbfc89146a1a3c4338913656465893e9a8c46405a29caad0d1480179625f9e4d"
+    },
+    {
+      "path": "Elegoo/process/0.10mm Standard @Elegoo CC 0.2 nozzle.json",
+      "sha256": "c072397f9e52c0ea049d457d75f9c2a4fce1949eac9373342f35b4196dd4a7c1"
+    },
+    {
+      "path": "Elegoo/process/0.12mm Draft @Elegoo CC 0.2 nozzle.json",
+      "sha256": "5402100d57ad6b1552e7ac747c0235b529acfb42850c279c5bc830ee37fd6977"
+    },
+    {
+      "path": "Elegoo/process/0.12mm Fine @Elegoo CC 0.4 nozzle.json",
+      "sha256": "0dfdccebb465123422f00e7a686b0a6ed5cf797972af5868e1f273cf93e6bf48"
+    },
+    {
+      "path": "Elegoo/process/0.14mm Extra Draft @Elegoo CC 0.2 nozzle.json",
+      "sha256": "ce96ec9744642799902784e027fececd15626fa058a77bfc5fbf05673da8a2f1"
+    },
+    {
+      "path": "Elegoo/process/0.16mm Extra Fine @Elegoo CC 0.8 nozzle.json",
+      "sha256": "e4e53b10dfeb43608321fa2ad4d35df36842ba75552f49bca4608e206390d393"
+    },
+    {
+      "path": "Elegoo/process/0.16mm Optimal @Elegoo CC 0.4 nozzle.json",
+      "sha256": "30fe61f863772ad4dc017c41f10ba4021e3b4284db7aeb609c9aa000270c1cba"
+    },
+    {
+      "path": "Elegoo/process/0.18mm Fine @Elegoo CC 0.6 nozzle.json",
+      "sha256": "259f3c648785b6836088ac1624550425be9aba1c2c51dc9214eff482b6dd38b5"
+    },
+    {
+      "path": "Elegoo/process/0.20mm Standard @Elegoo CC 0.4 nozzle.json",
+      "sha256": "8f44739af657faa1808e7d6d7e156b8b25b00c2906d58df2a0bc97ca964ce3d1"
+    },
+    {
+      "path": "Elegoo/process/0.20mm Strength @Elegoo CC 0.4 nozzle.json",
+      "sha256": "881210750fbadc6ca70235c291b744a074a2e54308ff085262d0b37708523248"
+    },
+    {
+      "path": "Elegoo/process/0.24mm Draft @Elegoo CC 0.4 nozzle.json",
+      "sha256": "4626de5be2f81f5166a46037ec05a22c97a58a3e7d3273cec13b4be37f983acd"
+    },
+    {
+      "path": "Elegoo/process/0.24mm Fine @Elegoo CC 0.8 nozzle.json",
+      "sha256": "4209db356f6bfbd3fc689690580f4e23c7350f940af8ab826509e7c414e224dd"
+    },
+    {
+      "path": "Elegoo/process/0.24mm Optimal @Elegoo CC 0.6 nozzle.json",
+      "sha256": "32c8986e04f27d351d7d958b860d46baf14deb7546bc7191bcd54e415bb895a8"
+    },
+    {
+      "path": "Elegoo/process/0.28mm Extra Draft @Elegoo CC 0.4 nozzle.json",
+      "sha256": "405b76a45312f4f67099d48dafbcc35c6b52a9b97ccfc9db1afc4d8334357932"
+    },
+    {
+      "path": "Elegoo/process/0.30mm Standard @Elegoo CC 0.6 nozzle.json",
+      "sha256": "9235df40627f417a17cab814d775a49b8f9ec1e2a69157c48dc2c983b5b1deea"
+    },
+    {
+      "path": "Elegoo/process/0.30mm Strength @Elegoo CC 0.6 nozzle.json",
+      "sha256": "1af0f8b3df4784b3edc69a4c0f5d1f014f3bc00b09815865a3bc999adca7a524"
+    },
+    {
+      "path": "Elegoo/process/0.32mm Optimal @Elegoo CC 0.8 nozzle.json",
+      "sha256": "4e9cd54d391f0276143739e9f137a2e91f5688bb0e64b1899693d8ad0824285c"
+    },
+    {
+      "path": "Elegoo/process/0.36mm Draft @Elegoo CC 0.6 nozzle.json",
+      "sha256": "d6bdbc1561c3c3b59ee9f92883e95122098a2ab7627afdb1c6d38302c78689be"
+    },
+    {
+      "path": "Elegoo/process/0.40mm Standard @Elegoo CC 0.8 nozzle.json",
+      "sha256": "496298f0853642efd3bca38fac4f30cc648c5f9a55a06c5f0af34c47897dda73"
+    },
+    {
+      "path": "Elegoo/process/0.42mm Extra Draft @Elegoo CC 0.6 nozzle.json",
+      "sha256": "f9b5cda998c58f24b75d5c71b74d988ecdca4f8bb8f31942903cef1242703dba"
+    },
+    {
+      "path": "Elegoo/process/0.48mm Draft @Elegoo CC 0.8 nozzle.json",
+      "sha256": "f7a4afa9dede7dade5fb05601758553d95ab23c03df8dea397bf2700a1afcf31"
+    },
+    {
+      "path": "Elegoo/process/fdm_process_ecc.json",
+      "sha256": "f6147205cc3d43c5646541048c01dba9e5331f2dd05a87dc21d9e3a5db0df9dc"
+    },
+    {
+      "path": "Elegoo/process/fdm_process_ecc_02010.json",
+      "sha256": "b4b7b0c03209f751c1e33650a7ff4b66f8e754c0843f2b8e0d59338bdc208eab"
+    },
+    {
+      "path": "Elegoo/process/fdm_process_ecc_04020.json",
+      "sha256": "dc309516c58262415ea0efbab31c59b3a49a78bebf80eb884054844146e3e01c"
+    },
+    {
+      "path": "Elegoo/process/fdm_process_ecc_06030.json",
+      "sha256": "f3e936f0c8c8103fba70b26ba2da5d6c38fd408871f4d540df0df1a9a38ce271"
+    },
+    {
+      "path": "Elegoo/process/fdm_process_ecc_08040.json",
+      "sha256": "4ecfd85ff965541cdcbadaca2f8ad727f9d72c7646192aa82dbb6f721f7c1a64"
+    },
+    {
+      "path": "Elegoo/process/fdm_process_ecc_common.json",
+      "sha256": "c4339833f792f6cf02aa6fcb333698bc0ab61056ce21e8c49d6529e1ac65606f"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 import { isStableEntityId } from './ids';
 import { canonicalStringify } from './canonical';
-import type { FilamentId } from './ids';
+import type { FilamentId, PhysicalFilamentId } from './ids';
 import type {
   ConfigMap,
   FacetAnnotations,
@@ -20,6 +20,14 @@ export interface ValidationIssue {
   message: string;
   severity: ValidationSeverity;
 }
+
+const SUPPORTED_VOLUME_ROLES = new Set([
+  'model',
+  'negative-volume',
+  'parameter-modifier',
+  'support-blocker',
+  'support-enforcer',
+]);
 
 export class ProjectValidationError extends Error {
   constructor(readonly issues: ValidationIssue[]) {
@@ -65,6 +73,43 @@ export function validateProjectState(state: ProjectState): ValidationIssue[] {
     add('invalid-tool-count', 'printer.toolCount', 'Printer toolCount must be a positive integer');
   }
   validateConfig(state.config, 'config', add);
+  let settingsBaseConfig: ConfigMap | undefined;
+  if (state.settingsBaseConfig !== undefined) {
+    const base = state.settingsBaseConfig as unknown;
+    if (base === null || typeof base !== 'object' || Array.isArray(base)) {
+      add('invalid-settings-base-config', 'settingsBaseConfig', 'Inherited project settings must be a JSON object');
+    } else {
+      settingsBaseConfig = base as ConfigMap;
+      validateConfig(settingsBaseConfig, 'settingsBaseConfig', add);
+    }
+  }
+  let settingsOverrides: ConfigMap | undefined;
+  if (state.settingsOverrides !== undefined) {
+    const overrides = state.settingsOverrides as unknown;
+    if (overrides === null || typeof overrides !== 'object' || Array.isArray(overrides)) {
+      add('invalid-settings-overrides', 'settingsOverrides', 'Project setting overrides must be a JSON object');
+    } else {
+      settingsOverrides = overrides as ConfigMap;
+      validateConfig(settingsOverrides, 'settingsOverrides', add);
+    }
+  }
+  if (settingsOverrides && !settingsBaseConfig) {
+    add(
+      'missing-settings-base-config',
+      'settingsBaseConfig',
+      'Explicit project setting overrides require an inherited settings base',
+    );
+  }
+  if (settingsBaseConfig) {
+    const expectedEffective = { ...settingsBaseConfig, ...(settingsOverrides ?? {}) };
+    if (canonicalStringify(expectedEffective) !== canonicalStringify(state.config)) {
+      add(
+        'mismatched-effective-settings-config',
+        'config',
+        'Effective project configuration must equal inherited settings plus explicit overrides',
+      );
+    }
+  }
   validateExtensionData(state.extensionData, 'extensionData', add);
 
   const assetIds = new Set<string>();
@@ -148,6 +193,13 @@ export function validateProjectState(state: ProjectState): ValidationIssue[] {
       object.volumes.forEach((volume, volumeIndex) => {
         const volumePath = `${objectPath}.volumes[${volumeIndex}]`;
         id(volume.id, `${volumePath}.id`);
+        if (!SUPPORTED_VOLUME_ROLES.has(volume.role)) {
+          add(
+            'unsupported-volume-role',
+            `${volumePath}.role`,
+            `Volume role ${JSON.stringify(volume.role)} is not supported by Snapmaker Orca v2.3.4`,
+          );
+        }
         validateTransform(volume.transform, `${volumePath}.transform`, add);
         validateConfig(volume.config, `${volumePath}.config`, add);
         validateExtensionData(volume.extensionData, `${volumePath}.extensionData`, add);
@@ -355,19 +407,28 @@ function validateMixedShape(filament: MixedFilament, path: string, add: AddIssue
     add('mixed-component-count', `${path}.components`, 'Mixed filament needs at least two components');
   }
   filament.components.forEach((component, index) => {
-    if (!Number.isFinite(component.weight) || component.weight <= 0) {
-      add('invalid-mixed-weight', `${path}.components[${index}].weight`, 'Weight must be greater than zero');
+    if (!Number.isFinite(component.weight) || component.weight < 0) {
+      add('invalid-mixed-weight', `${path}.components[${index}].weight`, 'Weight must be non-negative');
     }
   });
+  if (filament.components.length > 0 && filament.components.every((component) => component.weight === 0)) {
+    add('invalid-mixed-weight-total', `${path}.components`, 'At least one mixed-filament weight must be positive');
+  }
   const distribution = filament.distribution;
   if (
     distribution.mode === 'cycle' &&
+    distribution.cycleLengthMm !== undefined &&
     (!Number.isFinite(distribution.cycleLengthMm) || distribution.cycleLengthMm <= 0)
   ) {
     add('invalid-cycle-length', `${path}.distribution.cycleLengthMm`, 'Cycle length must be greater than zero');
   }
   if (distribution.mode === 'gradient') {
-    if (distribution.startZMm < 0 || distribution.endZMm <= distribution.startZMm) {
+    if (
+      (distribution.startZMm === undefined) !== (distribution.endZMm === undefined) ||
+      (distribution.startZMm !== undefined &&
+        distribution.endZMm !== undefined &&
+        (distribution.startZMm < 0 || distribution.endZMm <= distribution.startZMm))
+    ) {
       add('invalid-gradient-range', `${path}.distribution`, 'Gradient range must increase above zero');
     }
     if (
@@ -383,6 +444,109 @@ function validateMixedShape(filament: MixedFilament, path: string, add: AddIssue
     ) {
       add('invalid-gradient-weights', `${path}.distribution`, 'Gradient weights must be finite and non-negative');
     }
+  }
+  validateFullSpectrumRecipe(filament, path, add);
+}
+
+function validateFullSpectrumRecipe(filament: MixedFilament, path: string, add: AddIssue): void {
+  const recipe = filament.fullSpectrum;
+  if (!recipe) return;
+  const recipePath = `${path}.fullSpectrum`;
+  if (recipe.schemaVersion !== 1)
+    add('invalid-fullspectrum-schema', `${recipePath}.schemaVersion`, 'Expected schema 1');
+  if (![-1, 0, 1, 2, 3].includes(recipe.uiMode)) {
+    add('invalid-fullspectrum-ui-mode', `${recipePath}.uiMode`, 'UI mode must be -1 or one of the four pinned modes');
+  }
+  if (!/^(0|[1-9][0-9]*)$/.test(recipe.upstreamStableId)) {
+    add('invalid-fullspectrum-stable-id', `${recipePath}.upstreamStableId`, 'Expected unsigned decimal text');
+  } else {
+    try {
+      if (BigInt(recipe.upstreamStableId) > 0xffff_ffff_ffff_ffffn) {
+        add('invalid-fullspectrum-stable-id', `${recipePath}.upstreamStableId`, 'Stable ID exceeds uint64');
+      }
+    } catch {
+      add('invalid-fullspectrum-stable-id', `${recipePath}.upstreamStableId`, 'Expected unsigned decimal text');
+    }
+  }
+  const physicalComponents = new Set(filament.components.map((component) => component.filamentId));
+  const checkPhysical = (id: PhysicalFilamentId, fieldPath: string) => {
+    if (!physicalComponents.has(id)) {
+      add('missing-fullspectrum-component', fieldPath, 'Engine field must reference a canonical recipe component');
+    }
+  };
+  checkPhysical(recipe.componentAId, `${recipePath}.componentAId`);
+  checkPhysical(recipe.componentBId, `${recipePath}.componentBId`);
+  if (recipe.componentAId === recipe.componentBId) {
+    add('duplicate-fullspectrum-pair', recipePath, 'Component A and B must be different physical filaments');
+  }
+  recipe.manualPatternGroups.forEach((group, groupIndex) => {
+    if (group.length === 0)
+      add(
+        'empty-fullspectrum-pattern-group',
+        `${recipePath}.manualPatternGroups[${groupIndex}]`,
+        'Pattern groups cannot be empty',
+      );
+    group.forEach((id, index) => checkPhysical(id, `${recipePath}.manualPatternGroups[${groupIndex}][${index}]`));
+  });
+  recipe.gradientComponentIds.forEach((id, index) => checkPhysical(id, `${recipePath}.gradientComponentIds[${index}]`));
+  if (
+    recipe.gradientComponentWeights.length > 0 &&
+    recipe.gradientComponentWeights.length !== recipe.gradientComponentIds.length
+  ) {
+    add(
+      'invalid-fullspectrum-gradient-weights',
+      `${recipePath}.gradientComponentWeights`,
+      'Gradient component weights must align with component IDs',
+    );
+  }
+  if (
+    recipe.gradientComponentWeights.some((weight) => !Number.isSafeInteger(weight) || weight < 0) ||
+    (recipe.gradientComponentWeights.length > 0 && recipe.gradientComponentWeights.every((weight) => weight === 0))
+  ) {
+    add(
+      'invalid-fullspectrum-gradient-weights',
+      `${recipePath}.gradientComponentWeights`,
+      'Gradient component weights must be non-negative integers with a positive total',
+    );
+  }
+  for (const [field, value] of [
+    ['ratioA', recipe.ratioA],
+    ['ratioB', recipe.ratioB],
+    ['mixBPercent', recipe.mixBPercent],
+    ['localZMaxSublayers', recipe.localZMaxSublayers],
+  ] as const) {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      add('invalid-fullspectrum-integer', `${recipePath}.${field}`, 'Expected a non-negative safe integer');
+    }
+  }
+  if (recipe.mixBPercent > 100) {
+    add('invalid-fullspectrum-percent', `${recipePath}.mixBPercent`, 'Mix percentage cannot exceed 100');
+  }
+  for (const [field, value] of [
+    ['gradientStart', recipe.gradientStart],
+    ['gradientEnd', recipe.gradientEnd],
+  ] as const) {
+    if (!Number.isFinite(value) || value <= 0 || value >= 1) {
+      add('invalid-fullspectrum-gradient', `${recipePath}.${field}`, 'Gradient endpoints must be inside (0, 1)');
+    }
+  }
+  if (recipe.gradientEnabled && Math.abs(recipe.gradientStart - recipe.gradientEnd) < 0.05) {
+    add('invalid-fullspectrum-gradient', recipePath, 'Enabled gradient endpoints must differ by at least 0.05');
+  }
+  for (const [field, value] of [
+    ['componentASurfaceOffsetMm', recipe.componentASurfaceOffsetMm],
+    ['componentBSurfaceOffsetMm', recipe.componentBSurfaceOffsetMm],
+  ] as const) {
+    if (!Number.isFinite(value) || Math.abs(value) > 2) {
+      add(
+        'invalid-fullspectrum-offset',
+        `${recipePath}.${field}`,
+        'Offset must be within the pinned -2 mm to 2 mm range',
+      );
+    }
+  }
+  if (recipe.pointillismAllFilaments !== false || (recipe.distributionMode !== 0 && recipe.distributionMode !== 2)) {
+    add('unsupported-fullspectrum-distribution', recipePath, 'The pinned build supports LayerCycle or Simple only');
   }
 }
 

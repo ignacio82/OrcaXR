@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { InMemoryAssetRepository } from '../assets';
-import { cloneProjectState } from '../domain/canonical';
+import { cloneJson, cloneProjectState } from '../domain/canonical';
 import { seededRandom, UuidIdSource } from '../domain/ids';
-import type { ProjectSerializerPort } from '../ports';
+import type { ProjectArchiveSnapshot, ProjectSerializerPort } from '../ports';
 import { Bbs3mfProjectSerializer } from '../serialization/Bbs3mfProjectSerializer';
 import {
   CanonicalSliceJobCoordinator,
   SliceJobCancelledError,
+  SlicePreflightError,
+  SliceRouteCancellationError,
   SliceJobTimeoutError,
   SliceRouteError,
   StaleSliceCompletionError,
@@ -38,11 +40,18 @@ async function test(name: string, run: () => Promise<void>): Promise<void> {
 
 class CapturingSerializer implements ProjectSerializerPort {
   readonly delegate = new Bbs3mfProjectSerializer();
+  readonly snapshots: ProjectArchiveSnapshot[] = [];
   calls = 0;
 
-  async serialize(...args: Parameters<ProjectSerializerPort['serialize']>) {
+  async serialize(snapshot: ProjectArchiveSnapshot, cancellation?: Parameters<ProjectSerializerPort['serialize']>[1]) {
     this.calls += 1;
-    const result = await this.delegate.serialize(...args);
+    this.snapshots.push({
+      state: cloneProjectState(snapshot.state),
+      assets: snapshot.assets.map((asset) => ({ descriptor: cloneJson(asset.descriptor), bytes: asset.bytes.slice() })),
+      sourceRevision: snapshot.sourceRevision,
+      sourceHash: snapshot.sourceHash,
+    });
+    const result = await this.delegate.serialize(snapshot, cancellation);
     return { ...result, warnings: [...(result.warnings ?? []), 'serializer projection warning'] };
   }
 
@@ -67,23 +76,37 @@ class RecordingRoute implements SliceRouteAdapterPort {
 }
 
 const profiles: SliceProfileResolverPort = {
-  capture(state, plateId) {
+  capture(state, _plateId) {
     return {
       references: [
         {
           kind: 'printer',
-          id: state.printer.profileId ?? 'printer',
-          hash: state.printer.profileHash ?? 'sha256:printer-profile',
+          id: state.printer.profileId?.trim() || 'canonical:effective-printer',
+          hash: state.printer.profileHash ?? 'sha256:0000000000000000000000000000000000000000000000000000000000000001',
         },
-        ...state.filaments.physical
+        {
+          kind: 'process',
+          id:
+            (typeof state.config.print_settings_id === 'string' && state.config.print_settings_id) ||
+            'canonical:effective-process',
+          hash: 'sha256:0000000000000000000000000000000000000000000000000000000000000004',
+        },
+        ...state.filaments.physical.map((filament, index) => ({
+          kind: 'filament' as const,
+          id: filament.presetId?.trim() || filament.id,
+          hash: filament.presetHash ?? 'sha256:0000000000000000000000000000000000000000000000000000000000000002',
+          tool: index,
+        })),
+        ...state.filaments.mixed
           .filter((filament) => filament.enabled)
-          .map((filament) => ({
+          .map((filament, index) => ({
             kind: 'filament' as const,
-            id: filament.presetId ?? filament.id,
-            hash: filament.presetHash ?? `sha256:${filament.id}`,
+            id: filament.id,
+            hash: 'sha256:0000000000000000000000000000000000000000000000000000000000000005',
+            tool: state.filaments.physical.length + index,
           })),
       ],
-      effectiveConfigHash: `sha256:effective-config:${plateId}`,
+      effectiveConfigHash: 'sha256:0000000000000000000000000000000000000000000000000000000000000003',
     };
   },
 };
@@ -91,10 +114,10 @@ const profiles: SliceProfileResolverPort = {
 function harness(route: SliceRouteAdapterPort = new RecordingRoute(), publisher?: SliceResultPublisherPort) {
   const fixture = createProjectFixture();
   const state = cloneProjectState(fixture.state);
-  state.printer.profileHash = 'sha256:printer-profile';
+  state.printer.profileHash = 'sha256:0000000000000000000000000000000000000000000000000000000000000001';
   state.filaments.physical.forEach((filament, index) => {
     filament.presetId = `pla-${index}`;
-    filament.presetHash = `sha256:filament-profile-${index}`;
+    filament.presetHash = 'sha256:0000000000000000000000000000000000000000000000000000000000000002';
   });
   const project = new ProjectStore(state);
   const assets = new InMemoryAssetRepository();
@@ -124,13 +147,20 @@ await test('submits only serialized canonical 3MF bytes and records complete pro
   assert.deepEqual(Array.from(request.project.bytes.subarray(0, 2)), [0x50, 0x4b]);
   assert.equal(request.project.sourceRevision, 0);
   assert.equal(request.project.sourceHash, setup.project.getSnapshot().hash);
+  assert.equal(request.project.sourceAssetHash, result.sourceAssetHash);
+  assert.match(result.sourceAssetHash, /^fnv1a64:[0-9a-f]{16}$/);
   assert.equal(request.engine.commit, ENGINE_COMMIT);
   assert.equal(request.engine.artifactHash, ENGINE_ARTIFACT_HASH);
-  assert.equal(request.profiles.references[0].hash, 'sha256:printer-profile');
+  assert.equal(
+    request.profiles.references[0].hash,
+    'sha256:0000000000000000000000000000000000000000000000000000000000000001',
+  );
 
-  assert.equal(result.projectInputHash, request.project.inputHash);
-  assert.match(result.projectInputHash, /^sha256:[0-9a-f]{64}$/);
+  assert.equal(result.plates[0].projectInputHash, request.project.inputHash);
+  assert.match(result.plates[0].projectInputHash, /^sha256:[0-9a-f]{64}$/);
   assert.match(result.plates[0].outputHash, /^sha256:[0-9a-f]{64}$/);
+  assert.deepEqual(result.plates[0].serializerWarnings, ['serializer projection warning']);
+  assert.deepEqual(result.plates[0].preflightIssues, []);
   assert.equal(result.route.engine.commit, ENGINE_COMMIT);
   assert.equal(result.route.engine.artifactHash, ENGINE_ARTIFACT_HASH);
   assert.deepEqual(result.warnings, ['serializer projection warning', 'engine warning']);
@@ -141,6 +171,27 @@ await test('submits only serialized canonical 3MF bytes and records complete pro
   published[0].plates[0].gcode[1] = 0;
   assert.notEqual(setup.coordinator.getLatestResult()!.plates[0].gcode[0], 0);
   assert.notEqual(setup.coordinator.getLatestResult()!.plates[0].gcode[1], 0);
+});
+
+await test('blocks canonical preflight before serialization or route submission', async () => {
+  const route = new RecordingRoute();
+  const setup = harness(route);
+  const next = cloneProjectState(setup.project.getSnapshot().state);
+  next.filaments.physical[0].enabled = false;
+  setup.project.replaceState(next, { reason: 'disable-assigned-filament' });
+
+  const handle = setup.coordinator.startCurrentPlate();
+  await assert.rejects(handle.completion, (error: unknown) => {
+    assert.ok(error instanceof SlicePreflightError);
+    assert.equal(error.result.canSlice, false);
+    assert.ok(error.result.issues.some((issue) => issue.code === 'disabled-filament-assignment'));
+    assert.ok(error.result.issues.some((issue) => issue.code === 'disabled-mixed-component'));
+    return true;
+  });
+  assert.equal(setup.serializer.calls, 0);
+  assert.equal(route.requests.length, 0);
+  assert.equal(handle.getStatus().phase, 'failed');
+  assert.equal(handle.getStatus().errorName, 'SlicePreflightError');
 });
 
 await test('every required canonical edit changes the exact project bytes submitted to slicing', async () => {
@@ -199,34 +250,65 @@ await test('every required canonical edit changes the exact project bytes submit
   }
 });
 
-await test('slices current or all printable plates from one isolated canonical snapshot', async () => {
+await test('serializes current plate two and every printable plate as distinct one-plate archives', async () => {
   const route = new RecordingRoute();
   const setup = harness(route);
   const next = cloneProjectState(setup.project.getSnapshot().state);
-  const plateId = new UuidIdSource(seededRandom(0x5151)).next('plate');
+  const ids = new UuidIdSource(seededRandom(0x5151));
+  const plateId = ids.next('plate');
+  const secondObject = cloneJson(next.plates[0].objects[0]);
+  secondObject.id = ids.next('object');
+  secondObject.name = 'Second-plate triangle';
+  secondObject.volumes[0].id = ids.next('volume');
+  secondObject.instances[0].id = ids.next('instance');
+  secondObject.instances[0].transform.translationMm = [41, 17, 0];
+  secondObject.layerRanges[0].id = ids.next('layer-range');
   next.plates.push({
     id: plateId,
     name: 'Plate 2',
     order: 1,
     printable: true,
     config: { layer_height: 0.28 },
-    objects: [],
+    objects: [secondObject],
   });
+  next.activePlateId = plateId;
   setup.project.replaceState(next, { reason: 'add-second-plate' });
+  const fullSource = setup.project.getSnapshot();
 
   const current = await setup.coordinator.startCurrentPlate().completion;
   assert.deepEqual(
     current.plates.map((plate) => plate.plateId),
-    [next.activePlateId],
+    [plateId],
   );
+  const currentRequest = route.requests.at(-1)!;
+  assert.equal(currentRequest.plateId, plateId);
+  assert.equal(currentRequest.project.sourceHash, fullSource.hash);
+  assert.equal(current.sourceHash, fullSource.hash);
+  const currentProjection = setup.serializer.snapshots.at(-1)!;
+  assert.notEqual(currentProjection.sourceHash, fullSource.hash, 'projected and full-state hashes stay distinct');
+  assertOnePlateState(currentProjection.state, plateId, secondObject.id);
+  const currentArchive = await setup.serializer.deserialize(currentRequest.project.bytes);
+  assertOnePlateState(currentArchive.state, plateId, secondObject.id);
+
   const callsBeforeAll = setup.serializer.calls;
+  const requestsBeforeAll = route.requests.length;
   const all = await setup.coordinator.startAllPlates().completion;
   assert.deepEqual(
     all.plates.map((plate) => plate.plateId),
-    [next.activePlateId, plateId],
+    [setup.fixture.ids.plate, plateId],
   );
-  assert.equal(setup.serializer.calls, callsBeforeAll + 1, 'all plates share one immutable serialized snapshot');
-  assert.equal(new Set(all.plates.map((plate) => plate.projectInputHash)).size, 1);
+  assert.equal(setup.serializer.calls, callsBeforeAll + 2, 'every plate receives its own serializer projection');
+  assert.equal(new Set(all.plates.map((plate) => plate.projectInputHash)).size, 2);
+
+  const requests = route.requests.slice(requestsBeforeAll);
+  assert.equal(requests.length, 2);
+  assert.notDeepEqual(requests[0].project.bytes, requests[1].project.bytes);
+  assert.equal(requests[0].project.sourceHash, fullSource.hash);
+  assert.equal(requests[1].project.sourceHash, fullSource.hash);
+  const firstArchive = await setup.serializer.deserialize(requests[0].project.bytes);
+  const secondArchive = await setup.serializer.deserialize(requests[1].project.bytes);
+  assertOnePlateState(firstArchive.state, setup.fixture.ids.plate, setup.fixture.ids.object);
+  assertOnePlateState(secondArchive.state, plateId, secondObject.id);
 });
 
 await test('rejects stale completion before it can publish or replace the latest result', async () => {
@@ -251,6 +333,34 @@ await test('rejects stale completion before it can publish or replace the latest
   const newer = cloneProjectState(setup.project.getSnapshot().state);
   newer.name = 'Newer canonical revision';
   setup.project.replaceState(newer, { reason: 'newer-revision' });
+  pending!.resolve(responseFor(pending!.request));
+
+  await assert.rejects(handle.completion, StaleSliceCompletionError);
+  assert.equal(handle.getStatus().phase, 'stale');
+  assert.equal(published.length, 0);
+  assert.equal(setup.coordinator.getLatestResult(), undefined);
+});
+
+await test('rejects asset-repository-only drift before publication', async () => {
+  let pending:
+    | {
+        request: SliceRouteRequest;
+        resolve: (response: SliceRouteResponse) => void;
+      }
+    | undefined;
+  const route: SliceRouteAdapterPort = {
+    metadata: new RecordingRoute().metadata,
+    execute(request) {
+      return new Promise((resolve) => {
+        pending = { request: cloneRequest(request), resolve };
+      });
+    },
+  };
+  const published: CanonicalSliceJobResult[] = [];
+  const setup = harness(route, { publish: (result) => published.push(result) });
+  const handle = setup.coordinator.startCurrentPlate();
+  await waitUntil(() => pending !== undefined);
+  setup.assets.remove(setup.fixture.asset.descriptor.id);
   pending!.resolve(responseFor(pending!.request));
 
   await assert.rejects(handle.completion, StaleSliceCompletionError);
@@ -314,6 +424,114 @@ await test('cancellation and timeouts terminate publication even when a route st
   assert.equal(timedOut.coordinator.getLatestResult(), undefined);
 });
 
+await test('confirmed-cleanup routes delay cancellation until cleanup settles and fail unconfirmed cleanup honestly', async () => {
+  let cleanupStarted = false;
+  let releaseCleanup: (() => void) | undefined;
+  const cleanupGate = new Promise<void>((resolve) => {
+    releaseCleanup = resolve;
+  });
+  const confirmedRoute: SliceRouteAdapterPort = {
+    metadata: new RecordingRoute().metadata,
+    cancellation: { mode: 'confirmed-cleanup', cleanupTimeoutMs: 100 },
+    execute(_request, signal) {
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener(
+          'abort',
+          () => {
+            cleanupStarted = true;
+            void cleanupGate.then(() => {
+              const reason = signal.reason instanceof Error ? signal.reason : undefined;
+              reject(new SliceRouteCancellationError('route cleanup confirmed', true, reason));
+            });
+          },
+          { once: true },
+        );
+      });
+    },
+  };
+  const confirmed = harness(confirmedRoute);
+  const confirmedHandle = confirmed.coordinator.startCurrentPlate();
+  await waitUntil(() => confirmedHandle.getStatus().phase === 'submitting');
+  confirmedHandle.cancel('confirmed cancellation');
+  await waitUntil(() => cleanupStarted);
+  assert.equal(confirmedHandle.getStatus().phase, 'cancelling', 'terminal cancellation waits for cleanup');
+  releaseCleanup?.();
+  await assert.rejects(confirmedHandle.completion, SliceRouteCancellationError);
+  assert.equal(confirmedHandle.getStatus().phase, 'cancelled');
+  assert.equal(confirmedHandle.getStatus().cancellationConfirmed, true);
+
+  const unconfirmedRoute: SliceRouteAdapterPort = {
+    metadata: new RecordingRoute().metadata,
+    cancellation: { mode: 'confirmed-cleanup', cleanupTimeoutMs: 100 },
+    execute(_request, signal) {
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener(
+          'abort',
+          () => {
+            const reason = signal.reason instanceof Error ? signal.reason : undefined;
+            reject(new SliceRouteCancellationError('remote DELETE was not confirmed', false, reason));
+          },
+          { once: true },
+        );
+      });
+    },
+  };
+  const unconfirmed = harness(unconfirmedRoute);
+  const unconfirmedHandle = unconfirmed.coordinator.startCurrentPlate();
+  await waitUntil(() => unconfirmedHandle.getStatus().phase === 'submitting');
+  unconfirmedHandle.cancel('unconfirmed cancellation');
+  await assert.rejects(unconfirmedHandle.completion, SliceRouteCancellationError);
+  assert.equal(unconfirmedHandle.getStatus().phase, 'failed');
+  assert.equal(unconfirmedHandle.getStatus().cancellationConfirmed, false);
+});
+
+await test('confirmed-cleanup routes are bounded when an adapter never settles after abort', async () => {
+  const route: SliceRouteAdapterPort = {
+    metadata: new RecordingRoute().metadata,
+    cancellation: { mode: 'confirmed-cleanup', cleanupTimeoutMs: 5 },
+    execute() {
+      return new Promise(() => {});
+    },
+  };
+  const setup = harness(route);
+  const handle = setup.coordinator.startCurrentPlate();
+  await waitUntil(() => handle.getStatus().phase === 'submitting');
+  handle.cancel('adapter stalled');
+  await assert.rejects(
+    handle.completion,
+    (error: unknown) => error instanceof SliceRouteCancellationError && !error.cancellationConfirmed,
+  );
+  assert.equal(handle.getStatus().phase, 'failed');
+  assert.equal(handle.getStatus().cancellationConfirmed, false);
+});
+
+await test('route progress is bounded and projected with active plate and attempt context', async () => {
+  const route: SliceRouteAdapterPort = {
+    metadata: new RecordingRoute().metadata,
+    async execute(request, _signal, onProgress) {
+      onProgress?.({ percent: Number.NaN, message: '' });
+      onProgress?.({ percent: 137, message: `Generating\n${'x'.repeat(300)}` });
+      return responseFor(request);
+    },
+  };
+  const setup = harness(route);
+  const observed: ReturnType<typeof setup.coordinator.getActiveJobs>[number][] = [];
+  setup.coordinator.subscribe((status) => observed.push(status));
+  const handle = setup.coordinator.startCurrentPlate();
+  await handle.completion;
+
+  const progress = observed.find((status) => status.progressPercent !== undefined);
+  assert.ok(progress);
+  assert.equal(progress.phase, 'submitting');
+  assert.equal(progress.activePlateId, setup.fixture.ids.plate);
+  assert.equal(progress.attempt, 1);
+  assert.equal(progress.progressPercent, 100);
+  assert.equal(progress.progressMessage?.includes('\n'), false);
+  assert.equal(progress.progressMessage?.length, 160);
+  assert.equal(handle.getStatus().progressPercent, undefined);
+  assert.equal(handle.getStatus().progressMessage, undefined);
+});
+
 function responseFor(request: SliceRouteRequest): SliceRouteResponse {
   return {
     protocolVersion: SLICE_PROTOCOL_VERSION,
@@ -337,6 +555,21 @@ function cloneRequest(request: SliceRouteRequest): SliceRouteRequest {
     },
     engine: { ...request.engine },
   };
+}
+
+function assertOnePlateState(
+  state: ProjectArchiveSnapshot['state'],
+  plateId: ProjectArchiveSnapshot['state']['activePlateId'],
+  objectId: ProjectArchiveSnapshot['state']['plates'][number]['objects'][number]['id'],
+): void {
+  assert.equal(state.activePlateId, plateId);
+  assert.equal(state.plates.length, 1);
+  assert.equal(state.plates[0].id, plateId);
+  assert.equal(state.plates[0].order, 0);
+  assert.deepEqual(
+    state.plates[0].objects.map((object) => object.id),
+    [objectId],
+  );
 }
 
 async function waitUntil(condition: () => boolean): Promise<void> {

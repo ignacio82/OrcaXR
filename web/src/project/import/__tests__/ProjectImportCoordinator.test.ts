@@ -268,6 +268,51 @@ await test('cancellation during worker parsing leaves project, history, assets, 
   assert.deepEqual(capture(harness), before);
 });
 
+await test('prepared preview settlement releases its lifecycle exactly once', async () => {
+  const cancelledHarness = createHarness();
+  const cancelledCoordinator = new ProjectImportCoordinator({
+    parser: parserReturning({
+      state: cloneProjectState(cancelledHarness.state),
+      assets: [cloneJsonAsset(cancelledHarness.asset)],
+      importedAssetIds: [],
+    }),
+    commands: cancelledHarness.commands,
+  });
+  let settlements = 0;
+  const cancelled = await cancelledCoordinator.prepare(
+    { bytes: new Uint8Array([1]), source: { filename: 'cancelled-preview.3mf' } },
+    () => {
+      settlements += 1;
+    },
+  );
+  assert.equal(settlements, 0);
+  cancelled.cancel('dialog closed');
+  cancelled.cancel('duplicate close');
+  assert.equal(settlements, 1);
+
+  const committedHarness = createHarness();
+  const committedState = cloneProjectState(committedHarness.state);
+  committedState.name = 'Committed preview';
+  const committedCoordinator = new ProjectImportCoordinator({
+    parser: parserReturning({
+      state: committedState,
+      assets: [cloneJsonAsset(committedHarness.asset)],
+      importedAssetIds: [],
+    }),
+    commands: committedHarness.commands,
+  });
+  const committed = await committedCoordinator.prepare(
+    { bytes: new Uint8Array([2]), source: { filename: 'committed-preview.3mf' } },
+    () => {
+      settlements += 1;
+    },
+  );
+  committed.confirm({ confirmed: true, acknowledgedNoticeIds: [] });
+  assert.equal(settlements, 2);
+  assert.throws(() => committed.confirm({ confirmed: true, acknowledgedNoticeIds: [] }), ImportConfirmationError);
+  assert.equal(settlements, 2);
+});
+
 await test('invalid canonical output becomes a blocked diagnostic preview with no mutation', async () => {
   const harness = createHarness();
   const before = capture(harness);

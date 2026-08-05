@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import {
   AddObjectCommand,
+  AddObjectWithAssetCommand,
   AddPlateCommand,
   CommandBus,
+  DeletePlateCommand,
   InMemoryAssetRepository,
   ProjectStore,
   RenameProjectCommand,
@@ -59,6 +61,149 @@ test('applies, undoes and redoes project/plate/object commands with monotonic re
   assert.ok(bus.redo());
   assert.equal(project.getSnapshot().state.name, 'Renamed');
   assert.ok(project.getSnapshot().revision > startRevision);
+});
+
+test('adds a mesh asset and object atomically with exact undo and redo ownership', () => {
+  const fixture = createProjectFixture();
+  const initial = cloneProjectState(fixture.state);
+  initial.plates[0].objects = [];
+  initial.sourceAssets = [];
+  const project = new ProjectStore(initial);
+  const selection = new SelectionStore();
+  selection.set([{ kind: 'plate', id: initial.activePlateId }]);
+  const assets = new InMemoryAssetRepository();
+  const bus = new CommandBus({ project, selection, assets });
+  bus.markCheckpoint();
+  const stateBefore = canonicalStringify(project.getSnapshot().state);
+  const selectionBefore = selection.getSnapshot();
+
+  bus.execute(new AddObjectWithAssetCommand(initial.activePlateId, fixture.object, fixture.asset));
+  assert.equal(project.getSnapshot().state.plates[0].objects[0].id, fixture.object.id);
+  assert.deepEqual(project.getSnapshot().state.sourceAssets, [fixture.asset.descriptor]);
+  assert.deepEqual(assets.get(fixture.asset.descriptor.id), fixture.asset);
+  assert.deepEqual(selection.getSnapshot().primary, { kind: 'instance', id: fixture.ids.instance });
+
+  assert.equal(bus.undo(), true);
+  assert.equal(canonicalStringify(project.getSnapshot().state), stateBefore);
+  assert.deepEqual(selection.getSnapshot(), selectionBefore);
+  assert.equal(assets.has(fixture.asset.descriptor.id), false);
+  assert.equal(bus.redo(), true);
+  assert.equal(project.getSnapshot().state.plates[0].objects[0].id, fixture.object.id);
+  assert.deepEqual(assets.get(fixture.asset.descriptor.id), fixture.asset);
+});
+
+test('rolls back invalid asset/object insertion and requires digest remapping before deduplication', () => {
+  const fixture = createProjectFixture();
+  const initial = cloneProjectState(fixture.state);
+  const object = initial.plates[0].objects.pop()!;
+  initial.sourceAssets = [];
+  object.volumes[0].source.triangleCount += 1;
+  const project = new ProjectStore(initial);
+  const selection = new SelectionStore();
+  const assets = new InMemoryAssetRepository();
+  const bus = new CommandBus({ project, selection, assets });
+  const before = canonicalStringify(project.getSnapshot().state);
+
+  assert.throws(
+    () => bus.execute(new AddObjectWithAssetCommand(initial.activePlateId, object, fixture.asset)),
+    /Invalid project state/,
+  );
+  assert.equal(canonicalStringify(project.getSnapshot().state), before);
+  assert.deepEqual(assets.list(), []);
+  assert.equal(bus.getHistorySnapshot().undoCount, 0);
+
+  const dedupState = cloneProjectState(fixture.state);
+  const validObject = dedupState.plates[0].objects.pop()!;
+  const ids = new UuidIdSource(seededRandom(0xadd5));
+  const duplicateAsset = {
+    descriptor: { ...fixture.asset.descriptor, id: ids.next('asset') },
+    bytes: fixture.asset.bytes,
+  };
+  validObject.volumes[0].source.assetId = duplicateAsset.descriptor.id;
+  const dedupProject = new ProjectStore(dedupState);
+  const dedupAssets = new InMemoryAssetRepository();
+  dedupAssets.put(fixture.asset.descriptor, fixture.asset.bytes);
+  const dedupBus = new CommandBus({
+    project: dedupProject,
+    selection: new SelectionStore(),
+    assets: dedupAssets,
+  });
+  assert.throws(
+    () => dedupBus.execute(new AddObjectWithAssetCommand(dedupState.activePlateId, validObject, duplicateAsset)),
+    /remap the object/,
+  );
+  assert.equal(dedupProject.getSnapshot().state.sourceAssets.length, 1);
+  assert.equal(dedupProject.getSnapshot().state.plates[0].objects.length, 0);
+  assert.equal(dedupAssets.list().length, 1);
+});
+
+test('deletes a plate with scoped metadata and restores the exact project on undo', () => {
+  const fixture = createProjectFixture();
+  const state = cloneProjectState(fixture.state);
+  const ids = new UuidIdSource(seededRandom(0xd31e7e));
+  const secondPlate: ProjectPlate = {
+    id: ids.next('plate'),
+    name: 'Plate 2',
+    order: 1,
+    printable: true,
+    config: {},
+    objects: [],
+  };
+  state.plates.push(secondPlate);
+  state.customGcode.push({
+    id: ids.next('custom-gcode'),
+    scope: 'plate',
+    plateId: fixture.ids.plate,
+    trigger: 'before-plate',
+    code: 'M117 first plate',
+  });
+  state.thumbnails.push({
+    id: ids.next('thumbnail'),
+    assetId: fixture.ids.asset,
+    plateId: fixture.ids.plate,
+    width: 64,
+    height: 64,
+  });
+  const project = new ProjectStore(state);
+  const selection = new SelectionStore();
+  selection.set([{ kind: 'instance', id: fixture.ids.instance }]);
+  const assets = new InMemoryAssetRepository();
+  assets.put(fixture.asset.descriptor, fixture.asset.bytes);
+  const bus = new CommandBus({ project, selection, assets });
+  const before = canonicalStringify(project.getSnapshot().state);
+  const selectionBefore = selection.getSnapshot();
+
+  bus.execute(new DeletePlateCommand(fixture.ids.plate));
+  assert.deepEqual(
+    project.getSnapshot().state.plates.map((plate) => [plate.id, plate.order]),
+    [[secondPlate.id, 0]],
+  );
+  assert.equal(project.getSnapshot().state.activePlateId, secondPlate.id);
+  assert.deepEqual(project.getSnapshot().state.customGcode, []);
+  assert.deepEqual(project.getSnapshot().state.thumbnails, []);
+  assert.deepEqual(selection.getSnapshot(), {
+    refs: [{ kind: 'plate', id: secondPlate.id }],
+    primary: { kind: 'plate', id: secondPlate.id },
+  });
+  assert.equal(assets.has(fixture.ids.asset), true);
+
+  assert.equal(bus.undo(), true);
+  assert.equal(canonicalStringify(project.getSnapshot().state), before);
+  assert.deepEqual(selection.getSnapshot(), selectionBefore);
+  assert.equal(assets.has(fixture.ids.asset), true);
+  assert.equal(bus.redo(), true);
+  assert.equal(project.getSnapshot().state.plates.length, 1);
+});
+
+test('rejects deleting the final plate without changing history or selection', () => {
+  const { fixture, project, selection, bus } = harness();
+  selection.set([{ kind: 'plate', id: fixture.ids.plate }]);
+  const before = canonicalStringify(project.getSnapshot().state);
+  const selectionBefore = selection.getSnapshot();
+  assert.throws(() => bus.execute(new DeletePlateCommand(fixture.ids.plate)), /last plate/);
+  assert.equal(canonicalStringify(project.getSnapshot().state), before);
+  assert.deepEqual(selection.getSnapshot(), selectionBefore);
+  assert.equal(bus.getHistorySnapshot().undoCount, 0);
 });
 
 test('coalesces one instance drag into a single reversible history entry', () => {
@@ -120,6 +265,24 @@ test('commits a multi-command transaction as one atomic history entry', () => {
   assert.deepEqual(project.getSnapshot().state.plates[0].objects[0].instances[0].transform.translationMm, [42, 8, 1]);
   bus.undo();
   assert.equal(project.getSnapshot().state.plates[0].objects.length, 0);
+});
+
+test('rejects promise-returning transactions and rolls back their synchronous mutations', () => {
+  const { fixture, project, bus } = harness();
+  const before = canonicalStringify(project.getSnapshot().state);
+  const asyncOperation = () => {
+    bus.execute(new RenameProjectCommand('Must roll back'));
+    return Promise.resolve('not a transaction result');
+  };
+
+  assert.throws(
+    () => bus.transaction('Unsafe asynchronous transaction', asyncOperation as unknown as () => never),
+    /must be synchronous/,
+  );
+  assert.equal(canonicalStringify(project.getSnapshot().state), before);
+  assert.equal(bus.getHistorySnapshot().undoCount, 0);
+  assert.equal(bus.isDirty(), false);
+  assert.equal(project.getSnapshot().state.plates[0].objects[0].id, fixture.ids.object);
 });
 
 test('rolls back project, assets, selection, dirty state and history on transaction failure', () => {

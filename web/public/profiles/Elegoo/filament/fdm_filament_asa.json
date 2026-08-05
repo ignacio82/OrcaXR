@@ -5,7 +5,7 @@
     "from": "system",
     "instantiation": "false",
     "activate_air_filtration": [
-        "0"
+        "1"
     ],
     "cool_plate_temp": [
         "0"
@@ -78,8 +78,5 @@
     ],
     "textured_plate_temp_initial_layer": [
         "90"
-    ],
-    "filament_vendor": [
-        "Generic"
     ]
 }

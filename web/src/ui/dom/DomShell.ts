@@ -10,6 +10,7 @@
 import type { Action, ActionRegistry, ActionSurface } from '../../actions/ActionRegistry';
 import { MENU_SECTIONS } from '../../actions/ActionRegistry';
 import type { ActionContext } from '../../actions/ActionContext';
+import { ariaShortcutValue } from '../../actions/ShortcutCatalog';
 import type { UiState, WorkspaceMode } from '../../actions/UiState';
 import { domIcon } from '../icons';
 
@@ -91,6 +92,8 @@ export class DomShell {
     btn.dataset.actionId = a.id;
     btn.title = a.hint ?? a.label;
     btn.setAttribute('aria-label', a.hint ?? a.label);
+    const shortcuts = ariaShortcutValue(a.shortcuts);
+    if (shortcuts) btn.setAttribute('aria-keyshortcuts', shortcuts);
     const icon = document.createElement('span');
     icon.className = 'tool-icon';
     icon.setAttribute('aria-hidden', 'true');
@@ -108,6 +111,8 @@ export class DomShell {
     btn.className = primary ? 'action-btn primary' : 'action-btn';
     btn.dataset.actionId = a.id;
     btn.title = a.hint ?? a.label;
+    const shortcuts = ariaShortcutValue(a.shortcuts);
+    if (shortcuts) btn.setAttribute('aria-keyshortcuts', shortcuts);
     btn.textContent = `${domIcon(a.icon)}  ${a.label}`;
     btn.onclick = () => this.run(a, 'dom-primary');
     this.bound.push({ el: btn, action: a, surface: 'dom-primary' });
@@ -130,6 +135,8 @@ export class DomShell {
       item.className = 'menu-item';
       item.dataset.actionId = a.id;
       item.setAttribute('role', 'menuitem');
+      const shortcuts = ariaShortcutValue(a.shortcuts);
+      if (shortcuts) item.setAttribute('aria-keyshortcuts', shortcuts);
       const unavailable = a.capability.status === 'unavailable' || a.capability.status === 'blocked';
       item.title = unavailable ? (a.capability.reason ?? a.label) : (a.hint ?? a.label);
       const badge = unavailable ? '<span class="soon-badge">UNAVAILABLE</span>' : '';
@@ -218,10 +225,20 @@ export class DomShell {
       btn.dataset.mode = m.id;
       btn.setAttribute('aria-pressed', String(m.id === this.ui.get().mode));
       btn.textContent = m.label;
-      btn.onclick = () => this.ctx.setMode(m.id);
+      btn.onclick = () => this.runMode(m.id);
       this.modeButtons.push({ id: m.id, el: btn });
       host.appendChild(btn);
     }
+  }
+
+  private runMode(mode: WorkspaceMode): void {
+    if (mode === this.ui.get().mode) return;
+    const preview = this.registry.get('toggle_preview');
+    if (!preview) {
+      this.ctx.reportCapabilityUnavailable('Preview', 'The shared preview action is not registered.');
+      return;
+    }
+    this.run(preview, 'dom-primary');
   }
 
   private run(a: Action, surface: ActionSurface): void {
@@ -238,9 +255,17 @@ export class DomShell {
       el.title = availability.state === 'disabled' ? availability.reason : (action.hint ?? action.label);
       if (action.tool) el.classList.toggle('active', s.activeTool === action.tool);
     }
+    const previewAvailability = this.registry.availability('toggle_preview', 'dom-primary', s);
     for (const { id, el } of this.modeButtons) {
       el.classList.toggle('active', s.mode === id);
       el.setAttribute('aria-pressed', String(s.mode === id));
+      if (s.mode === id) {
+        el.disabled = false;
+        el.title = '';
+      } else {
+        el.disabled = previewAvailability.state !== 'enabled';
+        el.title = previewAvailability.state === 'disabled' ? previewAvailability.reason : '';
+      }
     }
   }
 }

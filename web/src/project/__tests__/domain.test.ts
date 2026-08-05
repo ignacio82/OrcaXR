@@ -116,6 +116,40 @@ test('rejects dangling and cyclic mixed-filament components', () => {
   assert.ok(cyclicCodes.has('cyclic-mixed-filament'));
 });
 
+test('rejects FullSpectrum fields outside the pinned engine domain', () => {
+  const broken = cloneProjectState(createProjectFixture().state);
+  const mixed = broken.filaments.mixed[0];
+  mixed.fullSpectrum = {
+    schemaVersion: 1,
+    upstreamStableId: '18446744073709551616',
+    uiMode: 7 as 0,
+    componentAId: mixed.components[0].filamentId,
+    componentBId: mixed.components[1].filamentId,
+    ratioA: 1,
+    ratioB: 1,
+    mixBPercent: 50,
+    manualPatternGroups: [],
+    gradientComponentIds: [],
+    gradientComponentWeights: [],
+    pointillismAllFilaments: false,
+    distributionMode: 2,
+    localZMaxSublayers: 2,
+    gradientEnabled: true,
+    gradientStart: 0.51,
+    gradientEnd: 0.49,
+    componentASurfaceOffsetMm: 2.001,
+    componentBSurfaceOffsetMm: -2.001,
+    deleted: false,
+    custom: true,
+    originAuto: false,
+  };
+  const codes = new Set(validateProjectState(broken).map((issue) => issue.code));
+  assert.ok(codes.has('invalid-fullspectrum-stable-id'));
+  assert.ok(codes.has('invalid-fullspectrum-ui-mode'));
+  assert.ok(codes.has('invalid-fullspectrum-gradient'));
+  assert.ok(codes.has('invalid-fullspectrum-offset'));
+});
+
 test('rejects stale topology annotations and out-of-range facets', () => {
   const broken = cloneProjectState(createProjectFixture().state);
   const volume = broken.plates[0].objects[0].volumes[0];

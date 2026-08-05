@@ -28,7 +28,7 @@ export const sceneActions: Action[] = [
     tool: 'move',
     hint: 'Move the selected model on the bed',
     shortcuts: ['G'],
-    run: (ctx) => ctx.setTool('move'),
+    run: (ctx) => ctx.applyTool('move'),
   },
   {
     id: 'tool_rotate',
@@ -40,7 +40,7 @@ export const sceneActions: Action[] = [
     tool: 'rotate',
     hint: 'Rotate the selected model',
     shortcuts: ['R'],
-    run: (ctx) => ctx.setTool('rotate'),
+    run: (ctx) => ctx.applyTool('rotate'),
   },
   {
     id: 'tool_scale',
@@ -52,7 +52,7 @@ export const sceneActions: Action[] = [
     tool: 'scale',
     hint: 'Scale the selected model',
     shortcuts: ['S'],
-    run: (ctx) => ctx.setTool('scale'),
+    run: (ctx) => ctx.applyTool('scale'),
   },
   {
     id: 'tool_lay_on_face',
@@ -63,7 +63,7 @@ export const sceneActions: Action[] = [
     disclosure: 'toolbar',
     tool: 'lay_on_face',
     hint: 'Click a face to lay it flat on the bed',
-    run: (ctx) => ctx.setTool('lay_on_face'),
+    run: (ctx) => ctx.applyTool('lay_on_face'),
   },
   {
     id: 'tool_paint',
@@ -74,18 +74,18 @@ export const sceneActions: Action[] = [
     disclosure: 'toolbar',
     tool: 'paint',
     hint: 'Brush filament colours onto the model',
-    run: (ctx) => ctx.setTool('paint'),
+    run: (ctx) => ctx.applyTool('paint'),
   },
   {
     id: 'drop_to_bed',
     mcpTool: 'transform_model',
-    label: 'Auto-orient',
+    label: 'Drop to bed',
     icon: 'auto_orient',
     group: 'scene',
     disclosure: 'toolbar',
-    hint: 'Rotate the model to the lowest-profile orientation',
-    isEnabled: (s) => s.hasSelection,
-    run: (ctx) => ctx.autoOrient(),
+    hint: 'Move each selected model vertically until its lowest model facet touches the bed',
+    isEnabled: (s) => s.hasInstanceSelection,
+    run: (ctx) => ctx.dropToBed(),
   },
   {
     id: 'delete_models',
@@ -95,7 +95,7 @@ export const sceneActions: Action[] = [
     group: 'scene',
     disclosure: 'toolbar',
     hint: 'Remove the selected model',
-    isEnabled: (s) => s.hasSelection,
+    isEnabled: (s) => s.hasInstanceSelection,
     run: (ctx) => ctx.deleteSelected(),
   },
 
@@ -214,6 +214,23 @@ export const sceneActions: Action[] = [
     run: (ctx) => ctx.addPlate(),
   },
   {
+    id: 'activate_plate',
+    label: 'Activate build plate',
+    icon: 'plate',
+    group: 'system',
+    disclosure: 'inspector',
+    hint: 'Switch to the selected build plate',
+    run: (ctx, invocation) => {
+      const request = invocation.plateTarget;
+      const plateId = request?.plateId ?? invocation.plateId;
+      if (!plateId) {
+        ctx.reportCapabilityUnavailable('Activate build plate', 'Choose a plate from the plate bar.');
+        return;
+      }
+      ctx.activatePlate(plateId, request?.sourceRevision);
+    },
+  },
+  {
     id: 'delete_plate',
     mcpTool: 'delete_plate',
     label: 'Delete build plate',
@@ -223,7 +240,56 @@ export const sceneActions: Action[] = [
     menuSection: 'tools',
     hint: 'Delete the active build plate',
     isEnabled: (s) => s.plateCount > 1,
-    run: (ctx) => ctx.deletePlate(),
+    run: (ctx, invocation) =>
+      ctx.deletePlate(invocation.plateTarget?.plateId ?? invocation.plateId, invocation.plateTarget?.sourceRevision),
+  },
+  {
+    id: 'rename_plate',
+    label: 'Rename build plate',
+    icon: 'plate',
+    group: 'system',
+    disclosure: 'inspector',
+    hint: 'Rename the selected build plate',
+    run: (ctx, invocation) => {
+      const request = invocation.plateRename;
+      if (!request) {
+        ctx.reportCapabilityUnavailable('Rename build plate', 'Choose a plate and enter its new name.');
+        return;
+      }
+      ctx.renamePlate(request.plateId, request.nextName, request.sourceRevision);
+    },
+  },
+  {
+    id: 'reorder_plates',
+    label: 'Reorder build plates',
+    icon: 'plate',
+    group: 'system',
+    disclosure: 'inspector',
+    hint: 'Move build plates earlier or later',
+    run: (ctx, invocation) => {
+      const request = invocation.plateReorder;
+      if (!request) {
+        ctx.reportCapabilityUnavailable('Reorder build plates', 'Choose a complete plate order.');
+        return;
+      }
+      ctx.reorderPlates(request.orderedPlateIds, request.sourceRevision);
+    },
+  },
+  {
+    id: 'set_plate_printable',
+    label: 'Include build plate in printing',
+    icon: 'plate',
+    group: 'system',
+    disclosure: 'inspector',
+    hint: 'Include or exclude one build plate from print output',
+    run: (ctx, invocation) => {
+      const request = invocation.platePrintable;
+      if (!request) {
+        ctx.reportCapabilityUnavailable('Include build plate in printing', 'Choose a build plate.');
+        return;
+      }
+      ctx.setPlatePrintable(request.plateId, request.printable, request.sourceRevision);
+    },
   },
   {
     id: 'mesh_boolean_subtract',

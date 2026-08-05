@@ -12,7 +12,11 @@
     "icons:verify": "node scripts/vendor-xr-icons.mjs",
     "parity:extract": "node ../tools/parity/extract.mjs",
     "parity:verify": "node ../tools/parity/verify.mjs && node ../tools/parity/test.mjs && node ../tools/parity/extract.mjs --check",
-    "settings:verify": "node ../tools/settings-schema/generate.mjs --check && node ../tools/settings-schema/self-test.mjs",
+    "profiles:sync": "node scripts/verify-pinned-profile-overlays.mjs --write && node scripts/generate-profile-catalog.mjs",
+    "profiles:verify": "node scripts/verify-pinned-profile-overlays.mjs && node scripts/generate-profile-catalog.mjs --check",
+    "calibration:sync": "node scripts/generate-calibration-inventory.mjs",
+    "calibration:verify": "node scripts/generate-calibration-inventory.mjs --check",
+    "settings:verify": "npm run profiles:verify && node ../tools/settings-schema/generate.mjs --check && node ../tools/settings-schema/self-test.mjs",
     "security:check": "node scripts/security-contract.mjs",
     "offline:check": "node scripts/offline-contract.mjs",
     "architecture:check": "node tools/check-import-boundaries.mjs",
@@ -31,7 +35,7 @@
     "test:e2e": "npm run build && npm run offline:check && node scripts/e2e-smoke.mjs && node scripts/offline-smoke.mjs",
     "test:a11y": "npm run build && node scripts/a11y-smoke.mjs",
     "size:check": "node scripts/size-check.mjs",
-    "quality": "npm run icons:verify && npm run security:check && npm run format:check && npm run lint && npm run typecheck && npm run architecture:check && npm run test:unit && npm run test:integration && npm run test:project && npm run test:settings && npm run test:xr && npm run parity:verify && npm run settings:verify && npm run parity:oracles && npm run test:e2e && npm run test:a11y && npm run size:check"
+    "quality": "npm run icons:verify && npm run security:check && npm run format:check && npm run lint && npm run typecheck && npm run architecture:check && npm run test:unit && npm run test:integration && npm run test:project && npm run test:settings && npm run test:xr && npm run parity:verify && npm run settings:verify && npm run calibration:verify && npm run parity:oracles && npm run test:e2e && npm run test:a11y && npm run size:check"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",

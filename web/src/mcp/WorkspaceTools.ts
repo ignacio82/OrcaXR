@@ -1,13 +1,27 @@
-import { OrcaWorkspace, type WorkspaceGizmoTool } from '../workspace/OrcaWorkspace';
+import type { ActionContext } from '../actions/ActionContext';
+import type { ActionRegistry } from '../actions/ActionRegistry';
+import type { OrcaWorkspace, WorkspaceGizmoTool } from '../workspace/OrcaWorkspace';
 import type { McpToolArguments, McpToolHost } from './McpToolHost';
 
 const GIZMO_TOOLS: readonly WorkspaceGizmoTool[] = ['move', 'rotate', 'scale', 'paint', 'lay_on_face'];
+const ACTION_ID_BY_GIZMO_TOOL = {
+  move: 'tool_move',
+  rotate: 'tool_rotate',
+  scale: 'tool_scale',
+  paint: 'tool_paint',
+  lay_on_face: 'tool_lay_on_face',
+} as const satisfies Readonly<Record<WorkspaceGizmoTool, string>>;
 
 function isGizmoTool(value: unknown): value is WorkspaceGizmoTool {
   return typeof value === 'string' && GIZMO_TOOLS.includes(value as WorkspaceGizmoTool);
 }
 
-export function registerWorkspaceTools(mcp: McpToolHost, workspace: OrcaWorkspace) {
+export function registerWorkspaceTools(
+  mcp: McpToolHost,
+  workspace: OrcaWorkspace,
+  registry: ActionRegistry,
+  actionContext: ActionContext,
+) {
   mcp.registerTool(
     'get_workspace_state',
     'Snapshot the entire in-session workspace.',
@@ -73,7 +87,17 @@ export function registerWorkspaceTools(mcp: McpToolHost, workspace: OrcaWorkspac
           isError: true,
         };
       }
-      workspace.setTool(tool);
+      const actionId = ACTION_ID_BY_GIZMO_TOOL[tool];
+      const state = actionContext.ui.get();
+      const availability = registry.availability(actionId, 'automation', state);
+      const invoked = await registry.invoke(actionId, 'automation', actionContext, state);
+      if (!invoked) {
+        const reason = availability.state === 'enabled' ? 'The action did not run.' : availability.reason;
+        return {
+          content: [{ type: 'text', text: `Error: ${reason}` }],
+          isError: true,
+        };
+      }
       return {
         content: [{ type: 'text', text: `Gizmo tool set to ${tool}` }],
       };

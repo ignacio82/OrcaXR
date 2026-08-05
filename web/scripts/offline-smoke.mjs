@@ -6,6 +6,10 @@ const browser = await launchBrowser();
 let page;
 try {
   page = await openReadyPage(browser, url);
+  page.on('pageerror', (err) => console.error('[offline-smoke pageerror]', err.message));
+  page.on('requestfailed', (req) =>
+    console.error('[offline-smoke requestfailed]', req.url(), req.failure()?.errorText),
+  );
   await page.evaluate(() => globalThis.navigator.serviceWorker.ready);
   await page.reload({ waitUntil: 'networkidle0', timeout: 60_000 });
   await page.waitForSelector('#app-boot.ready', { timeout: 60_000 });

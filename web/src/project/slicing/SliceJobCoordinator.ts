@@ -2,9 +2,17 @@ import { canonicalStringify, cloneJson, deepFreeze } from '../domain/canonical';
 import type { PlateId } from '../domain/ids';
 import type { CancellationToken, ProjectSerializerPort, SerializedProject } from '../ports';
 import { Sha256SliceContentHasher } from './hash';
-import { cloneArchiveSnapshot, validatedSnapshot } from './source';
+import { projectPlateArchiveForSlice } from './plateProjection';
+import {
+  CanonicalSlicePreflightValidator,
+  type CanonicalSlicePreflightPort,
+  type CanonicalSlicePreflightResult,
+} from './preflight';
+import { validatedSnapshot } from './source';
 import {
   SLICE_PROTOCOL_VERSION,
+  type CanonicalProjectSliceGuard,
+  type CanonicalProjectSliceSnapshot,
   type CanonicalProjectSliceSourcePort,
   type CanonicalSliceJobResult,
   type SliceContentHasherPort,
@@ -14,12 +22,15 @@ import {
   type SliceJobScope,
   type SliceJobStatus,
   type SliceJobSubscriber,
+  type SliceFilamentProfileReference,
   type SlicePlateResult,
+  type SliceProfileReference,
   type SliceProfileSnapshot,
   type SliceProfileResolverPort,
   type SliceResultPublisherPort,
   type SliceRouteAdapterPort,
   type SliceRouteMetadata,
+  type SliceRouteProgress,
   type SliceRouteRequest,
   type SliceRouteResponse,
 } from './types';
@@ -40,7 +51,7 @@ export class SliceJobTimeoutError extends Error {
 
 export class StaleSliceCompletionError extends Error {
   constructor() {
-    super('Slice completed for a stale canonical project revision');
+    super('Slice completed for a stale canonical project or asset bundle');
     this.name = 'StaleSliceCompletionError';
   }
 }
@@ -59,6 +70,21 @@ export class SliceProtocolError extends Error {
   }
 }
 
+export class SlicePreflightError extends Error {
+  readonly result: CanonicalSlicePreflightResult;
+
+  constructor(result: CanonicalSlicePreflightResult) {
+    const first = result.issues.find((issue) => issue.severity === 'error');
+    super(
+      `Slice preflight blocked plate ${result.plateId} with ${result.blockingCount} error${
+        result.blockingCount === 1 ? '' : 's'
+      }.${first ? ` ${first.message}` : ''}`,
+    );
+    this.name = 'SlicePreflightError';
+    this.result = deepFreeze(cloneJson(result));
+  }
+}
+
 export class SliceRouteError extends Error {
   constructor(
     message: string,
@@ -69,11 +95,24 @@ export class SliceRouteError extends Error {
   }
 }
 
+export class SliceRouteCancellationError extends Error {
+  constructor(
+    message: string,
+    readonly cancellationConfirmed: boolean,
+    readonly cancellationReason?: Error,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = 'SliceRouteCancellationError';
+  }
+}
+
 export interface CanonicalSliceJobCoordinatorOptions {
   source: CanonicalProjectSliceSourcePort;
   serializer: ProjectSerializerPort;
   profiles: SliceProfileResolverPort;
   route: SliceRouteAdapterPort;
+  preflight?: CanonicalSlicePreflightPort;
   publisher?: SliceResultPublisherPort;
   hasher?: SliceContentHasherPort;
   createJobId?: (sequence: number) => string;
@@ -91,6 +130,7 @@ interface MutableJob {
 
 const DEFAULT_OPTIONS: Required<SliceJobOptions> = {
   maxAttempts: 2,
+  preflightTimeoutMs: 10_000,
   attemptTimeoutMs: 120_000,
   serializationTimeoutMs: 30_000,
   recoveryTimeoutMs: 10_000,
@@ -104,6 +144,7 @@ const DEFAULT_OPTIONS: Required<SliceJobOptions> = {
 export class CanonicalSliceJobCoordinator {
   private readonly routeMetadata: SliceRouteMetadata;
   private readonly hasher: SliceContentHasherPort;
+  private readonly preflight: CanonicalSlicePreflightPort;
   private readonly subscribers = new Set<SliceJobSubscriber>();
   private readonly activeJobs = new Map<string, MutableJob>();
   private readonly issuedJobIds = new Set<string>();
@@ -113,8 +154,10 @@ export class CanonicalSliceJobCoordinator {
 
   constructor(private readonly options: CanonicalSliceJobCoordinatorOptions) {
     assertRouteMetadata(options.route.metadata);
+    assertRouteCancellation(options.route.cancellation);
     this.routeMetadata = deepFreeze(cloneJson(options.route.metadata));
     this.hasher = options.hasher ?? new Sha256SliceContentHasher();
+    this.preflight = options.preflight ?? new CanonicalSlicePreflightValidator();
   }
 
   startCurrentPlate(options?: SliceJobOptions): SliceJobHandle {
@@ -139,9 +182,7 @@ export class CanonicalSliceJobCoordinator {
   }
 
   cancelAll(reason = 'All slice jobs cancelled'): void {
-    for (const job of this.activeJobs.values()) {
-      if (!job.controller.signal.aborted) job.controller.abort(new SliceJobCancelledError(reason));
-    }
+    for (const job of this.activeJobs.values()) this.requestCancellation(job, reason);
   }
 
   private start(scope: SliceJobScope, overrides: SliceJobOptions | undefined): SliceJobHandle {
@@ -163,6 +204,7 @@ export class CanonicalSliceJobCoordinator {
         phase: 'queued',
         sourceRevision: archive.sourceRevision,
         sourceHash: archive.sourceHash,
+        sourceAssetHash: archive.sourceAssetHash,
         plateIds,
         completedPlateCount: 0,
         totalPlateCount: plateIds.length,
@@ -194,53 +236,98 @@ export class CanonicalSliceJobCoordinator {
       id,
       completion,
       cancel: (reason = 'Slice job cancelled') => {
-        if (!controller.signal.aborted) controller.abort(new SliceJobCancelledError(reason));
+        this.requestCancellation(job, reason);
       },
       getStatus: () => cloneStatus(job.status),
     };
   }
 
-  private async run(job: MutableJob, archive: ReturnType<typeof validatedSnapshot>): Promise<CanonicalSliceJobResult> {
-    this.assertFresh(job, archive.sourceRevision, archive.sourceHash);
-    this.transition(job, 'serializing');
-    const serialized = await runAbortable(
-      job.controller.signal,
-      job.options.serializationTimeoutMs,
-      new SliceJobTimeoutError('Project serialization', job.options.serializationTimeoutMs),
-      (signal) => this.options.serializer.serialize(cloneArchiveSnapshot(archive), cancellationToken(signal)),
-    );
-    validateSerializedProject(serialized, archive.sourceRevision, archive.sourceHash);
-    this.assertFresh(job, archive.sourceRevision, archive.sourceHash);
-
-    const projectBytes = serialized.bytes.slice();
-    const inputHash = await this.hasher.digest(projectBytes);
-    this.assertFresh(job, archive.sourceRevision, archive.sourceHash);
+  private async run(job: MutableJob, archive: CanonicalProjectSliceSnapshot): Promise<CanonicalSliceJobResult> {
     const plates: SlicePlateResult[] = [];
+    const allSerializerWarnings: string[] = [];
 
     for (const plateId of job.status.plateIds) {
-      this.assertFresh(job, archive.sourceRevision, archive.sourceHash);
+      this.assertFresh(job, archive);
+      job.status = {
+        ...job.status,
+        phase: 'preflighting',
+        activePlateId: plateId,
+        attempt: 0,
+        progressPercent: undefined,
+        progressMessage: undefined,
+      };
+      this.emit(job);
+      const preflight = validatedPreflight(
+        await runAbortable(
+          job.controller.signal,
+          job.options.preflightTimeoutMs,
+          new SliceJobTimeoutError('Plate preflight', job.options.preflightTimeoutMs),
+          () => Promise.resolve(this.preflight.evaluate(archive, plateId)),
+        ),
+        plateId,
+      );
+      this.assertFresh(job, archive);
+      if (!preflight.canSlice) throw new SlicePreflightError(preflight);
+
+      job.status = {
+        ...job.status,
+        phase: 'serializing',
+        activePlateId: plateId,
+        attempt: 0,
+        progressPercent: undefined,
+        progressMessage: undefined,
+      };
+      this.emit(job);
+
+      const projection = projectPlateArchiveForSlice(archive, plateId);
+      const serialized = await runAbortable(
+        job.controller.signal,
+        job.options.serializationTimeoutMs,
+        new SliceJobTimeoutError('Plate serialization', job.options.serializationTimeoutMs),
+        (signal) => this.options.serializer.serialize(projection.archive, cancellationToken(signal)),
+      );
+      validateSerializedProject(serialized, projection.archive.sourceRevision, projection.archive.sourceHash);
+      this.assertFresh(job, archive);
+
+      const serializerWarnings = uniqueWarnings(serialized.warnings ?? []);
+      allSerializerWarnings.push(...serializerWarnings);
+      const projectBytes = serialized.bytes.slice();
+      const inputHash = await this.hasher.digest(projectBytes);
+      this.assertFresh(job, archive);
       const profiles = validatedProfiles(await this.options.profiles.capture(archive.state, plateId), archive.state);
-      const plate = await this.executePlate(job, plateId, projectBytes, inputHash, archive, profiles);
+      this.assertFresh(job, archive);
+      const plate = await this.executePlate(
+        job,
+        plateId,
+        projectBytes,
+        inputHash,
+        archive,
+        profiles,
+        preflight,
+        serializerWarnings,
+      );
       plates.push(plate);
       job.status = {
         ...job.status,
         completedPlateCount: plates.length,
         activePlateId: undefined,
         attempt: 0,
+        progressPercent: undefined,
+        progressMessage: undefined,
       };
       this.emit(job);
     }
 
-    this.assertFresh(job, archive.sourceRevision, archive.sourceHash);
-    const serializerWarnings = uniqueWarnings(serialized.warnings ?? []);
+    this.assertFresh(job, archive);
+    const serializerWarnings = uniqueWarnings(allSerializerWarnings);
     const result: CanonicalSliceJobResult = {
       protocolVersion: SLICE_PROTOCOL_VERSION,
       jobId: job.id,
       scope: job.scope,
       sourceRevision: archive.sourceRevision,
       sourceHash: archive.sourceHash,
+      sourceAssetHash: archive.sourceAssetHash,
       route: cloneJson(this.routeMetadata),
-      projectInputHash: inputHash,
       serializerWarnings,
       warnings: uniqueWarnings([...serializerWarnings, ...plates.flatMap((plate) => plate.warnings)]),
       plates,
@@ -258,17 +345,21 @@ export class CanonicalSliceJobCoordinator {
     plateId: PlateId,
     projectBytes: Uint8Array,
     inputHash: string,
-    archive: ReturnType<typeof validatedSnapshot>,
+    archive: CanonicalProjectSliceSnapshot,
     profiles: SliceProfileSnapshot,
+    preflight: CanonicalSlicePreflightResult,
+    serializerWarnings: readonly string[],
   ): Promise<SlicePlateResult> {
     let lastError: unknown;
     for (let attempt = 1; attempt <= job.options.maxAttempts; attempt += 1) {
-      this.assertFresh(job, archive.sourceRevision, archive.sourceHash);
+      this.assertFresh(job, archive);
       job.status = {
         ...job.status,
         phase: attempt === 1 ? 'submitting' : 'retrying',
         activePlateId: plateId,
         attempt,
+        progressPercent: undefined,
+        progressMessage: undefined,
       };
       this.emit(job);
       const request = routeRequest(
@@ -282,32 +373,49 @@ export class CanonicalSliceJobCoordinator {
         this.routeMetadata,
       );
       try {
-        const response = await runAbortable(
+        const response = await runRouteAbortable(
           job.controller.signal,
           job.options.attemptTimeoutMs,
           new SliceJobTimeoutError('Slice route attempt', job.options.attemptTimeoutMs),
-          (signal) => this.options.route.execute(request, signal),
+          this.options.route.cancellation,
+          (signal) =>
+            this.options.route.execute(request, signal, (progress) =>
+              this.reportRouteProgress(job, plateId, attempt, progress),
+            ),
         );
-        this.assertFresh(job, archive.sourceRevision, archive.sourceHash);
+        this.assertFresh(job, archive);
         validateRouteResponse(response, request, this.routeMetadata);
         const gcode = response.gcode.slice();
         const outputHash = await this.hasher.digest(gcode);
-        this.assertFresh(job, archive.sourceRevision, archive.sourceHash);
+        this.assertFresh(job, archive);
         return {
           plateId,
           projectInputHash: inputHash,
           outputHash,
           profiles: cloneJson(profiles),
+          preflightIssues: cloneJson(preflight.issues),
+          serializerWarnings: [...serializerWarnings],
           gcode,
-          warnings: uniqueWarnings(response.warnings),
+          warnings: uniqueWarnings([
+            ...preflight.issues.filter((issue) => issue.severity === 'warning').map((issue) => issue.message),
+            ...response.warnings,
+          ]),
           statistics: deepFreeze(cloneJson(response.statistics)),
           attempts: attempt,
         };
       } catch (error) {
+        if (
+          error instanceof SliceRouteCancellationError &&
+          (!error.cancellationConfirmed || job.controller.signal.aborted)
+        ) {
+          throw error;
+        }
         if (job.controller.signal.aborted) throw abortReason(job.controller.signal);
-        this.assertFresh(job, archive.sourceRevision, archive.sourceHash);
+        this.assertFresh(job, archive);
         lastError = error;
-        const timedOut = error instanceof SliceJobTimeoutError;
+        const timedOut =
+          error instanceof SliceJobTimeoutError ||
+          (error instanceof SliceRouteCancellationError && error.cancellationReason instanceof SliceJobTimeoutError);
         const retryable = timedOut || (error instanceof SliceRouteError && error.retryable);
         const adapterRetryable = this.options.route.isRetryable?.(error) ?? false;
         if (attempt >= job.options.maxAttempts || (!retryable && !adapterRetryable)) throw error;
@@ -333,33 +441,91 @@ export class CanonicalSliceJobCoordinator {
     throw lastError ?? new SliceRouteError('Slice route exhausted without a result');
   }
 
-  private assertFresh(job: MutableJob, revision: number, hash: string): void {
+  private assertFresh(job: MutableJob, guard: CanonicalProjectSliceGuard): void {
     if (job.controller.signal.aborted) throw abortReason(job.controller.signal);
-    if (!this.options.source.isCurrent({ revision, hash })) throw new StaleSliceCompletionError();
+    if (!this.options.source.isCurrent(guard)) throw new StaleSliceCompletionError();
     for (const plateId of job.status.plateIds) {
       if (this.latestOwnerByPlate.get(plateId) !== job.id) throw new SupersededSliceJobError();
     }
   }
 
   private transition(job: MutableJob, phase: SliceJobPhase): void {
-    job.status = { ...job.status, phase, activePlateId: undefined, attempt: 0 };
-    this.emit(job);
-  }
-
-  private fail(job: MutableJob, error: unknown): void {
-    const phase: SliceJobPhase =
-      error instanceof SliceJobCancelledError
-        ? 'cancelled'
-        : error instanceof SliceJobTimeoutError
-          ? 'timed-out'
-          : error instanceof StaleSliceCompletionError || error instanceof SupersededSliceJobError
-            ? 'stale'
-            : 'failed';
     job.status = {
       ...job.status,
       phase,
       activePlateId: undefined,
+      attempt: 0,
+      progressPercent: undefined,
+      progressMessage: undefined,
+    };
+    this.emit(job);
+  }
+
+  private requestCancellation(job: MutableJob, reason: string): void {
+    if (job.controller.signal.aborted) return;
+    job.status = {
+      ...job.status,
+      phase: 'cancelling',
+      progressPercent: undefined,
+      progressMessage: undefined,
+    };
+    this.emit(job);
+    job.controller.abort(new SliceJobCancelledError(reason));
+  }
+
+  private fail(job: MutableJob, error: unknown): void {
+    const phase: SliceJobPhase =
+      error instanceof SliceRouteCancellationError
+        ? error.cancellationConfirmed
+          ? error.cancellationReason instanceof SliceJobTimeoutError
+            ? 'timed-out'
+            : 'cancelled'
+          : 'failed'
+        : error instanceof SliceJobCancelledError
+          ? 'cancelled'
+          : error instanceof SliceJobTimeoutError
+            ? 'timed-out'
+            : error instanceof StaleSliceCompletionError || error instanceof SupersededSliceJobError
+              ? 'stale'
+              : 'failed';
+    job.status = {
+      ...job.status,
+      phase,
+      activePlateId: undefined,
+      progressPercent: undefined,
+      progressMessage: undefined,
+      cancellationConfirmed: error instanceof SliceRouteCancellationError ? error.cancellationConfirmed : undefined,
       errorName: error instanceof Error ? error.name : 'UnknownError',
+    };
+    this.emit(job);
+  }
+
+  private reportRouteProgress(job: MutableJob, plateId: PlateId, attempt: number, progress: SliceRouteProgress): void {
+    if (
+      this.activeJobs.get(job.id) !== job ||
+      job.controller.signal.aborted ||
+      job.status.activePlateId !== plateId ||
+      job.status.attempt !== attempt ||
+      (job.status.phase !== 'submitting' && job.status.phase !== 'retrying')
+    ) {
+      return;
+    }
+    const percent =
+      typeof progress.percent === 'number' && Number.isFinite(progress.percent)
+        ? Math.min(100, Math.max(0, progress.percent))
+        : undefined;
+    const message =
+      typeof progress.message === 'string'
+        ? progress.message
+            .replace(/[\r\n\t]+/g, ' ')
+            .trim()
+            .slice(0, 160) || undefined
+        : undefined;
+    if (percent === undefined && message === undefined) return;
+    job.status = {
+      ...job.status,
+      ...(percent === undefined ? {} : { progressPercent: percent }),
+      ...(message === undefined ? {} : { progressMessage: message }),
     };
     this.emit(job);
   }
@@ -401,7 +567,7 @@ function routeRequest(
   plateId: PlateId,
   projectBytes: Uint8Array,
   inputHash: string,
-  archive: ReturnType<typeof validatedSnapshot>,
+  archive: CanonicalProjectSliceSnapshot,
   profiles: SliceProfileSnapshot,
   metadata: SliceRouteMetadata,
 ): SliceRouteRequest {
@@ -411,6 +577,7 @@ function routeRequest(
     inputHash,
     sourceRevision: archive.sourceRevision,
     sourceHash: archive.sourceHash,
+    sourceAssetHash: archive.sourceAssetHash,
   });
   return Object.freeze({
     protocolVersion: SLICE_PROTOCOL_VERSION,
@@ -459,38 +626,156 @@ function validatedProfiles(
   profile: SliceProfileSnapshot,
   state: ReturnType<typeof validatedSnapshot>['state'],
 ): SliceProfileSnapshot {
-  const references = profile.references.map((reference) => ({ ...reference }));
-  if (!profile.effectiveConfigHash) throw new SliceProtocolError('Effective profile config hash is missing');
-  for (const reference of references) {
-    if (!reference.id || !reference.hash)
-      throw new SliceProtocolError('Profile references require stable IDs and hashes');
+  if (!profile || !Array.isArray(profile.references)) {
+    throw new SliceProtocolError('Profile snapshot references are malformed');
   }
-  const printerHash = state.printer.profileHash;
-  const printerId = state.printer.profileId;
-  if (
-    printerHash &&
-    !references.some(
-      (reference) =>
-        reference.kind === 'printer' && reference.hash === printerHash && (!printerId || reference.id === printerId),
-    )
-  ) {
-    throw new SliceProtocolError('Profile snapshot omits the canonical printer profile hash');
+  if (!isCanonicalSha256(profile.effectiveConfigHash)) {
+    throw new SliceProtocolError('Effective profile config hash must be a canonical SHA-256 identity');
   }
-  for (const filament of state.filaments.physical) {
+
+  const references: SliceProfileReference[] = [];
+  for (const candidate of profile.references as readonly unknown[]) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+      throw new SliceProtocolError('Profile references are malformed');
+    }
+    const reference = candidate as Record<string, unknown>;
     if (
-      filament.enabled &&
-      filament.presetHash &&
-      !references.some(
-        (reference) =>
-          reference.kind === 'filament' &&
-          reference.hash === filament.presetHash &&
-          (!filament.presetId || reference.id === filament.presetId),
-      )
+      typeof reference.id !== 'string' ||
+      reference.id.length === 0 ||
+      reference.id.trim() !== reference.id ||
+      !isCanonicalSha256(reference.hash)
     ) {
-      throw new SliceProtocolError(`Profile snapshot omits filament profile ${filament.presetId ?? filament.id}`);
+      throw new SliceProtocolError('Profile references require canonical IDs and SHA-256 hashes');
+    }
+    if (reference.kind === 'filament') {
+      if (!Number.isSafeInteger(reference.tool) || (reference.tool as number) < 0) {
+        throw new SliceProtocolError('Filament profile references require a non-negative engine tool slot');
+      }
+      references.push({
+        kind: 'filament',
+        id: reference.id,
+        hash: reference.hash,
+        tool: reference.tool as number,
+      });
+    } else if (reference.kind === 'printer' || reference.kind === 'process') {
+      if (Object.hasOwn(reference, 'tool')) {
+        throw new SliceProtocolError('Only filament profile references may carry an engine tool slot');
+      }
+      references.push({ kind: reference.kind, id: reference.id, hash: reference.hash });
+    } else {
+      throw new SliceProtocolError('Profile reference kind is unsupported');
     }
   }
-  return deepFreeze({ references, effectiveConfigHash: profile.effectiveConfigHash });
+
+  const printerReferences = references.filter((reference) => reference.kind === 'printer');
+  const processReferences = references.filter((reference) => reference.kind === 'process');
+  if (printerReferences.length !== 1 || processReferences.length !== 1) {
+    throw new SliceProtocolError('Profile snapshot requires exactly one printer and one process reference');
+  }
+  const printer = printerReferences[0];
+  const process = processReferences[0];
+  const expectedPrinterId = state.printer.profileId?.trim() || 'canonical:effective-printer';
+  const expectedProcessId = configString(state.config.print_settings_id) || 'canonical:effective-process';
+  if (printer.id !== expectedPrinterId || process.id !== expectedProcessId) {
+    throw new SliceProtocolError('Printer or process profile ID differs from the current canonical state');
+  }
+  const canonicalPrinterHash = canonicalExplicitHash(state.printer.profileHash);
+  if (canonicalPrinterHash !== undefined && printer.hash !== canonicalPrinterHash) {
+    throw new SliceProtocolError('Profile snapshot omits the canonical printer profile hash');
+  }
+
+  const expectedFilaments = [
+    ...state.filaments.physical.map((filament, tool) => ({
+      tool,
+      id: filament.presetId?.trim() || filament.id,
+      hash: canonicalExplicitHash(filament.presetHash),
+    })),
+    ...state.filaments.mixed
+      .filter((filament) => filament.enabled)
+      .map((filament, index) => ({
+        tool: state.filaments.physical.length + index,
+        id: filament.id,
+        hash: undefined,
+      })),
+  ];
+  const filamentReferences = references.filter(
+    (reference): reference is SliceFilamentProfileReference => reference.kind === 'filament',
+  );
+  if (filamentReferences.length !== expectedFilaments.length) {
+    throw new SliceProtocolError('Profile snapshot does not cover every configured engine filament slot');
+  }
+  const filamentByTool = new Map<number, SliceFilamentProfileReference>();
+  for (const reference of filamentReferences) {
+    if (reference.tool >= expectedFilaments.length || filamentByTool.has(reference.tool)) {
+      throw new SliceProtocolError('Filament profile tool slots must be unique and dense');
+    }
+    filamentByTool.set(reference.tool, reference);
+  }
+  const orderedFilaments = expectedFilaments.map((expected) => {
+    const reference = filamentByTool.get(expected.tool);
+    if (!reference) throw new SliceProtocolError('Filament profile tool slots must be unique and dense');
+    if (reference.id !== expected.id) {
+      throw new SliceProtocolError(`Engine filament slot ${expected.tool} differs from the current canonical state`);
+    }
+    if (expected.hash !== undefined && reference.hash !== expected.hash) {
+      throw new SliceProtocolError(`Engine filament slot ${expected.tool} omits its canonical profile hash`);
+    }
+    return reference;
+  });
+
+  return deepFreeze(
+    cloneJson({
+      references: [printer, process, ...orderedFilaments],
+      effectiveConfigHash: profile.effectiveConfigHash,
+    }),
+  );
+}
+
+function isCanonicalSha256(value: unknown): value is string {
+  return typeof value === 'string' && /^sha256:[0-9a-f]{64}$/.test(value);
+}
+
+function canonicalExplicitHash(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized && isCanonicalSha256(normalized) ? normalized : undefined;
+}
+
+function configString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function validatedPreflight(result: CanonicalSlicePreflightResult, plateId: PlateId): CanonicalSlicePreflightResult {
+  if (!result || result.plateId !== plateId) {
+    throw new SliceProtocolError('Preflight result belongs to another plate');
+  }
+  if (
+    !Array.isArray(result.issues) ||
+    !Array.isArray(result.printableInstanceIds) ||
+    !Array.isArray(result.usedFilamentIds)
+  ) {
+    throw new SliceProtocolError('Preflight result is malformed');
+  }
+  const ids = new Set<string>();
+  for (const issue of result.issues) {
+    if (
+      !issue.id?.trim() ||
+      !issue.code?.trim() ||
+      !issue.message?.trim() ||
+      !issue.help?.trim() ||
+      (issue.severity !== 'warning' && issue.severity !== 'error') ||
+      !Array.isArray(issue.entities) ||
+      !Array.isArray(issue.actions)
+    ) {
+      throw new SliceProtocolError('Preflight issue is malformed');
+    }
+    if (ids.has(issue.id)) throw new SliceProtocolError(`Preflight repeats issue ID ${issue.id}`);
+    ids.add(issue.id);
+  }
+  const blockingCount = result.issues.filter((issue) => issue.severity === 'error').length;
+  if (result.blockingCount !== blockingCount || result.canSlice !== (blockingCount === 0)) {
+    throw new SliceProtocolError('Preflight blocking summary differs from its issue set');
+  }
+  return deepFreeze(cloneJson(result));
 }
 
 function assertRouteMetadata(metadata: SliceRouteMetadata): void {
@@ -499,6 +784,18 @@ function assertRouteMetadata(metadata: SliceRouteMetadata): void {
   }
   if (!metadata.id || !metadata.engine.commit || !metadata.engine.artifactHash) {
     throw new SliceProtocolError('Slice route requires ID, engine commit, and artifact hash');
+  }
+}
+
+function assertRouteCancellation(cancellation: SliceRouteAdapterPort['cancellation']): void {
+  if (!cancellation) return;
+  if (
+    cancellation.mode !== 'confirmed-cleanup' ||
+    !Number.isSafeInteger(cancellation.cleanupTimeoutMs) ||
+    cancellation.cleanupTimeoutMs <= 0 ||
+    cancellation.cleanupTimeoutMs > 120_000
+  ) {
+    throw new SliceProtocolError('Confirmed route cleanup requires a timeout from 1 to 120000 ms');
   }
 }
 
@@ -543,6 +840,102 @@ async function runAbortable<T>(
     clearTimeout(timer);
     parent.removeEventListener('abort', forwardAbort);
   }
+}
+
+async function runRouteAbortable<T>(
+  parent: AbortSignal,
+  timeoutMs: number,
+  timeoutError: SliceJobTimeoutError,
+  cancellation: SliceRouteAdapterPort['cancellation'],
+  operation: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  if (!cancellation) return runAbortable(parent, timeoutMs, timeoutError, operation);
+  if (parent.aborted) {
+    const reason = abortReason(parent);
+    throw new SliceRouteCancellationError('Slice route was cancelled before submission', true, reason, {
+      cause: reason,
+    });
+  }
+
+  const controller = new AbortController();
+  const forwardAbort = () => controller.abort(parent.reason);
+  parent.addEventListener('abort', forwardAbort, { once: true });
+  const timer = setTimeout(() => controller.abort(timeoutError), timeoutMs);
+  const operationPromise = Promise.resolve().then(() => operation(controller.signal));
+  const settled = settlePromise(operationPromise);
+  try {
+    const first = await raceSettlementWithAbort(settled, controller.signal);
+    if (first.kind === 'value') return first.value;
+    if (first.kind === 'error') throw first.error;
+
+    const cancellationReason = abortReason(controller.signal);
+    const cleanup = await settleWithin(settled, cancellation.cleanupTimeoutMs);
+    if (cleanup.kind === 'cleanup-timeout') {
+      throw new SliceRouteCancellationError(
+        `Slice route did not confirm cleanup within ${cancellation.cleanupTimeoutMs} ms`,
+        false,
+        cancellationReason,
+      );
+    }
+    if (cleanup.kind === 'value') {
+      throw new SliceRouteCancellationError(
+        'Slice route returned a result after abort without confirming cleanup',
+        false,
+        cancellationReason,
+      );
+    }
+    if (cleanup.error instanceof SliceRouteCancellationError) throw cleanup.error;
+    throw new SliceRouteCancellationError(
+      'Slice route rejected after abort without confirming cleanup',
+      false,
+      cancellationReason,
+      { cause: cleanup.error },
+    );
+  } finally {
+    clearTimeout(timer);
+    parent.removeEventListener('abort', forwardAbort);
+  }
+}
+
+type Settled<T> = { kind: 'value'; value: T } | { kind: 'error'; error: unknown };
+
+function settlePromise<T>(promise: Promise<T>): Promise<Settled<T>> {
+  return promise.then(
+    (value) => ({ kind: 'value' as const, value }),
+    (error: unknown) => ({ kind: 'error' as const, error }),
+  );
+}
+
+function raceSettlementWithAbort<T>(
+  settled: Promise<Settled<T>>,
+  signal: AbortSignal,
+): Promise<Settled<T> | { kind: 'abort' }> {
+  if (signal.aborted) return Promise.resolve({ kind: 'abort' });
+  return new Promise((resolve) => {
+    const aborted = () => {
+      cleanup();
+      resolve({ kind: 'abort' });
+    };
+    const cleanup = () => signal.removeEventListener('abort', aborted);
+    signal.addEventListener('abort', aborted, { once: true });
+    void settled.then((outcome) => {
+      cleanup();
+      resolve(outcome);
+    });
+  });
+}
+
+function settleWithin<T>(
+  settled: Promise<Settled<T>>,
+  timeoutMs: number,
+): Promise<Settled<T> | { kind: 'cleanup-timeout' }> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve({ kind: 'cleanup-timeout' }), timeoutMs);
+    void settled.then((outcome) => {
+      clearTimeout(timer);
+      resolve(outcome);
+    });
+  });
 }
 
 function raceAbort<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
@@ -590,6 +983,8 @@ function cloneJobResult(result: CanonicalSliceJobResult): CanonicalSliceJobResul
     plates: result.plates.map((plate) => ({
       ...plate,
       profiles: cloneJson(plate.profiles),
+      preflightIssues: cloneJson(plate.preflightIssues),
+      serializerWarnings: [...plate.serializerWarnings],
       gcode: plate.gcode.slice(),
       warnings: [...plate.warnings],
       statistics: cloneJson(plate.statistics),

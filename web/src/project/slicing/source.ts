@@ -1,10 +1,13 @@
-import { contentDigest, type AssetPayload, type AssetRepository } from '../assets';
+import { assetBundleFingerprint, contentDigest, type AssetPayload, type AssetRepository } from '../assets';
 import { canonicalStringify, cloneJson, cloneProjectState, deepFreeze, projectFingerprint } from '../domain/canonical';
 import type { ProjectState } from '../domain/model';
 import { assertValidProjectState } from '../domain/validation';
-import type { ProjectArchiveSnapshot } from '../ports';
 import type { ProjectStorePort } from '../store';
-import type { CanonicalProjectSliceSourcePort } from './types';
+import type {
+  CanonicalProjectSliceGuard,
+  CanonicalProjectSliceSnapshot,
+  CanonicalProjectSliceSourcePort,
+} from './types';
 
 /** Canonical store/assets adapter. It never consults render or legacy workspace state. */
 export class StoreProjectSliceSource implements CanonicalProjectSliceSourcePort {
@@ -13,18 +16,23 @@ export class StoreProjectSliceSource implements CanonicalProjectSliceSourcePort 
     private readonly assets: AssetRepository,
   ) {}
 
-  capture(): ProjectArchiveSnapshot {
+  capture(): CanonicalProjectSliceSnapshot {
     const snapshot = this.project.getSnapshot();
+    const assets = this.assets.list();
     return validatedSnapshot({
       state: snapshot.state,
-      assets: this.assets.list(),
+      assets,
       sourceRevision: snapshot.revision,
       sourceHash: snapshot.hash,
+      sourceAssetHash: assetBundleFingerprint(assets),
     });
   }
 
-  isCurrent(guard: { revision: number; hash: string }): boolean {
-    return this.project.isCurrent(guard);
+  isCurrent(guard: CanonicalProjectSliceGuard): boolean {
+    return (
+      this.project.isCurrent({ revision: guard.sourceRevision, hash: guard.sourceHash }) &&
+      assetBundleFingerprint(this.assets.list()) === guard.sourceAssetHash
+    );
   }
 }
 
@@ -32,7 +40,7 @@ export class StoreProjectSliceSource implements CanonicalProjectSliceSourcePort 
  * Defensively clones a source snapshot and verifies that its state hash and
  * immutable asset bundle describe the same canonical graph.
  */
-export function validatedSnapshot(snapshot: ProjectArchiveSnapshot): ProjectArchiveSnapshot {
+export function validatedSnapshot(snapshot: CanonicalProjectSliceSnapshot): CanonicalProjectSliceSnapshot {
   assertValidProjectState(snapshot.state);
   const state = deepFreeze(cloneProjectState(snapshot.state));
   const expectedHash = projectFingerprint(state);
@@ -43,20 +51,26 @@ export function validatedSnapshot(snapshot: ProjectArchiveSnapshot): ProjectArch
     throw new Error(`Invalid canonical project revision ${snapshot.sourceRevision}`);
   }
   const assets = validateAssets(state, snapshot.assets);
+  const sourceAssetHash = assetBundleFingerprint(assets);
+  if (snapshot.sourceAssetHash !== sourceAssetHash) {
+    throw new Error('Canonical source asset bundle hash mismatch');
+  }
   return {
     state,
     assets,
     sourceRevision: snapshot.sourceRevision,
     sourceHash: snapshot.sourceHash,
+    sourceAssetHash,
   };
 }
 
-export function cloneArchiveSnapshot(snapshot: ProjectArchiveSnapshot): ProjectArchiveSnapshot {
+export function cloneArchiveSnapshot(snapshot: CanonicalProjectSliceSnapshot): CanonicalProjectSliceSnapshot {
   return {
     state: deepFreeze(cloneProjectState(snapshot.state)),
     assets: snapshot.assets.map(cloneAsset),
     sourceRevision: snapshot.sourceRevision,
     sourceHash: snapshot.sourceHash,
+    sourceAssetHash: snapshot.sourceAssetHash,
   };
 }
 
