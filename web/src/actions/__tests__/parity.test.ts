@@ -48,7 +48,6 @@ for (const line of parityDocument.split('\n')) {
 }
 
 const UNAVAILABLE_IDS = [
-  'file_import_zip',
   'file_export_3mf',
   'edit_cut',
   'edit_copy',
@@ -101,7 +100,6 @@ const UNAVAILABLE_IDS = [
 ].sort();
 
 const CANONICAL_CUTOVER_GATED_IDS = [
-  'file_import_zip',
   'file_export_3mf',
   'edit_cut',
   'edit_copy',
@@ -125,6 +123,7 @@ const CANONICAL_ACTIONS_LEFT_ENABLED = [
   'file_new_project',
   'file_open_project',
   'file_import_model',
+  'file_import_zip',
   'file_save_project',
   'file_save_project_as',
   'edit_undo',

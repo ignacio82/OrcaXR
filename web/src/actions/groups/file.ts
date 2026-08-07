@@ -40,7 +40,7 @@ export const fileActions: Action[] = [
     group: 'file',
     disclosure: 'menu',
     menuSection: 'file',
-    hint: 'Import an STL or 3MF model',
+    hint: 'Import an STL, OBJ, or AMF model (3MF projects use Open Project)',
     run: (ctx) => ctx.loadModel(),
   },
   {
@@ -60,7 +60,7 @@ export const fileActions: Action[] = [
     group: 'file',
     disclosure: 'menu',
     menuSection: 'file',
-    hint: 'Load all models contained in a .zip archive',
+    hint: 'Import every STL, OBJ, and AMF model in a .zip archive as one transaction',
     run: (ctx) => ctx.importZip(),
   },
   {

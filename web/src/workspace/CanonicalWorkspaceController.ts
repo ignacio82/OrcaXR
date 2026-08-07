@@ -76,6 +76,7 @@ import {
 } from '../project/filaments/mixedCommands';
 import type { CommandHistorySnapshot } from '../project/history/commandBus';
 import { PreparedProjectImport, ProjectImportCoordinator } from '../project/import/ProjectImportCoordinator';
+import { ModelImportParser, type ModelImportPlacement } from '../project/import/ModelImportParser';
 import {
   ImportCancellationController,
   type ProjectImportParserPort,
@@ -2013,6 +2014,56 @@ export class CanonicalWorkspaceController {
       // Keep the lifecycle token while the immutable preview is live. Its
       // confirm/cancel settlement releases the token; disposal still aborts
       // every genuinely outstanding preview.
+      return prepared;
+    } catch (error) {
+      this.importCancellations.delete(lifecycle);
+      throw error;
+    }
+  }
+
+  /**
+   * Decode an STL/OBJ/AMF/ZIP model source and stage it as a merge import.
+   * The same transactional preview/confirm contract as project import applies,
+   * so a cancelled or malformed model never mutates canonical state, and the
+   * commit remains one undoable command.
+   */
+  async prepareModelImport(
+    bytes: Uint8Array,
+    source: ProjectImportSource,
+    options: { placement?: ModelImportPlacement; cancellation?: CancellationToken } = {},
+  ): Promise<PreparedProjectImport> {
+    this.assertActive();
+    const lifecycle = new ImportCancellationController();
+    this.importCancellations.add(lifecycle);
+    const parser = new ModelImportParser({
+      idSource: this.options.idSource,
+      clock: () => readClock(this.options.clock),
+      placement: options.placement,
+    });
+    const coordinator = new ProjectImportCoordinator({
+      parser: {
+        parse: async (request) => {
+          const parsed = await parser.parse(request);
+          return { ...parsed, state: this.withReconciledAutoPairs(parsed.state) };
+        },
+      },
+      commands: this.session.commands,
+      now: () => readClock(this.options.clock),
+    });
+    try {
+      const prepared = await coordinator.prepare(
+        {
+          bytes,
+          source,
+          mode: 'merge',
+          cancellation: combinedCancellation(lifecycle.token, options.cancellation),
+        },
+        () => this.importCancellations.delete(lifecycle),
+      );
+      if (this.disposed) {
+        prepared.cancel('canonical workspace disposed');
+        throw new Error('CanonicalWorkspaceController is disposed');
+      }
       return prepared;
     } catch (error) {
       this.importCancellations.delete(lifecycle);

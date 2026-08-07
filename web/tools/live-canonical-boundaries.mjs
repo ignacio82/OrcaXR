@@ -98,11 +98,38 @@ export function selfTestLiveCanonicalBoundaries() {
       `class OrcaWorkspace {
         addModelFromGeometry(raw) { this.canonicalProject.importBufferGeometry(raw); }
         loadModelFromGeometry(raw) { this.addModelFromGeometry(raw); }
-        loadModelFromBuffer(raw) { this.workspace.add(raw); this.loadModelFromGeometry(raw); }
-        loadModelFromUrl(raw) { this.loadModelFromGeometry(raw); }
-        importZipArchive() { throw new Error('unavailable'); }
+        importModelFile(name, bytes) { this.canonicalProject.prepareModelImport(bytes); }
+        loadModelFromBuffer(name, raw) { this.workspace.add(raw); this.importModelFile(name, raw); }
+        loadModelFromUrl(url) { this.importModelFile(url, url); }
+        importZipArchive(raw, name) { return this.importModelFile(name, raw); }
       }`,
       'attach imported geometry',
+    ],
+    [
+      'untransacted model import',
+      inspectImports,
+      `class OrcaWorkspace {
+        addModelFromGeometry(raw) { this.canonicalProject.importBufferGeometry(raw); }
+        loadModelFromGeometry(raw) { this.addModelFromGeometry(raw); }
+        importModelFile(name, bytes) { const decoded = decodeModelImport(bytes); this.loadModelFromGeometry(decoded); }
+        loadModelFromBuffer(name, raw) { return this.importModelFile(name, raw); }
+        loadModelFromUrl(url) { return this.importModelFile(url, url); }
+        importZipArchive(raw, name) { return this.importModelFile(name, raw); }
+      }`,
+      'model import must stage through the canonical import coordinator',
+    ],
+    [
+      'per-entry archive commit',
+      inspectImports,
+      `class OrcaWorkspace {
+        addModelFromGeometry(raw) { this.canonicalProject.importBufferGeometry(raw); }
+        loadModelFromGeometry(raw) { this.addModelFromGeometry(raw); }
+        importModelFile(name, bytes) { this.canonicalProject.prepareModelImport(bytes); }
+        loadModelFromBuffer(name, raw) { return this.importModelFile(name, raw); }
+        loadModelFromUrl(url) { return this.importModelFile(url, url); }
+        importZipArchive(raw) { for (const entry of unzipSync(raw)) this.loadModelFromGeometry(entry); }
+      }`,
+      'must route model sources through one transaction',
     ],
     [
       'second model owner',
@@ -547,13 +574,14 @@ function inspectImports(file, source) {
       'public geometry import must enter canonical placement',
     );
   }
-  for (const name of ['loadModelFromBuffer', 'loadModelFromUrl', 'importZipArchive']) {
+  for (const name of ['importModelFile', 'loadModelFromBuffer', 'loadModelFromUrl', 'importZipArchive']) {
     const method = check.method('OrcaWorkspace', name);
     if (!method) continue;
     const all = facts(method);
     check.forbidNews(all, {
       ThreeMFLoader: `${name} cannot parse a project into a Three scene`,
       OBJLoader: `${name} cannot import a scene graph outside one transaction`,
+      STLLoader: `${name} cannot decode meshes outside the canonical import dispatcher`,
     });
     check.forbidCalls(all, {
       ...sceneImportCalls(name),
@@ -561,16 +589,31 @@ function inspectImports(file, source) {
       'this.adoptPaletteFrom3mf': `${name} cannot mutate palette outside the project transaction`,
       extract3mfImportMetadata: `${name} cannot split metadata from canonical parsing`,
     });
-    if (name !== 'importZipArchive') {
-      check.requireCall(all, 'this.loadModelFromGeometry', `${name} must route supported geometry canonically`);
-    }
   }
-  const zip = findMethod(source, 'OrcaWorkspace', 'importZipArchive');
-  if (zip) {
-    check.forbidCalls(facts(zip), {
-      'this.loadModelFromBuffer': 'ZIP import cannot commit entries one at a time',
-      'this.loadModelFromGeometry': 'ZIP import cannot commit entries one at a time',
-      unzipSync: 'ZIP import must remain gated until worker parsing is atomic',
+  // Every file-backed model source enters the transactional canonical import.
+  for (const name of ['loadModelFromBuffer', 'importZipArchive', 'loadModelFromUrl']) {
+    const method = check.method('OrcaWorkspace', name);
+    if (!method) continue;
+    const all = facts(method);
+    check.requireCall(all, 'this.importModelFile', `${name} must route model sources through one transaction`);
+    check.forbidCalls(all, {
+      'this.loadModelFromGeometry': `${name} cannot commit decoded entries one at a time`,
+      unzipSync: `${name} cannot expand an archive outside the guarded decoder`,
+    });
+  }
+  const modelImport = check.method('OrcaWorkspace', 'importModelFile');
+  if (modelImport) {
+    const all = facts(modelImport);
+    check.requireCall(
+      all,
+      'this.canonicalProject.prepareModelImport',
+      'model import must stage through the canonical import coordinator',
+    );
+    check.forbidCalls(all, {
+      'this.loadModelFromGeometry': 'model import cannot commit decoded entries one at a time',
+      'this.addModelFromGeometry': 'model import cannot bypass its own preview transaction',
+      decodeModelImport: 'model import must decode inside the staged parser, not the workspace',
+      unzipSync: 'model import cannot expand an archive outside the guarded decoder',
     });
   }
   return check.failures;

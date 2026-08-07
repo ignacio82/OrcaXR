@@ -88,6 +88,30 @@ async function writeMultiPlateFixture(directory) {
   return path;
 }
 
+/** Two named OBJ objects, the second split across two material sections. */
+async function writeObjFixture(directory) {
+  const source = [
+    'o Wedge',
+    'usemtl shell',
+    'v 0 0 0',
+    'v 20 0 0',
+    'v 0 20 0',
+    'v 0 0 20',
+    'f 1 2 3',
+    'f 1 2 4',
+    'o Riser',
+    'usemtl core',
+    'v 40 0 0',
+    'v 60 0 0',
+    'v 40 20 0',
+    'f 5 6 7',
+    '',
+  ].join('\n');
+  const path = join(directory, 'two-objects.obj');
+  await writeFile(path, strToU8(source));
+  return path;
+}
+
 async function clickMenuAction(page, actionId) {
   await page.$eval(`[data-action-id="${actionId}"]`, (item) => {
     item.closest('.menu-host')?.querySelector('.menu-trigger')?.click();
@@ -121,6 +145,7 @@ async function clickVirtualFilamentAction(page, filamentId, action) {
 
 const fixtureDirectory = await mkdtemp(join(tmpdir(), 'orcaxr-e2e-'));
 const fixturePath = await writeMultiPlateFixture(fixtureDirectory);
+const objFixturePath = await writeObjFixture(fixtureDirectory);
 const { server, url } = await startPreview();
 const browser = await launchBrowser();
 try {
@@ -300,7 +325,35 @@ try {
     // the much larger slicing engine's background warm-up.
     globalThis.window.workspace.slicerWarmupQueued = true;
   });
-  assert.equal(await page.$eval('#file-input', (input) => input.accept), '.stl', 'the model picker remains STL-only');
+  assert.equal(
+    await page.$eval('#file-input', (input) => input.accept),
+    '.stl,.obj,.amf,.amfz,.zip',
+    'the model picker offers exactly the decodable model containers',
+  );
+
+  // A mesh source imports through the same canonical transaction as a project:
+  // OBJ objects become canonical objects and material sections become parts.
+  const objectPicker = await page.$('#file-input');
+  const [modelChooser] = await Promise.all([
+    page.waitForFileChooser(),
+    page.evaluate(() => globalThis.window.workspace.onRequestLoadStl?.()),
+  ]);
+  assert.ok(objectPicker, 'the model picker input exists');
+  await modelChooser.accept([objFixturePath]);
+  await page.waitForFunction(() => (globalThis.window.workspace?.getCanonicalSummary?.().objectCount ?? 0) === 2, {
+    timeout: 30_000,
+  });
+  const importedModels = await page.evaluate(() => {
+    const summary = globalThis.window.workspace.getCanonicalSummary();
+    const snapshot = globalThis.window.workspace.getAutomationSnapshot();
+    return { objectCount: summary.objectCount, placed: snapshot.placedModelsTotalAllPlates };
+  });
+  assert.equal(importedModels.objectCount, 2, 'both OBJ objects became canonical objects');
+  assert.equal(importedModels.placed, 2, 'both OBJ objects are placed on the active plate');
+  await page.evaluate(() => globalThis.window.workspace.undo?.());
+  await page.waitForFunction(() => (globalThis.window.workspace?.getCanonicalSummary?.().objectCount ?? -1) === 0, {
+    timeout: 30_000,
+  });
 
   // A project 3MF goes through File -> Open Project, its dedicated picker,
   // and the explicit import preview. It must not use the STL model picker.

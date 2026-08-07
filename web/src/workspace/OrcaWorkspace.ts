@@ -2234,29 +2234,90 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /**
-   * Load one model from an in-memory file buffer, dispatching by extension
-   * (STL / 3MF / OBJ). Shared by the zip importer so archive entries get the
-   * same treatment as a directly-imported file. Returns true if it loaded.
+   * Import one model source (STL, OBJ, AMF, or a ZIP of those) through the
+   * canonical transactional route: signature-first decode, immutable preview,
+   * explicit confirmation for anything repaired or dropped, then one undoable
+   * command. A cancelled, malformed, or unsupported source leaves the project
+   * untouched. Returns how many objects were added, or 0 when cancelled.
    */
-  async loadModelFromBuffer(name: string, buf: ArrayBuffer): Promise<boolean> {
-    const lower = name.toLowerCase();
-    if (!lower.endsWith('.stl')) {
-      throw new Error('Canonical model import currently accepts one STL; use Open Project for a 3MF archive.');
+  async importModelFile(name: string, bytes: ArrayBuffer | Uint8Array): Promise<number> {
+    const source = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    if (source.byteLength === 0) throw new Error(`${name} is empty.`);
+    if (this.projectImportInProgress) throw new Error('Another import preview is already open.');
+    this.projectImportInProgress = true;
+    try {
+      const before = new Set(this.projectedModels().map((entry) => entry.instanceId));
+      const prepared = await this.canonicalProject.prepareModelImport(
+        source,
+        { filename: name },
+        { placement: { bedSizeMm: [this.bedMm.x, this.bedMm.y], dropToBed: true } },
+      );
+      const preview = prepared.preview;
+      let committed = false;
+      try {
+        if (preview.blocked) {
+          const errors = preview.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+          throw new Error(
+            `${name} cannot be imported: ${errors[0]?.message ?? 'the preview reported an unresolved problem'}`,
+          );
+        }
+        if (preview.requiredAcknowledgementIds.length > 0) {
+          // Repairs, conflicts, and dropped fields always need a human decision.
+          const confirm = this.onProjectImportPreview;
+          if (!confirm) throw new Error('This import changes or drops source data and needs a confirmation surface.');
+          const decision = await confirm(preview);
+          if (!decision) {
+            this.setStatus('Import cancelled.');
+            return 0;
+          }
+          prepared.confirm(decision);
+        } else {
+          prepared.confirm({ confirmed: true, acknowledgedNoticeIds: [] });
+        }
+        committed = true;
+      } finally {
+        if (!committed) prepared.cancel('model import did not commit');
+      }
+
+      const added = this.projectedModels().filter((entry) => !before.has(entry.instanceId));
+      added.forEach((entry, index) => {
+        if (this.wireframeOn) this.applyWireframe(entry, true);
+        if (this.labelsOn) this.applyLabel(entry, this.models.length - added.length + index, true);
+        if (this.overhangOn) this.applyOverhang(entry, true);
+      });
+      const last = added[added.length - 1];
+      if (last) this.selectModel(last);
+      this.recomputePreflight();
+      this.warmSlicerAfterFirstModel();
+      const objects = new Set(added.map((entry) => entry.objectId)).size;
+      this.setStatus(`Imported ${name} — ${objects} object${objects === 1 ? '' : 's'}.`);
+      return objects;
+    } finally {
+      this.projectImportInProgress = false;
     }
-    this.loadModelFromGeometry(new STLLoader().parse(buf), name);
-    return true;
   }
 
   /**
-   * Import every STL / 3MF / OBJ model inside a .zip archive (Orca File →
-   * Import Zip Archive). Returns how many models loaded.
+   * Compatibility entry point for callers that import one model buffer.
+   * Returns true when at least one object was added.
    */
-  async importZipArchive(buf: ArrayBuffer): Promise<number> {
-    void buf;
-    throw new Error('ZIP model import is unavailable until the whole archive can commit atomically.');
+  async loadModelFromBuffer(name: string, buf: ArrayBuffer): Promise<boolean> {
+    return (await this.importModelFile(name, buf)) > 0;
   }
 
-  /** Load an STL or 3MF by URL into the library (used by tests + built-ins). */
+  /**
+   * Import every supported model inside a .zip archive (Orca File → Import Zip
+   * Archive) as one atomic transaction. Returns how many objects were added.
+   */
+  async importZipArchive(buf: ArrayBuffer, name = 'archive.zip'): Promise<number> {
+    return this.importModelFile(name, buf);
+  }
+
+  /**
+   * Load a model source by URL (tests + built-in samples). The bytes take the
+   * same signature-first transactional route as a picked file, so a served
+   * file never gets a second, more permissive decoder.
+   */
   async loadModelFromUrl(url: string): Promise<void> {
     const t0 = performance.now();
     console.log('[orcaxr-load] fetching', url);
@@ -2264,23 +2325,15 @@ export class OrcaWorkspace extends xb.Script {
 
     if (url.toLowerCase().endsWith('.3mf')) {
       throw new Error('3MF URLs must use the canonical project-open preview flow.');
-    } else {
-      this.setStatus(`Downloading ${name}...`);
-      this.setProgress(10);
-      const raw = await new STLLoader().loadAsync(url);
-      console.log(
-        '[orcaxr-load] parsed STL in',
-        Math.round(performance.now() - t0),
-        'ms,',
-        raw.getAttribute('position').count / 3,
-        'tris',
-      );
-
-      this.setStatus(`Building scene...`);
-      this.setProgress(90);
-      await new Promise((r) => setTimeout(r, 50));
-      this.loadModelFromGeometry(raw, name);
     }
+    this.setStatus(`Downloading ${name}...`);
+    this.setProgress(10);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Could not download ${name}: HTTP ${response.status}`);
+    const bytes = await response.arrayBuffer();
+    this.setStatus(`Building scene...`);
+    this.setProgress(90);
+    await this.importModelFile(name, bytes);
     this.setProgress(undefined);
     console.log('[orcaxr-load] scene setup done at', Math.round(performance.now() - t0), 'ms');
   }

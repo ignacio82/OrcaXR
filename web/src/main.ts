@@ -5,7 +5,6 @@
  * the libslic3r WASM module slicing the live scene (see OrcaWorkspace).
  */
 import * as THREE from 'three';
-import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import * as xb from 'xrblocks';
 import * as uikit from '@pmndrs/uikit';
@@ -282,19 +281,10 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       await new Promise((r) => setTimeout(r, 50));
       const buf = await file.arrayBuffer();
       try {
-        const lowerName = file.name.toLowerCase();
-        console.log(`[main.ts] Uploaded file: ${file.name}, lowerName: ${lowerName}`);
-        if (lowerName.endsWith('.stl')) {
-          updateModal(`Parsing STL geometry...`, 50);
-          await new Promise((r) => setTimeout(r, 50));
-          const geometry = new STLLoader().parse(buf);
-
-          updateModal(`Building scene...`, 90);
-          await new Promise((r) => setTimeout(r, 50));
-          workspace.loadModelFromGeometry(geometry, file.name);
-        } else {
-          throw new Error(`Unsupported model format for ${file.name}. Choose an STL file or use Open Project for 3MF.`);
-        }
+        // One signature-first, transactional route for every model container.
+        updateModal(`Decoding ${file.name}...`, 55);
+        await new Promise((r) => setTimeout(r, 50));
+        await workspace.importModelFile(file.name, buf);
       } catch (e) {
         statusText.textContent = `Failed to load: ${(e as Error).message}`;
       }
@@ -337,7 +327,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     loadingModalText.textContent = `Reading ${f.name}...`;
     loadingModalBar.style.width = '30%';
     try {
-      const n = await workspace.importZipArchive(await f.arrayBuffer());
+      const n = await workspace.importZipArchive(await f.arrayBuffer(), f.name);
       uiState.update({
         modelCount: workspace.modelCount,
         status: n > 0 ? `Imported ${n} model${n === 1 ? '' : 's'} from archive` : 'No models in archive',

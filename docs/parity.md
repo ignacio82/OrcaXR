@@ -310,7 +310,7 @@ Local starting seams: [`ActionContext.ts`](../web/src/actions/ActionContext.ts),
     delete, and tool-close aliases resolve through that same instance; bounded invocation data
     preserves exact plate, Objects-tree, semantic-edit, settings, and virtual-filament targeting. All 126 actions have exactly one real parity-task owner and
     containing-phase anchor; metadata-only IDs explicitly provide no behavioral evidence. Current
-    status is 76 partial, 50 unavailable, and zero implemented. Remaining direct contextual controls,
+    status is 77 partial, 49 unavailable, and zero implemented. Remaining direct contextual controls,
     upstream leaf-to-local reachability, and full browser interaction coverage remain open under
     P11.2/P12.
 
@@ -450,9 +450,13 @@ Local starting seams: [`Project3mf.ts`](../web/src/features/Project3mf.ts),
     assets/selection as one undoable command. The live Open Project route presents every repair,
     conflict, dropped field, and diagnostic in an accessible modal; blocked previews are reviewable
     but cannot commit, and each required notice must be checked before the exact acknowledged IDs
-    are submitted. Preview lifecycle tokens are released exactly once on confirm/cancel. Interactive
-    alternative selection for resolvable conflicts, large-archive responsiveness traces, and complete
-    corpus qualification remain.
+    are submitted. Preview lifecycle tokens are released exactly once on confirm/cancel. Mesh
+    sources (STL/OBJ/AMF/ZIP) now share the same coordinator through a merge-mode model parser, so
+    adding a model is also a previewed, cancellable, single-command transaction; a clean source
+    commits without prompting while any repair, conflict, or dropped field requires the explicit
+    modal acknowledgement. Interactive alternative selection for resolvable conflicts, worker
+    routing for mesh decode, large-archive responsiveness traces, and complete corpus qualification
+    remain.
 
 - [~] **P1.5 — Slice only canonical project state.** Build an in-memory or temporary compatible
   3MF for every edited project and use `startSliceProject`/external project slicing. Eliminate
@@ -1054,7 +1058,7 @@ Local starting seams: [`MeshCut.ts`](../web/src/features/MeshCut.ts),
     banners exist; wipe-tower 8-candidate Chebyshev clearance optimization (`WipeTowerPlacement.ts`) is
     implemented and unit tested. Automatic arrangement seeds and sequential clearance visualization remain open.
 
-- [ ] **P5.6 — Implement authoritative import filters and behavior.** From the generated P0
+- [~] **P5.6 — Implement authoritative import filters and behavior.** From the generated P0
   manifest support project/model 3MF, STL, STEP/STP, SVG, OBJ, AMF, and ZIP/archive paths exposed
   by v2.3.4; support drag/drop, picker, URL/handy-model import where applicable, and “whole
   project versus geometry only” conflict handling.
@@ -1067,6 +1071,25 @@ Local starting seams: [`MeshCut.ts`](../web/src/features/MeshCut.ts),
     format is unavailable; it may not reinterpret the bytes as another mesh format.
   - **Accept:** format corpus imports with reference-equivalent object/part counts, bounds, units,
     names, and warnings; malformed and hostile files are rejected safely.
+  - **Current:** one signature-first dispatcher owns every model container. Extension alone never
+    selects a decoder, a recognised extension that disagrees with a recognised signature fails
+    closed, and 3MF, STEP, SVG, and G-code raise typed `requires-project-import`,
+    `requires-native-kernel`, `requires-emboss-workflow`, and `not-a-model-format` reasons instead
+    of being reinterpreted as meshes. Binary/ASCII STL, OBJ, AMF, gzip/ZIP-compressed AMF, and ZIP
+    archives of those formats decode into deterministic welded indexed meshes: OBJ objects and
+    `usemtl`/`g` sections become canonical objects and parts with MTL diffuse colours, AMF carries
+    declared units, material names/colours, `slic3r.modifier` roles, and constellation instances,
+    and archives import atomically with per-member skip notices. Every unit conversion, degenerate
+    facet, dropped metadata field, merged multi-solid STL, and unloaded `mtllib` becomes a preview
+    repair, dropped field, or diagnostic. Live import now runs through the P1.4 transactional
+    coordinator: geometry becomes immutable deduplicated assets, names are disambiguated, objects
+    are centred and dropped onto the active plate, commit is one undoable command, and a malformed,
+    hostile, or cancelled source leaves canonical state untouched. Hostile inputs (DTD/entity AMF,
+    traversal or corrupt archives, truncated STL, out-of-range OBJ indices, over-cap geometry) are
+    rejected with stable reason codes. `file_import_zip` is therefore no longer an unavailable
+    cutover gate. STEP/SVG decoding, URL/handy-model sources, drag/drop, whole-project-versus-
+    geometry conflict handling, an external-engine STEP route, and official reference-corpus
+    comparison remain open.
 
 - [~] **P5.7 — Complete export and G-code import/viewing.** Cover project 3MF, generic/core 3MF,
   current/all sliced 3MF, combined/separate or selected STL, current/all plate G-code, toolpath
@@ -2009,7 +2032,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Feature family / required outcome | Primary tasks | 2026-07-30 current audit |
 |---|---:|---|
 | Upstream actions/settings/gizmos/formats/calibrations inventory and drift | P0.1, P12.1 | Exact pinned extractor maps 1,622 leaves/13 families from 17 Git blobs; manual upstream workflow sampling remains |
-| Truthful menu/toolbar/context/shortcut/XR capability state | P0.2, P11.2 | One guarded registry reports 126 actions = 76 partial + 50 unavailable and zero implemented, with unique real task ownership/anchors; full upstream reachability remains |
+| Truthful menu/toolbar/context/shortcut/XR capability state | P0.2, P11.2 | One guarded registry reports 126 actions = 77 partial + 49 unavailable and zero implemented, with unique real task ownership/anchors; full upstream reachability remains |
 | Clean-clone typecheck/test/build/CI and reproducible engine artifacts | P0.3, P12.3 | Aggregate local gate and artifact provenance pass; clean-clone CI/native rebuild qualification remains |
 | Golden 3MF/config/G-code/security fixture oracle | P0.4 | Structural 3MF, semantic G-code, and hostile server fixtures pass; official Snapmaker corpus remains |
 | Shared domain/action/surface boundaries | P0.5, P1.1–P1.2 | Canonical project/history, validated mesh codec, live one-way Three projection, and one injected guarded action registry exist; remaining contextual bypasses and feature commands are tracked explicitly |
@@ -2042,7 +2065,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Measure/assembly/emboss/SVG/simplify/brim gizmos | P5.3 | Mostly placeholders or disconnected code |
 | Multi-plate lifecycle, settings, lock/reorder/current/all slice | P5.4 | Live guarded add/activate/rename/duplicate/delete/reorder/printable management exists; locks/settings/move-copy/slice-all remain |
 | Collision-aware arrangement/orientation/wipe tower | P5.5 | Partial helpers; parity unverified |
-| Import 3MF/STL/STEP/SVG/OBJ/AMF/ZIP as appropriate | P5.6 | Picker dispatch supports STL/3MF and explicitly rejects unsupported extensions; remaining formats/workflows are missing |
+| Import 3MF/STL/STEP/SVG/OBJ/AMF/ZIP as appropriate | P5.6 | Signature-first dispatch decodes STL/OBJ/AMF/compressed-AMF/ZIP into canonical objects, parts, units, materials, and instances through the transactional import coordinator, and fails closed with typed reasons for 3MF/STEP/SVG/G-code and hostile inputs; STEP/SVG decoding, URL/handy sources, drag-drop, and official corpora remain |
 | Export project/core/sliced 3MF, STL variants, G-code, OBJ, bundles/logs | P5.7 | Canonical project/G-code download and deterministic selected-or-plate binary STL exist; remaining variants/viewers/destinations/oracles are open |
 | Primitives, text/SVG, handy/URL model sources | P5.8 | Primitives/catalog partial |
 | Variable/adaptive layer-height profile editor | P5.9 | Action is a placeholder; helper is disconnected |
@@ -2174,6 +2197,7 @@ Evidence: EVID-nnn or Pending
 | `EVID-012` | P0.3 aggregate; supersedes `EVID-009` for this worktree | `5f2bd25908fbb9080a4e262462919c670989b3d7` | `9fd12ff...` | 2026-07-17 | `./scripts/quality.sh` | Node 22.21.0; Chrome 150; Docker 28.3.1; WASM; no hardware | Pass: clean installs, web/server/WASM suites, real cube/profile/project/paint/prime-tower/FullSpectrum slices, Compose validation, and three zero-vulnerability production audits. One earlier browser-ready timeout was followed by four direct offline passes and this complete wrapper pass. | Codex automated review; clean-clone CI/headset/printer/native rebuild pending |
 | `EVID-013` | P0.2–P0.3, P1.5, P3.2, P4.9, P6.6–P6.7, P7.1, P9.1, P10.2, P10.7, P10.10, P11.3, P11.6 | Current worktree atop `20c42867cd29d203eaa7d2afb6bae33dff29eeb2`; commit pending | `9fd12ff...` | 2026-07-20 | `npm --prefix web run quality`; `npm --prefix server test` | Node 22.21.0; Chrome for Testing 150.0.7871.24; desktop/mobile emulation; no headset/printer | Pass: 34/34 unit, 3/3 integration, 13/13 project, 2/2 settings, and 1/1 XR files; 22 server tests; 112 actions = 77 partial + 35 unavailable; 98 local icons; E2E/offline/24-rule axe pass; bundle main 2,080,342 bytes, JS 8,394,204 bytes, CSS 0 | Codex automated review; canonical live migration, official workflow, AT/headset/printer, threat, and independent review pending |
 | `EVID-014` | P1.3 split-model import only | Current worktree atop `20c42867cd29d203eaa7d2afb6bae33dff29eeb2`; commit pending | `9fd12ff...` | 2026-07-20 | `npm --prefix web run test:project -- bbs3mf-serializer.test.ts`; architecture check; focused ESLint/Prettier/diff checks; read-only `tsx` deserialize and in-memory save/reopen of `MarbleRunTube_V7.3mf` | Node 22.21.0; headless; no GUI/device/printer | Pass: 17/17 project files; 20,401,604-byte source resolved 26 external model parts into 5 plates, 28 objects, 29 volumes, and 28 instances; 75 opaque members preserved; 14 virtual-grid transforms normalized; 48,194,991-byte/109-entry canonical save had no `p:path`, reopened with equal canonical state, and retained 102 asset payloads | Codex automated review; arbitrary-affine geometric oracle and official Snapmaker GUI open/save remain pending |
+| `EVID-015` | P0.2, P1.4, P5.6 | Current worktree atop `5ff753d`; commit pending | `9fd12ff...` | 2026-08-07 | `npm --prefix web run quality`; `model-formats.test.ts`; `ModelImportParser.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no printer | Pass: 20 format-decode traces (STL binary/ASCII, OBJ+MTL, AMF units/materials/modifiers/constellations, compressed AMF, ZIP atomicity, renamed-archive/STEP/SVG/G-code/empty/noise/truncated/limit rejections) and 6 staging traces (single-command commit with exact undo/redo, bed placement, OBJ part structure, AMF unit conversion, archive dedup/renaming, untouched project on failure); registry now reports 126 actions = 77 partial + 49 unavailable | Automated review; official Orca import-corpus comparison, drag/drop, and STEP/SVG routes pending |
 
 Correction note (2026-07-20): the provisional local-commit cells in `EVID-001`–`EVID-012`
 were filled with the commit that landed those runs. Their historical commands, counts, results,
@@ -2218,6 +2242,7 @@ has no equivalent, add a `BLOCK-*` row rather than calling it done or Not applic
 | 2026-07-20 | Live-wire the typed Moonraker boundary only for registry-guarded handshake and read-only sparse slot inspection; never compress or auto-apply physical slot identities | A reported H1/H3 set cannot safely become palette rows 1/2 or inherit project temperatures; inspection is useful only if it cannot silently change print intent | P0.2, P9.1, P9.3, P10.7 | Focused transport/parser/preference tests pass; mapping, mutation, and hardware review pending |
 | 2026-07-20 | Activate external-slicer routing only after a successful probe backed by explicit opt-in; persisted URL metadata alone never enables it | A stale saved endpoint or failed replacement must not silently upload project geometry outside the browser after the user selected Off | P7.1, P10.7 | Focused preference/race tests pass; production threat/device review pending |
 | 2026-07-23 | Make `CanonicalWorkspaceController` the live workspace owner and delete raw-project/scene-baked save, open, and slice fallbacks | A dormant second state model could reintroduce metadata loss or publish G-code for content different from the visible canonical project | P1.2, P1.4–P1.6, P7.1 | Focused controller/import/action tests pass; full quality, official Orca/G-code, browser/XR, and hardware qualification pending |
+| 2026-08-07 | Dispatch every model import by content signature first, fail closed on extension/signature disagreement, and route mesh sources through the transactional canonical import coordinator | Parsing an unknown container as STL silently produced wrong geometry, and a direct add bypassed preview/undo guarantees that project import already provided | P1.4, P5.6, P0.2 | Format/staging tests and the web quality gate pass; official corpus and drag/drop qualification pending |
 | YYYY-MM-DD |  |  |  |  |
 
 ## 21. Verification interface and matrices

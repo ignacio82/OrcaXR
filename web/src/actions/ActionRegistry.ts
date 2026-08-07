@@ -248,8 +248,6 @@ export const GROUPS: readonly ActionGroup[] = [
 ];
 
 const CANONICAL_CUTOVER_GATED_REASONS = {
-  file_import_zip:
-    'ZIP import is disabled until every member can be parsed, previewed, and committed through one transactional canonical import.',
   file_export_3mf:
     'Generic geometry 3MF export is disabled because the current exporter drops canonical project metadata and stable identities.',
   edit_cut:
