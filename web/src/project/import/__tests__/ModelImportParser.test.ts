@@ -112,6 +112,32 @@ await test('centres and drops imported geometry when a bed placement is supplied
   assert.deepEqual(instance.transform.translationMm, [95, 95, -4]);
 });
 
+await test('places a multi-object import as one group so its relative layout survives', async () => {
+  const harness = createHarness();
+  const coordinator = coordinatorFor(harness, { bedSizeMm: [200, 200], dropToBed: true });
+  const obj = `o Left
+v 0 0 0
+v 10 0 0
+v 0 10 0
+f 1 2 3
+o Right
+v 40 0 0
+v 50 0 0
+v 40 10 0
+f 4 5 6
+`;
+  const prepared = await coordinator.prepare({ bytes: utf8(obj), source: { filename: 'pair.obj' } });
+  prepared.confirm({ confirmed: true, acknowledgedNoticeIds: prepared.preview.requiredAcknowledgementIds });
+
+  const [left, right] = harness.project.getSnapshot().state.plates[0].objects;
+  const leftX = left.instances[0].transform.translationMm[0];
+  const rightX = right.instances[0].transform.translationMm[0];
+  assert.equal(rightX - leftX, 0, 'both objects share one group offset');
+  // Group bounds span 0..50 mm in X, so the shared offset centres the pair.
+  assert.equal(leftX, 75);
+  assert.equal(left.instances[0].transform.translationMm[1], 95);
+});
+
 await test('preserves OBJ object and material part structure with source provenance', async () => {
   const harness = createHarness();
   const coordinator = coordinatorFor(harness);

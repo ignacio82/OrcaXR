@@ -211,7 +211,9 @@
         background: var(--oxr-color-bg-card); backdrop-filter: blur(16px);
         padding: 8px 12px; border-radius: var(--oxr-radius-lg);
         border: 1px solid var(--oxr-color-stroke); pointer-events: auto;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); z-index: 6;
+        /* Above floating tool panels (20) and side rails so its menus are
+           always reachable; modals (50+) still cover it. */
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); z-index: 40;
       }
       #app-title { font-weight: 700; font-size: 15px; letter-spacing: -0.3px; padding: 0 6px; }
       #plate-bar { display: flex; align-items: center; gap: 4px; }
@@ -483,6 +485,9 @@
         <div id="objects-panel-host" class="panel" style="min-height:0;padding:10px;margin-bottom:12px;"></div>
         <details class="insp-section"><summary>Semantic object editing</summary>
           <div id="semantic-object-editor-host" class="panel" style="min-height:0;padding:10px;margin-bottom:12px;"></div>
+        </details>
+        <details class="insp-section"><summary>Colour painting</summary>
+          <div id="paint-panel-host" class="panel" style="min-height:0;padding:10px;margin-bottom:12px;"></div>
         </details>
         <details class="insp-section"><summary>Filament assignment</summary>
           <div id="filament-assignment-host" class="panel" style="min-height:0;padding:10px;margin-bottom:12px;"></div>

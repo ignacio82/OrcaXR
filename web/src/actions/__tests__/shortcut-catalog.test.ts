@@ -34,6 +34,12 @@ test('builds the exact keyboard catalog from registry action metadata', () => {
       { actionId: 'tool_move', source: 'G', canonical: '0000:g' },
       { actionId: 'tool_rotate', source: 'R', canonical: '0000:r' },
       { actionId: 'tool_scale', source: 'S', canonical: '0000:s' },
+      // Upstream `1`-`9` filament selection is nine discrete commands.
+      ...Array.from({ length: 9 }, (_unused, index) => ({
+        actionId: `paint_select_filament_${index + 1}`,
+        source: String(index + 1),
+        canonical: `0000:${index + 1}`,
+      })),
     ],
   );
   assert.ok(catalog.every((entry) => entry.unavailable === false));

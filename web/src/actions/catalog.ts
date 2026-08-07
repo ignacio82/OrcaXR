@@ -15,6 +15,7 @@ import { calibrationActions } from './groups/calibration';
 import { advancedActions } from './groups/advanced';
 import { helpActions } from './groups/help';
 import { objectsActions } from './groups/objects';
+import { paintingActions } from './groups/painting';
 
 export function buildRegistry(): ActionRegistry {
   return new ActionRegistry()
@@ -23,6 +24,7 @@ export function buildRegistry(): ActionRegistry {
     .addAll(objectsActions)
     .addAll(viewActions)
     .addAll(sceneActions)
+    .addAll(paintingActions)
     .addAll(gizmoActions)
     .addAll(sliceActions)
     .addAll(outputActions)

@@ -13,6 +13,7 @@ import type { FilamentPalette } from '../workspace/FilamentPalette';
 import type { FilamentId, PlateId } from '../project/domain/ids';
 import type { ConfigMap } from '../project/domain/model';
 import type { ObjectTreeEntityRef } from '../project/objects';
+import type { PaintToolKind } from '../project/painting/PaintStrokeService';
 import type {
   CanonicalFilamentAssignableEntityRef,
   CanonicalSemanticLayerRangeRequest,
@@ -226,6 +227,41 @@ export class ActionContext {
   }
   cutPlane(): void {
     this.workspace.cutSelectedByPlane();
+  }
+
+  // ---- Painting -------------------------------------------------------
+  /** Apply a bounded paint configuration request from any surface. */
+  configurePaint(request: {
+    readonly filamentId?: FilamentId | null;
+    readonly mode?: 'paint' | 'erase';
+    readonly tool?: PaintToolKind;
+    readonly radiusMm?: number;
+    readonly smartFillAngleDegrees?: number;
+    readonly heightRangeMm?: number;
+    readonly gapAreaMm2?: number;
+  }): void {
+    if (request.filamentId !== undefined) {
+      this.workspace.setPaintFilament(request.filamentId ?? undefined);
+    }
+    if (request.mode) this.workspace.setPaintMode(request.mode);
+    if (request.tool) this.workspace.setPaintTool(request.tool);
+    const settings: Record<string, number> = {};
+    if (request.radiusMm !== undefined) settings.radiusMm = request.radiusMm;
+    if (request.smartFillAngleDegrees !== undefined) settings.smartFillAngleDegrees = request.smartFillAngleDegrees;
+    if (request.heightRangeMm !== undefined) settings.heightRangeMm = request.heightRangeMm;
+    if (request.gapAreaMm2 !== undefined) settings.gapAreaMm2 = request.gapAreaMm2;
+    if (Object.keys(settings).length > 0) this.workspace.setPaintSettings(settings);
+  }
+
+  eraseAllPaint(): void {
+    this.workspace.eraseAllPaint();
+  }
+
+  /** Upstream `1`–`9`: select the palette row with that displayed number. */
+  selectPaintFilamentSlot(slot: number): void {
+    if (!this.workspace.setPaintFilamentByNumber(slot)) {
+      this.reportCapabilityUnavailable(`Paint with filament ${slot}`, 'No palette row uses that number yet.');
+    }
   }
 
   // ---- Tools / modes --------------------------------------------------

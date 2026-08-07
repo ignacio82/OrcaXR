@@ -90,26 +90,116 @@ async function writeMultiPlateFixture(directory) {
 
 /** Two named OBJ objects, the second split across two material sections. */
 async function writeObjFixture(directory) {
+  // Two closed tetrahedra: one large centred target for pointer painting and a
+  // second object that proves multi-object structure and material parts.
   const source = [
     'o Wedge',
     'usemtl shell',
-    'v 0 0 0',
-    'v 20 0 0',
-    'v 0 20 0',
-    'v 0 0 20',
-    'f 1 2 3',
+    'v -30 -30 0',
+    'v 30 -30 0',
+    'v 0 30 0',
+    'v 0 0 45',
+    'f 1 3 2',
     'f 1 2 4',
+    'f 2 3 4',
+    'f 3 1 4',
     'o Riser',
     'usemtl core',
-    'v 40 0 0',
-    'v 60 0 0',
-    'v 40 20 0',
-    'f 5 6 7',
+    'v 60 -10 0',
+    'v 80 -10 0',
+    'v 70 10 0',
+    'v 70 0 18',
+    'f 5 7 6',
+    'f 5 6 8',
+    'f 6 7 8',
+    'f 7 5 8',
     '',
   ].join('\n');
   const path = join(directory, 'two-objects.obj');
   await writeFile(path, strToU8(source));
   return path;
+}
+
+async function clickPanelControl(page, selector) {
+  await page.evaluate((target) => {
+    const control = globalThis.document.querySelector(target);
+    if (!control) throw new Error(`missing control ${target}`);
+    control.dispatchEvent(new globalThis.MouseEvent('click', { bubbles: true }));
+  }, selector);
+  // Panel refresh and the canonical command bus both settle in microtasks.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+}
+
+/**
+ * Colour painting through the real surfaces: the registry-routed paint panel
+ * configures the stroke and a genuine pointer gesture on the canvas commits
+ * canonical facet annotations that undo cleanly.
+ */
+async function paintImportedModel(page) {
+  const paintPanel = await page.$('[data-paint-panel="true"]');
+  assert.ok(paintPanel, 'the colour paint panel is mounted');
+  // The panel lives in a collapsed inspector section; a user expands it first.
+  await page.evaluate(() => {
+    globalThis.document.querySelector('[data-paint-panel="true"]')?.closest('details')?.setAttribute('open', '');
+  });
+  await clickPanelControl(page, '[data-paint-activate="true"]');
+  assert.equal(
+    await page.$eval('[data-paint-activate="true"]', (button) => button.getAttribute('aria-pressed')),
+    'true',
+    'activating the paint tool reports pressed state',
+  );
+  await clickPanelControl(page, '[data-paint-tool="triangle"]');
+  const swatches = await page.$$eval('[data-paint-swatch]', (buttons) =>
+    buttons.map((button) => ({
+      id: button.dataset.paintSwatch,
+      disabled: button.disabled,
+      label: button.getAttribute('aria-label'),
+    })),
+  );
+  const target = swatches.find((swatch) => swatch.id !== 'default' && !swatch.disabled);
+  assert.ok(target, 'at least one paintable filament swatch is offered');
+  assert.match(target.label ?? '', /T\d/, 'swatch labels carry a non-colour badge');
+  await clickPanelControl(page, `[data-paint-swatch="${target.id}"]`);
+
+  const canvas = await page.$('canvas');
+  assert.ok(canvas, 'the workspace canvas exists');
+  const box = await canvas.boundingBox();
+  const painted = await (async () => {
+    for (let radius = 0; radius <= 120; radius += 24) {
+      for (const [dx, dy] of [
+        [0, 0],
+        [radius, 0],
+        [-radius, 0],
+        [0, radius],
+        [0, -radius],
+      ]) {
+        const x = box.x + box.width / 2 + dx;
+        const y = box.y + box.height / 2 + dy;
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+        await page.mouse.up();
+        const facets = await page.evaluate(() => globalThis.window.workspace.getPaintedFacetCount?.() ?? 0);
+        if (facets > 0) return facets;
+      }
+    }
+    return 0;
+  })();
+  assert.ok(painted > 0, 'a pointer stroke painted canonical colour facets');
+
+  const historyLabel = await page.evaluate(() => globalThis.window.workspace.getCanonicalSummary().history.undoLabel);
+  assert.match(historyLabel ?? '', /paint/i, 'the stroke is one labelled undoable command');
+  await page.evaluate(() => globalThis.window.workspace.undo?.());
+  await page.waitForFunction(() => (globalThis.window.workspace.getPaintedFacetCount?.() ?? -1) === 0, {
+    timeout: 15_000,
+  });
+  await page.evaluate(() => globalThis.window.workspace.redo?.());
+  await page.waitForFunction(() => (globalThis.window.workspace.getPaintedFacetCount?.() ?? 0) > 0, {
+    timeout: 15_000,
+  });
+  await page.evaluate(() => globalThis.window.workspace.undo?.());
+  // The rail collapses once a model loads, so drive its action directly.
+  await clickPanelControl(page, '#left-toolbar [data-action-id="tool_move"]');
+  await page.waitForFunction(() => globalThis.window.__orcaUi.get().activeTool === 'move');
 }
 
 async function clickMenuAction(page, actionId) {
@@ -350,6 +440,9 @@ try {
   });
   assert.equal(importedModels.objectCount, 2, 'both OBJ objects became canonical objects');
   assert.equal(importedModels.placed, 2, 'both OBJ objects are placed on the active plate');
+
+  await paintImportedModel(page);
+
   await page.evaluate(() => globalThis.window.workspace.undo?.());
   await page.waitForFunction(() => (globalThis.window.workspace?.getCanonicalSummary?.().objectCount ?? -1) === 0, {
     timeout: 30_000,

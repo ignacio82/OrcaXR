@@ -15,6 +15,7 @@ import type { ActionContext } from './ActionContext';
 import type { FilamentId, PlateId } from '../project/domain/ids';
 import type { ConfigMap } from '../project/domain/model';
 import type { ObjectTreeEntityRef } from '../project/objects';
+import type { PaintToolKind } from '../project/painting/PaintStrokeService';
 import type {
   CanonicalFilamentAssignableEntityRef,
   CanonicalSemanticLayerRangeRequest,
@@ -160,6 +161,19 @@ export interface ActionInvocation {
     readonly enabled: boolean;
     readonly confirmedPhysicalCount?: number;
   };
+  /**
+   * Bounded colour-paint configuration from a paint surface. `filamentId`
+   * carries a stable physical or mixed identity; `null` selects erase-to-inherit.
+   */
+  paintConfiguration?: {
+    readonly filamentId?: FilamentId | null;
+    readonly mode?: 'paint' | 'erase';
+    readonly tool?: PaintToolKind;
+    readonly radiusMm?: number;
+    readonly smartFillAngleDegrees?: number;
+    readonly heightRangeMm?: number;
+    readonly gapAreaMm2?: number;
+  };
 }
 
 export type ActionHandler = (ctx: ActionContext, invocation: Readonly<ActionInvocation>) => void | Promise<void>;
@@ -274,8 +288,6 @@ const CANONICAL_CUTOVER_GATED_REASONS = {
     'Auto-arrange is disabled until placements are computed from canonical assets and committed as one reversible transaction.',
   tool_cut:
     'Plane cutting is disabled until canonical topology, annotations, assets, and stable IDs can be replaced atomically.',
-  tool_paint:
-    'Color painting is disabled until live strokes use canonical facet annotations with guarded undo, persistence, and slicing.',
   tool_smart_paint:
     'Smart Paint is disabled until asynchronous results are revision-guarded canonical facet-annotation commands.',
   tool_smart_paint_image:

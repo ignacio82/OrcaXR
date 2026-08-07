@@ -33,6 +33,7 @@ import { CommandPalette } from './ui/dom/CommandPalette';
 import { GeneratedSettingsPanel } from './ui/dom/GeneratedSettingsPanel';
 import { ObjectsPanel, type ObjectsPanelSelectionRequest } from './ui/dom/ObjectsPanel';
 import { FilamentAssignmentSelector } from './ui/dom/FilamentAssignmentSelector';
+import { PaintPanel } from './ui/dom/PaintPanel';
 import { PlateManager } from './ui/dom/PlateManager';
 import { SemanticObjectEditor } from './ui/dom/SemanticObjectEditor';
 import { VirtualFilamentLibrary } from './ui/dom/VirtualFilamentLibrary';
@@ -1040,6 +1041,53 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     window.addEventListener('pagehide', () => objectsPanel.dispose(), { once: true });
   }
 
+  const paintPanelHost = document.getElementById('paint-panel-host');
+  if (paintPanelHost) {
+    const paintPanel = new PaintPanel(paintPanelHost, {
+      getState: () => {
+        const tool = workspace.getPaintToolState();
+        return {
+          palette: workspace.getPaintPalette(true),
+          settings: tool.settings,
+          ...(tool.filamentId ? { filamentId: tool.filamentId } : {}),
+          mode: tool.mode,
+          active: tool.active,
+        };
+      },
+      subscribe: (listener) => {
+        const unsubscribeCanonical = workspace.subscribeCanonicalState(listener);
+        const previous = workspace.onPaintStateChanged;
+        workspace.onPaintStateChanged = () => {
+          previous?.();
+          listener();
+        };
+        return () => {
+          unsubscribeCanonical();
+          workspace.onPaintStateChanged = previous;
+        };
+      },
+      onConfigure: async (request) => {
+        const invoked = await registry.invoke('paint_configure', 'dom-inspector', actionCtx, uiState.get(), {
+          paintConfiguration: request,
+        });
+        if (!invoked) throw new Error('The paint configuration action is unavailable.');
+      },
+      onEraseAll: async () => {
+        const invoked = await registry.invoke('paint_erase_all', 'dom-inspector', actionCtx, uiState.get());
+        if (!invoked) throw new Error('Erase all painting is unavailable.');
+      },
+      onActivate: async () => {
+        const invoked = await registry.invoke('tool_paint', 'dom-toolbar', actionCtx, uiState.get());
+        if (!invoked) throw new Error('The paint tool is unavailable.');
+      },
+      onError: (error) => {
+        statusText.textContent = `Paint: ${error instanceof Error ? error.message : String(error)}`;
+      },
+    });
+    paintPanel.mount();
+    window.addEventListener('pagehide', () => paintPanel.dispose(), { once: true });
+  }
+
   const semanticObjectEditorHost = document.getElementById('semantic-object-editor-host');
   if (semanticObjectEditorHost) {
     const semanticEditor = new SemanticObjectEditor(semanticObjectEditorHost, {
@@ -1723,71 +1771,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const s = uiState.get();
     const hasSelection = !!workspace.getSelectedModelScale();
 
-    if (
-      hasSelection &&
-      (s.activeTool === 'paint' ||
-        s.activeTool === 'support_paint' ||
-        s.activeTool === 'seam_paint' ||
-        s.activeTool === 'fuzzy_skin')
-    ) {
-      toolSettingsPanel.style.display = 'block';
-      if (currentSettingsTool !== s.activeTool) {
-        currentSettingsTool = s.activeTool;
-        if (s.activeTool === 'paint') {
-          toolSettingsTitle.textContent = 'Color Painting';
-          toolSettingsContent.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="font-size:13px; color:#a0aab5;">Brush Size (mm)</span>
-              <span id="lbl-brush-size" style="font-size:13px;">${workspace.brushRadiusMm.toFixed(1)}</span>
-            </div>
-            <input type="range" id="in-brush-size" min="0.1" max="20" step="0.1" value="${workspace.brushRadiusMm}" style="accent-color:var(--oxr-color-accent);" />
-            
-            <div style="font-size:13px; color:#a0aab5; margin-top:8px;">Active Color</div>
-            <div id="paint-tool-swatches" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
-          `;
-
-          const inBrushSize = byId('in-brush-size') as HTMLInputElement;
-          const lblBrushSize = byId('lbl-brush-size');
-          inBrushSize.oninput = () => {
-            const val = parseFloat(inBrushSize.value);
-            workspace.brushRadiusMm = val;
-            lblBrushSize.textContent = val.toFixed(1);
-          };
-
-          const swatchesContainer = byId('paint-tool-swatches');
-          const activeHex = workspace.getActivePaintColorHex();
-          workspace.palette.list().forEach((slot) => {
-            const btn = document.createElement('button');
-            btn.style.cssText = `width:28px; height:28px; border-radius:14px; border:2px solid ${activeHex === slot.color ? '#fff' : 'transparent'}; background:${slot.color}; cursor:pointer;`;
-            btn.onclick = () => {
-              workspace.setActivePaintColor(slot.color);
-              uiState.update({ ...s });
-            };
-            swatchesContainer.appendChild(btn);
-          });
-        } else {
-          let title = 'Tool Settings';
-          if (s.activeTool === 'support_paint') title = 'Support Painting';
-          if (s.activeTool === 'seam_paint') title = 'Seam Painting';
-          if (s.activeTool === 'fuzzy_skin') title = 'Fuzzy-skin Painting';
-          toolSettingsTitle.textContent = title;
-          toolSettingsContent.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="font-size:13px; color:#a0aab5;">Brush Size (mm)</span>
-              <span id="lbl-brush-size" style="font-size:13px;">${workspace.brushRadiusMm.toFixed(1)}</span>
-            </div>
-            <input type="range" id="in-brush-size" min="0.1" max="20" step="0.1" value="${workspace.brushRadiusMm}" style="accent-color:var(--oxr-color-accent);" />
-          `;
-          const inBrushSize = byId('in-brush-size') as HTMLInputElement;
-          const lblBrushSize = byId('lbl-brush-size');
-          inBrushSize.oninput = () => {
-            const val = parseFloat(inBrushSize.value);
-            workspace.brushRadiusMm = val;
-            lblBrushSize.textContent = val.toFixed(1);
-          };
-        }
-      }
-    } else if (hasSelection && (s.activeTool === 'move' || s.activeTool === 'rotate' || s.activeTool === 'scale')) {
+    // Colour painting has its own canonical panel; this legacy surface only
+    // covers the numeric transform tools.
+    if (hasSelection && (s.activeTool === 'move' || s.activeTool === 'rotate' || s.activeTool === 'scale')) {
       toolSettingsPanel.style.display = 'block';
 
       const pos = workspace.getSelectedModelPosition() || new THREE.Vector3();

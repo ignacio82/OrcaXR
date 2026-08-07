@@ -77,6 +77,9 @@ import {
 import type { CommandHistorySnapshot } from '../project/history/commandBus';
 import { PreparedProjectImport, ProjectImportCoordinator } from '../project/import/ProjectImportCoordinator';
 import { ModelImportParser, type ModelImportPlacement } from '../project/import/ModelImportParser';
+import type { TriangleAssignments } from '../project/domain/model';
+import { PaintStrokeService } from '../project/painting/PaintStrokeService';
+import { projectPaintPalette, type PaintPalette, type PaintPaletteOptions } from '../project/painting/paintPalette';
 import {
   ImportCancellationController,
   type ProjectImportParserPort,
@@ -1425,6 +1428,39 @@ export class CanonicalWorkspaceController {
     }
     this.session.execute(new SetProjectSettingsOverridesCommand(guard, update));
     return projectSettingsOverrideSnapshot(this.session.project.getSnapshot());
+  }
+
+  /**
+   * Colour-painting service bound to this session's history and assets. The
+   * caller owns input, cursors, and rendering; every facet mutation still
+   * lands as one guarded canonical command.
+   */
+  createPaintStrokeService(): PaintStrokeService {
+    this.assertActive();
+    return new PaintStrokeService({ commands: this.session.commands, assets: this.assets });
+  }
+
+  /** Palette projection for paint surfaces; entries carry stable IDs only. */
+  getPaintPalette(options: PaintPaletteOptions = {}): PaintPalette {
+    this.assertActive();
+    return projectPaintPalette(this.session.project.getSnapshot().state, options);
+  }
+
+  /** Painted colour facets per volume, for derived overlays and legends. */
+  getColorFacetsByVolume(plateId?: PlateId): ReadonlyMap<VolumeId, readonly TriangleAssignments<FilamentId>[]> {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    const facets = new Map<VolumeId, readonly TriangleAssignments<FilamentId>[]>();
+    for (const plate of state.plates) {
+      if (plateId && plate.id !== plateId) continue;
+      for (const object of plate.objects) {
+        for (const volume of object.volumes) {
+          if (volume.annotations.color.length === 0) continue;
+          facets.set(volume.id, cloneJson(volume.annotations.color));
+        }
+      }
+    }
+    return facets;
   }
 
   /** Return a caller-safe snapshot without exposing the canonical ProjectState. */

@@ -21,6 +21,8 @@ import {
 } from '../project/slicing';
 import type { ProjectSettingsOverrideGuard, ProjectSettingsOverrideSnapshot } from '../project/settingsOverrides';
 import { CURRENT_THREE_WORLD_UNITS_PER_MM, getThreeProjectEntity } from '../project/surfaces/ThreeProjectSurface';
+import { PaintStrokeService, type PaintToolKind, type PaintToolSettings } from '../project/painting/PaintStrokeService';
+import { paintPaletteColors, type PaintPalette } from '../project/painting/paintPalette';
 import {
   CanonicalWorkspaceController,
   type CanonicalFilamentAssignableEntityRef,
@@ -111,6 +113,24 @@ interface HeadFilamentSelection {
 /** Fallback bed until the profile catalog loads. */
 const PLATE_MM = 200;
 const MM = 0.001;
+
+/** Derived colour overlays never occlude or intercept the canonical mesh. */
+const PAINT_OVERLAY_MATERIAL = new THREE.MeshStandardMaterial({
+  vertexColors: true,
+  roughness: 0.85,
+  metalness: 0,
+  polygonOffset: true,
+  polygonOffsetFactor: -2,
+  polygonOffsetUnits: -2,
+});
+const PAINT_PREVIEW_MATERIAL = new THREE.MeshBasicMaterial({
+  vertexColors: true,
+  transparent: true,
+  opacity: 0.55,
+  polygonOffset: true,
+  polygonOffsetFactor: -4,
+  polygonOffsetUnits: -4,
+});
 /** Visual magnification of the whole workspace: true-scale 3D-print beds
  *  read tiny in XR. Uniform, so transform baking cancels it exactly. */
 const WORKSPACE_SCALE = 1.75;
@@ -420,6 +440,7 @@ export class OrcaWorkspace extends xb.Script {
           this.revalidatePublishedGcode();
           this.onPlatesChanged?.();
           this.queuePreflightRecompute();
+          this.refreshPaintOverlays();
         }
         if (change.sources.includes('selection') || change.sources.includes('project')) {
           if (!this.activeTransformGesture) this.syncTransformProxy();
@@ -723,6 +744,10 @@ export class OrcaWorkspace extends xb.Script {
 
     this.actionContext = undefined;
     this.actionStateRefreshers.clear();
+    this.cancelPaintStroke();
+    for (const [volumeId, overlay] of [...this.paintOverlays]) this.disposeOverlay(volumeId, overlay);
+    this.paintServiceInstance = null;
+    this.onPaintStateChanged = null;
     for (const dispose of this.lifecycleDisposers.splice(0).reverse()) dispose();
     this.palette.onChanged = null;
     this.activeCanonicalSlicer?.dispose();
@@ -1065,13 +1090,45 @@ export class OrcaWorkspace extends xb.Script {
     let downX = 0,
       downY = 0;
 
+    const pointerRay = (event: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, xb.core.camera);
+      return raycaster;
+    };
+
     const onPointerDown = (event: PointerEvent) => {
       downX = event.clientX;
       downY = event.clientY;
+      if (this.tool !== 'paint' || xb.core.renderer.xr.isPresenting || event.button !== 0) return;
+      if (this.beginPaintStroke(pointerRay(event), event.pointerId)) {
+        // A paint gesture owns the pointer: orbiting would fight the stroke.
+        if (this.orbitControls) this.orbitControls.enabled = false;
+        canvas.setPointerCapture?.(event.pointerId);
+        event.preventDefault();
+      }
+    };
+
+    const onPointerMove = (event: PointerEvent) => {
+      if (!this.paintStroke || event.pointerId !== this.paintStroke.pointerId) return;
+      const [hit] = pointerRay(event).intersectObject(this.paintStroke.display, false);
+      if (hit) this.samplePaintStroke(hit);
+    };
+
+    const finishPaintGesture = (event: PointerEvent, cancelled: boolean) => {
+      if (!this.paintStroke || event.pointerId !== this.paintStroke.pointerId) return false;
+      canvas.releasePointerCapture?.(event.pointerId);
+      if (cancelled) this.cancelPaintStroke();
+      else this.endPaintStroke();
+      if (this.orbitControls) this.orbitControls.enabled = true;
+      return true;
     };
 
     const onPointerUp = (event: PointerEvent) => {
+      if (finishPaintGesture(event, false)) return;
       if (xb.core.renderer.xr.isPresenting) return;
+      if (this.tool === 'paint') return;
       if (this.transformControls && (this.transformControls as unknown as { dragging: boolean }).dragging) return;
 
       const dx = event.clientX - downX;
@@ -1103,24 +1160,30 @@ export class OrcaWorkspace extends xb.Script {
         this.unselectModel();
       }
     };
+    const onPointerCancel = (event: PointerEvent) => {
+      finishPaintGesture(event, true);
+    };
+    const onPaintEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !this.paintStroke) return;
+      this.cancelPaintStroke();
+      if (this.orbitControls) this.orbitControls.enabled = true;
+      this.setStatus('Paint stroke cancelled.');
+    };
     canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', onPointerUp);
+    canvas.addEventListener('pointercancel', onPointerCancel);
+    window.addEventListener('keydown', onPaintEscape);
     this.lifecycleDisposers.push(() => {
       canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);
+      canvas.removeEventListener('pointercancel', onPointerCancel);
+      window.removeEventListener('keydown', onPaintEscape);
     });
   }
 
   private tool: WorkspaceGizmoTool = 'move';
-  private activePaintColor = new THREE.Color(0xff0000); // Default to red
-  public setActivePaintColor(hex: string): void {
-    this.activePaintColor.set(hex);
-  }
-  public getActivePaintColorHex(): string {
-    return '#' + this.activePaintColor.getHexString();
-  }
-  /** Paint brush radius in mm (model space). */
-  public brushRadiusMm = 4;
   /** The set of filament slots — shared by paint, 3MF display, and slicing. */
   public palette = new FilamentPalette();
   /** Virtual (mixed) filaments adopted from the loaded FullSpectrum 3MF —
@@ -1133,6 +1196,355 @@ export class OrcaWorkspace extends xb.Script {
   private headNozzles: string[] = [];
   private applyingProfile = false;
   private headsContainer: UIPanel | null = null;
+
+  // ---------------------------------------------------------------------------
+  // Canonical colour painting (P4.2–P4.4)
+  // ---------------------------------------------------------------------------
+
+  private paintServiceInstance: PaintStrokeService | null = null;
+  private paintOverlays = new Map<VolumeId, THREE.Mesh>();
+  private paintPreviewOverlay: THREE.Mesh | null = null;
+  private paintStroke: {
+    volumeId: VolumeId;
+    display: THREE.Mesh;
+    triangles: Set<number>;
+    previousLocal?: THREE.Vector3;
+    pointerId: number;
+  } | null = null;
+  private paintSettings: PaintToolSettings = { tool: 'circle', radiusMm: 4, smartFillAngleDegrees: 30 };
+  private paintFilamentId: FilamentId | undefined;
+  private paintMode: 'paint' | 'erase' = 'paint';
+
+  private get paintService(): PaintStrokeService {
+    if (!this.paintServiceInstance) this.paintServiceInstance = this.canonicalProject.createPaintStrokeService();
+    return this.paintServiceInstance;
+  }
+
+  /** Read-only painted-facet total for diagnostics, automation, and E2E. */
+  public getPaintedFacetCount(plateId?: PlateId): number {
+    let total = 0;
+    for (const assignments of this.canonicalProject.getColorFacetsByVolume(plateId ?? this.activePlateId).values()) {
+      for (const assignment of assignments) total += assignment.triangles.length;
+    }
+    return total;
+  }
+
+  /** Palette rows for paint surfaces; every row carries a stable identity. */
+  public getPaintPalette(includeUnavailable = false): PaintPalette {
+    return this.canonicalProject.getPaintPalette({ includeUnavailable });
+  }
+
+  public getPaintToolState(): {
+    readonly settings: PaintToolSettings;
+    readonly filamentId?: FilamentId;
+    readonly mode: 'paint' | 'erase';
+    readonly active: boolean;
+  } {
+    return Object.freeze({
+      settings: Object.freeze({ ...this.paintSettings }),
+      ...(this.paintFilamentId ? { filamentId: this.paintFilamentId } : {}),
+      mode: this.paintMode,
+      active: this.tool === 'paint',
+    });
+  }
+
+  /** Choose the stable filament a stroke assigns; `undefined` erases. */
+  public setPaintFilament(filamentId: FilamentId | undefined): void {
+    if (filamentId) {
+      const entry = this.getPaintPalette(true).entries.find(
+        (candidate: PaintPalette['entries'][number]) => candidate.filamentId === filamentId,
+      );
+      if (!entry) {
+        this.setStatus('That filament is not in this project.');
+        return;
+      }
+      if (!entry.selectable) {
+        this.setStatus(entry.unavailableReason ?? 'That filament cannot be painted.');
+        return;
+      }
+      this.paintFilamentId = filamentId;
+      this.paintMode = 'paint';
+      this.setStatus(`Paint colour: ${entry.name}`);
+    } else {
+      this.paintFilamentId = undefined;
+      this.paintMode = 'erase';
+      this.setStatus('Paint colour: erase to default');
+    }
+    this.onPaintStateChanged?.();
+  }
+
+  /** Select a palette row by its displayed `1`–`9` shortcut. */
+  public setPaintFilamentByNumber(keyboardNumber: number): boolean {
+    const entry = this.getPaintPalette().entries.find(
+      (candidate: PaintPalette['entries'][number]) => candidate.keyboardNumber === keyboardNumber,
+    );
+    if (!entry?.filamentId) return false;
+    this.setPaintFilament(entry.filamentId);
+    return true;
+  }
+
+  public setPaintTool(tool: PaintToolKind): void {
+    this.paintSettings = { ...this.paintSettings, tool };
+    this.setStatus(`Paint tool: ${tool}`);
+    this.onPaintStateChanged?.();
+  }
+
+  public setPaintSettings(settings: Partial<PaintToolSettings>): void {
+    this.paintSettings = { ...this.paintSettings, ...settings };
+    this.onPaintStateChanged?.();
+  }
+
+  public setPaintMode(mode: 'paint' | 'erase'): void {
+    this.paintMode = mode;
+    this.onPaintStateChanged?.();
+  }
+
+  /** Erase every colour facet on the selected volumes ("Erase all"). */
+  public eraseAllPaint(): number {
+    const volumes = this.paintableSelectedVolumes();
+    if (volumes.length === 0) {
+      this.setStatus('Select a model to erase its colour painting.');
+      return 0;
+    }
+    let cleared = 0;
+    for (const volumeId of volumes) {
+      const result = this.paintService.clearVolume(volumeId);
+      if (result.status === 'applied') cleared += 1;
+    }
+    this.refreshPaintOverlays();
+    this.setStatus(cleared > 0 ? `Erased colour painting on ${cleared} part(s).` : 'Nothing was painted.');
+    return cleared;
+  }
+
+  /** Volumes the current selection paints, defaulting to the whole plate. */
+  private paintableSelectedVolumes(): VolumeId[] {
+    const selected = new Set(
+      this.canonicalProject
+        .getObjectsTree()
+        .selection.refs.filter((ref) => ref.kind === 'volume')
+        .map((ref) => ref.id as VolumeId),
+    );
+    const objectIds = new Set(
+      this.canonicalProject
+        .getObjectsTree()
+        .selection.refs.filter((ref) => ref.kind === 'object')
+        .map((ref) => ref.id),
+    );
+    const volumes: VolumeId[] = [];
+    for (const record of this.paintTargets()) {
+      if (
+        selected.has(record.volumeId) ||
+        objectIds.has(record.objectId) ||
+        (selected.size === 0 && objectIds.size === 0)
+      ) {
+        volumes.push(record.volumeId);
+      }
+    }
+    return [...new Set(volumes)];
+  }
+
+  /** Every rendered volume mesh on the active plate, with canonical identity. */
+  private paintTargets(): { volumeId: VolumeId; objectId: ObjectId; display: THREE.Mesh }[] {
+    const targets: { volumeId: VolumeId; objectId: ObjectId; display: THREE.Mesh }[] = [];
+    for (const viewer of this.canonicalProject.surface.root.children) {
+      const instance = getThreeProjectEntity(viewer);
+      if (!instance || instance.kind !== 'instance' || instance.plateId !== this.activePlateId) continue;
+      for (const child of viewer.children) {
+        const entity = getThreeProjectEntity(child);
+        if (!(child instanceof THREE.Mesh) || entity?.kind !== 'volume' || !entity.volumeId) continue;
+        targets.push({ volumeId: entity.volumeId, objectId: instance.objectId, display: child });
+      }
+    }
+    return targets;
+  }
+
+  /** Begin a paint gesture at this canvas ray, if it hits a paintable part. */
+  private beginPaintStroke(raycaster: THREE.Raycaster, pointerId: number): boolean {
+    const targets = this.paintTargets();
+    for (const target of targets) {
+      const [hit] = raycaster.intersectObject(target.display, false);
+      if (!hit || hit.faceIndex === undefined || hit.faceIndex === null) continue;
+      this.paintStroke = {
+        volumeId: target.volumeId,
+        display: target.display,
+        triangles: new Set<number>(),
+        pointerId,
+      };
+      this.samplePaintStroke(hit);
+      return true;
+    }
+    return false;
+  }
+
+  /** Accumulate one pointer sample without touching canonical state. */
+  private samplePaintStroke(hit: THREE.Intersection): void {
+    const stroke = this.paintStroke;
+    if (!stroke || hit.faceIndex === undefined || hit.faceIndex === null) return;
+    const local = stroke.display.worldToLocal(hit.point.clone());
+    const camera = stroke.display.worldToLocal(xb.core.camera.getWorldPosition(new THREE.Vector3()));
+    try {
+      const preview = this.paintService.previewStroke({
+        hit: {
+          volumeId: stroke.volumeId,
+          triangleIndex: hit.faceIndex,
+          localPoint: [local.x, local.y, local.z],
+          localCameraPosition: [camera.x, camera.y, camera.z],
+          ...(stroke.previousLocal
+            ? { previousLocalPoint: [stroke.previousLocal.x, stroke.previousLocal.y, stroke.previousLocal.z] as const }
+            : {}),
+          plateZMm: local.z,
+        },
+        settings: this.paintSettings,
+        ...(this.paintMode === 'paint' && this.paintFilamentId ? { filamentId: this.paintFilamentId } : {}),
+        mode: this.paintMode,
+      });
+      for (const triangle of preview.triangleIndices) stroke.triangles.add(triangle);
+      stroke.previousLocal = local;
+      this.renderPaintPreview(stroke.display, stroke.triangles);
+    } catch (error) {
+      this.setStatus(`Paint failed: ${(error as Error).message}`);
+      this.cancelPaintStroke();
+    }
+  }
+
+  /** Commit the accumulated gesture as exactly one undoable stroke. */
+  private endPaintStroke(): void {
+    const stroke = this.paintStroke;
+    this.paintStroke = null;
+    this.clearPaintPreview();
+    if (!stroke || stroke.triangles.size === 0) return;
+    try {
+      const result = this.paintService.commitTriangles({
+        volumeId: stroke.volumeId,
+        triangleIndices: [...stroke.triangles].sort((left, right) => left - right),
+        ...(this.paintMode === 'paint' && this.paintFilamentId ? { filamentId: this.paintFilamentId } : {}),
+        mode: this.paintMode,
+      });
+      if (result.status === 'applied') {
+        this.setStatus(this.paintMode === 'erase' ? 'Erased colour facets.' : 'Painted colour facets.');
+      }
+    } catch (error) {
+      this.setStatus(`Paint failed: ${(error as Error).message}`);
+    }
+    this.refreshPaintOverlays();
+  }
+
+  private cancelPaintStroke(): void {
+    this.paintStroke = null;
+    this.clearPaintPreview();
+  }
+
+  /** Rebuild every derived colour overlay from canonical annotations. */
+  public refreshPaintOverlays(): void {
+    if (this.disposed) return;
+    const facets = this.canonicalProject.getColorFacetsByVolume(this.activePlateId);
+    const colors = paintPaletteColors(this.getPaintPalette(true));
+    const live = new Set<VolumeId>();
+    for (const target of this.paintTargets()) {
+      const assignments = facets.get(target.volumeId);
+      const existing = this.paintOverlays.get(target.volumeId);
+      if (!assignments || assignments.length === 0) {
+        if (existing) this.disposeOverlay(target.volumeId, existing);
+        continue;
+      }
+      live.add(target.volumeId);
+      const geometry = this.buildPaintOverlayGeometry(target.display, assignments, colors);
+      if (!geometry) {
+        if (existing) this.disposeOverlay(target.volumeId, existing);
+        continue;
+      }
+      if (existing) {
+        existing.geometry.dispose();
+        existing.geometry = geometry;
+        if (existing.parent !== target.display) target.display.add(existing);
+      } else {
+        const overlay = new THREE.Mesh(geometry, PAINT_OVERLAY_MATERIAL.clone());
+        overlay.name = 'paint-overlay';
+        overlay.raycast = () => {};
+        overlay.renderOrder = 2;
+        target.display.add(overlay);
+        this.paintOverlays.set(target.volumeId, overlay);
+      }
+    }
+    for (const [volumeId, overlay] of [...this.paintOverlays]) {
+      if (!live.has(volumeId)) this.disposeOverlay(volumeId, overlay);
+    }
+  }
+
+  private disposeOverlay(volumeId: VolumeId, overlay: THREE.Mesh): void {
+    overlay.removeFromParent();
+    overlay.geometry.dispose();
+    (overlay.material as THREE.Material).dispose();
+    this.paintOverlays.delete(volumeId);
+  }
+
+  private buildPaintOverlayGeometry(
+    display: THREE.Mesh,
+    assignments: readonly { triangles: number[]; value: FilamentId }[],
+    colors: ReadonlyMap<FilamentId, string>,
+  ): THREE.BufferGeometry | null {
+    const source = display.geometry;
+    const position = source.getAttribute('position');
+    const index = source.getIndex();
+    if (!position || !index) return null;
+    const triangles: { triangle: number; color: THREE.Color }[] = [];
+    for (const assignment of assignments) {
+      const color = new THREE.Color(colors.get(assignment.value) ?? '#ffffff');
+      for (const triangle of assignment.triangles) triangles.push({ triangle, color });
+    }
+    if (triangles.length === 0) return null;
+    const positions = new Float32Array(triangles.length * 9);
+    const vertexColors = new Float32Array(triangles.length * 9);
+    triangles.forEach(({ triangle, color }, slot) => {
+      for (let corner = 0; corner < 3; corner += 1) {
+        const vertex = index.getX(triangle * 3 + corner);
+        const offset = slot * 9 + corner * 3;
+        positions[offset] = position.getX(vertex);
+        positions[offset + 1] = position.getY(vertex);
+        positions[offset + 2] = position.getZ(vertex);
+        vertexColors[offset] = color.r;
+        vertexColors[offset + 1] = color.g;
+        vertexColors[offset + 2] = color.b;
+      }
+    });
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(vertexColors, 3));
+    geometry.computeVertexNormals();
+    return geometry;
+  }
+
+  /** Show the in-flight selection before it becomes a canonical command. */
+  private renderPaintPreview(display: THREE.Mesh, triangles: ReadonlySet<number>): void {
+    this.clearPaintPreview();
+    if (triangles.size === 0) return;
+    const previewColor =
+      this.paintMode === 'erase'
+        ? '#ffffff'
+        : this.paintFilamentId
+          ? (paintPaletteColors(this.getPaintPalette(true)).get(this.paintFilamentId) ?? '#ffffff')
+          : '#ffffff';
+    const geometry = this.buildPaintOverlayGeometry(
+      display,
+      [{ triangles: [...triangles], value: 'preview' as unknown as FilamentId }],
+      new Map([['preview' as unknown as FilamentId, previewColor]]),
+    );
+    if (!geometry) return;
+    const preview = new THREE.Mesh(geometry, PAINT_PREVIEW_MATERIAL.clone());
+    preview.name = 'paint-preview';
+    preview.raycast = () => {};
+    preview.renderOrder = 3;
+    display.add(preview);
+    this.paintPreviewOverlay = preview;
+  }
+
+  private clearPaintPreview(): void {
+    if (!this.paintPreviewOverlay) return;
+    this.paintPreviewOverlay.removeFromParent();
+    this.paintPreviewOverlay.geometry.dispose();
+    (this.paintPreviewOverlay.material as THREE.Material).dispose();
+    this.paintPreviewOverlay = null;
+  }
 
   /** Number of models currently on the plate. */
   get modelCount(): number {
@@ -2745,6 +3157,8 @@ export class OrcaWorkspace extends xb.Script {
 
   /** Fires when the filament palette changes (2D UI re-renders). */
   public onPaletteChanged: (() => void) | null = null;
+  /** Fires when the paint tool, colour, or mode changes (DOM/XR surfaces). */
+  public onPaintStateChanged: (() => void) | null = null;
 
   /** Rebuild the XR paint swatch row from the current filament palette. */
   private rebuildPaintSwatches() {
@@ -2759,24 +3173,27 @@ export class OrcaWorkspace extends xb.Script {
       }
     }
     this.paintSwatches = [];
-    this.palette.list().forEach((slot, i) => {
-      const hex = slot.color;
+    // XR swatches project the same canonical palette as the DOM panel, so a
+    // spatial pinch assigns the identical stable filament identity.
+    for (const entry of this.getPaintPalette().entries) {
+      if (!entry.filamentId || !entry.selectable) continue;
+      const filamentId = entry.filamentId;
       const swatch = new UIPanel({
         width: 35,
         height: 35,
         cornerRadius: 4,
-        fillColor: hex,
+        fillColor: entry.displayColor,
         strokeWidth: 2,
-        strokeColor: '#444444',
+        strokeColor: this.paintFilamentId === filamentId ? '#ffffff' : '#444444',
         onClick: () => {
-          this.activePaintColor.set(hex);
-          this.setTool('paint');
+          this.setPaintFilament(filamentId);
+          this.actionContext?.setTool('paint');
           return true;
         },
       });
-      this.paintSwatches.push({ c: i, btn: swatch });
+      this.paintSwatches.push({ filamentId, btn: swatch });
       panel.add(swatch);
-    });
+    }
   }
 
   /**
@@ -2817,7 +3234,7 @@ export class OrcaWorkspace extends xb.Script {
   private menuPanelRoot: UIPanel | null = null;
   private menuPanelTitle: UIText | null = null;
   private paintOptionsPanel?: UIPanel;
-  private paintSwatches: { c: number; btn: UIPanel }[] = [];
+  private paintSwatches: { filamentId: FilamentId; btn: UIPanel }[] = [];
   private valueText: UIText | null = null;
   private progressBar: UIPanel | null = null;
   private progressContainer: UIPanel | null = null;
@@ -3659,16 +4076,23 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public setTool(tool: WorkspaceGizmoTool) {
-    if (tool === 'lay_on_face' || tool === 'paint') {
-      this.setStatus(
-        tool === 'paint'
-          ? 'Color painting is unavailable until facet assignments are canonical.'
-          : 'Lay on face is unavailable until the orientation result commits canonically.',
-      );
+    if (tool === 'lay_on_face') {
+      this.setStatus('Lay on face is unavailable until the orientation result commits canonically.');
       return;
     }
     this.tool = tool;
     this.refreshToolButtons();
+    if (tool === 'paint') {
+      const palette = this.getPaintPalette();
+      if (!this.paintFilamentId && this.paintMode === 'paint') {
+        const first = palette.entries.find((entry: PaintPalette['entries'][number]) => entry.filamentId);
+        if (first?.filamentId) this.paintFilamentId = first.filamentId;
+      }
+      this.refreshPaintOverlays();
+      this.onPaintStateChanged?.();
+      this.setStatus('Paint: drag across a model to colour it, Escape cancels.');
+      return;
+    }
     this.setStatus(`tool: ${tool} - pinch-drag the model`);
     if (this.transformControls) {
       if (tool === 'move') this.transformControls.setMode('translate');
@@ -3736,9 +4160,8 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   private refreshPaintSwatches() {
-    const activeHex = this.activePaintColor.getHex();
-    for (const { c, btn } of this.paintSwatches) {
-      btn.setStrokeColor(c === activeHex ? '#ffffff' : '#444444');
+    for (const { filamentId, btn } of this.paintSwatches) {
+      btn.setStrokeColor(filamentId === this.paintFilamentId ? '#ffffff' : '#444444');
     }
   }
 

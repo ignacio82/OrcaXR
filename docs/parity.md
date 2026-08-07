@@ -308,9 +308,9 @@ Local starting seams: [`ActionContext.ts`](../web/src/actions/ActionContext.ts),
   - **Current:** one registry instance and invocation guard is constructed at the composition root
     and injected into every catalogued surface. Empty-state/native-XR load, targeted plate add/
     delete, and tool-close aliases resolve through that same instance; bounded invocation data
-    preserves exact plate, Objects-tree, semantic-edit, settings, and virtual-filament targeting. All 126 actions have exactly one real parity-task owner and
+    preserves exact plate, Objects-tree, semantic-edit, settings, and virtual-filament targeting. All 137 actions have exactly one real parity-task owner and
     containing-phase anchor; metadata-only IDs explicitly provide no behavioral evidence. Current
-    status is 77 partial, 49 unavailable, and zero implemented. Remaining direct contextual controls,
+    status is 89 partial, 48 unavailable, and zero implemented. Remaining direct contextual controls,
     upstream leaf-to-local reachability, and full browser interaction coverage remain open under
     P11.2/P12.
 
@@ -843,7 +843,12 @@ Local starting seams: [`Paint3mf.ts`](../web/src/features/Paint3mf.ts),
     cancel are exact; painting a large mesh stays within P10 frame/worker budgets.
   - **Current:** a channel-generic headless stroke operation implements paint/erase/reset and a
     guarded command commits one atomic history entry with exact undo/redo, cancellation/no-op
-    behavior, defensive snapshots, and project/topology stale-result rejection. Ray/brush/fill
+    behavior, defensive snapshots, and project/topology stale-result rejection. A UI-independent
+    `PaintStrokeService` now resolves a canonical volume, decodes its immutable mesh once per
+    asset digest, runs the pinned selector, and commits; the live DOM surface streams pointer
+    samples into an accumulated selection with a derived preview overlay and commits exactly one
+    labelled command on release, while Escape and pointer cancellation discard the gesture without
+    touching canonical state. Orbit control is suspended for the duration of a stroke. Ray/brush/fill
     selection geometry, clipping, adjacency, source-located filter semantics, deterministic
     refined-leaf state application, and recursive homogeneous-child collapse now exist in the
     shared headless selector/commit contract. Canonical refined-state persistence, preview
@@ -861,8 +866,11 @@ Local starting seams: [`Paint3mf.ts`](../web/src/features/Paint3mf.ts),
   - **Accept:** a golden mesh and camera/input script checks exact selected facets for each tool,
     filter, clipping plane, threshold boundary, erase, and refined-triangle case against official
     reference output.
-  - **Current:** a source-pinned headless selector implements Circle, Sphere, Triangle, Height
-    Range, connected/smart Fill, and snapshot-based Gap Fill over canonical indexed geometry.
+  - **Current:** all six tools are selectable in the live paint panel with their exposed
+    parameters (brush radius, smart-fill angle, band height, gap-area threshold), paint/erase
+    modes, and Erase All on the selection; a source-pinned headless selector implements Circle,
+    Sphere, Triangle, Height Range, connected/smart Fill, and snapshot-based Gap Fill over
+    canonical indexed geometry.
     Circle/Sphere reproduce swept point/ray/edge capsule predicates; selection honors world-space
     transforms, clipping, strict threshold boundaries, edge adjacency, upstream per-tool angle
     filtering, and inverse-transpose overhang normals. Opt-in adaptive refinement reproduces the
@@ -870,17 +878,28 @@ Local starting seams: [`Paint3mf.ts`](../web/src/features/Paint3mf.ts),
     source-face/child-path leaf IDs, and direct/propagated split adjacency for Fill and Gap Fill.
     Refined commits apply disjoint targets and recursively collapse homogeneous children; malformed,
     cyclic, ambiguous, too-deep, or oversized trees fail closed. Thirty-nine focused traces cover
-    geometry, refinement, state application, degenerate inputs, and validation. Canonical
-    refined-state persistence and BBS engine projection, live cursor/wireframe/tool controls,
-    registry routing, touch/XR input, and official golden traces remain open.
+    geometry, refinement, state application, degenerate inputs, and validation, and the production
+    browser smoke paints through the real panel and canvas. Canonical refined-state persistence and
+    BBS engine projection, live cursor/wireframe/section-clipping controls, vertical/horizontal
+    filters, touch/XR input, and official golden traces remain open.
 
-- [ ] **P4.4 — Use the full physical-plus-virtual paint palette.** Palette entries show stable
+- [~] **P4.4 — Use the full physical-plus-virtual paint palette.** Palette entries show stable
   assignment ID, keyboard number, physical color or virtual recipe/gradient badge, name, and
   unavailable/compatibility state. The default/unpainted state inherits object/part assignment.
   - Painting with a mixed filament writes the virtual assignment state understood by the pinned
     engine; never flatten it to a predicted RGB or physical palette index.
   - **Accept:** physical and each FullSpectrum mode can be painted on separate facets, survives
     save/open, and produces expected segmentation/tool behavior.
+  - **Current:** one canonical palette projection feeds the DOM panel, the XR swatch row, and the
+    stroke service. Rows carry the stable physical or mixed ID, tool/mode badge, name, recipe
+    summary, gradient stops, the derived transient engine slot, and an explicit `1`–`9` number that
+    nine registry actions dispatch; the first row is the default/inherit state that erases back to
+    the object or part assignment. Disabled recipes and recipes whose components no longer exist are
+    listed with machine-readable unavailable reasons and cannot be selected or painted. A stroke
+    stores the stable filament ID — physical or mixed — and never a slot index or predicted RGB, and
+    a painted recipe reopens with the same identity after canonical save. Standard-BBS export still
+    projects a facet to its transient engine slot, so official-Orca colour round-trip, per-mode
+    fixtures on separate facets, compatibility policy, and segmentation/tool oracles remain open.
 
 - [~] **P4.5 — Implement explicit filament remapping.** Present every currently referenced
   source filament and a destination selector supporting identity and many-to-one mappings.
@@ -2032,7 +2051,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Feature family / required outcome | Primary tasks | 2026-07-30 current audit |
 |---|---:|---|
 | Upstream actions/settings/gizmos/formats/calibrations inventory and drift | P0.1, P12.1 | Exact pinned extractor maps 1,622 leaves/13 families from 17 Git blobs; manual upstream workflow sampling remains |
-| Truthful menu/toolbar/context/shortcut/XR capability state | P0.2, P11.2 | One guarded registry reports 126 actions = 77 partial + 49 unavailable and zero implemented, with unique real task ownership/anchors; full upstream reachability remains |
+| Truthful menu/toolbar/context/shortcut/XR capability state | P0.2, P11.2 | One guarded registry reports 137 actions = 89 partial + 48 unavailable and zero implemented, with unique real task ownership/anchors; full upstream reachability remains |
 | Clean-clone typecheck/test/build/CI and reproducible engine artifacts | P0.3, P12.3 | Aggregate local gate and artifact provenance pass; clean-clone CI/native rebuild qualification remains |
 | Golden 3MF/config/G-code/security fixture oracle | P0.4 | Structural 3MF, semantic G-code, and hostile server fixtures pass; official Snapmaker corpus remains |
 | Shared domain/action/surface boundaries | P0.5, P1.1–P1.2 | Canonical project/history, validated mesh codec, live one-way Three projection, and one injected guarded action registry exist; remaining contextual bypasses and feature commands are tracked explicitly |
@@ -2051,9 +2070,9 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | FullSpectrum Match authoring and gamut search | P3.5, P3.9 | Bounded cancellable worker search, ranked explicit choice, ΔE, prediction, and persistence exist; official target/tolerance and hardware oracle remain |
 | FullSpectrum Gradient authoring and Local-Z output | P3.6–P3.7, P3.9 | Live direction/endpoints/preview/persistence plus generated advanced settings exist; layer-wise and hardware oracles remain |
 | Virtual filaments in parts, painting, legends, preview, persistence | P2.3, P3.8, P4.4 | Live part/range assignment, badges/library summaries, and save/reopen exist; paint palette, complete legends/preview/send, and XR remain |
-| Canonical independent facet channels | P4.1–P4.2 | Five topology-aware sparse channels, guarded stroke history, and refined-leaf target/collapse helpers exist; refined persistence, live paint, and oracles are missing |
-| Color Circle/Sphere/Triangle/Height/Fill/Gap Fill | P4.3 | Source-pinned headless selectors cover all six tools, transforms/clipping/filters/overhang, swept traces, recursive adaptive refinement, split adjacency, and deterministic leaf commit/collapse; persistence, live tools/overlays, XR, and official goldens remain |
-| Physical + virtual color palette, erase, clipping, filters | P4.3–P4.4 | Physical radius/color/size only |
+| Canonical independent facet channels | P4.1–P4.2 | Five topology-aware sparse channels, guarded stroke history, refined-leaf helpers, and a live pointer stroke that previews then commits one undoable command exist; refined persistence, XR input, and oracles are missing |
+| Color Circle/Sphere/Triangle/Height/Fill/Gap Fill | P4.3 | All six tools and their exposed parameters are live in the DOM paint panel over the source-pinned selectors, with derived overlays and browser-verified strokes; section clipping, filters, wireframe, refined persistence, XR, and official goldens remain |
+| Physical + virtual color palette, erase, clipping, filters | P4.3–P4.4 | Canonical palette with stable physical/mixed IDs, badges, gradients, `1`–`9` keys, unavailable reasons, inherit/erase, and Erase All is live in DOM and XR swatches; clipping, filters, and official oracles remain |
 | Filament source→destination paint remapping | P4.5 | Canonical atomic many-to-one remap exists; preview/UI/default/deletion/oracle flows are missing |
 | Support painting | P4.6 | Placeholder |
 | Seam painting | P4.7 | Placeholder |
@@ -2198,6 +2217,7 @@ Evidence: EVID-nnn or Pending
 | `EVID-013` | P0.2–P0.3, P1.5, P3.2, P4.9, P6.6–P6.7, P7.1, P9.1, P10.2, P10.7, P10.10, P11.3, P11.6 | Current worktree atop `20c42867cd29d203eaa7d2afb6bae33dff29eeb2`; commit pending | `9fd12ff...` | 2026-07-20 | `npm --prefix web run quality`; `npm --prefix server test` | Node 22.21.0; Chrome for Testing 150.0.7871.24; desktop/mobile emulation; no headset/printer | Pass: 34/34 unit, 3/3 integration, 13/13 project, 2/2 settings, and 1/1 XR files; 22 server tests; 112 actions = 77 partial + 35 unavailable; 98 local icons; E2E/offline/24-rule axe pass; bundle main 2,080,342 bytes, JS 8,394,204 bytes, CSS 0 | Codex automated review; canonical live migration, official workflow, AT/headset/printer, threat, and independent review pending |
 | `EVID-014` | P1.3 split-model import only | Current worktree atop `20c42867cd29d203eaa7d2afb6bae33dff29eeb2`; commit pending | `9fd12ff...` | 2026-07-20 | `npm --prefix web run test:project -- bbs3mf-serializer.test.ts`; architecture check; focused ESLint/Prettier/diff checks; read-only `tsx` deserialize and in-memory save/reopen of `MarbleRunTube_V7.3mf` | Node 22.21.0; headless; no GUI/device/printer | Pass: 17/17 project files; 20,401,604-byte source resolved 26 external model parts into 5 plates, 28 objects, 29 volumes, and 28 instances; 75 opaque members preserved; 14 virtual-grid transforms normalized; 48,194,991-byte/109-entry canonical save had no `p:path`, reopened with equal canonical state, and retained 102 asset payloads | Codex automated review; arbitrary-affine geometric oracle and official Snapmaker GUI open/save remain pending |
 | `EVID-015` | P0.2, P1.4, P5.6 | Current worktree atop `5ff753d`; commit pending | `9fd12ff...` | 2026-08-07 | `npm --prefix web run quality`; `model-formats.test.ts`; `ModelImportParser.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no printer | Pass: 20 format-decode traces (STL binary/ASCII, OBJ+MTL, AMF units/materials/modifiers/constellations, compressed AMF, ZIP atomicity, renamed-archive/STEP/SVG/G-code/empty/noise/truncated/limit rejections) and 6 staging traces (single-command commit with exact undo/redo, bed placement, OBJ part structure, AMF unit conversion, archive dedup/renaming, untouched project on failure); registry now reports 126 actions = 77 partial + 49 unavailable | Automated review; official Orca import-corpus comparison, drag/drop, and STEP/SVG routes pending |
+| `EVID-016` | P4.2–P4.4, P10.2 | Current worktree atop `2f1423a`; commit pending | `9fd12ff...` | 2026-08-07 | `npm --prefix web run quality`; `src/project/painting/__tests__/painting.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no headset/printer | Pass: 10 painting traces (palette projection/engine slots/unavailable reasons, stable-ID strokes with exact undo/redo, mixed-recipe painting without flattening, erase and erase-all, swept brush and no-op suppression, rejected targets/filaments/hits, modifier refusal, cancellation, canonical save/reopen identity) plus a production browser pass that activates the paint tool, selects a swatch and tool, paints with a real pointer gesture, and undoes/redoes the labelled command; registry now reports 137 actions = 89 partial + 48 unavailable | Automated review; official Orca colour round-trip, segmentation/G-code oracles, touch/XR, and manual accessibility review pending |
 
 Correction note (2026-07-20): the provisional local-commit cells in `EVID-001`–`EVID-012`
 were filled with the commit that landed those runs. Their historical commands, counts, results,
@@ -2243,6 +2263,7 @@ has no equivalent, add a `BLOCK-*` row rather than calling it done or Not applic
 | 2026-07-20 | Activate external-slicer routing only after a successful probe backed by explicit opt-in; persisted URL metadata alone never enables it | A stale saved endpoint or failed replacement must not silently upload project geometry outside the browser after the user selected Off | P7.1, P10.7 | Focused preference/race tests pass; production threat/device review pending |
 | 2026-07-23 | Make `CanonicalWorkspaceController` the live workspace owner and delete raw-project/scene-baked save, open, and slice fallbacks | A dormant second state model could reintroduce metadata loss or publish G-code for content different from the visible canonical project | P1.2, P1.4–P1.6, P7.1 | Focused controller/import/action tests pass; full quality, official Orca/G-code, browser/XR, and hardware qualification pending |
 | 2026-08-07 | Dispatch every model import by content signature first, fail closed on extension/signature disagreement, and route mesh sources through the transactional canonical import coordinator | Parsing an unknown container as STL silently produced wrong geometry, and a direct add bypassed preview/undo guarantees that project import already provided | P1.4, P5.6, P0.2 | Format/staging tests and the web quality gate pass; official corpus and drag/drop qualification pending |
+| 2026-08-07 | Make colour painting a canonical live tool: one UI-independent stroke service, a stable-ID palette shared by DOM and XR, and derived overlays; delete the legacy display-colour paint panel and brush state | A second display-colour paint path could not persist, undo, or slice, and kept the tool honest only by staying disabled; the canonical facet channels already existed | P4.2–P4.4, P0.2 | Painting/registry/shortcut tests and the production browser smoke pass; official round-trip, XR, and hardware evidence pending |
 | YYYY-MM-DD |  |  |  |  |
 
 ## 21. Verification interface and matrices

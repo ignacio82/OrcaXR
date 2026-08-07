@@ -55,14 +55,23 @@ assert.equal(moveResult.isError, undefined);
 assert.deepEqual(applied, ['move']);
 assert.match(moveResult.content[0]?.text ?? '', /set to move/);
 
+// Colour painting is a canonical tool now, so automation reaches its handler.
 const paintResult = (await setGizmoTool({ tool: 'paint' })) as {
   content: Array<{ type: string; text: string }>;
   isError?: boolean;
 };
-assert.equal(paintResult.isError, true);
-assert.deepEqual(applied, ['move'], 'an unavailable paint tool must not reach the handler');
-assert.match(paintResult.content[0]?.text ?? '', /canonical facet annotations/i);
-assert.match(reports.at(-1) ?? '', /Paint: .*canonical facet annotations/i);
+assert.equal(paintResult.isError, undefined);
+assert.deepEqual(applied, ['move', 'paint']);
+
+// A still-gated tool must fail visibly instead of reaching the handler.
+const layFlatResult = (await setGizmoTool({ tool: 'lay_on_face' })) as {
+  content: Array<{ type: string; text: string }>;
+  isError?: boolean;
+};
+assert.equal(layFlatResult.isError, true);
+assert.deepEqual(applied, ['move', 'paint'], 'an unavailable tool must not reach the handler');
+assert.match(layFlatResult.content[0]?.text ?? '', /canonical/i);
+assert.match(reports.at(-1) ?? '', /Lay flat: .*canonical/i);
 
 const source = readFileSync(fileURLToPath(new URL('../WorkspaceTools.ts', import.meta.url)), 'utf8');
 assert.doesNotMatch(source, /workspace\.setTool\s*\(/);

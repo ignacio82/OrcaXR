@@ -74,6 +74,8 @@ export class ModelImportParser implements ProjectImportParserPort {
     const droppedFields: ImportDroppedFieldNotice[] = [];
     const diagnostics: ImportDiagnostic[] = [];
     const usedNames = new Set(state.plates.flatMap((entry) => entry.objects.map((object) => object.name)));
+    // The import is placed as one group so its authored relative layout survives.
+    const bounds = importBounds(decoded);
     const importedAt = this.options.clock?.() ?? new Date().toISOString();
     let noticeIndex = 0;
     const nextId = (prefix: string): string => {
@@ -84,7 +86,6 @@ export class ModelImportParser implements ProjectImportParserPort {
     decoded.objects.forEach((object, objectIndex) => {
       throwIfCancelled(request.cancellation);
       const volumes: ProjectVolume[] = [];
-      const bounds = objectBounds(object, decoded.unitScaleToMm);
 
       object.volumes.forEach((volume) => {
         const positions = scalePositions(volume.mesh.positions, decoded.unitScaleToMm);
@@ -242,6 +243,38 @@ const IDENTITY: Transform = Object.freeze({
 });
 
 const STAGING_ASSET_ID = 'import:staging:mesh' as AssetId;
+
+/** Bounds of every decoded object, including its instance offsets, in mm. */
+function importBounds(decoded: DecodedModelImport): ObjectBounds {
+  let bounds: ObjectBounds | undefined;
+  for (const object of decoded.objects) {
+    const local = objectBounds(object, decoded.unitScaleToMm);
+    for (const instance of object.instances) {
+      const [x, y, z] = [
+        instance.transform.translationMm[0] * decoded.unitScaleToMm,
+        instance.transform.translationMm[1] * decoded.unitScaleToMm,
+        instance.transform.translationMm[2] * decoded.unitScaleToMm,
+      ];
+      const shifted: ObjectBounds = {
+        minX: local.minX + x,
+        maxX: local.maxX + x,
+        minY: local.minY + y,
+        maxY: local.maxY + y,
+        minZ: local.minZ + z,
+      };
+      bounds = bounds
+        ? {
+            minX: Math.min(bounds.minX, shifted.minX),
+            maxX: Math.max(bounds.maxX, shifted.maxX),
+            minY: Math.min(bounds.minY, shifted.minY),
+            maxY: Math.max(bounds.maxY, shifted.maxY),
+            minZ: Math.min(bounds.minZ, shifted.minZ),
+          }
+        : shifted;
+    }
+  }
+  return bounds ?? { minX: 0, maxX: 0, minY: 0, maxY: 0, minZ: 0 };
+}
 
 function objectBounds(object: DecodedObject, scale: number): ObjectBounds {
   let minX = Number.POSITIVE_INFINITY;
