@@ -505,10 +505,16 @@ export class PresetGraph {
             });
           }
         }
+        // A slot the caller never asked about (a machine with more tools than
+        // the request carried) inherits the first slot's filament, the way Orca
+        // fills a new extruder with the active preset. Falling back to the
+        // catalog's first compatible preset instead would silently pair, say,
+        // PLA with ABS, and the engine refuses to slice that combination.
+        const inherited = slot > 0 && !requestedId && !defaultFilaments[slot] ? (filaments[0] ?? undefined) : undefined;
         selected = chooseFilamentReplacement(
           compatible,
-          requested?.kind === 'filament' ? requested : undefined,
-          defaultFilaments[slot] ?? defaultFilaments[0],
+          requested?.kind === 'filament' ? requested : inherited,
+          defaultFilaments[slot] ?? inherited?.name ?? defaultFilaments[0],
         );
       }
       filaments.push(selected ?? null);

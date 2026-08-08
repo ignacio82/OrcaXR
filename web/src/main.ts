@@ -15,8 +15,13 @@ import {
   loadPrinterEndpointPreferences,
   MoonrakerTransport,
   MoonrakerTransportError,
+  PrintSubmissionError,
   queryMoonrakerFilamentSlots,
+  queryPrintReadiness,
   savePrinterEndpointPreferences,
+  submitPrintJob,
+  validateToolMapping,
+  type MoonrakerFilamentSlot,
   type MoonrakerHandshake,
 } from './printer';
 import { registerWorkspaceTools } from './mcp/WorkspaceTools';
@@ -34,6 +39,7 @@ import { GeneratedSettingsPanel } from './ui/dom/GeneratedSettingsPanel';
 import { ObjectsPanel, type ObjectsPanelSelectionRequest } from './ui/dom/ObjectsPanel';
 import { FilamentAssignmentSelector } from './ui/dom/FilamentAssignmentSelector';
 import { askThreeMfIntake } from './ui/dom/FileIntakeDialog';
+import { askPrintSubmission } from './ui/dom/PrintSubmissionDialog';
 import { GcodePreviewPanel } from './ui/dom/GcodePreviewPanel';
 import { PaintPanel } from './ui/dom/PaintPanel';
 import { PlateManager } from './ui/dom/PlateManager';
@@ -83,6 +89,17 @@ if (import.meta.env.DEV && 'serviceWorker' in navigator) {
       .then((keys) => keys.forEach((k) => caches.delete(k)))
       .catch(() => {});
   }
+}
+
+/** Human summary of which tools a job needs and what the printer has loaded. */
+function describeToolUsage(tools: readonly number[], slots: readonly MoonrakerFilamentSlot[] | undefined): string {
+  if (tools.length === 0) return 'single filament';
+  const used = tools.map((tool) => `T${tool}`).join(', ');
+  if (!slots || slots.length === 0) {
+    return `${tools.length} tool${tools.length === 1 ? '' : 's'} (${used}); printer slots not reported`;
+  }
+  const loaded = slots.map((slot) => `slot ${slot.slotIndex + 1} ${slot.material} ${slot.colorHex}`).join(', ');
+  return `${tools.length} tool${tools.length === 1 ? '' : 's'} (${used}) — loaded: ${loaded}`;
 }
 
 function objectsEntityKey(entity: ObjectTreeEntityRef): string {
@@ -173,6 +190,17 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     printerTransportKey = '';
   };
 
+  /** The send button doubles as the cancel affordance while a send is running. */
+  const setPrinterSendBusy = (busy: boolean) => {
+    btnPrinterSend.textContent = busy ? 'Cancel send' : 'Send to Printer';
+    btnPrinterSend.title = busy
+      ? 'Stop the send in progress'
+      : 'Upload the sliced G-code to the configured Moonraker printer';
+    btnPrinterSend.disabled = busy ? false : !uiState.get().gcodeReady;
+    btnPrinterSend.setAttribute('aria-busy', String(busy));
+    btnPrinterSend.dataset.sendBusy = String(busy);
+  };
+
   const configuredPrinterTransport = (): MoonrakerTransport => {
     const endpoint = printerCfg.host.trim();
     if (!endpoint) throw new MoonrakerTransportError('invalid_endpoint', 'connect');
@@ -243,6 +271,94 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       );
     } catch (error) {
       workspace.setStatus(`Filament inspection failed: ${(error as Error).message}`);
+    }
+  };
+
+  // One in-flight send at a time, cancellable from the same button that
+  // started it. A second send cannot race the first onto the same printer.
+  let printSubmission: AbortController | null = null;
+
+  workspace.onRequestPrintSubmission = async (intent) => {
+    if (printSubmission) {
+      workspace.setStatus('A send is already in progress; cancel it before starting another.');
+      return;
+    }
+    if (!printerCfg.host.trim()) {
+      workspace.setStatus('Enter an explicit Moonraker endpoint first.');
+      return;
+    }
+    const controller = new AbortController();
+    printSubmission = controller;
+    setPrinterSendBusy(true);
+    try {
+      workspace.setStatus('Connecting to the printer…');
+      const { transport, handshake } = await connectConfiguredPrinter();
+      if (!handshake.capabilities.fileManagement) {
+        workspace.setStatus('This Moonraker instance does not expose file management; nothing was sent.');
+        return;
+      }
+      // Read the machine's own facts before asking anything: what it is doing,
+      // and what it actually has loaded.
+      const readiness = await queryPrintReadiness(transport, controller.signal);
+      let slots: readonly MoonrakerFilamentSlot[] | undefined;
+      try {
+        slots = await queryMoonrakerFilamentSlots(transport, controller.signal);
+      } catch {
+        // Not every Moonraker exposes Snapmaker's slot object; the mapping
+        // check then reports "unknown" instead of pretending it matched.
+        slots = undefined;
+      }
+      const mapping = validateToolMapping(intent.usage, slots);
+      const readinessBlockers = readiness.blockers.map((blocker) => blocker.message);
+      const decision = await askPrintSubmission({
+        filename: intent.filename,
+        plateName: intent.plateName,
+        byteLength: new TextEncoder().encode(intent.gcode).byteLength,
+        endpointLabel: handshake.printer.hostname || printerCfg.host.trim(),
+        printerStateLabel: readiness.ready ? `ready (${readiness.printState ?? 'idle'})` : readinessBlockers.join(' '),
+        toolSummary: describeToolUsage(intent.usage.tools, slots),
+        blockers: [...mapping.blockers.map((notice) => notice.message), ...(readiness.ready ? [] : readinessBlockers)],
+        warnings: mapping.warnings.map((notice) => notice.message),
+      });
+      if (decision.choice === 'cancel') {
+        workspace.setStatus('Send cancelled; nothing was uploaded.');
+        return;
+      }
+      const result = await submitPrintJob(transport, {
+        filename: intent.filename,
+        gcode: intent.gcode,
+        startPrint: decision.choice === 'upload-and-print',
+        overwrite: decision.overwrite,
+        signal: controller.signal,
+        onPhase: (phase) => {
+          const message =
+            phase === 'uploading'
+              ? `Uploading ${intent.filename}…`
+              : phase === 'verifying'
+                ? 'Verifying the stored file…'
+                : phase === 'starting'
+                  ? 'Starting the print…'
+                  : phase === 'checking'
+                    ? 'Checking the printer…'
+                    : null;
+          if (message) workspace.setStatus(message);
+        },
+      });
+      const renamed = result.renamedFrom ? ` (stored as ${result.path} to avoid replacing ${result.renamedFrom})` : '';
+      workspace.setStatus(
+        result.startedPrint
+          ? `Printing ${result.path} — ${(result.verifiedBytes / 1024).toFixed(0)} KB verified on the printer${renamed}.`
+          : `Uploaded ${result.path} — ${(result.verifiedBytes / 1024).toFixed(0)} KB verified; start it from the printer when ready${renamed}.`,
+      );
+    } catch (error) {
+      const message =
+        error instanceof PrintSubmissionError || error instanceof MoonrakerTransportError
+          ? error.message
+          : (error as Error).message;
+      workspace.setStatus(`Send failed: ${message}`);
+    } finally {
+      printSubmission = null;
+      setPrinterSendBusy(false);
     }
   };
 
@@ -1583,15 +1699,22 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     }
   };
   const btnPrinterWebcam = document.getElementById('btn-printer-webcam') as HTMLButtonElement;
-  const printerMutationReason =
-    'Unavailable until printer mapping, preflight, confirmation, integrity, and reconnect handling are complete.';
-  btnPrinterSend.disabled = true;
-  btnPrinterSend.title = printerMutationReason;
   btnPrinterWebcam.disabled = true;
   btnPrinterWebcam.title = 'Unavailable until webcam discovery is routed through the shared printer connection.';
+  btnPrinterSend.onclick = () => {
+    if (printSubmission) {
+      printSubmission.abort();
+      workspace.setStatus('Cancelling the send…');
+      return;
+    }
+    void registry
+      .invoke('send_to_printer', 'dom-inspector', actionCtx, uiState.get())
+      .catch((error) => workspace.setStatus(`Send failed: ${(error as Error).message}`));
+  };
+  setPrinterSendBusy(false);
 
-  // Download availability is registry-driven. Printer mutation stays blocked
-  // independently until the complete P9 safety workflow is wired.
+  // Download and send availability are both registry-driven; webcam discovery
+  // stays blocked until it is routed through the shared printer connection.
   // Build-plate bar: a chip per plate + an add button. Switching hides the
   // current plate's models and shows the target's (the workspace owns the sets).
   const plateBar = document.getElementById('plate-bar') as HTMLDivElement;
@@ -1657,8 +1780,10 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   updateCanonicalUi(workspace.getCanonicalSummary());
 
   workspace.onDownloadReady = (ready) => {
-    btnPrinterSend.disabled = true;
     uiState.update({ gcodeReady: ready });
+    // A stale artifact must not stay sendable; an in-flight send keeps its own
+    // cancel affordance until it settles.
+    if (!printSubmission) btnPrinterSend.disabled = !ready;
   };
 
   workspace.onSelectionChanged = () => {

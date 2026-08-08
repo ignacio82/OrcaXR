@@ -293,6 +293,52 @@ test('preserves compatible selections and deterministically substitutes printer 
   assert.equal(Object.isFrozen(replaced.filaments), true);
 });
 
+test('unrequested tool slots inherit the chosen filament instead of an unrelated material', () => {
+  // A four-tool printer that names only one default filament. Orca fills the
+  // extra extruders with the active preset; picking the catalog's first
+  // compatible preset instead would pair PETG with PLA, which the engine
+  // refuses to slice on temperature grounds.
+  const input = fixture() as unknown as Record<string, { machine: Record<string, unknown>[] }>;
+  input.Vendor.machine[0].nozzle_diameter = ['0.4', '0.4', '0.4', '0.4'];
+  input.Vendor.machine[0].default_filament_profile = ['PLA'];
+  const graph = PresetGraph.build(input as unknown as PresetCatalogInput);
+  const machine = graph.find('Vendor', 'machine', 'Machine 0.4')!;
+  const standard = graph.find('Vendor', 'process', 'Standard 0.4')!;
+  const pla = graph.find('Vendor', 'filament', 'PLA')!;
+  const petg = graph.find('Vendor', 'filament', 'PETG')!;
+
+  const inherited = graph.resolveSelection({
+    printerId: machine.id,
+    processId: standard.id,
+    filamentIds: [petg.id],
+    installedVendors: ['Vendor'],
+  });
+  assert.deepEqual(
+    inherited.filaments.map((filament) => filament?.id),
+    [petg.id, petg.id, petg.id, petg.id],
+  );
+  assert.deepEqual(
+    inherited.substitutions.map((substitution) => [substitution.slot, substitution.reason]),
+    [
+      [1, 'missing'],
+      [2, 'missing'],
+      [3, 'missing'],
+    ],
+  );
+
+  // With nothing requested at all, every slot still lands on the printer's own
+  // declared default rather than drifting apart.
+  const defaults = graph.resolveSelection({
+    printerId: machine.id,
+    processId: standard.id,
+    installedVendors: ['Vendor'],
+  });
+  assert.deepEqual(
+    defaults.filaments.map((filament) => filament?.id),
+    [pla.id, pla.id, pla.id, pla.id],
+  );
+});
+
 test('proves the live bundled corpus contains name-heuristic false positives that exact lists reject', () => {
   const catalog = JSON.parse(
     readFileSync(new URL('../../../public/profiles/catalog.json', import.meta.url), 'utf8'),

@@ -94,6 +94,8 @@ export interface MoonrakerRequestOptions extends Omit<RequestInit, 'signal' | 'h
   readonly signal?: AbortSignal;
   readonly headers?: Readonly<Record<string, string>>;
   readonly operation?: string;
+  /** File uploads answer with a bare object instead of a `result` envelope. */
+  readonly acceptBareEnvelope?: boolean;
 }
 
 export type MoonrakerObjectSubscription = Readonly<Record<string, readonly string[] | null>>;
@@ -298,6 +300,31 @@ export class MoonrakerTransport {
     return result;
   }
 
+  /**
+   * POST a multipart body (file upload) and accept Moonraker's bare or
+   * `result`-wrapped JSON response. Uploads are the only endpoint whose
+   * response shape differs, so they get their own guarded entry point rather
+   * than loosening the JSON-RPC contract every other call relies on.
+   */
+  async upload<T>(path: string, body: FormData, options: MoonrakerRequestOptions = {}): Promise<T> {
+    if (this.stateValue.status !== 'connected') {
+      throw new MoonrakerTransportError('invalid_state', options.operation ?? 'upload');
+    }
+    const generation = this.generation;
+    const socketEpoch = this.socketEpoch;
+    const operation = safeOperationName(options.operation ?? 'upload');
+    const result = await this.fetchResult<T>(
+      generation,
+      path,
+      { ...options, method: 'POST', body, acceptBareEnvelope: true },
+      operation,
+    );
+    if (this.stateValue.status !== 'connected' || this.generation !== generation || this.socketEpoch !== socketEpoch) {
+      throw new MoonrakerTransportError('cancelled', operation);
+    }
+    return result;
+  }
+
   private prepareNewSession(): void {
     this.desiredConnected = false;
     this.generation += 1;
@@ -386,6 +413,7 @@ export class MoonrakerTransport {
         signal: _ignoredSignal,
         headers: _ignoredHeaders,
         operation: _ignoredOperation,
+        acceptBareEnvelope: _ignoredEnvelope,
         ...requestInit
       } = options;
       const response = await this.fetcher(url, {
@@ -410,7 +438,10 @@ export class MoonrakerTransport {
       }
       if (!isRecord(envelope)) throw new MoonrakerTransportError('invalid_response', operation);
       if ('error' in envelope) throw new MoonrakerTransportError('protocol_error', operation);
-      if (!('result' in envelope)) throw new MoonrakerTransportError('invalid_response', operation);
+      if (!('result' in envelope)) {
+        if (options.acceptBareEnvelope) return envelope as T;
+        throw new MoonrakerTransportError('invalid_response', operation);
+      }
       return envelope.result as T;
     } catch (error) {
       const normalized =

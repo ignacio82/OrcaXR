@@ -12,11 +12,11 @@
       "wasm/slic3r_wasm.cpp",
       "wasm/build_wasm_module_snapmaker.sh"
     ],
-    "aggregateSha256": "799b0df8daee64fd6f834d98602cb8044c4532f7f557b30e0a7e26044ddb19b8"
+    "aggregateSha256": "eec9c7528d310a20f13d69f3c22e6e00e4325decb63f0f264581f711c0c01fd0"
   },
   "outputs": {
     "slic3r.mjs": "b90d06ccfeb526a4d0d7e08a56ebb5401175f7337f7d9b35c039bd738448f03e",
-    "slic3r.wasm": "92303665e531e1a9ac4a8d2a5558746c59f540f20597abcab41a630a774bbc58"
+    "slic3r.wasm": "746503927b36b2d86b63413937f4cef357ac5ab0fe42489bea7cebf41e72a221"
   },
   "publishedCopies": [
     "wasm/dist",

@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { strToU8, zipSync } from 'fflate';
+import { startMoonrakerSimulator } from './moonraker-simulator.mjs';
 import { launchBrowser, openReadyPage, startPreview } from './preview-harness.mjs';
 
 async function writeMultiPlateFixture(directory) {
@@ -440,6 +441,169 @@ async function paintImportedModel(page) {
   await page.waitForFunction(() => globalThis.window.__orcaUi.get().activeTool === 'move');
 }
 
+/**
+ * The whole multicolor output path in one pass: assign a second filament to a
+ * second object through the Objects panel, slice the plate, then send it to a
+ * Moonraker printer. Every safety property that guards a real machine is
+ * asserted against a real HTTP printer: a tool the printer cannot supply blocks
+ * starting, uploading is separate from printing, an existing name is never
+ * replaced silently, and the stored bytes match the artifact exactly.
+ */
+async function sliceAndSendActivePlate(page, printer) {
+  const objects = await page.evaluate(() => {
+    const snapshot = globalThis.window.workspace.getObjectsTreeSnapshot();
+    return [...snapshot.projection.rowsByKey.values()]
+      .filter((row) => row.kind === 'object' && row.entity?.kind === 'object')
+      .map((row) => ({ key: row.key, id: row.entity.id }));
+  });
+  assert.ok(objects.length >= 2, 'the multicolor send fixture needs two objects');
+  await page.evaluate((key) => {
+    const row = [...globalThis.document.querySelectorAll('[data-objects-row-key]')].find(
+      (candidate) => candidate.dataset.objectsRowKey === key,
+    );
+    row?.dispatchEvent(new globalThis.MouseEvent('click', { bubbles: true }));
+  }, objects[1].key);
+  await page.waitForFunction(
+    (id) => globalThis.window.workspace.getObjectsTreeSnapshot().selection.primary?.id === id,
+    {},
+    objects[1].id,
+  );
+
+  // Every tool slot must start on the same material: the engine refuses to
+  // slice filaments whose temperatures are far apart, so a mixed default
+  // palette would make two-colour printing impossible out of the box.
+  const filaments = await page.evaluate(() =>
+    globalThis.window.workspace
+      .getFilamentAssignmentSnapshot()
+      .options.filter((option) => option.kind === 'physical')
+      .map((option) => ({ id: option.id, material: option.material })),
+  );
+  assert.ok(filaments.length >= 2, 'the printer profile offers at least two filament slots');
+  assert.equal(
+    new Set(filaments.map((filament) => filament.material)).size,
+    1,
+    'unrequested filament slots inherit the selected material',
+  );
+  await page.evaluate((id) => {
+    const radio = [...globalThis.document.querySelectorAll('[data-filament-assignment-kind="filament"]')].find(
+      (candidate) => candidate.dataset.filamentId === id,
+    );
+    radio?.click();
+    globalThis.document.querySelector('[data-filament-assignment-apply="true"]')?.click();
+  }, filaments[1].id);
+  await page.waitForFunction(
+    ({ id, filamentId }) =>
+      globalThis.window.workspace
+        .getFilamentAssignmentSnapshot()
+        .scopes.some((scope) => scope.objectId === id && scope.localFilamentId === filamentId),
+    { timeout: 30_000 },
+    { id: objects[1].id, filamentId: filaments[1].id },
+  );
+
+  await page.click('#action-panel [data-action-id="slice_active_plate"]');
+  await page.waitForFunction(() => globalThis.window.__orcaUi.get().gcodeReady === true, { timeout: 600_000 });
+  const artifact = await page.evaluate(() => {
+    const gcode = globalThis.window.workspace.getLastGcode() ?? '';
+    const bytes = new globalThis.TextEncoder().encode(gcode);
+    let checksum = 5381;
+    for (const byte of bytes) checksum = ((checksum * 33) ^ byte) >>> 0;
+    return {
+      byteLength: bytes.byteLength,
+      checksum,
+      tools: [...new Set([...gcode.matchAll(/^T(\d+)\b/gm)].map((match) => Number(match[1])))].sort(),
+      colours: /^; filament_colour = (.+)$/m.exec(gcode)?.[1].split(';') ?? [],
+      types: /^; filament_type = (.+)$/m.exec(gcode)?.[1].split(';') ?? [],
+    };
+  });
+  assert.deepEqual(artifact.tools, [0, 1], 'the assigned second filament reaches the G-code as a second tool');
+  assert.ok(artifact.colours.length >= 2 && artifact.types.length >= 2, 'the artifact declares its filaments');
+
+  await page.$eval('#printer-panel', (panel) => panel.closest('details')?.setAttribute('open', ''));
+  await page.$eval(
+    '#printer-host',
+    (input, value) => {
+      input.value = value;
+      input.dispatchEvent(new globalThis.Event('input', { bubbles: true }));
+    },
+    printer.host,
+  );
+  assert.equal(await page.$eval('#btn-printer-send', (button) => button.disabled), false);
+
+  // A printer that cannot supply T1 must not be startable, and cancelling must
+  // leave the machine untouched.
+  printer.setSlots([{ color: artifact.colours[0], material: artifact.types[0] }]);
+  await page.click('#btn-printer-send');
+  await page.waitForSelector('[data-print-submission-dialog="true"]', { timeout: 60_000 });
+  const blocked = await page.$eval('[data-print-submission-dialog="true"]', (overlay) => ({
+    notices: [...overlay.querySelectorAll('[data-print-submission-notice]')].map((notice) => ({
+      kind: notice.dataset.printSubmissionNotice,
+      text: notice.textContent,
+    })),
+    startDisabled: overlay.querySelector('[data-print-submission-choice="upload-and-print"]').disabled,
+    uploadDisabled: overlay.querySelector('[data-print-submission-choice="upload"]').disabled,
+  }));
+  assert.equal(blocked.startDisabled, true, 'a missing filament slot blocks starting the print');
+  assert.equal(blocked.uploadDisabled, false, 'the file can still be stored for later');
+  assert.match(blocked.notices.find((notice) => notice.kind === 'blocker')?.text ?? '', /T1/);
+  await page.click('[data-print-submission-choice="cancel"]');
+  await page.waitForFunction(() => !globalThis.document.querySelector('[data-print-submission-dialog="true"]'));
+  assert.equal(printer.stored.size, 0, 'a cancelled send uploads nothing');
+  assert.equal(printer.started, null);
+
+  // With both tools loaded, uploading is still a separate decision from
+  // starting, and the stored bytes must equal the artifact exactly.
+  printer.setSlots(artifact.colours.slice(0, 2).map((color, index) => ({ color, material: artifact.types[index] })));
+  await page.click('#btn-printer-send');
+  await page.waitForSelector('[data-print-submission-dialog="true"]', { timeout: 60_000 });
+  const ready = await page.$eval('[data-print-submission-dialog="true"]', (overlay) => ({
+    text: overlay.textContent,
+    notices: overlay.querySelectorAll('[data-print-submission-notice]').length,
+    focused: globalThis.document.activeElement?.dataset?.printSubmissionChoice,
+  }));
+  assert.equal(ready.notices, 0, 'a matching printer reports no blockers or warnings');
+  assert.match(ready.text, /2 tools \(T0, T1\)/);
+  assert.equal(ready.focused, 'upload', 'focus never lands on the button that moves the machine');
+  await page.click('[data-print-submission-choice="upload"]');
+  await page.waitForFunction(() => /^Uploaded /.test(globalThis.document.getElementById('status-text')?.textContent));
+  const [storedName] = [...printer.stored.keys()];
+  assert.equal(printer.started, null, 'uploading alone never starts a print');
+  assert.equal(checksumOf(printer.stored.get(storedName)), artifact.checksum);
+  assert.equal(printer.stored.get(storedName).length, artifact.byteLength);
+
+  // The same plate sent again must not replace the stored file, and starting
+  // is what the operator explicitly asked for this time.
+  await page.click('#btn-printer-send');
+  await page.waitForSelector('[data-print-submission-dialog="true"]', { timeout: 60_000 });
+  await page.click('[data-print-submission-choice="upload-and-print"]');
+  await page.waitForFunction(() => /^Printing /.test(globalThis.document.getElementById('status-text')?.textContent));
+  assert.equal(printer.stored.size, 2, 'the second send picked an unused name');
+  assert.notEqual(printer.started, storedName);
+  assert.equal(checksumOf(printer.stored.get(printer.started)), artifact.checksum);
+  assert.match(
+    await page.evaluate(() => globalThis.document.getElementById('status-text').textContent),
+    /verified on the printer/,
+  );
+
+  await clickMenuAction(page, 'edit_undo');
+  await page.waitForFunction(
+    (id) =>
+      globalThis.window.workspace
+        .getFilamentAssignmentSnapshot()
+        .scopes.every((scope) => scope.objectId !== id || scope.localFilamentId === undefined),
+    {},
+    objects[1].id,
+  );
+  // Leave the inspector as it was found: later steps click controls by
+  // coordinate, and an extra expanded section moves them.
+  await page.$eval('#printer-panel', (panel) => panel.closest('details')?.removeAttribute('open'));
+}
+
+function checksumOf(buffer) {
+  let checksum = 5381;
+  for (const byte of buffer) checksum = ((checksum * 33) ^ byte) >>> 0;
+  return checksum;
+}
+
 async function clickMenuAction(page, actionId) {
   await page.$eval(`[data-action-id="${actionId}"]`, (item) => {
     item.closest('.menu-host')?.querySelector('.menu-trigger')?.click();
@@ -475,6 +639,7 @@ const fixtureDirectory = await mkdtemp(join(tmpdir(), 'orcaxr-e2e-'));
 const fixturePath = await writeMultiPlateFixture(fixtureDirectory);
 const objFixturePath = await writeObjFixture(fixtureDirectory);
 const gcodeFixturePath = await writeGcodeFixture(fixtureDirectory);
+const printer = await startMoonrakerSimulator();
 const { server, url } = await startPreview();
 const browser = await launchBrowser();
 try {
@@ -650,8 +815,8 @@ try {
 
   await page.setViewport({ width: 1280, height: 720 });
   await page.evaluate(() => {
-    // This fixture verifies import only; don't make the smoke gate wait for
-    // the much larger slicing engine's background warm-up.
+    // Skip the engine's background warm-up: the one slice this smoke performs
+    // loads it on demand, and the eager warm-up only slows every other step.
     globalThis.window.workspace.slicerWarmupQueued = true;
   });
   assert.equal(
@@ -686,6 +851,7 @@ try {
   await inspectStandaloneGcode(page, gcodeFixturePath);
   await paintImportedModel(page);
   await dropModelFile(page, objFixturePath);
+  await sliceAndSendActivePlate(page, printer);
 
   await page.evaluate(() => globalThis.window.workspace.undo?.());
   await page.waitForFunction(() => (globalThis.window.workspace?.getCanonicalSummary?.().objectCount ?? -1) === 0, {
@@ -2002,10 +2168,11 @@ try {
   assert.deepStrictEqual(pageErrors, [], `uncaught page errors: ${pageErrors.join('\n')}`);
   assert.deepStrictEqual(policyErrors, [], `CSP violations: ${policyErrors.join('\n')}`);
   console.log(
-    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings, and guarded plate management).',
+    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings, guarded plate management, and a multicolor slice sent to a live Moonraker printer).',
   );
 } finally {
   await browser.close();
   await server.close();
+  await printer.close();
   await rm(fixtureDirectory, { recursive: true, force: true });
 }

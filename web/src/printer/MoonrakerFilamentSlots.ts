@@ -77,13 +77,22 @@ function normalizedColor(value: string | undefined): string {
   return `#${(match?.[0] ?? 'FFFFFF').toUpperCase()}`;
 }
 
-function normalizedMaterial(value: string | undefined): string {
+/**
+ * Reduce a filament name to the family the printer and the slicer can agree on.
+ * A slot reported as "PLA-CF" and a profile sliced for "PLA+" are the same
+ * material for compatibility purposes, so both sides must normalize identically.
+ */
+export function normalizeFilamentMaterial(value: string | undefined): string {
   const material = safeLabel(value).toUpperCase();
   for (const known of ['PETG', 'PLA', 'ABS', 'ASA', 'TPU', 'PVA']) {
     if (material.startsWith(known)) return known;
   }
   if (material.startsWith('PA')) return 'PA';
   return material || 'PLA';
+}
+
+function normalizedMaterial(value: string | undefined): string {
+  return normalizeFilamentMaterial(value);
 }
 
 function safeLabel(value: string | undefined): string {

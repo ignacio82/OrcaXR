@@ -161,7 +161,10 @@ await test('round-trips inherited settings and restores them when an override is
   });
   const files = readSafeZip(saved.bytes);
   const standardSettings = JSON.parse(text(files.get('Metadata/project_settings.config')!)) as Record<string, unknown>;
-  assert.equal(standardSettings.layer_height, 0.1);
+  // BBS project settings are string-valued: the engine's JSON config reader
+  // accepts strings only. The canonical numeric override survives in the
+  // OrcaXR extension, which the assertions below check.
+  assert.equal(standardSettings.layer_height, '0.1');
   assert.equal(standardSettings.override_probe, 'explicit');
   assert.equal(Object.hasOwn(standardSettings, 'settingsBaseConfig'), false);
   assert.equal(Object.hasOwn(standardSettings, 'settingsOverrides'), false);
@@ -203,7 +206,9 @@ await test('round-trips inherited settings and restores them when an override is
   assert.equal(Object.hasOwn(foreign.state, 'settingsOverrides'), false);
   const foreignAdapter = projectSettingsOverrideSnapshot(new ProjectStore(foreign.state).getSnapshot());
   assert.deepEqual(foreignAdapter.overrides, {});
-  assert.equal(foreignAdapter.inheritedConfig.layer_height, 0.1);
+  // Without the extension this is an ordinary foreign BBS project, so the
+  // value arrives in the engine's own string form.
+  assert.equal(foreignAdapter.inheritedConfig.layer_height, '0.1');
   assert.equal(foreignAdapter.effectiveConfig.override_probe, 'explicit');
 });
 

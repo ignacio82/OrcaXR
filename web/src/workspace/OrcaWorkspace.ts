@@ -21,6 +21,8 @@ import {
 } from '../project/slicing';
 import type { ProjectSettingsOverrideGuard, ProjectSettingsOverrideSnapshot } from '../project/settingsOverrides';
 import { detectModelFormat } from '../project/import/formats';
+import type { PrintJobIntent } from '../printer/PrintJobSubmission';
+import { summarizeGcodeToolUsage } from '../printer/PrintToolMapping';
 import { serializePrintConfigArray } from '../settings/configSerialization';
 import type { ArrangeRegion } from '../project/objects/arrange';
 import { rotateVector } from '../project/objects/transformOperations';
@@ -2719,6 +2721,8 @@ export class OrcaWorkspace extends xb.Script {
   onRequestPrinterConnectionTest: (() => Promise<void>) | null = null;
   /** Injected by the live typed printer composition root. */
   onRequestPrinterFilamentInspection: (() => Promise<void>) | null = null;
+  /** Injected by the live typed printer composition root; owns confirmation. */
+  onRequestPrintSubmission: ((intent: PrintJobIntent) => Promise<void>) | null = null;
 
   public async testPrinterConnection(): Promise<void> {
     if (!this.onRequestPrinterConnectionTest) {
@@ -2734,6 +2738,32 @@ export class OrcaWorkspace extends xb.Script {
       return;
     }
     await this.onRequestPrinterFilamentInspection();
+  }
+
+  /**
+   * Hand the guarded artifact for the active plate to the shell's print
+   * submission flow. Only a revalidated artifact is offered, so a project edited
+   * after slicing can never be sent as if it were current.
+   */
+  public async sendToPrinter(): Promise<void> {
+    if (!this.onRequestPrintSubmission) {
+      this.setStatus('Sending to a printer is unavailable in this shell.');
+      return;
+    }
+    const gcode = this.getLastGcode();
+    if (!gcode) {
+      this.setStatus('Slice the active plate before sending it to the printer.');
+      return;
+    }
+    const summary = this.canonicalProject.getSummary();
+    const plate = summary.plates.find((candidate) => candidate.id === summary.activePlateId);
+    const plateName = plate?.name ?? 'Plate';
+    await this.onRequestPrintSubmission({
+      filename: `${summary.projectName}_${plateName}.gcode`,
+      gcode,
+      plateName,
+      usage: summarizeGcodeToolUsage(gcode),
+    });
   }
 
   // --- Import / Export Config (Orca File → Import / Export Config) -----

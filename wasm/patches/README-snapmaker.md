@@ -11,7 +11,11 @@ directory makes the build reproducible:
   the wasm32 Arachne underflow fix, the never-called
   `init_filament_option_keys()` ctor fix, the `normalize_fdm`
   wipe_tower_filament null-guard (same as server/patches/0002), the
-  `append_full_config` EMSCRIPTEN gate, and the FullSpectrum
+  restored `append_full_config` call (its EMSCRIPTEN gate is gone —
+  `fixup_enum_keys_map()` already runs on the slice config, and without the
+  dump the emitted CONFIG_BLOCK carries only the `first_layer_*` scalars, so
+  `filament_colour` / `filament_type` never reach the G-code), and the
+  FullSpectrum
   `GCodeProcessor::run_post_process` filament-stats OOB guard (same as
   server/patches/0003 — virtual mixed-filament ids overrun the physical
   per-extruder stat vectors; a benign heap-corrupting write on native but a

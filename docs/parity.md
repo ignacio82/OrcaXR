@@ -437,7 +437,13 @@ Local starting seams: [`Project3mf.ts`](../web/src/features/Project3mf.ts),
     read-only MarbleRunTube headless import/save/reopen smoke in `EVID-014` passed. Preserved OPC
     relationships are now emitted only when their target is present in the same package, so a
     projection that drops opaque members cannot produce an archive the engine refuses to load.
-    Some BBS
+    Project settings are now written the way the engine reads them: every value is a JSON string
+    or array of strings, and every per-filament option named by the pinned
+    `Preset::filament_options()` list carries one entry per physical filament. Both were
+    load-bearing rather than cosmetic — `ConfigBase::load_from_json` drops any option whose array
+    holds a number, and the engine derives its filament count from `filament_diameter.size()`, so
+    a scalar there clamped every per-object extruder assignment back to tool 1 and silently
+    printed a multicolor plate in one colour. Some BBS
     projections still use the OrcaXR envelope, general affine shear still projects through the
     existing canonical TRS decomposition, and official Snapmaker GUI open/save interoperability
     remains unverified.
@@ -660,7 +666,11 @@ Local starting seams: [`MixedFilamentStore.ts`](../web/src/features/MixedFilamen
     cover assignment, remap, referenced-definition tombstoning, and mixed add/edit/duplicate/
     enable lifecycle without palette indexes. The BBS/config adapter derives the transient engine
     namespace from physical rows followed by enabled mixed rows without changing stored intent,
-    and the live library/assignment surfaces retain stable IDs across save/reopen. Loaded/device
+    and the live library/assignment surfaces retain stable IDs across save/reopen. A tool slot the
+    selection never named now inherits the chosen filament instead of the catalog's first
+    compatible preset, matching how Orca fills a new extruder: the previous behaviour handed a
+    four-tool printer one PLA and three ABS slots, so the first two-colour slice failed on the
+    engine's filament-temperature check. Loaded/device
     mapping, physical reorder/replace dependency UX, official field/oracle comparison, and hardware
     qualification remain open.
 
@@ -1352,6 +1362,11 @@ Local starting seams: [`SlicerClient.ts`](../web/src/slicer/SlicerClient.ts),
     covers every printable plate, each plate keeps its own G-code, byte size, and warnings, the
     whole set shares one revision/hash/asset guard so drift discards all of it rather than
     publishing a mix, and each plate can be downloaded as its own named artifact. Prompt
+    The browser engine again emits the complete `CONFIG_BLOCK`: its Emscripten gate on
+    `append_full_config` predated `fixup_enum_keys_map()`, and without the dump an OrcaXR artifact
+    carried only the `first_layer_*` scalars, so nothing downstream — G-code re-import, the
+    send-time filament mapping, desktop diffing — could recover `filament_colour`,
+    `filament_type`, or `layer_height`. Prompt
     worker/process termination qualification, WASM/CLI semantic-oracle equivalence, per-plate
     statistics UI, and device qualification remain open.
 
@@ -1666,8 +1681,16 @@ implementations were removed when read-only live wiring moved to the typed bound
     preserves sparse physical slot identities such as H1/H3, and reports them without mutating
     palette, head, material, temperature, or profile state. Automatic application is deliberately
     blocked until stable-ID mapping, compatibility preflight, preview, and confirmation exist.
+    Send-time mapping is now real and read-only: the artifact's own tool changes are compared
+    against the loaded slots, a tool with no loaded filament blocks starting the print, and
+    material/colour differences are reported as warnings the operator confirms. A printer that
+    does not expose the slot object yields an explicit "not reported" warning for multi-tool jobs
+    rather than a silent pass. Material comparison folds both sides to families, so a PLA-CF
+    artifact matches a slot the printer reports as PLA. Destination/storage selection,
+    multi-printer choice, firmware and
+    bed/nozzle compatibility, and capability-proven leveling/timelapse options remain.
 
-- [ ] **P9.4 — Complete upload, queue, and print lifecycle.** Upload with atomic/unique naming,
+- [~] **P9.4 — Complete upload, queue, and print lifecycle.** Upload with atomic/unique naming,
   overwrite confirmation, progress, checksum/size verification, start, queue/reorder/remove,
   pause, resume, cancel, emergency-stop boundary, and completion/failure notification.
   - Use the Moonraker [file](https://moonraker.readthedocs.io/en/latest/external_api/file_manager/)
@@ -1675,6 +1698,24 @@ implementations were removed when read-only live wiring moved to the typed bound
     mutating confirmations and idempotency explicit.
   - **Accept:** integration tests use a Moonraker simulator; supervised hardware tests cover
     upload-only, print, pause/resume, cancel, reconnect, filename collision, and printer rejection.
+  - **Current:** the guarded artifact for the active plate can be sent through the shared registry
+    action. The flow reads printer state and loaded filaments, confirms the exact file, size, and
+    tool mapping in a focus-trapped dialog, sanitizes the filename, and picks an unused name unless
+    replacement is explicitly opted into. Upload progress is announced per phase, the send is
+    cancellable from the same control that started it, and the stored size is verified against the
+    submitted bytes before anything starts. Uploading and starting are separate buttons: a start is
+    refused outright when Klipper is not ready or the machine is busy, while queueing a file during
+    a running print stays allowed. The production smoke now drives the whole path against a real
+    HTTP Moonraker simulator: a multicolor plate is sliced in the browser, a printer missing T1
+    blocks the start while still allowing storage, cancelling uploads nothing, upload-only never
+    starts a job, a second send of the same plate lands on an unused name, and the started file is
+    byte-identical to the artifact. Note the operational precondition this surfaces: the page
+    talks to the printer cross-origin with an `x-api-key` header, so Moonraker must list the exact
+    page origin in `cors_domains` or every send fails at the preflight. Queue management,
+    pause/resume/cancel, the emergency-stop
+    boundary, and completion notification remain; hardware qualification is pending. The XR shell
+    still reports the send path as unavailable in that shell rather than offering a half-wired
+    confirmation, in line with the rest of the printer surfaces there.
 
 - [ ] **P9.5 — Implement live Status and Monitor outcomes.** Show state, file/thumbnail, overall
   and layer progress, elapsed/remaining/finish time, temperatures/targets, fans, speed/flow,
@@ -2162,7 +2203,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Calibration generators and real per-band output | P8.1–P8.3 | Exact pinned inventory covers 11 modes, 14 menu variants, tolerance, and device gates; a fingerprint-bound compiler validates all 15 manual workflows and emits bounded band/object/line plans with engine overrides, firmware commands, labels, fit data, result/preset schema, and slice assertions. Canonical geometry materialization, live workflows, and parsed sliced-G-code oracles remain; 11 bindings are still alpha geometry and four unbound |
 | Connected calibration wizard, save/history | P8.4–P8.6 | Missing |
 | Secure Moonraker connection and multi-printer setup | P9.1–P9.2 | Typed transport is live for registry-guarded handshake and read-only inspection; setup, multi-printer lifecycle, mutation matrices, and hardware evidence remain |
-| Pre-print validation/tool mapping/upload/start | P9.3–P9.4 | Sparse physical slots are inspected without applying them; real mapping/send/start remain disabled pending preflight, confirmation, integrity, reconnect, and hardware lifecycle |
+| Pre-print validation/tool mapping/upload/start | P9.3–P9.4 | Send-time tool mapping, confirmed upload with unique naming and size verification, and an explicitly confirmed start are live and covered end-to-end against a Moonraker simulator in the production browser; destination/storage selection, queue and lifecycle control, reconnect during transfer, and hardware qualification remain |
 | Live status/control/storage/queue/history | P9.4–P9.5 | Missing |
 | Camera/console/macros/history | P9.6 | Snapshot scaffold; rest missing |
 | Responsive desktop/tablet/mobile IA and complete states | P10.1 | Useful recent shell work; parity unverified |
@@ -2282,6 +2323,7 @@ Evidence: EVID-nnn or Pending
 | `EVID-022` | P7.1, P7.7, P10.7 | Current worktree atop `3874841`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `npm --prefix web audit --omit=dev --audit-level=high` | Node 22.21.0; Chrome for Testing 150; headless; no printer | Pass: live all-plate slicing retains one guarded artifact per plate with per-plate download, drift discards the whole set, and the production gate stays green; the production dependency surface now audits clean after dropping an unused `serve-handler`, moving the test-only `jsdom`/`puppeteer` to devDependencies, and pinning the patched transitive `protobufjs` | Automated review; per-plate statistics UI, external route attestation, and hardware qualification pending |
 | `EVID-023` | P5.6, P1.4, P11.1 | Current worktree atop `b32f941`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; live browser probes with `PeggyPalette.3mf` (3.3 MB, 41 volumes, 4 physical + 40 mixed) | Node 22.21.0; Chrome for Testing 150; headless; no printer | Pass: the picker and drag-and-drop share one intake; a picked 3MF offers Open-as-project versus geometry-only, project mode replaces canonically in ~13 s and geometry mode merges in ~5 s while listing the dropped plates/filaments/settings/custom-G-code/thumbnails; the production smoke drops an OBJ onto the window, imports it, clears the drop affordance, and undoes it | Automated review; STEP/SVG, URL sources, and official corpus comparison pending |
 | `EVID-024` | P1.3, P3.9, P7.1, P7.2, P10.7, P12.3 | `5037e02` | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `npm --prefix wasm run verify:artifacts`; `test_slice_cube.mjs`, `test_slice_painted.mjs`, `test_slice_project_fs.mjs`; browser slice of `PeggyPalette.3mf` | Node 22.21.0; Chrome for Testing 150 with the production CSP; no printer | Pass: the rebuilt CSP-safe engine slices cube (0.3 s), painted two-material (2 tool changes), and the FullSpectrum project (15.0 MB, 1,944 layers, 1,188 tool changes, T0-T3) headlessly; in the production browser build the imported FullSpectrum project passes preflight and slices to 13.97 MB / 98 layers / 296 tool changes / T0-T3 in 72 s; serializer and preflight regressions are covered by 11 serializer and 5 preflight traces | Automated review; official Orca comparison and hardware print qualification pending |
+| `EVID-025` | P9.3, P9.4, P1.3, P3.1, P7.1 | Current worktree atop `1a5dcdd`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `npm --prefix wasm run verify:artifacts`; `wasm/test_slice_cube.mjs`, `wasm/test_slice_project_fs.mjs`; production-browser send probe against a local Moonraker simulator | Node 22.21.0; Chrome for Testing 150 with the production CSP; simulated Moonraker over real HTTP; no hardware | Pass: a browser-authored two-object plate with a per-object filament assignment now slices to T0+T1 (2.07 MB, 222 layers) where it previously collapsed to T0 — the project writer emits engine-readable string values and per-filament vectors, unrequested tool slots inherit the chosen filament, and the engine emits its full `CONFIG_BLOCK` again so the artifact declares `filament_colour`/`filament_type`; the production smoke then sends that plate: a printer missing T1 blocks the start and stores nothing when cancelled, upload-only never starts a job, a repeat send takes an unused name, and the started file is byte-identical (checksum + length) to the artifact; 10 submission, 6 mapping, 5 simulator, and 8 preset-graph traces cover the protocol; registry reports 149 actions = 107 partial + 42 unavailable and the bundle budget holds at main 2,083,790 bytes | Automated review; queue/pause/resume/cancel, reconnect during transfer, `cors_domains` field setup, and supervised hardware qualification pending |
 
 Correction note (2026-07-20): the provisional local-commit cells in `EVID-001`–`EVID-012`
 were filled with the commit that landed those runs. Their historical commands, counts, results,
@@ -2332,6 +2374,9 @@ has no equivalent, add a `BLOCK-*` row rather than calling it done or Not applic
 | 2026-08-08 | Render the live preview from the bounded rich model plus preview projection, and delete the ad-hoc line renderer's role in the viewer | The projection already owns colour, filtering, legends, and explicit metadata gaps; a second renderer would invent colours the source never carried and could not report why a mode is unsupported | P7.3–P7.5, P7.7 | Session traces and the browser standalone-G-code pass; goldens, playback, and XR pending |
 | 2026-08-08 | Let pinned-engine gates verify committed locks/manifests when `third_party/SnapmakerOrca` is absent, and revert the unbuilt WASM statistics entry point | CI and clean clones have no developer checkout, so `profiles:verify`/`calibration:verify` crashed instead of proving anything; separately, a source edit that was never compiled into the published artifacts broke provenance and would have advertised an engine capability the shipped binary lacks | P0.3, P6.3, P7.6, P8.1, P12.3 | Full web gate passes with and without the checkout; `verify:artifacts` passes again |
 | 2026-08-08 | Build the browser engine with `-sDYNAMIC_EXECUTION=0`, attest imported projects from their own embedded configuration, and never emit an OPC relationship to a part this package does not contain | embind's `new Function` invokers made every in-browser slice fail under the app's own CSP; requiring catalog presets blocked slicing any imported project, which is the main multicolor/FullSpectrum workflow; and a preserved relationship left dangling by the one-plate projection made the pinned engine reject the archive entirely | P1.3, P3.9, P7.1, P7.2, P10.7 | Engine, serializer, and preflight traces plus a live browser FullSpectrum slice; hardware print qualification pending |
+| 2026-08-08 | Enable real printer mutation behind an explicit two-button confirmation, live tool mapping, and byte-exact size verification, superseding the 2026-07-20 decision to keep it disabled | The conditions that decision named are now met: the artifact is bound to its semantic snapshot, the job's tools are compared against the printer's reported slots, the filename never silently replaces a stored file, and the stored size is checked before anything starts. Storing a file and starting a print stay separate actions, because only the second one moves a machine | P9.3–P9.4, P1.5, P7.1 | Submission, mapping, and simulator traces plus a production-browser send pass; queue/lifecycle control, reconnect during transfer, and supervised hardware qualification pending |
+| 2026-08-08 | Write BBS project settings the way the engine reads them — string-valued, with one entry per filament for every key in the pinned `Preset::filament_options()` — and inherit the chosen filament into tool slots the selection never named | `ConfigBase::load_from_json` silently drops an option whose array holds numbers, and `num_extruders` comes from `filament_diameter.size()`, so a scalar clamped every per-object extruder to tool 1: a two-colour plate sliced, uploaded, and would have printed in one colour with no error anywhere. The default palette independently paired PLA with ABS, which the engine refuses outright | P1.3, P3.1, P7.1, P9.3 | Serializer, preset-graph, and engine traces plus a browser T0+T1 slice; official Orca round-trip of the rewritten settings pending |
+| 2026-08-08 | Restore `append_full_config` in the Emscripten build | The gate predated `fixup_enum_keys_map()`, which already runs on the slice config at both wasm entry points; without the dump an OrcaXR artifact carried no `filament_colour`/`filament_type`, so the send-time mapping could never compare materials or colours and our own G-code re-import lost every process key | P7.1, P9.3, P12.3 | Engine cube/project slices and `verify:artifacts` pass with the rebuilt artifacts; desktop G-code diffing pending |
 | YYYY-MM-DD |  |  |  |  |
 
 ## 21. Verification interface and matrices

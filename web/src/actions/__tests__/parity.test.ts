@@ -71,7 +71,6 @@ const UNAVAILABLE_IDS = [
   'file_export_obj',
   'file_open_gcode',
   'file_export_logs',
-  'send_to_printer',
   'help_config_folder',
   'view_perspective_toggle',
   'view_auto_perspective',

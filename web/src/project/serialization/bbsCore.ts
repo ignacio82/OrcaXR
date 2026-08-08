@@ -570,13 +570,7 @@ function buildProjectSettings(
   ) {
     config.nozzle_diameter = state.filaments.physical.map((filament) => filament.nozzleDiameterMm!);
   }
-  const filamentConfigKeys = new Set(state.filaments.physical.flatMap((filament) => Object.keys(filament.config)));
-  for (const key of [...filamentConfigKeys].sort(compareText)) {
-    if (Object.hasOwn(config, key)) continue;
-    if (state.filaments.physical.every((filament) => Object.hasOwn(filament.config, key))) {
-      config[key] = state.filaments.physical.map((filament) => cloneJson(filament.config[key]));
-    }
-  }
+  applyFilamentVectors(config, state);
   const orderedPlates = [...state.plates].sort((left, right) => left.order - right.order);
   const wipeTowers = orderedPlates.map((plate) => plate.wipeTower);
   if (wipeTowers.some((tower) => tower?.enabled)) {
@@ -602,7 +596,155 @@ function buildProjectSettings(
   }
   const definitions = serializeMixedDefinitions(state, warnings);
   if (definitions) config.mixed_filament_definitions = definitions;
+  for (const [key, value] of Object.entries(config)) config[key] = bbsConfigValue(value);
   return `${canonicalStringify(config)}\n`;
+}
+
+/**
+ * Per-filament option keys, ported verbatim from the pinned engine's
+ * `s_Preset_filament_options` (Snapmaker Orca v2.3.4,
+ * `src/libslic3r/Preset.cpp`), minus the compatibility and inheritance entries
+ * the engine itself skips when it resizes a filament vector.
+ *
+ * Writing any of these as a scalar is not cosmetic: the engine derives the
+ * filament count from `filament_diameter.size()`, and one entry there clamps
+ * every per-object extruder assignment back to tool 1, so a multicolor plate
+ * silently prints in a single colour.
+ */
+const FILAMENT_VECTOR_KEYS: readonly string[] = [
+  'activate_air_filtration',
+  'activate_chamber_temp_control',
+  'adaptive_pressure_advance',
+  'adaptive_pressure_advance_bridges',
+  'adaptive_pressure_advance_model',
+  'adaptive_pressure_advance_overhangs',
+  'additional_cooling_fan_speed',
+  'chamber_temperature',
+  'close_fan_the_first_x_layers',
+  'complete_print_exhaust_fan_speed',
+  'cool_plate_temp',
+  'cool_plate_temp_initial_layer',
+  'default_filament_colour',
+  'dont_slow_down_outer_wall',
+  'during_print_exhaust_fan_speed',
+  'enable_overhang_bridge_fan',
+  'enable_pressure_advance',
+  'eng_plate_temp',
+  'eng_plate_temp_initial_layer',
+  'fan_cooling_layer_time',
+  'fan_max_speed',
+  'fan_min_speed',
+  'filament_cooling_final_speed',
+  'filament_cooling_initial_speed',
+  'filament_cooling_moves',
+  'filament_cost',
+  'filament_density',
+  'filament_deretraction_speed',
+  'filament_diameter',
+  'filament_end_gcode',
+  'filament_flow_ratio',
+  'filament_is_support',
+  'filament_loading_speed',
+  'filament_loading_speed_start',
+  'filament_long_retractions_when_cut',
+  'filament_max_volumetric_speed',
+  'filament_minimal_purge_on_wipe_tower',
+  'filament_multitool_ramming',
+  'filament_multitool_ramming_flow',
+  'filament_multitool_ramming_volume',
+  'filament_notes',
+  'filament_ramming_parameters',
+  'filament_retract_before_wipe',
+  'filament_retract_length_toolchange',
+  'filament_retract_lift_above',
+  'filament_retract_lift_below',
+  'filament_retract_lift_enforce',
+  'filament_retract_restart_extra',
+  'filament_retract_restart_extra_toolchange',
+  'filament_retract_when_changing_layer',
+  'filament_retraction_distances_when_cut',
+  'filament_retraction_length',
+  'filament_retraction_minimum_travel',
+  'filament_retraction_speed',
+  'filament_shrink',
+  'filament_shrinkage_compensation_z',
+  'filament_soluble',
+  'filament_stamping_distance',
+  'filament_stamping_loading_speed',
+  'filament_start_gcode',
+  'filament_toolchange_delay',
+  'filament_type',
+  'filament_unloading_speed',
+  'filament_unloading_speed_start',
+  'filament_vendor',
+  'filament_wipe',
+  'filament_wipe_distance',
+  'filament_z_hop',
+  'filament_z_hop_types',
+  'full_fan_speed_layer',
+  'graphic_effect_plate_temp',
+  'graphic_effect_plate_temp_initial_layer',
+  'hot_plate_temp',
+  'hot_plate_temp_initial_layer',
+  'idle_temperature',
+  'internal_bridge_fan_speed',
+  'ironing_fan_speed',
+  'nozzle_temperature',
+  'nozzle_temperature_initial_layer',
+  'nozzle_temperature_range_high',
+  'nozzle_temperature_range_low',
+  'overhang_fan_speed',
+  'overhang_fan_threshold',
+  'pellet_flow_coefficient',
+  'pressure_advance',
+  'reduce_fan_stop_start_freq',
+  'required_nozzle_HRC',
+  'slow_down_for_layer_cooling',
+  'slow_down_layer_time',
+  'slow_down_min_speed',
+  'supertack_plate_temp',
+  'supertack_plate_temp_initial_layer',
+  'support_material_interface_fan_speed',
+  'temperature_vitrification',
+  'textured_cool_plate_temp',
+  'textured_cool_plate_temp_initial_layer',
+  'textured_plate_temp',
+  'textured_plate_temp_initial_layer',
+];
+
+/**
+ * Give every declared per-filament option one entry per physical filament: the
+ * filament's own value when it carries one, otherwise the project-level value
+ * (already a vector when the project was imported, a scalar when it came from a
+ * flattened profile).
+ */
+function applyFilamentVectors(config: Record<string, JsonValue>, state: ProjectState): void {
+  const physical = state.filaments.physical;
+  if (physical.length === 0) return;
+  for (const key of FILAMENT_VECTOR_KEYS) {
+    if (Array.isArray(config[key]) && (config[key] as JsonValue[]).length === physical.length) continue;
+    const base = state.config[key];
+    const values = physical.map((filament, index) => {
+      if (Object.hasOwn(filament.config, key)) return filament.config[key];
+      if (Array.isArray(base)) return base[index] ?? base[base.length - 1];
+      return base;
+    });
+    const fallback = values.find((value) => value !== undefined);
+    if (fallback === undefined) continue;
+    config[key] = values.map((value) => cloneJson(value ?? fallback));
+  }
+}
+
+/**
+ * Render one project-settings value the way the engine's JSON reader expects.
+ * `ConfigBase::load_from_json` accepts strings and arrays of strings only; a
+ * numeric or boolean array makes it drop the whole option, so a computed value
+ * such as `nozzle_diameter` would silently revert to the engine default.
+ */
+function bbsConfigValue(value: JsonValue): JsonValue {
+  if (Array.isArray(value)) return value.map((entry) => bbsValue(entry));
+  if (typeof value === 'string') return value;
+  return bbsValue(value);
 }
 
 function buildLayerRanges(

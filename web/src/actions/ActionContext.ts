@@ -404,6 +404,10 @@ export class ActionContext {
     return this.workspace.inspectPrinterFilaments();
   }
 
+  sendToPrinter(): Promise<void> {
+    return this.workspace.sendToPrinter();
+  }
+
   // ---- Advanced Features ----------------------------------------------
   autoPlaceWipeTower(): void {
     this.workspace.setWipeTowerAuto(!this.workspace.wipeTowerAuto);

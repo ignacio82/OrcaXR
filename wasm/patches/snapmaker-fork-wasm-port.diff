@@ -584,23 +584,24 @@ index 85c8f65..78109df 100644
  }; // namespace Slic3r
  
 diff --git a/src/libslic3r/GCode.cpp b/src/libslic3r/GCode.cpp
-index 946a89e..a4ea4a2 100644
+index 946a89e..4077b57 100644
 --- a/src/libslic3r/GCode.cpp
 +++ b/src/libslic3r/GCode.cpp
-@@ -3055,7 +3055,13 @@ void GCode::_do_export(Print& print, GCodeOutputStream& file, ThumbnailsGenerato
+@@ -3055,6 +3055,14 @@ void GCode::_do_export(Print& print, GCodeOutputStream& file, ThumbnailsGenerato
          file.write("\n");
          file.write("; CONFIG_BLOCK_START\n");
          std::string full_config;
-+#ifdef __EMSCRIPTEN__
-+        // OrcaXR WASM: append_full_config hangs with no preset bundle loaded
-+        // (enum name-table issue). Skip the config comment block until the
-+        // web build wires real preset bundles.
-+#else
++        // OrcaXR WASM: this used to be skipped under Emscripten because
++        // serializing an enum option whose name table was never populated
++        // dereferenced a null map. fixup_enum_keys_map() now runs on the slice
++        // config at both wasm entry points, so the dump is safe — and
++        // load-bearing: without it the CONFIG_BLOCK carries only the
++        // first_layer_* scalars, and nothing downstream (our own G-code
++        // re-import, the send-time filament mapping, desktop diffing) can
++        // recover filament_colour / filament_type / layer_height.
          append_full_config(print, full_config);
-+#endif
          if (!full_config.empty())
              file.write(full_config);
- 
 diff --git a/src/libslic3r/GCode.hpp b/src/libslic3r/GCode.hpp
 index 940bebf..f6bcf5d 100644
 --- a/src/libslic3r/GCode.hpp
@@ -614,27 +615,6 @@ index 940bebf..f6bcf5d 100644
  };
  
  class GCode {
-diff --git a/src/libslic3r/GCode/GCodeProcessor.cpp b/src/libslic3r/GCode/GCodeProcessor.cpp
-index a91f17e..785c1e1 100644
---- a/src/libslic3r/GCode/GCodeProcessor.cpp
-+++ b/src/libslic3r/GCode/GCodeProcessor.cpp
-@@ -4046,6 +4046,16 @@ void GCodeProcessor::run_post_process()
-     double filament_total_cost = 0.0;
- 
-     for (const auto& [id, volume] : m_result.print_statistics.total_volumes_per_extruder) {
-+        // OrcaXR: total_volumes_per_extruder is a map keyed by filament id and
-+        // can carry virtual (FullSpectrum mixed) filament ids that exceed
-+        // extruders_count (the physical filament count). filament_mm/cm3/g/cost
-+        // and filament_diameters/densities/costs are all sized to the physical
-+        // extruder set, so indexing them with a virtual id is out of bounds — a
-+        // benign heap-corrupting write on native x86-64, but a hard trap on
-+        // wasm32 (the in-browser slicer died silently here). Skip ids past the
-+        // physical set; their volume has no physical diameter/density/cost.
-+        if (id >= m_result.extruders_count)
-+            continue;
-         filament_mm[id] = volume / (static_cast<double>(M_PI) * sqr(0.5 * m_result.filament_diameters[id]));
-         filament_cm3[id] = volume * 0.001;
-         filament_g[id] = filament_cm3[id] * double(m_result.filament_densities[id]);
 diff --git a/src/libslic3r/Model.cpp b/src/libslic3r/Model.cpp
 index fbbb673..77c94d2 100644
 --- a/src/libslic3r/Model.cpp

@@ -60,6 +60,7 @@ export const outputActions: Action[] = [
     group: 'output',
     disclosure: 'menu',
     menuSection: 'tools',
-    hint: 'Upload the sliced G-code to a Moonraker printer and start the print',
+    hint: 'Upload the sliced G-code to a Moonraker printer, and start it only when you confirm',
+    run: (ctx) => ctx.sendToPrinter(),
   },
 ];

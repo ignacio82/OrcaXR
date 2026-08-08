@@ -313,7 +313,6 @@ const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
   file_export_obj: 'Toolpath OBJ export is not implemented yet.',
   file_open_gcode: 'Standalone G-code import and viewing is not implemented yet.',
   file_export_logs: 'A privacy-reviewed diagnostics bundle is not implemented yet.',
-  send_to_printer: 'Printer upload is not connected to the shared action path yet.',
   help_config_folder: 'Browsers cannot reveal a native config folder; the web adaptation is not implemented yet.',
   view_perspective_toggle: 'Perspective/orthographic switching is not implemented yet.',
   view_auto_perspective: 'Automatic perspective switching is not implemented yet.',
@@ -391,12 +390,20 @@ function prerequisitesFor(action: ActionDefinition): PrerequisiteId[] {
   return [...new Set(prerequisites)];
 }
 
+/**
+ * Menu actions that also own a dedicated inspector control. Orca keeps these in
+ * a menu, but the panel that configures them carries the same action as a
+ * button; without the extra surface that button would be silently hidden.
+ */
+const INSPECTOR_MIRRORED = new Set(['send_to_printer']);
+
 function surfacesFor(action: ActionDefinition): ActionSurface[] {
   const surfaces: ActionSurface[] = ['command-palette'];
   if (action.disclosure === 'primary') surfaces.push('dom-primary', 'xr-primary');
   else if (action.disclosure === 'toolbar') surfaces.push('dom-toolbar', 'xr-toolbar');
   else if (action.disclosure === 'menu') surfaces.push('dom-menu', 'xr-menu');
   else surfaces.push('dom-inspector');
+  if (INSPECTOR_MIRRORED.has(action.id) && !surfaces.includes('dom-inspector')) surfaces.push('dom-inspector');
   if (action.shortcuts?.length) surfaces.push('keyboard');
   if (action.mcpTool) surfaces.push('automation');
   return surfaces;
