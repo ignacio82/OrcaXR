@@ -42,6 +42,13 @@ test('projects deterministic schema fields by mode, technology, search, and hone
   assert.ok(first.every((field) => field.mode !== 'develop'));
   assert.ok(first.every((field) => field.applicability === 'applicable'));
   assert.ok(first.find((field) => field.key === 'layer_height')!.searchMatches.length > 0);
+  const layerHeight = first.find((field) => field.key === 'layer_height')!;
+  assert.equal(layerHeight.primaryGuiLocation?.tab.label, 'Quality');
+  assert.equal(layerHeight.primaryGuiLocation?.group.label, 'Layer height');
+  assert.deepEqual(
+    layerHeight.guiLocations.map((location) => location.tab.label),
+    ['Quality', 'Frequent'],
+  );
 
   const sla = projectSettingsFields(catalog, {
     mode: 'develop',
@@ -61,6 +68,8 @@ test('projects deterministic schema fields by mode, technology, search, and hone
   assert.ok(unknown.some((field) => field.applicability === 'unknown'));
 
   assert.deepEqual(assessFieldSupport(catalog, definition('layer_height')), { status: 'implemented' });
+  assert.equal(assessFieldSupport(catalog, definition('compatible_printers')).reason, 'custom-tab-widget');
+  assert.equal(assessFieldSupport(catalog, definition('printer_model')).reason, 'no-literal-gui-placement');
   assert.match(assessFieldSupport(catalog, definition('wall_filament')).reason!, /^special-widget:/);
   assert.match(assessFieldSupport(catalog, definition('filament_colour')).reason!, /^special-widget:/);
   assert.equal(assessFieldSupport(catalog, definition('curr_bed_type')).reason, 'conditional-enum-domain');
@@ -203,6 +212,27 @@ test('tracks inherited/default/changed state and commits all valid drafts atomic
   editor.resetToDefault(density);
   const reset = editor.commit();
   assert.equal(reset.changes[0].serialized, '20%');
+});
+
+test('fails project/process drafts closed for filament, printer, and plate-only GUI surfaces', () => {
+  const editor = new SettingsDraftEditor(catalog, {
+    mode: 'advanced',
+    technology: 'fff',
+    guiSurface: 'process',
+  });
+  assert.throws(() => editor.setDraft(definition('printable_height').id, '250'), /gui-surface-unavailable:process/);
+  assert.throws(() => editor.setDraft(definition('filament_diameter').id, '1.75'), /gui-surface-unavailable:process/);
+  assert.throws(
+    () => editor.setDraft(definition('first_layer_sequence_choice').id, '0'),
+    /gui-surface-unavailable:process/,
+  );
+  editor.setDraft(definition('layer_height').id, '0.22');
+
+  const revalidated = new SettingsDraftEditor(catalog, { mode: 'advanced', technology: 'fff' });
+  revalidated.setDraft(definition('printable_height').id, '250');
+  (revalidated as unknown as { guiSurface: 'process' | undefined }).guiSurface = 'process';
+  assert.throws(() => revalidated.commit(), SettingsDraftCommitError);
+  assert.equal(revalidated.getRevision(), 0);
 });
 
 console.log(`\nSchema-driven settings editor: ${passed} tests passed.`);

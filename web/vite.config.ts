@@ -64,6 +64,21 @@ export default defineConfig({
             cleanupOutdatedCaches: true,
             runtimeCaching: [
               {
+                // The generated schema is larger than Workbox's default
+                // precache patterns and is fetched by URL at runtime. Cache the
+                // exact content-hashed v2 asset only after a successful online
+                // load so the settings panel remains available offline without
+                // pinning an old schema while connected.
+                urlPattern: ({ url }: { url: URL }) =>
+                  /\/assets\/engine-options\.schema-[^/]+\.json$/.test(url.pathname),
+                handler: 'NetworkFirst',
+                options: {
+                  cacheName: 'orcaxr-settings-schema',
+                  expiration: { maxEntries: 2 },
+                  cacheableResponse: { statuses: [0, 200] },
+                },
+              },
+              {
                 urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith('/slicer/'),
                 handler: 'NetworkFirst',
                 options: {

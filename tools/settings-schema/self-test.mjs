@@ -9,6 +9,7 @@ import {
   PRINT_CONFIG_PATH,
   extractEngineOptionSchema,
 } from "./source-parser.mjs";
+import { TAB_SOURCE_PATH } from "./gui-source-parser.mjs";
 import { MANIFEST_PATH, serializeSchema } from "./generate.mjs";
 
 const manifestBytes = readFileSync(MANIFEST_PATH);
@@ -63,7 +64,7 @@ assert.equal(
   serializeSchema(second),
   "extraction must be deterministic",
 );
-assert.equal(first.schemaVersion, 1);
+assert.equal(first.schemaVersion, 2);
 assert.equal(first.status, "foundation-partial");
 assert.equal(first.coverage.definitions, 816);
 assert.equal(first.coverage.uniqueKeys, 809);
@@ -74,6 +75,23 @@ assert.equal(first.coverage.unresolvedDefaults, 0);
 assert.equal(first.coverage.unresolvedSourceValues, 0);
 assert.equal(first.coverage.enumWithoutStorageMap, 0);
 assert.equal(first.coverage.duplicateKeys.length, 7);
+assert.deepEqual(first.guiLayout.coverage, {
+  ambiguousDefinitionKeys: [
+    "chamber_temperature",
+    "outer_wall_acceleration",
+    "retract_lift_above",
+    "retract_lift_below",
+  ],
+  definitionsWithoutLiteralPlacement: 395,
+  dynamicPlacements: 26,
+  exactDefinitionBindings: 420,
+  groups: 93,
+  literalPlacements: 424,
+  projectConfigWrites: 3,
+  specialWidgets: 4,
+  tabs: 21,
+  uniqueLiteralPlacementKeys: 417,
+});
 assert.equal(
   new Set(first.definitions.map((definition) => definition.id)).size,
   first.definitions.length,
@@ -97,6 +115,22 @@ assert.equal(layerHeight.presentation.label.value, "Layer height");
 assert.equal(layerHeight.presentation.category.value, "Quality");
 assert.equal(layerHeight.presentation.unit.value, "mm");
 assert.equal(layerHeight.applicability.technology.value, "any");
+const layerHeightPlacements = first.guiLayout.placements.filter(
+  (placement) => placement.optionKey === "layer_height",
+);
+assert.equal(layerHeightPlacements.length, 2);
+assert.equal(layerHeightPlacements[0].definitionBinding.status, "exact");
+assert.equal(
+  first.guiLayout.tabs.find((tab) => tab.id === layerHeightPlacements[0].tabId)
+    .label,
+  "Quality",
+);
+assert.equal(
+  first.guiLayout.groups.find(
+    (group) => group.id === layerHeightPlacements[0].groupId,
+  ).label,
+  "Layer height",
+);
 
 const filamentRetraction = option(first, "filament_retraction_length");
 assert.equal(filamentRetraction.registrationKind, "derived-nullable");
@@ -244,6 +278,34 @@ expectFailure(
   /Config\.hpp drift: missing coStrings semicolon serialization/,
 );
 
+expectFailure(
+  "GUI source blob drift must fail",
+  () => {
+    const snapshot = mutatedSnapshot(TAB_SOURCE_PATH, (source) =>
+      source.replace(
+        'append_single_option_line("layer_height","quality_settings_layer_height")',
+        'append_single_option_line("layer_height", "quality_settings_layer_height")',
+      ),
+    );
+    extract(snapshot);
+  },
+  /Manifest\/source blob mismatch for src\/slic3r\/GUI\/Tab\.cpp/,
+);
+
+expectFailure(
+  "GUI placement inventory drift must fail closed",
+  () => {
+    const snapshot = mutatedSnapshot(TAB_SOURCE_PATH, (source) =>
+      source.replace(
+        'append_single_option_line("layer_height","quality_settings_layer_height")',
+        'append_single_option_line("schema_mutation_fixture","quality_settings_layer_height")',
+      ),
+    );
+    extract(snapshot, manifest, true);
+  },
+  /Stale src\/slic3r\/GUI\/Tab\.cpp provenance|Manifest placement mismatch/,
+);
+
 process.stdout.write(
-  "settings-schema self-test passed (816 definitions, 809 unique keys, 8 fail-closed mutations)\n",
+  "settings-schema self-test passed (816 definitions, 809 unique keys, 21 tabs, 93 groups, 424 literal placements, 10 fail-closed mutations)\n",
 );

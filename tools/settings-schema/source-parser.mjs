@@ -6,9 +6,10 @@ import {
   stripCppComments,
   symbolAt,
 } from "../parity/cpp-scan.mjs";
+import { extractGuiLayout, TAB_SOURCE_PATH } from "./gui-source-parser.mjs";
 
-export const SETTINGS_SCHEMA_VERSION = 1;
-export const SETTINGS_PARSER_VERSION = "0.1.0";
+export const SETTINGS_SCHEMA_VERSION = 2;
+export const SETTINGS_PARSER_VERSION = "0.2.0";
 export const PRINT_CONFIG_PATH = "src/libslic3r/PrintConfig.cpp";
 export const CONFIG_HEADER_PATH = "src/libslic3r/Config.hpp";
 
@@ -2137,6 +2138,63 @@ export function extractEngineOptionSchema({
         `${schemaCoverage.unresolvedSourceValues} metadata values`,
     );
   }
+  const guiLayout = extractGuiLayout({
+    snapshot,
+    manifest,
+    allowSyntheticSource,
+  });
+  const definitionsByKey = new Map();
+  for (const definition of definitions) {
+    const matches = definitionsByKey.get(definition.key) ?? [];
+    matches.push(definition);
+    definitionsByKey.set(definition.key, matches);
+  }
+  const placements = guiLayout.placements.map((placement) => {
+    const matches = definitionsByKey.get(placement.optionKey) ?? [];
+    if (matches.length === 0)
+      throw new Error(
+        `Tab.cpp placement ${placement.id} references unknown engine option ${placement.optionKey}`,
+      );
+    return {
+      ...placement,
+      definitionBinding: {
+        definitionIds: matches.map((definition) => definition.id),
+        status: matches.length === 1 ? "exact" : "ambiguous",
+      },
+    };
+  });
+  const placedKeys = new Set(
+    placements.map((placement) => placement.optionKey),
+  );
+  const ambiguousDefinitionKeys = [...placedKeys]
+    .filter((key) => (definitionsByKey.get(key)?.length ?? 0) > 1)
+    .sort((left, right) => left.localeCompare(right, "en"));
+  for (const widget of guiLayout.unresolved.specialWidgets) {
+    if (!definitionsByKey.has(widget.optionKey))
+      throw new Error(
+        `Tab.cpp custom widget references unknown engine option ${widget.optionKey}`,
+      );
+  }
+  for (const write of guiLayout.scopeEvidence.projectConfigWrites) {
+    if (!definitionsByKey.has(write.optionKey))
+      throw new Error(
+        `Tab.cpp project-config write references unknown engine option ${write.optionKey}`,
+      );
+  }
+  const resolvedGuiLayout = {
+    ...guiLayout,
+    coverage: {
+      ...guiLayout.coverage,
+      ambiguousDefinitionKeys,
+      definitionsWithoutLiteralPlacement: definitions.filter(
+        (definition) => !placedKeys.has(definition.key),
+      ).length,
+      exactDefinitionBindings: placements.filter(
+        (placement) => placement.definitionBinding.status === "exact",
+      ).length,
+    },
+    placements,
+  };
   return {
     schemaVersion: SETTINGS_SCHEMA_VERSION,
     parser: {
@@ -2151,13 +2209,15 @@ export function extractEngineOptionSchema({
       files: [
         { path: PRINT_CONFIG_PATH, blob: snapshot.blob(PRINT_CONFIG_PATH) },
         { path: CONFIG_HEADER_PATH, blob: snapshot.blob(CONFIG_HEADER_PATH) },
+        { path: TAB_SOURCE_PATH, blob: snapshot.blob(TAB_SOURCE_PATH) },
         { path: "docs/parity/snapmaker-v2.3.4.json", sha256: manifestSha256 },
       ],
     },
     coverage: schemaCoverage,
+    guiLayout: resolvedGuiLayout,
     limitations: [
       "Every source-provided value is resolved for this pin and retains its C++ expression; generation fails closed if a future expression is unsupported.",
-      "Tab/page/group ordering, dependency predicates, special widgets, reset rules, and allowed object/part/layer scopes are not extracted here.",
+      "The exact manifest-backed Tab.cpp inventory provides literal tab, group, and placement order. Dynamic and composite/multi-option placements, custom widgets, and general object/part/layer/plate scopes remain explicitly unresolved and fail closed. Dependency predicates and per-control reset rules remain unresolved and unenforced; three exact project-config writes are retained as narrow scope evidence.",
       "Legacy conversions in handle_legacy are not modeled as aliases unless ConfigOptionDef::aliases declares them.",
       "A commit-pinned runtime ConfigOptionDef dumper remains required to certify effective defaults and enum maps against the compiled engine.",
     ],

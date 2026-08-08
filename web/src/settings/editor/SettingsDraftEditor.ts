@@ -1,5 +1,5 @@
 import { EngineOptionCatalog } from '../generated/loader';
-import type { EngineOptionDefinition, EngineOptionValue } from '../generated/types';
+import type { EngineGuiSurface, EngineOptionDefinition, EngineOptionValue } from '../generated/types';
 import { parseSettingDraft, serializeSettingValue, validateSettingValue } from './codec';
 import { assessFieldSupport, projectSettingsField, projectSettingsFields } from './fields';
 import {
@@ -25,6 +25,7 @@ export class SettingsDraftEditor {
   private revision = 0;
   readonly mode;
   readonly technology;
+  readonly guiSurface: EngineGuiSurface | undefined;
 
   constructor(
     readonly catalog: EngineOptionCatalog,
@@ -32,6 +33,7 @@ export class SettingsDraftEditor {
   ) {
     this.mode = options.mode ?? 'advanced';
     this.technology = options.technology ?? 'fff';
+    this.guiSurface = options.guiSurface;
     this.inherited = cloneMap(options.inherited ?? {});
     this.overrides = cloneMap(options.overrides ?? {});
     this.definitionsById = new Map(catalog.definitions.map((definition) => [definition.id, definition]));
@@ -43,6 +45,9 @@ export class SettingsDraftEditor {
     return projectSettingsFields(this.catalog, {
       mode: query.mode ?? this.mode,
       technology: query.technology ?? this.technology,
+      ...(query.guiSurface !== undefined || this.guiSurface !== undefined
+        ? { guiSurface: query.guiSurface ?? this.guiSurface }
+        : {}),
       ...(query.search !== undefined ? { search: query.search } : {}),
       ...(query.includeNonApplicable !== undefined ? { includeNonApplicable: query.includeNonApplicable } : {}),
       ...(query.includeUnknownApplicability !== undefined
@@ -62,7 +67,7 @@ export class SettingsDraftEditor {
 
   getFieldState(fieldId: string): SettingsFieldState {
     const definition = this.definition(fieldId);
-    const field = projectSettingsField(this.catalog, definition, this.technology);
+    const field = projectSettingsField(this.catalog, definition, this.technology, this.guiSurface);
     const base = this.baseValue(definition);
     const hasOverride = hasOwn(this.overrides, definition.key);
     const override = hasOverride ? cloneValue(this.overrides[definition.key]) : undefined;
@@ -170,7 +175,7 @@ export class SettingsDraftEditor {
 
     for (const [fieldId, draft] of ordered) {
       const definition = this.definition(fieldId);
-      const support = assessFieldSupport(this.catalog, definition);
+      const support = assessFieldSupport(this.catalog, definition, this.guiSurface);
       if (support.status !== 'implemented') {
         issues.push({
           code: 'unavailable-setting',
@@ -246,7 +251,7 @@ export class SettingsDraftEditor {
   }
 
   private assertEditable(definition: EngineOptionDefinition): void {
-    const support = assessFieldSupport(this.catalog, definition);
+    const support = assessFieldSupport(this.catalog, definition, this.guiSurface);
     if (support.status !== 'implemented') {
       throw new Error(`Setting ${definition.key} is unavailable: ${support.reason}`);
     }

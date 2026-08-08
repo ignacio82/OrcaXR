@@ -1,6 +1,7 @@
 import { EngineOptionCatalog } from '../generated/loader';
-import type { EngineOptionDefinition } from '../generated/types';
+import type { EngineGuiSurface, EngineOptionDefinition } from '../generated/types';
 import { codecContractIssue, enumChoicesFor, validateSettingValue } from './codec';
+import { isReviewedFullSpectrumProjectOverride } from './fullSpectrumSemantics';
 import type {
   SettingsEditorMode,
   SettingsFieldProjection,
@@ -19,9 +20,13 @@ const MODE_RANK: Readonly<Record<SettingsEditorMode, number>> = {
 export function assessFieldSupport(
   catalog: EngineOptionCatalog,
   definition: EngineOptionDefinition,
+  guiSurface?: EngineGuiSurface,
 ): SettingsFieldSupport {
   if (catalog.all(definition.key).length !== 1) {
     return unavailable('ambiguous-key-owners');
+  }
+  if (catalog.hasCustomGuiWidget(definition.key)) {
+    return unavailable('custom-tab-widget');
   }
   if (definition.applicability.technology.value === 'unknown') {
     return unavailable('unknown-technology-applicability');
@@ -32,6 +37,20 @@ export function assessFieldSupport(
   }
   if (definition.enum.valuesExtended.length > 0 || definition.enum.valuesU1.length > 0) {
     return unavailable('conditional-enum-domain');
+  }
+  const placements = catalog.guiPlacements(definition);
+  const reviewedProjectOverride =
+    guiSurface === 'process' &&
+    (catalog.hasExactProjectConfigWrite(definition.key) || isReviewedFullSpectrumProjectOverride(definition.key));
+  if (placements.length === 0 && !reviewedProjectOverride) {
+    return unavailable('no-literal-gui-placement');
+  }
+  if (
+    guiSurface !== undefined &&
+    !reviewedProjectOverride &&
+    !placements.some((placement) => placement.surface === guiSurface)
+  ) {
+    return unavailable(`gui-surface-unavailable:${guiSurface}`);
   }
   const codecIssue = codecContractIssue(definition);
   if (codecIssue) return unavailable(codecIssue);
@@ -48,7 +67,7 @@ export function projectSettingsFields(
 ): SettingsFieldProjection[] {
   const tokens = tokenize(query.search ?? '');
   return catalog.definitions
-    .map((definition) => projectField(catalog, definition, query.technology, tokens))
+    .map((definition) => projectField(catalog, definition, query.technology, tokens, query.guiSurface))
     .filter((field) => MODE_RANK[field.mode] <= MODE_RANK[query.mode])
     .filter(
       (field) =>
@@ -65,8 +84,9 @@ export function projectSettingsField(
   catalog: EngineOptionCatalog,
   definition: EngineOptionDefinition,
   technology: SettingsTechnology = 'any',
+  guiSurface?: EngineGuiSurface,
 ): SettingsFieldProjection {
-  return projectField(catalog, definition, technology, []);
+  return projectField(catalog, definition, technology, [], guiSurface);
 }
 
 function projectField(
@@ -74,10 +94,20 @@ function projectField(
   definition: EngineOptionDefinition,
   technology: SettingsTechnology,
   tokens: readonly string[],
+  guiSurface?: EngineGuiSurface,
 ): SettingsFieldProjection {
   const label = definition.presentation.label.value ?? definition.key;
   const fullLabel = definition.presentation.fullLabel.value ?? undefined;
   const category = definition.presentation.category.value ?? 'Uncategorized';
+  const guiLocations = catalog.guiPlacements(definition).map((placement) => ({
+    placement,
+    group: catalog.guiGroup(placement.groupId),
+    tab: catalog.guiTab(placement.tabId),
+  }));
+  const primaryGuiLocation =
+    (guiSurface === undefined
+      ? undefined
+      : guiLocations.find((location) => location.placement.surface === guiSurface)) ?? guiLocations[0];
   const field: SettingsFieldProjection = {
     id: definition.id,
     key: definition.key,
@@ -86,12 +116,14 @@ function projectField(
     label,
     ...(fullLabel ? { fullLabel } : {}),
     category,
+    guiLocations,
+    ...(primaryGuiLocation ? { primaryGuiLocation } : {}),
     ...(definition.presentation.tooltip.value ? { tooltip: definition.presentation.tooltip.value } : {}),
     ...(definition.presentation.unit.value ? { unit: definition.presentation.unit.value } : {}),
     mode: definition.applicability.mode.value,
     technology: definition.applicability.technology.value,
     applicability: technologyApplicability(definition, technology),
-    support: assessFieldSupport(catalog, definition),
+    support: assessFieldSupport(catalog, definition, guiSurface),
     enumChoices: enumChoicesFor(definition),
     searchMatches: [],
   };
@@ -117,6 +149,13 @@ function collectMatches(field: SettingsFieldProjection, tokens: readonly string[
     { field: 'label', text: field.label },
     ...(field.fullLabel ? [{ field: 'fullLabel' as const, text: field.fullLabel }] : []),
     { field: 'category', text: field.category },
+    ...(field.primaryGuiLocation
+      ? [
+          { field: 'page' as const, text: field.primaryGuiLocation.tab.label },
+          { field: 'group' as const, text: field.primaryGuiLocation.group.label },
+          { field: 'surface' as const, text: field.primaryGuiLocation.placement.surface },
+        ]
+      : []),
     ...(field.tooltip ? [{ field: 'tooltip' as const, text: field.tooltip }] : []),
     { field: 'owner', text: field.owner },
     ...field.definition.behavior.aliases.value.map((text) => ({ field: 'alias' as const, text })),
@@ -149,6 +188,16 @@ function normalizeSearch(value: string): string {
 }
 
 function compareFields(left: SettingsFieldProjection, right: SettingsFieldProjection): number {
+  const leftGui = left.primaryGuiLocation;
+  const rightGui = right.primaryGuiLocation;
+  if (leftGui && rightGui) {
+    const guiOrder =
+      leftGui.tab.order - rightGui.tab.order ||
+      leftGui.group.order - rightGui.group.order ||
+      leftGui.placement.order - rightGui.placement.order;
+    if (guiOrder !== 0) return guiOrder;
+  } else if (leftGui) return -1;
+  else if (rightGui) return 1;
   return (
     left.category.localeCompare(right.category, 'en') ||
     left.label.localeCompare(right.label, 'en') ||

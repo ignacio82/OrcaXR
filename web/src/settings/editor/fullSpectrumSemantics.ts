@@ -8,6 +8,7 @@ import type { SettingsValidationIssue, SettingsValueMap } from './types';
  * engine-pin update fails focused tests until the GUI-source rules are reviewed.
  */
 export const FULL_SPECTRUM_SEMANTICS_SOURCE_COMMIT = '9fd12ffb2b1b80c9fb4c14564754d2ec1573a626' as const;
+export const FULL_SPECTRUM_PROJECT_UI_SOURCE_BLOB = '94ad6c3b2357c2f0bd2476265e83ea68babd6a9b' as const;
 
 export const FULL_SPECTRUM_KEYS = Object.freeze({
   localZMode: 'dithering_local_z_mode',
@@ -29,6 +30,21 @@ export const FULL_SPECTRUM_LOCAL_Z_DEPENDENT_KEYS: readonly FullSpectrumLocalZDe
   FULL_SPECTRUM_KEYS.localZInfill,
   FULL_SPECTRUM_KEYS.localZDirectMulticolor,
 ]);
+
+/**
+ * Narrow project-scope overlay proven by pinned Plater.cpp project-config reads
+ * and writes at lines 5705-5708, 6434-6435, and 6527-6528. The Local-Z direct
+ * key is independently emitted as exact Tab.cpp `set_project_bool` evidence.
+ */
+export const FULL_SPECTRUM_PROJECT_OVERRIDE_KEYS: readonly string[] = Object.freeze([
+  FULL_SPECTRUM_KEYS.heightLowerBound,
+  FULL_SPECTRUM_KEYS.heightUpperBound,
+  FULL_SPECTRUM_KEYS.localZDirectMulticolor,
+]);
+
+export function isReviewedFullSpectrumProjectOverride(key: string): boolean {
+  return FULL_SPECTRUM_PROJECT_OVERRIDE_KEYS.includes(key);
+}
 
 export interface FullSpectrumSettingsTransaction {
   /**

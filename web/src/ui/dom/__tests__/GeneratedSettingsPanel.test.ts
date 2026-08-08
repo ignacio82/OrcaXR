@@ -52,7 +52,17 @@ await test('loads asynchronously and exposes accessible modes, search, origin ba
   assert.equal(form.querySelector<HTMLInputElement>('[data-settings-mode="simple"]')?.checked, true);
   assert.ok(form.querySelector('[data-settings-search]')?.getAttribute('aria-controls'));
   assert.match(form.querySelector('[data-settings-schema-status]')?.textContent ?? '', /foundation-partial/);
+  assert.match(form.querySelector('[data-settings-schema-status]')?.textContent ?? '', /21 tabs, 93 groups, and 424/);
+  assert.match(form.querySelector('[data-settings-schema-status]')?.textContent ?? '', /dependency.*not enforced/);
   assert.equal(origin(form, 'layer_height'), 'inherited');
+  const layerRow = field(form, 'layer_height');
+  assert.ok(layerRow);
+  const layerSection = layerRow.closest<HTMLElement>('section');
+  assert.ok(layerSection);
+  assert.equal(layerSection.dataset.settingsSurface, 'process');
+  assert.equal(layerSection.dataset.settingsPage, 'Quality');
+  assert.equal(layerSection.dataset.settingsGroup, 'Layer height');
+  assert.match(layerSection.querySelector('h3')?.textContent ?? '', /Process · Quality · Layer height/);
 
   search(harness, 'enable support');
   assert.equal(origin(form, 'enable_support'), 'default');
@@ -75,7 +85,17 @@ await test('loads asynchronously and exposes accessible modes, search, origin ba
   assert.equal(unsupported.querySelector('[data-settings-availability]')?.textContent, 'Unavailable');
 
   search(harness, 'machine start gcode');
-  assert.equal(field(form, 'machine_start_gcode')?.querySelector('[data-settings-control]')?.tagName, 'TEXTAREA');
+  assert.equal(field(form, 'machine_start_gcode')?.dataset.settingsSupport, 'unavailable');
+  assert.equal(
+    field(form, 'machine_start_gcode')?.querySelector<HTMLInputElement>('[data-settings-control]')?.disabled,
+    true,
+  );
+  search(harness, 'printable height');
+  assert.equal(field(form, 'printable_height')?.dataset.settingsSupport, 'unavailable');
+  assert.match(
+    field(form, 'printable_height')?.querySelector('[data-settings-unavailable-reason]')?.textContent ?? '',
+    /another settings scope.*Process/,
+  );
 
   search(harness, 'add line number');
   assert.equal(field(form, 'gcode_add_line_number'), null);

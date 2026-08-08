@@ -1227,11 +1227,17 @@ Local starting seams: [`engine-options.schema.json`](../web/src/settings/generat
     as display values currently present in `profileKeys.ts`.
   - **Accept:** every upstream config entry and explicitly placed tab option is represented or in
     an approved internal-only exclusion; schema generation is deterministic and drift-tested.
-  - **Current:** the exact-blob generator emits 816 definitions/809 unique runtime keys with
-    types, defaults, bounds, enum maps, presentation metadata, applicability, provenance, and
-    serialization rules; a strict runtime loader and eight mutation guards pass. Tab/page/group
-    layout, predicates, widget/reset/scope semantics, runtime C++ dump comparison, and locale
-    catalogs remain open, so the generated schema labels itself `foundation-partial`.
+  - **Current:** schema v2 emits 816 definitions/809 unique runtime keys with types, defaults,
+    bounds, enum maps, presentation metadata, applicability, provenance, and serialization rules.
+    It now cross-checks the complete pinned `Tab.cpp` manifest inventory call-by-call and retains
+    21 tabs, 93 groups, and 424 ordered literal placements covering 417 keys, with 420 exact
+    definition bindings and four duplicate-owner bindings that remain ambiguous. The strict
+    loader pins the inventory counts and full binding sets; ten source/schema mutation guards
+    reject drift or truncation. Twenty-six dynamic placements, four custom widgets, 395
+    definitions without a literal placement, predicates, reset/general-scope semantics, runtime
+    C++ dump comparison, and locale catalogs remain explicit gaps. Dynamic placements, custom
+    widgets, and unproven scopes fail closed; dependency and per-control reset rules are truthfully
+    marked unenforced, so the schema still labels itself `foundation-partial`.
 
 - [~] **P6.2 — Implement the complete settings editor.** Cover Process pages Quality, Strength,
   Speed, Support, Multimaterial, and Others; Filament pages Filament, Cooling, Advanced,
@@ -1253,14 +1259,17 @@ Local starting seams: [`engine-options.schema.json`](../web/src/settings/generat
     prove engine effect. An option cannot be classified implemented solely because its key is
     present or passed to the worker.
   - **Current:** a headless editor derives fields only from the generated catalog, projects
-    deterministic mode/technology/search state, classifies ambiguous/read-only/unknown/special
-    definitions unavailable, parses and validates supported scalar/vector families, exposes
-    inherited/default/changed/compare/reset state, and commits drafts atomically. The generated DOM
-    panel now edits the canonical project override layer through a revision/hash-guarded registry
-    action, preserves unknown raw engine keys, restores inherited values on reset, and survives
-    canonical save/reopen without a shadow settings store. Generated GUI layout/dependencies and
-    every scope, special widgets, engine-effect proofs, XR, locale, and cross-surface qualification
-    remain open.
+    deterministic mode/technology/search state plus the pinned page/group/order, classifies
+    ambiguous/read-only/unknown/custom/no-literal definitions unavailable, parses and validates
+    supported scalar/vector families, exposes inherited/default/changed/compare/reset state, and
+    commits drafts atomically. The generated DOM panel groups fields by the pinned Process layout
+    and edits the canonical project override layer through a revision/hash-guarded registry action;
+    both draft and commit revalidate that authority, so Filament, Printer, Object, and Plate-only
+    placements remain disabled. Three exact `set_project_bool` writes and a narrow pinned
+    FullSpectrum project overlay are the only reviewed exceptions. Unknown raw engine keys survive,
+    reset restores inheritance, and canonical save/reopen uses no shadow store. Dependencies,
+    general scoped mutation seams, special widgets, engine-effect proofs, XR, locale, and
+    cross-surface qualification remain open.
 
 - [~] **P6.3 — Implement preset semantics.** Support system, user, and project presets for
   printer/process/filament; inheritance; compatibility expressions; multiple filament slots;
@@ -2262,12 +2271,12 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Export project/core/sliced 3MF, STL variants, G-code, OBJ, bundles/logs | P5.7 | Canonical project/G-code download and deterministic selected-or-plate binary STL exist; remaining variants/viewers/destinations/oracles are open |
 | Primitives, text/SVG, handy/URL model sources | P5.8 | Primitives/catalog partial |
 | Variable/adaptive layer-height profile editor | P5.9 | Action is a placeholder; helper is disconnected |
-| Complete generated engine settings schema | P6.1 | Deterministic 816-definition/809-key foundation exists; GUI layout/runtime dump/dispositions remain |
-| Process Quality/Strength/Speed/Support/Multimaterial/Others | P6.2 | Headless generated-schema editor supports core field families; GUI layout/special widgets/engine proofs are missing |
-| Filament pages and printer/extruder/machine-G-code pages | P6.2 | Headless schema fields exist without complete generated pages, special widgets, live UI, or engine proofs |
+| Complete generated engine settings schema | P6.1 | Deterministic 816-definition/809-key schema v2 includes the complete pinned 21-tab/93-group/424-literal-placement `Tab.cpp` inventory; dynamic/composite placement, predicates, reset/general-scope semantics, runtime dump, and locale remain |
+| Process Quality/Strength/Speed/Support/Multimaterial/Others | P6.2 | Live generated panel consumes pinned Process page/group/order and fails non-Process/custom/unplaced fields closed; dependencies, remaining widgets, complete reachability, and engine proofs are missing |
+| Filament pages and printer/extruder/machine-G-code pages | P6.2 | Exact placement metadata exists, but the project panel deliberately disables these scopes until canonical surface-specific mutation seams, widgets, and engine proofs exist |
 | System/user/project preset inheritance/compatibility/lifecycle | P6.3 | Immutable inheritance/compatibility graph, fail-closed filtered loader, exact-pinned/locked corpus gate, and live canonical-ID printer/process/multi-slot reconciliation with accessible substitution reasons exist; expression evaluation and full preset CRUD/conflict/import/export lifecycle remain |
 | Setup/custom printer/custom filament/bundle import/export | P6.4 | Profile files exist; lifecycle missing |
-| Settings search/modes/dependencies/validation/reset/compare | P6.2–P6.5 | Headless modes/search/validation/inheritance/reset/compare exist; dependencies/scopes/live surfaces are missing |
+| Settings search/modes/dependencies/validation/reset/compare | P6.2–P6.5 | Live Process panel has pinned grouping plus headless modes/search/validation/inheritance/reset/compare; predicates, general scopes, and the other live surfaces are missing |
 | Application preferences, storage migration, secret handling | P6.6 | AI and printer credentials are session-only with legacy plaintext purge/redaction; printer endpoint-only preferences are sanitized, while broader preferences/dialog lifecycle remains missing |
 | Correct config types/vector delimiters across boundaries | P6.7 | Shared ConfigIO/ProfileLoader classifier covers all 174 generated vector definitions; escaping/special/full boundary matrix remains |
 | Revisioned current/all plate slice, cancel, progress, route parity | P7.1 | Live current-plate and all-plate browser slicing use the canonical coordinator and actual-asset guard, retaining per-plate results and downloads; external attestation, route/oracle parity, and per-plate statistics remain |
@@ -2407,6 +2416,8 @@ Evidence: EVID-nnn or Pending
 | `EVID-028` | P7.5, P7.8 | Current worktree atop `6d82177`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `src/slicer/__tests__/gcode-inspection-model.test.ts`; production-browser preview pass in `scripts/e2e-smoke.mjs` | Node 22.21.0; Chrome for Testing 150 with the production CSP; no hardware | Pass: 9 inspection traces including a new one pinning that a retraction Z-hop on a travel no longer raises the reported layer height (a layer authored against 3.4 mm read 3.85 mm before the fix and 3.45 mm after — the first layer at or above the request) and that a travel-only layer still reports its observed Z; in the production browser the pause authored earlier comes back as a located tick, choosing it moves the layer window to that layer, authoring a custom event from the viewer records the layer's own height, and the published artifact is dropped so the preview closes rather than showing a view the project no longer produces; an opened G-code file lists its tick but offers no authoring, because it is not this project's artifact; the bundle budget holds at main 2,119,077 bytes | Automated review; slider badges, playback, tool-marker rendering, and official goldens pending |
 
 | `EVID-029` | P7.6 | Current worktree atop `b3a0798`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `src/slicer/__tests__/gcode-artifact-summary.test.ts`; production-browser preview pass in `scripts/e2e-smoke.mjs` | Node 22.21.0; Chrome for Testing 150 with the production CSP; no hardware | Pass: 6 summary traces covering per-tool length/volume/weight with colour and material, a stated zero kept as a real zero against an absent field left absent, every duration shape the engine writes plus rejection of the ones it does not, refusal to coerce a malformed or negative count, and trailer-only scanning proven on a 2.8 MB artifact; in the production browser the sliced plate reports 225 layers, a positive time estimate and total weight, and exactly the two tools it uses, with the panel showing each tool's material and mass; the bundle budget holds at main 2,123,148 bytes | Automated review; the verified sidecar's engine producer, per-role breakdown, cost units, all-plate UI, and official goldens pending |
+
+| `EVID-030` | P6.1–P6.2, P10.8 | Current worktree atop `0cd8bdd`; commit pending | `9fd12ff...` | 2026-08-08 | `node tools/settings-schema/self-test.mjs`; `node tools/settings-schema/generate.mjs --check --no-fetch`; `npm --prefix web run test:settings`; focused `GeneratedSettingsPanel.test.ts`; TypeScript typecheck; production build; offline contract/smoke | Node 22.21.0; Chrome for Testing 150; headless; no hardware | Pass: deterministic 5,383,500-byte schema v2; 816 definitions/809 keys; exact 21-tab/93-group/424-placement inventory; 10 fail-closed mutations; 5/5 settings files and 7/7 generated-panel cases. Full duplicate-owner binding sets and fixed inventory counts reject relationally valid truncation; symbol-derived surfaces and draft/commit guards reject non-Process relabeling; dependency/reset is pinned as unenforced rather than falsely fail-closed. Both production workers cache the content-hashed schema NetworkFirst, and an offline reload fetches and parses schema v2 | Automated and independent code review; runtime C++ dump, predicates/reset/general scopes, widget families, engine-effect fixtures, and cross-surface/browser/XR qualification pending |
 Correction note (2026-07-20): the provisional local-commit cells in `EVID-001`–`EVID-012`
 were filled with the commit that landed those runs. Their historical commands, counts, results,
 dates, and residual limitations were not refreshed.
@@ -2454,6 +2465,7 @@ has no equivalent, add a `BLOCK-*` row rather than calling it done or Not applic
 | 2026-08-07 | Make colour painting a canonical live tool: one UI-independent stroke service, a stable-ID palette shared by DOM and XR, and derived overlays; delete the legacy display-colour paint panel and brush state | A second display-colour paint path could not persist, undo, or slice, and kept the tool honest only by staying disabled; the canonical facet channels already existed | P4.2–P4.4, P0.2 | Painting/registry/shortcut tests and the production browser smoke pass; official round-trip, XR, and hardware evidence pending |
 | 2026-08-08 | Author every facet channel through one live paint tool set, and make the XR rail an explicit finite list instead of "any action with a tool" | Support, seam, and fuzzy-skin painting differ only by channel and assigned state, so a second implementation would duplicate the stroke, history, and overlay contracts; letting new modal tools auto-join the rail would silently break the finite-rail requirement | P4.6–P4.8, P10.5 | Channel traces and the browser support-paint pass; oracles, official round-trip, and headset review pending |
 | 2026-08-08 | Keep XR component construction behind exact pinned types and explicitly withhold any action whose only completion flow is DOM-only | Guessed option bags bypass the reactive API contract, while advertising printer submission in-headset without an XR confirmation strands a safety-critical workflow | P10.7, P10.9–P10.10 | Typed adapter/action/gesture tests pass; composite gallery, native printer dialog, simulator, and headset review pending |
+| 2026-08-08 | Treat the complete manifest-backed literal `Tab.cpp` inventory as generated settings layout authority; fail dynamic/widget/scope gaps closed and label unresolved dependency/reset behavior unenforced | A definition key alone does not prove that a user can reach or safely edit it, and self-consistent generated relationships can hide truncation unless fixed inventory counts and every owner binding are independently pinned. Calling imperative predicates or per-control reset rules fail-closed while their exact fields remain editable would be false, so their distinct disposition is loader-pinned | P6.1–P6.2, P6.5 | Generator/self-test, strict-loader, editor, live-panel, and independent review traces pass; runtime dump and remaining GUI semantics/surfaces pending |
 | 2026-08-08 | Render the live preview from the bounded rich model plus preview projection, and delete the ad-hoc line renderer's role in the viewer | The projection already owns colour, filtering, legends, and explicit metadata gaps; a second renderer would invent colours the source never carried and could not report why a mode is unsupported | P7.3–P7.5, P7.7 | Session traces and the browser standalone-G-code pass; goldens, playback, and XR pending |
 | 2026-08-08 | Let pinned-engine gates verify committed locks/manifests when `third_party/SnapmakerOrca` is absent, and revert the unbuilt WASM statistics entry point | CI and clean clones have no developer checkout, so `profiles:verify`/`calibration:verify` crashed instead of proving anything; separately, a source edit that was never compiled into the published artifacts broke provenance and would have advertised an engine capability the shipped binary lacks | P0.3, P6.3, P7.6, P8.1, P12.3 | Full web gate passes with and without the checkout; `verify:artifacts` passes again |
 | 2026-08-08 | Build the browser engine with `-sDYNAMIC_EXECUTION=0`, attest imported projects from their own embedded configuration, and never emit an OPC relationship to a part this package does not contain | embind's `new Function` invokers made every in-browser slice fail under the app's own CSP; requiring catalog presets blocked slicing any imported project, which is the main multicolor/FullSpectrum workflow; and a preserved relationship left dangling by the one-plate projection made the pinned engine reject the archive entirely | P1.3, P3.9, P7.1, P7.2, P10.7 | Engine, serializer, and preflight traces plus a live browser FullSpectrum slice; hardware print qualification pending |

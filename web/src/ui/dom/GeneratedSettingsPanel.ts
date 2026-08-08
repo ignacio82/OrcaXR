@@ -363,10 +363,13 @@ export class GeneratedSettingsPanel {
       this.drafts.clear();
       this.setAuthorityConflict(false);
       const coverage = catalog.schema.coverage;
+      const guiCoverage = catalog.schema.guiLayout.coverage;
       if (this.schemaStatus) {
         this.schemaStatus.textContent =
           `${coverage.definitions} generated definitions / ${coverage.uniqueKeys} engine keys loaded from the ` +
-          'pinned schema. The schema is foundation-partial; unsupported fields stay visibly disabled.';
+          `pinned schema, with ${guiCoverage.tabs} tabs, ${guiCoverage.groups} groups, and ` +
+          `${guiCoverage.literalPlacements} exact literal GUI placements. The schema is foundation-partial; ` +
+          'dynamic placements, custom widgets, and unproven scopes stay disabled; dependency and per-control reset rules are not enforced yet.';
       }
       this.renderFields();
       if (successMessage) this.setOperationMessage(successMessage);
@@ -424,6 +427,9 @@ export class GeneratedSettingsPanel {
     return new SettingsDraftEditor(catalog, {
       mode: this.mode,
       technology: this.technology,
+      // This adapter writes the project/process override map. Filament, printer,
+      // object, and plate surfaces require their own canonical mutation seams.
+      guiSurface: 'process',
       inherited: snapshot.inherited,
       overrides: snapshot.overrides,
     });
@@ -437,6 +443,7 @@ export class GeneratedSettingsPanel {
     const fields = editor.query({
       mode: this.mode,
       technology: this.technology,
+      guiSurface: 'process',
       search: this.search,
       includeUnavailable: true,
       includeUnknownApplicability: true,
@@ -457,15 +464,22 @@ export class GeneratedSettingsPanel {
       return;
     }
 
-    const categories = new Map<string, SettingsFieldProjection[]>();
+    const categories = new Map<string, { label: string; fields: SettingsFieldProjection[] }>();
     for (const field of fields) {
-      const entries = categories.get(field.category) ?? [];
-      entries.push(field);
-      categories.set(field.category, entries);
+      const location = field.primaryGuiLocation;
+      const key = location?.group.id ?? `metadata:${field.category}`;
+      const label = location
+        ? [guiSurfaceLabel(location.placement.surface), location.tab.label, location.group.label]
+            .filter((part) => part.length > 0)
+            .join(' · ')
+        : field.category;
+      const category = categories.get(key) ?? { label, fields: [] };
+      category.fields.push(field);
+      categories.set(key, category);
     }
     const fullSpectrumValues = this.fullSpectrumEffectiveValues(editor);
-    const sections = [...categories.entries()].map(([category, categoryFields], categoryIndex) =>
-      this.buildCategory(category, categoryFields, categoryIndex, fullSpectrumValues),
+    const sections = [...categories.values()].map((category, categoryIndex) =>
+      this.buildCategory(category.label, category.fields, categoryIndex, fullSpectrumValues),
     );
     container.replaceChildren(...sections);
     this.syncControlState();
@@ -482,6 +496,12 @@ export class GeneratedSettingsPanel {
     const headingId = `orcaxr-settings-category-${this.instanceId}-${categoryIndex}`;
     section.setAttribute('aria-labelledby', headingId);
     section.dataset.settingsCategory = category;
+    const location = fields[0]?.primaryGuiLocation;
+    if (location) {
+      section.dataset.settingsSurface = location.placement.surface;
+      section.dataset.settingsPage = location.tab.label;
+      section.dataset.settingsGroup = location.group.label;
+    }
     section.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
     const heading = document.createElement('h3');
     heading.id = headingId;
@@ -1148,14 +1168,31 @@ function originLabel(origin: SettingsFieldState['origin']): string {
   }
 }
 
+function guiSurfaceLabel(surface: string): string {
+  const labels: Readonly<Record<string, string>> = {
+    filament: 'Filament',
+    object: 'Object',
+    plate: 'Plate',
+    printer: 'Printer',
+    process: 'Process',
+  };
+  return labels[surface] ?? surface;
+}
+
 function formatUnavailableReason(reason: string | undefined): string {
   if (!reason) return 'the generated schema does not provide a safe editable contract';
   if (reason.startsWith('special-widget:')) {
     return `requires the unimplemented ${reason.slice('special-widget:'.length)} generated widget`;
   }
+  if (reason.startsWith('gui-surface-unavailable:')) {
+    const surface = reason.slice('gui-surface-unavailable:'.length);
+    return `belongs to another settings scope; this panel may edit only the ${guiSurfaceLabel(surface)} surface`;
+  }
   const descriptions: Readonly<Record<string, string>> = {
     'ambiguous-key-owners': 'the engine key has multiple owners and cannot be selected safely',
     'conditional-enum-domain': 'the enum domain depends on runtime state that is not generated yet',
+    'custom-tab-widget': 'the pinned Tab.cpp uses a custom widget whose behavior is not generated yet',
+    'no-literal-gui-placement': 'the pinned GUI inventory has no unambiguous literal placement for this field',
     readonly: 'the engine marks this field read-only',
     'unknown-technology-applicability': 'the generated schema cannot prove this field applies to this technology',
   };

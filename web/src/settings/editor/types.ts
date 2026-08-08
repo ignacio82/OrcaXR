@@ -1,4 +1,11 @@
-import type { EngineOptionDefinition, EngineOptionValue } from '../generated/types';
+import type {
+  EngineGuiGroup,
+  EngineGuiPlacement,
+  EngineGuiSurface,
+  EngineGuiTab,
+  EngineOptionDefinition,
+  EngineOptionValue,
+} from '../generated/types';
 
 export type SettingsEditorMode = 'simple' | 'advanced' | 'develop';
 export type SettingsTechnology = 'fff' | 'sla' | 'any';
@@ -22,10 +29,17 @@ export interface SettingsFieldSupport {
 }
 
 export interface SettingsSearchMatch {
-  field: 'key' | 'label' | 'fullLabel' | 'category' | 'tooltip' | 'owner' | 'alias' | 'enum';
+  field:
+    'key' | 'label' | 'fullLabel' | 'category' | 'page' | 'group' | 'surface' | 'tooltip' | 'owner' | 'alias' | 'enum';
   start: number;
   length: number;
   text: string;
+}
+
+export interface SettingsGuiLocation {
+  group: EngineGuiGroup;
+  placement: EngineGuiPlacement;
+  tab: EngineGuiTab;
 }
 
 export interface SettingsFieldProjection {
@@ -36,6 +50,8 @@ export interface SettingsFieldProjection {
   label: string;
   fullLabel?: string;
   category: string;
+  guiLocations: readonly SettingsGuiLocation[];
+  primaryGuiLocation?: SettingsGuiLocation;
   tooltip?: string;
   unit?: string;
   mode: SettingsEditorMode;
@@ -49,6 +65,7 @@ export interface SettingsFieldProjection {
 export interface SettingsFieldQuery {
   mode: SettingsEditorMode;
   technology: SettingsTechnology;
+  guiSurface?: EngineGuiSurface;
   search?: string;
   includeNonApplicable?: boolean;
   includeUnknownApplicability?: boolean;
@@ -103,6 +120,7 @@ export interface SettingsDraftCommit {
 export interface SettingsDraftEditorOptions {
   mode?: SettingsEditorMode;
   technology?: SettingsTechnology;
+  guiSurface?: EngineGuiSurface;
   inherited?: SettingsValueMap;
   overrides?: SettingsValueMap;
 }

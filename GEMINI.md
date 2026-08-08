@@ -121,6 +121,18 @@ engine (`libslic3r` via WASM) as the computational core.
   leaves the headset flow stranded. Generate shortcut matching and Help rows from registry
   declarations through the strict conflict-rejecting catalog; do not add a second hand-maintained
   shortcut list.
+- Generated settings schema v2 treats the exact pinned `Tab.cpp` inventory as
+  layout authority: 21 tabs, 93 groups, and 424 literal placements are fixed
+  counts, and every placement retains its full definition-owner binding set.
+  Dynamic placements, custom widgets, and general scope eligibility remain
+  explicit fail-closed gaps; imperative dependency predicates and per-control
+  reset rules are explicitly unresolved and unenforced, never described as
+  blocked. The live generated panel owns only the canonical project/Process override seam (plus the narrow
+  source-pinned FullSpectrum project overlay); it must revalidate that scope at
+  both draft and commit and never enable Filament, Printer, Object, or Plate-only
+  controls merely because their keys exist in `PrintConfig`. Both production
+  workers cache the content-hashed schema NetworkFirst after one successful load;
+  a schema contract bump requires a static shell-cache bump and an offline smoke.
 - CI and clean clones have no `third_party/SnapmakerOrca`, so every gate that
   derives from the pinned engine must degrade honestly instead of crashing:
   `profiles:verify` falls back to byte-exact SHA-256 verification of

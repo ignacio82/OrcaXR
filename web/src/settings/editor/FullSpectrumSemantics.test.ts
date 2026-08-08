@@ -8,6 +8,8 @@ import {
   expandFullSpectrumSettingsTransaction,
   FULL_SPECTRUM_KEYS,
   FULL_SPECTRUM_LOCAL_Z_DEPENDENT_KEYS,
+  FULL_SPECTRUM_PROJECT_OVERRIDE_KEYS,
+  FULL_SPECTRUM_PROJECT_UI_SOURCE_BLOB,
   FULL_SPECTRUM_SEMANTICS_SOURCE_COMMIT,
   getFullSpectrumDependencyState,
   getFullSpectrumSpecialEditorRequirement,
@@ -51,6 +53,7 @@ function test(name: string, run: () => void): void {
 
 test('pins the GUI semantics to the same reviewed source revision and serialized definition metadata', () => {
   assert.equal(FULL_SPECTRUM_SEMANTICS_SOURCE_COMMIT, ENGINE_OPTION_SOURCE_COMMIT);
+  assert.equal(FULL_SPECTRUM_PROJECT_UI_SOURCE_BLOB, '94ad6c3b2357c2f0bd2476265e83ea68babd6a9b');
   const definitions = catalog.get(FULL_SPECTRUM_KEYS.definitions);
   assert.equal(definitions.storage.optionType, 'coString');
   assert.equal(definitions.presentation.guiFlags.value, 'serialized');
@@ -62,6 +65,12 @@ test('pins the GUI semantics to the same reviewed source revision and serialized
   ]);
   assert.equal(Object.isFrozen(FULL_SPECTRUM_KEYS), true);
   assert.equal(Object.isFrozen(FULL_SPECTRUM_LOCAL_Z_DEPENDENT_KEYS), true);
+  assert.deepEqual(FULL_SPECTRUM_PROJECT_OVERRIDE_KEYS, [
+    'mixed_filament_height_lower_bound',
+    'mixed_filament_height_upper_bound',
+    'dithering_local_z_direct_multicolor',
+  ]);
+  assert.equal(Object.isFrozen(FULL_SPECTRUM_PROJECT_OVERRIDE_KEYS), true);
 });
 
 test('exhaustively expands Local-Z enable and disable across every prior child-state combination', () => {

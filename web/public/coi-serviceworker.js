@@ -14,7 +14,7 @@
 if (typeof window === 'undefined') {
   // ---------- service worker context ----------
   const CACHE_PREFIX = 'orcaxr-coi-';
-  const SHELL_CACHE = `${CACHE_PREFIX}shell-v1`;
+  const SHELL_CACHE = `${CACHE_PREFIX}shell-v2`;
   const SLICER_CACHE = `${CACHE_PREFIX}slicer-v1`;
 
   const withIsolationHeaders = (res) => {
