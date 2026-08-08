@@ -1,3 +1,4 @@
+import { formatArtifactDuration, type GcodeArtifactSummary } from '../../slicer/GcodeArtifactSummary';
 import type { GcodePreviewMode } from '../../slicer/GcodePreviewModel';
 import type { GcodePreviewMoveFilterId, GcodePreviewViewPatch } from '../../slicer/GcodePreviewSession';
 
@@ -36,6 +37,8 @@ export interface GcodePreviewPanelState {
     readonly layer: number;
     readonly zMm: number;
   }[];
+  /** Totals the engine wrote into the artifact, when it wrote any. */
+  readonly summary?: GcodeArtifactSummary;
 }
 
 /** One event kind the operator can author at the layer currently shown. */
@@ -149,6 +152,7 @@ export class GcodePreviewPanel {
       unsupported.textContent = state.unsupportedReason;
       root.append(unsupported);
     }
+    if (state.summary) root.append(this.renderSummary(state.summary));
     const authoring = this.renderEventAuthoring(state);
     if (authoring) root.append(authoring);
     if (state.ticks.length > 0) root.append(this.renderTicks(state));
@@ -253,6 +257,65 @@ export class GcodePreviewPanel {
       list.append(wrapper);
     }
     group.append(list);
+    return group;
+  }
+
+  /**
+   * The engine's own totals for this artifact. Every figure is read from the
+   * file rather than recomputed, and a figure the artifact never stated is
+   * simply absent — a missing weight is not zero grams.
+   */
+  private renderSummary(summary: GcodeArtifactSummary): HTMLElement {
+    const document = this.container.ownerDocument;
+    const group = document.createElement('div');
+    group.dataset.previewSummary = 'true';
+    group.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
+
+    const totals = document.createElement('p');
+    totals.dataset.previewSummaryTotals = 'true';
+    totals.style.cssText = 'margin:0;';
+    totals.textContent = [
+      summary.estimatedSeconds !== undefined ? `≈${formatArtifactDuration(summary.estimatedSeconds)}` : null,
+      summary.totalWeightG !== undefined ? `${summary.totalWeightG.toFixed(2)} g` : null,
+      summary.layerCount !== undefined ? `${summary.layerCount} layers` : null,
+      summary.toolChanges !== undefined ? `${summary.toolChanges} tool changes` : null,
+    ]
+      .filter((entry): entry is string => entry !== null)
+      .join(' · ');
+    group.append(totals);
+
+    const used = summary.perTool.filter((tool) => (tool.lengthMm ?? tool.weightG ?? 0) > 0);
+    if (used.length > 0) {
+      const list = document.createElement('ul');
+      list.style.cssText = 'list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;';
+      for (const tool of used) {
+        const item = document.createElement('li');
+        item.dataset.previewSummaryTool = String(tool.toolIndex);
+        item.style.cssText = 'display:flex;align-items:center;gap:6px;';
+        if (tool.colorHex) {
+          const swatch = document.createElement('span');
+          swatch.setAttribute('aria-hidden', 'true');
+          swatch.style.cssText =
+            `width:10px;height:10px;border-radius:2px;background:${tool.colorHex};` +
+            'border:1px solid rgba(255,255,255,0.35);flex:none;';
+          item.append(swatch);
+        }
+        const text = document.createElement('span');
+        // The swatch is decorative; the tool number and material carry the
+        // identity so nothing here depends on colour alone.
+        text.textContent = [
+          `T${tool.toolIndex}`,
+          tool.material,
+          tool.lengthMm !== undefined ? `${(tool.lengthMm / 1000).toFixed(2)} m` : undefined,
+          tool.weightG !== undefined ? `${tool.weightG.toFixed(2)} g` : undefined,
+        ]
+          .filter((entry): entry is string => entry !== undefined)
+          .join(' · ');
+        item.append(text);
+        list.append(item);
+      }
+      group.append(list);
+    }
     return group;
   }
 

@@ -472,6 +472,31 @@ async function inspectAndAuthorFromPreview(page) {
   });
   await page.waitForFunction(() => globalThis.window.workspace.getPreviewState().active === true, { timeout: 60_000 });
 
+  // The engine's own totals for this artifact, read rather than recomputed.
+  const summary = await page.evaluate(() => globalThis.window.workspace.getPreviewState().summary);
+  assert.ok(summary, 'the sliced artifact carries the engine totals');
+  assert.equal(summary.layerCount, 225);
+  assert.ok(summary.estimatedSeconds > 0, 'an estimated print time is reported');
+  assert.ok(summary.totalWeightG > 0, 'a total weight is reported');
+  assert.equal(summary.perTool.length, 4, 'one row per declared filament');
+  assert.deepEqual(
+    summary.perTool.filter((tool) => (tool.lengthMm ?? 0) > 0).map((tool) => tool.toolIndex),
+    [0, 1],
+    'only the two tools this plate uses report filament',
+  );
+  const totalsText = await page.$eval('[data-preview-summary-totals]', (node) => node.textContent ?? '');
+  assert.match(totalsText, /225 layers/);
+  assert.match(totalsText, /≈\d/);
+  assert.deepEqual(
+    await page.$$eval('[data-preview-summary-tool]', (rows) =>
+      rows.map((row) => [row.dataset.previewSummaryTool, /PLA/.test(row.textContent ?? '')]),
+    ),
+    [
+      ['0', true],
+      ['1', true],
+    ],
+  );
+
   const ticks = await page.evaluate(() => globalThis.window.workspace.getPreviewState().ticks);
   const pause = ticks.find((tick) => tick.kind === 'pause');
   assert.ok(pause, `the authored pause appears as a located tick: ${JSON.stringify(ticks)}`);
@@ -2435,7 +2460,7 @@ try {
   assert.deepStrictEqual(pageErrors, [], `uncaught page errors: ${pageErrors.join('\n')}`);
   assert.deepStrictEqual(policyErrors, [], `CSP violations: ${policyErrors.join('\n')}`);
   console.log(
-    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings, guarded plate management, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick, and a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel).',
+    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings, guarded plate management, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, and a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel).',
   );
 } finally {
   await browser.close();

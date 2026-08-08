@@ -28,6 +28,7 @@ import { summarizeGcodeToolUsage } from '../printer/PrintToolMapping';
 import { serializePrintConfigArray } from '../settings/configSerialization';
 import type { ArrangeRegion } from '../project/objects/arrange';
 import { rotateVector } from '../project/objects/transformOperations';
+import { summarizeGcodeArtifact, type GcodeArtifactSummary } from '../slicer/GcodeArtifactSummary';
 import { GCODE_PREVIEW_MODES } from '../slicer/GcodePreviewModel';
 import {
   GCODE_PREVIEW_MOVE_FILTERS,
@@ -469,6 +470,7 @@ export class OrcaWorkspace extends xb.Script {
   } | null = null;
   private previewSurface: GcodePreviewSurface | null = null;
   private previewSession: GcodePreviewSession | null = null;
+  private previewSummary: GcodeArtifactSummary | null = null;
   private previewOn = false;
   /** Fires when the preview session, view, or projection changes. */
   public onPreviewStateChanged: (() => void) | null = null;
@@ -3449,6 +3451,8 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus(`Could not read the G-code: ${(error as Error).message}`);
       return;
     }
+    // Read the engine's own totals once, from the artifact now on screen.
+    this.previewSummary = summarizeGcodeArtifact(gcode);
     this.previewOn = true;
     if (!this.renderPreviewProjection()) return;
     // Ghost the models so the toolpath reads clearly.
@@ -3484,6 +3488,7 @@ export class OrcaWorkspace extends xb.Script {
     this.previewSurface?.clear();
     this.previewSurface?.setVisible(false);
     this.previewSession = null;
+    this.previewSummary = null;
     this.previewOn = false;
     for (const m of this.models) m.viewer.visible = true;
     this.onPreviewStateChanged?.();
@@ -3512,6 +3517,8 @@ export class OrcaWorkspace extends xb.Script {
       readonly layer: number;
       readonly zMm: number;
     }[];
+    /** Totals the engine wrote into this artifact; absent when it stated none. */
+    readonly summary?: GcodeArtifactSummary;
   } {
     const session = this.previewSession;
     const base = { modes: GCODE_PREVIEW_MODES, moveFilters: GCODE_PREVIEW_MOVE_FILTERS };
@@ -3560,6 +3567,7 @@ export class OrcaWorkspace extends xb.Script {
             layerTopZMm: inspection.layerSelection.lastZMm,
           }
         : {}),
+      ...(this.previewSummary && !this.previewSummary.empty ? { summary: this.previewSummary } : {}),
       // Report each event at the height its layer prints at. The record's own Z
       // is wherever the toolhead happened to be when the marker was emitted —
       // usually the previous layer, since the Z move follows the layer change.
@@ -5473,7 +5481,11 @@ export class OrcaWorkspace extends xb.Script {
       }
       const elapsedMs = Math.round(performance.now() - startedAt);
       const lines = gcode.split('\n').length;
-      const layers = (gcode.match(/; CHANGE_LAYER|;LAYER_CHANGE/g) ?? []).length;
+      // Prefer the engine's own total: counting layer-change markers misses
+      // the layers it counts differently, and two disagreeing layer counts in
+      // one UI is worse than either.
+      const layers =
+        summarizeGcodeArtifact(gcode).layerCount ?? (gcode.match(/; CHANGE_LAYER|;LAYER_CHANGE/g) ?? []).length;
       const warningSuffix = result.warnings.length > 0 ? `, ${result.warnings.length} warning(s)` : '';
       this.setStatus(
         `SLICED in ${elapsedMs} ms\n${(plate.gcode.byteLength / 1024).toFixed(0)} KB, ${lines} lines, ${layers} layers${warningSuffix}`,
