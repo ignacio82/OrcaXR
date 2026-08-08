@@ -95,6 +95,17 @@ function findMissingPinnedParents(profilePaths) {
   return { missing, unresolved };
 }
 
+const upstreamAvailable = existsSync(join(upstreamRepository, '.git'));
+if (!upstreamAvailable) {
+  if (write) {
+    throw new Error(
+      `Refreshing the overlay needs the pinned upstream checkout at ${relative(repositoryRoot, upstreamRepository)}`,
+    );
+  }
+  verifyAgainstLock();
+  process.exit(process.exitCode ?? 0);
+}
+
 const actualCommit = runGitText('rev-parse', 'HEAD').trim();
 if (actualCommit !== PINNED_COMMIT) {
   throw new Error(`SnapmakerOrca HEAD is ${actualCommit}; expected pinned ${PINNED_COMMIT}`);
@@ -156,7 +167,9 @@ if (write && closureProblems.some((problem) => problem.startsWith('unresolved pa
   throw new Error(`Profile inheritance closure failed:\n${closureProblems.join('\n')}`);
 }
 
-const exactMirrors = localProfiles.filter((path) => upstreamProfiles.has(path));
+const exactMirrors = localProfiles
+  .filter((path) => upstreamProfiles.has(path))
+  .map((path) => ({ path, sha256: sha256(readFileSync(join(profileRoot, path))) }));
 const localAdaptations = localProfiles
   .filter((path) => !upstreamProfiles.has(path))
   .map((path) => ({
@@ -173,7 +186,7 @@ const lock = {
   },
   policy: {
     exactMirrors:
-      'Every local profile with the same vendor/category/filename as the pinned tree is byte-for-byte identical.',
+      'Every local profile with the same vendor/category/filename as the pinned tree is byte-for-byte identical; its SHA-256 lets a checkout without the upstream clone verify the same bytes.',
     localAdaptations:
       'Profiles absent at the same path in the pinned tree are explicit OrcaXR target-printer adaptations locked by SHA-256.',
   },
@@ -211,4 +224,66 @@ if ((!write && driftedMirrors.length > 0) || closureProblems.length > 0 || !lock
       `Updated ${updatedMirrors} mirrored profile files, added ${addedParents} pinned parents, and refreshed the overlay lock.`,
     );
   }
+}
+
+/**
+ * Verify the committed profile tree against the lock without the pinned
+ * upstream checkout. This proves the shipped bytes are exactly the ones the
+ * lock records; re-deriving the lock from the pinned commit still requires the
+ * upstream clone and is reported as skipped so the weaker claim stays honest.
+ */
+function verifyAgainstLock() {
+  if (!existsSync(lockPath)) {
+    console.error(`Profile overlay lock is missing: ${relative(repositoryRoot, lockPath)}`);
+    process.exitCode = 1;
+    return;
+  }
+  const lock = JSON.parse(readFileSync(lockPath, 'utf8'));
+  if (lock.schemaVersion !== 1 || lock.upstream?.commit !== PINNED_COMMIT) {
+    console.error(`Profile overlay lock does not describe schema 1 at ${PINNED_COMMIT}`);
+    process.exitCode = 1;
+    return;
+  }
+  const lockedEntries = [...(lock.exactMirrors ?? []), ...(lock.localAdaptations ?? [])];
+  const problems = [];
+  const lockedPaths = new Set();
+  for (const entry of lockedEntries) {
+    if (typeof entry?.path !== 'string' || !/^[0-9a-f]{64}$/.test(entry?.sha256 ?? '')) {
+      problems.push(`malformed lock entry: ${JSON.stringify(entry)}`);
+      continue;
+    }
+    if (lockedPaths.has(entry.path)) {
+      problems.push(`duplicate lock entry: ${entry.path}`);
+      continue;
+    }
+    lockedPaths.add(entry.path);
+    const absolutePath = join(profileRoot, entry.path);
+    if (!existsSync(absolutePath)) {
+      problems.push(`missing locked profile: ${entry.path}`);
+      continue;
+    }
+    const bytes = readFileSync(absolutePath);
+    try {
+      JSON.parse(bytes.toString('utf8'));
+    } catch (error) {
+      problems.push(`invalid JSON: ${entry.path} (${error.message})`);
+      continue;
+    }
+    const actual = sha256(bytes);
+    if (actual !== entry.sha256) problems.push(`profile drift: ${entry.path} is ${actual}`);
+  }
+  for (const path of listLocalProfiles()) {
+    if (!lockedPaths.has(path)) problems.push(`unlocked profile: ${path}`);
+  }
+
+  if (problems.length > 0) {
+    console.error(`Pinned profile overlay verification failed:\n${problems.map((line) => `  ${line}`).join('\n')}`);
+    console.error('Run `npm --prefix web run profiles:sync` with the pinned upstream checkout to restore it.');
+    process.exitCode = 1;
+    return;
+  }
+  console.log(
+    `Pinned profile overlays: ${lock.exactMirrors.length} exact mirrors and ${lock.localAdaptations.length} local adaptations match the lock at ${PINNED_COMMIT} ` +
+      '(upstream re-derivation skipped: no pinned checkout).',
+  );
 }

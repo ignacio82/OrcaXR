@@ -116,6 +116,21 @@ engine (`libslic3r` via WASM) as the computational core.
   invocation/availability gateway for DOM, menus, shortcuts, command palette,
   XR, and contextual Objects selection/rename/reveal. `implemented` requires a real
   handler/evidence mapping; all other states remain visibly and machine-readably honest. Generate shortcut matching and Help rows from registry declarations through the strict conflict-rejecting catalog; do not add a second hand-maintained shortcut list.
+- CI and clean clones have no `third_party/SnapmakerOrca`, so every gate that
+  derives from the pinned engine must degrade honestly instead of crashing:
+  `profiles:verify` falls back to byte-exact SHA-256 verification of
+  `web/scripts/profile-overlays.lock.json` (mirrors and adaptations both carry
+  hashes), and `calibration:verify` falls back to integrity-checking the
+  committed inventory's schema, pinned commit, and per-source blob hashes. Both
+  print that upstream re-derivation was skipped; `--write`/sync still requires
+  the checkout. Never make a gate silently pass when the checkout is missing.
+- `wasm/slic3r_wasm.cpp`, `wasm/patches/`, `wasm/shim-include/`, and the build
+  script hash into `wasm/artifact-provenance.json`. Editing any of them without
+  rebuilding and republishing the artifacts breaks `verify:artifacts`, and the
+  edit would ship as source that the checked-in engine does not contain. Engine
+  changes must land as committed `wasm/patches/*.patch` (a dirty
+  `third_party/SnapmakerOrca` worktree is never the authority), then rebuild,
+  publish, and update the provenance manifest in the same change.
 - `./scripts/quality.sh` is the clean-clone repository gate. Web-only changes
   must at minimum pass `npm --prefix web run quality`; do not weaken a failing
   check or claim broad parity before P12.6 is independently verified.

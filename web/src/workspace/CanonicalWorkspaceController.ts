@@ -89,6 +89,7 @@ import {
 import { encodeIndexedMeshAsset } from '../project/meshCodec';
 import {
   CreateInstanceCommand,
+  createInstancesAtTransforms,
   DeleteInstanceCommand,
   DeleteObjectCommand,
   DuplicateObjectCommand,
@@ -108,6 +109,7 @@ import {
 } from '../project/objects/transformOperations';
 import {
   arrangementTransformChanges,
+  planBedFill,
   planPlateArrangement,
   type ArrangeConstraints,
   type ArrangeResult,
@@ -2026,6 +2028,43 @@ export class CanonicalWorkspaceController {
     const changes = arrangementTransformChanges(result);
     if (changes.length > 0) this.setInstanceTransforms(changes, `arrange:${plateId}`);
     return result;
+  }
+
+  /**
+   * Fill the plate's free space with shared copies of one instance in a single
+   * undoable transaction. Existing instances never move, and the copy cap is
+   * reported so the surface can explain a partial fill.
+   */
+  fillPlateWithInstances(
+    instanceId: InstanceId,
+    constraints: ArrangeConstraints,
+    maxNewInstances?: number,
+  ): { created: number; withheld: number } {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    const found = findInstance(state, instanceId);
+    if (!found) throw new Error(`Unknown instance ${instanceId}`);
+    const plate = state.plates.find((candidate) => candidate.objects.some((object) => object.id === found.object.id));
+    if (!plate) throw new Error(`Instance ${instanceId} has no owning plate`);
+    const plan = planBedFill(
+      state,
+      this.assets,
+      plate.id,
+      { instanceId, ...(maxNewInstances !== undefined ? { maxNewInstances } : {}) },
+      constraints,
+    );
+    if (plan.placements.length === 0) return { created: 0, withheld: plan.withheldSlotCount };
+    createInstancesAtTransforms(
+      this.session.commands,
+      found.object.id,
+      plan.placements.map((placement) => ({
+        id: this.options.idSource.next('instance'),
+        transform: placement.transform,
+        printable: found.instance.printable,
+        ...(found.instance.name !== undefined ? { name: found.instance.name } : {}),
+      })),
+    );
+    return { created: plan.placements.length, withheld: plan.withheldSlotCount };
   }
 
   /** Canonical transform of one instance, for read-only surfaces. */

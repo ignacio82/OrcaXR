@@ -4336,6 +4336,45 @@ export class OrcaWorkspace extends xb.Script {
     return [...summary.selectedInstanceIds];
   }
 
+  /** Add one shared instance of the selected model (upstream "Add instance"). */
+  public addInstanceToSelection(): boolean {
+    const duplicate = this.canonicalProject.duplicateSelectedInstance();
+    if (!duplicate) {
+      this.setStatus('Select a model to add another instance.');
+      return false;
+    }
+    this.recomputePreflight();
+    this.setStatus('Added an instance — arrange or move it into place.');
+    return true;
+  }
+
+  /** Fill the plate's free space with copies of the selected instance. */
+  public fillPlateWithSelection(): number {
+    const primary = this.canonicalProject.getSummary().selectedInstanceIds.at(-1);
+    if (!primary) {
+      this.setStatus('Select a model to fill the plate with.');
+      return 0;
+    }
+    try {
+      const result = this.canonicalProject.fillPlateWithInstances(primary, {
+        bedSizeMm: [this.bedMm.x, this.bedMm.y],
+        ...(this.wipeTowerExclusion() ? { exclusions: [this.wipeTowerExclusion() as ArrangeRegion] } : {}),
+      });
+      this.recomputePreflight();
+      this.setStatus(
+        result.created === 0
+          ? 'The plate has no free space for another copy.'
+          : result.withheld > 0
+            ? `Added ${result.created} copies; ${result.withheld} more slots were left free by the copy limit.`
+            : `Filled the plate with ${result.created} more copies.`,
+      );
+      return result.created;
+    } catch (error) {
+      this.setStatus(`Fill bed failed: ${(error as Error).message}`);
+      return 0;
+    }
+  }
+
   /** Mirror the selection across one printer axis (Edit → Mirror). */
   public mirrorSelected(axis: 'x' | 'y' | 'z'): boolean {
     const instances = this.selectedInstanceIdsForTransform();

@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import process from 'node:process';
 
 const PINNED_COMMIT = '9fd12ffb2b1b80c9fb4c14564754d2ec1573a626';
@@ -51,6 +51,18 @@ function assertEqual(actual, expected, description) {
       `${description} mismatch\nexpected: ${JSON.stringify(expected)}\nactual:   ${JSON.stringify(actual)}`,
     );
   }
+}
+
+// Without the pinned developer checkout (CI, clean clones) the generated
+// inventory can still be verified for integrity: it is committed, strictly
+// typed at runtime, and declares the commit it was derived from. Re-deriving it
+// from upstream blobs needs the checkout and is reported as skipped.
+if (!existsSync(join(upstreamRoot, '.git'))) {
+  if (!checkOnly) {
+    throw new Error(`Generating the calibration inventory needs the pinned upstream checkout at ${upstreamRoot}`);
+  }
+  verifyCommittedInventory();
+  process.exit(process.exitCode ?? 0);
 }
 
 const resolvedCommit = git(['rev-parse', '--verify', `${PINNED_COMMIT}^{commit}`]);
@@ -1330,4 +1342,37 @@ if (checkOnly) {
   mkdirSync(resolve(outputPath, '..'), { recursive: true });
   writeFileSync(outputPath, rendered);
   console.log(`Wrote ${outputPath}`);
+}
+
+/** Integrity check for the committed inventory when upstream is unavailable. */
+function verifyCommittedInventory() {
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(outputPath, 'utf8'));
+  } catch (error) {
+    console.error(`Generated calibration inventory is missing or malformed: ${error.message}`);
+    process.exitCode = 1;
+    return;
+  }
+  const problems = [];
+  if (parsed?.schemaVersion !== 1) problems.push('schemaVersion is not 1');
+  if (parsed?.upstream?.commit !== PINNED_COMMIT) {
+    problems.push(`upstream commit is ${parsed?.upstream?.commit} instead of ${PINNED_COMMIT}`);
+  }
+  if (!Array.isArray(parsed?.workflows) || parsed.workflows.length === 0) problems.push('no workflows are present');
+  if (!Array.isArray(parsed?.modes) || parsed.modes.length === 0) problems.push('no calibration modes are present');
+  for (const source of parsed?.sources ?? []) {
+    if (!/^[0-9a-f]{40}$/.test(source?.blob ?? '')) problems.push(`source ${source?.id} has no pinned blob hash`);
+  }
+  if (problems.length > 0) {
+    console.error(
+      `Committed calibration inventory failed verification:\n${problems.map((line) => `  ${line}`).join('\n')}`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+  console.log(
+    `Calibration inventory: ${parsed.workflows.length} workflows and ${parsed.modes.length} modes recorded at ${PINNED_COMMIT} ` +
+      '(upstream re-derivation skipped: no pinned checkout).',
+  );
 }

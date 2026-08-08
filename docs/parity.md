@@ -308,9 +308,9 @@ Local starting seams: [`ActionContext.ts`](../web/src/actions/ActionContext.ts),
   - **Current:** one registry instance and invocation guard is constructed at the composition root
     and injected into every catalogued surface. Empty-state/native-XR load, targeted plate add/
     delete, and tool-close aliases resolve through that same instance; bounded invocation data
-    preserves exact plate, Objects-tree, semantic-edit, settings, and virtual-filament targeting. All 145 actions have exactly one real parity-task owner and
+    preserves exact plate, Objects-tree, semantic-edit, settings, and virtual-filament targeting. All 147 actions have exactly one real parity-task owner and
     containing-phase anchor; metadata-only IDs explicitly provide no behavioral evidence. Current
-    status is 102 partial, 43 unavailable, and zero implemented. Remaining direct contextual controls,
+    status is 104 partial, 43 unavailable, and zero implemented. Remaining direct contextual controls,
     upstream leaf-to-local reachability, and full browser interaction coverage remain open under
     P11.2/P12.
 
@@ -547,9 +547,13 @@ disconnected [`PlacedModels.ts`](../web/src/features/PlacedModels.ts),
     delete, independent duplicate with collision-checked injected IDs, shared instance
     create/delete, precomputed multi-instance placement as one transaction, cross-plate move,
     no-op suppression, selection repair, and byte-exact undo/redo without deleting shared assets.
-    Live DOM object/part rename is registry-routed and browser-tested. Remaining lifecycle UI/action
-    wiring, bed-fill placement, topology operations, asset GC, 3MF/oracle, and official Orca
-    qualification remain open.
+    Live DOM object/part rename is registry-routed and browser-tested. Add Instance and Fill Bed
+    with Instances are live registry actions: the first shares the selected object's parts and
+    paint, the second plans deterministic copies into the plate's remaining free space without
+    moving anything already placed, reports the slots a copy cap withheld, and commits as one
+    undoable transaction; a production browser pass covers both with undo. Remaining lifecycle
+    UI/action wiring (move to plate, merge, reload), topology operations, asset GC, 3MF/oracle, and
+    official Orca qualification remain open.
 
 - [~] **P2.3 — Implement per-object, part, and layer-range filament assignment.** The selector includes
   every physical head and enabled virtual/mixed filament with badge, name, recipe, material,
@@ -1473,7 +1477,10 @@ Local starting seams: [`SlicerClient.ts`](../web/src/slicer/SlicerClient.ts),
     custom tails, role/tool completeness, observation degradation, omission propagation, conflict
     coverage, hostile shapes/caps/arithmetic, tool/profile aggregation, cost units, partial silent
     availability, immutability, and stale/incompatible/forged inputs. The WASM/native and external-
-    server producers still discard or omit this sidecar; canonical route binding, authoritative
+    server producers still discard or omit this sidecar. A WASM entry point for it was reverted
+    because it referenced an engine header that exists only in a developer worktree, was never
+    built into the checked-in artifacts, and therefore broke artifact provenance; landing it
+    requires a committed `wasm/patches` entry, a rebuild, and a provenance update. Canonical route binding, authoritative
     profile-to-tool fingerprints and cost-unit preferences, imported-output support, live plate/all-
     plate UI, official golden tolerances, screenshots, and accessibility review remain open.
 
@@ -2085,7 +2092,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Feature family / required outcome | Primary tasks | 2026-07-30 current audit |
 |---|---:|---|
 | Upstream actions/settings/gizmos/formats/calibrations inventory and drift | P0.1, P12.1 | Exact pinned extractor maps 1,622 leaves/13 families from 17 Git blobs; manual upstream workflow sampling remains |
-| Truthful menu/toolbar/context/shortcut/XR capability state | P0.2, P11.2 | One guarded registry reports 145 actions = 102 partial + 43 unavailable and zero implemented, with unique real task ownership/anchors; full upstream reachability remains |
+| Truthful menu/toolbar/context/shortcut/XR capability state | P0.2, P11.2 | One guarded registry reports 147 actions = 104 partial + 43 unavailable and zero implemented, with unique real task ownership/anchors; full upstream reachability remains |
 | Clean-clone typecheck/test/build/CI and reproducible engine artifacts | P0.3, P12.3 | Aggregate local gate and artifact provenance pass; clean-clone CI/native rebuild qualification remains |
 | Golden 3MF/config/G-code/security fixture oracle | P0.4 | Structural 3MF, semantic G-code, and hostile server fixtures pass; official Snapmaker corpus remains |
 | Shared domain/action/surface boundaries | P0.5, P1.1–P1.2 | Canonical project/history, validated mesh codec, live one-way Three projection, and one injected guarded action registry exist; remaining contextual bypasses and feature commands are tracked explicitly |
@@ -2093,7 +2100,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | BBS 3MF project and generic 3MF round-trip | P1.3 | Deterministic BBS core, lossless envelope, and qualified `p:path` split-model import exist; complete official Orca round-trip remains |
 | Project/plate/object/volume/instance/layer-range model | P1.1, P2.1 | Canonical graph, immutable mesh assets/codec, atomic add/delete commands, live accessible/virtualized DOM tree, and one-way scene projection exist; XR and full edit outcomes remain |
 | Selection set and synchronized scene/Object tree | P1.2, P2.1, P5.1 | Typed canonical plate/object/volume/instance/layer-range multi-selection synchronizes the live DOM tree and Three scene; XR and complete touch/large-project qualification remain |
-| Object/part/instance add, clone, split, merge, move, reload | P2.2 | Canonical lifecycle subset covers rename/delete/duplicate/instances/move, with live object/part rename; remaining lifecycle UI, topology, and oracles are open |
+| Object/part/instance add, clone, split, merge, move, reload | P2.2 | Canonical lifecycle subset plus live Add Instance and deterministic Fill Bed with Instances; move-to-plate UI, merge/reload, topology, and oracles are open |
 | Per-object/per-part/per-height filament selection and inheritance | P2.3, P2.5 | Live guarded selector plus canonical stable-ID assignment/inheritance commands exist; scene/wipe/preview propagation and oracles are missing |
 | Solid/modifier/negative/support-enforcer/blocker volume roles | P2.4 | Guarded live conversion and canonical persistence exist; add-from-source, slice oracles, official qualification, and XR remain |
 | Per-object/part/layer settings | P2.5, P6.5 | Live height-range lifecycle exists; generated scoped setting editing/effects and XR remain |
@@ -2256,6 +2263,7 @@ Evidence: EVID-nnn or Pending
 | `EVID-018` | P5.5, P0.2 | Current worktree atop `20b9052`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `src/project/objects/__tests__/arrange.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no printer | Pass: 6 arrangement traces (deterministic repeat layout with no intersecting footprints inside margins, centred packed block, locked-instance and exclusion clearance, reported non-fitting instances, preserved orientation/scale/Z with an exact transform batch, rejected bed/spacing/exclusion/plate inputs) plus a production browser pass that arranges the imported models through the menu action and undoes the single labelled command; registry reports 137 actions = 93 partial + 44 unavailable | Automated review; rotation-aware nesting, auto-orientation, sequential clearance, and reference placement tolerances pending |
 | `EVID-019` | P7.4–P7.5, P7.7 | Current worktree atop `c03f8b8`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `src/slicer/__tests__/gcode-preview-session.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no headset/printer | Pass: 6 preview-session traces (default full-layer window, move-class filtering, clamped/reversed/single-layer windows, every pinned mode with units and legend codes, explicit unsupported colour-print metadata, published move filters) plus a production browser pass that opens a standalone G-code file, asserts the canonical revision is unchanged, switches to a numeric mode with unit and range, collapses to a single announced layer, and reveals travel moves | Automated review; seams/shells/tool marker, sequential playback, screenshots, XR, official goldens, and the result badge/dirty matrix pending |
 | `EVID-020` | P5.1 | Current worktree atop `c659f5f`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `src/project/objects/__tests__/transform-operations.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no printer | Pass: 6 transform traces (axis-exact reversible mirror with untouched rotation/position, independent rotation and scale resets, shared-delta centring verified against canonical bounds, facet lay-flat that turns the chosen normal down and rests the instance on Z=0 without XY drift, already-down and degenerate-normal handling, deterministic 180° alignment) plus a production browser pass that mirrors and centres through the Edit menu and undoes each command; registry reports 145 actions = 102 partial + 43 unavailable | Automated review; auto-orient, coordinate-space controls, snapping, reference tolerances, and XR pending |
+| `EVID-021` | P2.2, P5.5 | Current worktree atop `d0bd45b`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `src/project/objects/__tests__/arrange.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no printer | Pass: 8 arrangement/bed-fill traces including deterministic free-space fill that never overlaps the source or existing instances, respects the bed margin, keeps the source orientation, and reports withheld slots at the copy cap, plus a production browser pass that adds an instance, undoes it, fills the plate, and undoes that too; registry reports 147 actions = 104 partial + 43 unavailable | Automated review; move-to-plate UI, merge/reload, and official Orca counts pending |
 
 Correction note (2026-07-20): the provisional local-commit cells in `EVID-001`–`EVID-012`
 were filled with the commit that landed those runs. Their historical commands, counts, results,
@@ -2304,6 +2312,7 @@ has no equivalent, add a `BLOCK-*` row rather than calling it done or Not applic
 | 2026-08-07 | Make colour painting a canonical live tool: one UI-independent stroke service, a stable-ID palette shared by DOM and XR, and derived overlays; delete the legacy display-colour paint panel and brush state | A second display-colour paint path could not persist, undo, or slice, and kept the tool honest only by staying disabled; the canonical facet channels already existed | P4.2–P4.4, P0.2 | Painting/registry/shortcut tests and the production browser smoke pass; official round-trip, XR, and hardware evidence pending |
 | 2026-08-08 | Author every facet channel through one live paint tool set, and make the XR rail an explicit finite list instead of "any action with a tool" | Support, seam, and fuzzy-skin painting differ only by channel and assigned state, so a second implementation would duplicate the stroke, history, and overlay contracts; letting new modal tools auto-join the rail would silently break the finite-rail requirement | P4.6–P4.8, P10.5 | Channel traces and the browser support-paint pass; oracles, official round-trip, and headset review pending |
 | 2026-08-08 | Render the live preview from the bounded rich model plus preview projection, and delete the ad-hoc line renderer's role in the viewer | The projection already owns colour, filtering, legends, and explicit metadata gaps; a second renderer would invent colours the source never carried and could not report why a mode is unsupported | P7.3–P7.5, P7.7 | Session traces and the browser standalone-G-code pass; goldens, playback, and XR pending |
+| 2026-08-08 | Let pinned-engine gates verify committed locks/manifests when `third_party/SnapmakerOrca` is absent, and revert the unbuilt WASM statistics entry point | CI and clean clones have no developer checkout, so `profiles:verify`/`calibration:verify` crashed instead of proving anything; separately, a source edit that was never compiled into the published artifacts broke provenance and would have advertised an engine capability the shipped binary lacks | P0.3, P6.3, P7.6, P8.1, P12.3 | Full web gate passes with and without the checkout; `verify:artifacts` passes again |
 | YYYY-MM-DD |  |  |  |  |
 
 ## 21. Verification interface and matrices

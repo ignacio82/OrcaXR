@@ -220,6 +220,42 @@ async function inspectStandaloneGcode(page, fixture) {
   await page.waitForFunction(() => globalThis.window.workspace.getPreviewState().active === false);
 }
 
+/** Add-instance and fill-bed create shared instances in single commands. */
+async function fillPlateWithInstances(page) {
+  const before = await page.evaluate(
+    () => globalThis.window.workspace.getAutomationSnapshot().placedModelsTotalAllPlates,
+  );
+  await clickMenuAction(page, 'add_instance');
+  await page.waitForFunction(
+    (count) => globalThis.window.workspace.getAutomationSnapshot().placedModelsTotalAllPlates === count + 1,
+    {},
+    before,
+  );
+  await clickMenuAction(page, 'edit_undo');
+  await page.waitForFunction(
+    (count) => globalThis.window.workspace.getAutomationSnapshot().placedModelsTotalAllPlates === count,
+    {},
+    before,
+  );
+
+  await clickMenuAction(page, 'fill_bed_with_instances');
+  await page.waitForFunction(
+    (count) => globalThis.window.workspace.getAutomationSnapshot().placedModelsTotalAllPlates > count,
+    {},
+    before,
+  );
+  const filled = await page.evaluate(
+    () => globalThis.window.workspace.getAutomationSnapshot().placedModelsTotalAllPlates,
+  );
+  assert.ok(filled > before + 1, 'filling the bed adds several copies');
+  await clickMenuAction(page, 'edit_undo');
+  await page.waitForFunction(
+    (count) => globalThis.window.workspace.getAutomationSnapshot().placedModelsTotalAllPlates === count,
+    {},
+    before,
+  );
+}
+
 /** Mirror and centre run as canonical commands through the Edit menu. */
 async function transformImportedModels(page) {
   const instance = await page.evaluate(
@@ -614,6 +650,7 @@ try {
 
   await arrangeImportedModels(page);
   await transformImportedModels(page);
+  await fillPlateWithInstances(page);
   await inspectStandaloneGcode(page, gcodeFixturePath);
   await paintImportedModel(page);
 

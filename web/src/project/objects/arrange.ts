@@ -304,3 +304,130 @@ function overlaps(left: ArrangeRegion, right: ArrangeRegion): boolean {
     right.minY < left.maxY - MIN_FOOTPRINT_MM
   );
 }
+
+export interface BedFillRequest {
+  /** Instance whose footprint and orientation every copy reuses. */
+  readonly instanceId: InstanceId;
+  /** Hard ceiling on new copies, so a large bed cannot explode the project. */
+  readonly maxNewInstances?: number;
+}
+
+export interface BedFillPlacement {
+  readonly transform: Transform;
+  readonly footprint: ArrangeRegion;
+}
+
+export interface BedFillResult {
+  readonly plateId: PlateId;
+  readonly sourceInstanceId: InstanceId;
+  readonly placements: readonly BedFillPlacement[];
+  /** Free slots the cap withheld, so a caller can explain the limit. */
+  readonly withheldSlotCount: number;
+}
+
+export const DEFAULT_BED_FILL_LIMIT = 64;
+
+/**
+ * Plan "fill bed with instances": copies of one instance are laid into the
+ * free space left by everything already on the plate, in a deterministic
+ * row-major order, without moving any existing instance.
+ */
+export function planBedFill(
+  state: ProjectState,
+  assets: AssetRepository,
+  plateId: PlateId,
+  request: BedFillRequest,
+  constraints: ArrangeConstraints,
+): BedFillResult {
+  const plate = state.plates.find((candidate) => candidate.id === plateId);
+  if (!plate) throw new ArrangeConstraintError(`Unknown plate ${plateId}`, 'unknown-plate');
+  const [bedX, bedY] = constraints.bedSizeMm;
+  if (!Number.isFinite(bedX) || !Number.isFinite(bedY) || bedX <= 0 || bedY <= 0) {
+    throw new ArrangeConstraintError('Bed fill needs a positive printable area', 'invalid-bed');
+  }
+  const spacing = constraints.spacingMm ?? DEFAULT_ARRANGE_SPACING_MM;
+  const margin = constraints.bedMarginMm ?? DEFAULT_ARRANGE_BED_MARGIN_MM;
+  if (!Number.isFinite(spacing) || spacing < 0 || !Number.isFinite(margin) || margin < 0) {
+    throw new ArrangeConstraintError('Bed fill spacing and margin must be non-negative', 'invalid-spacing');
+  }
+  const limit = request.maxNewInstances ?? DEFAULT_BED_FILL_LIMIT;
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new ArrangeConstraintError('The bed-fill limit must be a positive integer', 'invalid-spacing');
+  }
+
+  const roles = constraints.volumeRoles ?? PRINTABLE_ROLES;
+  const source = findInstanceTransform(state, request.instanceId);
+  if (!source) throw new ArrangeConstraintError(`Unknown instance ${request.instanceId}`, 'unknown-plate');
+  const sourceBounds = computeCanonicalInstanceBounds(state, assets, [request.instanceId], { volumeRoles: roles });
+  const width = sourceBounds.max[0] - sourceBounds.min[0];
+  const depth = sourceBounds.max[1] - sourceBounds.min[1];
+  if (!(width > MIN_FOOTPRINT_MM) || !(depth > MIN_FOOTPRINT_MM)) {
+    return Object.freeze({
+      plateId,
+      sourceInstanceId: request.instanceId,
+      placements: Object.freeze([]),
+      withheldSlotCount: 0,
+    });
+  }
+
+  const reserved: ArrangeRegion[] = [...(constraints.exclusions ?? []).map((region) => ({ ...region }))];
+  for (const object of plate.objects) {
+    for (const instance of object.instances) {
+      try {
+        const bounds = computeCanonicalInstanceBounds(state, assets, [instance.id], { volumeRoles: roles });
+        reserved.push(
+          inflate({ minX: bounds.min[0], minY: bounds.min[1], maxX: bounds.max[0], maxY: bounds.max[1] }, spacing / 2),
+        );
+      } catch {
+        // An unreadable instance reserves nothing; the caller already blocks slicing.
+      }
+    }
+  }
+
+  const usable: ArrangeRegion = { minX: margin, minY: margin, maxX: bedX - margin, maxY: bedY - margin };
+  const placements: BedFillPlacement[] = [];
+  let withheld = 0;
+  for (let y = usable.minY; y + depth <= usable.maxY + MIN_FOOTPRINT_MM; y += depth + spacing) {
+    for (let x = usable.minX; x + width <= usable.maxX + MIN_FOOTPRINT_MM; x += width + spacing) {
+      const slot: ArrangeRegion = { minX: x, minY: y, maxX: x + width, maxY: y + depth };
+      if (reserved.some((region) => overlaps(region, inflate(slot, spacing / 2)))) continue;
+      if (placements.length >= limit) {
+        withheld += 1;
+        continue;
+      }
+      reserved.push(inflate(slot, spacing / 2));
+      placements.push(
+        Object.freeze({
+          transform: Object.freeze({
+            translationMm: Object.freeze([
+              source.translationMm[0] + (slot.minX - sourceBounds.min[0]),
+              source.translationMm[1] + (slot.minY - sourceBounds.min[1]),
+              source.translationMm[2],
+            ]) as unknown as Transform['translationMm'],
+            rotation: Object.freeze([...source.rotation]) as unknown as Transform['rotation'],
+            scale: Object.freeze([...source.scale]) as unknown as Transform['scale'],
+          }),
+          footprint: Object.freeze(slot),
+        }),
+      );
+    }
+  }
+
+  return Object.freeze({
+    plateId,
+    sourceInstanceId: request.instanceId,
+    placements: Object.freeze(placements),
+    withheldSlotCount: withheld,
+  });
+}
+
+function findInstanceTransform(state: ProjectState, instanceId: InstanceId): Transform | undefined {
+  for (const plate of state.plates) {
+    for (const object of plate.objects) {
+      for (const instance of object.instances) {
+        if (instance.id === instanceId) return instance.transform;
+      }
+    }
+  }
+  return undefined;
+}

@@ -10,7 +10,7 @@ import {
   type Transform,
 } from '../../domain/model';
 import { encodeIndexedMeshAsset } from '../../meshCodec';
-import { ArrangeConstraintError, arrangementTransformChanges, planPlateArrangement } from '../arrange';
+import { ArrangeConstraintError, arrangementTransformChanges, planBedFill, planPlateArrangement } from '../arrange';
 
 let passed = 0;
 function test(name: string, run: () => void): void {
@@ -198,6 +198,51 @@ test('rejects invalid beds, spacing, and exclusion rectangles', () => {
   assert.throws(
     () => planPlateArrangement(state, assets, entityId<'plate'>('import:test:missing'), { bedSizeMm: BED }),
     (error: unknown) => error instanceof ArrangeConstraintError && error.code === 'unknown-plate',
+  );
+});
+
+test('fills the free bed space with copies without moving what is already placed', () => {
+  const { state, assets, plateId, instanceIds } = createProject([{ size: 40, at: [4, 4] }]);
+  const fill = planBedFill(state, assets, plateId, { instanceId: instanceIds[0] }, { bedSizeMm: BED });
+  assert.ok(fill.placements.length >= 8, 'a 200 mm bed fits several 40 mm copies');
+  assert.equal(fill.sourceInstanceId, instanceIds[0]);
+
+  const occupied = [{ minX: 4, minY: 4, maxX: 44, maxY: 44 }, ...fill.placements.map((p) => p.footprint)];
+  for (let left = 0; left < occupied.length; left += 1) {
+    for (let right = left + 1; right < occupied.length; right += 1) {
+      const a = occupied[left];
+      const b = occupied[right];
+      assert.ok(
+        a.maxX <= b.minX || b.maxX <= a.minX || a.maxY <= b.minY || b.maxY <= a.minY,
+        'no copy overlaps the source or another copy',
+      );
+    }
+  }
+  for (const placement of fill.placements) {
+    assert.ok(placement.footprint.minX >= 2 && placement.footprint.maxX <= 198);
+    assert.deepEqual(placement.transform.rotation, [0, 0, 0, 1], 'copies keep the source orientation');
+  }
+  assert.deepEqual(
+    planBedFill(state, assets, plateId, { instanceId: instanceIds[0] }, { bedSizeMm: BED }),
+    fill,
+    'the plan is deterministic',
+  );
+});
+
+test('respects the copy limit and reports withheld slots', () => {
+  const { state, assets, plateId, instanceIds } = createProject([{ size: 20, at: [4, 4] }]);
+  const capped = planBedFill(
+    state,
+    assets,
+    plateId,
+    { instanceId: instanceIds[0], maxNewInstances: 3 },
+    { bedSizeMm: BED },
+  );
+  assert.equal(capped.placements.length, 3);
+  assert.ok(capped.withheldSlotCount > 0, 'the remaining free slots are reported, not silently dropped');
+  assert.throws(
+    () => planBedFill(state, assets, plateId, { instanceId: instanceIds[0], maxNewInstances: 0 }, { bedSizeMm: BED }),
+    (error: unknown) => error instanceof ArrangeConstraintError,
   );
 });
 

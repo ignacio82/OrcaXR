@@ -239,6 +239,15 @@ export class ActionContext {
     this.workspace.cutSelectedByPlane();
   }
 
+  // ---- Instances ------------------------------------------------------
+  addInstance(): void {
+    this.workspace.addInstanceToSelection();
+  }
+
+  fillBedWithInstances(): void {
+    this.workspace.fillPlateWithSelection();
+  }
+
   // ---- Transforms -----------------------------------------------------
   mirrorSelected(axis: 'x' | 'y' | 'z'): void {
     this.workspace.mirrorSelected(axis);
