@@ -20,6 +20,7 @@ import {
   type SliceJobStatus,
 } from '../project/slicing';
 import type { ProjectSettingsOverrideGuard, ProjectSettingsOverrideSnapshot } from '../project/settingsOverrides';
+import type { ArrangeRegion } from '../project/objects/arrange';
 import { CURRENT_THREE_WORLD_UNITS_PER_MM, getThreeProjectEntity } from '../project/surfaces/ThreeProjectSurface';
 import {
   DEFAULT_CHANNEL_VALUE,
@@ -4721,8 +4722,50 @@ export class OrcaWorkspace extends xb.Script {
     return true;
   }
 
-  public arrangePlate() {
-    this.setStatus('Arrange is unavailable until placement commits as one canonical transaction.');
+  /**
+   * Arrange the active plate's printable instances in one canonical command.
+   * The wipe tower, when the project places one, is an exclusion zone so a
+   * rearranged plate never collides with it.
+   */
+  public arrangePlate(): number {
+    const summary = this.canonicalProject.getSummary();
+    const plate = summary.plates.find((candidate) => candidate.active);
+    if (!plate || plate.instanceCount === 0) {
+      this.setStatus('Add a model before arranging the plate.');
+      return 0;
+    }
+    try {
+      const result = this.canonicalProject.arrangePlate(this.activePlateId, {
+        bedSizeMm: [this.bedMm.x, this.bedMm.y],
+        ...(this.wipeTowerExclusion() ? { exclusions: [this.wipeTowerExclusion() as ArrangeRegion] } : {}),
+      });
+      const moved = result.placements.length;
+      const unplaced = result.unplacedInstanceIds.length;
+      this.recomputePreflight();
+      this.setStatus(
+        unplaced > 0
+          ? `Arranged ${moved} model(s); ${unplaced} did not fit on this plate.`
+          : moved > 0
+            ? `Arranged ${moved} model(s).`
+            : 'The plate is already arranged.',
+      );
+      return moved;
+    } catch (error) {
+      this.setStatus(`Arrange failed: ${(error as Error).message}`);
+      return 0;
+    }
+  }
+
+  /** Footprint the project's prime/purge tower reserves, when it has one. */
+  private wipeTowerExclusion(): ArrangeRegion | undefined {
+    const tower = this.projectPrimeTower;
+    if (!tower?.enabled) return undefined;
+    return {
+      minX: tower.xMm,
+      minY: tower.yMm,
+      maxX: tower.xMm + tower.widthMm,
+      maxY: tower.yMm + tower.widthMm,
+    };
   }
 
   public exportPlateStl() {

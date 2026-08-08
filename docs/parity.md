@@ -310,7 +310,7 @@ Local starting seams: [`ActionContext.ts`](../web/src/actions/ActionContext.ts),
     delete, and tool-close aliases resolve through that same instance; bounded invocation data
     preserves exact plate, Objects-tree, semantic-edit, settings, and virtual-filament targeting. All 137 actions have exactly one real parity-task owner and
     containing-phase anchor; metadata-only IDs explicitly provide no behavioral evidence. Current
-    status is 92 partial, 45 unavailable, and zero implemented. Remaining direct contextual controls,
+    status is 93 partial, 44 unavailable, and zero implemented. Remaining direct contextual controls,
     upstream leaf-to-local reachability, and full browser interaction coverage remain open under
     P11.2/P12.
 
@@ -1081,9 +1081,18 @@ Local starting seams: [`MeshCut.ts`](../web/src/features/MeshCut.ts),
   wipe-tower placement use printer/profile constraints and deterministic seeds where possible.
   - **Accept:** fixture bounds never intersect forbidden zones; locked entities do not move;
     comparison screenshots and numeric placements meet recorded tolerances.
-  - **Current:** per-vertex bed collision and overflow detection (`BedCollision.ts`) with axis overflow
-    banners exist; wipe-tower 8-candidate Chebyshev clearance optimization (`WipeTowerPlacement.ts`) is
-    implemented and unit tested. Automatic arrangement seeds and sequential clearance visualization remain open.
+  - **Current:** auto-arrange is a canonical command: a deterministic shelf planner reads immutable
+    asset bytes and canonical transforms, sorts by footprint so one project always yields one
+    layout, keeps the bed margin, inter-object spacing, every declared exclusion (including the
+    project's prime tower) and every locked or non-printable instance clear, centres the packed
+    block when nothing else reserves space, preserves each instance's orientation, scale, and Z,
+    reports instances that do not fit instead of stacking or pushing them off the bed, and commits
+    one reversible transform batch; the live menu action and a production browser pass exercise it
+    with undo. Per-vertex bed collision and overflow detection (`BedCollision.ts`) with axis
+    overflow banners exist; wipe-tower 8-candidate Chebyshev clearance optimization
+    (`WipeTowerPlacement.ts`) is implemented and unit tested. Rotation-aware nesting, automatic
+    orientation, sequential-print clearance, top-cover constraints, and reference placement
+    tolerances remain open.
 
 - [~] **P5.6 — Implement authoritative import filters and behavior.** From the generated P0
   manifest support project/model 3MF, STL, STEP/STP, SVG, OBJ, AMF, and ZIP/archive paths exposed
@@ -2059,7 +2068,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Feature family / required outcome | Primary tasks | 2026-07-30 current audit |
 |---|---:|---|
 | Upstream actions/settings/gizmos/formats/calibrations inventory and drift | P0.1, P12.1 | Exact pinned extractor maps 1,622 leaves/13 families from 17 Git blobs; manual upstream workflow sampling remains |
-| Truthful menu/toolbar/context/shortcut/XR capability state | P0.2, P11.2 | One guarded registry reports 137 actions = 92 partial + 45 unavailable and zero implemented, with unique real task ownership/anchors; full upstream reachability remains |
+| Truthful menu/toolbar/context/shortcut/XR capability state | P0.2, P11.2 | One guarded registry reports 137 actions = 93 partial + 44 unavailable and zero implemented, with unique real task ownership/anchors; full upstream reachability remains |
 | Clean-clone typecheck/test/build/CI and reproducible engine artifacts | P0.3, P12.3 | Aggregate local gate and artifact provenance pass; clean-clone CI/native rebuild qualification remains |
 | Golden 3MF/config/G-code/security fixture oracle | P0.4 | Structural 3MF, semantic G-code, and hostile server fixtures pass; official Snapmaker corpus remains |
 | Shared domain/action/surface boundaries | P0.5, P1.1–P1.2 | Canonical project/history, validated mesh codec, live one-way Three projection, and one injected guarded action registry exist; remaining contextual bypasses and feature commands are tracked explicitly |
@@ -2091,7 +2100,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Cut/split/Boolean/repair/simplify | P5.2 | Guarded immutable topology replacement, pinned shared-edge split-to-parts, and a live explicitly confirmed, stale-guarded, atomic single-/multi-volume split-to-objects path preserve assets, placement, config, and unchanged-topology annotations while blocking lossy or over-cap synchronous cases; worker progress/cancel and cut/Boolean/repair/simplify algorithms/oracles remain gated |
 | Measure/assembly/emboss/SVG/simplify/brim gizmos | P5.3 | Mostly placeholders or disconnected code |
 | Multi-plate lifecycle, settings, lock/reorder/current/all slice | P5.4 | Live guarded add/activate/rename/duplicate/delete/reorder/printable management exists; locks/settings/move-copy/slice-all remain |
-| Collision-aware arrangement/orientation/wipe tower | P5.5 | Partial helpers; parity unverified |
+| Collision-aware arrangement/orientation/wipe tower | P5.5 | Deterministic canonical auto-arrange honours margins, spacing, exclusions, locked instances, and prime tower, commits one reversible batch, and is browser-verified; rotation-aware nesting, auto-orientation, and sequential clearance remain |
 | Import 3MF/STL/STEP/SVG/OBJ/AMF/ZIP as appropriate | P5.6 | Signature-first dispatch decodes STL/OBJ/AMF/compressed-AMF/ZIP into canonical objects, parts, units, materials, and instances through the transactional import coordinator, and fails closed with typed reasons for 3MF/STEP/SVG/G-code and hostile inputs; STEP/SVG decoding, URL/handy sources, drag-drop, and official corpora remain |
 | Export project/core/sliced 3MF, STL variants, G-code, OBJ, bundles/logs | P5.7 | Canonical project/G-code download and deterministic selected-or-plate binary STL exist; remaining variants/viewers/destinations/oracles are open |
 | Primitives, text/SVG, handy/URL model sources | P5.8 | Primitives/catalog partial |
@@ -2227,6 +2236,7 @@ Evidence: EVID-nnn or Pending
 | `EVID-015` | P0.2, P1.4, P5.6 | Current worktree atop `5ff753d`; commit pending | `9fd12ff...` | 2026-08-07 | `npm --prefix web run quality`; `model-formats.test.ts`; `ModelImportParser.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no printer | Pass: 20 format-decode traces (STL binary/ASCII, OBJ+MTL, AMF units/materials/modifiers/constellations, compressed AMF, ZIP atomicity, renamed-archive/STEP/SVG/G-code/empty/noise/truncated/limit rejections) and 6 staging traces (single-command commit with exact undo/redo, bed placement, OBJ part structure, AMF unit conversion, archive dedup/renaming, untouched project on failure); registry now reports 126 actions = 77 partial + 49 unavailable | Automated review; official Orca import-corpus comparison, drag/drop, and STEP/SVG routes pending |
 | `EVID-016` | P4.2–P4.4, P10.2 | Current worktree atop `2f1423a`; commit pending | `9fd12ff...` | 2026-08-07 | `npm --prefix web run quality`; `src/project/painting/__tests__/painting.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no headset/printer | Pass: 10 painting traces (palette projection/engine slots/unavailable reasons, stable-ID strokes with exact undo/redo, mixed-recipe painting without flattening, erase and erase-all, swept brush and no-op suppression, rejected targets/filaments/hits, modifier refusal, cancellation, canonical save/reopen identity) plus a production browser pass that activates the paint tool, selects a swatch and tool, paints with a real pointer gesture, and undoes/redoes the labelled command; registry now reports 137 actions = 89 partial + 48 unavailable | Automated review; official Orca colour round-trip, segmentation/G-code oracles, touch/XR, and manual accessibility review pending |
 | `EVID-017` | P4.6–P4.8, P10.5 | Current worktree atop `563fbf8`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `src/project/painting/__tests__/painting.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no headset/printer | Pass: 12 painting traces including independent support/seam/fuzzy-skin channels, per-channel erase, per-stroke history, and rejection of a state that does not belong to its channel; the production browser pass now also switches to the support channel, paints `block` with a real pointer gesture, checks the labelled command, and undoes it; the XR rail stays finite at seven while the three new modal tools live in Tools overflow; registry reports 137 actions = 92 partial + 45 unavailable | Automated review; generated-support/seam/perimeter oracles, official round-trip, dome fuzzy fixture, brim ears, and XR input pending |
+| `EVID-018` | P5.5, P0.2 | Current worktree atop `20b9052`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `src/project/objects/__tests__/arrange.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no printer | Pass: 6 arrangement traces (deterministic repeat layout with no intersecting footprints inside margins, centred packed block, locked-instance and exclusion clearance, reported non-fitting instances, preserved orientation/scale/Z with an exact transform batch, rejected bed/spacing/exclusion/plate inputs) plus a production browser pass that arranges the imported models through the menu action and undoes the single labelled command; registry reports 137 actions = 93 partial + 44 unavailable | Automated review; rotation-aware nesting, auto-orientation, sequential clearance, and reference placement tolerances pending |
 
 Correction note (2026-07-20): the provisional local-commit cells in `EVID-001`–`EVID-012`
 were filled with the commit that landed those runs. Their historical commands, counts, results,

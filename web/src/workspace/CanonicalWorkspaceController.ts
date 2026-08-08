@@ -99,6 +99,12 @@ import { computeCanonicalInstanceBounds, type CanonicalBounds3 } from '../projec
 import { exportCanonicalInstancesAsBinaryStl } from '../project/objects/stlExport';
 import { SetInstanceTransformsCommand, type InstanceTransformChange } from '../project/objects/transformCommands';
 import {
+  arrangementTransformChanges,
+  planPlateArrangement,
+  type ArrangeConstraints,
+  type ArrangeResult,
+} from '../project/objects/arrange';
+import {
   AddLayerRangeCommand,
   DeleteLayerRangeCommand,
   EditLayerRangeBoundsCommand,
@@ -1998,6 +2004,20 @@ export class CanonicalWorkspaceController {
     }
     this.setInstanceTransforms(changes);
     return Object.freeze({ instances: Object.freeze(results) });
+  }
+
+  /**
+   * Arrange one plate's printable instances as a single reversible command.
+   * Placement comes from canonical bounds, so locked instances, exclusion
+   * zones, and the printable area are honoured without reading the scene.
+   */
+  arrangePlate(plateId: PlateId, constraints: ArrangeConstraints): ArrangeResult {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    const result = planPlateArrangement(state, this.assets, plateId, constraints);
+    const changes = arrangementTransformChanges(result);
+    if (changes.length > 0) this.setInstanceTransforms(changes, `arrange:${plateId}`);
+    return result;
   }
 
   undo(): boolean {

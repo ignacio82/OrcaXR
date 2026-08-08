@@ -1,3 +1,4 @@
+export * from './arrange';
 export * from './bounds';
 export * from './commands';
 export * from './interaction';

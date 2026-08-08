@@ -288,8 +288,6 @@ const CANONICAL_CUTOVER_GATED_REASONS = {
     'Mesh subtraction is disabled until topology-changing booleans preserve canonical metadata and commit atomically.',
   mesh_boolean_intersection:
     'Mesh intersection is disabled until topology-changing booleans preserve canonical metadata and commit atomically.',
-  arrange_all:
-    'Auto-arrange is disabled until placements are computed from canonical assets and committed as one reversible transaction.',
   tool_cut:
     'Plane cutting is disabled until canonical topology, annotations, assets, and stable IDs can be replaced atomically.',
   tool_smart_paint:

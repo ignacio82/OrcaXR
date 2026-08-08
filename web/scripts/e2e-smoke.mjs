@@ -120,6 +120,34 @@ async function writeObjFixture(directory) {
   return path;
 }
 
+/** Auto-arrange is one canonical command over the real menu action. */
+async function arrangeImportedModels(page) {
+  const before = await page.evaluate(() =>
+    [...globalThis.window.workspace.getObjectsTreeSnapshot().projection.rowsByKey.values()]
+      .filter((row) => row.kind === 'instance' && row.entity?.kind === 'instance')
+      .map((row) => row.entity.id),
+  );
+  assert.ok(before.length >= 2, 'the arrange fixture needs at least two instances');
+  const undoBefore = await page.evaluate(() => globalThis.window.workspace.getCanonicalSummary().history.undoCount);
+  await clickMenuAction(page, 'arrange_all');
+  await page.waitForFunction(
+    (count) => globalThis.window.workspace.getCanonicalSummary().history.undoCount === count + 1,
+    {},
+    undoBefore,
+  );
+  assert.match(
+    (await page.evaluate(() => globalThis.window.workspace.getCanonicalSummary().history.undoLabel)) ?? '',
+    /transform/i,
+    'arrangement commits one labelled transform command',
+  );
+  await clickMenuAction(page, 'edit_undo');
+  await page.waitForFunction(
+    (count) => globalThis.window.workspace.getCanonicalSummary().history.undoCount === count,
+    {},
+    undoBefore,
+  );
+}
+
 /** Sweep the canvas until a real pointer gesture lands on the model. */
 async function paintAtFirstHit(page) {
   const canvas = await page.$('canvas');
@@ -458,6 +486,7 @@ try {
   assert.equal(importedModels.objectCount, 2, 'both OBJ objects became canonical objects');
   assert.equal(importedModels.placed, 2, 'both OBJ objects are placed on the active plate');
 
+  await arrangeImportedModels(page);
   await paintImportedModel(page);
 
   await page.evaluate(() => globalThis.window.workspace.undo?.());
