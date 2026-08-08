@@ -6,6 +6,12 @@
  */
 import * as THREE from 'three';
 
+import {
+  GCODE_RENDER_HARD_CAPS,
+  countGcodeRecordPathSegments,
+  validateGcodePathSidecar,
+  visitGcodeRecordPathSegments,
+} from './GcodePathSegments';
 import { GCODE_RECORD_KIND, parseRichGcodeModel } from './RichGcodeModel';
 
 /** OrcaSlicer-ish feature colors. */
@@ -28,9 +34,6 @@ const TYPE_COLORS: Record<string, number> = {
 };
 const DEFAULT_COLOR = 0x66d9ef;
 
-/** Hard cap so a pathological G-code can't OOM the tab. */
-const MAX_SEGMENTS = 1_500_000;
-
 export interface Toolpath {
   /** One LineSegments-ready geometry (positions in printer mm, Z-up). */
   geometry: THREE.BufferGeometry;
@@ -39,16 +42,27 @@ export interface Toolpath {
 }
 
 export function parseGcodeToolpath(gcode: string, filamentColors?: string[]): Toolpath {
-  const positions: number[] = [];
-  const colors: number[] = [];
-  const color = new THREE.Color();
   const model = parseRichGcodeModel(gcode, { filamentColors });
+  validateGcodePathSidecar(model);
   const columns = model.columns;
+  let segments = 0;
+  for (let index = 0; index < columns.count; index += 1) {
+    if (columns.kind[index] !== GCODE_RECORD_KIND.EXTRUDE) continue;
+    const recordSegments = countGcodeRecordPathSegments(model, index);
+    if (recordSegments > GCODE_RENDER_HARD_CAPS.segments - segments) {
+      throw new Error(`G-code toolpath requires more than ${GCODE_RENDER_HARD_CAPS.segments} rendered segments`);
+    }
+    segments += recordSegments;
+  }
+
+  const positions = new Float32Array(segments * 6);
+  const colors = new Float32Array(segments * 6);
+  const color = new THREE.Color();
   let currentFilamentColor =
     filamentColors && filamentColors.length > 0 ? new THREE.Color(filamentColors[0]).getHex() : DEFAULT_COLOR;
-  let segments = 0;
+  let output = 0;
 
-  for (let index = 0; index < columns.count && segments < MAX_SEGMENTS; index += 1) {
+  for (let index = 0; index < columns.count; index += 1) {
     const kind = columns.kind[index];
     if (kind === GCODE_RECORD_KIND.TOOL_CHANGE && filamentColors && filamentColors.length > 0) {
       const tool = columns.tool[index];
@@ -57,14 +71,6 @@ export function parseGcodeToolpath(gcode: string, filamentColors?: string[]): To
     }
     if (kind !== GCODE_RECORD_KIND.EXTRUDE) continue;
 
-    positions.push(
-      columns.startX[index],
-      columns.startY[index],
-      columns.startZ[index],
-      columns.endX[index],
-      columns.endY[index],
-      columns.endZ[index],
-    );
     const currentType = model.roles[columns.role[index]] ?? 'Undefined';
     const currentColor =
       currentType === 'Support' || currentType === 'Support interface'
@@ -73,12 +79,29 @@ export function parseGcodeToolpath(gcode: string, filamentColors?: string[]): To
           ? (TYPE_COLORS[currentType] ?? DEFAULT_COLOR)
           : currentFilamentColor;
     color.setHex(currentColor);
-    colors.push(color.r, color.g, color.b, color.r, color.g, color.b);
-    segments += 1;
+    visitGcodeRecordPathSegments(model, index, (startX, startY, startZ, endX, endY, endZ) => {
+      const vertex = output * 6;
+      positions[vertex] = startX;
+      positions[vertex + 1] = startY;
+      positions[vertex + 2] = startZ;
+      positions[vertex + 3] = endX;
+      positions[vertex + 4] = endY;
+      positions[vertex + 5] = endZ;
+      colors[vertex] = color.r;
+      colors[vertex + 1] = color.g;
+      colors[vertex + 2] = color.b;
+      colors[vertex + 3] = color.r;
+      colors[vertex + 4] = color.g;
+      colors[vertex + 5] = color.b;
+      output += 1;
+    });
+  }
+  if (output !== segments) {
+    throw new Error('G-code path sidecar changed while constructing legacy geometry');
   }
 
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   return { geometry, layerCount: model.layerCount, segmentCount: segments };
 }

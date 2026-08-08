@@ -6,6 +6,7 @@ import {
   type RichGcodeModel,
   type RichGcodeParseOptions,
 } from './RichGcodeModel';
+import { validateGcodePathSidecar } from './GcodePathSegments';
 import { sha256Utf8 } from './Utf8Sha256';
 
 const VERIFIED_RICH_GCODE_SOURCE = Symbol('verified-rich-gcode-statistics-source');
@@ -656,6 +657,7 @@ function validateModel(model: RichGcodeModel): void {
     model,
     [
       'columns',
+      'pathPoints',
       'roles',
       'filaments',
       'layerCount',
@@ -698,6 +700,11 @@ function validateModel(model: RichGcodeModel): void {
       'sourceStartOffset',
       'sourceEndOffset',
       'commandLineNumber',
+      'pathKind',
+      'pathPointOffset',
+      'pathPointCount',
+      'arcCenterX',
+      'arcCenterY',
     ],
     'rich G-code columns',
     invalidModel,
@@ -707,6 +714,7 @@ function validateModel(model: RichGcodeModel): void {
   if (!hasExactTypedArrayLength(columns.kind, Uint8Array, count)) {
     invalidModel();
   }
+  if (!hasExactTypedArrayLength(columns.pathKind, Uint8Array, count)) invalidModel();
   const floatColumnNames = [
     'startX',
     'startY',
@@ -722,6 +730,8 @@ function validateModel(model: RichGcodeModel): void {
     'volumetricFlowMm3PerSecond',
     'fanPercent',
     'hotendTemperatureC',
+    'arcCenterX',
+    'arcCenterY',
   ] as const;
   for (const name of floatColumnNames) {
     const column = columns[name];
@@ -729,7 +739,14 @@ function validateModel(model: RichGcodeModel): void {
       invalidModel();
     }
   }
-  for (const name of ['layer', 'sourceLine', 'sourceStartOffset', 'sourceEndOffset'] as const) {
+  for (const name of [
+    'layer',
+    'sourceLine',
+    'sourceStartOffset',
+    'sourceEndOffset',
+    'pathPointOffset',
+    'pathPointCount',
+  ] as const) {
     const column = columns[name];
     if (!hasExactTypedArrayLength(column, Uint32Array, count)) {
       invalidModel();
@@ -742,6 +759,18 @@ function validateModel(model: RichGcodeModel): void {
     }
   }
   if (!hasExactTypedArrayLength(columns.commandLineNumber, Int32Array, count)) {
+    invalidModel();
+  }
+  if (!isObject(model.pathPoints)) invalidModel();
+  validateExactObjectKeys(model.pathPoints, ['count', 'x', 'y', 'z'], 'rich G-code path points', invalidModel);
+  if (
+    !Number.isSafeInteger(model.pathPoints.count) ||
+    model.pathPoints.count < 0 ||
+    model.pathPoints.count > RICH_GCODE_HARD_CAPS.pathPoints ||
+    !hasExactTypedArrayLength(model.pathPoints.x, Float32Array, model.pathPoints.count) ||
+    !hasExactTypedArrayLength(model.pathPoints.y, Float32Array, model.pathPoints.count) ||
+    !hasExactTypedArrayLength(model.pathPoints.z, Float32Array, model.pathPoints.count)
+  ) {
     invalidModel();
   }
   for (let index = 0; index < count; index += 1) {
@@ -764,7 +793,7 @@ function validateModel(model: RichGcodeModel): void {
     typeof model.complete !== 'boolean' ||
     (model.complete && model.terminationReason !== undefined) ||
     (!model.complete &&
-      !['input-cap', 'line-cap', 'record-cap', 'unsupported-arc'].includes(model.terminationReason ?? ''))
+      !['input-cap', 'line-cap', 'record-cap', 'path-point-cap', 'numeric-cap'].includes(model.terminationReason ?? ''))
   ) {
     invalidModel();
   }
@@ -798,6 +827,7 @@ function validateModel(model: RichGcodeModel): void {
     'inputCharacters',
     'lines',
     'records',
+    'pathPoints',
     'warnings',
     'lineCharacters',
     'roles',
@@ -810,12 +840,18 @@ function validateModel(model: RichGcodeModel): void {
   }
   if (
     count > model.limits.records ||
+    model.pathPoints.count > model.limits.pathPoints ||
     model.parsedCharacters > model.limits.inputCharacters ||
     model.parsedLines > model.limits.lines ||
     model.roles.length > model.limits.roles ||
     model.filaments.length > model.limits.filaments ||
     (model.complete && model.parsedCharacters !== model.sourceLength)
   ) {
+    invalidModel();
+  }
+  try {
+    validateGcodePathSidecar(model);
+  } catch {
     invalidModel();
   }
   validateDenseArray(model.warnings, 'rich G-code warnings', RICH_GCODE_HARD_CAPS.warnings, 0, invalidModel);

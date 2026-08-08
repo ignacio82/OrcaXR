@@ -136,9 +136,14 @@ export class GcodePreviewPanel {
     status.style.cssText = 'margin:0;opacity:0.75;';
     status.textContent = state.active
       ? `Showing ${state.source?.name ?? 'sliced G-code'}${state.layerLabel ? ` — ${state.layerLabel}` : ''}`
-      : 'Slice the plate or open a G-code file to inspect toolpaths.';
+      : state.source && state.unsupportedReason
+        ? `Preview unavailable for ${state.source.name}. Adjust the controls below or open another G-code file.`
+        : 'Slice the plate or open a G-code file to inspect toolpaths.';
     root.append(status);
-    if (!state.active || !state.view || !state.layerBounds) return;
+    // A failed renderer keeps the bounded session so the operator can narrow
+    // layers/move classes or choose another mode. Explicitly closing preview
+    // removes the session and therefore still hides these controls.
+    if (!state.view || !state.layerBounds) return;
 
     root.append(this.renderModes(state));
     root.append(this.renderLayerControls(state));

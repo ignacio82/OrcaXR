@@ -5,6 +5,7 @@ import {
   type GcodeRecordKind,
   type RichGcodeModel,
 } from './RichGcodeModel';
+import { validateGcodePathSidecar, visitGcodeRecordPathSegments } from './GcodePathSegments';
 
 export const GCODE_INSPECTION_HARD_CAPS = Object.freeze({
   ticks: 100_000,
@@ -176,6 +177,8 @@ for (const kind of [
 }
 
 const GEOMETRIC_KIND = new Uint8Array(GCODE_RECORD_KIND_NAMES.length);
+GEOMETRIC_KIND[GCODE_RECORD_KIND.RETRACT] = 1;
+GEOMETRIC_KIND[GCODE_RECORD_KIND.UNRETRACT] = 1;
 GEOMETRIC_KIND[GCODE_RECORD_KIND.TRAVEL] = 1;
 GEOMETRIC_KIND[GCODE_RECORD_KIND.WIPE] = 1;
 GEOMETRIC_KIND[GCODE_RECORD_KIND.EXTRUDE] = 1;
@@ -350,6 +353,11 @@ function validateModel(model: RichGcodeModel): void {
     ) {
       invalidModel(`Record ${index} has an invalid source location`);
     }
+  }
+  try {
+    validateGcodePathSidecar(model);
+  } catch (error) {
+    invalidModel(error instanceof Error ? error.message : 'Rich G-code path sidecar is malformed');
   }
 }
 
@@ -695,18 +703,24 @@ function buildFocusBounds(
   if (!selection) return null;
   const min = [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
   const max = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY];
+  const include = (x: number, y: number, z: number): void => {
+    min[0] = Math.min(min[0], x);
+    min[1] = Math.min(min[1], y);
+    min[2] = Math.min(min[2], z);
+    max[0] = Math.max(max[0], x);
+    max[1] = Math.max(max[1], y);
+    max[2] = Math.max(max[2], z);
+  };
   for (let ordinal = selection.firstOrdinal; ordinal <= selection.lastOrdinal; ordinal += 1) {
     const record = records[ordinal];
     if (GEOMETRIC_KIND[model.columns.kind[record]] === 0) continue;
-    for (const point of [
-      [model.columns.startX[record], model.columns.startY[record], model.columns.startZ[record]],
-      [model.columns.endX[record], model.columns.endY[record], model.columns.endZ[record]],
-    ]) {
-      for (let axis = 0; axis < 3; axis += 1) {
-        min[axis] = Math.min(min[axis], point[axis]);
-        max[axis] = Math.max(max[axis], point[axis]);
-      }
-    }
+    // A direct record with no XYZ delta still locates the toolhead even though
+    // it has no renderable segment. Seed the bounds before walking an arc's
+    // intermediate points so that semantic focus is never lost.
+    include(model.columns.startX[record], model.columns.startY[record], model.columns.startZ[record]);
+    visitGcodeRecordPathSegments(model, record, (_startX, _startY, _startZ, endX, endY, endZ) => {
+      include(endX, endY, endZ);
+    });
   }
   if (!Number.isFinite(min[0])) return null;
   return Object.freeze({

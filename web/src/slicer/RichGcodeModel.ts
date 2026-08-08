@@ -21,6 +21,16 @@ export const GCODE_RECORD_KIND = Object.freeze({
 
 export type GcodeRecordKind = (typeof GCODE_RECORD_KIND)[keyof typeof GCODE_RECORD_KIND];
 
+/** Pinned `EMovePathType` subset retained by the bounded web model. */
+export const GCODE_PATH_KIND = Object.freeze({
+  /** Upstream's default `Noop` path: direct start-to-end rendering for non-arcs. */
+  DIRECT: 0,
+  ARC_CW: 2,
+  ARC_CCW: 3,
+} as const);
+
+export type GcodePathKind = (typeof GCODE_PATH_KIND)[keyof typeof GCODE_PATH_KIND];
+
 export const GCODE_RECORD_KIND_NAMES = Object.freeze([
   'noop',
   'retract',
@@ -42,6 +52,7 @@ export const RICH_GCODE_HARD_CAPS = Object.freeze({
   inputCharacters: 64 * 1024 * 1024,
   lines: 4_000_000,
   records: 1_500_000,
+  pathPoints: 4_000_000,
   warnings: 2_048,
   lineCharacters: 64 * 1024,
   roles: 512,
@@ -52,6 +63,7 @@ export interface RichGcodeLimits {
   readonly inputCharacters: number;
   readonly lines: number;
   readonly records: number;
+  readonly pathPoints: number;
   readonly warnings: number;
   readonly lineCharacters: number;
   readonly roles: number;
@@ -83,7 +95,7 @@ export interface GcodeParseWarning {
   readonly endOffset: number;
 }
 
-export type GcodeTerminationReason = 'input-cap' | 'line-cap' | 'record-cap' | 'unsupported-arc';
+export type GcodeTerminationReason = 'input-cap' | 'line-cap' | 'record-cap' | 'path-point-cap' | 'numeric-cap';
 
 /**
  * One row per classified move or source marker. Numeric data is stored in
@@ -116,10 +128,26 @@ export interface RichGcodeColumns {
   readonly sourceEndOffset: Uint32Array;
   /** Parsed N-word, or -1 when the source line has no numbered command. */
   readonly commandLineNumber: Int32Array;
+  readonly pathKind: Uint8Array;
+  /** Dense offset into `RichGcodeModel.pathPoints`; meaningful even when count is zero. */
+  readonly pathPointOffset: Uint32Array;
+  /** Pinned intermediate interpolation points; the final point may equal the record endpoint. */
+  readonly pathPointCount: Uint32Array;
+  /** Absolute printer-mm XY center for arcs; canonical zero for linear paths. */
+  readonly arcCenterX: Float32Array;
+  readonly arcCenterY: Float32Array;
+}
+
+export interface RichGcodePathPoints {
+  readonly count: number;
+  readonly x: Float32Array;
+  readonly y: Float32Array;
+  readonly z: Float32Array;
 }
 
 export interface RichGcodeModel {
   readonly columns: RichGcodeColumns;
+  readonly pathPoints: RichGcodePathPoints;
   readonly roles: readonly string[];
   readonly filaments: readonly GcodeFilamentIdentity[];
   readonly layerCount: number;
@@ -160,17 +188,32 @@ interface RecordValue {
   readonly tool: number;
   readonly filament: number;
   readonly source: SourceLocation;
+  readonly pathKind: GcodePathKind;
+  readonly pathPoints?: ArcInterpolationPoints;
+  readonly arcCenterX?: number;
+  readonly arcCenterY?: number;
+}
+
+interface ArcInterpolationPoints {
+  readonly count: number;
+  readonly x: Float32Array;
+  readonly y: Float32Array;
+  readonly z: Float32Array;
 }
 
 interface ParsedCommand {
   readonly letter: string;
   readonly code: number;
+  readonly exactArcSpelling: boolean;
   readonly parameters: ReadonlyMap<string, number>;
+  readonly invalidParameters: ReadonlySet<string>;
   readonly commandLineNumber: number;
 }
 
 interface NumberScan {
   readonly valid: boolean;
+  /** The token was syntactically numeric but exceeded JavaScript's finite domain. */
+  readonly outOfRange: boolean;
   readonly value: number;
   readonly end: number;
 }
@@ -181,6 +224,9 @@ const DEFAULT_TOOLPATH_HEIGHT_MM = 0.2;
 const WIPE_WIDTH_MM = 0.05;
 const WIPE_HEIGHT_MM = 0.05;
 const UPSTREAM_EPSILON = 1e-4;
+const DRAW_ARC_TOLERANCE_MM = Math.fround(0.0125);
+const FULL_CIRCLE_POSITION_EPSILON_MM = 1e-6;
+const MM_PER_MINUTE_TO_MM_PER_SECOND = Math.fround(1 / 60);
 const MAX_TOOL_IDENTITIES = 256;
 const MAX_COMMAND_LINE_NUMBER = 0x7fffffff;
 const DEFAULT_COLOR_CHANGES = ['#0B2C7A', '#1C8891', '#AAF200', '#F5CE0A', '#D16830', '#942616'] as const;
@@ -235,7 +281,7 @@ class RichGcodeParser {
   ) {
     this.limits = resolveLimits(options.limits);
     this.warnings = new WarningCollector(this.limits.warnings);
-    this.columns = new RecordColumnsBuilder(this.limits.records);
+    this.columns = new RecordColumnsBuilder(this.limits.records, this.limits.pathPoints);
     this.filamentDiameters = normalizeFilamentDiameters(options.filamentDiametersMm);
     this.filamentColors = normalizeFilamentColors(options.filamentColors);
     this.filament = this.ensureToolFilament(0, wholeInputLocation());
@@ -318,8 +364,10 @@ class RichGcodeParser {
       line += 1;
     }
 
+    const built = this.columns.finish();
     return {
-      columns: this.columns.finish(),
+      columns: built.columns,
+      pathPoints: built.pathPoints,
       roles: Object.freeze([...this.roles]),
       filaments: Object.freeze(this.filaments.map((filament) => Object.freeze({ ...filament }))),
       layerCount: this.layerCount,
@@ -355,13 +403,8 @@ class RichGcodeParser {
           return;
         case 2:
         case 3:
-          this.stop(
-            'unsupported-arc',
-            'unsupported-arc-interpolation',
-            'G2/G3 arc interpolation is not represented exactly by this bounded foundation; parsing stopped before the arc',
-            source,
-            'error',
-          );
+          if (!command.exactArcSpelling) return;
+          this.processArcMove(command.parameters, command.invalidParameters, source, command.code === 3);
           return;
         case 20:
           this.unitsToMm = 25.4;
@@ -456,7 +499,12 @@ class RichGcodeParser {
       if (parsed === undefined) {
         this.warn('invalid-height-tag', `Invalid layer height tag "${heightValue.trim()}"`, source);
       } else {
-        this.forcedHeightMm = parsed;
+        const normalized = Math.fround(parsed);
+        if (Number.isFinite(normalized)) {
+          this.forcedHeightMm = normalized;
+        } else {
+          this.warn('invalid-height-tag', `Layer height tag "${heightValue.trim()}" exceeds Float32`, source);
+        }
       }
       return;
     }
@@ -467,7 +515,12 @@ class RichGcodeParser {
       if (parsed === undefined) {
         this.warn('invalid-width-tag', `Invalid line width tag "${widthValue.trim()}"`, source);
       } else {
-        this.forcedWidthMm = parsed;
+        const normalized = Math.fround(parsed);
+        if (Number.isFinite(normalized)) {
+          this.forcedWidthMm = normalized;
+        } else {
+          this.warn('invalid-width-tag', `Line width tag "${widthValue.trim()}" exceeds Float32`, source);
+        }
       }
       return;
     }
@@ -534,7 +587,7 @@ class RichGcodeParser {
     if (feed !== undefined) {
       // The pinned processor converts positional axes in G20 mode, but keeps
       // feedrate words in mm/min before converting them to mm/s.
-      const converted = feed / 60;
+      const converted = Math.fround(feed * MM_PER_MINUTE_TO_MM_PER_SECOND);
       if (converted < 0) {
         this.warn('negative-feedrate', `Negative feedrate ${feed} was ignored`, source);
       } else {
@@ -562,24 +615,22 @@ class RichGcodeParser {
       mm3PerMm = distance > 0 ? (filamentArea * deltaE) / distance : 0;
       volumetricFlow = mm3PerMm * this.feedrateMmPerSecond;
 
+      const previousExtrudedLastZ = Math.fround(this.extrudedLastZ);
+      this.currentHeightMm = Math.fround(this.currentHeightMm);
       if (this.forcedHeightMm > 0) {
-        this.currentHeightMm = this.forcedHeightMm;
-      } else if (endZ > this.extrudedLastZ + UPSTREAM_EPSILON) {
-        this.currentHeightMm = endZ - this.extrudedLastZ;
+        this.currentHeightMm = Math.fround(this.forcedHeightMm);
+      } else if (endZ > previousExtrudedLastZ + UPSTREAM_EPSILON) {
+        this.currentHeightMm = Math.fround(endZ - previousExtrudedLastZ);
       }
-      if (this.currentHeightMm === 0) this.currentHeightMm = DEFAULT_TOOLPATH_HEIGHT_MM;
+      if (this.currentHeightMm === 0) this.currentHeightMm = Math.fround(DEFAULT_TOOLPATH_HEIGHT_MM);
       if (endZ === 0) endZ = this.currentHeightMm;
-      this.extrudedLastZ = endZ;
+      this.extrudedLastZ = Math.fround(endZ);
 
       if (this.forcedWidthMm > 0) {
-        this.currentWidthMm = this.forcedWidthMm;
+        this.currentWidthMm = Math.fround(this.forcedWidthMm);
       } else {
-        this.currentWidthMm = estimateWidth(
-          this.roles[this.role],
-          filamentDiameter,
-          deltaE,
-          distance,
-          this.currentHeightMm,
+        this.currentWidthMm = Math.fround(
+          estimateWidth(this.roles[this.role], filamentDiameter, deltaE, distance, this.currentHeightMm),
         );
       }
       widthMm = this.currentWidthMm;
@@ -610,6 +661,7 @@ class RichGcodeParser {
       tool: this.tool,
       filament: this.filament,
       source,
+      pathKind: GCODE_PATH_KIND.DIRECT,
     });
     if (!emitted) return;
     this.x = endX;
@@ -618,26 +670,289 @@ class RichGcodeParser {
     this.e = endE;
   }
 
+  /**
+   * Port of the pinned `GCodeProcessor::process_G2_G3` XY-plane arc model.
+   * I/J are always offsets from the current position, P supports one complete
+   * turn only, and a single semantic move owns a bounded interpolation slice.
+   */
+  private processArcMove(
+    parameters: ReadonlyMap<string, number>,
+    invalidParameters: ReadonlySet<string>,
+    source: SourceLocation,
+    isCounterClockwise: boolean,
+  ): void {
+    const startX = this.x;
+    const startY = this.y;
+    const startZ = this.z;
+    const startE = this.e;
+    const endX = this.axisPosition('X', parameters, startX, this.originX, false);
+    const endY = this.axisPosition('Y', parameters, startY, this.originY, false);
+    const rawEndZ = this.axisPosition('Z', parameters, startZ, this.originZ, false);
+    const endE = this.axisPosition('E', parameters, startE, this.originE, true);
+
+    if (![startX, startY, startZ, startE, endX, endY, rawEndZ, endE].every(isFiniteFloat32)) {
+      this.rejectUnsafeArc('arc-coordinate-range', 'Arc coordinates are outside the finite Float32 domain', source);
+      return;
+    }
+
+    // The pinned processor advances endpoint state before rejecting malformed
+    // I/J/P forms. Preserve that observable modal behavior while emitting no
+    // record or sidecar points for the invalid command.
+    const advanceRejectedEndpoint = (): void => {
+      this.x = endX;
+      this.y = endY;
+      this.z = rawEndZ;
+      this.e = endE;
+    };
+
+    if (['X', 'Y', 'Z', 'E', 'I', 'J', 'P', 'F'].some((parameter) => invalidParameters.has(parameter))) {
+      this.rejectUnsafeArc('arc-parameter-range', 'Arc parameters are outside the finite Float32 domain', source);
+      return;
+    }
+
+    if (!parameters.has('I') && !parameters.has('J')) {
+      this.warn('missing-arc-center', 'G2/G3 requires at least one I/J center offset', source, 'error');
+      advanceRejectedEndpoint();
+      return;
+    }
+    const turns = parameters.get('P');
+    const pinnedTurns = turns === undefined ? undefined : Math.fround(turns);
+    if (
+      pinnedTurns !== undefined &&
+      (!Number.isFinite(pinnedTurns) || Math.trunc(pinnedTurns) !== 1 || startX !== endX || startY !== endY)
+    ) {
+      this.warn(
+        'invalid-arc-turns',
+        'G2/G3 P mode requires a Float32 turn value whose truncated integer is 1 and an endpoint whose X/Y exactly matches the start',
+        source,
+        'error',
+      );
+      advanceRejectedEndpoint();
+      return;
+    }
+
+    const centerX = startX + this.scaledAxisWord(parameters.get('I') ?? 0);
+    const centerY = startY + this.scaledAxisWord(parameters.get('J') ?? 0);
+    if (![centerX, centerY].every(isFiniteFloat32)) {
+      this.rejectUnsafeArc('arc-center-range', 'Arc center coordinates are outside the finite Float32 domain', source);
+      return;
+    }
+
+    // Arc geometry enters the pinned implementation through Vec3f even though
+    // its modal endpoint state is double. Retain each float assignment so
+    // floor(angle/chordStep) agrees at interpolation-count boundaries.
+    const arcStartX = Math.fround(startX);
+    const arcStartY = Math.fround(startY);
+    const arcStartZ = Math.fround(startZ);
+    const arcEndX = Math.fround(endX);
+    const arcEndY = Math.fround(endY);
+    const arcEndZ = Math.fround(rawEndZ);
+    const arcCenterX = Math.fround(centerX);
+    const arcCenterY = Math.fround(centerY);
+    const radius = float32VectorLength(Math.fround(arcStartX - arcCenterX), Math.fround(arcStartY - arcCenterY));
+    const angle = calculateArcRadians(
+      arcStartX,
+      arcStartY,
+      arcEndX,
+      arcEndY,
+      arcCenterX,
+      arcCenterY,
+      isCounterClockwise,
+    );
+    const arcLength =
+      pinnedTurns === undefined
+        ? Math.fround(radius * angle)
+        : Math.fround(Math.trunc(pinnedTurns) * 2 * Math.PI * radius);
+    const deltaZ = rawEndZ - startZ;
+    const arcDeltaZ = Math.fround(arcEndZ - arcStartZ);
+    const deltaE = endE - startE;
+    const distance = Math.fround(Math.sqrt(Math.fround(arcLength * arcLength) + deltaZ * deltaZ));
+    if (![radius, angle, arcLength, deltaZ, arcDeltaZ, deltaE, distance].every(isFiniteFloat32)) {
+      this.rejectUnsafeArc('arc-metric-range', 'Arc geometry exceeds the finite Float32 metric domain', source);
+      return;
+    }
+
+    let nextFeedrate = this.feedrateMmPerSecond;
+    const feed = parameters.get('F');
+    if (feed !== undefined) {
+      const converted = Math.fround(feed * MM_PER_MINUTE_TO_MM_PER_SECOND);
+      if (converted < 0) {
+        this.warn('negative-feedrate', `Negative feedrate ${feed} was ignored`, source);
+      } else {
+        nextFeedrate = converted;
+      }
+    }
+    if (!isFiniteFloat32(nextFeedrate)) {
+      this.rejectUnsafeArc('arc-feedrate-range', 'Arc feedrate is outside the finite Float32 domain', source);
+      return;
+    }
+
+    if (arcLength === 0 && deltaZ === 0) {
+      this.x = endX;
+      this.y = endY;
+      this.z = rawEndZ;
+      this.e = endE;
+      this.feedrateMmPerSecond = nextFeedrate;
+      return;
+    }
+
+    // Record capacity is cheaper and more fundamental than interpolation
+    // capacity. Resolve it before planning or allocating an arc sidecar.
+    if (this.columns.remainingRecords === 0) {
+      this.stop(
+        'record-cap',
+        'record-cap',
+        `Classified record count reached the hard limit of ${this.limits.records}`,
+        source,
+      );
+      return;
+    }
+
+    const interpolation = planArcInterpolation(radius, angle, arcDeltaZ);
+    if (interpolation === undefined) {
+      this.rejectUnsafeArc(
+        'arc-interpolation-range',
+        'Arc interpolation step or point count is outside the bounded numeric domain',
+        source,
+      );
+      return;
+    }
+    if (interpolation.count > this.columns.remainingPathPoints) {
+      this.stop(
+        'path-point-cap',
+        'arc-path-point-cap',
+        `Arc interpolation exceeds the remaining bounded path-point budget of ${this.columns.remainingPathPoints}`,
+        source,
+        'error',
+      );
+      return;
+    }
+    const pathPoints = buildArcInterpolationPoints(
+      interpolation,
+      arcStartX,
+      arcStartY,
+      arcStartZ,
+      arcCenterX,
+      arcCenterY,
+      isCounterClockwise,
+    );
+    if (!pathPoints) {
+      this.rejectUnsafeArc(
+        'arc-interpolation-range',
+        'Arc interpolation produced a point outside the finite Float32 domain',
+        source,
+      );
+      return;
+    }
+
+    // Pinned arc classification intentionally differs from G0/G1: any nonzero
+    // E delta (including a retracting arc) is an extrusion, and WIPE tags do
+    // not override it. Retain that source behavior; numeric guards still keep
+    // negative-volume width calculations finite.
+    const kind = deltaE === 0 ? GCODE_RECORD_KIND.TRAVEL : GCODE_RECORD_KIND.EXTRUDE;
+    let endZ = rawEndZ;
+    let nextHeight = Math.fround(this.currentHeightMm);
+    let nextWidth = Math.fround(this.currentWidthMm);
+    let nextExtrudedLastZ = Math.fround(this.extrudedLastZ);
+    let widthMm = 0;
+    let heightMm = 0;
+    let mm3PerMm = 0;
+    let volumetricFlow = 0;
+    if (kind === GCODE_RECORD_KIND.EXTRUDE) {
+      const filamentDiameter = Math.fround(this.filamentDiameter(this.tool));
+      const filamentRadius = Math.fround(0.5 * filamentDiameter);
+      const filamentArea = Math.fround(Math.fround(Math.PI) * Math.fround(filamentRadius * filamentRadius));
+      const volume = Math.fround(filamentArea * deltaE);
+      mm3PerMm = distance > 0 ? Math.fround(volume / distance) : 0;
+      volumetricFlow = Math.fround(mm3PerMm * nextFeedrate);
+
+      if (this.forcedHeightMm > 0) {
+        nextHeight = this.forcedHeightMm;
+      } else if (endZ > nextExtrudedLastZ + UPSTREAM_EPSILON) {
+        nextHeight = Math.fround(endZ - nextExtrudedLastZ);
+      }
+      if (nextHeight === 0) nextHeight = Math.fround(DEFAULT_TOOLPATH_HEIGHT_MM);
+      if (endZ === 0) endZ = nextHeight;
+      nextExtrudedLastZ = Math.fround(endZ);
+      nextWidth = estimateArcWidth(
+        this.roles[this.role],
+        filamentDiameter,
+        filamentRadius,
+        deltaE,
+        distance,
+        nextHeight,
+        this.forcedWidthMm,
+      );
+      widthMm = nextWidth;
+      heightMm = nextHeight;
+    }
+
+    const record: RecordValue = {
+      kind,
+      startX,
+      startY,
+      startZ,
+      endX,
+      endY,
+      endZ,
+      deltaE,
+      feedrateMmPerSecond: nextFeedrate,
+      widthMm,
+      heightMm,
+      mm3PerMm,
+      volumetricFlowMm3PerSecond: volumetricFlow,
+      fanPercent: this.fanPercent,
+      hotendTemperatureC: this.hotendTemperatures[this.tool],
+      layer: this.layerCount,
+      role: this.role,
+      tool: this.tool,
+      filament: this.filament,
+      source,
+      pathKind: isCounterClockwise ? GCODE_PATH_KIND.ARC_CCW : GCODE_PATH_KIND.ARC_CW,
+      pathPoints,
+      arcCenterX,
+      arcCenterY,
+    };
+    if (!recordHasFiniteFloat32Values(record)) {
+      this.rejectUnsafeArc('arc-record-range', 'Arc record metadata is outside the finite Float32 domain', source);
+      return;
+    }
+    if (!this.emit(record)) return;
+
+    this.x = endX;
+    this.y = endY;
+    this.z = endZ;
+    this.e = endE;
+    this.feedrateMmPerSecond = nextFeedrate;
+    this.currentHeightMm = nextHeight;
+    this.currentWidthMm = nextWidth;
+    this.extrudedLastZ = nextExtrudedLastZ;
+  }
+
+  private rejectUnsafeArc(code: string, message: string, source: SourceLocation): void {
+    this.stop('numeric-cap', code, message, source, 'error');
+  }
+
   private processSetPosition(parameters: ReadonlyMap<string, number>): void {
     let found = false;
     const x = parameters.get('X');
     if (x !== undefined) {
-      this.originX = this.x - x * this.unitsToMm;
+      this.originX = this.x - this.scaledAxisWord(x);
       found = true;
     }
     const y = parameters.get('Y');
     if (y !== undefined) {
-      this.originY = this.y - y * this.unitsToMm;
+      this.originY = this.y - this.scaledAxisWord(y);
       found = true;
     }
     const z = parameters.get('Z');
     if (z !== undefined) {
-      this.originZ = this.z - z * this.unitsToMm;
+      this.originZ = this.z - this.scaledAxisWord(z);
       found = true;
     }
     const e = parameters.get('E');
     if (e !== undefined) {
-      this.e = e * this.unitsToMm;
+      this.e = this.scaledAxisWord(e);
       found = true;
     }
     const hasUnknownAxis = [...parameters.keys()].some(
@@ -723,11 +1038,13 @@ class RichGcodeParser {
       tool: this.tool,
       filament: this.filament,
       source,
+      pathKind: GCODE_PATH_KIND.DIRECT,
     });
   }
 
   private emit(record: RecordValue): boolean {
-    if (this.columns.count >= this.limits.records) {
+    const result = this.columns.append(record);
+    if (result === 'record-cap') {
       this.stop(
         'record-cap',
         'record-cap',
@@ -736,7 +1053,16 @@ class RichGcodeParser {
       );
       return false;
     }
-    this.columns.append(record);
+    if (result === 'path-point-cap') {
+      this.stop(
+        'path-point-cap',
+        'arc-path-point-cap',
+        `Arc interpolation would exceed the hard limit of ${this.limits.pathPoints} path points`,
+        record.source,
+        'error',
+      );
+      return false;
+    }
     return true;
   }
 
@@ -749,9 +1075,13 @@ class RichGcodeParser {
   ): number {
     const value = parameters.get(letter);
     if (value === undefined) return current;
-    const converted = value * this.unitsToMm;
+    const converted = this.scaledAxisWord(value);
     const relative = this.globalRelative || (extrusion && this.extruderRelative);
     return relative ? current + converted : origin + converted;
+  }
+
+  private scaledAxisWord(value: number): number {
+    return this.unitsToMm === 1 ? value : Math.fround(value * Math.fround(this.unitsToMm));
   }
 
   private roleIndex(role: string, source: SourceLocation): number {
@@ -840,9 +1170,122 @@ class RichGcodeParser {
     return (
       this.terminationReason === 'line-cap' ||
       this.terminationReason === 'record-cap' ||
-      this.terminationReason === 'unsupported-arc'
+      this.terminationReason === 'path-point-cap' ||
+      this.terminationReason === 'numeric-cap'
     );
   }
+}
+
+interface ArcInterpolationPlan {
+  readonly count: number;
+  readonly radianStep: number;
+  readonly zStep: number;
+}
+
+/** Exact branch structure from pinned `ArcSegment::calc_arc_radian`. */
+function calculateArcRadians(
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+  centerX: number,
+  centerY: number,
+  isCounterClockwise: boolean,
+): number {
+  const startDeltaX = Math.fround(centerX - startX);
+  const startDeltaY = Math.fround(centerY - startY);
+  const endDeltaX = Math.fround(centerX - endX);
+  const endDeltaY = Math.fround(centerY - endY);
+  if (
+    float32VectorLength(Math.fround(startDeltaX - endDeltaX), Math.fround(startDeltaY - endDeltaY)) <
+    FULL_CIRCLE_POSITION_EPSILON_MM
+  ) {
+    return Math.fround(2 * Math.PI);
+  }
+  // Eigen computes the dot in float before widening it; the pinned cross
+  // explicitly widens each float operand to double before multiplication.
+  const dot = Math.fround(Math.fround(startDeltaX * endDeltaX) + Math.fround(startDeltaY * endDeltaY));
+  const cross = startDeltaX * endDeltaY - startDeltaY * endDeltaX;
+  const radians = Math.fround(Math.atan2(cross, dot));
+  if (isCounterClockwise) return Math.fround(radians < 0 ? 2 * Math.PI + radians : radians);
+  return Math.fround(radians < 0 ? Math.abs(radians) : 2 * Math.PI - radians);
+}
+
+/**
+ * Pinned interpolation uses `floor(angle / chordStep)` and deliberately may
+ * include the exact endpoint in its intermediate vector.
+ */
+function planArcInterpolation(radius: number, angle: number, deltaZ: number): ArcInterpolationPlan | undefined {
+  if (radius <= DRAW_ARC_TOLERANCE_MM) return { count: 0, radianStep: 0, zStep: deltaZ };
+  const chordRatio = Math.fround(Math.fround(radius - DRAW_ARC_TOLERANCE_MM) / radius);
+  const radianStep = Math.fround(2 * Math.fround(Math.acos(chordRatio)));
+  if (!Number.isFinite(radianStep) || radianStep <= 0) return undefined;
+  const interpolationRatio = Math.fround(angle / radianStep);
+  if (!Number.isFinite(interpolationRatio) || interpolationRatio < 0) return undefined;
+  const count = Math.floor(interpolationRatio);
+  if (!Number.isSafeInteger(count) || count < 0) return undefined;
+  const zStep = Math.fround(interpolationRatio < 1 ? deltaZ : Math.fround(deltaZ / interpolationRatio));
+  if (!Number.isFinite(zStep)) return undefined;
+  return { count, radianStep, zStep };
+}
+
+function buildArcInterpolationPoints(
+  plan: ArcInterpolationPlan,
+  startX: number,
+  startY: number,
+  startZ: number,
+  centerX: number,
+  centerY: number,
+  isCounterClockwise: boolean,
+): ArcInterpolationPoints | undefined {
+  const x = new Float32Array(plan.count);
+  const y = new Float32Array(plan.count);
+  const z = new Float32Array(plan.count);
+  const deltaX = Math.fround(startX - centerX);
+  const deltaY = Math.fround(startY - centerY);
+  const signedStep = Math.fround(isCounterClockwise ? plan.radianStep : -plan.radianStep);
+  for (let index = 0; index < plan.count; index += 1) {
+    const radians = Math.fround((index + 1) * signedStep);
+    const cosine = Math.fround(Math.cos(radians));
+    const sine = Math.fround(Math.sin(radians));
+    const pointX = Math.fround(Math.fround(centerX + Math.fround(deltaX * cosine)) - Math.fround(deltaY * sine));
+    const pointY = Math.fround(Math.fround(centerY + Math.fround(deltaX * sine)) + Math.fround(deltaY * cosine));
+    const pointZ = Math.fround(startZ + Math.fround((index + 1) * plan.zStep));
+    if (![pointX, pointY, pointZ].every(isFiniteFloat32)) return undefined;
+    x[index] = pointX;
+    y[index] = pointY;
+    z[index] = pointZ;
+  }
+  return { count: plan.count, x, y, z };
+}
+
+function float32VectorLength(x: number, y: number): number {
+  return Math.fround(Math.sqrt(Math.fround(Math.fround(x * x) + Math.fround(y * y))));
+}
+
+function isFiniteFloat32(value: number): boolean {
+  return Number.isFinite(value) && Number.isFinite(Math.fround(value));
+}
+
+function recordHasFiniteFloat32Values(record: RecordValue): boolean {
+  return [
+    record.startX,
+    record.startY,
+    record.startZ,
+    record.endX,
+    record.endY,
+    record.endZ,
+    record.deltaE,
+    record.feedrateMmPerSecond,
+    record.widthMm,
+    record.heightMm,
+    record.mm3PerMm,
+    record.volumetricFlowMm3PerSecond,
+    record.fanPercent,
+    record.hotendTemperatureC,
+    record.arcCenterX ?? 0,
+    record.arcCenterY ?? 0,
+  ].every(isFiniteFloat32);
 }
 
 function classifyMove(wiping: boolean, dx: number, dy: number, dz: number, de: number): GcodeRecordKind {
@@ -875,6 +1318,44 @@ function estimateWidth(
   }
   if (!Number.isFinite(width) || width === 0) width = DEFAULT_TOOLPATH_WIDTH_MM;
   return Math.min(width, Math.max(2, 4 * height));
+}
+
+/** Float-assignment order from pinned G2/G3 width calculation. */
+function estimateArcWidth(
+  role: string,
+  filamentDiameter: number,
+  filamentRadius: number,
+  deltaE: number,
+  distance: number,
+  height: number,
+  forcedWidth: number,
+): number {
+  let width: number;
+  if (forcedWidth > 0) {
+    width = forcedWidth;
+  } else if (deltaE <= 0 || distance <= 0 || height <= 0) {
+    // Upstream classifies any nonzero arc E as extrusion, but its negative-E
+    // bridge formula can become NaN. The bounded web model keeps the semantic
+    // kind while using the same finite fallback as a zero-width result.
+    width = Math.fround(DEFAULT_TOOLPATH_WIDTH_MM);
+  } else if (role === 'Outer wall') {
+    const scaledRadius = Math.fround(Math.fround(1.05) * filamentRadius);
+    const crossSection = Math.fround(Math.PI * Math.fround(scaledRadius * scaledRadius));
+    const denominator = Math.fround(distance * height);
+    width = Math.fround((deltaE * crossSection) / denominator);
+  } else if (role === 'Bridge' || role === 'Internal Bridge' || role === 'Undefined') {
+    width = Math.fround(filamentDiameter * Math.sqrt(deltaE / distance));
+  } else {
+    const crossSection = Math.fround(Math.PI * Math.fround(filamentRadius * filamentRadius));
+    const denominator = Math.fround(distance * height);
+    const rectangularWidth = (deltaE * crossSection) / denominator;
+    const semicircleWidth = Math.fround(Math.fround(1 - 0.25 * Math.PI) * height);
+    width = Math.fround(rectangularWidth + semicircleWidth);
+  }
+
+  if (Number.isNaN(width) || width === 0) width = Math.fround(DEFAULT_TOOLPATH_WIDTH_MM);
+  const maximum = Math.max(Math.fround(2), Math.fround(4 * height));
+  return Math.fround(Math.min(width, maximum));
 }
 
 function prefixedValue(comment: string, prefixes: readonly string[]): string | undefined {
@@ -931,9 +1412,16 @@ function parseCommand(
     warn('invalid-command', `Command ${letter} has an invalid numeric code`);
     return undefined;
   }
+  const commandToken = line.slice(cursor, commandNumber.end).toUpperCase();
+  const commandDelimiter = line.charCodeAt(commandNumber.end);
+  const exactArcSpelling =
+    letter === 'G' &&
+    (commandToken === 'G2' || commandToken === 'G3') &&
+    (commandNumber.end >= end || commandDelimiter === 32 || commandDelimiter === 9);
   cursor = commandNumber.end;
 
   const parameters = new Map<string, number>();
+  const invalidParameters = new Set<string>();
   while (cursor < end) {
     cursor = skipWhitespace(line, cursor, end);
     if (cursor >= end || line[cursor] === '*') break;
@@ -945,6 +1433,16 @@ function parseCommand(
     }
     const number = scanNumber(line, cursor + 1, end);
     if (!number.valid) {
+      if (number.outOfRange) {
+        invalidParameters.add(parameter);
+        parameters.delete(parameter);
+        warn(
+          'invalid-parameter',
+          `Parameter ${parameter} in ${letter}${commandNumber.value} is outside the finite numeric domain`,
+        );
+        cursor = number.end;
+        continue;
+      }
       warn(
         'invalid-parameter',
         `Parameter ${parameter} in ${letter}${commandNumber.value} has no finite numeric value`,
@@ -955,10 +1453,22 @@ function parseCommand(
     if (parameters.has(parameter)) {
       warn('duplicate-parameter', `Parameter ${parameter} is duplicated; the final value is used`);
     }
-    parameters.set(parameter, number.value);
+    const value = Math.fround(number.value);
+    if (!Number.isFinite(value)) {
+      invalidParameters.add(parameter);
+      parameters.delete(parameter);
+      warn(
+        'invalid-parameter',
+        `Parameter ${parameter} in ${letter}${commandNumber.value} is outside the finite Float32 domain`,
+      );
+      cursor = number.end;
+      continue;
+    }
+    invalidParameters.delete(parameter);
+    parameters.set(parameter, value);
     cursor = number.end;
   }
-  return { letter, code: commandNumber.value, parameters, commandLineNumber };
+  return { letter, code: commandNumber.value, exactArcSpelling, parameters, invalidParameters, commandLineNumber };
 }
 
 function scanNumber(line: string, start: number, end: number): NumberScan {
@@ -976,13 +1486,9 @@ function scanNumber(line: string, start: number, end: number): NumberScan {
       digits += 1;
     }
   }
-  if (
-    digits > 0 &&
-    cursor + 1 < end &&
-    (line[cursor] === 'e' || line[cursor] === 'E') &&
-    (line[cursor + 1] === '+' || line[cursor + 1] === '-')
-  ) {
-    let exponentEnd = cursor + 2;
+  if (digits > 0 && cursor + 1 < end && (line[cursor] === 'e' || line[cursor] === 'E')) {
+    let exponentEnd = cursor + 1;
+    if (line[exponentEnd] === '+' || line[exponentEnd] === '-') exponentEnd += 1;
     let exponentDigits = 0;
     while (exponentEnd < end && isDigit(line.charCodeAt(exponentEnd))) {
       exponentEnd += 1;
@@ -990,9 +1496,10 @@ function scanNumber(line: string, start: number, end: number): NumberScan {
     }
     if (exponentDigits > 0) cursor = exponentEnd;
   }
-  if (digits === 0) return { valid: false, value: Number.NaN, end: start };
+  if (digits === 0) return { valid: false, outOfRange: false, value: Number.NaN, end: start };
   const value = Number(line.slice(start, cursor));
-  return { valid: Number.isFinite(value), value, end: cursor };
+  const valid = Number.isFinite(value);
+  return { valid, outOfRange: !valid, value, end: cursor };
 }
 
 function skipWhitespace(line: string, start: number, end: number): number {
@@ -1052,6 +1559,7 @@ function resolveLimits(requested: Partial<RichGcodeLimits> | undefined): RichGco
     inputCharacters: limit('inputCharacters'),
     lines: limit('lines'),
     records: limit('records'),
+    pathPoints: limit('pathPoints'),
     warnings: limit('warnings'),
     lineCharacters: limit('lineCharacters'),
     roles: limit('roles'),
@@ -1122,8 +1630,17 @@ class RecordColumnsBuilder {
   private sourceStart: Uint32Array;
   private sourceEnd: Uint32Array;
   private commandLine: Int32Array;
+  private pathKind: Uint8Array;
+  private pathPointOffset: Uint32Array;
+  private pathPointCount: Uint32Array;
+  private arcCenterX: Float32Array;
+  private arcCenterY: Float32Array;
+  private readonly pathPoints: PathPointsBuilder;
 
-  constructor(private readonly maximum: number) {
+  constructor(
+    private readonly maximum: number,
+    maximumPathPoints: number,
+  ) {
     this.capacity = Math.min(1_024, maximum);
     this.kind = new Uint8Array(this.capacity);
     this.startX = new Float32Array(this.capacity);
@@ -1149,15 +1666,45 @@ class RecordColumnsBuilder {
     this.sourceEnd = new Uint32Array(this.capacity);
     this.commandLine = new Int32Array(this.capacity);
     this.commandLine.fill(-1);
+    this.pathKind = new Uint8Array(this.capacity);
+    this.pathPointOffset = new Uint32Array(this.capacity);
+    this.pathPointCount = new Uint32Array(this.capacity);
+    this.arcCenterX = new Float32Array(this.capacity);
+    this.arcCenterY = new Float32Array(this.capacity);
+    this.pathPoints = new PathPointsBuilder(maximumPathPoints);
   }
 
   get count(): number {
     return this.length;
   }
 
-  append(value: RecordValue): void {
+  get remainingRecords(): number {
+    return this.maximum - this.length;
+  }
+
+  get remainingPathPoints(): number {
+    return this.pathPoints.remaining;
+  }
+
+  append(value: RecordValue): 'ok' | 'record-cap' | 'path-point-cap' {
+    if (this.length >= this.maximum) return 'record-cap';
+    const pathCount = value.pathPoints?.count ?? 0;
+    if (pathCount > this.pathPoints.remaining) return 'path-point-cap';
+    if (value.pathKind === GCODE_PATH_KIND.DIRECT && pathCount !== 0) {
+      throw new Error('A direct G-code record cannot own arc interpolation points');
+    }
+    if (
+      value.pathPoints &&
+      (value.pathPoints.x.length !== pathCount ||
+        value.pathPoints.y.length !== pathCount ||
+        value.pathPoints.z.length !== pathCount)
+    ) {
+      throw new Error('Arc interpolation point columns must have equal declared lengths');
+    }
     if (this.length === this.capacity) this.grow();
     const index = this.length;
+    const pathOffset = this.pathPoints.count;
+    if (value.pathPoints) this.pathPoints.append(value.pathPoints);
     this.kind[index] = value.kind;
     this.startX[index] = value.startX;
     this.startY[index] = value.startY;
@@ -1181,36 +1728,50 @@ class RecordColumnsBuilder {
     this.sourceStart[index] = value.source.startOffset;
     this.sourceEnd[index] = value.source.endOffset;
     this.commandLine[index] = value.source.commandLineNumber;
+    this.pathKind[index] = value.pathKind;
+    this.pathPointOffset[index] = pathOffset;
+    this.pathPointCount[index] = pathCount;
+    this.arcCenterX[index] = value.arcCenterX ?? 0;
+    this.arcCenterY[index] = value.arcCenterY ?? 0;
     this.length += 1;
+    return 'ok';
   }
 
-  finish(): RichGcodeColumns {
+  finish(): { readonly columns: RichGcodeColumns; readonly pathPoints: RichGcodePathPoints } {
     const length = this.length;
     return {
-      count: length,
-      kind: this.kind.subarray(0, length),
-      startX: this.startX.subarray(0, length),
-      startY: this.startY.subarray(0, length),
-      startZ: this.startZ.subarray(0, length),
-      endX: this.endX.subarray(0, length),
-      endY: this.endY.subarray(0, length),
-      endZ: this.endZ.subarray(0, length),
-      deltaE: this.deltaE.subarray(0, length),
-      feedrateMmPerSecond: this.feedrate.subarray(0, length),
-      widthMm: this.width.subarray(0, length),
-      heightMm: this.height.subarray(0, length),
-      mm3PerMm: this.mm3PerMm.subarray(0, length),
-      volumetricFlowMm3PerSecond: this.volumetricFlow.subarray(0, length),
-      fanPercent: this.fan.subarray(0, length),
-      hotendTemperatureC: this.temperature.subarray(0, length),
-      layer: this.layer.subarray(0, length),
-      role: this.role.subarray(0, length),
-      tool: this.tool.subarray(0, length),
-      filament: this.filament.subarray(0, length),
-      sourceLine: this.sourceLine.subarray(0, length),
-      sourceStartOffset: this.sourceStart.subarray(0, length),
-      sourceEndOffset: this.sourceEnd.subarray(0, length),
-      commandLineNumber: this.commandLine.subarray(0, length),
+      columns: {
+        count: length,
+        kind: this.kind.subarray(0, length),
+        startX: this.startX.subarray(0, length),
+        startY: this.startY.subarray(0, length),
+        startZ: this.startZ.subarray(0, length),
+        endX: this.endX.subarray(0, length),
+        endY: this.endY.subarray(0, length),
+        endZ: this.endZ.subarray(0, length),
+        deltaE: this.deltaE.subarray(0, length),
+        feedrateMmPerSecond: this.feedrate.subarray(0, length),
+        widthMm: this.width.subarray(0, length),
+        heightMm: this.height.subarray(0, length),
+        mm3PerMm: this.mm3PerMm.subarray(0, length),
+        volumetricFlowMm3PerSecond: this.volumetricFlow.subarray(0, length),
+        fanPercent: this.fan.subarray(0, length),
+        hotendTemperatureC: this.temperature.subarray(0, length),
+        layer: this.layer.subarray(0, length),
+        role: this.role.subarray(0, length),
+        tool: this.tool.subarray(0, length),
+        filament: this.filament.subarray(0, length),
+        sourceLine: this.sourceLine.subarray(0, length),
+        sourceStartOffset: this.sourceStart.subarray(0, length),
+        sourceEndOffset: this.sourceEnd.subarray(0, length),
+        commandLineNumber: this.commandLine.subarray(0, length),
+        pathKind: this.pathKind.subarray(0, length),
+        pathPointOffset: this.pathPointOffset.subarray(0, length),
+        pathPointCount: this.pathPointCount.subarray(0, length),
+        arcCenterX: this.arcCenterX.subarray(0, length),
+        arcCenterY: this.arcCenterY.subarray(0, length),
+      },
+      pathPoints: this.pathPoints.finish(),
     };
   }
 
@@ -1238,10 +1799,67 @@ class RecordColumnsBuilder {
     this.sourceLine = growTyped(this.sourceLine, next);
     this.sourceStart = growTyped(this.sourceStart, next);
     this.sourceEnd = growTyped(this.sourceEnd, next);
+    this.pathKind = growTyped(this.pathKind, next);
+    this.pathPointOffset = growTyped(this.pathPointOffset, next);
+    this.pathPointCount = growTyped(this.pathPointCount, next);
+    this.arcCenterX = growTyped(this.arcCenterX, next);
+    this.arcCenterY = growTyped(this.arcCenterY, next);
     const commandLine = new Int32Array(next);
     commandLine.fill(-1);
     commandLine.set(this.commandLine);
     this.commandLine = commandLine;
+    this.capacity = next;
+  }
+}
+
+class PathPointsBuilder {
+  private capacity: number;
+  private length = 0;
+  private x: Float32Array;
+  private y: Float32Array;
+  private z: Float32Array;
+
+  constructor(private readonly maximum: number) {
+    this.capacity = Math.min(1_024, maximum);
+    this.x = new Float32Array(this.capacity);
+    this.y = new Float32Array(this.capacity);
+    this.z = new Float32Array(this.capacity);
+  }
+
+  get count(): number {
+    return this.length;
+  }
+
+  get remaining(): number {
+    return this.maximum - this.length;
+  }
+
+  append(points: ArcInterpolationPoints): void {
+    const nextLength = this.length + points.count;
+    if (nextLength > this.maximum) throw new Error('Arc interpolation points exceed their preflighted limit');
+    this.ensureCapacity(nextLength);
+    this.x.set(points.x, this.length);
+    this.y.set(points.y, this.length);
+    this.z.set(points.z, this.length);
+    this.length = nextLength;
+  }
+
+  finish(): RichGcodePathPoints {
+    return {
+      count: this.length,
+      x: this.x.subarray(0, this.length),
+      y: this.y.subarray(0, this.length),
+      z: this.z.subarray(0, this.length),
+    };
+  }
+
+  private ensureCapacity(required: number): void {
+    if (required <= this.capacity) return;
+    let next = this.capacity;
+    while (next < required) next = Math.min(this.maximum, Math.max(next + 1, next * 2));
+    this.x = growTyped(this.x, next);
+    this.y = growTyped(this.y, next);
+    this.z = growTyped(this.z, next);
     this.capacity = next;
   }
 }

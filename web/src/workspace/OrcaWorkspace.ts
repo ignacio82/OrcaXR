@@ -50,7 +50,7 @@ import {
   type GcodePreviewViewPatch,
   type GcodePreviewViewState,
 } from '../slicer/GcodePreviewSession';
-import { GcodePreviewSurface } from '../ui/preview/GcodePreviewSurface';
+import { GcodePreviewSurface, type GcodePreviewSurfaceOptions } from '../ui/preview/GcodePreviewSurface';
 import { CURRENT_THREE_WORLD_UNITS_PER_MM, getThreeProjectEntity } from '../project/surfaces/ThreeProjectSurface';
 import {
   DEFAULT_CHANNEL_VALUE,
@@ -196,6 +196,23 @@ function rgbaToHex(color: readonly [number, number, number, number]): string {
       .toString(16)
       .padStart(2, '0');
   return `#${channel(color[0])}${channel(color[1])}${channel(color[2])}`;
+}
+
+function previewRenderFailureMessage(error: unknown): string {
+  const detail = (error instanceof Error ? error.message : String(error))
+    .replaceAll(/[\r\n\t]+/g, ' ')
+    .trim()
+    .slice(0, 240);
+  if (/rendered segments|segment limit/i.test(detail)) {
+    return 'Preview unavailable: this G-code exceeds the safe renderer segment limit. Show fewer layers or move classes and try again.';
+  }
+  if (/Float32 world domain|surface transform|printer-to-world transform/i.test(detail)) {
+    return 'Preview unavailable: the printer-to-world transform is outside the safe renderer domain. Reset the workspace or printer profile and try again.';
+  }
+  if (/sidecar|path-point|path point|path kind|arc record/i.test(detail)) {
+    return 'Preview unavailable: this G-code path failed safety validation. Re-slice the plate or open a different G-code file.';
+  }
+  return `Preview unavailable: the toolpath could not be rendered safely${detail ? ` (${detail})` : ''}. Re-slice the plate or open a different G-code file.`;
 }
 
 function channelOverlayColors(
@@ -407,7 +424,11 @@ export interface WorkspaceAutomationSnapshot {
 
 export interface OrcaWorkspaceOptions {
   readonly fullSpectrumAutoPairPreferences?: FullSpectrumAutoPairGenerationPreferences;
+  /** Renderer dependency seam used to fail closed without constructing test-sized GPU buffers. */
+  readonly previewSurfaceFactory?: (options: GcodePreviewSurfaceOptions) => WorkspacePreviewSurface;
 }
+
+export type WorkspacePreviewSurface = Pick<GcodePreviewSurface, 'clear' | 'render' | 'setVisible'>;
 
 export class OrcaWorkspace extends xb.Script {
   private uiCore: UICore;
@@ -481,10 +502,12 @@ export class OrcaWorkspace extends xb.Script {
     readonly plates: ReadonlyMap<PlateId, { gcode: string; byteLength: number; warnings: readonly string[] }>;
     readonly guard: CanonicalProjectSliceGuard;
   } | null = null;
-  private previewSurface: GcodePreviewSurface | null = null;
+  private previewSurface: WorkspacePreviewSurface | null = null;
+  private readonly previewSurfaceFactory: (options: GcodePreviewSurfaceOptions) => WorkspacePreviewSurface;
   private previewSession: GcodePreviewSession | null = null;
   private previewSummary: GcodeArtifactSummary | null = null;
   private previewOn = false;
+  private previewUnsupportedReason: string | null = null;
   /** Fires when the preview session, view, or projection changes. */
   public onPreviewStateChanged: (() => void) | null = null;
   /** Injected by the shell: opens a standalone G-code picker. */
@@ -522,6 +545,8 @@ export class OrcaWorkspace extends xb.Script {
     options: OrcaWorkspaceOptions = {},
   ) {
     super();
+    this.previewSurfaceFactory =
+      options.previewSurfaceFactory ?? ((surfaceOptions) => new GcodePreviewSurface(surfaceOptions));
     this.canonicalProject = CanonicalWorkspaceController.createEmpty({
       idSource: new UuidIdSource(cryptographicRandomWord),
       clock: () => new Date(),
@@ -3591,45 +3616,68 @@ export class OrcaWorkspace extends xb.Script {
    * layer window all come from the bounded rich model and preview projection,
    * so the viewer never invents metadata the source does not carry.
    */
-  private showToolpathPreview(gcode: string, source: GcodePreviewSessionSource = { kind: 'slice', name: 'plate' }) {
+  private showToolpathPreview(
+    gcode: string,
+    source: GcodePreviewSessionSource = { kind: 'slice', name: 'plate' },
+  ): boolean {
     this.clearToolpathPreview();
     try {
       this.previewSession = GcodePreviewSession.fromGcode(gcode, source);
     } catch (error) {
       this.setStatus(`Could not read the G-code: ${(error as Error).message}`);
-      return;
+      return false;
     }
     // Read the engine's own totals once, from the artifact now on screen.
     this.previewSummary = summarizeGcodeArtifact(gcode);
-    this.previewOn = true;
-    if (!this.renderPreviewProjection()) return;
-    // Ghost the models so the toolpath reads clearly.
-    for (const m of this.models) m.viewer.visible = false;
+    return this.renderPreviewProjection();
   }
 
   /** Redraw the active preview session; returns false when nothing is drawn. */
   private renderPreviewProjection(): boolean {
     const session = this.previewSession;
     if (!session) return false;
-    if (!this.previewSurface) {
-      this.previewSurface = new GcodePreviewSurface({
-        parent: this.workspace,
-        worldUnitsPerMm: MM * WORKSPACE_SCALE,
-        originOffsetMm: [-this.bedMm.x / 2, -this.bedMm.y / 2, 0],
-      });
-    }
-    const projection = session.project();
-    if (projection.status !== 'ready') {
-      this.previewSurface.clear();
-      const missing = projection.missingMetadata.map((entry) => entry.message).join(' ');
-      this.setStatus(`${projection.mode.label} needs data this G-code does not carry. ${missing}`.trim());
+    try {
+      if (!this.previewSurface) {
+        this.previewSurface = this.previewSurfaceFactory({
+          parent: this.workspace,
+          worldUnitsPerMm: MM * WORKSPACE_SCALE,
+          originOffsetMm: [-this.bedMm.x / 2, -this.bedMm.y / 2, 0],
+        });
+      }
+      const projection = session.project();
+      if (projection.status !== 'ready') {
+        const missing = projection.missingMetadata.map((entry) => entry.message).join(' ');
+        return this.deactivatePreviewRendering(
+          `${projection.mode.label} needs data this G-code does not carry. ${missing}`.trim(),
+        );
+      }
+      const result = this.previewSurface.render(session.model, projection);
+      if (result.segmentCount === 0) {
+        return this.deactivatePreviewRendering(
+          'Preview has no drawable moves in the current layer and move filters. Widen the range or enable a move class and try again.',
+        );
+      }
+      this.previewUnsupportedReason = null;
+      this.previewOn = true;
+      this.previewSurface.setVisible(true);
+      // Ghost the models so the toolpath reads clearly.
+      for (const model of this.models) model.viewer.visible = false;
       this.onPreviewStateChanged?.();
-      return false;
+      return true;
+    } catch (error) {
+      return this.deactivatePreviewRendering(previewRenderFailureMessage(error));
     }
-    const result = this.previewSurface.render(session.model, projection);
-    this.previewSurface.setVisible(true);
+  }
+
+  private deactivatePreviewRendering(reason: string): false {
+    this.previewSurface?.clear();
+    this.previewSurface?.setVisible(false);
+    this.previewOn = false;
+    this.previewUnsupportedReason = reason;
+    for (const model of this.models) model.viewer.visible = true;
+    this.setStatus(reason);
     this.onPreviewStateChanged?.();
-    return result.segmentCount > 0;
+    return false;
   }
 
   private clearToolpathPreview() {
@@ -3638,6 +3686,7 @@ export class OrcaWorkspace extends xb.Script {
     this.previewSession = null;
     this.previewSummary = null;
     this.previewOn = false;
+    this.previewUnsupportedReason = null;
     for (const m of this.models) m.viewer.visible = true;
     this.onPreviewStateChanged?.();
   }
@@ -3673,6 +3722,11 @@ export class OrcaWorkspace extends xb.Script {
     if (!session) return { active: false, legend: [], limitations: [], ticks: [], ...base };
     const projection = session.project();
     const inspection = session.inspect();
+    const unsupportedReason =
+      this.previewUnsupportedReason ??
+      (projection.status === 'unsupported'
+        ? projection.missingMetadata.map((entry) => entry.message).join(' ')
+        : undefined);
     const legend =
       projection.status === 'ready'
         ? projection.legend.map((entry) => ({
@@ -3700,11 +3754,7 @@ export class OrcaWorkspace extends xb.Script {
             },
           }
         : {}),
-      ...(projection.status === 'unsupported'
-        ? {
-            unsupportedReason: projection.missingMetadata.map((entry) => entry.message).join(' '),
-          }
-        : {}),
+      ...(unsupportedReason ? { unsupportedReason } : {}),
       limitations: [
         ...projection.limitations.map((entry) => entry.message),
         ...inspection.limitations.map((entry) => entry.message),
@@ -3730,18 +3780,18 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Apply a bounded preview view change and redraw. */
-  public updatePreviewView(patch: GcodePreviewViewPatch): void {
+  public updatePreviewView(patch: GcodePreviewViewPatch): boolean {
     if (!this.previewSession) {
       this.setStatus('Slice or open G-code before changing the preview.');
-      return;
+      return false;
     }
     try {
       this.previewSession.updateView(patch);
     } catch (error) {
       this.setStatus(`Preview: ${(error as Error).message}`);
-      return;
+      return false;
     }
-    this.renderPreviewProjection();
+    return this.renderPreviewProjection();
   }
 
   /** Open a standalone G-code artifact in the viewer without touching the project. */
@@ -3750,18 +3800,20 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus(`${name} is empty.`);
       return false;
     }
-    this.showToolpathPreview(gcode, { kind: 'file', name });
-    if (!this.previewSession) return false;
-    const layers = this.previewSession.layerBounds;
+    if (!this.showToolpathPreview(gcode, { kind: 'file', name })) return false;
+    const session = this.previewSession;
+    if (!session) return false;
+    const layers = session.layerBounds;
     this.setStatus(`Viewing ${name} — layers ${layers[0]}–${layers[1]}.`);
     return true;
   }
 
   /** Toggle between toolpath preview and model view (panel + tests). */
-  togglePreview() {
+  togglePreview(): boolean {
     if (this.previewOn) {
       this.clearToolpathPreview();
       this.setStatus('model view');
+      return true;
     } else {
       const gcode = this.getLastGcode();
       if (!gcode) {
@@ -3770,10 +3822,11 @@ export class OrcaWorkspace extends xb.Script {
             ? 'project changed — slice again to preview current toolpaths'
             : 'slice first to preview toolpaths',
         );
-        return;
+        return false;
       }
-      this.showToolpathPreview(gcode);
+      if (!this.showToolpathPreview(gcode)) return false;
       this.setStatus('toolpath preview');
+      return true;
     }
   }
 

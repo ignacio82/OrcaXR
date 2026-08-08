@@ -28,6 +28,10 @@ function approximatelyValues(actual: ArrayLike<number>, expected: readonly numbe
   expected.forEach((value, index) => approximately(actual[index], value, epsilon));
 }
 
+function pinnedFeedrate(mmPerMinute: number): number {
+  return Math.fround(Math.fround(mmPerMinute) * Math.fround(1 / 60));
+}
+
 function visibleKinds(...kinds: number[]): Uint8Array {
   const mask = new Uint8Array(GCODE_PREVIEW_EVENT_COUNT);
   for (const kind of kinds) mask[kind] = 1;
@@ -108,9 +112,17 @@ test('numeric projections use compact typed columns, pinned ranges, and non-hue 
   assert.ok(speed.valueValid instanceof Uint8Array);
   assert.ok(speed.colorsRgba instanceof Float32Array);
   assert.equal(speed.count, 3);
-  approximatelyValues(speed.values, [10, 30, 10]);
+  const speed10 = pinnedFeedrate(600);
+  const speed30 = pinnedFeedrate(1800);
+  approximatelyValues(speed.values, [speed10, speed30, speed10]);
   assert.deepEqual(Array.from(speed.valueValid), [1, 1, 1]);
-  assert.deepEqual(speed.range, { min: 10, max: 30, unit: 'mm/s', scale: 'linear', sampleCount: 3 });
+  assert.deepEqual(speed.range, {
+    min: speed10,
+    max: speed30,
+    unit: 'mm/s',
+    scale: 'linear',
+    sampleCount: 3,
+  });
   assert.equal(speed.legend.length, 10);
   assert.equal(speed.legend[0].label, '30 mm/s');
   assert.match(speed.legend[0].accessibleLabel, /range step 10 of 10/);
@@ -238,7 +250,7 @@ test('layer-time modes require authoritative metadata and distinguish linear fro
   ]);
 });
 
-test('missing semantic colors and incomplete parsing are reported instead of guessed', () => {
+test('missing semantic colors are explicit and arc parsing retains the following suffix', () => {
   const noColor = parseRichGcodeModel('M83\nG1 X10 E1');
   const unsupported = projectGcodePreview(noColor, {
     mode: 'ColorPrint',
@@ -250,15 +262,15 @@ test('missing semantic colors and incomplete parsing are reported instead of gue
     assert.deepEqual(unsupported.missingMetadata[0].indices, [0]);
   }
 
-  const partial = parseRichGcodeModel('M83\nG1 X1 E1\nG2 X2 Y2 I1 J0\nG1 X3 E1');
-  const projected = projectGcodePreview(partial, {
+  const withArc = parseRichGcodeModel('M83\nG1 X1 E1\nG2 X2 Y2 I1 J0\nG1 X3 E1');
+  const projected = projectGcodePreview(withArc, {
     mode: 'FeatureType',
     eventVisibility: visibleKinds(GCODE_RECORD_KIND.EXTRUDE),
   });
   assert.equal(projected.status, 'ready');
   if (projected.status === 'ready') {
-    assert.equal(projected.count, 1);
-    assert.match(projected.limitations[0].message, /unsupported-arc/);
+    assert.deepEqual(Array.from(projected.recordIndices), [0, 2]);
+    assert.deepEqual(projected.limitations, []);
   }
 });
 
@@ -304,7 +316,7 @@ test('validation and caps fail closed, and projections do not retain mutable out
   const second = projectGcodePreview(model, { mode: 'Feedrate', eventVisibility: extrusionOnly });
   assert.equal(second.status, 'ready');
   if (second.status === 'ready') {
-    assert.equal(second.values[0], 10);
+    assert.equal(second.values[0], pinnedFeedrate(600));
     assert.notEqual(second.colorsRgba[0], 999);
   }
 });

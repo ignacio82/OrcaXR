@@ -89,7 +89,16 @@ engine (`libslic3r` via WASM) as the computational core.
   projected records with the projection's RGBA. Never colour or filter a
   toolpath in the renderer, and never fabricate metadata the projection reports
   as unsupported. Standalone G-code opens read-only and must not touch canonical
-  project state.
+  project state. A pinned XY `G2`/`G3` command remains one semantic/source record:
+  direction, center, and a dense bounded Float32 interpolation slice are sidecar
+  data, and render/inspection consumers expand that slice without renumbering the
+  record or distributing semantic metadata. Preserve the upstream Float32
+  assignment order—word parsing, P's distinct full-circle length, modal Z/height,
+  width, volume, flow, and interpolation floor all have observable boundary
+  behavior. Parser record/path/numeric caps publish no partial arc; the lower
+  renderer cap fails back to model view with retained narrowing controls. Any
+  nonzero arc E stays an extrusion as upstream classifies it, but negative-E
+  width uses an explicit finite web fallback instead of propagating upstream NaN.
 - Colour painting is canonical end to end: `web/src/project/painting/` owns the
   stable-ID palette projection and a UI-independent `PaintStrokeService`; live
   surfaces stream pointer samples, preview with a derived overlay, and commit one

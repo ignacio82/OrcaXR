@@ -5,6 +5,7 @@ import {
   type GcodeRecordKind,
   type RichGcodeModel,
 } from './RichGcodeModel';
+import { validateGcodePathSidecar } from './GcodePathSegments';
 
 export const GCODE_PREVIEW_MODES = Object.freeze([
   { id: 'FeatureType', label: 'Line Type', valueKind: 'category', unit: null, scale: 'categorical' },
@@ -416,6 +417,11 @@ function validateModel(model: RichGcodeModel): void {
     ) {
       invalidModel(`Record ${index} contains a non-finite preview value`);
     }
+  }
+  try {
+    validateGcodePathSidecar(model);
+  } catch (error) {
+    invalidModel(error instanceof Error ? error.message : 'Rich G-code path sidecar is malformed');
   }
 }
 

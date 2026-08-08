@@ -295,7 +295,7 @@ test('focus bounds cover only geometric records inside the selected sequential s
   assert.equal(eventOnly.focusBounds, null);
 });
 
-test('empty and incomplete prefixes stay explicit while malformed columns fail closed', () => {
+test('empty inputs and complete arc suffixes stay explicit while malformed columns fail closed', () => {
   const empty = inspectGcode(parseRichGcodeModel(''));
   assert.equal(empty.layers.count, 0);
   assert.equal(empty.layerSelection, null);
@@ -303,11 +303,10 @@ test('empty and incomplete prefixes stay explicit while malformed columns fail c
   assert.equal(empty.current, null);
   assert.equal(empty.focusBounds, null);
 
-  const partial = parseRichGcodeModel([';LAYER_CHANGE', 'M83', 'G1 X1 E1', 'G2 X2 Y2 I1 J0'].join('\n'));
-  const partialState = inspectGcode(partial);
-  assert.equal(partialState.recordIndices.length, 1);
-  assert.equal(partialState.limitations[0].code, 'source-incomplete');
-  assert.match(partialState.limitations[0].message, /unsupported-arc/);
+  const withArc = parseRichGcodeModel([';LAYER_CHANGE', 'M83', 'G1 X1 E1', 'G2 X2 Y2 I1 J0'].join('\n'));
+  const arcState = inspectGcode(withArc);
+  assert.deepEqual(Array.from(arcState.recordIndices), [1, 2]);
+  assert.deepEqual(arcState.limitations, []);
 
   const base = fixture();
   const malformed: RichGcodeModel = {
