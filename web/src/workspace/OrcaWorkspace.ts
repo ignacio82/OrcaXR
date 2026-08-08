@@ -136,6 +136,15 @@ interface HeadFilamentSelection {
 }
 
 /** Fallback bed until the profile catalog loads. */
+/** Height the given layer prints at, from the inspection layer index. */
+function layerPrintZ(
+  layers: { readonly layerIds: Uint32Array; readonly zMm: Float32Array },
+  layer: number,
+): number | undefined {
+  const ordinal = layers.layerIds.indexOf(layer);
+  return ordinal < 0 ? undefined : layers.zMm[ordinal];
+}
+
 /** One authorable layer event and whether the current profile can perform it. */
 export interface LayerEventCapability {
   readonly type: LayerEventType;
@@ -3493,10 +3502,20 @@ export class OrcaWorkspace extends xb.Script {
     readonly unsupportedReason?: string;
     readonly limitations: readonly string[];
     readonly layerLabel?: string;
+    /** Top Z of the layer the viewer is showing; the height an authored event uses. */
+    readonly layerTopZMm?: number;
+    /** Events the artifact itself contains, in print order. */
+    readonly ticks: readonly {
+      readonly id: string;
+      readonly kind: 'tool-change' | 'color-change' | 'pause' | 'custom';
+      readonly label: string;
+      readonly layer: number;
+      readonly zMm: number;
+    }[];
   } {
     const session = this.previewSession;
     const base = { modes: GCODE_PREVIEW_MODES, moveFilters: GCODE_PREVIEW_MOVE_FILTERS };
-    if (!session) return { active: false, legend: [], limitations: [], ...base };
+    if (!session) return { active: false, legend: [], limitations: [], ticks: [], ...base };
     const projection = session.project();
     const inspection = session.inspect();
     const legend =
@@ -3535,7 +3554,22 @@ export class OrcaWorkspace extends xb.Script {
         ...projection.limitations.map((entry) => entry.message),
         ...inspection.limitations.map((entry) => entry.message),
       ],
-      ...(inspection.layerSelection ? { layerLabel: inspection.layerSelection.accessibleLabel } : {}),
+      ...(inspection.layerSelection
+        ? {
+            layerLabel: inspection.layerSelection.accessibleLabel,
+            layerTopZMm: inspection.layerSelection.lastZMm,
+          }
+        : {}),
+      // Report each event at the height its layer prints at. The record's own Z
+      // is wherever the toolhead happened to be when the marker was emitted —
+      // usually the previous layer, since the Z move follows the layer change.
+      ticks: inspection.ticks.map((tick) => ({
+        id: tick.id,
+        kind: tick.kind,
+        label: tick.label,
+        layer: tick.layer,
+        zMm: layerPrintZ(inspection.layers, tick.layer) ?? tick.zMm,
+      })),
     };
   }
 

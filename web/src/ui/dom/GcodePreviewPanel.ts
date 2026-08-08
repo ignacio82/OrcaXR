@@ -26,6 +26,24 @@ export interface GcodePreviewPanelState {
   readonly unsupportedReason?: string;
   readonly limitations: readonly string[];
   readonly layerLabel?: string;
+  /** Top Z of the layer being shown; the height an authored event uses. */
+  readonly layerTopZMm?: number;
+  /** Events the artifact itself contains, in print order. */
+  readonly ticks: readonly {
+    readonly id: string;
+    readonly kind: 'tool-change' | 'color-change' | 'pause' | 'custom';
+    readonly label: string;
+    readonly layer: number;
+    readonly zMm: number;
+  }[];
+}
+
+/** One event kind the operator can author at the layer currently shown. */
+export interface GcodePreviewAuthorableEvent {
+  readonly type: 'pause' | 'custom';
+  readonly label: string;
+  readonly supported: boolean;
+  readonly reason?: string;
 }
 
 export interface GcodePreviewPanelAdapter {
@@ -33,6 +51,10 @@ export interface GcodePreviewPanelAdapter {
   subscribe?(listener: () => void): () => void;
   onUpdateView(patch: GcodePreviewViewPatch): void | Promise<void>;
   onOpenGcode?(): void | Promise<void>;
+  /** Event kinds the selected printer profile can perform, or none to hide authoring. */
+  getAuthorableEvents?(): readonly GcodePreviewAuthorableEvent[];
+  /** Author one event at the exact height the viewer is showing. */
+  onAuthorEvent?(type: 'pause' | 'custom', topZMm: number): void | Promise<void>;
   onError?(error: unknown): void;
 }
 
@@ -127,6 +149,9 @@ export class GcodePreviewPanel {
       unsupported.textContent = state.unsupportedReason;
       root.append(unsupported);
     }
+    const authoring = this.renderEventAuthoring(state);
+    if (authoring) root.append(authoring);
+    if (state.ticks.length > 0) root.append(this.renderTicks(state));
     if (state.legend.length > 0) root.append(this.renderLegend(state));
     if (state.range) {
       const range = document.createElement('p');
@@ -226,6 +251,69 @@ export class GcodePreviewPanel {
       label.textContent = filter.label;
       wrapper.append(checkbox, label);
       list.append(wrapper);
+    }
+    group.append(list);
+    return group;
+  }
+
+  /**
+   * Author an event at the height on screen. Picking a layer by looking at it
+   * is the reason this lives here rather than only in the inspector's numeric
+   * field — the artifact supplies the exact top Z, so the operator never has to
+   * translate a layer number into millimetres.
+   */
+  private renderEventAuthoring(state: GcodePreviewPanelState): HTMLElement | null {
+    const authorable = this.adapter.getAuthorableEvents?.() ?? [];
+    const topZMm = state.layerTopZMm;
+    if (authorable.length === 0 || !this.adapter.onAuthorEvent || topZMm === undefined) return null;
+    if (state.source?.kind !== 'slice') return null;
+    const document = this.container.ownerDocument;
+    const group = document.createElement('div');
+    group.dataset.previewAuthorEvents = 'true';
+    group.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;';
+    const label = document.createElement('span');
+    label.style.cssText = 'opacity:0.75;';
+    label.textContent = `At ${topZMm.toFixed(2)} mm:`;
+    group.append(label);
+    for (const entry of authorable) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.previewAuthorEvent = entry.type;
+      button.textContent = `Add ${entry.label} here`;
+      button.disabled = !entry.supported;
+      button.title = entry.supported ? `Add a ${entry.label} at ${topZMm.toFixed(2)} mm` : (entry.reason ?? '');
+      button.style.cssText = controlStyle(false);
+      if (!entry.supported) button.style.opacity = '0.55';
+      button.onclick = () => void this.run(() => this.adapter.onAuthorEvent?.(entry.type, topZMm));
+      group.append(button);
+    }
+    return group;
+  }
+
+  /** Events the artifact already contains, located by layer and height. */
+  private renderTicks(state: GcodePreviewPanelState): HTMLElement {
+    const document = this.container.ownerDocument;
+    const group = document.createElement('div');
+    group.dataset.previewTicks = 'true';
+    group.style.cssText = 'display:flex;flex-direction:column;gap:3px;';
+    const heading = document.createElement('p');
+    heading.style.cssText = 'margin:0;opacity:0.75;';
+    heading.textContent = `${state.ticks.length} event${state.ticks.length === 1 ? '' : 's'} in this G-code`;
+    group.append(heading);
+    const list = document.createElement('ul');
+    list.style.cssText = 'list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;';
+    for (const tick of state.ticks) {
+      const item = document.createElement('li');
+      item.dataset.previewTick = tick.kind;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.previewTickGoto = String(tick.layer);
+      button.textContent = `${tick.label} — layer ${tick.layer} (${tick.zMm.toFixed(2)} mm)`;
+      button.style.cssText = `${controlStyle(false)};width:100%;text-align:left;`;
+      button.onclick = () =>
+        void this.run(() => this.adapter.onUpdateView({ layerRange: [tick.layer, tick.layer], singleLayer: true }));
+      item.append(button);
+      list.append(item);
     }
     group.append(list);
     return group;

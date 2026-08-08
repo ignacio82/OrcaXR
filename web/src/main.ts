@@ -1438,6 +1438,30 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
         const invoked = await registry.invoke('view_open_gcode', 'dom-menu', actionCtx, uiState.get());
         if (!invoked) throw new Error('Opening a G-code file is unavailable.');
       },
+      getAuthorableEvents: () =>
+        workspace
+          .getLayerEventCapabilities()
+          .filter(
+            (capability): capability is typeof capability & { type: 'pause' | 'custom' } =>
+              capability.type === 'pause' || capability.type === 'custom',
+          ),
+      onAuthorEvent: async (type, topZMm) => {
+        const snapshot = workspace.getLayerEventSnapshot();
+        const invoked = await registry.invoke('layer_event_mutate', 'dom-inspector', actionCtx, uiState.get(), {
+          layerEventMutation: {
+            operation: 'add',
+            type,
+            topZMm,
+            expectedRevision: snapshot.sourceRevision,
+            sourceHash: snapshot.sourceHash,
+            // A custom event authored from the viewer starts as a marker the
+            // operator edits in the inspector; a body is required, so give it
+            // one that is visible on the printer rather than inventing motion.
+            ...(type === 'custom' ? { code: `M117 layer at ${topZMm.toFixed(2)} mm` } : {}),
+          },
+        });
+        if (!invoked) throw new Error('Layer-event authoring is unavailable in the current workspace state.');
+      },
       onError: (error) => {
         statusText.textContent = `Preview: ${error instanceof Error ? error.message : String(error)}`;
       },

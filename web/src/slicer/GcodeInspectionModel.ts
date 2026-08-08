@@ -373,6 +373,12 @@ function buildLayerIndex(model: RichGcodeModel): GcodeInspectionLayerIndex {
   const last = new Uint32Array(maximumLayer + 1);
   const z = new Float64Array(maximumLayer + 1);
   z.fill(Number.NEGATIVE_INFINITY);
+  // A layer's height is where it is printed, which only extrusions report: a
+  // travel or wipe may be lifted by the retraction Z-hop, and taking the
+  // maximum over those would overstate every layer by the hop and mislocate
+  // anything authored against it.
+  const extrudeZ = new Float64Array(maximumLayer + 1);
+  extrudeZ.fill(Number.NEGATIVE_INFINITY);
   const present = new Uint8Array(maximumLayer + 1);
   for (let record = 0; record < model.columns.count; record += 1) {
     const kind = model.columns.kind[record];
@@ -382,6 +388,9 @@ function buildLayerIndex(model: RichGcodeModel): GcodeInspectionLayerIndex {
     first[layer] = Math.min(first[layer], record);
     last[layer] = record;
     z[layer] = Math.max(z[layer], model.columns.startZ[record], model.columns.endZ[record]);
+    if (kind === GCODE_RECORD_KIND.EXTRUDE) {
+      extrudeZ[layer] = Math.max(extrudeZ[layer], model.columns.startZ[record], model.columns.endZ[record]);
+    }
   }
   const layerIds: number[] = [];
   const zValues: number[] = [];
@@ -390,7 +399,11 @@ function buildLayerIndex(model: RichGcodeModel): GcodeInspectionLayerIndex {
   for (let layer = 0; layer <= maximumLayer; layer += 1) {
     if (present[layer] === 0) continue;
     layerIds.push(layer);
-    zValues.push(Number.isFinite(z[layer]) ? z[layer] : 0);
+    // Prefer the extrusion height; fall back only for a layer that prints
+    // nothing (a travel-only or marker-only layer), where the observed Z is
+    // the only fact available.
+    const printZ = Number.isFinite(extrudeZ[layer]) ? extrudeZ[layer] : z[layer];
+    zValues.push(Number.isFinite(printZ) ? printZ : 0);
     firstRecords.push(first[layer]);
     lastRecords.push(last[layer]);
   }

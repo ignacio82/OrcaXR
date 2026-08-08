@@ -84,6 +84,35 @@ test('indexes exact record-bearing layers, Z values, record bounds, and accessib
   assert.ok(Object.isFrozen(state.layerSelection!));
 });
 
+test('reports the height a layer prints at, not the height a Z-hop travel reached', () => {
+  // A retraction Z-hop lifts the toolhead above the layer it is printing. The
+  // layer's own height is what an operator locates an event by, so a lifted
+  // travel must not raise it.
+  const hopped = parseRichGcodeModel(
+    [
+      'M83',
+      ';LAYER_CHANGE',
+      'G1 Z0.2 F600',
+      'G1 X10 E1',
+      'G1 Z0.6 F9000',
+      'G1 X20',
+      'G1 Z0.2 F9000',
+      'G1 X25 E1',
+      ';LAYER_CHANGE',
+      'G1 Z0.4',
+      'G1 X30 E1',
+    ].join('\n'),
+    {},
+  );
+  const state = inspectGcode(hopped);
+  assertNumbersClose(Array.from(state.layers.zMm), [0.2, 0.4]);
+  assert.equal(state.layerSelection?.accessibleLabel, 'Layers 1 through 2, Z 0.2 through 0.4 mm');
+
+  // A layer that prints nothing has only its observed height to report.
+  const travelOnly = parseRichGcodeModel(['M83', ';LAYER_CHANGE', 'G1 Z0.9 F9000', 'G1 X10'].join('\n'), {});
+  assertNumbersClose(Array.from(inspectGcode(travelOnly).layers.zMm), [0.9]);
+});
+
 test('layer ranges and pinned one-layer mode select exact source records without renumbering', () => {
   const range = inspectGcode(fixture(), { layerRange: [1, 2] });
   assert.deepEqual(Array.from(range.recordIndices), [1, 2, 3, 5, 6, 7, 8, 9]);

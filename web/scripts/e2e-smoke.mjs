@@ -180,6 +180,17 @@ async function inspectStandaloneGcode(page, fixture) {
     opened.legend.every((entry) => entry.code.length > 0 && entry.accessibleLabel.length > 0),
     'legend entries never rely on colour alone',
   );
+  // The fixture's tool change is located for the viewer, but an opened file is
+  // not this project's artifact, so nothing here may author into the project.
+  assert.deepEqual(
+    opened.ticks.map((tick) => [tick.kind, tick.layer]),
+    [['tool-change', 2]],
+  );
+  assert.equal(
+    await page.$eval('[data-preview-ticks="true"]', (group) => group.querySelectorAll('[data-preview-tick]').length),
+    1,
+  );
+  assert.equal(await page.$('[data-preview-author-events="true"]'), null);
   assert.equal(
     await page.evaluate(() => globalThis.window.workspace.getCanonicalSummary().revision),
     beforeRevision,
@@ -442,6 +453,91 @@ async function paintImportedModel(page) {
 }
 
 /**
+ * The preview closes the authoring loop: the artifact's own events appear as
+ * located ticks, and the layer on screen supplies the exact height for a new
+ * one. Authoring drops the published artifact on purpose — it no longer matches
+ * the project — so the preview closing is the assertion, not a surprise.
+ */
+async function inspectAndAuthorFromPreview(page) {
+  await page.evaluate(() => {
+    globalThis.document
+      .querySelector('[data-gcode-preview-panel="true"]')
+      ?.closest('details')
+      ?.setAttribute('open', '');
+  });
+  // A successful slice already opens the preview; only ask for it when it is
+  // closed, or the toggle would close the very view under test.
+  await page.evaluate(() => {
+    if (!globalThis.window.workspace.getPreviewState().active) globalThis.window.workspace.togglePreview();
+  });
+  await page.waitForFunction(() => globalThis.window.workspace.getPreviewState().active === true, { timeout: 60_000 });
+
+  const ticks = await page.evaluate(() => globalThis.window.workspace.getPreviewState().ticks);
+  const pause = ticks.find((tick) => tick.kind === 'pause');
+  assert.ok(pause, `the authored pause appears as a located tick: ${JSON.stringify(ticks)}`);
+  // The engine applies an event to the first layer at or above the authored
+  // height, and the tick reports the height that layer prints at.
+  assert.ok(
+    pause.zMm >= 3.4 && pause.zMm < 3.4 + 0.25,
+    `the tick sits on the first layer at or above 3.4 mm, got ${pause.zMm}`,
+  );
+  assert.match(
+    await page.$eval('[data-preview-tick="pause"] button', (button) => button.textContent ?? ''),
+    /layer \d+ \(3\.4\d mm\)/,
+  );
+
+  // Choosing a tick moves the layer window to it.
+  await page.evaluate(() => globalThis.document.querySelector('[data-preview-tick="pause"] button').click());
+  await page.waitForFunction(
+    (layer) => {
+      const view = globalThis.window.workspace.getPreviewState().view;
+      return view.singleLayer && view.layerRange[0] === layer && view.layerRange[1] === layer;
+    },
+    { timeout: 30_000 },
+    pause.layer,
+  );
+
+  const authoring = await page.$eval('[data-preview-author-events="true"]', (group) => ({
+    label: group.querySelector('span')?.textContent,
+    buttons: [...group.querySelectorAll('[data-preview-author-event]')].map((button) => [
+      button.dataset.previewAuthorEvent,
+      button.disabled,
+    ]),
+  }));
+  assert.match(authoring.label ?? '', /^At 3\.4\d mm:$/);
+  assert.deepEqual(authoring.buttons, [
+    ['pause', false],
+    ['custom', false],
+  ]);
+
+  const before = await page.evaluate(() => globalThis.window.workspace.getLayerEventSnapshot().events.length);
+  await page.evaluate(() => globalThis.document.querySelector('[data-preview-author-event="custom"]').click());
+  await page.waitForFunction(
+    (count) => globalThis.window.workspace.getLayerEventSnapshot().events.length === count + 1,
+    { timeout: 30_000 },
+    before,
+  );
+  const authored = await page.evaluate(() =>
+    globalThis.window.workspace.getLayerEventSnapshot().events.map((row) => [row.event.type, row.event.topZMm]),
+  );
+  assert.equal(authored.length, 2);
+  assert.ok(
+    authored.some(([type, z]) => type === 'custom' && Math.abs(z - pause.zMm) < 0.001),
+    `the new event took the layer's own height: ${JSON.stringify(authored)}`,
+  );
+  // Authoring changed the project, so the artifact it was viewing is gone.
+  await page.waitForFunction(() => globalThis.window.__orcaUi.get().gcodeReady === false, { timeout: 30_000 });
+  assert.equal(await page.evaluate(() => globalThis.window.workspace.getPreviewState().active), false);
+
+  await clickMenuAction(page, 'edit_undo');
+  await page.waitForFunction(
+    (count) => globalThis.window.workspace.getLayerEventSnapshot().events.length === count,
+    { timeout: 30_000 },
+    before,
+  );
+}
+
+/**
  * Author a pause through the real panel. The height is what the engine
  * resolves against its own layers, so the assertion after slicing is that the
  * emitted G-code actually pauses — not merely that the project stored a row.
@@ -632,6 +728,7 @@ async function sliceAndSendActivePlate(page, printer) {
   );
 
   await controlRunningPrint(page, printer);
+  await inspectAndAuthorFromPreview(page);
 
   await clickMenuAction(page, 'edit_undo');
   await page.waitForFunction(() => globalThis.window.workspace.getLayerEventSnapshot().events.length === 0, {
@@ -2338,7 +2435,7 @@ try {
   assert.deepStrictEqual(pageErrors, [], `uncaught page errors: ${pageErrors.join('\n')}`);
   assert.deepStrictEqual(policyErrors, [], `CSP violations: ${policyErrors.join('\n')}`);
   console.log(
-    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings, guarded plate management, an authored layer pause that reaches the sliced G-code, and a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel).',
+    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings, guarded plate management, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick, and a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel).',
   );
 } finally {
   await browser.close();
