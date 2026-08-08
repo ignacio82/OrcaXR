@@ -21,6 +21,7 @@ import {
 } from '../project/slicing';
 import type { ProjectSettingsOverrideGuard, ProjectSettingsOverrideSnapshot } from '../project/settingsOverrides';
 import { detectModelFormat } from '../project/import/formats';
+import type { LayerEventType } from '../project/domain/model';
 import type { PrintJobCommand } from '../printer/PrintJobControl';
 import type { PrintJobIntent } from '../printer/PrintJobSubmission';
 import { summarizeGcodeToolUsage } from '../printer/PrintToolMapping';
@@ -53,6 +54,8 @@ import {
   type CanonicalAutoPairReconciliationConfirmation,
   type CanonicalAutoPairReconciliationResult,
   type CanonicalAutoPairPolicySnapshot,
+  type CanonicalLayerEventMutationRequest,
+  type CanonicalLayerEventSnapshot,
   type CanonicalObjectsTreeSnapshot,
   type CanonicalSemanticLayerRangeRequest,
   type CanonicalSemanticObjectEditorSnapshot,
@@ -133,6 +136,23 @@ interface HeadFilamentSelection {
 }
 
 /** Fallback bed until the profile catalog loads. */
+/** One authorable layer event and whether the current profile can perform it. */
+export interface LayerEventCapability {
+  readonly type: LayerEventType;
+  readonly label: string;
+  readonly supported: boolean;
+  readonly reason?: string;
+}
+
+/** Operator-facing names for each authored layer event. */
+const LAYER_EVENT_LABELS: Readonly<Record<LayerEventType, string>> = Object.freeze({
+  'color-change': 'colour change',
+  pause: 'pause',
+  'tool-change': 'tool change',
+  template: 'template G-code',
+  custom: 'custom G-code',
+});
+
 const PLATE_MM = 200;
 const MM = 0.001;
 
@@ -601,6 +621,57 @@ export class OrcaWorkspace extends xb.Script {
   /** Revision-bound physical/virtual library for the shared FullSpectrum editor. */
   public getVirtualFilamentLibrarySnapshot(): CanonicalVirtualFilamentLibrarySnapshot {
     return this.canonicalProject.getVirtualFilamentLibrarySnapshot();
+  }
+
+  /** Revision-bound layer events for the active plate, in print order. */
+  public getLayerEventSnapshot(): CanonicalLayerEventSnapshot {
+    return this.canonicalProject.getLayerEventSnapshot();
+  }
+
+  /**
+   * Which event kinds the selected printer profile can actually perform.
+   *
+   * Pause, template, and colour change take their body from a profile setting;
+   * when that setting is empty the engine emits an empty marker and the printer
+   * does nothing. Offering such an event would be a silent no-op, so it is
+   * reported as unsupported with the exact missing key instead.
+   */
+  public getLayerEventCapabilities(): readonly LayerEventCapability[] {
+    const bodyKey: Readonly<Partial<Record<LayerEventType, string>>> = {
+      pause: 'machine_pause_gcode',
+      template: 'template_custom_gcode',
+      'color-change': 'color_change_gcode',
+    };
+    return Object.freeze(
+      (['pause', 'color-change', 'template', 'custom'] as const).map((type) => {
+        const key = bodyKey[type];
+        const value = key ? unambiguousProfileScalar(this.profile?.config[key]) : undefined;
+        const supported = key === undefined || (value !== undefined && value.length > 0);
+        return Object.freeze({
+          type,
+          label: LAYER_EVENT_LABELS[type],
+          supported,
+          ...(supported ? {} : { reason: `The selected printer profile has no ${key}.` }),
+        });
+      }),
+    );
+  }
+
+  /**
+   * One guarded layer-event change. Authoring an event changes what the machine
+   * will do mid-print, so the published artifact is revalidated immediately:
+   * the G-code on disk no longer matches the project that produced it.
+   */
+  public mutateLayerEvent(request: CanonicalLayerEventMutationRequest): void {
+    this.canonicalProject.mutateLayerEvent(request);
+    this.revalidatePublishedGcode();
+    this.setStatus(
+      request.operation === 'delete'
+        ? 'Removed the layer event; slice again to apply it.'
+        : request.operation === 'edit'
+          ? 'Updated the layer event; slice again to apply it.'
+          : `Added a ${LAYER_EVENT_LABELS[request.type]} at ${request.topZMm.toFixed(2)} mm; slice again to apply it.`,
+    );
   }
 
   /** One registry-routed, guarded canonical FullSpectrum lifecycle request. */
@@ -4705,9 +4776,14 @@ export class OrcaWorkspace extends xb.Script {
   public setStatus(text: string, percent?: number) {
     this.lastStatusText = text;
     // Troika's XR font atlas does not include a few typographic symbols used
-    // by profile display names (notably · and ×). Keep DOM status text intact
+    // by profile display names (notably ·, ×, —, –). Keep DOM status text intact
     // but feed the immersive card a supported, equally legible equivalent.
-    const xrText = text.replaceAll('·', '-').replaceAll('×', 'x').replaceAll('…', '...');
+    const xrText = text
+      .replaceAll('·', '-')
+      .replaceAll('×', 'x')
+      .replaceAll('…', '...')
+      .replaceAll('—', '-')
+      .replaceAll('–', '-');
     if (this.statusText) {
       this.statusText.setText(xrText);
     }

@@ -238,12 +238,41 @@ export interface MixedFilament {
   extensionData?: Record<string, JsonValue>;
 }
 
+/**
+ * Event kinds the pinned engine understands at a layer boundary
+ * (`CustomGCode::Type` in `src/libslic3r/CustomGCode.hpp`). `pause` and
+ * `template` take their body from the printer profile; `custom` carries its
+ * own; `color-change` and `tool-change` address one tool.
+ */
+export type LayerEventType = 'color-change' | 'pause' | 'tool-change' | 'template' | 'custom';
+
+/**
+ * One authored event bound to an exact print height. The engine applies it to
+ * the first layer whose top Z is at or above `topZMm`, so the stored value is
+ * the operator's intent rather than a resolved layer index that a layer-height
+ * change would silently invalidate.
+ */
+export interface CustomGcodeLayerEvent {
+  type: LayerEventType;
+  topZMm: number;
+  /** 1-based engine tool for colour/tool changes; absent otherwise. */
+  toolIndex?: number;
+  /** Stable filament the tool index was derived from, when one applies. */
+  filamentId?: FilamentId;
+  /** Badge colour the authoring surface shows. */
+  color?: string;
+  /** Operator-visible message a pause shows on the printer. */
+  message?: string;
+}
+
 export interface CustomGcode {
   id: CustomGcodeId;
   scope: 'project' | 'plate';
   plateId?: PlateId;
   trigger: 'before-plate' | 'after-plate' | 'before-layer' | 'after-layer' | 'tool-change';
   code: string;
+  /** Present when this entry is an authored layer event rather than a hook. */
+  layerEvent?: CustomGcodeLayerEvent;
 }
 
 export interface ProjectThumbnail {

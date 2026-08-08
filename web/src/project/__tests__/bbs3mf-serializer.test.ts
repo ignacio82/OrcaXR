@@ -9,6 +9,7 @@ import {
   UnsafeThreeMfArchiveError,
   canonicalStringify,
   entityId,
+  layerEventEntry,
   projectFingerprint,
   readSafeZip,
   writeDeterministicZip,
@@ -725,5 +726,76 @@ function findBytes(haystack: Uint8Array, needle: Uint8Array): number {
   }
   return -1;
 }
+
+await test('projects layer events into the engine format and reads them back', async () => {
+  const fixture = createProjectFixture();
+  const plateId = fixture.state.plates[0].id;
+  fixture.state.customGcode = [
+    layerEventEntry({
+      id: entityId<'custom-gcode'>('import:test:fixture-pause'),
+      plateId,
+      type: 'pause',
+      topZMm: 4.2,
+      message: 'Insert the magnet',
+    }),
+    layerEventEntry({
+      id: entityId<'custom-gcode'>('import:test:fixture-custom'),
+      plateId,
+      type: 'custom',
+      topZMm: 1.6,
+      code: 'M117 half way',
+    }),
+    layerEventEntry({
+      id: entityId<'custom-gcode'>('import:test:fixture-colour'),
+      plateId,
+      type: 'color-change',
+      topZMm: 8,
+      toolIndex: 2,
+      color: '#00FF00',
+    }),
+  ];
+  const serializer = new Bbs3mfProjectSerializer();
+  const saved = await serializer.serialize({
+    state: fixture.state,
+    assets: [fixture.asset],
+    sourceRevision: 11,
+    sourceHash: projectFingerprint(fixture.state),
+  });
+  const files = readSafeZip(saved.bytes);
+  const xml = new TextDecoder().decode(files.get('Metadata/custom_gcode_per_layer.xml'));
+
+  // Exactly the attributes the pinned importer reads, in print order, with the
+  // engine's own numeric type codes.
+  const layers = [...xml.matchAll(/<layer\b([^>]*)\/>/g)].map((match) => match[1]);
+  assert.equal(layers.length, 3);
+  assert.match(layers[0], /top_z="1\.6"[\s\S]*type="4"[\s\S]*extra="M117 half way"[\s\S]*gcode="M117 half way"/);
+  assert.match(layers[1], /top_z="4\.2"[\s\S]*type="1"[\s\S]*extra="Insert the magnet"[\s\S]*gcode="M601"/);
+  assert.match(layers[2], /top_z="8"[\s\S]*type="0"[\s\S]*extruder="2"[\s\S]*color="#00FF00"[\s\S]*gcode="M600"/);
+  assert.match(xml, /<plate_info id="1"\/>/);
+  assert.match(xml, /<mode value="MultiExtruder"\/>/);
+
+  // Canonical reopen keeps the authored events verbatim.
+  const reopened = await serializer.deserialize(saved.bytes);
+  assert.deepEqual(
+    reopened.state.customGcode.map((entry) => entry.layerEvent),
+    fixture.state.customGcode.map((entry) => entry.layerEvent),
+  );
+
+  // A foreign project — the same package without the OrcaXR envelope — has to
+  // recover the same events from the engine file alone.
+  files.delete(ORCAXR_EXTENSION_PATH);
+  const foreign = await serializer.deserialize(writeDeterministicZip(files));
+  assert.deepEqual(
+    foreign.state.customGcode
+      .map((entry) => entry.layerEvent)
+      .sort((left, right) => (left?.topZMm ?? 0) - (right?.topZMm ?? 0)),
+    [
+      { type: 'custom', topZMm: 1.6, toolIndex: 1 },
+      { type: 'pause', topZMm: 4.2, toolIndex: 1, message: 'Insert the magnet' },
+      { type: 'color-change', topZMm: 8, toolIndex: 2, color: '#00FF00' },
+    ],
+  );
+  assert.equal(foreign.state.customGcode.find((entry) => entry.layerEvent?.type === 'custom')?.code, 'M117 half way');
+});
 
 console.log(`\nBBS-compatible 3MF serializer: ${passed} tests passed.`);

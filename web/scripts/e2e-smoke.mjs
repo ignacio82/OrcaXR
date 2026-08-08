@@ -442,6 +442,47 @@ async function paintImportedModel(page) {
 }
 
 /**
+ * Author a pause through the real panel. The height is what the engine
+ * resolves against its own layers, so the assertion after slicing is that the
+ * emitted G-code actually pauses — not merely that the project stored a row.
+ */
+async function authorLayerPause(page) {
+  await page.$eval('#layer-event-host', (host) => host.closest('details')?.setAttribute('open', ''));
+  await page.waitForSelector('[data-layer-event-panel="true"]');
+  assert.equal(
+    await page.$eval('[data-layer-event-empty]', (node) => node.textContent),
+    'No layer events on this plate.',
+  );
+  const options = await page.$$eval('[data-layer-event-option]', (nodes) =>
+    nodes.map((node) => [node.dataset.layerEventOption, node.disabled]),
+  );
+  assert.deepEqual(
+    options.filter(([, disabled]) => !disabled).map(([type]) => type),
+    ['pause', 'custom'],
+    'only the event kinds this printer profile can perform are offered',
+  );
+
+  await page.evaluate(() => {
+    const document = globalThis.document;
+    document.querySelector('[data-layer-event-type="true"]').value = 'pause';
+    document.querySelector('[data-layer-event-type="true"]').dispatchEvent(new globalThis.Event('change'));
+    document.querySelector('[data-layer-event-height="true"]').value = '3.4';
+    document.querySelector('[data-layer-event-detail="true"]').value = 'Insert the magnet';
+    document.querySelector('[data-layer-event-add="true"]').click();
+  });
+  await page.waitForFunction(() => globalThis.window.workspace.getLayerEventSnapshot().events.length === 1, {
+    timeout: 30_000,
+  });
+  const authored = await page.evaluate(() => globalThis.window.workspace.getLayerEventSnapshot().events[0]);
+  assert.deepEqual(authored.event, { type: 'pause', topZMm: 3.4, message: 'Insert the magnet' });
+  assert.match(
+    await page.$eval('[data-layer-event-row]', (row) => row.textContent ?? ''),
+    /Pause at 3\.40 mm — Insert the magnet/,
+  );
+  await page.$eval('#layer-event-host', (host) => host.closest('details')?.removeAttribute('open'));
+}
+
+/**
  * The whole multicolor output path in one pass: assign a second filament to a
  * second object through the Objects panel, slice the plate, then send it to a
  * Moonraker printer. Every safety property that guards a real machine is
@@ -500,6 +541,8 @@ async function sliceAndSendActivePlate(page, printer) {
     { id: objects[1].id, filamentId: filaments[1].id },
   );
 
+  await authorLayerPause(page);
+
   await page.click('#action-panel [data-action-id="slice_active_plate"]');
   await page.waitForFunction(() => globalThis.window.__orcaUi.get().gcodeReady === true, { timeout: 600_000 });
   const artifact = await page.evaluate(() => {
@@ -513,10 +556,14 @@ async function sliceAndSendActivePlate(page, printer) {
       tools: [...new Set([...gcode.matchAll(/^T(\d+)\b/gm)].map((match) => Number(match[1])))].sort(),
       colours: /^; filament_colour = (.+)$/m.exec(gcode)?.[1].split(';') ?? [],
       types: /^; filament_type = (.+)$/m.exec(gcode)?.[1].split(';') ?? [],
+      pauses: (gcode.match(/^;PAUSE_PRINT$/gm) ?? []).length,
+      pauseBody: /^;PAUSE_PRINT\n(.+)$/m.exec(gcode)?.[1] ?? '',
     };
   });
   assert.deepEqual(artifact.tools, [0, 1], 'the assigned second filament reaches the G-code as a second tool');
   assert.ok(artifact.colours.length >= 2 && artifact.types.length >= 2, 'the artifact declares its filaments');
+  assert.equal(artifact.pauses, 1, 'the authored pause reaches the engine and appears once in the G-code');
+  assert.equal(artifact.pauseBody, 'M600', 'the pause emits the body this printer profile declares');
 
   await page.$eval('#printer-panel', (panel) => panel.closest('details')?.setAttribute('open', ''));
   await page.$eval(
@@ -586,6 +633,10 @@ async function sliceAndSendActivePlate(page, printer) {
 
   await controlRunningPrint(page, printer);
 
+  await clickMenuAction(page, 'edit_undo');
+  await page.waitForFunction(() => globalThis.window.workspace.getLayerEventSnapshot().events.length === 0, {
+    timeout: 30_000,
+  });
   await clickMenuAction(page, 'edit_undo');
   await page.waitForFunction(
     (id) =>

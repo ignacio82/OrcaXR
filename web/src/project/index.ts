@@ -17,6 +17,7 @@ export * from './import/ProjectImportCoordinator';
 export * from './import/types';
 export * from './migration';
 export * from './meshCodec';
+export * from './layerEventCommands';
 export * from './objects';
 export * from './ports';
 export * from './selection';

@@ -26,6 +26,7 @@ const PAINT_TOOL_FOR_CHANNEL: Readonly<Record<PaintChannel, ToolName>> = Object.
 });
 import type {
   CanonicalFilamentAssignableEntityRef,
+  CanonicalLayerEventMutationRequest,
   CanonicalSemanticLayerRangeRequest,
   CanonicalSemanticVolumeRoleRequest,
   CanonicalVirtualFilamentMutationRequest,
@@ -109,6 +110,9 @@ export class ActionContext {
     guard: Readonly<{ sourceRevision: number; sourceHash: string }>,
   ): void {
     this.workspace.setFilamentAssignments(entities, filamentId, guard);
+  }
+  mutateLayerEvent(request: CanonicalLayerEventMutationRequest): void {
+    this.workspace.mutateLayerEvent(request);
   }
   convertSemanticVolumeRole(request: CanonicalSemanticVolumeRoleRequest): void {
     this.workspace.convertSemanticVolumeRole(request);

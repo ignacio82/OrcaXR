@@ -84,6 +84,21 @@ export const objectsActions: Action[] = [
     },
   },
   {
+    id: 'layer_event_mutate',
+    label: 'Author layer events',
+    icon: 'layers_edit',
+    group: 'slice',
+    disclosure: 'inspector',
+    hint: 'Add, edit, or delete a pause, colour change, or custom G-code at an exact height',
+    run: (ctx, invocation) => {
+      if (!invocation.layerEventMutation) {
+        ctx.reportCapabilityUnavailable('Author layer events', 'Choose a layer event to add, edit, or delete.');
+        return;
+      }
+      ctx.mutateLayerEvent(invocation.layerEventMutation);
+    },
+  },
+  {
     id: 'objects_edit_layer_range',
     label: 'Edit object height ranges',
     icon: 'height_range',

@@ -1,11 +1,13 @@
 import { canonicalStringify, cloneJson, fnv1a64 } from '../domain/canonical';
-import { entityId, type FilamentId } from '../domain/ids';
+import { entityId, type CustomGcodeId, type FilamentId, type PlateId } from '../domain/ids';
 import type { AssetPayload } from '../assets';
 import { contentDigest } from '../assets';
 import type {
   ConfigMap,
+  CustomGcode,
   FacetAnnotations,
   JsonValue,
+  LayerEventType,
   LayerRange,
   PhysicalFilament,
   ProjectObject,
@@ -28,6 +30,7 @@ export const MODEL_RELS_PATH = '3D/_rels/3dmodel.model.rels';
 export const PROJECT_SETTINGS_PATH = 'Metadata/project_settings.config';
 export const MODEL_SETTINGS_PATH = 'Metadata/model_settings.config';
 export const LAYER_RANGES_PATH = 'Metadata/layer_config_ranges.xml';
+export const LAYER_EVENTS_PATH = 'Metadata/custom_gcode_per_layer.xml';
 
 const ORCAXR_CORE_NAMESPACE = 'https://orcaxr.martinez.fyi/3mf/project/1';
 const CORE_OBJECT_ATTRIBUTES_KEY = `${ORCAXR_CORE_NAMESPACE}/core-object-attributes`;
@@ -65,6 +68,7 @@ export const GENERATED_STANDARD_PATHS = new Set([
   PROJECT_SETTINGS_PATH,
   MODEL_SETTINGS_PATH,
   LAYER_RANGES_PATH,
+  LAYER_EVENTS_PATH,
 ]);
 
 export interface BbsCoreBuild {
@@ -340,9 +344,11 @@ export function buildBbsCore(state: ProjectState, assets: ReadonlyMap<string, As
   const layerRanges = buildLayerRanges(mappings, filamentSlots);
   if (layerRanges) files.set(LAYER_RANGES_PATH, encodeText(layerRanges));
   files.set(MODEL_RELS_PATH, encodeText(emptyRelationships()));
-  if (state.customGcode.length > 0) {
+  const layerEvents = buildLayerEvents(state, orderedPlates);
+  if (layerEvents) files.set(LAYER_EVENTS_PATH, encodeText(layerEvents));
+  if (state.customGcode.some((entry) => !entry.layerEvent)) {
     warnings.push(
-      'Custom G-code is preserved losslessly in the OrcaXR extension; the canonical model does not yet carry every BBS height/event field needed for an official custom_gcode_per_layer.xml projection',
+      'Custom G-code hooks that are not layer events are preserved losslessly in the OrcaXR extension; the canonical model does not yet carry every BBS field needed to project them',
     );
   }
   if (state.extensionData || state.extensionBlobs.length > 0) {
@@ -745,6 +751,70 @@ function bbsConfigValue(value: JsonValue): JsonValue {
   if (Array.isArray(value)) return value.map((entry) => bbsValue(entry));
   if (typeof value === 'string') return value;
   return bbsValue(value);
+}
+
+/**
+ * Engine event codes, from `CustomGCode::Type` in the pinned tree. The reader
+ * keys off `type`; the `gcode` attribute exists for pre-2.3 readers that only
+ * understood the command string, so both are emitted.
+ */
+const LAYER_EVENT_TYPE_CODES: Readonly<Record<LayerEventType, number>> = Object.freeze({
+  'color-change': 0,
+  pause: 1,
+  'tool-change': 2,
+  template: 3,
+  custom: 4,
+});
+const LEGACY_LAYER_EVENT_GCODE: Readonly<Record<LayerEventType, string>> = Object.freeze({
+  'color-change': 'M600',
+  pause: 'M601',
+  'tool-change': 'tool_change',
+  template: '',
+  custom: '',
+});
+
+/**
+ * Project authored layer events into the engine's own
+ * `custom_gcode_per_layer.xml`. Without this file the events exist only in the
+ * OrcaXR envelope and never reach the slicer, so a pause the operator added
+ * would silently not happen.
+ */
+function buildLayerEvents(state: ProjectState, orderedPlates: readonly ProjectPlate[]): string | undefined {
+  const byPlate = new Map<PlateId, CustomGcode[]>();
+  for (const entry of state.customGcode) {
+    if (!entry.layerEvent || entry.scope !== 'plate' || !entry.plateId) continue;
+    byPlate.set(entry.plateId, [...(byPlate.get(entry.plateId) ?? []), entry]);
+  }
+  if (byPlate.size === 0) return undefined;
+
+  const lines = ['<?xml version="1.0" encoding="utf-8"?>', '<custom_gcodes_per_layer>'];
+  for (const plate of orderedPlates) {
+    const events = byPlate.get(plate.id);
+    if (!events || events.length === 0) continue;
+    lines.push('<plate>');
+    lines.push(`<plate_info id="${plate.order + 1}"/>`);
+    for (const entry of [...events].sort(
+      (left, right) => (left.layerEvent?.topZMm ?? 0) - (right.layerEvent?.topZMm ?? 0),
+    )) {
+      const event = entry.layerEvent!;
+      // `extra` is where BBS keeps the operator-visible pause message and the
+      // body of a custom event; every other type leaves it empty.
+      const extra = event.type === 'custom' ? entry.code : (event.message ?? '');
+      const gcode = event.type === 'custom' ? entry.code : LEGACY_LAYER_EVENT_GCODE[event.type];
+      lines.push(
+        `<layer top_z="${formatNumber(event.topZMm)}" type="${LAYER_EVENT_TYPE_CODES[event.type]}"` +
+          ` extruder="${event.toolIndex ?? 1}" color="${xmlAttribute(event.color ?? '')}"` +
+          ` extra="${xmlAttribute(extra)}" gcode="${xmlAttribute(gcode)}"/>`,
+      );
+    }
+    // Multi-tool machines resolve events per extruder; single-extruder
+    // multi-material projects are the MultiAsSingle case, which OrcaXR does
+    // not author yet.
+    lines.push('<mode value="MultiExtruder"/>');
+    lines.push('</plate>');
+  }
+  lines.push('</custom_gcodes_per_layer>', '');
+  return lines.length > 4 ? lines.join('\n') : undefined;
 }
 
 function buildLayerRanges(
@@ -1644,7 +1714,7 @@ export function importBbsCore(files: ReadonlyMap<string, Uint8Array>, archiveHas
     plates,
     filaments: { physical, mixed },
     sourceAssets,
-    customGcode: [],
+    customGcode: importedLayerEvents(files, plates, makeId, warnings),
     thumbnails: [],
     extensionBlobs: [],
   };
@@ -1652,6 +1722,7 @@ export function importBbsCore(files: ReadonlyMap<string, Uint8Array>, archiveHas
   if (files.has(PROJECT_SETTINGS_PATH)) consumedPaths.add(PROJECT_SETTINGS_PATH);
   if (files.has(MODEL_SETTINGS_PATH)) consumedPaths.add(MODEL_SETTINGS_PATH);
   if (files.has(LAYER_RANGES_PATH)) consumedPaths.add(LAYER_RANGES_PATH);
+  if (files.has(LAYER_EVENTS_PATH)) consumedPaths.add(LAYER_EVENTS_PATH);
   return { state, assets, consumedPaths, warnings };
 }
 
@@ -2212,6 +2283,94 @@ function parseLayerRanges(bytes: Uint8Array | undefined): Map<number, Array<Omit
     result.set(objectId, ranges);
   }
   return result;
+}
+
+/** Bind parsed events to canonical plates, dropping any that name a missing one. */
+function importedLayerEvents(
+  files: ReadonlyMap<string, Uint8Array>,
+  plates: readonly ProjectPlate[],
+  makeId: <Kind extends string>(kind: Kind, suffix: string) => string,
+  warnings: string[],
+): CustomGcode[] {
+  const byPlateIndex = parseLayerEvents(files.get(LAYER_EVENTS_PATH));
+  if (byPlateIndex.size === 0) return [];
+  const events: CustomGcode[] = [];
+  let dropped = 0;
+  for (const [plateIndex, entries] of [...byPlateIndex].sort(([left], [right]) => left - right)) {
+    const plate = plates[plateIndex - 1];
+    if (!plate) {
+      dropped += entries.length;
+      continue;
+    }
+    entries.forEach((entry, position) => {
+      events.push({
+        ...entry,
+        id: makeId('custom-gcode', `${plateIndex}-${position + 1}`) as CustomGcodeId,
+        plateId: plate.id,
+      });
+    });
+  }
+  if (dropped > 0) {
+    warnings.push(
+      `${dropped} layer event${dropped === 1 ? '' : 's'} named a plate this project does not contain and were not imported; the original file remains preserved`,
+    );
+  }
+  return events;
+}
+
+/**
+ * Read the engine's layer events, keyed by its 1-based plate index. Entries the
+ * canonical model cannot represent faithfully (an unknown type code, a
+ * nonsensical height) are dropped rather than guessed; the original file stays
+ * preserved as an opaque member either way.
+ */
+function parseLayerEvents(bytes: Uint8Array | undefined): Map<number, Array<Omit<CustomGcode, 'id' | 'plateId'>>> {
+  const result = new Map<number, Array<Omit<CustomGcode, 'id' | 'plateId'>>>();
+  if (!bytes) return result;
+  const xml = decodeText(bytes, LAYER_EVENTS_PATH);
+  const codeToType = new Map<number, LayerEventType>(
+    Object.entries(LAYER_EVENT_TYPE_CODES).map(([type, code]) => [code, type as LayerEventType]),
+  );
+  let fallbackPlateIndex = 0;
+  for (const plateMatch of xml.matchAll(/<plate\b[^>]*>([\s\S]*?)<\/plate>/gi)) {
+    fallbackPlateIndex += 1;
+    const body = plateMatch[1];
+    const declared = Number(parseAttributes(/<plate_info\b([^>]*)\/?\s*>/i.exec(body)?.[1] ?? '').id);
+    const plateIndex = Number.isInteger(declared) && declared > 0 ? declared : fallbackPlateIndex;
+    const events: Array<Omit<CustomGcode, 'id' | 'plateId'>> = [];
+    for (const layerMatch of body.matchAll(/<layer\b([^>]*)\/?\s*>/gi)) {
+      const attrs = parseAttributes(layerMatch[1]);
+      const topZMm = Number(attrs.top_z);
+      if (!Number.isFinite(topZMm) || topZMm <= 0) continue;
+      const type = codeToType.get(Number(attrs.type)) ?? legacyLayerEventType(decodeXml(attrs.gcode ?? ''));
+      if (!type) continue;
+      const toolIndex = Number(attrs.extruder);
+      const color = decodeXml(attrs.color ?? '');
+      const extra = decodeXml(attrs.extra ?? '');
+      events.push({
+        scope: 'plate',
+        trigger: 'before-layer',
+        code: type === 'custom' ? extra || decodeXml(attrs.gcode ?? '') : '',
+        layerEvent: {
+          type,
+          topZMm,
+          ...(Number.isInteger(toolIndex) && toolIndex >= 1 ? { toolIndex } : {}),
+          ...(color ? { color } : {}),
+          ...(type === 'pause' && extra ? { message: extra } : {}),
+        },
+      });
+    }
+    if (events.length > 0) result.set(plateIndex, events);
+  }
+  return result;
+}
+
+/** Pre-2.3 files carried only the command string; map the ones it could hold. */
+function legacyLayerEventType(gcode: string): LayerEventType | undefined {
+  if (gcode === 'M600') return 'color-change';
+  if (gcode === 'M601') return 'pause';
+  if (gcode === 'tool_change') return 'tool-change';
+  return gcode.length > 0 ? 'custom' : undefined;
 }
 
 function parseMetadataConfig(xml: string): ConfigMap {

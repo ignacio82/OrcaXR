@@ -19,6 +19,7 @@ import type { PaintChannel, PaintToolKind } from '../project/painting/PaintStrok
 import type { GcodePreviewViewPatch } from '../slicer/GcodePreviewSession';
 import type {
   CanonicalFilamentAssignableEntityRef,
+  CanonicalLayerEventMutationRequest,
   CanonicalSemanticLayerRangeRequest,
   CanonicalSemanticVolumeRoleRequest,
   CanonicalVirtualFilamentMutationRequest,
@@ -159,6 +160,8 @@ export interface ActionInvocation {
   semanticVolumeRole?: CanonicalSemanticVolumeRoleRequest;
   /** Revision/hash/object-bound height-range lifecycle request. */
   semanticLayerRange?: CanonicalSemanticLayerRangeRequest;
+  /** Revision-guarded add/edit/delete of one authored layer event. */
+  layerEventMutation?: CanonicalLayerEventMutationRequest;
   /** Complete revision/hash-guarded FullSpectrum add/edit/duplicate/toggle/delete request. */
   virtualFilamentMutation?: CanonicalVirtualFilamentMutationRequest;
   /** Explicit app preference plus the pinned count-bound confirmation, when required. */

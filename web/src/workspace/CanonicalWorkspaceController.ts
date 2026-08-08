@@ -17,6 +17,7 @@ import {
 import { canonicalStringify, cloneJson, cloneProjectState, deepFreeze } from '../project/domain/canonical';
 import type {
   AssetId,
+  CustomGcodeId,
   FilamentId,
   IdSource,
   InstanceId,
@@ -34,6 +35,8 @@ import {
   emptyFacetAnnotations,
   identityTransform,
   type ConfigMap,
+  type CustomGcodeLayerEvent,
+  type LayerEventType,
   type MixedFilament,
   type PhysicalFilament,
   type ProjectObject,
@@ -50,6 +53,13 @@ import {
   resolveFilament,
 } from '../project/domain/selectors';
 import { assertValidProjectState } from '../project/domain/validation';
+import {
+  AddLayerEventCommand,
+  DeleteLayerEventCommand,
+  EditLayerEventCommand,
+  plateLayerEvents,
+  type LayerEventPatch,
+} from '../project/layerEventCommands';
 import { SetFilamentAssignmentsCommand, type FilamentAssignmentChange } from '../project/filaments/commands';
 import {
   allocateFullSpectrumAutoPairIdentity,
@@ -509,6 +519,48 @@ export type CanonicalVirtualFilamentMutationRequest = CanonicalVirtualFilamentMu
     | { readonly operation: 'set-enabled'; readonly filamentId: MixedFilamentId; readonly enabled: boolean }
     | { readonly operation: 'delete'; readonly filamentId: MixedFilamentId }
   );
+
+export interface CanonicalLayerEventRow {
+  readonly id: CustomGcodeId;
+  readonly event: CustomGcodeLayerEvent;
+  /** Body the engine emits; only a custom event has one. */
+  readonly code: string;
+}
+
+export interface CanonicalLayerEventSnapshot {
+  readonly sourceRevision: number;
+  readonly sourceHash: string;
+  readonly plateId: PlateId;
+  /** Events on the active plate, in print order. */
+  readonly events: readonly CanonicalLayerEventRow[];
+}
+
+export type CanonicalLayerEventMutationRequest = Readonly<{
+  expectedRevision: number;
+  sourceHash: string;
+}> &
+  (
+    | {
+        readonly operation: 'add';
+        readonly type: LayerEventType;
+        readonly topZMm: number;
+        readonly toolIndex?: number;
+        readonly filamentId?: FilamentId;
+        readonly color?: string;
+        readonly message?: string;
+        readonly code?: string;
+      }
+    | { readonly operation: 'edit'; readonly id: CustomGcodeId; readonly patch: LayerEventPatch }
+    | { readonly operation: 'delete'; readonly id: CustomGcodeId }
+  );
+
+export class StaleCanonicalLayerEventMutationError extends Error {
+  override readonly name = 'StaleCanonicalLayerEventMutationError';
+
+  constructor() {
+    super('Layer-event operation was prepared for a stale canonical project revision');
+  }
+}
 
 export class StaleCanonicalVirtualFilamentMutationError extends Error {
   constructor() {
@@ -1030,6 +1082,59 @@ export class CanonicalWorkspaceController {
     const assignments = entities.map((entity) => filamentAssignmentChange(before.state, entity, filamentId));
     this.session.execute(new SetFilamentAssignmentsCommand(assignments));
     return this.session.project.getSnapshot().revision !== before.revision;
+  }
+
+  /** Revision-bound layer events for the active plate, in print order. */
+  getLayerEventSnapshot(): CanonicalLayerEventSnapshot {
+    this.assertActive();
+    const project = this.session.project.getSnapshot();
+    return deepFreeze({
+      sourceRevision: project.revision,
+      sourceHash: project.hash,
+      plateId: project.state.activePlateId,
+      events: plateLayerEvents(project.state, project.state.activePlateId).map((entry) => ({
+        id: entry.id,
+        event: cloneJson(entry.layerEvent!),
+        code: entry.code,
+      })),
+    });
+  }
+
+  /** One guarded add/edit/delete of a layer event on the active plate. */
+  mutateLayerEvent(request: CanonicalLayerEventMutationRequest): CustomGcodeId | undefined {
+    this.assertActive();
+    const project = this.session.project.getSnapshot();
+    if (!Number.isSafeInteger(request.expectedRevision) || request.expectedRevision < 0) {
+      throw new Error('Expected layer-event revision must be a non-negative safe integer');
+    }
+    if (project.revision !== request.expectedRevision || project.hash !== request.sourceHash) {
+      throw new StaleCanonicalLayerEventMutationError();
+    }
+    switch (request.operation) {
+      case 'add': {
+        const id = this.options.idSource.next('custom-gcode');
+        this.session.execute(
+          new AddLayerEventCommand({
+            id,
+            plateId: project.state.activePlateId,
+            type: request.type,
+            topZMm: request.topZMm,
+            ...(request.toolIndex !== undefined ? { toolIndex: request.toolIndex } : {}),
+            ...(request.filamentId !== undefined ? { filamentId: request.filamentId } : {}),
+            ...(request.color !== undefined ? { color: request.color } : {}),
+            ...(request.message !== undefined ? { message: request.message } : {}),
+            ...(request.code !== undefined ? { code: request.code } : {}),
+          }),
+        );
+        return id;
+      }
+      case 'edit':
+        this.session.execute(new EditLayerEventCommand(request.id, request.patch));
+        return request.id;
+      case 'delete':
+        this.session.execute(new DeleteLayerEventCommand(request.id));
+        return undefined;
+    }
   }
 
   /** Immutable FullSpectrum library state; deleted tombstones stay canonical but are hidden from authoring rows. */

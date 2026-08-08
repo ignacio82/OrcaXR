@@ -21,6 +21,9 @@ export interface ValidationIssue {
   severity: ValidationSeverity;
 }
 
+/** Taller than any printable Z on a consumer FFF machine; a guard, not a bed limit. */
+const MAX_LAYER_EVENT_Z_MM = 10_000;
+
 const SUPPORTED_VOLUME_ROLES = new Set([
   'model',
   'negative-volume',
@@ -31,7 +34,11 @@ const SUPPORTED_VOLUME_ROLES = new Set([
 
 export class ProjectValidationError extends Error {
   constructor(readonly issues: ValidationIssue[]) {
-    super(`Invalid project state (${issues.filter((issue) => issue.severity === 'error').length} errors)`);
+    const errors = issues.filter((issue) => issue.severity === 'error');
+    // Name the first failure: this message is what a status line or a rejected
+    // command shows, and "1 errors" tells the operator nothing actionable.
+    const first = errors[0];
+    super(`Invalid project state (${errors.length} errors)` + (first ? `: ${first.message} at ${first.path}` : ''));
     this.name = 'ProjectValidationError';
   }
 }
@@ -293,6 +300,7 @@ export function validateProjectState(state: ProjectState): ValidationIssue[] {
     add('duplicate-plate-order', 'plates', 'Plate order values must be unique');
   }
 
+  const eventHeightsByPlate = new Map<string, Set<string>>();
   state.customGcode.forEach((entry, index) => {
     const path = `customGcode[${index}]`;
     id(entry.id, `${path}.id`);
@@ -301,6 +309,41 @@ export function validateProjectState(state: ProjectState): ValidationIssue[] {
     }
     if (entry.scope === 'project' && entry.plateId) {
       add('incompatible-gcode-scope', `${path}.plateId`, 'Project-scoped G-code cannot name a plate');
+    }
+    const event = entry.layerEvent;
+    if (!event) return;
+    // Layer events are a per-plate concept in the engine's own format; a
+    // project-scoped one would have no plate to attach to on export.
+    if (entry.scope !== 'plate' || !entry.plateId) {
+      add('layer-event-scope', `${path}.scope`, 'A layer event must be scoped to one plate');
+    }
+    if (!Number.isFinite(event.topZMm) || event.topZMm <= 0 || event.topZMm > MAX_LAYER_EVENT_Z_MM) {
+      add('layer-event-height', `${path}.layerEvent.topZMm`, 'Layer-event height must be above the plate and finite');
+    }
+    if (event.type === 'custom' && entry.code.trim().length === 0) {
+      add('layer-event-empty-code', `${path}.code`, 'A custom layer event needs G-code to emit');
+    }
+    if (event.type !== 'custom' && entry.code.length > 0) {
+      add(
+        'layer-event-unexpected-code',
+        `${path}.code`,
+        'Only a custom layer event carries its own G-code; the others come from the printer profile',
+      );
+    }
+    if (
+      (event.type === 'color-change' || event.type === 'tool-change') &&
+      (!Number.isInteger(event.toolIndex) || (event.toolIndex ?? 0) < 1)
+    ) {
+      add('layer-event-tool', `${path}.layerEvent.toolIndex`, 'Colour and tool changes address a 1-based tool');
+    }
+    if (entry.plateId) {
+      const heights = eventHeightsByPlate.get(entry.plateId) ?? new Set<string>();
+      const key = event.topZMm.toFixed(4);
+      if (heights.has(key)) {
+        add('duplicate-layer-event', `${path}.layerEvent.topZMm`, 'One layer event per height on a plate');
+      }
+      heights.add(key);
+      eventHeightsByPlate.set(entry.plateId, heights);
     }
   });
   state.thumbnails.forEach((thumbnail, index) => {

@@ -7,6 +7,7 @@ import type { CancellationToken, ProjectArchiveSnapshot, ProjectSerializerPort, 
 import {
   CORE_MODEL_PATH,
   GENERATED_STANDARD_PATHS,
+  LAYER_EVENTS_PATH,
   LAYER_RANGES_PATH,
   MODEL_RELS_PATH,
   MODEL_SETTINGS_PATH,
@@ -26,7 +27,12 @@ const CONTENT_TYPES_PATH = '[Content_Types].xml';
 const ROOT_RELATIONSHIPS_PATH = '_rels/.rels';
 const OPC_RELATIONSHIPS_KEY = `${ORCAXR_EXTENSION_FORMAT}/opc-relationships`;
 const OPC_CONTENT_TYPES_KEY = `${ORCAXR_EXTENSION_FORMAT}/opc-content-types`;
-const PRESERVABLE_GENERATED_METADATA = new Set([PROJECT_SETTINGS_PATH, MODEL_SETTINGS_PATH, LAYER_RANGES_PATH]);
+const PRESERVABLE_GENERATED_METADATA = new Set([
+  PROJECT_SETTINGS_PATH,
+  MODEL_SETTINGS_PATH,
+  LAYER_RANGES_PATH,
+  LAYER_EVENTS_PATH,
+]);
 
 interface PreservedOpcRelationship {
   source: '/' | typeof CORE_MODEL_PATH;

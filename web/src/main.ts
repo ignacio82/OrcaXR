@@ -46,6 +46,7 @@ import { CommandPalette } from './ui/dom/CommandPalette';
 import { GeneratedSettingsPanel } from './ui/dom/GeneratedSettingsPanel';
 import { ObjectsPanel, type ObjectsPanelSelectionRequest } from './ui/dom/ObjectsPanel';
 import { FilamentAssignmentSelector } from './ui/dom/FilamentAssignmentSelector';
+import { LayerEventPanel } from './ui/dom/LayerEventPanel';
 import { askThreeMfIntake } from './ui/dom/FileIntakeDialog';
 import { askPrintSubmission } from './ui/dom/PrintSubmissionDialog';
 import { askPrintJobConfirmation } from './ui/dom/PrintJobConfirmDialog';
@@ -603,7 +604,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   dropOverlay.hidden = true;
   dropOverlay.textContent = 'Drop a 3MF, STL, OBJ, AMF, ZIP, or G-code file to load it';
   dropOverlay.style.cssText =
-    'position:fixed;inset:16px;z-index:9998;display:flex;align-items:center;justify-content:center;' +
+    'position:fixed;inset:16px;z-index:9998;display:none;align-items:center;justify-content:center;' +
     'border:2px dashed var(--oxr-color-accent,#4fc3f7);border-radius:16px;background:rgba(6,10,16,0.72);' +
     'color:#fff;font:600 16px/1.4 system-ui,sans-serif;pointer-events:none;text-align:center;padding:24px;';
   document.body.appendChild(dropOverlay);
@@ -614,6 +615,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     event.preventDefault();
     dragDepth += 1;
     dropOverlay.hidden = false;
+    dropOverlay.style.display = 'flex';
   });
   window.addEventListener('dragover', (event) => {
     if (!hasFiles(event)) return;
@@ -623,13 +625,17 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   window.addEventListener('dragleave', (event) => {
     if (!hasFiles(event)) return;
     dragDepth = Math.max(0, dragDepth - 1);
-    if (dragDepth === 0) dropOverlay.hidden = true;
+    if (dragDepth === 0) {
+      dropOverlay.hidden = true;
+      dropOverlay.style.display = 'none';
+    }
   });
   window.addEventListener('drop', (event) => {
     if (!hasFiles(event)) return;
     event.preventDefault();
     dragDepth = 0;
     dropOverlay.hidden = true;
+    dropOverlay.style.display = 'none';
     void intakeFiles(Array.from(event.dataTransfer?.files ?? []));
   });
 
@@ -1566,6 +1572,26 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     });
     selector.mount();
     window.addEventListener('pagehide', () => selector.dispose(), { once: true });
+  }
+
+  const layerEventHost = document.getElementById('layer-event-host');
+  if (layerEventHost) {
+    const layerEvents = new LayerEventPanel(layerEventHost, {
+      getSnapshot: () => workspace.getLayerEventSnapshot(),
+      getCapabilities: () => workspace.getLayerEventCapabilities(),
+      subscribe: (listener) => workspace.subscribeCanonicalState(listener),
+      onMutate: async (request) => {
+        const invoked = await registry.invoke('layer_event_mutate', 'dom-inspector', actionCtx, uiState.get(), {
+          layerEventMutation: request,
+        });
+        if (!invoked) throw new Error('Layer-event authoring is unavailable in the current workspace state.');
+      },
+      onError: (error) => {
+        statusText.textContent = `Layer event: ${error instanceof Error ? error.message : String(error)}`;
+      },
+    });
+    layerEvents.mount();
+    window.addEventListener('pagehide', () => layerEvents.dispose(), { once: true });
   }
 
   const plateManagerHost = document.getElementById('plate-manager-host');
