@@ -1,3 +1,8 @@
 dist/
 node_modules/
 public/
+
+# Deterministic generated artifacts: their exact bytes are verified by
+# `settings:verify` and `calibration:verify`, so formatting must not touch them.
+src/settings/generated/
+src/features/generated/

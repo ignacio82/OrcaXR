@@ -1052,6 +1052,9 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
           ...(tool.filamentId ? { filamentId: tool.filamentId } : {}),
           mode: tool.mode,
           active: tool.active,
+          channel: tool.channel,
+          channelState:
+            typeof tool.channelState === 'string' || typeof tool.channelState === 'boolean' ? tool.channelState : null,
         };
       },
       subscribe: (listener) => {
@@ -1077,7 +1080,13 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
         if (!invoked) throw new Error('Erase all painting is unavailable.');
       },
       onActivate: async () => {
-        const invoked = await registry.invoke('tool_paint', 'dom-toolbar', actionCtx, uiState.get());
+        const channelTool = {
+          color: 'tool_paint',
+          support: 'tool_support_paint',
+          seam: 'tool_seam_paint',
+          fuzzySkin: 'tool_fuzzy_skin',
+        }[workspace.getPaintToolState().channel];
+        const invoked = await registry.invoke(channelTool, 'dom-toolbar', actionCtx, uiState.get());
         if (!invoked) throw new Error('The paint tool is unavailable.');
       },
       onError: (error) => {

@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import type { FilamentId, InstanceId, LayerRangeId, ObjectId, PlateId, VolumeId } from '../project/domain/ids';
 import { entityId, UuidIdSource } from '../project/domain/ids';
-import type { ConfigMap, Transform } from '../project/domain/model';
+import type { ConfigMap, JsonValue, Transform } from '../project/domain/model';
 import type { FullSpectrumAutoPairGenerationPreferences } from '../project/filaments/autoPairReconciliation';
 import type { ImportCommitConfirmation, ProjectImportPreview } from '../project/import/types';
 import type { ObjectTreeEntityRef } from '../project/objects';
@@ -21,7 +21,14 @@ import {
 } from '../project/slicing';
 import type { ProjectSettingsOverrideGuard, ProjectSettingsOverrideSnapshot } from '../project/settingsOverrides';
 import { CURRENT_THREE_WORLD_UNITS_PER_MM, getThreeProjectEntity } from '../project/surfaces/ThreeProjectSurface';
-import { PaintStrokeService, type PaintToolKind, type PaintToolSettings } from '../project/painting/PaintStrokeService';
+import {
+  DEFAULT_CHANNEL_VALUE,
+  PaintStrokeService,
+  channelLabel,
+  type PaintChannel,
+  type PaintToolKind,
+  type PaintToolSettings,
+} from '../project/painting/PaintStrokeService';
 import { paintPaletteColors, type PaintPalette } from '../project/painting/paintPalette';
 import {
   CanonicalWorkspaceController,
@@ -113,6 +120,25 @@ interface HeadFilamentSelection {
 /** Fallback bed until the profile catalog loads. */
 const PLATE_MM = 200;
 const MM = 0.001;
+
+/**
+ * Non-colour channels have no filament colour, so each assigned state gets a
+ * fixed, distinguishable overlay hue. The panel always labels the state too, so
+ * hue is never the only cue.
+ */
+const CHANNEL_STATE_COLORS: Readonly<Record<string, Readonly<Record<string, string>>>> = Object.freeze({
+  support: Object.freeze({ enforce: '#39d353', block: '#f85149' }),
+  seam: Object.freeze({ prefer: '#58a6ff', avoid: '#ff9f43' }),
+  fuzzySkin: Object.freeze({ true: '#bc8cff' }),
+});
+
+function channelOverlayColors(
+  channel: PaintChannel,
+  filamentColors: ReadonlyMap<string, string>,
+): ReadonlyMap<string, string> {
+  if (channel === 'color') return filamentColors;
+  return new Map(Object.entries(CHANNEL_STATE_COLORS[channel] ?? {}));
+}
 
 /** Derived colour overlays never occlude or intercept the canonical mesh. */
 const PAINT_OVERLAY_MATERIAL = new THREE.MeshStandardMaterial({
@@ -279,7 +305,16 @@ interface GeometryLoadOptions {
 
 type ProjectPrimeTower = { enabled: boolean; xMm: number; yMm: number; widthMm: number };
 
-export type WorkspaceGizmoTool = 'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint';
+export type WorkspaceGizmoTool =
+  'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint' | 'support_paint' | 'seam_paint' | 'fuzzy_skin';
+
+/** Modal tools that author facet annotations, and the channel each authors. */
+export const PAINT_TOOL_CHANNELS: Readonly<Record<string, PaintChannel>> = Object.freeze({
+  paint: 'color',
+  support_paint: 'support',
+  seam_paint: 'seam',
+  fuzzy_skin: 'fuzzySkin',
+});
 
 export interface WorkspaceAutomationSnapshot {
   workspaceMode: 'Prepare' | 'Preview';
@@ -1101,7 +1136,7 @@ export class OrcaWorkspace extends xb.Script {
     const onPointerDown = (event: PointerEvent) => {
       downX = event.clientX;
       downY = event.clientY;
-      if (this.tool !== 'paint' || xb.core.renderer.xr.isPresenting || event.button !== 0) return;
+      if (!(this.tool in PAINT_TOOL_CHANNELS) || xb.core.renderer.xr.isPresenting || event.button !== 0) return;
       if (this.beginPaintStroke(pointerRay(event), event.pointerId)) {
         // A paint gesture owns the pointer: orbiting would fight the stroke.
         if (this.orbitControls) this.orbitControls.enabled = false;
@@ -1128,7 +1163,7 @@ export class OrcaWorkspace extends xb.Script {
     const onPointerUp = (event: PointerEvent) => {
       if (finishPaintGesture(event, false)) return;
       if (xb.core.renderer.xr.isPresenting) return;
-      if (this.tool === 'paint') return;
+      if (this.tool in PAINT_TOOL_CHANNELS) return;
       if (this.transformControls && (this.transformControls as unknown as { dragging: boolean }).dragging) return;
 
       const dx = event.clientX - downX;
@@ -1214,16 +1249,23 @@ export class OrcaWorkspace extends xb.Script {
   private paintSettings: PaintToolSettings = { tool: 'circle', radiusMm: 4, smartFillAngleDegrees: 30 };
   private paintFilamentId: FilamentId | undefined;
   private paintMode: 'paint' | 'erase' = 'paint';
+  private paintChannel: PaintChannel = 'color';
+  /** Assigned state for the non-colour channels, e.g. support `enforce`. */
+  private paintChannelValue: Record<Exclude<PaintChannel, 'color'>, JsonValue> = { ...DEFAULT_CHANNEL_VALUE };
 
   private get paintService(): PaintStrokeService {
     if (!this.paintServiceInstance) this.paintServiceInstance = this.canonicalProject.createPaintStrokeService();
     return this.paintServiceInstance;
   }
 
-  /** Read-only painted-facet total for diagnostics, automation, and E2E. */
-  public getPaintedFacetCount(plateId?: PlateId): number {
+  /**
+   * Painted-facet total of one channel (the active paint channel by default),
+   * for diagnostics, automation, and end-to-end verification.
+   */
+  public getPaintedFacetCount(channel?: PaintChannel, plateId?: PlateId): number {
+    const target = channel ?? PAINT_TOOL_CHANNELS[this.tool] ?? this.paintChannel;
     let total = 0;
-    for (const assignments of this.canonicalProject.getColorFacetsByVolume(plateId ?? this.activePlateId).values()) {
+    for (const assignments of this.canonicalProject.getFacetsByVolume(target, plateId ?? this.activePlateId).values()) {
       for (const assignment of assignments) total += assignment.triangles.length;
     }
     return total;
@@ -1239,13 +1281,47 @@ export class OrcaWorkspace extends xb.Script {
     readonly filamentId?: FilamentId;
     readonly mode: 'paint' | 'erase';
     readonly active: boolean;
+    readonly channel: PaintChannel;
+    readonly channelState: JsonValue;
   } {
     return Object.freeze({
       settings: Object.freeze({ ...this.paintSettings }),
       ...(this.paintFilamentId ? { filamentId: this.paintFilamentId } : {}),
       mode: this.paintMode,
-      active: this.tool === 'paint',
+      active: this.tool in PAINT_TOOL_CHANNELS,
+      channel: this.paintChannel,
+      channelState:
+        this.paintChannel === 'color'
+          ? (this.paintFilamentId ?? null)
+          : this.paintChannelValue[this.paintChannel as Exclude<PaintChannel, 'color'>],
     });
+  }
+
+  /** Select the facet channel the next stroke authors. */
+  public setPaintChannel(channel: PaintChannel): void {
+    this.paintChannel = channel;
+    if (channel !== 'color' && this.paintMode === 'paint') {
+      this.paintChannelValue[channel as Exclude<PaintChannel, 'color'>] ??=
+        DEFAULT_CHANNEL_VALUE[channel as Exclude<PaintChannel, 'color'>];
+    }
+    this.refreshPaintOverlays();
+    this.onPaintStateChanged?.();
+  }
+
+  /** Choose the assigned state for a non-colour channel (enforce/block, ...). */
+  public setPaintChannelState(state: JsonValue): void {
+    if (this.paintChannel === 'color') return;
+    this.paintChannelValue[this.paintChannel as Exclude<PaintChannel, 'color'>] = state;
+    this.paintMode = 'paint';
+    this.setStatus(`Paint ${channelLabel(this.paintChannel)}: ${String(state)}`);
+    this.onPaintStateChanged?.();
+  }
+
+  /** Value the next stroke assigns, or undefined when erasing. */
+  private activePaintValue(): JsonValue | undefined {
+    if (this.paintMode === 'erase') return undefined;
+    if (this.paintChannel === 'color') return this.paintFilamentId;
+    return this.paintChannelValue[this.paintChannel as Exclude<PaintChannel, 'color'>];
   }
 
   /** Choose the stable filament a stroke assigns; `undefined` erases. */
@@ -1303,16 +1379,20 @@ export class OrcaWorkspace extends xb.Script {
   public eraseAllPaint(): number {
     const volumes = this.paintableSelectedVolumes();
     if (volumes.length === 0) {
-      this.setStatus('Select a model to erase its colour painting.');
+      this.setStatus(`Select a model to erase its ${channelLabel(this.paintChannel)} painting.`);
       return 0;
     }
     let cleared = 0;
     for (const volumeId of volumes) {
-      const result = this.paintService.clearVolume(volumeId);
+      const result = this.paintService.clearVolume(volumeId, this.paintChannel);
       if (result.status === 'applied') cleared += 1;
     }
     this.refreshPaintOverlays();
-    this.setStatus(cleared > 0 ? `Erased colour painting on ${cleared} part(s).` : 'Nothing was painted.');
+    this.setStatus(
+      cleared > 0
+        ? `Erased ${channelLabel(this.paintChannel)} painting on ${cleared} part(s).`
+        : 'Nothing was painted.',
+    );
     return cleared;
   }
 
@@ -1395,7 +1475,8 @@ export class OrcaWorkspace extends xb.Script {
           plateZMm: local.z,
         },
         settings: this.paintSettings,
-        ...(this.paintMode === 'paint' && this.paintFilamentId ? { filamentId: this.paintFilamentId } : {}),
+        channel: this.paintChannel,
+        ...(this.activePaintValue() !== undefined ? { value: this.activePaintValue() as never } : {}),
         mode: this.paintMode,
       });
       for (const triangle of preview.triangleIndices) stroke.triangles.add(triangle);
@@ -1417,11 +1498,13 @@ export class OrcaWorkspace extends xb.Script {
       const result = this.paintService.commitTriangles({
         volumeId: stroke.volumeId,
         triangleIndices: [...stroke.triangles].sort((left, right) => left - right),
-        ...(this.paintMode === 'paint' && this.paintFilamentId ? { filamentId: this.paintFilamentId } : {}),
+        channel: this.paintChannel,
+        ...(this.activePaintValue() !== undefined ? { value: this.activePaintValue() as never } : {}),
         mode: this.paintMode,
       });
       if (result.status === 'applied') {
-        this.setStatus(this.paintMode === 'erase' ? 'Erased colour facets.' : 'Painted colour facets.');
+        const label = channelLabel(this.paintChannel);
+        this.setStatus(this.paintMode === 'erase' ? `Erased ${label} facets.` : `Painted ${label} facets.`);
       }
     } catch (error) {
       this.setStatus(`Paint failed: ${(error as Error).message}`);
@@ -1437,8 +1520,11 @@ export class OrcaWorkspace extends xb.Script {
   /** Rebuild every derived colour overlay from canonical annotations. */
   public refreshPaintOverlays(): void {
     if (this.disposed) return;
-    const facets = this.canonicalProject.getColorFacetsByVolume(this.activePlateId);
-    const colors = paintPaletteColors(this.getPaintPalette(true));
+    // The visible overlay is the channel the active tool authors; Prepare keeps
+    // showing colour so filament intent stays visible outside painting.
+    const channel = PAINT_TOOL_CHANNELS[this.tool] ?? 'color';
+    const facets = this.canonicalProject.getFacetsByVolume(channel, this.activePlateId);
+    const colors = channelOverlayColors(channel, paintPaletteColors(this.getPaintPalette(true)));
     const live = new Set<VolumeId>();
     for (const target of this.paintTargets()) {
       const assignments = facets.get(target.volumeId);
@@ -1480,8 +1566,8 @@ export class OrcaWorkspace extends xb.Script {
 
   private buildPaintOverlayGeometry(
     display: THREE.Mesh,
-    assignments: readonly { triangles: number[]; value: FilamentId }[],
-    colors: ReadonlyMap<FilamentId, string>,
+    assignments: readonly { triangles: number[]; value: JsonValue }[],
+    colors: ReadonlyMap<string, string>,
   ): THREE.BufferGeometry | null {
     const source = display.geometry;
     const position = source.getAttribute('position');
@@ -1489,7 +1575,7 @@ export class OrcaWorkspace extends xb.Script {
     if (!position || !index) return null;
     const triangles: { triangle: number; color: THREE.Color }[] = [];
     for (const assignment of assignments) {
-      const color = new THREE.Color(colors.get(assignment.value) ?? '#ffffff');
+      const color = new THREE.Color(colors.get(String(assignment.value)) ?? '#ffffff');
       for (const triangle of assignment.triangles) triangles.push({ triangle, color });
     }
     if (triangles.length === 0) return null;
@@ -1518,16 +1604,16 @@ export class OrcaWorkspace extends xb.Script {
   private renderPaintPreview(display: THREE.Mesh, triangles: ReadonlySet<number>): void {
     this.clearPaintPreview();
     if (triangles.size === 0) return;
+    const value = this.activePaintValue();
     const previewColor =
-      this.paintMode === 'erase'
+      value === undefined
         ? '#ffffff'
-        : this.paintFilamentId
-          ? (paintPaletteColors(this.getPaintPalette(true)).get(this.paintFilamentId) ?? '#ffffff')
-          : '#ffffff';
+        : (channelOverlayColors(this.paintChannel, paintPaletteColors(this.getPaintPalette(true))).get(String(value)) ??
+          '#ffffff');
     const geometry = this.buildPaintOverlayGeometry(
       display,
-      [{ triangles: [...triangles], value: 'preview' as unknown as FilamentId }],
-      new Map([['preview' as unknown as FilamentId, previewColor]]),
+      [{ triangles: [...triangles], value: 'preview' }],
+      new Map([['preview', previewColor]]),
     );
     if (!geometry) return;
     const preview = new THREE.Mesh(geometry, PAINT_PREVIEW_MATERIAL.clone());
@@ -4082,15 +4168,16 @@ export class OrcaWorkspace extends xb.Script {
     }
     this.tool = tool;
     this.refreshToolButtons();
-    if (tool === 'paint') {
-      const palette = this.getPaintPalette();
-      if (!this.paintFilamentId && this.paintMode === 'paint') {
-        const first = palette.entries.find((entry: PaintPalette['entries'][number]) => entry.filamentId);
+    const channel = PAINT_TOOL_CHANNELS[tool];
+    if (channel) {
+      this.paintChannel = channel;
+      if (channel === 'color' && !this.paintFilamentId && this.paintMode === 'paint') {
+        const first = this.getPaintPalette().entries.find((entry: PaintPalette['entries'][number]) => entry.filamentId);
         if (first?.filamentId) this.paintFilamentId = first.filamentId;
       }
       this.refreshPaintOverlays();
       this.onPaintStateChanged?.();
-      this.setStatus('Paint: drag across a model to colour it, Escape cancels.');
+      this.setStatus(`Paint ${channelLabel(channel)}: drag across a model, Escape cancels.`);
       return;
     }
     this.setStatus(`tool: ${tool} - pinch-drag the model`);

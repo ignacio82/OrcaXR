@@ -9,6 +9,9 @@ const ACTION_ID_BY_GIZMO_TOOL = {
   rotate: 'tool_rotate',
   scale: 'tool_scale',
   paint: 'tool_paint',
+  support_paint: 'tool_support_paint',
+  seam_paint: 'tool_seam_paint',
+  fuzzy_skin: 'tool_fuzzy_skin',
   lay_on_face: 'tool_lay_on_face',
 } as const satisfies Readonly<Record<WorkspaceGizmoTool, string>>;
 

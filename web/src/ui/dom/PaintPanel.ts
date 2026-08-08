@@ -1,6 +1,6 @@
 import type { FilamentId } from '../../project/domain/ids';
 import type { PaintPalette, PaintPaletteEntry } from '../../project/painting/paintPalette';
-import type { PaintToolKind, PaintToolSettings } from '../../project/painting/PaintStrokeService';
+import type { PaintChannel, PaintToolKind, PaintToolSettings } from '../../project/painting/PaintStrokeService';
 
 export interface PaintPanelState {
   readonly palette: PaintPalette;
@@ -8,9 +8,15 @@ export interface PaintPanelState {
   readonly filamentId?: FilamentId;
   readonly mode: 'paint' | 'erase';
   readonly active: boolean;
+  /** Facet channel the next stroke authors. */
+  readonly channel: PaintChannel;
+  /** Assigned state for a non-colour channel (`enforce`, `prefer`, `true`, ...). */
+  readonly channelState: string | boolean | null;
 }
 
 export interface PaintConfigurationRequest {
+  readonly channel?: PaintChannel;
+  readonly channelState?: string | boolean;
   readonly filamentId?: FilamentId | null;
   readonly mode?: 'paint' | 'erase';
   readonly tool?: PaintToolKind;
@@ -37,6 +43,32 @@ const TOOLS: readonly { kind: PaintToolKind; label: string; hint: string }[] = [
   { kind: 'fill', label: 'Fill', hint: 'Flood the connected surface, bounded by the smart-fill angle' },
   { kind: 'heightRange', label: 'Height range', hint: 'Paint a horizontal band measured from the hit' },
   { kind: 'gapFill', label: 'Gap fill', hint: 'Close unpainted patches under the area threshold' },
+];
+
+/** Channels and their assigned states, exactly as the pinned gizmos expose them. */
+const CHANNELS: readonly {
+  channel: PaintChannel;
+  label: string;
+  states: readonly { value: string | boolean; label: string; color: string }[];
+}[] = [
+  { channel: 'color', label: 'Colour', states: [] },
+  {
+    channel: 'support',
+    label: 'Support',
+    states: [
+      { value: 'enforce', label: 'Enforce support', color: '#39d353' },
+      { value: 'block', label: 'Block support', color: '#f85149' },
+    ],
+  },
+  {
+    channel: 'seam',
+    label: 'Seam',
+    states: [
+      { value: 'prefer', label: 'Prefer seam', color: '#58a6ff' },
+      { value: 'avoid', label: 'Avoid seam', color: '#ff9f43' },
+    ],
+  },
+  { channel: 'fuzzySkin', label: 'Fuzzy skin', states: [{ value: true, label: 'Fuzzy surface', color: '#bc8cff' }] },
 ];
 
 let panelSequence = 0;
@@ -115,7 +147,8 @@ export class PaintPanel {
       : 'Start painting to assign filaments to individual facets.';
     root.append(status);
 
-    root.append(this.renderPalette(state));
+    root.append(this.renderChannels(state));
+    root.append(state.channel === 'color' ? this.renderPalette(state) : this.renderChannelStates(state));
     root.append(this.renderTools(state));
     root.append(this.renderParameters(state));
 
@@ -126,6 +159,80 @@ export class PaintPanel {
     eraseAll.style.cssText = buttonStyle(false);
     eraseAll.onclick = () => void this.run(() => this.adapter.onEraseAll());
     root.append(eraseAll);
+  }
+
+  private renderChannels(state: PaintPanelState): HTMLElement {
+    const document = this.container.ownerDocument;
+    const group = document.createElement('fieldset');
+    group.dataset.paintChannels = 'true';
+    group.style.cssText = 'border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;';
+    const legend = document.createElement('legend');
+    legend.textContent = 'Channel';
+    legend.style.cssText = 'padding:0;font-size:12px;opacity:0.8;';
+    group.append(legend);
+    const list = document.createElement('div');
+    list.setAttribute('role', 'radiogroup');
+    list.setAttribute('aria-label', 'Paint channel');
+    list.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
+    for (const entry of CHANNELS) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.setAttribute('role', 'radio');
+      const selected = state.channel === entry.channel;
+      button.setAttribute('aria-checked', String(selected));
+      button.dataset.paintChannel = entry.channel;
+      button.textContent = entry.label;
+      button.style.cssText = buttonStyle(selected);
+      button.onclick = () => void this.run(() => this.adapter.onConfigure({ channel: entry.channel }));
+      list.append(button);
+    }
+    group.append(list);
+    return group;
+  }
+
+  private renderChannelStates(state: PaintPanelState): HTMLElement {
+    const document = this.container.ownerDocument;
+    const group = document.createElement('fieldset');
+    group.dataset.paintChannelStates = 'true';
+    group.style.cssText = 'border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;';
+    const legend = document.createElement('legend');
+    legend.textContent = 'State';
+    legend.style.cssText = 'padding:0;font-size:12px;opacity:0.8;';
+    group.append(legend);
+    const list = document.createElement('div');
+    list.setAttribute('role', 'radiogroup');
+    list.setAttribute('aria-label', 'Paint state');
+    list.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
+    const states = CHANNELS.find((entry) => entry.channel === state.channel)?.states ?? [];
+    for (const option of states) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.setAttribute('role', 'radio');
+      const selected = state.mode === 'paint' && state.channelState === option.value;
+      button.setAttribute('aria-checked', String(selected));
+      button.dataset.paintChannelState = String(option.value);
+      button.style.cssText = `${buttonStyle(selected)}display:flex;align-items:center;gap:6px;`;
+      const swatch = document.createElement('span');
+      swatch.setAttribute('aria-hidden', 'true');
+      swatch.style.cssText = `width:14px;height:14px;border-radius:3px;flex:none;background:${option.color};`;
+      const label = document.createElement('span');
+      label.textContent = option.label;
+      button.append(swatch, label);
+      button.onclick = () =>
+        void this.run(() => this.adapter.onConfigure({ channelState: option.value, mode: 'paint' }));
+      list.append(button);
+    }
+    const erase = document.createElement('button');
+    erase.type = 'button';
+    erase.setAttribute('role', 'radio');
+    erase.setAttribute('aria-checked', String(state.mode === 'erase'));
+    erase.dataset.paintChannelState = 'erase';
+    erase.textContent = 'Erase';
+    erase.style.cssText = buttonStyle(state.mode === 'erase');
+    erase.onclick = () => void this.run(() => this.adapter.onConfigure({ mode: 'erase' }));
+    list.append(erase);
+    group.append(list);
+    return group;
   }
 
   private renderPalette(state: PaintPanelState): HTMLElement {

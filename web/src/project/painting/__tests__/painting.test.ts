@@ -174,7 +174,7 @@ test('commits one undoable stroke that stores the stable filament identity', () 
   const preview = harness.service.previewStroke({
     hit: { volumeId: harness.volumeId, ...TRIANGLE_HIT },
     settings: { tool: 'triangle' },
-    filamentId: TOOL_TWO,
+    value: TOOL_TWO,
     mode: 'paint',
   });
   assert.deepEqual(preview.triangleIndices, [0]);
@@ -183,7 +183,7 @@ test('commits one undoable stroke that stores the stable filament identity', () 
   const result = harness.service.commitStroke({
     hit: { volumeId: harness.volumeId, ...TRIANGLE_HIT },
     settings: { tool: 'triangle' },
-    filamentId: TOOL_TWO,
+    value: TOOL_TWO,
     mode: 'paint',
   });
   assert.equal(result.status, 'applied');
@@ -200,7 +200,7 @@ test('paints a virtual recipe without flattening it to a physical slot or colour
   harness.service.commitStroke({
     hit: { volumeId: harness.volumeId, ...TRIANGLE_HIT },
     settings: { tool: 'fill', smartFillAngleDegrees: 30 },
-    filamentId: RATIO,
+    value: RATIO,
     mode: 'paint',
   });
   const facets = colorFacets(harness);
@@ -214,7 +214,7 @@ test('erases back to inherit and clears a whole volume', () => {
   harness.service.commitStroke({
     hit: { volumeId: harness.volumeId, ...TRIANGLE_HIT },
     settings: { tool: 'fill', smartFillAngleDegrees: 30 },
-    filamentId: TOOL_ONE,
+    value: TOOL_ONE,
     mode: 'paint',
   });
   assert.equal(colorFacets(harness).length, 1);
@@ -243,7 +243,7 @@ test('brush strokes select a sweep and repeated identical samples are no-ops', (
       previousLocalPoint: [1, 1, 0],
     },
     settings: { tool: 'sphere', radiusMm: 6 },
-    filamentId: TOOL_ONE,
+    value: TOOL_ONE,
     mode: 'paint',
   });
   assert.equal(sphere.status, 'applied');
@@ -258,7 +258,7 @@ test('brush strokes select a sweep and repeated identical samples are no-ops', (
       previousLocalPoint: [1, 1, 0],
     },
     settings: { tool: 'sphere', radiusMm: 6 },
-    filamentId: TOOL_ONE,
+    value: TOOL_ONE,
     mode: 'paint',
   });
   assert.equal(again.status, 'noop', 'an unchanged stroke never grows history');
@@ -271,7 +271,7 @@ test('rejects unpaintable targets, filaments, and incomplete tool input', () => 
       harness.service.commitStroke({
         hit: { volumeId: entityId<'volume'>('import:test:missing'), ...TRIANGLE_HIT },
         settings: { tool: 'triangle' },
-        filamentId: TOOL_ONE,
+        value: TOOL_ONE,
         mode: 'paint',
       }),
     (error: unknown) => error instanceof PaintTargetError && error.code === 'unknown-volume',
@@ -281,7 +281,7 @@ test('rejects unpaintable targets, filaments, and incomplete tool input', () => 
       harness.service.commitStroke({
         hit: { volumeId: harness.volumeId, ...TRIANGLE_HIT },
         settings: { tool: 'triangle' },
-        filamentId: DISABLED,
+        value: DISABLED,
         mode: 'paint',
       }),
     (error: unknown) => error instanceof PaintTargetError && error.code === 'unavailable-filament',
@@ -291,7 +291,7 @@ test('rejects unpaintable targets, filaments, and incomplete tool input', () => 
       harness.service.commitStroke({
         hit: { volumeId: harness.volumeId, ...TRIANGLE_HIT },
         settings: { tool: 'heightRange', heightRangeMm: 2 },
-        filamentId: TOOL_ONE,
+        value: TOOL_ONE,
         mode: 'paint',
       }),
     (error: unknown) => error instanceof PaintTargetError && error.code === 'invalid-hit',
@@ -317,7 +317,7 @@ test('refuses to paint a modifier volume', () => {
       harness.service.commitStroke({
         hit: { volumeId: modifierId, ...TRIANGLE_HIT },
         settings: { tool: 'triangle' },
-        filamentId: TOOL_ONE,
+        value: TOOL_ONE,
         mode: 'paint',
       }),
     (error: unknown) => error instanceof PaintTargetError && error.code === 'unsupported-role',
@@ -329,12 +329,68 @@ test('a cancelled stroke commits nothing', () => {
   const result = harness.service.commitStroke({
     hit: { volumeId: harness.volumeId, ...TRIANGLE_HIT },
     settings: { tool: 'triangle' },
-    filamentId: TOOL_ONE,
+    value: TOOL_ONE,
     mode: 'paint',
     cancellation: { aborted: true, reason: 'pointer cancelled' },
   });
   assert.deepEqual(result, { status: 'cancelled', reason: 'pointer cancelled' });
   assert.equal(colorFacets(harness).length, 0);
+});
+
+test('authors support, seam, and fuzzy-skin channels independently', () => {
+  const harness = createHarness();
+  const volume = () => harness.project.getSnapshot().state.plates[0].objects[0].volumes[0].annotations;
+
+  harness.service.commitStroke({
+    hit: { volumeId: harness.volumeId, ...TRIANGLE_HIT },
+    settings: { tool: 'triangle' },
+    channel: 'support',
+    value: 'enforce',
+    mode: 'paint',
+  });
+  harness.service.commitStroke({
+    hit: { volumeId: harness.volumeId, ...TRIANGLE_HIT },
+    settings: { tool: 'triangle' },
+    channel: 'seam',
+    value: 'avoid',
+    mode: 'paint',
+  });
+  harness.service.commitStroke({
+    hit: { volumeId: harness.volumeId, ...TRIANGLE_HIT },
+    settings: { tool: 'triangle' },
+    channel: 'fuzzySkin',
+    value: true,
+    mode: 'paint',
+  });
+
+  assert.deepEqual(volume().support, [{ value: 'enforce', triangles: [0] }]);
+  assert.deepEqual(volume().seam, [{ value: 'avoid', triangles: [0] }]);
+  assert.deepEqual(volume().fuzzySkin, [{ value: true, triangles: [0] }]);
+  assert.deepEqual(volume().color, [], 'other channels stay independent of colour');
+
+  // Erasing one channel leaves the others untouched.
+  harness.service.clearVolume(harness.volumeId, 'seam');
+  assert.deepEqual(volume().seam, []);
+  assert.deepEqual(volume().support, [{ value: 'enforce', triangles: [0] }]);
+
+  harness.commands.undo();
+  assert.deepEqual(volume().seam, [{ value: 'avoid', triangles: [0] }], 'each channel stroke is its own command');
+});
+
+test('rejects a state that does not belong to the channel', () => {
+  const harness = createHarness();
+  assert.throws(
+    () =>
+      harness.service.commitStroke({
+        hit: { volumeId: harness.volumeId, ...TRIANGLE_HIT },
+        settings: { tool: 'triangle' },
+        channel: 'support',
+        value: 'prefer' as never,
+        mode: 'paint',
+      }),
+    (error: unknown) => error instanceof PaintTargetError && error.code === 'invalid-settings',
+  );
+  assert.deepEqual(harness.project.getSnapshot().state.plates[0].objects[0].volumes[0].annotations.support, []);
 });
 
 await (async () => {
@@ -343,7 +399,7 @@ await (async () => {
   harness.service.commitStroke({
     hit: { volumeId: harness.volumeId, ...TRIANGLE_HIT },
     settings: { tool: 'fill', smartFillAngleDegrees: 30 },
-    filamentId: RATIO,
+    value: RATIO,
     mode: 'paint',
   });
   const serializer = new Bbs3mfProjectSerializer();

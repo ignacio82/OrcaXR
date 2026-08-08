@@ -120,6 +120,29 @@ async function writeObjFixture(directory) {
   return path;
 }
 
+/** Sweep the canvas until a real pointer gesture lands on the model. */
+async function paintAtFirstHit(page) {
+  const canvas = await page.$('canvas');
+  assert.ok(canvas, 'the workspace canvas exists');
+  const box = await canvas.boundingBox();
+  for (let radius = 0; radius <= 120; radius += 24) {
+    for (const [dx, dy] of [
+      [0, 0],
+      [radius, 0],
+      [-radius, 0],
+      [0, radius],
+      [0, -radius],
+    ]) {
+      await page.mouse.move(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy);
+      await page.mouse.down();
+      await page.mouse.up();
+      const facets = await page.evaluate(() => globalThis.window.workspace.getPaintedFacetCount?.() ?? 0);
+      if (facets > 0) return facets;
+    }
+  }
+  return 0;
+}
+
 async function clickPanelControl(page, selector) {
   await page.evaluate((target) => {
     const control = globalThis.document.querySelector(target);
@@ -161,30 +184,24 @@ async function paintImportedModel(page) {
   assert.match(target.label ?? '', /T\d/, 'swatch labels carry a non-colour badge');
   await clickPanelControl(page, `[data-paint-swatch="${target.id}"]`);
 
-  const canvas = await page.$('canvas');
-  assert.ok(canvas, 'the workspace canvas exists');
-  const box = await canvas.boundingBox();
-  const painted = await (async () => {
-    for (let radius = 0; radius <= 120; radius += 24) {
-      for (const [dx, dy] of [
-        [0, 0],
-        [radius, 0],
-        [-radius, 0],
-        [0, radius],
-        [0, -radius],
-      ]) {
-        const x = box.x + box.width / 2 + dx;
-        const y = box.y + box.height / 2 + dy;
-        await page.mouse.move(x, y);
-        await page.mouse.down();
-        await page.mouse.up();
-        const facets = await page.evaluate(() => globalThis.window.workspace.getPaintedFacetCount?.() ?? 0);
-        if (facets > 0) return facets;
-      }
-    }
-    return 0;
-  })();
+  const painted = await paintAtFirstHit(page);
   assert.ok(painted > 0, 'a pointer stroke painted canonical colour facets');
+
+  // Support painting shares the same gesture, panel, and command path.
+  await clickPanelControl(page, '[data-paint-channel="support"]');
+  await clickPanelControl(page, '[data-paint-channel-state="block"]');
+  const supportState = await page.evaluate(() => globalThis.window.workspace.getPaintToolState());
+  assert.equal(supportState.channel, 'support');
+  assert.equal(supportState.channelState, 'block');
+  assert.equal(supportState.active, true, 'switching channel keeps a paint tool active');
+  const supportPainted = await paintAtFirstHit(page);
+  assert.ok(supportPainted > 0, 'a support stroke painted canonical facets');
+  assert.match(
+    (await page.evaluate(() => globalThis.window.workspace.getCanonicalSummary().history.undoLabel)) ?? '',
+    /support/i,
+  );
+  await page.evaluate(() => globalThis.window.workspace.undo?.());
+  await clickPanelControl(page, '[data-paint-channel="color"]');
 
   const historyLabel = await page.evaluate(() => globalThis.window.workspace.getCanonicalSummary().history.undoLabel);
   assert.match(historyLabel ?? '', /paint/i, 'the stroke is one labelled undoable command');

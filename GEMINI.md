@@ -89,7 +89,11 @@ engine (`libslic3r` via WASM) as the computational core.
   labelled undoable command on release. A facet stores the stable physical or
   mixed filament ID, never a palette index or predicted RGB, and the legacy
   display-colour paint panel/brush state is deleted. The `1`-`9` palette keys are
-  nine discrete registry actions, matching upstream. Standard-BBS export still
+  nine discrete registry actions, matching upstream. The same tool set authors
+  support (enforce/block), seam (prefer/avoid), and fuzzy-skin facets - the
+  active modal tool owns the channel, so `PAINT_TOOL_CHANNELS` is the only
+  channel authority - and the XR rail is an explicit seven-action list, never
+  "every action with a tool". Standard-BBS export still
   projects a facet onto the transient engine slot, so official-Orca colour
   round-trip remains unproven.
 - Model import (STL/OBJ/AMF/compressed AMF/ZIP) is signature-first and transactional:

@@ -15,7 +15,7 @@ import type { ActionContext } from './ActionContext';
 import type { FilamentId, PlateId } from '../project/domain/ids';
 import type { ConfigMap } from '../project/domain/model';
 import type { ObjectTreeEntityRef } from '../project/objects';
-import type { PaintToolKind } from '../project/painting/PaintStrokeService';
+import type { PaintChannel, PaintToolKind } from '../project/painting/PaintStrokeService';
 import type {
   CanonicalFilamentAssignableEntityRef,
   CanonicalSemanticLayerRangeRequest,
@@ -166,6 +166,10 @@ export interface ActionInvocation {
    * carries a stable physical or mixed identity; `null` selects erase-to-inherit.
    */
   paintConfiguration?: {
+    /** Facet channel the next stroke authors. */
+    readonly channel?: PaintChannel;
+    /** Assigned state for a non-colour channel, e.g. `enforce`. */
+    readonly channelState?: string | boolean;
     readonly filamentId?: FilamentId | null;
     readonly mode?: 'paint' | 'erase';
     readonly tool?: PaintToolKind;
@@ -318,9 +322,6 @@ const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
   view_show_outline: 'Selection-outline rendering is not implemented yet.',
   view_show_gcode_window: 'The G-code text inspector is not implemented yet.',
   split_to_parts: 'Splitting an object into editable parts is not implemented yet.',
-  tool_support_paint: 'Canonical support-facet painting is not implemented yet.',
-  tool_seam_paint: 'Canonical seam-facet painting is not implemented yet.',
-  tool_fuzzy_skin: 'Canonical fuzzy-skin facet painting is not implemented yet.',
   tool_brim_ears: 'Brim-ear authoring is not implemented yet.',
   tool_measure: 'The geometry measurement tool is not implemented yet.',
   tool_assembly: 'Assembly view and constraints are not implemented yet.',

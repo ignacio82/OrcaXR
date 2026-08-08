@@ -77,7 +77,8 @@ import {
 import type { CommandHistorySnapshot } from '../project/history/commandBus';
 import { PreparedProjectImport, ProjectImportCoordinator } from '../project/import/ProjectImportCoordinator';
 import { ModelImportParser, type ModelImportPlacement } from '../project/import/ModelImportParser';
-import type { TriangleAssignments } from '../project/domain/model';
+import type { JsonValue, TriangleAssignments } from '../project/domain/model';
+import type { FacetAnnotationChannel } from '../project/annotations';
 import { PaintStrokeService } from '../project/painting/PaintStrokeService';
 import { projectPaintPalette, type PaintPalette, type PaintPaletteOptions } from '../project/painting/paintPalette';
 import {
@@ -1448,15 +1449,27 @@ export class CanonicalWorkspaceController {
 
   /** Painted colour facets per volume, for derived overlays and legends. */
   getColorFacetsByVolume(plateId?: PlateId): ReadonlyMap<VolumeId, readonly TriangleAssignments<FilamentId>[]> {
+    return this.getFacetsByVolume('color', plateId) as ReadonlyMap<
+      VolumeId,
+      readonly TriangleAssignments<FilamentId>[]
+    >;
+  }
+
+  /** Painted facets of one channel per volume, for derived overlays. */
+  getFacetsByVolume(
+    channel: FacetAnnotationChannel,
+    plateId?: PlateId,
+  ): ReadonlyMap<VolumeId, readonly TriangleAssignments<JsonValue>[]> {
     this.assertActive();
     const state = this.session.project.getSnapshot().state;
-    const facets = new Map<VolumeId, readonly TriangleAssignments<FilamentId>[]>();
+    const facets = new Map<VolumeId, readonly TriangleAssignments<JsonValue>[]>();
     for (const plate of state.plates) {
       if (plateId && plate.id !== plateId) continue;
       for (const object of plate.objects) {
         for (const volume of object.volumes) {
-          if (volume.annotations.color.length === 0) continue;
-          facets.set(volume.id, cloneJson(volume.annotations.color));
+          const assignments = volume.annotations[channel];
+          if (assignments.length === 0) continue;
+          facets.set(volume.id, cloneJson(assignments) as TriangleAssignments<JsonValue>[]);
         }
       }
     }

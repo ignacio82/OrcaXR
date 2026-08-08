@@ -12,6 +12,8 @@ import {
   captureFacetAnnotationGuard,
   selectFacetRegion,
   triangleRangesFromIndices,
+  type FacetAnnotationChannel,
+  type FacetAnnotationValue,
   type FacetClippingPlane,
   type FacetRegionSelection,
   type FacetRegionTool,
@@ -21,7 +23,7 @@ import {
   type TriangleRange,
 } from '../annotations';
 import type { FilamentId, VolumeId } from '../domain/ids';
-import type { ProjectState, ProjectVolume, Vec3 } from '../domain/model';
+import type { JsonValue, ProjectState, ProjectVolume, Vec3 } from '../domain/model';
 import { findVolume } from '../domain/selectors';
 import type { CommandBus } from '../history/commandBus';
 import { decodeIndexedMeshAsset } from '../meshCodec';
@@ -29,6 +31,26 @@ import type { CancellationToken } from '../ports';
 import { projectPaintPalette } from './paintPalette';
 
 export type PaintToolKind = 'circle' | 'sphere' | 'triangle' | 'heightRange' | 'fill' | 'gapFill';
+
+/** Facet channels a live paint surface can author. */
+export type PaintChannel = Extract<FacetAnnotationChannel, 'color' | 'support' | 'seam' | 'fuzzySkin'>;
+
+/**
+ * Pinned upstream state order per channel: unpainted is the implicit state
+ * zero, so Gap Fill's neighbour precedence lists only assigned states.
+ */
+const CHANNEL_STATE_ORDER: Readonly<Record<Exclude<PaintChannel, 'color'>, readonly JsonValue[]>> = Object.freeze({
+  support: Object.freeze(['enforce', 'block']),
+  seam: Object.freeze(['prefer', 'avoid']),
+  fuzzySkin: Object.freeze([true]),
+});
+
+/** Default assigned state used when a surface selects a channel. */
+export const DEFAULT_CHANNEL_VALUE: Readonly<Record<Exclude<PaintChannel, 'color'>, JsonValue>> = Object.freeze({
+  support: 'enforce',
+  seam: 'prefer',
+  fuzzySkin: true,
+});
 
 export interface PaintToolSettings {
   readonly tool: PaintToolKind;
@@ -63,11 +85,17 @@ export interface PaintTargetHit {
   readonly transform?: FacetSelectionTransform;
 }
 
-export interface PaintStrokeRequest {
+export interface PaintStrokeRequest<Channel extends PaintChannel = 'color'> {
   readonly hit: PaintTargetHit;
   readonly settings: PaintToolSettings;
-  /** Stable physical or mixed identity; omitted means erase to inherit. */
-  readonly filamentId?: FilamentId;
+  /** Facet channel this stroke authors; colour when omitted. */
+  readonly channel?: Channel;
+  /**
+   * Assigned state for the channel: a stable physical or mixed filament ID for
+   * colour, `enforce`/`block`, `prefer`/`avoid`, or `true`. Omitting it erases
+   * back to the channel's inherited/unpainted state.
+   */
+  readonly value?: FacetAnnotationValue<Channel>;
   readonly mode: 'paint' | 'erase';
   readonly cancellation?: CancellationToken;
   readonly label?: string;
@@ -116,9 +144,9 @@ export class PaintStrokeService {
   constructor(private readonly options: PaintStrokeServiceOptions) {}
 
   /** Selection for the current pointer sample; never mutates the project. */
-  previewStroke(request: PaintStrokeRequest): PaintStrokePreview {
+  previewStroke<Channel extends PaintChannel>(request: PaintStrokeRequest<Channel>): PaintStrokePreview {
     const { volume, state } = this.resolveVolume(request.hit.volumeId);
-    this.assertFilament(state, request);
+    this.assertValue(state, request);
     const mesh = this.meshFor(volume.source.assetId, request.hit.volumeId);
     const selection = this.select(mesh, request, state);
     return Object.freeze({
@@ -131,32 +159,16 @@ export class PaintStrokeService {
   }
 
   /** Apply the current sample as one atomic, undoable canonical command. */
-  commitStroke(request: PaintStrokeRequest): FacetStrokeCommitResult {
+  commitStroke<Channel extends PaintChannel>(request: PaintStrokeRequest<Channel>): FacetStrokeCommitResult {
     if (request.cancellation?.aborted) {
       return { status: 'cancelled', ...(request.cancellation.reason ? { reason: request.cancellation.reason } : {}) };
     }
     const { volume, state } = this.resolveVolume(request.hit.volumeId);
-    this.assertFilament(state, request);
+    this.assertValue(state, request);
     const mesh = this.meshFor(volume.source.assetId, request.hit.volumeId);
     const selection = this.select(mesh, request, state);
     if (selection.ranges.length === 0) return { status: 'noop' };
-    const guard = captureFacetAnnotationGuard(this.options.commands, request.hit.volumeId);
-    if (request.mode === 'erase' || !request.filamentId) {
-      return commitFacetAnnotationStroke(this.options.commands, {
-        guard,
-        channel: 'color',
-        operation: { mode: 'erase', ranges: selection.ranges },
-        ...(request.cancellation ? { cancellation: request.cancellation } : {}),
-        label: request.label ?? 'Erase colour facets',
-      });
-    }
-    return commitFacetAnnotationStroke(this.options.commands, {
-      guard,
-      channel: 'color',
-      operation: { mode: 'paint', ranges: selection.ranges, value: request.filamentId },
-      ...(request.cancellation ? { cancellation: request.cancellation } : {}),
-      label: request.label ?? 'Paint colour facets',
-    });
+    return this.commitRanges(request.hit.volumeId, selection.ranges, request);
   }
 
   /**
@@ -165,10 +177,11 @@ export class PaintStrokeService {
    * release, so a stroke is exactly one history entry no matter how many
    * samples it contained.
    */
-  commitTriangles(request: {
+  commitTriangles<Channel extends PaintChannel>(request: {
     readonly volumeId: VolumeId;
     readonly triangleIndices: readonly number[];
-    readonly filamentId?: FilamentId;
+    readonly channel?: Channel;
+    readonly value?: FacetAnnotationValue<Channel>;
     readonly mode: 'paint' | 'erase';
     readonly cancellation?: CancellationToken;
     readonly label?: string;
@@ -177,38 +190,56 @@ export class PaintStrokeService {
       return { status: 'cancelled', ...(request.cancellation.reason ? { reason: request.cancellation.reason } : {}) };
     }
     const { volume, state } = this.resolveVolume(request.volumeId);
-    this.assertFilament(state, {
-      hit: { volumeId: request.volumeId, triangleIndex: 0, localPoint: [0, 0, 0], localCameraPosition: [0, 0, 0] },
-      settings: { tool: 'triangle' },
+    this.assertValue(state, {
       mode: request.mode,
-      ...(request.filamentId ? { filamentId: request.filamentId } : {}),
+      ...(request.channel ? { channel: request.channel } : {}),
+      ...(request.value !== undefined ? { value: request.value } : {}),
     });
     const ranges = triangleRangesFromIndices([...request.triangleIndices], volume.source.triangleCount);
     if (ranges.length === 0) return { status: 'noop' };
-    const guard = captureFacetAnnotationGuard(this.options.commands, request.volumeId);
-    const operation =
-      request.mode === 'erase' || !request.filamentId
-        ? ({ mode: 'erase', ranges } as const)
-        : ({ mode: 'paint', ranges, value: request.filamentId } as const);
-    return commitFacetAnnotationStroke(this.options.commands, {
-      guard,
-      channel: 'color',
-      operation,
-      ...(request.cancellation ? { cancellation: request.cancellation } : {}),
-      label: request.label ?? (request.mode === 'erase' ? 'Erase colour facets' : 'Paint colour facets'),
-    });
+    return this.commitRanges(request.volumeId, ranges, request);
   }
 
-  /** Clear every colour facet on one volume ("Erase all"). */
-  clearVolume(volumeId: VolumeId, cancellation?: CancellationToken): FacetStrokeCommitResult {
+  /** Clear every facet of one channel on one volume ("Erase all"). */
+  clearVolume(
+    volumeId: VolumeId,
+    channel: PaintChannel = 'color',
+    cancellation?: CancellationToken,
+  ): FacetStrokeCommitResult {
     this.resolveVolume(volumeId);
     return commitFacetAnnotationStroke(this.options.commands, {
       guard: captureFacetAnnotationGuard(this.options.commands, volumeId),
-      channel: 'color',
+      channel,
       operation: { mode: 'reset' },
       ...(cancellation ? { cancellation } : {}),
-      label: 'Erase all colour facets',
+      label: `Erase all ${channelLabel(channel)} facets`,
     });
+  }
+
+  private commitRanges<Channel extends PaintChannel>(
+    volumeId: VolumeId,
+    ranges: readonly TriangleRange[],
+    request: {
+      readonly channel?: Channel;
+      readonly value?: FacetAnnotationValue<Channel>;
+      readonly mode: 'paint' | 'erase';
+      readonly cancellation?: CancellationToken;
+      readonly label?: string;
+    },
+  ): FacetStrokeCommitResult {
+    const channel = (request.channel ?? 'color') as PaintChannel;
+    const guard = captureFacetAnnotationGuard(this.options.commands, volumeId);
+    const erasing = request.mode === 'erase' || request.value === undefined;
+    const operation = erasing
+      ? ({ mode: 'erase', ranges } as const)
+      : ({ mode: 'paint', ranges, value: request.value } as const);
+    return commitFacetAnnotationStroke(this.options.commands, {
+      guard,
+      channel,
+      operation,
+      ...(request.cancellation ? { cancellation: request.cancellation } : {}),
+      label: request.label ?? `${erasing ? 'Erase' : 'Paint'} ${channelLabel(channel)} facets`,
+    } as Parameters<typeof commitFacetAnnotationStroke>[1]);
   }
 
   /** Drop cached decoded meshes, e.g. after topology-changing operations. */
@@ -226,14 +257,33 @@ export class PaintStrokeService {
     return { volume: found.volume, state };
   }
 
-  private assertFilament(state: ProjectState, request: PaintStrokeRequest): void {
-    if (request.mode === 'erase' || !request.filamentId) return;
+  private assertValue<Channel extends PaintChannel>(
+    state: ProjectState,
+    request: {
+      readonly mode: 'paint' | 'erase';
+      readonly channel?: Channel;
+      readonly value?: FacetAnnotationValue<Channel>;
+    },
+  ): void {
+    if (request.mode === 'erase' || request.value === undefined) return;
+    const channel = (request.channel ?? 'color') as PaintChannel;
+    if (channel !== 'color') {
+      const allowed = CHANNEL_STATE_ORDER[channel];
+      if (!allowed.includes(request.value as JsonValue)) {
+        throw new PaintTargetError(
+          `${String(request.value)} is not a valid ${channelLabel(channel)} state`,
+          'invalid-settings',
+        );
+      }
+      return;
+    }
+    const filamentId = request.value as FilamentId;
     const palette = projectPaintPalette(state, { includeUnavailable: true });
-    const entry = palette.entries.find((candidate) => candidate.filamentId === request.filamentId);
-    if (!entry) throw new PaintTargetError(`Unknown filament ${request.filamentId}`, 'unknown-filament');
+    const entry = palette.entries.find((candidate) => candidate.filamentId === filamentId);
+    if (!entry) throw new PaintTargetError(`Unknown filament ${filamentId}`, 'unknown-filament');
     if (!entry.selectable) {
       throw new PaintTargetError(
-        entry.unavailableReason ?? `Filament ${request.filamentId} cannot be painted`,
+        entry.unavailableReason ?? `Filament ${filamentId} cannot be painted`,
         'unavailable-filament',
       );
     }
@@ -254,7 +304,11 @@ export class PaintStrokeService {
     return mesh;
   }
 
-  private select(mesh: FacetSelectionMesh, request: PaintStrokeRequest, state: ProjectState): FacetRegionSelection {
+  private select<Channel extends PaintChannel>(
+    mesh: FacetSelectionMesh,
+    request: PaintStrokeRequest<Channel>,
+    state: ProjectState,
+  ): FacetRegionSelection {
     const { volume } = this.resolveVolume(request.hit.volumeId);
     if (!Number.isInteger(request.hit.triangleIndex) || request.hit.triangleIndex < 0) {
       throw new PaintTargetError('The paint hit does not reference a source triangle', 'invalid-hit');
@@ -262,12 +316,12 @@ export class PaintStrokeService {
     return selectFacetRegion({
       mesh,
       annotations: volume.annotations,
-      channel: 'color',
       guard: {
         topologyRevision: volume.source.topologyRevision,
         triangleCount: volume.source.triangleCount,
       },
       seedTriangle: request.hit.triangleIndex,
+      channel: (request.channel ?? 'color') as PaintChannel,
       tool: this.tool(request, state),
       ...(request.settings.clippingPlane ? { clippingPlane: request.settings.clippingPlane } : {}),
       ...(request.hit.transform ? { transform: request.hit.transform } : {}),
@@ -283,7 +337,10 @@ export class PaintStrokeService {
     });
   }
 
-  private tool(request: PaintStrokeRequest, state: ProjectState): FacetRegionTool {
+  private tool<Channel extends PaintChannel>(
+    request: PaintStrokeRequest<Channel>,
+    state: ProjectState,
+  ): FacetRegionTool {
     const settings = request.settings;
     const hit = request.hit;
     switch (settings.tool) {
@@ -329,12 +386,14 @@ export class PaintStrokeService {
                 },
         };
       }
-      case 'gapFill':
+      case 'gapFill': {
+        const channel = (request.channel ?? 'color') as PaintChannel;
         return {
           kind: 'gapFill',
           maxAreaMm2: clamp(settings.gapAreaMm2 ?? 2, 0, ORCA_GAP_AREA_MAX_MM2),
-          stateOrder: paintStateOrder(state),
+          stateOrder: channel === 'color' ? paintStateOrder(state) : CHANNEL_STATE_ORDER[channel],
         };
+      }
       default:
         throw new PaintTargetError(`Unsupported paint tool ${String(settings.tool)}`, 'invalid-settings');
     }
@@ -348,6 +407,19 @@ export function paintStateOrder(state: ProjectState): readonly string[] {
       .entries.filter((entry) => entry.filamentId)
       .map((entry) => entry.filamentId as string),
   );
+}
+
+export function channelLabel(channel: PaintChannel): string {
+  switch (channel) {
+    case 'support':
+      return 'support';
+    case 'seam':
+      return 'seam';
+    case 'fuzzySkin':
+      return 'fuzzy-skin';
+    default:
+      return 'colour';
+  }
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

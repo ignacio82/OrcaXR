@@ -13,7 +13,15 @@ import type { FilamentPalette } from '../workspace/FilamentPalette';
 import type { FilamentId, PlateId } from '../project/domain/ids';
 import type { ConfigMap } from '../project/domain/model';
 import type { ObjectTreeEntityRef } from '../project/objects';
-import type { PaintToolKind } from '../project/painting/PaintStrokeService';
+import type { PaintChannel, PaintToolKind } from '../project/painting/PaintStrokeService';
+
+/** Modal tool that authors each facet channel. */
+const PAINT_TOOL_FOR_CHANNEL: Readonly<Record<PaintChannel, ToolName>> = Object.freeze({
+  color: 'paint',
+  support: 'support_paint',
+  seam: 'seam_paint',
+  fuzzySkin: 'fuzzy_skin',
+});
 import type {
   CanonicalFilamentAssignableEntityRef,
   CanonicalSemanticLayerRangeRequest,
@@ -25,7 +33,8 @@ import type { UiState, WorkspaceMode } from './UiState';
 import { ABOUT_HTML, TUTORIAL_HTML, shortcutsHtml, tipOfTheDayHtml } from './helpContent';
 
 export type BooleanOp = 'UNION' | 'A_NOT_B' | 'INTERSECTION';
-export type ToolName = 'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint';
+export type ToolName =
+  'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint' | 'support_paint' | 'seam_paint' | 'fuzzy_skin';
 
 export class ActionContext {
   constructor(
@@ -232,6 +241,8 @@ export class ActionContext {
   // ---- Painting -------------------------------------------------------
   /** Apply a bounded paint configuration request from any surface. */
   configurePaint(request: {
+    readonly channel?: PaintChannel;
+    readonly channelState?: string | boolean;
     readonly filamentId?: FilamentId | null;
     readonly mode?: 'paint' | 'erase';
     readonly tool?: PaintToolKind;
@@ -240,6 +251,15 @@ export class ActionContext {
     readonly heightRangeMm?: number;
     readonly gapAreaMm2?: number;
   }): void {
+    if (request.channel) {
+      // The active tool owns the channel while painting, so switching channels
+      // switches tools instead of creating a second authority.
+      const channelTool = PAINT_TOOL_FOR_CHANNEL[request.channel];
+      const painting = Object.values(PAINT_TOOL_FOR_CHANNEL).includes(this.ui.get().activeTool as ToolName);
+      if (painting) this.applyTool(channelTool);
+      else this.workspace.setPaintChannel(request.channel);
+    }
+    if (request.channelState !== undefined) this.workspace.setPaintChannelState(request.channelState);
     if (request.filamentId !== undefined) {
       this.workspace.setPaintFilament(request.filamentId ?? undefined);
     }

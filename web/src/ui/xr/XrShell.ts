@@ -53,11 +53,24 @@ export interface XrButtonOpts {
   onHoverExit?: (btn: XrPanel<XrIcon>) => void;
 }
 
-const RAIL_OPERATION_IDS = new Set(['drop_to_bed', 'delete_models']);
+/**
+ * The rail is an explicit finite set, not "every action that owns a tool":
+ * additional modal tools (support, seam, and fuzzy-skin painting) stay
+ * reachable through the XR Tools overflow instead of growing the rail.
+ */
+const RAIL_ACTION_IDS = new Set([
+  'tool_move',
+  'tool_rotate',
+  'tool_scale',
+  'tool_lay_on_face',
+  'tool_paint',
+  'drop_to_bed',
+  'delete_models',
+]);
 
 /** Keep the spatial rail finite while leaving every other action in menus. */
 export function xrToolRailActions(actions: readonly Action[]): Action[] {
-  return actions.filter((action) => Boolean(action.tool) || RAIL_OPERATION_IDS.has(action.id));
+  return actions.filter((action) => RAIL_ACTION_IDS.has(action.id));
 }
 
 /** Build one uikit button for `action`; clicking it runs the action via `onRun`. */
