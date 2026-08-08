@@ -17,6 +17,17 @@ export const outputActions: Action[] = [
     run: (ctx) => ctx.downloadGcode(),
   },
   {
+    id: 'save_all_plate_gcode',
+    label: 'Download All Plates',
+    icon: 'download',
+    group: 'output',
+    disclosure: 'menu',
+    menuSection: 'file',
+    hint: 'Download one named G-code artifact per sliced plate',
+    isEnabled: (s) => s.gcodeReady,
+    run: (ctx) => ctx.downloadAllPlateGcode(),
+  },
+  {
     id: 'view_open_gcode',
     label: 'Open G-code…',
     icon: 'load',

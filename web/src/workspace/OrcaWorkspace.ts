@@ -428,6 +428,11 @@ export class OrcaWorkspace extends xb.Script {
   private sliceModalBar: UIPanel | null = null;
   private sliceModalProgressContainer: UIPanel | null = null;
   private publishedGcode: { readonly gcode: string; readonly guard: CanonicalProjectSliceGuard } | null = null;
+  /** Per-plate artifacts from the last all-plate slice, guarded as one set. */
+  private publishedPlateGcode: {
+    readonly plates: ReadonlyMap<PlateId, { gcode: string; byteLength: number; warnings: readonly string[] }>;
+    readonly guard: CanonicalProjectSliceGuard;
+  } | null = null;
   private previewSurface: GcodePreviewSurface | null = null;
   private previewSession: GcodePreviewSession | null = null;
   private previewOn = false;
@@ -3103,11 +3108,14 @@ export class OrcaWorkspace extends xb.Script {
 
   /** Re-evaluate an artifact at a stable mutation boundary (for exact undo). */
   private revalidatePublishedGcode(): string | null {
+    const source = this.canonicalProject.createCanonicalSliceSource();
+    // Per-plate artifacts are one guarded set: drift invalidates all of them.
+    if (this.publishedPlateGcode && !source.isCurrent(this.publishedPlateGcode.guard)) {
+      this.publishedPlateGcode = null;
+    }
     const published = this.publishedGcode;
     if (!published) return null;
-    const gcode = this.canonicalProject.createCanonicalSliceSource().isCurrent(published.guard)
-      ? published.gcode
-      : null;
+    const gcode = source.isCurrent(published.guard) ? published.gcode : null;
     if (!gcode) {
       if (this.previewOn) this.clearToolpathPreview();
     }
@@ -5214,6 +5222,126 @@ export class OrcaWorkspace extends xb.Script {
       this.onSliceStateChanged?.(false);
       this.sliceModalCard?.hide();
     }
+  }
+
+  /**
+   * Slice every printable plate in one canonical job and retain a per-plate
+   * result. Each plate keeps its own G-code, output hash, and warnings; the
+   * active plate's result also feeds the existing preview/download path, and
+   * any project drift discards the whole set rather than publishing a mix.
+   */
+  public async sliceAllPlates(): Promise<number> {
+    if (this.activeCanonicalSlicer) return 0;
+    const summary = this.canonicalProject.getSummary();
+    const printable = summary.plates.filter((plate) => plate.printable && plate.instanceCount > 0);
+    if (printable.length === 0) {
+      this.setStatus('No printable plate has models to slice.');
+      return 0;
+    }
+    if (SlicerClient.useExternalSlicer()) {
+      this.setStatus(
+        'slice failed: external canonical slicing needs independently attested engine provenance; disable the external slicer to use the verified browser engine.',
+      );
+      return 0;
+    }
+    const startedAt = performance.now();
+    const slicer = new CanonicalWorkspaceSlicer({
+      workspace: this.canonicalProject,
+      client: this.slicer,
+      route: { kind: 'browser-wasm' },
+      maxThreads: 4,
+      preflight: this.createLiveProfilePreflight(),
+    });
+    this.activeCanonicalSlicer = slicer;
+    const unsubscribe = slicer.subscribe((status) => this.renderCanonicalSliceStatus(status));
+    try {
+      this.markPublishedGcodeStale();
+      this.onSliceStateChanged?.(true);
+      this.sliceModalCard?.show();
+      const result = await slicer.startAllPlates().completion;
+      if (result.plates.length === 0) throw new Error('The canonical slicer returned no plate output.');
+      const guard = {
+        sourceRevision: result.sourceRevision,
+        sourceHash: result.sourceHash,
+        sourceAssetHash: result.sourceAssetHash,
+      };
+      const decoder = new TextDecoder('utf-8', { fatal: true });
+      const plates = new Map<PlateId, { gcode: string; byteLength: number; warnings: readonly string[] }>();
+      for (const plate of result.plates) {
+        plates.set(plate.plateId, {
+          gcode: decoder.decode(plate.gcode),
+          byteLength: plate.gcode.byteLength,
+          warnings: plate.warnings,
+        });
+      }
+      this.publishedPlateGcode = { plates, guard };
+      const active = plates.get(this.activePlateId) ?? [...plates.values()][0];
+      this.publishedGcode = active ? { gcode: active.gcode, guard } : null;
+      if (!this.revalidatePublishedGcode()) {
+        this.publishedPlateGcode = null;
+        throw new Error('The project changed while slicing; the stale results were discarded. Slice again.');
+      }
+      const elapsedMs = Math.round(performance.now() - startedAt);
+      const totalBytes = [...plates.values()].reduce((sum, entry) => sum + entry.byteLength, 0);
+      const warningCount = result.warnings.length;
+      this.setStatus(
+        `SLICED ${plates.size} plate(s) in ${elapsedMs} ms\n${(totalBytes / 1024).toFixed(0)} KB total` +
+          (warningCount > 0 ? `, ${warningCount} warning(s)` : ''),
+      );
+      if (active) this.showToolpathPreview(active.gcode);
+      return plates.size;
+    } catch (error) {
+      if (error instanceof SlicePreflightError) this.publishPreflightResult(error.result);
+      this.setStatus(`slice failed: ${(error as Error).message}`);
+      this.revalidatePublishedGcode();
+      return 0;
+    } finally {
+      unsubscribe();
+      slicer.dispose();
+      if (this.activeCanonicalSlicer === slicer) this.activeCanonicalSlicer = null;
+      this.onSliceStateChanged?.(false);
+      this.sliceModalCard?.hide();
+    }
+  }
+
+  /** Per-plate results retained by the last all-plate slice, if still valid. */
+  public getPlateSliceResults(): readonly {
+    plateId: PlateId;
+    name: string;
+    byteLength: number;
+    warnings: readonly string[];
+  }[] {
+    const published = this.publishedPlateGcode;
+    if (!published) return [];
+    const names = new Map(this.canonicalProject.getSummary().plates.map((plate) => [plate.id, plate.name]));
+    return [...published.plates.entries()].map(([plateId, entry]) => ({
+      plateId,
+      name: names.get(plateId) ?? 'Plate',
+      byteLength: entry.byteLength,
+      warnings: entry.warnings,
+    }));
+  }
+
+  /** Download each retained plate result as its own named artifact. */
+  public downloadAllPlateGcode(): number {
+    const published = this.publishedPlateGcode;
+    if (!published || published.plates.size === 0) {
+      this.setStatus('Slice all plates before downloading their G-code.');
+      return 0;
+    }
+    if (!this.revalidatePublishedGcode()) {
+      this.setStatus('The project changed since the last slice; slice again before downloading.');
+      return 0;
+    }
+    const names = new Map(this.canonicalProject.getSummary().plates.map((plate) => [plate.id, plate.name]));
+    let downloaded = 0;
+    for (const [plateId, entry] of published.plates) {
+      const label = (names.get(plateId) ?? 'plate').replace(/[^A-Za-z0-9._-]+/g, '_');
+      this.onDownloadFile?.(`${label}.gcode`, entry.gcode, 'text/plain');
+      downloaded += 1;
+    }
+    this.setStatus(`Downloaded ${downloaded} plate G-code file(s).`);
+    return downloaded;
   }
 
   public cancelSlice(): void {

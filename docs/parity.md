@@ -308,9 +308,9 @@ Local starting seams: [`ActionContext.ts`](../web/src/actions/ActionContext.ts),
   - **Current:** one registry instance and invocation guard is constructed at the composition root
     and injected into every catalogued surface. Empty-state/native-XR load, targeted plate add/
     delete, and tool-close aliases resolve through that same instance; bounded invocation data
-    preserves exact plate, Objects-tree, semantic-edit, settings, and virtual-filament targeting. All 147 actions have exactly one real parity-task owner and
+    preserves exact plate, Objects-tree, semantic-edit, settings, and virtual-filament targeting. All 149 actions have exactly one real parity-task owner and
     containing-phase anchor; metadata-only IDs explicitly provide no behavioral evidence. Current
-    status is 104 partial, 43 unavailable, and zero implemented. Remaining direct contextual controls,
+    status is 106 partial, 43 unavailable, and zero implemented. Remaining direct contextual controls,
     upstream leaf-to-local reachability, and full browser interaction coverage remain open under
     P11.2/P12.
 
@@ -1339,9 +1339,12 @@ Local starting seams: [`SlicerClient.ts`](../web/src/slicer/SlicerClient.ts),
     hashes, warnings, statistics, and route. On the server, `.3mf` plus ZIP signature writes
     `/tmp/in.3mf` and calls `startSliceProject`; STL calls `startSliceFile`, while extension/
     signature mismatches and unsupported inputs fail closed. The live current-plate workspace uses
-    this coordinator and projects progress/cancel/result guards. All-plate live UI, prompt
-    worker/process termination qualification, WASM/CLI semantic-oracle equivalence, and device
-    qualification remain open.
+    this coordinator and projects progress/cancel/result guards. Slice All Plates is live: one job
+    covers every printable plate, each plate keeps its own G-code, byte size, and warnings, the
+    whole set shares one revision/hash/asset guard so drift discards all of it rather than
+    publishing a mix, and each plate can be downloaded as its own named artifact. Prompt
+    worker/process termination qualification, WASM/CLI semantic-oracle equivalence, per-plate
+    statistics UI, and device qualification remain open.
 
 - [~] **P7.2 — Implement complete preflight and actionable errors.** Validate printable objects,
   plate bounds/collisions, manifold/repair status, profile/nozzle/printer compatibility, settings,
@@ -1495,9 +1498,9 @@ Local starting seams: [`SlicerClient.ts`](../web/src/slicer/SlicerClient.ts),
     and picker: it parses into the bounded rich model, drives the same preview projection as a
     slice result, and leaves the canonical project revision untouched, which a production browser
     pass asserts. Published slice artifacts remain bound to their exact semantic snapshot and fail
-    closed after drift. Per-plate result retention, the sliced-revision/printer badge, an explicit
-    revalidation flow before send, named export variants, and the full dirty-state matrix remain
-    open.
+    closed after drift. An all-plate slice now retains one guarded result per plate and downloads
+    each as its own named artifact. The sliced-revision/printer badge, an explicit revalidation flow
+    before send, remaining export variants, and the full dirty-state matrix remain open.
 
 - [ ] **P7.8 — Author layer custom-G-code events and filament sequences.** On the layer slider,
   add/edit/delete pause, custom G-code, color/filament change, template, and other event types
@@ -2092,7 +2095,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Feature family / required outcome | Primary tasks | 2026-07-30 current audit |
 |---|---:|---|
 | Upstream actions/settings/gizmos/formats/calibrations inventory and drift | P0.1, P12.1 | Exact pinned extractor maps 1,622 leaves/13 families from 17 Git blobs; manual upstream workflow sampling remains |
-| Truthful menu/toolbar/context/shortcut/XR capability state | P0.2, P11.2 | One guarded registry reports 147 actions = 104 partial + 43 unavailable and zero implemented, with unique real task ownership/anchors; full upstream reachability remains |
+| Truthful menu/toolbar/context/shortcut/XR capability state | P0.2, P11.2 | One guarded registry reports 149 actions = 106 partial + 43 unavailable and zero implemented, with unique real task ownership/anchors; full upstream reachability remains |
 | Clean-clone typecheck/test/build/CI and reproducible engine artifacts | P0.3, P12.3 | Aggregate local gate and artifact provenance pass; clean-clone CI/native rebuild qualification remains |
 | Golden 3MF/config/G-code/security fixture oracle | P0.4 | Structural 3MF, semantic G-code, and hostile server fixtures pass; official Snapmaker corpus remains |
 | Shared domain/action/surface boundaries | P0.5, P1.1–P1.2 | Canonical project/history, validated mesh codec, live one-way Three projection, and one injected guarded action registry exist; remaining contextual bypasses and feature commands are tracked explicitly |
@@ -2137,7 +2140,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Settings search/modes/dependencies/validation/reset/compare | P6.2–P6.5 | Headless modes/search/validation/inheritance/reset/compare exist; dependencies/scopes/live surfaces are missing |
 | Application preferences, storage migration, secret handling | P6.6 | AI and printer credentials are session-only with legacy plaintext purge/redaction; printer endpoint-only preferences are sanitized, while broader preferences/dialog lifecycle remains missing |
 | Correct config types/vector delimiters across boundaries | P6.7 | Shared ConfigIO/ProfileLoader classifier covers all 174 generated vector definitions; escaping/special/full boundary matrix remains |
-| Revisioned current/all plate slice, cancel, progress, route parity | P7.1 | Live current-plate browser slicing and progress/cancel use the canonical coordinator and actual-asset guard; all-plate UI, external attestation, route/oracle parity remain |
+| Revisioned current/all plate slice, cancel, progress, route parity | P7.1 | Live current-plate and all-plate browser slicing use the canonical coordinator and actual-asset guard, retaining per-plate results and downloads; external attestation, route/oracle parity, and per-plate statistics remain |
 | Preflight and actionable engine/project/device errors | P7.2 | Live UI and coordinator share canonical pre-route checks, exact catalog-derived build/nozzle/material/temperature constraints, fail-closed target attestation, structured accessible findings, and registry-routed Reveal/Drop-to-bed actions; remaining fixes and complete engine/device safety matrix remain |
 | Rich G-code parsing and standalone G-code open | P7.3, P7.7 | Bounded typed-column parser plus a read-only standalone G-code viewer that never mutates the project; arcs, seams, time/estimate semantics, official corpora, and streaming partitions remain |
 | All preview color modes/move filters/legends | P7.4 | The live viewer renders the bounded projection for all 12 pinned modes with a DOM panel for modes, layer window, move filters, coded legend, numeric range, and unsupported-mode reasons; seams/shells/marker, screenshots, XR, and goldens remain |
@@ -2264,6 +2267,7 @@ Evidence: EVID-nnn or Pending
 | `EVID-019` | P7.4–P7.5, P7.7 | Current worktree atop `c03f8b8`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `src/slicer/__tests__/gcode-preview-session.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no headset/printer | Pass: 6 preview-session traces (default full-layer window, move-class filtering, clamped/reversed/single-layer windows, every pinned mode with units and legend codes, explicit unsupported colour-print metadata, published move filters) plus a production browser pass that opens a standalone G-code file, asserts the canonical revision is unchanged, switches to a numeric mode with unit and range, collapses to a single announced layer, and reveals travel moves | Automated review; seams/shells/tool marker, sequential playback, screenshots, XR, official goldens, and the result badge/dirty matrix pending |
 | `EVID-020` | P5.1 | Current worktree atop `c659f5f`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `src/project/objects/__tests__/transform-operations.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no printer | Pass: 6 transform traces (axis-exact reversible mirror with untouched rotation/position, independent rotation and scale resets, shared-delta centring verified against canonical bounds, facet lay-flat that turns the chosen normal down and rests the instance on Z=0 without XY drift, already-down and degenerate-normal handling, deterministic 180° alignment) plus a production browser pass that mirrors and centres through the Edit menu and undoes each command; registry reports 145 actions = 102 partial + 43 unavailable | Automated review; auto-orient, coordinate-space controls, snapping, reference tolerances, and XR pending |
 | `EVID-021` | P2.2, P5.5 | Current worktree atop `d0bd45b`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `src/project/objects/__tests__/arrange.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no printer | Pass: 8 arrangement/bed-fill traces including deterministic free-space fill that never overlaps the source or existing instances, respects the bed margin, keeps the source orientation, and reports withheld slots at the copy cap, plus a production browser pass that adds an instance, undoes it, fills the plate, and undoes that too; registry reports 147 actions = 104 partial + 43 unavailable | Automated review; move-to-plate UI, merge/reload, and official Orca counts pending |
+| `EVID-022` | P7.1, P7.7, P10.7 | Current worktree atop `3874841`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `npm --prefix web audit --omit=dev --audit-level=high` | Node 22.21.0; Chrome for Testing 150; headless; no printer | Pass: live all-plate slicing retains one guarded artifact per plate with per-plate download, drift discards the whole set, and the production gate stays green; the production dependency surface now audits clean after dropping an unused `serve-handler`, moving the test-only `jsdom`/`puppeteer` to devDependencies, and pinning the patched transitive `protobufjs` | Automated review; per-plate statistics UI, external route attestation, and hardware qualification pending |
 
 Correction note (2026-07-20): the provisional local-commit cells in `EVID-001`–`EVID-012`
 were filled with the commit that landed those runs. Their historical commands, counts, results,

@@ -18,6 +18,17 @@ export const sliceActions: Action[] = [
     run: (ctx) => ctx.slice(),
   },
   {
+    id: 'slice_all_plates',
+    label: 'Slice All Plates',
+    icon: 'slice',
+    group: 'slice',
+    disclosure: 'menu',
+    menuSection: 'tools',
+    hint: 'Slice every printable plate and keep each plate’s own result',
+    isEnabled: (s) => s.modelCount > 0 && !s.isSlicing && !s.preflightBlocked,
+    run: (ctx) => ctx.sliceAllPlates(),
+  },
+  {
     id: 'toggle_preview',
     label: 'Preview',
     icon: 'preview',

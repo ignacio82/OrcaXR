@@ -261,6 +261,15 @@ export class ActionContext {
     this.workspace.centerSelectedOnPlate();
   }
 
+  // ---- Slicing --------------------------------------------------------
+  sliceAllPlates(): void {
+    void this.workspace.sliceAllPlates();
+  }
+
+  downloadAllPlateGcode(): void {
+    this.workspace.downloadAllPlateGcode();
+  }
+
   // ---- Preview --------------------------------------------------------
   /** Apply a bounded preview view change from any viewer surface. */
   updatePreviewView(patch: GcodePreviewViewPatch): void {
