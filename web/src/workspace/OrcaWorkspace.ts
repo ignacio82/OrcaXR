@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import type { FilamentId, InstanceId, LayerRangeId, ObjectId, PlateId, VolumeId } from '../project/domain/ids';
 import { entityId, UuidIdSource } from '../project/domain/ids';
-import type { ConfigMap, JsonValue, Transform } from '../project/domain/model';
+import type { ConfigMap, JsonValue, Transform, Vec3 } from '../project/domain/model';
 import type { FullSpectrumAutoPairGenerationPreferences } from '../project/filaments/autoPairReconciliation';
 import type { ImportCommitConfirmation, ProjectImportPreview } from '../project/import/types';
 import type { ObjectTreeEntityRef } from '../project/objects';
@@ -21,6 +21,7 @@ import {
 } from '../project/slicing';
 import type { ProjectSettingsOverrideGuard, ProjectSettingsOverrideSnapshot } from '../project/settingsOverrides';
 import type { ArrangeRegion } from '../project/objects/arrange';
+import { rotateVector } from '../project/objects/transformOperations';
 import { GCODE_PREVIEW_MODES } from '../slicer/GcodePreviewModel';
 import {
   GCODE_PREVIEW_MOVE_FILTERS,
@@ -543,6 +544,11 @@ export class OrcaWorkspace extends xb.Script {
       });
     }
     return entries;
+  }
+
+  /** Read-only canonical transform of one instance, for diagnostics and E2E. */
+  public getInstanceTransform(instanceId: InstanceId): Transform | undefined {
+    return this.canonicalProject.getInstanceTransform(instanceId);
   }
 
   /** Read-only live boundary for diagnostics/E2E; returned summaries are immutable. */
@@ -1186,6 +1192,12 @@ export class OrcaWorkspace extends xb.Script {
       if (finishPaintGesture(event, false)) return;
       if (xb.core.renderer.xr.isPresenting) return;
       if (this.tool in PAINT_TOOL_CHANNELS) return;
+      if (this.tool === 'lay_on_face') {
+        const dragX = Math.abs(event.clientX - downX);
+        const dragY = Math.abs(event.clientY - downY);
+        if (dragX <= 10 && dragY <= 10) this.layPickedFacetOnBed(pointerRay(event));
+        return;
+      }
       if (this.transformControls && (this.transformControls as unknown as { dragging: boolean }).dragging) return;
 
       const dx = event.clientX - downX;
@@ -4288,10 +4300,6 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public setTool(tool: WorkspaceGizmoTool) {
-    if (tool === 'lay_on_face') {
-      this.setStatus('Lay on face is unavailable until the orientation result commits canonically.');
-      return;
-    }
     this.tool = tool;
     this.refreshToolButtons();
     const channel = PAINT_TOOL_CHANNELS[tool];
@@ -4306,6 +4314,10 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus(`Paint ${channelLabel(channel)}: drag across a model, Escape cancels.`);
       return;
     }
+    if (tool === 'lay_on_face') {
+      this.setStatus('Lay flat: click the facet that should rest on the bed.');
+      return;
+    }
     this.setStatus(`tool: ${tool} - pinch-drag the model`);
     if (this.transformControls) {
       if (tool === 'move') this.transformControls.setMode('translate');
@@ -4316,6 +4328,98 @@ export class OrcaWorkspace extends xb.Script {
 
   public autoOrientSelectedModel() {
     this.setStatus('Auto-orient is unavailable until its analysis commits a canonical transform.');
+  }
+
+  /** Stable instance IDs the transform actions operate on. */
+  private selectedInstanceIdsForTransform(): InstanceId[] {
+    const summary = this.canonicalProject.getSummary();
+    return [...summary.selectedInstanceIds];
+  }
+
+  /** Mirror the selection across one printer axis (Edit → Mirror). */
+  public mirrorSelected(axis: 'x' | 'y' | 'z'): boolean {
+    const instances = this.selectedInstanceIdsForTransform();
+    if (instances.length === 0) {
+      this.setStatus('Select a model to mirror.');
+      return false;
+    }
+    try {
+      this.canonicalProject.mirrorInstances(instances, axis);
+      this.recomputePreflight();
+      this.setStatus(`Mirrored ${instances.length} model(s) on ${axis.toUpperCase()}.`);
+      return true;
+    } catch (error) {
+      this.setStatus(`Mirror failed: ${(error as Error).message}`);
+      return false;
+    }
+  }
+
+  /** Clear rotation, scale, or both on the selection. */
+  public resetSelectedTransform(target: 'rotation' | 'scale' | 'both'): boolean {
+    const instances = this.selectedInstanceIdsForTransform();
+    if (instances.length === 0) {
+      this.setStatus('Select a model to reset.');
+      return false;
+    }
+    try {
+      this.canonicalProject.resetInstanceTransforms(instances, target);
+      this.recomputePreflight();
+      this.setStatus(`Reset ${target === 'both' ? 'rotation and scale' : target} on ${instances.length} model(s).`);
+      return true;
+    } catch (error) {
+      this.setStatus(`Reset failed: ${(error as Error).message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Lay the facet under this ray on the bed. The facet normal is taken in
+   * volume space and composed with the canonical volume transform, so the
+   * canonical command never reads back a rendered matrix.
+   */
+  private layPickedFacetOnBed(raycaster: THREE.Raycaster): boolean {
+    for (const target of this.paintTargets()) {
+      const [hit] = raycaster.intersectObject(target.display, false);
+      if (!hit?.face) continue;
+      const instance = this.projectedModels(this.activePlateId).find(
+        (entry) => entry.volumeId === target.volumeId,
+      )?.instanceId;
+      if (!instance) continue;
+      const volume = this.canonicalProject.getVolumeTransform(target.volumeId);
+      const normal = volume
+        ? rotateVector([hit.face.normal.x, hit.face.normal.y, hit.face.normal.z], volume.rotation)
+        : ([hit.face.normal.x, hit.face.normal.y, hit.face.normal.z] as Vec3);
+      try {
+        this.canonicalProject.layInstanceOnFace(instance, normal);
+        this.recomputePreflight();
+        this.setStatus('Laid the chosen facet on the bed.');
+        return true;
+      } catch (error) {
+        this.setStatus(`Lay flat failed: ${(error as Error).message}`);
+        return false;
+      }
+    }
+    this.setStatus('Click a model facet to lay it flat.');
+    return false;
+  }
+
+  /** Centre the selection (or the whole plate) on the printable area. */
+  public centerSelectedOnPlate(): boolean {
+    let instances = this.selectedInstanceIdsForTransform();
+    if (instances.length === 0) instances = this.projectedModels(this.activePlateId).map((entry) => entry.instanceId);
+    if (instances.length === 0) {
+      this.setStatus('Add a model before centring the plate.');
+      return false;
+    }
+    try {
+      this.canonicalProject.centerInstancesOnPlate(instances, [this.bedMm.x, this.bedMm.y]);
+      this.recomputePreflight();
+      this.setStatus(`Centred ${instances.length} model(s) on the plate.`);
+      return true;
+    } catch (error) {
+      this.setStatus(`Centre failed: ${(error as Error).message}`);
+      return false;
+    }
   }
   private checkLoadButtonAndTrigger() {
     if (!this.loadButtonNode || !this.onRequestLoadStl) return;

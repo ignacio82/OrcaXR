@@ -308,9 +308,9 @@ Local starting seams: [`ActionContext.ts`](../web/src/actions/ActionContext.ts),
   - **Current:** one registry instance and invocation guard is constructed at the composition root
     and injected into every catalogued surface. Empty-state/native-XR load, targeted plate add/
     delete, and tool-close aliases resolve through that same instance; bounded invocation data
-    preserves exact plate, Objects-tree, semantic-edit, settings, and virtual-filament targeting. All 139 actions have exactly one real parity-task owner and
+    preserves exact plate, Objects-tree, semantic-edit, settings, and virtual-filament targeting. All 145 actions have exactly one real parity-task owner and
     containing-phase anchor; metadata-only IDs explicitly provide no behavioral evidence. Current
-    status is 95 partial, 44 unavailable, and zero implemented. Remaining direct contextual controls,
+    status is 102 partial, 43 unavailable, and zero implemented. Remaining direct contextual controls,
     upstream leaf-to-local reachability, and full browser interaction coverage remain open under
     P11.2/P12.
 
@@ -1014,9 +1014,12 @@ Local starting seams: [`MeshCut.ts`](../web/src/features/MeshCut.ts),
     use the canonical transformed-geometry bounds center rather than a render-array/first-model
     pivot. Drop to Bed matches the pinned per-instance minimum-Z behavior from immutable model
     mesh bytes, excludes modifier roles, and is shared by DOM/XR/automation through the registry.
-    Box/touch selection, part/object scope, mirror/reset, coordinate-space controls, snapping,
-    uniform lock, center/lay/auto-orient, cancel traces, unit UI, and reference/browser/XR
-    qualification remain open.
+    Mirror on X/Y/Z (a reversible negative scale component), Reset rotation, Reset scale, Centre on
+    plate (one shared delta that preserves relative layout), and Lay flat (pick a facet, compose the
+    shortest-arc rotation that turns it toward the bed, then rest on Z=0) are canonical commands
+    with headless traces and browser coverage. Box/touch selection, part/object scope,
+    coordinate-space controls, snapping, uniform lock, auto-orient, cancel traces, unit UI, and
+    reference/XR qualification remain open.
 
 - [~] **P5.2 — Complete mesh operations.** Deliver cut (plane, keep upper/lower, connectors where
   upstream exposes them), split to objects, split to parts, mesh Boolean union/difference/
@@ -2082,7 +2085,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Feature family / required outcome | Primary tasks | 2026-07-30 current audit |
 |---|---:|---|
 | Upstream actions/settings/gizmos/formats/calibrations inventory and drift | P0.1, P12.1 | Exact pinned extractor maps 1,622 leaves/13 families from 17 Git blobs; manual upstream workflow sampling remains |
-| Truthful menu/toolbar/context/shortcut/XR capability state | P0.2, P11.2 | One guarded registry reports 139 actions = 95 partial + 44 unavailable and zero implemented, with unique real task ownership/anchors; full upstream reachability remains |
+| Truthful menu/toolbar/context/shortcut/XR capability state | P0.2, P11.2 | One guarded registry reports 145 actions = 102 partial + 43 unavailable and zero implemented, with unique real task ownership/anchors; full upstream reachability remains |
 | Clean-clone typecheck/test/build/CI and reproducible engine artifacts | P0.3, P12.3 | Aggregate local gate and artifact provenance pass; clean-clone CI/native rebuild qualification remains |
 | Golden 3MF/config/G-code/security fixture oracle | P0.4 | Structural 3MF, semantic G-code, and hostile server fixtures pass; official Snapmaker corpus remains |
 | Shared domain/action/surface boundaries | P0.5, P1.1–P1.2 | Canonical project/history, validated mesh codec, live one-way Three projection, and one injected guarded action registry exist; remaining contextual bypasses and feature commands are tracked explicitly |
@@ -2110,7 +2113,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Fuzzy-skin painting and brim ears | P4.8 | Live fuzzy-skin strokes on the canonical channel; brim-ear gizmo, perimeter/brim oracles, and the dome regression fixture remain |
 | AI-assisted painting and color recreation through canonical annotations | P4.9 | AI scaffolds remain noncanonical; unsafe legacy color recreation was removed and its action is unavailable pending canonical facet/history/oracle/slice implementation |
 | Safe painted slicing without monochrome fallback | P4.10, P7.1 | Canonical live current-plate coordinator and revision/project/asset guard exist with no scene/raw-source fallback; paint-authoring/oracle/send evidence remains pending |
-| Move/rotate/scale/mirror/lay/auto-orient/numeric transforms | P5.1 | Stable-ID multi-select/select-all, bounds-center group transforms, numeric/nudge batching, and canonical Drop to Bed exist; remaining scope/tools/snap/XR are open |
+| Move/rotate/scale/mirror/lay/auto-orient/numeric transforms | P5.1 | Stable-ID multi-select/select-all, bounds-center group transforms, numeric/nudge batching, Drop to Bed, mirror X/Y/Z, reset rotation/scale, centre on plate, and facet-pick Lay flat are canonical commands; auto-orient, coordinate spaces, snapping, box select, and XR remain |
 | Cut/split/Boolean/repair/simplify | P5.2 | Guarded immutable topology replacement, pinned shared-edge split-to-parts, and a live explicitly confirmed, stale-guarded, atomic single-/multi-volume split-to-objects path preserve assets, placement, config, and unchanged-topology annotations while blocking lossy or over-cap synchronous cases; worker progress/cancel and cut/Boolean/repair/simplify algorithms/oracles remain gated |
 | Measure/assembly/emboss/SVG/simplify/brim gizmos | P5.3 | Mostly placeholders or disconnected code |
 | Multi-plate lifecycle, settings, lock/reorder/current/all slice | P5.4 | Live guarded add/activate/rename/duplicate/delete/reorder/printable management exists; locks/settings/move-copy/slice-all remain |
@@ -2252,6 +2255,7 @@ Evidence: EVID-nnn or Pending
 | `EVID-017` | P4.6–P4.8, P10.5 | Current worktree atop `563fbf8`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `src/project/painting/__tests__/painting.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no headset/printer | Pass: 12 painting traces including independent support/seam/fuzzy-skin channels, per-channel erase, per-stroke history, and rejection of a state that does not belong to its channel; the production browser pass now also switches to the support channel, paints `block` with a real pointer gesture, checks the labelled command, and undoes it; the XR rail stays finite at seven while the three new modal tools live in Tools overflow; registry reports 137 actions = 92 partial + 45 unavailable | Automated review; generated-support/seam/perimeter oracles, official round-trip, dome fuzzy fixture, brim ears, and XR input pending |
 | `EVID-018` | P5.5, P0.2 | Current worktree atop `20b9052`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `src/project/objects/__tests__/arrange.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no printer | Pass: 6 arrangement traces (deterministic repeat layout with no intersecting footprints inside margins, centred packed block, locked-instance and exclusion clearance, reported non-fitting instances, preserved orientation/scale/Z with an exact transform batch, rejected bed/spacing/exclusion/plate inputs) plus a production browser pass that arranges the imported models through the menu action and undoes the single labelled command; registry reports 137 actions = 93 partial + 44 unavailable | Automated review; rotation-aware nesting, auto-orientation, sequential clearance, and reference placement tolerances pending |
 | `EVID-019` | P7.4–P7.5, P7.7 | Current worktree atop `c03f8b8`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `src/slicer/__tests__/gcode-preview-session.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no headset/printer | Pass: 6 preview-session traces (default full-layer window, move-class filtering, clamped/reversed/single-layer windows, every pinned mode with units and legend codes, explicit unsupported colour-print metadata, published move filters) plus a production browser pass that opens a standalone G-code file, asserts the canonical revision is unchanged, switches to a numeric mode with unit and range, collapses to a single announced layer, and reveals travel moves | Automated review; seams/shells/tool marker, sequential playback, screenshots, XR, official goldens, and the result badge/dirty matrix pending |
+| `EVID-020` | P5.1 | Current worktree atop `c659f5f`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `src/project/objects/__tests__/transform-operations.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no printer | Pass: 6 transform traces (axis-exact reversible mirror with untouched rotation/position, independent rotation and scale resets, shared-delta centring verified against canonical bounds, facet lay-flat that turns the chosen normal down and rests the instance on Z=0 without XY drift, already-down and degenerate-normal handling, deterministic 180° alignment) plus a production browser pass that mirrors and centres through the Edit menu and undoes each command; registry reports 145 actions = 102 partial + 43 unavailable | Automated review; auto-orient, coordinate-space controls, snapping, reference tolerances, and XR pending |
 
 Correction note (2026-07-20): the provisional local-commit cells in `EVID-001`–`EVID-012`
 were filled with the commit that landed those runs. Their historical commands, counts, results,

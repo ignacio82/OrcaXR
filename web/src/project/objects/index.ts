@@ -11,6 +11,7 @@ export * from './splitToObjectsCommands';
 export * from './stlExport';
 export * from './topologyCommands';
 export * from './transformCommands';
+export * from './transformOperations';
 export * from './types';
 export * from './view';
 export * from './virtualization';

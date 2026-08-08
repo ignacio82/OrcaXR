@@ -220,6 +220,31 @@ async function inspectStandaloneGcode(page, fixture) {
   await page.waitForFunction(() => globalThis.window.workspace.getPreviewState().active === false);
 }
 
+/** Mirror and centre run as canonical commands through the Edit menu. */
+async function transformImportedModels(page) {
+  const instance = await page.evaluate(
+    () => globalThis.window.workspace.getCanonicalSummary().selectedInstanceIds[0] ?? null,
+  );
+  assert.ok(instance, 'the imported model is selected after import');
+  const scaleBefore = await page.evaluate((id) => globalThis.window.workspace.getInstanceTransform(id).scale, instance);
+  await clickMenuAction(page, 'mirror_x');
+  await page.waitForFunction((id) => globalThis.window.workspace.getInstanceTransform(id).scale[0] < 0, {}, instance);
+  await clickMenuAction(page, 'edit_undo');
+  await page.waitForFunction(
+    ({ id, expected }) => globalThis.window.workspace.getInstanceTransform(id).scale[0] === expected,
+    {},
+    { id: instance, expected: scaleBefore[0] },
+  );
+
+  await clickMenuAction(page, 'center_on_plate');
+  await page.waitForFunction(
+    (count) => globalThis.window.workspace.getCanonicalSummary().history.undoCount === count,
+    {},
+    await page.evaluate(() => globalThis.window.workspace.getCanonicalSummary().history.undoCount),
+  );
+  await clickMenuAction(page, 'edit_undo');
+}
+
 /** Auto-arrange is one canonical command over the real menu action. */
 async function arrangeImportedModels(page) {
   const before = await page.evaluate(() =>
@@ -588,6 +613,7 @@ try {
   assert.equal(importedModels.placed, 2, 'both OBJ objects are placed on the active plate');
 
   await arrangeImportedModels(page);
+  await transformImportedModels(page);
   await inspectStandaloneGcode(page, gcodeFixturePath);
   await paintImportedModel(page);
 

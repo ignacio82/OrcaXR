@@ -279,8 +279,6 @@ const CANONICAL_CUTOVER_GATED_REASONS = {
     'Paste is disabled until clipboard content can be validated and inserted through one canonical command with fresh stable IDs.',
   edit_delete_all:
     'Delete All is disabled until active-plate instances can be removed through one reversible canonical transaction.',
-  tool_lay_on_face:
-    'Lay Flat is disabled until face orientation is computed from canonical assets and committed through a reversible transform command.',
   repair_model:
     'Mesh repair is disabled until topology replacement invalidates facet metadata and commits through a guarded canonical command.',
   simplify_model:

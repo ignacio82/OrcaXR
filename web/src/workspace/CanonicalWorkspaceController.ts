@@ -77,7 +77,7 @@ import {
 import type { CommandHistorySnapshot } from '../project/history/commandBus';
 import { PreparedProjectImport, ProjectImportCoordinator } from '../project/import/ProjectImportCoordinator';
 import { ModelImportParser, type ModelImportPlacement } from '../project/import/ModelImportParser';
-import type { JsonValue, TriangleAssignments } from '../project/domain/model';
+import type { JsonValue, TriangleAssignments, Vec3 } from '../project/domain/model';
 import type { FacetAnnotationChannel } from '../project/annotations';
 import { PaintStrokeService } from '../project/painting/PaintStrokeService';
 import { projectPaintPalette, type PaintPalette, type PaintPaletteOptions } from '../project/painting/paintPalette';
@@ -98,6 +98,14 @@ import {
 import { computeCanonicalInstanceBounds, type CanonicalBounds3 } from '../project/objects/bounds';
 import { exportCanonicalInstancesAsBinaryStl } from '../project/objects/stlExport';
 import { SetInstanceTransformsCommand, type InstanceTransformChange } from '../project/objects/transformCommands';
+import {
+  centerInstancesOnPlate,
+  layInstanceOnFace,
+  mirrorInstances,
+  resetInstanceRotations,
+  resetInstanceScales,
+  type MirrorAxis,
+} from '../project/objects/transformOperations';
 import {
   arrangementTransformChanges,
   planPlateArrangement,
@@ -2020,6 +2028,54 @@ export class CanonicalWorkspaceController {
     return result;
   }
 
+  /** Canonical transform of one instance, for read-only surfaces. */
+  getInstanceTransform(instanceId: InstanceId): Transform | undefined {
+    this.assertActive();
+    const found = findInstance(this.session.project.getSnapshot().state, instanceId);
+    return found ? cloneJson(found.instance.transform) : undefined;
+  }
+
+  /** Canonical transform of one volume, for surfaces that resolve facet data. */
+  getVolumeTransform(volumeId: VolumeId): Transform | undefined {
+    this.assertActive();
+    const found = findVolume(this.session.project.getSnapshot().state, volumeId);
+    return found ? cloneJson(found.volume.transform) : undefined;
+  }
+
+  /** Mirror an exact instance selection across one axis in one command. */
+  mirrorInstances(instanceIds: readonly InstanceId[], axis: MirrorAxis): void {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    this.setInstanceTransforms(mirrorInstances(state, instanceIds, axis), `mirror:${axis}`);
+  }
+
+  /** Clear rotation, scale, or both for an exact instance selection. */
+  resetInstanceTransforms(instanceIds: readonly InstanceId[], target: 'rotation' | 'scale' | 'both'): void {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    const changes =
+      target === 'rotation'
+        ? resetInstanceRotations(state, instanceIds)
+        : target === 'scale'
+          ? resetInstanceScales(state, instanceIds)
+          : mergeChanges(resetInstanceRotations(state, instanceIds), resetInstanceScales(state, instanceIds));
+    this.setInstanceTransforms(changes, `reset:${target}`);
+  }
+
+  /** Centre an exact instance selection on the printable area. */
+  centerInstancesOnPlate(instanceIds: readonly InstanceId[], bedSizeMm: readonly [number, number]): void {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    this.setInstanceTransforms(centerInstancesOnPlate(state, this.assets, instanceIds, bedSizeMm), 'center');
+  }
+
+  /** Rotate one instance so a chosen facet rests on the bed. */
+  layInstanceOnFace(instanceId: InstanceId, localNormal: Vec3): void {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    this.setInstanceTransforms(layInstanceOnFace(state, this.assets, { instanceId, localNormal }), 'lay-on-face');
+  }
+
   undo(): boolean {
     this.assertActive();
     return this.session.undo();
@@ -2491,6 +2547,22 @@ function readClock(clock: CanonicalWorkspaceClock): string {
   const date = value instanceof Date ? value : new Date(value);
   if (!Number.isFinite(date.getTime())) throw new Error('Canonical workspace clock returned an invalid timestamp');
   return date.toISOString();
+}
+
+/** Later changes win, so a combined reset applies both fields per instance. */
+function mergeChanges(
+  first: readonly InstanceTransformChange[],
+  second: readonly InstanceTransformChange[],
+): InstanceTransformChange[] {
+  const merged = new Map<string, InstanceTransformChange>();
+  for (const change of [...first, ...second]) {
+    const previous = merged.get(change.instanceId);
+    merged.set(change.instanceId, {
+      instanceId: change.instanceId,
+      transform: previous ? { ...previous.transform, ...change.transform } : change.transform,
+    });
+  }
+  return [...merged.values()];
 }
 
 function combinedCancellation(primary: CancellationToken, secondary?: CancellationToken): CancellationToken {

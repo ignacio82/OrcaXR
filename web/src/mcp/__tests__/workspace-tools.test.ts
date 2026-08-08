@@ -63,15 +63,21 @@ const paintResult = (await setGizmoTool({ tool: 'paint' })) as {
 assert.equal(paintResult.isError, undefined);
 assert.deepEqual(applied, ['move', 'paint']);
 
-// A still-gated tool must fail visibly instead of reaching the handler.
+// Lay flat is canonical now and reaches its handler.
 const layFlatResult = (await setGizmoTool({ tool: 'lay_on_face' })) as {
   content: Array<{ type: string; text: string }>;
   isError?: boolean;
 };
-assert.equal(layFlatResult.isError, true);
-assert.deepEqual(applied, ['move', 'paint'], 'an unavailable tool must not reach the handler');
-assert.match(layFlatResult.content[0]?.text ?? '', /canonical/i);
-assert.match(reports.at(-1) ?? '', /Lay flat: .*canonical/i);
+assert.equal(layFlatResult.isError, undefined);
+assert.deepEqual(applied, ['move', 'paint', 'lay_on_face']);
+
+// A tool that is still gated must fail visibly instead of reaching the handler.
+const cutResult = (await setGizmoTool({ tool: 'cut' })) as {
+  content: Array<{ type: string; text: string }>;
+  isError?: boolean;
+};
+assert.equal(cutResult.isError, true);
+assert.deepEqual(applied, ['move', 'paint', 'lay_on_face'], 'an unknown or gated tool never reaches the handler');
 
 const source = readFileSync(fileURLToPath(new URL('../WorkspaceTools.ts', import.meta.url)), 'utf8');
 assert.doesNotMatch(source, /workspace\.setTool\s*\(/);

@@ -239,6 +239,19 @@ export class ActionContext {
     this.workspace.cutSelectedByPlane();
   }
 
+  // ---- Transforms -----------------------------------------------------
+  mirrorSelected(axis: 'x' | 'y' | 'z'): void {
+    this.workspace.mirrorSelected(axis);
+  }
+
+  resetSelectedTransform(target: 'rotation' | 'scale' | 'both'): void {
+    this.workspace.resetSelectedTransform(target);
+  }
+
+  centerOnPlate(): void {
+    this.workspace.centerSelectedOnPlate();
+  }
+
   // ---- Preview --------------------------------------------------------
   /** Apply a bounded preview view change from any viewer surface. */
   updatePreviewView(patch: GcodePreviewViewPatch): void {

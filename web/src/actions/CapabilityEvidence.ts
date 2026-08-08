@@ -60,6 +60,12 @@ export const ACTION_IDS_BY_PARITY_TASK = {
     'tool_scale',
     'tool_lay_on_face',
     'drop_to_bed',
+    'mirror_x',
+    'mirror_y',
+    'mirror_z',
+    'reset_rotation',
+    'reset_scale',
+    'center_on_plate',
   ],
   'P5.2': [
     'repair_model',
