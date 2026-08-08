@@ -1093,8 +1093,11 @@ Local starting seams: [`MeshCut.ts`](../web/src/features/MeshCut.ts),
     fresh IDs for every editable descendant while sharing immutable assets and cloning exact
     plate-scoped G-code/thumbnail metadata. A live accessible, revision-guarded manager covers
     add/activate/rename/duplicate/delete/reorder/printable state through the action registry.
-    Locking, copy/move UI, plate settings, per-plate slice state, official round-trip, and slice-all
-    qualification remain open.
+    Slice All Plates is live through the same revision/project/asset guard as the active-plate
+    route: every printable plate retains its own named G-code result and download, and any drift
+    withdraws the whole set instead of publishing a mixture of revisions. Locking, copy/move UI,
+    plate settings, per-plate statistics, official round-trip, and cross-route qualification
+    remain open.
 
 - [~] **P5.5 — Match arrangement and placement outcomes.** Arrange all/current plate, automatic
   orientation, bed collision, top-cover/clearance constraints, sequential-print clearance, and
@@ -1994,8 +1997,11 @@ This contract is part of every XR acceptance gate, not optional styling guidance
     routing is enabled only after a successful probe backed by explicit opt-in, replacement
     disables the old route before probing, failed replacement stays local, and disable/clear
     invalidates in-flight probes.
-    Live printer reads use the typed boundary while all mutation remains blocked. The hostile
-    XML/G-code/client SSRF/license/static-scan matrix plus production threat review remain open.
+    Printer mutation now uses the same typed boundary behind explicit confirmation, artifact/tool
+    mapping, unique-name/replace policy, stored-size verification, and state-derived lifecycle
+    guards; cancel/emergency-stop re-read the live job before acting. Queue/storage mutations,
+    reconnect-during-transfer and hardware qualification remain open. The hostile XML/G-code/
+    client SSRF/license/static-scan matrix plus production threat review also remains open.
 
 - [~] **P10.8 — Add offline/PWA and recovery guarantees.** App shell, profiles, help, local
   editing, save/export, and already-downloaded assets work offline; slicer update caching follows
@@ -2004,8 +2010,11 @@ This contract is part of every XR acceptance gate, not optional styling guidance
   - **Accept:** offline reload completes supported work; update never mixes incompatible worker/
     WASM/schema versions; forced crash/quota/corruption restores or clearly reports last safe data.
   - **Current:** app-shell/icons are precached; runtime content is NetworkFirst; slicer artifacts
-    use a separate bounded cache; production offline reload is tested. Autosave, quota/corruption
-    recovery, and worker/WASM/schema atomic-update guarantees remain open.
+    use a separate bounded cache; production offline reload is tested. A versioned, size-capped
+    IndexedDB autosave ring skips unchanged revisions, prunes/retries on quota pressure, validates
+    snapshots before offering the newest recoverable entry, falls back past corruption, and keeps
+    recovery/discard explicit in headless tests. Composition-root capture/recovery UI, forced-crash
+    qualification, and worker/WASM/schema atomic-update guarantees remain open.
 
 - [~] **P10.9 — Build a version-pinned XRBlocks design system and typed adapter.** Exact-pin the
   qualified XRBlocks/UIKit pair and isolate addon imports behind a typed, mockable adapter. Remove
@@ -2074,8 +2083,11 @@ Local starting seams: the [`action groups`](../web/src/actions/groups/),
     canonical state/asset/selection/history authority, allocates fresh project/plate identities,
     retains the selected base profile and physical tools, clears project overrides and virtual
     recipes, and establishes a clean checkpoint. Canonical worker-preview Open and deterministic
-    download Save/Save As exist. Recent files, distinct Save versus Save As/file handles,
-    autosave/recovery, metadata UX, import conflicts, and the full dirty/browser matrix remain.
+    download Save/Save As exist. A bounded versioned autosave store can identify and validate the
+    newest recoverable snapshot, report corruption, and explicitly discard recovery state, but it
+    is not yet wired to live capture/startup recovery. Recent files, distinct Save versus Save As/
+    file handles, live autosave/recovery, metadata UX, import conflicts, and the full dirty/browser
+    matrix remain.
 
 - [ ] **P11.2 — Close every menu, toolbar, context, camera, and view gap.** File, Edit, View, Add,
   Prepare/tool, plate/object context, Calibration, Device, Help, scene cameras, perspective/
@@ -2209,7 +2221,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Clean-clone typecheck/test/build/CI and reproducible engine artifacts | P0.3, P12.3 | Aggregate local gate and artifact provenance pass; clean-clone CI/native rebuild qualification remains |
 | Golden 3MF/config/G-code/security fixture oracle | P0.4 | Structural 3MF, semantic G-code, and hostile server fixtures pass; official Snapmaker corpus remains |
 | Shared domain/action/surface boundaries | P0.5, P1.1–P1.2 | Canonical project/history, validated mesh codec, live one-way Three projection, and one injected guarded action registry exist; remaining contextual bypasses and feature commands are tracked explicitly |
-| New/open/recent/save/save-as/dirty prompts/recovery | P1.3–P1.6, P11.1 | Dirty-confirmed canonical New, worker-preview/confirm Open, and deterministic save exist; recent/distinct Save As/autosave/recovery remain |
+| New/open/recent/save/save-as/dirty prompts/recovery | P1.3–P1.6, P11.1 | Dirty-confirmed canonical New, worker-preview/confirm Open, deterministic save, and a bounded corruption-aware autosave/recovery store exist; composition-root capture/recovery UI, recent files, and distinct Save As/file handles remain |
 | BBS 3MF project and generic 3MF round-trip | P1.3 | Deterministic BBS core, lossless envelope, and qualified `p:path` split-model import exist; complete official Orca round-trip remains |
 | Project/plate/object/volume/instance/layer-range model | P1.1, P2.1 | Canonical graph, immutable mesh assets/codec, atomic add/delete commands, live accessible/virtualized DOM tree, and one-way scene projection exist; XR and full edit outcomes remain |
 | Selection set and synchronized scene/Object tree | P1.2, P2.1, P5.1 | Typed canonical plate/object/volume/instance/layer-range multi-selection synchronizes the live DOM tree and Three scene; XR and complete touch/large-project qualification remain |
@@ -2236,7 +2248,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Move/rotate/scale/mirror/lay/auto-orient/numeric transforms | P5.1 | Stable-ID multi-select/select-all, bounds-center group transforms, numeric/nudge batching, Drop to Bed, mirror X/Y/Z, reset rotation/scale, centre on plate, and facet-pick Lay flat are canonical commands; auto-orient, coordinate spaces, snapping, box select, and XR remain |
 | Cut/split/Boolean/repair/simplify | P5.2 | Guarded immutable topology replacement, pinned shared-edge split-to-parts, and a live explicitly confirmed, stale-guarded, atomic single-/multi-volume split-to-objects path preserve assets, placement, config, and unchanged-topology annotations while blocking lossy or over-cap synchronous cases; worker progress/cancel and cut/Boolean/repair/simplify algorithms/oracles remain gated |
 | Measure/assembly/emboss/SVG/simplify/brim gizmos | P5.3 | Mostly placeholders or disconnected code |
-| Multi-plate lifecycle, settings, lock/reorder/current/all slice | P5.4 | Live guarded add/activate/rename/duplicate/delete/reorder/printable management exists; locks/settings/move-copy/slice-all remain |
+| Multi-plate lifecycle, settings, lock/reorder/current/all slice | P5.4 | Live guarded add/activate/rename/duplicate/delete/reorder/printable management and revision-guarded all-plate slicing with one named result/download per printable plate exist; locks/settings/move-copy, per-plate statistics, and route qualification remain |
 | Collision-aware arrangement/orientation/wipe tower | P5.5 | Deterministic canonical auto-arrange honours margins, spacing, exclusions, locked instances, and prime tower, commits one reversible batch, and is browser-verified; rotation-aware nesting, auto-orientation, and sequential clearance remain |
 | Import 3MF/STL/STEP/SVG/OBJ/AMF/ZIP as appropriate | P5.6 | One signature-first intake serves the picker and drag-and-drop: 3MF opens as a project or merges geometry-only with reported drops, STL/OBJ/AMF/compressed-AMF/ZIP decode into canonical objects/parts/units/materials/instances, G-code opens read-only, and hostile or unsupported input fails closed with typed reasons; STEP/SVG decoding, URL/handy sources, and official corpora remain |
 | Export project/core/sliced 3MF, STL variants, G-code, OBJ, bundles/logs | P5.7 | Canonical project/G-code download and deterministic selected-or-plate binary STL exist; remaining variants/viewers/destinations/oracles are open |
@@ -2271,7 +2283,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | XR update/input ownership, cleanup, comfort, headset budgets | P10.10 | Duplicate owners removed; per-controller sticky UI suppression, actual-hit targeting, and idempotent disposal are tested foundations; instrumentation/headset budgets remain |
 | Bundle/frame/memory/worker/WASM resource budgets | P10.6, P10.10 | Production chunk budgets pass; runtime/frame/memory/device budgets remain |
 | Client/server/archive/printer/AI security | P10.7 | Bounded server/archive abuse, session-only AI/Moonraker secrets, purge/redaction, and fail-closed external-slicer opt-in/probe foundations pass; full threat/device review remains |
-| PWA offline, coherent updates, autosave/crash recovery | P10.8 | Offline/CSP/update contract and production reload smoke pass; autosave/crash recovery UX remains |
+| PWA offline, coherent updates, autosave/crash recovery | P10.8 | Offline/CSP/update contract and production reload smoke pass; a bounded versioned autosave ring proves quota pruning, corruption fallback, validation, recovery choice, and discard headlessly, while live capture/startup UX and atomic worker/WASM/schema updates remain |
 | Complete menus/cameras/views/shortcuts/help/preferences | P11.2–P11.3 | Shortcut help is generated from the guarded action catalog and basic help claims are truthful; many menu/view behaviors, contextual help, and preferences remain missing |
 | Diagnostics/log export and privacy preview | P11.4 | Placeholder |
 | Typed permissioned MCP/voice/AI automation | P11.5 | Scaffolds; remote/unpinned risk |
