@@ -80,7 +80,11 @@ export type PrerequisiteId =
   | 'has-multiple-plates'
   | 'not-slicing'
   | 'preflight-clear'
-  | 'projection-healthy';
+  | 'projection-healthy'
+  | 'printer-printing'
+  | 'printer-paused'
+  | 'printer-job-active'
+  | 'printer-connected';
 
 export interface Capability {
   status: CapabilityStatus;
@@ -387,6 +391,12 @@ function prerequisitesFor(action: ActionDefinition): PrerequisiteId[] {
   if (action.id === 'slice_active_plate') {
     prerequisites.push('has-model', 'not-slicing', 'preflight-clear', 'projection-healthy');
   }
+  if (action.id === 'printer_pause_print') prerequisites.push('printer-printing');
+  if (action.id === 'printer_resume_print') prerequisites.push('printer-paused');
+  if (action.id === 'printer_cancel_print') prerequisites.push('printer-job-active');
+  // Deliberately not gated on a job: a hard stop is what an operator reaches
+  // for when the machine is doing something it should not be doing at all.
+  if (action.id === 'printer_emergency_stop') prerequisites.push('printer-connected');
   return [...new Set(prerequisites)];
 }
 
@@ -451,6 +461,25 @@ const PREREQUISITES: Readonly<
     met: (state) => state.projectionHealthy,
     reason:
       'The 3D project projection failed for this revision; recover or reopen the project before saving or slicing.',
+  },
+  // Printer lifecycle prerequisites read the machine's own reported state, so a
+  // job started from the printer's screen enables these exactly as one sent
+  // from here does.
+  'printer-printing': {
+    met: (state) => state.printerJobState === 'printing',
+    reason: 'The connected printer is not printing.',
+  },
+  'printer-paused': {
+    met: (state) => state.printerJobState === 'paused',
+    reason: 'The connected printer has no paused print.',
+  },
+  'printer-job-active': {
+    met: (state) => state.printerJobState === 'printing' || state.printerJobState === 'paused',
+    reason: 'The connected printer has no job to act on.',
+  },
+  'printer-connected': {
+    met: (state) => state.printerJobState !== 'disconnected',
+    reason: 'Connect to a printer first.',
   },
 };
 

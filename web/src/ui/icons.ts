@@ -140,6 +140,10 @@ const ICONS: Record<string, IconGlyph> = {
   negative_part: { xr: 'do_not_disturb_on', dom: '⊖' },
   layers_edit: { xr: 'layers', dom: '≣' },
   printer_send: { xr: 'send', dom: '📤' },
+  printer_pause: { xr: 'pause_circle', dom: '⏸' },
+  printer_resume: { xr: 'play_circle', dom: '▶' },
+  printer_cancel: { xr: 'stop_circle', dom: '⏹' },
+  emergency_stop: { xr: 'e911_emergency', dom: '🛑' },
 
   // Advanced tools
   emboss: { xr: 'title', dom: '🅣' },

@@ -178,6 +178,8 @@ const FULL_STATE = {
   status: 'ready',
   progress: null,
   preflightBlocked: false,
+  // A connected, printing machine so the lifecycle actions are reachable.
+  printerJobState: 'printing',
 } as const;
 
 test('all audited status-only placeholders are explicitly unavailable', () => {

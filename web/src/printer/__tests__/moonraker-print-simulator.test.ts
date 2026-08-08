@@ -4,7 +4,11 @@ import { AddressInfo } from 'node:net';
 
 import {
   MoonrakerTransport,
+  PrintJobCommandError,
+  PrintJobStatusModel,
   PrintSubmissionError,
+  PRINT_JOB_QUERY_PATH,
+  executePrintJobCommand,
   submitPrintJob,
   summarizeGcodeToolUsage,
   validateToolMapping,
@@ -53,12 +57,17 @@ class Simulator {
   readonly stored = new Map<string, Buffer>();
   readonly requests: string[] = [];
   readonly apiKeys: (string | undefined)[] = [];
+  readonly lifecycle: string[] = [];
   started: string | null = null;
+  klippy: string;
+  printState: string;
   private readonly server: Server;
   private port = 0;
 
   constructor(private readonly options: SimulatorOptions = {}) {
     for (const name of options.files ?? []) this.stored.set(name, Buffer.alloc(1));
+    this.klippy = options.klippy ?? 'ready';
+    this.printState = options.printState ?? 'standby';
     this.server = createServer((request, response) => void this.handle(request, response));
   }
 
@@ -98,8 +107,19 @@ class Simulator {
       }
       return json({
         status: {
-          webhooks: { state: this.options.klippy ?? 'ready' },
-          print_stats: { state: this.options.printState ?? 'standby', filename: '' },
+          webhooks: { state: this.klippy },
+          print_stats: {
+            state: this.printState,
+            filename: this.started ?? '',
+            print_duration: this.printState === 'standby' ? 0 : 240,
+            info: this.printState === 'standby' ? {} : { current_layer: 11, total_layer: 98 },
+          },
+          virtual_sdcard: {
+            is_active: this.printState === 'printing',
+            progress: this.printState === 'standby' ? 0 : 0.2,
+          },
+          extruder: { temperature: 219.6, target: this.printState === 'printing' ? 220 : 0 },
+          heater_bed: { temperature: 59.7, target: this.printState === 'printing' ? 60 : 0 },
         },
       });
     }
@@ -126,6 +146,27 @@ class Simulator {
     }
     if (url.pathname === '/printer/print/start') {
       this.started = url.searchParams.get('filename');
+      this.printState = 'printing';
+      return json('ok');
+    }
+    if (url.pathname === '/printer/print/pause') {
+      this.lifecycle.push('pause');
+      this.printState = 'paused';
+      return json('ok');
+    }
+    if (url.pathname === '/printer/print/resume') {
+      this.lifecycle.push('resume');
+      this.printState = 'printing';
+      return json('ok');
+    }
+    if (url.pathname === '/printer/print/cancel') {
+      this.lifecycle.push('cancel');
+      this.printState = 'cancelled';
+      return json('ok');
+    }
+    if (url.pathname === '/printer/emergency_stop') {
+      this.lifecycle.push('emergency-stop');
+      this.klippy = 'shutdown';
       return json('ok');
     }
     response.writeHead(404, { 'content-type': 'application/json' });
@@ -265,6 +306,62 @@ await test('never starts a print when the stored size disagrees with the transfe
       (error: unknown) => error instanceof PrintSubmissionError && error.code === 'verification-failed',
     );
     assert.equal(simulator.started, null);
+  });
+});
+
+await test('reads the live job and drives its lifecycle through the real transport', async () => {
+  await withPrinter({}, async ({ transport, simulator }) => {
+    const status = new PrintJobStatusModel();
+    const read = async () => status.applyQuery(await transport.request<unknown>(PRINT_JOB_QUERY_PATH));
+
+    assert.equal((await read()).state, 'standby');
+    await submitPrintJob(transport, { filename: 'plate.gcode', gcode: MULTICOLOR_GCODE, startPrint: true });
+
+    const printing = await read();
+    assert.equal(printing.state, 'printing');
+    assert.equal(printing.filename, 'plate.gcode');
+    assert.equal(printing.currentLayer, 11);
+    assert.equal(printing.totalLayers, 98);
+    assert.deepEqual(printing.extruder, { actualC: 219.6, targetC: 220 });
+
+    // Cancelling the wrong job must be impossible even when the state allows it.
+    await assert.rejects(
+      () =>
+        executePrintJobCommand(transport, {
+          command: 'cancel',
+          observed: printing,
+          expectedFilename: 'a_different_plate.gcode',
+        }),
+      (error: unknown) => error instanceof PrintJobCommandError && error.code === 'job-changed',
+    );
+    assert.deepEqual(simulator.lifecycle, []);
+
+    await executePrintJobCommand(transport, { command: 'pause', observed: printing });
+    const paused = await read();
+    assert.equal(paused.state, 'paused');
+    await executePrintJobCommand(transport, { command: 'resume', observed: paused });
+    const resumed = await read();
+    assert.equal(resumed.state, 'printing');
+    await executePrintJobCommand(transport, {
+      command: 'cancel',
+      observed: resumed,
+      expectedFilename: 'plate.gcode',
+    });
+    assert.equal((await read()).state, 'cancelled');
+    assert.deepEqual(simulator.lifecycle, ['pause', 'resume', 'cancel']);
+  });
+});
+
+await test('halts a machine whose Klipper is down, where nothing else is allowed', async () => {
+  await withPrinter({ klippy: 'shutdown' }, async ({ transport, simulator }) => {
+    const status = new PrintJobStatusModel();
+    const observed = status.applyQuery(await transport.request<unknown>(PRINT_JOB_QUERY_PATH));
+    await assert.rejects(
+      () => executePrintJobCommand(transport, { command: 'pause', observed }),
+      (error: unknown) => error instanceof PrintJobCommandError && error.code === 'not-allowed',
+    );
+    await executePrintJobCommand(transport, { command: 'emergency-stop', observed });
+    assert.deepEqual(simulator.lifecycle, ['emergency-stop']);
   });
 });
 

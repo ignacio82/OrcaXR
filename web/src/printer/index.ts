@@ -4,5 +4,7 @@ export * from './MoonrakerTransport';
 export * from './MoonrakerTypes';
 export * from './PrinterEndpointPreferences';
 export * from './SessionCredentials';
+export * from './PrintJobControl';
+export * from './PrintJobStatus';
 export * from './PrintJobSubmission';
 export * from './PrintToolMapping';

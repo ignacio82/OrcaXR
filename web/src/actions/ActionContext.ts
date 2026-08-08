@@ -14,6 +14,7 @@ import type { FilamentId, PlateId } from '../project/domain/ids';
 import type { ConfigMap } from '../project/domain/model';
 import type { ObjectTreeEntityRef } from '../project/objects';
 import type { PaintChannel, PaintToolKind } from '../project/painting/PaintStrokeService';
+import type { PrintJobCommand } from '../printer/PrintJobControl';
 import type { GcodePreviewViewPatch } from '../slicer/GcodePreviewSession';
 
 /** Modal tool that authors each facet channel. */
@@ -406,6 +407,10 @@ export class ActionContext {
 
   sendToPrinter(): Promise<void> {
     return this.workspace.sendToPrinter();
+  }
+
+  controlPrintJob(command: PrintJobCommand): Promise<void> {
+    return this.workspace.controlPrintJob(command);
   }
 
   // ---- Advanced Features ----------------------------------------------

@@ -24,12 +24,41 @@ export async function startMoonrakerSimulator(options = {}) {
     slots: options.slots ?? [],
     reportedSizeDelta: options.reportedSizeDelta ?? 0,
     allowOrigin: options.allowOrigin ?? true,
+    progress: options.progress ?? 0,
+    printDurationS: options.printDurationS ?? 0,
+    filamentUsedMm: options.filamentUsedMm ?? 0,
+    currentLayer: options.currentLayer ?? 0,
+    totalLayers: options.totalLayers ?? 0,
+    nozzleC: options.nozzleC ?? 24.5,
+    bedC: options.bedC ?? 23.8,
+    message: options.message ?? '',
   };
+  const commands = [];
   const stored = new Map();
   const requests = [];
   const apiKeys = [];
+  const sockets = new Set();
   let started = null;
+  let notificationId = 0;
   for (const name of options.files ?? []) stored.set(name, Buffer.alloc(1));
+
+  /**
+   * Push the objects a state change touched, exactly as Klipper does. Live
+   * surfaces are meant to follow these notifications rather than poll, so the
+   * simulator has to send them for that path to be exercised at all.
+   */
+  const notifyStatus = () => {
+    if (sockets.size === 0) return;
+    notificationId += 1;
+    const frame = encodeWebSocketText(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'notify_status_update',
+        params: [jobStatusObjects(state), notificationId],
+      }),
+    );
+    for (const socket of sockets) socket.write(frame);
+  };
 
   const server = createServer((request, response) => {
     void handle(request, response).catch((error) => {
@@ -86,13 +115,7 @@ export async function startMoonrakerSimulator(options = {}) {
           },
         });
       }
-      return json({
-        status: {
-          webhooks: { state: state.klippy },
-          print_stats: { state: state.printState, filename: state.currentFilename },
-          virtual_sdcard: { is_active: state.printState === 'printing' },
-        },
-      });
+      return json({ status: jobStatusObjects(state) });
     }
     if (url.pathname === '/server/files/list') {
       return json([...stored.entries()].map(([path, content]) => ({ path, size: content.length, modified: 0 })));
@@ -117,16 +140,57 @@ export async function startMoonrakerSimulator(options = {}) {
       started = url.searchParams.get('filename');
       state.printState = 'printing';
       state.currentFilename = started;
+      state.progress = state.progress || 0.12;
+      state.printDurationS = state.printDurationS || 240;
+      state.currentLayer = state.currentLayer || 11;
+      state.totalLayers = state.totalLayers || 98;
+      state.nozzleC = 219.6;
+      state.bedC = 59.7;
+      commands.push('start');
+      notifyStatus();
+      return json('ok');
+    }
+    // Lifecycle: the simulator moves its own state the way Klipper would, so a
+    // control surface is tested against the state it will actually observe.
+    if (url.pathname === '/printer/print/pause') {
+      commands.push('pause');
+      state.printState = 'paused';
+      notifyStatus();
+      return json('ok');
+    }
+    if (url.pathname === '/printer/print/resume') {
+      commands.push('resume');
+      state.printState = 'printing';
+      notifyStatus();
+      return json('ok');
+    }
+    if (url.pathname === '/printer/print/cancel') {
+      commands.push('cancel');
+      state.printState = 'cancelled';
+      notifyStatus();
+      return json('ok');
+    }
+    if (url.pathname === '/printer/emergency_stop') {
+      commands.push('emergency-stop');
+      state.klippy = 'shutdown';
+      state.message = 'Emergency stop requested';
+      notifyStatus();
+      return json('ok');
+    }
+    if (url.pathname === '/printer/firmware_restart') {
+      commands.push('firmware-restart');
+      state.klippy = 'ready';
+      state.printState = 'standby';
+      state.message = '';
+      notifyStatus();
       return json('ok');
     }
     response.writeHead(404, { ...cors, 'content-type': 'application/json' });
     response.end(JSON.stringify({ error: { message: 'unknown path' } }));
   }
 
-  // Moonraker's JSON-RPC socket: the transport opens it during the handshake
-  // and pushes identify/subscription frames, so the simulator only has to
-  // complete the upgrade and stay open.
-  const sockets = new Set();
+  // Moonraker's JSON-RPC socket: the transport opens it during the handshake,
+  // pushes identify/subscription frames, and then listens for status updates.
   server.on('upgrade', (request, socket) => {
     const key = request.headers['sec-websocket-key'];
     if (!key) {
@@ -147,7 +211,22 @@ export async function startMoonrakerSimulator(options = {}) {
     sockets.add(socket);
     socket.on('close', () => sockets.delete(socket));
     socket.on('error', () => sockets.delete(socket));
-    socket.resume();
+    // Answer every JSON-RPC call the client makes, including the transport's
+    // heartbeat: an unanswered heartbeat makes it declare the socket lost and
+    // reconnect, which would hide whether live updates actually work.
+    socket.on('data', (chunk) => {
+      for (const text of decodeWebSocketFrames(chunk)) {
+        let message;
+        try {
+          message = JSON.parse(text);
+        } catch {
+          continue;
+        }
+        if (message && message.id !== undefined) {
+          socket.write(encodeWebSocketText(JSON.stringify({ jsonrpc: '2.0', id: message.id, result: {} })));
+        }
+      }
+    });
   });
 
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -161,6 +240,10 @@ export async function startMoonrakerSimulator(options = {}) {
     get started() {
       return started;
     },
+    /** Lifecycle commands the printer received, in order. */
+    get commands() {
+      return commands;
+    },
     get state() {
       return state;
     },
@@ -169,11 +252,13 @@ export async function startMoonrakerSimulator(options = {}) {
     },
     setState(patch) {
       Object.assign(state, patch);
+      notifyStatus();
     },
     reset() {
       stored.clear();
       requests.length = 0;
       apiKeys.length = 0;
+      commands.length = 0;
       started = null;
     },
     async close() {
@@ -182,6 +267,71 @@ export async function startMoonrakerSimulator(options = {}) {
       await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
     },
   };
+}
+
+/** The Klipper objects a live job surface reads, in Moonraker's own shape. */
+function jobStatusObjects(state) {
+  return {
+    webhooks: { state: state.klippy },
+    print_stats: {
+      state: state.printState,
+      filename: state.currentFilename,
+      print_duration: state.printDurationS,
+      total_duration: state.printDurationS,
+      filament_used: state.filamentUsedMm,
+      message: state.message,
+      info: { current_layer: state.currentLayer, total_layer: state.totalLayers },
+    },
+    virtual_sdcard: { is_active: state.printState === 'printing', progress: state.progress },
+    display_status: { progress: state.progress },
+    extruder: { temperature: state.nozzleC, target: state.printState === 'printing' ? 220 : 0 },
+    heater_bed: { temperature: state.bedC, target: state.printState === 'printing' ? 60 : 0 },
+  };
+}
+
+/** Read the masked client frames in one chunk; control frames are ignored. */
+function decodeWebSocketFrames(chunk) {
+  const messages = [];
+  let offset = 0;
+  while (offset + 2 <= chunk.length) {
+    const opcode = chunk[offset] & 0x0f;
+    const masked = (chunk[offset + 1] & 0x80) !== 0;
+    let length = chunk[offset + 1] & 0x7f;
+    let cursor = offset + 2;
+    if (length === 126) {
+      if (cursor + 2 > chunk.length) break;
+      length = chunk.readUInt16BE(cursor);
+      cursor += 2;
+    } else if (length === 127) {
+      // Nothing this client sends is that large; stop rather than guess.
+      break;
+    }
+    let mask;
+    if (masked) {
+      if (cursor + 4 > chunk.length) break;
+      mask = chunk.subarray(cursor, cursor + 4);
+      cursor += 4;
+    }
+    if (cursor + length > chunk.length) break;
+    const payload = Buffer.from(chunk.subarray(cursor, cursor + length));
+    if (mask) for (let index = 0; index < payload.length; index += 1) payload[index] ^= mask[index % 4];
+    if (opcode === 0x1) messages.push(payload.toString('utf8'));
+    offset = cursor + length;
+  }
+  return messages;
+}
+
+/** Minimal unmasked server frame; payloads here stay well under 64 KiB. */
+function encodeWebSocketText(text) {
+  const payload = Buffer.from(text, 'utf8');
+  if (payload.length < 126) {
+    return Buffer.concat([Buffer.from([0x81, payload.length]), payload]);
+  }
+  const header = Buffer.alloc(4);
+  header[0] = 0x81;
+  header[1] = 126;
+  header.writeUInt16BE(payload.length, 2);
+  return Buffer.concat([header, payload]);
 }
 
 async function readBody(request) {

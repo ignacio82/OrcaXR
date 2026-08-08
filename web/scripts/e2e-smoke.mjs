@@ -584,6 +584,8 @@ async function sliceAndSendActivePlate(page, printer) {
     /verified on the printer/,
   );
 
+  await controlRunningPrint(page, printer);
+
   await clickMenuAction(page, 'edit_undo');
   await page.waitForFunction(
     (id) =>
@@ -596,6 +598,123 @@ async function sliceAndSendActivePlate(page, printer) {
   // Leave the inspector as it was found: later steps click controls by
   // coordinate, and an extra expanded section moves them.
   await page.$eval('#printer-panel', (panel) => panel.closest('details')?.removeAttribute('open'));
+}
+
+/**
+ * The live job readout and its lifecycle controls, driven the way an operator
+ * would: the panel reflects what the machine reports, pause/resume act
+ * immediately, and both irreversible commands stop at a confirmation that
+ * sends nothing when dismissed.
+ */
+async function controlRunningPrint(page, printer) {
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'printing',
+    { timeout: 30_000 },
+  );
+  const live = await page.evaluate(() => ({
+    headline: globalThis.document.querySelector('[data-print-job-state]')?.textContent,
+    progress: globalThis.document.querySelector('[data-print-job-progress-label]')?.textContent,
+    layer: globalThis.document.querySelector('[data-print-job-field="layer"]')?.textContent,
+    nozzle: globalThis.document.querySelector('[data-print-job-field="nozzle"]')?.textContent,
+    commands: [...globalThis.document.querySelectorAll('[data-print-job-command]')].map((button) => [
+      button.dataset.printJobCommand,
+      button.disabled,
+    ]),
+  }));
+  assert.match(live.headline ?? '', /^Printing /);
+  assert.match(live.progress ?? '', /%/);
+  assert.equal(live.layer, '11 / 98');
+  assert.match(live.nozzle ?? '', /219\.6 °C → 220 °C/);
+  assert.deepEqual(live.commands, [
+    ['pause', false],
+    ['resume', true],
+    ['cancel', false],
+    ['emergency-stop', false],
+  ]);
+
+  // A change made at the machine itself must reach this panel: the printer
+  // pushes it, nothing here polls for it, and the controls re-derive from it.
+  printer.setState({ printState: 'paused' });
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'paused',
+    { timeout: 30_000 },
+  );
+  assert.deepEqual(
+    await page.$$eval('[data-print-job-command]', (buttons) =>
+      buttons.map((button) => [button.dataset.printJobCommand, button.disabled]),
+    ),
+    [
+      ['pause', true],
+      ['resume', false],
+      ['cancel', false],
+      ['emergency-stop', false],
+    ],
+    'controls follow the machine, not this client',
+  );
+  printer.setState({ printState: 'printing' });
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'printing',
+    { timeout: 30_000 },
+  );
+
+  const clickCommand = (command) =>
+    page.evaluate((target) => {
+      globalThis.document.querySelector(`[data-print-job-command="${target}"]`)?.click();
+    }, command);
+
+  await clickCommand('pause');
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'paused',
+    { timeout: 30_000 },
+  );
+  assert.equal(
+    await page.$eval('[data-print-job-command="pause"]', (button) => button.disabled),
+    true,
+    'a paused job cannot be paused again',
+  );
+  await clickCommand('resume');
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'printing',
+    { timeout: 30_000 },
+  );
+  assert.deepEqual(printer.commands, ['start', 'pause', 'resume']);
+
+  // A dismissed confirmation must leave the machine untouched.
+  await clickCommand('emergency-stop');
+  await page.waitForSelector('[data-print-job-confirm="true"]', { timeout: 30_000 });
+  const stopDialog = await page.$eval('[data-print-job-confirm="true"]', (overlay) => ({
+    role: overlay.querySelector('[role="alertdialog"]') !== null,
+    consequences: [...overlay.querySelectorAll('[data-print-job-confirm-consequence]')].map((row) => row.textContent),
+    focused: globalThis.document.activeElement?.dataset?.printJobConfirmChoice,
+  }));
+  assert.equal(stopDialog.role, true);
+  assert.equal(stopDialog.focused, 'cancel', 'focus never starts on the button that halts the printer');
+  assert.ok(
+    stopDialog.consequences.some((text) => /firmware/i.test(text)),
+    'the dialog states that Klipper stays halted until a firmware restart',
+  );
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !globalThis.document.querySelector('[data-print-job-confirm="true"]'));
+  assert.deepEqual(printer.commands, ['start', 'pause', 'resume'], 'a dismissed stop sends nothing');
+
+  await clickCommand('cancel');
+  await page.waitForSelector('[data-print-job-confirm="true"]', { timeout: 30_000 });
+  await page.click('[data-print-job-confirm-choice="cancel"]');
+  assert.deepEqual(printer.commands, ['start', 'pause', 'resume'], 'a dismissed cancel sends nothing');
+
+  await clickCommand('cancel');
+  await page.waitForSelector('[data-print-job-confirm="true"]', { timeout: 30_000 });
+  await page.click('[data-print-job-confirm-choice="confirm"]');
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'cancelled',
+    { timeout: 30_000 },
+  );
+  assert.deepEqual(printer.commands, ['start', 'pause', 'resume', 'cancel']);
+  assert.equal(
+    await page.$eval('[data-print-job-command="cancel"]', (button) => button.disabled),
+    true,
+    'a finished job offers nothing to cancel',
+  );
 }
 
 function checksumOf(buffer) {
@@ -2168,7 +2287,7 @@ try {
   assert.deepStrictEqual(pageErrors, [], `uncaught page errors: ${pageErrors.join('\n')}`);
   assert.deepStrictEqual(policyErrors, [], `CSP violations: ${policyErrors.join('\n')}`);
   console.log(
-    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings, guarded plate management, and a multicolor slice sent to a live Moonraker printer).',
+    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings, guarded plate management, and a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel).',
   );
 } finally {
   await browser.close();

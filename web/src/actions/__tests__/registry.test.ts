@@ -43,6 +43,7 @@ const baseState: UiStateShape = {
   status: '',
   progress: null,
   preflightBlocked: false,
+  printerJobState: 'disconnected',
 };
 
 test('catalog builds without duplicate ids', () => {

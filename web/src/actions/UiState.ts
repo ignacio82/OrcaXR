@@ -11,8 +11,17 @@
  * (`onStatusChanged`, `onDownloadReady`, selection, `palette.onChanged`).
  */
 
+import type { PrintJobState } from '../printer/PrintJobStatus';
+
 /** Which modal surface the workspace is in — drives the tool rail + inspector. */
 export type WorkspaceMode = 'prepare' | 'preview';
+
+/**
+ * What the connected printer reports, or `disconnected` when this session has
+ * no live connection. `unknown` means connected but not reporting a state,
+ * which must not be mistaken for idle.
+ */
+export type PrinterJobUiState = PrintJobState | 'disconnected';
 
 export interface UiStateShape {
   /** Active modal surface. */
@@ -50,6 +59,8 @@ export interface UiStateShape {
   progress: number | null;
   /** True when a blocking (error) pre-flight banner is active. */
   preflightBlocked: boolean;
+  /** Live job state of the connected printer; gates the lifecycle actions. */
+  printerJobState: PrinterJobUiState;
 }
 
 const INITIAL: UiStateShape = {
@@ -74,6 +85,7 @@ const INITIAL: UiStateShape = {
   status: 'Ready. Load a model to begin.',
   progress: null,
   preflightBlocked: false,
+  printerJobState: 'disconnected',
 };
 
 export type UiStateListener = (s: Readonly<UiStateShape>) => void;

@@ -21,6 +21,7 @@ import {
 } from '../project/slicing';
 import type { ProjectSettingsOverrideGuard, ProjectSettingsOverrideSnapshot } from '../project/settingsOverrides';
 import { detectModelFormat } from '../project/import/formats';
+import type { PrintJobCommand } from '../printer/PrintJobControl';
 import type { PrintJobIntent } from '../printer/PrintJobSubmission';
 import { summarizeGcodeToolUsage } from '../printer/PrintToolMapping';
 import { serializePrintConfigArray } from '../settings/configSerialization';
@@ -2723,6 +2724,8 @@ export class OrcaWorkspace extends xb.Script {
   onRequestPrinterFilamentInspection: (() => Promise<void>) | null = null;
   /** Injected by the live typed printer composition root; owns confirmation. */
   onRequestPrintSubmission: ((intent: PrintJobIntent) => Promise<void>) | null = null;
+  /** Injected by the live typed printer composition root; owns confirmation. */
+  onRequestPrintJobCommand: ((command: PrintJobCommand) => Promise<void>) | null = null;
 
   public async testPrinterConnection(): Promise<void> {
     if (!this.onRequestPrinterConnectionTest) {
@@ -2764,6 +2767,19 @@ export class OrcaWorkspace extends xb.Script {
       plateName,
       usage: summarizeGcodeToolUsage(gcode),
     });
+  }
+
+  /**
+   * Ask the shell to run one printer lifecycle command. The workspace holds no
+   * printer state of its own: the shell owns the connection, the live snapshot
+   * the operator is looking at, and any confirmation the command needs.
+   */
+  public async controlPrintJob(command: PrintJobCommand): Promise<void> {
+    if (!this.onRequestPrintJobCommand) {
+      this.setStatus('Printer controls are unavailable in this shell.');
+      return;
+    }
+    await this.onRequestPrintJobCommand(command);
   }
 
   // --- Import / Export Config (Orca File → Import / Export Config) -----

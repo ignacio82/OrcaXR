@@ -12,17 +12,25 @@ import * as uikit from '@pmndrs/uikit';
 import { OrcaWorkspace, type WorkspacePresetOption } from './workspace/OrcaWorkspace';
 import { SlicerClient } from './slicer/SlicerClient';
 import {
+  executePrintJobCommand,
   loadPrinterEndpointPreferences,
   MoonrakerTransport,
   MoonrakerTransportError,
+  PrintJobCommandError,
+  PrintJobStatusModel,
   PrintSubmissionError,
+  printJobCommandAvailability,
   queryMoonrakerFilamentSlots,
   queryPrintReadiness,
   savePrinterEndpointPreferences,
   submitPrintJob,
   validateToolMapping,
+  PRINT_JOB_OBJECTS,
+  PRINT_JOB_QUERY_PATH,
   type MoonrakerFilamentSlot,
   type MoonrakerHandshake,
+  type PrintJobCommand,
+  type PrintJobSnapshot,
 } from './printer';
 import { registerWorkspaceTools } from './mcp/WorkspaceTools';
 import { registerSystemTools } from './mcp/SystemTools';
@@ -40,6 +48,8 @@ import { ObjectsPanel, type ObjectsPanelSelectionRequest } from './ui/dom/Object
 import { FilamentAssignmentSelector } from './ui/dom/FilamentAssignmentSelector';
 import { askThreeMfIntake } from './ui/dom/FileIntakeDialog';
 import { askPrintSubmission } from './ui/dom/PrintSubmissionDialog';
+import { askPrintJobConfirmation } from './ui/dom/PrintJobConfirmDialog';
+import { PrintJobPanel } from './ui/dom/PrintJobPanel';
 import { GcodePreviewPanel } from './ui/dom/GcodePreviewPanel';
 import { PaintPanel } from './ui/dom/PaintPanel';
 import { PlateManager } from './ui/dom/PlateManager';
@@ -101,6 +111,49 @@ function describeToolUsage(tools: readonly number[], slots: readonly MoonrakerFi
   const loaded = slots.map((slot) => `slot ${slot.slotIndex + 1} ${slot.material} ${slot.colorHex}`).join(', ');
   return `${tools.length} tool${tools.length === 1 ? '' : 's'} (${used}) — loaded: ${loaded}`;
 }
+
+/** Registry action that owns each lifecycle command, so the panel routes through one path. */
+const PRINT_JOB_ACTION_IDS: Readonly<Record<PrintJobCommand, string>> = Object.freeze({
+  pause: 'printer_pause_print',
+  resume: 'printer_resume_print',
+  cancel: 'printer_cancel_print',
+  'emergency-stop': 'printer_emergency_stop',
+  'firmware-restart': 'printer_emergency_stop',
+});
+
+/** Commands that end or halt work already in progress get an explicit confirmation. */
+const PRINT_JOB_CONFIRMATIONS: Partial<
+  Record<
+    PrintJobCommand,
+    { title: string; message: string; consequences: readonly string[]; confirmLabel: string; dismissLabel: string }
+  >
+> = Object.freeze({
+  cancel: {
+    title: 'Cancel this print?',
+    message: 'The printer stops the running job',
+    consequences: ['The partially printed object cannot be resumed; it has to be started again from the beginning.'],
+    confirmLabel: 'Cancel the print',
+    dismissLabel: 'Keep printing',
+  },
+  'emergency-stop': {
+    title: 'Emergency stop?',
+    message: 'Klipper halts immediately',
+    consequences: [
+      'Heaters and motors stop at once, wherever the toolhead is.',
+      'Klipper stays halted until the firmware is restarted, so the printer accepts nothing else until then.',
+    ],
+    confirmLabel: 'Stop the printer now',
+    dismissLabel: 'Do not stop',
+  },
+});
+
+const PRINT_JOB_OUTCOMES: Readonly<Record<PrintJobCommand, string>> = Object.freeze({
+  pause: 'Paused the print on the printer.',
+  resume: 'Resumed the print on the printer.',
+  cancel: 'Cancelled the print on the printer.',
+  'emergency-stop': 'Emergency stop sent. Klipper is halted and needs a firmware restart before it accepts work.',
+  'firmware-restart': 'Firmware restart requested.',
+});
 
 function objectsEntityKey(entity: ObjectTreeEntityRef): string {
   return `${entity.kind}:${entity.id}`;
@@ -184,10 +237,28 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   let printerTransportKey = '';
   let hadModels = false;
 
+  // One live job model per session. It is seeded from an explicit query and
+  // then kept current by the transport's own status notifications, so the
+  // panel shows what the machine reports rather than what this tab last asked
+  // for — a job started at the printer's own screen appears here too.
+  const printJobStatus = new PrintJobStatusModel();
+  let printJobSnapshot: PrintJobSnapshot | null = null;
+  let unsubscribePrintJob: (() => void) | null = null;
+  const printJobListeners = new Set<() => void>();
+  const publishPrintJob = (snapshot: PrintJobSnapshot | null) => {
+    printJobSnapshot = snapshot;
+    uiState.update({ printerJobState: snapshot?.state ?? 'disconnected' });
+    for (const listener of printJobListeners) listener();
+  };
+
   const disposePrinterTransport = () => {
+    unsubscribePrintJob?.();
+    unsubscribePrintJob = null;
     printerTransport?.dispose();
     printerTransport = null;
     printerTransportKey = '';
+    printJobStatus.reset();
+    publishPrintJob(null);
   };
 
   /** The send button doubles as the cancel affordance while a send is running. */
@@ -219,12 +290,46 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     return printerTransport;
   };
 
+  /**
+   * Start (or restart) live job tracking on a connected transport: subscribe to
+   * the Klipper objects the model reads, seed it from one explicit query, then
+   * fold in every status notification. A re-seed on reconnect keeps a dropped
+   * socket from leaving a stale "printing" readout on screen.
+   */
+  const trackPrintJob = (transport: MoonrakerTransport): void => {
+    unsubscribePrintJob?.();
+    transport.setObjectSubscription(PRINT_JOB_OBJECTS);
+    const stopNotifications = transport.subscribeNotifications((notification) => {
+      if (notification.method !== 'notify_status_update') return;
+      const next = printJobStatus.applyNotification(notification.params);
+      if (next) publishPrintJob(next);
+    });
+    const seed = () => {
+      void transport
+        .request<unknown>(PRINT_JOB_QUERY_PATH, { operation: 'print_job_status' })
+        .then((payload) => publishPrintJob(printJobStatus.applyQuery(payload)))
+        .catch(() => publishPrintJob(null));
+    };
+    const stopState = transport.subscribeState((state) => {
+      if (state.status === 'connected') seed();
+      else if (state.status !== 'connecting') {
+        printJobStatus.reset();
+        publishPrintJob(null);
+      }
+    });
+    unsubscribePrintJob = () => {
+      stopNotifications();
+      stopState();
+    };
+  };
+
   const connectConfiguredPrinter = async (): Promise<{
     transport: MoonrakerTransport;
     handshake: MoonrakerHandshake;
   }> => {
     const transport = configuredPrinterTransport();
     const handshake = await transport.connect();
+    if (!unsubscribePrintJob) trackPrintJob(transport);
     return { transport, handshake };
   };
 
@@ -344,6 +449,14 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
           if (message) workspace.setStatus(message);
         },
       });
+      if (result.startedPrint) {
+        // We just changed what the machine is doing; read it back rather than
+        // waiting for the next push so the live panel is correct immediately.
+        await transport
+          .request<unknown>(PRINT_JOB_QUERY_PATH, { operation: 'print_job_status' })
+          .then((payload) => publishPrintJob(printJobStatus.applyQuery(payload)))
+          .catch(() => {});
+      }
       const renamed = result.renamedFrom ? ` (stored as ${result.path} to avoid replacing ${result.renamedFrom})` : '';
       workspace.setStatus(
         result.startedPrint
@@ -361,6 +474,68 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       setPrinterSendBusy(false);
     }
   };
+
+  // Lifecycle commands act on a running machine, so each one is checked twice:
+  // the registry gates it on the state the panel is showing, and the transport
+  // call re-checks the freshly re-read state before anything is sent.
+  workspace.onRequestPrintJobCommand = async (command) => {
+    if (!printerCfg.host.trim()) {
+      workspace.setStatus('Enter an explicit Moonraker endpoint first.');
+      return;
+    }
+    const confirmation = PRINT_JOB_CONFIRMATIONS[command];
+    if (confirmation) {
+      const filename = printJobSnapshot?.filename;
+      const confirmed = await askPrintJobConfirmation({
+        ...confirmation,
+        message: filename ? `${confirmation.message} (${filename})` : confirmation.message,
+      });
+      if (!confirmed) {
+        workspace.setStatus(
+          `${command === 'cancel' ? 'Cancel' : 'Emergency stop'} dismissed; the printer was left alone.`,
+        );
+        return;
+      }
+    }
+    try {
+      const { transport } = await connectConfiguredPrinter();
+      // Re-read the machine immediately before acting: the operator may have
+      // been looking at a panel drawn before the job changed.
+      const observed = await transport
+        .request<unknown>(PRINT_JOB_QUERY_PATH, { operation: 'print_job_status' })
+        .then((payload) => publishPrintJob(printJobStatus.applyQuery(payload)) ?? printJobSnapshot)
+        .catch(() => printJobSnapshot);
+      await executePrintJobCommand(transport, {
+        command,
+        observed,
+        ...(observed?.filename ? { expectedFilename: observed.filename } : {}),
+      });
+      workspace.setStatus(PRINT_JOB_OUTCOMES[command]);
+    } catch (error) {
+      const message =
+        error instanceof PrintJobCommandError || error instanceof MoonrakerTransportError
+          ? error.message
+          : (error as Error).message;
+      workspace.setStatus(message);
+    }
+  };
+
+  const printJobHost = document.getElementById('printer-job-host');
+  if (printJobHost) {
+    const panel = new PrintJobPanel(printJobHost, {
+      getSnapshot: () => printJobSnapshot,
+      getCommands: () => printJobCommandAvailability(printJobSnapshot),
+      subscribe: (listener) => {
+        printJobListeners.add(listener);
+        return () => printJobListeners.delete(listener);
+      },
+      onCommand: async (command) => {
+        await registry.invoke(PRINT_JOB_ACTION_IDS[command], 'dom-inspector', actionCtx, uiState.get());
+      },
+    });
+    panel.mount();
+    window.addEventListener('pagehide', () => panel.dispose(), { once: true });
+  }
 
   window.addEventListener('pagehide', disposePrinterTransport, { once: true });
 
