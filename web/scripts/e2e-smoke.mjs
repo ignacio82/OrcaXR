@@ -2338,7 +2338,7 @@ try {
   assert.deepStrictEqual(pageErrors, [], `uncaught page errors: ${pageErrors.join('\n')}`);
   assert.deepStrictEqual(policyErrors, [], `CSP violations: ${policyErrors.join('\n')}`);
   console.log(
-    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings, guarded plate management, and a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel).',
+    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings, guarded plate management, an authored layer pause that reaches the sliced G-code, and a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel).',
   );
 } finally {
   await browser.close();
