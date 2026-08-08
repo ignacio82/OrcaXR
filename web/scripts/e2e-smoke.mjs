@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { strToU8, zipSync } from 'fflate';
@@ -306,6 +306,38 @@ async function arrangeImportedModels(page) {
     (count) => globalThis.window.workspace.getCanonicalSummary().history.undoCount === count,
     {},
     undoBefore,
+  );
+}
+
+/** Dropping a file anywhere over the app loads it through the same intake. */
+async function dropModelFile(page, fixture) {
+  const before = await page.evaluate(() => globalThis.window.workspace.getCanonicalSummary().objectCount);
+  const bytes = Array.from(await readFile(fixture));
+  await page.evaluate(
+    async ({ name, data }) => {
+      const file = new globalThis.File([new Uint8Array(data)], name, { type: 'model/obj' });
+      const transfer = new globalThis.DataTransfer();
+      transfer.items.add(file);
+      globalThis.window.dispatchEvent(new globalThis.DragEvent('dragenter', { bubbles: true, dataTransfer: transfer }));
+      globalThis.window.dispatchEvent(new globalThis.DragEvent('drop', { bubbles: true, dataTransfer: transfer }));
+    },
+    { name: 'dropped.obj', data: bytes },
+  );
+  await page.waitForFunction(
+    (count) => globalThis.window.workspace.getCanonicalSummary().objectCount > count,
+    { timeout: 60_000 },
+    before,
+  );
+  assert.equal(
+    await page.$eval('[data-file-drop-overlay="true"]', (node) => node.hidden),
+    true,
+    'the drop affordance clears after the drop',
+  );
+  await page.evaluate(() => globalThis.window.workspace.undo?.());
+  await page.waitForFunction(
+    (count) => globalThis.window.workspace.getCanonicalSummary().objectCount === count,
+    { timeout: 30_000 },
+    before,
   );
 }
 
@@ -624,8 +656,8 @@ try {
   });
   assert.equal(
     await page.$eval('#file-input', (input) => input.accept),
-    '.stl,.obj,.amf,.amfz,.zip',
-    'the model picker offers exactly the decodable model containers',
+    '.3mf,.stl,.obj,.amf,.amfz,.zip,.gcode,.gco,.g',
+    'one picker offers every loadable container',
   );
 
   // A mesh source imports through the same canonical transaction as a project:
@@ -653,6 +685,7 @@ try {
   await fillPlateWithInstances(page);
   await inspectStandaloneGcode(page, gcodeFixturePath);
   await paintImportedModel(page);
+  await dropModelFile(page, objFixturePath);
 
   await page.evaluate(() => globalThis.window.workspace.undo?.());
   await page.waitForFunction(() => (globalThis.window.workspace?.getCanonicalSummary?.().objectCount ?? -1) === 0, {

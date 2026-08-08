@@ -20,6 +20,7 @@ import {
   type SliceJobStatus,
 } from '../project/slicing';
 import type { ProjectSettingsOverrideGuard, ProjectSettingsOverrideSnapshot } from '../project/settingsOverrides';
+import { detectModelFormat } from '../project/import/formats';
 import type { ArrangeRegion } from '../project/objects/arrange';
 import { rotateVector } from '../project/objects/transformOperations';
 import { GCODE_PREVIEW_MODES } from '../slicer/GcodePreviewModel';
@@ -2832,6 +2833,97 @@ export class OrcaWorkspace extends xb.Script {
     } finally {
       this.projectImportInProgress = false;
     }
+  }
+
+  /**
+   * Import only the geometry of a 3MF into the open project. Plates, project
+   * settings, the source filament library, and custom G-code are reported as
+   * dropped in the same transactional preview the model importer uses.
+   */
+  public async importProjectGeometry(name: string, bytes: ArrayBuffer | Uint8Array): Promise<number> {
+    const source = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    if (source.byteLength === 0) throw new Error(`${name} is empty.`);
+    if (this.projectImportInProgress) throw new Error('Another import preview is already open.');
+    this.projectImportInProgress = true;
+    try {
+      const before = new Set(this.projectedModels().map((entry) => entry.instanceId));
+      const prepared = await this.canonicalProject.prepareGeometryImport(
+        source,
+        { filename: name },
+        { bedSizeMm: [this.bedMm.x, this.bedMm.y] },
+      );
+      const preview = prepared.preview;
+      let committed = false;
+      try {
+        if (preview.blocked) {
+          const errors = preview.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+          throw new Error(
+            `${name} cannot be imported: ${errors[0]?.message ?? 'the preview reported an unresolved problem'}`,
+          );
+        }
+        const confirm = this.onProjectImportPreview;
+        if (!confirm) throw new Error('Geometry import needs an explicit confirmation surface.');
+        const decision = await confirm(preview);
+        if (!decision) {
+          this.setStatus('Import cancelled.');
+          return 0;
+        }
+        prepared.confirm(decision);
+        committed = true;
+      } finally {
+        if (!committed) prepared.cancel('geometry import did not commit');
+      }
+
+      const added = this.projectedModels().filter((entry) => !before.has(entry.instanceId));
+      const last = added[added.length - 1];
+      if (last) this.selectModel(last);
+      this.recomputePreflight();
+      this.warmSlicerAfterFirstModel();
+      const objects = new Set(added.map((entry) => entry.objectId)).size;
+      this.setStatus(`Imported geometry from ${name} — ${objects} object${objects === 1 ? '' : 's'}.`);
+      return objects;
+    } finally {
+      this.projectImportInProgress = false;
+    }
+  }
+
+  /**
+   * One intake for every supported file, routed by content signature: a 3MF
+   * opens as a project (or merges as geometry when asked), mesh containers
+   * merge as models, and G-code opens read-only in the viewer.
+   */
+  public async openFile(
+    name: string,
+    bytes: ArrayBuffer | Uint8Array,
+    options: { threeMfMode?: 'project' | 'geometry' } = {},
+  ): Promise<'project' | 'geometry' | 'model' | 'gcode' | 'cancelled'> {
+    const source = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    let detection;
+    try {
+      detection = detectModelFormat(source, name);
+    } catch (error) {
+      // G-code and unknown containers still get a precise message below.
+      if (/\.(gcode|gco|g)$/i.test(name)) {
+        return this.openGcodeForPreview(new TextDecoder('utf-8', { fatal: false }).decode(source), name)
+          ? 'gcode'
+          : 'cancelled';
+      }
+      throw error;
+    }
+    if (detection.format === 'gcode') {
+      return this.openGcodeForPreview(new TextDecoder('utf-8', { fatal: false }).decode(source), name)
+        ? 'gcode'
+        : 'cancelled';
+    }
+    if (detection.format === 'project-3mf') {
+      if (options.threeMfMode === 'geometry') {
+        return (await this.importProjectGeometry(name, source)) > 0 ? 'geometry' : 'cancelled';
+      }
+      const owned = new ArrayBuffer(source.byteLength);
+      new Uint8Array(owned).set(source);
+      return (await this.openProject(owned, name)) ? 'project' : 'cancelled';
+    }
+    return (await this.importModelFile(name, source)) > 0 ? 'model' : 'cancelled';
   }
 
   /**

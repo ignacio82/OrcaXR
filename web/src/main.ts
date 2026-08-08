@@ -33,6 +33,7 @@ import { CommandPalette } from './ui/dom/CommandPalette';
 import { GeneratedSettingsPanel } from './ui/dom/GeneratedSettingsPanel';
 import { ObjectsPanel, type ObjectsPanelSelectionRequest } from './ui/dom/ObjectsPanel';
 import { FilamentAssignmentSelector } from './ui/dom/FilamentAssignmentSelector';
+import { askThreeMfIntake } from './ui/dom/FileIntakeDialog';
 import { GcodePreviewPanel } from './ui/dom/GcodePreviewPanel';
 import { PaintPanel } from './ui/dom/PaintPanel';
 import { PlateManager } from './ui/dom/PlateManager';
@@ -268,31 +269,83 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     toolbarToggle.setAttribute('aria-expanded', String(!leftToolbar.classList.contains('collapsed')));
   };
 
-  fileInput.onchange = async () => {
-    const files = Array.from(fileInput.files ?? []).slice(0, 1);
-    if (files.length > 0) loadingModal.style.display = 'flex';
-
-    const updateModal = (text: string, percent: number) => {
-      loadingModalText.textContent = text;
-      loadingModalBar.style.width = `${percent}%`;
-      uiState.update({ status: text, progress: percent });
-    };
-
-    for (const file of files) {
-      updateModal(`Reading ${file.name}...`, 10);
-      await new Promise((r) => setTimeout(r, 50));
-      const buf = await file.arrayBuffer();
-      try {
-        // One signature-first, transactional route for every model container.
-        updateModal(`Decoding ${file.name}...`, 55);
-        await new Promise((r) => setTimeout(r, 50));
-        await workspace.importModelFile(file.name, buf);
-      } catch (e) {
-        statusText.textContent = `Failed to load: ${(e as Error).message}`;
+  /**
+   * Single intake for picked and dropped files: a 3MF asks whether to open as
+   * a project or contribute geometry, meshes merge as models, and G-code opens
+   * read-only in the viewer.
+   */
+  const intakeFiles = async (files: readonly File[]) => {
+    if (files.length === 0) return;
+    loadingModal.style.display = 'flex';
+    try {
+      for (const file of files) {
+        loadingModalText.textContent = `Reading ${file.name}...`;
+        loadingModalBar.style.width = '40%';
+        uiState.update({ status: `Reading ${file.name}...`, progress: 40 });
+        try {
+          const bytes = await file.arrayBuffer();
+          const isProjectArchive = /\.3mf$/i.test(file.name);
+          if (isProjectArchive) {
+            const choice = await askThreeMfIntake(file.name);
+            if (choice === 'cancel') {
+              statusText.textContent = 'Load cancelled.';
+              continue;
+            }
+            await workspace.openFile(file.name, bytes, { threeMfMode: choice });
+          } else {
+            await workspace.openFile(file.name, bytes);
+          }
+        } catch (error) {
+          statusText.textContent = `Failed to load ${file.name}: ${(error as Error).message}`;
+        }
       }
+    } finally {
+      loadingModal.style.display = 'none';
+      uiState.update({ modelCount: workspace.modelCount, progress: null });
     }
-    loadingModal.style.display = 'none';
-    uiState.update({ modelCount: workspace.modelCount, progress: null });
+  };
+
+  // Drag and drop anywhere over the app, with a visible drop affordance.
+  const dropOverlay = document.createElement('div');
+  dropOverlay.dataset.fileDropOverlay = 'true';
+  dropOverlay.setAttribute('role', 'status');
+  dropOverlay.hidden = true;
+  dropOverlay.textContent = 'Drop a 3MF, STL, OBJ, AMF, ZIP, or G-code file to load it';
+  dropOverlay.style.cssText =
+    'position:fixed;inset:16px;z-index:9998;display:flex;align-items:center;justify-content:center;' +
+    'border:2px dashed var(--oxr-color-accent,#4fc3f7);border-radius:16px;background:rgba(6,10,16,0.72);' +
+    'color:#fff;font:600 16px/1.4 system-ui,sans-serif;pointer-events:none;text-align:center;padding:24px;';
+  document.body.appendChild(dropOverlay);
+  let dragDepth = 0;
+  const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
+  window.addEventListener('dragenter', (event) => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    dragDepth += 1;
+    dropOverlay.hidden = false;
+  });
+  window.addEventListener('dragover', (event) => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+  });
+  window.addEventListener('dragleave', (event) => {
+    if (!hasFiles(event)) return;
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) dropOverlay.hidden = true;
+  });
+  window.addEventListener('drop', (event) => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    dragDepth = 0;
+    dropOverlay.hidden = true;
+    void intakeFiles(Array.from(event.dataTransfer?.files ?? []));
+  });
+
+  fileInput.onchange = async () => {
+    const files = Array.from(fileInput.files ?? []);
+    fileInput.value = '';
+    await intakeFiles(files);
   };
 
   const downloadGcode = (gcode: string) => {

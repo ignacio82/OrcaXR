@@ -79,6 +79,7 @@ import { PreparedProjectImport, ProjectImportCoordinator } from '../project/impo
 import { ModelImportParser, type ModelImportPlacement } from '../project/import/ModelImportParser';
 import type { JsonValue, TriangleAssignments, Vec3 } from '../project/domain/model';
 import type { FacetAnnotationChannel } from '../project/annotations';
+import { GeometryMergeParser } from '../project/import/GeometryMergeParser';
 import { PaintStrokeService } from '../project/painting/PaintStrokeService';
 import { projectPaintPalette, type PaintPalette, type PaintPaletteOptions } from '../project/painting/paintPalette';
 import {
@@ -2203,6 +2204,55 @@ export class CanonicalWorkspaceController {
       idSource: this.options.idSource,
       clock: () => readClock(this.options.clock),
       placement: options.placement,
+    });
+    const coordinator = new ProjectImportCoordinator({
+      parser: {
+        parse: async (request) => {
+          const parsed = await parser.parse(request);
+          return { ...parsed, state: this.withReconciledAutoPairs(parsed.state) };
+        },
+      },
+      commands: this.session.commands,
+      now: () => readClock(this.options.clock),
+    });
+    try {
+      const prepared = await coordinator.prepare(
+        {
+          bytes,
+          source,
+          mode: 'merge',
+          cancellation: combinedCancellation(lifecycle.token, options.cancellation),
+        },
+        () => this.importCancellations.delete(lifecycle),
+      );
+      if (this.disposed) {
+        prepared.cancel('canonical workspace disposed');
+        throw new Error('CanonicalWorkspaceController is disposed');
+      }
+      return prepared;
+    } catch (error) {
+      this.importCancellations.delete(lifecycle);
+      throw error;
+    }
+  }
+
+  /**
+   * Stage a 3MF's geometry as a merge import: its objects join the open
+   * project while plates, settings, filaments, and custom G-code are reported
+   * as deliberately dropped. Same transactional preview/confirm contract.
+   */
+  async prepareGeometryImport(
+    bytes: Uint8Array,
+    source: ProjectImportSource,
+    options: { bedSizeMm?: readonly [number, number]; cancellation?: CancellationToken } = {},
+  ): Promise<PreparedProjectImport> {
+    this.assertActive();
+    const lifecycle = new ImportCancellationController();
+    this.importCancellations.add(lifecycle);
+    const parser = new GeometryMergeParser({
+      idSource: this.options.idSource,
+      clock: () => readClock(this.options.clock),
+      ...(options.bedSizeMm ? { bedSizeMm: options.bedSizeMm } : {}),
     });
     const coordinator = new ProjectImportCoordinator({
       parser: {
