@@ -21,6 +21,15 @@ import {
 } from '../project/slicing';
 import type { ProjectSettingsOverrideGuard, ProjectSettingsOverrideSnapshot } from '../project/settingsOverrides';
 import type { ArrangeRegion } from '../project/objects/arrange';
+import { GCODE_PREVIEW_MODES } from '../slicer/GcodePreviewModel';
+import {
+  GCODE_PREVIEW_MOVE_FILTERS,
+  GcodePreviewSession,
+  type GcodePreviewSessionSource,
+  type GcodePreviewViewPatch,
+  type GcodePreviewViewState,
+} from '../slicer/GcodePreviewSession';
+import { GcodePreviewSurface } from '../ui/preview/GcodePreviewSurface';
 import { CURRENT_THREE_WORLD_UNITS_PER_MM, getThreeProjectEntity } from '../project/surfaces/ThreeProjectSurface';
 import {
   DEFAULT_CHANNEL_VALUE,
@@ -83,7 +92,6 @@ import {
   type UIImageProperties as XRImageProperties,
 } from 'xrblocks/addons/uiblocks/src/index.js';
 
-import { parseGcodeToolpath } from '../slicer/GcodeToolpath';
 import { FilamentPalette } from './FilamentPalette';
 import { bedSizeFromProfile, ProfileCatalog, type SlicerProfile } from '../slicer/ProfileLoader';
 import { SlicerClient } from '../slicer/SlicerClient';
@@ -132,6 +140,14 @@ const CHANNEL_STATE_COLORS: Readonly<Record<string, Readonly<Record<string, stri
   seam: Object.freeze({ prefer: '#58a6ff', avoid: '#ff9f43' }),
   fuzzySkin: Object.freeze({ true: '#bc8cff' }),
 });
+
+function rgbaToHex(color: readonly [number, number, number, number]): string {
+  const channel = (value: number) =>
+    Math.max(0, Math.min(255, Math.round(value * 255)))
+      .toString(16)
+      .padStart(2, '0');
+  return `#${channel(color[0])}${channel(color[1])}${channel(color[2])}`;
+}
 
 function channelOverlayColors(
   channel: PaintChannel,
@@ -411,8 +427,13 @@ export class OrcaWorkspace extends xb.Script {
   private sliceModalBar: UIPanel | null = null;
   private sliceModalProgressContainer: UIPanel | null = null;
   private publishedGcode: { readonly gcode: string; readonly guard: CanonicalProjectSliceGuard } | null = null;
-  private toolpathObj: THREE.LineSegments | null = null;
+  private previewSurface: GcodePreviewSurface | null = null;
+  private previewSession: GcodePreviewSession | null = null;
   private previewOn = false;
+  /** Fires when the preview session, view, or projection changes. */
+  public onPreviewStateChanged: (() => void) | null = null;
+  /** Injected by the shell: opens a standalone G-code picker. */
+  public onRequestOpenGcode: (() => void) | null = null;
   private needsRecenter = false;
 
   public orbitControls: OrbitControls | null = null;
@@ -3156,40 +3177,144 @@ export class OrcaWorkspace extends xb.Script {
     }, 1200);
   }
 
-  /** Build/replace the toolpath preview from sliced G-code and show it. */
-  private showToolpathPreview(gcode: string) {
+  /**
+   * Build/replace the toolpath preview from G-code. Colour, filtering, and the
+   * layer window all come from the bounded rich model and preview projection,
+   * so the viewer never invents metadata the source does not carry.
+   */
+  private showToolpathPreview(gcode: string, source: GcodePreviewSessionSource = { kind: 'slice', name: 'plate' }) {
     this.clearToolpathPreview();
-    const filamentColors = this.palette
-      .list()
-      .map((s) => s.color)
-      .concat(this.virtualFilaments.map((v) => v.color));
-    const { geometry, segmentCount } = parseGcodeToolpath(gcode, filamentColors);
-    if (segmentCount === 0) return;
-    const lines = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ vertexColors: true }));
-    lines.name = 'toolpath';
-    lines.raycast = () => {}; // display-only; must never swallow pinches
-    // Printer mm (Z-up, bed-corner origin) → workspace local (Y-up,
-    // bed-center origin, magnified) — the inverse of the bake transform.
-    const vis = MM * WORKSPACE_SCALE;
-    lines.scale.setScalar(vis);
-    lines.rotation.x = -Math.PI / 2;
-    lines.position.set((-this.bedMm.x / 2) * vis, 0, (this.bedMm.y / 2) * vis);
-    this.workspace.add(lines);
-    this.toolpathObj = lines;
+    try {
+      this.previewSession = GcodePreviewSession.fromGcode(gcode, source);
+    } catch (error) {
+      this.setStatus(`Could not read the G-code: ${(error as Error).message}`);
+      return;
+    }
     this.previewOn = true;
+    if (!this.renderPreviewProjection()) return;
     // Ghost the models so the toolpath reads clearly.
     for (const m of this.models) m.viewer.visible = false;
   }
 
-  private clearToolpathPreview() {
-    if (this.toolpathObj) {
-      this.workspace.remove(this.toolpathObj);
-      this.toolpathObj.geometry.dispose();
-      (this.toolpathObj.material as THREE.Material).dispose();
-      this.toolpathObj = null;
+  /** Redraw the active preview session; returns false when nothing is drawn. */
+  private renderPreviewProjection(): boolean {
+    const session = this.previewSession;
+    if (!session) return false;
+    if (!this.previewSurface) {
+      this.previewSurface = new GcodePreviewSurface({
+        parent: this.workspace,
+        worldUnitsPerMm: MM * WORKSPACE_SCALE,
+        originOffsetMm: [-this.bedMm.x / 2, -this.bedMm.y / 2, 0],
+      });
     }
+    const projection = session.project();
+    if (projection.status !== 'ready') {
+      this.previewSurface.clear();
+      const missing = projection.missingMetadata.map((entry) => entry.message).join(' ');
+      this.setStatus(`${projection.mode.label} needs data this G-code does not carry. ${missing}`.trim());
+      this.onPreviewStateChanged?.();
+      return false;
+    }
+    const result = this.previewSurface.render(session.model, projection);
+    this.previewSurface.setVisible(true);
+    this.onPreviewStateChanged?.();
+    return result.segmentCount > 0;
+  }
+
+  private clearToolpathPreview() {
+    this.previewSurface?.clear();
+    this.previewSurface?.setVisible(false);
+    this.previewSession = null;
     this.previewOn = false;
     for (const m of this.models) m.viewer.visible = true;
+    this.onPreviewStateChanged?.();
+  }
+
+  /** Read-only preview state for DOM/XR surfaces and automation. */
+  public getPreviewState(): {
+    readonly active: boolean;
+    readonly source?: GcodePreviewSessionSource;
+    readonly view?: GcodePreviewViewState;
+    readonly layerBounds?: readonly [number, number];
+    readonly modes: typeof GCODE_PREVIEW_MODES;
+    readonly moveFilters: typeof GCODE_PREVIEW_MOVE_FILTERS;
+    readonly legend: readonly { id: string; label: string; code: string; accessibleLabel: string; color: string }[];
+    readonly range?: { min: number; max: number; unit: string; scale: string };
+    readonly unsupportedReason?: string;
+    readonly limitations: readonly string[];
+    readonly layerLabel?: string;
+  } {
+    const session = this.previewSession;
+    const base = { modes: GCODE_PREVIEW_MODES, moveFilters: GCODE_PREVIEW_MOVE_FILTERS };
+    if (!session) return { active: false, legend: [], limitations: [], ...base };
+    const projection = session.project();
+    const inspection = session.inspect();
+    const legend =
+      projection.status === 'ready'
+        ? projection.legend.map((entry) => ({
+            id: entry.id,
+            label: entry.label,
+            code: entry.code,
+            accessibleLabel: entry.accessibleLabel,
+            color: rgbaToHex(entry.color),
+          }))
+        : [];
+    return {
+      active: this.previewOn,
+      source: session.source,
+      view: session.getView(),
+      layerBounds: session.layerBounds,
+      ...base,
+      legend,
+      ...(projection.status === 'ready' && projection.range
+        ? {
+            range: {
+              min: projection.range.min,
+              max: projection.range.max,
+              unit: projection.range.unit,
+              scale: projection.range.scale,
+            },
+          }
+        : {}),
+      ...(projection.status === 'unsupported'
+        ? {
+            unsupportedReason: projection.missingMetadata.map((entry) => entry.message).join(' '),
+          }
+        : {}),
+      limitations: [
+        ...projection.limitations.map((entry) => entry.message),
+        ...inspection.limitations.map((entry) => entry.message),
+      ],
+      ...(inspection.layerSelection ? { layerLabel: inspection.layerSelection.accessibleLabel } : {}),
+    };
+  }
+
+  /** Apply a bounded preview view change and redraw. */
+  public updatePreviewView(patch: GcodePreviewViewPatch): void {
+    if (!this.previewSession) {
+      this.setStatus('Slice or open G-code before changing the preview.');
+      return;
+    }
+    try {
+      this.previewSession.updateView(patch);
+    } catch (error) {
+      this.setStatus(`Preview: ${(error as Error).message}`);
+      return;
+    }
+    this.renderPreviewProjection();
+  }
+
+  /** Open a standalone G-code artifact in the viewer without touching the project. */
+  public openGcodeForPreview(gcode: string, name: string): boolean {
+    if (!gcode.trim()) {
+      this.setStatus(`${name} is empty.`);
+      return false;
+    }
+    this.showToolpathPreview(gcode, { kind: 'file', name });
+    if (!this.previewSession) return false;
+    const layers = this.previewSession.layerBounds;
+    this.setStatus(`Viewing ${name} — layers ${layers[0]}–${layers[1]}.`);
+    return true;
   }
 
   /** Toggle between toolpath preview and model view (panel + tests). */

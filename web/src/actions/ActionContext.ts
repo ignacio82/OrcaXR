@@ -14,6 +14,7 @@ import type { FilamentId, PlateId } from '../project/domain/ids';
 import type { ConfigMap } from '../project/domain/model';
 import type { ObjectTreeEntityRef } from '../project/objects';
 import type { PaintChannel, PaintToolKind } from '../project/painting/PaintStrokeService';
+import type { GcodePreviewViewPatch } from '../slicer/GcodePreviewSession';
 
 /** Modal tool that authors each facet channel. */
 const PAINT_TOOL_FOR_CHANNEL: Readonly<Record<PaintChannel, ToolName>> = Object.freeze({
@@ -236,6 +237,17 @@ export class ActionContext {
   }
   cutPlane(): void {
     this.workspace.cutSelectedByPlane();
+  }
+
+  // ---- Preview --------------------------------------------------------
+  /** Apply a bounded preview view change from any viewer surface. */
+  updatePreviewView(patch: GcodePreviewViewPatch): void {
+    this.workspace.updatePreviewView(patch);
+  }
+
+  /** Ask the shell for a standalone G-code file to inspect. */
+  openGcodeFile(): void {
+    this.workspace.onRequestOpenGcode?.();
   }
 
   // ---- Painting -------------------------------------------------------

@@ -16,6 +16,7 @@ import type { FilamentId, PlateId } from '../project/domain/ids';
 import type { ConfigMap } from '../project/domain/model';
 import type { ObjectTreeEntityRef } from '../project/objects';
 import type { PaintChannel, PaintToolKind } from '../project/painting/PaintStrokeService';
+import type { GcodePreviewViewPatch } from '../slicer/GcodePreviewSession';
 import type {
   CanonicalFilamentAssignableEntityRef,
   CanonicalSemanticLayerRangeRequest,
@@ -165,6 +166,8 @@ export interface ActionInvocation {
    * Bounded colour-paint configuration from a paint surface. `filamentId`
    * carries a stable physical or mixed identity; `null` selects erase-to-inherit.
    */
+  /** Bounded G-code preview view change from a viewer surface. */
+  previewView?: GcodePreviewViewPatch;
   paintConfiguration?: {
     /** Facet channel the next stroke authors. */
     readonly channel?: PaintChannel;

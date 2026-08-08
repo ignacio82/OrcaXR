@@ -33,6 +33,7 @@ import { CommandPalette } from './ui/dom/CommandPalette';
 import { GeneratedSettingsPanel } from './ui/dom/GeneratedSettingsPanel';
 import { ObjectsPanel, type ObjectsPanelSelectionRequest } from './ui/dom/ObjectsPanel';
 import { FilamentAssignmentSelector } from './ui/dom/FilamentAssignmentSelector';
+import { GcodePreviewPanel } from './ui/dom/GcodePreviewPanel';
 import { PaintPanel } from './ui/dom/PaintPanel';
 import { PlateManager } from './ui/dom/PlateManager';
 import { SemanticObjectEditor } from './ui/dom/SemanticObjectEditor';
@@ -341,6 +342,28 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     zipInput.value = '';
   };
   workspace.onRequestLoadZip = () => zipInput.click();
+
+  // Open G-code (File menu): a read-only viewer route that never touches the
+  // canonical project.
+  const gcodeInput = document.createElement('input');
+  gcodeInput.type = 'file';
+  gcodeInput.accept = '.gcode,.gco,.g';
+  gcodeInput.style.display = 'none';
+  document.body.appendChild(gcodeInput);
+  gcodeInput.onchange = async () => {
+    const file = gcodeInput.files?.[0];
+    if (!file) return;
+    loadingModal.style.display = 'flex';
+    loadingModalText.textContent = `Reading ${file.name}...`;
+    try {
+      workspace.openGcodeForPreview(await file.text(), file.name);
+    } catch (error) {
+      statusText.textContent = `Failed to open G-code: ${(error as Error).message}`;
+    }
+    loadingModal.style.display = 'none';
+    gcodeInput.value = '';
+  };
+  workspace.onRequestOpenGcode = () => gcodeInput.click();
 
   workspace.onProjectImportPreview = showProjectImportPreviewDialog;
 
@@ -1039,6 +1062,38 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     });
     objectsPanel.mount();
     window.addEventListener('pagehide', () => objectsPanel.dispose(), { once: true });
+  }
+
+  const previewPanelHost = document.getElementById('gcode-preview-panel-host');
+  if (previewPanelHost) {
+    const previewPanel = new GcodePreviewPanel(previewPanelHost, {
+      getState: () => workspace.getPreviewState(),
+      subscribe: (listener) => {
+        const previous = workspace.onPreviewStateChanged;
+        workspace.onPreviewStateChanged = () => {
+          previous?.();
+          listener();
+        };
+        return () => {
+          workspace.onPreviewStateChanged = previous;
+        };
+      },
+      onUpdateView: async (patch) => {
+        const invoked = await registry.invoke('preview_configure', 'dom-inspector', actionCtx, uiState.get(), {
+          previewView: patch,
+        });
+        if (!invoked) throw new Error('The preview control action is unavailable.');
+      },
+      onOpenGcode: async () => {
+        const invoked = await registry.invoke('view_open_gcode', 'dom-menu', actionCtx, uiState.get());
+        if (!invoked) throw new Error('Opening a G-code file is unavailable.');
+      },
+      onError: (error) => {
+        statusText.textContent = `Preview: ${error instanceof Error ? error.message : String(error)}`;
+      },
+    });
+    previewPanel.mount();
+    window.addEventListener('pagehide', () => previewPanel.dispose(), { once: true });
   }
 
   const paintPanelHost = document.getElementById('paint-panel-host');

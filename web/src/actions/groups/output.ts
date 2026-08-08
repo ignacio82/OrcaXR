@@ -17,6 +17,32 @@ export const outputActions: Action[] = [
     run: (ctx) => ctx.downloadGcode(),
   },
   {
+    id: 'view_open_gcode',
+    label: 'Open G-code…',
+    icon: 'load',
+    group: 'output',
+    disclosure: 'menu',
+    menuSection: 'file',
+    hint: 'Inspect a standalone G-code file without changing the project',
+    run: (ctx) => ctx.openGcodeFile(),
+  },
+  {
+    id: 'preview_configure',
+    label: 'Set preview view',
+    icon: 'view',
+    group: 'output',
+    disclosure: 'inspector',
+    hint: 'Choose the preview colour mode, layer window, and visible move classes',
+    run: (ctx, invocation) => {
+      const request = invocation.previewView;
+      if (!request) {
+        ctx.reportCapabilityUnavailable('Set preview view', 'Choose a preview control first.');
+        return;
+      }
+      ctx.updatePreviewView(request);
+    },
+  },
+  {
     id: 'send_to_printer',
     label: 'Send to Printer',
     icon: 'printer_send',

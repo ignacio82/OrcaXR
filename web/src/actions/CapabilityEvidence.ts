@@ -105,9 +105,9 @@ export const ACTION_IDS_BY_PARITY_TASK = {
   'P6.2': ['settings_apply_project'],
   'P6.4': ['help_setup_wizard'],
   'P7.1': ['slice_active_plate'],
-  'P7.4': ['toggle_preview'],
+  'P7.4': ['toggle_preview', 'preview_configure'],
   'P7.5': ['view_show_gcode_window'],
-  'P7.7': ['save_gcode_to_downloads'],
+  'P7.7': ['save_gcode_to_downloads', 'view_open_gcode'],
   'P8.3': [
     'add_calibration_tower',
     'add_calibration_cube',

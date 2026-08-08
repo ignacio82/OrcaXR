@@ -308,9 +308,9 @@ Local starting seams: [`ActionContext.ts`](../web/src/actions/ActionContext.ts),
   - **Current:** one registry instance and invocation guard is constructed at the composition root
     and injected into every catalogued surface. Empty-state/native-XR load, targeted plate add/
     delete, and tool-close aliases resolve through that same instance; bounded invocation data
-    preserves exact plate, Objects-tree, semantic-edit, settings, and virtual-filament targeting. All 137 actions have exactly one real parity-task owner and
+    preserves exact plate, Objects-tree, semantic-edit, settings, and virtual-filament targeting. All 139 actions have exactly one real parity-task owner and
     containing-phase anchor; metadata-only IDs explicitly provide no behavioral evidence. Current
-    status is 93 partial, 44 unavailable, and zero implemented. Remaining direct contextual controls,
+    status is 95 partial, 44 unavailable, and zero implemented. Remaining direct contextual controls,
     upstream leaf-to-local reachability, and full browser interaction coverage remain open under
     P11.2/P12.
 
@@ -1397,8 +1397,13 @@ Local starting seams: [`SlicerClient.ts`](../web/src/slicer/SlicerClient.ts),
     Color-print mode fails closed without exact filament colors, layer-time linear/log fail closed
     without positive provenance-bearing processor durations, and incomplete parser prefixes remain
     explicitly limited. Eight tests cover every mode, filters, metadata gaps, caps, numeric state,
-    and deterministic detached outputs. GPU/render integration, exact live tool colors, seams,
-    shells, live tool-marker rendering, interactive legend/filter UI, screenshots, XR, and
+    and deterministic detached outputs. The live viewer now consumes that projection directly: a
+    read-only preview session owns the parsed rich model, mode, layer window, and move-class
+    filters; a one-way Three surface draws exactly the projected records with the projection's own
+    RGBA and never intercepts picking; and an accessible DOM panel exposes all twelve modes, the
+    layer sliders, single-layer mode, move filters, the coded/patterned legend, the numeric range
+    with its unit and scale, and the exact reason a mode is unsupported. Exact live tool colors,
+    seams, shells, tool-marker rendering, sequential playback controls, screenshots, XR, and
     official golden output remain open.
 
 - [~] **P7.5 — Add layer and sequential-move inspection.** Dual-handle layer/Z range, single-layer
@@ -1416,9 +1421,11 @@ Local starting seams: [`SlicerClient.ts`](../web/src/slicer/SlicerClient.ts),
     inspection state. Incomplete parser prefixes remain explicitly limited and malformed models,
     masks, ranges, source lengths, and playback requests fail closed. Eight tests cover endpoint
     identity, one-layer behavior, composed filters, ticks, source windows, stepping/playback,
-    focus bounds, caps, immutability, and malformed/incomplete inputs. Live sliders and playback,
-    artifact-bound source plumbing, renderer/camera integration, keyboard/controller/touch/XR
-    interaction, screenshots, accessibility review, and official golden G-code remain open.
+    focus bounds, caps, immutability, and malformed/incomplete inputs. Live layer sliders and
+    single-layer mode now drive that model from the DOM preview panel and announce their value.
+    Sequential move playback, ticks and tool-marker rendering, artifact-bound source plumbing,
+    camera focus integration, controller/touch/XR interaction, screenshots, accessibility review,
+    and official golden G-code remain open.
 
 - [~] **P7.6 — Show complete statistics and conflicts.** Normal/silent estimates where available;
   prepare/model/total time; per-role/tool and model/total filament length/volume/weight/cost;
@@ -1467,13 +1474,20 @@ Local starting seams: [`SlicerClient.ts`](../web/src/slicer/SlicerClient.ts),
     profile-to-tool fingerprints and cost-unit preferences, imported-output support, live plate/all-
     plate UI, official golden tolerances, screenshots, and accessibility review remain open.
 
-- [ ] **P7.7 — Complete output lifecycle.** View imported G-code, reslice after changes, retain
+- [~] **P7.7 — Complete output lifecycle.** View imported G-code, reslice after changes, retain
   per-plate results, download/export named artifacts, upload-only, send-and-print, and invalidate
   results precisely when project/profile changes affect them.
   - A result badge shows sliced revision and target printer/profile. Prevent sending stale or
     incompatible G-code unless the user explicitly revalidates it.
   - **Accept:** dirty-state matrix proves which edits invalidate which result; standalone G-code
     works without a model project; outputs from every route pass bounds/tool/temperature checks.
+  - **Current:** standalone G-code opens read-only in the viewer through its own registry action
+    and picker: it parses into the bounded rich model, drives the same preview projection as a
+    slice result, and leaves the canonical project revision untouched, which a production browser
+    pass asserts. Published slice artifacts remain bound to their exact semantic snapshot and fail
+    closed after drift. Per-plate result retention, the sliced-revision/printer badge, an explicit
+    revalidation flow before send, named export variants, and the full dirty-state matrix remain
+    open.
 
 - [ ] **P7.8 — Author layer custom-G-code events and filament sequences.** On the layer slider,
   add/edit/delete pause, custom G-code, color/filament change, template, and other event types
@@ -2068,7 +2082,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Feature family / required outcome | Primary tasks | 2026-07-30 current audit |
 |---|---:|---|
 | Upstream actions/settings/gizmos/formats/calibrations inventory and drift | P0.1, P12.1 | Exact pinned extractor maps 1,622 leaves/13 families from 17 Git blobs; manual upstream workflow sampling remains |
-| Truthful menu/toolbar/context/shortcut/XR capability state | P0.2, P11.2 | One guarded registry reports 137 actions = 93 partial + 44 unavailable and zero implemented, with unique real task ownership/anchors; full upstream reachability remains |
+| Truthful menu/toolbar/context/shortcut/XR capability state | P0.2, P11.2 | One guarded registry reports 139 actions = 95 partial + 44 unavailable and zero implemented, with unique real task ownership/anchors; full upstream reachability remains |
 | Clean-clone typecheck/test/build/CI and reproducible engine artifacts | P0.3, P12.3 | Aggregate local gate and artifact provenance pass; clean-clone CI/native rebuild qualification remains |
 | Golden 3MF/config/G-code/security fixture oracle | P0.4 | Structural 3MF, semantic G-code, and hostile server fixtures pass; official Snapmaker corpus remains |
 | Shared domain/action/surface boundaries | P0.5, P1.1–P1.2 | Canonical project/history, validated mesh codec, live one-way Three projection, and one injected guarded action registry exist; remaining contextual bypasses and feature commands are tracked explicitly |
@@ -2115,9 +2129,9 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Correct config types/vector delimiters across boundaries | P6.7 | Shared ConfigIO/ProfileLoader classifier covers all 174 generated vector definitions; escaping/special/full boundary matrix remains |
 | Revisioned current/all plate slice, cancel, progress, route parity | P7.1 | Live current-plate browser slicing and progress/cancel use the canonical coordinator and actual-asset guard; all-plate UI, external attestation, route/oracle parity remain |
 | Preflight and actionable engine/project/device errors | P7.2 | Live UI and coordinator share canonical pre-route checks, exact catalog-derived build/nozzle/material/temperature constraints, fail-closed target attestation, structured accessible findings, and registry-routed Reveal/Drop-to-bed actions; remaining fixes and complete engine/device safety matrix remain |
-| Rich G-code parsing and standalone G-code open | P7.3, P7.7 | Bounded typed-column parser retains linear move/process/source metadata and explicit marker identity; arcs, seams, time/estimate semantics, official corpora, streaming partitions, and standalone open remain |
-| All preview color modes/move filters/legends | P7.4 | Headless bounded typed-array projection covers all 12 pinned modes, composable masks/ranges, units, explicit metadata gaps, and coded/patterned text legends; live GPU/UI, seams/shells/marker, screenshots, XR, and goldens remain |
-| Layer and sequential-move sliders/playback/G-code window | P7.5 | Bounded headless state preserves rich record IDs across layer/one-layer/visibility/move filters and projects accessible endpoints, ticks, marker/focus, exact stepping/playback, and a bounded synchronized source window; live UI/input/render/camera wiring, artifact binding, and official goldens remain |
+| Rich G-code parsing and standalone G-code open | P7.3, P7.7 | Bounded typed-column parser plus a read-only standalone G-code viewer that never mutates the project; arcs, seams, time/estimate semantics, official corpora, and streaming partitions remain |
+| All preview color modes/move filters/legends | P7.4 | The live viewer renders the bounded projection for all 12 pinned modes with a DOM panel for modes, layer window, move filters, coded legend, numeric range, and unsupported-mode reasons; seams/shells/marker, screenshots, XR, and goldens remain |
+| Layer and sequential-move sliders/playback/G-code window | P7.5 | Live layer sliders and single-layer mode drive the bounded inspection model with announced values; sequential playback, ticks/marker rendering, source window UI, camera focus, artifact binding, and official goldens remain |
 | Complete estimates/material/tool/conflict/all-plate statistics | P7.6 | Opaque exact-UTF-8/SHA verification plus a strict bounded sidecar now enforce canonical export identities, float32 planner and sample-count-bounded double material reconciliation, unavailable propagation, non-exhaustive conflict disclosure, and tool+profile-safe aggregation; engine/external producers, canonical route/live UI, accessibility, and official goldens remain |
 | Layer pauses/custom G-code/color changes/filament sequences | P7.8 | Store scaffold exists; authoring missing |
 | Calibration generators and real per-band output | P8.1–P8.3 | Exact pinned inventory covers 11 modes, 14 menu variants, tolerance, and device gates; a fingerprint-bound compiler validates all 15 manual workflows and emits bounded band/object/line plans with engine overrides, firmware commands, labels, fit data, result/preset schema, and slice assertions. Canonical geometry materialization, live workflows, and parsed sliced-G-code oracles remain; 11 bindings are still alpha geometry and four unbound |
@@ -2237,6 +2251,7 @@ Evidence: EVID-nnn or Pending
 | `EVID-016` | P4.2–P4.4, P10.2 | Current worktree atop `2f1423a`; commit pending | `9fd12ff...` | 2026-08-07 | `npm --prefix web run quality`; `src/project/painting/__tests__/painting.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no headset/printer | Pass: 10 painting traces (palette projection/engine slots/unavailable reasons, stable-ID strokes with exact undo/redo, mixed-recipe painting without flattening, erase and erase-all, swept brush and no-op suppression, rejected targets/filaments/hits, modifier refusal, cancellation, canonical save/reopen identity) plus a production browser pass that activates the paint tool, selects a swatch and tool, paints with a real pointer gesture, and undoes/redoes the labelled command; registry now reports 137 actions = 89 partial + 48 unavailable | Automated review; official Orca colour round-trip, segmentation/G-code oracles, touch/XR, and manual accessibility review pending |
 | `EVID-017` | P4.6–P4.8, P10.5 | Current worktree atop `563fbf8`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `src/project/painting/__tests__/painting.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no headset/printer | Pass: 12 painting traces including independent support/seam/fuzzy-skin channels, per-channel erase, per-stroke history, and rejection of a state that does not belong to its channel; the production browser pass now also switches to the support channel, paints `block` with a real pointer gesture, checks the labelled command, and undoes it; the XR rail stays finite at seven while the three new modal tools live in Tools overflow; registry reports 137 actions = 92 partial + 45 unavailable | Automated review; generated-support/seam/perimeter oracles, official round-trip, dome fuzzy fixture, brim ears, and XR input pending |
 | `EVID-018` | P5.5, P0.2 | Current worktree atop `20b9052`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `src/project/objects/__tests__/arrange.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no printer | Pass: 6 arrangement traces (deterministic repeat layout with no intersecting footprints inside margins, centred packed block, locked-instance and exclusion clearance, reported non-fitting instances, preserved orientation/scale/Z with an exact transform batch, rejected bed/spacing/exclusion/plate inputs) plus a production browser pass that arranges the imported models through the menu action and undoes the single labelled command; registry reports 137 actions = 93 partial + 44 unavailable | Automated review; rotation-aware nesting, auto-orientation, sequential clearance, and reference placement tolerances pending |
+| `EVID-019` | P7.4–P7.5, P7.7 | Current worktree atop `c03f8b8`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `src/slicer/__tests__/gcode-preview-session.test.ts` | Node 22.21.0; Chrome for Testing 150; headless; no headset/printer | Pass: 6 preview-session traces (default full-layer window, move-class filtering, clamped/reversed/single-layer windows, every pinned mode with units and legend codes, explicit unsupported colour-print metadata, published move filters) plus a production browser pass that opens a standalone G-code file, asserts the canonical revision is unchanged, switches to a numeric mode with unit and range, collapses to a single announced layer, and reveals travel moves | Automated review; seams/shells/tool marker, sequential playback, screenshots, XR, official goldens, and the result badge/dirty matrix pending |
 
 Correction note (2026-07-20): the provisional local-commit cells in `EVID-001`–`EVID-012`
 were filled with the commit that landed those runs. Their historical commands, counts, results,
@@ -2284,6 +2299,7 @@ has no equivalent, add a `BLOCK-*` row rather than calling it done or Not applic
 | 2026-08-07 | Dispatch every model import by content signature first, fail closed on extension/signature disagreement, and route mesh sources through the transactional canonical import coordinator | Parsing an unknown container as STL silently produced wrong geometry, and a direct add bypassed preview/undo guarantees that project import already provided | P1.4, P5.6, P0.2 | Format/staging tests and the web quality gate pass; official corpus and drag/drop qualification pending |
 | 2026-08-07 | Make colour painting a canonical live tool: one UI-independent stroke service, a stable-ID palette shared by DOM and XR, and derived overlays; delete the legacy display-colour paint panel and brush state | A second display-colour paint path could not persist, undo, or slice, and kept the tool honest only by staying disabled; the canonical facet channels already existed | P4.2–P4.4, P0.2 | Painting/registry/shortcut tests and the production browser smoke pass; official round-trip, XR, and hardware evidence pending |
 | 2026-08-08 | Author every facet channel through one live paint tool set, and make the XR rail an explicit finite list instead of "any action with a tool" | Support, seam, and fuzzy-skin painting differ only by channel and assigned state, so a second implementation would duplicate the stroke, history, and overlay contracts; letting new modal tools auto-join the rail would silently break the finite-rail requirement | P4.6–P4.8, P10.5 | Channel traces and the browser support-paint pass; oracles, official round-trip, and headset review pending |
+| 2026-08-08 | Render the live preview from the bounded rich model plus preview projection, and delete the ad-hoc line renderer's role in the viewer | The projection already owns colour, filtering, legends, and explicit metadata gaps; a second renderer would invent colours the source never carried and could not report why a mode is unsupported | P7.3–P7.5, P7.7 | Session traces and the browser standalone-G-code pass; goldens, playback, and XR pending |
 | YYYY-MM-DD |  |  |  |  |
 
 ## 21. Verification interface and matrices
