@@ -124,6 +124,21 @@ engine (`libslic3r` via WASM) as the computational core.
   committed inventory's schema, pinned commit, and per-source blob hashes. Both
   print that upstream re-derivation was skipped; `--write`/sync still requires
   the checkout. Never make a gate silently pass when the checkout is missing.
+- The browser engine must link with `-sDYNAMIC_EXECUTION=0`: embind otherwise
+  builds its invokers with `new Function`, which the app's CSP (`script-src
+  'self' 'wasm-unsafe-eval'`) refuses, so every in-browser slice fails while
+  Node keeps working. Relinking also picks up whatever is in the fork worktree,
+  so revert unrelated engine edits before rebuilding.
+- An imported project slices as authored: its embedded printer/filament
+  configuration is the preflight authority (`source: 'authored-project'`), so
+  catalog preset identity is not required — but every safety fact must still be
+  declared exactly by that configuration. Import must therefore keep per-tool
+  `filament_type` and temperature ranges instead of collapsing them to
+  "Unknown".
+- Never emit an OPC relationship whose target is not in the same package: the
+  pinned engine rejects the entire archive ("Archive does not contain a valid
+  model"). Projections that drop preserved members must drop their
+  relationships too.
 - `wasm/slic3r_wasm.cpp`, `wasm/patches/`, `wasm/shim-include/`, and the build
   script hash into `wasm/artifact-provenance.json`. Editing any of them without
   rebuilding and republishing the artifacts breaks `verify:artifacts`, and the

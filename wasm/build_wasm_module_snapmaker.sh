@@ -68,6 +68,9 @@ for a in "${ARCHIVES[@]}"; do
     [[ -f "$a" ]] || { echo "missing archive: $a" >&2; exit 1; }
 done
 
+# -sDYNAMIC_EXECUTION=0 is load-bearing: embind otherwise builds its invokers
+# with `new Function`, which the app's CSP (script-src 'self' 'wasm-unsafe-eval')
+# refuses, so every embind call fails in a production build.
 em++ -O2 -pthread -fwasm-exceptions --profiling-funcs -sASSERTIONS=1 \
     -isystem "$HERE/shim-include" \
     -I "$ORCA/src" \
@@ -94,6 +97,7 @@ em++ -O2 -pthread -fwasm-exceptions --profiling-funcs -sASSERTIONS=1 \
     -sPTHREAD_POOL_SIZE=10 \
     -sFORCE_FILESYSTEM=1 \
     -sEXPORTED_RUNTIME_METHODS=FS \
+    -sDYNAMIC_EXECUTION=0 \
     -o "$OUT/slic3r.mjs"
 
 echo "OK: $OUT/slic3r.mjs + slic3r.wasm (Snapmaker tree: $ORCA)"

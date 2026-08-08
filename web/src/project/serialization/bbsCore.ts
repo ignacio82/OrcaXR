@@ -1237,15 +1237,28 @@ export function importBbsCore(files: ReadonlyMap<string, Uint8Array>, archiveHas
       : parsed.materials.length > 0
         ? parsed.materials.map((material) => material.color)
         : ['#CCCCCC'];
-  const physical: PhysicalFilament[] = colors.map((color, index) => ({
-    id: makeId('physical-filament', String(index + 1)),
-    name: parsed.materials[index]?.name || `Imported tool ${index + 1}`,
-    toolId: index,
-    material: 'Unknown',
-    color,
-    config: {},
-    enabled: true,
-  }));
+  // Per-tool filament facts the project actually declares; slicing preflight
+  // treats an imported project's own configuration as its authority, so these
+  // must survive import instead of collapsing into "Unknown".
+  const filamentTypes = perToolConfigValues(projectConfig.config, 'filament_type');
+  const filamentNames = perToolConfigValues(projectConfig.config, 'filament_settings_id');
+  const nozzleLow = perToolConfigValues(projectConfig.config, 'nozzle_temperature_range_low');
+  const nozzleHigh = perToolConfigValues(projectConfig.config, 'nozzle_temperature_range_high');
+  const physical: PhysicalFilament[] = colors.map((color, index) => {
+    const config: ConfigMap = {};
+    if (filamentTypes[index]) config.filament_type = filamentTypes[index];
+    if (nozzleLow[index]) config.nozzle_temperature_range_low = nozzleLow[index];
+    if (nozzleHigh[index]) config.nozzle_temperature_range_high = nozzleHigh[index];
+    return {
+      id: makeId('physical-filament', String(index + 1)),
+      name: filamentNames[index] || parsed.materials[index]?.name || `Imported tool ${index + 1}`,
+      toolId: index,
+      material: filamentTypes[index] || 'Unknown',
+      color,
+      config,
+      enabled: true,
+    };
+  });
   const mixedImport = projectConfig.mixedDefinitions
     ? importFullSpectrumDefinitions(projectConfig.mixedDefinitions, physical, {
         createId: (rowIndex, upstreamStableId) => makeId('mixed-filament', `${rowIndex + 1}-${upstreamStableId}`),
@@ -2581,4 +2594,21 @@ function decodeXml(value: string): string {
       }
     },
   );
+}
+
+/**
+ * Per-tool values of a project-level filament vector. BBS stores these as JSON
+ * arrays or delimited strings; a scalar applies to every tool.
+ */
+function perToolConfigValues(config: ConfigMap, key: string): string[] {
+  const value = config[key];
+  if (value === undefined || value === null) return [];
+  if (Array.isArray(value)) {
+    return value.map((entry) => (typeof entry === 'string' ? entry.trim() : String(entry ?? '')));
+  }
+  if (typeof value === 'string') {
+    const parts = value.includes(';') ? value.split(';') : value.includes(',') ? value.split(',') : [value];
+    return parts.map((entry) => entry.trim());
+  }
+  return [String(value)];
 }

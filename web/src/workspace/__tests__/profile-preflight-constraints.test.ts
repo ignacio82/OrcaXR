@@ -172,4 +172,50 @@ function profile(filament: string, config: Readonly<Record<string, string>>): Sl
   };
 }
 
+test('an imported project attests from its own embedded configuration', () => {
+  const authored = (config: Readonly<Record<string, string>>, id: string): SlicerProfile => ({
+    id,
+    displayName: id,
+    machineName: 'Imported printer',
+    processName: 'Imported process',
+    filamentName: id,
+    config: { ...config },
+  });
+  const derived = deriveLiveProfilePreflightConstraints({
+    source: 'authored-project',
+    primaryProfile: authored(
+      { printable_area: '0x0,220x0,220x220,0x220', printable_height: '250', nozzle_diameter: '0.4,0.4' },
+      'authored-project',
+    ),
+    filamentProfiles: [
+      authored(
+        { filament_type: 'PLA', nozzle_temperature_range_low: '190', nozzle_temperature_range_high: '240' },
+        'authored-filament-1',
+      ),
+      authored(
+        { filament_type: 'PETG', nozzle_temperature_range_low: '220', nozzle_temperature_range_high: '260' },
+        'authored-filament-2',
+      ),
+    ],
+    toolCount: 2,
+  });
+  assert.deepEqual(derived.blockingDiagnostics, [], 'no catalog preset is required to slice as authored');
+  assert.equal(derived.constraints.tools?.[0]?.nozzleDiameterMm, 0.4);
+  assert.deepEqual(derived.constraints.tools?.[1]?.supportedMaterials, ['PETG']);
+  assert.equal(derived.constraints.tools?.[0]?.maxHotendTemperatureC, 240);
+
+  const missing = deriveLiveProfilePreflightConstraints({
+    source: 'authored-project',
+    primaryProfile: authored(
+      { printable_area: '0x0,220x0,220x220,0x220', printable_height: '250', nozzle_diameter: '0.4' },
+      'authored-project',
+    ),
+    filamentProfiles: [undefined],
+    toolCount: 1,
+  });
+  assert.equal(missing.blockingDiagnostics.length, 1);
+  assert.equal(missing.blockingDiagnostics[0].code, 'missing-exact-filament-profile');
+  assert.match(missing.blockingDiagnostics[0].message, /embedded filament configuration/i);
+});
+
 console.log(`\n${passed} profile preflight constraint tests passed.`);

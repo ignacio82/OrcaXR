@@ -21,6 +21,7 @@ import {
 } from '../project/slicing';
 import type { ProjectSettingsOverrideGuard, ProjectSettingsOverrideSnapshot } from '../project/settingsOverrides';
 import { detectModelFormat } from '../project/import/formats';
+import { serializePrintConfigArray } from '../settings/configSerialization';
 import type { ArrangeRegion } from '../project/objects/arrange';
 import { rotateVector } from '../project/objects/transformOperations';
 import { GCODE_PREVIEW_MODES } from '../slicer/GcodePreviewModel';
@@ -2289,7 +2290,27 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   private createLiveProfilePreflight(): LiveProfileSlicePreflight {
-    const toolCount = this.canonicalProject.getSlicingConfiguration().printer.toolCount;
+    const slicing = this.canonicalProject.getSlicingConfiguration();
+    const toolCount = slicing.printer.toolCount;
+    // An imported project slices as authored, so its own embedded printer and
+    // filament configuration is the attested target; a catalog selection must
+    // still resolve exact presets.
+    if (this.importedProjectOwnsSlicingConfiguration && !this.profile) {
+      const projectConfig = engineWireConfig(slicing.config as Readonly<Record<string, unknown>>);
+      const physical = slicing.filaments.physical.map((filament) => ({
+        toolId: filament.toolId,
+        material: filament.material,
+        config: engineWireConfig(filament.config as Readonly<Record<string, unknown>>),
+      }));
+      return new LiveProfileSlicePreflight(
+        deriveLiveProfilePreflightConstraints({
+          source: 'authored-project',
+          primaryProfile: authoredProjectProfile(projectConfig),
+          filamentProfiles: authoredFilamentProfiles(projectConfig, physical, toolCount),
+          toolCount,
+        }),
+      );
+    }
     return new LiveProfileSlicePreflight(
       deriveLiveProfilePreflightConstraints({
         primaryProfile: this.exactCatalogPrimaryProfile(),
@@ -5534,4 +5555,78 @@ export class OrcaWorkspace extends xb.Script {
   async smartPaintImage(): Promise<void> {
     this.setStatus('Image Smart Paint is unavailable until results commit as canonical facet annotations.');
   }
+}
+
+/**
+ * Present an imported project's embedded configuration as the preflight
+ * target. Nothing is invented: the project's own effective config supplies the
+ * build volume and nozzle map, and each physical filament contributes only the
+ * fields it actually declares. Canonical values are projected to the same
+ * engine wire strings a catalog profile carries.
+ */
+function authoredProjectProfile(config: Record<string, string>): SlicerProfile {
+  return {
+    id: 'authored-project',
+    displayName: 'Imported project',
+    machineName: config['printer_settings_id'] ?? 'Imported printer',
+    processName: config['print_settings_id'] ?? 'Imported process',
+    filamentName: config['filament_settings_id'] ?? 'Imported filament',
+    config,
+  };
+}
+
+function authoredFilamentProfiles(
+  projectConfig: Record<string, string>,
+  physical: readonly { toolId: number; config: Record<string, string>; material: string }[],
+  toolCount: number,
+): readonly (SlicerProfile | undefined)[] {
+  const byTool = new Map(physical.map((filament) => [filament.toolId, filament]));
+  return Object.freeze(
+    Array.from({ length: toolCount }, (_unused, toolId) => {
+      const filament = byTool.get(toolId);
+      if (!filament) return undefined;
+      // Project-level filament vectors already carry per-tool values; the
+      // per-filament config overrides them where the project set one.
+      const config: Record<string, string> = {
+        ...projectFilamentConfig(projectConfig, toolId),
+        ...filament.config,
+      };
+      if (filament.material && config['filament_type'] === undefined) config['filament_type'] = filament.material;
+      return {
+        id: `authored-project-filament-${toolId}`,
+        displayName: `Imported filament ${toolId + 1}`,
+        machineName: projectConfig['printer_settings_id'] ?? 'Imported printer',
+        processName: projectConfig['print_settings_id'] ?? 'Imported process',
+        filamentName: `Imported filament ${toolId + 1}`,
+        config,
+      } satisfies SlicerProfile;
+    }),
+  );
+}
+
+/** Per-tool slice of the project's filament vectors, when it declares them. */
+function projectFilamentConfig(config: Record<string, string>, toolId: number): Record<string, string> {
+  const perTool: Record<string, string> = {};
+  for (const key of ['filament_type', 'nozzle_temperature_range_low', 'nozzle_temperature_range_high']) {
+    const value = config[key];
+    if (value === undefined) continue;
+    const parts = value.includes(';') ? value.split(';') : value.includes(',') ? value.split(',') : [value];
+    const entry = parts.length === 1 ? parts[0] : parts[toolId];
+    if (entry !== undefined && entry !== '') perTool[key] = entry.trim();
+  }
+  return perTool;
+}
+
+/** Canonical config values projected to their engine wire strings. */
+function engineWireConfig(config: Readonly<Record<string, unknown>>): Record<string, string> {
+  const wire: Record<string, string> = {};
+  for (const [key, value] of Object.entries(config)) {
+    if (value === undefined || value === null) continue;
+    wire[key] = Array.isArray(value)
+      ? serializePrintConfigArray(key, value as readonly unknown[])
+      : typeof value === 'object'
+        ? JSON.stringify(value)
+        : String(value);
+  }
+  return wire;
 }

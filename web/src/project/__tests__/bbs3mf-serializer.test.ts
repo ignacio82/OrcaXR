@@ -527,6 +527,43 @@ await test('imports the structural parity oracle and retains unsupported BBS met
 
   const canonical = await serializer.deserialize(saved.bytes);
   assert.equal(canonicalStringify(canonical.state), canonicalStringify(imported.state));
+
+  // A projection that omits preserved members (the one-plate slice archive
+  // drops every opaque entry) must not emit a relationship to a missing part:
+  // the pinned engine refuses to load the whole package when one dangles.
+  const projected = structuredClone(imported.state) as typeof imported.state;
+  projected.extensionBlobs = [];
+  const withoutBlobs = await serializer.serialize({
+    state: projected,
+    assets: imported.assets,
+    sourceRevision: 1,
+    sourceHash: projectFingerprint(projected),
+  });
+  const pruned = readSafeZip(withoutBlobs.bytes);
+  const prunedRoot = text(pruned.get('_rels/.rels')!);
+  const prunedModel = text(pruned.get('3D/_rels/3dmodel.model.rels')!);
+  const resolveTarget = (source: string, target: string) => {
+    const segments = target.startsWith('/')
+      ? target.slice(1).split('/')
+      : [...(source === '/' ? [] : source.split('/').slice(0, -1)), ...target.split('/')];
+    const resolved: string[] = [];
+    for (const segment of segments) {
+      if (segment === '' || segment === '.') continue;
+      if (segment === '..') resolved.pop();
+      else resolved.push(segment);
+    }
+    return resolved.join('/');
+  };
+  for (const [document, source] of [
+    [prunedRoot, '/'],
+    [prunedModel, CORE_MODEL_PATH],
+  ] as const) {
+    for (const target of [...document.matchAll(/Target="([^"]+)"/g)].map((match) => match[1])) {
+      const path = resolveTarget(source, target);
+      assert.ok(pruned.has(path), `relationship target ${target} is missing from the package`);
+    }
+  }
+  assert.match((withoutBlobs.warnings ?? []).join('\n'), /Dropped \d+ preserved package relationship/);
 });
 
 function text(bytes: Uint8Array): string {

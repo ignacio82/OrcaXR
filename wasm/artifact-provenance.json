@@ -12,11 +12,14 @@
       "wasm/slic3r_wasm.cpp",
       "wasm/build_wasm_module_snapmaker.sh"
     ],
-    "aggregateSha256": "fbf32bdc74dee3289dd810dbc83e0d29dc840caaff5e85b1e6fa6cea9185099f"
+    "aggregateSha256": "799b0df8daee64fd6f834d98602cb8044c4532f7f557b30e0a7e26044ddb19b8"
   },
   "outputs": {
-    "slic3r.mjs": "a37ac3888752da651ca412228a8a2feb80db8b9d9ea0f84bfc642501c11697f0",
-    "slic3r.wasm": "da3940122ea5096f75e0b5d9379db235b30e628f37b33a5d8dba08796d2a710d"
+    "slic3r.mjs": "b90d06ccfeb526a4d0d7e08a56ebb5401175f7337f7d9b35c039bd738448f03e",
+    "slic3r.wasm": "92303665e531e1a9ac4a8d2a5558746c59f540f20597abcab41a630a774bbc58"
   },
-  "publishedCopies": ["wasm/dist", "web/public/slicer"]
+  "publishedCopies": [
+    "wasm/dist",
+    "web/public/slicer"
+  ]
 }

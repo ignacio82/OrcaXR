@@ -74,7 +74,7 @@ export class Bbs3mfProjectSerializer implements ProjectSerializerPort {
     const files = new Map(projection.files);
     const assetEntries = writeAssetEntries(snapshot.state, payloads, files);
     writeExtensionBlobs(snapshot.state, payloads, files, warnings);
-    files.set(MODEL_RELS_PATH, encodeText(buildPartRelationships(snapshot.state, CORE_MODEL_PATH)));
+    files.set(MODEL_RELS_PATH, encodeText(buildPartRelationships(snapshot.state, CORE_MODEL_PATH, files)));
 
     const envelope: CanonicalExtensionEnvelope = {
       format: ORCAXR_EXTENSION_FORMAT,
@@ -83,7 +83,7 @@ export class Bbs3mfProjectSerializer implements ProjectSerializerPort {
       assetEntries,
     };
     files.set(ORCAXR_EXTENSION_PATH, encodeText(`${canonicalStringify(envelope)}\n`));
-    files.set(ROOT_RELATIONSHIPS_PATH, encodeText(buildRootRelationships(snapshot.state)));
+    files.set(ROOT_RELATIONSHIPS_PATH, encodeText(buildRootRelationships(snapshot.state, files, warnings)));
     files.set(CONTENT_TYPES_PATH, encodeText(buildContentTypes(files, snapshot.state)));
     throwIfCancelled(cancellation);
     const bytes = writeDeterministicZip(files, this.zipLimits);
@@ -427,7 +427,11 @@ function parseEnvelope(bytes: Uint8Array): CanonicalExtensionEnvelope {
   };
 }
 
-function buildRootRelationships(state: ProjectState): string {
+function buildRootRelationships(
+  state: ProjectState,
+  files: ReadonlyMap<string, Uint8Array>,
+  warnings: string[],
+): string {
   const fixed: PreservedOpcRelationship[] = [
     {
       source: '/',
@@ -444,11 +448,74 @@ function buildRootRelationships(state: ProjectState): string {
       targetMode: 'Internal',
     },
   ];
-  return relationshipDocument('/', fixed, readPreservedRelationships(state));
+  return relationshipDocument('/', fixed, resolvableRelationships(state, files, warnings));
 }
 
-function buildPartRelationships(state: ProjectState, source: typeof CORE_MODEL_PATH): string {
-  return relationshipDocument(source, [], readPreservedRelationships(state));
+function buildPartRelationships(
+  state: ProjectState,
+  source: typeof CORE_MODEL_PATH,
+  files: ReadonlyMap<string, Uint8Array>,
+): string {
+  return relationshipDocument(source, [], resolvableRelationships(state, files, []));
+}
+
+/**
+ * Preserved relationships whose target is actually in this package.
+ *
+ * A projection may legitimately omit preserved members — the one-plate slice
+ * archive drops every opaque entry — and an OPC relationship to a missing part
+ * makes the whole package unreadable: the pinned engine reports
+ * "Archive does not contain a valid model" and loads nothing. Dropping the
+ * dangling row keeps the package loadable and records what was dropped.
+ */
+function resolvableRelationships(
+  state: ProjectState,
+  files: ReadonlyMap<string, Uint8Array>,
+  warnings: string[],
+): PreservedOpcRelationship[] {
+  const kept: PreservedOpcRelationship[] = [];
+  const dropped: string[] = [];
+  for (const relationship of readPreservedRelationships(state)) {
+    if (
+      relationship.targetMode === 'External' ||
+      files.has(resolveOpcTarget(relationship.source, relationship.target))
+    ) {
+      kept.push(relationship);
+      continue;
+    }
+    dropped.push(relationship.target);
+  }
+  if (dropped.length > 0) {
+    warnings.push(
+      `Dropped ${dropped.length} preserved package relationship(s) whose target is not part of this archive: ${[
+        ...new Set(dropped),
+      ]
+        .sort()
+        .join(', ')}`,
+    );
+  }
+  return kept;
+}
+
+/**
+ * Resolve an OPC relationship target to its package path. Targets are either
+ * package-absolute (`/3D/x.model`) or relative to the source part's folder
+ * (`../Metadata/x.xml` from `3D/3dmodel.model`).
+ */
+function resolveOpcTarget(source: string, target: string): string {
+  const segments = target.startsWith('/')
+    ? target.slice(1).split('/')
+    : [...(source === '/' ? [] : source.split('/').slice(0, -1)), ...target.split('/')];
+  const resolved: string[] = [];
+  for (const segment of segments) {
+    if (segment === '' || segment === '.') continue;
+    if (segment === '..') {
+      resolved.pop();
+      continue;
+    }
+    resolved.push(segment);
+  }
+  return resolved.join('/');
 }
 
 function relationshipDocument(

@@ -45,6 +45,14 @@ export interface LiveProfilePreflightTarget {
   /** Exact resolved filament catalog entry for each canonical physical tool. */
   readonly filamentProfiles: readonly (SlicerProfile | undefined)[];
   readonly toolCount: number;
+  /**
+   * Where the target came from. `catalog` requires exact catalog preset
+   * identity. `authored-project` is an imported project that slices
+   * as authored: its own embedded machine/filament configuration is the
+   * authority, so preset identity is not required — but every safety fact
+   * still has to be declared exactly by that configuration.
+   */
+  readonly source?: 'catalog' | 'authored-project';
 }
 
 export interface LiveProfileConstraintDerivation {
@@ -54,6 +62,9 @@ export interface LiveProfileConstraintDerivation {
   /** Optional constraints absent from the profile corpus; never guessed. */
   readonly omissions: readonly LiveProfileConstraintOmission[];
 }
+
+const AUTHORED_HELP =
+  'This project was imported with its own printer and filament configuration. Re-open it with complete embedded settings, or select a catalog printer, process, and filament to slice against instead.';
 
 const PROFILE_HELP =
   'Choose a complete catalog-backed printer, process, and filament combination before slicing. No target value is inferred from the scene or a display label.';
@@ -70,11 +81,19 @@ export function deriveLiveProfilePreflightConstraints(
   const omissions: LiveProfileConstraintOmission[] = [];
   const primary = target.primaryProfile;
 
-  if (!hasExactPresetIdentity(primary)) {
+  const authoredProject = target.source === 'authored-project';
+  if (!authoredProject && !hasExactPresetIdentity(primary)) {
     blockingDiagnostics.push({
       code: 'missing-exact-printer-profile',
       message: 'The live printer, process, and primary filament selection is not bound to exact catalog presets.',
       help: PROFILE_HELP,
+    });
+  }
+  if (authoredProject && !primary) {
+    blockingDiagnostics.push({
+      code: 'missing-exact-printer-profile',
+      message: 'The imported project does not carry an embedded printer configuration to slice against.',
+      help: AUTHORED_HELP,
     });
   }
   if (!Number.isSafeInteger(target.toolCount) || target.toolCount < 1) {
@@ -123,11 +142,18 @@ export function deriveLiveProfilePreflightConstraints(
   const tools: Array<ToolFilamentConstraints | undefined> = Array.from({ length: toolCount });
   for (let toolId = 0; toolId < toolCount; toolId += 1) {
     const filament = target.filamentProfiles[toolId];
-    if (!hasExactPresetIdentity(filament) || !sameMachineAndProcess(primary, filament)) {
+    // An authored project's embedded per-filament configuration is its own
+    // authority; a catalog target must resolve an exact compatible preset.
+    const usable = authoredProject
+      ? Boolean(filament?.config)
+      : hasExactPresetIdentity(filament) && sameMachineAndProcess(primary, filament);
+    if (!usable || !filament) {
       blockingDiagnostics.push({
         code: 'missing-exact-filament-profile',
-        message: `Physical tool ${toolId + 1} is not bound to an exact compatible filament preset.`,
-        help: PROFILE_HELP,
+        message: authoredProject
+          ? `Physical tool ${toolId + 1} has no embedded filament configuration in the imported project.`
+          : `Physical tool ${toolId + 1} is not bound to an exact compatible filament preset.`,
+        help: authoredProject ? AUTHORED_HELP : PROFILE_HELP,
         path: `filaments.physical[${toolId}].presetId`,
         toolId,
       });
