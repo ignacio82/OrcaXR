@@ -1,8 +1,10 @@
 /**
  * ActionRegistry — the ONE declaration of everything OrcaXR can do.
  *
- * Both shells render from this list, so an action can never exist in one shell
- * and be missing from the other: parity is structural, not maintained by hand.
+ * Both shells render from this list, so presentation reachability cannot drift
+ * silently. A surface-specific exclusion must live here with an exact reason;
+ * for example, an XR control is withheld while its only completion flow is a
+ * DOM dialog.
  * Presentation metadata and executable capability truth are deliberately
  * separate. A visible control can therefore describe an unavailable upstream
  * outcome without pretending that a status message is an implementation.
@@ -224,6 +226,13 @@ export interface ActionDefinition {
   isEnabled?(s: Readonly<UiStateShape>): boolean;
   /** Default true. Return false to hide entirely for the given state. */
   isVisible?(s: Readonly<UiStateShape>): boolean;
+  /**
+   * Exact reason this action is intentionally withheld from immersive XR.
+   * Use this only when the current handler crosses into a DOM-only flow; the
+   * registry then omits the XR presentation surface instead of advertising a
+   * control that cannot be completed in-headset.
+   */
+  xrUnsupportedReason?: string;
   /** Omitted for unavailable/blocked outcomes. */
   run?: ActionHandler;
 }
@@ -412,10 +421,16 @@ const INSPECTOR_MIRRORED = new Set(['send_to_printer']);
 
 function surfacesFor(action: ActionDefinition): ActionSurface[] {
   const surfaces: ActionSurface[] = ['command-palette'];
-  if (action.disclosure === 'primary') surfaces.push('dom-primary', 'xr-primary');
-  else if (action.disclosure === 'toolbar') surfaces.push('dom-toolbar', 'xr-toolbar');
-  else if (action.disclosure === 'menu') surfaces.push('dom-menu', 'xr-menu');
-  else surfaces.push('dom-inspector');
+  if (action.disclosure === 'primary') {
+    surfaces.push('dom-primary');
+    if (!action.xrUnsupportedReason) surfaces.push('xr-primary');
+  } else if (action.disclosure === 'toolbar') {
+    surfaces.push('dom-toolbar');
+    if (!action.xrUnsupportedReason) surfaces.push('xr-toolbar');
+  } else if (action.disclosure === 'menu') {
+    surfaces.push('dom-menu');
+    if (!action.xrUnsupportedReason) surfaces.push('xr-menu');
+  } else surfaces.push('dom-inspector');
   if (INSPECTOR_MIRRORED.has(action.id) && !surfaces.includes('dom-inspector')) surfaces.push('dom-inspector');
   if (action.shortcuts?.length) surfaces.push('keyboard');
   if (action.mcpTool) surfaces.push('automation');
@@ -556,7 +571,13 @@ export class ActionRegistry {
     const action = typeof actionOrId === 'string' ? this.get(actionOrId) : actionOrId;
     if (!action) return { state: 'hidden', reason: 'Unknown action.' };
     if (!action.capability.surfaces.includes(surface)) {
-      return { state: 'hidden', reason: `Not offered on ${surface}.` };
+      return {
+        state: 'hidden',
+        reason:
+          surface.startsWith('xr-') && action.xrUnsupportedReason
+            ? action.xrUnsupportedReason
+            : `Not offered on ${surface}.`,
+      };
     }
     if (action.isVisible && !action.isVisible(state)) {
       return { state: 'hidden', reason: 'Not applicable in the current workspace state.' };

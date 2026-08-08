@@ -2032,7 +2032,11 @@ This contract is part of every XR acceptance gate, not optional styling guidance
     and Galaxy XR without API suppressions or runtime asset fetches.
   - **Current:** XRBlocks/UIKit and 98 Material SVGs are exact/local; typed signal setters, shared
     capability state, a seven-action finite rail plus menu overflow, CSP, and offline icon tests
-    pass. The complete composite adapter/gallery, visual review, and Galaxy XR review remain open.
+    pass. An exact `UIPanelProperties`/`UIImageProperties` adapter now owns construction and
+    signal-aware mutation for the registry action-button composite; its enabled, selected, busy,
+    hover, destructive, and disposed states are guarded and headlessly tested without option-bag
+    casts. Dialog, paged-list, progress/status, field, and broader card composites, the component
+    gallery, visual review, and Galaxy XR review remain open.
 
 - [~] **P10.10 — Qualify XRBlocks input, lifecycle, cleanup, and headset performance.** Instrument
   script/card update counts and input dispatch, then leave exactly one update owner and one select
@@ -2053,10 +2057,14 @@ This contract is part of every XR acceptance gate, not optional styling guidance
   - **Current:** duplicate manual card updates/select manipulation handlers are removed. UI
     suppression is sticky from press through release per controller, controllers remain
     independent in unit coverage, and manipulation/painting targets the actual hit model rather
-    than a first-model fallback. Disposal is deterministic and idempotent; the narrowly scoped
-    native file-picker `select` listener remains an instrumented exception. Counter/snapshot
-    automation, broader overlap/modal/release cases, retained-growth traces, simulator, and
-    Galaxy XR evidence remain open.
+    than a first-model fallback. Input ownership now exposes exact start/update/end,
+    allowed/suppressed-transition, active-controller, and UI-owned-controller snapshots; disposed
+    guards reject stale events. Registry action handles invalidate callbacks idempotently before
+    workspace teardown, and the DOM-dialog-only printer submission action is withheld from the XR
+    menu with an explicit XR-native-confirmation requirement. The narrowly scoped native
+    file-picker `select` listener remains an instrumented exception. Per-frame script/card counters,
+    broader overlap/modal/release cases, retained-growth traces, simulator, and Galaxy XR evidence
+    remain open.
 
 P10 exit gate: all canonical flows pass the viewport/input/accessibility/XR/performance/security
 matrices and independent visual/interaction review rates them at least official quality.
@@ -2278,9 +2286,9 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Responsive desktop/tablet/mobile IA and complete states | P10.1 | Useful recent shell work; parity unverified |
 | WCAG AA, keyboard, screen reader, non-color states | P10.2–P10.3 | Axe, headless tree semantics, keyboard menus/modal focus, registry-derived shortcut dispatch/help/ARIA metadata, and conflict tests pass; complete contexts/remapping workflows and manual assistive review remain |
 | Localization/pseudo-localization/RTL-safe layout | P10.4 | Missing |
-| XRBlocks typed design system, correct reactive API, local assets | P10.9 | Exact pins, local icons, and audited UI/UIBlocks contract exist; full qualified component kit remains |
-| Complete XR workflows and common capability gating | P2.6, P10.5, P10.9–P10.10 | Shell exists; many workflows and input modes missing |
-| XR update/input ownership, cleanup, comfort, headset budgets | P10.10 | Duplicate owners removed; per-controller sticky UI suppression, actual-hit targeting, and idempotent disposal are tested foundations; instrumentation/headset budgets remain |
+| XRBlocks typed design system, correct reactive API, local assets | P10.9 | Exact pins, local icons, audited UI/UIBlocks contract, and an exact-typed signal-aware action-button adapter with guarded states/disposal exist; full composite kit/gallery remains |
+| Complete XR workflows and common capability gating | P2.6, P10.5, P10.9–P10.10 | Shell exists and DOM-only printer submission is truthfully withheld from XR pending a native confirmation flow; many workflows and input modes remain missing |
+| XR update/input ownership, cleanup, comfort, headset budgets | P10.10 | Duplicate owners removed; per-controller sticky UI suppression, transition snapshots, actual-hit targeting, stale-event refusal, and idempotent handle/guard disposal are tested foundations; frame counters/headset budgets remain |
 | Bundle/frame/memory/worker/WASM resource budgets | P10.6, P10.10 | Production chunk budgets pass; runtime/frame/memory/device budgets remain |
 | Client/server/archive/printer/AI security | P10.7 | Bounded server/archive abuse, session-only AI/Moonraker secrets, purge/redaction, and fail-closed external-slicer opt-in/probe foundations pass; full threat/device review remains |
 | PWA offline, coherent updates, autosave/crash recovery | P10.8 | Offline/CSP/update contract and production reload smoke pass; a bounded versioned autosave ring proves quota pruning, corruption fallback, validation, recovery choice, and discard headlessly, while live capture/startup UX and atomic worker/WASM/schema updates remain |
@@ -2445,6 +2453,7 @@ has no equivalent, add a `BLOCK-*` row rather than calling it done or Not applic
 | 2026-08-07 | Dispatch every model import by content signature first, fail closed on extension/signature disagreement, and route mesh sources through the transactional canonical import coordinator | Parsing an unknown container as STL silently produced wrong geometry, and a direct add bypassed preview/undo guarantees that project import already provided | P1.4, P5.6, P0.2 | Format/staging tests and the web quality gate pass; official corpus and drag/drop qualification pending |
 | 2026-08-07 | Make colour painting a canonical live tool: one UI-independent stroke service, a stable-ID palette shared by DOM and XR, and derived overlays; delete the legacy display-colour paint panel and brush state | A second display-colour paint path could not persist, undo, or slice, and kept the tool honest only by staying disabled; the canonical facet channels already existed | P4.2–P4.4, P0.2 | Painting/registry/shortcut tests and the production browser smoke pass; official round-trip, XR, and hardware evidence pending |
 | 2026-08-08 | Author every facet channel through one live paint tool set, and make the XR rail an explicit finite list instead of "any action with a tool" | Support, seam, and fuzzy-skin painting differ only by channel and assigned state, so a second implementation would duplicate the stroke, history, and overlay contracts; letting new modal tools auto-join the rail would silently break the finite-rail requirement | P4.6–P4.8, P10.5 | Channel traces and the browser support-paint pass; oracles, official round-trip, and headset review pending |
+| 2026-08-08 | Keep XR component construction behind exact pinned types and explicitly withhold any action whose only completion flow is DOM-only | Guessed option bags bypass the reactive API contract, while advertising printer submission in-headset without an XR confirmation strands a safety-critical workflow | P10.7, P10.9–P10.10 | Typed adapter/action/gesture tests pass; composite gallery, native printer dialog, simulator, and headset review pending |
 | 2026-08-08 | Render the live preview from the bounded rich model plus preview projection, and delete the ad-hoc line renderer's role in the viewer | The projection already owns colour, filtering, legends, and explicit metadata gaps; a second renderer would invent colours the source never carried and could not report why a mode is unsupported | P7.3–P7.5, P7.7 | Session traces and the browser standalone-G-code pass; goldens, playback, and XR pending |
 | 2026-08-08 | Let pinned-engine gates verify committed locks/manifests when `third_party/SnapmakerOrca` is absent, and revert the unbuilt WASM statistics entry point | CI and clean clones have no developer checkout, so `profiles:verify`/`calibration:verify` crashed instead of proving anything; separately, a source edit that was never compiled into the published artifacts broke provenance and would have advertised an engine capability the shipped binary lacks | P0.3, P6.3, P7.6, P8.1, P12.3 | Full web gate passes with and without the checkout; `verify:artifacts` passes again |
 | 2026-08-08 | Build the browser engine with `-sDYNAMIC_EXECUTION=0`, attest imported projects from their own embedded configuration, and never emit an OPC relationship to a part this package does not contain | embind's `new Function` invokers made every in-browser slice fail under the app's own CSP; requiring catalog presets blocked slicing any imported project, which is the main multicolor/FullSpectrum workflow; and a preserved relationship left dangling by the one-plate projection made the pinned engine reject the archive entirely | P1.3, P3.9, P7.1, P7.2, P10.7 | Engine, serializer, and preflight traces plus a live browser FullSpectrum slice; hardware print qualification pending |

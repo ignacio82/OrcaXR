@@ -278,23 +278,53 @@ for (const action of actions.filter((item) => item.capability.status === 'partia
   });
 }
 
-test('every action declares command-palette plus its presentation surfaces', () => {
-  const presentation: Record<string, readonly ActionSurface[]> = {
-    primary: ['dom-primary', 'xr-primary'],
-    toolbar: ['dom-toolbar', 'xr-toolbar'],
-    menu: ['dom-menu', 'xr-menu'],
-    inspector: ['dom-inspector'],
+test('every action declares command-palette plus only its truthful presentation surfaces', () => {
+  const domPresentation: Record<string, ActionSurface> = {
+    primary: 'dom-primary',
+    toolbar: 'dom-toolbar',
+    menu: 'dom-menu',
+    inspector: 'dom-inspector',
+  };
+  const xrPresentation: Partial<Record<string, ActionSurface>> = {
+    primary: 'xr-primary',
+    toolbar: 'xr-toolbar',
+    menu: 'xr-menu',
   };
   for (const action of actions) {
     assert.ok(action.capability.surfaces.includes('command-palette'), `${action.id} missing palette`);
-    for (const surface of presentation[action.disclosure]) {
-      assert.ok(action.capability.surfaces.includes(surface), `${action.id} missing ${surface}`);
+    const domSurface = domPresentation[action.disclosure];
+    assert.ok(action.capability.surfaces.includes(domSurface), `${action.id} missing ${domSurface}`);
+    assert.notStrictEqual(registry.availability(action, domSurface, FULL_STATE).state, 'hidden');
+
+    const xrSurface = xrPresentation[action.disclosure];
+    if (!xrSurface) continue;
+    if (action.xrUnsupportedReason) {
+      assert.ok(!action.capability.surfaces.includes(xrSurface), `${action.id} falsely advertises ${xrSurface}`);
+      assert.deepStrictEqual(registry.availability(action, xrSurface, FULL_STATE), {
+        state: 'hidden',
+        reason: action.xrUnsupportedReason,
+      });
+    } else {
+      assert.ok(action.capability.surfaces.includes(xrSurface), `${action.id} missing ${xrSurface}`);
       assert.notStrictEqual(
-        registry.availability(action, surface, FULL_STATE).state,
+        registry.availability(action, xrSurface, FULL_STATE).state,
         'hidden',
-        `${action.id} declared but hidden on ${surface}`,
+        `${action.id} declared but hidden on ${xrSurface}`,
       );
     }
+  }
+});
+
+test('DOM-only printer confirmation is never advertised as an immersive mutation path', () => {
+  const send = registry.get('send_to_printer')!;
+  assert.ok(send.capability.surfaces.includes('dom-menu'));
+  assert.ok(send.capability.surfaces.includes('dom-inspector'));
+  assert.ok(!send.capability.surfaces.includes('xr-menu'));
+  assert.ok(!registry.forSurface('xr-menu').includes(send));
+  const immersiveAvailability = registry.availability(send, 'xr-menu', FULL_STATE);
+  assert.strictEqual(immersiveAvailability.state, 'hidden');
+  if (immersiveAvailability.state === 'hidden') {
+    assert.match(immersiveAvailability.reason, /XR-native dialog/);
   }
 });
 

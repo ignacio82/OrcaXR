@@ -61,6 +61,8 @@ export const outputActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'tools',
     hint: 'Upload the sliced G-code to a Moonraker printer, and start it only when you confirm',
+    xrUnsupportedReason:
+      'Send to Printer is withheld in immersive XR until its preflight and two-button confirmation are available as an XR-native dialog.',
     run: (ctx) => ctx.sendToPrinter(),
   },
 ];

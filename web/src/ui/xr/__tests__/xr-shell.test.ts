@@ -4,7 +4,9 @@
  * shell does — click routing, icons, and active-tool restyle — with no browser.
  */
 import assert from 'node:assert';
-import { renderXrActionButton, refreshXrToolActive, xrToolRailActions, type XrUiFactory } from '../XrShell';
+import * as THREE from 'three';
+import { renderXrActionButton, refreshXrToolActive, xrToolRailActions } from '../XrShell';
+import type { XrImageColor, XrImageProperties, XrPanelFill, XrPanelProperties, XrUiAdapter } from '../XrUiAdapter';
 import { buildRegistry } from '../../../actions/catalog';
 import { xrIcon } from '../../icons';
 import { tokens } from '../../tokens';
@@ -16,42 +18,50 @@ function test(name: string, fn: () => void) {
   console.log('  ✓', name);
 }
 
-// Fake uikit: records constructor opts, exposes fillColor/color + onClick.
+// Fake adapter nodes: property shapes still come from the pinned UIBlocks types.
 class FakePanel {
-  fillColor: string;
-  opts: Record<string, unknown>;
-  children: unknown[] = [];
-  constructor(opts: Record<string, unknown>) {
+  fillColor: XrPanelFill;
+  opacity: number;
+  readonly opts: XrPanelProperties;
+  readonly children: FakeIcon[] = [];
+  constructor(opts: XrPanelProperties) {
     this.opts = opts;
-    this.fillColor = opts.fillColor as string;
+    this.fillColor = opts.fillColor ?? '#000000';
+    this.opacity = typeof opts.opacity === 'number' ? opts.opacity : 1;
   }
-  add(c: unknown) {
-    this.children.push(c);
+  click(): void {
+    this.opts.onClick?.();
   }
-  setFillColor(color: string) {
-    this.fillColor = color;
+  hoverEnter(): void {
+    this.opts.onHoverEnter?.(new THREE.Object3D());
   }
-  setProperties(props: { opacity?: number }) {
-    Object.assign(this.opts, props);
-  }
-  click() {
-    return (this.opts.onClick as () => boolean)();
+  hoverExit(): void {
+    this.opts.onHoverExit?.(new THREE.Object3D());
   }
 }
 class FakeIcon {
-  color: string;
-  name: string;
-  constructor(name: string, opts: Record<string, unknown>) {
+  color: XrImageColor;
+  readonly name: string;
+  constructor(name: string, opts: XrImageProperties) {
     this.name = name;
-    this.color = opts.color as string;
-  }
-  setColor(color: string) {
-    this.color = color;
+    const color = opts.color;
+    this.color =
+      typeof color === 'string' || typeof color === 'number' || color instanceof THREE.Color ? color : '#ffffff';
   }
 }
-const factory: XrUiFactory<FakePanel, FakeIcon> = {
+const adapter: XrUiAdapter<FakePanel, FakeIcon> = {
   createPanel: (opts) => new FakePanel(opts),
-  createIcon: (name, opts) => new FakeIcon(name, opts),
+  createImage: (name, opts) => new FakeIcon(name, opts),
+  appendImage: (panel, icon) => panel.children.push(icon),
+  setPanelFill: (panel, fill) => {
+    panel.fillColor = fill;
+  },
+  setPanelOpacity: (panel, opacity) => {
+    panel.opacity = opacity;
+  },
+  setImageColor: (icon, color) => {
+    icon.color = color;
+  },
 };
 
 const registry = buildRegistry();
@@ -72,10 +82,10 @@ test('registry exposes the expected toolbar action set (incl. paint)', () => {
 
 test('each toolbar action renders a button with its XR icon', () => {
   for (const a of toolbar) {
-    const h = renderXrActionButton(a, () => {}, factory);
+    const h = renderXrActionButton(a, () => {}, adapter);
     assert.ok(h.iconEl instanceof FakeIcon);
-    assert.strictEqual((h.iconEl as unknown as FakeIcon).name, xrIcon(a.icon), `${a.id} icon mismatch`);
-    assert.strictEqual((h.btn as unknown as FakePanel).children.length, 1, 'button has icon child');
+    assert.strictEqual(h.iconEl.name, xrIcon(a.icon), `${a.id} icon mismatch`);
+    assert.strictEqual(h.btn.children.length, 1, 'button has icon child');
   }
 });
 
@@ -90,14 +100,14 @@ test('XR icons resolve only to app-owned offline assets', () => {
 test('clicking a button runs exactly that action', () => {
   const runs: string[] = [];
   const move = toolbar.find((a) => a.id === 'tool_move')!;
-  const h = renderXrActionButton(move, (a) => runs.push(a.id), factory);
-  const callbackResult = (h.btn as unknown as FakePanel).click();
+  const h = renderXrActionButton(move, (a) => runs.push(a.id), adapter);
+  const callbackResult = h.btn.click();
   assert.strictEqual(callbackResult, undefined, 'UIBlocks callbacks do not control bubbling');
   assert.deepStrictEqual(runs, ['tool_move']);
 });
 
 test('active-tool restyle highlights only the matching tool, not op actions', () => {
-  const handles = toolbar.map((a) => renderXrActionButton(a, () => {}, factory));
+  const handles = toolbar.map((a) => renderXrActionButton(a, () => {}, adapter));
   refreshXrToolActive(handles, 'rotate');
   const rot = handles.find((h) => h.action.id === 'tool_rotate')!;
   const mov = handles.find((h) => h.action.id === 'tool_move')!;
@@ -110,8 +120,39 @@ test('active-tool restyle highlights only the matching tool, not op actions', ()
 
 test('danger button (delete) uses the danger icon colour', () => {
   const del = toolbar.find((a) => a.id === 'delete_models')!;
-  const h = renderXrActionButton(del, () => {}, factory, { danger: true });
-  assert.strictEqual((h.iconEl as unknown as FakeIcon).color, tokens.color.danger);
+  const h = renderXrActionButton(del, () => {}, adapter, { danger: true });
+  assert.strictEqual(h.iconEl.color, tokens.color.danger);
+});
+
+test('disabled and busy guards suppress callbacks until the live state permits them', () => {
+  const runs: string[] = [];
+  const move = toolbar.find((a) => a.id === 'tool_move')!;
+  const h = renderXrActionButton(move, (a) => runs.push(a.id), adapter, { enabled: false });
+  h.btn.click();
+  assert.deepStrictEqual(runs, []);
+  assert.strictEqual(h.btn.opacity, 0.45);
+
+  h.setEnabled(true);
+  h.setBusy(true);
+  h.btn.click();
+  assert.deepStrictEqual(runs, []);
+
+  h.setBusy(false);
+  h.btn.click();
+  assert.deepStrictEqual(runs, ['tool_move']);
+});
+
+test('button disposal is idempotent and leaves no stale actionable callback', () => {
+  const runs: string[] = [];
+  const rotate = toolbar.find((a) => a.id === 'tool_rotate')!;
+  const h = renderXrActionButton(rotate, (a) => runs.push(a.id), adapter);
+  h.dispose();
+  h.dispose();
+  h.btn.hoverEnter();
+  h.btn.click();
+  assert.strictEqual(h.disposed, true);
+  assert.strictEqual(h.btn.opacity, 0.45);
+  assert.deepStrictEqual(runs, []);
 });
 
 console.log(`\nXrShell: ${passed} tests passed. (${toolbar.length} toolbar actions)`);

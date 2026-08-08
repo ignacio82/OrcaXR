@@ -81,8 +81,9 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import type { Action, ActionRegistry, ActionSurface } from '../actions/ActionRegistry';
 import { MENU_SECTIONS } from '../actions/ActionRegistry';
 import type { ActionContext } from '../actions/ActionContext';
-import { renderXrActionButton, xrToolRailActions, type XrUiFactory } from '../ui/xr/XrShell';
-import { SceneGestureGuard } from '../ui/xr/SceneGestureGuard';
+import { renderXrActionButton, xrToolRailActions, type XrActionHandle } from '../ui/xr/XrShell';
+import { xrBlocksUiAdapter } from '../ui/xr/XrUiAdapter';
+import { SceneGestureGuard, type SceneGestureSnapshot } from '../ui/xr/SceneGestureGuard';
 import { CalibrationRampGenerator } from '../features/CalibrationRampGenerator';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 
@@ -98,8 +99,6 @@ import {
   UIImage as XRImage,
   raycastSortFunction,
   ManipulationBehavior,
-  type UIPanelProperties,
-  type UIImageProperties as XRImageProperties,
 } from 'xrblocks/addons/uiblocks/src/index.js';
 
 import { FilamentPalette } from './FilamentPalette';
@@ -899,6 +898,10 @@ export class OrcaWorkspace extends xb.Script {
 
     this.actionContext = undefined;
     this.actionStateRefreshers.clear();
+    for (const handle of this.toolButtons) handle.dispose();
+    this.toolButtons = [];
+    this.sceneGestureGuard.dispose();
+    this.drag = null;
     this.cancelPaintStroke();
     for (const [volumeId, overlay] of [...this.paintOverlays]) this.disposeOverlay(volumeId, overlay);
     this.paintServiceInstance = null;
@@ -1843,6 +1846,11 @@ export class OrcaWorkspace extends xb.Script {
     gestureId: string;
   } | null = null;
   private readonly sceneGestureGuard = new SceneGestureGuard<unknown>();
+
+  /** Read-only counters for simulator/headset input-lifecycle evidence. */
+  public getXrInputLifecycleSnapshot(): SceneGestureSnapshot {
+    return this.sceneGestureGuard.snapshot();
+  }
 
   private controllerHitsUi(controller: unknown): boolean {
     const input = xb.core.input as unknown as {
@@ -3731,7 +3739,7 @@ export class OrcaWorkspace extends xb.Script {
     this.actionStateRefreshers.add(refresh);
     if (this.actionContext) refresh();
   }
-  private toolButtons: { action: Action; btn: UIPanel; iconEl: XRImage }[] = [];
+  private toolButtons: XrActionHandle<UIPanel, XRImage>[] = [];
   // Top-bar dropdown menu state (progressive disclosure of the full menu surface).
   private menuBarButtons: { id: string; btn: UIPanel; label: UIText }[] = [];
   private openMenuSection: string | null = null;
@@ -4330,10 +4338,6 @@ export class OrcaWorkspace extends xb.Script {
     // Tool rail rendered from the shared ActionRegistry — the same catalogue the
     // DOM shell renders — so the two shells can't drift. Clicks run through the
     // injected ActionContext (read at click time; set by main.ts after build).
-    const factory: XrUiFactory<UIPanel, XRImage> = {
-      createPanel: (properties) => new UIPanel(properties as UIPanelProperties),
-      createIcon: (icon, properties) => new XRImage(icon, properties as XRImageProperties),
-    };
     const runAction = (a: Action) => {
       if (this.actionContext) {
         void this.actionRegistry.invoke(a, 'xr-toolbar', this.actionContext, this.actionContext.ui.get());
@@ -4345,7 +4349,7 @@ export class OrcaWorkspace extends xb.Script {
     root.add(heading('TOOLS'));
     for (const a of toolbar) {
       if (!a.tool) continue;
-      const h = renderXrActionButton(a, runAction, factory, {
+      const h = renderXrActionButton(a, runAction, xrBlocksUiAdapter, {
         size: 64,
         iconSize: 34,
         enabled: this.actionContext
@@ -4354,11 +4358,7 @@ export class OrcaWorkspace extends xb.Script {
         onHoverExit: () => this.refreshToolButtons(),
       });
       root.add(h.btn);
-      this.toolButtons.push({
-        action: a,
-        btn: h.btn,
-        iconEl: h.iconEl,
-      });
+      this.toolButtons.push(h);
     }
 
     // Keep only the two high-frequency object actions beside the modal tools.
@@ -4367,7 +4367,7 @@ export class OrcaWorkspace extends xb.Script {
     root.add(divider());
     for (const a of toolbar) {
       if (a.tool || !['drop_to_bed', 'delete_models'].includes(a.id)) continue;
-      const h = renderXrActionButton(a, runAction, factory, {
+      const h = renderXrActionButton(a, runAction, xrBlocksUiAdapter, {
         size: 64,
         iconSize: 34,
         danger: a.id === 'delete_models',
@@ -4376,7 +4376,7 @@ export class OrcaWorkspace extends xb.Script {
           : false,
       });
       root.add(h.btn);
-      this.toolButtons.push({ action: a, btn: h.btn, iconEl: h.iconEl });
+      this.toolButtons.push(h);
     }
 
     // Paint colours — the filament slots doubling as the paint palette. Fixed
@@ -4782,12 +4782,12 @@ export class OrcaWorkspace extends xb.Script {
 
   private refreshToolButtons() {
     const state = this.actionContext?.ui.get();
-    for (const { action, btn, iconEl } of this.toolButtons) {
+    for (const handle of this.toolButtons) {
+      const { action } = handle;
       const enabled = state ? this.actionRegistry.availability(action, 'xr-toolbar', state).state === 'enabled' : false;
       const active = enabled && Boolean(action.tool) && this.tool === action.tool;
-      btn.setProperties({ opacity: enabled ? 1 : 0.38 });
-      btn.setFillColor(enabled ? (active ? '#ffffff4d' : '#ffffff14') : '#ffffff08');
-      iconEl.setColor(enabled ? (active ? '#ffffff' : '#cccccc') : '#8a94a0');
+      handle.setEnabled(enabled);
+      handle.setSelected(active);
     }
     if (this.paintOptionsPanel) {
       this.paintOptionsPanel.visible = this.tool === 'paint';

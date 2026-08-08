@@ -115,7 +115,12 @@ engine (`libslic3r` via WASM) as the computational core.
 - `ActionRegistry` is constructed once at the composition root and is the only
   invocation/availability gateway for DOM, menus, shortcuts, command palette,
   XR, and contextual Objects selection/rename/reveal. `implemented` requires a real
-  handler/evidence mapping; all other states remain visibly and machine-readably honest. Generate shortcut matching and Help rows from registry declarations through the strict conflict-rejecting catalog; do not add a second hand-maintained shortcut list.
+  handler/evidence mapping; all other states remain visibly and machine-readably honest. A
+  handler that completes through a DOM-only dialog must declare an exact XR exclusion reason and
+  stay out of the XR surface until an in-headset flow exists; never advertise a spatial control that
+  leaves the headset flow stranded. Generate shortcut matching and Help rows from registry
+  declarations through the strict conflict-rejecting catalog; do not add a second hand-maintained
+  shortcut list.
 - CI and clean clones have no `third_party/SnapmakerOrca`, so every gate that
   derives from the pinned engine must degrade honestly instead of crashing:
   `profiles:verify` falls back to byte-exact SHA-256 verification of
@@ -215,6 +220,9 @@ Use the exact 0.17.0 construction and mutation APIs:
   `setStrokeColor`, `setStrokeWidth`, `setCornerRadius`, `setProperties`,
   `setText`, and `setColor`. Direct assignments such as `.fillColor`, `.color`,
   or `.opacity` are neither the typed nor reliably reactive API.
+- Product composites must construct `UIPanel`/`UIImage` and mutate their signals through the
+  exact-typed `XrUiAdapter`; do not reintroduce `Record<string, unknown>` constructor bags or casts
+  in workspace presentation code. Handles invalidate callbacks before their owning card tears down.
 - UIBlocks uses `fillColor`, `strokeWidth`, `strokeColor`, and `cornerRadius`,
   not CSS-like `backgroundColor`, `borderWidth`, `borderColor`, or
   `borderRadius`. Prefer portable `#RRGGBB` plus explicit opacity; use alpha hex
