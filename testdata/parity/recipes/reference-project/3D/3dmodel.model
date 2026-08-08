@@ -23,7 +23,7 @@
           <vertex x="0" y="0" z="10"/>
         </vertices>
         <triangles>
-          <triangle v1="0" v2="2" v3="1" paint_color="1F" paint_supports="2" seam="1" fuzzy_skin="1" ox:face-tag="preserve-me"/>
+          <triangle v1="0" v2="2" v3="1" paint_color="8" paint_supports="4" paint_seam="4" paint_fuzzy_skin="4" ox:face-tag="preserve-me"/>
           <triangle v1="0" v2="1" v3="3"/>
           <triangle v1="1" v2="2" v3="3"/>
           <triangle v1="2" v2="0" v3="3"/>

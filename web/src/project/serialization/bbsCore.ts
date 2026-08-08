@@ -1,4 +1,11 @@
 import { canonicalStringify, cloneJson, fnv1a64 } from '../domain/canonical';
+import {
+  facetAssignmentsFromRefinement,
+  facetRefinementHasSplits,
+  mapFacetRefinementStates,
+  normalizeFacetRefinementEncoding,
+  visitFacetRefinementAssignedValues,
+} from '../domain/facetRefinement';
 import { entityId, type CustomGcodeId, type FilamentId, type PlateId } from '../domain/ids';
 import type { AssetPayload } from '../assets';
 import { contentDigest } from '../assets';
@@ -6,6 +13,8 @@ import type {
   ConfigMap,
   CustomGcode,
   FacetAnnotations,
+  FacetRefinementEncoding,
+  FacetRefinementNode,
   JsonValue,
   LayerEventType,
   LayerRange,
@@ -19,11 +28,18 @@ import type {
   TriangleAssignments,
   VolumeRole,
 } from '../domain/model';
-import { emptyFacetAnnotations } from '../domain/model';
+import { emptyFacetAnnotations, ORCA_REFINEMENT_ENCODING_VERSION, ORCA_REFINEMENT_MAX_NODES } from '../domain/model';
 import { importFullSpectrumDefinitions } from '../filaments/fullSpectrumImport';
 import { serializeFullSpectrumDefinition } from '../filaments/fullSpectrumRecipe';
 import { decodeIndexedMeshAsset, type DecodedIndexedMesh } from '../meshCodec';
 import { validatePackagePath } from './deterministicZip';
+import {
+  BbsFacetCodecError,
+  decodeBbsFacetRoot,
+  encodeBbsFacetRoot,
+  unpaintedBbsFacetRoot,
+  type BbsFacetDecodeBudget,
+} from './bbsFacetCodec';
 
 export const CORE_MODEL_PATH = '3D/3dmodel.model';
 export const MODEL_RELS_PATH = '3D/_rels/3dmodel.model.rels';
@@ -37,10 +53,21 @@ const CORE_OBJECT_ATTRIBUTES_KEY = `${ORCAXR_CORE_NAMESPACE}/core-object-attribu
 const CORE_COMPONENT_ATTRIBUTES_KEY = `${ORCAXR_CORE_NAMESPACE}/core-component-attributes`;
 const CORE_BUILD_ATTRIBUTES_KEY = `${ORCAXR_CORE_NAMESPACE}/core-build-attributes`;
 const CORE_FACET_ATTRIBUTES_KEY = `${ORCAXR_CORE_NAMESPACE}/core-facet-attributes`;
+const RESERVED_FACET_ATTRIBUTES = new Set([
+  'v1',
+  'v2',
+  'v3',
+  'paint_color',
+  'paint_supports',
+  'paint_seam',
+  'paint_fuzzy_skin',
+  'paint_fuzzy',
+]);
 const BBS_PLATE_GAP_RATIO = 0.2;
 const PRODUCTION_NAMESPACE = 'http://schemas.microsoft.com/3dmanufacturing/production/2015/06';
 const MAX_COMPONENT_GRAPH_DEPTH = 64;
 const MAX_COMPONENT_GRAPH_EXPANSION = 16_384;
+const MAX_BBS_COLOR_STATE = 64;
 
 export type BbsPlateCoordinateErrorCode = 'invalid-plate-metadata' | 'missing-printable-area' | 'unassigned-build-item';
 
@@ -310,9 +337,9 @@ export function buildBbsCore(state: ProjectState, assets: ReadonlyMap<string, As
     filamentSlots.set(filament.id, materialRows.length + 1);
     materialRows.push({ name: filament.name, color: normalizeColor(filament.displayColor) });
   }
-  if (materialRows.length > 18) {
+  if (materialRows.length > MAX_BBS_COLOR_STATE) {
     warnings.push(
-      `The BBS whole-facet paint encoding supports 18 material states; slots 19-${materialRows.length} remain lossless only in the OrcaXR extension`,
+      `The pinned BBS color-paint consumer supports ${MAX_BBS_COLOR_STATE} material states; slots ${MAX_BBS_COLOR_STATE + 1}-${materialRows.length} remain lossless only in the OrcaXR extension`,
     );
   }
   const referencedFilaments = new Set<FilamentId>();
@@ -326,6 +353,26 @@ export function buildBbsCore(state: ProjectState, assets: ReadonlyMap<string, As
       object.volumes.forEach((volume) => {
         if (volume.filamentId) referencedFilaments.add(volume.filamentId);
         volume.annotations.color.forEach((assignment) => referencedFilaments.add(assignment.value));
+        if (volume.annotations.refinement?.color) {
+          visitFacetRefinementAssignedValues(volume.annotations.refinement.color, (value) =>
+            referencedFilaments.add(value),
+          );
+          volume.annotations.refinement.color.roots.forEach((root, triangle) => {
+            if (
+              root.kind === 'split' &&
+              facetRootUsesUnsupportedBbsState(root, (value) => filamentSlots.get(value) ?? 0, MAX_BBS_COLOR_STATE)
+            ) {
+              warnings.push(
+                `Volume ${volume.id} source facet ${triangle} has a refined color root with a material state outside 1..${MAX_BBS_COLOR_STATE}; the entire standard BBS paint_color root was omitted and remains lossless in the OrcaXR extension`,
+              );
+            }
+          });
+        }
+        if (volume.annotations.brim.length > 0 || volume.annotations.refinement?.brim) {
+          warnings.push(
+            `Volume ${volume.id} uses${volume.annotations.refinement?.brim ? ' refined' : ''} brim facet annotations; BBS has no standard brim-paint attribute, so they remain lossless only in the OrcaXR extension`,
+          );
+        }
       });
     }
   }
@@ -372,13 +419,20 @@ function buildCoreModel(
     .map(([namespace, prefix]) => ` xmlns:${prefix}="${xmlAttribute(namespace)}"`)
     .join('');
   const hasSupports = mappings.some((mapping) =>
-    mapping.volumes.some((entry) => entry.volume.annotations.support.length > 0),
+    mapping.volumes.some(
+      (entry) =>
+        entry.volume.annotations.support.length > 0 || entry.volume.annotations.refinement?.support !== undefined,
+    ),
   );
   const hasSeams = mappings.some((mapping) =>
-    mapping.volumes.some((entry) => entry.volume.annotations.seam.length > 0),
+    mapping.volumes.some(
+      (entry) => entry.volume.annotations.seam.length > 0 || entry.volume.annotations.refinement?.seam !== undefined,
+    ),
   );
   const hasColors = mappings.some((mapping) =>
-    mapping.volumes.some((entry) => entry.volume.annotations.color.length > 0),
+    mapping.volumes.some(
+      (entry) => entry.volume.annotations.color.length > 0 || entry.volume.annotations.refinement?.color !== undefined,
+    ),
   );
   const lines = [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -431,6 +485,7 @@ function buildCoreModel(
       entry.mesh.triangles.forEach((triangle, index) => {
         const attributes = new Map(annotations.get(index) ?? []);
         for (const extension of facetExtensions.get(index) ?? []) {
+          if (!extension.namespace && RESERVED_FACET_ATTRIBUTES.has(extension.name)) continue;
           const renderedName = renderedExtensionName(extension, namespacePrefixes);
           if (renderedName) attributes.set(renderedName, extension.value);
         }
@@ -849,32 +904,87 @@ function annotationAttributes(
   filamentSlots: ReadonlyMap<FilamentId, number>,
 ): Map<number, Map<string, string>> {
   const attributes = new Map<number, Map<string, string>>();
-  addAnnotation(attributes, annotations.color, 'paint_color', (value) =>
-    encodeFacetState(filamentSlots.get(value) ?? 0),
+  addBbsAnnotation(
+    attributes,
+    annotations.color,
+    annotations.refinement?.color,
+    'paint_color',
+    (value) => filamentSlots.get(value) ?? 0,
+    MAX_BBS_COLOR_STATE,
   );
-  addAnnotation(attributes, annotations.support, 'paint_supports', (value) =>
-    encodeFacetState(value === 'enforce' ? 1 : 2),
+  addBbsAnnotation(attributes, annotations.support, annotations.refinement?.support, 'paint_supports', (value) =>
+    value === 'enforce' ? 1 : 2,
   );
-  addAnnotation(attributes, annotations.seam, 'paint_seam', (value) => encodeFacetState(value === 'prefer' ? 1 : 2));
-  addAnnotation(attributes, annotations.fuzzySkin, 'paint_fuzzy_skin', (value) => (value ? encodeFacetState(1) : ''));
+  addBbsAnnotation(attributes, annotations.seam, annotations.refinement?.seam, 'paint_seam', (value) =>
+    value === 'prefer' ? 1 : 2,
+  );
+  addBbsAnnotation(attributes, annotations.fuzzySkin, annotations.refinement?.fuzzySkin, 'paint_fuzzy_skin', (value) =>
+    value ? 1 : 0,
+  );
   return attributes;
 }
 
-function addAnnotation<T extends JsonValue>(
+function addBbsAnnotation<T extends JsonValue>(
   target: Map<number, Map<string, string>>,
   assignments: TriangleAssignments<T>[],
+  refinement: FacetRefinementEncoding<T> | undefined,
   name: string,
-  encode: (value: T) => string,
+  encodeAssigned: (value: T) => number,
+  maxState = 255,
 ): void {
+  if (refinement) {
+    refinement.roots.forEach((root, triangle) => {
+      if (root.kind === 'leaf' && root.state.kind === 'unpainted') return;
+      if (
+        root.kind === 'leaf' &&
+        root.state.kind === 'assigned' &&
+        (encodeAssigned(root.state.value) <= 0 || encodeAssigned(root.state.value) > maxState)
+      ) {
+        return;
+      }
+      if (facetRootUsesUnsupportedBbsState(root, encodeAssigned, maxState)) return;
+      const encoded = encodeBbsFacetRoot(root, encodeAssigned);
+      const values = target.get(triangle) ?? new Map<string, string>();
+      values.set(name, encoded);
+      target.set(triangle, values);
+    });
+    return;
+  }
   for (const assignment of assignments) {
-    const encoded = encode(assignment.value);
-    if (!encoded) continue;
+    const state = encodeAssigned(assignment.value);
+    if (state <= 0 || state > maxState) continue;
+    const encoded = encodeBbsFacetRoot(
+      { kind: 'leaf', state: { kind: 'assigned', value: assignment.value } },
+      encodeAssigned,
+    );
     for (const triangle of assignment.triangles) {
       const values = target.get(triangle) ?? new Map<string, string>();
       values.set(name, encoded);
       target.set(triangle, values);
     }
   }
+}
+
+function facetRootUsesUnsupportedBbsState<T extends JsonValue>(
+  root: FacetRefinementNode<T>,
+  encodeAssigned: (value: T) => number,
+  maxState = 255,
+): boolean {
+  const stack = [root];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    if (node.kind === 'leaf') {
+      if (
+        node.state.kind === 'assigned' &&
+        (encodeAssigned(node.state.value) <= 0 || encodeAssigned(node.state.value) > maxState)
+      ) {
+        return true;
+      }
+    } else {
+      stack.push(...node.children);
+    }
+  }
+  return false;
 }
 
 function collectCoreExtensionNamespaces(mappings: ObjectMapping[]): Set<string> {
@@ -1008,12 +1118,6 @@ function assertXmlValue(value: string, label: string): void {
       throw new Error(`${label} contains a character XML 1.0 cannot represent`);
     }
   }
-}
-
-function encodeFacetState(state: number): string {
-  if (!Number.isInteger(state) || state <= 0 || state > 18) return '';
-  if (state <= 2) return (state << 2).toString(16).toUpperCase();
-  return `${(state - 3).toString(16).toUpperCase()}C`;
 }
 
 function serializeMixedDefinitions(state: ProjectState, warnings: string[]): string {
@@ -1431,14 +1535,35 @@ function plateLocalTransform(transform: Transform, originMm: { x: number; y: num
   };
 }
 
-export function importBbsCore(files: ReadonlyMap<string, Uint8Array>, archiveHash: string): ImportedCoreProject {
-  const parsed = parseCorePackage(files);
+export function importBbsCore(
+  files: ReadonlyMap<string, Uint8Array>,
+  archiveHash: string,
+  options: { maxFacetRefinementNodes?: number; maxFacetAnnotationMaterializationUnits?: number } = {},
+): ImportedCoreProject {
+  const maxFacetRefinementNodes = options.maxFacetRefinementNodes ?? ORCA_REFINEMENT_MAX_NODES;
+  const maxFacetAnnotationMaterializationUnits =
+    options.maxFacetAnnotationMaterializationUnits ?? ORCA_REFINEMENT_MAX_NODES;
+  if (
+    !Number.isInteger(maxFacetRefinementNodes) ||
+    maxFacetRefinementNodes < 1 ||
+    maxFacetRefinementNodes > ORCA_REFINEMENT_MAX_NODES
+  ) {
+    throw new Error(`Facet refinement import limit must be in [1, ${ORCA_REFINEMENT_MAX_NODES}]`);
+  }
+  if (
+    !Number.isInteger(maxFacetAnnotationMaterializationUnits) ||
+    maxFacetAnnotationMaterializationUnits < 1 ||
+    maxFacetAnnotationMaterializationUnits > ORCA_REFINEMENT_MAX_NODES
+  ) {
+    throw new Error(`Facet annotation materialization limit must be in [1, ${ORCA_REFINEMENT_MAX_NODES}]`);
+  }
+  const parsed = parseCorePackage(files, maxFacetRefinementNodes);
   const projectConfig = parseProjectSettings(files.get(PROJECT_SETTINGS_PATH));
   const modelMetadata = parseModelSettings(files.get(MODEL_SETTINGS_PATH));
   const plateCoordinates = importedPlateCoordinates(files, modelMetadata, parsed.build.length);
   const layerRanges = parseLayerRanges(files.get(LAYER_RANGES_PATH));
   const warnings = [
-    'Imported a 3MF without OrcaXR canonical metadata. Core geometry, transforms, basic BBS settings, plates, and simple whole-facet annotations were recovered; unsupported BBS fields remain preserved as opaque package entries.',
+    'Imported a 3MF without OrcaXR canonical metadata. Core geometry, transforms, basic BBS settings, plates, and bounded BBS facet trees were recovered; unsupported BBS fields remain preserved as opaque package entries.',
   ];
   const makeId = <Kind extends string>(kind: Kind, suffix: string) =>
     entityId<Kind>(`import:3mf:${archiveHash}-${kind}-${suffix}`);
@@ -1483,11 +1608,33 @@ export function importBbsCore(files: ReadonlyMap<string, Uint8Array>, archiveHas
   }
   const assignmentFilaments = [...physical, ...mixed.filter((filament) => filament.enabled)];
   for (const object of parsed.objects.values()) {
-    object.annotations.color = object.annotations.color.flatMap((assignment) => {
-      const match = /^import:3mf:paint-slot-(\d+)$/.exec(assignment.value);
-      const filament = match ? assignmentFilaments[Number(match[1]) - 1] : undefined;
-      return filament ? [{ ...assignment, value: filament.id }] : [];
-    });
+    const colorRefinement = object.annotations.refinement?.color;
+    if (colorRefinement) {
+      const remapped = mapFacetRefinementStates(colorRefinement, (state) => {
+        if (state.kind === 'unpainted') return state;
+        const match = /^import:3mf:paint-slot-(\d+)$/.exec(state.value);
+        const filament = match ? assignmentFilaments[Number(match[1]) - 1] : undefined;
+        if (!filament) {
+          throw new Error(`3MF facet paint references unavailable material slot ${match?.[1] ?? state.value}`);
+        }
+        return { kind: 'assigned', value: filament.id };
+      });
+      object.annotations.color = facetAssignmentsFromRefinement(remapped);
+      if (facetRefinementHasSplits(remapped)) object.annotations.refinement!.color = remapped;
+      else {
+        delete object.annotations.refinement!.color;
+        if (Object.keys(object.annotations.refinement!).length === 0) delete object.annotations.refinement;
+      }
+    } else {
+      object.annotations.color = object.annotations.color.flatMap((assignment) => {
+        const match = /^import:3mf:paint-slot-(\d+)$/.exec(assignment.value);
+        const filament = match ? assignmentFilaments[Number(match[1]) - 1] : undefined;
+        if (!filament) {
+          throw new Error(`3MF facet paint references unavailable material slot ${match?.[1] ?? assignment.value}`);
+        }
+        return [{ ...assignment, value: filament.id }];
+      });
+    }
   }
   if (projectConfig.mixedDefinitions && mixed.length === 0) {
     warnings.push(
@@ -1586,6 +1733,7 @@ export function importBbsCore(files: ReadonlyMap<string, Uint8Array>, archiveHas
   }));
 
   let sourceObjectOrdinal = 0;
+  let expandedFacetAnnotationUnits = 0;
   for (const [parentKey, group] of buildByObject) {
     const parent = parsed.objects.get(parentKey);
     if (!parent) throw new Error(`3MF build references missing object ${describeObjectReference(group.reference)}`);
@@ -1608,6 +1756,15 @@ export function importBbsCore(files: ReadonlyMap<string, Uint8Array>, archiveHas
         const leaf = component.object;
         const assetId = meshAssetIds.get(objectReferenceKey(leaf));
         if (!leaf.mesh || !assetId) continue;
+        expandedFacetAnnotationUnits += facetAnnotationMaterializationUnits(
+          leaf.annotations,
+          maxFacetAnnotationMaterializationUnits - expandedFacetAnnotationUnits,
+        );
+        if (expandedFacetAnnotationUnits > maxFacetAnnotationMaterializationUnits) {
+          throw new Error(
+            `Expanded 3MF component facet annotations exceed the materialization limit of ${maxFacetAnnotationMaterializationUnits}`,
+          );
+        }
         const part = modelMetadata.partData.get(parentId)?.get(leaf.numericId);
         let role = part?.role ?? 'model';
         if (componentRows.length === 1 && role !== 'model') {
@@ -1733,10 +1890,11 @@ interface ParsedModelPart {
   build: ParsedBuildItem[];
 }
 
-function parseCorePackage(files: ReadonlyMap<string, Uint8Array>): ParsedCorePackage {
+function parseCorePackage(files: ReadonlyMap<string, Uint8Array>, maxFacetRefinementNodes: number): ParsedCorePackage {
   const rootBytes = files.get(CORE_MODEL_PATH);
   if (!rootBytes) throw new Error(`3MF is missing ${CORE_MODEL_PATH}`);
-  const root = parseModelPart(decodeText(rootBytes, CORE_MODEL_PATH), CORE_MODEL_PATH, true);
+  const facetDecodeBudget: BbsFacetDecodeBudget = { remainingNodes: maxFacetRefinementNodes };
+  const root = parseModelPart(decodeText(rootBytes, CORE_MODEL_PATH), CORE_MODEL_PATH, true, facetDecodeBudget);
   const referencedPaths = new Set<string>();
   for (const object of root.objects.values()) {
     for (const component of object.components) {
@@ -1751,7 +1909,7 @@ function parseCorePackage(files: ReadonlyMap<string, Uint8Array>): ParsedCorePac
   for (const path of [...referencedPaths].sort(compareText)) {
     const bytes = files.get(path);
     if (!bytes) throw new Error(`3MF Production Extension references missing model part ${path}`);
-    parts.set(path, parseModelPart(decodeText(bytes, path), path, false));
+    parts.set(path, parseModelPart(decodeText(bytes, path), path, false, facetDecodeBudget));
   }
 
   const objects = new Map<string, ParsedMeshObject>();
@@ -1779,7 +1937,12 @@ function parseCorePackage(files: ReadonlyMap<string, Uint8Array>): ParsedCorePac
   };
 }
 
-function parseModelPart(xml: string, modelPath: string, root: boolean): ParsedModelPart {
+function parseModelPart(
+  xml: string,
+  modelPath: string,
+  root: boolean,
+  facetDecodeBudget: BbsFacetDecodeBudget,
+): ParsedModelPart {
   const markup = validatedXmlMarkup(xml, modelPath);
   const namespaceMatch = /<model\b([^>]*)>/i.exec(markup);
   if (!namespaceMatch) throw new Error(`${modelPath} is missing its 3MF model element`);
@@ -1811,7 +1974,9 @@ function parseModelPart(xml: string, modelPath: string, root: boolean): ParsedMo
     if (meshMatches.length + (componentsMatch ? 1 : 0) !== 1) {
       throw new Error(`${modelPath} object ${numericId} must contain exactly one mesh or components element`);
     }
-    const mesh = meshMatches[0] ? parseMesh(meshMatches[0][1], namespaces, unitScaleMm) : undefined;
+    const mesh = meshMatches[0]
+      ? parseMesh(meshMatches[0][1], namespaces, unitScaleMm, modelPath, numericId, facetDecodeBudget)
+      : undefined;
     const components = [...(componentsMatch?.[1] ?? '').matchAll(/<component\b([^>]*)\/?\s*>/gi)].map((component) => {
       const attrs = parseAttributes(component[1]);
       const objectId = Number(attrs.objectid);
@@ -2026,7 +2191,10 @@ function withoutProductionPath(attributes: ExtensionAttribute[]): ExtensionAttri
 function parseMesh(
   body: string,
   namespaces: ReadonlyMap<string, string>,
-  unitScaleMm = 1,
+  unitScaleMm: number,
+  modelPath: string,
+  objectId: number,
+  facetDecodeBudget: BbsFacetDecodeBudget,
 ): DecodedIndexedMesh & {
   annotations: FacetAnnotations;
   facetExtensionAttributes: FacetExtensionAttributes[];
@@ -2045,28 +2213,102 @@ function parseMesh(
   });
   const annotations = emptyFacetAnnotations(0);
   const facetExtensionAttributes: FacetExtensionAttributes[] = [];
+  const colorRoots: Array<FacetRefinementNode<FilamentId> | undefined> = [];
+  const supportRoots: Array<FacetRefinementNode<'enforce' | 'block'> | undefined> = [];
+  const seamRoots: Array<FacetRefinementNode<'prefer' | 'avoid'> | undefined> = [];
+  const fuzzySkinRoots: Array<FacetRefinementNode<true> | undefined> = [];
   const triangles = [...body.matchAll(/<triangle\b([^>]*)\/?\s*>/gi)].map((triangle, triangleIndex) => {
     const attrs = parseAttributes(triangle[1]);
     const value: readonly [number, number, number] = [Number(attrs.v1), Number(attrs.v2), Number(attrs.v3)];
     if (value.some((index) => !Number.isInteger(index) || index < 0 || index >= vertices.length)) {
       throw new Error('3MF triangle references an invalid vertex');
     }
-    importSimpleFacet(annotations.color, triangleIndex, attrs.paint_color, (state) =>
-      entityId<'physical-filament'>(`import:3mf:paint-slot-${state}`),
+    const colorRoot = decodeImportedFacet(
+      attrs.paint_color,
+      'paint_color',
+      triangleIndex,
+      modelPath,
+      objectId,
+      facetDecodeBudget,
+      (state) =>
+        state <= MAX_BBS_COLOR_STATE ? entityId<'physical-filament'>(`import:3mf:paint-slot-${state}`) : undefined,
     );
-    importSimpleFacet(annotations.support, triangleIndex, attrs.paint_supports, (state) =>
-      state === 1 ? 'enforce' : 'block',
+    const supportRoot = decodeImportedFacet(
+      attrs.paint_supports,
+      'paint_supports',
+      triangleIndex,
+      modelPath,
+      objectId,
+      facetDecodeBudget,
+      (state) => (state === 1 ? 'enforce' : state === 2 ? 'block' : undefined),
     );
-    importSimpleFacet(annotations.seam, triangleIndex, attrs.paint_seam ?? attrs.seam, (state) =>
-      state === 1 ? 'prefer' : 'avoid',
+    const seamName = attrs.paint_seam !== undefined ? 'paint_seam' : undefined;
+    const seamRoot = decodeImportedFacet(
+      seamName ? attrs[seamName] : undefined,
+      seamName ?? 'paint_seam',
+      triangleIndex,
+      modelPath,
+      objectId,
+      facetDecodeBudget,
+      (state) => (state === 1 ? 'prefer' : state === 2 ? 'avoid' : undefined),
     );
-    importSimpleFacet(annotations.fuzzySkin, triangleIndex, attrs.paint_fuzzy_skin ?? attrs.fuzzy_skin, () => true);
-    const extensionAttributes = parseExtensionAttributes(triangle[1], namespaces, ['v1', 'v2', 'v3']);
+    const fuzzySkinName = attrs.paint_fuzzy_skin ? 'paint_fuzzy_skin' : attrs.paint_fuzzy ? 'paint_fuzzy' : undefined;
+    const fuzzySkinRoot = decodeImportedFacet(
+      fuzzySkinName ? attrs[fuzzySkinName] : undefined,
+      fuzzySkinName ?? 'paint_fuzzy_skin',
+      triangleIndex,
+      modelPath,
+      objectId,
+      facetDecodeBudget,
+      (state) => (state === 1 ? true : undefined),
+    );
+    colorRoots.push(colorRoot);
+    supportRoots.push(supportRoot);
+    seamRoots.push(seamRoot);
+    fuzzySkinRoots.push(fuzzySkinRoot);
+    const knownAttributes = ['v1', 'v2', 'v3'];
+    if (colorRoot) knownAttributes.push('paint_color');
+    if (supportRoot) knownAttributes.push('paint_supports');
+    if (seamRoot && seamName) knownAttributes.push(seamName);
+    if (fuzzySkinRoot && fuzzySkinName) knownAttributes.push(fuzzySkinName);
+    const extensionAttributes = parseExtensionAttributes(triangle[1], namespaces, knownAttributes);
     if (extensionAttributes.length > 0) {
       facetExtensionAttributes.push({ triangle: triangleIndex, attributes: extensionAttributes });
     }
     return value;
   });
+  const color = finalizeImportedFacetChannel(colorRoots, facetDecodeBudget);
+  const support = finalizeImportedFacetChannel(supportRoots, facetDecodeBudget);
+  const seam = finalizeImportedFacetChannel(seamRoots, facetDecodeBudget);
+  const fuzzySkin = finalizeImportedFacetChannel(fuzzySkinRoots, facetDecodeBudget);
+  annotations.color = color.assignments;
+  annotations.support = support.assignments;
+  annotations.seam = seam.assignments;
+  annotations.fuzzySkin = fuzzySkin.assignments;
+  if (color.refinement) {
+    annotations.refinement = {
+      ...(annotations.refinement ?? {}),
+      color: color.refinement,
+    };
+  }
+  if (support.refinement) {
+    annotations.refinement = {
+      ...(annotations.refinement ?? {}),
+      support: support.refinement,
+    };
+  }
+  if (seam.refinement) {
+    annotations.refinement = {
+      ...(annotations.refinement ?? {}),
+      seam: seam.refinement,
+    };
+  }
+  if (fuzzySkin.refinement) {
+    annotations.refinement = {
+      ...(annotations.refinement ?? {}),
+      fuzzySkin: fuzzySkin.refinement,
+    };
+  }
   return { vertices, triangles, annotations, facetExtensionAttributes };
 }
 
@@ -2525,23 +2767,88 @@ function modelUnitScaleMm(unit: string | undefined, path: string): number {
   }
 }
 
-function importSimpleFacet<T extends JsonValue>(
-  assignments: TriangleAssignments<T>[],
-  triangle: number,
-  encoded: string | undefined,
-  value: (state: number) => T,
-): void {
-  const state = decodeSimpleFacetState(encoded);
-  if (state > 0) assignments.push({ triangles: [triangle], value: value(state) });
+function facetAnnotationMaterializationUnits(annotations: FacetAnnotations, stopAfter: number): number {
+  let count = 0;
+  const channels = [
+    [annotations.color, annotations.refinement?.color],
+    [annotations.support, annotations.refinement?.support],
+    [annotations.seam, annotations.refinement?.seam],
+    [annotations.fuzzySkin, annotations.refinement?.fuzzySkin],
+    [annotations.brim, annotations.refinement?.brim],
+  ] as const;
+  for (const [assignments, encoding] of channels) {
+    if (encoding) {
+      const stack: FacetRefinementNode[] = [...encoding.roots];
+      while (stack.length > 0) {
+        const node = stack.pop()!;
+        count += 1;
+        if (count > stopAfter) return count;
+        if (node.kind === 'split') stack.push(...node.children);
+      }
+    }
+    for (const assignment of assignments) {
+      count += 1 + assignment.triangles.length;
+      if (count > stopAfter) return count;
+    }
+  }
+  return count;
 }
 
-function decodeSimpleFacetState(encoded: string | undefined): number {
-  if (!encoded || !/^[0-9a-f]+$/i.test(encoded)) return 0;
-  const reversed = [...encoded].reverse().map((digit) => Number.parseInt(digit, 16));
-  const code = reversed[0];
-  if ((code & 3) !== 0) return 0;
-  if ((code & 0xc) === 0xc) return reversed.length === 2 ? reversed[1] + 3 : 0;
-  return reversed.length === 1 ? code >> 2 : 0;
+function finalizeImportedFacetChannel<T extends JsonValue>(
+  roots: readonly (FacetRefinementNode<T> | undefined)[],
+  budget: BbsFacetDecodeBudget,
+): { assignments: TriangleAssignments<T>[]; refinement?: FacetRefinementEncoding<T> } {
+  if (!roots.some((root) => root?.kind === 'split')) {
+    const groups = new Map<string, TriangleAssignments<T>>();
+    roots.forEach((root, triangle) => {
+      if (root?.kind !== 'leaf' || root.state.kind !== 'assigned') return;
+      const key = canonicalStringify(root.state.value);
+      const group = groups.get(key) ?? { value: cloneJson(root.state.value), triangles: [] };
+      group.triangles.push(triangle);
+      groups.set(key, group);
+    });
+    return {
+      assignments: [...groups.entries()]
+        .sort(([left], [right]) => compareText(left, right))
+        .map(([, assignment]) => assignment),
+    };
+  }
+  const implicitRoots = roots.filter((root) => root === undefined).length;
+  budget.remainingNodes -= implicitRoots;
+  if (budget.remainingNodes < 0 || roots.length > ORCA_REFINEMENT_MAX_NODES) {
+    throw new Error('3MF facet refinement exceeds the aggregate node limit');
+  }
+  const encoding = normalizeFacetRefinementEncoding({
+    version: ORCA_REFINEMENT_ENCODING_VERSION,
+    roots: roots.map((root) => root ?? unpaintedBbsFacetRoot<T>()),
+  });
+  return {
+    assignments: facetAssignmentsFromRefinement(encoding),
+    ...(facetRefinementHasSplits(encoding) ? { refinement: encoding } : {}),
+  };
+}
+
+function decodeImportedFacet<T extends JsonValue>(
+  encoded: string | undefined,
+  attribute: string,
+  triangle: number,
+  modelPath: string,
+  objectId: number,
+  budget: BbsFacetDecodeBudget,
+  value: (state: number) => T | undefined,
+): FacetRefinementNode<T> | undefined {
+  if (encoded === undefined) return undefined;
+  try {
+    return decodeBbsFacetRoot(encoded, value, budget);
+  } catch (error) {
+    if (error instanceof BbsFacetCodecError) {
+      throw new Error(
+        `${modelPath} object ${objectId} triangle ${triangle} has invalid ${attribute}: ${error.message}`,
+        { cause: error },
+      );
+    }
+    throw error;
+  }
 }
 
 interface XmlOpeningTag {

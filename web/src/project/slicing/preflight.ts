@@ -1,5 +1,6 @@
 import { InMemoryAssetRepository, type AssetRepository } from '../assets';
 import { cloneJson, deepFreeze } from '../domain/canonical';
+import { visitFacetRefinementAssignedValues } from '../domain/facetRefinement';
 import type {
   CustomGcodeId,
   FilamentId,
@@ -373,6 +374,9 @@ function collectUsedFilaments(plate: ProjectPlate): Set<FilamentId> {
       const resolved = resolveFilament(object, volume).effective;
       if (resolved) used.add(resolved);
       for (const assignment of volume.annotations.color) used.add(assignment.value);
+      if (volume.annotations.refinement?.color) {
+        visitFacetRefinementAssignedValues(volume.annotations.refinement.color, (value) => used.add(value));
+      }
     }
     for (const range of object.layerRanges) {
       const resolved = resolveFilament(object, range).effective;

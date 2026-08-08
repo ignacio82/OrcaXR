@@ -1,4 +1,9 @@
 import { canonicalStringify, cloneJson, cloneProjectState } from '../domain/canonical';
+import {
+  facetAssignmentsFromRefinement,
+  facetRefinementHasSplits,
+  remapFacetRefinementValues,
+} from '../domain/facetRefinement';
 import type { FilamentId, LayerRangeId, ObjectId, PhysicalFilamentId, VolumeId } from '../domain/ids';
 import type { MixedFilament, ProjectState } from '../domain/model';
 import { findLayerRange, findObject, findVolume } from '../domain/selectors';
@@ -159,7 +164,18 @@ export class RemapFilamentsCommand extends SnapshotFilamentCommand {
         if (object.filamentId) object.filamentId = replacements.get(object.filamentId) ?? object.filamentId;
         for (const volume of object.volumes) {
           if (volume.filamentId) volume.filamentId = replacements.get(volume.filamentId) ?? volume.filamentId;
-          volume.annotations.color = remapFacetColors(volume.annotations.color, replacements);
+          const colorRefinement = volume.annotations.refinement?.color;
+          if (colorRefinement) {
+            const remapped = remapFacetRefinementValues(colorRefinement, (value) => replacements.get(value) ?? value);
+            volume.annotations.color = facetAssignmentsFromRefinement(remapped);
+            if (facetRefinementHasSplits(remapped)) volume.annotations.refinement!.color = remapped;
+            else {
+              delete volume.annotations.refinement!.color;
+              if (Object.keys(volume.annotations.refinement!).length === 0) delete volume.annotations.refinement;
+            }
+          } else {
+            volume.annotations.color = remapFacetColors(volume.annotations.color, replacements);
+          }
         }
         for (const range of object.layerRanges) {
           if (range.filamentId) range.filamentId = replacements.get(range.filamentId) ?? range.filamentId;

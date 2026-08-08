@@ -11,7 +11,7 @@
     {
       "id": "missing-paint-facet",
       "member": "3D/3dmodel.model",
-      "find": " paint_color=\"1F\"",
+      "find": " paint_color=\"8\"",
       "replace": "",
       "expectedDifference": "/facetAnnotations"
     },
@@ -39,4 +39,3 @@
     }
   ]
 }
-

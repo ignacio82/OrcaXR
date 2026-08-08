@@ -16,6 +16,7 @@ import {
   type ProjectArchiveSnapshot,
 } from '..';
 import { createProjectFixture } from './fixtures';
+import { encodeBbsFacetRoot } from '../serialization/bbsFacetCodec';
 
 const CORE_MODEL_PATH = '3D/3dmodel.model';
 
@@ -79,6 +80,369 @@ await test('emits a deterministic BBS-compatible core plus lossless canonical en
     sourceHash: snapshot.sourceHash,
   });
   assert.deepEqual(savedAgain.bytes, first.bytes);
+});
+
+await test('migrates legacy sparse false fuzzy-skin assignments to inherited state before v1 validation', async () => {
+  const serializer = new Bbs3mfProjectSerializer();
+  const saved = await serializer.serialize(archiveFixture());
+  const files = readSafeZip(saved.bytes);
+  const envelope = JSON.parse(text(files.get(ORCAXR_EXTENSION_PATH)!));
+  envelope.state.plates[0].objects[0].volumes[0].annotations.fuzzySkin = [{ value: false, triangles: [0] }];
+  files.set(ORCAXR_EXTENSION_PATH, new TextEncoder().encode(`${JSON.stringify(envelope)}\n`));
+
+  const reopened = await serializer.deserialize(writeDeterministicZip(files));
+  assert.deepEqual(reopened.state.plates[0].objects[0].volumes[0].annotations.fuzzySkin, []);
+  assert.match(reopened.warnings.join('\n'), /legacy false fuzzy-skin facet assignment/);
+
+  envelope.state.plates[0].objects[0].volumes[0].annotations.fuzzySkin = [{ value: false, triangles: [99] }];
+  files.set(ORCAXR_EXTENSION_PATH, new TextEncoder().encode(`${JSON.stringify(envelope)}\n`));
+  await assert.rejects(serializer.deserialize(writeDeterministicZip(files)), /Triangle must be in/);
+});
+
+await test('persists refined leaves and round-trips the exact BBS tree without the canonical envelope', async () => {
+  const serializer = new Bbs3mfProjectSerializer();
+  const snapshot = archiveFixture();
+  const volume = snapshot.state.plates[0].objects[0].volumes[0];
+  const [first, second] = snapshot.state.filaments.physical;
+  volume.annotations.color = [];
+  volume.annotations.refinement = {
+    color: {
+      version: 1,
+      roots: [
+        {
+          kind: 'split',
+          splitSides: 1,
+          specialSide: 0,
+          children: [
+            { kind: 'leaf', state: { kind: 'assigned', value: first.id } },
+            { kind: 'leaf', state: { kind: 'assigned', value: second.id } },
+          ],
+        },
+      ],
+    },
+    support: {
+      version: 1,
+      roots: [
+        {
+          kind: 'split',
+          splitSides: 1,
+          specialSide: 0,
+          children: [
+            { kind: 'leaf', state: { kind: 'assigned', value: 'enforce' } },
+            { kind: 'leaf', state: { kind: 'assigned', value: 'block' } },
+          ],
+        },
+      ],
+    },
+    seam: {
+      version: 1,
+      roots: [
+        {
+          kind: 'split',
+          splitSides: 1,
+          specialSide: 0,
+          children: [
+            { kind: 'leaf', state: { kind: 'assigned', value: 'prefer' } },
+            { kind: 'leaf', state: { kind: 'assigned', value: 'avoid' } },
+          ],
+        },
+      ],
+    },
+    fuzzySkin: {
+      version: 1,
+      roots: [
+        {
+          kind: 'split',
+          splitSides: 1,
+          specialSide: 0,
+          children: [
+            { kind: 'leaf', state: { kind: 'assigned', value: true } },
+            { kind: 'leaf', state: { kind: 'unpainted' } },
+          ],
+        },
+      ],
+    },
+    brim: {
+      version: 1,
+      roots: [
+        {
+          kind: 'split',
+          splitSides: 1,
+          specialSide: 0,
+          children: [
+            { kind: 'leaf', state: { kind: 'assigned', value: true } },
+            { kind: 'leaf', state: { kind: 'assigned', value: false } },
+          ],
+        },
+      ],
+    },
+  };
+  volume.annotations.support = [];
+  volume.annotations.seam = [];
+  volume.annotations.fuzzySkin = [];
+  volume.annotations.brim = [];
+  snapshot.sourceHash = projectFingerprint(snapshot.state);
+
+  const saved = await serializer.serialize(snapshot);
+  assert.match((saved.warnings ?? []).join('\n'), /refined brim facet annotations.*no standard brim-paint attribute/);
+  const core = text(readSafeZip(saved.bytes).get(CORE_MODEL_PATH)!);
+  assert.match(core, /paint_color="481"/);
+  assert.match(core, /paint_supports="481"/);
+  assert.match(core, /paint_seam="481"/);
+  assert.match(core, /paint_fuzzy_skin="401"/);
+  const files = readSafeZip(saved.bytes);
+  files.delete(ORCAXR_EXTENSION_PATH);
+  const reopened = await serializer.deserialize(writeDeterministicZip(files));
+  const importedVolume = reopened.state.plates[0].objects[0].volumes[0];
+  assert.deepEqual(importedVolume.annotations.color, []);
+  assert.equal(importedVolume.annotations.refinement?.color?.roots[0].kind, 'split');
+  assert.equal(importedVolume.annotations.refinement?.support?.roots[0].kind, 'split');
+  assert.equal(importedVolume.annotations.refinement?.seam?.roots[0].kind, 'split');
+  assert.equal(importedVolume.annotations.refinement?.fuzzySkin?.roots[0].kind, 'split');
+  const importedRoot = importedVolume.annotations.refinement!.color!.roots[0];
+  assert.deepEqual(
+    importedRoot.kind === 'split'
+      ? importedRoot.children.map((child) =>
+          child.kind === 'leaf' && child.state.kind === 'assigned' ? child.state.value : null,
+        )
+      : [],
+    reopened.state.filaments.physical.slice(0, 2).map((filament) => filament.id),
+  );
+  const resaved = await serializer.serialize({
+    state: reopened.state,
+    assets: reopened.assets,
+    sourceRevision: 1,
+    sourceHash: projectFingerprint(reopened.state),
+  });
+  assert.match(text(readSafeZip(resaved.bytes).get(CORE_MODEL_PATH)!), /paint_color="481"/);
+});
+
+await test('canonical facet attributes win over colliding preserved extension metadata', async () => {
+  const serializer = new Bbs3mfProjectSerializer();
+  const snapshot = archiveFixture();
+  const volume = snapshot.state.plates[0].objects[0].volumes[0];
+  volume.annotations.support = [{ value: 'enforce', triangles: [0] }];
+  volume.annotations.seam = [{ value: 'prefer', triangles: [0] }];
+  volume.annotations.fuzzySkin = [{ value: true, triangles: [0] }];
+  volume.extensionData = {
+    ...volume.extensionData,
+    'https://orcaxr.martinez.fyi/3mf/project/1/core-facet-attributes': [
+      {
+        triangle: 0,
+        attributes: [
+          { namespace: '', name: 'v1', value: '999' },
+          { namespace: '', name: 'paint_color', value: '4' },
+          { namespace: '', name: 'paint_supports', value: '8' },
+          { namespace: '', name: 'paint_seam', value: '8' },
+          { namespace: '', name: 'paint_fuzzy_skin', value: '8' },
+          { namespace: '', name: 'paint_fuzzy', value: '8' },
+          { namespace: 'urn:vendor:facet', name: 'face-tag', value: 'preserve-me' },
+        ],
+      },
+    ],
+  };
+  snapshot.sourceHash = projectFingerprint(snapshot.state);
+
+  const core = text(readSafeZip((await serializer.serialize(snapshot)).bytes).get(CORE_MODEL_PATH)!);
+  assert.match(core, /<triangle v1="0" v2="1" v3="2"/);
+  assert.match(core, /paint_color="0C"/);
+  assert.match(core, /paint_supports="4"/);
+  assert.match(core, /paint_seam="4"/);
+  assert.match(core, /paint_fuzzy_skin="4"/);
+  assert.match(core, /:face-tag="preserve-me"/);
+  assert.doesNotMatch(core, /v1="999"|paint_color="4"|paint_supports="8"|paint_seam="8"/);
+  assert.doesNotMatch(core, /paint_fuzzy_skin="8"| paint_fuzzy=/);
+});
+
+await test('rejects malformed, deep, trailing, and unresolved BBS facet paint atomically', async () => {
+  const serializer = new Bbs3mfProjectSerializer();
+  const snapshot = archiveFixture();
+  const volume = snapshot.state.plates[0].objects[0].volumes[0];
+  volume.annotations.color = [];
+  volume.annotations.refinement = {
+    color: {
+      version: 1,
+      roots: [
+        {
+          kind: 'split',
+          splitSides: 1,
+          specialSide: 0,
+          children: [
+            { kind: 'leaf', state: { kind: 'assigned', value: snapshot.state.filaments.physical[0].id } },
+            { kind: 'leaf', state: { kind: 'assigned', value: snapshot.state.filaments.physical[1].id } },
+          ],
+        },
+      ],
+    },
+  };
+  snapshot.sourceHash = projectFingerprint(snapshot.state);
+  const saved = await serializer.serialize(snapshot);
+  const deepStream = [...new Array(65).fill(1), 0, ...new Array(65).fill(0)];
+  const deep = deepStream
+    .reverse()
+    .map((nibble) => nibble.toString(16))
+    .join('');
+  for (const [encoded, message] of [
+    ['1', /truncated/],
+    ['4481', /trailing data/],
+    [deep, /depth limit/],
+  ] as const) {
+    const files = readSafeZip(saved.bytes);
+    files.delete(ORCAXR_EXTENSION_PATH);
+    files.set(
+      CORE_MODEL_PATH,
+      new TextEncoder().encode(
+        text(files.get(CORE_MODEL_PATH)!).replace('paint_color="481"', `paint_color="${encoded}"`),
+      ),
+    );
+    await assert.rejects(serializer.deserialize(writeDeterministicZip(files)), message);
+  }
+  const unresolved = readSafeZip(saved.bytes);
+  unresolved.delete(ORCAXR_EXTENSION_PATH);
+  unresolved.set(
+    CORE_MODEL_PATH,
+    new TextEncoder().encode(text(unresolved.get(CORE_MODEL_PATH)!).replace('paint_color="481"', 'paint_color="1C"')),
+  );
+  await assert.rejects(serializer.deserialize(writeDeterministicZip(unresolved)), /unavailable material slot 4/);
+});
+
+await test('bounds facet trees across unique meshes and repeated component materialization', async () => {
+  const serializer = new Bbs3mfProjectSerializer();
+  const saved = await serializer.serialize(archiveFixture());
+  const baseFiles = readSafeZip(saved.bytes);
+  baseFiles.delete(ORCAXR_EXTENSION_PATH);
+  const baseCore = text(baseFiles.get(CORE_MODEL_PATH)!).replace(/paint_color="[^"]+"/, 'paint_color="481"');
+  const meshObject = / {2}<object id="1"[\s\S]*? {2}<\/object>/.exec(baseCore)?.[0];
+  const component = / {4}<component\b[^>]*objectid="1"[^>]*\/>/.exec(baseCore)?.[0];
+  assert.ok(meshObject && component, 'fixture must contain one mesh object and one component edge');
+
+  const duplicateMesh = meshObject.replace('id="1"', 'id="3"');
+  const uniqueMeshCore = baseCore
+    .replace('  <object id="2"', `${duplicateMesh}\n  <object id="2"`)
+    .replace(component, `${component}\n${component.replace('objectid="1"', 'objectid="3"')}`);
+  const uniqueMeshFiles = new Map(baseFiles);
+  uniqueMeshFiles.set(CORE_MODEL_PATH, new TextEncoder().encode(uniqueMeshCore));
+  const boundedDecode = new Bbs3mfProjectSerializer({ maxImportedFacetRefinementNodes: 5 });
+  await assert.rejects(boundedDecode.deserialize(writeDeterministicZip(uniqueMeshFiles)), /node limit/);
+
+  const repeatedCore = baseCore.replace(component, `${component}\n${component}`);
+  const repeatedFiles = new Map(baseFiles);
+  repeatedFiles.set(CORE_MODEL_PATH, new TextEncoder().encode(repeatedCore));
+  const boundedMaterialization = new Bbs3mfProjectSerializer({
+    maxImportedFacetAnnotationMaterializationUnits: 5,
+  });
+  await assert.rejects(
+    boundedMaterialization.deserialize(writeDeterministicZip(repeatedFiles)),
+    /Expanded 3MF component facet annotations exceed the materialization limit of 5/,
+  );
+
+  const plainLeafCore = text(baseFiles.get(CORE_MODEL_PATH)!)
+    .replace(/paint_color="[^"]+"/, 'paint_color="4"')
+    .replace(component, `${component}\n${component}`);
+  const plainLeafFiles = new Map(baseFiles);
+  plainLeafFiles.set(CORE_MODEL_PATH, new TextEncoder().encode(plainLeafCore));
+  await assert.rejects(
+    new Bbs3mfProjectSerializer({ maxImportedFacetAnnotationMaterializationUnits: 3 }).deserialize(
+      writeDeterministicZip(plainLeafFiles),
+    ),
+    /Expanded 3MF component facet annotations exceed the materialization limit of 3/,
+  );
+
+  const mixedCore = repeatedCore.replace('paint_color="481"', 'paint_color="481" paint_supports="4"');
+  const mixedFiles = new Map(baseFiles);
+  mixedFiles.set(CORE_MODEL_PATH, new TextEncoder().encode(mixedCore));
+  await assert.rejects(
+    new Bbs3mfProjectSerializer({ maxImportedFacetAnnotationMaterializationUnits: 9 }).deserialize(
+      writeDeterministicZip(mixedFiles),
+    ),
+    /Expanded 3MF component facet annotations exceed the materialization limit of 9/,
+  );
+});
+
+await test('imports the pinned legacy paint_fuzzy attribute and enforces the 64-slot color consumer cap', async () => {
+  const serializer = new Bbs3mfProjectSerializer();
+  const fuzzySnapshot = archiveFixture();
+  fuzzySnapshot.state.plates[0].objects[0].volumes[0].annotations.fuzzySkin = [{ triangles: [0], value: true }];
+  fuzzySnapshot.sourceHash = projectFingerprint(fuzzySnapshot.state);
+  const fuzzySaved = await serializer.serialize(fuzzySnapshot);
+  const fuzzyFiles = readSafeZip(fuzzySaved.bytes);
+  fuzzyFiles.delete(ORCAXR_EXTENSION_PATH);
+  fuzzyFiles.set(
+    CORE_MODEL_PATH,
+    new TextEncoder().encode(
+      text(fuzzyFiles.get(CORE_MODEL_PATH)!).replace('paint_fuzzy_skin="4"', 'paint_fuzzy_skin="" paint_fuzzy="4"'),
+    ),
+  );
+  const fuzzyReopened = await serializer.deserialize(writeDeterministicZip(fuzzyFiles));
+  assert.deepEqual(fuzzyReopened.state.plates[0].objects[0].volumes[0].annotations.fuzzySkin, [
+    { triangles: [0], value: true },
+  ]);
+
+  const unavailableSplit = archiveFixture();
+  unavailableSplit.state.filaments.mixed[0].enabled = false;
+  const unavailableVolume = unavailableSplit.state.plates[0].objects[0].volumes[0];
+  unavailableVolume.annotations.color = [];
+  unavailableVolume.annotations.refinement = {
+    color: {
+      version: 1,
+      roots: [
+        {
+          kind: 'split',
+          splitSides: 1,
+          specialSide: 0,
+          children: [
+            { kind: 'leaf', state: { kind: 'assigned', value: unavailableSplit.state.filaments.mixed[0].id } },
+            { kind: 'leaf', state: { kind: 'assigned', value: unavailableSplit.state.filaments.physical[0].id } },
+          ],
+        },
+      ],
+    },
+  };
+  unavailableSplit.sourceHash = projectFingerprint(unavailableSplit.state);
+  const unavailableSaved = await serializer.serialize(unavailableSplit);
+  assert.doesNotMatch(text(readSafeZip(unavailableSaved.bytes).get(CORE_MODEL_PATH)!), /paint_color=/);
+  assert.match((unavailableSaved.warnings ?? []).join('\n'), /cannot be assigned a BBS material slot/);
+  assert.match((unavailableSaved.warnings ?? []).join('\n'), /entire standard BBS paint_color root was omitted/);
+
+  const boundary = archiveFixture();
+  boundary.state.filaments.mixed = [];
+  const template = boundary.state.filaments.physical[0];
+  while (boundary.state.filaments.physical.length < 65) {
+    const toolId = boundary.state.filaments.physical.length;
+    boundary.state.filaments.physical.push({
+      ...template,
+      id: entityId<'physical-filament'>(`import:test:paint-boundary-${toolId + 1}`),
+      name: `Boundary ${toolId + 1}`,
+      toolId,
+    });
+  }
+  boundary.state.printer.toolCount = 65;
+  const boundaryVolume = boundary.state.plates[0].objects[0].volumes[0];
+  boundaryVolume.annotations.color = [{ triangles: [0], value: boundary.state.filaments.physical[63].id }];
+  boundary.sourceHash = projectFingerprint(boundary.state);
+  const state64 = await serializer.serialize(boundary);
+  const encoded64 = encodeBbsFacetRoot({ kind: 'leaf', state: { kind: 'assigned', value: 64 } }, (value) => value);
+  assert.match(text(readSafeZip(state64.bytes).get(CORE_MODEL_PATH)!), new RegExp(`paint_color="${encoded64}"`));
+
+  boundaryVolume.annotations.color = [{ triangles: [0], value: boundary.state.filaments.physical[64].id }];
+  boundary.sourceHash = projectFingerprint(boundary.state);
+  const state65 = await serializer.serialize(boundary);
+  assert.doesNotMatch(text(readSafeZip(state65.bytes).get(CORE_MODEL_PATH)!), /paint_color=/);
+  assert.match((state65.warnings ?? []).join('\n'), /supports 64 material states/);
+
+  const invalid65 = readSafeZip(state64.bytes);
+  invalid65.delete(ORCAXR_EXTENSION_PATH);
+  const encoded65 = encodeBbsFacetRoot({ kind: 'leaf', state: { kind: 'assigned', value: 65 } }, (value) => value);
+  invalid65.set(
+    CORE_MODEL_PATH,
+    new TextEncoder().encode(
+      text(invalid65.get(CORE_MODEL_PATH)!).replace(`paint_color="${encoded64}"`, `paint_color="${encoded65}"`),
+    ),
+  );
+  await assert.rejects(
+    serializer.deserialize(writeDeterministicZip(invalid65)),
+    /state 65 is invalid for this channel/,
+  );
 });
 
 await test('preserves newly encountered safe ZIP entries byte-for-byte across reopen-save', async () => {
@@ -522,7 +886,7 @@ await test('imports the structural parity oracle and retains unsupported BBS met
   assert.match(modelRelationships, /Type="http:\/\/schemas\.orcaxr\.test\/relationships\/custom-gcode"/);
   assert.match(modelRelationships, /Type="http:\/\/schemas\.orcaxr\.test\/relationships\/extension"/);
   assert.match(projectedCore, /:face-tag="preserve-me"/);
-  assert.match(projectedCore, /paint_color="1F"/);
+  assert.match(projectedCore, /paint_color="8"/);
   assert.match(projectedCore, /:stable-id="object-assembly"/);
   assert.match(projectedCore, /:instance-id="instance-a"/);
 

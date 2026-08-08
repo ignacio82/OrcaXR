@@ -9,7 +9,20 @@ import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import type { FilamentId, InstanceId, LayerRangeId, ObjectId, PlateId, VolumeId } from '../project/domain/ids';
 import { entityId, UuidIdSource } from '../project/domain/ids';
-import type { ConfigMap, JsonValue, Transform, Vec3 } from '../project/domain/model';
+import type {
+  ConfigMap,
+  FacetAnnotations,
+  FacetRefinementEncoding,
+  JsonValue,
+  Transform,
+  Vec3,
+} from '../project/domain/model';
+import { materializeFacetRefinement, type FacetAnnotationGuard } from '../project/annotations';
+import {
+  facetAssignmentsFromRefinement,
+  facetRefinementAssignedLeafCount,
+  facetRefinementHasSplits,
+} from '../project/domain/facetRefinement';
 import type { FullSpectrumAutoPairGenerationPreferences } from '../project/filaments/autoPairReconciliation';
 import type { ImportCommitConfirmation, ProjectImportPreview } from '../project/import/types';
 import type { ObjectTreeEntityRef } from '../project/objects';
@@ -75,6 +88,7 @@ import {
   type MultiInstanceTransformOrigin,
 } from './multiInstanceTransform';
 import { deriveLiveProfilePreflightConstraints, LiveProfileSlicePreflight } from './ProfilePreflightConstraints';
+import { PaintOverlayRegistry } from './PaintOverlayRegistry';
 
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
@@ -903,7 +917,7 @@ export class OrcaWorkspace extends xb.Script {
     this.sceneGestureGuard.dispose();
     this.drag = null;
     this.cancelPaintStroke();
-    for (const [volumeId, overlay] of [...this.paintOverlays]) this.disposeOverlay(volumeId, overlay);
+    this.paintOverlays.clear((overlay) => this.disposeOverlayResource(overlay));
     this.paintServiceInstance = null;
     this.onPaintStateChanged = null;
     for (const dispose of this.lifecycleDisposers.splice(0).reverse()) dispose();
@@ -1366,12 +1380,18 @@ export class OrcaWorkspace extends xb.Script {
   // ---------------------------------------------------------------------------
 
   private paintServiceInstance: PaintStrokeService | null = null;
-  private paintOverlays = new Map<VolumeId, THREE.Mesh>();
+  private paintOverlays = new PaintOverlayRegistry<THREE.Mesh, VolumeId, THREE.Mesh>();
   private paintPreviewOverlay: THREE.Mesh | null = null;
+  private paintPreviewHiddenOverlay: THREE.Mesh | null = null;
   private paintStroke: {
     volumeId: VolumeId;
     display: THREE.Mesh;
     triangles: Set<number>;
+    channel: PaintChannel;
+    mode: 'paint' | 'erase';
+    value?: JsonValue;
+    refinement?: FacetRefinementEncoding;
+    guard?: FacetAnnotationGuard;
     previousLocal?: THREE.Vector3;
     pointerId: number;
   } | null = null;
@@ -1394,8 +1414,11 @@ export class OrcaWorkspace extends xb.Script {
   public getPaintedFacetCount(channel?: PaintChannel, plateId?: PlateId): number {
     const target = channel ?? PAINT_TOOL_CHANNELS[this.tool] ?? this.paintChannel;
     let total = 0;
-    for (const assignments of this.canonicalProject.getFacetsByVolume(target, plateId ?? this.activePlateId).values()) {
-      for (const assignment of assignments) total += assignment.triangles.length;
+    for (const snapshot of this.canonicalProject
+      .getFacetOverlayByVolume(target, plateId ?? this.activePlateId)
+      .values()) {
+      if (snapshot.refinement) total += facetRefinementAssignedLeafCount(snapshot.refinement);
+      else for (const assignment of snapshot.assignments) total += assignment.triangles.length;
     }
     return total;
   }
@@ -1573,10 +1596,14 @@ export class OrcaWorkspace extends xb.Script {
     for (const target of targets) {
       const [hit] = raycaster.intersectObject(target.display, false);
       if (!hit || hit.faceIndex === undefined || hit.faceIndex === null) continue;
+      const value = this.activePaintValue();
       this.paintStroke = {
         volumeId: target.volumeId,
         display: target.display,
         triangles: new Set<number>(),
+        channel: this.paintChannel,
+        mode: this.paintMode,
+        ...(value !== undefined ? { value } : {}),
         pointerId,
       };
       this.samplePaintStroke(hit);
@@ -1604,13 +1631,25 @@ export class OrcaWorkspace extends xb.Script {
           plateZMm: local.z,
         },
         settings: this.paintSettings,
-        channel: this.paintChannel,
-        ...(this.activePaintValue() !== undefined ? { value: this.activePaintValue() as never } : {}),
-        mode: this.paintMode,
+        channel: stroke.channel,
+        ...(stroke.value !== undefined ? { value: stroke.value as never } : {}),
+        mode: stroke.mode,
+        ...(stroke.refinement ? { refinement: stroke.refinement as never } : {}),
+        ...(stroke.guard ? { guard: stroke.guard } : {}),
       });
       for (const triangle of preview.triangleIndices) stroke.triangles.add(triangle);
+      if (preview.refinementAfter) stroke.refinement = preview.refinementAfter;
+      stroke.guard ??= preview.guard;
       stroke.previousLocal = local;
-      this.renderPaintPreview(stroke.display, stroke.triangles);
+      this.renderPaintPreview(
+        stroke.display,
+        stroke.triangles,
+        preview.refinementAfter,
+        preview.topologyRevision,
+        preview.triangleCount,
+        stroke.channel,
+        stroke.value,
+      );
     } catch (error) {
       this.setStatus(`Paint failed: ${(error as Error).message}`);
       this.cancelPaintStroke();
@@ -1624,16 +1663,25 @@ export class OrcaWorkspace extends xb.Script {
     this.clearPaintPreview();
     if (!stroke || stroke.triangles.size === 0) return;
     try {
-      const result = this.paintService.commitTriangles({
-        volumeId: stroke.volumeId,
-        triangleIndices: [...stroke.triangles].sort((left, right) => left - right),
-        channel: this.paintChannel,
-        ...(this.activePaintValue() !== undefined ? { value: this.activePaintValue() as never } : {}),
-        mode: this.paintMode,
-      });
+      const result = stroke.refinement
+        ? this.paintService.commitRefinement({
+            volumeId: stroke.volumeId,
+            channel: stroke.channel,
+            encoding: stroke.refinement as never,
+            mode: stroke.mode,
+            ...(stroke.guard ? { guard: stroke.guard } : {}),
+          })
+        : this.paintService.commitTriangles({
+            volumeId: stroke.volumeId,
+            triangleIndices: [...stroke.triangles].sort((left, right) => left - right),
+            channel: stroke.channel,
+            ...(stroke.value !== undefined ? { value: stroke.value as never } : {}),
+            mode: stroke.mode,
+            ...(stroke.guard ? { guard: stroke.guard } : {}),
+          });
       if (result.status === 'applied') {
-        const label = channelLabel(this.paintChannel);
-        this.setStatus(this.paintMode === 'erase' ? `Erased ${label} facets.` : `Painted ${label} facets.`);
+        const label = channelLabel(stroke.channel);
+        this.setStatus(stroke.mode === 'erase' ? `Erased ${label} facets.` : `Painted ${label} facets.`);
       }
     } catch (error) {
       this.setStatus(`Paint failed: ${(error as Error).message}`);
@@ -1652,20 +1700,28 @@ export class OrcaWorkspace extends xb.Script {
     // The visible overlay is the channel the active tool authors; Prepare keeps
     // showing colour so filament intent stays visible outside painting.
     const channel = PAINT_TOOL_CHANNELS[this.tool] ?? 'color';
-    const facets = this.canonicalProject.getFacetsByVolume(channel, this.activePlateId);
+    const facets = this.canonicalProject.getFacetOverlayByVolume(channel, this.activePlateId);
     const colors = channelOverlayColors(channel, paintPaletteColors(this.getPaintPalette(true)));
-    const live = new Set<VolumeId>();
+    const live = new Set<THREE.Mesh>();
     for (const target of this.paintTargets()) {
-      const assignments = facets.get(target.volumeId);
-      const existing = this.paintOverlays.get(target.volumeId);
-      if (!assignments || assignments.length === 0) {
-        if (existing) this.disposeOverlay(target.volumeId, existing);
+      const snapshot = facets.get(target.volumeId);
+      const existing = this.paintOverlays.get(target.display);
+      if (!snapshot) {
+        if (existing) this.disposeOverlay(target.display, existing);
         continue;
       }
-      live.add(target.volumeId);
-      const geometry = this.buildPaintOverlayGeometry(target.display, assignments, colors);
+      live.add(target.display);
+      const geometry = this.buildPaintOverlayGeometry(
+        target.display,
+        snapshot.assignments,
+        colors,
+        snapshot.refinement,
+        snapshot.topologyRevision,
+        snapshot.triangleCount,
+        channel,
+      );
       if (!geometry) {
-        if (existing) this.disposeOverlay(target.volumeId, existing);
+        if (existing) this.disposeOverlay(target.display, existing);
         continue;
       }
       if (existing) {
@@ -1678,45 +1734,100 @@ export class OrcaWorkspace extends xb.Script {
         overlay.raycast = () => {};
         overlay.renderOrder = 2;
         target.display.add(overlay);
-        this.paintOverlays.set(target.volumeId, overlay);
+        this.paintOverlays.set(target.display, target.volumeId, overlay);
       }
     }
-    for (const [volumeId, overlay] of [...this.paintOverlays]) {
-      if (!live.has(volumeId)) this.disposeOverlay(volumeId, overlay);
-    }
+    this.paintOverlays.prune(live, (overlay) => this.disposeOverlayResource(overlay));
   }
 
-  private disposeOverlay(volumeId: VolumeId, overlay: THREE.Mesh): void {
+  private disposeOverlay(display: THREE.Mesh, overlay: THREE.Mesh): void {
+    this.paintOverlays.delete(display);
+    this.disposeOverlayResource(overlay);
+  }
+
+  private disposeOverlayResource(overlay: THREE.Mesh): void {
     overlay.removeFromParent();
     overlay.geometry.dispose();
     (overlay.material as THREE.Material).dispose();
-    this.paintOverlays.delete(volumeId);
   }
 
   private buildPaintOverlayGeometry(
     display: THREE.Mesh,
     assignments: readonly { triangles: number[]; value: JsonValue }[],
     colors: ReadonlyMap<string, string>,
+    refinement?: FacetRefinementEncoding,
+    topologyRevision = 0,
+    triangleCount?: number,
+    channel: PaintChannel = this.paintChannel,
   ): THREE.BufferGeometry | null {
     const source = display.geometry;
     const position = source.getAttribute('position');
     const index = source.getIndex();
     if (!position || !index) return null;
-    const triangles: { triangle: number; color: THREE.Color }[] = [];
-    for (const assignment of assignments) {
-      const color = new THREE.Color(colors.get(String(assignment.value)) ?? '#ffffff');
-      for (const triangle of assignment.triangles) triangles.push({ triangle, color });
+    const painted: Array<{ vertices: readonly [number, number, number]; color: THREE.Color }> = [];
+    let renderVertices: readonly Vec3[] | undefined;
+    if (refinement) {
+      const sourceMesh = {
+        vertices: Array.from(
+          { length: position.count },
+          (_, vertex) => [position.getX(vertex), position.getY(vertex), position.getZ(vertex)] as const,
+        ),
+        triangles: Array.from(
+          { length: index.count / 3 },
+          (_, triangle) =>
+            [index.getX(triangle * 3), index.getX(triangle * 3 + 1), index.getX(triangle * 3 + 2)] as const,
+        ),
+      };
+      const channelAssignments: FacetAnnotations = {
+        topologyRevision,
+        color: [],
+        support: [],
+        seam: [],
+        fuzzySkin: [],
+        brim: [],
+        refinement: { [channel]: refinement },
+      } as FacetAnnotations;
+      channelAssignments[channel] = assignments as never;
+      const materialized = materializeFacetRefinement({
+        mesh: sourceMesh,
+        annotations: channelAssignments,
+        channel,
+        guard: { topologyRevision, triangleCount: triangleCount ?? sourceMesh.triangles.length },
+        refinement,
+      });
+      renderVertices = materialized.vertices;
+      for (const leaf of materialized.leaves) {
+        if (leaf.state.kind !== 'assigned') continue;
+        painted.push({
+          vertices: leaf.vertexIndices,
+          color: new THREE.Color(colors.get(String(leaf.state.value)) ?? '#ffffff'),
+        });
+      }
+    } else {
+      renderVertices = Array.from(
+        { length: position.count },
+        (_, vertex) => [position.getX(vertex), position.getY(vertex), position.getZ(vertex)] as const,
+      );
+      for (const assignment of assignments) {
+        const color = new THREE.Color(colors.get(String(assignment.value)) ?? '#ffffff');
+        for (const triangle of assignment.triangles) {
+          painted.push({
+            vertices: [index.getX(triangle * 3), index.getX(triangle * 3 + 1), index.getX(triangle * 3 + 2)],
+            color,
+          });
+        }
+      }
     }
-    if (triangles.length === 0) return null;
-    const positions = new Float32Array(triangles.length * 9);
-    const vertexColors = new Float32Array(triangles.length * 9);
-    triangles.forEach(({ triangle, color }, slot) => {
+    if (painted.length === 0) return null;
+    const positions = new Float32Array(painted.length * 9);
+    const vertexColors = new Float32Array(painted.length * 9);
+    painted.forEach(({ vertices, color }, slot) => {
       for (let corner = 0; corner < 3; corner += 1) {
-        const vertex = index.getX(triangle * 3 + corner);
+        const vertex = renderVertices![vertices[corner]];
         const offset = slot * 9 + corner * 3;
-        positions[offset] = position.getX(vertex);
-        positions[offset + 1] = position.getY(vertex);
-        positions[offset + 2] = position.getZ(vertex);
+        positions[offset] = vertex[0];
+        positions[offset + 1] = vertex[1];
+        positions[offset + 2] = vertex[2];
         vertexColors[offset] = color.r;
         vertexColors[offset + 1] = color.g;
         vertexColors[offset + 2] = color.b;
@@ -1730,20 +1841,45 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Show the in-flight selection before it becomes a canonical command. */
-  private renderPaintPreview(display: THREE.Mesh, triangles: ReadonlySet<number>): void {
+  private renderPaintPreview(
+    display: THREE.Mesh,
+    triangles: ReadonlySet<number>,
+    refinement?: FacetRefinementEncoding,
+    topologyRevision = 0,
+    triangleCount?: number,
+    channel: PaintChannel = this.paintChannel,
+    value: JsonValue | undefined = this.activePaintValue(),
+  ): void {
     this.clearPaintPreview();
     if (triangles.size === 0) return;
-    const value = this.activePaintValue();
-    const previewColor =
-      value === undefined
-        ? '#ffffff'
-        : (channelOverlayColors(this.paintChannel, paintPaletteColors(this.getPaintPalette(true))).get(String(value)) ??
-          '#ffffff');
-    const geometry = this.buildPaintOverlayGeometry(
-      display,
-      [{ triangles: [...triangles], value: 'preview' }],
-      new Map([['preview', previewColor]]),
-    );
+    let geometry: THREE.BufferGeometry | null;
+    if (refinement) {
+      const canonicalOverlay = this.paintOverlays.get(display);
+      if (canonicalOverlay) {
+        canonicalOverlay.visible = false;
+        this.paintPreviewHiddenOverlay = canonicalOverlay;
+      }
+      geometry = this.buildPaintOverlayGeometry(
+        display,
+        facetAssignmentsFromRefinement(refinement),
+        channelOverlayColors(channel, paintPaletteColors(this.getPaintPalette(true))),
+        facetRefinementHasSplits(refinement) ? refinement : undefined,
+        topologyRevision,
+        triangleCount,
+        channel,
+      );
+    } else {
+      const previewColor =
+        value === undefined
+          ? '#ffffff'
+          : (channelOverlayColors(channel, paintPaletteColors(this.getPaintPalette(true))).get(String(value)) ??
+            '#ffffff');
+      geometry = this.buildPaintOverlayGeometry(
+        display,
+        [{ triangles: [...triangles], value: 'preview' }],
+        new Map([['preview', previewColor]]),
+      );
+    }
     if (!geometry) return;
     const preview = new THREE.Mesh(geometry, PAINT_PREVIEW_MATERIAL.clone());
     preview.name = 'paint-preview';
@@ -1754,6 +1890,10 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   private clearPaintPreview(): void {
+    if (this.paintPreviewHiddenOverlay) {
+      this.paintPreviewHiddenOverlay.visible = true;
+      this.paintPreviewHiddenOverlay = null;
+    }
     if (!this.paintPreviewOverlay) return;
     this.paintPreviewOverlay.removeFromParent();
     this.paintPreviewOverlay.geometry.dispose();

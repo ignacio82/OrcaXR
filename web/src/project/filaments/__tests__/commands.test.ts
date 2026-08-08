@@ -224,6 +224,55 @@ test('remaps many source IDs across every reference and coalesces mixed gradient
   assert.deepEqual(assets.capture(), assetsBefore);
 });
 
+test('many-to-one remap collapses refined color leaves and remains byte-exact through undo and redo', () => {
+  const fixture = createProjectFixture();
+  const state = cloneProjectState(fixture.state);
+  const destination: PhysicalFilament = {
+    id: new UuidIdSource(seededRandom(0x4513)).next('physical-filament'),
+    name: 'Merged head',
+    toolId: 2,
+    material: 'PLA',
+    color: '#00ff00',
+    config: {},
+    enabled: true,
+  };
+  state.printer.toolCount = 3;
+  state.filaments.physical.push(destination);
+  state.filaments.mixed = [];
+  const annotations = state.plates[0].objects[0].volumes[0].annotations;
+  annotations.color = [];
+  annotations.refinement = {
+    color: {
+      version: 1,
+      roots: [
+        {
+          kind: 'split',
+          splitSides: 1,
+          specialSide: 0,
+          children: [
+            { kind: 'leaf', state: { kind: 'assigned', value: fixture.ids.physical0 } },
+            { kind: 'leaf', state: { kind: 'assigned', value: fixture.ids.physical1 } },
+          ],
+        },
+      ],
+    },
+  };
+  const { project, bus } = harness(state);
+  const before = bytes(project);
+
+  bus.execute(new RemapFilamentsCommand([fixture.ids.physical0, fixture.ids.physical1], destination.id));
+  const remapped = project.getSnapshot().state.plates[0].objects[0].volumes[0].annotations;
+  assert.deepEqual(remapped.color, [{ value: destination.id, triangles: [0] }]);
+  assert.equal(remapped.refinement, undefined);
+  const after = bytes(project);
+  assert.equal(bus.getHistorySnapshot().undoCount, 1);
+
+  assert.equal(bus.undo(), true);
+  assert.equal(bytes(project), before);
+  assert.equal(bus.redo(), true);
+  assert.equal(bytes(project), after);
+});
+
 test('rejects self/cyclic remaps and omits an unused-source remap without dirtying history', () => {
   const fixture = createProjectFixture();
   assert.throws(

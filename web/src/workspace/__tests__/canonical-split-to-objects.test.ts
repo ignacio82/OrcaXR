@@ -216,6 +216,60 @@ await test('promotes existing model volumes while preserving volume identity, an
   workspace.dispose();
 });
 
+await test('rejects connected-component splitting when paint exists only in refined leaves', async () => {
+  const fixture = createProjectFixture();
+  const state = cloneProjectState(fixture.state);
+  const geometry = indexedTetrahedra(1);
+  const asset = encodeIndexedMeshAsset({
+    id: fixture.ids.asset,
+    positions: geometry.getAttribute('position').array,
+    indices: geometry.getIndex()!.array,
+    sourceFilename: 'refined-tetrahedron.stl',
+  });
+  state.sourceAssets = [asset.descriptor];
+  const object = state.plates[0].objects[0];
+  object.layerRanges = [];
+  const volume = object.volumes[0];
+  volume.source.triangleCount = 4;
+  volume.annotations.color = [];
+  volume.annotations.refinement = {
+    color: {
+      version: 1,
+      roots: [
+        {
+          kind: 'split',
+          splitSides: 1,
+          specialSide: 0,
+          children: [
+            { kind: 'leaf', state: { kind: 'assigned', value: fixture.ids.physical0 } },
+            { kind: 'leaf', state: { kind: 'assigned', value: fixture.ids.physical1 } },
+          ],
+        },
+        { kind: 'leaf', state: { kind: 'unpainted' } },
+        { kind: 'leaf', state: { kind: 'unpainted' } },
+        { kind: 'leaf', state: { kind: 'unpainted' } },
+      ],
+    },
+  };
+  const archive = await new Bbs3mfProjectSerializer().serialize({
+    state,
+    assets: [asset],
+    sourceRevision: 0,
+    sourceHash: projectFingerprint(state),
+  });
+  const workspace = controller();
+  await workspace.openCanonical3mf(archive.bytes);
+  workspace.selectInstance(fixture.ids.instance);
+  const before = canonicalSnapshot(workspace);
+
+  assert.throws(() => workspace.getSplitToObjectsConfirmation(), /painted facet annotations/);
+  assert.equal(canonicalSnapshot(workspace), before);
+  assert.equal(workspace.getSummary().history.undoCount, 0);
+
+  geometry.dispose();
+  workspace.dispose();
+});
+
 await test('rejects stale, unselected, oversized, connected, and lossy requests without canonical mutation', () => {
   const staleWorkspace = controller();
   const staleGeometry = indexedTetrahedra(2);

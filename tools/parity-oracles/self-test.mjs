@@ -116,7 +116,7 @@ assert.ok(
 );
 assert.ok(
   summary.facetAnnotations.some(
-    (annotation) => annotation.payload.paint_color === "1F",
+    (annotation) => annotation.payload.paint_color === "8",
   ),
 );
 assert.ok(

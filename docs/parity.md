@@ -308,9 +308,9 @@ Local starting seams: [`ActionContext.ts`](../web/src/actions/ActionContext.ts),
   - **Current:** one registry instance and invocation guard is constructed at the composition root
     and injected into every catalogued surface. Empty-state/native-XR load, targeted plate add/
     delete, and tool-close aliases resolve through that same instance; bounded invocation data
-    preserves exact plate, Objects-tree, semantic-edit, settings, and virtual-filament targeting. All 149 actions have exactly one real parity-task owner and
+    preserves exact plate, Objects-tree, semantic-edit, settings, and virtual-filament targeting. All 154 actions have exactly one real parity-task owner and
     containing-phase anchor; metadata-only IDs explicitly provide no behavioral evidence. Current
-    status is 106 partial, 43 unavailable, and zero implemented. Remaining direct contextual controls,
+    status is 112 partial, 42 unavailable, and zero implemented. Remaining direct contextual controls,
     upstream leaf-to-local reachability, and full browser interaction coverage remain open under
     P11.2/P12.
 
@@ -842,10 +842,13 @@ Local starting seams: [`Paint3mf.ts`](../web/src/features/Paint3mf.ts),
     states; overlapping channels remain independent; no vertex-sharing artifact changes a
     neighboring face.
   - **Current:** canonical volumes own independent sparse color, support, seam, fuzzy-skin, and
-    brim channels tied to topology revision. Headless normalization/validation rejects stale
-    topology, invalid values, duplicate/out-of-range faces, and deterministically preserves
-    overlapping channels. Upstream subdivision encoding, brim geometry/anchors, render-overlay
-    adoption, mesh face-map workflows, official fixtures, and Orca round-trip equivalence remain
+    brim channels tied to topology revision, plus an optional versioned source-face/child-path
+    refinement tree for every channel. Headless normalization/validation rejects stale topology,
+    invalid values, duplicate/out-of-range faces, shared/cyclic/noncanonical trees, inconsistent
+    sparse roots, and bounded-depth/node violations. Exact uppercase BBS subdivision streams now
+    import/export color, support, seam, and fuzzy-skin leaves, while the derived live overlay
+    materializes those same leaves after reopen for every rendered instance. Brim geometry/anchors,
+    mesh face-map workflows, official fixtures, and official-Orca round-trip equivalence remain
     open.
 
 - [~] **P4.2 — Build a common paint engine and command model.** Share ray casting, section
@@ -868,9 +871,12 @@ Local starting seams: [`Paint3mf.ts`](../web/src/features/Paint3mf.ts),
     touching canonical state. Orbit control is suspended for the duration of a stroke. Ray/brush/fill
     selection geometry, clipping, adjacency, source-located filter semantics, deterministic
     refined-leaf state application, and recursive homogeneous-child collapse now exist in the
-    shared headless selector/commit contract. Canonical refined-state persistence, preview
-    overlays, pointer/touch/XR input, haptics, worker routing, deterministic live-surface traces,
-    and performance qualification remain open.
+    shared headless selector/commit contract. Streamed adaptive samples accumulate one exact
+    post-sample tree under the first sample's project/topology/volume guard; Gap Fill retains each
+    component's snapshot-derived target rather than repainting the union with the active swatch.
+    Reopen-safe refined previews and canonical overlays are derived per rendered instance. Stylus
+    pressure, touch/XR input, haptics, worker routing, deterministic live-surface traces, and
+    performance qualification remain open.
 
 - [~] **P4.3 — Implement all six color-paint tools.** Provide Circle, Sphere, Triangle, Height
   Range, Fill, and Gap Fill with the upstream-visible parameters and cursor/overlay feedback.
@@ -894,11 +900,12 @@ Local starting seams: [`Paint3mf.ts`](../web/src/features/Paint3mf.ts),
     pinned one/two/three-side recursive topology, float32 shared midpoint reuse, stable
     source-face/child-path leaf IDs, and direct/propagated split adjacency for Fill and Gap Fill.
     Refined commits apply disjoint targets and recursively collapse homogeneous children; malformed,
-    cyclic, ambiguous, too-deep, or oversized trees fail closed. Thirty-nine focused traces cover
-    geometry, refinement, state application, degenerate inputs, and validation, and the production
-    browser smoke paints through the real panel and canvas. Canonical refined-state persistence and
-    BBS engine projection, live cursor/wireframe/section-clipping controls, vertical/horizontal
-    filters, touch/XR input, and official golden traces remain open.
+    cyclic, ambiguous, too-deep, or oversized trees fail closed. Focused traces cover geometry,
+    refinement, per-component Gap Fill, state application, streamed commit guards, degenerate
+    inputs, and validation, and the production browser smoke paints through the real panel and
+    canvas. Refined state now persists canonically and through the exact standard BBS projection;
+    live cursor/wireframe/section-clipping controls, vertical/horizontal filters, touch/XR input,
+    and official golden traces remain open.
 
 - [~] **P4.4 — Use the full physical-plus-virtual paint palette.** Palette entries show stable
   assignment ID, keyboard number, physical color or virtual recipe/gradient badge, name, and
@@ -914,9 +921,13 @@ Local starting seams: [`Paint3mf.ts`](../web/src/features/Paint3mf.ts),
     the object or part assignment. Disabled recipes and recipes whose components no longer exist are
     listed with machine-readable unavailable reasons and cannot be selected or painted. A stroke
     stores the stable filament ID — physical or mixed — and never a slot index or predicted RGB, and
-    a painted recipe reopens with the same identity after canonical save. Standard-BBS export still
-    projects a facet to its transient engine slot, so official-Orca colour round-trip, per-mode
-    fixtures on separate facets, compatibility policy, and segmentation/tool oracles remain open.
+    a painted recipe reopens with the same identity after canonical save. Standard-BBS export maps
+    stable IDs to the transient material slots the file declares, including exact refined leaves,
+    but emits color states only for the pinned consumer's safe slots `1..64`; an unavailable or
+    higher slot stays lossless in the canonical envelope, and a partially unrepresentable refined
+    source root is omitted from the standard projection with an explicit warning. Official-Orca
+    colour round-trip, per-mode fixtures on separate facets, compatibility policy, and
+    segmentation/tool oracles remain open.
 
 - [~] **P4.5 — Implement explicit filament remapping.** Present every currently referenced
   source filament and a destination selector supporting identity and many-to-one mappings.
@@ -929,10 +940,11 @@ Local starting seams: [`Paint3mf.ts`](../web/src/features/Paint3mf.ts),
   - **Accept:** remap fixtures cover sparse IDs, virtual IDs, many-to-one, default state, deleted
     recipes, cancellation, undo/redo, save/reopen, and G-code comparison.
   - **Current:** one canonical command performs validated many-to-one stable-ID remaps across
-    object/part/layer assignments, color facets, wipe-tower assignment, and physical recipe
-    components, coalesces collided facet/component data, preserves source definitions, rejects
-    self/disabled destinations and virtual destinations for physical-only recipe components, and
-    round-trips through history. Reference discovery/preview UX,
+    object/part/layer assignments, sparse and refined color facets, wipe-tower assignment, and
+    physical recipe components, coalesces collided facet/component data, recursively collapses
+    homogeneous remapped leaves, preserves source definitions, rejects self/disabled destinations
+    and virtual destinations for physical-only recipe components, and round-trips through history.
+    Reference discovery/preview UX,
     default-state and deletion/reorder hooks, cancellation flow, tombstone retention policy,
     live legends/surfaces, save/reopen, and G-code comparison remain open.
 
@@ -965,10 +977,14 @@ Local starting seams: [`Paint3mf.ts`](../web/src/features/Paint3mf.ts),
   - **Accept:** reference models compare affected perimeters/brim geometry, 3MF state, and
     undo/redo. Dome-shaped fuzzy fixtures specifically guard the v2.3.4 regression.
   - **Current:** canonical fuzzySkin and brim channels support sparse boolean triangle ranges,
-    stroke commands, selection geometry, adaptive splitting, homogeneous child collapse, and
-    BBS 3MF annotation export/import. Fuzzy-skin painting is live through the shared paint tool and
-    channel tabs with one undoable command per stroke. Perimeter/brim geometry comparison, the
-    dome-shaped v2.3.4 regression fixture, brim-ear gizmo controls, and XR input remain open.
+    stroke commands, selection geometry, adaptive splitting, homogeneous child collapse, and the
+    lossless OrcaXR envelope. Fuzzy-skin leaves additionally import/export through the standard
+    `paint_fuzzy_skin` attribute (and the pinned legacy `paint_fuzzy` reader alias); BBS defines no
+    facet-paint attribute for brim, so authored brim state remains extension-only with an explicit
+    warning until the actual brim-ear geometry/anchor model lands. Fuzzy-skin painting is live
+    through the shared paint tool and channel tabs with one undoable command per stroke.
+    Perimeter/brim geometry comparison, the dome-shaped v2.3.4 regression fixture, brim-ear gizmo
+    controls, and XR input remain open.
 
 - [ ] **P4.9 — Integrate AI/semantic painting as an enhancement over the same state.** Repair
   current typing and placeholder color-distance logic; require a preview mask, chosen channel
@@ -2234,7 +2250,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Feature family / required outcome | Primary tasks | 2026-07-30 current audit |
 |---|---:|---|
 | Upstream actions/settings/gizmos/formats/calibrations inventory and drift | P0.1, P12.1 | Exact pinned extractor maps 1,622 leaves/13 families from 17 Git blobs; manual upstream workflow sampling remains |
-| Truthful menu/toolbar/context/shortcut/XR capability state | P0.2, P11.2 | One guarded registry reports 149 actions = 106 partial + 43 unavailable and zero implemented, with unique real task ownership/anchors; full upstream reachability remains |
+| Truthful menu/toolbar/context/shortcut/XR capability state | P0.2, P11.2 | One guarded registry reports 154 actions = 112 partial + 42 unavailable and zero implemented, with unique real task ownership/anchors; full upstream reachability remains |
 | Clean-clone typecheck/test/build/CI and reproducible engine artifacts | P0.3, P12.3 | Aggregate local gate and artifact provenance pass; clean-clone CI/native rebuild qualification remains |
 | Golden 3MF/config/G-code/security fixture oracle | P0.4 | Structural 3MF, semantic G-code, and hostile server fixtures pass; official Snapmaker corpus remains |
 | Shared domain/action/surface boundaries | P0.5, P1.1–P1.2 | Canonical project/history, validated mesh codec, live one-way Three projection, and one injected guarded action registry exist; remaining contextual bypasses and feature commands are tracked explicitly |
@@ -2252,14 +2268,14 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | FullSpectrum Cycle authoring and slicing | P3.4, P3.9 | Live pattern authoring/preview/persistence and exhaustive parser corpus exist; layer/tool G-code oracle remains |
 | FullSpectrum Match authoring and gamut search | P3.5, P3.9 | Bounded cancellable worker search, ranked explicit choice, ΔE, prediction, and persistence exist; official target/tolerance and hardware oracle remain |
 | FullSpectrum Gradient authoring and Local-Z output | P3.6–P3.7, P3.9 | Live direction/endpoints/preview/persistence plus generated advanced settings exist; layer-wise and hardware oracles remain |
-| Virtual filaments in parts, painting, legends, preview, persistence | P2.3, P3.8, P4.4 | Live part/range assignment, badges/library summaries, and save/reopen exist; paint palette, complete legends/preview/send, and XR remain |
-| Canonical independent facet channels | P4.1–P4.2 | Five topology-aware sparse channels, guarded stroke history, refined-leaf helpers, and a live pointer stroke that previews then commits one undoable command exist; refined persistence, XR input, and oracles are missing |
-| Color Circle/Sphere/Triangle/Height/Fill/Gap Fill | P4.3 | All six tools and their exposed parameters are live in the DOM paint panel over the source-pinned selectors, with derived overlays and browser-verified strokes; section clipping, filters, wireframe, refined persistence, XR, and official goldens remain |
+| Virtual filaments in parts, painting, legends, preview, persistence | P2.3, P3.8, P4.4 | Live part/range assignment, badges/library summaries, stable-ID physical/mixed paint palette, refined canonical/BBS persistence, and save/reopen exist; complete preview/send legends, XR authoring, and official output qualification remain |
+| Canonical independent facet channels | P4.1–P4.2 | Five topology-aware sparse channels plus bounded version-1 refinement trees, guarded streamed stroke history, exact per-component Gap Fill, reopen-safe per-instance overlays, and exact color/support/seam/fuzzy BBS codecs exist; XR input and official oracles are missing |
+| Color Circle/Sphere/Triangle/Height/Fill/Gap Fill | P4.3 | All six tools and their exposed parameters are live in the DOM paint panel over the source-pinned selectors, with derived exact-leaf overlays, one-command streamed gestures, and browser-verified strokes; section clipping, filters, wireframe, XR, and official goldens remain |
 | Physical + virtual color palette, erase, clipping, filters | P4.3–P4.4 | Canonical palette with stable physical/mixed IDs, badges, gradients, `1`–`9` keys, unavailable reasons, inherit/erase, and Erase All is live in DOM and XR swatches; clipping, filters, and official oracles remain |
-| Filament source→destination paint remapping | P4.5 | Canonical atomic many-to-one remap exists; preview/UI/default/deletion/oracle flows are missing |
-| Support painting | P4.6 | Live enforce/block/erase strokes on the canonical support channel with labelled states and per-channel overlay; generated-support and official round-trip oracles remain |
-| Seam painting | P4.7 | Live prefer/avoid/erase strokes on the canonical seam channel; seam-position G-code oracle and official round-trip remain |
-| Fuzzy-skin painting and brim ears | P4.8 | Live fuzzy-skin strokes on the canonical channel; brim-ear gizmo, perimeter/brim oracles, and the dome regression fixture remain |
+| Filament source→destination paint remapping | P4.5 | Canonical atomic many-to-one remap covers sparse and refined leaves, recursively collapses collisions, and is byte-exact through undo/redo; preview/UI/default/deletion/oracle flows are missing |
+| Support painting | P4.6 | Live enforce/block/erase refined strokes on the canonical support channel with labelled per-instance overlays and standard BBS persistence; generated-support and official round-trip oracles remain |
+| Seam painting | P4.7 | Live prefer/avoid/erase refined strokes on the canonical seam channel with standard BBS persistence; seam-position G-code oracle and official round-trip remain |
+| Fuzzy-skin painting and brim ears | P4.8 | Live refined fuzzy-skin strokes persist through standard BBS attributes; brim remains canonical-envelope-only because BBS has no facet attribute, and the brim-ear gizmo, perimeter/brim oracles, and dome regression fixture remain |
 | AI-assisted painting and color recreation through canonical annotations | P4.9 | AI scaffolds remain noncanonical; unsafe legacy color recreation was removed and its action is unavailable pending canonical facet/history/oracle/slice implementation |
 | Safe painted slicing without monochrome fallback | P4.10, P7.1 | Canonical live current-plate coordinator and revision/project/asset guard exist with no scene/raw-source fallback; paint-authoring/oracle/send evidence remains pending |
 | Move/rotate/scale/mirror/lay/auto-orient/numeric transforms | P5.1 | Stable-ID multi-select/select-all, bounds-center group transforms, numeric/nudge batching, Drop to Bed, mirror X/Y/Z, reset rotation/scale, centre on plate, and facet-pick Lay flat are canonical commands; auto-orient, coordinate spaces, snapping, box select, and XR remain |
@@ -2417,7 +2433,8 @@ Evidence: EVID-nnn or Pending
 
 | `EVID-029` | P7.6 | Current worktree atop `b3a0798`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; `src/slicer/__tests__/gcode-artifact-summary.test.ts`; production-browser preview pass in `scripts/e2e-smoke.mjs` | Node 22.21.0; Chrome for Testing 150 with the production CSP; no hardware | Pass: 6 summary traces covering per-tool length/volume/weight with colour and material, a stated zero kept as a real zero against an absent field left absent, every duration shape the engine writes plus rejection of the ones it does not, refusal to coerce a malformed or negative count, and trailer-only scanning proven on a 2.8 MB artifact; in the production browser the sliced plate reports 225 layers, a positive time estimate and total weight, and exactly the two tools it uses, with the panel showing each tool's material and mass; the bundle budget holds at main 2,123,148 bytes | Automated review; the verified sidecar's engine producer, per-role breakdown, cost units, all-plate UI, and official goldens pending |
 
-| `EVID-030` | P6.1–P6.2, P10.8 | Current worktree atop `0cd8bdd`; commit pending | `9fd12ff...` | 2026-08-08 | `node tools/settings-schema/self-test.mjs`; `node tools/settings-schema/generate.mjs --check --no-fetch`; `npm --prefix web run test:settings`; focused `GeneratedSettingsPanel.test.ts`; TypeScript typecheck; production build; offline contract/smoke | Node 22.21.0; Chrome for Testing 150; headless; no hardware | Pass: deterministic 5,383,500-byte schema v2; 816 definitions/809 keys; exact 21-tab/93-group/424-placement inventory; 10 fail-closed mutations; 5/5 settings files and 7/7 generated-panel cases. Full duplicate-owner binding sets and fixed inventory counts reject relationally valid truncation; symbol-derived surfaces and draft/commit guards reject non-Process relabeling; dependency/reset is pinned as unenforced rather than falsely fail-closed. Both production workers cache the content-hashed schema NetworkFirst, and an offline reload fetches and parses schema v2 | Automated and independent code review; runtime C++ dump, predicates/reset/general scopes, widget families, engine-effect fixtures, and cross-surface/browser/XR qualification pending |
+| `EVID-030` | P6.1–P6.2, P10.8 | `33f0534` | `9fd12ff...` | 2026-08-08 | `node tools/settings-schema/self-test.mjs`; `node tools/settings-schema/generate.mjs --check --no-fetch`; `npm --prefix web run test:settings`; focused `GeneratedSettingsPanel.test.ts`; TypeScript typecheck; production build; offline contract/smoke | Node 22.21.0; Chrome for Testing 150; headless; no hardware | Pass: deterministic 5,383,500-byte schema v2; 816 definitions/809 keys; exact 21-tab/93-group/424-placement inventory; 10 fail-closed mutations; 5/5 settings files and 7/7 generated-panel cases. Full duplicate-owner binding sets and fixed inventory counts reject relationally valid truncation; symbol-derived surfaces and draft/commit guards reject non-Process relabeling; dependency/reset is pinned as unenforced rather than falsely fail-closed. Both production workers cache the content-hashed schema NetworkFirst, and an offline reload fetches and parses schema v2 | Automated and independent code review; runtime C++ dump, predicates/reset/general scopes, widget families, engine-effect fixtures, and cross-surface/browser/XR qualification pending |
+| `EVID-031` | P1.3, P4.1–P4.8, P10.6–P10.7 | Current worktree atop `33f0534`; commit pending | `9fd12ff...` | 2026-08-08 | `npm --prefix web run quality`; 18 BBS serializer, 3 codec, 17 painting, 7 remap, and repeated-instance overlay traces; `npm --prefix web run test:project`; `npm --prefix web run parity:oracles` | Node 22.21.0; Chrome for Testing 150 with production CSP; headless; no hardware | Pass: exact bounded version-1 source-root/child-path persistence and uppercase BBS color/support/seam/fuzzy codec, first-nonempty fuzzy alias, safe `1..64` color consumer cap, whole-root/extension-only warnings, reserved-attribute authority, package-global decode and sparse/refined component-materialization budgets, and fail-closed legacy-false migration. Streamed adaptive paint keeps first-sample volume/revision authority, applies each Gap Fill component's target, commits one labelled history entry, remaps/collapses refined leaves, reopens exact overlays, and retains one overlay per repeated instance. All 46 project test files, parity's 11 artifacts, production E2E/offline reload, 26 axe rules, and bundle budgets pass (`main=2,166,514`, JS total `9,451,681`) | Two independent code reviews clean; compiled upstream differential, official Orca GUI round-trip/G-code comparison, XR/touch authoring, and hardware qualification pending |
 Correction note (2026-07-20): the provisional local-commit cells in `EVID-001`–`EVID-012`
 were filled with the commit that landed those runs. Their historical commands, counts, results,
 dates, and residual limitations were not refreshed.
@@ -2477,6 +2494,7 @@ has no equivalent, add a `BLOCK-*` row rather than calling it done or Not applic
 | 2026-08-08 | Store layer events by exact height and project them into the engine's own `custom_gcode_per_layer.xml`, offering only the kinds the selected printer profile declares a body for | A layer index is invalidated by any layer-height change, while the engine resolves a height against the layers it actually produced. And an event kept only in the OrcaXR envelope never reaches the slicer at all: the operator would see a pause in the project and none in the print. Colour change and template take their body from profile settings, so offering them without one emits an empty marker the machine ignores | P7.8, P1.3 | Command, serializer, engine, and production-browser traces pass; slider authoring, preview ticks, and filament sequences pending |
 | 2026-08-08 | Report a layer's height from its extrusions, and locate an event by its layer rather than by the record's own Z | The layer index took the maximum Z over every record, so a retraction Z-hop on a travel overstated the layer by the hop; anything authored or located against it was placed at a height the printer never prints at. An event marker is likewise emitted before the Z move that follows a layer change, so its record Z belongs to the previous layer | P7.5, P7.8 | An inspection trace pins both the hopped and travel-only cases; the browser pass shows a pause authored at 3.4 mm reported at 3.45 mm, the first layer at or above it |
 | 2026-08-08 | Show the totals the engine wrote into the artifact rather than recomputing them from parsed toolpaths, and make the slice status line use the engine's own layer count | The slicer already accounted for every extrusion, purge, and tool change; a second derivation would produce subtly different numbers with no way to say which is right. Counting layer-change markers disagreed with the engine's total by three on the smoke fixture, and two disagreeing layer counts in one UI is worse than either | P7.6, P7.1 | 6 summary traces plus a browser pass; the verified sidecar contract, per-role breakdown, and cost units remain the open half |
+| 2026-08-08 | Persist refined facet intent as a bounded version-1 source-root/child-path tree and make the exact BBS nibble stream a secondary projection with explicit representability limits | Sparse source faces cannot identify a subdivided child after save/reopen. The pinned stream reverses child order and hexadecimal output, carries wire states through 255, but the pinned color consumer supports only material states `1..64`; if any refined child is unavailable, omitting the whole standard root is safer than changing sibling topology, while the canonical envelope remains lossless. Package-global decode and component-materialization budgets prevent compact component graphs from amplifying refined or sparse annotations, and legacy sparse fuzzy `false` is validated then migrated to inherited state rather than making schema-v1 files unreadable | P1.3, P4.1–P4.8, P10.6–P10.7 | 18 serializer, 3 codec, painting/remap/overlay traces, full web quality, and two independent code reviews pass; compiled upstream differential and official GUI/G-code/hardware qualification pending |
 | YYYY-MM-DD |  |  |  |  |
 
 ## 21. Verification interface and matrices

@@ -15,6 +15,7 @@ import {
   SetPlatePrintableCommand,
 } from '../project/commands';
 import { canonicalStringify, cloneJson, cloneProjectState, deepFreeze } from '../project/domain/canonical';
+import { facetAnnotationsHaveAssignments } from '../project/domain/facetRefinement';
 import type {
   AssetId,
   CustomGcodeId,
@@ -88,6 +89,7 @@ import type { CommandHistorySnapshot } from '../project/history/commandBus';
 import { PreparedProjectImport, ProjectImportCoordinator } from '../project/import/ProjectImportCoordinator';
 import { ModelImportParser, type ModelImportPlacement } from '../project/import/ModelImportParser';
 import type { JsonValue, TriangleAssignments, Vec3 } from '../project/domain/model';
+import type { FacetRefinementEncoding } from '../project/domain/model';
 import type { FacetAnnotationChannel } from '../project/annotations';
 import { GeometryMergeParser } from '../project/import/GeometryMergeParser';
 import { PaintStrokeService } from '../project/painting/PaintStrokeService';
@@ -1598,6 +1600,49 @@ export class CanonicalWorkspaceController {
     return facets;
   }
 
+  /** Sparse roots plus optional refined leaves for reopen-safe derived overlays. */
+  getFacetOverlayByVolume(
+    channel: FacetAnnotationChannel,
+    plateId?: PlateId,
+  ): ReadonlyMap<
+    VolumeId,
+    {
+      readonly assignments: readonly TriangleAssignments<JsonValue>[];
+      readonly refinement?: FacetRefinementEncoding;
+      readonly topologyRevision: number;
+      readonly triangleCount: number;
+    }
+  > {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    const facets = new Map<
+      VolumeId,
+      {
+        readonly assignments: readonly TriangleAssignments<JsonValue>[];
+        readonly refinement?: FacetRefinementEncoding;
+        readonly topologyRevision: number;
+        readonly triangleCount: number;
+      }
+    >();
+    for (const plate of state.plates) {
+      if (plateId && plate.id !== plateId) continue;
+      for (const object of plate.objects) {
+        for (const volume of object.volumes) {
+          const assignments = volume.annotations[channel] as TriangleAssignments<JsonValue>[];
+          const refinement = volume.annotations.refinement?.[channel] as FacetRefinementEncoding | undefined;
+          if (assignments.length === 0 && !refinement) continue;
+          facets.set(volume.id, {
+            assignments: cloneJson(assignments),
+            ...(refinement ? { refinement: cloneJson(refinement) } : {}),
+            topologyRevision: volume.source.topologyRevision,
+            triangleCount: volume.source.triangleCount,
+          });
+        }
+      }
+    }
+    return facets;
+  }
+
   /** Return a caller-safe snapshot without exposing the canonical ProjectState. */
   getSlicingConfiguration(): CanonicalSlicingConfiguration {
     this.assertActive();
@@ -2569,13 +2614,7 @@ function assertSplitToObjectsSource(object: ProjectObject, synchronousTriangleLi
   if (volume.source.triangleCount > synchronousTriangleLimit) {
     throw new CanonicalSplitToObjectsTriangleLimitError(volume.source.triangleCount, synchronousTriangleLimit);
   }
-  if (
-    volume.annotations.color.length > 0 ||
-    volume.annotations.support.length > 0 ||
-    volume.annotations.seam.length > 0 ||
-    volume.annotations.fuzzySkin.length > 0 ||
-    volume.annotations.brim.length > 0
-  ) {
+  if (facetAnnotationsHaveAssignments(volume.annotations)) {
     throw new Error(
       'Split to Objects cannot yet remap painted facet annotations onto connected components; clear or preserve them explicitly first',
     );

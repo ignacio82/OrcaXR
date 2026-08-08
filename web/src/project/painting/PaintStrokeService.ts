@@ -8,22 +8,40 @@ import {
   ORCA_OVERHANG_ANGLE_MAX_DEGREES,
   ORCA_SMART_FILL_ANGLE_MAX_DEGREES,
   ORCA_SMART_FILL_ANGLE_MIN_DEGREES,
+  applyFacetRefinedSelection,
+  applyFacetRefinedStateUpdates,
+  commitFacetRefinement,
   commitFacetAnnotationStroke,
   captureFacetAnnotationGuard,
   selectFacetRegion,
+  StaleFacetAnnotationResultError,
   triangleRangesFromIndices,
   type FacetAnnotationChannel,
+  type FacetAnnotationGuard,
   type FacetAnnotationValue,
   type FacetClippingPlane,
   type FacetRegionSelection,
+  type FacetRefinedSelection,
+  type FacetRegionState,
   type FacetRegionTool,
   type FacetSelectionMesh,
   type FacetSelectionTransform,
   type FacetStrokeCommitResult,
   type TriangleRange,
 } from '../annotations';
+import { cloneJson, deepFreeze } from '../domain/canonical';
+import { buildFacetRefinementEncoding } from '../domain/facetRefinement';
 import type { FilamentId, VolumeId } from '../domain/ids';
-import type { JsonValue, ProjectState, ProjectVolume, Vec3 } from '../domain/model';
+import type {
+  FacetAnnotations,
+  FacetRefinementEncoding,
+  FacetRefinementNode,
+  JsonValue,
+  ProjectState,
+  ProjectVolume,
+  TriangleAssignments,
+  Vec3,
+} from '../domain/model';
 import { findVolume } from '../domain/selectors';
 import type { CommandBus } from '../history/commandBus';
 import { decodeIndexedMeshAsset } from '../meshCodec';
@@ -99,6 +117,10 @@ export interface PaintStrokeRequest<Channel extends PaintChannel = 'color'> {
   readonly mode: 'paint' | 'erase';
   readonly cancellation?: CancellationToken;
   readonly label?: string;
+  /** Transient post-sample tree used while one streamed gesture is still open. */
+  readonly refinement?: FacetRefinementEncoding<FacetAnnotationValue<Channel>>;
+  /** First-sample guard for a streamed gesture. */
+  readonly guard?: FacetAnnotationGuard;
 }
 
 export interface PaintStrokePreview {
@@ -107,6 +129,11 @@ export interface PaintStrokePreview {
   readonly ranges: readonly TriangleRange[];
   readonly topologyRevision: number;
   readonly triangleCount: number;
+  /** Stable leaf paths and pre-stroke tree when this sample used adaptive refinement. */
+  readonly refinement?: FacetRefinedSelection;
+  /** Post-sample tree for accumulating a streamed gesture without mutating canonical state. */
+  readonly refinementAfter?: FacetRefinementEncoding;
+  readonly guard: FacetAnnotationGuard;
 }
 
 export class PaintTargetError extends Error {
@@ -145,16 +172,40 @@ export class PaintStrokeService {
 
   /** Selection for the current pointer sample; never mutates the project. */
   previewStroke<Channel extends PaintChannel>(request: PaintStrokeRequest<Channel>): PaintStrokePreview {
+    assertGuardTargetsVolume(request.guard, request.hit.volumeId);
+    const guard = request.guard ?? captureFacetAnnotationGuard(this.options.commands, request.hit.volumeId);
+    if (!this.options.commands.context.project.isCurrent(guard)) throw new StaleFacetAnnotationResultError('project');
     const { volume, state } = this.resolveVolume(request.hit.volumeId);
+    if (
+      volume.source.topologyRevision !== guard.topologyRevision ||
+      volume.source.triangleCount !== guard.triangleCount
+    ) {
+      throw new StaleFacetAnnotationResultError('topology');
+    }
     this.assertValue(state, request);
     const mesh = this.meshFor(volume.source.assetId, request.hit.volumeId);
     const selection = this.select(mesh, request, state);
+    const channel = (request.channel ?? 'color') as PaintChannel;
+    const target: FacetRegionState =
+      request.mode === 'erase' || request.value === undefined
+        ? { kind: 'unpainted' }
+        : { kind: 'assigned', value: request.value as JsonValue };
+    const refinementAfter = selectionRefinementAfter(
+      channel,
+      selection,
+      volume.annotations[channel],
+      volume.source.triangleCount,
+      target,
+    );
     return Object.freeze({
       volumeId: request.hit.volumeId,
       triangleIndices: Object.freeze([...selection.triangleIndices]),
       ranges: Object.freeze(selection.ranges.map((range) => Object.freeze({ ...range }))),
       topologyRevision: volume.source.topologyRevision,
       triangleCount: volume.source.triangleCount,
+      ...(selection.refinement ? { refinement: selection.refinement } : {}),
+      ...(refinementAfter ? { refinementAfter } : {}),
+      guard: Object.freeze({ ...guard }),
     });
   }
 
@@ -163,11 +214,34 @@ export class PaintStrokeService {
     if (request.cancellation?.aborted) {
       return { status: 'cancelled', ...(request.cancellation.reason ? { reason: request.cancellation.reason } : {}) };
     }
+    assertGuardTargetsVolume(request.guard, request.hit.volumeId);
     const { volume, state } = this.resolveVolume(request.hit.volumeId);
     this.assertValue(state, request);
     const mesh = this.meshFor(volume.source.assetId, request.hit.volumeId);
     const selection = this.select(mesh, request, state);
     if (selection.ranges.length === 0) return { status: 'noop' };
+    const channel = (request.channel ?? 'color') as PaintChannel;
+    const target: FacetRegionState =
+      request.mode === 'erase' || request.value === undefined
+        ? { kind: 'unpainted' }
+        : { kind: 'assigned', value: request.value as JsonValue };
+    const refinementAfter = selectionRefinementAfter(
+      channel,
+      selection,
+      volume.annotations[channel],
+      volume.source.triangleCount,
+      target,
+    );
+    if (refinementAfter) {
+      return commitFacetRefinement(this.options.commands, {
+        guard: request.guard ?? captureFacetAnnotationGuard(this.options.commands, request.hit.volumeId),
+        channel,
+        encoding: refinementAfter as never,
+        ...(request.cancellation ? { cancellation: request.cancellation } : {}),
+        label:
+          request.label ?? `${target.kind === 'unpainted' ? 'Erase' : 'Paint'} refined ${channelLabel(channel)} facets`,
+      });
+    }
     return this.commitRanges(request.hit.volumeId, selection.ranges, request);
   }
 
@@ -185,10 +259,12 @@ export class PaintStrokeService {
     readonly mode: 'paint' | 'erase';
     readonly cancellation?: CancellationToken;
     readonly label?: string;
+    readonly guard?: FacetAnnotationGuard;
   }): FacetStrokeCommitResult {
     if (request.cancellation?.aborted) {
       return { status: 'cancelled', ...(request.cancellation.reason ? { reason: request.cancellation.reason } : {}) };
     }
+    assertGuardTargetsVolume(request.guard, request.volumeId);
     const { volume, state } = this.resolveVolume(request.volumeId);
     this.assertValue(state, {
       mode: request.mode,
@@ -198,6 +274,31 @@ export class PaintStrokeService {
     const ranges = triangleRangesFromIndices([...request.triangleIndices], volume.source.triangleCount);
     if (ranges.length === 0) return { status: 'noop' };
     return this.commitRanges(request.volumeId, ranges, request);
+  }
+
+  /** Commit the accumulated post-sample tree of one streamed gesture. */
+  commitRefinement<Channel extends PaintChannel>(request: {
+    readonly volumeId: VolumeId;
+    readonly channel?: Channel;
+    readonly encoding: FacetRefinementEncoding<FacetAnnotationValue<Channel>>;
+    readonly mode?: 'paint' | 'erase';
+    readonly cancellation?: CancellationToken;
+    readonly label?: string;
+    readonly guard?: FacetAnnotationGuard;
+  }): FacetStrokeCommitResult {
+    if (request.cancellation?.aborted) {
+      return { status: 'cancelled', ...(request.cancellation.reason ? { reason: request.cancellation.reason } : {}) };
+    }
+    assertGuardTargetsVolume(request.guard, request.volumeId);
+    this.resolveVolume(request.volumeId);
+    const channel = (request.channel ?? 'color') as PaintChannel;
+    return commitFacetRefinement(this.options.commands, {
+      guard: request.guard ?? captureFacetAnnotationGuard(this.options.commands, request.volumeId),
+      channel,
+      encoding: request.encoding as never,
+      ...(request.cancellation ? { cancellation: request.cancellation } : {}),
+      label: request.label ?? `${request.mode === 'erase' ? 'Erase' : 'Paint'} refined ${channelLabel(channel)} facets`,
+    });
   }
 
   /** Clear every facet of one channel on one volume ("Erase all"). */
@@ -225,10 +326,11 @@ export class PaintStrokeService {
       readonly mode: 'paint' | 'erase';
       readonly cancellation?: CancellationToken;
       readonly label?: string;
+      readonly guard?: FacetAnnotationGuard;
     },
   ): FacetStrokeCommitResult {
     const channel = (request.channel ?? 'color') as PaintChannel;
-    const guard = captureFacetAnnotationGuard(this.options.commands, volumeId);
+    const guard = request.guard ?? captureFacetAnnotationGuard(this.options.commands, volumeId);
     const erasing = request.mode === 'erase' || request.value === undefined;
     const operation = erasing
       ? ({ mode: 'erase', ranges } as const)
@@ -322,6 +424,12 @@ export class PaintStrokeService {
       },
       seedTriangle: request.hit.triangleIndex,
       channel: (request.channel ?? 'color') as PaintChannel,
+      ...((request.refinement ?? volume.annotations.refinement?.[(request.channel ?? 'color') as PaintChannel])
+        ? {
+            refinement: (request.refinement ??
+              volume.annotations.refinement?.[(request.channel ?? 'color') as PaintChannel]) as never,
+          }
+        : {}),
       tool: this.tool(request, state),
       ...(request.settings.clippingPlane ? { clippingPlane: request.settings.clippingPlane } : {}),
       ...(request.hit.transform ? { transform: request.hit.transform } : {}),
@@ -398,6 +506,54 @@ export class PaintStrokeService {
         throw new PaintTargetError(`Unsupported paint tool ${String(settings.tool)}`, 'invalid-settings');
     }
   }
+}
+
+function assertGuardTargetsVolume(guard: FacetAnnotationGuard | undefined, volumeId: VolumeId): void {
+  if (guard && guard.volumeId !== volumeId) throw new StaleFacetAnnotationResultError('project');
+}
+
+function selectionRefinementAfter(
+  channel: PaintChannel,
+  selection: FacetRegionSelection,
+  assignments: FacetAnnotations[PaintChannel],
+  triangleCount: number,
+  target: FacetRegionState,
+): FacetRefinementEncoding | undefined {
+  if (selection.refinement) {
+    if (selection.gapFillReplacements !== undefined) {
+      return applyFacetRefinedStateUpdates(
+        channel,
+        selection.refinement,
+        selection.gapFillReplacements.flatMap((replacement) =>
+          (replacement.refinedLeaves ?? []).map((leaf) => ({
+            ...leaf,
+            target: replacement.target,
+          })),
+        ),
+      );
+    }
+    return applyFacetRefinedSelection(channel, selection.refinement, target);
+  }
+  if (selection.gapFillReplacements === undefined) return undefined;
+
+  const encoding = buildFacetRefinementEncoding(
+    assignments as readonly TriangleAssignments<JsonValue>[],
+    triangleCount,
+  );
+  const replacementByTriangle = new Map<number, FacetRegionState>();
+  for (const replacement of selection.gapFillReplacements) {
+    for (const triangle of replacement.triangleIndices) replacementByTriangle.set(triangle, replacement.target);
+  }
+  return deepFreeze({
+    version: encoding.version,
+    roots: encoding.roots.map((root, triangle): FacetRefinementNode => {
+      const replacement = replacementByTriangle.get(triangle);
+      if (!replacement) return root;
+      return replacement.kind === 'unpainted'
+        ? { kind: 'leaf', state: { kind: 'unpainted' } }
+        : { kind: 'leaf', state: { kind: 'assigned', value: cloneJson(replacement.value) } };
+    }),
+  });
 }
 
 /** Displayed filament-ID order used by Gap Fill's neighbour precedence. */

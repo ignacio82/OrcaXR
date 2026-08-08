@@ -153,7 +153,25 @@ await test('explains and atomically rejects lossy or engine-invalid role convers
   const secondModelId = entityId<'volume'>('import:test:semantic-second-model');
   const paintedHarness = harness((state) => {
     const object = state.plates[0].objects[0];
+    object.volumes[0].annotations.color = [];
+    object.volumes[0].annotations.refinement = {
+      color: {
+        version: 1,
+        roots: [
+          {
+            kind: 'split',
+            splitSides: 1,
+            specialSide: 0,
+            children: [
+              { kind: 'leaf', state: { kind: 'assigned', value: state.filaments.physical[0].id } },
+              { kind: 'leaf', state: { kind: 'assigned', value: state.filaments.physical[1].id } },
+            ],
+          },
+        ],
+      },
+    };
     object.volumes.push(volumeFrom(object.volumes[0], secondModelId, 'model'));
+    object.volumes[1].annotations = emptyFacetAnnotations(0);
   });
   const paintedBefore = projectBytes(paintedHarness.project);
   assert.throws(

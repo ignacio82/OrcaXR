@@ -1,4 +1,15 @@
-import type { FacetAnnotations, JsonValue, TriangleAssignments, Vec3 } from '../domain/model';
+import {
+  ORCA_REFINEMENT_ENCODING_VERSION,
+  ORCA_REFINEMENT_MAX_DEPTH,
+  ORCA_REFINEMENT_MAX_NODES,
+  type FacetAnnotations,
+  type FacetRefinementEncoding,
+  type FacetRefinementNode,
+  type FacetRefinementState,
+  type JsonValue,
+  type TriangleAssignments,
+  type Vec3,
+} from '../domain/model';
 import { canonicalStringify, cloneJson, deepFreeze } from '../domain/canonical';
 import { triangleRangesFromIndices, validateFacetAnnotations } from './sparse';
 import {
@@ -25,9 +36,8 @@ export const ORCA_GAP_AREA_MAX_MM2 = 5;
 export const ORCA_GAP_AREA_STEP_MM2 = 0.2;
 export const ORCA_OVERHANG_ANGLE_MIN_DEGREES = 0;
 export const ORCA_OVERHANG_ANGLE_MAX_DEGREES = 90;
-export const ORCA_REFINEMENT_ENCODING_VERSION = 1;
-export const ORCA_REFINEMENT_MAX_DEPTH = 64;
-export const ORCA_REFINEMENT_MAX_NODES = 1_000_000;
+export { ORCA_REFINEMENT_ENCODING_VERSION, ORCA_REFINEMENT_MAX_DEPTH, ORCA_REFINEMENT_MAX_NODES };
+export type { FacetRefinementEncoding, FacetRefinementNode };
 
 export type FacetTriangle = readonly [number, number, number];
 
@@ -124,30 +134,6 @@ export type FacetRegionTool =
       readonly stateOrder: readonly JsonValue[];
     };
 
-export type FacetRefinementNode =
-  | {
-      readonly kind: 'leaf';
-      /** Authoritative state for this channel at this refined leaf. */
-      readonly state: FacetRegionState;
-    }
-  | {
-      readonly kind: 'split';
-      readonly splitSides: 1 | 2 | 3;
-      readonly specialSide: 0 | 1 | 2;
-      /** Pinned child order; the length is exactly `splitSides + 1`. */
-      readonly children: readonly FacetRefinementNode[];
-    };
-
-/**
- * Stable, allocation-independent representation of TriangleSelector's tree.
- * Root order is source-triangle order and child order is the pinned Orca
- * order, so `(sourceTriangle, path)` is a deterministic refined-leaf key.
- */
-export interface FacetRefinementEncoding {
-  readonly version: typeof ORCA_REFINEMENT_ENCODING_VERSION;
-  readonly roots: readonly FacetRefinementNode[];
-}
-
 export interface FacetRefinedLeafReference {
   readonly sourceTriangle: number;
   readonly path: readonly number[];
@@ -217,12 +203,15 @@ export interface FacetRegionSelection {
   readonly refinement?: FacetRefinedSelection;
 }
 
-export type FacetRegionState =
-  | { readonly kind: 'unpainted' }
-  | {
-      readonly kind: 'assigned';
-      readonly value: JsonValue;
-    };
+export interface FacetRefinementMaterializationRequest<Channel extends FacetAnnotationChannel> {
+  readonly mesh: FacetSelectionMesh;
+  readonly annotations: FacetAnnotations;
+  readonly channel: Channel;
+  readonly guard: { readonly topologyRevision: number; readonly triangleCount: number };
+  readonly refinement: FacetRefinementEncoding;
+}
+
+export type FacetRegionState = FacetRefinementState;
 
 export interface FacetGapFillReplacement {
   readonly areaMm2: number;
@@ -381,6 +370,30 @@ export function selectFacetRegion<Channel extends FacetAnnotationChannel>(
     if (value !== 0) indices.push(index);
   });
   return selectionFromIndices(indices, request.guard.triangleCount);
+}
+
+/** Reconstruct every persisted refined leaf for a derived render overlay. */
+export function materializeFacetRefinement<Channel extends FacetAnnotationChannel>(
+  request: FacetRefinementMaterializationRequest<Channel>,
+): FacetRefinedSelection {
+  const internal: FacetRegionSelectionRequest<Channel> = {
+    ...request,
+    seedTriangle: 0,
+    tool: { kind: 'triangle' },
+  };
+  validateRequest(internal);
+  if (
+    request.annotations.topologyRevision !== request.guard.topologyRevision ||
+    request.mesh.triangles.length !== request.guard.triangleCount
+  ) {
+    throw new StaleFacetAnnotationResultError('topology');
+  }
+  const annotationIssues = validateFacetAnnotations(request.annotations, {
+    topologyRevision: request.guard.topologyRevision,
+    triangleCount: request.guard.triangleCount,
+  });
+  if (annotationIssues.length > 0) throw new FacetAnnotationValidationError(annotationIssues);
+  return freezeRefinedSelection(buildRefinementWorkspace(internal), new Set<number>(), undefined);
 }
 
 /**
@@ -2958,6 +2971,7 @@ function isFacetChannelValue(channel: FacetAnnotationChannel, value: JsonValue):
     case 'seam':
       return value === 'prefer' || value === 'avoid';
     case 'fuzzySkin':
+      return value === true;
     case 'brim':
       return typeof value === 'boolean';
   }

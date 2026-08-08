@@ -100,9 +100,14 @@ engine (`libslic3r` via WASM) as the computational core.
   support (enforce/block), seam (prefer/avoid), and fuzzy-skin facets - the
   active modal tool owns the channel, so `PAINT_TOOL_CHANNELS` is the only
   channel authority - and the XR rail is an explicit seven-action list, never
-  "every action with a tool". Standard-BBS export still
-  projects a facet onto the transient engine slot, so official-Orca colour
-  round-trip remains unproven.
+  "every action with a tool". Refined state persists as the bounded version-1
+  source-root/child-path tree and uses the pinned uppercase BBS nibble codec for
+  `paint_color`, `paint_supports`, `paint_seam`, and `paint_fuzzy_skin` (plus the
+  legacy `paint_fuzzy` reader alias). Color projection may use only material
+  states `1..64`, even though the wire codec represents `1..255`; an unsupported
+  child omits its whole refined source root from the standard projection with a
+  warning while the canonical envelope remains lossless. BBS has no brim facet
+  attribute, and official-Orca colour round-trip remains unproven.
 - Model import (STL/OBJ/AMF/compressed AMF/ZIP) is signature-first and transactional:
   `web/src/project/import/formats/` decides the container from content, refuses a
   recognised extension that disagrees with the signature, and returns typed

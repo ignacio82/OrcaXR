@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "threeMf": {
-    "normalizedSha256": "f0a852191bf51abaa295037ef733356b8d1d16228902e501ea236660a4fefc5d",
+    "normalizedSha256": "2b6cc108d2612326120e7c044b177d0663672258198ee27c70753d32c44246d8",
     "archiveMembers": [
       "_rels/.rels",
       "[Content_Types].xml",
@@ -320,10 +320,10 @@
         "element": "triangle",
         "path": "3D/3dmodel.model/model[0]/resources[0]/object[1]/mesh[0]/triangles[0]/triangle[0]",
         "payload": {
-          "fuzzy_skin": "1",
-          "paint_color": "1F",
-          "paint_supports": "2",
-          "seam": "1"
+          "paint_color": "8",
+          "paint_fuzzy_skin": "4",
+          "paint_seam": "4",
+          "paint_supports": "4"
         },
         "text": ""
       }

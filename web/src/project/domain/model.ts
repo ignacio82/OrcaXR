@@ -82,14 +82,48 @@ export interface TriangleAssignments<T extends JsonValue> {
   value: T;
 }
 
+/** Stable version of Orca's per-source-facet TriangleSelector tree. */
+export const ORCA_REFINEMENT_ENCODING_VERSION = 1;
+export const ORCA_REFINEMENT_MAX_DEPTH = 64;
+export const ORCA_REFINEMENT_MAX_NODES = 1_000_000;
+
+export type FacetRefinementState<T extends JsonValue = JsonValue> =
+  { readonly kind: 'unpainted' } | { readonly kind: 'assigned'; readonly value: T };
+
+export type FacetRefinementNode<T extends JsonValue = JsonValue> =
+  | { readonly kind: 'leaf'; readonly state: FacetRefinementState<T> }
+  | {
+      readonly kind: 'split';
+      readonly splitSides: 1 | 2 | 3;
+      readonly specialSide: 0 | 1 | 2;
+      /** Pinned child order; the length is exactly `splitSides + 1`. */
+      readonly children: readonly FacetRefinementNode<T>[];
+    };
+
+/** Root order is source-triangle order; child paths are stable refined-facet IDs. */
+export interface FacetRefinementEncoding<T extends JsonValue = JsonValue> {
+  readonly version: typeof ORCA_REFINEMENT_ENCODING_VERSION;
+  readonly roots: readonly FacetRefinementNode<T>[];
+}
+
+export interface FacetAnnotationRefinements {
+  color?: FacetRefinementEncoding<FilamentId>;
+  support?: FacetRefinementEncoding<'enforce' | 'block'>;
+  seam?: FacetRefinementEncoding<'prefer' | 'avoid'>;
+  fuzzySkin?: FacetRefinementEncoding<true>;
+  brim?: FacetRefinementEncoding<boolean>;
+}
+
 export interface FacetAnnotations {
   /** Must equal the owning mesh reference's topologyRevision. */
   topologyRevision: number;
   color: TriangleAssignments<FilamentId>[];
   support: TriangleAssignments<'enforce' | 'block'>[];
   seam: TriangleAssignments<'prefer' | 'avoid'>[];
-  fuzzySkin: TriangleAssignments<boolean>[];
+  fuzzySkin: TriangleAssignments<true>[];
   brim: TriangleAssignments<boolean>[];
+  /** Present only for channels with at least one subdivided source facet. */
+  refinement?: FacetAnnotationRefinements;
 }
 
 export interface MeshSourceRef {

@@ -1,4 +1,5 @@
 import { canonicalStringify, cloneJson, cloneProjectState } from '../domain/canonical';
+import { visitFacetRefinementAssignedValues } from '../domain/facetRefinement';
 import { isStableEntityId, type FilamentId, type MixedFilamentId, type PhysicalFilamentId } from '../domain/ids';
 import type {
   ConfigMap,
@@ -320,6 +321,14 @@ export function findFilamentDependentPaths(state: ProjectState, filamentId: Fila
             paths.push(`${volumePath}.annotations.color[${assignmentIndex}].value`);
           }
         });
+        const colorRefinement = volume.annotations.refinement?.color;
+        if (colorRefinement) {
+          visitFacetRefinementAssignedValues(colorRefinement, (value, refinementPath) => {
+            if (value === filamentId) {
+              paths.push(`${volumePath}.annotations.refinement.color.${refinementPath}`);
+            }
+          });
+        }
       });
       object.layerRanges.forEach((range, rangeIndex) => {
         if (range.filamentId === filamentId) {

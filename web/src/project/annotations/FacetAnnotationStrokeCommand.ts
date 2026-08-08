@@ -1,6 +1,20 @@
 import { canonicalStringify, cloneJson, cloneProjectState, deepFreeze } from '../domain/canonical';
+import {
+  facetAssignmentsFromRefinement,
+  facetRefinementHasSplits,
+  normalizeFacetRefinementEncoding,
+  replaceFacetRefinementRoots,
+  validateFacetRefinementChannel,
+} from '../domain/facetRefinement';
 import type { VolumeId } from '../domain/ids';
-import type { FacetAnnotations } from '../domain/model';
+import type {
+  FacetAnnotationRefinements,
+  FacetAnnotations,
+  FacetRefinementEncoding,
+  FacetRefinementState,
+  JsonValue,
+  TriangleAssignments,
+} from '../domain/model';
 import { findVolume } from '../domain/selectors';
 import type { CommandContext, ProjectCommand } from '../history/command';
 import type { CommandBus } from '../history/commandBus';
@@ -8,6 +22,7 @@ import {
   applyFacetChannelStroke,
   facetAnnotationsBytes,
   normalizeFacetChannel,
+  normalizeTriangleRanges,
   validateFacetAnnotations,
 } from './sparse';
 import {
@@ -139,12 +154,42 @@ export function commitFacetAnnotationStroke<Channel extends FacetAnnotationChann
 
   const before = cloneJson(found.volume.annotations);
   const normalizedBeforeChannel = normalizeFacetChannel(before[request.channel]);
-  const afterChannel = applyFacetChannelStroke(normalizedBeforeChannel, request.operation, request.guard.triangleCount);
-  if (canonicalStringify(normalizedBeforeChannel) === canonicalStringify(afterChannel)) {
-    return { status: 'noop' };
-  }
   const after = cloneJson(before);
-  after[request.channel] = afterChannel;
+  const storedRefinement = before.refinement?.[request.channel] as FacetRefinementEncoding<JsonValue> | undefined;
+  if (storedRefinement) {
+    if (request.operation.mode === 'reset') {
+      after[request.channel] = [] as unknown as FacetAnnotations[Channel];
+      setRefinementChannel(after, request.channel, undefined);
+    } else {
+      const ranges = normalizeTriangleRanges(request.operation.ranges, request.guard.triangleCount);
+      const triangles = new Set<number>();
+      for (const range of ranges) {
+        for (let triangle = range.start; triangle < range.endExclusive; triangle += 1) triangles.add(triangle);
+      }
+      const target =
+        request.operation.mode === 'paint'
+          ? ({ kind: 'assigned', value: cloneJson(request.operation.value) } as FacetRefinementState<JsonValue>)
+          : ({ kind: 'unpainted' } as const);
+      const nextRefinement = replaceFacetRefinementRoots(storedRefinement, triangles, target);
+      after[request.channel] = facetAssignmentsFromRefinement(nextRefinement) as FacetAnnotations[Channel];
+      setRefinementChannel(
+        after,
+        request.channel,
+        facetRefinementHasSplits(nextRefinement) ? nextRefinement : undefined,
+      );
+    }
+  } else {
+    const afterChannel = applyFacetChannelStroke(
+      normalizedBeforeChannel,
+      request.operation,
+      request.guard.triangleCount,
+    );
+    if (canonicalStringify(normalizedBeforeChannel) === canonicalStringify(afterChannel)) {
+      return { status: 'noop' };
+    }
+    after[request.channel] = afterChannel;
+  }
+  if (facetAnnotationsBytes(before) === facetAnnotationsBytes(after)) return { status: 'noop' };
   const afterIssues = validateFacetAnnotations(after, {
     topologyRevision: request.guard.topologyRevision,
     triangleCount: request.guard.triangleCount,
@@ -157,6 +202,106 @@ export function commitFacetAnnotationStroke<Channel extends FacetAnnotationChann
   });
   const committed = context.project.getSnapshot();
   return { status: 'applied', revision: committed.revision, hash: committed.hash };
+}
+
+export interface FacetRefinementCommitRequest<Channel extends FacetAnnotationChannel> {
+  guard: FacetAnnotationGuard;
+  channel: Channel;
+  encoding: FacetRefinementEncoding<FacetAnnotations[Channel][number]['value']>;
+  cancellation?: FacetStrokeRequest<Channel>['cancellation'];
+  label?: string;
+}
+
+/** Persist one already-resolved refined selector result as one exact history entry. */
+export function commitFacetRefinement<Channel extends FacetAnnotationChannel>(
+  commands: CommandBus,
+  request: FacetRefinementCommitRequest<Channel>,
+): FacetStrokeCommitResult {
+  if (request.cancellation?.aborted) {
+    return { status: 'cancelled', ...(request.cancellation.reason ? { reason: request.cancellation.reason } : {}) };
+  }
+  const context = commands.context;
+  if (!context.project.isCurrent(request.guard)) throw new StaleFacetAnnotationResultError('project');
+  const found = findVolume(context.project.getSnapshot().state, request.guard.volumeId);
+  if (!found) throw new StaleFacetAnnotationResultError('project');
+  if (
+    found.volume.source.topologyRevision !== request.guard.topologyRevision ||
+    found.volume.source.triangleCount !== request.guard.triangleCount ||
+    found.volume.annotations.topologyRevision !== request.guard.topologyRevision
+  ) {
+    throw new StaleFacetAnnotationResultError('topology');
+  }
+  if (found.volume.role !== 'model') {
+    throw new FacetAnnotationValidationError([
+      {
+        code: 'incompatible-modifier-annotations',
+        path: 'volume.role',
+        message: `${found.volume.role} volumes cannot own facet annotations`,
+      },
+    ]);
+  }
+  const filamentIds = new Set(
+    [
+      ...context.project.getSnapshot().state.filaments.physical,
+      ...context.project.getSnapshot().state.filaments.mixed,
+    ].map((filament) => filament.id),
+  );
+  const beforeIssues = validateFacetAnnotations(found.volume.annotations, {
+    topologyRevision: request.guard.topologyRevision,
+    triangleCount: request.guard.triangleCount,
+    filamentIds,
+  });
+  if (beforeIssues.length > 0) throw new FacetAnnotationValidationError(beforeIssues);
+
+  const before = cloneJson(found.volume.annotations);
+  const projectedAssignments = facetAssignmentsFromRefinement(request.encoding);
+  const encodingIssues = validateFacetRefinementChannel(
+    request.channel,
+    request.encoding,
+    projectedAssignments as TriangleAssignments<JsonValue>[],
+    {
+      triangleCount: request.guard.triangleCount,
+      filamentIds,
+      path: `refinement.${request.channel}`,
+      requireSplit: false,
+    },
+  );
+  if (encodingIssues.length > 0) throw new FacetAnnotationValidationError(encodingIssues);
+  const encoding = normalizeFacetRefinementEncoding(request.encoding);
+  const after = cloneJson(before);
+  after[request.channel] = facetAssignmentsFromRefinement(encoding) as FacetAnnotations[Channel];
+  setRefinementChannel(after, request.channel, facetRefinementHasSplits(encoding) ? encoding : undefined);
+  const afterIssues = validateFacetAnnotations(after, {
+    topologyRevision: request.guard.topologyRevision,
+    triangleCount: request.guard.triangleCount,
+    filamentIds,
+  });
+  if (afterIssues.length > 0) throw new FacetAnnotationValidationError(afterIssues);
+  if (facetAnnotationsBytes(before) === facetAnnotationsBytes(after)) return { status: 'noop' };
+
+  commands.execute(
+    new FacetAnnotationStrokeCommand(
+      request.guard,
+      before,
+      after,
+      request.label ?? `Paint refined ${request.channel} facets`,
+    ),
+    { coalesce: false },
+  );
+  const committed = context.project.getSnapshot();
+  return { status: 'applied', revision: committed.revision, hash: committed.hash };
+}
+
+function setRefinementChannel(
+  annotations: FacetAnnotations,
+  channel: FacetAnnotationChannel,
+  encoding: FacetRefinementEncoding<JsonValue> | undefined,
+): void {
+  const refinement = { ...(annotations.refinement ?? {}) } as Record<FacetAnnotationChannel, unknown>;
+  if (encoding) refinement[channel] = encoding;
+  else delete refinement[channel];
+  if (Object.keys(refinement).length > 0) annotations.refinement = refinement as FacetAnnotationRefinements;
+  else delete annotations.refinement;
 }
 
 function defaultStrokeLabel(channel: FacetAnnotationChannel, mode: 'paint' | 'erase' | 'reset'): string {

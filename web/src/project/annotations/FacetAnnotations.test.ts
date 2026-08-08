@@ -253,4 +253,125 @@ test('cancellation, semantic no-op, invalid values, and stale async guards never
   assert.deepEqual(stale.commands.getHistorySnapshot(), historyAfterRename);
 });
 
+test('validates strict persisted refinement DTOs and sparse-root consistency', () => {
+  const h = harness();
+  const current = annotations(h);
+  current.color = [];
+  current.refinement = {
+    color: {
+      version: 1,
+      roots: Array.from({ length: 12 }, (_, triangle) =>
+        triangle === 0
+          ? {
+              kind: 'split' as const,
+              splitSides: 1 as const,
+              specialSide: 0 as const,
+              children: [
+                { kind: 'leaf' as const, state: { kind: 'assigned' as const, value: h.fixture.ids.physical0 } },
+                { kind: 'leaf' as const, state: { kind: 'assigned' as const, value: h.fixture.ids.physical1 } },
+              ],
+            }
+          : { kind: 'leaf' as const, state: { kind: 'unpainted' as const } },
+      ),
+    },
+  };
+  assert.deepEqual(
+    validateFacetAnnotations(current, {
+      topologyRevision: 0,
+      triangleCount: 12,
+      filamentIds: new Set([h.fixture.ids.physical0, h.fixture.ids.physical1, h.fixture.ids.mixed]),
+    }),
+    [],
+  );
+
+  const unknownContainer = cloneJson(current) as FacetAnnotations & { refinement: Record<string, unknown> };
+  unknownContainer.refinement.future = {};
+  assert.ok(
+    validateFacetAnnotations(unknownContainer, { topologyRevision: 0, triangleCount: 12 }).some(
+      (issue) => issue.code === 'unknown-facet-refinement-channel',
+    ),
+  );
+  const unknownNode = cloneJson(current);
+  Object.assign(unknownNode.refinement!.color!.roots[0], { future: true });
+  assert.ok(
+    validateFacetAnnotations(unknownNode, { topologyRevision: 0, triangleCount: 12 }).some(
+      (issue) => issue.code === 'invalid-facet-refinement-fields',
+    ),
+  );
+  const empty = cloneJson(current);
+  empty.refinement = {};
+  assert.ok(
+    validateFacetAnnotations(empty, { topologyRevision: 0, triangleCount: 12 }).some(
+      (issue) => issue.code === 'empty-facet-refinements',
+    ),
+  );
+  const homogeneous = cloneJson(current);
+  homogeneous.refinement!.color = {
+    version: 1,
+    roots: [
+      {
+        kind: 'split',
+        splitSides: 1,
+        specialSide: 0,
+        children: [
+          { kind: 'leaf', state: { kind: 'assigned', value: h.fixture.ids.physical0 } },
+          {
+            kind: 'split',
+            splitSides: 1,
+            specialSide: 0,
+            children: [
+              { kind: 'leaf', state: { kind: 'assigned', value: h.fixture.ids.physical0 } },
+              { kind: 'leaf', state: { kind: 'assigned', value: h.fixture.ids.physical0 } },
+            ],
+          },
+        ],
+      },
+      ...homogeneous.refinement!.color!.roots.slice(1),
+    ],
+  };
+  assert.ok(
+    validateFacetAnnotations(homogeneous, { topologyRevision: 0, triangleCount: 12 }).some(
+      (issue) => issue.code === 'noncanonical-facet-refinement',
+    ),
+  );
+});
+
+test('whole-root strokes replace stored splits and omit refinement after collapse', () => {
+  const h = harness();
+  const state = cloneProjectState(h.project.getSnapshot().state);
+  const volume = findVolume(state, h.volumeId)!.volume;
+  volume.annotations.color = [];
+  volume.annotations.refinement = {
+    color: {
+      version: 1,
+      roots: Array.from({ length: 12 }, (_, triangle) =>
+        triangle === 0
+          ? {
+              kind: 'split' as const,
+              splitSides: 1 as const,
+              specialSide: 0 as const,
+              children: [
+                { kind: 'leaf' as const, state: { kind: 'assigned' as const, value: h.fixture.ids.physical0 } },
+                { kind: 'leaf' as const, state: { kind: 'assigned' as const, value: h.fixture.ids.physical1 } },
+              ],
+            }
+          : { kind: 'leaf' as const, state: { kind: 'unpainted' as const } },
+      ),
+    },
+  };
+  h.project.replaceState(state, { reason: 'test-setup', dirtyCategories: [] });
+  h.commands.markCheckpoint();
+  const before = canonicalStringify(annotations(h));
+  const result = commitFacetAnnotationStroke(h.commands, {
+    guard: captureFacetAnnotationGuard(h.commands, h.volumeId),
+    channel: 'color',
+    operation: { mode: 'paint', value: h.fixture.ids.physical1, ranges: [{ start: 0, endExclusive: 1 }] },
+  });
+  assert.equal(result.status, 'applied');
+  assert.deepEqual(annotations(h).color, [{ value: h.fixture.ids.physical1, triangles: [0] }]);
+  assert.equal(annotations(h).refinement, undefined);
+  assert.equal(h.commands.undo(), true);
+  assert.equal(canonicalStringify(annotations(h)), before);
+});
+
 console.log(`\nCanonical facet annotations: ${passed} tests passed.`);

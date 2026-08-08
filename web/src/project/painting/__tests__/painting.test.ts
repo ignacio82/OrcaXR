@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 
 import { InMemoryAssetRepository } from '../../assets';
+import { materializeFacetRefinement, StaleFacetAnnotationResultError } from '../../annotations';
+import { canonicalStringify, cloneProjectState } from '../../domain/canonical';
 import { entityId, seededRandom, UuidIdSource } from '../../domain/ids';
 import {
   createEmptyProject,
@@ -11,7 +13,7 @@ import {
   type ProjectState,
 } from '../../domain/model';
 import { CommandBus } from '../../history/commandBus';
-import { encodeIndexedMeshAsset } from '../../meshCodec';
+import { decodeIndexedMeshAsset, encodeIndexedMeshAsset } from '../../meshCodec';
 import { SelectionStore } from '../../selection';
 import { ProjectStore } from '../../store';
 import { paintPaletteColors, paintPaletteEntryFor, projectPaintPalette } from '../paintPalette';
@@ -52,19 +54,19 @@ function ratioRecipe(id: typeof RATIO, name: string, enabled: boolean): MixedFil
 }
 
 /** Two coplanar triangles forming a 10 mm square in the XY plane. */
-function squareMeshAsset(id = entityId<'asset'>('import:test:square')) {
+function squareMeshAsset(id = entityId<'asset'>('import:test:square'), sideMm = 10) {
   return encodeIndexedMeshAsset({
     id,
-    positions: [0, 0, 0, 10, 0, 0, 10, 10, 0, 0, 10, 0],
+    positions: [0, 0, 0, sideMm, 0, 0, sideMm, sideMm, 0, 0, sideMm, 0],
     indices: [0, 1, 2, 0, 2, 3],
     sourceFilename: 'square.stl',
   });
 }
 
-function createHarness(options: { withMixed?: boolean } = {}) {
+function createHarness(options: { withMixed?: boolean; sideMm?: number } = {}) {
   const ids = new UuidIdSource(seededRandom(0x9a17));
   const state: ProjectState = createEmptyProject({ idSource: ids, now: '2026-08-07T00:00:00.000Z', toolCount: 2 });
-  const asset = squareMeshAsset();
+  const asset = squareMeshAsset(undefined, options.sideMm);
   const objectId = ids.next('object');
   const volumeId = ids.next('volume');
   const instanceId = ids.next('instance');
@@ -264,6 +266,230 @@ test('brush strokes select a sweep and repeated identical samples are no-ops', (
   assert.equal(again.status, 'noop', 'an unchanged stroke never grows history');
 });
 
+test('accumulates refined preview samples and commits them once with the first-sample guard', () => {
+  const harness = createHarness();
+  const first = harness.service.previewStroke({
+    hit: {
+      volumeId: harness.volumeId,
+      triangleIndex: 0,
+      localPoint: [1, 1, 0],
+      localCameraPosition: [1, 1, 40],
+    },
+    settings: { tool: 'circle', radiusMm: 0.4, triangleSplitting: true },
+    value: TOOL_ONE,
+    mode: 'paint',
+  });
+  assert.ok(first.refinementAfter?.roots.some((root) => root.kind === 'split'));
+  const second = harness.service.previewStroke({
+    hit: {
+      volumeId: harness.volumeId,
+      triangleIndex: 0,
+      localPoint: [2, 1, 0],
+      previousLocalPoint: [1, 1, 0],
+      localCameraPosition: [2, 1, 40],
+    },
+    settings: { tool: 'circle', radiusMm: 0.4, triangleSplitting: true },
+    value: TOOL_ONE,
+    mode: 'paint',
+    refinement: first.refinementAfter as never,
+    guard: first.guard,
+  });
+  const result = harness.service.commitRefinement({
+    volumeId: harness.volumeId,
+    encoding: second.refinementAfter as never,
+    guard: first.guard,
+  });
+  assert.equal(result.status, 'applied');
+  assert.equal(harness.commands.getHistorySnapshot().undoCount, 1);
+  const stored = harness.project.getSnapshot().state.plates[0].objects[0].volumes[0].annotations.refinement?.color;
+  assert.deepEqual(stored, second.refinementAfter);
+  assert.equal(harness.commands.undo(), true);
+  assert.equal(harness.project.getSnapshot().state.plates[0].objects[0].volumes[0].annotations.refinement, undefined);
+
+  const stale = createHarness();
+  const preview = stale.service.previewStroke({
+    hit: { volumeId: stale.volumeId, ...TRIANGLE_HIT },
+    settings: { tool: 'circle', radiusMm: 0.4, triangleSplitting: true },
+    value: TOOL_ONE,
+    mode: 'paint',
+  });
+  stale.project.replaceState(cloneProjectState(stale.project.getSnapshot().state), { reason: 'concurrent edit' });
+  assert.throws(
+    () =>
+      stale.service.commitRefinement({
+        volumeId: stale.volumeId,
+        encoding: preview.refinementAfter as never,
+        guard: preview.guard,
+      }),
+    StaleFacetAnnotationResultError,
+  );
+});
+
+test('Gap Fill commits each refined component to its snapshot-derived neighbour state', () => {
+  const harness = createHarness({ sideMm: 1 });
+  const next = cloneProjectState(harness.project.getSnapshot().state);
+  const annotations = next.plates[0].objects[0].volumes[0].annotations;
+  annotations.color = [{ value: TOOL_TWO, triangles: [1] }];
+  annotations.refinement = {
+    color: {
+      version: 1,
+      roots: [
+        {
+          kind: 'split',
+          splitSides: 1,
+          specialSide: 0,
+          children: [
+            { kind: 'leaf', state: { kind: 'assigned', value: TOOL_ONE } },
+            { kind: 'leaf', state: { kind: 'assigned', value: TOOL_TWO } },
+          ],
+        },
+        { kind: 'leaf', state: { kind: 'assigned', value: TOOL_TWO } },
+      ],
+    },
+  };
+  harness.project.replaceState(next, { reason: 'install refined Gap Fill fixture' });
+  const before = canonicalStringify(annotations);
+  const request = {
+    hit: { volumeId: harness.volumeId, ...TRIANGLE_HIT },
+    settings: { tool: 'gapFill' as const, gapAreaMm2: 0.3 },
+    value: TOOL_ONE,
+    mode: 'paint' as const,
+  };
+
+  const preview = harness.service.previewStroke(request);
+  assert.deepEqual(preview.refinementAfter?.roots, [
+    { kind: 'leaf', state: { kind: 'assigned', value: TOOL_TWO } },
+    { kind: 'leaf', state: { kind: 'assigned', value: TOOL_TWO } },
+  ]);
+  assert.equal(
+    canonicalStringify(harness.project.getSnapshot().state.plates[0].objects[0].volumes[0].annotations),
+    before,
+    'preview keeps the refined source snapshot immutable',
+  );
+
+  assert.equal(harness.service.commitStroke(request).status, 'applied');
+  const committed = harness.project.getSnapshot().state.plates[0].objects[0].volumes[0].annotations;
+  assert.deepEqual(committed.color, [{ value: TOOL_TWO, triangles: [0, 1] }]);
+  assert.equal(committed.refinement, undefined, 'homogeneous refined children collapse after replacement');
+  assert.equal(harness.commands.undo(), true);
+  assert.equal(
+    canonicalStringify(harness.project.getSnapshot().state.plates[0].objects[0].volumes[0].annotations),
+    before,
+  );
+});
+
+test('labels an accumulated adaptive erase as erase history', () => {
+  const harness = createHarness();
+  const painted = harness.service.previewStroke({
+    hit: {
+      volumeId: harness.volumeId,
+      triangleIndex: 0,
+      localPoint: [1, 1, 0],
+      localCameraPosition: [1, 1, 40],
+    },
+    settings: { tool: 'circle', radiusMm: 0.4, triangleSplitting: true },
+    value: TOOL_ONE,
+    mode: 'paint',
+  });
+  harness.service.commitRefinement({
+    volumeId: harness.volumeId,
+    encoding: painted.refinementAfter as never,
+    guard: painted.guard,
+  });
+  const erased = harness.service.previewStroke({
+    hit: {
+      volumeId: harness.volumeId,
+      triangleIndex: 0,
+      localPoint: [1, 1, 0],
+      localCameraPosition: [1, 1, 40],
+    },
+    settings: { tool: 'circle', radiusMm: 0.4, triangleSplitting: true },
+    mode: 'erase',
+  });
+  assert.equal(
+    harness.service.commitRefinement({
+      volumeId: harness.volumeId,
+      encoding: erased.refinementAfter as never,
+      guard: erased.guard,
+      mode: 'erase',
+    }).status,
+    'applied',
+  );
+  assert.equal(harness.commands.getHistorySnapshot().undoLabel, 'Erase refined colour facets');
+});
+
+test('rejects cross-volume guards before preview or any commit path can mutate state', () => {
+  const harness = createHarness();
+  const next = cloneProjectState(harness.project.getSnapshot().state);
+  const secondVolumeId = harness.ids.next('volume');
+  next.plates[0].objects[0].volumes.push({
+    ...cloneProjectState(next).plates[0].objects[0].volumes[0],
+    id: secondVolumeId,
+    name: 'Second body',
+    annotations: emptyFacetAnnotations(),
+  });
+  harness.project.replaceState(next, { reason: 'install second paint target' });
+  const secondGuard = harness.service.previewStroke({
+    hit: { volumeId: secondVolumeId, ...TRIANGLE_HIT },
+    settings: { tool: 'triangle' },
+    value: TOOL_ONE,
+    mode: 'paint',
+  }).guard;
+  const before = canonicalStringify(harness.project.getSnapshot().state);
+  const mismatchedHit = { volumeId: harness.volumeId, ...TRIANGLE_HIT };
+
+  assert.throws(
+    () =>
+      harness.service.previewStroke({
+        hit: mismatchedHit,
+        settings: { tool: 'triangle' },
+        value: TOOL_ONE,
+        mode: 'paint',
+        guard: secondGuard,
+      }),
+    StaleFacetAnnotationResultError,
+  );
+  assert.throws(
+    () =>
+      harness.service.commitStroke({
+        hit: mismatchedHit,
+        settings: { tool: 'triangle' },
+        value: TOOL_ONE,
+        mode: 'paint',
+        guard: secondGuard,
+      }),
+    StaleFacetAnnotationResultError,
+  );
+  assert.throws(
+    () =>
+      harness.service.commitTriangles({
+        volumeId: harness.volumeId,
+        triangleIndices: [0],
+        value: TOOL_ONE,
+        mode: 'paint',
+        guard: secondGuard,
+      }),
+    StaleFacetAnnotationResultError,
+  );
+  assert.throws(
+    () =>
+      harness.service.commitRefinement({
+        volumeId: harness.volumeId,
+        encoding: {
+          version: 1,
+          roots: [
+            { kind: 'leaf', state: { kind: 'assigned', value: TOOL_ONE } },
+            { kind: 'leaf', state: { kind: 'unpainted' } },
+          ],
+        },
+        guard: secondGuard,
+      }),
+    StaleFacetAnnotationResultError,
+  );
+  assert.equal(canonicalStringify(harness.project.getSnapshot().state), before);
+  assert.equal(harness.commands.getHistorySnapshot().undoCount, 0);
+});
+
 test('rejects unpaintable targets, filaments, and incomplete tool input', () => {
   const harness = createHarness({ withMixed: true });
   assert.throws(
@@ -417,6 +643,54 @@ await (async () => {
   assert.deepEqual(facets[0].triangles, [0, 1]);
   passed += 1;
   console.log('  ✓ painted recipe identity survives canonical save and reopen');
+})();
+
+await (async () => {
+  const harness = createHarness();
+  const preview = harness.service.previewStroke({
+    hit: {
+      volumeId: harness.volumeId,
+      triangleIndex: 0,
+      localPoint: [1, 1, 0],
+      localCameraPosition: [1, 1, 40],
+    },
+    settings: { tool: 'circle', radiusMm: 0.4, triangleSplitting: true },
+    value: TOOL_TWO,
+    mode: 'paint',
+  });
+  harness.service.commitRefinement({
+    volumeId: harness.volumeId,
+    encoding: preview.refinementAfter as never,
+    guard: preview.guard,
+  });
+  const storedVolume = harness.project.getSnapshot().state.plates[0].objects[0].volumes[0];
+  const storedBytes = canonicalStringify(storedVolume.annotations.refinement);
+  const serializer = new Bbs3mfProjectSerializer();
+  const snapshot = harness.project.getSnapshot();
+  const saved = await serializer.serialize({
+    state: snapshot.state,
+    assets: harness.assets.list(),
+    sourceRevision: snapshot.revision,
+    sourceHash: snapshot.hash,
+  });
+  const reopened = await serializer.deserialize(saved.bytes);
+  const reopenedVolume = reopened.state.plates[0].objects[0].volumes[0];
+  assert.equal(canonicalStringify(reopenedVolume.annotations.refinement), storedBytes);
+  const decoded = decodeIndexedMeshAsset(reopened.assets[0]);
+  const materialized = materializeFacetRefinement({
+    mesh: decoded,
+    annotations: reopenedVolume.annotations,
+    channel: 'color',
+    guard: {
+      topologyRevision: reopenedVolume.source.topologyRevision,
+      triangleCount: reopenedVolume.source.triangleCount,
+    },
+    refinement: reopenedVolume.annotations.refinement!.color!,
+  });
+  assert.ok(materialized.vertices.length > decoded.vertices.length);
+  assert.ok(materialized.leaves.some((leaf) => leaf.state.kind === 'assigned' && leaf.state.value === TOOL_TWO));
+  passed += 1;
+  console.log('  ✓ refined paint survives reopen and rematerializes assigned overlay leaves');
 })();
 
 console.log(`\nCanonical painting: ${passed} tests passed.`);

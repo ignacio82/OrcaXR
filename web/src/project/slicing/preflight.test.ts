@@ -187,6 +187,35 @@ test('blocks unavailable recipe dependencies and incompatible tool/material/temp
   assert.equal(result.canSlice, false);
 });
 
+test('includes stable filament IDs used only by refined leaves', () => {
+  const { fixture, state, assets } = harness();
+  const volume = state.plates[0].objects[0].volumes[0];
+  volume.annotations.color = [];
+  volume.annotations.refinement = {
+    color: {
+      version: 1,
+      roots: [
+        {
+          kind: 'split',
+          splitSides: 1,
+          specialSide: 0,
+          children: [
+            { kind: 'leaf', state: { kind: 'assigned', value: fixture.ids.mixed } },
+            { kind: 'leaf', state: { kind: 'assigned', value: fixture.ids.physical0 } },
+          ],
+        },
+      ],
+    },
+  };
+  state.filaments.mixed[0].enabled = false;
+  const result = runCanonicalSlicePreflight({ state, assets, plateId: fixture.ids.plate });
+  assert.equal(result.usedFilamentIds.includes(fixture.ids.mixed), true);
+  assert.equal(
+    result.issues.some((issue) => issue.code === 'disabled-filament-assignment'),
+    true,
+  );
+});
+
 test('requires explicit attestation only when requested and validates wipe-tower intent', () => {
   const { fixture, state, assets } = harness();
   state.plates[0].wipeTower = {

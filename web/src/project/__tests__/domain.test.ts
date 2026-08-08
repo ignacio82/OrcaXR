@@ -160,6 +160,16 @@ test('rejects stale topology annotations and out-of-range facets', () => {
   assert.ok(codes.has('facet-index-out-of-range'));
 });
 
+test('rejects sparse facet values that cannot round-trip through their BBS channels', () => {
+  const broken = cloneProjectState(createProjectFixture().state);
+  const annotations = broken.plates[0].objects[0].volumes[0].annotations;
+  (annotations.fuzzySkin as unknown as Array<{ value: boolean; triangles: number[] }>).push({
+    value: false,
+    triangles: [0],
+  });
+  assert.ok(validateProjectState(broken).some((issue) => issue.code === 'invalid-facet-value'));
+});
+
 test('rejects runtime values that cannot round-trip through canonical JSON', () => {
   const broken = cloneProjectState(createProjectFixture().state);
   (broken.config as Record<string, unknown>).invalid = undefined;

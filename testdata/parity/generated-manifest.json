@@ -8,29 +8,29 @@
   },
   "artifacts": [
     {
-      "bytes": 15629,
+      "bytes": 15640,
       "path": "expected/reference.semantic.json",
-      "sha256": "12a799d1297401920bb85028a7adef0a382995648646b68dc9aabd19b62648bf"
+      "sha256": "2045bea8fa65aa1ae53dd8b0291f8dc103b7fe783b4422b6ade2731ab4ec92d6"
     },
     {
-      "bytes": 8254,
+      "bytes": 8265,
       "path": "fixtures/mutations/changed-setting.3mf",
-      "sha256": "eb381d93cc6f057dc8b3a0792d365b5a7068e8c43e018a3c1a3bd583ad8124c1"
+      "sha256": "f21c19da856ae1a793838fdb60e998b1e44d744eaea2abe0d5f31568e61f2a95"
     },
     {
-      "bytes": 8183,
+      "bytes": 8194,
       "path": "fixtures/mutations/missing-mixed-definition.3mf",
-      "sha256": "13a0bd8d7087273263426c293bbd8788fc6d6073df9cc3be129b89f07523f65f"
+      "sha256": "8ffdc69a0e7f553219f8e38f960cbe971e72008037967dcb4fa45f1b63b95132"
     },
     {
-      "bytes": 8237,
+      "bytes": 8249,
       "path": "fixtures/mutations/missing-paint-facet.3mf",
-      "sha256": "8f88a4002923064c01f1e5f4040894c4ae278de992fa907799d2e39a59e83d11"
+      "sha256": "206e612edd05871e244742a5d9b2f12d8e49e5744fdc23eb68e1b0f45e078a0b"
     },
     {
-      "bytes": 8211,
+      "bytes": 8222,
       "path": "fixtures/mutations/missing-part-assignment.3mf",
-      "sha256": "4aa2085e95cbb76de871ef8f280c2bc618c24730cf489ab7d497ae62e59bf177"
+      "sha256": "c819e00d61ea21d0863d23e9974b63e88241b440ce927a930f3a9f2a62fe74fd"
     },
     {
       "bytes": 603,
@@ -38,9 +38,9 @@
       "sha256": "d38e62de9f66b7b59f964d1a35073d8dbcf1b17654e30a60d97b5fb3e694b503"
     },
     {
-      "bytes": 8254,
+      "bytes": 8265,
       "path": "fixtures/reference.3mf",
-      "sha256": "b75e0004939e2d63f288c4cbc6af1be2d491d595a6a06102986304f93c583dee"
+      "sha256": "3d0f5b2fa1f10fa8686f51eb9d65f3d9ce6a32e9b7b5b1d19c69ea90cbd1540b"
     },
     {
       "bytes": 643,
@@ -65,8 +65,8 @@
   ],
   "recipes": {
     "geometry": "sha256:cdbbcfe2f883aded2c402db2ada53d3d896ddb92fcd5d9be74b3b49a82ef39eb",
-    "mutations": "sha256:c2e31b125d6381ee59588e749fef1a5f295d2c09d8843a81298dedb46905323f",
-    "projectTree": "sha256:9cae7d2b15178e98d4100ddd3a48d3cd9491f04ff2b5d756e4d25bc8008b22a7",
+    "mutations": "sha256:a22cd1bcefdcf6835b49064dec0d516eff15af6057abbb08dd2036e7ec95ea65",
+    "projectTree": "sha256:d3f67eff5b09a172bc84e2673da3a595c8fb76235cd627454aabfcebc49ddf4b",
     "representativeGcode": "sha256:f44348fbe1d44747b7c961ef24262bd550b6525c378a97c108a20975b78b3ded"
   }
 }

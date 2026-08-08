@@ -1,4 +1,5 @@
 import type { FilamentId } from '../domain/ids';
+import { facetRefinementAssignedLeafCount } from '../domain/facetRefinement';
 import { resolveFilament } from '../domain/selectors';
 import type {
   ConfigMap,
@@ -353,11 +354,19 @@ function filamentBadge(
 function sumPaint(annotations: readonly FacetAnnotations[]): { colorFacetCount: number; supportFacetCount: number } {
   return {
     colorFacetCount: annotations.reduce(
-      (sum, entry) => sum + entry.color.reduce((count, assignment) => count + assignment.triangles.length, 0),
+      (sum, entry) =>
+        sum +
+        (entry.refinement?.color
+          ? facetRefinementAssignedLeafCount(entry.refinement.color)
+          : entry.color.reduce((count, assignment) => count + assignment.triangles.length, 0)),
       0,
     ),
     supportFacetCount: annotations.reduce(
-      (sum, entry) => sum + entry.support.reduce((count, assignment) => count + assignment.triangles.length, 0),
+      (sum, entry) =>
+        sum +
+        (entry.refinement?.support
+          ? facetRefinementAssignedLeafCount(entry.refinement.support)
+          : entry.support.reduce((count, assignment) => count + assignment.triangles.length, 0)),
       0,
     ),
   };

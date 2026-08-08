@@ -1,4 +1,5 @@
 import { canonicalStringify, cloneJson, cloneProjectState } from '../domain/canonical';
+import { facetAnnotationsHaveAssignments } from '../domain/facetRefinement';
 import type { ObjectId, VolumeId } from '../domain/ids';
 import type { ProjectState, ProjectVolume, VolumeRole } from '../domain/model';
 import { findVolume } from '../domain/selectors';
@@ -156,14 +157,7 @@ function assertConversionAllowed(
 }
 
 function hasFacetAssignments(volume: ProjectVolume): boolean {
-  const { annotations } = volume;
-  return (
-    annotations.color.length > 0 ||
-    annotations.support.length > 0 ||
-    annotations.seam.length > 0 ||
-    annotations.fuzzySkin.length > 0 ||
-    annotations.brim.length > 0
-  );
+  return facetAnnotationsHaveAssignments(volume.annotations);
 }
 
 function roleSupportsLocalFilament(role: VolumeRole): boolean {

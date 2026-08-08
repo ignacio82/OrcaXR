@@ -1,5 +1,6 @@
 import { canonicalStringify, cloneJson } from '../domain/canonical';
 import type { FacetAnnotations, JsonValue, TriangleAssignments } from '../domain/model';
+import { normalizeFacetRefinementEncoding, validateFacetRefinementChannel } from '../domain/facetRefinement';
 import type {
   FacetAnnotationChannel,
   FacetAnnotationIssue,
@@ -110,6 +111,50 @@ export function validateFacetAnnotations(
       });
     });
   }
+  const refinement = annotations.refinement as unknown;
+  if (refinement !== undefined) {
+    if (typeof refinement !== 'object' || refinement === null || Array.isArray(refinement)) {
+      issues.push({
+        code: 'invalid-facet-refinements',
+        path: 'refinement',
+        message: 'Facet refinements must be a per-channel object',
+      });
+    } else {
+      const keys = Object.keys(refinement);
+      if (keys.length === 0) {
+        issues.push({
+          code: 'empty-facet-refinements',
+          path: 'refinement',
+          message: 'Empty facet refinements must be omitted',
+        });
+      }
+      keys
+        .filter((key) => !(CHANNELS as readonly string[]).includes(key))
+        .forEach((key) =>
+          issues.push({
+            code: 'unknown-facet-refinement-channel',
+            path: `refinement.${key}`,
+            message: `Unknown facet refinement channel ${key}`,
+          }),
+        );
+      for (const channel of CHANNELS) {
+        const candidate = (refinement as Record<string, unknown>)[channel];
+        if (candidate === undefined) continue;
+        issues.push(
+          ...validateFacetRefinementChannel(
+            channel,
+            candidate,
+            annotations[channel] as readonly TriangleAssignments<JsonValue>[],
+            {
+              triangleCount: options.triangleCount,
+              ...(options.filamentIds ? { filamentIds: options.filamentIds } : {}),
+              path: `refinement.${channel}`,
+            },
+          ),
+        );
+      }
+    }
+  }
   return issues;
 }
 
@@ -119,6 +164,7 @@ export function normalizeFacetAnnotations(
 ): FacetAnnotations {
   const issues = validateFacetAnnotations(annotations, options);
   if (issues.length > 0) throw new FacetAnnotationValidationError(issues);
+  const refinement = annotations.refinement;
   return {
     topologyRevision: annotations.topologyRevision,
     color: normalizeChannel(annotations.color),
@@ -126,6 +172,17 @@ export function normalizeFacetAnnotations(
     seam: normalizeChannel(annotations.seam),
     fuzzySkin: normalizeChannel(annotations.fuzzySkin),
     brim: normalizeChannel(annotations.brim),
+    ...(refinement
+      ? {
+          refinement: {
+            ...(refinement.color ? { color: normalizeFacetRefinementEncoding(refinement.color) } : {}),
+            ...(refinement.support ? { support: normalizeFacetRefinementEncoding(refinement.support) } : {}),
+            ...(refinement.seam ? { seam: normalizeFacetRefinementEncoding(refinement.seam) } : {}),
+            ...(refinement.fuzzySkin ? { fuzzySkin: normalizeFacetRefinementEncoding(refinement.fuzzySkin) } : {}),
+            ...(refinement.brim ? { brim: normalizeFacetRefinementEncoding(refinement.brim) } : {}),
+          },
+        }
+      : {}),
   };
 }
 
@@ -224,6 +281,7 @@ function validChannelValue(
     case 'seam':
       return value === 'prefer' || value === 'avoid';
     case 'fuzzySkin':
+      return value === true;
     case 'brim':
       return typeof value === 'boolean';
   }

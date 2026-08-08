@@ -1,5 +1,10 @@
 import { isStableEntityId } from './ids';
 import { canonicalStringify } from './canonical';
+import {
+  facetAnnotationsHaveAssignments,
+  validateFacetRefinementChannel,
+  type FacetRefinementChannel,
+} from './facetRefinement';
 import type { FilamentId, PhysicalFilamentId } from './ids';
 import type {
   ConfigMap,
@@ -244,10 +249,7 @@ export function validateProjectState(state: ProjectState): ValidationIssue[] {
             `${volume.role} cannot own a filament assignment`,
           );
         }
-        if (
-          volume.role !== 'model' &&
-          Object.values(volume.annotations).some((value) => Array.isArray(value) && value.length > 0)
-        ) {
+        if (volume.role !== 'model' && facetAnnotationsHaveAssignments(volume.annotations)) {
           add(
             'incompatible-modifier-annotations',
             `${volumePath}.annotations`,
@@ -665,6 +667,19 @@ function validateAnnotations(
       if (name === 'color' && !filamentIds.has(assignment.value as string)) {
         add('dangling-filament', `${path}.annotations.color[${assignmentIndex}].value`, 'Unknown paint filament');
       }
+      const validValue =
+        (name === 'color' && typeof assignment.value === 'string') ||
+        (name === 'support' && (assignment.value === 'enforce' || assignment.value === 'block')) ||
+        (name === 'seam' && (assignment.value === 'prefer' || assignment.value === 'avoid')) ||
+        (name === 'fuzzySkin' && assignment.value === true) ||
+        (name === 'brim' && typeof assignment.value === 'boolean');
+      if (!validValue) {
+        add(
+          'invalid-facet-value',
+          `${path}.annotations.${name}[${assignmentIndex}].value`,
+          `Invalid ${name} annotation value`,
+        );
+      }
       assignment.triangles.forEach((triangle, triangleIndex) => {
         const trianglePath = `${path}.annotations.${name}[${assignmentIndex}].triangles[${triangleIndex}]`;
         if (!Number.isInteger(triangle) || triangle < 0 || triangle >= triangleCount) {
@@ -676,5 +691,41 @@ function validateAnnotations(
         seen.add(triangle);
       });
     });
+  }
+  const refinement = annotations.refinement as unknown;
+  if (refinement !== undefined) {
+    if (refinement === null || typeof refinement !== 'object' || Array.isArray(refinement)) {
+      add(
+        'invalid-facet-refinements',
+        `${path}.annotations.refinement`,
+        'Facet refinements must be a per-channel object',
+      );
+      return;
+    }
+    const refinementKeys = Object.keys(refinement);
+    const knownChannels = new Set(channels.map(([name]) => name));
+    if (refinementKeys.length === 0) {
+      add('empty-facet-refinements', `${path}.annotations.refinement`, 'Empty facet refinements must be omitted');
+    }
+    refinementKeys
+      .filter((name) => !knownChannels.has(name))
+      .forEach((name) =>
+        add(
+          'unknown-facet-refinement-channel',
+          `${path}.annotations.refinement.${name}`,
+          `Unknown facet refinement channel ${name}`,
+        ),
+      );
+    for (const [name, assignments] of channels) {
+      const candidate = (refinement as Record<string, unknown>)[name];
+      if (candidate === undefined) continue;
+      for (const issue of validateFacetRefinementChannel(name as FacetRefinementChannel, candidate, assignments, {
+        triangleCount,
+        filamentIds,
+        path: `${path}.annotations.refinement.${name}`,
+      })) {
+        add(issue.code, issue.path, issue.message);
+      }
+    }
   }
 }

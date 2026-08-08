@@ -55,6 +55,10 @@ interface CanonicalExtensionEnvelope {
 
 export interface Bbs3mfProjectSerializerOptions {
   zipLimits?: Partial<ZipSafetyLimits>;
+  /** Optional stricter cap for constrained import surfaces; never exceeds the canonical hard limit. */
+  maxImportedFacetRefinementNodes?: number;
+  /** Optional stricter cap on annotation payload cloned through expanded component graphs. */
+  maxImportedFacetAnnotationMaterializationUnits?: number;
 }
 
 /**
@@ -64,9 +68,13 @@ export interface Bbs3mfProjectSerializerOptions {
  */
 export class Bbs3mfProjectSerializer implements ProjectSerializerPort {
   private readonly zipLimits: Partial<ZipSafetyLimits>;
+  private readonly maxImportedFacetRefinementNodes: number | undefined;
+  private readonly maxImportedFacetAnnotationMaterializationUnits: number | undefined;
 
   constructor(options: Bbs3mfProjectSerializerOptions = {}) {
     this.zipLimits = { ...options.zipLimits };
+    this.maxImportedFacetRefinementNodes = options.maxImportedFacetRefinementNodes;
+    this.maxImportedFacetAnnotationMaterializationUnits = options.maxImportedFacetAnnotationMaterializationUnits;
   }
 
   async serialize(snapshot: ProjectArchiveSnapshot, cancellation?: CancellationToken): Promise<SerializedProject> {
@@ -126,9 +134,21 @@ export class Bbs3mfProjectSerializer implements ProjectSerializerPort {
     archiveHash: string,
   ): { state: ProjectState; assets: AssetPayload[]; warnings: string[] } {
     const envelope = parseEnvelope(extensionBytes);
-    assertValidProjectState(envelope.state);
     const state = cloneJson(envelope.state);
     const warnings: string[] = [];
+    const legacyFalseFuzzyAssignments = countLegacyFalseFuzzyAssignments(state);
+    if (legacyFalseFuzzyAssignments > 0) {
+      const validationState = cloneJson(state);
+      coerceLegacyFalseFuzzyAssignments(validationState);
+      assertValidProjectState(validationState);
+      removeLegacyFalseFuzzyAssignments(state);
+      warnings.push(
+        `Removed ${legacyFalseFuzzyAssignments} legacy false fuzzy-skin facet assignment${
+          legacyFalseFuzzyAssignments === 1 ? '' : 's'
+        }; false represented the inherited/unpainted state`,
+      );
+    }
+    assertValidProjectState(state);
     mergePackageRelationships(state, files, warnings);
     mergePackageContentTypes(state, files, warnings);
     const descriptors = new Map(state.sourceAssets.map((entry) => [entry.id, entry]));
@@ -214,7 +234,14 @@ export class Bbs3mfProjectSerializer implements ProjectSerializerPort {
     files: ReadonlyMap<string, Uint8Array>,
     archiveHash: string,
   ): { state: ProjectState; assets: AssetPayload[]; warnings: string[] } {
-    const imported = importBbsCore(files, archiveHash);
+    const imported = importBbsCore(files, archiveHash, {
+      ...(this.maxImportedFacetRefinementNodes !== undefined
+        ? { maxFacetRefinementNodes: this.maxImportedFacetRefinementNodes }
+        : {}),
+      ...(this.maxImportedFacetAnnotationMaterializationUnits !== undefined
+        ? { maxFacetAnnotationMaterializationUnits: this.maxImportedFacetAnnotationMaterializationUnits }
+        : {}),
+    });
     const state = imported.state;
     mergePackageRelationships(state, files, imported.warnings);
     mergePackageContentTypes(state, files, imported.warnings);
@@ -431,6 +458,58 @@ function parseEnvelope(bytes: Uint8Array): CanonicalExtensionEnvelope {
     state: parsed.state as unknown as ProjectState,
     assetEntries,
   };
+}
+
+function countLegacyFalseFuzzyAssignments(state: ProjectState): number {
+  let count = 0;
+  visitLegacyFalseFuzzyAssignments(state, () => {
+    count += 1;
+  });
+  return count;
+}
+
+function coerceLegacyFalseFuzzyAssignments(state: ProjectState): number {
+  let coerced = 0;
+  visitLegacyFalseFuzzyAssignments(state, (assignment) => {
+    assignment.value = true;
+    coerced += 1;
+  });
+  return coerced;
+}
+
+function visitLegacyFalseFuzzyAssignments(
+  state: ProjectState,
+  visitor: (assignment: Record<string, unknown>) => void,
+): void {
+  const plates = (state as unknown as Record<string, unknown>).plates;
+  if (!Array.isArray(plates)) return;
+  for (const plate of plates) {
+    if (!isRecord(plate) || !Array.isArray(plate.objects)) continue;
+    for (const object of plate.objects) {
+      if (!isRecord(object) || !Array.isArray(object.volumes)) continue;
+      for (const volume of object.volumes) {
+        if (!isRecord(volume) || !isRecord(volume.annotations) || !Array.isArray(volume.annotations.fuzzySkin)) {
+          continue;
+        }
+        for (const assignment of volume.annotations.fuzzySkin) {
+          if (!isRecord(assignment) || assignment.value !== false) continue;
+          visitor(assignment);
+        }
+      }
+    }
+  }
+}
+
+function removeLegacyFalseFuzzyAssignments(state: ProjectState): void {
+  for (const plate of state.plates) {
+    for (const object of plate.objects) {
+      for (const volume of object.volumes) {
+        volume.annotations.fuzzySkin = (volume.annotations.fuzzySkin as unknown as Array<{ value: boolean }>).filter(
+          (assignment) => assignment.value !== false,
+        ) as typeof volume.annotations.fuzzySkin;
+      }
+    }
+  }
 }
 
 function buildRootRelationships(
