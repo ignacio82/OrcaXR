@@ -345,7 +345,6 @@ const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
   view_show_gcode_window: 'The G-code text inspector is not implemented yet.',
   split_to_parts: 'Splitting an object into editable parts is not implemented yet.',
   tool_brim_ears: 'Brim-ear authoring is not implemented yet.',
-  tool_measure: 'The geometry measurement tool is not implemented yet.',
   tool_assembly: 'Assembly view and constraints are not implemented yet.',
   tool_face_detector: 'Face detection and selection is not implemented yet.',
   tool_svg: 'SVG import and embossing is not implemented yet.',

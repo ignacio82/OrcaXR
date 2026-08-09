@@ -61,6 +61,13 @@ import {
   type PaintToolSettings,
 } from '../project/painting/PaintStrokeService';
 import type { AiPaintSession } from '../project/painting/AiPaintSession';
+import {
+  SurfaceFeatureExtractor,
+  describeSurfaceFeature,
+  measureSurfaceFeatures,
+  transformSurfaceFeature,
+  type SurfaceFeature,
+} from '../project/objects/measure';
 import { GEMINI_PAINT_PROVIDER_ID, LazyGeminiAiPaintPort } from '../features/aiPaintProvider';
 import { paintPaletteColors, type PaintPalette } from '../project/painting/paintPalette';
 import {
@@ -391,7 +398,25 @@ interface GeometryLoadOptions {
 type ProjectPrimeTower = { enabled: boolean; xMm: number; yMm: number; widthMm: number };
 
 export type WorkspaceGizmoTool =
-  'move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint' | 'support_paint' | 'seam_paint' | 'fuzzy_skin';
+  'move' | 'rotate' | 'scale' | 'lay_on_face' | 'measure' | 'paint' | 'support_paint' | 'seam_paint' | 'fuzzy_skin';
+
+/** Read-only view a measurement readout renders; every number is canonical. */
+export interface MeasureSnapshot {
+  readonly active: boolean;
+  readonly picks: readonly {
+    readonly kind: SurfaceFeature['kind'];
+    readonly summary: string;
+    /** Circle diameter in millimetres, when the pick is a circle. */
+    readonly diameterMm?: number;
+  }[];
+  readonly distanceMm?: number;
+  readonly distanceKind?: 'strict' | 'infinite';
+  readonly distanceXyzMm?: readonly [number, number, number];
+  readonly angleDeg?: number;
+  /** Exact reason a value the pinned engine computes is withheld here. */
+  readonly unsupportedReason?: string;
+  readonly hint: string;
+}
 
 /** Modal tools that author facet annotations, and the channel each authors. */
 export const PAINT_TOOL_CHANNELS: Readonly<Record<string, PaintChannel>> = Object.freeze({
@@ -1361,6 +1386,12 @@ export class OrcaWorkspace extends xb.Script {
         if (dragX <= 10 && dragY <= 10) this.layPickedFacetOnBed(pointerRay(event));
         return;
       }
+      if (this.tool === 'measure') {
+        const dragX = Math.abs(event.clientX - downX);
+        const dragY = Math.abs(event.clientY - downY);
+        if (dragX <= 10 && dragY <= 10) this.pickMeasureFeature(pointerRay(event));
+        return;
+      }
       if (this.transformControls && (this.transformControls as unknown as { dragging: boolean }).dragging) return;
 
       const dx = event.clientX - downX;
@@ -1804,6 +1835,130 @@ export class OrcaWorkspace extends xb.Script {
     mesh.renderOrder = 3;
     target.display.add(mesh);
     this.paintPreviewOverlay = mesh;
+  }
+
+  // ---------------------------------------------------------------------
+  // Measure (P5.3.1). Picks resolve to canonical surface features in world
+  // millimetres; nothing here mutates the project.
+  // ---------------------------------------------------------------------
+
+  private measureExtractors = new Map<string, SurfaceFeatureExtractor>();
+  private measurePicks: SurfaceFeature[] = [];
+  public onMeasureStateChanged: (() => void) | null = null;
+
+  /** Activate the measurement tool and start a fresh pair of picks. */
+  public measureTool(): void {
+    this.setTool('measure');
+    this.measurePicks = [];
+    this.setStatus('Measure: click two features (a face, edge, corner, or hole).');
+    this.onMeasureStateChanged?.();
+  }
+
+  public clearMeasureSelection(): void {
+    this.measurePicks = [];
+    this.setStatus('Measurement cleared.');
+    this.onMeasureStateChanged?.();
+  }
+
+  public getMeasureSnapshot(): MeasureSnapshot {
+    const active = this.tool === 'measure';
+    const picks = this.measurePicks.map((feature) => ({
+      kind: feature.kind,
+      summary: describeSurfaceFeature(feature),
+      ...(feature.kind === 'circle' ? { diameterMm: feature.radius * 2 } : {}),
+    }));
+    if (this.measurePicks.length < 2) {
+      return Object.freeze({
+        active,
+        picks: Object.freeze(picks),
+        hint: active
+          ? this.measurePicks.length === 0
+            ? 'Click the first feature to measure from.'
+            : 'Click the second feature to measure to.'
+          : 'Choose the Measure tool, then click two features.',
+      });
+    }
+    const result = measureSurfaceFeatures(this.measurePicks[0], this.measurePicks[1]);
+    const distance = result.distanceStrict ?? result.distanceInfinite;
+    return Object.freeze({
+      active,
+      picks: Object.freeze(picks),
+      ...(distance ? { distanceMm: distance.distance } : {}),
+      ...(distance ? { distanceKind: result.distanceStrict ? ('strict' as const) : ('infinite' as const) } : {}),
+      ...(result.distanceXyz
+        ? { distanceXyzMm: Object.freeze([...result.distanceXyz] as [number, number, number]) }
+        : {}),
+      ...(result.angle ? { angleDeg: (result.angle.angle * 180) / Math.PI } : {}),
+      ...(result.unsupported === 'non-parallel-circle-pair'
+        ? {
+            unsupportedReason:
+              'Two circles in non-parallel planes need the engine’s polynomial solver, which this build does not carry.',
+          }
+        : {}),
+      hint: 'Click another feature to start a new measurement.',
+    });
+  }
+
+  /** Resolve a ray to a canonical surface feature in world millimetres. */
+  private pickMeasureFeature(raycaster: THREE.Raycaster): boolean {
+    for (const target of this.paintTargets()) {
+      const [hit] = raycaster.intersectObject(target.display, false);
+      if (!hit || hit.faceIndex === undefined || hit.faceIndex === null) continue;
+      try {
+        const extractor = this.measureExtractorFor(target.volumeId);
+        if (!extractor) continue;
+        const local = target.display.worldToLocal(hit.point.clone());
+        const localFeature = extractor.featureAt(hit.faceIndex, [local.x, local.y, local.z]);
+        target.display.updateWorldMatrix(true, false);
+        const m = target.display.matrixWorld.elements;
+        // Three stores column-major; the measure port takes row-major.
+        const worldFeature = transformSurfaceFeature(localFeature, [
+          m[0],
+          m[4],
+          m[8],
+          m[12],
+          m[1],
+          m[5],
+          m[9],
+          m[13],
+          m[2],
+          m[6],
+          m[10],
+          m[14],
+          m[3],
+          m[7],
+          m[11],
+          m[15],
+        ]);
+        if (!worldFeature) {
+          this.setStatus('That hole is scaled unevenly, so it has no single radius to measure.');
+          this.onMeasureStateChanged?.();
+          return false;
+        }
+        // A third pick starts a new measurement rather than silently replacing one.
+        if (this.measurePicks.length >= 2) this.measurePicks = [];
+        this.measurePicks.push(worldFeature);
+        this.setStatus(`Measure: picked ${describeSurfaceFeature(worldFeature)}.`);
+        this.onMeasureStateChanged?.();
+        return true;
+      } catch (error) {
+        this.setStatus(`Measure failed: ${(error as Error).message}`);
+        return false;
+      }
+    }
+    this.setStatus('Click a model surface to measure it.');
+    return false;
+  }
+
+  private measureExtractorFor(volumeId: VolumeId): SurfaceFeatureExtractor | undefined {
+    const mesh = this.canonicalProject.getVolumeMesh(volumeId);
+    if (!mesh) return undefined;
+    const key = `${volumeId}:${mesh.triangles.length}:${mesh.vertices.length}`;
+    const cached = this.measureExtractors.get(key);
+    if (cached) return cached;
+    const extractor = new SurfaceFeatureExtractor(mesh);
+    this.measureExtractors.set(key, extractor);
+    return extractor;
   }
 
   /** Volumes the current selection paints, defaulting to the whole plate. */

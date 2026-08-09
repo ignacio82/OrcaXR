@@ -90,7 +90,7 @@ import { PreparedProjectImport, ProjectImportCoordinator } from '../project/impo
 import { ModelImportParser, type ModelImportPlacement } from '../project/import/ModelImportParser';
 import type { JsonValue, TriangleAssignments, Vec3 } from '../project/domain/model';
 import type { FacetRefinementEncoding } from '../project/domain/model';
-import type { FacetAnnotationChannel } from '../project/annotations';
+import type { FacetAnnotationChannel, FacetSelectionMesh } from '../project/annotations';
 import { GeometryMergeParser } from '../project/import/GeometryMergeParser';
 import { AiPaintSession, type AiPaintPort } from '../project/painting/AiPaintSession';
 import { PaintStrokeService } from '../project/painting/PaintStrokeService';
@@ -100,7 +100,7 @@ import {
   type ProjectImportParserPort,
   type ProjectImportSource,
 } from '../project/import/types';
-import { encodeIndexedMeshAsset } from '../project/meshCodec';
+import { decodeIndexedMeshAsset, encodeIndexedMeshAsset } from '../project/meshCodec';
 import {
   CreateInstanceCommand,
   createInstancesAtTransforms,
@@ -2239,6 +2239,20 @@ export class CanonicalWorkspaceController {
     this.assertActive();
     const found = findInstance(this.session.project.getSnapshot().state, instanceId);
     return found ? cloneJson(found.instance.transform) : undefined;
+  }
+
+  /**
+   * Immutable decoded mesh of one volume, for read-only geometry tools such as
+   * measurement. It never caches into canonical state.
+   */
+  getVolumeMesh(volumeId: VolumeId): FacetSelectionMesh | undefined {
+    this.assertActive();
+    const found = findVolume(this.session.project.getSnapshot().state, volumeId);
+    if (!found) return undefined;
+    const payload = this.assets.get(found.volume.source.assetId);
+    if (!payload) return undefined;
+    const decoded = decodeIndexedMeshAsset(payload);
+    return { vertices: decoded.vertices, triangles: decoded.triangles };
   }
 
   /** Canonical transform of one volume, for surfaces that resolve facet data. */

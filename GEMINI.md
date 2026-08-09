@@ -117,6 +117,17 @@ engine (`libslic3r` via WASM) as the computational core.
   child omits its whole refined source root from the standard projection with a
   warning while the canonical envelope remains lossless. BBS has no brim facet
   attribute, and official-Orca colour round-trip remains unproven.
+- Measurement is a read-only port of the pinned `Measure.cpp`, and its plane
+  clustering is easy to get wrong: a neighbour facet is *queued* but only
+  *claimed* when it is popped and its normal still matches the seed. Claiming at
+  push time swallows the whole mesh into one plane (a cube reports 1 instead of
+  6). Circle fitting deliberately replaces upstream's default-seeded
+  `circle_ransac` with a deterministic algebraic fit — `std::sample` ordering is
+  implementation-defined, so exact replication is impossible — while keeping the
+  pinned error metric and `0.05` threshold. Circle-to-circle across non-parallel
+  planes needs upstream's degree-8 solver and is reported unsupported, never
+  approximated. A non-uniformly scaled circle is an ellipse and has no radius to
+  report.
 - Model import (STL/OBJ/AMF/compressed AMF/ZIP) is signature-first and transactional:
   `web/src/project/import/formats/` decides the container from content, refuses a
   recognised extension that disagrees with the signature, and returns typed

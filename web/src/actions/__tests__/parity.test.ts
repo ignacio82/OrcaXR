@@ -77,7 +77,6 @@ const UNAVAILABLE_IDS = [
   'view_show_gcode_window',
   'split_to_parts',
   'tool_brim_ears',
-  'tool_measure',
   'tool_assembly',
   'tool_face_detector',
   'tool_svg',
@@ -328,15 +327,18 @@ test('all XR toolbar actions are reachable by finite rail or Tools overflow', ()
   const toolbar = registry.forSurface('xr-toolbar');
   const rail = xrToolRailActions(toolbar);
   const overflow = toolbar.filter((action) => !rail.includes(action));
-  // Smart Paint and Smart Paint (Image) are deliberately absent: both declare
-  // an XR exclusion because their consent and prompt are DOM-only.
-  assert.strictEqual(toolbar.length, 17);
+  // Smart Paint, Smart Paint (Image), and Measure are deliberately absent:
+  // each declares an XR exclusion because its flow is DOM-only.
+  assert.strictEqual(toolbar.length, 16);
   assert.strictEqual(rail.length, 7);
-  assert.strictEqual(overflow.length, 10);
-  assert.equal(
-    toolbar.some((action) => action.id.startsWith('tool_smart_paint')),
-    false,
-  );
+  assert.strictEqual(overflow.length, 9);
+  for (const excluded of ['tool_smart_paint', 'tool_smart_paint_image', 'tool_measure']) {
+    assert.equal(
+      toolbar.some((action) => action.id === excluded),
+      false,
+      `${excluded} must stay out of the XR toolbar`,
+    );
+  }
   assert.deepStrictEqual(new Set([...rail, ...overflow]), new Set(toolbar));
 });
 
@@ -441,7 +443,6 @@ const REQUIRED_ORCA_ACTIONS = [
   'tool_seam_paint',
   'tool_fuzzy_skin',
   'tool_brim_ears',
-  'tool_measure',
   'tool_assembly',
   'tool_face_detector',
   'tool_svg',

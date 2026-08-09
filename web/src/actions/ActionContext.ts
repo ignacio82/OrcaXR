@@ -423,6 +423,14 @@ export class ActionContext {
     this.workspace.setWipeTowerAuto(!this.workspace.wipeTowerAuto);
     this.workspace.setStatus('Auto-place Wipe Tower toggled: ' + this.workspace.wipeTowerAuto);
   }
+  measureTool(): void {
+    this.workspace.measureTool();
+  }
+
+  clearMeasureSelection(): void {
+    this.workspace.clearMeasureSelection();
+  }
+
   smartPaint(): void {
     void this.workspace.smartPaint();
   }

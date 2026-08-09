@@ -55,6 +55,7 @@ import { GcodePreviewPanel, type GcodePreviewPanelAdapter } from './ui/dom/Gcode
 import { PreviewScrubber } from './ui/dom/PreviewScrubber';
 import { InspectorTabs } from './ui/dom/InspectorTabs';
 import { PaintPanel } from './ui/dom/PaintPanel';
+import { MeasurePanel } from './ui/dom/MeasurePanel';
 import { SmartPaintPanel } from './ui/dom/SmartPaintPanel';
 import { PlateManager } from './ui/dom/PlateManager';
 import { SemanticObjectEditor } from './ui/dom/SemanticObjectEditor';
@@ -1625,6 +1626,38 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     });
     smartPaintPanel.mount();
     window.addEventListener('pagehide', () => smartPaintPanel.dispose(), { once: true });
+  }
+
+  const measurePanelHost = document.getElementById('measure-panel-host');
+  if (measurePanelHost) {
+    const measurePanel = new MeasurePanel(measurePanelHost, {
+      getState: () => workspace.getMeasureSnapshot(),
+      subscribe: (listener) => {
+        const unsubscribeCanonical = workspace.subscribeCanonicalState(listener);
+        const previous = workspace.onMeasureStateChanged;
+        workspace.onMeasureStateChanged = () => {
+          previous?.();
+          listener();
+        };
+        return () => {
+          unsubscribeCanonical();
+          workspace.onMeasureStateChanged = previous;
+        };
+      },
+      onActivate: async () => {
+        const invoked = await registry.invoke('tool_measure', 'dom-toolbar', actionCtx, uiState.get());
+        if (!invoked) throw new Error('Add a model before measuring it.');
+      },
+      onClear: async () => {
+        const invoked = await registry.invoke('measure_clear', 'dom-inspector', actionCtx, uiState.get());
+        if (!invoked) throw new Error('Clearing the measurement is unavailable.');
+      },
+      onError: (error) => {
+        statusText.textContent = `Measure: ${error instanceof Error ? error.message : String(error)}`;
+      },
+    });
+    measurePanel.mount();
+    window.addEventListener('pagehide', () => measurePanel.dispose(), { once: true });
   }
 
   const semanticObjectEditorHost = document.getElementById('semantic-object-editor-host');
