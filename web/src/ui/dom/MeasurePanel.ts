@@ -4,6 +4,18 @@ export interface MeasurePickView {
   readonly diameterMm?: number;
 }
 
+/** Pinned alignments the current pick pair allows. */
+export interface MeasureAssemblyView {
+  readonly canSetToParallel: boolean;
+  readonly canSetToCenterCoincidence: boolean;
+  readonly canRotateAroundFaceCenter: boolean;
+  readonly hasParallelDistance: boolean;
+  readonly parallelDistanceMm: number;
+  /** False when both picks sit on the same model, so nothing can move. */
+  readonly movable: boolean;
+  readonly hint: string;
+}
+
 export interface MeasurePanelState {
   readonly active: boolean;
   readonly picks: readonly MeasurePickView[];
@@ -14,6 +26,8 @@ export interface MeasurePanelState {
   readonly angleDeg?: number;
   readonly unsupportedReason?: string;
   readonly hint: string;
+  /** Present once two features are picked; absent hides the alignment controls. */
+  readonly assembly?: MeasureAssemblyView;
 }
 
 export interface MeasurePanelAdapter {
@@ -21,6 +35,7 @@ export interface MeasurePanelAdapter {
   subscribe?(listener: () => void): () => void;
   onActivate(): void | Promise<void>;
   onClear(): void | Promise<void>;
+  onAlign?(kind: string, parameter?: number): void | Promise<void>;
   onError?(error: unknown): void;
 }
 
@@ -140,6 +155,8 @@ export class MeasurePanel {
     }
     if (rows > 0) children.push(readout);
 
+    if (state.assembly) children.push(this.renderAssembly(state.assembly));
+
     if (state.unsupportedReason) {
       const unsupported = document.createElement('p');
       unsupported.dataset.measureUnsupported = 'true';
@@ -150,6 +167,53 @@ export class MeasurePanel {
     }
 
     root.replaceChildren(...children);
+  }
+
+  private renderAssembly(assembly: MeasureAssemblyView): HTMLElement {
+    const document = this.container.ownerDocument;
+    const group = document.createElement('fieldset');
+    group.dataset.measureAssembly = 'true';
+    group.style.cssText = 'margin:0;padding:8px;border:1px solid var(--oxr-color-border,#30363d);border-radius:8px;';
+    const legend = document.createElement('legend');
+    legend.textContent = 'Align';
+    legend.style.cssText = 'padding:0 4px;font-weight:600;';
+
+    const hint = document.createElement('p');
+    hint.dataset.measureAssemblyHint = 'true';
+    hint.setAttribute('role', 'status');
+    hint.style.cssText = 'margin:6px 0 0;opacity:0.75;';
+    hint.textContent = assembly.hint;
+
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;';
+    const align = (id: string, label: string, enabled: boolean, parameter?: () => number | undefined): void => {
+      const button = this.button(id, label, () => this.adapter.onAlign?.(id.replace('align-', ''), parameter?.()));
+      button.disabled = !enabled || !assembly.movable;
+      row.appendChild(button);
+    };
+    align('align-parallel', 'Parallel', assembly.canSetToParallel);
+    align('align-center-coincidence', 'Centre coincidence', assembly.canSetToCenterCoincidence);
+    align('align-reverse-rotation', 'Flip over', true);
+
+    const distance = document.createElement('input');
+    distance.type = 'number';
+    distance.step = '0.1';
+    distance.id = `orcaxr-measure-gap-${this.instanceId}`;
+    distance.dataset.measureAssemblyDistance = 'true';
+    distance.value = `${Number(assembly.parallelDistanceMm.toFixed(3))}`;
+    distance.disabled = !assembly.hasParallelDistance || !assembly.movable;
+    distance.style.cssText =
+      'width:90px;padding:6px;border-radius:6px;border:1px solid var(--oxr-color-border,#30363d);' +
+      'background:var(--oxr-color-surface,#0d1117);color:inherit;font:inherit;';
+    const distanceLabel = document.createElement('label');
+    distanceLabel.htmlFor = distance.id;
+    distanceLabel.textContent = 'Gap (mm)';
+    distanceLabel.style.cssText = 'opacity:0.75;display:flex;align-items:center;gap:6px;margin-top:6px;';
+    distanceLabel.appendChild(distance);
+    align('align-parallel-distance', 'Set gap', assembly.hasParallelDistance, () => Number(distance.value));
+
+    group.append(legend, hint, row, distanceLabel);
+    return group;
   }
 
   private button(id: string, label: string, run: () => void | Promise<void>): HTMLButtonElement {

@@ -15,7 +15,6 @@ import type { ActionDefinition as Action } from '../ActionRegistry';
 const UNAVAILABLE_TOOL_IDS = new Set([
   'split_to_parts',
   'tool_brim_ears',
-  'tool_assembly',
   'tool_face_detector',
   'tool_svg',
   'tool_hollow',
@@ -194,14 +193,37 @@ export const gizmoActions: Action[] = [
     xrUnsupportedReason: 'Measurements are read from the DOM inspector; no in-headset readout surface exists yet.',
     run: (ctx) => ctx.clearMeasureSelection(),
   },
-  tool(
-    'tool_assembly',
-    'Assembly View',
-    'assembly',
-    'Explode multi-part objects into an assembly view',
-    'assemblyView',
-    'toolbar',
-  ),
+  {
+    id: 'tool_assembly',
+    label: 'Assembly',
+    icon: 'assembly',
+    group: 'scene',
+    disclosure: 'toolbar',
+    tool: 'measure',
+    hint: 'Pick two faces on different models, then align them',
+    isEnabled: (s) => s.modelCount > 1,
+    xrUnsupportedReason:
+      'Assembly alignment is driven from the DOM inspector; no in-headset alignment surface exists yet.',
+    run: (ctx) => ctx.assemblyView(),
+  },
+  {
+    id: 'assembly_align',
+    label: 'Align picked faces',
+    icon: 'assembly',
+    group: 'scene',
+    disclosure: 'inspector',
+    hint: 'Apply one pinned alignment to the second picked model as a single undoable move',
+    xrUnsupportedReason:
+      'Assembly alignment is driven from the DOM inspector; no in-headset alignment surface exists yet.',
+    run: (ctx, invocation) => {
+      const request = invocation.assemblyAlignment;
+      if (!request) {
+        ctx.reportCapabilityUnavailable('Align picked faces', 'Pick two faces in the Measure panel first.');
+        return;
+      }
+      ctx.applyAssemblyAlignment(request.kind, request.parameter);
+    },
+  },
   tool(
     'tool_face_detector',
     'Auto Face Orientation',

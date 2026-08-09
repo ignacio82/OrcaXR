@@ -68,6 +68,12 @@ import {
   transformSurfaceFeature,
   type SurfaceFeature,
 } from '../project/objects/measure';
+import {
+  inspectAssemblyActions,
+  planAssemblyAlignment,
+  type AssemblyAlignmentKind,
+  type AssemblyAvailability,
+} from '../project/objects/assembly';
 import { GEMINI_PAINT_PROVIDER_ID, LazyGeminiAiPaintPort } from '../features/aiPaintProvider';
 import { paintPaletteColors, type PaintPalette } from '../project/painting/paintPalette';
 import {
@@ -399,6 +405,25 @@ type ProjectPrimeTower = { enabled: boolean; xMm: number; yMm: number; widthMm: 
 
 export type WorkspaceGizmoTool =
   'move' | 'rotate' | 'scale' | 'lay_on_face' | 'measure' | 'paint' | 'support_paint' | 'seam_paint' | 'fuzzy_skin';
+
+/** Read-only view an assembly surface renders. */
+export interface AssemblySnapshot {
+  readonly available: AssemblyAvailability;
+  /** True when the second pick belongs to a different, movable instance. */
+  readonly movable: boolean;
+  readonly hint: string;
+}
+
+const EMPTY_ASSEMBLY_AVAILABILITY: AssemblyAvailability = Object.freeze({
+  canSetToParallel: false,
+  canSetToCenterCoincidence: false,
+  canReverseFeature1: false,
+  canReverseFeature2: false,
+  canRotateAroundFaceCenter: false,
+  hasParallelDistance: false,
+  parallelDistanceMm: 0,
+  angleRadians: 0,
+});
 
 /** Read-only view a measurement readout renders; every number is canonical. */
 export interface MeasureSnapshot {
@@ -1843,7 +1868,7 @@ export class OrcaWorkspace extends xb.Script {
   // ---------------------------------------------------------------------
 
   private measureExtractors = new Map<string, SurfaceFeatureExtractor>();
-  private measurePicks: SurfaceFeature[] = [];
+  private measurePicks: { feature: SurfaceFeature; instanceId?: InstanceId }[] = [];
   public onMeasureStateChanged: (() => void) | null = null;
 
   /** Activate the measurement tool and start a fresh pair of picks. */
@@ -1862,7 +1887,7 @@ export class OrcaWorkspace extends xb.Script {
 
   public getMeasureSnapshot(): MeasureSnapshot {
     const active = this.tool === 'measure';
-    const picks = this.measurePicks.map((feature) => ({
+    const picks = this.measurePicks.map(({ feature }) => ({
       kind: feature.kind,
       summary: describeSurfaceFeature(feature),
       ...(feature.kind === 'circle' ? { diameterMm: feature.radius * 2 } : {}),
@@ -1878,7 +1903,7 @@ export class OrcaWorkspace extends xb.Script {
           : 'Choose the Measure tool, then click two features.',
       });
     }
-    const result = measureSurfaceFeatures(this.measurePicks[0], this.measurePicks[1]);
+    const result = measureSurfaceFeatures(this.measurePicks[0].feature, this.measurePicks[1].feature);
     const distance = result.distanceStrict ?? result.distanceInfinite;
     return Object.freeze({
       active,
@@ -1897,6 +1922,74 @@ export class OrcaWorkspace extends xb.Script {
         : {}),
       hint: 'Click another feature to start a new measurement.',
     });
+  }
+
+  /**
+   * Which pinned assembly alignments the two picks allow. The second pick's
+   * instance is the one that would move, so a pair on one instance offers
+   * nothing to align.
+   */
+  public getAssemblySnapshot(): AssemblySnapshot {
+    if (this.measurePicks.length < 2) {
+      return Object.freeze({
+        available: Object.freeze({ ...EMPTY_ASSEMBLY_AVAILABILITY }),
+        movable: false,
+        hint: 'Pick two faces — the second one moves.',
+      });
+    }
+    const [first, second] = this.measurePicks;
+    const availability = inspectAssemblyActions(first.feature, second.feature);
+    const movable = Boolean(second.instanceId) && second.instanceId !== first.instanceId;
+    return Object.freeze({
+      available: availability,
+      movable,
+      hint: movable
+        ? 'Choose an alignment; it commits as one undoable move.'
+        : 'Pick two faces on different models to align them.',
+    });
+  }
+
+  /** Commit one pinned alignment as a single undoable instance transform. */
+  public applyAssemblyAlignment(kind: AssemblyAlignmentKind, parameter?: number): boolean {
+    if (this.measurePicks.length < 2) {
+      this.setStatus('Pick two faces before aligning.');
+      return false;
+    }
+    const [first, second] = this.measurePicks;
+    const target = second.instanceId;
+    if (!target || target === first.instanceId) {
+      this.setStatus('Assembly alignment needs two faces on different models.');
+      return false;
+    }
+    const current = this.canonicalProject.getInstanceTransform(target);
+    if (!current) {
+      this.setStatus('The model to align is no longer on this plate.');
+      return false;
+    }
+    try {
+      const plan = planAssemblyAlignment({
+        kind,
+        first: first.feature,
+        second: second.feature,
+        movingTransform: current,
+        ...(parameter !== undefined ? { parameter } : {}),
+      });
+      if (plan.noop) {
+        this.setStatus('Those faces are already aligned; nothing moved.');
+        return false;
+      }
+      this.canonicalProject.setInstanceTransform(target, plan.transform);
+      this.recomputePreflight();
+      // The picks describe where the faces *were*; keep them honest.
+      this.measurePicks = [];
+      this.setStatus(`Applied ${kind.replaceAll('-', ' ')}. Undo restores the previous placement.`);
+      this.onMeasureStateChanged?.();
+      return true;
+    } catch (error) {
+      this.setStatus(`Alignment failed: ${(error as Error).message}`);
+      this.onMeasureStateChanged?.();
+      return false;
+    }
   }
 
   /** Resolve a ray to a canonical surface feature in world millimetres. */
@@ -1937,7 +2030,10 @@ export class OrcaWorkspace extends xb.Script {
         }
         // A third pick starts a new measurement rather than silently replacing one.
         if (this.measurePicks.length >= 2) this.measurePicks = [];
-        this.measurePicks.push(worldFeature);
+        const instanceId = this.projectedModels(this.activePlateId).find(
+          (entry) => entry.volumeId === target.volumeId,
+        )?.instanceId;
+        this.measurePicks.push({ feature: worldFeature, ...(instanceId ? { instanceId } : {}) });
         this.setStatus(`Measure: picked ${describeSurfaceFeature(worldFeature)}.`);
         this.onMeasureStateChanged?.();
         return true;

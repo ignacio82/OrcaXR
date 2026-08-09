@@ -91,6 +91,7 @@ export const ACTION_IDS_BY_PARITY_TASK = {
     'tool_measure',
     'measure_clear',
     'tool_assembly',
+    'assembly_align',
     'tool_face_detector',
     'tool_svg',
     'tool_hollow',

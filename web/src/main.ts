@@ -1631,7 +1631,23 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   const measurePanelHost = document.getElementById('measure-panel-host');
   if (measurePanelHost) {
     const measurePanel = new MeasurePanel(measurePanelHost, {
-      getState: () => workspace.getMeasureSnapshot(),
+      getState: () => {
+        const measure = workspace.getMeasureSnapshot();
+        if (measure.picks.length < 2) return measure;
+        const assembly = workspace.getAssemblySnapshot();
+        return {
+          ...measure,
+          assembly: {
+            canSetToParallel: assembly.available.canSetToParallel,
+            canSetToCenterCoincidence: assembly.available.canSetToCenterCoincidence,
+            canRotateAroundFaceCenter: assembly.available.canRotateAroundFaceCenter,
+            hasParallelDistance: assembly.available.hasParallelDistance,
+            parallelDistanceMm: assembly.available.parallelDistanceMm,
+            movable: assembly.movable,
+            hint: assembly.hint,
+          },
+        };
+      },
       subscribe: (listener) => {
         const unsubscribeCanonical = workspace.subscribeCanonicalState(listener);
         const previous = workspace.onMeasureStateChanged;
@@ -1651,6 +1667,15 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       onClear: async () => {
         const invoked = await registry.invoke('measure_clear', 'dom-inspector', actionCtx, uiState.get());
         if (!invoked) throw new Error('Clearing the measurement is unavailable.');
+      },
+      onAlign: async (kind, parameter) => {
+        const invoked = await registry.invoke('assembly_align', 'dom-inspector', actionCtx, uiState.get(), {
+          assemblyAlignment: {
+            kind: kind as NonNullable<ActionInvocation['assemblyAlignment']>['kind'],
+            ...(parameter !== undefined ? { parameter } : {}),
+          },
+        });
+        if (!invoked) throw new Error('Assembly alignment is unavailable.');
       },
       onError: (error) => {
         statusText.textContent = `Measure: ${error instanceof Error ? error.message : String(error)}`;

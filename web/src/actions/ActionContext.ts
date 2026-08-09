@@ -8,6 +8,7 @@
  * method or feature module. **No feature logic lives here** — this is routing,
  * so the DOM shell and the XR shell invoke identical behaviour.
  */
+import type { AssemblyAlignmentKind } from '../project/objects/assembly';
 import type { ActionInvocation } from './ActionRegistry';
 import type { OrcaWorkspace } from '../workspace/OrcaWorkspace';
 import type { FilamentPalette } from '../workspace/FilamentPalette';
@@ -429,6 +430,15 @@ export class ActionContext {
 
   clearMeasureSelection(): void {
     this.workspace.clearMeasureSelection();
+  }
+
+  assemblyView(): void {
+    this.workspace.measureTool();
+    this.workspace.setStatus('Assembly: pick a face on each model, then choose an alignment.');
+  }
+
+  applyAssemblyAlignment(kind: AssemblyAlignmentKind, parameter?: number): void {
+    this.workspace.applyAssemblyAlignment(kind, parameter);
   }
 
   smartPaint(): void {

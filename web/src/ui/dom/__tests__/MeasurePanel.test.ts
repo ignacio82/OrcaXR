@@ -28,6 +28,9 @@ function mount(initial: MeasurePanelState) {
     onClear: () => {
       calls.push('clear');
     },
+    onAlign: (kind, parameter) => {
+      calls.push(parameter === undefined ? `align:${kind}` : `align:${kind}:${parameter}`);
+    },
   });
   panel.mount();
   return {
@@ -136,6 +139,104 @@ await test('an unsupported pair states the reason instead of showing a number', 
   assert.equal(value(view.host, 'distance'), null, 'no distance is invented for an unsupported pair');
   // The diameters the picks really carry are still reported.
   assert.equal(value(view.host, 'diameter'), '10 mm');
+});
+
+await test('alignment controls appear only with two picks and follow what the pair allows', async () => {
+  const view = mount({
+    active: true,
+    picks: [
+      { kind: 'plane', summary: 'plane facing (0, 0, 1)' },
+      { kind: 'plane', summary: 'plane facing (1, 0, 0)' },
+    ],
+    hint: 'Click another feature to start a new measurement.',
+    assembly: {
+      canSetToParallel: true,
+      canSetToCenterCoincidence: true,
+      canRotateAroundFaceCenter: false,
+      hasParallelDistance: false,
+      parallelDistanceMm: 0,
+      movable: true,
+      hint: 'Choose an alignment; it commits as one undoable move.',
+    },
+  });
+  const button = (id: string) => view.host.querySelector<HTMLButtonElement>(`[data-measure-action="${id}"]`);
+  assert.equal(button('align-parallel')?.disabled, false);
+  assert.equal(button('align-center-coincidence')?.disabled, false);
+  assert.equal(button('align-parallel-distance')?.disabled, true, 'crossing planes have no gap to set');
+  assert.equal(view.host.querySelector<HTMLInputElement>('[data-measure-assembly-distance]')?.disabled, true);
+
+  button('align-parallel')!.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(view.calls, ['align:parallel']);
+});
+
+await test('two picks on one model offer no alignment, and a gap commits its exact value', async () => {
+  const sameModel = mount({
+    active: true,
+    picks: [
+      { kind: 'plane', summary: 'plane facing (0, 0, 1)' },
+      { kind: 'plane', summary: 'plane facing (0, 0, -1)' },
+    ],
+    hint: 'Click another feature to start a new measurement.',
+    assembly: {
+      canSetToParallel: false,
+      canSetToCenterCoincidence: true,
+      canRotateAroundFaceCenter: true,
+      hasParallelDistance: true,
+      parallelDistanceMm: 5,
+      movable: false,
+      hint: 'Pick two faces on different models to align them.',
+    },
+  });
+  for (const id of [
+    'align-parallel',
+    'align-center-coincidence',
+    'align-reverse-rotation',
+    'align-parallel-distance',
+  ]) {
+    assert.equal(
+      sameModel.host.querySelector<HTMLButtonElement>(`[data-measure-action="${id}"]`)?.disabled,
+      true,
+      `${id} must stay disabled when nothing can move`,
+    );
+  }
+  assert.match(
+    sameModel.host.querySelector<HTMLElement>('[data-measure-assembly-hint]')?.textContent ?? '',
+    /different models/,
+  );
+
+  const movable = mount({
+    active: true,
+    picks: [
+      { kind: 'plane', summary: 'plane facing (0, 0, 1)' },
+      { kind: 'plane', summary: 'plane facing (0, 0, -1)' },
+    ],
+    hint: 'Click another feature to start a new measurement.',
+    assembly: {
+      canSetToParallel: false,
+      canSetToCenterCoincidence: true,
+      canRotateAroundFaceCenter: true,
+      hasParallelDistance: true,
+      parallelDistanceMm: 5,
+      movable: true,
+      hint: 'Choose an alignment; it commits as one undoable move.',
+    },
+  });
+  const gap = movable.host.querySelector<HTMLInputElement>('[data-measure-assembly-distance]')!;
+  assert.equal(gap.value, '5', 'the field starts at the measured gap');
+  gap.value = '2.5';
+  movable.host.querySelector<HTMLButtonElement>('[data-measure-action="align-parallel-distance"]')!.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(movable.calls, ['align:parallel-distance:2.5']);
+});
+
+await test('no alignment controls render before two features are picked', () => {
+  const view = mount({
+    active: true,
+    picks: [{ kind: 'plane', summary: 'plane facing (0, 0, 1)' }],
+    hint: 'Pick one more.',
+  });
+  assert.equal(view.host.querySelector('[data-measure-assembly]'), null);
 });
 
 console.log(`\nMeasure panel: ${passed} tests passed.`);

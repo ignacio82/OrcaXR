@@ -17,6 +17,7 @@ import type { ActionContext } from './ActionContext';
 import type { FilamentId, PlateId } from '../project/domain/ids';
 import type { ConfigMap } from '../project/domain/model';
 import type { ObjectTreeEntityRef } from '../project/objects';
+import type { AssemblyAlignmentKind } from '../project/objects/assembly';
 import type { PaintChannel, PaintToolKind } from '../project/painting/PaintStrokeService';
 import type { GcodePreviewViewPatch } from '../slicer/GcodePreviewSession';
 import type {
@@ -202,6 +203,12 @@ export interface ActionInvocation {
     readonly imageBase64?: string | null;
     readonly region?: { readonly id: string; readonly value: string | boolean | null };
   };
+  /** Bounded assembly alignment request from the Measure panel. */
+  assemblyAlignment?: {
+    readonly kind: AssemblyAlignmentKind;
+    /** Millimetres for `parallel-distance`, degrees for `around-face-center`. */
+    readonly parameter?: number;
+  };
 }
 
 export type ActionHandler = (ctx: ActionContext, invocation: Readonly<ActionInvocation>) => void | Promise<void>;
@@ -345,7 +352,6 @@ const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
   view_show_gcode_window: 'The G-code text inspector is not implemented yet.',
   split_to_parts: 'Splitting an object into editable parts is not implemented yet.',
   tool_brim_ears: 'Brim-ear authoring is not implemented yet.',
-  tool_assembly: 'Assembly view and constraints are not implemented yet.',
   tool_face_detector: 'Face detection and selection is not implemented yet.',
   tool_svg: 'SVG import and embossing is not implemented yet.',
   tool_hollow: 'Model hollowing is not implemented yet.',
