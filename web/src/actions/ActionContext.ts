@@ -147,8 +147,8 @@ export class ActionContext {
   addPrimitive(kind: 'cube' | 'cylinder' | 'sphere'): void {
     this.workspace.addPrimitive(kind);
   }
-  simplifySelected(): void {
-    this.workspace.simplifySelected();
+  simplifySelected(decimateRatio?: number): void {
+    this.workspace.simplifySelected(decimateRatio);
   }
   addCalibration(
     kind:

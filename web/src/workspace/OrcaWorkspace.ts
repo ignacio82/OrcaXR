@@ -60,6 +60,7 @@ import {
   type PaintToolKind,
   type PaintToolSettings,
 } from '../project/painting/PaintStrokeService';
+import { SIMPLIFY_DEFAULT_MAX_ERROR } from '../project/objects/simplify';
 import type { AiPaintSession } from '../project/painting/AiPaintSession';
 import {
   SurfaceFeatureExtractor,
@@ -3974,9 +3975,45 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Projection-only simplification is forbidden until a canonical topology command owns it. */
-  public simplifySelected(keepRatio = 0.5) {
-    void keepRatio;
-    this.setStatus('Simplify is unavailable until topology and annotation remapping commit canonically.');
+  /**
+   * Decimate every selected part. Each volume installs through the guarded
+   * topology command, so the whole run is undoable and a failure on one part
+   * leaves the rest — and the project — exactly as they were.
+   */
+  public simplifySelected(decimateRatio = 50): boolean {
+    const volumes = this.paintableSelectedVolumes();
+    if (volumes.length === 0) {
+      this.setStatus('Select a model to simplify.');
+      return false;
+    }
+    let before = 0;
+    let after = 0;
+    let changed = 0;
+    for (const volumeId of volumes) {
+      try {
+        const result = this.canonicalProject.simplifyVolume(volumeId, {
+          useCount: true,
+          decimateRatio,
+          maxError: SIMPLIFY_DEFAULT_MAX_ERROR,
+        });
+        before += result.beforeTriangles;
+        after += result.afterTriangles;
+        if (result.afterTriangles < result.beforeTriangles) changed += 1;
+      } catch (error) {
+        this.setStatus(`Simplify failed: ${(error as Error).message}`);
+        return false;
+      }
+    }
+    if (changed === 0) {
+      this.setStatus('Nothing to simplify at that ratio.');
+      return false;
+    }
+    this.refreshPaintOverlays();
+    this.recomputePreflight();
+    this.setStatus(
+      `Simplified ${changed} part(s): ${before} → ${after} triangles. Painting was reset; undo restores both.`,
+    );
+    return true;
   }
 
   public addFromLibrary() {

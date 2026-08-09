@@ -101,6 +101,13 @@ import {
   type ProjectImportSource,
 } from '../project/import/types';
 import { decodeIndexedMeshAsset, encodeIndexedMeshAsset } from '../project/meshCodec';
+import { ReplaceVolumeMeshCommand, type MeshTopologyReplacementGuard } from '../project/objects/topologyCommands';
+import {
+  DEFAULT_SIMPLIFY_CONFIGURATION,
+  simplifyMesh,
+  type SimplifyConfiguration,
+  type SimplifyOptions,
+} from '../project/objects/simplify';
 import {
   CreateInstanceCommand,
   createInstancesAtTransforms,
@@ -2253,6 +2260,63 @@ export class CanonicalWorkspaceController {
     if (!payload) return undefined;
     const decoded = decodeIndexedMeshAsset(payload);
     return { vertices: decoded.vertices, triangles: decoded.triangles };
+  }
+
+  /**
+   * Decimate one volume and install the result through the guarded topology
+   * command, so the whole change — new mesh, invalidated facet channels, asset
+   * ownership — is one undoable entry. Staging happens before the command runs,
+   * and a cancelled or failed run never touches canonical state.
+   */
+  simplifyVolume(
+    volumeId: VolumeId,
+    configuration: SimplifyConfiguration = DEFAULT_SIMPLIFY_CONFIGURATION,
+    options: SimplifyOptions = {},
+  ): { readonly beforeTriangles: number; readonly afterTriangles: number; readonly maxError: number } {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    const found = findVolume(state, volumeId);
+    if (!found) throw new Error(`Unknown volume ${volumeId}`);
+    const payload = this.assets.get(found.volume.source.assetId);
+    if (!payload) throw new Error(`Volume ${volumeId} has no stored mesh asset`);
+
+    const guard: MeshTopologyReplacementGuard = {
+      volumeId,
+      assetId: found.volume.source.assetId,
+      assetDigest: payload.descriptor.digest,
+      topologyRevision: found.volume.source.topologyRevision,
+      triangleCount: found.volume.source.triangleCount,
+    };
+    const decoded = decodeIndexedMeshAsset(payload);
+    const simplified = simplifyMesh(
+      { vertices: decoded.vertices, triangles: decoded.triangles },
+      configuration,
+      options,
+    );
+    if (simplified.triangles.length >= simplified.sourceTriangleCount) {
+      return {
+        beforeTriangles: simplified.sourceTriangleCount,
+        afterTriangles: simplified.sourceTriangleCount,
+        maxError: 0,
+      };
+    }
+
+    const positions: number[] = [];
+    for (const vertex of simplified.vertices) positions.push(vertex[0], vertex[1], vertex[2]);
+    const indices: number[] = [];
+    for (const triangle of simplified.triangles) indices.push(triangle[0], triangle[1], triangle[2]);
+    const encoded = encodeIndexedMeshAsset({
+      id: this.options.idSource.next('asset'),
+      positions,
+      indices,
+      ...(payload.descriptor.sourceFilename ? { sourceFilename: payload.descriptor.sourceFilename } : {}),
+    });
+    this.session.commands.execute(new ReplaceVolumeMeshCommand(guard, encoded));
+    return {
+      beforeTriangles: simplified.sourceTriangleCount,
+      afterTriangles: simplified.triangles.length,
+      maxError: simplified.maxAppliedError,
+    };
   }
 
   /** Canonical transform of one volume, for surfaces that resolve facet data. */

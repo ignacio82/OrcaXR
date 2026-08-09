@@ -274,9 +274,9 @@ export const sceneActions: Action[] = [
     group: 'scene',
     disclosure: 'menu',
     menuSection: 'tools',
-    hint: 'Halve the triangle count of the selected model',
+    hint: 'Decimate the selected model; painting is reset and the whole change undoes as one entry',
     isEnabled: (s) => s.hasSelection,
-    run: (ctx) => ctx.simplifySelected(),
+    run: (ctx, invocation) => ctx.simplifySelected(invocation.simplifyRatio),
   },
   {
     id: 'mesh_boolean_union',

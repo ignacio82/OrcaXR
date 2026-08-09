@@ -203,6 +203,8 @@ export interface ActionInvocation {
     readonly imageBase64?: string | null;
     readonly region?: { readonly id: string; readonly value: string | boolean | null };
   };
+  /** Percent of triangles to remove, matching the pinned decimate ratio. */
+  simplifyRatio?: number;
   /** Bounded assembly alignment request from the Measure panel. */
   assemblyAlignment?: {
     readonly kind: AssemblyAlignmentKind;
@@ -316,8 +318,6 @@ const CANONICAL_CUTOVER_GATED_REASONS = {
     'Delete All is disabled until active-plate instances can be removed through one reversible canonical transaction.',
   repair_model:
     'Mesh repair is disabled until topology replacement invalidates facet metadata and commits through a guarded canonical command.',
-  simplify_model:
-    'Mesh simplification is disabled until topology replacement invalidates facet metadata and commits through a guarded canonical command.',
   mesh_boolean_union:
     'Mesh union is disabled until topology-changing booleans preserve canonical metadata and commit atomically.',
   mesh_boolean_subtract:
