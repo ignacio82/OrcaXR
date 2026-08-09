@@ -10,6 +10,7 @@ import { entityId, type CustomGcodeId, type FilamentId, type PlateId } from '../
 import type { AssetPayload } from '../assets';
 import { contentDigest } from '../assets';
 import type {
+  BrimEarPoint,
   ConfigMap,
   CustomGcode,
   FacetAnnotations,
@@ -33,6 +34,7 @@ import { importFullSpectrumDefinitions } from '../filaments/fullSpectrumImport';
 import { serializeFullSpectrumDefinition } from '../filaments/fullSpectrumRecipe';
 import { decodeIndexedMeshAsset, type DecodedIndexedMesh } from '../meshCodec';
 import { validatePackagePath } from './deterministicZip';
+import { BRIM_EAR_POINTS_PATH, decodeBrimEarPoints, encodeBrimEarPoints } from './brimEarPoints';
 import {
   BbsFacetCodecError,
   decodeBbsFacetRoot,
@@ -47,6 +49,7 @@ export const PROJECT_SETTINGS_PATH = 'Metadata/project_settings.config';
 export const MODEL_SETTINGS_PATH = 'Metadata/model_settings.config';
 export const LAYER_RANGES_PATH = 'Metadata/layer_config_ranges.xml';
 export const LAYER_EVENTS_PATH = 'Metadata/custom_gcode_per_layer.xml';
+export { BRIM_EAR_POINTS_PATH };
 
 const ORCAXR_CORE_NAMESPACE = 'https://orcaxr.martinez.fyi/3mf/project/1';
 const CORE_OBJECT_ATTRIBUTES_KEY = `${ORCAXR_CORE_NAMESPACE}/core-object-attributes`;
@@ -96,6 +99,7 @@ export const GENERATED_STANDARD_PATHS = new Set([
   MODEL_SETTINGS_PATH,
   LAYER_RANGES_PATH,
   LAYER_EVENTS_PATH,
+  BRIM_EAR_POINTS_PATH,
 ]);
 
 export interface BbsCoreBuild {
@@ -393,6 +397,14 @@ export function buildBbsCore(state: ProjectState, assets: ReadonlyMap<string, As
   files.set(MODEL_RELS_PATH, encodeText(emptyRelationships()));
   const layerEvents = buildLayerEvents(state, orderedPlates);
   if (layerEvents) files.set(LAYER_EVENTS_PATH, encodeText(layerEvents));
+  // The pinned writer numbers brim-ear objects by their position in
+  // `model.objects`, which is exactly this mapping's ordinal.
+  const brimEars = encodeBrimEarPoints(
+    mappings
+      .filter((mapping) => (mapping.object.brimEars?.length ?? 0) > 0)
+      .map((mapping) => ({ objectId: mapping.ordinal, points: mapping.object.brimEars as BrimEarPoint[] })),
+  );
+  if (brimEars) files.set(BRIM_EAR_POINTS_PATH, encodeText(brimEars));
   if (state.customGcode.some((entry) => !entry.layerEvent)) {
     warnings.push(
       'Custom G-code hooks that are not layer events are preserved losslessly in the OrcaXR extension; the canonical model does not yet carry every BBS field needed to project them',
@@ -1875,11 +1887,13 @@ export function importBbsCore(
     thumbnails: [],
     extensionBlobs: [],
   };
+  applyImportedBrimEars(files, plates, warnings);
   const consumedPaths = new Set([CORE_MODEL_PATH]);
   if (files.has(PROJECT_SETTINGS_PATH)) consumedPaths.add(PROJECT_SETTINGS_PATH);
   if (files.has(MODEL_SETTINGS_PATH)) consumedPaths.add(MODEL_SETTINGS_PATH);
   if (files.has(LAYER_RANGES_PATH)) consumedPaths.add(LAYER_RANGES_PATH);
   if (files.has(LAYER_EVENTS_PATH)) consumedPaths.add(LAYER_EVENTS_PATH);
+  if (files.has(BRIM_EAR_POINTS_PATH)) consumedPaths.add(BRIM_EAR_POINTS_PATH);
   return { state, assets, consumedPaths, warnings };
 }
 
@@ -2525,6 +2539,35 @@ function parseLayerRanges(bytes: Uint8Array | undefined): Map<number, Array<Omit
     result.set(objectId, ranges);
   }
   return result;
+}
+
+/**
+ * Restore brim ears onto the objects the pinned writer numbered. Object IDs are
+ * 1-based positions in plate order, so an ID past the end is reported rather
+ * than silently attached to the wrong part.
+ */
+function applyImportedBrimEars(
+  files: ReadonlyMap<string, Uint8Array>,
+  plates: readonly ProjectPlate[],
+  warnings: string[],
+): void {
+  const bytes = files.get(BRIM_EAR_POINTS_PATH);
+  if (!bytes) return;
+  const decoded = decodeBrimEarPoints(decodeText(bytes, BRIM_EAR_POINTS_PATH));
+  for (const warning of decoded.warnings) warnings.push(`${BRIM_EAR_POINTS_PATH}: ${warning}`);
+  const ordered: ProjectObject[] = [];
+  for (const plate of [...plates].sort((left, right) => left.order - right.order)) ordered.push(...plate.objects);
+  for (const entry of decoded.objects) {
+    const object = ordered[entry.objectId - 1];
+    if (!object) {
+      warnings.push(`${BRIM_EAR_POINTS_PATH}: object ${entry.objectId} is not in this package`);
+      continue;
+    }
+    object.brimEars = entry.points.map((point) => ({
+      positionMm: [...point.positionMm] as BrimEarPoint['positionMm'],
+      headFrontRadiusMm: point.headFrontRadiusMm,
+    }));
+  }
 }
 
 /** Bind parsed events to canonical plates, dropping any that name a missing one. */

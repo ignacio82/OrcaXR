@@ -55,6 +55,7 @@ import { GcodePreviewPanel, type GcodePreviewPanelAdapter } from './ui/dom/Gcode
 import { PreviewScrubber } from './ui/dom/PreviewScrubber';
 import { InspectorTabs } from './ui/dom/InspectorTabs';
 import { PaintPanel } from './ui/dom/PaintPanel';
+import { BrimEarsPanel } from './ui/dom/BrimEarsPanel';
 import { MeasurePanel } from './ui/dom/MeasurePanel';
 import { SmartPaintPanel } from './ui/dom/SmartPaintPanel';
 import { PlateManager } from './ui/dom/PlateManager';
@@ -1683,6 +1684,64 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     });
     measurePanel.mount();
     window.addEventListener('pagehide', () => measurePanel.dispose(), { once: true });
+  }
+
+  const brimEarsPanelHost = document.getElementById('brim-ears-panel-host');
+  if (brimEarsPanelHost) {
+    const brimEarsPanel = new BrimEarsPanel(brimEarsPanelHost, {
+      getState: () => {
+        const snapshot = workspace.getBrimEarSnapshot();
+        return {
+          active: snapshot.active,
+          ...(snapshot.objectId ? { objectId: String(snapshot.objectId) } : {}),
+          radiusMm: snapshot.radiusMm,
+          minRadiusMm: 0.1,
+          maxRadiusMm: 20,
+          ears: snapshot.ears.map((ear) => ({
+            positionMm: [ear.positionMm[0], ear.positionMm[1], ear.positionMm[2]] as const,
+            headFrontRadiusMm: ear.headFrontRadiusMm,
+          })),
+          hint: snapshot.hint,
+        };
+      },
+      subscribe: (listener) => {
+        const unsubscribeCanonical = workspace.subscribeCanonicalState(listener);
+        const previous = workspace.onBrimEarStateChanged;
+        workspace.onBrimEarStateChanged = () => {
+          previous?.();
+          listener();
+        };
+        return () => {
+          unsubscribeCanonical();
+          workspace.onBrimEarStateChanged = previous;
+        };
+      },
+      onActivate: async () => {
+        const invoked = await registry.invoke('tool_brim_ears', 'dom-toolbar', actionCtx, uiState.get());
+        if (!invoked) throw new Error('Select a model part before placing brim ears.');
+      },
+      onSetRadius: async (radiusMm) => {
+        const invoked = await registry.invoke('brim_ears_configure', 'dom-inspector', actionCtx, uiState.get(), {
+          brimEarRadiusMm: radiusMm,
+        });
+        if (!invoked) throw new Error('Setting the brim-ear radius is unavailable.');
+      },
+      onRemove: async (index) => {
+        const invoked = await registry.invoke('brim_ears_remove', 'dom-inspector', actionCtx, uiState.get(), {
+          brimEarIndex: index,
+        });
+        if (!invoked) throw new Error('Removing a brim ear is unavailable.');
+      },
+      onClear: async () => {
+        const invoked = await registry.invoke('brim_ears_clear', 'dom-inspector', actionCtx, uiState.get());
+        if (!invoked) throw new Error('Clearing brim ears is unavailable.');
+      },
+      onError: (error) => {
+        statusText.textContent = `Brim ears: ${error instanceof Error ? error.message : String(error)}`;
+      },
+    });
+    brimEarsPanel.mount();
+    window.addEventListener('pagehide', () => brimEarsPanel.dispose(), { once: true });
   }
 
   const semanticObjectEditorHost = document.getElementById('semantic-object-editor-host');

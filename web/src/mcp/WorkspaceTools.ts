@@ -14,6 +14,7 @@ const ACTION_ID_BY_GIZMO_TOOL = {
   fuzzy_skin: 'tool_fuzzy_skin',
   lay_on_face: 'tool_lay_on_face',
   measure: 'tool_measure',
+  brim_ears: 'tool_brim_ears',
 } as const satisfies Readonly<Record<WorkspaceGizmoTool, string>>;
 
 function isGizmoTool(value: unknown): value is WorkspaceGizmoTool {

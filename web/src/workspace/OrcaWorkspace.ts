@@ -61,6 +61,7 @@ import {
   type PaintToolSettings,
 } from '../project/painting/PaintStrokeService';
 import { SIMPLIFY_DEFAULT_MAX_ERROR } from '../project/objects/simplify';
+import { BRIM_EAR_MAX_RADIUS_MM, BRIM_EAR_MIN_RADIUS_MM } from '../project/objects/brimEarCommands';
 import type { AiPaintSession } from '../project/painting/AiPaintSession';
 import {
   SurfaceFeatureExtractor,
@@ -405,7 +406,26 @@ interface GeometryLoadOptions {
 type ProjectPrimeTower = { enabled: boolean; xMm: number; yMm: number; widthMm: number };
 
 export type WorkspaceGizmoTool =
-  'move' | 'rotate' | 'scale' | 'lay_on_face' | 'measure' | 'paint' | 'support_paint' | 'seam_paint' | 'fuzzy_skin';
+  | 'move'
+  | 'rotate'
+  | 'scale'
+  | 'lay_on_face'
+  | 'measure'
+  | 'brim_ears'
+  | 'paint'
+  | 'support_paint'
+  | 'seam_paint'
+  | 'fuzzy_skin';
+
+/** Read-only view a brim-ear surface renders. */
+export interface BrimEarSnapshot {
+  readonly active: boolean;
+  /** Object the next placement lands on, when exactly one part is in scope. */
+  readonly objectId?: ObjectId;
+  readonly radiusMm: number;
+  readonly ears: readonly { readonly positionMm: Vec3; readonly headFrontRadiusMm: number }[];
+  readonly hint: string;
+}
 
 /** Read-only view an assembly surface renders. */
 export interface AssemblySnapshot {
@@ -1418,6 +1438,12 @@ export class OrcaWorkspace extends xb.Script {
         if (dragX <= 10 && dragY <= 10) this.pickMeasureFeature(pointerRay(event));
         return;
       }
+      if (this.tool === 'brim_ears') {
+        const dragX = Math.abs(event.clientX - downX);
+        const dragY = Math.abs(event.clientY - downY);
+        if (dragX <= 10 && dragY <= 10) this.placeBrimEar(pointerRay(event));
+        return;
+      }
       if (this.transformControls && (this.transformControls as unknown as { dragging: boolean }).dragging) return;
 
       const dx = event.clientX - downX;
@@ -1991,6 +2017,111 @@ export class OrcaWorkspace extends xb.Script {
       this.onMeasureStateChanged?.();
       return false;
     }
+  }
+
+  // ---------------------------------------------------------------------
+  // Brim ears (P5.3.6). Each placement is one undoable canonical command.
+  // ---------------------------------------------------------------------
+
+  private brimEarRadiusMm = 5;
+  public onBrimEarStateChanged: (() => void) | null = null;
+
+  public brimEarsTool(): void {
+    this.setTool('brim_ears');
+    this.setStatus('Brim ears: click the model where an ear should sit.');
+    this.onBrimEarStateChanged?.();
+  }
+
+  public setBrimEarRadius(radiusMm: number): void {
+    if (!Number.isFinite(radiusMm) || radiusMm < BRIM_EAR_MIN_RADIUS_MM || radiusMm > BRIM_EAR_MAX_RADIUS_MM) {
+      this.setStatus(`A brim ear radius must be between ${BRIM_EAR_MIN_RADIUS_MM} and ${BRIM_EAR_MAX_RADIUS_MM} mm.`);
+      return;
+    }
+    this.brimEarRadiusMm = radiusMm;
+    this.onBrimEarStateChanged?.();
+  }
+
+  public getBrimEarSnapshot(): BrimEarSnapshot {
+    const objectId = this.brimEarTargetObject();
+    return Object.freeze({
+      active: this.tool === 'brim_ears',
+      ...(objectId ? { objectId } : {}),
+      radiusMm: this.brimEarRadiusMm,
+      ears: objectId ? this.canonicalProject.getBrimEars(objectId) : Object.freeze([]),
+      hint: objectId
+        ? 'Click the model to place an ear; each placement undoes on its own.'
+        : 'Select one model part to place brim ears on it.',
+    });
+  }
+
+  public clearBrimEars(): boolean {
+    const objectId = this.brimEarTargetObject();
+    if (!objectId) {
+      this.setStatus('Select one model part before clearing its brim ears.');
+      return false;
+    }
+    if (this.canonicalProject.getBrimEars(objectId).length === 0) {
+      this.setStatus('That part has no brim ears.');
+      return false;
+    }
+    this.canonicalProject.clearBrimEars(objectId);
+    this.setStatus('Cleared the brim ears; undo restores them.');
+    this.onBrimEarStateChanged?.();
+    return true;
+  }
+
+  public removeBrimEar(index: number): boolean {
+    const objectId = this.brimEarTargetObject();
+    if (!objectId) return false;
+    try {
+      this.canonicalProject.removeBrimEar(objectId, index);
+      this.setStatus('Removed a brim ear.');
+      this.onBrimEarStateChanged?.();
+      return true;
+    } catch (error) {
+      this.setStatus(`Brim ear: ${(error as Error).message}`);
+      return false;
+    }
+  }
+
+  /** The single object brim ears apply to, or undefined when it is ambiguous. */
+  private brimEarTargetObject(): ObjectId | undefined {
+    const volumes = new Set(this.paintableSelectedVolumes());
+    const objects = new Set(
+      this.paintTargets()
+        .filter((record) => volumes.has(record.volumeId))
+        .map((record) => record.objectId),
+    );
+    return objects.size === 1 ? [...objects][0] : undefined;
+  }
+
+  /** Place one ear where the ray meets the model, in object-local millimetres. */
+  private placeBrimEar(raycaster: THREE.Raycaster): boolean {
+    const objectId = this.brimEarTargetObject();
+    if (!objectId) {
+      this.setStatus('Select one model part before placing brim ears.');
+      return false;
+    }
+    for (const target of this.paintTargets()) {
+      if (target.objectId !== objectId) continue;
+      const [hit] = raycaster.intersectObject(target.display, false);
+      if (!hit) continue;
+      const local = target.display.worldToLocal(hit.point.clone());
+      try {
+        this.canonicalProject.addBrimEar(objectId, {
+          positionMm: [local.x, local.y, local.z],
+          headFrontRadiusMm: this.brimEarRadiusMm,
+        });
+        this.setStatus(`Placed a ${this.brimEarRadiusMm} mm brim ear.`);
+        this.onBrimEarStateChanged?.();
+        return true;
+      } catch (error) {
+        this.setStatus(`Brim ear: ${(error as Error).message}`);
+        return false;
+      }
+    }
+    this.setStatus('Click the selected model to place a brim ear.');
+    return false;
   }
 
   /** Resolve a ray to a canonical surface feature in world millimetres. */

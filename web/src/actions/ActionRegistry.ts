@@ -203,6 +203,10 @@ export interface ActionInvocation {
     readonly imageBase64?: string | null;
     readonly region?: { readonly id: string; readonly value: string | boolean | null };
   };
+  /** Index of the placed brim ear to remove. */
+  brimEarIndex?: number;
+  /** Front radius, in millimetres, for the next placed brim ear. */
+  brimEarRadiusMm?: number;
   /** Percent of triangles to remove, matching the pinned decimate ratio. */
   simplifyRatio?: number;
   /** Bounded assembly alignment request from the Measure panel. */
@@ -351,7 +355,6 @@ const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
   view_show_outline: 'Selection-outline rendering is not implemented yet.',
   view_show_gcode_window: 'The G-code text inspector is not implemented yet.',
   split_to_parts: 'Splitting an object into editable parts is not implemented yet.',
-  tool_brim_ears: 'Brim-ear authoring is not implemented yet.',
   tool_face_detector: 'Face detection and selection is not implemented yet.',
   tool_svg: 'SVG import and embossing is not implemented yet.',
   tool_hollow: 'Model hollowing is not implemented yet.',

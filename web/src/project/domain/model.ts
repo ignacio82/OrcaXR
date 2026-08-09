@@ -161,6 +161,15 @@ export interface LayerRange {
   filamentId?: FilamentId;
 }
 
+/**
+ * One pinned `BrimPoint`: a placed brim "mouse ear" in object-local
+ * millimetres with its own front radius.
+ */
+export interface BrimEarPoint {
+  positionMm: Vec3;
+  headFrontRadiusMm: number;
+}
+
 export interface ProjectObject {
   id: ObjectId;
   name: string;
@@ -170,6 +179,8 @@ export interface ProjectObject {
   volumes: ProjectVolume[];
   instances: ProjectInstance[];
   layerRanges: LayerRange[];
+  /** Pinned `ModelObject::brim_points`; absent means none were placed. */
+  brimEars?: BrimEarPoint[];
   extensionData?: Record<string, JsonValue>;
 }
 

@@ -432,6 +432,22 @@ export class ActionContext {
     this.workspace.clearMeasureSelection();
   }
 
+  brimEars(): void {
+    this.workspace.brimEarsTool();
+  }
+
+  setBrimEarRadius(radiusMm: number): void {
+    this.workspace.setBrimEarRadius(radiusMm);
+  }
+
+  removeBrimEar(index: number): void {
+    this.workspace.removeBrimEar(index);
+  }
+
+  clearBrimEars(): void {
+    this.workspace.clearBrimEars();
+  }
+
   assemblyView(): void {
     this.workspace.measureTool();
     this.workspace.setStatus('Assembly: pick a face on each model, then choose an alignment.');

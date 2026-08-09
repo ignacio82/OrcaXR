@@ -52,7 +52,7 @@ export const ACTION_IDS_BY_PARITY_TASK = {
   ],
   'P4.6': ['tool_support_paint'],
   'P4.7': ['tool_seam_paint'],
-  'P4.8': ['tool_fuzzy_skin', 'tool_brim_ears'],
+  'P4.8': ['tool_fuzzy_skin'],
   'P4.9': [
     'tool_smart_paint',
     'tool_smart_paint_image',
@@ -88,6 +88,10 @@ export const ACTION_IDS_BY_PARITY_TASK = {
     'tool_cut',
   ],
   'P5.3': [
+    'tool_brim_ears',
+    'brim_ears_configure',
+    'brim_ears_remove',
+    'brim_ears_clear',
     'tool_measure',
     'measure_clear',
     'tool_assembly',

@@ -14,7 +14,6 @@ import type { ActionDefinition as Action } from '../ActionRegistry';
 
 const UNAVAILABLE_TOOL_IDS = new Set([
   'split_to_parts',
-  'tool_brim_ears',
   'tool_face_detector',
   'tool_svg',
   'tool_hollow',
@@ -170,7 +169,66 @@ export const gizmoActions: Action[] = [
       'Smart Paint consent and its prompt are entered in a DOM panel; no in-headset consent or text flow exists yet.',
     run: (ctx) => ctx.smartPaintImage(),
   },
-  tool('tool_brim_ears', 'Brim Ears', 'brim_ears', 'Place brim "mouse ears" at chosen points', 'brimEars', 'toolbar'),
+  {
+    id: 'tool_brim_ears',
+    label: 'Brim Ears',
+    icon: 'brim_ears',
+    group: 'scene',
+    disclosure: 'toolbar',
+    tool: 'brim_ears',
+    hint: 'Click the selected part to place brim "mouse ears" that reach the slicer',
+    isEnabled: (s) => s.hasInstanceSelection,
+    xrUnsupportedReason:
+      'Brim-ear radius and the placed-ear list are edited in the DOM inspector; no in-headset flow exists yet.',
+    run: (ctx) => ctx.brimEars(),
+  },
+  {
+    id: 'brim_ears_configure',
+    label: 'Set brim-ear radius',
+    icon: 'brim_ears',
+    group: 'scene',
+    disclosure: 'inspector',
+    hint: 'Choose the front radius the next placed ear uses',
+    xrUnsupportedReason:
+      'Brim-ear radius and the placed-ear list are edited in the DOM inspector; no in-headset flow exists yet.',
+    run: (ctx, invocation) => {
+      const radius = invocation.brimEarRadiusMm;
+      if (radius === undefined) {
+        ctx.reportCapabilityUnavailable('Set brim-ear radius', 'Choose a radius in the Brim ears panel.');
+        return;
+      }
+      ctx.setBrimEarRadius(radius);
+    },
+  },
+  {
+    id: 'brim_ears_remove',
+    label: 'Remove a brim ear',
+    icon: 'delete',
+    group: 'scene',
+    disclosure: 'inspector',
+    hint: 'Remove one placed ear; it comes back at its original index on undo',
+    xrUnsupportedReason:
+      'Brim-ear radius and the placed-ear list are edited in the DOM inspector; no in-headset flow exists yet.',
+    run: (ctx, invocation) => {
+      const index = invocation.brimEarIndex;
+      if (index === undefined) {
+        ctx.reportCapabilityUnavailable('Remove a brim ear', 'Choose an ear in the Brim ears panel.');
+        return;
+      }
+      ctx.removeBrimEar(index);
+    },
+  },
+  {
+    id: 'brim_ears_clear',
+    label: 'Clear brim ears',
+    icon: 'delete',
+    group: 'scene',
+    disclosure: 'inspector',
+    hint: 'Remove every brim ear from the selected part as one undoable command',
+    xrUnsupportedReason:
+      'Brim-ear radius and the placed-ear list are edited in the DOM inspector; no in-headset flow exists yet.',
+    run: (ctx) => ctx.clearBrimEars(),
+  },
   {
     id: 'tool_measure',
     label: 'Measure',

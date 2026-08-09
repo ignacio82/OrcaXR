@@ -88,7 +88,7 @@ import {
 import type { CommandHistorySnapshot } from '../project/history/commandBus';
 import { PreparedProjectImport, ProjectImportCoordinator } from '../project/import/ProjectImportCoordinator';
 import { ModelImportParser, type ModelImportPlacement } from '../project/import/ModelImportParser';
-import type { JsonValue, TriangleAssignments, Vec3 } from '../project/domain/model';
+import type { BrimEarPoint, JsonValue, TriangleAssignments, Vec3 } from '../project/domain/model';
 import type { FacetRefinementEncoding } from '../project/domain/model';
 import type { FacetAnnotationChannel, FacetSelectionMesh } from '../project/annotations';
 import { GeometryMergeParser } from '../project/import/GeometryMergeParser';
@@ -102,6 +102,7 @@ import {
 } from '../project/import/types';
 import { decodeIndexedMeshAsset, encodeIndexedMeshAsset } from '../project/meshCodec';
 import { ReplaceVolumeMeshCommand, type MeshTopologyReplacementGuard } from '../project/objects/topologyCommands';
+import { AddBrimEarCommand, ClearBrimEarsCommand, RemoveBrimEarCommand } from '../project/objects/brimEarCommands';
 import {
   DEFAULT_SIMPLIFY_CONFIGURATION,
   simplifyMesh,
@@ -2317,6 +2318,32 @@ export class CanonicalWorkspaceController {
       afterTriangles: simplified.triangles.length,
       maxError: simplified.maxAppliedError,
     };
+  }
+
+  /** Place one brim ear in object-local millimetres, as one undoable command. */
+  addBrimEar(objectId: ObjectId, point: BrimEarPoint): void {
+    this.assertActive();
+    this.session.commands.execute(new AddBrimEarCommand(objectId, point));
+  }
+
+  removeBrimEar(objectId: ObjectId, index: number): void {
+    this.assertActive();
+    this.session.commands.execute(new RemoveBrimEarCommand(objectId, index));
+  }
+
+  clearBrimEars(objectId: ObjectId): void {
+    this.assertActive();
+    this.session.commands.execute(new ClearBrimEarsCommand(objectId));
+  }
+
+  /** Ears currently placed on one object, for a readout or an overlay. */
+  getBrimEars(objectId: ObjectId): readonly BrimEarPoint[] {
+    this.assertActive();
+    for (const plate of this.session.project.getSnapshot().state.plates) {
+      const object = plate.objects.find((candidate) => candidate.id === objectId);
+      if (object) return cloneJson(object.brimEars ?? []);
+    }
+    return [];
   }
 
   /** Canonical transform of one volume, for surfaces that resolve facet data. */

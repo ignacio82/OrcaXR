@@ -273,6 +273,16 @@ export function validateProjectState(state: ProjectState): ValidationIssue[] {
         validateExtensionData(instance.extensionData, `${instancePath}.extensionData`, add);
       });
 
+      (object.brimEars ?? []).forEach((ear, earIndex) => {
+        const earPath = `${objectPath}.brimEars[${earIndex}]`;
+        if (ear.positionMm.length !== 3 || !ear.positionMm.every(Number.isFinite)) {
+          add('invalid-brim-ear', `${earPath}.positionMm`, 'A brim ear needs three finite coordinates');
+        }
+        if (!Number.isFinite(ear.headFrontRadiusMm) || ear.headFrontRadiusMm <= 0) {
+          add('invalid-brim-ear', `${earPath}.headFrontRadiusMm`, 'A brim ear needs a positive front radius');
+        }
+      });
+
       const ranges = [...object.layerRanges].sort((a, b) => a.minZMm - b.minZMm);
       ranges.forEach((range, rangeIndex) => {
         const originalIndex = object.layerRanges.indexOf(range);
