@@ -230,6 +230,67 @@ export const gizmoActions: Action[] = [
     run: (ctx) => ctx.clearBrimEars(),
   },
   {
+    id: 'add_emboss',
+    mcpTool: 'emboss_model',
+    label: 'Emboss Text',
+    icon: 'emboss',
+    group: 'scene',
+    disclosure: 'toolbar',
+    menuSection: 'tools',
+    tool: 'emboss',
+    hint: 'Cut text as a new part of the selected model',
+    isEnabled: (s) => s.modelCount > 0,
+    xrUnsupportedReason:
+      'Embossing needs a font file the operator picks and a text field to type in; both are DOM-only, and no in-headset file picker or keyboard flow exists yet.',
+    run: (ctx) => ctx.emboss(),
+  },
+  {
+    id: 'emboss_load_font',
+    label: 'Load an emboss font',
+    icon: 'emboss',
+    group: 'scene',
+    disclosure: 'inspector',
+    hint: 'Choose a .ttf file; a browser cannot read the fonts installed on this machine',
+    xrUnsupportedReason: 'Choosing a font file needs the DOM file picker; no in-headset file browser exists yet.',
+    run: (ctx, invocation) => {
+      const font = invocation.emboss?.font;
+      if (!font) {
+        ctx.reportCapabilityUnavailable('Load an emboss font', 'Choose a .ttf file in the Emboss panel.');
+        return;
+      }
+      ctx.loadEmbossFont(font.name, font.bytes);
+    },
+  },
+  {
+    id: 'emboss_configure',
+    label: 'Set the emboss text and shape',
+    icon: 'emboss',
+    group: 'scene',
+    disclosure: 'inspector',
+    hint: 'Change the text, size, depth, spacing, or alignment before cutting it',
+    xrUnsupportedReason: 'The emboss recipe is typed into a DOM panel; no in-headset text entry exists yet.',
+    run: (ctx, invocation) => {
+      const recipe = invocation.emboss?.recipe;
+      if (!recipe) {
+        ctx.reportCapabilityUnavailable('Set the emboss text and shape', 'Edit the fields in the Emboss panel.');
+        return;
+      }
+      ctx.setEmbossRecipe(recipe);
+    },
+  },
+  {
+    id: 'emboss_apply',
+    label: 'Add embossed text',
+    icon: 'emboss',
+    group: 'scene',
+    disclosure: 'inspector',
+    hint: 'Cut the text and add it to the selected part, or re-cut the selected text part',
+    isEnabled: (s) => s.modelCount > 0,
+    xrUnsupportedReason:
+      'Embossing needs a font file the operator picks and a text field to type in; both are DOM-only, and no in-headset file picker or keyboard flow exists yet.',
+    run: (ctx) => ctx.applyEmboss(),
+  },
+  {
     id: 'tool_measure',
     label: 'Measure',
     icon: 'measure',

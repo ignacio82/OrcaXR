@@ -100,6 +100,9 @@ export const ACTION_IDS_BY_PARITY_TASK = {
     'tool_svg',
     'tool_hollow',
     'add_emboss',
+    'emboss_load_font',
+    'emboss_configure',
+    'emboss_apply',
     'add_magnet',
   ],
   'P5.4': [

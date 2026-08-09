@@ -7,6 +7,16 @@
  */
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import {
+  DEFAULT_EMBOSS_FONT_PROPERTY,
+  DEFAULT_EMBOSS_PROJECTION,
+  type EmbossFontProperty,
+  type EmbossProjection,
+  type EmbossTextConfiguration,
+  type EmbossedMesh,
+  type GlyphOutlineSource,
+} from '../project/objects/emboss';
+import { readTrueTypeOutlines } from '../project/objects/truetypeOutlines';
 import type { FilamentId, InstanceId, LayerRangeId, ObjectId, PlateId, VolumeId } from '../project/domain/ids';
 import { entityId, UuidIdSource } from '../project/domain/ids';
 import type {
@@ -415,7 +425,8 @@ export type WorkspaceGizmoTool =
   | 'paint'
   | 'support_paint'
   | 'seam_paint'
-  | 'fuzzy_skin';
+  | 'fuzzy_skin'
+  | 'emboss';
 
 /** Read-only view a brim-ear surface renders. */
 export interface BrimEarSnapshot {
@@ -424,6 +435,25 @@ export interface BrimEarSnapshot {
   readonly objectId?: ObjectId;
   readonly radiusMm: number;
   readonly ears: readonly { readonly positionMm: Vec3; readonly headFrontRadiusMm: number }[];
+  readonly hint: string;
+}
+
+/** A bounded change to the emboss recipe; absent fields keep their value. */
+export type EmbossRecipePatch = Partial<Omit<EmbossTextConfiguration, 'font' | 'projection'>> & {
+  readonly font?: Partial<EmbossFontProperty>;
+  readonly projection?: Partial<EmbossProjection>;
+};
+
+/** Read-only view an emboss surface renders. */
+export interface EmbossSnapshot {
+  readonly active: boolean;
+  /** Object a new embossed part would be added to, when one part is in scope. */
+  readonly objectId?: ObjectId;
+  /** Volume whose recipe an edit would re-cut, when an embossed part is selected. */
+  readonly volumeId?: VolumeId;
+  /** Name of the loaded font, or undefined when the operator has chosen none. */
+  readonly fontName?: string;
+  readonly configuration: EmbossTextConfiguration;
   readonly hint: string;
 }
 
@@ -2066,6 +2096,136 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus(`Filament sync failed: ${(error as Error).message}`);
       return false;
     }
+  }
+
+  private embossFont?: { name: string; source: GlyphOutlineSource };
+  private embossRecipe: EmbossTextConfiguration = {
+    text: 'Text',
+    styleName: '',
+    fontDescriptor: '',
+    fontDescriptorType: 'file_name',
+    font: DEFAULT_EMBOSS_FONT_PROPERTY,
+    projection: DEFAULT_EMBOSS_PROJECTION,
+  };
+  public onEmbossStateChanged: (() => void) | null = null;
+
+  public embossTool(): void {
+    this.setTool('emboss');
+    this.setStatus(
+      this.embossFont
+        ? 'Emboss: type the text, then add it to the selected part.'
+        : 'Emboss: choose a .ttf font file first — the browser cannot read your installed fonts.',
+    );
+    this.onEmbossStateChanged?.();
+  }
+
+  /**
+   * Load a font the operator chose. Nothing is fetched: a browser cannot list
+   * installed fonts and the app CSP forbids requesting one, so the bytes always
+   * come from a file the operator picked.
+   */
+  public loadEmbossFont(name: string, bytes: Uint8Array): boolean {
+    try {
+      const source = readTrueTypeOutlines(bytes, this.embossRecipe.font.collection);
+      this.embossFont = { name, source };
+      this.embossRecipe = {
+        ...this.embossRecipe,
+        styleName: this.embossRecipe.styleName || name,
+        fontDescriptor: name,
+        fontDescriptorType: 'file_name',
+      };
+      this.setStatus(`Loaded ${name} for embossing.`);
+      this.onEmbossStateChanged?.();
+      return true;
+    } catch (error) {
+      this.setStatus(`Could not read that font: ${(error as Error).message}`);
+      this.onEmbossStateChanged?.();
+      return false;
+    }
+  }
+
+  /** Merge a partial recipe change without losing the rest of the settings. */
+  public setEmbossRecipe(patch: EmbossRecipePatch): void {
+    const { font, projection, ...rest } = patch;
+    this.embossRecipe = {
+      ...this.embossRecipe,
+      ...rest,
+      font: { ...this.embossRecipe.font, ...(font ?? {}) },
+      projection: { ...this.embossRecipe.projection, ...(projection ?? {}) },
+    };
+    this.onEmbossStateChanged?.();
+  }
+
+  public getEmbossSnapshot(): EmbossSnapshot {
+    const objectId = this.brimEarTargetObject();
+    const volumeId = this.embossTargetVolume();
+    return Object.freeze({
+      active: this.tool === 'emboss',
+      ...(objectId ? { objectId } : {}),
+      ...(volumeId ? { volumeId } : {}),
+      ...(this.embossFont ? { fontName: this.embossFont.name } : {}),
+      configuration: Object.freeze({ ...this.embossRecipe }),
+      hint: !this.embossFont
+        ? 'Choose a .ttf font file; the browser cannot read the fonts installed on this machine.'
+        : volumeId
+          ? 'Editing the selected text re-cuts its mesh; undo restores the previous cut.'
+          : objectId
+            ? 'Adds the text as a new part of the selected model.'
+            : 'Select one model part to add the text to.',
+    });
+  }
+
+  /** Add the current recipe to the selected object, or re-cut a selected text part. */
+  public applyEmboss(): boolean {
+    const font = this.embossFont;
+    if (!font) {
+      this.setStatus('Choose a .ttf font file before embossing.');
+      return false;
+    }
+    const volumeId = this.embossTargetVolume();
+    try {
+      const mesh = volumeId
+        ? this.canonicalProject.editEmbossText(volumeId, this.embossRecipe, font.source)
+        : this.addEmbossToSelectedObject(font.source);
+      if (!mesh) return false;
+      const notes: string[] = [];
+      if (mesh.missingCodePoints.length > 0) {
+        notes.push(
+          `${font.name} has no glyph for ${mesh.missingCodePoints
+            .map((point) => String.fromCodePoint(point))
+            .join(' ')}`,
+        );
+      }
+      // An open mesh still prints, but it prints wrong; say so rather than let
+      // the slicer quietly repair it into something the operator did not ask for.
+      if (mesh.openEdgeCount > 0) notes.push(`${mesh.openEdgeCount} edges did not close`);
+      this.setStatus(
+        notes.length > 0
+          ? `Embossed the text — ${notes.join('; ')}.`
+          : `Embossed the text as ${mesh.triangleCount} triangles.`,
+      );
+      this.onEmbossStateChanged?.();
+      return true;
+    } catch (error) {
+      this.setStatus(`Emboss failed: ${(error as Error).message}`);
+      return false;
+    }
+  }
+
+  private addEmbossToSelectedObject(source: GlyphOutlineSource): EmbossedMesh | undefined {
+    const objectId = this.brimEarTargetObject();
+    if (!objectId) {
+      this.setStatus('Select one model part to add embossed text to.');
+      return undefined;
+    }
+    return this.canonicalProject.addEmbossText(objectId, this.embossRecipe, source).mesh;
+  }
+
+  /** The selected volume, when it is itself embossed text an edit would re-cut. */
+  private embossTargetVolume(): VolumeId | undefined {
+    const volumes = this.paintableSelectedVolumes();
+    if (volumes.length !== 1) return undefined;
+    return this.canonicalProject.getEmbossText(volumes[0]) ? volumes[0] : undefined;
   }
 
   public brimEarsTool(): void {

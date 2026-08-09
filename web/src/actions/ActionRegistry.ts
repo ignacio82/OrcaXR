@@ -13,6 +13,7 @@
  * data — they never touch presentation nodes, so the same guarded code path
  * runs from DOM, XR, keyboard, automation, or the command palette.
  */
+import type { EmbossRecipePatch } from '../workspace/OrcaWorkspace';
 import type { ActionContext } from './ActionContext';
 import type { FilamentId, PlateId } from '../project/domain/ids';
 import type { ConfigMap } from '../project/domain/model';
@@ -209,6 +210,15 @@ export interface ActionInvocation {
   brimEarRadiusMm?: number;
   /** Percent of triangles to remove, matching the pinned decimate ratio. */
   simplifyRatio?: number;
+  /**
+   * Bounded emboss request. The font arrives as bytes the operator picked: a
+   * browser cannot enumerate installed fonts and the CSP forbids fetching one,
+   * so there is no name-only form of this parameter.
+   */
+  emboss?: {
+    readonly font?: { readonly name: string; readonly bytes: Uint8Array };
+    readonly recipe?: EmbossRecipePatch;
+  };
   /** Bounded assembly alignment request from the Measure panel. */
   assemblyAlignment?: {
     readonly kind: AssemblyAlignmentKind;
@@ -338,7 +348,6 @@ const CANONICAL_CUTOVER_GATED_IDS = new Set<string>(Object.keys(CANONICAL_CUTOVE
 
 const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
   ...CANONICAL_CUTOVER_GATED_REASONS,
-  add_emboss: 'Text embossing is not implemented yet; no model will be changed.',
   add_magnet: 'Magnet-hole geometry is not implemented yet; no model will be changed.',
   scan_network: 'Local-network printer discovery is not implemented yet.',
   view_webcam: 'The registry webcam flow is not connected to a configured printer yet.',

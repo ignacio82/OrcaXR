@@ -44,16 +44,6 @@ export const advancedActions: Action[] = [
     },
   },
   {
-    id: 'add_emboss',
-    mcpTool: 'emboss_model',
-    label: 'Emboss Text',
-    icon: 'emboss',
-    group: 'advanced',
-    disclosure: 'menu',
-    menuSection: 'tools',
-    hint: 'Emboss text onto the selected model',
-  },
-  {
     id: 'add_magnet',
     mcpTool: 'add_magnets',
     label: 'Add Magnet Hole',

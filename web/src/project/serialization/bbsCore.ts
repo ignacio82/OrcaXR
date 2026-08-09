@@ -35,6 +35,14 @@ import { serializeFullSpectrumDefinition } from '../filaments/fullSpectrumRecipe
 import { decodeIndexedMeshAsset, type DecodedIndexedMesh } from '../meshCodec';
 import { validatePackagePath } from './deterministicZip';
 import { BRIM_EAR_POINTS_PATH, decodeBrimEarPoints, encodeBrimEarPoints } from './brimEarPoints';
+import type { EmbossTextConfiguration } from '../objects/emboss';
+import {
+  EMBOSS_SHAPE_TAG,
+  EMBOSS_TEXT_TAG,
+  decodeEmbossTextConfiguration,
+  encodeEmbossShape,
+  encodeEmbossTextConfiguration,
+} from './embossTextConfig';
 import {
   BbsFacetCodecError,
   decodeBbsFacetRoot,
@@ -583,6 +591,13 @@ function buildModelSettings(
       const slot = entry.volume.filamentId ? filamentSlots.get(entry.volume.filamentId) : undefined;
       if (slot) lines.push(metadataLine('extruder', slot, 3));
       appendConfig(lines, entry.volume.config, 3);
+      if (entry.volume.embossText) {
+        // Upstream keeps the text recipe and its projection on the part, which
+        // is what makes the volume reopen as editable text rather than as an
+        // anonymous mesh.
+        lines.push(`   ${encodeEmbossTextConfiguration(entry.volume.embossText)}`);
+        lines.push(`   ${encodeEmbossShape(entry.volume.embossText.projection)}`);
+      }
       lines.push(
         '   <mesh_stat edges_fixed="0" degenerate_facets="0" facets_removed="0" facets_reversed="0" backwards_edges="0"/>',
       );
@@ -1451,7 +1466,10 @@ interface ResolvedMeshComponent {
 interface ParsedModelMetadata {
   objectConfig: Map<number, ConfigMap>;
   objectNames: Map<number, string>;
-  partData: Map<number, Map<number, { role: VolumeRole; name?: string; config: ConfigMap }>>;
+  partData: Map<
+    number,
+    Map<number, { role: VolumeRole; name?: string; config: ConfigMap; embossText?: EmbossTextConfiguration }>
+  >;
   layerRanges: Map<number, Array<Omit<LayerRange, 'id'>>>;
   plates: Array<{
     sourceId: number;
@@ -1603,12 +1621,12 @@ export function importBbsCore(
   }
   const parsed = parseCorePackage(files, maxFacetRefinementNodes);
   const projectConfig = parseProjectSettings(files.get(PROJECT_SETTINGS_PATH));
-  const modelMetadata = parseModelSettings(files.get(MODEL_SETTINGS_PATH));
-  const plateCoordinates = importedPlateCoordinates(files, modelMetadata, parsed.build.length);
-  const layerRanges = parseLayerRanges(files.get(LAYER_RANGES_PATH));
   const warnings = [
     'Imported a 3MF without OrcaXR canonical metadata. Core geometry, transforms, basic BBS settings, plates, and bounded BBS facet trees were recovered; unsupported BBS fields remain preserved as opaque package entries.',
   ];
+  const modelMetadata = parseModelSettings(files.get(MODEL_SETTINGS_PATH), warnings);
+  const plateCoordinates = importedPlateCoordinates(files, modelMetadata, parsed.build.length);
+  const layerRanges = parseLayerRanges(files.get(LAYER_RANGES_PATH));
   const makeId = <Kind extends string>(kind: Kind, suffix: string) =>
     entityId<Kind>(`import:3mf:${archiveHash}-${kind}-${suffix}`);
 
@@ -1851,6 +1869,7 @@ export function importBbsCore(
           transform: component.transform,
           config: volumeConfig,
           annotations: cloneJson(leaf.annotations),
+          ...(part?.embossText ? { embossText: part.embossText } : {}),
           ...(filament && supportsFilament ? { filamentId: filament.id } : {}),
           ...(Object.keys(volumeExtensionData).length > 0 ? { extensionData: volumeExtensionData } : {}),
         });
@@ -2436,7 +2455,24 @@ function bbsVirtualPlateOrigins(
   });
 }
 
-function parseModelSettings(bytes: Uint8Array | undefined): ParsedModelMetadata {
+/** Read `slic3rpe:text`/`slic3rpe:shape` off one part, reporting what it cannot use. */
+function readPartEmbossText(
+  body: string,
+  objectId: number,
+  partId: number,
+  warnings: string[],
+): { embossText?: EmbossTextConfiguration } {
+  const textMatch = new RegExp(`<${EMBOSS_TEXT_TAG}\\b[^>]*/?>`, 'i').exec(body);
+  if (!textMatch) return {};
+  const shapeMatch = new RegExp(`<${EMBOSS_SHAPE_TAG}\\b[^>]*/?>`, 'i').exec(body);
+  const decoded = decodeEmbossTextConfiguration(textMatch[0], shapeMatch?.[0]);
+  for (const warning of decoded.warnings) {
+    warnings.push(`${MODEL_SETTINGS_PATH} object ${objectId} part ${partId}: ${warning}`);
+  }
+  return decoded.configuration ? { embossText: decoded.configuration } : {};
+}
+
+function parseModelSettings(bytes: Uint8Array | undefined, embossWarnings: string[] = []): ParsedModelMetadata {
   const result: ParsedModelMetadata = {
     objectConfig: new Map(),
     objectNames: new Map(),
@@ -2466,7 +2502,10 @@ function parseModelSettings(bytes: Uint8Array | undefined): ParsedModelMetadata 
       delete config.name;
     }
     result.objectConfig.set(objectId, config);
-    const parts = new Map<number, { role: VolumeRole; name?: string; config: ConfigMap }>();
+    const parts = new Map<
+      number,
+      { role: VolumeRole; name?: string; config: ConfigMap; embossText?: EmbossTextConfiguration }
+    >();
     for (const partMatch of body.matchAll(/<part\b([^>]*)>([\s\S]*?)<\/part>/gi)) {
       const partAttrs = parseAttributes(partMatch[1]);
       const partId = Number(partAttrs.id);
@@ -2482,6 +2521,7 @@ function parseModelSettings(bytes: Uint8Array | undefined): ParsedModelMetadata 
         role: roleFromSubtype(partAttrs.subtype),
         name,
         config: partConfig,
+        ...readPartEmbossText(partMatch[2], objectId, partId, embossWarnings),
       });
     }
     if (parts.size > 0) result.partData.set(objectId, parts);

@@ -59,7 +59,6 @@ const UNAVAILABLE_IDS = [
   'mesh_boolean_intersection',
   'tool_cut',
   'auto_place_wipe',
-  'add_emboss',
   'add_magnet',
   'scan_network',
   'view_webcam',

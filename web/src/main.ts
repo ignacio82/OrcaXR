@@ -56,6 +56,7 @@ import { PreviewScrubber } from './ui/dom/PreviewScrubber';
 import { InspectorTabs } from './ui/dom/InspectorTabs';
 import { PaintPanel } from './ui/dom/PaintPanel';
 import { BrimEarsPanel } from './ui/dom/BrimEarsPanel';
+import { EmbossPanel } from './ui/dom/EmbossPanel';
 import { MeasurePanel } from './ui/dom/MeasurePanel';
 import { SmartPaintPanel } from './ui/dom/SmartPaintPanel';
 import { PlateManager } from './ui/dom/PlateManager';
@@ -1756,6 +1757,79 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     });
     brimEarsPanel.mount();
     window.addEventListener('pagehide', () => brimEarsPanel.dispose(), { once: true });
+  }
+
+  const embossPanelHost = document.getElementById('emboss-panel-host');
+  if (embossPanelHost) {
+    const embossPanel = new EmbossPanel(embossPanelHost, {
+      getState: () => {
+        const snapshot = workspace.getEmbossSnapshot();
+        return {
+          active: snapshot.active,
+          ...(snapshot.objectId ? { objectId: String(snapshot.objectId) } : {}),
+          ...(snapshot.volumeId ? { volumeId: String(snapshot.volumeId) } : {}),
+          ...(snapshot.fontName ? { fontName: snapshot.fontName } : {}),
+          text: snapshot.configuration.text,
+          sizeMm: snapshot.configuration.font.lineHeightMm,
+          depthMm: snapshot.configuration.projection.depthMm,
+          charGapMm: snapshot.configuration.font.charGapMm,
+          lineGapMm: snapshot.configuration.font.lineGapMm,
+          horizontal: snapshot.configuration.font.horizontal,
+          vertical: snapshot.configuration.font.vertical,
+          hint: snapshot.hint,
+        };
+      },
+      subscribe: (listener) => {
+        const unsubscribeCanonical = workspace.subscribeCanonicalState(listener);
+        const previous = workspace.onEmbossStateChanged;
+        workspace.onEmbossStateChanged = () => {
+          previous?.();
+          listener();
+        };
+        return () => {
+          unsubscribeCanonical();
+          workspace.onEmbossStateChanged = previous;
+        };
+      },
+      onActivate: async () => {
+        const invoked = await registry.invoke('add_emboss', 'dom-toolbar', actionCtx, uiState.get());
+        if (!invoked) throw new Error('Load a model before embossing text onto it.');
+      },
+      onLoadFont: async (name, bytes) => {
+        const invoked = await registry.invoke('emboss_load_font', 'dom-inspector', actionCtx, uiState.get(), {
+          emboss: { font: { name, bytes } },
+        });
+        if (!invoked) throw new Error('Loading an emboss font is unavailable.');
+      },
+      onConfigure: async (patch) => {
+        // The panel speaks in plain millimetres; the recipe keeps the pinned
+        // field names, so the mapping happens here rather than in the panel.
+        const recipe = {
+          ...(patch.text === undefined ? {} : { text: patch.text }),
+          font: {
+            ...(patch.sizeMm === undefined ? {} : { lineHeightMm: patch.sizeMm }),
+            ...(patch.charGapMm === undefined ? {} : { charGapMm: patch.charGapMm }),
+            ...(patch.lineGapMm === undefined ? {} : { lineGapMm: patch.lineGapMm }),
+            ...(patch.horizontal === undefined ? {} : { horizontal: patch.horizontal }),
+            ...(patch.vertical === undefined ? {} : { vertical: patch.vertical }),
+          },
+          ...(patch.depthMm === undefined ? {} : { projection: { depthMm: patch.depthMm } }),
+        };
+        const invoked = await registry.invoke('emboss_configure', 'dom-inspector', actionCtx, uiState.get(), {
+          emboss: { recipe },
+        });
+        if (!invoked) throw new Error('Changing the emboss recipe is unavailable.');
+      },
+      onApply: async () => {
+        const invoked = await registry.invoke('emboss_apply', 'dom-inspector', actionCtx, uiState.get());
+        if (!invoked) throw new Error('Adding embossed text is unavailable.');
+      },
+      onError: (error) => {
+        statusText.textContent = `Emboss: ${error instanceof Error ? error.message : String(error)}`;
+      },
+    });
+    embossPanel.mount();
+    window.addEventListener('pagehide', () => embossPanel.dispose(), { once: true });
   }
 
   const semanticObjectEditorHost = document.getElementById('semantic-object-editor-host');

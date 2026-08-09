@@ -1,3 +1,4 @@
+import type { EmbossTextConfiguration } from '../objects/emboss';
 import type {
   AssetId,
   CustomGcodeId,
@@ -142,6 +143,12 @@ export interface ProjectVolume {
   /** Missing means inherit from the object. */
   filamentId?: FilamentId;
   annotations: FacetAnnotations;
+  /**
+   * The text recipe this volume's mesh was generated from, when it is embossed
+   * text. Keeping the recipe — not just the triangles — is what lets a saved
+   * project reopen with the text still editable, exactly as upstream does.
+   */
+  embossText?: EmbossTextConfiguration;
   extensionData?: Record<string, JsonValue>;
 }
 

@@ -1198,10 +1198,39 @@ Local starting seams: [`MeshCut.ts`](../web/src/features/MeshCut.ts),
     same-object (volume-level) alignment mode, its on-canvas alignment handles, and XR also remain;
     all six actions in this family declare an `xrUnsupportedReason`.
 
-- [ ] **P5.3.3 — Emboss text.** Text volumes with font, size, depth, alignment, per-character
+- [~] **P5.3.3 — Emboss text.** Text volumes with font, size, depth, alignment, per-character
   spacing, surface projection, and the pinned editable parameter set persisted for reopen.
   - **Accept:** golden geometry compares within tolerance and a saved project reopens the text
     still editable; no font is fetched at runtime under the app CSP.
+  - **Current:** `project/objects/emboss.ts` lays text out in millimetres — line height, letter and
+    line gap, skew, and both alignment axes — and extrudes it; `project/objects/truetypeOutlines.ts`
+    reads `glyf` outlines, composite glyphs, and cmap formats 4 and 12 from a font the operator
+    supplies. Nothing is fetched: a browser cannot enumerate installed fonts and the CSP forbids
+    requesting one, so the font is always a picked file. That is recorded in the platform-adaptation
+    register, not silently substituted.
+    Counters are the hard part, and they are correct: contours are classified by winding direction —
+    the rule fonts actually use — so a part that merely touches another (the cedilla of ç, the bars
+    of #) stays solid instead of being read as a hole, and `project/objects/polygonTriangulation.ts`
+    subtracts real holes through hole bridging with the two recovery passes a naive ear clipper
+    lacks. Walls are derived from the cap's own boundary, so the solid is watertight by
+    construction. The sweep in `truetypeOutlines.test.ts` extrudes every printable character of
+    every system font present and requires them closed.
+    `slic3rpe:text` and `slic3rpe:shape` are written and read on the part exactly as the pinned
+    `bbs_3mf.cpp` does — including vertical `center` serialising as `middle` — so a saved project
+    reopens with the text still editable, and a BBS project written elsewhere brings its recipe
+    across. `AddEmbossTextCommand`/`EditEmbossTextCommand` add and re-cut the volume as single
+    undoable commands that reset the facet annotations a re-cut invalidates. `add_emboss` is a real
+    registry action with `emboss_load_font`, `emboss_configure`, and `emboss_apply` behind a DOM
+    panel.
+  - **Outstanding:** `use_surface` projection onto the model is stored and round-trips but is not
+    yet applied — the mesh is extruded flat, so the flag is persisted rather than honoured;
+    per-glyph embossing (`per_glyph`) is likewise stored but not yet cut as separate volumes; and
+    boldness is stored without an outline-offset pass. There is no live preview before apply, no
+    golden-geometry oracle against the pinned engine (the sweep proves closure, not equality), and
+    all four actions declare an `xrUnsupportedReason` because choosing a font file and typing text
+    are DOM-only. One system glyph in roughly 1400 (FreeSerif `4`) still comes out open; the mesh
+    reports `openEdgeCount` and the status line says so rather than letting the slicer quietly
+    repair it.
 
 - [ ] **P5.3.4 — SVG emboss and SVG part.** Import an SVG, resolve its paths to a mesh volume, and
   keep the pinned editable parameters.

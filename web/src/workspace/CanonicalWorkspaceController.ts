@@ -16,6 +16,13 @@ import {
 } from '../project/commands';
 import { canonicalStringify, cloneJson, cloneProjectState, deepFreeze } from '../project/domain/canonical';
 import { facetAnnotationsHaveAssignments } from '../project/domain/facetRefinement';
+import type { EmbossTextConfiguration, EmbossedMesh, GlyphOutlineSource } from '../project/objects/emboss';
+import {
+  AddEmbossTextCommand,
+  EditEmbossTextCommand,
+  embossVolumeIdentity,
+  prepareEmbossedVolume,
+} from '../project/objects/embossCommands';
 import type {
   AssetId,
   CustomGcodeId,
@@ -2367,6 +2374,46 @@ export class CanonicalWorkspaceController {
       if (object) return cloneJson(object.brimEars ?? []);
     }
     return [];
+  }
+
+  /**
+   * Cut embossed text and add it to an object, as one undoable command.
+   *
+   * The font is a `GlyphOutlineSource` the caller supplies, because a browser
+   * cannot enumerate installed fonts and the app CSP forbids fetching one.
+   */
+  addEmbossText(
+    objectId: ObjectId,
+    configuration: EmbossTextConfiguration,
+    font: GlyphOutlineSource,
+    transform: Transform = identityTransform(),
+  ): { volumeId: VolumeId; mesh: EmbossedMesh } {
+    this.assertActive();
+    const identity = embossVolumeIdentity(this.options.idSource);
+    const prepared = prepareEmbossedVolume(configuration, font, identity.assetId);
+    this.session.commands.execute(
+      new AddEmbossTextCommand(
+        { objectId, volumeId: identity.volumeId, assetId: identity.assetId, transform },
+        configuration,
+        prepared,
+      ),
+    );
+    return { volumeId: identity.volumeId, mesh: prepared.mesh };
+  }
+
+  /** Re-cut an existing embossed volume from an edited recipe. */
+  editEmbossText(volumeId: VolumeId, configuration: EmbossTextConfiguration, font: GlyphOutlineSource): EmbossedMesh {
+    this.assertActive();
+    const prepared = prepareEmbossedVolume(configuration, font, embossVolumeIdentity(this.options.idSource).assetId);
+    this.session.commands.execute(new EditEmbossTextCommand(volumeId, configuration, prepared));
+    return prepared.mesh;
+  }
+
+  /** The recipe on one volume, when it is embossed text. */
+  getEmbossText(volumeId: VolumeId): EmbossTextConfiguration | undefined {
+    this.assertActive();
+    const found = findVolume(this.session.project.getSnapshot().state, volumeId);
+    return found?.volume.embossText ? cloneJson(found.volume.embossText) : undefined;
   }
 
   /** Canonical transform of one volume, for surfaces that resolve facet data. */

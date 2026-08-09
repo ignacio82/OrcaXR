@@ -8,6 +8,7 @@
  * method or feature module. **No feature logic lives here** — this is routing,
  * so the DOM shell and the XR shell invoke identical behaviour.
  */
+import type { EmbossRecipePatch } from '../workspace/OrcaWorkspace';
 import type { AssemblyAlignmentKind } from '../project/objects/assembly';
 import type { ActionInvocation } from './ActionRegistry';
 import type { OrcaWorkspace } from '../workspace/OrcaWorkspace';
@@ -434,6 +435,22 @@ export class ActionContext {
 
   brimEars(): void {
     this.workspace.brimEarsTool();
+  }
+
+  emboss(): void {
+    this.workspace.embossTool();
+  }
+
+  loadEmbossFont(name: string, bytes: Uint8Array): void {
+    this.workspace.loadEmbossFont(name, bytes);
+  }
+
+  setEmbossRecipe(patch: EmbossRecipePatch): void {
+    this.workspace.setEmbossRecipe(patch);
+  }
+
+  applyEmboss(): void {
+    this.workspace.applyEmboss();
   }
 
   setBrimEarRadius(radiusMm: number): void {

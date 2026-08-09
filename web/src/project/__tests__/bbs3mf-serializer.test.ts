@@ -1189,4 +1189,91 @@ await test('projects layer events into the engine format and reads them back', a
   assert.equal(foreign.state.customGcode.find((entry) => entry.layerEvent?.type === 'custom')?.code, 'M117 half way');
 });
 
+await test('an embossed volume reopens with its text still editable', async () => {
+  const serializer = new Bbs3mfProjectSerializer();
+  const fixture = createProjectFixture();
+  const volume = fixture.state.plates[0].objects[0].volumes[0];
+  volume.embossText = {
+    text: 'Drew\nwas here',
+    styleName: 'DejaVu Sans',
+    fontDescriptor: '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+    fontDescriptorType: 'file_name',
+    font: {
+      charGapMm: 0.4,
+      lineGapMm: 1.5,
+      lineHeightMm: 14,
+      boldnessMm: 0.1,
+      skew: 0.2,
+      perGlyph: true,
+      horizontal: 'right',
+      vertical: 'bottom',
+      collection: 1,
+    },
+    projection: { depthMm: 2.5, useSurface: true },
+    family: 'DejaVu Sans',
+    faceName: 'DejaVu Sans Book',
+    style: 'Book',
+    weight: '400',
+  };
+
+  const archive = await serializer.serialize({
+    state: fixture.state,
+    assets: [fixture.asset],
+    sourceRevision: 11,
+    sourceHash: projectFingerprint(fixture.state),
+  });
+
+  // The recipe lands on the part, where the pinned reader looks for it.
+  const settings = new TextDecoder().decode(readSafeZip(archive.bytes).get('Metadata/model_settings.config')!);
+  assert.match(settings, /<slic3rpe:text /);
+  assert.match(settings, /<slic3rpe:shape /);
+  assert.match(settings, /vertical="bottom"/);
+  assert.match(settings, /depth="2.5"/);
+
+  const reopened = await serializer.deserialize(archive.bytes);
+  assert.deepEqual(
+    reopened.state.plates[0].objects[0].volumes[0].embossText,
+    volume.embossText,
+    'every field of the recipe survives the round trip',
+  );
+});
+
+await test('a BBS project written elsewhere brings its emboss text across', async () => {
+  const serializer = new Bbs3mfProjectSerializer();
+  const fixture = createProjectFixture();
+  const archive = await serializer.serialize({
+    state: fixture.state,
+    assets: [fixture.asset],
+    sourceRevision: 3,
+    sourceHash: projectFingerprint(fixture.state),
+  });
+
+  // Rebuild the package as a foreign BBS one: drop the canonical envelope and
+  // inject the emboss elements the way another slicer would have written them.
+  const files = readSafeZip(archive.bytes);
+  const settings = new TextDecoder()
+    .decode(files.get('Metadata/model_settings.config')!)
+    .replace(
+      /<mesh_stat/,
+      '<slic3rpe:text text="Hi" style_name="S" font_descriptor="f.ttf" font_descriptor_type="file_name" line_height="8" horizontal="left" vertical="middle"/>\n   <slic3rpe:shape depth="1.75"/>\n   <mesh_stat',
+    );
+  const rebuilt: Record<string, Uint8Array> = {};
+  for (const [path, bytes] of files) {
+    if (path === ORCAXR_EXTENSION_PATH) continue;
+    rebuilt[path] = path === 'Metadata/model_settings.config' ? new TextEncoder().encode(settings) : bytes;
+  }
+
+  const imported = await serializer.deserialize(zipSync(rebuilt));
+  const embossed = imported.state.plates
+    .flatMap((plate) => plate.objects)
+    .flatMap((object) => object.volumes)
+    .find((candidate) => candidate.embossText !== undefined);
+  assert.ok(embossed, 'the imported project must carry the emboss recipe');
+  assert.equal(embossed.embossText?.text, 'Hi');
+  assert.equal(embossed.embossText?.font.lineHeightMm, 8);
+  // "middle" is how upstream spells a vertically centred block.
+  assert.equal(embossed.embossText?.font.vertical, 'center');
+  assert.equal(embossed.embossText?.projection.depthMm, 1.75);
+});
+
 console.log(`\nBBS-compatible 3MF serializer: ${passed} tests passed.`);
