@@ -157,6 +157,7 @@ async function writeGcodeFixture(directory) {
  * legend whose entries carry a code plus text.
  */
 async function inspectStandaloneGcode(page, fixture) {
+  await showInspectorTab(page, 'preview');
   await page.evaluate(() => {
     globalThis.document
       .querySelector('[data-gcode-preview-panel="true"]')
@@ -353,11 +354,17 @@ async function dropModelFile(page, fixture) {
   );
 }
 
-/** Sweep the canvas until a real pointer gesture lands on the model. */
+/**
+ * Sweep the viewport until a real pointer gesture lands on the model. The
+ * renderer fills the window but the docked chrome covers its edges, so the
+ * plate is centred on the visible viewport, not on the canvas.
+ */
 async function paintAtFirstHit(page) {
   const canvas = await page.$('canvas');
   assert.ok(canvas, 'the workspace canvas exists');
-  const box = await canvas.boundingBox();
+  const viewport = await page.$('#viewport');
+  assert.ok(viewport, 'the workspace viewport exists');
+  const box = await viewport.boundingBox();
   for (let radius = 0; radius <= 120; radius += 24) {
     for (const [dx, dy] of [
       [0, 0],
@@ -374,6 +381,19 @@ async function paintAtFirstHit(page) {
     }
   }
   return 0;
+}
+
+/**
+ * The inspector is tabbed, so a panel that is not on the active tab is hidden.
+ * A real user selects the tab before touching the controls inside it; every
+ * step below reaches its panel the same way.
+ */
+async function showInspectorTab(page, tabId) {
+  await page.evaluate((id) => {
+    const tab = globalThis.document.querySelector(`[data-inspector-tab="${id}"]`);
+    if (!tab) throw new Error(`missing inspector tab ${id}`);
+    tab.click();
+  }, tabId);
 }
 
 async function clickPanelControl(page, selector) {
@@ -395,6 +415,7 @@ async function paintImportedModel(page) {
   const paintPanel = await page.$('[data-paint-panel="true"]');
   assert.ok(paintPanel, 'the colour paint panel is mounted');
   // The panel lives in a collapsed inspector section; a user expands it first.
+  await showInspectorTab(page, 'filament');
   await page.evaluate(() => {
     globalThis.document.querySelector('[data-paint-panel="true"]')?.closest('details')?.setAttribute('open', '');
   });
@@ -459,6 +480,7 @@ async function paintImportedModel(page) {
  * the project — so the preview closing is the assertion, not a surprise.
  */
 async function inspectAndAuthorFromPreview(page) {
+  await showInspectorTab(page, 'preview');
   await page.evaluate(() => {
     globalThis.document
       .querySelector('[data-gcode-preview-panel="true"]')
@@ -568,6 +590,7 @@ async function inspectAndAuthorFromPreview(page) {
  * emitted G-code actually pauses — not merely that the project stored a row.
  */
 async function authorLayerPause(page) {
+  await showInspectorTab(page, 'preview');
   await page.$eval('#layer-event-host', (host) => host.closest('details')?.setAttribute('open', ''));
   await page.waitForSelector('[data-layer-event-panel="true"]');
   assert.equal(
@@ -686,6 +709,7 @@ async function sliceAndSendActivePlate(page, printer) {
   assert.equal(artifact.pauses, 1, 'the authored pause reaches the engine and appears once in the G-code');
   assert.equal(artifact.pauseBody, 'M600', 'the pause emits the body this printer profile declares');
 
+  await showInspectorTab(page, 'printer');
   await page.$eval('#printer-panel', (panel) => panel.closest('details')?.setAttribute('open', ''));
   await page.$eval(
     '#printer-host',
@@ -700,6 +724,7 @@ async function sliceAndSendActivePlate(page, printer) {
   // A printer that cannot supply T1 must not be startable, and cancelling must
   // leave the machine untouched.
   printer.setSlots([{ color: artifact.colours[0], material: artifact.types[0] }]);
+  await showInspectorTab(page, 'printer');
   await page.click('#btn-printer-send');
   await page.waitForSelector('[data-print-submission-dialog="true"]', { timeout: 60_000 });
   const blocked = await page.$eval('[data-print-submission-dialog="true"]', (overlay) => ({
@@ -721,6 +746,7 @@ async function sliceAndSendActivePlate(page, printer) {
   // With both tools loaded, uploading is still a separate decision from
   // starting, and the stored bytes must equal the artifact exactly.
   printer.setSlots(artifact.colours.slice(0, 2).map((color, index) => ({ color, material: artifact.types[index] })));
+  await showInspectorTab(page, 'printer');
   await page.click('#btn-printer-send');
   await page.waitForSelector('[data-print-submission-dialog="true"]', { timeout: 60_000 });
   const ready = await page.$eval('[data-print-submission-dialog="true"]', (overlay) => ({
@@ -740,6 +766,7 @@ async function sliceAndSendActivePlate(page, printer) {
 
   // The same plate sent again must not replace the stored file, and starting
   // is what the operator explicitly asked for this time.
+  await showInspectorTab(page, 'printer');
   await page.click('#btn-printer-send');
   await page.waitForSelector('[data-print-submission-dialog="true"]', { timeout: 60_000 });
   await page.click('[data-print-submission-choice="upload-and-print"]');
@@ -1094,8 +1121,9 @@ try {
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !globalThis.document.getElementById('oxr-modal-overlay'));
   assert.equal(
-    await page.$eval('.menu-trigger:focus', (trigger) => trigger.textContent.trim().startsWith('Help')),
-    true,
+    await page.evaluate(() => globalThis.document.activeElement?.id),
+    'menu-button',
+    'closing the dialog returns focus to the control that opens the menu',
   );
 
   await page.setViewport({ width: 390, height: 844 });
@@ -1259,6 +1287,7 @@ try {
   // The live FullSpectrum library performs a bounded worker Match search and
   // routes every lifecycle change through guarded canonical commands. Saving
   // and reopening the project must preserve the surviving disabled Match row.
+  await showInspectorTab(page, 'filament');
   await page.$eval('#virtual-filament-library-host', (host) => {
     const details = host.closest('details');
     if (details) details.open = true;
@@ -1550,6 +1579,8 @@ try {
   assert.equal(await page.$eval('#menu-bar-host [data-action-id="edit_deselect_all"]', (node) => node.disabled), false);
 
   const beforeRename = await page.evaluate(() => globalThis.window.workspace.getCanonicalSummary().history.undoCount);
+  // Keyboard rename needs the row actually on screen, so select its tab first.
+  await showInspectorTab(page, 'objects');
   await page.evaluate((key) => {
     const row = [...globalThis.document.querySelectorAll('[data-objects-row-key]')].find(
       (candidate) => candidate.dataset.objectsRowKey === key,
@@ -1661,6 +1692,7 @@ try {
     };
   });
   assert.ok(assignmentFixture.targetId, 'the imported project exposes a different enabled stable filament');
+  await showInspectorTab(page, 'filament');
   await page.$eval('#filament-assignment-host', (host) => {
     const details = host.closest('details');
     if (details) details.open = true;
@@ -1719,6 +1751,7 @@ try {
   // height-range lifecycle operation is then asserted from the adapter snapshot.
   const semanticObject = objectFixture.objects.find((object) => object.volumes.length > 1);
   assert.ok(semanticObject?.volume, 'the semantic fixture exposes a two-part object');
+  await showInspectorTab(page, 'objects');
   await page.$eval('#semantic-object-editor-host', (host) => {
     const details = host.closest('details');
     if (details) details.open = true;
@@ -1999,6 +2032,7 @@ try {
   // Generated settings commit exact wire values into the canonical override
   // map, preserve the inherited raw map, and reset through the same guarded
   // atomic seam. Undo/redo must restore the complete base/override/effective trio.
+  await showInspectorTab(page, 'settings');
   await page.waitForSelector('#settings-inspector-host [data-generated-settings-panel="true"]', {
     timeout: 60_000,
   });
@@ -2025,6 +2059,7 @@ try {
     },
   );
   assert.equal(await page.$eval('[data-settings-apply]', (button) => button.disabled), false);
+  await showInspectorTab(page, 'settings');
   await page.click('[data-settings-apply]');
   await page.waitForFunction(
     ({ sourceRevision, undoCount }) => {
@@ -2074,6 +2109,7 @@ try {
     false,
     `reset-to-inherited did not create an applicable draft: ${JSON.stringify(settingsResetDraftUi)}`,
   );
+  await showInspectorTab(page, 'settings');
   await page.click('[data-settings-apply]');
   await page.waitForFunction(
     ({ sourceRevision, undoCount, inheritedHasLayerHeight, inheritedLayerHeight }) => {
@@ -2119,6 +2155,7 @@ try {
   // The responsive PlateManager owns guarded canonical plate operations. Add
   // starts in the existing plate bar; every subsequent operation is driven
   // through the manager and asserted from canonical summaries/tree IDs.
+  await showInspectorTab(page, 'plates');
   await page.$eval('#plate-manager-host', (host) => {
     const details = host.closest('details');
     if (details) details.open = true;

@@ -554,7 +554,12 @@ test('composition root injects one registry into the workspace and DOM shell', (
   assert.doesNotMatch(workspaceToolsSource, /workspace\.setTool\(/);
   assert.match(workspaceToolsSource, /registry\.invoke\(actionId, 'automation'/);
   assert.doesNotMatch(domShellSource, /ctx\.setMode\(/);
-  assert.match(domShellSource, /this\.run\(preview, 'dom-primary'\)/);
+  // The header stage bar is presentation only: every step it offers runs the
+  // shared registry action for that step, on a declared surface.
+  assert.match(domShellSource, /this\.runById\('toggle_preview', 'dom-primary'\)/);
+  assert.match(domShellSource, /actionId: 'slice_active_plate', surface: 'dom-primary'/);
+  assert.match(domShellSource, /actionId: 'toggle_preview', surface: 'dom-primary'/);
+  assert.match(domShellSource, /actionId: 'send_to_printer', surface: 'dom-inspector'/);
   assert.match(workspaceSource, /\.invoke\('load_model_from_path', 'xr-primary'/);
 });
 

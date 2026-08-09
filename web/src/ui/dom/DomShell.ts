@@ -1,25 +1,40 @@
 /**
- * DomShell — renders the desktop UI from the shared {@link ActionRegistry}.
+ * DomShell — renders the flat workspace chrome from the shared
+ * {@link ActionRegistry}.
  *
- * Phase 2 (workspace + inspector IA): the tool rail (left), the primary bar,
- * the `Add ▾` / `Tools ▾` header menus, and the Prepare|Paint|Preview mode
- * control all come from the same registry the XR shell uses. Every control
- * subscribes to {@link UiState}, so enabled / active / visible state updates
- * automatically — no scattered `btn.disabled = …`.
+ * Everything the header, tool rail, inspector footer and calibration grid show
+ * comes from the same registry the XR shell renders, so presentation
+ * reachability cannot drift silently. Every control subscribes to
+ * {@link UiState}, so enabled / active / visible state updates automatically —
+ * no scattered `btn.disabled = …`.
+ *
+ * Surfaces owned here:
+ *  - the tool rail (`dom-toolbar`),
+ *  - the inspector's primary action bar (`dom-primary`),
+ *  - the mega menu: one column per Orca menu section (`dom-menu`),
+ *  - the Prepare → Slice → Preview → Send stage bar, which drives the same
+ *    slice / preview / send actions the rest of the app uses,
+ *  - the Plates tab's calibration grid, a second presentation of the
+ *    Calibration menu section.
  */
 import type { Action, ActionRegistry, ActionSurface } from '../../actions/ActionRegistry';
 import { MENU_SECTIONS } from '../../actions/ActionRegistry';
 import type { ActionContext } from '../../actions/ActionContext';
 import { ariaShortcutValue } from '../../actions/ShortcutCatalog';
-import type { UiState, WorkspaceMode } from '../../actions/UiState';
+import type { UiState, UiStateShape } from '../../actions/UiState';
 import { domIcon } from '../icons';
 
 interface Hosts {
   toolbar: HTMLElement;
   primary: HTMLElement;
-  modeControl: HTMLElement;
-  /** Container the File/Edit/View/Add/Tools/Calibration/Help menus mount into. */
+  /** Prepare → Slice → Preview → Send stepper in the header. */
+  stageBar: HTMLElement;
+  /** Container the File/Edit/View/Add/Tools/Calibration/Help columns mount into. */
   menuBar: HTMLElement;
+  /** The `☰ Menu` button that opens {@link Hosts.menuBar}. */
+  menuButton: HTMLButtonElement;
+  /** Grid in the Plates tab that mirrors the Calibration menu section. */
+  calibration: HTMLElement;
 }
 
 interface Bound {
@@ -28,16 +43,33 @@ interface Bound {
   surface: ActionSurface;
 }
 
-const MODES: { id: WorkspaceMode; label: string }[] = [
-  { id: 'prepare', label: 'Prepare' },
-  { id: 'preview', label: 'Preview' },
+/**
+ * One step of the print workflow. `actionId` is the registry entry the step
+ * runs and whose availability it reports — a step is never a decoration that
+ * pretends to work.
+ */
+interface Stage {
+  id: string;
+  label: string;
+  /** Registry action this step invokes, or null when it only restores a mode. */
+  actionId: string | null;
+  surface: ActionSurface;
+}
+
+const STAGES: readonly Stage[] = [
+  { id: 'prepare', label: 'Prepare', actionId: null, surface: 'dom-primary' },
+  { id: 'slice', label: 'Slice', actionId: 'slice_active_plate', surface: 'dom-primary' },
+  { id: 'preview', label: 'Preview', actionId: 'toggle_preview', surface: 'dom-primary' },
+  { id: 'send', label: 'Send', actionId: 'send_to_printer', surface: 'dom-inspector' },
 ];
 
 export class DomShell {
   private bound: Bound[] = [];
-  private modeButtons: { id: WorkspaceMode; el: HTMLButtonElement }[] = [];
+  private stageButtons: { stage: Stage; el: HTMLButtonElement; index: number }[] = [];
   private unsubscribe: (() => void) | null = null;
   private eventDisposers: Array<() => void> = [];
+  private menuBar: HTMLElement | null = null;
+  private menuButton: HTMLButtonElement | null = null;
 
   constructor(
     private readonly registry: ActionRegistry,
@@ -47,6 +79,9 @@ export class DomShell {
 
   mount(hosts: Hosts): void {
     this.dispose();
+    this.menuBar = hosts.menuBar;
+    this.menuButton = hosts.menuButton;
+
     // Tool rail
     hosts.toolbar.innerHTML = '';
     for (const a of this.registry.forSurface('dom-toolbar')) {
@@ -58,8 +93,8 @@ export class DomShell {
       hosts.primary.appendChild(this.actionButton(a, a.id === 'slice_active_plate'));
     }
 
-    // Full menu bar — one dropdown per Orca menu section, in bar order. A
-    // section with no actions is skipped so the bar stays tidy.
+    // Mega menu — one column per Orca menu section, in bar order. A section
+    // with no actions is skipped so the panel stays tidy.
     const menu = this.registry.forSurface('dom-menu');
     hosts.menuBar.innerHTML = '';
     for (const section of MENU_SECTIONS) {
@@ -70,9 +105,16 @@ export class DomShell {
       hosts.menuBar.appendChild(host);
       this.buildMenu(host, section.label, items);
     }
+    this.bindMenuButton(hosts.menuButton, hosts.menuBar);
 
-    // Mode control
-    this.buildModeControl(hosts.modeControl);
+    // The calibration grid is a second presentation of the same menu entries,
+    // shown where a maker looks for them: next to the plates they print on.
+    this.buildCalibrationGrid(
+      hosts.calibration,
+      menu.filter((a) => a.menuSection === 'calibration'),
+    );
+
+    this.buildStageBar(hosts.stageBar);
 
     this.unsubscribe = this.ui.subscribe((s) => this.refresh(s));
   }
@@ -83,11 +125,14 @@ export class DomShell {
     for (const dispose of this.eventDisposers.splice(0).reverse()) dispose();
     for (const { el } of this.bound) el.onclick = null;
     this.bound = [];
-    this.modeButtons = [];
+    this.stageButtons = [];
+    this.menuBar = null;
+    this.menuButton = null;
   }
 
   private toolButton(a: Action): HTMLButtonElement {
     const btn = document.createElement('button');
+    btn.type = 'button';
     btn.className = 'tool-btn';
     btn.dataset.actionId = a.id;
     btn.title = a.hint ?? a.label;
@@ -99,6 +144,9 @@ export class DomShell {
     icon.setAttribute('aria-hidden', 'true');
     icon.textContent = domIcon(a.icon);
     const label = document.createElement('span');
+    // The rail collapses to icons only; the label class is what CSS hides, so
+    // the accessible name above still describes the button when it does.
+    label.className = 'tool-label';
     label.textContent = a.label;
     btn.append(icon, label);
     btn.onclick = () => this.run(a, 'dom-toolbar');
@@ -108,30 +156,85 @@ export class DomShell {
 
   private actionButton(a: Action, primary: boolean): HTMLButtonElement {
     const btn = document.createElement('button');
+    btn.type = 'button';
     btn.className = primary ? 'action-btn primary' : 'action-btn';
     btn.dataset.actionId = a.id;
     btn.title = a.hint ?? a.label;
     const shortcuts = ariaShortcutValue(a.shortcuts);
     if (shortcuts) btn.setAttribute('aria-keyshortcuts', shortcuts);
-    btn.textContent = `${domIcon(a.icon)}  ${a.label}`;
+    // Glyph over label: four actions have to share the inspector footer, and a
+    // stacked button keeps every one of them legible instead of truncated.
+    const glyph = document.createElement('span');
+    glyph.className = 'action-glyph';
+    glyph.setAttribute('aria-hidden', 'true');
+    glyph.textContent = domIcon(a.icon);
+    const label = document.createElement('span');
+    label.className = 'action-label';
+    label.textContent = a.label;
+    btn.append(glyph, label);
     btn.onclick = () => this.run(a, 'dom-primary');
     this.bound.push({ el: btn, action: a, surface: 'dom-primary' });
     return btn;
   }
 
+  // ---- Mega menu ----------------------------------------------------------
+
+  private isMenuOpen(): boolean {
+    return this.menuBar?.classList.contains('open') ?? false;
+  }
+
+  private setMenuOpen(open: boolean): void {
+    this.menuBar?.classList.toggle('open', open);
+    this.menuButton?.setAttribute('aria-expanded', String(open));
+  }
+
+  private bindMenuButton(button: HTMLButtonElement, panel: HTMLElement): void {
+    const onClick = (e: MouseEvent) => {
+      e.stopPropagation();
+      this.setMenuOpen(!this.isMenuOpen());
+    };
+    button.addEventListener('click', onClick);
+    this.eventDisposers.push(() => button.removeEventListener('click', onClick));
+
+    // Click-away and Escape both close the panel, and Escape returns focus to
+    // the control that opened it.
+    const onDocumentClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (!panel.contains(target) && !button.contains(target)) this.setMenuOpen(false);
+    };
+    document.addEventListener('click', onDocumentClick);
+    this.eventDisposers.push(() => document.removeEventListener('click', onDocumentClick));
+
+    const onKeydown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || !this.isMenuOpen()) return;
+      this.setMenuOpen(false);
+      button.focus();
+    };
+    panel.addEventListener('keydown', onKeydown);
+    button.addEventListener('keydown', onKeydown);
+    this.eventDisposers.push(() => {
+      panel.removeEventListener('keydown', onKeydown);
+      button.removeEventListener('keydown', onKeydown);
+    });
+  }
+
   private buildMenu(host: HTMLElement, triggerLabel: string, actions: Action[]): void {
     host.innerHTML = '';
     const trigger = document.createElement('button');
+    trigger.type = 'button';
     trigger.className = 'menu-trigger';
-    trigger.innerHTML = `${triggerLabel} <span aria-hidden="true">▾</span>`;
-    trigger.setAttribute('aria-haspopup', 'menu');
-    trigger.setAttribute('aria-expanded', 'false');
+    trigger.textContent = triggerLabel;
     const dropdown = document.createElement('div');
     dropdown.className = 'menu-dropdown';
     dropdown.setAttribute('role', 'menu');
+    dropdown.setAttribute('aria-label', triggerLabel);
+    const dropdownId = `oxr-menu-${triggerLabel.toLowerCase()}`;
+    dropdown.id = dropdownId;
+    trigger.setAttribute('aria-controls', dropdownId);
 
     for (const a of actions) {
       const item = document.createElement('button');
+      item.type = 'button';
       item.className = 'menu-item';
       item.dataset.actionId = a.id;
       item.setAttribute('role', 'menuitem');
@@ -142,46 +245,28 @@ export class DomShell {
       const badge = unavailable ? '<span class="soon-badge">UNAVAILABLE</span>' : '';
       item.innerHTML = `<span class="glyph">${domIcon(a.icon)}</span><span class="menu-item-label">${a.label}</span>${badge}`;
       item.onclick = () => {
-        host.classList.remove('open');
-        trigger.setAttribute('aria-expanded', 'false');
+        this.setMenuOpen(false);
         this.run(a, 'dom-menu');
       };
       this.bound.push({ el: item, action: a, surface: 'dom-menu' });
       dropdown.appendChild(item);
     }
 
+    // Every column lives inside one popover, so the section header opens that
+    // popover rather than a dropdown of its own. Clicking a header when the
+    // panel is already open is a no-op the pointer user never notices, and it
+    // keeps a keyboard/automation entry point per section.
     trigger.onclick = (e) => {
       e.stopPropagation();
-      const wasOpen = host.classList.contains('open');
-      // Close any other open menu, then toggle this one.
-      document.querySelectorAll('.menu-host.open').forEach((m) => {
-        m.classList.remove('open');
-        m.querySelector<HTMLButtonElement>('.menu-trigger')?.setAttribute('aria-expanded', 'false');
-      });
-      host.classList.toggle('open', !wasOpen);
-      trigger.setAttribute('aria-expanded', String(!wasOpen));
+      this.setMenuOpen(true);
     };
-    // Click-away closes.
-    const onDocumentClick = (e: MouseEvent) => {
-      if (!host.contains(e.target as Node)) {
-        host.classList.remove('open');
-        trigger.setAttribute('aria-expanded', 'false');
-      }
-    };
-    document.addEventListener('click', onDocumentClick);
-    this.eventDisposers.push(() => document.removeEventListener('click', onDocumentClick));
 
     const enabledItems = () =>
       [...dropdown.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].filter((item) => !item.disabled);
     const onTriggerKeydown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        host.classList.remove('open');
-        trigger.setAttribute('aria-expanded', 'false');
-        trigger.focus();
-      } else if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+      if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        host.classList.add('open');
-        trigger.setAttribute('aria-expanded', 'true');
+        this.setMenuOpen(true);
         enabledItems()[0]?.focus();
       }
     };
@@ -191,12 +276,7 @@ export class DomShell {
     const onMenuKeydown = (e: KeyboardEvent) => {
       const items = enabledItems();
       const current = items.indexOf(e.target as HTMLButtonElement);
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        host.classList.remove('open');
-        trigger.setAttribute('aria-expanded', 'false');
-        trigger.focus();
-      } else if (e.key === 'ArrowDown' && items.length > 0) {
+      if (e.key === 'ArrowDown' && items.length > 0) {
         e.preventDefault();
         items[(current + 1 + items.length) % items.length]?.focus();
       } else if (e.key === 'ArrowUp' && items.length > 0) {
@@ -217,28 +297,72 @@ export class DomShell {
     host.appendChild(dropdown);
   }
 
-  private buildModeControl(host: HTMLElement): void {
+  private buildCalibrationGrid(host: HTMLElement, actions: readonly Action[]): void {
     host.innerHTML = '';
-    for (const m of MODES) {
+    for (const a of actions) {
       const btn = document.createElement('button');
-      btn.className = 'seg-btn';
-      btn.dataset.mode = m.id;
-      btn.setAttribute('aria-pressed', String(m.id === this.ui.get().mode));
-      btn.textContent = m.label;
-      btn.onclick = () => this.runMode(m.id);
-      this.modeButtons.push({ id: m.id, el: btn });
+      btn.type = 'button';
+      btn.className = 'calibration-card';
+      btn.dataset.actionId = a.id;
+      btn.dataset.calibrationCard = 'true';
+      btn.title = a.hint ?? a.label;
+      btn.innerHTML =
+        `<span class="calibration-name">${domIcon(a.icon)} ${a.label}</span>` +
+        (a.hint ? `<span class="calibration-hint">${a.hint}</span>` : '');
+      btn.onclick = () => this.run(a, 'dom-menu');
+      this.bound.push({ el: btn, action: a, surface: 'dom-menu' });
       host.appendChild(btn);
     }
   }
 
-  private runMode(mode: WorkspaceMode): void {
-    if (mode === this.ui.get().mode) return;
-    const preview = this.registry.get('toggle_preview');
-    if (!preview) {
-      this.ctx.reportCapabilityUnavailable('Preview', 'The shared preview action is not registered.');
+  // ---- Stage bar ----------------------------------------------------------
+
+  private buildStageBar(host: HTMLElement): void {
+    host.innerHTML = '';
+    STAGES.forEach((stage, index) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'stage-btn';
+      btn.dataset.stage = stage.id;
+      const n = document.createElement('span');
+      n.className = 'stage-n';
+      n.setAttribute('aria-hidden', 'true');
+      n.textContent = String(index + 1);
+      const label = document.createElement('span');
+      label.textContent = stage.label;
+      btn.append(n, label);
+      btn.onclick = () => this.runStage(stage);
+      this.stageButtons.push({ stage, el: btn, index });
+      host.appendChild(btn);
+    });
+  }
+
+  private runStage(stage: Stage): void {
+    const state = this.ui.get();
+    if (stage.id === 'prepare') {
+      // Prepare is the base surface: leaving the preview is the only work.
+      if (state.mode !== 'preview') return;
+      this.runById('toggle_preview', 'dom-primary');
       return;
     }
-    this.run(preview, 'dom-primary');
+    if (stage.id === 'preview' && state.mode === 'preview') return;
+    if (stage.actionId) this.runById(stage.actionId, stage.surface);
+  }
+
+  private stageIndexFor(s: Readonly<UiStateShape>): number {
+    if (s.isSlicing) return 1;
+    return s.mode === 'preview' ? 2 : 0;
+  }
+
+  // ---- Shared plumbing ----------------------------------------------------
+
+  private runById(id: string, surface: ActionSurface): void {
+    const action = this.registry.get(id);
+    if (!action) {
+      this.ctx.reportCapabilityUnavailable(id, `The "${id}" action is not registered.`);
+      return;
+    }
+    this.run(action, surface);
   }
 
   private run(a: Action, surface: ActionSurface): void {
@@ -247,7 +371,7 @@ export class DomShell {
       .catch((e) => console.error(`[orcaxr] action "${a.id}" failed:`, e));
   }
 
-  private refresh(s: Readonly<ReturnType<UiState['get']>>): void {
+  private refresh(s: Readonly<UiStateShape>): void {
     for (const { el, action, surface } of this.bound) {
       const availability = this.registry.availability(action, surface, s);
       el.style.display = availability.state === 'hidden' ? 'none' : '';
@@ -255,16 +379,28 @@ export class DomShell {
       el.title = availability.state === 'disabled' ? availability.reason : (action.hint ?? action.label);
       if (action.tool) el.classList.toggle('active', s.activeTool === action.tool);
     }
-    const previewAvailability = this.registry.availability('toggle_preview', 'dom-primary', s);
-    for (const { id, el } of this.modeButtons) {
-      el.classList.toggle('active', s.mode === id);
-      el.setAttribute('aria-pressed', String(s.mode === id));
-      if (s.mode === id) {
-        el.disabled = false;
-        el.title = '';
+
+    const current = this.stageIndexFor(s);
+    for (const { stage, el, index } of this.stageButtons) {
+      const active = index === current;
+      // A step is "done" once the workflow has moved past it. Slice also
+      // reports done while sitting in Prepare with a fresh artifact in hand.
+      const done = index < current || (stage.id === 'slice' && s.gcodeReady && !s.isSlicing);
+      el.classList.toggle('active', active);
+      el.classList.toggle('done', !active && done);
+      el.setAttribute('aria-current', active ? 'step' : 'false');
+      const marker = el.querySelector<HTMLElement>('.stage-n');
+      if (marker) marker.textContent = !active && done ? '✓' : String(index + 1);
+
+      if (stage.actionId) {
+        const availability = this.registry.availability(stage.actionId, stage.surface, s);
+        const alreadyThere = stage.id === 'preview' && s.mode === 'preview';
+        el.disabled = !alreadyThere && availability.state !== 'enabled';
+        el.title =
+          availability.state === 'disabled' && !alreadyThere ? availability.reason : `${stage.label} the active plate`;
       } else {
-        el.disabled = previewAvailability.state !== 'enabled';
-        el.title = previewAvailability.state === 'disabled' ? previewAvailability.reason : '';
+        el.disabled = false;
+        el.title = 'Return to the prepare view';
       }
     }
   }

@@ -135,6 +135,30 @@ engine (`libslic3r` via WASM) as the computational core.
   leaves the headset flow stranded. Generate shortcut matching and Help rows from registry
   declarations through the strict conflict-rejecting catalog; do not add a second hand-maintained
   shortcut list.
+- The flat shell is a **docked workspace**, not floating panels: `web/index.html`
+  is a header / tool rail / viewport / inspector grid laid over the full-window
+  canvas, and the viewport is a transparent hole so pointer input reaches the
+  renderer. `ui/tokens.ts` is the only source of colour, radius, shadow, type and
+  motion; it emits both the published design-system spelling (`--oxr-surface`,
+  `--radius-lg`, `--font-sans`, `--shadow-menu`) and the legacy
+  `--oxr-<group>-<key>` form from one table. Never hard-code a hex in the
+  stylesheet, and never add a remote font or stylesheet — the CSP and the offline
+  gate both forbid it, so type stacks name the design family first and fall back
+  to platform faces. `DomShell` renders the rail, the inspector footer's primary
+  bar, the seven-column mega menu, the Prepare → Slice → Preview → Send stage
+  bar, and the Plates tab's calibration grid; every one of them invokes a
+  registry action on a declared surface, so the stage bar is presentation and
+  never a second slice path. `InspectorTabs` owns the six inspector tabs
+  (Objects / Settings / Filament / Preview / Printer / Plates) — a panel on an
+  inactive tab is hidden, so any test or automation that really clicks inside one
+  must select its tab first. `UiState.mode` follows
+  `workspace.onPreviewStateChanged`, because the workspace opens the toolpath
+  preview by itself after a slice; without that the header would read "Prepare"
+  over a visible toolpath. `PreviewScrubber` is a second view of the *same*
+  `GcodePreviewPanelAdapter` the inspector uses and renders nothing the
+  projection did not supply. `main.ts` keeps the camera's `setViewOffset` in step
+  with the viewport rect so the plate is centred in the visible area, and clears
+  it whenever an XR session is presenting.
 - Generated settings schema v2 treats the exact pinned `Tab.cpp` inventory as
   layout authority: 21 tabs, 93 groups, and 424 literal placements are fixed
   counts, and every placement retains its full definition-owner binding set.

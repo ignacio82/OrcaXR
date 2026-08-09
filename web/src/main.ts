@@ -51,7 +51,9 @@ import { askThreeMfIntake } from './ui/dom/FileIntakeDialog';
 import { askPrintSubmission } from './ui/dom/PrintSubmissionDialog';
 import { askPrintJobConfirmation } from './ui/dom/PrintJobConfirmDialog';
 import { PrintJobPanel } from './ui/dom/PrintJobPanel';
-import { GcodePreviewPanel } from './ui/dom/GcodePreviewPanel';
+import { GcodePreviewPanel, type GcodePreviewPanelAdapter } from './ui/dom/GcodePreviewPanel';
+import { PreviewScrubber } from './ui/dom/PreviewScrubber';
+import { InspectorTabs } from './ui/dom/InspectorTabs';
 import { PaintPanel } from './ui/dom/PaintPanel';
 import { PlateManager } from './ui/dom/PlateManager';
 import { SemanticObjectEditor } from './ui/dom/SemanticObjectEditor';
@@ -227,8 +229,9 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   const emptyLoadModel = document.getElementById('empty-load-model') as HTMLButtonElement;
   const domSliceProgress = document.getElementById('dom-slice-progress') as HTMLElement;
   const uiContainer = document.getElementById('ui-container') as HTMLElement;
-  const leftToolbar = document.getElementById('left-toolbar') as HTMLElement;
+  const toolRail = document.getElementById('tool-rail') as HTMLElement;
   const toolbarToggle = document.getElementById('toolbar-toggle') as HTMLButtonElement;
+  const statusDot = document.getElementById('status-dot') as HTMLElement;
   const printerHost = document.getElementById('printer-host') as HTMLInputElement;
   const printerApiKey = document.getElementById('printer-api-key') as HTMLInputElement;
   const btnPrinterTest = document.getElementById('btn-printer-test') as HTMLButtonElement;
@@ -545,20 +548,35 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       .invoke('load_model_from_path', 'dom-primary', actionCtx, uiState.get())
       .catch((error) => console.error('[orcaxr] empty-state load action failed:', error));
   };
+  /**
+   * The rail collapses to icons rather than disappearing, so the modal tools
+   * stay one click away at every width. Keep its label and expanded state in
+   * step with the class that drives the CSS.
+   */
+  const syncRailToggle = () => {
+    const collapsed = toolRail.classList.contains('collapsed');
+    toolbarToggle.setAttribute('aria-expanded', String(!collapsed));
+    toolbarToggle.title = collapsed ? 'Show tool labels' : 'Collapse the tool rail to icons';
+    const glyph = toolbarToggle.querySelector('.tool-icon');
+    const label = toolbarToggle.querySelector('.tool-label');
+    if (glyph) glyph.textContent = collapsed ? '⤓' : '⤒';
+    if (label) label.textContent = collapsed ? 'Expand' : 'Collapse';
+  };
   uiState.subscribe((state) => {
     emptyState.hidden = state.modelCount > 0;
     uiContainer.classList.toggle('no-model', state.modelCount === 0);
-    toolbarToggle.hidden = state.modelCount === 0;
     // A newly loaded model should expose the plate and the obvious Slice
-    // action, not a floor-to-ceiling list of rarely-used editing commands.
-    // Preserve the maker's choice after they explicitly open the rail.
-    if (state.modelCount > 0 && !hadModels) leftToolbar.classList.add('collapsed');
+    // action, not a floor-to-ceiling list of labelled editing commands.
+    // Preserve the maker's choice after they explicitly expand the rail.
+    if (state.modelCount > 0 && !hadModels) toolRail.classList.add('collapsed');
     hadModels = state.modelCount > 0;
-    toolbarToggle.setAttribute('aria-expanded', String(!leftToolbar.classList.contains('collapsed')));
+    statusDot.classList.toggle('busy', state.isSlicing);
+    statusDot.classList.toggle('ready', !state.isSlicing && state.gcodeReady);
+    syncRailToggle();
   });
   toolbarToggle.onclick = () => {
-    leftToolbar.classList.toggle('collapsed');
-    toolbarToggle.setAttribute('aria-expanded', String(!leftToolbar.classList.contains('collapsed')));
+    toolRail.classList.toggle('collapsed');
+    syncRailToggle();
   };
 
   /**
@@ -767,7 +785,14 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     overlay.remove();
     const returnFocus = modalReturnFocus;
     modalReturnFocus = null;
-    if (returnFocus?.isConnected) returnFocus.focus();
+    if (!returnFocus?.isConnected) return;
+    returnFocus.focus();
+    // Invoking a menu item closes the mega menu, which takes the section
+    // header out of the layout. Hand focus to the control that opens it so a
+    // keyboard user is never left with focus on <body>.
+    if (document.activeElement !== returnFocus) {
+      document.getElementById('menu-button')?.focus();
+    }
   };
   const buildModal = (title: string, body: HTMLElement | string): void => {
     closeModal();
@@ -1414,9 +1439,27 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     window.addEventListener('pagehide', () => objectsPanel.dispose(), { once: true });
   }
 
+  // The workspace opens the toolpath preview on its own — after a slice, and
+  // when a standalone G-code file is opened — not only through the toggle
+  // action. The stage bar, the inspector tabs and the layer scrubber all render
+  // from `mode`, so follow the workspace instead of just the toggle, or the
+  // header would still read "Prepare" over a visible toolpath. Assigned before
+  // the preview panel mounts so its own subscription chains onto this one.
+  const syncPreviewMode = () => {
+    uiState.update({
+      mode: workspace.getAutomationSnapshot().workspaceMode === 'Preview' ? 'preview' : 'prepare',
+    });
+  };
+  workspace.onPreviewStateChanged = syncPreviewMode;
+  syncPreviewMode();
+
   const previewPanelHost = document.getElementById('gcode-preview-panel-host');
-  if (previewPanelHost) {
-    const previewPanel = new GcodePreviewPanel(previewPanelHost, {
+  const previewScrubberHost = document.getElementById('preview-scrubber-host');
+  {
+    // One adapter, two surfaces: the inspector's full preview controls and the
+    // layer scrubber docked under the model. Sharing it keeps the two from
+    // ever disagreeing about the projected view.
+    const previewAdapter: GcodePreviewPanelAdapter = {
       getState: () => workspace.getPreviewState(),
       subscribe: (listener) => {
         const previous = workspace.onPreviewStateChanged;
@@ -1465,9 +1508,18 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       onError: (error) => {
         statusText.textContent = `Preview: ${error instanceof Error ? error.message : String(error)}`;
       },
-    });
-    previewPanel.mount();
-    window.addEventListener('pagehide', () => previewPanel.dispose(), { once: true });
+    };
+
+    if (previewPanelHost) {
+      const previewPanel = new GcodePreviewPanel(previewPanelHost, previewAdapter);
+      previewPanel.mount();
+      window.addEventListener('pagehide', () => previewPanel.dispose(), { once: true });
+    }
+    if (previewScrubberHost) {
+      const scrubber = new PreviewScrubber(previewScrubberHost, previewAdapter, uiState);
+      scrubber.mount();
+      window.addEventListener('pagehide', () => scrubber.dispose(), { once: true });
+    }
   }
 
   const paintPanelHost = document.getElementById('paint-panel-host');
@@ -2218,9 +2270,59 @@ document.addEventListener('DOMContentLoaded', async () => {
   domShell.mount({
     toolbar: byId('left-toolbar'),
     primary: byId('action-panel'),
-    modeControl: byId('mode-control'),
+    stageBar: byId('stage-bar'),
     menuBar: byId('menu-bar-host'),
+    menuButton: byId('menu-button') as HTMLButtonElement,
+    calibration: byId('calibration-grid'),
   });
+
+  // Six named inspector tabs replace the old single scroll of disclosures.
+  // Every panel still exists; the tabs decide which one is on screen.
+  const inspectorTabs = new InspectorTabs(
+    {
+      tabs: byId('inspector-tabs'),
+      title: byId('inspector-title'),
+      meta: byId('inspector-meta'),
+      panels: byId('inspector-scroll'),
+    },
+    uiState,
+  );
+  inspectorTabs.mount();
+  window.addEventListener('pagehide', () => inspectorTabs.dispose(), { once: true });
+
+  // The renderer fills the window, but the chrome covers its left, right and
+  // top edges. Shift the camera's projection so the build plate is centred in
+  // the *visible* viewport instead of behind the inspector. XR sessions drive
+  // the camera themselves, so the offset is cleared for the duration.
+  const viewport = byId('viewport');
+  const centreCameraOnViewport = () => {
+    const camera = xb.core.camera;
+    if (!(camera instanceof THREE.PerspectiveCamera)) return;
+    if (xb.core.renderer?.xr?.isPresenting) {
+      camera.clearViewOffset();
+      return;
+    }
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const rect = viewport.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1 || width < 1 || height < 1) {
+      camera.clearViewOffset();
+      return;
+    }
+    camera.setViewOffset(
+      width,
+      height,
+      Math.round(width / 2 - (rect.left + rect.width / 2)),
+      Math.round(height / 2 - (rect.top + rect.height / 2)),
+      width,
+      height,
+    );
+  };
+  centreCameraOnViewport();
+  window.addEventListener('resize', centreCameraOnViewport);
+  new ResizeObserver(centreCameraOnViewport).observe(viewport);
+  xb.core.renderer?.xr?.addEventListener('sessionstart', centreCameraOnViewport);
+  xb.core.renderer?.xr?.addEventListener('sessionend', centreCameraOnViewport);
 
   const toolSettingsPanel = byId('tool-settings-panel');
   const toolSettingsTitle = byId('tool-settings-title');
