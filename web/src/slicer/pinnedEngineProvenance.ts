@@ -32,5 +32,6 @@ export const PINNED_ENGINE_PROVENANCE = Object.freeze({
     '0002-normalize-fdm-partial-config-null-nozzle.patch':
       '7ae55127a840422c143846b932a579d648f7e11d0c8cd052abf301ef030e8b5a',
     '0003-gcodeprocessor-fullspectrum-oob.patch': '73402637904ff1500e04e1ca60fe287df74d8d6b930e5b7889737c729f7d9a7a',
+    '0004-cli-safe-plate-name-texture.patch': '8d6df350cba4a0d3ec4b18cc71ba790129d0c00c0a3e5eb1c4a430f323ca1646',
   }),
 });

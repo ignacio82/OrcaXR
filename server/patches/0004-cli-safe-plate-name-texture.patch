@@ -1,0 +1,24 @@
+diff --git a/src/slic3r/GUI/PartPlate.cpp b/src/slic3r/GUI/PartPlate.cpp
+index f80f834..d0410d3 100644
+--- a/src/slic3r/GUI/PartPlate.cpp
++++ b/src/slic3r/GUI/PartPlate.cpp
+@@ -1913,6 +1913,19 @@ Vec3d PartPlate::get_center_origin()
+ 
+ void PartPlate::generate_plate_name_texture()
+ {
++	// OrcaXR: this builds a GL texture of the plate's name through the GUI
++	// application — wxGetApp().em_unit() and Label::sysFont() — neither of
++	// which exists in the headless CLI. Loading any project whose plates are
++	// named therefore segfaults in PartPlateList::load_from_3mf_structure ->
++	// set_plate_name -> here, before slicing even starts; a project whose
++	// plates are unnamed never reaches this path, which is why it goes
++	// unnoticed. The name itself is already stored on the plate and forwarded
++	// to the print, so skipping only the texture leaves CLI output identical
++	// to the GUI's. Every other caller is a render path that cannot run
++	// headless.
++	if (wxTheApp == nullptr || m_plater == nullptr)
++		return;
++
+     m_plate_name_icon.reset();
+ 
+ 	// generate m_name_texture texture from m_name with generate_from_text_string

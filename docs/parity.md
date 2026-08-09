@@ -493,6 +493,13 @@ Local starting seams: [`Project3mf.ts`](../web/src/features/Project3mf.ts),
     desktop output. `npm --prefix web run security:check` fails when `server/patches/` drifts from
     the pinned set, so an engine this build has never seen cannot receive canonical work. Official
     G-code oracles, all-plate UI, and hardware acceptance remain open.
+    Making that route usable also required `server/patches/0004`: any project whose plates carry
+    names — which OrcaXR's own projects do — segfaulted the CLI in
+    `PartPlateList::load_from_3mf_structure -> set_plate_name -> generate_plate_name_texture`,
+    which builds a GL texture through the GUI application that a headless CLI does not have. A
+    project with unnamed plates never reaches that path, which is why it went unnoticed. The plate
+    name is already stored and forwarded to the print, so skipping only the texture leaves CLI
+    output identical to the GUI's.
 
 - [~] **P1.6 — Migrate existing workspace data incrementally.** Write adapters from flat
   `ModelEntry`, `PlateStore`, `FilamentPalette`, and existing OrcaXR JSON into `ProjectState`,
