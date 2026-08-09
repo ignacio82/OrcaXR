@@ -68,6 +68,18 @@ interface Slic3rModule {
   };
 }
 
+/**
+ * Bearer token for a secured external slicer, held for this tab only.
+ *
+ * A server published beyond loopback refuses to start without a token, so
+ * without somewhere to put one there is no way to reach a correctly secured
+ * slicer at all — the attestation probe just 401s and canonical slicing stays
+ * blocked forever. It is deliberately *not* persisted: it is a credential, and
+ * the repo keeps credentials in session memory rather than in localStorage
+ * where any later script can read them back.
+ */
+let externalSlicerToken = '';
+
 const EXTERNAL_URL_KEY = 'external_slicer_url';
 const EXTERNAL_ENABLED_KEY = 'external_slicer_enabled';
 
@@ -129,6 +141,24 @@ export class SlicerClient {
     localStorage.removeItem(EXTERNAL_ENABLED_KEY);
   }
 
+  /**
+   * Set or clear the bearer token for the configured external slicer. Kept in
+   * memory for this tab only; never written to storage and never logged.
+   */
+  static setExternalSlicerToken(token: string): void {
+    externalSlicerToken = token.trim();
+  }
+
+  /** Whether a token is held, without revealing it. */
+  static hasExternalSlicerToken(): boolean {
+    return externalSlicerToken.length > 0;
+  }
+
+  /** Authorization header for the external slicer, empty when no token is held. */
+  static externalAuthHeaders(): Record<string, string> {
+    return externalSlicerToken ? { Authorization: `Bearer ${externalSlicerToken}` } : {};
+  }
+
   /** True when the next slice will be dispatched to the external server. */
   static useExternalSlicer(): boolean {
     return !!SlicerClient.getExternalSlicerUrl() && SlicerClient.isExternalSlicerEnabled();
@@ -150,7 +180,8 @@ export class SlicerClient {
    * itself.
    */
   static async attestExternalEngine(
-    fetcher: (url: string) => Promise<{ ok: boolean; json?: () => Promise<unknown> }> = (url) => fetchLocalNetwork(url),
+    fetcher: (url: string) => Promise<{ ok: boolean; status?: number; json?: () => Promise<unknown> }> = (url) =>
+      fetchLocalNetwork(url, { headers: SlicerClient.externalAuthHeaders() }),
   ): Promise<{ attested: true; commit: string } | { attested: false; reason: string }> {
     const endpoint = SlicerClient.useExternalSlicer() ? SlicerClient.getExternalSlicerUrl() : '';
     if (!endpoint) return { attested: false, reason: 'No external slicer is enabled.' };
@@ -158,12 +189,19 @@ export class SlicerClient {
     try {
       const response = await fetcher(`${canonicalExternalEndpoint(endpoint)}/engine`);
       if (!response.ok) {
-        // A server predating the /engine route answers 404 here. Say what to do
-        // about it rather than leaving the operator to guess.
+        // The status separates the two ways this fails in practice, which
+        // otherwise look identical from the browser: an old server has no
+        // /engine route at all, and a secured one wants a token first.
+        if (response.status === 401 || response.status === 403) {
+          return {
+            attested: false,
+            reason: 'The external slicer requires a token before it will report its engine.',
+          };
+        }
+        const status = response.status === undefined ? '' : ` (HTTP ${response.status})`;
         return {
           attested: false,
-          reason:
-            'The external slicer did not report its engine provenance; update the slicer server to a build that serves /engine.',
+          reason: `The external slicer did not report its engine provenance${status}; update the slicer server to a build that serves /engine.`,
         };
       }
       payload = await response.json?.();
@@ -218,7 +256,8 @@ export class SlicerClient {
    */
   static async connectExternalSlicer(
     candidate: string,
-    probe: (url: string) => Promise<{ ok: boolean }> = (url) => fetchLocalNetwork(url),
+    probe: (url: string) => Promise<{ ok: boolean }> = (url) =>
+      fetchLocalNetwork(url, { headers: SlicerClient.externalAuthHeaders() }),
   ): Promise<string> {
     SlicerClient.disableExternalSlicer();
     const connectionEpoch = SlicerClient.externalConnectionEpoch;
@@ -293,7 +332,10 @@ export class SlicerClient {
         await delayWithSignal(pollIntervalMs, options.signal);
         let status: { status: string; percent: number; message?: string; error?: string };
         try {
-          const res = await fetchLocalNetwork(`${externalUrl}/jobs/${jobId}`, { signal: options.signal });
+          const res = await fetchLocalNetwork(`${externalUrl}/jobs/${jobId}`, {
+            signal: options.signal,
+            headers: SlicerClient.externalAuthHeaders(),
+          });
           if (!res.ok) throw new Error(`status ${res.status}: ${await res.text()}`);
           status = await res.json();
           consecutiveFailures = 0;
@@ -311,7 +353,10 @@ export class SlicerClient {
           throw new SlicerClientCancellationError('The external slicer job was cancelled.', true);
         }
         if (status.status === 'done') {
-          const gcode = await fetchLocalNetwork(`${externalUrl}/jobs/${jobId}/gcode`, { signal: options.signal });
+          const gcode = await fetchLocalNetwork(`${externalUrl}/jobs/${jobId}/gcode`, {
+            signal: options.signal,
+            headers: SlicerClient.externalAuthHeaders(),
+          });
           if (!gcode.ok) {
             throw new Error(`External Slicer Failed: ${await gcode.text()}`);
           }
@@ -349,7 +394,10 @@ export class SlicerClient {
   ): Promise<void> {
     let response: Response;
     try {
-      response = await fetchLocalNetwork(`${externalUrl}/jobs/${jobId}`, { method: 'DELETE' });
+      response = await fetchLocalNetwork(`${externalUrl}/jobs/${jobId}`, {
+        method: 'DELETE',
+        headers: SlicerClient.externalAuthHeaders(),
+      });
     } catch (error) {
       throw new SlicerClientCancellationError(
         `Could not confirm external slice cancellation: ${errorMessage(error)}`,
@@ -369,7 +417,9 @@ export class SlicerClient {
     while (Date.now() < deadline) {
       await delayWithoutSignal(pollIntervalMs);
       try {
-        const statusResponse = await fetchLocalNetwork(`${externalUrl}/jobs/${jobId}`);
+        const statusResponse = await fetchLocalNetwork(`${externalUrl}/jobs/${jobId}`, {
+          headers: SlicerClient.externalAuthHeaders(),
+        });
         if (!statusResponse.ok) {
           throw new Error(`HTTP ${statusResponse.status}`);
         }
@@ -456,6 +506,7 @@ export class SlicerClient {
       const res = await fetchLocalNetwork(`${externalUrl}/slice?async=1`, {
         method: 'POST',
         body: formData,
+        headers: SlicerClient.externalAuthHeaders(),
       });
       if (res.status === 202) {
         const { job } = (await res.json()) as { job: string };
@@ -600,6 +651,7 @@ export class SlicerClient {
         response = await fetchLocalNetwork(`${externalUrl}/slice?async=1`, {
           method: 'POST',
           body: formData,
+          headers: SlicerClient.externalAuthHeaders(),
         });
       } catch (error) {
         if (options.signal?.aborted) {

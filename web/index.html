@@ -923,10 +923,15 @@
                   <input id="external-slicer-url" type="text" class="text-input" placeholder="URL (e.g. http://localhost:3000)" style="flex:1;min-width:0;font-family:var(--oxr-font-mono);" />
                   <button id="btn-external-slicer-connect" class="action-btn" type="button" style="width:auto;margin:0;padding:10px 16px;">Connect</button>
                 </div>
+                <div style="display:flex;gap:8px;margin-bottom:8px;">
+                  <input id="external-slicer-token" type="password" class="text-input" autocomplete="off" placeholder="Access token (only if the server requires one)" style="flex:1;min-width:0;font-family:var(--oxr-font-mono);" />
+                </div>
                 <p class="field-note">
                   A local <code>http://</code> server works on Chrome 142+ after Local Network
                   Access permission. The Docker server already enables CORS; use HTTPS for
-                  untrusted or remote networks.
+                  untrusted or remote networks. A server published beyond loopback requires
+                  <code>ORCAXR_SERVER_TOKEN</code> — paste it above. The token is kept for this
+                  tab only and is never saved to disk, so re-enter it after a reload.
                 </p>
                 <div id="external-slicer-controls" style="display:none;justify-content:space-between;align-items:center;gap:8px;">
                   <label class="check-row">

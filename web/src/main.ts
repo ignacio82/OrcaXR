@@ -2126,6 +2126,12 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   const btnExternalSlicerDelete = document.getElementById('btn-external-slicer-delete') as HTMLButtonElement;
   const externalSlicerHint = document.getElementById('external-slicer-hint') as HTMLParagraphElement;
   externalSlicerUrl.value = SlicerClient.getExternalSlicerUrl();
+  const externalSlicerToken = document.getElementById('external-slicer-token') as HTMLInputElement;
+  // Session-only by design: the token is a credential, so it is held in memory
+  // for this tab rather than persisted where a later script could read it back.
+  externalSlicerToken.addEventListener('input', () => {
+    SlicerClient.setExternalSlicerToken(externalSlicerToken.value);
+  });
 
   const updateExternalSlicerStatus = (connected: boolean) => {
     if (connected) {

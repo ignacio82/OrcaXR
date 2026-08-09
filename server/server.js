@@ -809,8 +809,9 @@ export function createSlicerService(options = {}) {
   app.get("/ping", (req, res) => res.type("text/plain").send("pong"));
 
   // Engine provenance, so a client can decide whether this server is a route
-  // it is allowed to send canonical work to. Read-only and unauthenticated:
-  // it reveals only which engine build runs here.
+  // it is allowed to send canonical work to. Read-only, and authenticated like
+  // every other route on a secured deployment — the client sends the same
+  // bearer token it uses to slice.
   app.get("/engine", (req, res) => res.json(buildEngineAttestation(engine)));
 
   app.post(

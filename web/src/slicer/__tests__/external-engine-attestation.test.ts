@@ -177,4 +177,62 @@ await test('with no external slicer enabled there is nothing to attest', async (
   if (!result.attested) assert.match(result.reason, /No external slicer is enabled/);
 });
 
+/**
+ * A server published beyond loopback refuses to start without a token, so the
+ * client must be able to send one. Without this the attestation probe 401s and
+ * canonical slicing is blocked on every correctly secured deployment.
+ */
+await test('a secured server is reached with the token the operator supplied', async () => {
+  enabledExternal();
+  SlicerClient.setExternalSlicerToken('  secret-token  ');
+  assert.equal(SlicerClient.hasExternalSlicerToken(), true);
+  assert.deepEqual(SlicerClient.externalAuthHeaders(), { Authorization: 'Bearer secret-token' }, 'trimmed');
+
+  let seen: string | undefined;
+  const result = await SlicerClient.attestExternalEngine(async (url) => {
+    seen = url;
+    return { ok: true, status: 200, json: async () => attested };
+  });
+  assert.equal(result.attested, true);
+  assert.match(seen ?? '', /\/engine$/);
+
+  SlicerClient.setExternalSlicerToken('');
+  assert.equal(SlicerClient.hasExternalSlicerToken(), false);
+  assert.deepEqual(SlicerClient.externalAuthHeaders(), {}, 'clearing the token sends no header at all');
+});
+
+await test('the token is never persisted where a later script could read it', async () => {
+  enabledExternal();
+  SlicerClient.setExternalSlicerToken('secret-token');
+  const storage = (
+    globalThis as {
+      localStorage: { length: number; key(index: number): string | null; getItem(key: string): string | null };
+    }
+  ).localStorage;
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key === null) continue;
+    assert.doesNotMatch(storage.getItem(key) ?? '', /secret-token/, `${key} must not hold the token`);
+    assert.doesNotMatch(key, /token/i, 'no storage key is even named for a token');
+  }
+  SlicerClient.setExternalSlicerToken('');
+});
+
+await test('a server that wants a token says so instead of blaming its provenance', async () => {
+  enabledExternal();
+  for (const status of [401, 403]) {
+    const result = await SlicerClient.attestExternalEngine(async () => ({ ok: false, status }));
+    assert.equal(result.attested, false);
+    if (!result.attested) assert.match(result.reason, /requires a token/);
+  }
+  // Any other failure names the status, so a missing route is distinguishable
+  // from a rejected one at a glance.
+  const missing = await SlicerClient.attestExternalEngine(async () => ({ ok: false, status: 404 }));
+  assert.equal(missing.attested, false);
+  if (!missing.attested) {
+    assert.match(missing.reason, /HTTP 404/);
+    assert.match(missing.reason, /serves \/engine/);
+  }
+});
+
 console.log(`\nExternal engine attestation: ${passed} tests passed.`);
