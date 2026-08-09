@@ -47,13 +47,75 @@ await test('an engine matching the verified build is attested', async () => {
   assert.deepEqual(result, { attested: true, commit: PINNED_ENGINE_PROVENANCE.commit });
 });
 
-await test('a CLI engine is refused with the server’s own reason', async () => {
+await test('an unproven engine is refused with the server’s own reason', async () => {
   enabledExternal();
   const result = await SlicerClient.attestExternalEngine(
     respond({ schemaVersion: 1, engine: 'cli', attested: false, reason: 'CLI build cannot be proven.' }),
   );
   assert.equal(result.attested, false);
   if (!result.attested) assert.equal(result.reason, 'CLI build cannot be proven.');
+});
+
+/**
+ * The CLI route exists precisely to produce what desktop Snapmaker Orca
+ * produces, so it must be able to attest. Its identity is the upstream commit
+ * plus the OrcaXR patches applied on top — never the WASM artifact digests,
+ * which a native binary does not have.
+ */
+const attestedCli = {
+  schemaVersion: 1,
+  engine: 'cli',
+  attested: true,
+  upstream: {
+    name: 'snapmaker-orca',
+    version: PINNED_ENGINE_PROVENANCE.cliVersion,
+    commit: PINNED_ENGINE_PROVENANCE.commit,
+  },
+  patches: Object.entries(PINNED_ENGINE_PROVENANCE.cliPatches).map(([name, sha256]) => ({ name, sha256 })),
+  artifacts: { 'snapmaker-orca': 'c0ffee' },
+};
+
+await test('a CLI engine on the pinned commit with the pinned patches is attested', async () => {
+  enabledExternal();
+  assert.deepEqual(await SlicerClient.attestExternalEngine(respond(attestedCli)), {
+    attested: true,
+    commit: PINNED_ENGINE_PROVENANCE.commit,
+  });
+});
+
+await test('a CLI engine whose patch set differs is refused by name', async () => {
+  enabledExternal();
+  const [firstPatch, ...restPatches] = attestedCli.patches;
+
+  const extra = await SlicerClient.attestExternalEngine(
+    respond({ ...attestedCli, patches: [...attestedCli.patches, { name: '0099-rogue.patch', sha256: 'x' }] }),
+  );
+  assert.equal(extra.attested, false);
+  if (!extra.attested) assert.match(extra.reason, /does not know: 0099-rogue\.patch/);
+
+  const missing = await SlicerClient.attestExternalEngine(respond({ ...attestedCli, patches: restPatches }));
+  assert.equal(missing.attested, false);
+  if (!missing.attested) assert.match(missing.reason, /built without the .*0001-cli-safe/);
+
+  const tampered = await SlicerClient.attestExternalEngine(
+    respond({ ...attestedCli, patches: [{ ...firstPatch, sha256: 'deadbeef' }, ...restPatches] }),
+  );
+  assert.equal(tampered.attested, false);
+  if (!tampered.attested) assert.match(tampered.reason, /carries a different .*0001-cli-safe/);
+
+  // A build that reports no patch list at all proves nothing about its engine.
+  const silent = await SlicerClient.attestExternalEngine(respond({ ...attestedCli, patches: undefined }));
+  assert.equal(silent.attested, false);
+  if (!silent.attested) assert.match(silent.reason, /did not report which engine patches/);
+});
+
+await test('a CLI engine off the pinned commit is refused whatever its patches say', async () => {
+  enabledExternal();
+  const result = await SlicerClient.attestExternalEngine(
+    respond({ ...attestedCli, upstream: { commit: '0000000000000000000000000000000000000000' } }),
+  );
+  assert.equal(result.attested, false);
+  if (!result.attested) assert.match(result.reason, /different pinned engine commit/);
 });
 
 await test('a different engine artifact names the artifact that differs', async () => {

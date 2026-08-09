@@ -6486,9 +6486,10 @@ export class OrcaWorkspace extends xb.Script {
   /**
    * Decide where canonical work may run. The browser engine is verified by
    * `verify:artifacts`, so it is always allowed. An external server is allowed
-   * only when it attests to exactly the same engine build; otherwise the
-   * operator is told precisely what failed instead of getting a blanket
-   * refusal, and nothing leaves the browser.
+   * once it proves which engine it runs — matching WASM artifacts, or the
+   * pinned Snapmaker Orca commit with the pinned patch set for a CLI build.
+   * Otherwise the operator is told precisely what failed instead of getting a
+   * blanket refusal, and nothing leaves the browser.
    */
   private async resolveCanonicalSliceRoute(): Promise<SlicerClientProjectRoute | null> {
     if (!SlicerClient.useExternalSlicer()) return { kind: 'browser-wasm' };

@@ -39,6 +39,18 @@ RUN ./build_linux.sh -dr
 COPY server/patches/ /orca-patches/
 RUN git apply --verbose /orca-patches/*.patch && ./build_linux.sh -sr
 
+# Record what this engine actually is, so the server can prove it to a client
+# instead of asking to be trusted. The patch digests are part of the identity:
+# they are the exact difference between this binary and stock upstream, and a
+# client is entitled to see them rather than be told the engine is "official".
+RUN set -eu; \
+    patches=$(for f in /orca-patches/*.patch; do \
+        printf '{"name":"%s","sha256":"%s"},' "$(basename "$f")" "$(sha256sum "$f" | cut -d' ' -f1)"; \
+      done | sed 's/,$//'); \
+    printf '{"schemaVersion":1,"engine":{"name":"snapmaker-orca","version":"%s","commit":"%s"},"patches":[%s]}' \
+      "${ORCA_VERSION}" "${ORCA_COMMIT}" "${patches}" \
+      > /orca/build/package/engine-provenance.json
+
 # ---- Stage 2: runtime — HTTP slicer server wrapping the patched CLI.
 FROM ubuntu:24.04
 
@@ -75,6 +87,15 @@ COPY --from=orca-build /orca/build/package /app/orca
 # Same entry point name/contract as the old AppImage-based image.
 RUN printf '#!/bin/sh\nexport LD_LIBRARY_PATH="/app/orca/bin:${LD_LIBRARY_PATH}"\nexec /app/orca/bin/snapmaker-orca "$@"\n' \
         > /usr/local/bin/orca-slicer && chmod +x /usr/local/bin/orca-slicer
+
+# Complete the provenance manifest with a digest of the binary that will run.
+# It is taken here, in the runtime image, from the file the server executes.
+RUN set -eu; \
+    digest=$(sha256sum /app/orca/bin/snapmaker-orca | cut -d' ' -f1); \
+    node -e 'const fs=require("fs");const p="/app/orca/engine-provenance.json";\
+      const m=JSON.parse(fs.readFileSync(p,"utf8"));\
+      m.binary={path:"/app/orca/bin/snapmaker-orca",sha256:process.argv[1]};\
+      fs.writeFileSync(p,JSON.stringify(m));' "$digest"
 
 # Install server dependencies
 COPY server/package*.json ./

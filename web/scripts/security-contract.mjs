@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -33,4 +34,35 @@ for (const [name, expected] of Object.entries(exactPackages)) {
   assert.equal(lock.packages[`node_modules/${name}`]?.version, expected, `${name} lock drift`);
 }
 
-console.log('Web security contract verified (CSP, local XR assets, exact UI pins).');
+// The CLI engine's identity is its upstream commit plus the OrcaXR patches
+// applied on top, so a patch added, removed, or edited without updating the
+// pin would let an engine this build has never seen receive canonical work.
+const { PINNED_ENGINE_PROVENANCE } = await import('../src/slicer/pinnedEngineProvenance.ts').catch(async () => {
+  // The contract script runs without a TypeScript loader; read the literal.
+  const source = await readFile(join(root, 'src/slicer/pinnedEngineProvenance.ts'), 'utf8');
+  const pinned = {};
+  const block = source.match(/cliPatches: Object\.freeze\(\{([\s\S]*?)\}\)/)?.[1] ?? '';
+  for (const [, name, digest] of block.matchAll(/'([^']+\.patch)':\s*\n?\s*'([0-9a-f]{64})'/g)) {
+    pinned[name] = digest;
+  }
+  return { PINNED_ENGINE_PROVENANCE: { cliPatches: pinned } };
+});
+
+const patchDirectory = join(root, '..', 'server', 'patches');
+const patchFiles = (await readdir(patchDirectory)).filter((name) => name.endsWith('.patch')).sort();
+const pinnedPatches = PINNED_ENGINE_PROVENANCE.cliPatches;
+assert.deepEqual(
+  patchFiles,
+  Object.keys(pinnedPatches).sort(),
+  'server/patches must match the CLI engine patches pinned in pinnedEngineProvenance.ts',
+);
+for (const name of patchFiles) {
+  const digest = createHash('sha256')
+    .update(await readFile(join(patchDirectory, name)))
+    .digest('hex');
+  assert.equal(digest, pinnedPatches[name], `${name} changed without updating its pinned digest`);
+}
+
+console.log(
+  `Web security contract verified (CSP, local XR assets, exact UI pins, ${patchFiles.length} pinned engine patches).`,
+);

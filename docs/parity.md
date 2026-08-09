@@ -483,8 +483,16 @@ Local starting seams: [`Project3mf.ts`](../web/src/features/Project3mf.ts),
     plate through that coordinator and the verified browser-WASM route, publishes only a revision/
     project-hash/asset-hash guarded artifact, and revalidates preview/download reads after undo/redo.
     Scene-baked STL and immutable imported-byte fallbacks were deleted. External canonical slicing
-    remains fail-closed pending independent provenance attestation; official G-code oracles, all-
-    plate UI, and hardware acceptance remain open.
+    is no longer fail-closed by construction: the server proves which engine it runs on `/engine`
+    and the client compares that to what this build accepts, per engine kind. A WASM server must
+    match the exact artifacts the client verified for itself. A CLI server runs the official
+    Snapmaker Orca binary, which has no WASM artifacts to compare, so it proves the upstream commit
+    it was built from and the OrcaXR patches applied on top — the entire difference from stock
+    upstream — each by name and digest. Requiring WASM digests of a native binary is what
+    previously made the CLI route refuse itself, which is the one route that exists to match
+    desktop output. `npm --prefix web run security:check` fails when `server/patches/` drifts from
+    the pinned set, so an engine this build has never seen cannot receive canonical work. Official
+    G-code oracles, all-plate UI, and hardware acceptance remain open.
 
 - [~] **P1.6 — Migrate existing workspace data incrementally.** Write adapters from flat
   `ModelEntry`, `PlateStore`, `FilamentPalette`, and existing OrcaXR JSON into `ProjectState`,

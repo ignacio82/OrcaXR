@@ -33,15 +33,27 @@ const KEY_TYPES = JSON.parse(
 const MACHINE_KEYS = new Set(KEY_TYPES.machine);
 
 /**
- * Engine attestation. A client may only route canonical slicing here when it
- * can prove this server runs the same engine it verified itself: the WASM
- * build is hashed from the exact files this process will load, and the pinned
- * commit comes from the provenance manifest published alongside them. A CLI
- * engine reports honestly that it carries no verifiable provenance rather than
- * claiming one — the client is expected to refuse it.
+ * Engine attestation. A client may only route canonical slicing here when this
+ * server can prove which engine it runs, and both engines can.
+ *
+ * The WASM build is hashed from the exact files this process will load, and
+ * its pinned commit comes from the provenance manifest published beside them.
+ *
+ * The CLI is the official Snapmaker Orca Slicer, built from a pinned commit in
+ * the same image that runs it (see `server/Dockerfile`), so its provenance is
+ * the commit it was built from, the OrcaXR patches applied on top, and a hash
+ * of the binary this process will actually execute. Those patches are reported
+ * by name and digest rather than glossed over: they are what make headless
+ * multi-filament slicing behave as the desktop GUI does, and a client is
+ * entitled to see exactly how the engine differs from stock upstream.
+ *
+ * A hand-assembled deployment with no manifest still reports honestly that it
+ * cannot prove its engine, and the client refuses that route.
  */
 const WASM_DIST_DIR = path.join(__dirname, "wasm-dist");
 const WASM_PROVENANCE_PATH = path.join(WASM_DIST_DIR, "artifact-provenance.json");
+const CLI_PROVENANCE_PATH =
+  process.env.ORCAXR_CLI_PROVENANCE || "/app/orca/engine-provenance.json";
 
 function sha256File(filePath) {
   try {
@@ -51,16 +63,61 @@ function sha256File(filePath) {
   }
 }
 
-function buildEngineAttestation(engine) {
-  if (engine !== "wasm") {
+/** Attest the native Snapmaker Orca binary this server would execute. */
+function buildCliAttestation(engine) {
+  let provenance = null;
+  try {
+    provenance = JSON.parse(readFileSync(CLI_PROVENANCE_PATH, "utf8"));
+  } catch {
     return {
       schemaVersion: 1,
       engine,
       attested: false,
       reason:
-        "This server slices with an external OrcaSlicer CLI binary, whose build this server cannot prove to a client.",
+        "This server ships no engine provenance manifest beside its Snapmaker Orca binary, so it cannot prove which build it runs.",
     };
   }
+  const binaryPath = provenance?.binary?.path;
+  if (typeof binaryPath !== "string" || binaryPath.length === 0) {
+    return {
+      schemaVersion: 1,
+      engine,
+      attested: false,
+      reason: "This server's engine provenance manifest names no binary.",
+    };
+  }
+  // Hash what would actually run, not what the manifest claims, so a swapped
+  // binary cannot inherit the manifest's good name.
+  const digest = sha256File(binaryPath);
+  if (digest === null) {
+    return {
+      schemaVersion: 1,
+      engine,
+      attested: false,
+      reason: "This server could not read its own Snapmaker Orca binary.",
+    };
+  }
+  if (digest !== provenance.binary.sha256) {
+    return {
+      schemaVersion: 1,
+      engine,
+      attested: false,
+      reason: "This server's Snapmaker Orca binary does not match the provenance manifest beside it.",
+      artifacts: { [path.basename(binaryPath)]: digest },
+    };
+  }
+  return {
+    schemaVersion: 1,
+    engine,
+    attested: true,
+    upstream: provenance.engine ?? null,
+    patches: provenance.patches ?? [],
+    artifacts: { [path.basename(binaryPath)]: digest },
+  };
+}
+
+function buildEngineAttestation(engine) {
+  if (engine !== "wasm") return buildCliAttestation(engine);
   const artifacts = {
     "slic3r.mjs": sha256File(path.join(WASM_DIST_DIR, "slic3r.mjs")),
     "slic3r.wasm": sha256File(path.join(WASM_DIST_DIR, "slic3r.wasm")),

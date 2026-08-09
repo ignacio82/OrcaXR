@@ -136,11 +136,18 @@ export class SlicerClient {
 
   /**
    * Ask the configured external slicer to prove which engine it runs, and
-   * compare that to the build this client verified for itself. Canonical work
-   * may only leave the browser when the two match exactly; anything else — a
-   * CLI engine, a different artifact, an unreachable or malformed response —
-   * returns the exact reason so the caller can say why rather than refusing
-   * blankly.
+   * compare that to what this build accepts. Canonical work may only leave the
+   * browser when the proof holds; anything else — an unattested build, a
+   * different artifact, an unreachable or malformed response — returns the
+   * exact reason so the caller can say why rather than refusing blankly.
+   *
+   * The two engines prove different things. A WASM server must match the exact
+   * artifacts this client verified for itself. A CLI server runs the official
+   * Snapmaker Orca binary, which has no WASM artifacts to compare, so it proves
+   * the upstream commit it was built from and the OrcaXR patches applied on
+   * top. Requiring WASM digests of a native binary is what previously made the
+   * CLI route — the one that exists precisely to match desktop output — refuse
+   * itself.
    */
   static async attestExternalEngine(
     fetcher: (url: string) => Promise<{ ok: boolean; json?: () => Promise<unknown> }> = (url) => fetchLocalNetwork(url),
@@ -151,7 +158,13 @@ export class SlicerClient {
     try {
       const response = await fetcher(`${canonicalExternalEndpoint(endpoint)}/engine`);
       if (!response.ok) {
-        return { attested: false, reason: 'The external slicer did not report its engine provenance.' };
+        // A server predating the /engine route answers 404 here. Say what to do
+        // about it rather than leaving the operator to guess.
+        return {
+          attested: false,
+          reason:
+            'The external slicer did not report its engine provenance; update the slicer server to a build that serves /engine.',
+        };
       }
       payload = await response.json?.();
     } catch {
@@ -161,9 +174,11 @@ export class SlicerClient {
       return { attested: false, reason: 'The external slicer returned a malformed engine attestation.' };
     }
     const record = payload as {
+      engine?: unknown;
       attested?: unknown;
       reason?: unknown;
       artifacts?: unknown;
+      patches?: unknown;
       upstream?: { commit?: unknown };
     };
     if (record.attested !== true) {
@@ -174,19 +189,14 @@ export class SlicerClient {
     if (typeof artifacts !== 'object' || artifacts === null) {
       return { attested: false, reason: 'The external slicer attested no engine artifacts.' };
     }
-    const declared = artifacts as Record<string, unknown>;
-    for (const [name, digest] of Object.entries(PINNED_ENGINE_PROVENANCE.artifacts)) {
-      if (declared[name] !== digest) {
-        return {
-          attested: false,
-          reason: `The external slicer runs a different ${name} than this build verified.`,
-        };
-      }
-    }
-    const commit = record.upstream?.commit;
-    if (commit !== PINNED_ENGINE_PROVENANCE.commit) {
+    if (record.upstream?.commit !== PINNED_ENGINE_PROVENANCE.commit) {
       return { attested: false, reason: 'The external slicer reports a different pinned engine commit.' };
     }
+    const failure =
+      record.engine === 'wasm'
+        ? compareWasmArtifacts(artifacts as Record<string, unknown>)
+        : compareCliPatches(record.patches);
+    if (failure) return { attested: false, reason: failure };
     return { attested: true, commit: PINNED_ENGINE_PROVENANCE.commit };
   }
 
@@ -993,4 +1003,40 @@ function canonicalExternalEndpoint(value: string): string {
     throw new Error('Canonical external slicer URLs cannot contain credentials, query parameters, or fragments.');
   }
   return normalized;
+}
+
+/** A WASM server must run byte-identical artifacts to the ones this client verified. */
+function compareWasmArtifacts(declared: Record<string, unknown>): string | undefined {
+  for (const [name, digest] of Object.entries(PINNED_ENGINE_PROVENANCE.artifacts)) {
+    if (declared[name] !== digest) {
+      return `The external slicer runs a different ${name} than this build verified.`;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * A CLI server must run the pinned upstream commit with exactly the OrcaXR
+ * patches this build knows. An unknown or altered patch changes what the
+ * engine emits, so it is named rather than tolerated.
+ */
+function compareCliPatches(reported: unknown): string | undefined {
+  if (!Array.isArray(reported)) {
+    return 'The external slicer did not report which engine patches it was built with.';
+  }
+  const applied = new Map<string, unknown>();
+  for (const entry of reported) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const record = entry as { name?: unknown; sha256?: unknown };
+    if (typeof record.name === 'string') applied.set(record.name, record.sha256);
+  }
+  const expected = PINNED_ENGINE_PROVENANCE.cliPatches as Readonly<Record<string, string>>;
+  for (const [name, digest] of Object.entries(expected)) {
+    if (!applied.has(name)) return `The external slicer was built without the ${name} engine patch.`;
+    if (applied.get(name) !== digest) return `The external slicer carries a different ${name} than this build pins.`;
+  }
+  for (const name of applied.keys()) {
+    if (!(name in expected)) return `The external slicer carries an engine patch this build does not know: ${name}.`;
+  }
+  return undefined;
 }

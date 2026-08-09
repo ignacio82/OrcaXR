@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+import http from "node:http";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -21,6 +23,9 @@ import {
   detectSliceInputKind,
   startSliceInput,
 } from "./slice_worker.mjs";
+
+/** The Snapmaker Orca commit both engines are pinned to. */
+const PINNED_ENGINE_COMMIT = "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626";
 
 const archiveLimits = {
   ...loadServerConfig({}),
@@ -360,8 +365,81 @@ test("engine attestation proves the WASM build and refuses to claim one for CLI"
     assert.match(wasm.reason, /could not read|ships no engine provenance/i);
   }
 
+  // A CLI server with no manifest beside it proves nothing and says so.
   const cli = await read(createSlicerService({ engine: "cli" }).app, "/engine");
-  assert.equal(cli.attested, false, "a CLI binary has no provenance this server can prove");
+  assert.equal(cli.attested, false, "a CLI binary with no manifest has no provenance to report");
   assert.equal(cli.engine, "cli");
-  assert.match(cli.reason, /cannot prove/i);
+  assert.match(cli.reason, /no engine provenance manifest/i);
+});
+
+test("a CLI engine attests its upstream commit, patch set, and the binary it will run", async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "orcaxr-cli-attest-"));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const binaryPath = path.join(dir, "snapmaker-orca");
+  await fs.writeFile(binaryPath, "#!/bin/sh\nexit 0\n");
+  const digest = createHash("sha256").update(await fs.readFile(binaryPath)).digest("hex");
+
+  const patchDirectory = new URL("./patches/", import.meta.url);
+  const patchNames = (await fs.readdir(patchDirectory)).filter((name) => name.endsWith(".patch")).sort();
+  const patches = [];
+  for (const name of patchNames) {
+    patches.push({
+      name,
+      sha256: createHash("sha256")
+        .update(await fs.readFile(new URL(name, patchDirectory)))
+        .digest("hex"),
+    });
+  }
+  const manifestPath = path.join(dir, "engine-provenance.json");
+  const manifest = {
+    schemaVersion: 1,
+    engine: { name: "snapmaker-orca", version: "2.3.4", commit: PINNED_ENGINE_COMMIT },
+    patches,
+    binary: { path: binaryPath, sha256: digest },
+  };
+  await fs.writeFile(manifestPath, JSON.stringify(manifest));
+
+  const read = async (route) => {
+    const previous = process.env.ORCAXR_CLI_PROVENANCE;
+    process.env.ORCAXR_CLI_PROVENANCE = manifestPath;
+    try {
+      const { createSlicerService } = await import(`./server.js?cli-attest=${encodeURIComponent(manifestPath)}`);
+      const app = createSlicerService({ engine: "cli" }).app;
+      return await new Promise((resolve, reject) => {
+        const server = app.listen(0, "127.0.0.1", () => {
+          const { port } = server.address();
+          http
+            .get({ host: "127.0.0.1", port, path: route }, (res) => {
+              let body = "";
+              res.on("data", (chunk) => (body += chunk));
+              res.on("end", () => {
+                server.close();
+                resolve(JSON.parse(body));
+              });
+            })
+            .on("error", (error) => {
+              server.close();
+              reject(error);
+            });
+        });
+      });
+    } finally {
+      if (previous === undefined) delete process.env.ORCAXR_CLI_PROVENANCE;
+      else process.env.ORCAXR_CLI_PROVENANCE = previous;
+    }
+  };
+
+  const attestation = await read("/engine");
+  assert.equal(attestation.engine, "cli");
+  assert.equal(attestation.attested, true, "a CLI engine built from a pinned commit can prove itself");
+  assert.equal(attestation.upstream.commit, PINNED_ENGINE_COMMIT);
+  assert.deepEqual(attestation.patches, patches, "the patch set is part of the engine's identity");
+  // The digest must come from the file on disk, not from the manifest, so a
+  // swapped binary cannot inherit the manifest's good name.
+  assert.equal(attestation.artifacts["snapmaker-orca"], digest);
+
+  await fs.writeFile(binaryPath, "#!/bin/sh\nexit 1\n");
+  const swapped = await read("/engine");
+  assert.equal(swapped.attested, false, "a binary that no longer matches its manifest cannot attest");
+  assert.match(swapped.reason, /does not match the provenance manifest/i);
 });
