@@ -310,9 +310,17 @@ test(
 
 test("engine attestation proves the WASM build and refuses to claim one for CLI", async () => {
   const { createSlicerService } = await import("./server.js");
-  const provenance = JSON.parse(
-    await fs.readFile(new URL("./wasm-dist/artifact-provenance.json", import.meta.url), "utf8"),
-  );
+  // `wasm-dist/` holds build output and is not committed, so a clean checkout —
+  // CI included — has no engine to attest. The refusal path is the one that
+  // must hold everywhere; the proof path is asserted wherever a build exists.
+  let provenance = null;
+  try {
+    provenance = JSON.parse(
+      await fs.readFile(new URL("./wasm-dist/artifact-provenance.json", import.meta.url), "utf8"),
+    );
+  } catch {
+    provenance = null;
+  }
 
   const read = async (app, route) => {
     const http = await import("node:http");
@@ -337,12 +345,20 @@ test("engine attestation proves the WASM build and refuses to claim one for CLI"
   };
 
   const wasm = await read(createSlicerService({ engine: "wasm" }).app, "/engine");
-  assert.equal(wasm.attested, true, "a wasm engine matching its manifest attests");
   assert.equal(wasm.engine, "wasm");
-  assert.equal(wasm.upstream.commit, provenance.engine.commit);
-  // The digests must be computed from the files this process would load, not
-  // copied out of the manifest, so a swapped artifact cannot pass.
-  assert.deepEqual(wasm.artifacts, provenance.outputs);
+  if (provenance) {
+    assert.equal(wasm.attested, true, "a wasm engine matching its manifest attests");
+    assert.equal(wasm.upstream.commit, provenance.engine.commit);
+    // The digests must be computed from the files this process would load, not
+    // copied out of the manifest, so a swapped artifact cannot pass.
+    assert.deepEqual(wasm.artifacts, provenance.outputs);
+  } else {
+    // No build present: the server must say it cannot prove an engine rather
+    // than assert one. Claiming attestation here would let an unverified binary
+    // through the client's canonical-slicing gate.
+    assert.equal(wasm.attested, false, "an absent build attests to nothing");
+    assert.match(wasm.reason, /could not read|ships no engine provenance/i);
+  }
 
   const cli = await read(createSlicerService({ engine: "cli" }).app, "/engine");
   assert.equal(cli.attested, false, "a CLI binary has no provenance this server can prove");
