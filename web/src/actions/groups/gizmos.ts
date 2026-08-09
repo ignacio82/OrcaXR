@@ -149,15 +149,29 @@ export const gizmoActions: Action[] = [
     isEnabled: (s) => s.hasInstanceSelection,
     run: (ctx) => ctx.applyTool('fuzzy_skin'),
   },
-  tool('tool_smart_paint', 'Smart Paint', 'smart_paint', 'AI-powered semantic painting', 'smartPaint', 'toolbar'),
-  tool(
-    'tool_smart_paint_image',
-    'Smart Paint (Image)',
-    'smart_paint_image',
-    'AI-powered semantic painting using an image',
-    'smartPaintImage',
-    'toolbar',
-  ),
+  // Smart Paint opens the assistant panel; it never sends anything by itself.
+  {
+    id: 'tool_smart_paint',
+    label: 'Smart Paint',
+    icon: 'smart_paint',
+    group: 'scene',
+    disclosure: 'toolbar',
+    hint: 'Propose paint regions with an assistant, then correct and apply them yourself',
+    xrUnsupportedReason:
+      'Smart Paint consent and its prompt are entered in a DOM panel; no in-headset consent or text flow exists yet.',
+    run: (ctx) => ctx.smartPaint(),
+  },
+  {
+    id: 'tool_smart_paint_image',
+    label: 'Smart Paint (Image)',
+    icon: 'smart_paint_image',
+    group: 'scene',
+    disclosure: 'toolbar',
+    hint: 'Propose paint regions from a reference image you explicitly allow sending',
+    xrUnsupportedReason:
+      'Smart Paint consent and its prompt are entered in a DOM panel; no in-headset consent or text flow exists yet.',
+    run: (ctx) => ctx.smartPaintImage(),
+  },
   tool('tool_brim_ears', 'Brim Ears', 'brim_ears', 'Place brim "mouse ears" at chosen points', 'brimEars', 'toolbar'),
   tool('tool_measure', 'Measure', 'measure', 'Measure distances and angles on the model', 'measureTool', 'toolbar'),
   tool(

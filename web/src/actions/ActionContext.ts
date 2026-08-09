@@ -8,6 +8,7 @@
  * method or feature module. **No feature logic lives here** — this is routing,
  * so the DOM shell and the XR shell invoke identical behaviour.
  */
+import type { ActionInvocation } from './ActionRegistry';
 import type { OrcaWorkspace } from '../workspace/OrcaWorkspace';
 import type { FilamentPalette } from '../workspace/FilamentPalette';
 import type { FilamentId, PlateId } from '../project/domain/ids';
@@ -428,6 +429,26 @@ export class ActionContext {
 
   smartPaintImage(): void {
     void this.workspace.smartPaintImage();
+  }
+
+  /** Consent, prompt, attached image, and per-region destinations. */
+  configureSmartPaint(request: NonNullable<ActionInvocation['smartPaint']>): void {
+    if (request.consent) this.workspace.setSmartPaintConsent(request.consent);
+    if (request.prompt !== undefined) this.workspace.setSmartPaintPrompt(request.prompt);
+    if (request.imageBase64 !== undefined) this.workspace.attachSmartPaintImage(request.imageBase64);
+    if (request.region) this.workspace.assignSmartPaintRegion(request.region.id, request.region.value);
+  }
+
+  requestSmartPaint(): void {
+    void this.workspace.requestSmartPaint();
+  }
+
+  applySmartPaint(): void {
+    this.workspace.applySmartPaint();
+  }
+
+  cancelSmartPaint(): void {
+    this.workspace.cancelSmartPaint();
   }
 
   /** Report a registry-controlled disabled reason without invoking a feature handler. */

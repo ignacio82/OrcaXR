@@ -59,8 +59,6 @@ const UNAVAILABLE_IDS = [
   'mesh_boolean_subtract',
   'mesh_boolean_intersection',
   'tool_cut',
-  'tool_smart_paint',
-  'tool_smart_paint_image',
   'auto_place_wipe',
   'add_emboss',
   'add_magnet',
@@ -104,8 +102,6 @@ const CANONICAL_CUTOVER_GATED_IDS = [
   'mesh_boolean_subtract',
   'mesh_boolean_intersection',
   'tool_cut',
-  'tool_smart_paint',
-  'tool_smart_paint_image',
   'auto_place_wipe',
 ] as const;
 
@@ -332,9 +328,15 @@ test('all XR toolbar actions are reachable by finite rail or Tools overflow', ()
   const toolbar = registry.forSurface('xr-toolbar');
   const rail = xrToolRailActions(toolbar);
   const overflow = toolbar.filter((action) => !rail.includes(action));
-  assert.strictEqual(toolbar.length, 19);
+  // Smart Paint and Smart Paint (Image) are deliberately absent: both declare
+  // an XR exclusion because their consent and prompt are DOM-only.
+  assert.strictEqual(toolbar.length, 17);
   assert.strictEqual(rail.length, 7);
-  assert.strictEqual(overflow.length, 12);
+  assert.strictEqual(overflow.length, 10);
+  assert.equal(
+    toolbar.some((action) => action.id.startsWith('tool_smart_paint')),
+    false,
+  );
   assert.deepStrictEqual(new Set([...rail, ...overflow]), new Set(toolbar));
 });
 

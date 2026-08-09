@@ -126,6 +126,20 @@ engine (`libslic3r` via WASM) as the computational core.
   same `ProjectImportCoordinator` as Open Project, so every add is previewed,
   deduplicated, undoable in one command, and leaves canonical state untouched on
   failure or cancel. Never add a second direct scene-insert import path.
+- Smart Paint is a proposal, never a painter. An assistant returns a bounded
+  version-1 proposal of normalized-AABB boxes and normal-direction cones;
+  `project/painting/aiPaintProposal.ts` projects it against the volume's own
+  mesh into exact source triangles (later regions overwrite earlier ones), and
+  `AiPaintSession` commits the operator-corrected mask through the same
+  `PaintStrokeService` as a manual stroke, as one labelled transaction. Never
+  accept a free-form polygon (it would need a camera the proposal never
+  declared), never trust a provider-supplied region ID, and never let a
+  provider payload reach canonical state without passing the strict parser.
+  Consent is checked per payload kind and per provider *before* the request:
+  geometry consent sends only a facet count and bounding-box extent, never
+  vertices, names, or IDs. Cancel, provider failure, malformed output, and a
+  revision/topology change between preview and apply must all leave the project
+  byte-identical.
 - `ActionRegistry` is constructed once at the composition root and is the only
   invocation/availability gateway for DOM, menus, shortcuts, command palette,
   XR, and contextual Objects selection/rename/reveal. `implemented` requires a real

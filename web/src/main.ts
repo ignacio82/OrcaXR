@@ -39,7 +39,7 @@ import { injectTokenCss } from './ui/tokens';
 import { UiState } from './actions/UiState';
 import { ActionContext } from './actions/ActionContext';
 import { buildRegistry } from './actions/catalog';
-import type { ActionRegistry } from './actions/ActionRegistry';
+import type { ActionInvocation, ActionRegistry } from './actions/ActionRegistry';
 import { buildShortcutCatalog, isShortcutEditingTarget, matchShortcut } from './actions/ShortcutCatalog';
 import { DomShell } from './ui/dom/DomShell';
 import { CommandPalette } from './ui/dom/CommandPalette';
@@ -55,6 +55,7 @@ import { GcodePreviewPanel, type GcodePreviewPanelAdapter } from './ui/dom/Gcode
 import { PreviewScrubber } from './ui/dom/PreviewScrubber';
 import { InspectorTabs } from './ui/dom/InspectorTabs';
 import { PaintPanel } from './ui/dom/PaintPanel';
+import { SmartPaintPanel } from './ui/dom/SmartPaintPanel';
 import { PlateManager } from './ui/dom/PlateManager';
 import { SemanticObjectEditor } from './ui/dom/SemanticObjectEditor';
 import { VirtualFilamentLibrary } from './ui/dom/VirtualFilamentLibrary';
@@ -1576,6 +1577,54 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     });
     paintPanel.mount();
     window.addEventListener('pagehide', () => paintPanel.dispose(), { once: true });
+  }
+
+  const smartPaintPanelHost = document.getElementById('smart-paint-panel-host');
+  if (smartPaintPanelHost) {
+    const configure = async (request: NonNullable<ActionInvocation['smartPaint']>): Promise<void> => {
+      const invoked = await registry.invoke('paint_smart_configure', 'dom-inspector', actionCtx, uiState.get(), {
+        smartPaint: request,
+      });
+      if (!invoked) throw new Error('The Smart Paint configuration action is unavailable.');
+    };
+    const smartPaintPanel = new SmartPaintPanel(smartPaintPanelHost, {
+      getState: () => {
+        const snapshot = workspace.getSmartPaintSnapshot();
+        return { ...snapshot, palette: workspace.getPaintPalette(true) };
+      },
+      subscribe: (listener) => {
+        const unsubscribeCanonical = workspace.subscribeCanonicalState(listener);
+        const previous = workspace.onSmartPaintStateChanged;
+        workspace.onSmartPaintStateChanged = () => {
+          previous?.();
+          listener();
+        };
+        return () => {
+          unsubscribeCanonical();
+          workspace.onSmartPaintStateChanged = previous;
+        };
+      },
+      onSetConsent: (consent) => configure({ consent }),
+      onSetPrompt: (prompt) => configure({ prompt }),
+      onAssignRegion: (id, value) => configure({ region: { id, value } }),
+      onRequest: async () => {
+        const invoked = await registry.invoke('paint_smart_request', 'dom-inspector', actionCtx, uiState.get());
+        if (!invoked) throw new Error('Select a model part before asking the Smart Paint assistant.');
+      },
+      onApply: async () => {
+        const invoked = await registry.invoke('paint_smart_apply', 'dom-inspector', actionCtx, uiState.get());
+        if (!invoked) throw new Error('Applying the Smart Paint mask is unavailable.');
+      },
+      onCancel: async () => {
+        const invoked = await registry.invoke('paint_smart_cancel', 'dom-inspector', actionCtx, uiState.get());
+        if (!invoked) throw new Error('Discarding the Smart Paint mask is unavailable.');
+      },
+      onError: (error) => {
+        statusText.textContent = `Smart Paint: ${error instanceof Error ? error.message : String(error)}`;
+      },
+    });
+    smartPaintPanel.mount();
+    window.addEventListener('pagehide', () => smartPaintPanel.dispose(), { once: true });
   }
 
   const semanticObjectEditorHost = document.getElementById('semantic-object-editor-host');

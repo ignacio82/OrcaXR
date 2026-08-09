@@ -60,6 +60,8 @@ import {
   type PaintToolKind,
   type PaintToolSettings,
 } from '../project/painting/PaintStrokeService';
+import type { AiPaintSession } from '../project/painting/AiPaintSession';
+import { GEMINI_PAINT_PROVIDER_ID, LazyGeminiAiPaintPort } from '../features/aiPaintProvider';
 import { paintPaletteColors, type PaintPalette } from '../project/painting/paintPalette';
 import {
   CanonicalWorkspaceController,
@@ -398,6 +400,33 @@ export const PAINT_TOOL_CHANNELS: Readonly<Record<string, PaintChannel>> = Objec
   seam_paint: 'seam',
   fuzzy_skin: 'fuzzySkin',
 });
+
+/** Read-only view a Smart Paint surface renders; every number is canonical. */
+export interface SmartPaintSnapshot {
+  readonly providerId: string;
+  readonly unavailableReason?: string;
+  readonly channel: PaintChannel;
+  readonly consent: { readonly geometry: boolean; readonly image: boolean };
+  readonly prompt: string;
+  readonly imageAttached: boolean;
+  readonly busy: boolean;
+  readonly error?: string;
+  readonly preview?: {
+    readonly channel: PaintChannel;
+    readonly coverage: number;
+    readonly confidence: number;
+    readonly unassignedFacetCount: number;
+    readonly assignable: boolean;
+    readonly regions: readonly {
+      readonly id: string;
+      readonly label: string;
+      readonly confidence: number;
+      readonly coverage: number;
+      readonly facetCount: number;
+      readonly value: string | boolean | null;
+    }[];
+  };
+}
 
 export interface WorkspaceAutomationSnapshot {
   workspaceMode: 'Prepare' | 'Preview';
@@ -1571,6 +1600,210 @@ export class OrcaWorkspace extends xb.Script {
         : 'Nothing was painted.',
     );
     return cleared;
+  }
+
+  // ---------------------------------------------------------------------
+  // Smart Paint (P4.9). The assistant only proposes; every mutation below
+  // goes through the same canonical paint service manual strokes use.
+  // ---------------------------------------------------------------------
+
+  private smartPaintSessionInstance: AiPaintSession | null = null;
+  private smartPaintConsent: { geometry: boolean; image: boolean } = { geometry: false, image: false };
+  private smartPaintPrompt = '';
+  private smartPaintImageBase64: string | undefined;
+  private smartPaintBusy = false;
+  private smartPaintError: string | undefined;
+  public onSmartPaintStateChanged: (() => void) | null = null;
+
+  private get smartPaintSession(): AiPaintSession {
+    if (!this.smartPaintSessionInstance) {
+      this.smartPaintSessionInstance = this.canonicalProject.createAiPaintSession(new LazyGeminiAiPaintPort());
+    }
+    return this.smartPaintSessionInstance;
+  }
+
+  /** Everything a Smart Paint surface renders; no value is invented here. */
+  public getSmartPaintSnapshot(): SmartPaintSnapshot {
+    const volumes = this.paintableSelectedVolumes();
+    const preview = this.smartPaintSessionInstance?.current;
+    return Object.freeze({
+      providerId: GEMINI_PAINT_PROVIDER_ID,
+      ...(volumes.length === 1
+        ? {}
+        : {
+            unavailableReason:
+              volumes.length === 0
+                ? 'Select one model part to use Smart Paint.'
+                : `Smart Paint works on one part at a time; ${volumes.length} are selected.`,
+          }),
+      channel: this.paintChannel,
+      consent: Object.freeze({ ...this.smartPaintConsent }),
+      prompt: this.smartPaintPrompt,
+      imageAttached: this.smartPaintImageBase64 !== undefined,
+      busy: this.smartPaintBusy,
+      ...(this.smartPaintError ? { error: this.smartPaintError } : {}),
+      ...(preview
+        ? {
+            preview: Object.freeze({
+              channel: preview.channel,
+              coverage: preview.coverage,
+              confidence: preview.confidence,
+              unassignedFacetCount: preview.unassignedTriangleCount,
+              assignable: preview.assignable,
+              regions: Object.freeze(
+                preview.regions.map((region) =>
+                  Object.freeze({
+                    id: region.id,
+                    label: region.label,
+                    confidence: region.confidence,
+                    coverage: region.coverage,
+                    facetCount: region.triangleIndices.length,
+                    value: (region.value ?? null) as string | boolean | null,
+                  }),
+                ),
+              ),
+            }),
+          }
+        : {}),
+    });
+  }
+
+  public setSmartPaintConsent(next: { geometry?: boolean; image?: boolean }): void {
+    this.smartPaintConsent = {
+      geometry: next.geometry ?? this.smartPaintConsent.geometry,
+      image: next.image ?? this.smartPaintConsent.image,
+    };
+    this.onSmartPaintStateChanged?.();
+  }
+
+  public setSmartPaintPrompt(prompt: string): void {
+    this.smartPaintPrompt = prompt;
+    this.onSmartPaintStateChanged?.();
+  }
+
+  public attachSmartPaintImage(imageBase64: string | null): void {
+    this.smartPaintImageBase64 = imageBase64 ?? undefined;
+    if (imageBase64 === null) this.smartPaintConsent = { ...this.smartPaintConsent, image: false };
+    this.onSmartPaintStateChanged?.();
+  }
+
+  /** Ask the assistant. Canonical state is untouched on every outcome. */
+  public async requestSmartPaint(): Promise<void> {
+    const volumes = this.paintableSelectedVolumes();
+    if (volumes.length !== 1) {
+      this.smartPaintError = 'Select exactly one model part before asking the assistant.';
+      this.onSmartPaintStateChanged?.();
+      return;
+    }
+    this.smartPaintBusy = true;
+    this.smartPaintError = undefined;
+    this.onSmartPaintStateChanged?.();
+    try {
+      const outcome = await this.smartPaintSession.request({
+        volumeId: volumes[0],
+        channel: this.paintChannel,
+        prompt: this.smartPaintPrompt,
+        ...(this.smartPaintImageBase64 !== undefined ? { imageBase64: this.smartPaintImageBase64 } : {}),
+        consent: {
+          ...this.smartPaintConsent,
+          providerId: GEMINI_PAINT_PROVIDER_ID,
+          grantedAt: new Date().toISOString(),
+        },
+      });
+      if (outcome.status === 'failed') {
+        this.smartPaintError = outcome.message;
+        this.setStatus(`Smart Paint: ${outcome.message}`);
+      } else if (outcome.status === 'cancelled') {
+        this.setStatus('Smart Paint was cancelled; nothing changed.');
+      } else {
+        this.setStatus(
+          `Smart Paint proposed ${outcome.preview.regions.length} region(s). Choose a destination, then apply.`,
+        );
+      }
+    } finally {
+      this.smartPaintBusy = false;
+      this.refreshSmartPaintPreview();
+      this.onSmartPaintStateChanged?.();
+    }
+  }
+
+  public assignSmartPaintRegion(regionId: string, value: string | boolean | null): void {
+    if (!this.smartPaintSessionInstance?.current) return;
+    this.smartPaintSessionInstance.assignRegion(regionId, (value ?? undefined) as never);
+    this.refreshSmartPaintPreview();
+    this.onSmartPaintStateChanged?.();
+  }
+
+  /** Drop the mask. There is nothing to unwind, because nothing was applied. */
+  public cancelSmartPaint(): void {
+    this.smartPaintSessionInstance?.cancel();
+    this.smartPaintError = undefined;
+    this.clearPaintPreview();
+    this.setStatus('Smart Paint mask discarded; the project is unchanged.');
+    this.onSmartPaintStateChanged?.();
+  }
+
+  /** Commit the corrected mask as exactly one undoable command. */
+  public applySmartPaint(): void {
+    const session = this.smartPaintSessionInstance;
+    if (!session?.current) return;
+    const outcome = session.apply();
+    switch (outcome.status) {
+      case 'applied':
+        this.setStatus(`Smart Paint applied to ${outcome.facetCount} facet(s). Undo restores the previous painting.`);
+        break;
+      case 'stale':
+        this.smartPaintError = 'The project changed while the mask was open; ask again before applying.';
+        this.setStatus(this.smartPaintError);
+        break;
+      case 'cancelled':
+        this.setStatus('Smart Paint was cancelled; nothing changed.');
+        break;
+      default:
+        this.setStatus('Choose a destination for at least one region before applying.');
+    }
+    this.clearPaintPreview();
+    this.refreshPaintOverlays();
+    this.refreshSmartPaintPreview();
+    this.onSmartPaintStateChanged?.();
+  }
+
+  /** Draw the current mask over the model, using each region's destination. */
+  private refreshSmartPaintPreview(): void {
+    const preview = this.smartPaintSessionInstance?.current;
+    if (!preview) {
+      this.clearPaintPreview();
+      return;
+    }
+    const target = this.paintTargets().find((record) => record.volumeId === preview.volumeId);
+    if (!target) {
+      this.clearPaintPreview();
+      return;
+    }
+    const colors = channelOverlayColors(preview.channel, paintPaletteColors(this.getPaintPalette(true)));
+    const assignments: { triangles: number[]; value: string }[] = [];
+    const colorByKey = new Map<string, string>();
+    for (const region of preview.regions) {
+      if (region.triangleIndices.length === 0) continue;
+      const key = `smart:${region.id}`;
+      // An unassigned region still previews, in neutral white, so the operator
+      // can see what the assistant found before choosing a destination.
+      colorByKey.set(key, region.value === undefined ? '#ffffff' : (colors.get(String(region.value)) ?? '#ffffff'));
+      assignments.push({ triangles: [...region.triangleIndices], value: key });
+    }
+    if (assignments.length === 0) {
+      this.clearPaintPreview();
+      return;
+    }
+    this.clearPaintPreview();
+    const geometry = this.buildPaintOverlayGeometry(target.display, assignments, colorByKey);
+    if (!geometry) return;
+    const mesh = new THREE.Mesh(geometry, PAINT_PREVIEW_MATERIAL.clone());
+    mesh.name = 'smart-paint-preview';
+    mesh.raycast = () => {};
+    mesh.renderOrder = 3;
+    target.display.add(mesh);
+    this.paintPreviewOverlay = mesh;
   }
 
   /** Volumes the current selection paints, defaulting to the whole plate. */
@@ -5909,12 +6142,30 @@ export class OrcaWorkspace extends xb.Script {
     this.setStatus(`Boolean ${op} is unavailable until topology and annotations commit atomically.`);
   }
 
+  /**
+   * Open the Smart Paint flow. The assistant is not called here: consent, the
+   * prompt, and an explicit apply all happen in the panel, so activating the
+   * tool never sends anything.
+   */
   async smartPaint(): Promise<void> {
-    this.setStatus('Smart Paint is unavailable until results commit as canonical facet annotations.');
+    this.smartPaintError = undefined;
+    this.setStatus(
+      this.paintableSelectedVolumes().length === 1
+        ? 'Smart Paint: allow what may be sent, describe the regions, then ask the assistant.'
+        : 'Select one model part to use Smart Paint.',
+    );
+    this.onSmartPaintStateChanged?.();
   }
 
+  /** The same flow with a reference image; the image needs its own consent. */
   async smartPaintImage(): Promise<void> {
-    this.setStatus('Image Smart Paint is unavailable until results commit as canonical facet annotations.');
+    this.smartPaintError = undefined;
+    this.setStatus(
+      this.smartPaintImageBase64 === undefined
+        ? 'Attach a reference image, allow sending it, then ask the assistant.'
+        : 'Smart Paint: allow sending the attached image, then ask the assistant.',
+    );
+    this.onSmartPaintStateChanged?.();
   }
 }
 

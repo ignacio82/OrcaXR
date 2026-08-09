@@ -407,6 +407,85 @@ async function clickPanelControl(page, selector) {
 }
 
 /**
+ * Smart Paint's consent gate in the production build. No assistant is
+ * configured here on purpose: the point is to prove that the panel is mounted
+ * and registry-routed, that nothing can be sent before explicit consent and a
+ * prompt exist, and that a provider failure is reported honestly while the
+ * canonical project stays exactly as it was.
+ */
+async function smartPaintConsentGate(page) {
+  // Smart Paint targets exactly one part, so the flow starts by selecting one.
+  await showInspectorTab(page, 'objects');
+  const objects = await page.evaluate(() => {
+    const snapshot = globalThis.window.workspace.getObjectsTreeSnapshot();
+    return [...snapshot.projection.rowsByKey.values()]
+      .filter((row) => row.kind === 'object' && row.entity?.kind === 'object')
+      .map((row) => ({ key: row.key, id: row.entity.id }));
+  });
+  assert.ok(objects.length >= 1, 'the Smart Paint gate needs at least one object');
+  await page.evaluate((key) => {
+    const row = [...globalThis.document.querySelectorAll('[data-objects-row-key]')].find(
+      (candidate) => candidate.dataset.objectsRowKey === key,
+    );
+    row?.dispatchEvent(new globalThis.MouseEvent('click', { bubbles: true }));
+  }, objects[0].key);
+  await page.waitForFunction(
+    (id) => globalThis.window.workspace.getObjectsTreeSnapshot().selection.primary?.id === id,
+    {},
+    objects[0].id,
+  );
+
+  await showInspectorTab(page, 'filament');
+  await page.evaluate(() => {
+    globalThis.document.querySelector('[data-smart-paint-panel="true"]')?.closest('details')?.setAttribute('open', '');
+  });
+  const panel = await page.$('[data-smart-paint-panel="true"]');
+  assert.ok(panel, 'the Smart Paint panel is mounted');
+  assert.equal(
+    await page.evaluate(() => globalThis.window.workspace.getSmartPaintSnapshot().unavailableReason),
+    undefined,
+    'one selected part puts Smart Paint in scope',
+  );
+
+  const askDisabled = () => page.$eval('[data-smart-paint-action="smart-paint-request"]', (button) => button.disabled);
+  assert.equal(await askDisabled(), true, 'asking is blocked before consent and a prompt exist');
+
+  const before = await page.evaluate(() => globalThis.window.workspace.getCanonicalSummary().history);
+
+  await page.evaluate(() => {
+    const consent = globalThis.document.querySelector('[data-smart-paint-consent-key="geometry"]');
+    consent.checked = true;
+    consent.dispatchEvent(new globalThis.Event('change', { bubbles: true }));
+    const prompt = globalThis.document.querySelector('[data-smart-paint-prompt]');
+    prompt.value = 'the top surface';
+    prompt.dispatchEvent(new globalThis.Event('change', { bubbles: true }));
+  });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  const snapshot = await page.evaluate(() => globalThis.window.workspace.getSmartPaintSnapshot());
+  assert.equal(snapshot.consent.geometry, true, 'consent is recorded canonically, not in the DOM alone');
+  assert.equal(snapshot.consent.image, false, 'image consent stays separate and off');
+  assert.equal(snapshot.prompt, 'the top surface');
+  assert.equal(await askDisabled(), false, 'consent plus a prompt unlocks the request');
+
+  // No API key is configured, so the provider boundary must fail honestly.
+  await clickPanelControl(page, '[data-smart-paint-action="smart-paint-request"]');
+  await page.waitForFunction(() => globalThis.window.workspace.getSmartPaintSnapshot().busy === false, {
+    timeout: 30_000,
+  });
+  const failed = await page.evaluate(() => globalThis.window.workspace.getSmartPaintSnapshot());
+  assert.ok(failed.error, 'an unconfigured assistant reports a reason instead of failing silently');
+  assert.equal(failed.preview, undefined, 'a failed request produces no mask');
+  assert.deepEqual(
+    await page.evaluate(() => globalThis.window.workspace.getCanonicalSummary().history),
+    before,
+    'a failed Smart Paint request leaves canonical history untouched',
+  );
+
+  await clickPanelControl(page, '[data-smart-paint-action="smart-paint-cancel"]');
+}
+
+/**
  * Colour painting through the real surfaces: the registry-routed paint panel
  * configures the stroke and a genuine pointer gesture on the canvas commits
  * canonical facet annotations that undo cleanly.
@@ -1170,6 +1249,7 @@ try {
   await fillPlateWithInstances(page);
   await inspectStandaloneGcode(page, gcodeFixturePath);
   await paintImportedModel(page);
+  await smartPaintConsentGate(page);
   await dropModelFile(page, objFixturePath);
   await sliceAndSendActivePlate(page, printer);
 
@@ -2497,7 +2577,7 @@ try {
   assert.deepStrictEqual(pageErrors, [], `uncaught page errors: ${pageErrors.join('\n')}`);
   assert.deepStrictEqual(policyErrors, [], `CSP violations: ${policyErrors.join('\n')}`);
   console.log(
-    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings, guarded plate management, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, and a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel).',
+    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, and a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel).',
   );
 } finally {
   await browser.close();

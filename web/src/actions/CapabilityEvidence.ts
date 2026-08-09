@@ -53,7 +53,15 @@ export const ACTION_IDS_BY_PARITY_TASK = {
   'P4.6': ['tool_support_paint'],
   'P4.7': ['tool_seam_paint'],
   'P4.8': ['tool_fuzzy_skin', 'tool_brim_ears'],
-  'P4.9': ['tool_smart_paint', 'tool_smart_paint_image', 'recreate_model_colors_fullspectrum'],
+  'P4.9': [
+    'tool_smart_paint',
+    'tool_smart_paint_image',
+    'paint_smart_configure',
+    'paint_smart_request',
+    'paint_smart_apply',
+    'paint_smart_cancel',
+    'recreate_model_colors_fullspectrum',
+  ],
   'P5.1': [
     'edit_select_all',
     'edit_deselect_all',

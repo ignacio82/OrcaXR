@@ -92,6 +92,7 @@ import type { JsonValue, TriangleAssignments, Vec3 } from '../project/domain/mod
 import type { FacetRefinementEncoding } from '../project/domain/model';
 import type { FacetAnnotationChannel } from '../project/annotations';
 import { GeometryMergeParser } from '../project/import/GeometryMergeParser';
+import { AiPaintSession, type AiPaintPort } from '../project/painting/AiPaintSession';
 import { PaintStrokeService } from '../project/painting/PaintStrokeService';
 import { projectPaintPalette, type PaintPalette, type PaintPaletteOptions } from '../project/painting/paintPalette';
 import {
@@ -1563,6 +1564,21 @@ export class CanonicalWorkspaceController {
   createPaintStrokeService(): PaintStrokeService {
     this.assertActive();
     return new PaintStrokeService({ commands: this.session.commands, assets: this.assets });
+  }
+
+  /**
+   * Smart Paint session over the same command bus and assets as manual
+   * painting, so an assistant's mask commits through exactly one canonical
+   * path and undoes as one entry.
+   */
+  createAiPaintSession(port: AiPaintPort): AiPaintSession {
+    this.assertActive();
+    return new AiPaintSession({
+      commands: this.session.commands,
+      assets: this.assets,
+      strokes: this.createPaintStrokeService(),
+      port,
+    });
   }
 
   /** Palette projection for paint surfaces; entries carry stable IDs only. */

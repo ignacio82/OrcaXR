@@ -190,6 +190,18 @@ export interface ActionInvocation {
     readonly heightRangeMm?: number;
     readonly gapAreaMm2?: number;
   };
+  /**
+   * Bounded Smart Paint change from the assistant panel. Consent is explicit
+   * per payload kind, and a region destination is a stable canonical state —
+   * never a predicted colour.
+   */
+  smartPaint?: {
+    readonly consent?: { readonly geometry?: boolean; readonly image?: boolean };
+    readonly prompt?: string;
+    /** Base64 reference image, or `null` to detach the current one. */
+    readonly imageBase64?: string | null;
+    readonly region?: { readonly id: string; readonly value: string | boolean | null };
+  };
 }
 
 export type ActionHandler = (ctx: ActionContext, invocation: Readonly<ActionInvocation>) => void | Promise<void>;
@@ -307,10 +319,6 @@ const CANONICAL_CUTOVER_GATED_REASONS = {
     'Mesh intersection is disabled until topology-changing booleans preserve canonical metadata and commit atomically.',
   tool_cut:
     'Plane cutting is disabled until canonical topology, annotations, assets, and stable IDs can be replaced atomically.',
-  tool_smart_paint:
-    'Smart Paint is disabled until asynchronous results are revision-guarded canonical facet-annotation commands.',
-  tool_smart_paint_image:
-    'Image Smart Paint is disabled until asynchronous results are revision-guarded canonical facet-annotation commands.',
   auto_place_wipe:
     'Wipe-tower auto-placement is disabled until its position is computed and stored through canonical project commands.',
 } as const satisfies Readonly<Record<string, string>>;

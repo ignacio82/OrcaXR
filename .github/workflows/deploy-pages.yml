@@ -10,8 +10,13 @@ on:
       - ".github/workflows/deploy-pages.yml"
   workflow_dispatch:
 
+# A job-level `permissions` block replaces the workflow block rather than
+# merging with it, so these stay at the top level exactly as GitHub's own Pages
+# starter workflow declares them.
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: "pages"
@@ -60,9 +65,6 @@ jobs:
 
   deploy:
     needs: build
-    permissions:
-      pages: write
-      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
