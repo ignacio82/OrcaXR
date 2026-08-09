@@ -378,9 +378,11 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
         return;
       }
       const summary = slots.map((slot) => `H${slot.slotIndex + 1}: ${slot.material} ${slot.colorHex}`).join('; ');
-      workspace.setStatus(
-        `Printer filaments (read-only): ${summary}. Project mapping was not changed; P9 mapping and confirmation are required.`,
-      );
+      // Adopting the machine's own loaded filaments is a project edit, so it
+      // goes through one undoable canonical command and reports what changed.
+      if (!workspace.syncFilamentsFromPrinter(slots)) {
+        workspace.setStatus(`Printer filaments: ${summary}.`);
+      }
     } catch (error) {
       workspace.setStatus(`Filament inspection failed: ${(error as Error).message}`);
     }
@@ -1073,6 +1075,18 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       return;
     }
     sel.disabled = false;
+    // With no selection the browser would display the first option, which
+    // silently implies a printer nobody chose. An imported project owns its own
+    // configuration, so say that instead of letting a catalog entry masquerade.
+    if (current === undefined) {
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Using the project’s own settings';
+      placeholder.disabled = true;
+      placeholder.selected = true;
+      placeholder.dataset.presetPlaceholder = 'true';
+      sel.appendChild(placeholder);
+    }
     for (const item of items) {
       const opt = document.createElement('option');
       opt.value = item.id;

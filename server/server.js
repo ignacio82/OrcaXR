@@ -31,6 +31,78 @@ const KEY_TYPES = JSON.parse(
   readFileSync(path.join(__dirname, "preset_key_types.json"), "utf8"),
 );
 const MACHINE_KEYS = new Set(KEY_TYPES.machine);
+
+/**
+ * Engine attestation. A client may only route canonical slicing here when it
+ * can prove this server runs the same engine it verified itself: the WASM
+ * build is hashed from the exact files this process will load, and the pinned
+ * commit comes from the provenance manifest published alongside them. A CLI
+ * engine reports honestly that it carries no verifiable provenance rather than
+ * claiming one — the client is expected to refuse it.
+ */
+const WASM_DIST_DIR = path.join(__dirname, "wasm-dist");
+const WASM_PROVENANCE_PATH = path.join(WASM_DIST_DIR, "artifact-provenance.json");
+
+function sha256File(filePath) {
+  try {
+    return crypto.createHash("sha256").update(readFileSync(filePath)).digest("hex");
+  } catch {
+    return null;
+  }
+}
+
+function buildEngineAttestation(engine) {
+  if (engine !== "wasm") {
+    return {
+      schemaVersion: 1,
+      engine,
+      attested: false,
+      reason:
+        "This server slices with an external OrcaSlicer CLI binary, whose build this server cannot prove to a client.",
+    };
+  }
+  const artifacts = {
+    "slic3r.mjs": sha256File(path.join(WASM_DIST_DIR, "slic3r.mjs")),
+    "slic3r.wasm": sha256File(path.join(WASM_DIST_DIR, "slic3r.wasm")),
+  };
+  if (Object.values(artifacts).some((value) => value === null)) {
+    return {
+      schemaVersion: 1,
+      engine,
+      attested: false,
+      reason: "The server could not read its own WASM engine artifacts.",
+    };
+  }
+  let provenance = null;
+  try {
+    provenance = JSON.parse(readFileSync(WASM_PROVENANCE_PATH, "utf8"));
+  } catch {
+    return {
+      schemaVersion: 1,
+      engine,
+      attested: false,
+      reason: "The server ships no engine provenance manifest beside its WASM artifacts.",
+    };
+  }
+  const declared = provenance?.outputs ?? {};
+  const matches = Object.entries(artifacts).every(([name, digest]) => declared[name] === digest);
+  if (!matches) {
+    return {
+      schemaVersion: 1,
+      engine,
+      attested: false,
+      reason: "The server's WASM artifacts do not match the provenance manifest beside them.",
+      artifacts,
+    };
+  }
+  return {
+    schemaVersion: 1,
+    engine,
+    attested: true,
+    upstream: provenance.engine ?? null,
+    artifacts,
+  };
+}
 const FILAMENT_KEYS = new Set(KEY_TYPES.filament);
 const CLI_CRASH_KEYS = new Set([]);
 const MAX_LOG_BYTES = 64 * 1024;
@@ -678,6 +750,11 @@ export function createSlicerService(options = {}) {
     Promise.resolve(handler(req, res, next)).catch(next);
 
   app.get("/ping", (req, res) => res.type("text/plain").send("pong"));
+
+  // Engine provenance, so a client can decide whether this server is a route
+  // it is allowed to send canonical work to. Read-only and unauthenticated:
+  // it reveals only which engine build runs here.
+  app.get("/engine", (req, res) => res.json(buildEngineAttestation(engine)));
 
   app.post(
     "/slice",

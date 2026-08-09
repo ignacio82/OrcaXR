@@ -115,6 +115,9 @@ function harness(route: SliceRouteAdapterPort = new RecordingRoute(), publisher?
   const fixture = createProjectFixture();
   const state = cloneProjectState(fixture.state);
   state.printer.profileHash = 'sha256:0000000000000000000000000000000000000000000000000000000000000001';
+  // Absolute extruder addressing, so the projection's relative-E layer reset
+  // does not apply and this test keeps asserting exactly its own warning.
+  state.config.use_relative_e_distances = '0';
   state.filaments.physical.forEach((filament, index) => {
     filament.presetId = `pla-${index}`;
     filament.presetHash = 'sha256:0000000000000000000000000000000000000000000000000000000000000002';

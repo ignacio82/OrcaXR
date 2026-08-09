@@ -307,3 +307,45 @@ test(
     assert(child.exitCode !== null || child.signalCode !== null);
   },
 );
+
+test("engine attestation proves the WASM build and refuses to claim one for CLI", async () => {
+  const { createSlicerService } = await import("./server.js");
+  const provenance = JSON.parse(
+    await fs.readFile(new URL("./wasm-dist/artifact-provenance.json", import.meta.url), "utf8"),
+  );
+
+  const read = async (app, route) => {
+    const http = await import("node:http");
+    return new Promise((resolve, reject) => {
+      const server = app.listen(0, "127.0.0.1", () => {
+        const { port } = server.address();
+        http
+          .get({ host: "127.0.0.1", port, path: route }, (res) => {
+            let body = "";
+            res.on("data", (chunk) => (body += chunk));
+            res.on("end", () => {
+              server.close();
+              resolve(JSON.parse(body));
+            });
+          })
+          .on("error", (error) => {
+            server.close();
+            reject(error);
+          });
+      });
+    });
+  };
+
+  const wasm = await read(createSlicerService({ engine: "wasm" }).app, "/engine");
+  assert.equal(wasm.attested, true, "a wasm engine matching its manifest attests");
+  assert.equal(wasm.engine, "wasm");
+  assert.equal(wasm.upstream.commit, provenance.engine.commit);
+  // The digests must be computed from the files this process would load, not
+  // copied out of the manifest, so a swapped artifact cannot pass.
+  assert.deepEqual(wasm.artifacts, provenance.outputs);
+
+  const cli = await read(createSlicerService({ engine: "cli" }).app, "/engine");
+  assert.equal(cli.attested, false, "a CLI binary has no provenance this server can prove");
+  assert.equal(cli.engine, "cli");
+  assert.match(cli.reason, /cannot prove/i);
+});

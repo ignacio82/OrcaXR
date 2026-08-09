@@ -21,5 +21,8 @@
   "publishedCopies": [
     "wasm/dist",
     "web/public/slicer"
+  ],
+  "optionalPublishedCopies": [
+    "server/wasm-dist"
   ]
 }

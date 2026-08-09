@@ -619,6 +619,37 @@ function buildModelSettings(
   return lines.join('\n');
 }
 
+/**
+ * Pinned `Print::validate()` refuses relative extruder addressing on a Marlin
+ * flavour unless a layer G-code hook resets the extruder, and names the exact
+ * remedy. `use_relative_e_distances` defaults to true in `PrintConfig.cpp`, so
+ * a project imported without any machine G-code — a Bambu 3MF, for instance,
+ * whose machine settings live in a preset we do not receive — hits that check
+ * and fails to slice with a raw engine message.
+ *
+ * Supply the reset the engine itself asks for, and say so. This is the engine's
+ * documented precondition, not an invented safety fact: it changes no
+ * temperature, tool mapping, or geometry.
+ */
+const G92_E0_PATTERN = /^[ \t]*[gG]92[ \t]*[eE](0(\.0*)?|\.0+)[ \t]*(;.*)?$/m;
+const RELATIVE_E_MARLIN_FLAVORS = new Set(['marlin', 'marlin2']);
+
+function applyRelativeExtruderReset(config: Record<string, JsonValue>, warnings: string[]): void {
+  // Absolute addressing needs no reset, and an explicit 0 is the user's call.
+  const declared = config.use_relative_e_distances;
+  const relative = declared === undefined || declared === true || declared === 1 || declared === '1';
+  if (!relative) return;
+  const flavor = typeof config.gcode_flavor === 'string' ? config.gcode_flavor.toLowerCase() : 'marlin';
+  if (!RELATIVE_E_MARLIN_FLAVORS.has(flavor)) return;
+  const before = typeof config.before_layer_change_gcode === 'string' ? config.before_layer_change_gcode : '';
+  const change = typeof config.layer_change_gcode === 'string' ? config.layer_change_gcode : '';
+  if (G92_E0_PATTERN.test(before) || G92_E0_PATTERN.test(change)) return;
+  config.before_layer_change_gcode = before ? `${before}\nG92 E0` : 'G92 E0';
+  warnings.push(
+    'Added "G92 E0" to before_layer_change_gcode: this project uses relative extruder addressing but carries no layer G-code, which the engine refuses to slice.',
+  );
+}
+
 function buildProjectSettings(
   state: ProjectState,
   filamentSlots: ReadonlyMap<FilamentId, number>,
@@ -644,6 +675,7 @@ function buildProjectSettings(
     config.nozzle_diameter = state.filaments.physical.map((filament) => filament.nozzleDiameterMm!);
   }
   applyFilamentVectors(config, state);
+  applyRelativeExtruderReset(config, warnings);
   const orderedPlates = [...state.plates].sort((left, right) => left.order - right.order);
   const wipeTowers = orderedPlates.map((plate) => plate.wipeTower);
   if (wipeTowers.some((tower) => tower?.enabled)) {

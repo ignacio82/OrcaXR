@@ -1,4 +1,5 @@
 import { fetchLocalNetwork, normalizeHttpEndpoint } from '../net/LocalNetworkAccess';
+import { PINNED_ENGINE_PROVENANCE } from './pinnedEngineProvenance';
 
 /**
  * Browser-side client for the OrcaXR WASM slicer (wasm/dist → /slicer/).
@@ -131,6 +132,62 @@ export class SlicerClient {
   /** True when the next slice will be dispatched to the external server. */
   static useExternalSlicer(): boolean {
     return !!SlicerClient.getExternalSlicerUrl() && SlicerClient.isExternalSlicerEnabled();
+  }
+
+  /**
+   * Ask the configured external slicer to prove which engine it runs, and
+   * compare that to the build this client verified for itself. Canonical work
+   * may only leave the browser when the two match exactly; anything else — a
+   * CLI engine, a different artifact, an unreachable or malformed response —
+   * returns the exact reason so the caller can say why rather than refusing
+   * blankly.
+   */
+  static async attestExternalEngine(
+    fetcher: (url: string) => Promise<{ ok: boolean; json?: () => Promise<unknown> }> = (url) => fetchLocalNetwork(url),
+  ): Promise<{ attested: true; commit: string } | { attested: false; reason: string }> {
+    const endpoint = SlicerClient.useExternalSlicer() ? SlicerClient.getExternalSlicerUrl() : '';
+    if (!endpoint) return { attested: false, reason: 'No external slicer is enabled.' };
+    let payload: unknown;
+    try {
+      const response = await fetcher(`${canonicalExternalEndpoint(endpoint)}/engine`);
+      if (!response.ok) {
+        return { attested: false, reason: 'The external slicer did not report its engine provenance.' };
+      }
+      payload = await response.json?.();
+    } catch {
+      return { attested: false, reason: 'The external slicer could not be reached to check its engine.' };
+    }
+    if (typeof payload !== 'object' || payload === null) {
+      return { attested: false, reason: 'The external slicer returned a malformed engine attestation.' };
+    }
+    const record = payload as {
+      attested?: unknown;
+      reason?: unknown;
+      artifacts?: unknown;
+      upstream?: { commit?: unknown };
+    };
+    if (record.attested !== true) {
+      const reason = typeof record.reason === 'string' ? record.reason : 'It reported no verifiable engine build.';
+      return { attested: false, reason };
+    }
+    const artifacts = record.artifacts;
+    if (typeof artifacts !== 'object' || artifacts === null) {
+      return { attested: false, reason: 'The external slicer attested no engine artifacts.' };
+    }
+    const declared = artifacts as Record<string, unknown>;
+    for (const [name, digest] of Object.entries(PINNED_ENGINE_PROVENANCE.artifacts)) {
+      if (declared[name] !== digest) {
+        return {
+          attested: false,
+          reason: `The external slicer runs a different ${name} than this build verified.`,
+        };
+      }
+    }
+    const commit = record.upstream?.commit;
+    if (commit !== PINNED_ENGINE_PROVENANCE.commit) {
+      return { attested: false, reason: 'The external slicer reports a different pinned engine commit.' };
+    }
+    return { attested: true, commit: PINNED_ENGINE_PROVENANCE.commit };
   }
 
   /** Capture one immutable semantic route. Callers must not re-decide mid-job. */

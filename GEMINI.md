@@ -230,6 +230,31 @@ engine (`libslic3r` via WASM) as the computational core.
   the `Print::validate()` prime-tower preconditions (relative E required, ooze
   prevention incompatible with single-extruder multi-material, mismatched
   nozzle/filament diameters a warning and not a stop).
+- **A consumed 3MF metadata entry must not also be preserved as an opaque blob.**
+  On import, `Metadata/model_settings.config` and `Metadata/project_settings.config`
+  are parsed into canonical state, so the canonical writer owns them from then
+  on. Preserving the originals too puts them back over the generated files on
+  save: every canonical edit is silently discarded, and `model_settings.config`
+  reinstates object ids the regenerated core no longer has, so the engine
+  rejects the whole archive with "can not find object for assemble item". The
+  rule is exact — exclude a consumed path from preservation **only when the
+  writer regenerates it for that state**; a consumed path the writer does not
+  emit is still the only carrier of that data and must stay preserved.
+- The pinned `Print::validate()` refuses relative extruder addressing on a
+  Marlin flavour unless `before_layer_change_gcode` or `layer_change_gcode`
+  resets the extruder, and `use_relative_e_distances` defaults to **true**. A
+  project imported without any machine G-code (a Bambu 3MF, whose machine
+  settings live in a preset we never receive) therefore fails to slice with a
+  raw engine message, so the writer supplies the `G92 E0` the engine itself
+  names and warns that it did.
+- Canonical work may leave the browser only for an **attested** engine. The
+  server's `GET /engine` hashes the artifacts it will actually load and reports
+  the pinned commit; the client compares both against
+  `slicer/pinnedEngineProvenance.ts`, generated from
+  `wasm/artifact-provenance.json`. A CLI engine cannot be proven and is refused
+  by design. `server/wasm-dist` is a published copy of the verified artifacts
+  and is listed in the manifest's `publishedCopies`; letting it drift is what
+  makes an external route silently unverifiable.
 - Never emit an OPC relationship whose target is not in the same package: the
   pinned engine rejects the entire archive ("Archive does not contain a valid
   model"). Projections that drop preserved members must drop their

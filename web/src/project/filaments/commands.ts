@@ -67,6 +67,74 @@ abstract class SnapshotFilamentCommand implements ProjectCommand {
   }
 }
 
+/** One loaded slot the printer reported, mapped to a canonical physical tool. */
+export interface PrinterFilamentSlotFacts {
+  readonly toolId: number;
+  readonly color: string;
+  readonly material: string;
+  readonly vendor?: string;
+}
+
+/**
+ * Adopt the filaments a connected printer says are loaded.
+ *
+ * Only the facts the machine actually reports are written — colour, material,
+ * and vendor — and only onto tools that already exist canonically. A slot the
+ * project has no tool for is left alone rather than inventing a filament, and
+ * preset identity is deliberately untouched: the printer knows what is in the
+ * slot, not which catalog preset the operator intends to slice with.
+ */
+export class SyncPhysicalFilamentsFromPrinterCommand extends SnapshotFilamentCommand {
+  readonly type = 'sync-physical-filaments-from-printer';
+  readonly label = 'Sync filaments from printer';
+  readonly dirtyCategories = ['projectData'] as const;
+
+  constructor(private readonly slots: readonly PrinterFilamentSlotFacts[]) {
+    super();
+    for (const slot of slots) {
+      if (!Number.isSafeInteger(slot.toolId) || slot.toolId < 0) {
+        throw new Error(`Printer slot tool id ${slot.toolId} must be a non-negative integer`);
+      }
+      if (!/^#[0-9a-fA-F]{6}$/.test(slot.color)) {
+        throw new Error(`Printer slot ${slot.toolId + 1} reported an unusable colour ${slot.color}`);
+      }
+      if (!slot.material.trim()) {
+        throw new Error(`Printer slot ${slot.toolId + 1} reported no material`);
+      }
+    }
+  }
+
+  /** Tools this command would change, so a caller can confirm before applying. */
+  static describe(
+    state: ProjectState,
+    slots: readonly PrinterFilamentSlotFacts[],
+  ): { readonly applied: readonly number[]; readonly unmatched: readonly number[] } {
+    const byTool = new Map(state.filaments.physical.map((filament) => [filament.toolId, filament]));
+    const applied: number[] = [];
+    const unmatched: number[] = [];
+    for (const slot of slots) {
+      const filament = byTool.get(slot.toolId);
+      if (!filament) {
+        unmatched.push(slot.toolId);
+        continue;
+      }
+      if (filament.color !== slot.color || filament.material !== slot.material) applied.push(slot.toolId);
+    }
+    return { applied: Object.freeze(applied), unmatched: Object.freeze(unmatched) };
+  }
+
+  protected mutate(state: ProjectState): void {
+    const byTool = new Map(state.filaments.physical.map((filament) => [filament.toolId, filament]));
+    for (const slot of this.slots) {
+      const filament = byTool.get(slot.toolId);
+      if (!filament) continue;
+      filament.color = slot.color;
+      filament.material = slot.material;
+      if (slot.vendor?.trim()) filament.vendor = slot.vendor.trim();
+    }
+  }
+}
+
 /** One atomic command for homogeneous or heterogeneous assignment scopes. */
 export class SetFilamentAssignmentsCommand extends SnapshotFilamentCommand {
   readonly type: string;

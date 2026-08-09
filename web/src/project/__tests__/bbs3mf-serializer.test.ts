@@ -873,11 +873,38 @@ await test('imports the structural parity oracle and retains unsupported BBS met
     sourceHash: projectFingerprint(imported.state),
   });
   const output = readSafeZip(saved.bytes);
+  // Genuinely unsupported entries are preserved byte for byte.
   assert.deepEqual(output.get('Extensions/opaque.txt'), originalFiles.get('Extensions/opaque.txt'));
-  assert.deepEqual(output.get('Metadata/model_settings.config'), originalFiles.get('Metadata/model_settings.config'));
+  // Metadata the importer consumed is regenerated from canonical state instead.
+  // Writing the original bytes back would make the canonical model decorative:
+  // every edit would be discarded on save, and model_settings.config would
+  // reinstate object ids the regenerated core no longer has, which makes the
+  // pinned engine reject the whole archive.
+  assert.equal(
+    imported.state.extensionBlobs.some(
+      (entry) => entry.path === 'Metadata/model_settings.config' || entry.path === 'Metadata/project_settings.config',
+    ),
+    false,
+    'consumed metadata must not also be preserved as an opaque blob',
+  );
+  const savedModelSettings = text(output.get('Metadata/model_settings.config')!);
+  const savedCore = text(output.get(CORE_MODEL_PATH)!);
+  for (const objectId of [...savedModelSettings.matchAll(/<object id="(\d+)"/g)].map((match) => match[1])) {
+    assert.match(
+      savedCore,
+      new RegExp(`<object id="${objectId}"`),
+      `model_settings.config object ${objectId} must exist in the regenerated core model`,
+    );
+  }
+  const savedProjectSettings = JSON.parse(text(output.get('Metadata/project_settings.config')!)) as Record<
+    string,
+    unknown
+  >;
+  assert.equal(savedProjectSettings.from, 'project', 'project settings are regenerated, not copied');
   assert.deepEqual(
-    output.get('Metadata/project_settings.config'),
-    originalFiles.get('Metadata/project_settings.config'),
+    savedProjectSettings.filament_colour,
+    imported.state.filaments.physical.map((filament) => filament.color.slice(0, 7)),
+    'regenerated project settings carry the canonical filaments',
   );
   const rootRelationships = text(output.get('_rels/.rels')!);
   const modelRelationships = text(output.get('3D/_rels/3dmodel.model.rels')!);

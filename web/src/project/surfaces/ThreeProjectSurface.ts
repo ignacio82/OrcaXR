@@ -3,12 +3,32 @@ import * as THREE from 'three';
 import { contentDigest, type AssetPayload, type AssetRepository } from '../assets';
 import { canonicalStringify } from '../domain/canonical';
 import type { AssetId, InstanceId, ObjectId, PlateId, VolumeId } from '../domain/ids';
-import type { ProjectState, ProjectVolume, Transform, Vec3 } from '../domain/model';
+import type { ProjectObject, ProjectState, ProjectVolume, Transform, Vec3 } from '../domain/model';
+import { resolveFilament } from '../domain/selectors';
 import { assertValidProjectState } from '../domain/validation';
 import { decodeIndexedMeshAsset } from '../meshCodec';
 import type { EditorSurfacePort } from '../ports';
 import { selectionKey, type SelectionRef, type SelectionSnapshot } from '../selection';
 import type { ProjectSnapshot } from '../store';
+
+/**
+ * Display colour for one volume: the stable filament it resolves to, projected
+ * exactly as the palette does — a physical tool's own colour, or a mixed
+ * recipe's stored display colour. An unassigned volume returns undefined so the
+ * caller keeps the neutral material instead of inventing a colour.
+ */
+function resolveVolumeFilamentColor(
+  state: ProjectState,
+  object: ProjectObject,
+  volume: ProjectVolume,
+): string | undefined {
+  const filamentId = resolveFilament(object, volume).effective;
+  if (!filamentId) return undefined;
+  const physical = state.filaments.physical.find((filament) => filament.id === filamentId);
+  if (physical) return physical.color;
+  const mixed = state.filaments.mixed.find((filament) => filament.id === filamentId);
+  return mixed?.displayColor;
+}
 
 /** The live workspace's current 1 mm -> 1.75 mm-world visual magnification. */
 export const CURRENT_THREE_WORLD_UNITS_PER_MM = 0.00175;
@@ -104,6 +124,12 @@ interface GeometryEntry {
 interface PlannedVolume {
   readonly volume: ProjectVolume;
   readonly geometry: GeometryEntry;
+  /**
+   * Display colour of the filament this volume resolves to, or undefined when
+   * nothing is assigned. Never a guess: an unassigned volume keeps the neutral
+   * base material rather than borrowing another tool's colour.
+   */
+  readonly filamentColor?: string;
 }
 
 interface PlannedInstance {
@@ -172,6 +198,8 @@ export class ThreeProjectSurface implements EditorSurfacePort {
   private readonly geometryByAsset = new Map<AssetId, Map<string, GeometryEntry>>();
   private readonly material: THREE.Material;
   private readonly ownsMaterial: boolean;
+  /** One material per distinct assigned filament colour, owned by this surface. */
+  private readonly filamentMaterials = new Map<string, THREE.Material>();
   private mapping: ThreePrinterSpaceMapping;
   private selection: SelectionSnapshot = { refs: [] };
   private status: ThreeProjectProjectionStatus = { state: 'idle' };
@@ -187,6 +215,26 @@ export class ThreeProjectSurface implements EditorSurfacePort {
     this.root.name = 'canonical-project-printer-space';
     this.applyMapping();
     options.parent.add(this.root);
+  }
+
+  /**
+   * Material for one volume. A caller-supplied material always wins, so tests
+   * and specialised surfaces keep full control; otherwise each assigned
+   * filament colour gets its own cached material and unassigned volumes keep
+   * the neutral base.
+   */
+  private materialFor(filamentColor: string | undefined): THREE.Material {
+    if (this.options.material || !filamentColor) return this.material;
+    const cached = this.filamentMaterials.get(filamentColor);
+    if (cached) return cached;
+    const base = this.material as THREE.MeshStandardMaterial;
+    const material = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(filamentColor),
+      roughness: base.roughness ?? 0.72,
+      metalness: base.metalness ?? 0.04,
+    });
+    this.filamentMaterials.set(filamentColor, material);
+    return material;
   }
 
   renderProject(snapshot: ProjectSnapshot): void {
@@ -290,6 +338,8 @@ export class ThreeProjectSurface implements EditorSurfacePort {
     }
     this.geometryByAsset.clear();
     if (this.ownsMaterial) this.material.dispose();
+    for (const material of this.filamentMaterials.values()) material.dispose();
+    this.filamentMaterials.clear();
     this.status = { state: 'disposed' };
     this.lastError = undefined;
   }
@@ -328,7 +378,8 @@ export class ThreeProjectSurface implements EditorSurfacePort {
                 `Volume ${volume.id} triangle count differs from decoded asset ${volume.source.assetId}`,
               );
             }
-            return { volume, geometry };
+            const filamentColor = resolveVolumeFilamentColor(state, object, volume);
+            return { volume, geometry, ...(filamentColor ? { filamentColor } : {}) };
           });
           for (const instance of object.instances) {
             instances.push({
@@ -491,16 +542,20 @@ export class ThreeProjectSurface implements EditorSurfacePort {
       meshes.delete(volumeId);
     }
 
-    for (const { volume, geometry } of planned.volumes) {
+    for (const { volume, geometry, filamentColor } of planned.volumes) {
+      const material = this.materialFor(filamentColor);
       let meshRecord = meshes.get(volume.id);
       if (!meshRecord) {
-        const mesh = new THREE.Mesh(geometry.geometry, this.material);
+        const mesh = new THREE.Mesh(geometry.geometry, material);
         meshRecord = { mesh, geometry };
         meshes.set(volume.id, meshRecord);
         group.add(mesh);
-      } else if (meshRecord.geometry !== geometry) {
-        meshRecord.mesh.geometry = geometry.geometry;
-        meshRecord.geometry = geometry;
+      } else {
+        if (meshRecord.geometry !== geometry) {
+          meshRecord.mesh.geometry = geometry.geometry;
+          meshRecord.geometry = geometry;
+        }
+        if (meshRecord.mesh.material !== material) meshRecord.mesh.material = material;
       }
       const { mesh } = meshRecord;
       mesh.name = `canonical-volume:${volume.name}`;

@@ -61,7 +61,12 @@ import {
   plateLayerEvents,
   type LayerEventPatch,
 } from '../project/layerEventCommands';
-import { SetFilamentAssignmentsCommand, type FilamentAssignmentChange } from '../project/filaments/commands';
+import {
+  SetFilamentAssignmentsCommand,
+  SyncPhysicalFilamentsFromPrinterCommand,
+  type FilamentAssignmentChange,
+  type PrinterFilamentSlotFacts,
+} from '../project/filaments/commands';
 import {
   allocateFullSpectrumAutoPairIdentity,
   ReconcileFullSpectrumAutoPairsCommand,
@@ -2318,6 +2323,24 @@ export class CanonicalWorkspaceController {
       afterTriangles: simplified.triangles.length,
       maxError: simplified.maxAppliedError,
     };
+  }
+
+  /**
+   * Adopt the filaments a connected printer reports as loaded, as one undoable
+   * command. Returns which tools changed and which reported slots had no
+   * canonical tool, so the caller can report both honestly.
+   */
+  syncPhysicalFilamentsFromPrinter(slots: readonly PrinterFilamentSlotFacts[]): {
+    readonly applied: readonly number[];
+    readonly unmatched: readonly number[];
+  } {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    const summary = SyncPhysicalFilamentsFromPrinterCommand.describe(state, slots);
+    if (summary.applied.length > 0) {
+      this.session.commands.execute(new SyncPhysicalFilamentsFromPrinterCommand(slots));
+    }
+    return summary;
   }
 
   /** Place one brim ear in object-local millimetres, as one undoable command. */

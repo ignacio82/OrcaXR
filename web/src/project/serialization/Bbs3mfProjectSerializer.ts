@@ -247,8 +247,29 @@ export class Bbs3mfProjectSerializer implements ProjectSerializerPort {
     mergePackageContentTypes(state, files, imported.warnings);
     const repository = new InMemoryAssetRepository();
     for (const payload of imported.assets) repository.put(payload.descriptor, payload.bytes);
+    // A consumed path that the canonical writer regenerates is owned from here
+    // on. Preserving it as an opaque blob as well would put the original bytes
+    // back over the generated file on save, silently discarding every edit —
+    // and, for model_settings.config, reinstating object ids the regenerated
+    // core no longer has, which makes the pinned engine reject the archive.
+    // A consumed path the writer does *not* regenerate is still the only
+    // carrier of that data, so it stays preserved.
     const excluded = new Set([CONTENT_TYPES_PATH, ROOT_RELATIONSHIPS_PATH, CORE_MODEL_PATH, MODEL_RELS_PATH]);
-    preserveUnownedEntries(state, repository, files, excluded, archiveHash, imported.warnings, imported.consumedPaths);
+    let regeneratedPaths: ReadonlySet<string> = new Set();
+    try {
+      regeneratedPaths = new Set(
+        buildBbsCore(state, new Map(repository.list().map((payload) => [payload.descriptor.id, payload]))).files.keys(),
+      );
+    } catch (error) {
+      if (!(error instanceof BbsPlateCoordinateError)) throw error;
+      imported.warnings.push(
+        `Imported metadata is preserved as-is because standard BBS metadata cannot be regenerated yet: ${error.message}`,
+      );
+    }
+    for (const path of imported.consumedPaths) {
+      if (regeneratedPaths.has(path)) excluded.add(path);
+    }
+    preserveUnownedEntries(state, repository, files, excluded, archiveHash, imported.warnings);
     assertValidProjectState(state);
     return {
       state,

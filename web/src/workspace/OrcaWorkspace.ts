@@ -134,7 +134,7 @@ import {
 
 import { FilamentPalette } from './FilamentPalette';
 import { bedSizeFromProfile, ProfileCatalog, type SlicerProfile } from '../slicer/ProfileLoader';
-import { SlicerClient } from '../slicer/SlicerClient';
+import { SlicerClient, type SlicerClientProjectRoute } from '../slicer/SlicerClient';
 import { exportConfigJson, parseConfigJson } from '../features/ConfigIO';
 import { virtualFilamentsFromConfig, type VirtualFilament } from '../features/MixedFilamentPreview';
 import { xrIcon } from '../ui/icons';
@@ -2025,6 +2025,48 @@ export class OrcaWorkspace extends xb.Script {
 
   private brimEarRadiusMm = 5;
   public onBrimEarStateChanged: (() => void) | null = null;
+
+  /**
+   * Adopt the filaments a connected printer reports as loaded. The caller
+   * supplies the slots it read, so this stays testable and the transport stays
+   * out of the workspace.
+   */
+  public syncFilamentsFromPrinter(
+    slots: readonly { slotIndex: number; colorHex: string; material: string; vendor: string }[],
+  ): boolean {
+    if (slots.length === 0) {
+      this.setStatus('The printer reported no loaded filament slots; nothing was changed.');
+      return false;
+    }
+    try {
+      const summary = this.canonicalProject.syncPhysicalFilamentsFromPrinter(
+        slots.map((slot) => ({
+          toolId: slot.slotIndex,
+          color: slot.colorHex,
+          material: slot.material,
+          ...(slot.vendor ? { vendor: slot.vendor } : {}),
+        })),
+      );
+      const unmatched =
+        summary.unmatched.length > 0
+          ? ` ${summary.unmatched.length} reported slot(s) have no tool in this project and were left alone.`
+          : '';
+      if (summary.applied.length === 0) {
+        this.setStatus(`Project filaments already match the printer.${unmatched}`);
+        return false;
+      }
+      this.refreshPaintOverlays();
+      this.recomputePreflight();
+      this.onProfileChanged?.();
+      this.setStatus(
+        `Synced ${summary.applied.length} filament(s) from the printer; undo restores the previous colours.${unmatched}`,
+      );
+      return true;
+    } catch (error) {
+      this.setStatus(`Filament sync failed: ${(error as Error).message}`);
+      return false;
+    }
+  }
 
   public brimEarsTool(): void {
     this.setTool('brim_ears');
@@ -6281,6 +6323,25 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
+  /**
+   * Decide where canonical work may run. The browser engine is verified by
+   * `verify:artifacts`, so it is always allowed. An external server is allowed
+   * only when it attests to exactly the same engine build; otherwise the
+   * operator is told precisely what failed instead of getting a blanket
+   * refusal, and nothing leaves the browser.
+   */
+  private async resolveCanonicalSliceRoute(): Promise<SlicerClientProjectRoute | null> {
+    if (!SlicerClient.useExternalSlicer()) return { kind: 'browser-wasm' };
+    const attestation = await SlicerClient.attestExternalEngine();
+    if (!attestation.attested) {
+      this.setStatus(
+        `slice failed: the external slicer is not an attested engine route. ${attestation.reason} Disable the external slicer to use the verified browser engine.`,
+      );
+      return null;
+    }
+    return SlicerClient.captureProjectRoute();
+  }
+
   public async sliceNow() {
     if (this.activeCanonicalSlicer) return;
     const activePlate = this.canonicalProject.getSummary().plates.find((plate) => plate.id === this.activePlateId);
@@ -6288,12 +6349,8 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus('No models to slice.');
       return;
     }
-    if (SlicerClient.useExternalSlicer()) {
-      this.setStatus(
-        'slice failed: external canonical slicing needs independently attested engine provenance; disable the external slicer to use the verified browser engine.',
-      );
-      return;
-    }
+    const route = await this.resolveCanonicalSliceRoute();
+    if (!route) return;
     const startedAt = performance.now();
     const preflight = this.createLiveProfilePreflight();
     const slicer = new CanonicalWorkspaceSlicer({
@@ -6364,17 +6421,13 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus('No printable plate has models to slice.');
       return 0;
     }
-    if (SlicerClient.useExternalSlicer()) {
-      this.setStatus(
-        'slice failed: external canonical slicing needs independently attested engine provenance; disable the external slicer to use the verified browser engine.',
-      );
-      return 0;
-    }
+    const route = await this.resolveCanonicalSliceRoute();
+    if (!route) return 0;
     const startedAt = performance.now();
     const slicer = new CanonicalWorkspaceSlicer({
       workspace: this.canonicalProject,
       client: this.slicer,
-      route: { kind: 'browser-wasm' },
+      route,
       maxThreads: 4,
       preflight: this.createLiveProfilePreflight(),
     });
