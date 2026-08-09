@@ -9,7 +9,18 @@ export interface MoonrakerRequestPort {
 export interface MoonrakerFilamentSlot {
   readonly slotIndex: number;
   readonly colorHex: string;
+  /** The plain filament type the slicer understands, such as PLA. */
   readonly material: string;
+  /**
+   * The machine's finer grade — Matte, SnapSpeed — when it reports one.
+   *
+   * Kept apart from `material` on purpose: the type becomes `filament_type`
+   * in the exported 3MF and is matched against the pinned compatibility
+   * table, so folding "Matte" into it would describe a material no slicer
+   * knows. Two slots of the same type and different grades are otherwise
+   * indistinguishable in the palette, which is the case worth showing.
+   */
+  readonly subType?: string;
   readonly vendor: string;
 }
 
@@ -32,6 +43,7 @@ export function parseMoonrakerFilamentSlots(result: unknown): readonly Moonraker
 
   const colors = stringLikeArray(config.filament_color_rgba);
   const types = stringLikeArray(config.filament_type);
+  const subTypes = stringLikeArray(config.filament_sub_type);
   const vendors = stringLikeArray(config.filament_vendor);
   const exists = scalarArray(config.filament_exist);
   if (!colors) throw invalidResponse();
@@ -44,6 +56,7 @@ export function parseMoonrakerFilamentSlots(result: unknown): readonly Moonraker
         slotIndex: index,
         colorHex: normalizedColor(colors[index]),
         material: normalizedMaterial(types?.[index]),
+        ...(safeLabel(subTypes?.[index]) ? { subType: safeLabel(subTypes?.[index]) } : {}),
         vendor: safeLabel(vendors?.[index]),
       }),
     );

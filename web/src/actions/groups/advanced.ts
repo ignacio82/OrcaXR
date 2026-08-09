@@ -83,11 +83,15 @@ export const advancedActions: Action[] = [
   },
   {
     id: 'printer_inspect_filaments',
-    label: 'Inspect Printer Filaments',
+    mcpTool: 'sync_filaments_from_printer',
+    label: 'Sync Filaments From Printer',
     icon: 'filament',
     group: 'filament',
     disclosure: 'inspector',
-    hint: 'Read loaded filament slots without changing project or profile mappings',
+    // The old label and hint said this only read the slots. It has adopted
+    // them into the project as an undoable command for some time, so saying
+    // otherwise hid the feature from the person looking for exactly it.
+    hint: 'Adopt the filaments the connected printer reports as loaded, as one undoable change',
     run: (ctx) => ctx.inspectPrinterFilaments(),
   },
   {

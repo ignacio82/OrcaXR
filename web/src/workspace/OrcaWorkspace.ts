@@ -2062,7 +2062,13 @@ export class OrcaWorkspace extends xb.Script {
    * out of the workspace.
    */
   public syncFilamentsFromPrinter(
-    slots: readonly { slotIndex: number; colorHex: string; material: string; vendor: string }[],
+    slots: readonly {
+      slotIndex: number;
+      colorHex: string;
+      material: string;
+      subType?: string;
+      vendor: string;
+    }[],
   ): boolean {
     if (slots.length === 0) {
       this.setStatus('The printer reported no loaded filament slots; nothing was changed.');
@@ -2074,22 +2080,30 @@ export class OrcaWorkspace extends xb.Script {
           toolId: slot.slotIndex,
           color: slot.colorHex,
           material: slot.material,
+          ...(slot.subType ? { subType: slot.subType } : {}),
           ...(slot.vendor ? { vendor: slot.vendor } : {}),
         })),
       );
-      const unmatched =
-        summary.unmatched.length > 0
-          ? ` ${summary.unmatched.length} reported slot(s) have no tool in this project and were left alone.`
+      // A tool the printer did not report is kept, not deleted: objects may be
+      // assigned to it, and an empty slot is not a reason to strip that.
+      const extra =
+        summary.extra.length > 0
+          ? ` ${summary.extra.length} project tool(s) are not loaded in the printer and were kept.`
           : '';
-      if (summary.applied.length === 0) {
-        this.setStatus(`Project filaments already match the printer.${unmatched}`);
+      const changed = summary.applied.length + summary.added.length;
+      if (changed === 0) {
+        this.setStatus(`Project filaments already match the printer.${extra}`);
         return false;
       }
       this.refreshPaintOverlays();
       this.recomputePreflight();
       this.onProfileChanged?.();
+      const parts = [
+        summary.applied.length > 0 ? `updated ${summary.applied.length}` : '',
+        summary.added.length > 0 ? `added ${summary.added.length}` : '',
+      ].filter(Boolean);
       this.setStatus(
-        `Synced ${summary.applied.length} filament(s) from the printer; undo restores the previous colours.${unmatched}`,
+        `Synced filaments from the printer: ${parts.join(' and ')}. Undo restores the previous palette.${extra}`,
       );
       return true;
     } catch (error) {

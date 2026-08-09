@@ -1113,12 +1113,16 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     // as it is redundant and confusing (each head gets its own filament picker).
     selFilament.style.display = exCount > 1 ? 'none' : 'block';
 
-    if (exCount > 1) {
+    // Offered whatever the extruder count is. Gating this on exCount > 1 made
+    // it unreachable in the case that needs it most: a single-tool project
+    // cannot grow to match a four-slot machine if the button that adopts those
+    // slots only appears once the project already has several.
+    {
       const syncBtn = document.createElement('button');
       syncBtn.className = 'action-btn';
       syncBtn.style.cssText =
         'background: #2E7D32; color: white; border: none; padding: 8px; margin-bottom: 8px; border-radius: 8px; cursor: pointer; font-size: 13px; width: 100%;';
-      syncBtn.textContent = 'Inspect Printer Filaments';
+      syncBtn.textContent = 'Sync Filaments From Printer';
       syncBtn.onclick = async () => {
         syncBtn.disabled = true;
         syncBtn.setAttribute('aria-busy', 'true');

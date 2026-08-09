@@ -71,6 +71,7 @@ import {
 import {
   SetFilamentAssignmentsCommand,
   SyncPhysicalFilamentsFromPrinterCommand,
+  type PrinterFilamentSyncSummary,
   type FilamentAssignmentChange,
   type PrinterFilamentSlotFacts,
 } from '../project/filaments/commands';
@@ -2337,15 +2338,14 @@ export class CanonicalWorkspaceController {
    * command. Returns which tools changed and which reported slots had no
    * canonical tool, so the caller can report both honestly.
    */
-  syncPhysicalFilamentsFromPrinter(slots: readonly PrinterFilamentSlotFacts[]): {
-    readonly applied: readonly number[];
-    readonly unmatched: readonly number[];
-  } {
+  syncPhysicalFilamentsFromPrinter(slots: readonly PrinterFilamentSlotFacts[]): PrinterFilamentSyncSummary {
     this.assertActive();
     const state = this.session.project.getSnapshot().state;
-    const summary = SyncPhysicalFilamentsFromPrinterCommand.describe(state, slots);
-    if (summary.applied.length > 0) {
-      this.session.commands.execute(new SyncPhysicalFilamentsFromPrinterCommand(slots));
+    // The id source is what lets a reported slot with no canonical tool be
+    // adopted rather than merely counted.
+    const summary = SyncPhysicalFilamentsFromPrinterCommand.describe(state, slots, true);
+    if (summary.applied.length > 0 || summary.added.length > 0) {
+      this.session.commands.execute(new SyncPhysicalFilamentsFromPrinterCommand(slots, this.options.idSource));
     }
     return summary;
   }

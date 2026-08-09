@@ -4,7 +4,7 @@ import {
   facetRefinementHasSplits,
   remapFacetRefinementValues,
 } from '../domain/facetRefinement';
-import type { FilamentId, LayerRangeId, ObjectId, PhysicalFilamentId, VolumeId } from '../domain/ids';
+import type { FilamentId, IdSource, LayerRangeId, ObjectId, PhysicalFilamentId, VolumeId } from '../domain/ids';
 import type { MixedFilament, ProjectState } from '../domain/model';
 import { findLayerRange, findObject, findVolume } from '../domain/selectors';
 import { assertValidProjectState } from '../domain/validation';
@@ -71,25 +71,66 @@ abstract class SnapshotFilamentCommand implements ProjectCommand {
 export interface PrinterFilamentSlotFacts {
   readonly toolId: number;
   readonly color: string;
+  /**
+   * The canonical filament type — PLA, PETG, ABS. This becomes `filament_type`
+   * in the exported 3MF and is matched against the FullSpectrum compatibility
+   * table, so it stays a plain type even when the machine reports a finer
+   * grade; the grade goes in `subType`.
+   */
   readonly material: string;
+  /** The machine's own finer grade, such as Matte or SnapSpeed. Display only. */
+  readonly subType?: string;
   readonly vendor?: string;
+}
+
+/**
+ * A readable name for a slot, or undefined when the machine said nothing worth
+ * renaming for.
+ *
+ * A printer that reports only the bare type would otherwise rename a carefully
+ * chosen "Elegoo PLA Matte" to "PLA", which is strictly less information than
+ * the project already had. A name is only offered when the machine adds a
+ * vendor or a grade on top of the type.
+ */
+export function printerFilamentSlotName(slot: PrinterFilamentSlotFacts): string | undefined {
+  const vendor = slot.vendor?.trim();
+  const subType = slot.subType?.trim();
+  if (!vendor && !subType) return undefined;
+  return [vendor, slot.material.trim(), subType].filter(Boolean).join(' ');
 }
 
 /**
  * Adopt the filaments a connected printer says are loaded.
  *
- * Only the facts the machine actually reports are written — colour, material,
- * and vendor — and only onto tools that already exist canonically. A slot the
- * project has no tool for is left alone rather than inventing a filament, and
- * preset identity is deliberately untouched: the printer knows what is in the
- * slot, not which catalog preset the operator intends to slice with.
+ * Only the facts the machine actually reports are written — colour, type,
+ * grade, and vendor. Preset identity is deliberately untouched: the printer
+ * knows what is in the slot, not which catalog preset the operator intends to
+ * slice with.
+ *
+ * A slot the project has no tool for is *adopted* when the caller supplies an
+ * id source, because "sync with the filaments in my printer" means ending up
+ * with those filaments — recolouring only the tools that happen to exist
+ * already leaves a four-slot machine half-imported into a one-tool project.
+ *
+ * The reverse is reported, never done: a tool the printer did not report is
+ * left in place. Objects, volumes, and layer ranges may be assigned to it, and
+ * deleting it would silently strip those assignments to satisfy a machine that
+ * merely has an empty slot.
  */
 export class SyncPhysicalFilamentsFromPrinterCommand extends SnapshotFilamentCommand {
   readonly type = 'sync-physical-filaments-from-printer';
   readonly label = 'Sync filaments from printer';
   readonly dirtyCategories = ['projectData'] as const;
 
-  constructor(private readonly slots: readonly PrinterFilamentSlotFacts[]) {
+  /**
+   * @param ids Supplying an id source lets a reported slot with no canonical
+   * tool be adopted as a new one. Omitting it keeps the older behaviour of
+   * reporting that slot as unmatched and changing nothing.
+   */
+  constructor(
+    private readonly slots: readonly PrinterFilamentSlotFacts[],
+    private readonly ids?: IdSource,
+  ) {
     super();
     for (const slot of slots) {
       if (!Number.isSafeInteger(slot.toolId) || slot.toolId < 0) {
@@ -104,35 +145,79 @@ export class SyncPhysicalFilamentsFromPrinterCommand extends SnapshotFilamentCom
     }
   }
 
-  /** Tools this command would change, so a caller can confirm before applying. */
+  /** What this command would do, so a caller can report it before applying. */
   static describe(
     state: ProjectState,
     slots: readonly PrinterFilamentSlotFacts[],
-  ): { readonly applied: readonly number[]; readonly unmatched: readonly number[] } {
+    canAdopt = false,
+  ): PrinterFilamentSyncSummary {
     const byTool = new Map(state.filaments.physical.map((filament) => [filament.toolId, filament]));
+    const reported = new Set(slots.map((slot) => slot.toolId));
     const applied: number[] = [];
+    const added: number[] = [];
     const unmatched: number[] = [];
     for (const slot of slots) {
       const filament = byTool.get(slot.toolId);
       if (!filament) {
-        unmatched.push(slot.toolId);
+        (canAdopt ? added : unmatched).push(slot.toolId);
         continue;
       }
-      if (filament.color !== slot.color || filament.material !== slot.material) applied.push(slot.toolId);
+      const name = printerFilamentSlotName(slot);
+      if (filament.color !== slot.color || filament.material !== slot.material || (name && filament.name !== name)) {
+        applied.push(slot.toolId);
+      }
     }
-    return { applied: Object.freeze(applied), unmatched: Object.freeze(unmatched) };
+    const extra = state.filaments.physical
+      .map((filament) => filament.toolId)
+      .filter((toolId) => !reported.has(toolId))
+      .sort((left, right) => left - right);
+    return {
+      applied: Object.freeze(applied),
+      added: Object.freeze(added.sort((left, right) => left - right)),
+      unmatched: Object.freeze(unmatched),
+      extra: Object.freeze(extra),
+    };
   }
 
   protected mutate(state: ProjectState): void {
     const byTool = new Map(state.filaments.physical.map((filament) => [filament.toolId, filament]));
     for (const slot of this.slots) {
       const filament = byTool.get(slot.toolId);
-      if (!filament) continue;
+      const name = printerFilamentSlotName(slot);
+      if (!filament) {
+        if (!this.ids) continue;
+        state.filaments.physical.push({
+          id: this.ids.next<'physical-filament'>('physical-filament'),
+          name: name || `Tool ${slot.toolId + 1}`,
+          toolId: slot.toolId,
+          material: slot.material,
+          color: slot.color,
+          ...(slot.vendor?.trim() ? { vendor: slot.vendor.trim() } : {}),
+          config: {},
+          enabled: true,
+        });
+        continue;
+      }
       filament.color = slot.color;
       filament.material = slot.material;
+      if (name) filament.name = name;
       if (slot.vendor?.trim()) filament.vendor = slot.vendor.trim();
     }
+    // Tools stay in slot order so the palette and every tool index agree.
+    state.filaments.physical.sort((left, right) => left.toolId - right.toolId);
   }
+}
+
+/** What a printer sync changed, adopted, skipped, and left alone. */
+export interface PrinterFilamentSyncSummary {
+  /** Existing tools whose colour, type, or name the machine disagreed with. */
+  readonly applied: readonly number[];
+  /** Reported slots with no canonical tool, adopted as new ones. */
+  readonly added: readonly number[];
+  /** Reported slots with no canonical tool that were left alone. */
+  readonly unmatched: readonly number[];
+  /** Project tools the printer did not report; kept, never deleted. */
+  readonly extra: readonly number[];
 }
 
 /** One atomic command for homogeneous or heterogeneous assignment scopes. */

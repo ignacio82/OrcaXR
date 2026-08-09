@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { InMemoryAssetRepository } from '../assets';
+import { cloneProjectState } from '../domain/canonical';
 import { seededRandom, UuidIdSource } from '../domain/ids';
 import {
   createEmptyProject,
@@ -136,6 +137,81 @@ test('a sync that matches the printer already is a no-op', () => {
   const summary = SyncPhysicalFilamentsFromPrinterCommand.describe(h.project.getSnapshot().state, slots);
   assert.deepEqual(summary.applied, [], 'nothing differs, so nothing is applied');
   assert.deepEqual(summary.unmatched, []);
+});
+
+/**
+ * The case a four-slot machine and a one-tool project actually present. Before
+ * adoption this was unreachable: the sync only recoloured tools that already
+ * existed, so a project could never grow to match the printer in front of it.
+ */
+test('a printer with more slots than the project has tools is adopted in full', () => {
+  const h = harness();
+  const ids = new UuidIdSource(seededRandom(7));
+  const state = h.project.getSnapshot().state;
+  // Reduce the fixture to a single tool, as a freshly imported model would be.
+  const trimmed = cloneProjectState(state);
+  trimmed.filaments.physical = trimmed.filaments.physical.slice(0, 1);
+  for (const plate of trimmed.plates) {
+    for (const object of plate.objects) {
+      object.filamentId = trimmed.filaments.physical[0].id;
+      for (const volume of object.volumes) delete volume.filamentId;
+    }
+  }
+  h.project.replaceState(trimmed, { reason: 'test', dirtyCategories: ['projectData'] });
+
+  // Exactly what the Snapmaker U1 reports over its Moonraker extension.
+  const slots = [
+    { toolId: 0, color: '#1E88E5', material: 'PLA', subType: 'Matte', vendor: 'Snapmaker' },
+    { toolId: 1, color: '#000000', material: 'PLA', subType: 'Matte', vendor: 'Snapmaker' },
+    { toolId: 2, color: '#E2DEDB', material: 'PLA', subType: 'SnapSpeed', vendor: 'Snapmaker' },
+    { toolId: 3, color: '#F8F81C', material: 'PLA', subType: 'Matte', vendor: 'Snapmaker' },
+  ];
+
+  const summary = SyncPhysicalFilamentsFromPrinterCommand.describe(h.project.getSnapshot().state, slots, true);
+  assert.deepEqual(summary.applied, [0]);
+  assert.deepEqual(summary.added, [1, 2, 3], 'the three slots with no tool are adopted');
+  assert.deepEqual(summary.unmatched, []);
+  assert.deepEqual(summary.extra, []);
+
+  const undoBefore = h.commands.getHistorySnapshot().undoCount;
+  h.commands.execute(new SyncPhysicalFilamentsFromPrinterCommand(slots, ids));
+  const synced = h.project.getSnapshot().state;
+  assert.equal(synced.filaments.physical.length, 4, 'the project now matches the machine');
+  assert.deepEqual(
+    synced.filaments.physical.map((filament) => [filament.toolId, filament.color, filament.material, filament.name]),
+    [
+      [0, '#1E88E5', 'PLA', 'Snapmaker PLA Matte'],
+      [1, '#000000', 'PLA', 'Snapmaker PLA Matte'],
+      [2, '#E2DEDB', 'PLA', 'Snapmaker PLA SnapSpeed'],
+      [3, '#F8F81C', 'PLA', 'Snapmaker PLA Matte'],
+    ],
+  );
+  // The grade never contaminates the type the slicer reads.
+  assert.deepEqual(new Set(synced.filaments.physical.map((f) => f.material)), new Set(['PLA']));
+  assert.equal(h.commands.getHistorySnapshot().undoCount, undoBefore + 1, 'adoption is one entry');
+
+  assert.equal(h.commands.undo(), true);
+  assert.equal(h.project.getSnapshot().state.filaments.physical.length, 1, 'undo restores the single tool');
+});
+
+test('a tool the printer does not report is reported, never deleted', () => {
+  const h = harness();
+  const ids = new UuidIdSource(seededRandom(11));
+  // The machine has two slots loaded; the project carries four tools.
+  const slots = [
+    { toolId: 0, color: '#111111', material: 'PLA', vendor: 'Snapmaker' },
+    { toolId: 1, color: '#222222', material: 'PLA', vendor: 'Snapmaker' },
+  ];
+  const summary = SyncPhysicalFilamentsFromPrinterCommand.describe(h.project.getSnapshot().state, slots, true);
+  assert.deepEqual(summary.extra, [2, 3], 'the unreported tools are named');
+
+  h.commands.execute(new SyncPhysicalFilamentsFromPrinterCommand(slots, ids));
+  const state = h.project.getSnapshot().state;
+  assert.equal(state.filaments.physical.length, 4, 'objects may be assigned to those tools; they stay');
+  assert.deepEqual(
+    state.filaments.physical.map((filament) => filament.toolId),
+    [0, 1, 2, 3],
+  );
 });
 
 test('unusable printer slot facts are refused before any mutation', () => {

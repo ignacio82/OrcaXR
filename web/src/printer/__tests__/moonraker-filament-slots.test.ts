@@ -68,4 +68,53 @@ await test('query uses the typed transport operation and forwards cancellation',
   });
 });
 
+/**
+ * Captured from a Snapmaker U1 over its Moonraker extension, reduced to the
+ * keys this parser reads. Four PLA slots of three different grades, which is
+ * the case that shows why the grade cannot be folded into the type.
+ */
+const SNAPMAKER_U1_RESPONSE = {
+  status: {
+    print_task_config: {
+      filament_vendor: ['Snapmaker', 'Snapmaker', 'Snapmaker', 'Snapmaker'],
+      filament_type: ['PLA', 'PLA', 'PLA', 'PLA'],
+      filament_sub_type: ['Matte', 'Matte', 'SnapSpeed', 'Matte'],
+      filament_color_rgba: ['1E88E5FF', '000000FF', 'E2DEDBFF', 'F8F81CFF'],
+      filament_exist: [true, true, true, true],
+    },
+  },
+};
+
+await test('reads a real Snapmaker U1 four-slot response, grade included', () => {
+  const slots = parseMoonrakerFilamentSlots(SNAPMAKER_U1_RESPONSE);
+  assert.equal(slots.length, 4);
+  assert.deepEqual(
+    slots.map((slot) => [slot.slotIndex, slot.material, slot.subType, slot.colorHex, slot.vendor]),
+    [
+      [0, 'PLA', 'Matte', '#1E88E5', 'Snapmaker'],
+      [1, 'PLA', 'Matte', '#000000', 'Snapmaker'],
+      [2, 'PLA', 'SnapSpeed', '#E2DEDB', 'Snapmaker'],
+      [3, 'PLA', 'Matte', '#F8F81C', 'Snapmaker'],
+    ],
+  );
+  // The type stays sliceable; the grade rides alongside it.
+  assert.deepEqual(new Set(slots.map((slot) => slot.material)), new Set(['PLA']));
+});
+
+await test('a machine that reports no grade simply omits it', () => {
+  const slots = parseMoonrakerFilamentSlots({
+    status: {
+      print_task_config: {
+        filament_color_rgba: ['112233FF'],
+        filament_type: ['PETG'],
+        filament_vendor: ['Generic'],
+        filament_exist: [true],
+      },
+    },
+  });
+  assert.equal(slots.length, 1);
+  assert.equal(slots[0].subType, undefined);
+  assert.equal(slots[0].material, 'PETG');
+});
+
 console.log(`\nMoonraker filament slots: ${passed} tests passed.`);

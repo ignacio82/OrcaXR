@@ -1963,10 +1963,19 @@ implementations were removed when read-only live wiring moved to the typed bound
   - **Accept:** mapping is required for ambiguous/mismatched jobs; unsafe or out-of-bounds G-code
     blocks; upload cancel/retry does not start a partial file; virtual dependencies resolve to
     the intended U1 heads.
-  - **Current:** a bounded read-only query parses the Snapmaker Moonraker filament extension,
-    preserves sparse physical slot identities such as H1/H3, and reports them without mutating
-    palette, head, material, temperature, or profile state. Automatic application is deliberately
-    blocked until stable-ID mapping, compatibility preflight, preview, and confirmation exist.
+  - **Current:** a bounded query parses the Snapmaker Moonraker filament extension and preserves
+    sparse physical slot identities such as H1/H3. The operator can now adopt those slots into the
+    project as one undoable command: colour, type, vendor, and the machine's finer grade are
+    written onto the matching tools, and a reported slot the project has no tool for is *added*
+    rather than counted — a four-slot U1 could otherwise never be imported into a one-tool
+    project, since the sync only ever recoloured tools that already existed and the button that
+    ran it was hidden below two extruders. The reverse is reported, never done: a tool the printer
+    did not report is kept, because objects may be assigned to it and an empty slot is no reason
+    to strip those assignments. The grade stays out of `material`, which becomes `filament_type`
+    in the exported 3MF and is matched against the pinned compatibility table; it rides in the
+    filament name instead, and a machine that reports only a bare type never renames a richer
+    project name to a poorer one. Verified against a real Snapmaker U1 over its Moonraker
+    extension — four PLA slots of three grades — whose response is pinned as a parser fixture.
     Send-time mapping is now real and read-only: the artifact's own tool changes are compared
     against the loaded slots, a tool with no loaded filament blocks starting the print, and
     material/colour differences are reported as warnings the operator confirms. A printer that
