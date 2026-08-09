@@ -12,18 +12,20 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
+# Build and deploy are separate jobs on purpose. The Pages backend can reject a
+# deployment with a bare "Deployment failed, try again later", and its own
+# documented recovery is to re-run. With one combined job, `rerun --failed`
+# uploads a second artifact named `github-pages` into the same run and
+# `deploy-pages` aborts with "Multiple artifacts named ... Artifact count is 2",
+# so the only recovery was an empty commit. Split, a retry re-runs `deploy`
+# alone: no second upload, and no repeat of the ~7-minute quality gate.
 jobs:
-  build-and-deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -56,6 +58,16 @@ jobs:
         with:
           path: "./docs"
 
+  deploy:
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5

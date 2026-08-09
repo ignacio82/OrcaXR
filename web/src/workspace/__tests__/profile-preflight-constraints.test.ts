@@ -236,4 +236,38 @@ test('an imported project attests from its own embedded configuration', () => {
   assert.ok(multiToolSingleNozzle.constraints.tools?.every((tool) => tool?.nozzleDiameterMm === 0.4));
 });
 
+test('declares FullSpectrum capability only from the resolved tool count', () => {
+  const single = profile('pla', {
+    printable_area: '0x0,220x0,220x220,0x220',
+    printable_height: '250',
+    nozzle_diameter: '0.4',
+    filament_type: 'PLA',
+  });
+  const singleTool = deriveLiveProfilePreflightConstraints({
+    primaryProfile: single,
+    filamentProfiles: [single],
+    toolCount: 1,
+  });
+  assert.deepEqual(singleTool.constraints.printer, { physicalToolCount: 1 });
+
+  const multiTool = deriveLiveProfilePreflightConstraints({
+    primaryProfile: single,
+    filamentProfiles: [single, single, single, single],
+    toolCount: 4,
+  });
+  assert.deepEqual(multiTool.constraints.printer, { physicalToolCount: 4 });
+
+  // An unusable tool count leaves the capability undeclared rather than guessed.
+  const unusable = deriveLiveProfilePreflightConstraints({
+    primaryProfile: single,
+    filamentProfiles: [],
+    toolCount: 0,
+  });
+  assert.equal(unusable.constraints.printer, undefined);
+  assert.equal(
+    unusable.blockingDiagnostics.some((diagnostic) => diagnostic.code === 'invalid-tool-count'),
+    true,
+  );
+});
+
 console.log(`\n${passed} profile preflight constraint tests passed.`);

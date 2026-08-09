@@ -190,6 +190,21 @@ engine (`libslic3r` via WASM) as the computational core.
   declared exactly by that configuration. Import must therefore keep per-tool
   `filament_type` and temperature ranges instead of collapsing them to
   "Unknown".
+- Canonical slice preflight refuses every silent engine repair, and it never
+  duplicates a canonical validation error — `runCanonicalSlicePreflight` short-
+  circuits on those and reports them as `invalid-project-state`, so a new check
+  belongs there only when `validateProjectState` cannot already see it. The
+  FullSpectrum capability authority is the resolved target's own
+  `physicalToolCount`, never the fact that the authoring UI allowed a virtual
+  row: `SlicePreflightConstraints.printer` is optional, and an absent
+  declaration leaves capability unevaluated instead of assumed. The repairs
+  that must stay blocked are the extruder clamp in
+  `region_config_from_model_volume`, the `[0.01, 0.99]` gradient clamp and the
+  duplicate/out-of-range drops in `decode_gradient_component_ids`,
+  `MAXIMUM_FILAMENT_NUMBER` (64), the pinned material compatibility matrix, and
+  the `Print::validate()` prime-tower preconditions (relative E required, ooze
+  prevention incompatible with single-extruder multi-material, mismatched
+  nozzle/filament diameters a warning and not a stop).
 - Never emit an OPC relationship whose target is not in the same package: the
   pinned engine rejects the entire archive ("Archive does not contain a valid
   model"). Projections that drop preserved members must drop their
