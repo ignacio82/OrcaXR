@@ -9,9 +9,10 @@ import type {
   PhysicalFilamentId,
   PlateId,
 } from '../domain/ids';
-import type { ConfigMap, PhysicalFilament, ProjectPlate, ProjectState } from '../domain/model';
-import { findPlate, resolveFilament } from '../domain/selectors';
+import type { ConfigMap, MixedFilament, PhysicalFilament, ProjectPlate, ProjectState } from '../domain/model';
+import { findPlate, resolveConfig, resolveFilament } from '../domain/selectors';
 import { validateProjectState } from '../domain/validation';
+import { inspectFullSpectrumCompatibility } from '../filaments/fullSpectrumCompatibility';
 import { computeCanonicalInstanceBounds, type CanonicalBounds3 } from '../objects/bounds';
 import type { SelectionRef } from '../selection';
 import type { CanonicalProjectSliceSnapshot } from './types';
@@ -20,7 +21,25 @@ export const PINNED_SLICE_PREFLIGHT_SOURCE = Object.freeze({
   commit: '9fd12ffb2b1b80c9fb4c14564754d2ec1573a626',
   modelValidation: 'src/libslic3r/Model.cpp',
   gcodeValidation: 'src/libslic3r/GCode/GCodeProcessor.hpp',
+  engineLimits: 'src/libslic3r/libslic3r.h',
+  mixedFilament: 'src/libslic3r/MixedFilament.cpp',
+  mixedFilamentModel: 'src/libslic3r/MixedFilament.hpp',
+  gradientApplication: 'src/libslic3r/PrintObjectSlice.cpp',
+  wipeTowerValidation: 'src/libslic3r/Print.cpp',
 });
+
+/** Pinned `MAXIMUM_FILAMENT_NUMBER` (`libslic3r.h`). */
+export const PINNED_MAXIMUM_FILAMENT_NUMBER = 64;
+
+/** Pinned clamp applied by `MixedFilamentManager` whenever a gradient row is enabled. */
+const GRADIENT_MIN_RATIO = 0.01;
+const GRADIENT_MAX_RATIO = 0.99;
+
+/** Pinned `Print::validate()` filament-diameter tolerance for the prime tower. */
+const WIPE_TOWER_FILAMENT_DIAMETER_TOLERANCE = 0.1;
+
+/** Pinned `Print::validate()` nozzle-diameter comparison epsilon. */
+const WIPE_TOWER_NOZZLE_EPSILON = 1e-4;
 
 export type SlicePreflightSeverity = 'warning' | 'error';
 
@@ -37,6 +56,11 @@ export type SlicePreflightCode =
   | 'disabled-filament-assignment'
   | 'deleted-mixed-filament-assignment'
   | 'disabled-mixed-component'
+  | 'incompatible-mixed-components'
+  | 'mixed-filament-unsupported-printer'
+  | 'filament-tool-out-of-range'
+  | 'filament-count-exceeds-engine-limit'
+  | 'gradient-recipe-out-of-bounds'
   | 'filament-nozzle-mismatch'
   | 'unsupported-filament-material'
   | 'invalid-filament-temperature'
@@ -44,6 +68,9 @@ export type SlicePreflightCode =
   | 'missing-profile-attestation'
   | 'wipe-tower-outside-build-volume'
   | 'wipe-tower-requires-physical-filament'
+  | 'wipe-tower-requires-relative-e'
+  | 'wipe-tower-ooze-prevention-conflict'
+  | 'wipe-tower-mixed-extruder-diameters'
   | 'unsafe-custom-gcode';
 
 export type SlicePreflightActionId =
@@ -91,10 +118,27 @@ export interface ToolFilamentConstraints {
   readonly maxHotendTemperatureC?: number;
 }
 
+/**
+ * Capability facts the resolved printer target declares exactly. They are only
+ * evaluated when a caller supplies them: FullSpectrum support is never inferred
+ * from the fact that the authoring UI let a virtual filament be created.
+ */
+export interface PrinterCapabilityConstraints {
+  /** Exact number of physical tool slots the resolved printer declares. */
+  readonly physicalToolCount: number;
+  /**
+   * Ceiling on physical plus enabled virtual filaments. Defaults to the pinned
+   * `MAXIMUM_FILAMENT_NUMBER`; a printer may declare a smaller exact limit.
+   */
+  readonly maxTotalFilaments?: number;
+}
+
 export interface SlicePreflightConstraints {
   readonly buildVolume?: RectangularBuildVolume;
   /** Indexed by the canonical zero-based physical tool ID. */
   readonly tools?: readonly (ToolFilamentConstraints | undefined)[];
+  /** Exact printer capability declaration; absent means "not evaluated". */
+  readonly printer?: PrinterCapabilityConstraints;
   readonly requireProfileAttestation?: boolean;
   readonly customGcodeByteLimit?: number;
   readonly geometryToleranceMm?: number;
@@ -213,7 +257,7 @@ export function runCanonicalSlicePreflight(request: CanonicalSlicePreflightReque
   const printable = plate.objects.flatMap((object) =>
     object.instances.filter((instance) => instance.printable).map((instance) => ({ object, instance })),
   );
-  if (printable.length === 0) {
+  if (plate.objects.length > 0 && printable.length === 0) {
     addIssue(issues, {
       code: 'no-printable-instance',
       severity: 'error',
@@ -272,8 +316,9 @@ export function runCanonicalSlicePreflight(request: CanonicalSlicePreflightReque
 
   checkPotentialOverlaps(issues, bounded, request.constraints?.geometryToleranceMm ?? DEFAULT_GEOMETRY_TOLERANCE_MM);
   const usedFilaments = collectUsedFilaments(plate);
+  checkEngineFilamentCapacity(issues, request.state, request.constraints?.printer);
   const usedPhysicalComponents = checkFilaments(issues, request.state, usedFilaments, request.constraints);
-  checkWipeTower(issues, request.state, plate, request.constraints?.buildVolume);
+  checkWipeTower(issues, request.state, plate, request.constraints, usedPhysicalComponents);
   checkCustomGcode(
     issues,
     request.state,
@@ -425,9 +470,12 @@ function checkFilaments(
         ],
       });
     }
+    checkMixedPrinterCapability(issues, mixed, entity, constraints?.printer);
     for (const component of mixed.components) {
       usedPhysical.add(component.filamentId);
       const componentFilament = physicalById.get(component.filamentId);
+      // A component that is absent from the library is already a canonical
+      // `dangling-mixed-component` error, so only availability is left here.
       if (!componentFilament?.enabled) {
         const componentEntity: SelectionRef = {
           kind: 'filament',
@@ -446,6 +494,8 @@ function checkFilaments(
         });
       }
     }
+    checkMixedMaterialCompatibility(issues, state, mixed, entity, physicalById);
+    checkGradientRecipe(issues, mixed, entity, physicalById, constraints?.printer);
   }
 
   if (constraints?.requireProfileAttestation) {
@@ -477,9 +527,190 @@ function checkFilaments(
         actions: [{ id: 'choose-profile', label: 'Choose an attested filament profile', entity }],
       });
     }
+    checkPhysicalToolRange(issues, filament, entity, constraints?.printer);
     checkPhysicalFilament(issues, filament, entity, constraints?.tools?.[filament.toolId]);
   }
   return usedPhysical;
+}
+
+/**
+ * `region_config_from_model_volume` clamps any per-object extruder above
+ * `filament_diameter.size()` back to the first tool, which turns a correctly
+ * assigned multicolor plate into a silent single-tool print. Refuse it instead.
+ */
+function checkPhysicalToolRange(
+  issues: SlicePreflightIssue[],
+  filament: PhysicalFilament,
+  entity: SelectionRef,
+  printer: PrinterCapabilityConstraints | undefined,
+): void {
+  if (!printer || filament.toolId < printer.physicalToolCount) return;
+  addIssue(issues, {
+    code: 'filament-tool-out-of-range',
+    severity: 'error',
+    message:
+      `${filament.name} is assigned to physical tool ${filament.toolId + 1}, but the selected printer ` +
+      `declares ${printer.physicalToolCount} tool${printer.physicalToolCount === 1 ? '' : 's'}. ` +
+      'The engine would silently reassign it to the first tool.',
+    help: PREFLIGHT_HELP,
+    entities: [entity],
+    actions: [
+      { id: 'choose-filament', label: 'Reassign to a declared tool', entity },
+      { id: 'choose-profile', label: 'Choose a printer with more tools' },
+    ],
+  });
+}
+
+/**
+ * A FullSpectrum row resolves to two distinct physical heads. A target that
+ * declares fewer than two physical tools cannot print one, and the engine would
+ * collapse it to a single tool rather than report the mismatch.
+ */
+function checkMixedPrinterCapability(
+  issues: SlicePreflightIssue[],
+  mixed: MixedFilament,
+  entity: SelectionRef,
+  printer: PrinterCapabilityConstraints | undefined,
+): void {
+  if (!printer || printer.physicalToolCount >= 2) return;
+  addIssue(issues, {
+    code: 'mixed-filament-unsupported-printer',
+    severity: 'error',
+    message:
+      `${mixed.name} is a mixed (FullSpectrum) filament, but the selected printer declares ` +
+      `${printer.physicalToolCount} physical tool${printer.physicalToolCount === 1 ? '' : 's'}. ` +
+      'Mixing needs at least two.',
+    help: PREFLIGHT_HELP,
+    entities: [entity],
+    actions: [
+      { id: 'choose-filament', label: 'Assign a physical filament instead', entity },
+      { id: 'choose-profile', label: 'Choose a multi-tool printer' },
+    ],
+  });
+}
+
+/** Pinned `MixedColorMatchHelpers` category matrix; incompatible pairs never print. */
+function checkMixedMaterialCompatibility(
+  issues: SlicePreflightIssue[],
+  state: ProjectState,
+  mixed: MixedFilament,
+  entity: SelectionRef,
+  physicalById: ReadonlyMap<PhysicalFilamentId, PhysicalFilament>,
+): void {
+  const componentIds = mixed.components
+    .filter((component) => physicalById.has(component.filamentId))
+    .map((component) => component.filamentId);
+  if (componentIds.length < 2) return;
+  const decision = inspectFullSpectrumCompatibility(state.filaments.physical, componentIds);
+  if (decision.allowed) return;
+  const entities: SelectionRef[] = [entity, { kind: 'filament', id: decision.firstId }];
+  if (decision.secondId) entities.push({ kind: 'filament', id: decision.secondId });
+  addIssue(issues, {
+    code: 'incompatible-mixed-components',
+    severity: 'error',
+    message: `${mixed.name} mixes incompatible materials. ${decision.reason}`,
+    help: PREFLIGHT_HELP,
+    entities,
+    actions: [
+      { id: 'reveal', label: 'Reveal virtual filament', entity },
+      { id: 'choose-filament', label: 'Choose compatible components', entity },
+    ],
+  });
+}
+
+/**
+ * Canonical validation already rejects a gradient outside `(0, 1)`, endpoints
+ * closer than `k_min_gradient_difference`, an A==B pair, mismatched weight
+ * counts, and component IDs that are not recipe components. What it cannot see
+ * is the narrower repair the pinned manager performs on an accepted recipe: it
+ * clamps enabled endpoints into `[0.01, 0.99]`, and `decode_gradient_component_ids`
+ * silently drops duplicates and any ID past the printer's physical tool count.
+ * Each of those would print a mix the project never authored.
+ */
+function checkGradientRecipe(
+  issues: SlicePreflightIssue[],
+  mixed: MixedFilament,
+  entity: SelectionRef,
+  physicalById: ReadonlyMap<PhysicalFilamentId, PhysicalFilament>,
+  printer: PrinterCapabilityConstraints | undefined,
+): void {
+  const recipe = mixed.fullSpectrum;
+  if (!recipe?.gradientEnabled) return;
+  const report = (detailCode: string, message: string): void => {
+    addIssue(issues, {
+      code: 'gradient-recipe-out-of-bounds',
+      detailCode,
+      severity: 'error',
+      message: `${mixed.name}: ${message}`,
+      help: PREFLIGHT_HELP,
+      path: `filaments.mixed.${mixed.id}.fullSpectrum.${detailCode}`,
+      entities: [entity],
+      actions: [
+        { id: 'reveal', label: 'Reveal virtual filament', entity },
+        { id: 'choose-filament', label: 'Edit the gradient recipe', entity },
+      ],
+    });
+  };
+
+  for (const [field, value] of [
+    ['gradientStart', recipe.gradientStart],
+    ['gradientEnd', recipe.gradientEnd],
+  ] as const) {
+    if (Number.isFinite(value) && (value < GRADIENT_MIN_RATIO || value > GRADIENT_MAX_RATIO)) {
+      report(
+        field,
+        `${field} is ${value}; the engine clamps an enabled gradient into ` +
+          `[${GRADIENT_MIN_RATIO}, ${GRADIENT_MAX_RATIO}].`,
+      );
+    }
+  }
+
+  const seen = new Set<PhysicalFilamentId>();
+  for (const componentId of recipe.gradientComponentIds) {
+    const filament = physicalById.get(componentId);
+    if (!filament) continue;
+    if (seen.has(componentId)) {
+      report(
+        'gradientComponentIds',
+        `gradient component ${filament.name} is listed twice; the engine keeps only the first occurrence.`,
+      );
+      continue;
+    }
+    seen.add(componentId);
+    if (printer && filament.toolId >= printer.physicalToolCount) {
+      report(
+        'gradientComponentIds',
+        `gradient component ${filament.name} sits on tool ${filament.toolId + 1}, beyond the printer's ` +
+          `${printer.physicalToolCount}; the engine drops it while decoding.`,
+      );
+    }
+  }
+}
+
+/**
+ * `MixedFilamentManager::total_filaments` is compared against the pinned
+ * `MAXIMUM_FILAMENT_NUMBER`; beyond it the engine cannot address a row at all.
+ */
+function checkEngineFilamentCapacity(
+  issues: SlicePreflightIssue[],
+  state: ProjectState,
+  printer: PrinterCapabilityConstraints | undefined,
+): void {
+  const limit = printer?.maxTotalFilaments ?? PINNED_MAXIMUM_FILAMENT_NUMBER;
+  const physicalCount = state.filaments.physical.length;
+  const virtualCount = state.filaments.mixed.filter((mixed) => mixed.enabled && !mixed.fullSpectrum?.deleted).length;
+  const total = physicalCount + virtualCount;
+  if (total <= limit) return;
+  addIssue(issues, {
+    code: 'filament-count-exceeds-engine-limit',
+    severity: 'error',
+    message:
+      `The project declares ${physicalCount} physical and ${virtualCount} enabled virtual filaments ` +
+      `(${total}); the engine addresses at most ${limit}.`,
+    help: PREFLIGHT_HELP,
+    entities: [{ kind: 'project' }],
+    actions: [{ id: 'choose-filament', label: 'Remove or disable filaments' }],
+  });
 }
 
 function disabledFilamentIssue(entity: SelectionRef, name: string): MutableIssue {
@@ -598,11 +829,14 @@ function checkWipeTower(
   issues: SlicePreflightIssue[],
   state: ProjectState,
   plate: ProjectPlate,
-  buildVolume: RectangularBuildVolume | undefined,
+  constraints: SlicePreflightConstraints | undefined,
+  usedPhysical: ReadonlySet<PhysicalFilamentId>,
 ): void {
   const tower = plate.wipeTower;
   if (!tower?.enabled) return;
+  const buildVolume = constraints?.buildVolume;
   const plateEntity: SelectionRef = { kind: 'plate', id: plate.id };
+  checkWipeTowerFeasibility(issues, state, plate, plateEntity, constraints, usedPhysical);
   if (
     buildVolume &&
     (tower.positionMm[0] < buildVolume.minXmm ||
@@ -633,6 +867,99 @@ function checkWipeTower(
       actions: [{ id: 'choose-filament', label: 'Choose a physical wipe-tower filament', entity: plateEntity }],
     });
   }
+}
+
+/**
+ * Exact prime-tower preconditions from the pinned `Print::validate()`:
+ * relative extruder addressing is required, ooze prevention conflicts with
+ * single-extruder multi-material, and mismatched nozzle or filament diameters
+ * across the used tools are the upstream warning, not a hard stop.
+ */
+function checkWipeTowerFeasibility(
+  issues: SlicePreflightIssue[],
+  state: ProjectState,
+  plate: ProjectPlate,
+  plateEntity: SelectionRef,
+  constraints: SlicePreflightConstraints | undefined,
+  usedPhysical: ReadonlySet<PhysicalFilamentId>,
+): void {
+  const config = resolveConfig(state, { plateId: plate.id }).effective;
+  if (parseConfigBoolean(config, 'use_relative_e_distances') === false) {
+    addIssue(issues, {
+      code: 'wipe-tower-requires-relative-e',
+      severity: 'error',
+      message: 'The wipe tower needs relative extruder addressing (use_relative_e_distances = 1).',
+      help: PREFLIGHT_HELP,
+      path: 'config.use_relative_e_distances',
+      entities: [plateEntity],
+      actions: [
+        { id: 'choose-profile', label: 'Enable relative E addressing', settingKey: 'use_relative_e_distances' },
+        { id: 'disable-wipe-tower', label: 'Disable wipe tower', entity: plateEntity },
+      ],
+    });
+  }
+  if (
+    parseConfigBoolean(config, 'ooze_prevention') === true &&
+    parseConfigBoolean(config, 'single_extruder_multi_material') === true
+  ) {
+    addIssue(issues, {
+      code: 'wipe-tower-ooze-prevention-conflict',
+      severity: 'error',
+      message: 'Ooze prevention only works with the wipe tower when single_extruder_multi_material is off.',
+      help: PREFLIGHT_HELP,
+      path: 'config.ooze_prevention',
+      entities: [plateEntity],
+      actions: [
+        { id: 'choose-profile', label: 'Turn off ooze prevention', settingKey: 'ooze_prevention' },
+        { id: 'disable-wipe-tower', label: 'Disable wipe tower', entity: plateEntity },
+      ],
+    });
+  }
+
+  const used = state.filaments.physical
+    .filter((filament) => usedPhysical.has(filament.id))
+    .sort((left, right) => left.toolId - right.toolId);
+  if (used.length < 2) return;
+  const nozzleOf = (filament: PhysicalFilament): number | undefined =>
+    constraints?.tools?.[filament.toolId]?.nozzleDiameterMm ?? filament.nozzleDiameterMm;
+  const firstNozzle = nozzleOf(used[0]);
+  const firstDiameter = parseConfigNumbers(used[0].config, 'filament_diameter')?.[0];
+  for (const filament of used.slice(1)) {
+    const nozzle = nozzleOf(filament);
+    const diameter = parseConfigNumbers(filament.config, 'filament_diameter')?.[0];
+    const nozzleMismatch =
+      firstNozzle !== undefined && nozzle !== undefined && Math.abs(nozzle - firstNozzle) > WIPE_TOWER_NOZZLE_EPSILON;
+    const diameterMismatch =
+      firstDiameter !== undefined &&
+      diameter !== undefined &&
+      firstDiameter !== 0 &&
+      Math.abs((diameter - firstDiameter) / firstDiameter) > WIPE_TOWER_FILAMENT_DIAMETER_TOLERANCE;
+    if (!nozzleMismatch && !diameterMismatch) continue;
+    const entity: SelectionRef = { kind: 'filament', id: filament.id };
+    addIssue(issues, {
+      code: 'wipe-tower-mixed-extruder-diameters',
+      detailCode: nozzleMismatch ? 'nozzle_diameter' : 'filament_diameter',
+      severity: 'warning',
+      message:
+        `${filament.name} on tool ${filament.toolId + 1} uses a different ` +
+        `${nozzleMismatch ? 'nozzle' : 'filament'} diameter than tool ${used[0].toolId + 1}; ` +
+        'the pinned engine treats that as experimental with the prime tower.',
+      help: PREFLIGHT_HELP,
+      entities: [plateEntity, entity],
+      actions: [{ id: 'choose-profile', label: 'Match the tool diameters', entity }],
+    });
+  }
+}
+
+function parseConfigBoolean(config: ConfigMap, key: string): boolean | undefined {
+  const value = config[key];
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === '1' || normalized === 'true') return true;
+  if (normalized === '0' || normalized === 'false') return false;
+  return undefined;
 }
 
 function checkCustomGcode(
@@ -727,7 +1054,7 @@ function finish(
   const blockingCount = issues.filter((issue) => issue.severity === 'error').length;
   return Object.freeze({
     plateId,
-    canSlice: blockingCount === 0,
+    canSlice: blockingCount === 0 && printableInstanceIds.length > 0,
     blockingCount,
     issues: Object.freeze(issues),
     printableInstanceIds: Object.freeze([...printableInstanceIds].sort()),
@@ -770,6 +1097,22 @@ function assertPreflightConstraints(constraints: SlicePreflightConstraints | und
     (!Number.isSafeInteger(constraints.customGcodeByteLimit) || constraints.customGcodeByteLimit < 1)
   ) {
     throw new Error('Custom G-code byte limit must be a positive safe integer');
+  }
+  const printer = constraints.printer;
+  if (printer) {
+    if (!Number.isSafeInteger(printer.physicalToolCount) || printer.physicalToolCount < 1) {
+      throw new Error('Printer capability must declare a positive physical tool count');
+    }
+    if (
+      printer.maxTotalFilaments !== undefined &&
+      (!Number.isSafeInteger(printer.maxTotalFilaments) ||
+        printer.maxTotalFilaments < 1 ||
+        printer.maxTotalFilaments > PINNED_MAXIMUM_FILAMENT_NUMBER)
+    ) {
+      throw new Error(
+        `Printer filament ceiling must be a positive integer no greater than ${PINNED_MAXIMUM_FILAMENT_NUMBER}`,
+      );
+    }
   }
   for (const [toolId, tool] of (constraints.tools ?? []).entries()) {
     if (!tool) continue;

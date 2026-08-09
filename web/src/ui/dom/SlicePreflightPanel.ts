@@ -80,7 +80,7 @@ export class SlicePreflightPanel {
     code.dataset.preflightStableCode = issue.code;
     code.style.cssText = 'margin-left:6px;color:inherit;';
     code.textContent = issue.detailCode ? `${issue.code} / ${issue.detailCode}` : issue.code;
-    heading.append(severity, code);
+    heading.append(severity, ' ', code);
 
     const description = document.createElement('div');
     description.id = descriptionId;

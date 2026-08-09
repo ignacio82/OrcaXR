@@ -33,6 +33,7 @@ export default defineConfig({
           // growth in canonical project handling no longer inflates the entry
           // script past its independently enforced budget.
           three: ['three', 'three-mesh-bvh'],
+          uikit: ['@pmndrs/uikit'],
         },
       },
     },

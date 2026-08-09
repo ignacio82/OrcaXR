@@ -3,10 +3,15 @@ import assert from 'node:assert/strict';
 import { InMemoryAssetRepository } from '../assets';
 import { cloneProjectState } from '../domain/canonical';
 import { entityId } from '../domain/ids';
-import { identityTransform } from '../domain/model';
+import { identityTransform, type FullSpectrumRecipeState } from '../domain/model';
 import { encodeIndexedMeshAsset } from '../meshCodec';
 import { createProjectFixture } from '../__tests__/fixtures';
-import { PINNED_SLICE_PREFLIGHT_SOURCE, runCanonicalSlicePreflight, type SlicePreflightConstraints } from './preflight';
+import {
+  PINNED_MAXIMUM_FILAMENT_NUMBER,
+  PINNED_SLICE_PREFLIGHT_SOURCE,
+  runCanonicalSlicePreflight,
+  type SlicePreflightConstraints,
+} from './preflight';
 
 let passed = 0;
 function test(name: string, run: () => void): void {
@@ -81,6 +86,19 @@ test('blocks unknown, excluded, and empty printable plates with stable codes', (
     ['no-printable-instance', 'plate-not-printable'],
   );
   assert.ok(excluded.issues.every((issue) => issue.id.startsWith('slice-preflight:')));
+});
+
+test('does not report no-printable-instance error issue for empty plates with zero objects', () => {
+  const { fixture, state, assets } = harness();
+  state.plates[0].objects = [];
+  const empty = runCanonicalSlicePreflight({
+    state,
+    assets,
+    plateId: fixture.ids.plate,
+  });
+  assert.deepEqual(empty.issues, []);
+  assert.equal(empty.canSlice, false);
+  assert.equal(empty.blockingCount, 0);
 });
 
 test('uses canonical transformed mesh bytes for build-volume, sinking, overlap, and asset checks', () => {
@@ -319,6 +337,257 @@ test('rejects malformed preflight constraints instead of silently weakening chec
   assert.equal(
     result.issues.some((issue) => issue.code === 'empty-model-mesh'),
     true,
+  );
+});
+
+function fullSpectrumRecipe(
+  overrides: Partial<FullSpectrumRecipeState> & Pick<FullSpectrumRecipeState, 'componentAId' | 'componentBId'>,
+): FullSpectrumRecipeState {
+  return {
+    schemaVersion: 1,
+    upstreamStableId: '4242',
+    uiMode: 3,
+    ratioA: 1,
+    ratioB: 1,
+    mixBPercent: 50,
+    manualPatternGroups: [],
+    gradientComponentIds: [],
+    gradientComponentWeights: [],
+    pointillismAllFilaments: false,
+    distributionMode: 0,
+    localZMaxSublayers: 0,
+    gradientEnabled: true,
+    gradientStart: 0.8,
+    gradientEnd: 0.2,
+    componentASurfaceOffsetMm: 0,
+    componentBSurfaceOffsetMm: 0,
+    deleted: false,
+    custom: true,
+    originAuto: false,
+    ...overrides,
+  };
+}
+
+test('blocks a mixed filament on a target that declares fewer than two physical tools', () => {
+  // A two-tool project re-targeted at a single-extruder printer: the canonical
+  // graph is valid, the resolved printer simply cannot mix.
+  const { fixture, state, assets } = harness();
+  const result = runCanonicalSlicePreflight({
+    state,
+    assets,
+    plateId: fixture.ids.plate,
+    constraints: { buildVolume, printer: { physicalToolCount: 1 } },
+  });
+  const capability = result.issues.find((issue) => issue.code === 'mixed-filament-unsupported-printer');
+  assert.ok(capability, 'expected the capability gate to fire');
+  assert.match(capability.message, /declares 1 physical tool/);
+  assert.equal(result.canSlice, false);
+
+  // The same project on a two-tool target keeps the recipe printable.
+  const allowed = runCanonicalSlicePreflight({
+    state,
+    assets,
+    plateId: fixture.ids.plate,
+    constraints: { buildVolume, printer: { physicalToolCount: 2 } },
+  });
+  assert.equal(
+    allowed.issues.some((issue) => issue.code === 'mixed-filament-unsupported-printer'),
+    false,
+  );
+});
+
+test('refuses the silent single-tool collapse of an out-of-range physical tool', () => {
+  const { fixture, state, assets } = harness();
+  const result = runCanonicalSlicePreflight({
+    state,
+    assets,
+    plateId: fixture.ids.plate,
+    constraints: { buildVolume, printer: { physicalToolCount: 1 } },
+  });
+  const outOfRange = result.issues.filter((issue) => issue.code === 'filament-tool-out-of-range');
+  assert.equal(outOfRange.length, 1);
+  assert.match(outOfRange[0].message, /silently reassign/);
+  assert.deepEqual(outOfRange[0].entities, [{ kind: 'filament', id: fixture.ids.physical1 }]);
+});
+
+test('enforces the pinned material compatibility matrix on recipe components', () => {
+  const { fixture, state, assets } = harness();
+  state.filaments.physical[1].material = 'PETG';
+  const result = runCanonicalSlicePreflight({
+    state,
+    assets,
+    plateId: fixture.ids.plate,
+    constraints: { buildVolume },
+  });
+  const incompatible = result.issues.find((issue) => issue.code === 'incompatible-mixed-components');
+  assert.ok(incompatible, 'expected PLA + PETG to be refused');
+  assert.match(incompatible.message, /PLA and PETG cannot be mixed/);
+  assert.deepEqual(
+    incompatible.entities.map((entity) => ('id' in entity ? entity.id : entity.kind)),
+    [fixture.ids.mixed, fixture.ids.physical0, fixture.ids.physical1],
+  );
+});
+
+test('blocks the gradient repairs canonical validation lets through', () => {
+  const { fixture, state, assets } = harness();
+  // Canonical validation only requires (0, 1); the engine clamps to [0.01, 0.99]
+  // and drops a duplicated component while decoding the compact ID list.
+  state.filaments.mixed[0].fullSpectrum = fullSpectrumRecipe({
+    componentAId: fixture.ids.physical0,
+    componentBId: fixture.ids.physical1,
+    gradientStart: 0.995,
+    gradientEnd: 0.005,
+    gradientComponentIds: [fixture.ids.physical0, fixture.ids.physical1, fixture.ids.physical0],
+  });
+  const result = runCanonicalSlicePreflight({
+    state,
+    assets,
+    plateId: fixture.ids.plate,
+    constraints: { buildVolume, printer: { physicalToolCount: 2 } },
+  });
+  const gradient = result.issues.filter((issue) => issue.code === 'gradient-recipe-out-of-bounds');
+  assert.deepEqual([...new Set(gradient.map((issue) => issue.detailCode))].sort(), [
+    'gradientComponentIds',
+    'gradientEnd',
+    'gradientStart',
+  ]);
+  assert.match(gradient[0].help, /remains unchanged until an explicit fix runs/);
+  assert.equal(result.canSlice, false);
+
+  state.filaments.mixed[0].fullSpectrum = fullSpectrumRecipe({
+    componentAId: fixture.ids.physical0,
+    componentBId: fixture.ids.physical1,
+    gradientComponentIds: [fixture.ids.physical0, fixture.ids.physical1],
+    gradientComponentWeights: [70, 30],
+  });
+  const clean = runCanonicalSlicePreflight({
+    state,
+    assets,
+    plateId: fixture.ids.plate,
+    constraints: { buildVolume, printer: { physicalToolCount: 2 } },
+  });
+  assert.equal(
+    clean.issues.some((issue) => issue.code === 'gradient-recipe-out-of-bounds'),
+    false,
+  );
+
+  // The same clean recipe against a single-tool target loses a component silently.
+  const narrowed = runCanonicalSlicePreflight({
+    state,
+    assets,
+    plateId: fixture.ids.plate,
+    constraints: { buildVolume, printer: { physicalToolCount: 1 } },
+  });
+  assert.equal(
+    narrowed.issues.some(
+      (issue) => issue.code === 'gradient-recipe-out-of-bounds' && /drops it while decoding/.test(issue.message),
+    ),
+    true,
+  );
+});
+
+test('holds the project to the pinned engine filament ceiling', () => {
+  const { fixture, state, assets } = harness();
+  assert.equal(PINNED_MAXIMUM_FILAMENT_NUMBER, 64);
+  const template = state.filaments.mixed[0];
+  for (let index = 0; index < 62; index += 1) {
+    state.filaments.mixed.push({
+      ...template,
+      id: entityId<'mixed-filament'>(`import:preflight:mix-${index}`),
+      name: `Mix ${index}`,
+    });
+  }
+  const result = runCanonicalSlicePreflight({ state, assets, plateId: fixture.ids.plate });
+  const overflow = result.issues.find((issue) => issue.code === 'filament-count-exceeds-engine-limit');
+  assert.ok(overflow, 'expected the engine ceiling to fire');
+  assert.match(overflow.message, /at most 64/);
+
+  // A tombstoned or disabled row is not addressable and does not count.
+  state.filaments.mixed[62].enabled = false;
+  const trimmed = runCanonicalSlicePreflight({ state, assets, plateId: fixture.ids.plate });
+  assert.equal(
+    trimmed.issues.some((issue) => issue.code === 'filament-count-exceeds-engine-limit'),
+    false,
+  );
+  assert.throws(
+    () =>
+      runCanonicalSlicePreflight({
+        state,
+        assets,
+        plateId: fixture.ids.plate,
+        constraints: { printer: { physicalToolCount: 2, maxTotalFilaments: 65 } },
+      }),
+    /no greater than 64/,
+  );
+});
+
+test('applies the pinned prime-tower preconditions and diameter warning', () => {
+  const { fixture, state, assets } = harness();
+  state.plates[0].wipeTower = {
+    enabled: true,
+    positionMm: [100, 100],
+    rotationDeg: 0,
+    filamentId: fixture.ids.physical0,
+  };
+  state.config.use_relative_e_distances = '0';
+  state.config.ooze_prevention = '1';
+  state.config.single_extruder_multi_material = '1';
+  state.filaments.physical[0].config.filament_diameter = '1.75';
+  state.filaments.physical[1].config.filament_diameter = '2.85';
+  const result = runCanonicalSlicePreflight({
+    state,
+    assets,
+    plateId: fixture.ids.plate,
+    constraints: {
+      buildVolume,
+      tools: [{ nozzleDiameterMm: 0.4 }, { nozzleDiameterMm: 0.6 }],
+    },
+  });
+  const codes = result.issues.map((issue) => issue.code);
+  assert.equal(codes.includes('wipe-tower-requires-relative-e'), true);
+  assert.equal(codes.includes('wipe-tower-ooze-prevention-conflict'), true);
+  const diameters = result.issues.find((issue) => issue.code === 'wipe-tower-mixed-extruder-diameters');
+  assert.ok(diameters, 'expected the upstream diameter warning');
+  assert.equal(diameters.severity, 'warning');
+  assert.equal(diameters.detailCode, 'nozzle_diameter');
+
+  state.config.use_relative_e_distances = '1';
+  state.config.ooze_prevention = '0';
+  const relaxed = runCanonicalSlicePreflight({
+    state,
+    assets,
+    plateId: fixture.ids.plate,
+    constraints: { buildVolume, tools: [{ nozzleDiameterMm: 0.4 }, { nozzleDiameterMm: 0.4 }] },
+  });
+  const remaining = relaxed.issues.filter((issue) => issue.code.startsWith('wipe-tower-'));
+  assert.equal(remaining.length, 1);
+  assert.equal(remaining[0].detailCode, 'filament_diameter');
+  assert.equal(remaining[0].severity, 'warning');
+});
+
+test('leaves an undeclared printer capability unevaluated instead of guessing', () => {
+  const { fixture, state, assets } = harness();
+  const result = runCanonicalSlicePreflight({
+    state,
+    assets,
+    plateId: fixture.ids.plate,
+    constraints: { buildVolume },
+  });
+  assert.equal(
+    result.issues.some(
+      (issue) => issue.code === 'mixed-filament-unsupported-printer' || issue.code === 'filament-tool-out-of-range',
+    ),
+    false,
+  );
+  assert.throws(
+    () =>
+      runCanonicalSlicePreflight({
+        state,
+        assets,
+        plateId: fixture.ids.plate,
+        constraints: { printer: { physicalToolCount: 0 } },
+      }),
+    /positive physical tool count/,
   );
 });
 

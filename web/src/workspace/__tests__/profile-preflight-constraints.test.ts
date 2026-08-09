@@ -216,6 +216,24 @@ test('an imported project attests from its own embedded configuration', () => {
   assert.equal(missing.blockingDiagnostics.length, 1);
   assert.equal(missing.blockingDiagnostics[0].code, 'missing-exact-filament-profile');
   assert.match(missing.blockingDiagnostics[0].message, /embedded filament configuration/i);
+
+  const multiToolSingleNozzle = deriveLiveProfilePreflightConstraints({
+    source: 'authored-project',
+    primaryProfile: authored(
+      { printable_area: '0x0,256x0,256x256,0x256', printable_height: '250', nozzle_diameter: '0.4' },
+      'authored-project',
+    ),
+    filamentProfiles: [
+      authored({ filament_type: 'PLA' }, 'filament-1'),
+      authored({ filament_type: 'PLA' }, 'filament-2'),
+      authored({ filament_type: 'PLA' }, 'filament-3'),
+      authored({ filament_type: 'PLA' }, 'filament-4'),
+    ],
+    toolCount: 4,
+  });
+  assert.deepEqual(multiToolSingleNozzle.blockingDiagnostics, []);
+  assert.equal(multiToolSingleNozzle.constraints.tools?.length, 4);
+  assert.ok(multiToolSingleNozzle.constraints.tools?.every((tool) => tool?.nozzleDiameterMm === 0.4));
 });
 
 console.log(`\n${passed} profile preflight constraint tests passed.`);

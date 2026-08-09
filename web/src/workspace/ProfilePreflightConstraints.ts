@@ -134,7 +134,7 @@ export function deriveLiveProfilePreflightConstraints(
       message: `The selected printer profile cannot map its nozzle diameters exactly to ${toolCount} physical tool${
         toolCount === 1 ? '' : 's'
       }.`,
-      help: 'Select a profile whose nozzle_diameter count matches its tools, or an explicitly declared single-extruder multi-material profile.',
+      help: 'Select a profile whose nozzle_diameter count matches its tools or specifies one uniform nozzle size.',
       path: 'config.nozzle_diameter',
     });
   }
@@ -219,6 +219,9 @@ export function deriveLiveProfilePreflightConstraints(
     constraints: Object.freeze({
       ...(buildVolume ? { buildVolume: Object.freeze(buildVolume) } : {}),
       ...(tools.length > 0 ? { tools: Object.freeze(tools) } : {}),
+      // The resolved target's own tool count is the only FullSpectrum capability
+      // authority; it is never inferred from the authoring UI being reachable.
+      ...(toolCount > 0 ? { printer: Object.freeze({ physicalToolCount: toolCount }) } : {}),
     }),
     blockingDiagnostics: Object.freeze(blockingDiagnostics.map((diagnostic) => Object.freeze({ ...diagnostic }))),
     omissions: Object.freeze(omissions.map((omission) => Object.freeze({ ...omission }))),
@@ -345,8 +348,8 @@ function parseNozzleMap(config: Readonly<Record<string, string>>, toolCount: num
   const nozzles = parsePositiveList(config['nozzle_diameter']);
   if (!nozzles) return undefined;
   if (nozzles.length === toolCount) return Object.freeze(nozzles);
-  if (nozzles.length !== 1 || !declaresSingleExtruderMultiMaterial(config)) return undefined;
-  return Object.freeze(Array.from({ length: toolCount }, () => nozzles[0]));
+  if (nozzles.length === 1) return Object.freeze(Array.from({ length: toolCount }, () => nozzles[0]));
+  return undefined;
 }
 
 function parsePositiveList(value: string | undefined): number[] | undefined {
@@ -372,11 +375,6 @@ function parseFiniteScalar(value: string | undefined): number | undefined {
 function parseNonEmptyScalar(value: string | undefined): string | undefined {
   if (!value?.trim() || /[;,]/.test(value)) return undefined;
   return value.trim();
-}
-
-function declaresSingleExtruderMultiMaterial(config: Readonly<Record<string, string>>): boolean {
-  const value = parseNonEmptyScalar(config['single_extruder_multi_material'])?.toLowerCase();
-  return value === '1' || value === 'true';
 }
 
 function hasExactPresetIdentity(
