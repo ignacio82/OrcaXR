@@ -2615,10 +2615,34 @@ try {
     await reloaded.close();
   }
 
+  // ---- Preferences: versioned, migrated, resettable without losing work ----
+  await showInspectorTab(page, 'printer');
+  await page.click('#pref-reduce-motion');
+  assert.equal(
+    await page.evaluate(() => globalThis.document.documentElement.dataset.reduceMotion),
+    'always',
+    'a preference with no observable effect would be worse than not offering it',
+  );
+
+  const presetsBefore = await page.evaluate(() => globalThis.localStorage.getItem('orcaxr.profiles'));
+  await page.click('#btn-prefs-reset');
+  const afterReset = await page.evaluate(() => ({
+    prefs: globalThis.localStorage.getItem('orcaxr.preferences'),
+    printer: globalThis.localStorage.getItem('orcaxr.printer'),
+    presets: globalThis.localStorage.getItem('orcaxr.profiles'),
+    motion: globalThis.document.documentElement.dataset.reduceMotion,
+  }));
+  assert.equal(afterReset.prefs, null);
+  assert.equal(afterReset.printer, null);
+  assert.equal(afterReset.motion, undefined, 'the override lifts live, not on next reload');
+  // The acceptance criterion: restoring settings must not cost the operator
+  // their presets.
+  assert.equal(afterReset.presets, presetsBefore, 'presets survive a settings reset');
+
   assert.deepStrictEqual(pageErrors, [], `uncaught page errors: ${pageErrors.join('\n')}`);
   assert.deepStrictEqual(policyErrors, [], `CSP violations: ${policyErrors.join('\n')}`);
   console.log(
-    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, and a printer plus slicer configured once that are still configured after a reload).',
+    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a printer plus slicer configured once that are still configured after a reload, and device preferences that apply live and reset without touching presets).',
   );
 } finally {
   await browser.close();

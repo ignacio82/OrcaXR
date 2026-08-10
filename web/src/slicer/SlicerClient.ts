@@ -1,4 +1,5 @@
 import { fetchLocalNetwork, normalizeHttpEndpoint } from '../net/LocalNetworkAccess';
+import { SLICER_ENABLED_KEY, SLICER_URL_KEY, migrateLegacyKeys } from '../settings/Preferences';
 import { loadRememberedCredentials, saveRememberedCredentials } from '../settings/RememberedCredentials';
 import { PINNED_ENGINE_PROVENANCE } from './pinnedEngineProvenance';
 
@@ -84,8 +85,11 @@ interface Slic3rModule {
  */
 let externalSlicerToken = loadRememberedCredentials().slicerToken;
 
-const EXTERNAL_URL_KEY = 'external_slicer_url';
-const EXTERNAL_ENABLED_KEY = 'external_slicer_enabled';
+// Namespaced since preferences v2; an install written under the old
+// unnamespaced names is migrated by `Preferences.migrateLegacyKeys`, which
+// runs before anything reads them.
+const EXTERNAL_URL_KEY = SLICER_URL_KEY;
+const EXTERNAL_ENABLED_KEY = SLICER_ENABLED_KEY;
 
 export class SlicerClient {
   private static externalConnectionEpoch = 0;
@@ -116,6 +120,9 @@ export class SlicerClient {
   // a URL is configured AND the flag is on, so the user can keep a server
   // saved while slicing locally, and can delete it outright.
   static getExternalSlicerUrl(): string {
+    // Migration is idempotent and runs here because this is the first read on
+    // every path that cares about the route.
+    migrateLegacyKeys(localStorage);
     return localStorage.getItem(EXTERNAL_URL_KEY) || '';
   }
 

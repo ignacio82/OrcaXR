@@ -618,6 +618,13 @@
           animation-duration: .01ms !important; animation-iteration-count: 1 !important;
         }
       }
+      /* The same suppression, requested in-app rather than by the OS. */
+      html[data-reduce-motion='always'] *,
+      html[data-reduce-motion='always'] *::before,
+      html[data-reduce-motion='always'] *::after {
+        scroll-behavior: auto !important; transition-duration: .01ms !important;
+        animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+      }
 
       /* ---- Tablet: give the viewport back some width ---------------------- */
       @media (max-width: 1180px) {
@@ -911,6 +918,25 @@
                   it ships itself.
                 </p>
                 <button id="btn-forget-credentials" class="action-btn" type="button" style="margin-bottom:8px;">Forget Saved Credentials</button>
+                <div class="insp-kicker" style="margin:12px 0 8px;">This device</div>
+                <label class="check-row" style="margin-bottom:8px;">
+                  <input id="pref-reduce-motion" type="checkbox" style="accent-color:var(--oxr-ok);" />
+                  Always reduce motion
+                </label>
+                <p class="field-note">
+                  Off follows your system's reduced-motion setting, which this app already honours.
+                  On suppresses animation here regardless of it.
+                </p>
+                <div style="display:flex;gap:8px;margin-bottom:8px;">
+                  <button id="btn-prefs-export" class="action-btn" type="button" style="flex:1;margin:0;">Export Settings</button>
+                  <button id="btn-prefs-import" class="action-btn" type="button" style="flex:1;margin:0;">Import Settings</button>
+                </div>
+                <input id="prefs-import-file" type="file" accept="application/json,.json" hidden />
+                <button id="btn-prefs-reset" class="action-btn" type="button" style="margin-bottom:8px;">Reset Settings</button>
+                <p class="field-note">
+                  An export carries this device's setup but never a token, so it is safe to share or
+                  attach to a bug report. Reset clears the setup only — projects and presets stay.
+                </p>
                 <button id="btn-printer-test" class="action-btn" type="button" style="margin-bottom:8px;">Test Connection</button>
                 <div style="display:flex; gap:8px;">
                   <button id="btn-printer-send" class="action-btn" type="button" style="flex:1;margin-bottom:0;" disabled>Send unavailable</button>

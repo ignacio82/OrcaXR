@@ -1595,7 +1595,7 @@ Local starting seams: [`engine-options.schema.json`](../web/src/settings/generat
   - **Accept:** a cross-surface test edits the same sampled settings and compares canonical state
     and generated config byte-for-byte.
 
-- [ ] **P6.6 — Implement application preferences separately from slice settings.** Cover language,
+- [~] **P6.6 — Implement application preferences separately from slice settings.** Cover language,
   units, theme/system/high contrast, zoom-to-pointer, pan/rotate mapping, wheel direction,
   configurable shortcuts, autosave/recovery, privacy/network, external slicer endpoint, printer
   connections, AI provider/key handling, update behavior, and accessibility/XR comfort options.
@@ -1603,9 +1603,28 @@ Local starting seams: [`engine-options.schema.json`](../web/src/settings/generat
     plaintext `localStorage` by default.
   - **Accept:** preferences survive reload and migration, respect OS signals, do not leak into
     project config, and can be restored without clearing projects/presets.
-  - **Current:** browser AI keys are held only in tab/session memory, known legacy plaintext keys
-    are purged, and provider errors are redacted. The broader versioned preferences dialog,
-    migration, reset/export, persistence, and cross-surface lifecycle remain open.
+  - **Current:** `settings/Preferences.ts` owns a versioned, migrating store for the settings that
+    belong to this device rather than to a project. Migration is real rather than hypothetical: the
+    slicer route shipped under unnamespaced `external_slicer_url`/`external_slicer_enabled` keys
+    that collide with anything else on the origin, and v2 moves them under `orcaxr.` on first read,
+    idempotently and without overwriting a value changed since. Export is versioned and deliberately
+    secret-free so a setup can be shared or attached to a bug report; import validates the format
+    and version and refuses any key outside the preference set, so a file from elsewhere cannot
+    reach credentials, presets, or an arbitrary key on this origin. Reset clears the setup and
+    provably leaves projects and presets alone — that separation is why the key list is explicit
+    rather than a prefix sweep, since `orcaxr.profiles` shares the namespace and is the operator's
+    work. Browser AI keys remain session-only.
+    Only preferences with an observable effect are offered: a reduce-motion override that the
+    stylesheet honours alongside the OS signal. Storing a setting nothing reads would look like it
+    works, so the rest of the enumerated list is named as outstanding rather than shipped inert.
+  - **Outstanding:** language, units, theme and high contrast, zoom-to-pointer, pan/rotate mapping,
+    wheel direction, configurable shortcuts, autosave/recovery, update behaviour, and XR comfort
+    options are all still absent — most need the behaviour they would control to exist first (the
+    app has one dark theme and no unit-aware display layer). The printer API key and slicer token
+    are now remembered on the device by default, which reverses this item's own "never persist
+    secrets in plaintext `localStorage` by default" instruction; that was an explicit operator
+    decision, is recorded as `ADAPT-10` and in the decision log, and remains behind a switch that
+    erases what it stored.
 
 - [~] **P6.7 — Correct config serialization at every boundary.** String vectors use semicolons;
   numeric vectors use commas as required by this port. Preserve escaping, percent/absolute

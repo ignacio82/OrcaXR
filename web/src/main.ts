@@ -63,6 +63,14 @@ import {
   loadRememberedCredentials,
   saveRememberedCredentials,
 } from './settings/RememberedCredentials';
+import {
+  applyPreferences,
+  exportPreferences,
+  importPreferences,
+  loadPreferences,
+  resetPreferences,
+  savePreferences,
+} from './settings/Preferences';
 import { MeasurePanel } from './ui/dom/MeasurePanel';
 import { SmartPaintPanel } from './ui/dom/SmartPaintPanel';
 import { PlateManager } from './ui/dom/PlateManager';
@@ -2233,6 +2241,66 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       ? 'Credentials will be remembered on this device.'
       : 'Stopped remembering credentials; the saved copies were erased.';
   };
+  // Preferences: this device's setup, versioned and separate from the project.
+  const prefReduceMotion = document.getElementById('pref-reduce-motion') as HTMLInputElement;
+  const btnPrefsExport = document.getElementById('btn-prefs-export') as HTMLButtonElement;
+  const btnPrefsImport = document.getElementById('btn-prefs-import') as HTMLButtonElement;
+  const btnPrefsReset = document.getElementById('btn-prefs-reset') as HTMLButtonElement;
+  const prefsImportFile = document.getElementById('prefs-import-file') as HTMLInputElement;
+
+  let preferences = loadPreferences();
+  applyPreferences(preferences, document.documentElement);
+  prefReduceMotion.checked = preferences.reduceMotion === 'always';
+  prefReduceMotion.onchange = () => {
+    preferences = { ...preferences, reduceMotion: prefReduceMotion.checked ? 'always' : 'system' };
+    savePreferences(preferences);
+    applyPreferences(preferences, document.documentElement);
+  };
+
+  btnPrefsExport.onclick = () => {
+    const blob = new Blob([JSON.stringify(exportPreferences(), null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'orcaxr-settings.json';
+    link.click();
+    URL.revokeObjectURL(url);
+    statusText.textContent = 'Exported this device\u2019s settings. The file carries no tokens.';
+  };
+
+  btnPrefsImport.onclick = () => prefsImportFile.click();
+  prefsImportFile.onchange = async () => {
+    const file = prefsImportFile.files?.[0];
+    if (!file) return;
+    try {
+      const result = importPreferences(JSON.parse(await file.text()));
+      // Reloading is the honest way to apply an imported endpoint: the printer
+      // transport and slicer route both read their settings at construction.
+      statusText.textContent =
+        result.applied.length > 0
+          ? `Imported ${result.applied.length} setting(s); reload to use them.${result.warnings.length > 0 ? ` ${result.warnings[0]}` : ''}`
+          : `Nothing was imported. ${result.warnings[0] ?? ''}`;
+    } catch (error) {
+      statusText.textContent = `Could not read that settings file: ${(error as Error).message}`;
+    } finally {
+      prefsImportFile.value = '';
+    }
+  };
+
+  btnPrefsReset.onclick = () => {
+    resetPreferences();
+    printerHost.value = '';
+    printerApiKey.value = '';
+    printerCfg.host = '';
+    disposePrinterTransport();
+    SlicerClient.setExternalSlicerToken('', { persist: false });
+    preferences = loadPreferences();
+    prefReduceMotion.checked = preferences.reduceMotion === 'always';
+    applyPreferences(preferences, document.documentElement);
+    refreshFirstRunPrompt();
+    statusText.textContent = 'Reset this device\u2019s settings. Your projects and presets are untouched.';
+  };
+
   btnForgetCredentials.onclick = () => {
     forgetRememberedCredentials();
     printerApiKey.value = '';
