@@ -39,6 +39,11 @@ import { serializeFullSpectrumDefinition } from '../filaments/fullSpectrumRecipe
 import { decodeIndexedMeshAsset, type DecodedIndexedMesh } from '../meshCodec';
 import { validatePackagePath } from './deterministicZip';
 import { BRIM_EAR_POINTS_PATH, decodeBrimEarPoints, encodeBrimEarPoints } from './brimEarPoints';
+import {
+  LAYER_HEIGHTS_PROFILE_PATH,
+  decodeLayerHeightsProfile,
+  encodeLayerHeightsProfile,
+} from './layerHeightsProfile';
 import type { EmbossTextConfiguration } from '../objects/emboss';
 import type { EmbossSvgPart } from '../domain/model';
 import {
@@ -114,6 +119,7 @@ export const GENERATED_STANDARD_PATHS = new Set([
   LAYER_RANGES_PATH,
   LAYER_EVENTS_PATH,
   BRIM_EAR_POINTS_PATH,
+  LAYER_HEIGHTS_PROFILE_PATH,
 ]);
 
 export interface BbsCoreBuild {
@@ -437,6 +443,14 @@ export function buildBbsCore(state: ProjectState, assets: ReadonlyMap<string, As
       .map((mapping) => ({ objectId: mapping.ordinal, points: mapping.object.brimEars as BrimEarPoint[] })),
   );
   if (brimEars) files.set(BRIM_EAR_POINTS_PATH, encodeText(brimEars));
+  // Object order here is the same 1-based order the core model writes, which is
+  // what the pinned reader matches profiles back to.
+  const layerHeights = encodeLayerHeightsProfile(
+    mappings
+      .map((mapping, index) => ({ objectId: index + 1, profile: mapping.object.layerHeightProfile ?? [] }))
+      .filter((entry) => entry.profile.length > 0),
+  );
+  if (layerHeights) files.set(LAYER_HEIGHTS_PROFILE_PATH, encodeText(layerHeights));
   if (state.customGcode.some((entry) => !entry.layerEvent)) {
     warnings.push(
       'Custom G-code hooks that are not layer events are preserved losslessly in the OrcaXR extension; the canonical model does not yet carry every BBS field needed to project them',
@@ -2031,12 +2045,14 @@ export function importBbsCore(
     extensionBlobs: [],
   };
   applyImportedBrimEars(files, plates, warnings);
+  applyImportedLayerHeightProfiles(files, plates, warnings);
   const consumedPaths = new Set([CORE_MODEL_PATH, ...consumedSvgPaths]);
   if (files.has(PROJECT_SETTINGS_PATH)) consumedPaths.add(PROJECT_SETTINGS_PATH);
   if (files.has(MODEL_SETTINGS_PATH)) consumedPaths.add(MODEL_SETTINGS_PATH);
   if (files.has(LAYER_RANGES_PATH)) consumedPaths.add(LAYER_RANGES_PATH);
   if (files.has(LAYER_EVENTS_PATH)) consumedPaths.add(LAYER_EVENTS_PATH);
   if (files.has(BRIM_EAR_POINTS_PATH)) consumedPaths.add(BRIM_EAR_POINTS_PATH);
+  if (files.has(LAYER_HEIGHTS_PROFILE_PATH)) consumedPaths.add(LAYER_HEIGHTS_PROFILE_PATH);
   return { state, assets, consumedPaths, warnings };
 }
 
@@ -2765,6 +2781,31 @@ function applyImportedBrimEars(
       positionMm: [...point.positionMm] as BrimEarPoint['positionMm'],
       headFrontRadiusMm: point.headFrontRadiusMm,
     }));
+  }
+}
+
+/**
+ * Apply imported variable layer-height profiles, matched by the same 1-based
+ * object order the core model writes.
+ */
+function applyImportedLayerHeightProfiles(
+  files: ReadonlyMap<string, Uint8Array>,
+  plates: readonly ProjectPlate[],
+  warnings: string[],
+): void {
+  const bytes = files.get(LAYER_HEIGHTS_PROFILE_PATH);
+  if (!bytes) return;
+  const decoded = decodeLayerHeightsProfile(decodeText(bytes, LAYER_HEIGHTS_PROFILE_PATH));
+  for (const warning of decoded.warnings) warnings.push(`${LAYER_HEIGHTS_PROFILE_PATH}: ${warning}`);
+  const ordered: ProjectObject[] = [];
+  for (const plate of [...plates].sort((left, right) => left.order - right.order)) ordered.push(...plate.objects);
+  for (const entry of decoded.entries) {
+    const object = ordered[entry.objectId - 1];
+    if (!object) {
+      warnings.push(`${LAYER_HEIGHTS_PROFILE_PATH}: object ${entry.objectId} is not in this package`);
+      continue;
+    }
+    object.layerHeightProfile = [...entry.profile];
   }
 }
 

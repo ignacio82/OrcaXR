@@ -1392,4 +1392,49 @@ await test('a BBS shape with no SVG reference is not mistaken for an SVG part', 
   );
 });
 
+await test('a variable layer-height profile round-trips through the archive', async () => {
+  const serializer = new Bbs3mfProjectSerializer();
+  const fixture = createProjectFixture();
+  const object = fixture.state.plates[0].objects[0];
+  // A real edited profile: fixed first layer, a thinner band, then the top.
+  object.layerHeightProfile = [0, 0.2, 0.2, 0.2, 8, 0.12, 12, 0.12, 20, 0.2];
+
+  const archive = await serializer.serialize({
+    state: fixture.state,
+    assets: [fixture.asset],
+    sourceRevision: 13,
+    sourceHash: projectFingerprint(fixture.state),
+  });
+
+  const written = readSafeZip(archive.bytes).get('Metadata/layer_heights_profile.txt');
+  assert.ok(written, 'the pinned profile file is written');
+  const text = new TextDecoder().decode(written);
+  // Object ids are 1-based and every number is %f, which is what desktop Orca
+  // parses; anything else it silently ignores.
+  assert.match(text, /^object_id=1\|0\.000000;0\.200000;/);
+
+  const reopened = await serializer.deserialize(archive.bytes);
+  assert.deepEqual(
+    reopened.state.plates[0].objects[0].layerHeightProfile,
+    object.layerHeightProfile,
+    'the profile survives to the six decimals the format stores',
+  );
+});
+
+await test('an object with no profile writes no profile file at all', async () => {
+  const serializer = new Bbs3mfProjectSerializer();
+  const fixture = createProjectFixture();
+  const archive = await serializer.serialize({
+    state: fixture.state,
+    assets: [fixture.asset],
+    sourceRevision: 14,
+    sourceHash: projectFingerprint(fixture.state),
+  });
+  // Writing a flat profile for every object would grow every archive for no
+  // information, and upstream does not do it either.
+  assert.equal(readSafeZip(archive.bytes).has('Metadata/layer_heights_profile.txt'), false);
+  const reopened = await serializer.deserialize(archive.bytes);
+  assert.equal(reopened.state.plates[0].objects[0].layerHeightProfile, undefined);
+});
+
 console.log(`\nBBS-compatible 3MF serializer: ${passed} tests passed.`);

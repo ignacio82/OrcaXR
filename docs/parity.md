@@ -1440,7 +1440,7 @@ Local starting seams: [`MeshCut.ts`](../web/src/features/MeshCut.ts),
     along with `ModelVolumeType` role bindings; `HandyModelCatalog` manages remote/offline model
     sources. Parameter editing UI and SVG text entry remain open.
 
-- [ ] **P5.9 — Implement variable/adaptive layer-height editing.** For an eligible selected
+- [~] **P5.9 — Implement variable/adaptive layer-height editing.** For an eligible selected
   object, render the Z profile and height/quality legend; support manual add-detail/remove-detail,
   reset-to-base, local smoothing, wheel/controller edit-radius adjustment, Adaptive with
   Quality/Speed factor, Smooth with radius and Keep min, and full Reset. Use the pinned
@@ -1453,6 +1453,29 @@ Local starting seams: [`MeshCut.ts`](../web/src/features/MeshCut.ts),
     chords; show the resulting height at the cursor accessibly.
   - **Accept:** manual/adaptive/smooth/reset profiles compare numerically with reference fixtures,
     round-trip through official Orca, alter layer Z/heights as previewed, and undo exactly.
+  - **Current:** `project/objects/layerHeightProfile.ts` ports the pinned `Slicing.cpp` editor and
+    `SlicingAdaptive.cpp` generator, keeping upstream's own `[z, h, …]` representation and every
+    constant that goes with it — the 0.1 mm resampling step, six smoothing rounds, the raised
+    cosine falloff, `LAYER_HEIGHT_CHANGE_STEP`, and the 1.44/0.184 slope formula — so a profile is
+    numerically comparable rather than merely plausible. All four manual actions are implemented,
+    plus the biased Gaussian smoother with radius and Keep min, adaptive generation from the
+    object's own triangles, and the layer boundaries a profile produces.
+    Two behaviours are worth stating because both read backwards at first glance and getting either
+    wrong would silently hand an operator the opposite of what they asked for: the pinned
+    "Quality / Speed" factor is **finest at 0**, and a *vertical* wall takes the maximum layer
+    height while a shallow, nearly horizontal surface takes the minimum. Both are pinned by test.
+    The profile lives on the canonical object, is written to and read from
+    `Metadata/layer_heights_profile.txt` in the pinned `object_id=N|z;h;…` form at `%f` precision,
+    and every entry point — manual edit, adaptive, smooth, reset — is one undoable command. Reset
+    clears the profile rather than writing a flat one, so an object that was never edited never
+    grows a profile in its saved archive.
+  - **Outstanding:** there is no on-canvas Z-profile editor or height/quality legend yet, so the
+    algorithms are reachable through commands rather than by dragging on the model; no
+    wheel/controller edit-radius control and no XR flow; the upstream conflict checks (organic
+    support, unequal prime-tower profiles) and the `layer_config_ranges` interaction that suppresses
+    edits inside a configured range are not enforced; and the preview does not yet re-render layer
+    Z from an edited profile, so "alter layer Z as previewed" is proven by `objectLayersFromProfile`
+    rather than on screen.
 
 P5 exit gate: the generated prepare/file manifest has no unmapped behavior; all enabled tools
 operate on canonical entities, survive history/3MF, and meet geometry/plate acceptance tests.

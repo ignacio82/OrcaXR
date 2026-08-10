@@ -248,6 +248,14 @@ export interface ProjectObject {
   layerRanges: LayerRange[];
   /** Pinned `ModelObject::brim_points`; absent means none were placed. */
   brimEars?: BrimEarPoint[];
+  /**
+   * Pinned `ModelObject::layer_height_profile`: `[z0, h0, z1, h1, …]`.
+   *
+   * Absent means the object slices at the profile's base layer height, which
+   * is the overwhelmingly common case; storing a flat profile for every object
+   * would bloat both the state and the exported 3MF for no information.
+   */
+  layerHeightProfile?: number[];
   extensionData?: Record<string, JsonValue>;
 }
 
