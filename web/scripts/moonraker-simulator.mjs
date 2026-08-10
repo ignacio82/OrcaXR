@@ -41,6 +41,14 @@ export async function startMoonrakerSimulator(options = {}) {
   let started = null;
   let notificationId = 0;
   for (const name of options.files ?? []) stored.set(name, Buffer.alloc(1));
+  /**
+   * Scan metadata, keyed by path, exactly as Moonraker's file manager holds it:
+   * a file it has never scanned has an entry here only if one was supplied, so
+   * "no estimated time" and "no thumbnail" are reachable states rather than
+   * assumptions.
+   */
+  const metadata = new Map(Object.entries(options.metadata ?? {}));
+  const modified = new Map(Object.entries(options.modified ?? {}));
 
   /**
    * Push the objects a state change touched, exactly as Klipper does. Live
@@ -73,7 +81,7 @@ export async function startMoonrakerSimulator(options = {}) {
       ? {
           'access-control-allow-origin': request.headers.origin ?? '*',
           'access-control-allow-headers': 'x-api-key, content-type, authorization',
-          'access-control-allow-methods': 'GET, POST, OPTIONS',
+          'access-control-allow-methods': 'GET, POST, DELETE, OPTIONS',
           'access-control-max-age': '60',
         }
       : {};
@@ -134,7 +142,83 @@ export async function startMoonrakerSimulator(options = {}) {
         response.end(JSON.stringify({ error: { message: 'not found' } }));
         return;
       }
-      return json({ filename: url.searchParams.get('filename'), size: content.length + state.reportedSizeDelta });
+      const path = url.searchParams.get('filename') ?? '';
+      return json({
+        filename: path,
+        size: content.length + state.reportedSizeDelta,
+        ...(modified.has(path) ? { modified: modified.get(path) } : {}),
+        ...(metadata.get(path) ?? {}),
+      });
+    }
+    // The file manager's browse/rename/delete/download surface. Moonraker
+    // exposes directories rather than one flat list, so the simulator does too;
+    // a flat stand-in would never exercise folder navigation.
+    if (url.pathname === '/server/files/directory') {
+      const requested = (url.searchParams.get('path') ?? 'gcodes').replace(/^gcodes\/?/, '').replace(/\/+$/, '');
+      const prefix = requested ? `${requested}/` : '';
+      const dirs = new Set();
+      const files = [];
+      for (const [path, content] of stored.entries()) {
+        if (!path.startsWith(prefix)) continue;
+        const rest = path.slice(prefix.length);
+        const slash = rest.indexOf('/');
+        if (slash === -1) {
+          files.push({
+            filename: rest,
+            size: content.length,
+            modified: modified.get(path) ?? 0,
+            permissions: 'rw',
+          });
+        } else {
+          dirs.add(rest.slice(0, slash));
+        }
+      }
+      return json({
+        dirs: [...dirs].map((dirname) => ({ dirname, modified: 0, size: 4096, permissions: 'rw' })),
+        files,
+        disk_usage: { total: 8_000_000_000, used: 1_000_000, free: 7_999_000_000 },
+        root_info: { name: 'gcodes', permissions: 'rw' },
+      });
+    }
+    if (url.pathname === '/server/files/move') {
+      const source = (url.searchParams.get('source') ?? '').replace(/^gcodes\//, '');
+      const dest = (url.searchParams.get('dest') ?? '').replace(/^gcodes\//, '');
+      if (!stored.has(source)) {
+        response.writeHead(404, { ...cors, 'content-type': 'application/json' });
+        response.end(JSON.stringify({ error: { message: 'not found' } }));
+        return;
+      }
+      stored.set(dest, stored.get(source));
+      stored.delete(source);
+      if (metadata.has(source)) {
+        metadata.set(dest, metadata.get(source));
+        metadata.delete(source);
+      }
+      if (modified.has(source)) {
+        modified.set(dest, modified.get(source));
+        modified.delete(source);
+      }
+      commands.push(`move:${source}->${dest}`);
+      return json({ item: { path: dest, root: 'gcodes' }, source_item: { path: source, root: 'gcodes' } });
+    }
+    if (url.pathname.startsWith('/server/files/gcodes/')) {
+      const path = decodeURIComponent(url.pathname.slice('/server/files/gcodes/'.length));
+      const content = stored.get(path);
+      if (!content) {
+        response.writeHead(404, { ...cors, 'content-type': 'application/json' });
+        response.end(JSON.stringify({ error: { message: 'not found' } }));
+        return;
+      }
+      if (request.method === 'DELETE') {
+        stored.delete(path);
+        metadata.delete(path);
+        modified.delete(path);
+        commands.push(`delete:${path}`);
+        return json({ item: { path, root: 'gcodes' }, action: 'delete_file' });
+      }
+      response.writeHead(200, { ...cors, 'content-type': 'application/octet-stream' });
+      response.end(content);
+      return;
     }
     if (url.pathname === '/printer/print/start') {
       started = url.searchParams.get('filename');
@@ -254,8 +338,16 @@ export async function startMoonrakerSimulator(options = {}) {
       Object.assign(state, patch);
       notifyStatus();
     },
+    /** Put a file on the printer, optionally with the scan metadata it would have. */
+    putFile(path, content = Buffer.alloc(1), scan = {}, modifiedSeconds) {
+      stored.set(path, Buffer.isBuffer(content) ? content : Buffer.from(content));
+      if (Object.keys(scan).length > 0) metadata.set(path, scan);
+      if (modifiedSeconds !== undefined) modified.set(path, modifiedSeconds);
+    },
     reset() {
       stored.clear();
+      metadata.clear();
+      modified.clear();
       requests.length = 0;
       apiKeys.length = 0;
       commands.length = 0;

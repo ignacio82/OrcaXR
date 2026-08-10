@@ -1,4 +1,26 @@
+import type { ActionContext } from '../ActionContext';
 import type { ActionDefinition as Action } from '../ActionRegistry';
+import type { PrinterStorageOperation } from '../../printer/PrinterStorage';
+
+/**
+ * Route one storage operation, refusing a payload that names a different one.
+ *
+ * These actions each act on a file the operator picked, so an action invoked
+ * with no target — from the command palette, say — has to say what is missing
+ * rather than guess at a file.
+ */
+function storageOperation(
+  ctx: ActionContext,
+  operation: PrinterStorageOperation | undefined,
+  kind: PrinterStorageOperation['kind'],
+  label: string,
+): void | Promise<void> {
+  if (!operation || operation.kind !== kind) {
+    ctx.reportCapabilityUnavailable(label, 'Pick a file in the printer storage browser first.');
+    return;
+  }
+  return ctx.operatePrinterStorage(operation);
+}
 
 export const advancedActions: Action[] = [
   {
@@ -151,6 +173,58 @@ export const advancedActions: Action[] = [
     disclosure: 'inspector',
     hint: 'Halt the printer immediately; Klipper then needs a firmware restart',
     run: (ctx) => ctx.controlPrintJob('emergency-stop'),
+  },
+  {
+    id: 'printer_browse_storage',
+    mcpTool: 'browse_printer_storage',
+    label: 'Browse Printer Files',
+    icon: 'file',
+    group: 'advanced',
+    disclosure: 'inspector',
+    hint: "List the G-code already on the connected printer, with each file's own metadata",
+    run: (ctx, invocation) => {
+      const operation = invocation.printerStorage;
+      return ctx.operatePrinterStorage(
+        operation?.kind === 'browse' ? operation : { kind: 'browse', ...(operation ? { path: operation.path } : {}) },
+      );
+    },
+  },
+  {
+    id: 'printer_print_stored_file',
+    mcpTool: 'print_stored_file',
+    label: 'Print Stored File',
+    icon: 'printer_resume',
+    group: 'advanced',
+    disclosure: 'inspector',
+    hint: 'Start a print of a file already on the printer, without re-slicing or re-uploading it',
+    run: (ctx, invocation) => storageOperation(ctx, invocation.printerStorage, 'print', 'Print Stored File'),
+  },
+  {
+    id: 'printer_rename_stored_file',
+    label: 'Rename Stored File',
+    icon: 'edit',
+    group: 'advanced',
+    disclosure: 'inspector',
+    hint: 'Rename one file on the printer, leaving it in the folder it is already in',
+    run: (ctx, invocation) => storageOperation(ctx, invocation.printerStorage, 'rename', 'Rename Stored File'),
+  },
+  {
+    id: 'printer_download_stored_file',
+    label: 'Download Stored File',
+    icon: 'download',
+    group: 'advanced',
+    disclosure: 'inspector',
+    hint: "Fetch one file's bytes from the printer to this device",
+    run: (ctx, invocation) => storageOperation(ctx, invocation.printerStorage, 'download', 'Download Stored File'),
+  },
+  {
+    id: 'printer_delete_stored_file',
+    label: 'Delete Stored File',
+    icon: 'delete',
+    group: 'advanced',
+    disclosure: 'inspector',
+    hint: 'Remove one file from the printer after an explicit confirmation',
+    run: (ctx, invocation) => storageOperation(ctx, invocation.printerStorage, 'delete', 'Delete Stored File'),
   },
   {
     id: 'view_webcam',

@@ -161,6 +161,13 @@ export const ACTION_IDS_BY_PARITY_TASK = {
     'printer_cancel_print',
     'printer_emergency_stop',
   ],
+  'P9.5': [
+    'printer_browse_storage',
+    'printer_print_stored_file',
+    'printer_rename_stored_file',
+    'printer_download_stored_file',
+    'printer_delete_stored_file',
+  ],
   'P9.6': ['view_webcam'],
   'P10.3': ['help_shortcuts'],
   'P11.1': ['file_new_project', 'file_open_project', 'file_save_project', 'file_save_project_as'],

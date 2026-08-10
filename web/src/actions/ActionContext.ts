@@ -19,6 +19,7 @@ import type { ObjectTreeEntityRef } from '../project/objects';
 import type { PaintChannel, PaintToolKind } from '../project/painting/PaintStrokeService';
 import type { ScopedOverrideTarget } from '../project/scopedOverrides';
 import type { PrintJobCommand } from '../printer/PrintJobControl';
+import type { PrinterStorageOperation } from '../printer/PrinterStorage';
 import type { GcodePreviewViewPatch } from '../slicer/GcodePreviewSession';
 
 /** Modal tool that authors each facet channel. */
@@ -137,6 +138,9 @@ export class ActionContext {
     guard: Readonly<{ sourceRevision: number; sourceHash: string }>,
   ): void {
     this.workspace.setScopedOverrides(target, overrides, guard);
+  }
+  operatePrinterStorage(operation: PrinterStorageOperation): Promise<void> {
+    return this.workspace.operatePrinterStorage(operation);
   }
   mutateVirtualFilament(request: CanonicalVirtualFilamentMutationRequest): void {
     this.workspace.mutateVirtualFilament(request);

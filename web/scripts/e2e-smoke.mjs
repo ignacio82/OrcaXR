@@ -957,6 +957,7 @@ async function sliceAndSendActivePlate(page, printer) {
   );
 
   await controlRunningPrint(page, printer);
+  await browsePrinterStorage(page, printer);
   await inspectAndAuthorFromPreview(page);
 
   await clickMenuAction(page, 'edit_undo');
@@ -1092,6 +1093,103 @@ async function controlRunningPrint(page, printer) {
     true,
     'a finished job offers nothing to cancel',
   );
+}
+
+/**
+ * The other half of a print workflow: the files already on the machine.
+ *
+ * Everything here is driven through the shipped panel rather than the module,
+ * because the failures that matter are the wiring ones — an action the surface
+ * cannot reach, a delete that acts on the wrong row, a thumbnail requested with
+ * the credential in a URL. The simulator holds a scanned file with a thumbnail
+ * and an unscanned one, so "reports nothing" is checked against a real absence.
+ */
+async function browsePrinterStorage(page, printer) {
+  printer.putFile(
+    'projects/tower.gcode',
+    Buffer.from('G1 X1 Y1 E1\n'),
+    {
+      estimated_time: 5400,
+      filament_weight_total: 21.5,
+      slicer: 'OrcaSlicer',
+      thumbnails: [{ width: 300, height: 300, size: 8, relative_path: '.thumbs/tower.png' }],
+    },
+    1_800_000_000,
+  );
+  printer.putFile('projects/.thumbs/tower.png', Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+
+  await showInspectorTab(page, 'printer');
+  await page.$eval('#printer-storage-details', (details) => {
+    details.closest('details')?.setAttribute('open', '');
+    details.setAttribute('open', '');
+  });
+  await page.waitForSelector('[data-printer-storage-panel="true"]', { timeout: 30_000 });
+  await page.$eval('[data-printer-storage-refresh]', (button) => button.click());
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-printer-storage-list]')?.textContent.includes('projects'),
+    { timeout: 30_000 },
+  );
+
+  // Folders are navigable; the uploaded plates live at the root, the seeded
+  // file one level down.
+  await page.$eval('[data-printer-storage-list]', (list) => {
+    const row = [...list.querySelectorAll('button')].find((button) => button.textContent.includes('projects'));
+    if (!row) throw new Error('no projects folder row');
+    row.click();
+  });
+  await page.waitForSelector('[data-printer-storage-file="projects/tower.gcode"]', { timeout: 30_000 });
+
+  await page.$eval('[data-printer-storage-file="projects/tower.gcode"]', (row) => row.click());
+  await page.waitForFunction(() => globalThis.document.querySelector('[data-printer-storage-thumbnail]') !== null, {
+    timeout: 30_000,
+  });
+  const facts = await page.$eval('[data-printer-storage-facts]', (list) =>
+    [...list.children].map((node) => node.textContent),
+  );
+  assert.ok(facts.includes('1 h 30 min'), `estimated time missing from ${JSON.stringify(facts)}`);
+  assert.ok(facts.includes('21.5 g'), `filament weight missing from ${JSON.stringify(facts)}`);
+  assert.equal(
+    await page.$eval('[data-printer-storage-thumbnail]', (image) => image.src.startsWith('blob:')),
+    true,
+    'the thumbnail is fetched with the session credential, never by pointing an <img> at the printer',
+  );
+
+  // Reprint the stored file: nothing is uploaded, and the live job picks it up.
+  const storedBefore = printer.stored.size;
+  await page.$eval('[data-printer-storage-action="print"]', (button) => button.click());
+  await page.waitForFunction(
+    () => /^Printing projects\/tower\.gcode/.test(globalThis.document.getElementById('status-text')?.textContent ?? ''),
+    { timeout: 30_000 },
+  );
+  assert.equal(printer.started, 'projects/tower.gcode');
+  assert.equal(printer.stored.size, storedBefore, 'a reprint uploads nothing');
+
+  // Rename in place, then delete after an explicit confirmation.
+  await page.evaluate(() => {
+    globalThis.window.prompt = () => 'tower-v2.gcode';
+  });
+  await page.$eval('[data-printer-storage-action="rename"]', (button) => button.click());
+  await page.waitForSelector('[data-printer-storage-file="projects/tower-v2.gcode"]', { timeout: 30_000 });
+  assert.equal(printer.stored.has('projects/tower.gcode'), false);
+
+  await page.$eval('[data-printer-storage-file="projects/tower-v2.gcode"]', (row) => row.click());
+  await page.$eval('[data-printer-storage-action="delete"]', (button) => button.click());
+  await page.waitForSelector('[data-print-job-confirm="true"]', { timeout: 30_000 });
+  await page.click('[data-print-job-confirm-choice="cancel"]');
+  await page.waitForFunction(() => !globalThis.document.querySelector('[data-print-job-confirm="true"]'));
+  assert.equal(printer.stored.has('projects/tower-v2.gcode'), true, 'a dismissed delete removes nothing');
+
+  await page.$eval('[data-printer-storage-action="delete"]', (button) => button.click());
+  await page.waitForSelector('[data-print-job-confirm="true"]', { timeout: 30_000 });
+  await page.click('[data-print-job-confirm-choice="confirm"]');
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-printer-storage-file="projects/tower-v2.gcode"]') === null,
+    { timeout: 30_000 },
+  );
+  assert.equal(printer.stored.has('projects/tower-v2.gcode'), false);
+  assert.equal(printer.stored.has('projects/.thumbs/tower.png'), true, 'a sibling survived the delete');
+  await page.$eval('#printer-storage-details', (details) => details.removeAttribute('open'));
+  console.log('[e2e] printer storage browsed, reprinted, renamed, and deleted behind a confirmation');
 }
 
 function checksumOf(buffer) {
@@ -2784,7 +2882,7 @@ try {
   assert.deepStrictEqual(pageErrors, [], `uncaught page errors: ${pageErrors.join('\n')}`);
   assert.deepStrictEqual(policyErrors, [], `CSP violations: ${policyErrors.join('\n')}`);
   console.log(
-    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings that the same panel also writes to one object without touching the project, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a printer plus slicer configured once that are still configured after a reload, device preferences that apply live and reset without touching presets, and two named printers that switch without their credentials following each other).',
+    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings that the same panel also writes to one object without touching the project, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a stored file browsed, reprinted without re-uploading, renamed, and deleted behind a confirmation, a printer plus slicer configured once that are still configured after a reload, device preferences that apply live and reset without touching presets, and two named printers that switch without their credentials following each other).',
   );
 } finally {
   await browser.close();

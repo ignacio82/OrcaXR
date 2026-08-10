@@ -7,4 +7,5 @@ export * from './SessionCredentials';
 export * from './PrintJobControl';
 export * from './PrintJobStatus';
 export * from './PrintJobSubmission';
+export * from './PrinterStorage';
 export * from './PrintToolMapping';

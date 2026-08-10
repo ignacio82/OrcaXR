@@ -28,7 +28,7 @@
     "typecheck": "tsc --noEmit",
     "test": "npm run test:unit",
     "test:unit": "node scripts/run-tests.mjs",
-    "test:integration": "node scripts/run-tests.mjs project3mf.test.ts local-network.test.ts webmcp-client.test.ts moonraker-print-simulator.test.ts",
+    "test:integration": "node scripts/run-tests.mjs project3mf.test.ts local-network.test.ts webmcp-client.test.ts moonraker-print-simulator.test.ts moonraker-storage-simulator.test.ts",
     "test:local-network": "node scripts/run-tests.mjs local-network.test.ts",
     "test:project": "node scripts/run-tests.mjs src/project/",
     "test:settings": "node scripts/run-tests.mjs src/settings/",

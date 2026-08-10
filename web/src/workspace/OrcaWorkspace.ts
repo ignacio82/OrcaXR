@@ -55,6 +55,7 @@ import { detectModelFormat } from '../project/import/formats';
 import type { LayerEventType } from '../project/domain/model';
 import type { PrintJobCommand } from '../printer/PrintJobControl';
 import type { PrintJobIntent } from '../printer/PrintJobSubmission';
+import type { PrinterStorageOperation } from '../printer/PrinterStorage';
 import { summarizeGcodeToolUsage } from '../printer/PrintToolMapping';
 import { serializePrintConfigArray } from '../settings/configSerialization';
 import type { ArrangeRegion } from '../project/objects/arrange';
@@ -3977,6 +3978,8 @@ export class OrcaWorkspace extends xb.Script {
   onRequestPrintSubmission: ((intent: PrintJobIntent) => Promise<void>) | null = null;
   /** Injected by the live typed printer composition root; owns confirmation. */
   onRequestPrintJobCommand: ((command: PrintJobCommand) => Promise<void>) | null = null;
+  /** Injected by the live typed printer composition root; owns confirmation. */
+  onRequestPrinterStorage: ((operation: PrinterStorageOperation) => Promise<void>) | null = null;
 
   public async testPrinterConnection(): Promise<void> {
     if (!this.onRequestPrinterConnectionTest) {
@@ -4031,6 +4034,21 @@ export class OrcaWorkspace extends xb.Script {
       return;
     }
     await this.onRequestPrintJobCommand(command);
+  }
+
+  /**
+   * Ask the shell to act on a file that is already on the printer (P9.5).
+   *
+   * The workspace does not browse the machine itself for the same reason it
+   * does not hold a socket: the file list belongs to the connection, and a
+   * cached copy would let a delete act on something the printer no longer has.
+   */
+  public async operatePrinterStorage(operation: PrinterStorageOperation): Promise<void> {
+    if (!this.onRequestPrinterStorage) {
+      this.setStatus('Printer storage is unavailable in this shell.');
+      return;
+    }
+    await this.onRequestPrinterStorage(operation);
   }
 
   // --- Import / Export Config (Orca File → Import / Export Config) -----

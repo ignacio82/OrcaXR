@@ -19,6 +19,7 @@ import type { FilamentId, PlateId } from '../project/domain/ids';
 import type { ConfigMap } from '../project/domain/model';
 import type { ObjectTreeEntityRef } from '../project/objects';
 import type { ScopedOverrideTarget } from '../project/scopedOverrides';
+import type { PrinterStorageOperation } from '../printer/PrinterStorage';
 import type { AssemblyAlignmentKind } from '../project/objects/assembly';
 import type { PaintChannel, PaintToolKind } from '../project/painting/PaintStrokeService';
 import type { GcodePreviewViewPatch } from '../slicer/GcodePreviewSession';
@@ -153,6 +154,8 @@ export interface ActionInvocation {
     readonly sourceRevision: number;
     readonly sourceHash: string;
   };
+  /** One printer-storage operation requested by a storage surface (P9.5). */
+  printerStorage?: PrinterStorageOperation;
   /** Exact canonical entity set requested by an Objects surface. */
   objectsSelection?: {
     readonly refs: readonly ObjectTreeEntityRef[];

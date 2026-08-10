@@ -19,10 +19,18 @@ import {
   PrintJobCommandError,
   PrintJobStatusModel,
   PrintSubmissionError,
+  PrinterStorageError,
+  deletePrinterFile,
+  downloadPrinterFile,
+  listPrinterDirectory,
+  movePrinterFile,
   printJobCommandAvailability,
   queryMoonrakerFilamentSlots,
   queryPrintReadiness,
+  readPrinterFileMetadata,
+  renamedStoragePath,
   savePrinterEndpointPreferences,
+  startStoredPrint,
   submitPrintJob,
   validateToolMapping,
   PRINT_JOB_OBJECTS,
@@ -31,6 +39,9 @@ import {
   type MoonrakerHandshake,
   type PrintJobCommand,
   type PrintJobSnapshot,
+  type PrinterDirectoryListing,
+  type PrinterFileMetadata,
+  type PrinterStorageOperation,
 } from './printer';
 import { registerWorkspaceTools } from './mcp/WorkspaceTools';
 import { registerSystemTools } from './mcp/SystemTools';
@@ -52,6 +63,7 @@ import { askThreeMfIntake } from './ui/dom/FileIntakeDialog';
 import { askPrintSubmission } from './ui/dom/PrintSubmissionDialog';
 import { askPrintJobConfirmation } from './ui/dom/PrintJobConfirmDialog';
 import { PrintJobPanel } from './ui/dom/PrintJobPanel';
+import { PrinterStoragePanel } from './ui/dom/PrinterStoragePanel';
 import { GcodePreviewPanel, type GcodePreviewPanelAdapter } from './ui/dom/GcodePreviewPanel';
 import { PreviewScrubber } from './ui/dom/PreviewScrubber';
 import { InspectorTabs } from './ui/dom/InspectorTabs';
@@ -160,6 +172,15 @@ const PRINT_JOB_ACTION_IDS: Readonly<Record<PrintJobCommand, string>> = Object.f
   cancel: 'printer_cancel_print',
   'emergency-stop': 'printer_emergency_stop',
   'firmware-restart': 'printer_emergency_stop',
+});
+
+/** Registry action that owns each storage operation, so the panel routes through one path. */
+const PRINTER_STORAGE_ACTION_IDS: Readonly<Record<PrinterStorageOperation['kind'], string>> = Object.freeze({
+  browse: 'printer_browse_storage',
+  print: 'printer_print_stored_file',
+  rename: 'printer_rename_stored_file',
+  download: 'printer_download_stored_file',
+  delete: 'printer_delete_stored_file',
 });
 
 /** Commands that end or halt work already in progress get an explicit confirmation. */
@@ -563,6 +584,188 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       workspace.setStatus(message);
     }
   };
+
+  // Printer storage: browsing, reprinting, renaming, downloading, and deleting
+  // what is already on the machine. Every operation goes through the registry so
+  // the same guarded path serves the panel, the command palette, and automation.
+  const storageState: {
+    listing?: PrinterDirectoryListing;
+    metadata?: PrinterFileMetadata;
+    thumbnailUrl?: string;
+    selected?: string;
+    busy: boolean;
+    message?: string;
+  } = { busy: false };
+  const storageListeners = new Set<() => void>();
+  const notifyStorage = () => {
+    for (const listener of storageListeners) listener();
+  };
+  const releaseThumbnail = () => {
+    if (storageState.thumbnailUrl) URL.revokeObjectURL(storageState.thumbnailUrl);
+    delete storageState.thumbnailUrl;
+  };
+  /**
+   * Read the selected file's own metadata and thumbnail.
+   *
+   * A file the printer has never scanned simply has none; that is reported as
+   * absent rather than retried, because the retry would return the same nothing.
+   */
+  const loadStorageSelection = async (transport: MoonrakerTransport, path: string): Promise<void> => {
+    releaseThumbnail();
+    delete storageState.metadata;
+    try {
+      storageState.metadata = await readPrinterFileMetadata(transport, path);
+    } catch {
+      return;
+    }
+    const thumbnail = storageState.metadata.thumbnails[0];
+    if (!thumbnail) return;
+    try {
+      const bytes = await downloadPrinterFile(transport, thumbnail.path);
+      storageState.thumbnailUrl = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'image/png' }));
+    } catch {
+      // A missing thumbnail is a missing thumbnail; the facts still render.
+    }
+  };
+
+  workspace.onRequestPrinterStorage = async (operation) => {
+    if (!printerCfg.host.trim()) {
+      workspace.setStatus('Enter an explicit Moonraker endpoint first.');
+      return;
+    }
+    storageState.busy = true;
+    notifyStorage();
+    try {
+      const { transport } = await connectConfiguredPrinter();
+      switch (operation.kind) {
+        case 'browse': {
+          storageState.listing = await listPrinterDirectory(transport, operation.path ?? '');
+          // A selection that the new listing does not contain is dropped rather
+          // than kept pointing at a file this folder does not hold.
+          if (storageState.selected && !storageState.listing.files.some((f) => f.path === storageState.selected)) {
+            delete storageState.selected;
+            delete storageState.metadata;
+            releaseThumbnail();
+          }
+          storageState.message = `${storageState.listing.files.length} file${
+            storageState.listing.files.length === 1 ? '' : 's'
+          } in gcodes${storageState.listing.path ? `/${storageState.listing.path}` : ''}.`;
+          break;
+        }
+        case 'print': {
+          const started = await startStoredPrint(transport, operation.path);
+          await transport
+            .request<unknown>(PRINT_JOB_QUERY_PATH, { operation: 'print_job_status' })
+            .then((payload) => publishPrintJob(printJobStatus.applyQuery(payload)))
+            .catch(() => {});
+          storageState.message = `Printing ${started}.`;
+          workspace.setStatus(`Printing ${started} from the printer's own storage.`);
+          break;
+        }
+        case 'rename': {
+          const next = await movePrinterFile(
+            transport,
+            operation.path,
+            renamedStoragePath(operation.path, operation.nextName),
+          );
+          storageState.selected = next;
+          storageState.listing = await listPrinterDirectory(transport, storageState.listing?.path ?? '');
+          await loadStorageSelection(transport, next);
+          storageState.message = `Renamed to ${next}.`;
+          break;
+        }
+        case 'download': {
+          const bytes = await downloadPrinterFile(transport, operation.path);
+          workspace.onDownloadFile?.(
+            operation.path.split('/').pop() ?? operation.path,
+            new TextDecoder().decode(bytes),
+            'text/plain',
+          );
+          storageState.message = `Downloaded ${operation.path}.`;
+          break;
+        }
+        case 'delete': {
+          await deletePrinterFile(transport, operation.path);
+          if (storageState.selected === operation.path) {
+            delete storageState.selected;
+            delete storageState.metadata;
+            releaseThumbnail();
+          }
+          storageState.listing = await listPrinterDirectory(transport, storageState.listing?.path ?? '');
+          storageState.message = `Deleted ${operation.path}.`;
+          break;
+        }
+      }
+    } catch (error) {
+      const message =
+        error instanceof PrinterStorageError || error instanceof MoonrakerTransportError
+          ? error.message
+          : (error as Error).message;
+      storageState.message = message;
+      workspace.setStatus(`Printer storage: ${message}`);
+    } finally {
+      storageState.busy = false;
+      notifyStorage();
+    }
+  };
+
+  const printerStorageHost = document.getElementById('printer-storage-host');
+  if (printerStorageHost) {
+    const storagePanel = new PrinterStoragePanel(printerStorageHost, {
+      getListing: () => storageState.listing,
+      getMetadata: () => storageState.metadata,
+      getThumbnailUrl: () => storageState.thumbnailUrl,
+      getSelectedPath: () => storageState.selected,
+      getStatus: () => ({
+        busy: storageState.busy,
+        ...(storageState.message ? { message: storageState.message } : {}),
+      }),
+      subscribe: (listener) => {
+        storageListeners.add(listener);
+        return () => storageListeners.delete(listener);
+      },
+      select: (path) => {
+        storageState.selected = path;
+        delete storageState.metadata;
+        releaseThumbnail();
+        notifyStorage();
+        if (!path) return;
+        void connectConfiguredPrinter()
+          .then(({ transport }) => loadStorageSelection(transport, path))
+          .catch(() => {})
+          .finally(notifyStorage);
+      },
+      run: async (operation) => {
+        await registry.invoke(PRINTER_STORAGE_ACTION_IDS[operation.kind], 'dom-inspector', actionCtx, uiState.get(), {
+          printerStorage: operation,
+        });
+      },
+      askName: async (current) => {
+        const next = window.prompt('New name for this file on the printer', current);
+        return next === null ? undefined : next.trim();
+      },
+      confirmDelete: (path) =>
+        askPrintJobConfirmation({
+          title: 'Delete this file from the printer?',
+          message: path,
+          consequences: [
+            'The file is removed from the printer immediately.',
+            'This cannot be undone from OrcaXR, and the printer may be the only place it exists.',
+          ],
+          confirmLabel: 'Delete file',
+          dismissLabel: 'Keep it',
+        }),
+    });
+    storagePanel.mount();
+    window.addEventListener(
+      'pagehide',
+      () => {
+        releaseThumbnail();
+        storagePanel.dispose();
+      },
+      { once: true },
+    );
+  }
 
   const printJobHost = document.getElementById('printer-job-host');
   if (printJobHost) {

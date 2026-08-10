@@ -25,6 +25,12 @@ const DEFAULT_VERSION_POLICY: MoonrakerVersionPolicy = Object.freeze({
   maximumMajor: 1,
 });
 const MAX_JSON_RESPONSE_BYTES = 2 * 1024 * 1024;
+/**
+ * Cap for a downloaded file. G-code from a printer is routinely tens of
+ * megabytes, so the JSON cap would refuse ordinary files; this bound still
+ * refuses a response large enough to exhaust the tab.
+ */
+const MAX_DOWNLOAD_BYTES = 256 * 1024 * 1024;
 const MAX_SOCKET_MESSAGE_CHARS = 1024 * 1024;
 const KNOWN_COMPONENTS = new Set([
   'announcements',
@@ -379,11 +385,75 @@ export class MoonrakerTransport {
     return Object.freeze({ server, printer, capabilities });
   }
 
-  private async fetchResult<T>(
+  /**
+   * Fetch a file's bytes with the session's credentials attached.
+   *
+   * Downloads exist as their own entry point because they are the one response
+   * that is not JSON, and because a thumbnail or a stored G-code must never be
+   * reached by putting the API key in a URL — `fetchResult` refuses that, and
+   * an `<img src>` straight at the printer would have no other way to
+   * authenticate.
+   */
+  async download(path: string, options: MoonrakerRequestOptions = {}): Promise<Uint8Array> {
+    if (this.stateValue.status !== 'connected') {
+      throw new MoonrakerTransportError('invalid_state', options.operation ?? 'download');
+    }
+    const generation = this.generation;
+    const socketEpoch = this.socketEpoch;
+    const operation = safeOperationName(options.operation ?? 'download');
+    const bytes = await this.fetchWith(generation, path, options, operation, async (response) => {
+      const declaredLength = Number(response.headers.get('content-length') ?? '0');
+      if (Number.isFinite(declaredLength) && declaredLength > MAX_DOWNLOAD_BYTES) {
+        throw new MoonrakerTransportError('invalid_response', operation);
+      }
+      const buffer = await response.arrayBuffer();
+      if (buffer.byteLength > MAX_DOWNLOAD_BYTES) {
+        throw new MoonrakerTransportError('invalid_response', operation);
+      }
+      return new Uint8Array(buffer);
+    });
+    if (this.stateValue.status !== 'connected' || this.generation !== generation || this.socketEpoch !== socketEpoch) {
+      throw new MoonrakerTransportError('cancelled', operation);
+    }
+    return bytes;
+  }
+
+  private fetchResult<T>(
     session: number,
     path: string,
     options: MoonrakerRequestOptions,
     operation: string,
+  ): Promise<T> {
+    return this.fetchWith<T>(session, path, options, operation, async (response) => {
+      const declaredLength = Number(response.headers.get('content-length') ?? '0');
+      if (Number.isFinite(declaredLength) && declaredLength > MAX_JSON_RESPONSE_BYTES) {
+        throw new MoonrakerTransportError('invalid_response', operation);
+      }
+      const text = await response.text();
+      if (text.length > MAX_JSON_RESPONSE_BYTES) throw new MoonrakerTransportError('invalid_response', operation);
+      let envelope: unknown;
+      try {
+        envelope = JSON.parse(text);
+      } catch {
+        throw new MoonrakerTransportError('invalid_response', operation);
+      }
+      if (!isRecord(envelope)) throw new MoonrakerTransportError('invalid_response', operation);
+      if ('error' in envelope) throw new MoonrakerTransportError('protocol_error', operation);
+      if (!('result' in envelope)) {
+        if (options.acceptBareEnvelope) return envelope as T;
+        throw new MoonrakerTransportError('invalid_response', operation);
+      }
+      return envelope.result as T;
+    });
+  }
+
+  /** Shared request plumbing: session guard, credentials, timeout, and abort. */
+  private async fetchWith<T>(
+    session: number,
+    path: string,
+    options: MoonrakerRequestOptions,
+    operation: string,
+    read: (response: Response) => Promise<T>,
   ): Promise<T> {
     this.assertCurrentSession(session, operation);
     const url = joinMoonrakerEndpointPath(this.endpoint.transportHttpUrl, path);
@@ -424,25 +494,7 @@ export class MoonrakerTransport {
         credentials: this.endpoint.usesSameOriginProxy ? 'same-origin' : 'omit',
       });
       if (!response.ok) throw httpStatusError(response.status, operation);
-      const declaredLength = Number(response.headers.get('content-length') ?? '0');
-      if (Number.isFinite(declaredLength) && declaredLength > MAX_JSON_RESPONSE_BYTES) {
-        throw new MoonrakerTransportError('invalid_response', operation);
-      }
-      const text = await response.text();
-      if (text.length > MAX_JSON_RESPONSE_BYTES) throw new MoonrakerTransportError('invalid_response', operation);
-      let envelope: unknown;
-      try {
-        envelope = JSON.parse(text);
-      } catch {
-        throw new MoonrakerTransportError('invalid_response', operation);
-      }
-      if (!isRecord(envelope)) throw new MoonrakerTransportError('invalid_response', operation);
-      if ('error' in envelope) throw new MoonrakerTransportError('protocol_error', operation);
-      if (!('result' in envelope)) {
-        if (options.acceptBareEnvelope) return envelope as T;
-        throw new MoonrakerTransportError('invalid_response', operation);
-      }
-      return envelope.result as T;
+      return await read(response);
     } catch (error) {
       const normalized =
         error instanceof MoonrakerTransportError
