@@ -146,6 +146,9 @@ export class ActionContext {
   operatePrinterConsole(operation: PrinterConsoleOperation): Promise<void> {
     return this.workspace.operatePrinterConsole(operation);
   }
+  loadPrintHistory(start: number): Promise<void> {
+    return this.workspace.loadPrintHistory(start);
+  }
   mutateVirtualFilament(request: CanonicalVirtualFilamentMutationRequest): void {
     this.workspace.mutateVirtualFilament(request);
   }

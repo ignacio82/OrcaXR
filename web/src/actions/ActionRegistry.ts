@@ -159,6 +159,8 @@ export interface ActionInvocation {
   printerStorage?: PrinterStorageOperation;
   /** One console command or macro invocation requested by a console surface (P9.6). */
   printerConsole?: PrinterConsoleOperation;
+  /** Offset into the printer's own job ordering, for a paged history surface. */
+  printHistoryStart?: number;
   /** Exact canonical entity set requested by an Objects surface. */
   objectsSelection?: {
     readonly refs: readonly ObjectTreeEntityRef[];

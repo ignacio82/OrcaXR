@@ -38,6 +38,9 @@ export interface MoonrakerSimulatorOptions {
   readonly configSettings?: Readonly<Record<string, Record<string, unknown>>>;
   /** Canned console replies by command mnemonic; anything else answers `ok`. */
   readonly gcodeResponses?: Readonly<Record<string, string>>;
+  /** Recorded jobs, newest first, as Moonraker's history component stores them. */
+  readonly history?: readonly Record<string, unknown>[];
+  readonly historyTotals?: Readonly<Record<string, number>>;
 }
 
 export interface MoonrakerSimulator {

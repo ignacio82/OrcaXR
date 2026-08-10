@@ -19,6 +19,7 @@ import {
   PrintJobCommandError,
   PrintJobStatusModel,
   PrintSubmissionError,
+  PrintHistoryError,
   PrinterConsoleError,
   PrinterConsoleLog,
   PrinterStorageError,
@@ -26,12 +27,14 @@ import {
   buildMacroInvocation,
   deletePrinterFile,
   downloadPrinterFile,
+  listPrintHistory,
   listPrinterDirectory,
   listPrinterMacros,
   movePrinterFile,
   printJobCommandAvailability,
   queryMoonrakerFilamentSlots,
   queryPrintReadiness,
+  readPrintHistoryTotals,
   readPrinterFileMetadata,
   recentCommands,
   renamedStoragePath,
@@ -46,6 +49,8 @@ import {
   type MoonrakerHandshake,
   type PrintJobCommand,
   type PrintJobSnapshot,
+  type PrintHistoryPage,
+  type PrintHistoryTotals,
   type PrinterConsoleOperation,
   type PrinterDirectoryListing,
   type PrinterFileMetadata,
@@ -72,6 +77,7 @@ import { askThreeMfIntake } from './ui/dom/FileIntakeDialog';
 import { askPrintSubmission } from './ui/dom/PrintSubmissionDialog';
 import { askPrintJobConfirmation } from './ui/dom/PrintJobConfirmDialog';
 import { PrintJobPanel } from './ui/dom/PrintJobPanel';
+import { PrintHistoryPanel } from './ui/dom/PrintHistoryPanel';
 import { PrinterConsolePanel } from './ui/dom/PrinterConsolePanel';
 import { PrinterStoragePanel } from './ui/dom/PrinterStoragePanel';
 import { GcodePreviewPanel, type GcodePreviewPanelAdapter } from './ui/dom/GcodePreviewPanel';
@@ -893,6 +899,69 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     });
     consolePanel.mount();
     window.addEventListener('pagehide', () => consolePanel.dispose(), { once: true });
+  }
+
+  // The printer's own record of what it has run. Paged rather than fetched
+  // whole: a machine in daily service has thousands of jobs.
+  const historyState: {
+    page?: PrintHistoryPage;
+    totals?: PrintHistoryTotals;
+    busy: boolean;
+    message?: string;
+  } = { busy: false };
+  const historyListeners = new Set<() => void>();
+  const notifyHistory = () => {
+    for (const listener of historyListeners) listener();
+  };
+
+  workspace.onRequestPrintHistory = async (start) => {
+    if (!printerCfg.host.trim()) {
+      workspace.setStatus('Enter an explicit Moonraker endpoint first.');
+      return;
+    }
+    historyState.busy = true;
+    notifyHistory();
+    try {
+      const { transport } = await connectConfiguredPrinter();
+      historyState.page = await listPrintHistory(transport, { start, limit: 20 });
+      // Totals are a separate endpoint; a printer that lists jobs but keeps no
+      // totals still shows its jobs rather than failing the whole load.
+      historyState.totals = await readPrintHistoryTotals(transport).catch(() => undefined);
+      historyState.message = `${historyState.page.total} recorded job${historyState.page.total === 1 ? '' : 's'}.`;
+    } catch (error) {
+      const message =
+        error instanceof PrintHistoryError || error instanceof MoonrakerTransportError
+          ? error.message
+          : (error as Error).message;
+      historyState.message = message;
+      workspace.setStatus(`Print history: ${message}`);
+    } finally {
+      historyState.busy = false;
+      notifyHistory();
+    }
+  };
+
+  const printerHistoryHost = document.getElementById('printer-history-host');
+  if (printerHistoryHost) {
+    const historyPanel = new PrintHistoryPanel(printerHistoryHost, {
+      getPage: () => historyState.page,
+      getTotals: () => historyState.totals,
+      getStatus: () => ({
+        busy: historyState.busy,
+        ...(historyState.message ? { message: historyState.message } : {}),
+      }),
+      subscribe: (listener) => {
+        historyListeners.add(listener);
+        return () => historyListeners.delete(listener);
+      },
+      load: async (start) => {
+        await registry.invoke('printer_view_history', 'dom-inspector', actionCtx, uiState.get(), {
+          printHistoryStart: start,
+        });
+      },
+    });
+    historyPanel.mount();
+    window.addEventListener('pagehide', () => historyPanel.dispose(), { once: true });
   }
 
   const printJobHost = document.getElementById('printer-job-host');

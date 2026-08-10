@@ -959,6 +959,7 @@ async function sliceAndSendActivePlate(page, printer) {
   await controlRunningPrint(page, printer);
   await browsePrinterStorage(page, printer);
   await usePrinterConsole(page, printer);
+  await readPrintHistory(page);
   await inspectAndAuthorFromPreview(page);
 
   await clickMenuAction(page, 'edit_undo');
@@ -1271,6 +1272,71 @@ async function usePrinterConsole(page, printer) {
   console.log('[e2e] printer console queried, refused a dismissed stepper release, and ran a macro with parameters');
 }
 
+/**
+ * The printer's own record of what it has run.
+ *
+ * Paging is the part a unit test cannot prove: the pager has to be driven by
+ * the count the printer reports, not by how many rows happened to arrive, or
+ * the last page silently becomes unreachable.
+ */
+async function readPrintHistory(page) {
+  await showInspectorTab(page, 'printer');
+  await page.$eval('#printer-history-details', (details) => details.setAttribute('open', ''));
+  await page.waitForSelector('[data-print-history-panel="true"]', { timeout: 30_000 });
+  await page.$eval('[data-print-history-refresh]', (button) => button.click());
+  await page.waitForSelector('[data-print-history-job="000001"]', { timeout: 30_000 });
+
+  const totals = await page.$eval('[data-print-history-totals]', (node) => node.textContent);
+  assert.match(totals, /23 jobs/);
+  assert.match(totals, /21 h 5 min printing/);
+  assert.match(totals, /96\.60 m filament/);
+
+  // A job the printer never finished reports nothing rather than zeroes, and a
+  // file that is gone says so instead of implying it can be reprinted.
+  const running = await page.$eval('[data-print-history-job="000001"]', (row) => ({
+    status: row.querySelector('[data-print-history-status-label]')?.dataset.printHistoryStatusLabel,
+    facts: row.querySelector('[data-print-history-facts]')?.textContent,
+  }));
+  assert.equal(running.status, 'in_progress');
+  assert.match(running.facts, /Printed —/);
+  assert.match(running.facts, /— filament/);
+  assert.equal(
+    await page.$eval('[data-print-history-job="000002"] [data-print-history-missing]', (node) => node.textContent),
+    'No longer on the printer',
+  );
+
+  // A completed run is comparable against its own estimate.
+  assert.match(
+    await page.$eval('[data-print-history-job="000003"] [data-print-history-facts]', (node) => node.textContent),
+    /\+10% vs estimate/,
+  );
+
+  const firstPage = await page.$eval('[data-print-history-page-label]', (node) => node.textContent);
+  assert.equal(firstPage, 'Page 1 of 2 — 23 jobs');
+  assert.equal(await page.$eval('[data-print-history-previous]', (button) => button.disabled), true);
+
+  await page.$eval('[data-print-history-next]', (button) => button.click());
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-print-history-page-label]')?.textContent === 'Page 2 of 2 — 23 jobs',
+    { timeout: 30_000 },
+  );
+  assert.equal(
+    await page.$eval('[data-print-history-next]', (button) => button.disabled),
+    true,
+    'the last page is last',
+  );
+  assert.equal(
+    await page.$$eval('[data-print-history-job]', (rows) => rows.length),
+    3,
+    'the final page holds the remainder',
+  );
+  await page.$eval('[data-print-history-previous]', (button) => button.click());
+  await page.waitForSelector('[data-print-history-job="000001"]', { timeout: 30_000 });
+
+  await page.$eval('#printer-history-details', (details) => details.removeAttribute('open'));
+  console.log('[e2e] print history read, paged to the last job, and back');
+}
+
 function checksumOf(buffer) {
   let checksum = 5381;
   for (const byte of buffer) checksum = ((checksum * 33) ^ byte) >>> 0;
@@ -1323,6 +1389,25 @@ const printer = await startMoonrakerSimulator({
     'gcode_macro reset_everything': { gcode: 'FIRMWARE_RESTART' },
   },
   gcodeResponses: { M115: 'FIRMWARE_NAME:Klipper FIRMWARE_VERSION:v0.12.0' },
+  // Enough recorded jobs to page, including one the printer never finished and
+  // one whose file has since been deleted.
+  history: Array.from({ length: 23 }, (_, index) => ({
+    job_id: String(index + 1).padStart(6, '0'),
+    filename: `history/job-${index + 1}.gcode`,
+    status: index === 0 ? 'in_progress' : index % 5 === 0 ? 'cancelled' : 'completed',
+    start_time: 1_800_000_000 - index * 7200,
+    end_time: index === 0 ? 0 : 1_800_003_600 - index * 7200,
+    ...(index === 0 ? {} : { print_duration: 3300 + index, total_duration: 3600 + index, filament_used: 4200 + index }),
+    exists: index !== 1,
+    metadata: { estimated_time: 3000 },
+  })),
+  historyTotals: {
+    total_jobs: 23,
+    total_time: 82_800,
+    total_print_time: 75_900,
+    total_filament_used: 96_600,
+    longest_print: 3322,
+  },
 });
 const { server, url } = await startPreview();
 const browser = await launchBrowser();
@@ -2972,7 +3057,7 @@ try {
   assert.deepStrictEqual(pageErrors, [], `uncaught page errors: ${pageErrors.join('\n')}`);
   assert.deepStrictEqual(policyErrors, [], `CSP violations: ${policyErrors.join('\n')}`);
   console.log(
-    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings that the same panel also writes to one object without touching the project, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a stored file browsed, reprinted without re-uploading, renamed, and deleted behind a confirmation, a console that answers a query over the socket, sends nothing when a stepper release is dismissed, and runs a macro with the parameters its own body declares, a printer plus slicer configured once that are still configured after a reload, device preferences that apply live and reset without touching presets, and two named printers that switch without their credentials following each other).',
+    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings that the same panel also writes to one object without touching the project, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a stored file browsed, reprinted without re-uploading, renamed, and deleted behind a confirmation, a console that answers a query over the socket, sends nothing when a stepper release is dismissed, and runs a macro with the parameters its own body declares, a print history paged by the count the printer reports, a printer plus slicer configured once that are still configured after a reload, device preferences that apply live and reset without touching presets, and two named printers that switch without their credentials following each other).',
   );
 } finally {
   await browser.close();

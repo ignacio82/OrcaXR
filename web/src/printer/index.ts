@@ -8,5 +8,6 @@ export * from './PrintJobControl';
 export * from './PrintJobStatus';
 export * from './PrintJobSubmission';
 export * from './PrinterConsole';
+export * from './PrinterHistory';
 export * from './PrinterStorage';
 export * from './PrintToolMapping';

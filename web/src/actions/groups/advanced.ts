@@ -270,6 +270,16 @@ export const advancedActions: Action[] = [
     run: (ctx) => ctx.operatePrinterConsole({ kind: 'refresh-macros' }),
   },
   {
+    id: 'printer_view_history',
+    mcpTool: 'list_print_history',
+    label: 'Print History',
+    icon: 'logs',
+    group: 'advanced',
+    disclosure: 'inspector',
+    hint: 'Read what this printer has already printed, with how each run ended and what it used',
+    run: (ctx, invocation) => ctx.loadPrintHistory(invocation.printHistoryStart ?? 0),
+  },
+  {
     id: 'view_webcam',
     label: 'View Webcam',
     icon: 'webcam',

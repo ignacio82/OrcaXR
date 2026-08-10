@@ -36,6 +36,9 @@ export async function startMoonrakerSimulator(options = {}) {
     configSettings: options.configSettings ?? {},
     /** Canned replies by command mnemonic; anything else answers `ok`. */
     gcodeResponses: options.gcodeResponses ?? {},
+    /** Recorded jobs, newest first, exactly as the history component stores them. */
+    history: options.history ?? [],
+    historyTotals: options.historyTotals ?? {},
   };
   const commands = [];
   const stored = new Map();
@@ -245,6 +248,16 @@ export async function startMoonrakerSimulator(options = {}) {
       const response = state.gcodeResponses[script.split(/\s/)[0].toUpperCase()] ?? 'ok';
       notifyGcodeResponse(response);
       return json('ok');
+    }
+    // The history the machine keeps of its own runs, paged the way Moonraker
+    // pages it: a slice of the ordered list plus the total count.
+    if (url.pathname === '/server/history/list') {
+      const limit = Number(url.searchParams.get('limit') ?? '20');
+      const start = Number(url.searchParams.get('start') ?? '0');
+      return json({ count: state.history.length, jobs: state.history.slice(start, start + limit) });
+    }
+    if (url.pathname === '/server/history/totals') {
+      return json({ job_totals: state.historyTotals });
     }
     if (url.pathname === '/printer/print/start') {
       started = url.searchParams.get('filename');

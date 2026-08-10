@@ -3983,6 +3983,8 @@ export class OrcaWorkspace extends xb.Script {
   onRequestPrinterStorage: ((operation: PrinterStorageOperation) => Promise<void>) | null = null;
   /** Injected by the live typed printer composition root; owns confirmation. */
   onRequestPrinterConsole: ((operation: PrinterConsoleOperation) => Promise<void>) | null = null;
+  /** Injected by the live typed printer composition root. */
+  onRequestPrintHistory: ((start: number) => Promise<void>) | null = null;
 
   public async testPrinterConnection(): Promise<void> {
     if (!this.onRequestPrinterConnectionTest) {
@@ -4067,6 +4069,15 @@ export class OrcaWorkspace extends xb.Script {
       return;
     }
     await this.onRequestPrinterConsole(operation);
+  }
+
+  /** Ask the shell for one page of the printer's own job history (P9.6). */
+  public async loadPrintHistory(start = 0): Promise<void> {
+    if (!this.onRequestPrintHistory) {
+      this.setStatus('Print history is unavailable in this shell.');
+      return;
+    }
+    await this.onRequestPrintHistory(start);
   }
 
   // --- Import / Export Config (Orca File → Import / Export Config) -----
