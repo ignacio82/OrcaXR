@@ -19,6 +19,7 @@ import type { FilamentId, PlateId } from '../project/domain/ids';
 import type { ConfigMap } from '../project/domain/model';
 import type { ObjectTreeEntityRef } from '../project/objects';
 import type { ScopedOverrideTarget } from '../project/scopedOverrides';
+import type { PrinterConsoleOperation } from '../printer/PrinterConsole';
 import type { PrinterStorageOperation } from '../printer/PrinterStorage';
 import type { AssemblyAlignmentKind } from '../project/objects/assembly';
 import type { PaintChannel, PaintToolKind } from '../project/painting/PaintStrokeService';
@@ -156,6 +157,8 @@ export interface ActionInvocation {
   };
   /** One printer-storage operation requested by a storage surface (P9.5). */
   printerStorage?: PrinterStorageOperation;
+  /** One console command or macro invocation requested by a console surface (P9.6). */
+  printerConsole?: PrinterConsoleOperation;
   /** Exact canonical entity set requested by an Objects surface. */
   objectsSelection?: {
     readonly refs: readonly ObjectTreeEntityRef[];

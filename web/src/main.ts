@@ -19,16 +19,23 @@ import {
   PrintJobCommandError,
   PrintJobStatusModel,
   PrintSubmissionError,
+  PrinterConsoleError,
+  PrinterConsoleLog,
   PrinterStorageError,
+  assessGcodeCommand,
+  buildMacroInvocation,
   deletePrinterFile,
   downloadPrinterFile,
   listPrinterDirectory,
+  listPrinterMacros,
   movePrinterFile,
   printJobCommandAvailability,
   queryMoonrakerFilamentSlots,
   queryPrintReadiness,
   readPrinterFileMetadata,
+  recentCommands,
   renamedStoragePath,
+  runGcodeScript,
   savePrinterEndpointPreferences,
   startStoredPrint,
   submitPrintJob,
@@ -39,8 +46,10 @@ import {
   type MoonrakerHandshake,
   type PrintJobCommand,
   type PrintJobSnapshot,
+  type PrinterConsoleOperation,
   type PrinterDirectoryListing,
   type PrinterFileMetadata,
+  type PrinterMacro,
   type PrinterStorageOperation,
 } from './printer';
 import { registerWorkspaceTools } from './mcp/WorkspaceTools';
@@ -63,6 +72,7 @@ import { askThreeMfIntake } from './ui/dom/FileIntakeDialog';
 import { askPrintSubmission } from './ui/dom/PrintSubmissionDialog';
 import { askPrintJobConfirmation } from './ui/dom/PrintJobConfirmDialog';
 import { PrintJobPanel } from './ui/dom/PrintJobPanel';
+import { PrinterConsolePanel } from './ui/dom/PrinterConsolePanel';
 import { PrinterStoragePanel } from './ui/dom/PrinterStoragePanel';
 import { GcodePreviewPanel, type GcodePreviewPanelAdapter } from './ui/dom/GcodePreviewPanel';
 import { PreviewScrubber } from './ui/dom/PreviewScrubber';
@@ -181,6 +191,13 @@ const PRINTER_STORAGE_ACTION_IDS: Readonly<Record<PrinterStorageOperation['kind'
   rename: 'printer_rename_stored_file',
   download: 'printer_download_stored_file',
   delete: 'printer_delete_stored_file',
+});
+
+/** Registry action that owns each console operation, so the panel routes through one path. */
+const PRINTER_CONSOLE_ACTION_IDS: Readonly<Record<PrinterConsoleOperation['kind'], string>> = Object.freeze({
+  send: 'printer_console_send',
+  macro: 'printer_run_macro',
+  'refresh-macros': 'printer_list_macros',
 });
 
 /** Commands that end or halt work already in progress get an explicit confirmation. */
@@ -765,6 +782,117 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       },
       { once: true },
     );
+  }
+
+  // The console: what is typed goes to the firmware, so nothing is sent until
+  // its assessment has been shown and — when it moves, heats, or halts —
+  // explicitly confirmed. Responses arrive over the socket, not the HTTP reply.
+  // The transcript is copied into support bundles, so the key is redacted on
+  // the way in rather than at render time.
+  const consoleLog = new PrinterConsoleLog(200, () =>
+    [printerApiKey.value.trim()].filter((entry): entry is string => entry.length > 0),
+  );
+  const consoleState: { macros: readonly PrinterMacro[]; busy: boolean; message?: string } = {
+    macros: [],
+    busy: false,
+  };
+  const consoleListeners = new Set<() => void>();
+  const notifyConsole = () => {
+    for (const listener of consoleListeners) listener();
+  };
+  let unsubscribeConsole: (() => void) | undefined;
+  const trackConsoleResponses = (transport: MoonrakerTransport) => {
+    if (unsubscribeConsole) return;
+    unsubscribeConsole = transport.subscribeNotifications((notification) => {
+      if (consoleLog.appendNotification(notification.method, notification.params)) notifyConsole();
+    });
+  };
+
+  workspace.onRequestPrinterConsole = async (operation) => {
+    if (!printerCfg.host.trim()) {
+      workspace.setStatus('Enter an explicit Moonraker endpoint first.');
+      return;
+    }
+    consoleState.busy = true;
+    notifyConsole();
+    try {
+      const { transport } = await connectConfiguredPrinter();
+      trackConsoleResponses(transport);
+      if (operation.kind === 'refresh-macros') {
+        consoleState.macros = await listPrinterMacros(transport);
+        consoleState.message = `${consoleState.macros.length} macro${
+          consoleState.macros.length === 1 ? '' : 's'
+        } read from the printer.`;
+        return;
+      }
+      const script =
+        operation.kind === 'send' ? operation.script : buildMacroInvocation(operation.name, operation.values ?? {});
+      const assessment = assessGcodeCommand(script, printJobSnapshot);
+      if (assessment.level !== 'safe') {
+        const confirmed = await askPrintJobConfirmation({
+          title: assessment.level === 'dangerous' ? 'Run this command anyway?' : 'Run this command?',
+          message: script,
+          consequences: assessment.reasons,
+          confirmLabel: `Run ${assessment.command}`,
+          dismissLabel: 'Do not run it',
+        });
+        if (!confirmed) {
+          consoleState.message = `${assessment.command} was not sent.`;
+          return;
+        }
+      }
+      await runGcodeScript(transport, script);
+      consoleLog.append('sent', script);
+      consoleState.message = `Sent ${assessment.command || script}.`;
+    } catch (error) {
+      const message =
+        error instanceof PrinterConsoleError || error instanceof MoonrakerTransportError
+          ? error.message
+          : (error as Error).message;
+      consoleLog.append('error', message);
+      consoleState.message = message;
+      workspace.setStatus(`Printer console: ${message}`);
+    } finally {
+      consoleState.busy = false;
+      notifyConsole();
+    }
+  };
+
+  const printerConsoleHost = document.getElementById('printer-console-host');
+  if (printerConsoleHost) {
+    const consolePanel = new PrinterConsolePanel(printerConsoleHost, {
+      getEntries: () => consoleLog.entries,
+      getMacros: () => consoleState.macros,
+      getRecentCommands: () => recentCommands(consoleLog.entries),
+      assess: (script) => assessGcodeCommand(script, printJobSnapshot),
+      getStatus: () => ({
+        busy: consoleState.busy,
+        ...(consoleState.message ? { message: consoleState.message } : {}),
+      }),
+      subscribe: (listener) => {
+        consoleListeners.add(listener);
+        return () => consoleListeners.delete(listener);
+      },
+      run: async (operation) => {
+        await registry.invoke(PRINTER_CONSOLE_ACTION_IDS[operation.kind], 'dom-inspector', actionCtx, uiState.get(), {
+          printerConsole: operation,
+        });
+      },
+      askParameters: async (macro) => {
+        const values: Record<string, string> = {};
+        for (const parameter of macro.parameters) {
+          const supplied = window.prompt(
+            `${macro.name} — ${parameter.name}${parameter.required ? ' (required)' : ''}`,
+            parameter.defaultValue ?? '',
+          );
+          if (supplied === null) return undefined;
+          if (supplied.trim()) values[parameter.name] = supplied.trim();
+        }
+        return values;
+      },
+    });
+    consolePanel.mount();
+    window.addEventListener('pagehide', () => consolePanel.dispose(), { once: true });
   }
 
   const printJobHost = document.getElementById('printer-job-host');

@@ -227,6 +227,49 @@ export const advancedActions: Action[] = [
     run: (ctx, invocation) => storageOperation(ctx, invocation.printerStorage, 'delete', 'Delete Stored File'),
   },
   {
+    id: 'printer_console_send',
+    mcpTool: 'send_printer_gcode',
+    label: 'Send G-code Command',
+    icon: 'gcode',
+    group: 'advanced',
+    disclosure: 'inspector',
+    hint: 'Run one typed G-code command on the printer, after confirming what it will do',
+    run: (ctx, invocation) => {
+      const operation = invocation.printerConsole;
+      if (!operation || operation.kind !== 'send') {
+        ctx.reportCapabilityUnavailable('Send G-code Command', 'Type a command in the printer console first.');
+        return;
+      }
+      return ctx.operatePrinterConsole(operation);
+    },
+  },
+  {
+    id: 'printer_run_macro',
+    mcpTool: 'run_printer_macro',
+    label: 'Run Printer Macro',
+    icon: 'gcode',
+    group: 'advanced',
+    disclosure: 'inspector',
+    hint: "Run one of the printer's own macros with the parameters its body declares",
+    run: (ctx, invocation) => {
+      const operation = invocation.printerConsole;
+      if (!operation || operation.kind !== 'macro') {
+        ctx.reportCapabilityUnavailable('Run Printer Macro', 'Pick a macro in the printer console first.');
+        return;
+      }
+      return ctx.operatePrinterConsole(operation);
+    },
+  },
+  {
+    id: 'printer_list_macros',
+    label: 'Refresh Printer Macros',
+    icon: 'network',
+    group: 'advanced',
+    disclosure: 'inspector',
+    hint: "Read the macros from the connected printer's own configuration",
+    run: (ctx) => ctx.operatePrinterConsole({ kind: 'refresh-macros' }),
+  },
+  {
     id: 'view_webcam',
     label: 'View Webcam',
     icon: 'webcam',

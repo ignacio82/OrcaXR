@@ -19,6 +19,7 @@ import type { ObjectTreeEntityRef } from '../project/objects';
 import type { PaintChannel, PaintToolKind } from '../project/painting/PaintStrokeService';
 import type { ScopedOverrideTarget } from '../project/scopedOverrides';
 import type { PrintJobCommand } from '../printer/PrintJobControl';
+import type { PrinterConsoleOperation } from '../printer/PrinterConsole';
 import type { PrinterStorageOperation } from '../printer/PrinterStorage';
 import type { GcodePreviewViewPatch } from '../slicer/GcodePreviewSession';
 
@@ -141,6 +142,9 @@ export class ActionContext {
   }
   operatePrinterStorage(operation: PrinterStorageOperation): Promise<void> {
     return this.workspace.operatePrinterStorage(operation);
+  }
+  operatePrinterConsole(operation: PrinterConsoleOperation): Promise<void> {
+    return this.workspace.operatePrinterConsole(operation);
   }
   mutateVirtualFilament(request: CanonicalVirtualFilamentMutationRequest): void {
     this.workspace.mutateVirtualFilament(request);

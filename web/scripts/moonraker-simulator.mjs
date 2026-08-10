@@ -32,6 +32,10 @@ export async function startMoonrakerSimulator(options = {}) {
     nozzleC: options.nozzleC ?? 24.5,
     bedC: options.bedC ?? 23.8,
     message: options.message ?? '',
+    /** `configfile.settings`, where Klipper's macros live. */
+    configSettings: options.configSettings ?? {},
+    /** Canned replies by command mnemonic; anything else answers `ok`. */
+    gcodeResponses: options.gcodeResponses ?? {},
   };
   const commands = [];
   const stored = new Map();
@@ -64,6 +68,16 @@ export async function startMoonrakerSimulator(options = {}) {
         method: 'notify_status_update',
         params: [jobStatusObjects(state), notificationId],
       }),
+    );
+    for (const socket of sockets) socket.write(frame);
+  };
+
+  /** Klipper's own answer to a console command, pushed over the socket. */
+  const notifyGcodeResponse = (line) => {
+    if (sockets.size === 0) return;
+    notificationId += 1;
+    const frame = encodeWebSocketText(
+      JSON.stringify({ jsonrpc: '2.0', method: 'notify_gcode_response', params: [line] }),
     );
     for (const socket of sockets) socket.write(frame);
   };
@@ -111,6 +125,9 @@ export async function startMoonrakerSimulator(options = {}) {
       return json({ state: state.klippy, hostname: 'orcaxr-simulator', software_version: 'v0.12.0' });
     }
     if (url.pathname === '/printer/objects/query') {
+      if (url.searchParams.has('configfile')) {
+        return json({ status: { configfile: { settings: state.configSettings } } });
+      }
       if (url.searchParams.has('print_task_config')) {
         return json({
           status: {
@@ -219,6 +236,15 @@ export async function startMoonrakerSimulator(options = {}) {
       response.writeHead(200, { ...cors, 'content-type': 'application/octet-stream' });
       response.end(content);
       return;
+    }
+    // The console: Klipper acknowledges over HTTP and answers over the socket,
+    // so a surface that only reads the HTTP reply would show nothing at all.
+    if (url.pathname === '/printer/gcode/script') {
+      const script = url.searchParams.get('script') ?? '';
+      commands.push(`gcode:${script}`);
+      const response = state.gcodeResponses[script.split(/\s/)[0].toUpperCase()] ?? 'ok';
+      notifyGcodeResponse(response);
+      return json('ok');
     }
     if (url.pathname === '/printer/print/start') {
       started = url.searchParams.get('filename');

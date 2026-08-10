@@ -55,6 +55,7 @@ import { detectModelFormat } from '../project/import/formats';
 import type { LayerEventType } from '../project/domain/model';
 import type { PrintJobCommand } from '../printer/PrintJobControl';
 import type { PrintJobIntent } from '../printer/PrintJobSubmission';
+import type { PrinterConsoleOperation } from '../printer/PrinterConsole';
 import type { PrinterStorageOperation } from '../printer/PrinterStorage';
 import { summarizeGcodeToolUsage } from '../printer/PrintToolMapping';
 import { serializePrintConfigArray } from '../settings/configSerialization';
@@ -3980,6 +3981,8 @@ export class OrcaWorkspace extends xb.Script {
   onRequestPrintJobCommand: ((command: PrintJobCommand) => Promise<void>) | null = null;
   /** Injected by the live typed printer composition root; owns confirmation. */
   onRequestPrinterStorage: ((operation: PrinterStorageOperation) => Promise<void>) | null = null;
+  /** Injected by the live typed printer composition root; owns confirmation. */
+  onRequestPrinterConsole: ((operation: PrinterConsoleOperation) => Promise<void>) | null = null;
 
   public async testPrinterConnection(): Promise<void> {
     if (!this.onRequestPrinterConnectionTest) {
@@ -4049,6 +4052,21 @@ export class OrcaWorkspace extends xb.Script {
       return;
     }
     await this.onRequestPrinterStorage(operation);
+  }
+
+  /**
+   * Ask the shell to run one console command or macro (P9.6).
+   *
+   * The workspace deliberately does not classify the command itself: what a
+   * command does depends on what the machine is doing right now, and only the
+   * connection knows that.
+   */
+  public async operatePrinterConsole(operation: PrinterConsoleOperation): Promise<void> {
+    if (!this.onRequestPrinterConsole) {
+      this.setStatus('The printer console is unavailable in this shell.');
+      return;
+    }
+    await this.onRequestPrinterConsole(operation);
   }
 
   // --- Import / Export Config (Orca File → Import / Export Config) -----

@@ -958,6 +958,7 @@ async function sliceAndSendActivePlate(page, printer) {
 
   await controlRunningPrint(page, printer);
   await browsePrinterStorage(page, printer);
+  await usePrinterConsole(page, printer);
   await inspectAndAuthorFromPreview(page);
 
   await clickMenuAction(page, 'edit_undo');
@@ -1192,6 +1193,84 @@ async function browsePrinterStorage(page, printer) {
   console.log('[e2e] printer storage browsed, reprinted, renamed, and deleted behind a confirmation');
 }
 
+/**
+ * The G-code console and the printer's own macros.
+ *
+ * The safety model is the thing under test: a query goes straight through, a
+ * command that moves or halts states what it does and sends nothing when the
+ * confirmation is dismissed, and the printer's reply arrives over the socket
+ * rather than in the HTTP response.
+ */
+async function usePrinterConsole(page, printer) {
+  await showInspectorTab(page, 'printer');
+  await page.$eval('#printer-console-details', (details) => details.setAttribute('open', ''));
+  await page.waitForSelector('[data-printer-console-panel="true"]', { timeout: 30_000 });
+
+  // A pure query needs no confirmation, and the answer comes back over the
+  // socket — an HTTP-only console would show nothing at all here.
+  const beforeQuery = printer.commands.length;
+  await setDomInput(page, '[data-printer-console-input]', 'M115');
+  assert.equal(
+    await page.$eval('[data-printer-console-assessment]', (line) => line.dataset.printerConsoleLevel),
+    'safe',
+  );
+  await page.$eval('[data-printer-console-send]', (button) => button.click());
+  await page.waitForFunction(
+    () =>
+      [...globalThis.document.querySelectorAll('[data-printer-console-entry="received"]')].some((line) =>
+        line.textContent.includes('FIRMWARE_NAME:Klipper'),
+      ),
+    { timeout: 30_000 },
+  );
+  assert.deepEqual(printer.commands.slice(beforeQuery), ['gcode:M115']);
+
+  // A command that drops the gantry states so, and a dismissed confirmation
+  // must send nothing at all.
+  await setDomInput(page, '[data-printer-console-input]', 'M84');
+  const assessment = await page.$eval('[data-printer-console-assessment]', (line) => ({
+    level: line.dataset.printerConsoleLevel,
+    text: line.textContent,
+  }));
+  assert.equal(assessment.level, 'dangerous');
+  assert.match(assessment.text, /Z axis can drop/);
+  const beforeDismissed = printer.commands.length;
+  await page.$eval('[data-printer-console-send]', (button) => button.click());
+  await page.waitForSelector('[data-print-job-confirm="true"]', { timeout: 30_000 });
+  await page.click('[data-print-job-confirm-choice="cancel"]');
+  await page.waitForFunction(() => !globalThis.document.querySelector('[data-print-job-confirm="true"]'));
+  assert.equal(printer.commands.length, beforeDismissed, 'a dismissed console command sends nothing');
+
+  // Macros come from the printer's own configuration, carrying their own risk.
+  await page.$eval('[data-printer-console-refresh-macros]', (button) => button.click());
+  await page.waitForSelector('[data-printer-console-macro="PARK_HEAD"]', { timeout: 30_000 });
+  await page.waitForSelector('[data-printer-console-macro="RESET_EVERYTHING"]', { timeout: 30_000 });
+  assert.match(
+    await page.$eval('[data-printer-console-macro="PARK_HEAD"]', (button) => button.title),
+    /Parameters: X=0, Y=200/,
+  );
+
+  // Running it asks for each parameter, then sends the built invocation once
+  // its own assessment has been confirmed.
+  await page.evaluate(() => {
+    globalThis.window.prompt = (label) => (label.includes('X') ? '10' : '190');
+  });
+  const beforeMacro = printer.commands.length;
+  await page.$eval('[data-printer-console-macro="PARK_HEAD"]', (button) => button.click());
+  await page.waitForSelector('[data-print-job-confirm="true"]', { timeout: 30_000 });
+  await page.click('[data-print-job-confirm-choice="confirm"]');
+  await page.waitForFunction(
+    () =>
+      [...globalThis.document.querySelectorAll('[data-printer-console-entry="sent"]')].some((line) =>
+        line.textContent.includes('PARK_HEAD X=10 Y=190'),
+      ),
+    { timeout: 30_000 },
+  );
+  assert.deepEqual(printer.commands.slice(beforeMacro), ['gcode:PARK_HEAD X=10 Y=190']);
+
+  await page.$eval('#printer-console-details', (details) => details.removeAttribute('open'));
+  console.log('[e2e] printer console queried, refused a dismissed stepper release, and ran a macro with parameters');
+}
+
 function checksumOf(buffer) {
   let checksum = 5381;
   for (const byte of buffer) checksum = ((checksum * 33) ^ byte) >>> 0;
@@ -1233,7 +1312,18 @@ const fixtureDirectory = await mkdtemp(join(tmpdir(), 'orcaxr-e2e-'));
 const fixturePath = await writeMultiPlateFixture(fixtureDirectory);
 const objFixturePath = await writeObjFixture(fixtureDirectory);
 const gcodeFixturePath = await writeGcodeFixture(fixtureDirectory);
-const printer = await startMoonrakerSimulator();
+const printer = await startMoonrakerSimulator({
+  // Klipper reports its macros through `configfile.settings`; the console reads
+  // parameters out of the bodies rather than inventing a schema Klipper lacks.
+  configSettings: {
+    'gcode_macro park_head': {
+      description: 'Park the toolhead at the back left',
+      gcode: 'G1 X{params.X|default(0)} Y{params.Y|default(200)} F6000',
+    },
+    'gcode_macro reset_everything': { gcode: 'FIRMWARE_RESTART' },
+  },
+  gcodeResponses: { M115: 'FIRMWARE_NAME:Klipper FIRMWARE_VERSION:v0.12.0' },
+});
 const { server, url } = await startPreview();
 const browser = await launchBrowser();
 try {
@@ -2882,7 +2972,7 @@ try {
   assert.deepStrictEqual(pageErrors, [], `uncaught page errors: ${pageErrors.join('\n')}`);
   assert.deepStrictEqual(policyErrors, [], `CSP violations: ${policyErrors.join('\n')}`);
   console.log(
-    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings that the same panel also writes to one object without touching the project, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a stored file browsed, reprinted without re-uploading, renamed, and deleted behind a confirmation, a printer plus slicer configured once that are still configured after a reload, device preferences that apply live and reset without touching presets, and two named printers that switch without their credentials following each other).',
+    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings that the same panel also writes to one object without touching the project, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a stored file browsed, reprinted without re-uploading, renamed, and deleted behind a confirmation, a console that answers a query over the socket, sends nothing when a stepper release is dismissed, and runs a macro with the parameters its own body declares, a printer plus slicer configured once that are still configured after a reload, device preferences that apply live and reset without touching presets, and two named printers that switch without their credentials following each other).',
   );
 } finally {
   await browser.close();

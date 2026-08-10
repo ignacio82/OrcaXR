@@ -34,6 +34,10 @@ export interface MoonrakerSimulatorOptions {
   readonly metadata?: Readonly<Record<string, Record<string, unknown>>>;
   /** Modification times by path, in seconds since the epoch. */
   readonly modified?: Readonly<Record<string, number>>;
+  /** `configfile.settings`, where Klipper reports its macros. */
+  readonly configSettings?: Readonly<Record<string, Record<string, unknown>>>;
+  /** Canned console replies by command mnemonic; anything else answers `ok`. */
+  readonly gcodeResponses?: Readonly<Record<string, string>>;
 }
 
 export interface MoonrakerSimulator {
