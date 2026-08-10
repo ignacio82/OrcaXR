@@ -3,7 +3,6 @@ import type { FilamentId } from './ids';
 import {
   ORCA_REFINEMENT_ENCODING_VERSION,
   ORCA_REFINEMENT_MAX_DEPTH,
-  ORCA_REFINEMENT_MAX_NODES,
   refinementNodeBudget,
   type FacetAnnotationRefinements,
   type FacetAnnotations,
@@ -337,7 +336,8 @@ export function visitFacetRefinementAssignedValues<T extends JsonValue>(
     .map((node, index) => ({ node, path: `roots[${index}]` }))
     .reverse();
   const seen = new Set<object>();
-  while (stack.length > 0 && seen.size < ORCA_REFINEMENT_MAX_NODES) {
+  const budget = refinementNodeBudget(encoding.roots.length);
+  while (stack.length > 0 && seen.size < budget) {
     const { node, path } = stack.pop()!;
     if (typeof node !== 'object' || node === null || seen.has(node)) continue;
     seen.add(node);

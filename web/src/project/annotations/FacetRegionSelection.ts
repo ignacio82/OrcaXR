@@ -2,6 +2,7 @@ import {
   ORCA_REFINEMENT_ENCODING_VERSION,
   ORCA_REFINEMENT_MAX_DEPTH,
   ORCA_REFINEMENT_MAX_NODES,
+  refinementNodeBudget,
   type FacetAnnotations,
   type FacetRefinementEncoding,
   type FacetRefinementNode,
@@ -552,15 +553,11 @@ function validateRefinedCommitSelection(
       },
     ]);
   }
-  if (selection.encoding.roots.length > ORCA_REFINEMENT_MAX_NODES) {
-    throw new FacetAnnotationValidationError([
-      {
-        code: 'facet-refinement-limit-exceeded',
-        path: 'selection.encoding.roots',
-        message: `Facet refinement may contain at most ${ORCA_REFINEMENT_MAX_NODES} nodes`,
-      },
-    ]);
-  }
+  // One root per source triangle is the format's own invariant, so the budget
+  // is derived from the root count rather than capped by a constant: a flat cap
+  // here is a cap on how many triangles a painted mesh may have, and it stopped
+  // a real multi-million triangle model from ever showing its paint.
+  const nodeBudget = refinementNodeBudget(selection.encoding.roots.length);
 
   const encodedLeaves: Array<FacetRefinedLeafReference & { readonly state: FacetRegionState }> = [];
   const seen = new Set<object>();
@@ -577,11 +574,11 @@ function validateRefinedCommitSelection(
   while (stack.length > 0) {
     const entry = stack.pop()!;
     nodeCount += 1;
-    if (nodeCount > ORCA_REFINEMENT_MAX_NODES) {
+    if (nodeCount > nodeBudget) {
       issues.push({
         code: 'facet-refinement-limit-exceeded',
         path: 'selection.encoding',
-        message: `Facet refinement may contain at most ${ORCA_REFINEMENT_MAX_NODES} nodes`,
+        message: `Facet refinement may contain at most ${nodeBudget} nodes`,
       });
       break;
     }
@@ -734,6 +731,15 @@ interface RefinementWorkspace {
   readonly triangles: RefinedTriangle[];
   readonly roots: number[];
   readonly rootNeighbors: readonly RefinedNeighborTuple[];
+  /**
+   * Ceiling on refined triangles, derived from the source mesh.
+   *
+   * The working set starts at one triangle per source facet, so a constant
+   * here is exceeded before any subdivision happens on a large mesh — which
+   * is what stopped a real multi-million triangle model from ever showing its
+   * paint. What this bounds is subdivision growth beyond the geometry.
+   */
+  readonly triangleBudget: number;
 }
 
 interface RefinedNeighborTables {
@@ -813,6 +819,7 @@ function buildRefinementWorkspace<Channel extends FacetAnnotationChannel>(
   const workspace: RefinementWorkspace = {
     vertices: request.mesh.vertices.map(floatVector),
     triangles,
+    triangleBudget: refinementNodeBudget(request.mesh.triangles.length),
     roots,
     rootNeighbors: buildValidatedOrcaFaceNeighbors(request.mesh).map(
       (neighbors) => [...neighbors] as RefinedNeighborTuple,
@@ -862,12 +869,12 @@ function performRefinedSplit(
   specialSide: RefinedSide,
   depth: number,
 ): void {
-  if (depth >= ORCA_REFINEMENT_MAX_DEPTH || workspace.triangles.length + splitSides + 1 > ORCA_REFINEMENT_MAX_NODES) {
+  if (depth >= ORCA_REFINEMENT_MAX_DEPTH || workspace.triangles.length + splitSides + 1 > workspace.triangleBudget) {
     throw new FacetAnnotationValidationError([
       {
         code: 'facet-refinement-limit-exceeded',
         path: 'refinement',
-        message: `Facet refinement exceeds ${ORCA_REFINEMENT_MAX_DEPTH} levels or ${ORCA_REFINEMENT_MAX_NODES} nodes`,
+        message: `Facet refinement exceeds ${ORCA_REFINEMENT_MAX_DEPTH} levels or ${workspace.triangleBudget} nodes`,
       },
     ]);
   }
@@ -2736,14 +2743,9 @@ function validateRefinementEncoding<Channel extends FacetAnnotationChannel>(
       message: 'Facet refinement must contain exactly one root per source triangle',
     });
   }
-  if (encoding.roots.length > ORCA_REFINEMENT_MAX_NODES) {
-    issues.push({
-      code: 'facet-refinement-limit-exceeded',
-      path: 'refinement.roots',
-      message: `Facet refinement may contain at most ${ORCA_REFINEMENT_MAX_NODES} nodes`,
-    });
-    return;
-  }
+  // Derived from the root count, which the format requires to equal the source
+  // triangle count; a constant here would cap the size of a painted mesh.
+  const nodeBudget = refinementNodeBudget(encoding.roots.length);
 
   const seen = new Set<object>();
   const stack: { readonly node: unknown; readonly path: string; readonly depth: number }[] = encoding.roots.map(
@@ -2757,11 +2759,11 @@ function validateRefinementEncoding<Channel extends FacetAnnotationChannel>(
   while (stack.length > 0) {
     const { node, path, depth } = stack.pop()!;
     nodeCount += 1;
-    if (nodeCount > ORCA_REFINEMENT_MAX_NODES) {
+    if (nodeCount > nodeBudget) {
       issues.push({
         code: 'facet-refinement-limit-exceeded',
         path: 'refinement',
-        message: `Facet refinement may contain at most ${ORCA_REFINEMENT_MAX_NODES} nodes`,
+        message: `Facet refinement may contain at most ${nodeBudget} nodes`,
       });
       return;
     }
@@ -2876,7 +2878,8 @@ function refinementLeafStates(refinement: FacetRefinementEncoding | undefined): 
   const states: FacetRegionState[] = [];
   const stack: unknown[] = [...refinement.roots];
   const seen = new Set<object>();
-  while (stack.length > 0 && seen.size <= ORCA_REFINEMENT_MAX_NODES) {
+  const budget = refinementNodeBudget(refinement.roots.length);
+  while (stack.length > 0 && seen.size <= budget) {
     const node = stack.pop();
     if (typeof node !== 'object' || node === null || Array.isArray(node) || seen.has(node)) continue;
     seen.add(node);

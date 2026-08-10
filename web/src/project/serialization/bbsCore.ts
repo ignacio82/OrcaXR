@@ -1639,12 +1639,18 @@ export function importBbsCore(
   const makeId = <Kind extends string>(kind: Kind, suffix: string) =>
     entityId<Kind>(`import:3mf:${archiveHash}-${kind}-${suffix}`);
 
-  const colors =
+  // BBS writes `filament_colour` as #RRGGBBAA. The alpha means nothing for a
+  // spool, and carrying it through left canonical colours in a form the 3D
+  // view cannot parse — a painted model then drew in the fallback colour
+  // instead of its own. Canonical colours are #RRGGBB, which is also what this
+  // serializer writes back out.
+  const colors = (
     projectConfig.filamentColors.length > 0
       ? projectConfig.filamentColors
       : parsed.materials.length > 0
         ? parsed.materials.map((material) => material.color)
-        : ['#CCCCCC'];
+        : ['#CCCCCC']
+  ).map((color) => normalizeColor(color).slice(0, 7));
   // Per-tool filament facts the project actually declares; slicing preflight
   // treats an imported project's own configuration as its authority, so these
   // must survive import instead of collapsing into "Unknown".
