@@ -17,6 +17,7 @@ import {
   type GlyphOutlineSource,
 } from '../project/objects/emboss';
 import { readTrueTypeOutlines } from '../project/objects/truetypeOutlines';
+import { readSvgShapes } from '../project/objects/svgShapes';
 import type { FilamentId, InstanceId, LayerRangeId, ObjectId, PlateId, VolumeId } from '../project/domain/ids';
 import { entityId, UuidIdSource } from '../project/domain/ids';
 import type {
@@ -426,7 +427,8 @@ export type WorkspaceGizmoTool =
   | 'support_paint'
   | 'seam_paint'
   | 'fuzzy_skin'
-  | 'emboss';
+  | 'emboss'
+  | 'svg';
 
 /** Read-only view a brim-ear surface renders. */
 export interface BrimEarSnapshot {
@@ -454,6 +456,23 @@ export interface EmbossSnapshot {
   /** Name of the loaded font, or undefined when the operator has chosen none. */
   readonly fontName?: string;
   readonly configuration: EmbossTextConfiguration;
+  readonly hint: string;
+}
+
+/** Read-only view an SVG-part surface renders. */
+export interface SvgPartSnapshot {
+  readonly active: boolean;
+  /** Object a new part would be added to, when one part is in scope. */
+  readonly objectId?: ObjectId;
+  /** Volume an edit would re-cut, when an SVG part is selected. */
+  readonly volumeId?: VolumeId;
+  /** Name of the loaded drawing, or undefined when none has been chosen. */
+  readonly fileName?: string;
+  readonly depthMm: number;
+  /** Requested width in millimetres; undefined keeps the drawing's own size. */
+  readonly widthMm?: number;
+  /** What the loaded drawing contains that cannot become solid geometry. */
+  readonly unsupported: readonly { readonly element: string; readonly detail: string }[];
   readonly hint: string;
 }
 
@@ -2240,6 +2259,122 @@ export class OrcaWorkspace extends xb.Script {
     const volumes = this.paintableSelectedVolumes();
     if (volumes.length !== 1) return undefined;
     return this.canonicalProject.getEmbossText(volumes[0]) ? volumes[0] : undefined;
+  }
+
+  private svgDrawing?: { name: string; source: string };
+  private svgDepthMm = 2;
+  private svgWidthMm?: number;
+  public onSvgStateChanged: (() => void) | null = null;
+
+  public svgPartTool(): void {
+    this.setTool('svg');
+    this.setStatus(
+      this.svgDrawing
+        ? 'SVG part: set the size, then add it to the selected part.'
+        : 'SVG part: choose an .svg file to cut.',
+    );
+    this.onSvgStateChanged?.();
+  }
+
+  /** Load a drawing the operator picked. Nothing is fetched. */
+  public loadSvgDrawing(name: string, source: string): boolean {
+    try {
+      const shapes = readSvgShapes(source);
+      this.svgDrawing = { name, source };
+      const notes = shapes.unsupported.length > 0 ? ` ${shapes.unsupported.length} part(s) of it cannot be cut.` : '';
+      this.setStatus(`Loaded ${name} at ${shapes.sizeMm[0].toFixed(1)} x ${shapes.sizeMm[1].toFixed(1)} mm.${notes}`);
+      this.onSvgStateChanged?.();
+      return true;
+    } catch (error) {
+      this.svgDrawing = undefined;
+      this.setStatus(`Could not read that drawing: ${(error as Error).message}`);
+      this.onSvgStateChanged?.();
+      return false;
+    }
+  }
+
+  public setSvgPartSize(patch: { depthMm?: number; widthMm?: number }): void {
+    if (patch.depthMm !== undefined) this.svgDepthMm = patch.depthMm;
+    if (patch.widthMm !== undefined) this.svgWidthMm = patch.widthMm > 0 ? patch.widthMm : undefined;
+    this.onSvgStateChanged?.();
+  }
+
+  public getSvgPartSnapshot(): SvgPartSnapshot {
+    const objectId = this.brimEarTargetObject();
+    const volumeId = this.svgTargetVolume();
+    let unsupported: readonly { element: string; detail: string }[] = [];
+    if (this.svgDrawing) {
+      try {
+        unsupported = readSvgShapes(this.svgDrawing.source).unsupported.map((entry) => ({
+          element: entry.element,
+          detail: entry.detail,
+        }));
+      } catch {
+        unsupported = [];
+      }
+    }
+    return Object.freeze({
+      active: this.tool === 'svg',
+      ...(objectId ? { objectId } : {}),
+      ...(volumeId ? { volumeId } : {}),
+      ...(this.svgDrawing ? { fileName: this.svgDrawing.name } : {}),
+      depthMm: this.svgDepthMm,
+      ...(this.svgWidthMm !== undefined ? { widthMm: this.svgWidthMm } : {}),
+      unsupported: Object.freeze(unsupported),
+      hint: !this.svgDrawing
+        ? 'Choose an .svg file; its filled shapes become a solid part.'
+        : volumeId
+          ? 'Changing the size re-cuts the selected part; undo restores it.'
+          : objectId
+            ? 'Adds the drawing as a new part of the selected model.'
+            : 'Select one model part to add the drawing to.',
+    });
+  }
+
+  /** Cut the loaded drawing into the selection, or re-cut a selected SVG part. */
+  public applySvgPart(): boolean {
+    const drawing = this.svgDrawing;
+    if (!drawing) {
+      this.setStatus('Choose an .svg file before adding a part.');
+      return false;
+    }
+    const options = {
+      fileName: drawing.name,
+      depthMm: this.svgDepthMm,
+      ...(this.svgWidthMm !== undefined ? { widthMm: this.svgWidthMm } : {}),
+    };
+    try {
+      const volumeId = this.svgTargetVolume();
+      let prepared;
+      if (volumeId) {
+        prepared = this.canonicalProject.editSvgPart(volumeId, drawing.source, options);
+      } else {
+        const objectId = this.brimEarTargetObject();
+        if (!objectId) {
+          this.setStatus('Select one model part to add the drawing to.');
+          return false;
+        }
+        prepared = this.canonicalProject.addSvgPart(objectId, drawing.source, options).prepared;
+      }
+      // Anything the drawing asked for that a solid cannot express is named
+      // rather than quietly missing from the result.
+      const notes = prepared.unsupported.length > 0 ? ` Not cut: ${prepared.unsupported[0].detail}` : '';
+      const open = prepared.mesh.openEdgeCount > 0 ? ` ${prepared.mesh.openEdgeCount} edges did not close.` : '';
+      this.setStatus(
+        `Cut ${drawing.name} at ${prepared.sizeMm[0].toFixed(1)} x ${prepared.sizeMm[1].toFixed(1)} mm.${notes}${open}`,
+      );
+      this.onSvgStateChanged?.();
+      return true;
+    } catch (error) {
+      this.setStatus(`SVG part failed: ${(error as Error).message}`);
+      return false;
+    }
+  }
+
+  private svgTargetVolume(): VolumeId | undefined {
+    const volumes = this.paintableSelectedVolumes();
+    if (volumes.length !== 1) return undefined;
+    return this.canonicalProject.getSvgPart(volumes[0]) ? volumes[0] : undefined;
   }
 
   public brimEarsTool(): void {

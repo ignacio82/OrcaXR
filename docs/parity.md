@@ -1257,10 +1257,37 @@ Local starting seams: [`MeshCut.ts`](../web/src/features/MeshCut.ts),
     reports `openEdgeCount` and the status line says so rather than letting the slicer quietly
     repair it.
 
-- [ ] **P5.3.4 — SVG emboss and SVG part.** Import an SVG, resolve its paths to a mesh volume, and
+- [~] **P5.3.4 — SVG emboss and SVG part.** Import an SVG, resolve its paths to a mesh volume, and
   keep the pinned editable parameters.
   - **Accept:** golden geometry and parameter round-trip; unsupported SVG features are reported
     exactly rather than silently dropped.
+  - **Current:** `project/objects/svgShapes.ts` resolves paths, rects, circles, ellipses, and
+    polygons — with every path command including elliptical arcs and the smooth-curve reflections —
+    through nested transforms, into closed contours in millimetres. The document's own physical
+    size, its viewBox, and the 96dpi pixel convention all resolve to real millimetres, and the y
+    axis is flipped so a cut part is not a mirror of the drawing. The reader is hand-written rather
+    than `DOMParser`-based because the canonical layer has no DOM and because a real parser would
+    hide exactly what this has to report.
+    Extrusion is the same `extrude.ts` the text emboss uses, so SVG parts inherit its winding-based
+    hole handling and cap-derived walls: all 7,314 Material Symbols production icons extrude to
+    watertight solids, and a bounded slice of them runs in the gate.
+    Unsupported features are named individually — text needing a font, raster images, `use`
+    references, clip paths, masks, filters, gradients, stroked shapes with no fill, and units with
+    no fixed physical size — each with the element and a sentence an operator can act on, surfaced
+    both in the panel before cutting and in the status line after. `slic3rpe:shape` carries
+    `filepath` and `filepath3mf` exactly as the pinned `bbs_3mf.cpp` writes them, so a saved part
+    reopens with its drawing and parameters, and a shape without an SVG reference is never mistaken
+    for one. `AddSvgPartCommand`/`EditSvgPartCommand` add and re-cut as single undoable commands
+    that reset the annotations a re-cut invalidates; `tool_svg` stops being a coming-soon stub and
+    gains `svg_load_drawing`, `svg_configure`, and `svg_apply` behind a DOM panel.
+    The drawing itself is written into the package at `filepath3mf` and recovered on import as a
+    canonical asset, so a reopened part can be re-cut rather than merely re-placed; the reference
+    is emitted only when the file is actually stored, as upstream does, so it never names something
+    the package lacks.
+  - **Outstanding:** `use_surface` is stored and round-trips but is not applied; there is no golden
+    oracle against the pinned engine (the sweep proves closure, not equality); CSS `style` blocks
+    and presentation inheritance beyond a shape's own `fill`/`stroke` are not resolved; and all
+    four actions declare an `xrUnsupportedReason` because choosing a file is DOM-only.
 
 - [~] **P5.3.5 — Simplify UI.** Front the existing guarded topology-replacement command with the
   pinned decimation controls (ratio/error, preview, apply/cancel, progress).

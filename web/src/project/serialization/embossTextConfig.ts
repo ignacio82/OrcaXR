@@ -21,6 +21,9 @@ import { DEFAULT_EMBOSS_FONT_PROPERTY } from '../objects/emboss';
 
 export const EMBOSS_TEXT_TAG = 'slic3rpe:text';
 export const EMBOSS_SHAPE_TAG = 'slic3rpe:shape';
+/** Pinned `SVG_FILE_PATH_ATTR` / `SVG_FILE_PATH_IN_3MF_ATTR`. */
+export const SVG_FILE_PATH_ATTR = 'filepath';
+export const SVG_FILE_PATH_IN_3MF_ATTR = 'filepath3mf';
 
 /** Pinned `TextConfigurationSerialization::type_to_name`. */
 export const EMBOSS_FONT_DESCRIPTOR_TYPES = Object.freeze([
@@ -72,12 +75,40 @@ export function encodeEmbossTextConfiguration(configuration: EmbossTextConfigura
 }
 
 /** Serialize the projection half, which upstream keeps on `slic3rpe:shape`. */
-export function encodeEmbossShape(projection: EmbossProjection, scale?: number, unhealed?: boolean): string {
-  const parts: string[] = [`depth="${formatNumber(projection.depthMm)}"`];
+export function encodeEmbossShape(
+  projection: EmbossProjection,
+  scale?: number,
+  unhealed?: boolean,
+  svg?: EmbossSvgReference,
+): string {
+  const parts: string[] = [];
+  // Upstream writes the SVG's paths before the projection, and omits the
+  // originating disk path when the drawing was never on disk.
+  if (svg) {
+    if (svg.sourcePath) parts.push(`${SVG_FILE_PATH_ATTR}="${escapeAttribute(svg.sourcePath)}"`);
+    parts.push(`${SVG_FILE_PATH_IN_3MF_ATTR}="${escapeAttribute(svg.pathIn3mf)}"`);
+  }
+  parts.push(`depth="${formatNumber(projection.depthMm)}"`);
   if (projection.useSurface) parts.push('use_surface="1"');
   if (scale !== undefined) parts.push(`scale="${formatNumber(scale)}"`);
   if (unhealed) parts.push('unhealed="1"');
   return `<${EMBOSS_SHAPE_TAG} ${parts.join(' ')}/>`;
+}
+
+/** Where an SVG part's drawing lives, as the pinned writer records it. */
+export interface EmbossSvgReference {
+  /** Path inside the 3MF archive holding the drawing itself. */
+  readonly pathIn3mf: string;
+  /** The operator's own file path, when the drawing came from disk. */
+  readonly sourcePath?: string;
+}
+
+/** Read the SVG reference off a `slic3rpe:shape` element, when it carries one. */
+export function decodeEmbossSvgReference(shapeXml: string): EmbossSvgReference | undefined {
+  const pathIn3mf = attribute(shapeXml, SVG_FILE_PATH_IN_3MF_ATTR);
+  if (!pathIn3mf) return undefined;
+  const sourcePath = attribute(shapeXml, SVG_FILE_PATH_ATTR);
+  return Object.freeze({ pathIn3mf, ...(sourcePath ? { sourcePath } : {}) });
 }
 
 export interface DecodedEmbossVolume {

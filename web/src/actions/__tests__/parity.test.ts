@@ -75,7 +75,6 @@ const UNAVAILABLE_IDS = [
   'view_show_gcode_window',
   'split_to_parts',
   'tool_face_detector',
-  'tool_svg',
   'tool_hollow',
   'add_modifier',
   'add_support_enforcer',
@@ -322,18 +321,19 @@ test('all XR toolbar actions are reachable by finite rail or Tools overflow', ()
   const toolbar = registry.forSurface('xr-toolbar');
   const rail = xrToolRailActions(toolbar);
   const overflow = toolbar.filter((action) => !rail.includes(action));
-  // Smart Paint, Smart Paint (Image), Measure, Assembly, and Brim Ears are
-  // deliberately absent: each declares an XR exclusion because its flow is
-  // DOM-only.
-  assert.strictEqual(toolbar.length, 14);
+  // Smart Paint, Smart Paint (Image), Measure, Assembly, Brim Ears, and the
+  // SVG part tool are deliberately absent: each declares an XR exclusion
+  // because its flow is DOM-only. The SVG one needs a file picker.
+  assert.strictEqual(toolbar.length, 13);
   assert.strictEqual(rail.length, 7);
-  assert.strictEqual(overflow.length, 7);
+  assert.strictEqual(overflow.length, 6);
   for (const excluded of [
     'tool_smart_paint',
     'tool_smart_paint_image',
     'tool_measure',
     'tool_assembly',
     'tool_brim_ears',
+    'tool_svg',
   ]) {
     assert.equal(
       toolbar.some((action) => action.id === excluded),

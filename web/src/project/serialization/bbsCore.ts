@@ -40,9 +40,11 @@ import { decodeIndexedMeshAsset, type DecodedIndexedMesh } from '../meshCodec';
 import { validatePackagePath } from './deterministicZip';
 import { BRIM_EAR_POINTS_PATH, decodeBrimEarPoints, encodeBrimEarPoints } from './brimEarPoints';
 import type { EmbossTextConfiguration } from '../objects/emboss';
+import type { EmbossSvgPart } from '../domain/model';
 import {
   EMBOSS_SHAPE_TAG,
   EMBOSS_TEXT_TAG,
+  decodeEmbossSvgReference,
   decodeEmbossTextConfiguration,
   encodeEmbossShape,
   encodeEmbossTextConfiguration,
@@ -305,6 +307,20 @@ function canonicalPlateOrigins(
 
 export function buildBbsCore(state: ProjectState, assets: ReadonlyMap<string, AssetPayload>): BbsCoreBuild {
   const warnings: string[] = [];
+  // Drawings an SVG part depends on, gathered before the settings are written
+  // so the reference and the file it names are decided together.
+  const svgDrawings = new Map<string, Uint8Array>();
+  for (const plate of state.plates) {
+    for (const object of plate.objects) {
+      for (const volume of object.volumes) {
+        const svg = volume.embossSvg;
+        if (!svg) continue;
+        const payload = assets.get(svg.drawingAssetId);
+        if (payload) svgDrawings.set(svg.pathIn3mf, payload.bytes);
+        else warnings.push(`SVG part ${volume.name} has no stored drawing, so its reference was left out`);
+      }
+    }
+  }
   const mappings: ObjectMapping[] = [];
   let nextNumericId = 1;
   let ordinal = 0;
@@ -402,7 +418,11 @@ export function buildBbsCore(state: ProjectState, assets: ReadonlyMap<string, As
   const materialId = nextNumericId;
   const files = new Map<string, Uint8Array>();
   files.set(CORE_MODEL_PATH, encodeText(buildCoreModel(state, mappings, materialRows, materialId, filamentSlots)));
-  files.set(MODEL_SETTINGS_PATH, encodeText(buildModelSettings(orderedPlates, mappings, filamentSlots)));
+  files.set(
+    MODEL_SETTINGS_PATH,
+    encodeText(buildModelSettings(orderedPlates, mappings, filamentSlots, new Set(svgDrawings.keys()))),
+  );
+  for (const [path, bytes] of svgDrawings) files.set(path, bytes);
   files.set(PROJECT_SETTINGS_PATH, encodeText(buildProjectSettings(state, filamentSlots, warnings)));
   const layerRanges = buildLayerRanges(mappings, filamentSlots);
   if (layerRanges) files.set(LAYER_RANGES_PATH, encodeText(layerRanges));
@@ -576,6 +596,7 @@ function buildModelSettings(
   orderedPlates: readonly ProjectPlate[],
   mappings: ObjectMapping[],
   filamentSlots: ReadonlyMap<FilamentId, number>,
+  svgDrawings: ReadonlySet<string>,
 ): string {
   const lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<config>'];
   for (const mapping of mappings) {
@@ -601,6 +622,22 @@ function buildModelSettings(
         // anonymous mesh.
         lines.push(`   ${encodeEmbossTextConfiguration(entry.volume.embossText)}`);
         lines.push(`   ${encodeEmbossShape(entry.volume.embossText.projection)}`);
+      } else if (entry.volume.embossSvg) {
+        // An SVG part carries no text element — just the shape. The reference is
+        // written only when the drawing is actually in the package, matching the
+        // pinned writer, which omits it rather than naming a missing file.
+        const svg = entry.volume.embossSvg;
+        const stored = svgDrawings.has(svg.pathIn3mf);
+        lines.push(
+          `   ${encodeEmbossShape(
+            { depthMm: svg.depthMm, useSurface: svg.useSurface },
+            undefined,
+            undefined,
+            stored
+              ? { pathIn3mf: svg.pathIn3mf, ...(svg.sourcePath ? { sourcePath: svg.sourcePath } : {}) }
+              : undefined,
+          )}`,
+        );
       }
       lines.push(
         '   <mesh_stat edges_fixed="0" degenerate_facets="0" facets_removed="0" facets_reversed="0" backwards_edges="0"/>',
@@ -1472,7 +1509,16 @@ interface ParsedModelMetadata {
   objectNames: Map<number, string>;
   partData: Map<
     number,
-    Map<number, { role: VolumeRole; name?: string; config: ConfigMap; embossText?: EmbossTextConfiguration }>
+    Map<
+      number,
+      {
+        role: VolumeRole;
+        name?: string;
+        config: ConfigMap;
+        embossText?: EmbossTextConfiguration;
+        embossSvg?: Omit<EmbossSvgPart, 'drawingAssetId'>;
+      }
+    >
   >;
   layerRanges: Map<number, Array<Omit<LayerRange, 'id'>>>;
   plates: Array<{
@@ -1761,6 +1807,9 @@ export function importBbsCore(
   );
 
   const assets: AssetPayload[] = [];
+  // Drawings pulled out of the archive; recorded as consumed once the standard
+  // consumed-path set exists further down.
+  const consumedSvgPaths = new Set<string>();
   const sourceAssets: SourceAssetDescriptor[] = [];
   const meshAssetIds = new Map<string, SourceAssetDescriptor['id']>();
   for (const object of parsed.objects.values()) {
@@ -1872,6 +1921,33 @@ export function importBbsCore(
             attributes: encodeExtensionAttributes(row.attributes),
           }));
         }
+        // The drawing named by `filepath3mf` becomes a canonical asset, so a
+        // reopened part can be re-cut and re-saved rather than pointing at a
+        // file the package no longer carries.
+        let embossSvg: EmbossSvgPart | undefined;
+        if (part?.embossSvg) {
+          const drawingBytes = files.get(part.embossSvg.pathIn3mf);
+          if (drawingBytes) {
+            const drawingId = makeId('asset', `svg-${part.embossSvg.pathIn3mf}`);
+            if (!assets.some((entry) => entry.descriptor.id === drawingId)) {
+              const descriptor: SourceAssetDescriptor = {
+                id: drawingId,
+                kind: 'extension',
+                digest: contentDigest(drawingBytes),
+                byteLength: drawingBytes.byteLength,
+                mediaType: 'image/svg+xml',
+                sourceFilename: part.embossSvg.pathIn3mf.split('/').pop() ?? 'drawing.svg',
+              };
+              assets.push({ descriptor, bytes: drawingBytes });
+            }
+            embossSvg = { ...part.embossSvg, drawingAssetId: drawingId };
+            consumedSvgPaths.add(part.embossSvg.pathIn3mf);
+          } else {
+            warnings.push(
+              `An SVG part references ${part.embossSvg.pathIn3mf}, which this package does not contain; its size and depth were kept but it cannot be re-cut`,
+            );
+          }
+        }
         volumes.push({
           id: makeId('volume', `${parentToken}-${objectReferenceToken(leaf)}-${componentIndex + 1}-${plateIndex + 1}`),
           name: part?.name ?? leaf.name ?? `Part ${leaf.numericId}`,
@@ -1885,6 +1961,7 @@ export function importBbsCore(
           config: volumeConfig,
           annotations: cloneJson(leaf.annotations),
           ...(part?.embossText ? { embossText: part.embossText } : {}),
+          ...(embossSvg ? { embossSvg } : {}),
           ...(filament && supportsFilament ? { filamentId: filament.id } : {}),
           ...(Object.keys(volumeExtensionData).length > 0 ? { extensionData: volumeExtensionData } : {}),
         });
@@ -1954,7 +2031,7 @@ export function importBbsCore(
     extensionBlobs: [],
   };
   applyImportedBrimEars(files, plates, warnings);
-  const consumedPaths = new Set([CORE_MODEL_PATH]);
+  const consumedPaths = new Set([CORE_MODEL_PATH, ...consumedSvgPaths]);
   if (files.has(PROJECT_SETTINGS_PATH)) consumedPaths.add(PROJECT_SETTINGS_PATH);
   if (files.has(MODEL_SETTINGS_PATH)) consumedPaths.add(MODEL_SETTINGS_PATH);
   if (files.has(LAYER_RANGES_PATH)) consumedPaths.add(LAYER_RANGES_PATH);
@@ -2476,15 +2553,43 @@ function readPartEmbossText(
   objectId: number,
   partId: number,
   warnings: string[],
-): { embossText?: EmbossTextConfiguration } {
-  const textMatch = new RegExp(`<${EMBOSS_TEXT_TAG}\\b[^>]*/?>`, 'i').exec(body);
-  if (!textMatch) return {};
+): { embossText?: EmbossTextConfiguration; embossSvg?: Omit<EmbossSvgPart, 'drawingAssetId'> } {
   const shapeMatch = new RegExp(`<${EMBOSS_SHAPE_TAG}\\b[^>]*/?>`, 'i').exec(body);
-  const decoded = decodeEmbossTextConfiguration(textMatch[0], shapeMatch?.[0]);
-  for (const warning of decoded.warnings) {
-    warnings.push(`${MODEL_SETTINGS_PATH} object ${objectId} part ${partId}: ${warning}`);
+  const textMatch = new RegExp(`<${EMBOSS_TEXT_TAG}\\b[^>]*/?>`, 'i').exec(body);
+  if (textMatch) {
+    const decoded = decodeEmbossTextConfiguration(textMatch[0], shapeMatch?.[0]);
+    for (const warning of decoded.warnings) {
+      warnings.push(`${MODEL_SETTINGS_PATH} object ${objectId} part ${partId}: ${warning}`);
+    }
+    return decoded.configuration ? { embossText: decoded.configuration } : {};
   }
-  return decoded.configuration ? { embossText: decoded.configuration } : {};
+  // A shape with an SVG reference and no text element is an SVG part.
+  if (!shapeMatch) return {};
+  const reference = decodeEmbossSvgReference(shapeMatch[0]);
+  if (!reference) return {};
+  const depth = shapeNumber(shapeMatch[0], 'depth');
+  if (depth === undefined || depth <= 0) {
+    warnings.push(
+      `${MODEL_SETTINGS_PATH} object ${objectId} part ${partId}: ${EMBOSS_SHAPE_TAG} has no usable depth; used the pinned default of 1 mm`,
+    );
+  }
+  return {
+    embossSvg: Object.freeze({
+      pathIn3mf: reference.pathIn3mf,
+      ...(reference.sourcePath ? { sourcePath: reference.sourcePath } : {}),
+      depthMm: depth !== undefined && depth > 0 ? depth : 1,
+      useSurface: /\buse_surface="1"/.test(shapeMatch[0]),
+      // Width is a property of the cut mesh, recovered from it on reopen.
+      widthMm: 0,
+    }) as Omit<EmbossSvgPart, 'drawingAssetId'>,
+  };
+}
+
+function shapeNumber(xml: string, name: string): number | undefined {
+  const match = new RegExp(`\\b${name}="([^"]*)"`).exec(xml);
+  if (!match) return undefined;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function parseModelSettings(bytes: Uint8Array | undefined, embossWarnings: string[] = []): ParsedModelMetadata {
@@ -2519,7 +2624,13 @@ function parseModelSettings(bytes: Uint8Array | undefined, embossWarnings: strin
     result.objectConfig.set(objectId, config);
     const parts = new Map<
       number,
-      { role: VolumeRole; name?: string; config: ConfigMap; embossText?: EmbossTextConfiguration }
+      {
+        role: VolumeRole;
+        name?: string;
+        config: ConfigMap;
+        embossText?: EmbossTextConfiguration;
+        embossSvg?: Omit<EmbossSvgPart, 'drawingAssetId'>;
+      }
     >();
     for (const partMatch of body.matchAll(/<part\b([^>]*)>([\s\S]*?)<\/part>/gi)) {
       const partAttrs = parseAttributes(partMatch[1]);

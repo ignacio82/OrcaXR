@@ -179,7 +179,37 @@ export interface ProjectVolume {
    * project reopen with the text still editable, exactly as upstream does.
    */
   embossText?: EmbossTextConfiguration;
+  /**
+   * The drawing this volume's mesh was cut from, when it is an SVG part.
+   *
+   * The parameters travel with the volume for the same reason the text recipe
+   * does: reopening a saved project has to give back something still editable,
+   * not an anonymous mesh. The drawing itself is stored in the archive at
+   * `pathIn3mf`, exactly as the pinned writer does.
+   */
+  embossSvg?: EmbossSvgPart;
   extensionData?: Record<string, JsonValue>;
+}
+
+/** Pinned `EmbossShape` with an `svg_file`, in the units upstream stores. */
+export interface EmbossSvgPart {
+  /** Path inside the 3MF archive holding the drawing. */
+  readonly pathIn3mf: string;
+  /**
+   * Canonical asset holding the drawing's own bytes.
+   *
+   * Without it `pathIn3mf` would name a file the package does not contain, and
+   * a reopened part could be moved but never re-cut from its original drawing.
+   */
+  readonly drawingAssetId: AssetId;
+  /** The operator's own file path, when the drawing came from disk. */
+  readonly sourcePath?: string;
+  /** Extrusion depth in millimetres. */
+  readonly depthMm: number;
+  /** Project the drawing onto the model surface instead of a flat plane. */
+  readonly useSurface: boolean;
+  /** Width the drawing was scaled to, in millimetres. */
+  readonly widthMm: number;
 }
 
 export interface ProjectInstance {

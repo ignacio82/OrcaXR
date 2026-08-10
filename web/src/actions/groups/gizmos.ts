@@ -15,7 +15,6 @@ import type { ActionDefinition as Action } from '../ActionRegistry';
 const UNAVAILABLE_TOOL_IDS = new Set([
   'split_to_parts',
   'tool_face_detector',
-  'tool_svg',
   'tool_hollow',
   'add_modifier',
   'add_support_enforcer',
@@ -351,7 +350,65 @@ export const gizmoActions: Action[] = [
     'faceDetector',
     'toolbar',
   ),
-  tool('tool_svg', 'SVG Emboss', 'svg', 'Emboss / cut an SVG onto the model surface', 'svgEmboss', 'toolbar'),
+  {
+    id: 'tool_svg',
+    label: 'SVG Part',
+    icon: 'svg',
+    group: 'scene',
+    disclosure: 'toolbar',
+    tool: 'svg',
+    hint: 'Cut an SVG drawing as a new part of the selected model',
+    isEnabled: (s) => s.modelCount > 0,
+    xrUnsupportedReason:
+      'Choosing a drawing needs the DOM file picker and its size is typed into a panel; no in-headset file browser or keyboard flow exists yet.',
+    run: (ctx) => ctx.svgPart(),
+  },
+  {
+    id: 'svg_load_drawing',
+    label: 'Load an SVG drawing',
+    icon: 'svg',
+    group: 'scene',
+    disclosure: 'inspector',
+    hint: 'Choose an .svg file; its filled shapes become the part',
+    xrUnsupportedReason: 'Choosing a drawing needs the DOM file picker; no in-headset file browser exists yet.',
+    run: (ctx, invocation) => {
+      const drawing = invocation.svg?.drawing;
+      if (!drawing) {
+        ctx.reportCapabilityUnavailable('Load an SVG drawing', 'Choose an .svg file in the SVG part panel.');
+        return;
+      }
+      ctx.loadSvgDrawing(drawing.name, drawing.source);
+    },
+  },
+  {
+    id: 'svg_configure',
+    label: 'Set the SVG part size',
+    icon: 'svg',
+    group: 'scene',
+    disclosure: 'inspector',
+    hint: 'Change the width or depth before cutting the drawing',
+    xrUnsupportedReason: 'The size is typed into a DOM panel; no in-headset number entry exists yet.',
+    run: (ctx, invocation) => {
+      const size = invocation.svg?.size;
+      if (!size) {
+        ctx.reportCapabilityUnavailable('Set the SVG part size', 'Edit the fields in the SVG part panel.');
+        return;
+      }
+      ctx.setSvgPartSize(size);
+    },
+  },
+  {
+    id: 'svg_apply',
+    label: 'Add SVG part',
+    icon: 'svg',
+    group: 'scene',
+    disclosure: 'inspector',
+    hint: 'Cut the drawing and add it to the selected part, or re-cut the selected SVG part',
+    isEnabled: (s) => s.modelCount > 0,
+    xrUnsupportedReason:
+      'Choosing a drawing needs the DOM file picker and its size is typed into a panel; no in-headset file browser or keyboard flow exists yet.',
+    run: (ctx) => ctx.applySvgPart(),
+  },
   tool('tool_hollow', 'Hollow', 'hollow', 'Hollow the model with an internal shell', 'hollowModel', 'toolbar'),
 
   // ---- Object context-menu ops (Orca right-click) ----

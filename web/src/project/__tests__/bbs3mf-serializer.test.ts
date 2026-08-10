@@ -8,6 +8,7 @@ import {
   ORCAXR_EXTENSION_PATH,
   UnsafeThreeMfArchiveError,
   canonicalStringify,
+  contentDigest,
   entityId,
   layerEventEntry,
   projectFingerprint,
@@ -1274,6 +1275,121 @@ await test('a BBS project written elsewhere brings its emboss text across', asyn
   // "middle" is how upstream spells a vertically centred block.
   assert.equal(embossed.embossText?.font.vertical, 'center');
   assert.equal(embossed.embossText?.projection.depthMm, 1.75);
+});
+
+await test('an SVG part carries its drawing into the archive and back', async () => {
+  const serializer = new Bbs3mfProjectSerializer();
+  const fixture = createProjectFixture();
+  const drawing =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="40mm" height="20mm" viewBox="0 0 40 20">' +
+    '<rect width="40" height="20"/></svg>';
+  const drawingBytes = new TextEncoder().encode(drawing);
+  const drawingAsset = {
+    descriptor: {
+      id: entityId<'asset'>('import:test:svg-drawing'),
+      kind: 'extension' as const,
+      digest: contentDigest(drawingBytes),
+      byteLength: drawingBytes.byteLength,
+      mediaType: 'image/svg+xml',
+    },
+    bytes: drawingBytes,
+  };
+  fixture.state.sourceAssets.push(drawingAsset.descriptor);
+  const volume = fixture.state.plates[0].objects[0].volumes[0];
+  volume.embossSvg = {
+    pathIn3mf: 'Metadata/svg/part-1/logo.svg',
+    drawingAssetId: drawingAsset.descriptor.id,
+    depthMm: 2,
+    useSurface: false,
+    widthMm: 40,
+  };
+
+  const archive = await serializer.serialize({
+    state: fixture.state,
+    assets: [fixture.asset, drawingAsset],
+    sourceRevision: 9,
+    sourceHash: projectFingerprint(fixture.state),
+  });
+
+  // The reference must name a file the package actually contains.
+  const files = readSafeZip(archive.bytes);
+  const stored = files.get('Metadata/svg/part-1/logo.svg');
+  assert.ok(stored, 'the drawing itself is written into the archive');
+  assert.equal(new TextDecoder().decode(stored), drawing);
+
+  const reopened = await serializer.deserialize(archive.bytes);
+  const restored = reopened.state.plates[0].objects[0].volumes[0].embossSvg;
+  assert.equal(restored?.pathIn3mf, 'Metadata/svg/part-1/logo.svg');
+  assert.equal(restored?.depthMm, 2);
+  // The drawing comes back as a canonical asset, so the part can be re-cut.
+  const recovered = reopened.assets.find((asset) => asset.descriptor.id === restored?.drawingAssetId);
+  assert.ok(recovered, 'the drawing is recovered as an asset');
+  assert.equal(new TextDecoder().decode(recovered.bytes), drawing);
+});
+
+await test('an SVG part reopens with its drawing and parameters', async () => {
+  const serializer = new Bbs3mfProjectSerializer();
+  const fixture = createProjectFixture();
+  const volume = fixture.state.plates[0].objects[0].volumes[0];
+  volume.embossSvg = {
+    pathIn3mf: 'Metadata/svg/part-1/logo.svg',
+    drawingAssetId: fixture.asset.descriptor.id,
+    sourcePath: '/home/ignacio/Downloads/logo.svg',
+    depthMm: 1.75,
+    useSurface: true,
+    widthMm: 42.5,
+  };
+
+  const archive = await serializer.serialize({
+    state: fixture.state,
+    assets: [fixture.asset],
+    sourceRevision: 5,
+    sourceHash: projectFingerprint(fixture.state),
+  });
+
+  const settings = new TextDecoder().decode(readSafeZip(archive.bytes).get('Metadata/model_settings.config')!);
+  // The pinned writer names these exactly; a different spelling is a file the
+  // desktop slicer silently ignores.
+  assert.match(settings, /filepath3mf="Metadata\/svg\/part-1\/logo.svg"/);
+  assert.match(settings, /filepath="\/home\/ignacio\/Downloads\/logo.svg"/);
+  assert.match(settings, /depth="1.75"/);
+  assert.match(settings, /use_surface="1"/);
+  // An SVG part carries no text element.
+  assert.equal(settings.includes('<slic3rpe:text'), false);
+
+  const reopened = await serializer.deserialize(archive.bytes);
+  const restored = reopened.state.plates[0].objects[0].volumes[0].embossSvg;
+  assert.equal(restored?.pathIn3mf, 'Metadata/svg/part-1/logo.svg');
+  assert.equal(restored?.sourcePath, '/home/ignacio/Downloads/logo.svg');
+  assert.equal(restored?.depthMm, 1.75);
+  assert.equal(restored?.useSurface, true);
+});
+
+await test('a BBS shape with no SVG reference is not mistaken for an SVG part', async () => {
+  const serializer = new Bbs3mfProjectSerializer();
+  const fixture = createProjectFixture();
+  const archive = await serializer.serialize({
+    state: fixture.state,
+    assets: [fixture.asset],
+    sourceRevision: 2,
+    sourceHash: projectFingerprint(fixture.state),
+  });
+  const files = readSafeZip(archive.bytes);
+  const settings = new TextDecoder()
+    .decode(files.get('Metadata/model_settings.config')!)
+    .replace(/<mesh_stat/, '<slic3rpe:shape depth="2"/>\n   <mesh_stat');
+  const rebuilt: Record<string, Uint8Array> = {};
+  for (const [path, bytes] of files) {
+    if (path === ORCAXR_EXTENSION_PATH) continue;
+    rebuilt[path] = path === 'Metadata/model_settings.config' ? new TextEncoder().encode(settings) : bytes;
+  }
+  const imported = await serializer.deserialize(zipSync(rebuilt));
+  const volumes = imported.state.plates.flatMap((plate) => plate.objects).flatMap((object) => object.volumes);
+  assert.equal(
+    volumes.some((candidate) => candidate.embossSvg !== undefined),
+    false,
+    'a shape without filepath3mf describes no drawing',
+  );
 });
 
 console.log(`\nBBS-compatible 3MF serializer: ${passed} tests passed.`);

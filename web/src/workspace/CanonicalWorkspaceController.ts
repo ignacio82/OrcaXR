@@ -17,6 +17,14 @@ import {
 import { canonicalStringify, cloneJson, cloneProjectState, deepFreeze } from '../project/domain/canonical';
 import { facetAnnotationsHaveAssignments } from '../project/domain/facetRefinement';
 import type { EmbossTextConfiguration, EmbossedMesh, GlyphOutlineSource } from '../project/objects/emboss';
+import type { EmbossSvgPart } from '../project/domain/model';
+import {
+  AddSvgPartCommand,
+  EditSvgPartCommand,
+  prepareSvgPart,
+  svgVolumeIdentity,
+  type PreparedSvgPart,
+} from '../project/objects/svgCommands';
 import {
   AddEmbossTextCommand,
   EditEmbossTextCommand,
@@ -2407,6 +2415,72 @@ export class CanonicalWorkspaceController {
     const prepared = prepareEmbossedVolume(configuration, font, embossVolumeIdentity(this.options.idSource).assetId);
     this.session.commands.execute(new EditEmbossTextCommand(volumeId, configuration, prepared));
     return prepared.mesh;
+  }
+
+  /**
+   * Cut a drawing into a part and add it, as one undoable command.
+   *
+   * The SVG's own bytes are returned so the caller can keep them beside the
+   * project; without them a reopened part could be re-placed but never re-cut.
+   */
+  addSvgPart(
+    objectId: ObjectId,
+    source: string,
+    options: {
+      readonly fileName: string;
+      readonly depthMm: number;
+      readonly widthMm?: number;
+      readonly sourcePath?: string;
+    },
+    transform: Transform = identityTransform(),
+  ): { volumeId: VolumeId; prepared: PreparedSvgPart } {
+    this.assertActive();
+    const identity = svgVolumeIdentity(this.options.idSource);
+    const prepared = prepareSvgPart(source, {
+      ...options,
+      volumeId: identity.volumeId,
+      assetId: identity.assetId,
+      drawingAssetId: identity.drawingAssetId,
+    });
+    const name = options.fileName.replace(/\.svg$/i, '') || 'SVG part';
+    this.session.commands.execute(
+      new AddSvgPartCommand(
+        { objectId, volumeId: identity.volumeId, assetId: identity.assetId, transform },
+        prepared,
+        name,
+      ),
+    );
+    return { volumeId: identity.volumeId, prepared };
+  }
+
+  /** Re-cut an existing SVG part from changed width or depth. */
+  editSvgPart(
+    volumeId: VolumeId,
+    source: string,
+    options: {
+      readonly fileName: string;
+      readonly depthMm: number;
+      readonly widthMm?: number;
+      readonly sourcePath?: string;
+    },
+  ): PreparedSvgPart {
+    this.assertActive();
+    const next = svgVolumeIdentity(this.options.idSource);
+    const prepared = prepareSvgPart(source, {
+      ...options,
+      volumeId,
+      assetId: next.assetId,
+      drawingAssetId: next.drawingAssetId,
+    });
+    this.session.commands.execute(new EditSvgPartCommand(volumeId, prepared));
+    return prepared;
+  }
+
+  /** The drawing parameters on one volume, when it is an SVG part. */
+  getSvgPart(volumeId: VolumeId): EmbossSvgPart | undefined {
+    this.assertActive();
+    const found = findVolume(this.session.project.getSnapshot().state, volumeId);
+    return found?.volume.embossSvg ? cloneJson(found.volume.embossSvg) : undefined;
   }
 
   /** The recipe on one volume, when it is embossed text. */

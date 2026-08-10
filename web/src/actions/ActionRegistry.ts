@@ -219,6 +219,14 @@ export interface ActionInvocation {
     readonly font?: { readonly name: string; readonly bytes: Uint8Array };
     readonly recipe?: EmbossRecipePatch;
   };
+  /**
+   * Bounded SVG-part request. The drawing arrives as text the operator picked;
+   * nothing is fetched, so there is no URL form of this parameter.
+   */
+  svg?: {
+    readonly drawing?: { readonly name: string; readonly source: string };
+    readonly size?: { readonly depthMm?: number; readonly widthMm?: number };
+  };
   /** Bounded assembly alignment request from the Measure panel. */
   assemblyAlignment?: {
     readonly kind: AssemblyAlignmentKind;
@@ -365,7 +373,6 @@ const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
   view_show_gcode_window: 'The G-code text inspector is not implemented yet.',
   split_to_parts: 'Splitting an object into editable parts is not implemented yet.',
   tool_face_detector: 'Face detection and selection is not implemented yet.',
-  tool_svg: 'SVG import and embossing is not implemented yet.',
   tool_hollow: 'Model hollowing is not implemented yet.',
   add_modifier: 'Parameter-modifier volumes are not implemented yet.',
   add_support_enforcer: 'Support-enforcer volumes are not implemented yet.',

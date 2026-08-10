@@ -57,6 +57,7 @@ import { InspectorTabs } from './ui/dom/InspectorTabs';
 import { PaintPanel } from './ui/dom/PaintPanel';
 import { BrimEarsPanel } from './ui/dom/BrimEarsPanel';
 import { EmbossPanel } from './ui/dom/EmbossPanel';
+import { SvgPanel } from './ui/dom/SvgPanel';
 import { MeasurePanel } from './ui/dom/MeasurePanel';
 import { SmartPaintPanel } from './ui/dom/SmartPaintPanel';
 import { PlateManager } from './ui/dom/PlateManager';
@@ -1834,6 +1835,62 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     });
     embossPanel.mount();
     window.addEventListener('pagehide', () => embossPanel.dispose(), { once: true });
+  }
+
+  const svgPanelHost = document.getElementById('svg-panel-host');
+  if (svgPanelHost) {
+    const svgPanel = new SvgPanel(svgPanelHost, {
+      getState: () => {
+        const snapshot = workspace.getSvgPartSnapshot();
+        return {
+          active: snapshot.active,
+          ...(snapshot.objectId ? { objectId: String(snapshot.objectId) } : {}),
+          ...(snapshot.volumeId ? { volumeId: String(snapshot.volumeId) } : {}),
+          ...(snapshot.fileName ? { fileName: snapshot.fileName } : {}),
+          depthMm: snapshot.depthMm,
+          ...(snapshot.widthMm !== undefined ? { widthMm: snapshot.widthMm } : {}),
+          unsupported: snapshot.unsupported,
+          hint: snapshot.hint,
+        };
+      },
+      subscribe: (listener) => {
+        const unsubscribeCanonical = workspace.subscribeCanonicalState(listener);
+        const previous = workspace.onSvgStateChanged;
+        workspace.onSvgStateChanged = () => {
+          previous?.();
+          listener();
+        };
+        return () => {
+          unsubscribeCanonical();
+          workspace.onSvgStateChanged = previous;
+        };
+      },
+      onActivate: async () => {
+        const invoked = await registry.invoke('tool_svg', 'dom-toolbar', actionCtx, uiState.get());
+        if (!invoked) throw new Error('Load a model before cutting an SVG part.');
+      },
+      onLoadDrawing: async (name, source) => {
+        const invoked = await registry.invoke('svg_load_drawing', 'dom-inspector', actionCtx, uiState.get(), {
+          svg: { drawing: { name, source } },
+        });
+        if (!invoked) throw new Error('Loading an SVG drawing is unavailable.');
+      },
+      onConfigure: async (patch) => {
+        const invoked = await registry.invoke('svg_configure', 'dom-inspector', actionCtx, uiState.get(), {
+          svg: { size: patch },
+        });
+        if (!invoked) throw new Error('Changing the SVG part size is unavailable.');
+      },
+      onApply: async () => {
+        const invoked = await registry.invoke('svg_apply', 'dom-inspector', actionCtx, uiState.get());
+        if (!invoked) throw new Error('Adding an SVG part is unavailable.');
+      },
+      onError: (error) => {
+        statusText.textContent = `SVG part: ${error instanceof Error ? error.message : String(error)}`;
+      },
+    });
+    svgPanel.mount();
+    window.addEventListener('pagehide', () => svgPanel.dispose(), { once: true });
   }
 
   const semanticObjectEditorHost = document.getElementById('semantic-object-editor-host');

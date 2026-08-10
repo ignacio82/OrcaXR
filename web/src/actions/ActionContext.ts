@@ -441,6 +441,22 @@ export class ActionContext {
     this.workspace.embossTool();
   }
 
+  svgPart(): void {
+    this.workspace.svgPartTool();
+  }
+
+  loadSvgDrawing(name: string, source: string): void {
+    this.workspace.loadSvgDrawing(name, source);
+  }
+
+  setSvgPartSize(patch: { depthMm?: number; widthMm?: number }): void {
+    this.workspace.setSvgPartSize(patch);
+  }
+
+  applySvgPart(): void {
+    this.workspace.applySvgPart();
+  }
+
   loadEmbossFont(name: string, bytes: Uint8Array): void {
     this.workspace.loadEmbossFont(name, bytes);
   }
