@@ -29,7 +29,11 @@ import type {
   TriangleAssignments,
   VolumeRole,
 } from '../domain/model';
-import { emptyFacetAnnotations, ORCA_REFINEMENT_ENCODING_VERSION, ORCA_REFINEMENT_MAX_NODES } from '../domain/model';
+import {
+  emptyFacetAnnotations,
+  ORCA_REFINEMENT_ENCODING_VERSION,
+  ORCA_REFINEMENT_MAX_AGGREGATE_NODES,
+} from '../domain/model';
 import { importFullSpectrumDefinitions } from '../filaments/fullSpectrumImport';
 import { serializeFullSpectrumDefinition } from '../filaments/fullSpectrumRecipe';
 import { decodeIndexedMeshAsset, type DecodedIndexedMesh } from '../meshCodec';
@@ -1602,22 +1606,27 @@ export function importBbsCore(
   archiveHash: string,
   options: { maxFacetRefinementNodes?: number; maxFacetAnnotationMaterializationUnits?: number } = {},
 ): ImportedCoreProject {
-  const maxFacetRefinementNodes = options.maxFacetRefinementNodes ?? ORCA_REFINEMENT_MAX_NODES;
-  const maxFacetAnnotationMaterializationUnits =
-    options.maxFacetAnnotationMaterializationUnits ?? ORCA_REFINEMENT_MAX_NODES;
+  // Defaults scale with the geometry the archive actually spells out, because
+  // a painted mesh needs one refinement root per triangle no matter how little
+  // paint it carries. A caller that passes a limit gets exactly that limit, so
+  // the guards stay testable with small numbers.
+  const explicitRefinementNodes = options.maxFacetRefinementNodes;
+  const explicitMaterializationUnits = options.maxFacetAnnotationMaterializationUnits;
+  const maxFacetRefinementNodes = explicitRefinementNodes ?? ORCA_REFINEMENT_MAX_AGGREGATE_NODES;
+  const maxFacetAnnotationMaterializationUnits = explicitMaterializationUnits ?? ORCA_REFINEMENT_MAX_AGGREGATE_NODES;
   if (
     !Number.isInteger(maxFacetRefinementNodes) ||
     maxFacetRefinementNodes < 1 ||
-    maxFacetRefinementNodes > ORCA_REFINEMENT_MAX_NODES
+    maxFacetRefinementNodes > ORCA_REFINEMENT_MAX_AGGREGATE_NODES
   ) {
-    throw new Error(`Facet refinement import limit must be in [1, ${ORCA_REFINEMENT_MAX_NODES}]`);
+    throw new Error(`Facet refinement import limit must be in [1, ${ORCA_REFINEMENT_MAX_AGGREGATE_NODES}]`);
   }
   if (
     !Number.isInteger(maxFacetAnnotationMaterializationUnits) ||
     maxFacetAnnotationMaterializationUnits < 1 ||
-    maxFacetAnnotationMaterializationUnits > ORCA_REFINEMENT_MAX_NODES
+    maxFacetAnnotationMaterializationUnits > ORCA_REFINEMENT_MAX_AGGREGATE_NODES
   ) {
-    throw new Error(`Facet annotation materialization limit must be in [1, ${ORCA_REFINEMENT_MAX_NODES}]`);
+    throw new Error(`Facet annotation materialization limit must be in [1, ${ORCA_REFINEMENT_MAX_AGGREGATE_NODES}]`);
   }
   const parsed = parseCorePackage(files, maxFacetRefinementNodes);
   const projectConfig = parseProjectSettings(files.get(PROJECT_SETTINGS_PATH));
@@ -2928,9 +2937,14 @@ function finalizeImportedFacetChannel<T extends JsonValue>(
         .map(([, assignment]) => assignment),
     };
   }
-  const implicitRoots = roots.filter((root) => root === undefined).length;
-  budget.remainingNodes -= implicitRoots;
-  if (budget.remainingNodes < 0 || roots.length > ORCA_REFINEMENT_MAX_NODES) {
+  // The decode budget counts nodes actually decoded from a paint payload; it
+  // exists so a hostile file cannot make us build an enormous tree. A triangle
+  // the file says nothing about decoded nothing, so charging one node for it
+  // measured mesh size instead of paint complexity — and rejected any large
+  // model carrying even a single subdivided facet, which the pinned engine
+  // opens without complaint. Materialization cost is bounded separately, by
+  // the annotation materialization limit that is named for exactly that.
+  if (budget.remainingNodes < 0) {
     throw new Error('3MF facet refinement exceeds the aggregate node limit');
   }
   const encoding = normalizeFacetRefinementEncoding({

@@ -4,6 +4,7 @@ import {
   ORCA_REFINEMENT_ENCODING_VERSION,
   ORCA_REFINEMENT_MAX_DEPTH,
   ORCA_REFINEMENT_MAX_NODES,
+  refinementNodeBudget,
   type FacetAnnotationRefinements,
   type FacetAnnotations,
   type FacetRefinementEncoding,
@@ -73,14 +74,9 @@ export function validateFacetRefinementChannel(
       message: 'Facet refinement must contain exactly one root per source triangle',
     });
   }
-  if (candidate.roots.length > ORCA_REFINEMENT_MAX_NODES) {
-    issues.push({
-      code: 'facet-refinement-limit-exceeded',
-      path: `${path}.roots`,
-      message: `Facet refinement may contain at most ${ORCA_REFINEMENT_MAX_NODES} nodes`,
-    });
-    return issues;
-  }
+  // One root per triangle is already required above, so a flat cap on the root
+  // count would only be a cap on how many triangles a painted mesh may have.
+  const nodeBudget = refinementNodeBudget(options.triangleCount);
 
   const assignmentByTriangle = new Map<number, JsonValue>();
   for (const assignment of assignments) {
@@ -105,11 +101,11 @@ export function validateFacetRefinementChannel(
   while (stack.length > 0) {
     const entry = stack.pop()!;
     nodeCount += 1;
-    if (nodeCount > ORCA_REFINEMENT_MAX_NODES) {
+    if (nodeCount > nodeBudget) {
       issues.push({
         code: 'facet-refinement-limit-exceeded',
         path,
-        message: `Facet refinement may contain at most ${ORCA_REFINEMENT_MAX_NODES} nodes`,
+        message: `Facet refinement may contain at most ${nodeBudget} nodes`,
       });
       break;
     }

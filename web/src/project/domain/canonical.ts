@@ -43,23 +43,56 @@ function stringifyCanonical(value: unknown): string {
   return `{${entries.join(',')}}`;
 }
 
-export function fnv1a64(bytes: Uint8Array): string {
-  let hash = 0xcbf29ce484222325n;
-  for (const byte of bytes) {
-    hash ^= BigInt(byte);
-    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+/**
+ * FNV-1a 64 held as two 32-bit halves.
+ *
+ * The obvious BigInt loop costs a multiplication object per byte, which is
+ * fine for a digest of a few kilobytes and hopeless for a project state of
+ * a hundred megabytes. Every intermediate here stays under 2^53, so plain
+ * Number arithmetic is exact and the digest is bit-identical to the BigInt
+ * form — pinned by test.
+ */
+class Fnv1a64 {
+  private hi = 0xcbf29ce4;
+  private lo = 0x84222325;
+
+  update(byte: number): void {
+    // 0x100000001b3 = (0x100 << 32) | 0x1b3.
+    const lo = (this.lo ^ byte) >>> 0;
+    const productLow = lo * 0x1b3;
+    const carry = Math.floor(productLow / 0x100000000);
+    this.lo = productLow % 0x100000000;
+    this.hi = (this.hi * 0x1b3 + lo * 0x100 + carry) % 0x100000000;
   }
-  return hash.toString(16).padStart(16, '0');
+
+  digest(): string {
+    return this.hi.toString(16).padStart(8, '0') + this.lo.toString(16).padStart(8, '0');
+  }
+}
+
+export function fnv1a64(bytes: Uint8Array): string {
+  const hash = new Fnv1a64();
+  for (const byte of bytes) hash.update(byte);
+  return hash.digest();
+}
+
+/** FNV-1a 64 of a string's UTF-8, encoded in one streaming pass. */
+export function fnv1a64Text(value: string): string {
+  const hash = new Fnv1a64();
+  forEachUtf8ByteOf(value, (byte) => hash.update(byte));
+  return hash.digest();
 }
 
 export function projectFingerprint(state: ProjectState): string {
-  const bytes = encodeUtf8(canonicalStringify(state));
-  return `fnv1a64:${fnv1a64(bytes)}`;
+  // Encoded and hashed in one pass. Materializing the UTF-8 of a large painted
+  // project as an intermediate array exceeded what a JS array can hold, so a
+  // model that opened could not be fingerprinted, and therefore could not be
+  // saved.
+  return `fnv1a64:${fnv1a64Text(canonicalStringify(state))}`;
 }
 
-/** Minimal standards-compatible UTF-8 encoder kept inside the pure domain. */
-function encodeUtf8(value: string): Uint8Array {
-  const bytes: number[] = [];
+/** Feed the UTF-8 bytes of `value` to `emit` without building an array. */
+export function forEachUtf8ByteOf(value: string, emit: (byte: number) => void): void {
   for (let index = 0; index < value.length; index += 1) {
     let codePoint = value.charCodeAt(index);
     if (codePoint >= 0xd800 && codePoint <= 0xdbff && index + 1 < value.length) {
@@ -69,19 +102,20 @@ function encodeUtf8(value: string): Uint8Array {
         index += 1;
       }
     }
-    if (codePoint <= 0x7f) bytes.push(codePoint);
-    else if (codePoint <= 0x7ff) {
-      bytes.push(0xc0 | (codePoint >> 6), 0x80 | (codePoint & 0x3f));
+    if (codePoint <= 0x7f) {
+      emit(codePoint);
+    } else if (codePoint <= 0x7ff) {
+      emit(0xc0 | (codePoint >> 6));
+      emit(0x80 | (codePoint & 0x3f));
     } else if (codePoint <= 0xffff) {
-      bytes.push(0xe0 | (codePoint >> 12), 0x80 | ((codePoint >> 6) & 0x3f), 0x80 | (codePoint & 0x3f));
+      emit(0xe0 | (codePoint >> 12));
+      emit(0x80 | ((codePoint >> 6) & 0x3f));
+      emit(0x80 | (codePoint & 0x3f));
     } else {
-      bytes.push(
-        0xf0 | (codePoint >> 18),
-        0x80 | ((codePoint >> 12) & 0x3f),
-        0x80 | ((codePoint >> 6) & 0x3f),
-        0x80 | (codePoint & 0x3f),
-      );
+      emit(0xf0 | (codePoint >> 18));
+      emit(0x80 | ((codePoint >> 12) & 0x3f));
+      emit(0x80 | ((codePoint >> 6) & 0x3f));
+      emit(0x80 | (codePoint & 0x3f));
     }
   }
-  return new Uint8Array(bytes);
 }

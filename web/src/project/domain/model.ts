@@ -86,7 +86,37 @@ export interface TriangleAssignments<T extends JsonValue> {
 /** Stable version of Orca's per-source-facet TriangleSelector tree. */
 export const ORCA_REFINEMENT_ENCODING_VERSION = 1;
 export const ORCA_REFINEMENT_MAX_DEPTH = 64;
+/** Ceiling on a *single* source facet's subdivision tree. */
 export const ORCA_REFINEMENT_MAX_NODES = 1_000_000;
+/**
+ * Ceiling on refinement nodes per source triangle, across a whole mesh.
+ *
+ * A refinement carries exactly one root per triangle, so an aggregate cap
+ * expressed as a flat node count is really a cap on how many triangles a
+ * painted model may have — which rejected a legitimate 1.9M-triangle painted
+ * model the pinned engine opens without complaint. What actually needs
+ * bounding is *expansion*: how much larger the paint tree can be than the
+ * geometry that had to be spelled out in the archive byte by byte. Subdividing
+ * every facet five levels deep stays far inside this.
+ */
+export const ORCA_REFINEMENT_MAX_NODES_PER_TRIANGLE = 32;
+
+/**
+ * Hard ceiling on the package-wide refinement/materialization budgets.
+ *
+ * Every decoded node costs at least one character of paint in the archive, and
+ * every root costs a triangle that had to be written out, so total expansion is
+ * already bounded by the ZIP entry guards. This is the backstop behind that,
+ * not the primary defence — set high enough that a real painted model of a few
+ * million triangles opens, which the flat per-facet cap was not.
+ */
+export const ORCA_REFINEMENT_MAX_AGGREGATE_NODES = 256_000_000;
+
+/** Aggregate refinement node budget for a mesh of `triangleCount` triangles. */
+export function refinementNodeBudget(triangleCount: number): number {
+  const scaled = Math.max(0, Math.trunc(triangleCount)) * ORCA_REFINEMENT_MAX_NODES_PER_TRIANGLE;
+  return Math.max(ORCA_REFINEMENT_MAX_NODES, scaled);
+}
 
 export type FacetRefinementState<T extends JsonValue = JsonValue> =
   { readonly kind: 'unpainted' } | { readonly kind: 'assigned'; readonly value: T };

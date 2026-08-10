@@ -501,6 +501,16 @@ Local starting seams: [`Project3mf.ts`](../web/src/features/Project3mf.ts),
     name is already stored and forwarded to the print, so skipping only the texture leaves CLI
     output identical to the GUI's.
 
+- **Large painted projects.** A real 1.9M-triangle painted project the pinned engine opens was
+  refused by five separate flat limits, each of which conflated model size with attack surface: a
+  refinement carries one root per source triangle, so a fixed node cap is really a cap on how many
+  triangles a painted mesh may have. The aggregate budgets now scale with the geometry the archive
+  actually spells out (`refinementNodeBudget`), the save-side JSON allowance tracks the project's
+  own triangle totals, the canonical envelope is bounded by its own text length — every JSON node
+  costs at least a character, and ZIP guards already bound those — and the fingerprint streams its
+  UTF-8 instead of materializing 144 MB as a JS array. Expansion far beyond the geometry is still
+  refused, which is what those budgets are for. Per-facet tree depth and size caps are unchanged.
+
 - [~] **P1.6 — Migrate existing workspace data incrementally.** Write adapters from flat
   `ModelEntry`, `PlateStore`, `FilamentPalette`, and existing OrcaXR JSON into `ProjectState`,
   then move render, save, slice, and selection consumers to projections of the store.

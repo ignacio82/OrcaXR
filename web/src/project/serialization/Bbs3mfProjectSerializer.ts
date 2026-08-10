@@ -2,6 +2,7 @@ import { InMemoryAssetRepository, contentDigest, type AssetPayload } from '../as
 import { canonicalStringify, cloneJson, fnv1a64 } from '../domain/canonical';
 import { entityId, type AssetId } from '../domain/ids';
 import type { ExtensionBlob, ProjectState, SourceAssetDescriptor } from '../domain/model';
+import { refinementNodeBudget } from '../domain/model';
 import { assertValidProjectState } from '../domain/validation';
 import type { CancellationToken, ProjectArchiveSnapshot, ProjectSerializerPort, SerializedProject } from '../ports';
 import {
@@ -79,7 +80,7 @@ export class Bbs3mfProjectSerializer implements ProjectSerializerPort {
 
   async serialize(snapshot: ProjectArchiveSnapshot, cancellation?: CancellationToken): Promise<SerializedProject> {
     throwIfCancelled(cancellation);
-    assertSafeJsonTree(snapshot.state, 'project state');
+    assertSafeJsonTree(snapshot.state, 'project state', projectStateJsonNodeBudget(snapshot.state));
     assertValidProjectState(snapshot.state);
     const warnings: string[] = [];
     const payloads = validateSnapshotAssets(snapshot, warnings);
@@ -452,14 +453,21 @@ function preserveUnownedEntries(
 
 function parseEnvelope(bytes: Uint8Array): CanonicalExtensionEnvelope {
   let parsed: unknown;
+  let text: string;
   try {
-    parsed = JSON.parse(decodeText(bytes, ORCAXR_EXTENSION_PATH));
+    text = decodeText(bytes, ORCAXR_EXTENSION_PATH);
+    parsed = JSON.parse(text);
   } catch (error) {
     throw new Error(`Invalid OrcaXR canonical metadata: ${error instanceof Error ? error.message : String(error)}`, {
       cause: error,
     });
   }
-  assertSafeJsonTree(parsed, ORCAXR_EXTENSION_PATH);
+  // Every JSON node costs at least one character, and the ZIP guards already
+  // bound how many characters this entry may contain, so the text length is an
+  // exact ceiling on the node count. A flat cap instead would refuse to reopen
+  // a project this same serializer had just written, once the model carried
+  // more painted triangles than the constant allowed.
+  assertSafeJsonTree(parsed, ORCAXR_EXTENSION_PATH, Math.max(DEFAULT_JSON_NODE_LIMIT, text.length));
   if (!isRecord(parsed)) throw new Error('OrcaXR canonical metadata must be a JSON object');
   if (parsed.format !== ORCAXR_EXTENSION_FORMAT || parsed.version !== 1) {
     throw new Error(`Unsupported OrcaXR 3MF extension ${String(parsed.format)} version ${String(parsed.version)}`);
@@ -820,13 +828,35 @@ function safeCodePoint(value: number, original: string): string {
   return String.fromCodePoint(value);
 }
 
-function assertSafeJsonTree(root: unknown, label: string): void {
+/**
+ * Node allowance for a project's own state.
+ *
+ * A flat cap here is the same mistake as a flat refinement cap: a painted mesh
+ * needs one refinement root per triangle, so a legitimate multi-million
+ * triangle model exceeds any fixed number and becomes a project that can be
+ * opened but never saved. The allowance therefore tracks the geometry the
+ * project actually holds, using the same per-triangle budget the refinement
+ * validator applies, over a floor that covers everything else in the state.
+ */
+function projectStateJsonNodeBudget(state: ProjectState): number {
+  let budget = DEFAULT_JSON_NODE_LIMIT;
+  for (const plate of state.plates) {
+    for (const object of plate.objects) {
+      for (const volume of object.volumes) budget += refinementNodeBudget(volume.source.triangleCount);
+    }
+  }
+  return budget;
+}
+
+const DEFAULT_JSON_NODE_LIMIT = 1_000_000;
+
+function assertSafeJsonTree(root: unknown, label: string, nodeLimit = DEFAULT_JSON_NODE_LIMIT): void {
   const stack: Array<{ value: unknown; depth: number }> = [{ value: root, depth: 0 }];
   let nodes = 0;
   while (stack.length > 0) {
     const { value, depth } = stack.pop()!;
     nodes += 1;
-    if (nodes > 1_000_000) throw new Error(`${label} exceeds the JSON node limit`);
+    if (nodes > nodeLimit) throw new Error(`${label} exceeds the JSON node limit`);
     if (depth > 256) throw new Error(`${label} exceeds the JSON nesting limit`);
     if (Array.isArray(value)) {
       for (const child of value) stack.push({ value: child, depth: depth + 1 });
