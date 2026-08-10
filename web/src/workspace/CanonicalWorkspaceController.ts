@@ -198,6 +198,17 @@ import {
   type ProjectSettingsOverrideSnapshot,
   type ProjectSettingsOverrideUpdate,
 } from '../project/settingsOverrides';
+import {
+  SetScopedOverridesCommand,
+  StaleScopedOverrideError,
+  projectScopeUpdate,
+  scopedOverrideSnapshot,
+  scopedOverrideTargets,
+  type ScopedOverrideGuard,
+  type ScopedOverrideSnapshot,
+  type ScopedOverrideTarget,
+  type ScopedOverrideTargetOption,
+} from '../project/scopedOverrides';
 import { EditorSession, UnhealthyProjectProjectionError } from '../project/session';
 import { StoreProjectSliceSource } from '../project/slicing/source';
 import type { CanonicalProjectSliceGuard, CanonicalProjectSliceSourcePort } from '../project/slicing/types';
@@ -1583,6 +1594,48 @@ export class CanonicalWorkspaceController {
     }
     this.session.execute(new SetProjectSettingsOverridesCommand(guard, update));
     return projectSettingsOverrideSnapshot(this.session.project.getSnapshot());
+  }
+
+  /**
+   * One node's own overrides, the chain above it, and what the chain resolves
+   * to (P6.5). Every scope answers the same question through this one call, so
+   * no surface has to know that the project stores a base/override pair while
+   * the other four store overrides alone.
+   */
+  getScopedOverrideSnapshot(target: ScopedOverrideTarget): ScopedOverrideSnapshot {
+    this.assertActive();
+    return scopedOverrideSnapshot(this.session.project.getSnapshot(), target);
+  }
+
+  /** Every node a scoped edit can address, in containment order. */
+  listScopedOverrideTargets(): readonly ScopedOverrideTargetOption[] {
+    this.assertActive();
+    return scopedOverrideTargets(this.session.project.getSnapshot().state);
+  }
+
+  /** Replace one node's in-scope overrides as a single reversible command. */
+  setScopedOverrides(
+    target: ScopedOverrideTarget,
+    overrides: Readonly<ConfigMap>,
+    guard: ScopedOverrideGuard,
+  ): ScopedOverrideSnapshot {
+    this.assertActive();
+    const before = this.session.project.getSnapshot();
+    if (before.revision !== guard.sourceRevision || before.hash !== guard.sourceHash) {
+      throw new StaleScopedOverrideError();
+    }
+    if (target.scope === 'project') {
+      const update = projectScopeUpdate(before, overrides);
+      this.session.execute(
+        new SetProjectSettingsOverridesCommand(guard, {
+          inheritedConfig: update.inheritedConfig,
+          overrides: update.overrides,
+        }),
+      );
+    } else {
+      this.session.execute(new SetScopedOverridesCommand(guard, target, overrides));
+    }
+    return scopedOverrideSnapshot(this.session.project.getSnapshot(), target);
   }
 
   /**

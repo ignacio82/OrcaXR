@@ -66,14 +66,19 @@ test('resolves project/plate/object/part and layer inheritance without losing lo
     layerRangeId: object.layerRanges[0].id,
   });
   assert.equal(layer.effective.layer_height, 0.12);
-  assert.throws(() =>
-    resolveConfig(state, {
-      plateId: state.activePlateId,
-      objectId: object.id,
-      volumeId: volume.id,
-      layerRangeId: object.layerRanges[0].id,
-    }),
-  );
+
+  // A height range is not the part's sibling — the engine applies the part
+  // first and the range on top, so a part inside a range gets both.
+  const both = resolveConfig(state, {
+    plateId: state.activePlateId,
+    objectId: object.id,
+    volumeId: volume.id,
+    layerRangeId: object.layerRanges[0].id,
+  });
+  assert.equal(both.effective.wall_loops, 3);
+  assert.equal(both.effective.layer_height, 0.12);
+  assert.equal(both.sourceByKey.layer_height.kind, 'layer-range');
+  assert.equal(both.sourceByKey.wall_loops.kind, 'volume');
 });
 
 test('reports duplicate IDs, dangling references, invalid transforms/ranges/tools and modifier misuse', () => {

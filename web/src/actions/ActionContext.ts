@@ -17,6 +17,7 @@ import type { FilamentId, PlateId } from '../project/domain/ids';
 import type { ConfigMap } from '../project/domain/model';
 import type { ObjectTreeEntityRef } from '../project/objects';
 import type { PaintChannel, PaintToolKind } from '../project/painting/PaintStrokeService';
+import type { ScopedOverrideTarget } from '../project/scopedOverrides';
 import type { PrintJobCommand } from '../printer/PrintJobControl';
 import type { GcodePreviewViewPatch } from '../slicer/GcodePreviewSession';
 
@@ -129,6 +130,13 @@ export class ActionContext {
     guard: Readonly<{ sourceRevision: number; sourceHash: string }>,
   ): void {
     this.workspace.setProjectSettingsOverrides(inheritedConfig, overrides, guard);
+  }
+  applyScopedSettings(
+    target: ScopedOverrideTarget,
+    overrides: Readonly<ConfigMap>,
+    guard: Readonly<{ sourceRevision: number; sourceHash: string }>,
+  ): void {
+    this.workspace.setScopedOverrides(target, overrides, guard);
   }
   mutateVirtualFilament(request: CanonicalVirtualFilamentMutationRequest): void {
     this.workspace.mutateVirtualFilament(request);

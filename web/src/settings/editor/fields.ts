@@ -1,4 +1,5 @@
 import { EngineOptionCatalog } from '../generated/loader';
+import { SETTING_SCOPE_KEYS } from '../generated/settingScopes';
 import type { EngineGuiSurface, EngineOptionDefinition } from '../generated/types';
 import { codecContractIssue, enumChoicesFor, validateSettingValue } from './codec';
 import { isReviewedFullSpectrumProjectOverride } from './fullSpectrumSemantics';
@@ -66,7 +67,11 @@ export function projectSettingsFields(
   query: SettingsFieldQuery,
 ): SettingsFieldProjection[] {
   const tokens = tokenize(query.search ?? '');
+  // Scope first: a key the engine never reads at this scope is not a hidden
+  // advanced control, it is a control that would do nothing.
+  const inScope = query.scope ? new Set(SETTING_SCOPE_KEYS[query.scope]) : undefined;
   return catalog.definitions
+    .filter((definition) => !inScope || inScope.has(definition.key))
     .map((definition) => projectField(catalog, definition, query.technology, tokens, query.guiSurface))
     .filter((field) => MODE_RANK[field.mode] <= MODE_RANK[query.mode])
     .filter(

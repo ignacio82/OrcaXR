@@ -1,4 +1,5 @@
 import { EngineOptionCatalog } from '../generated/loader';
+import { SETTING_SCOPE_KEYS, type SettingScope } from '../generated/settingScopes';
 import type { EngineGuiSurface, EngineOptionDefinition, EngineOptionValue } from '../generated/types';
 import { parseSettingDraft, serializeSettingValue, validateSettingValue } from './codec';
 import { assessFieldSupport, projectSettingsField, projectSettingsFields } from './fields';
@@ -26,6 +27,9 @@ export class SettingsDraftEditor {
   readonly mode;
   readonly technology;
   readonly guiSurface: EngineGuiSurface | undefined;
+  /** Override scope this draft edits; undefined means the whole project config. */
+  readonly scope: SettingScope | undefined;
+  private readonly scopeKeys: ReadonlySet<string> | undefined;
 
   constructor(
     readonly catalog: EngineOptionCatalog,
@@ -34,11 +38,17 @@ export class SettingsDraftEditor {
     this.mode = options.mode ?? 'advanced';
     this.technology = options.technology ?? 'fff';
     this.guiSurface = options.guiSurface;
+    this.scope = options.scope;
+    this.scopeKeys = options.scope ? new Set(SETTING_SCOPE_KEYS[options.scope]) : undefined;
     this.inherited = cloneMap(options.inherited ?? {});
     this.overrides = cloneMap(options.overrides ?? {});
     this.definitionsById = new Map(catalog.definitions.map((definition) => [definition.id, definition]));
     this.assertKnownKeys(this.inherited, 'inherited');
     this.assertKnownKeys(this.overrides, 'overrides');
+    // Inherited values legitimately come from wider scopes; the overrides are
+    // this node's own, so one outside its scope would be stored where nothing
+    // reads it.
+    this.assertInScope(this.overrides);
   }
 
   query(query: Partial<SettingsFieldQuery> = {}) {
@@ -48,6 +58,7 @@ export class SettingsDraftEditor {
       ...(query.guiSurface !== undefined || this.guiSurface !== undefined
         ? { guiSurface: query.guiSurface ?? this.guiSurface }
         : {}),
+      ...((query.scope ?? this.scope) ? { scope: (query.scope ?? this.scope)! } : {}),
       ...(query.search !== undefined ? { search: query.search } : {}),
       ...(query.includeNonApplicable !== undefined ? { includeNonApplicable: query.includeNonApplicable } : {}),
       ...(query.includeUnknownApplicability !== undefined
@@ -251,6 +262,9 @@ export class SettingsDraftEditor {
   }
 
   private assertEditable(definition: EngineOptionDefinition): void {
+    if (this.scopeKeys && !this.scopeKeys.has(definition.key)) {
+      throw new Error(`Setting ${definition.key} cannot be overridden at the ${this.scope} scope`);
+    }
     const support = assessFieldSupport(this.catalog, definition, this.guiSurface);
     if (support.status !== 'implemented') {
       throw new Error(`Setting ${definition.key} is unavailable: ${support.reason}`);
@@ -260,6 +274,15 @@ export class SettingsDraftEditor {
   private assertKnownKeys(values: SettingsValueMap, layer: string): void {
     for (const key of Object.keys(values)) {
       if (!this.catalog.has(key)) throw new Error(`Unknown ${layer} setting ${JSON.stringify(key)}`);
+    }
+  }
+
+  private assertInScope(values: SettingsValueMap): void {
+    if (!this.scopeKeys) return;
+    for (const key of Object.keys(values)) {
+      if (!this.scopeKeys.has(key)) {
+        throw new Error(`Setting ${JSON.stringify(key)} cannot be overridden at the ${this.scope} scope`);
+      }
     }
   }
 }

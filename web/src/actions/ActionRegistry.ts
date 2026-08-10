@@ -18,6 +18,7 @@ import type { ActionContext } from './ActionContext';
 import type { FilamentId, PlateId } from '../project/domain/ids';
 import type { ConfigMap } from '../project/domain/model';
 import type { ObjectTreeEntityRef } from '../project/objects';
+import type { ScopedOverrideTarget } from '../project/scopedOverrides';
 import type { AssemblyAlignmentKind } from '../project/objects/assembly';
 import type { PaintChannel, PaintToolKind } from '../project/painting/PaintStrokeService';
 import type { GcodePreviewViewPatch } from '../slicer/GcodePreviewSession';
@@ -137,6 +138,17 @@ export interface ActionInvocation {
   /** Complete raw engine-wire settings maps guarded by their canonical source. */
   projectSettingsApply?: {
     readonly inheritedConfig: Readonly<ConfigMap>;
+    readonly overrides: Readonly<ConfigMap>;
+    readonly sourceRevision: number;
+    readonly sourceHash: string;
+  };
+  /**
+   * Complete next override map for one addressed node, guarded by the snapshot
+   * it was drafted against. The map is the whole scope, not a patch, so an
+   * omitted key means "inherit" rather than "leave alone".
+   */
+  scopedSettingsApply?: {
+    readonly target: ScopedOverrideTarget;
     readonly overrides: Readonly<ConfigMap>;
     readonly sourceRevision: number;
     readonly sourceHash: string;

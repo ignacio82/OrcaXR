@@ -6,6 +6,7 @@ import type {
   EngineOptionDefinition,
   EngineOptionValue,
 } from '../generated/types';
+import type { SettingScope } from '../generated/settingScopes';
 
 export type SettingsEditorMode = 'simple' | 'advanced' | 'develop';
 export type SettingsTechnology = 'fff' | 'sla' | 'any';
@@ -66,6 +67,8 @@ export interface SettingsFieldQuery {
   mode: SettingsEditorMode;
   technology: SettingsTechnology;
   guiSurface?: EngineGuiSurface;
+  /** Restrict results to keys the engine reads at this override scope. */
+  scope?: SettingScope;
   search?: string;
   includeNonApplicable?: boolean;
   includeUnknownApplicability?: boolean;
@@ -121,6 +124,13 @@ export interface SettingsDraftEditorOptions {
   mode?: SettingsEditorMode;
   technology?: SettingsTechnology;
   guiSurface?: EngineGuiSurface;
+  /**
+   * Override scope this draft edits (P6.5). Omitted means the whole project
+   * config. A narrower scope hides — and refuses to edit — every key the engine
+   * would not read from it, so one editor serves all five scopes without any
+   * surface deciding for itself what a plate or a part may hold.
+   */
+  scope?: SettingScope;
   inherited?: SettingsValueMap;
   overrides?: SettingsValueMap;
 }

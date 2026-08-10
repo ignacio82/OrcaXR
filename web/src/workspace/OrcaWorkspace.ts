@@ -45,6 +45,12 @@ import {
   type SliceJobStatus,
 } from '../project/slicing';
 import type { ProjectSettingsOverrideGuard, ProjectSettingsOverrideSnapshot } from '../project/settingsOverrides';
+import type {
+  ScopedOverrideGuard,
+  ScopedOverrideSnapshot,
+  ScopedOverrideTarget,
+  ScopedOverrideTargetOption,
+} from '../project/scopedOverrides';
 import { detectModelFormat } from '../project/import/formats';
 import type { LayerEventType } from '../project/domain/model';
 import type { PrintJobCommand } from '../printer/PrintJobControl';
@@ -4583,6 +4589,31 @@ export class OrcaWorkspace extends xb.Script {
     guard: ProjectSettingsOverrideGuard,
   ): ProjectSettingsOverrideSnapshot {
     const result = this.canonicalProject.setProjectSettingsOverrides({ inheritedConfig, overrides }, guard);
+    this.revalidatePublishedGcode();
+    return result;
+  }
+
+  /** One node's overrides, its chain, and the resolved config (P6.5). */
+  public getScopedOverrideSnapshot(target: ScopedOverrideTarget): ScopedOverrideSnapshot {
+    return this.canonicalProject.getScopedOverrideSnapshot(target);
+  }
+
+  /** Every node a scoped edit can address, in containment order. */
+  public listScopedOverrideTargets(): readonly ScopedOverrideTargetOption[] {
+    return this.canonicalProject.listScopedOverrideTargets();
+  }
+
+  /**
+   * Replace one node's in-scope overrides. Any scope changes what the engine
+   * will produce, so a published G-code artifact stops being current here just
+   * as it does for a project-wide change.
+   */
+  public setScopedOverrides(
+    target: ScopedOverrideTarget,
+    overrides: Readonly<ConfigMap>,
+    guard: ScopedOverrideGuard,
+  ): ScopedOverrideSnapshot {
+    const result = this.canonicalProject.setScopedOverrides(target, overrides, guard);
     this.revalidatePublishedGcode();
     return result;
   }

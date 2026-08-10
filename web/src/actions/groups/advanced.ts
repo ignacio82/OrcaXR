@@ -44,6 +44,28 @@ export const advancedActions: Action[] = [
     },
   },
   {
+    id: 'settings_apply_scoped',
+    label: 'Apply scoped settings',
+    icon: 'advanced',
+    group: 'advanced',
+    disclosure: 'inspector',
+    hint: 'Override settings on a plate, object, part, or height range as one canonical command',
+    run: (ctx, invocation) => {
+      const request = invocation.scopedSettingsApply;
+      if (!request) {
+        ctx.reportCapabilityUnavailable(
+          'Apply scoped settings',
+          'Pick a plate, object, part, or height range in the Settings panel and edit one of its settings first.',
+        );
+        return;
+      }
+      ctx.applyScopedSettings(request.target, request.overrides, {
+        sourceRevision: request.sourceRevision,
+        sourceHash: request.sourceHash,
+      });
+    },
+  },
+  {
     id: 'add_magnet',
     mcpTool: 'add_magnets',
     label: 'Add Magnet Hole',

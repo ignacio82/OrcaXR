@@ -43,7 +43,8 @@ import type { ActionInvocation, ActionRegistry } from './actions/ActionRegistry'
 import { buildShortcutCatalog, isShortcutEditingTarget, matchShortcut } from './actions/ShortcutCatalog';
 import { DomShell } from './ui/dom/DomShell';
 import { CommandPalette } from './ui/dom/CommandPalette';
-import { GeneratedSettingsPanel } from './ui/dom/GeneratedSettingsPanel';
+import type { GeneratedSettingsPanelAdapter } from './ui/dom/GeneratedSettingsPanel';
+import { ScopedSettingsPanel } from './ui/dom/ScopedSettingsPanel';
 import { ObjectsPanel, type ObjectsPanelSelectionRequest } from './ui/dom/ObjectsPanel';
 import { FilamentAssignmentSelector } from './ui/dom/FilamentAssignmentSelector';
 import { LayerEventPanel } from './ui/dom/LayerEventPanel';
@@ -109,6 +110,7 @@ import type { ConfigMap } from './project/domain/model';
 import { loadEngineOptionCatalog, type EngineOptionCatalog } from './settings/generated/loader';
 import { applySettingsCommitToConfig, decodeSettingsConfig } from './settings/editor';
 import type { ProjectSettingsOverrideSnapshot } from './project/settingsOverrides';
+import type { ScopedOverrideSnapshot, ScopedOverrideTargetOption } from './project/scopedOverrides';
 
 declare global {
   interface Window {
@@ -2163,57 +2165,124 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       inherited: decodeSettingsConfig(catalog, raw.inheritedConfig as unknown as Readonly<ConfigMap>).values,
       overrides: decodeSettingsConfig(catalog, raw.overrides as unknown as Readonly<ConfigMap>).values,
     });
-    const settingsPanel = new GeneratedSettingsPanel(
-      settingsHost,
-      {
+    const projectAdapter: GeneratedSettingsPanelAdapter = {
+      load: async () => {
+        const catalog = await catalogPromise;
+        displayedRaw = workspace.getProjectSettingsOverrideSnapshot();
+        return projectPanelSnapshot(catalog, displayedRaw);
+      },
+      subscribe: (listener) =>
+        workspace.subscribeCanonicalState(() => {
+          const current = workspace.getProjectSettingsOverrideSnapshot();
+          if (
+            !displayedRaw ||
+            current.sourceRevision !== displayedRaw.sourceRevision ||
+            current.sourceHash !== displayedRaw.sourceHash
+          ) {
+            listener();
+          }
+        }),
+      apply: async (request) => {
+        const raw = displayedRaw;
+        if (!raw || raw.sourceRevision !== request.expectedRevision || raw.sourceHash !== request.sourceHash) {
+          throw new Error('The settings draft no longer matches the displayed canonical project snapshot.');
+        }
+        const overrides = applySettingsCommitToConfig(raw.overrides as unknown as Readonly<ConfigMap>, request.commit);
+        const invoked = await registry.invoke('settings_apply_project', 'dom-inspector', actionCtx, uiState.get(), {
+          projectSettingsApply: {
+            inheritedConfig: raw.inheritedConfig as unknown as Readonly<ConfigMap>,
+            overrides,
+            sourceRevision: raw.sourceRevision,
+            sourceHash: raw.sourceHash,
+          },
+        });
+        if (!invoked) throw new Error('The project settings action is unavailable in the current workspace state.');
+        displayedRaw = workspace.getProjectSettingsOverrideSnapshot();
+        return projectPanelSnapshot(await catalogPromise, displayedRaw);
+      },
+      cancel: (request) => {
+        const raw = displayedRaw;
+        if (!raw || raw.sourceRevision !== request.expectedRevision || raw.sourceHash !== request.sourceHash) {
+          throw new Error('The settings draft no longer matches the displayed canonical project snapshot.');
+        }
+      },
+      onError: (error) => {
+        statusText.textContent = `Project settings: ${error instanceof Error ? error.message : String(error)}`;
+      },
+    };
+
+    // A plate, object, part, or height range stores overrides alone, so its
+    // adapter reads the resolved chain as "inherited" and writes only the map
+    // for that node. One panel, one commit path; the scope decides what may be
+    // stored and who wins (P6.5).
+    const nodeAdapter = (option: ScopedOverrideTargetOption): GeneratedSettingsPanelAdapter => {
+      let displayed: ScopedOverrideSnapshot | undefined;
+      const project = async (raw: ScopedOverrideSnapshot) => {
+        const catalog = await catalogPromise;
+        return {
+          revision: raw.sourceRevision,
+          sourceHash: raw.sourceHash,
+          inherited: decodeSettingsConfig(catalog, raw.inheritedConfig).values,
+          overrides: decodeSettingsConfig(catalog, raw.overrides).values,
+        };
+      };
+      return {
         load: async () => {
-          const catalog = await catalogPromise;
-          displayedRaw = workspace.getProjectSettingsOverrideSnapshot();
-          return projectPanelSnapshot(catalog, displayedRaw);
+          displayed = workspace.getScopedOverrideSnapshot(option.target);
+          return project(displayed);
         },
         subscribe: (listener) =>
           workspace.subscribeCanonicalState(() => {
-            const current = workspace.getProjectSettingsOverrideSnapshot();
+            const current = workspace.getScopedOverrideSnapshot(option.target);
             if (
-              !displayedRaw ||
-              current.sourceRevision !== displayedRaw.sourceRevision ||
-              current.sourceHash !== displayedRaw.sourceHash
+              !displayed ||
+              current.sourceRevision !== displayed.sourceRevision ||
+              current.sourceHash !== displayed.sourceHash
             ) {
               listener();
             }
           }),
         apply: async (request) => {
-          const raw = displayedRaw;
+          const raw = displayed;
           if (!raw || raw.sourceRevision !== request.expectedRevision || raw.sourceHash !== request.sourceHash) {
             throw new Error('The settings draft no longer matches the displayed canonical project snapshot.');
           }
-          const overrides = applySettingsCommitToConfig(
-            raw.overrides as unknown as Readonly<ConfigMap>,
-            request.commit,
-          );
-          const invoked = await registry.invoke('settings_apply_project', 'dom-inspector', actionCtx, uiState.get(), {
-            projectSettingsApply: {
-              inheritedConfig: raw.inheritedConfig as unknown as Readonly<ConfigMap>,
+          const overrides = applySettingsCommitToConfig(raw.overrides, request.commit);
+          const invoked = await registry.invoke('settings_apply_scoped', 'dom-inspector', actionCtx, uiState.get(), {
+            scopedSettingsApply: {
+              target: option.target,
               overrides,
               sourceRevision: raw.sourceRevision,
               sourceHash: raw.sourceHash,
             },
           });
-          if (!invoked) throw new Error('The project settings action is unavailable in the current workspace state.');
-          displayedRaw = workspace.getProjectSettingsOverrideSnapshot();
-          return projectPanelSnapshot(await catalogPromise, displayedRaw);
+          if (!invoked) throw new Error('The scoped settings action is unavailable in the current workspace state.');
+          displayed = workspace.getScopedOverrideSnapshot(option.target);
+          return project(displayed);
         },
         cancel: (request) => {
-          const raw = displayedRaw;
+          const raw = displayed;
           if (!raw || raw.sourceRevision !== request.expectedRevision || raw.sourceHash !== request.sourceHash) {
             throw new Error('The settings draft no longer matches the displayed canonical project snapshot.');
           }
         },
         onError: (error) => {
-          statusText.textContent = `Project settings: ${error instanceof Error ? error.message : String(error)}`;
+          statusText.textContent = `${option.path} settings: ${error instanceof Error ? error.message : String(error)}`;
+        },
+      };
+    };
+
+    const settingsPanel = new ScopedSettingsPanel(
+      settingsHost,
+      {
+        listTargets: () => workspace.listScopedOverrideTargets(),
+        subscribe: (listener) => workspace.subscribeCanonicalState(listener),
+        adapterFor: (option) => (option.scope === 'project' ? projectAdapter : nodeAdapter(option)),
+        onError: (error) => {
+          statusText.textContent = `Settings: ${error instanceof Error ? error.message : String(error)}`;
         },
       },
-      { loadCatalog: () => catalogPromise },
+      { panel: { loadCatalog: () => catalogPromise } },
     );
     void settingsPanel.mount();
     window.addEventListener('pagehide', () => settingsPanel.dispose(), { once: true });

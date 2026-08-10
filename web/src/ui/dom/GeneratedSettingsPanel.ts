@@ -1,5 +1,6 @@
 import { EngineOptionCatalog, loadEngineOptionCatalog } from '../../settings/generated/loader';
-import type { EngineOptionValue } from '../../settings/generated/types';
+import type { SettingScope } from '../../settings/generated/settingScopes';
+import type { EngineGuiSurface, EngineOptionValue } from '../../settings/generated/types';
 import {
   SettingsDraftCommitError,
   SettingsDraftEditor,
@@ -73,6 +74,18 @@ export interface GeneratedSettingsPanelOptions {
   readonly initialSearch?: string;
   readonly technology?: SettingsTechnology;
   readonly loadCatalog?: () => Promise<EngineOptionCatalog>;
+  /**
+   * Which pinned GUI surface this panel edits. Defaults to the process tab —
+   * the project's own settings. A plate or model scope reads its fields from
+   * the corresponding upstream tab instead (P6.5).
+   */
+  readonly guiSurface?: EngineGuiSurface;
+  /**
+   * Override scope this panel writes to. Omitted means the project config;
+   * anything narrower hides every key the engine would not read there, so the
+   * panel cannot offer a control that does nothing.
+   */
+  readonly scope?: SettingScope;
 }
 
 const MODES: readonly { readonly id: SettingsEditorMode; readonly label: string }[] = [
@@ -87,6 +100,8 @@ let panelSequence = 0;
 export class GeneratedSettingsPanel {
   private readonly instanceId = ++panelSequence;
   private readonly technology: SettingsTechnology;
+  private readonly guiSurface: EngineGuiSurface;
+  private readonly scope: SettingScope | undefined;
   private mode: SettingsEditorMode;
   private search: string;
   private root?: HTMLFormElement;
@@ -123,6 +138,8 @@ export class GeneratedSettingsPanel {
     this.mode = options.initialMode ?? 'simple';
     this.search = options.initialSearch ?? '';
     this.technology = options.technology ?? 'fff';
+    this.guiSurface = options.guiSurface ?? 'process';
+    this.scope = options.scope;
   }
 
   mount(): Promise<void> {
@@ -427,9 +444,10 @@ export class GeneratedSettingsPanel {
     return new SettingsDraftEditor(catalog, {
       mode: this.mode,
       technology: this.technology,
-      // This adapter writes the project/process override map. Filament, printer,
-      // object, and plate surfaces require their own canonical mutation seams.
-      guiSurface: 'process',
+      // Which upstream tab supplies the fields, and — when the adapter writes a
+      // plate or model node — which keys the engine will actually read there.
+      guiSurface: this.guiSurface,
+      ...(this.scope ? { scope: this.scope } : {}),
       inherited: snapshot.inherited,
       overrides: snapshot.overrides,
     });
@@ -443,7 +461,8 @@ export class GeneratedSettingsPanel {
     const fields = editor.query({
       mode: this.mode,
       technology: this.technology,
-      guiSurface: 'process',
+      guiSurface: this.guiSurface,
+      ...(this.scope ? { scope: this.scope } : {}),
       search: this.search,
       includeUnavailable: true,
       includeUnknownApplicability: true,

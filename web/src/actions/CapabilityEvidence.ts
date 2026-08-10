@@ -131,6 +131,7 @@ export const ACTION_IDS_BY_PARITY_TASK = {
   'P5.9': ['variable_layer_height'],
   'P6.3': ['file_import_config', 'file_export_config'],
   'P6.2': ['settings_apply_project'],
+  'P6.5': ['settings_apply_scoped'],
   'P6.4': ['help_setup_wizard'],
   'P7.1': ['slice_active_plate', 'slice_all_plates'],
   'P7.4': ['toggle_preview', 'preview_configure'],

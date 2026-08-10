@@ -396,6 +396,104 @@ async function showInspectorTab(page, tabId) {
   }, tabId);
 }
 
+/**
+ * Override one setting on an object and prove the scope is real (P6.5).
+ *
+ * The interesting failures here are invisible to unit tests: a panel that
+ * renders the project's keys while writing to a node, an action that is
+ * catalogued but unreachable from the surface that needs it, or a plate-only
+ * key still offered where the engine would never read it. So this drives the
+ * shipped picker in the real browser and then reads the canonical answer back.
+ */
+async function overrideOneObjectSetting(page) {
+  await showInspectorTab(page, 'settings');
+  await page.waitForSelector('[data-scoped-settings-panel="true"]', { timeout: 60_000 });
+  const objectTarget = await page.evaluate(() =>
+    globalThis.window.workspace.listScopedOverrideTargets().find((entry) => entry.scope === 'object'),
+  );
+  assert.ok(objectTarget, 'the loaded project should expose at least one object as a settings target');
+
+  await page.$eval(
+    '[data-scoped-settings-target="true"]',
+    (select, id) => {
+      select.value = id;
+      select.dispatchEvent(new globalThis.Event('change', { bubbles: true }));
+    },
+    objectTarget.id,
+  );
+  await page.waitForFunction(
+    () =>
+      globalThis.document.querySelector('[data-scoped-settings-host]')?.dataset.scopedSettingsScope === 'object' &&
+      globalThis.document.querySelector('[data-scoped-settings-host] [data-generated-settings-panel="true"]') !== null,
+    { timeout: 60_000 },
+  );
+
+  // A plate arranges its own print sequence; an object cannot, and the engine
+  // would ignore the key entirely if it were stored here.
+  await page.$eval('[data-settings-search]', (input) => {
+    input.value = 'print_sequence';
+    input.dispatchEvent(new globalThis.Event('input', { bubbles: true }));
+  });
+  await page.waitForFunction(() => globalThis.document.querySelector('[data-settings-key="print_sequence"]') === null, {
+    timeout: 30_000,
+  });
+
+  await page.$eval('[data-settings-search]', (input) => {
+    input.value = 'wall_loops';
+    input.dispatchEvent(new globalThis.Event('input', { bubbles: true }));
+  });
+  await page.waitForSelector('[data-settings-key="wall_loops"][data-settings-support="implemented"]', {
+    timeout: 60_000,
+  });
+  const before = await page.evaluate((target) => {
+    const workspace = globalThis.window.workspace;
+    return {
+      scoped: workspace.getScopedOverrideSnapshot(target),
+      project: workspace.getProjectSettingsOverrideSnapshot(),
+      undoCount: workspace.getCanonicalSummary().history.undoCount,
+    };
+  }, objectTarget.target);
+  assert.equal(Object.hasOwn(before.scoped.overrides, 'wall_loops'), false);
+
+  await page.$eval('[data-settings-key="wall_loops"] [data-settings-control][data-settings-editable="true"]', (c) => {
+    c.value = '4';
+    c.dispatchEvent(new globalThis.Event('input', { bubbles: true }));
+  });
+  await page.$eval('[data-settings-apply]', (button) => button.click());
+  await page.waitForFunction(
+    ({ target, undoCount }) => {
+      const workspace = globalThis.window.workspace;
+      const snapshot = workspace.getScopedOverrideSnapshot(target);
+      return (
+        snapshot.overrides.wall_loops === '4' &&
+        snapshot.effectiveConfig.wall_loops === '4' &&
+        workspace.getCanonicalSummary().history.undoCount === undoCount + 1
+      );
+    },
+    { timeout: 60_000 },
+    { target: objectTarget.target, undoCount: before.undoCount },
+  );
+
+  // The edit landed on the object and nowhere else: the project's own override
+  // map is untouched, which is exactly what a scope is for.
+  const after = await page.evaluate(() => globalThis.window.workspace.getProjectSettingsOverrideSnapshot());
+  assert.deepStrictEqual(after.overrides, before.project.overrides);
+
+  await clickMenuAction(page, 'edit_undo');
+  await page.waitForFunction(
+    (target) => !Object.hasOwn(globalThis.window.workspace.getScopedOverrideSnapshot(target).overrides, 'wall_loops'),
+    { timeout: 30_000 },
+    objectTarget.target,
+  );
+  await clickMenuAction(page, 'edit_redo');
+  await page.waitForFunction(
+    (target) => globalThis.window.workspace.getScopedOverrideSnapshot(target).overrides.wall_loops === '4',
+    { timeout: 30_000 },
+    objectTarget.target,
+  );
+  console.log('[e2e] scoped object override applied, isolated from the project, and reversible');
+}
+
 async function clickPanelControl(page, selector) {
   await page.evaluate((target) => {
     const control = globalThis.document.querySelector(target);
@@ -2232,6 +2330,9 @@ try {
   await page.waitForFunction(
     () => !Object.hasOwn(globalThis.window.workspace.getProjectSettingsOverrideSnapshot().overrides, 'layer_height'),
   );
+
+  await overrideOneObjectSetting(page);
+
   // The responsive PlateManager owns guarded canonical plate operations. Add
   // starts in the existing plate bar; every subsequent operation is driven
   // through the manager and asserted from canonical summaries/tree IDs.
@@ -2683,7 +2784,7 @@ try {
   assert.deepStrictEqual(pageErrors, [], `uncaught page errors: ${pageErrors.join('\n')}`);
   assert.deepStrictEqual(policyErrors, [], `CSP violations: ${policyErrors.join('\n')}`);
   console.log(
-    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a printer plus slicer configured once that are still configured after a reload, device preferences that apply live and reset without touching presets, and two named printers that switch without their credentials following each other).',
+    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings that the same panel also writes to one object without touching the project, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a printer plus slicer configured once that are still configured after a reload, device preferences that apply live and reset without touching presets, and two named printers that switch without their credentials following each other).',
   );
 } finally {
   await browser.close();
