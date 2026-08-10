@@ -4078,6 +4078,14 @@ export class OrcaWorkspace extends xb.Script {
   onShowSetupWizard: (() => void) | null = null;
 
   /** Show a titled informational modal, or fall back to the status line in XR. */
+  /** Injected by the shell; owns a live, searchable help surface. */
+  public onShowHelpSearch: (() => void) | null = null;
+
+  public showHelpSearch(): void {
+    if (this.onShowHelpSearch) this.onShowHelpSearch();
+    else this.setStatus('Help search is unavailable in this shell.');
+  }
+
   public showModal(title: string, bodyHtml: string) {
     if (this.onShowModal) this.onShowModal({ title, bodyHtml });
     else this.setStatus(title);

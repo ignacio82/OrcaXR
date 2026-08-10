@@ -2439,7 +2439,7 @@ Local starting seams: the [`action groups`](../web/src/actions/groups/),
   - **Accept:** P0 surface manifest has no unclassified item and reachability tests pass for DOM,
     touch, keyboard, and XR.
 
-- [ ] **P11.3 — Build contextual help and troubleshooting.** Help for each action/setting/error
+- [~] **P11.3 — Build contextual help and troubleshooting.** Help for each action/setting/error
   links to version-appropriate official docs or maintained OrcaXR adaptation docs. Include
   onboarding, shortcuts, FullSpectrum, parts/assignments, painting, profiles, preview, Moonraker,
   offline/XR, privacy/security, known limitations, diagnostics, and release notes.
@@ -2447,9 +2447,26 @@ Local starting seams: the [`action groups`](../web/src/actions/groups/),
     generated/checkable for dead links and unmapped actions/settings.
   - **Accept:** link checker and help-coverage test pass; novice task study can recover from the
     standard preflight/error corpus without developer assistance.
-  - **Current:** About, Tutorial, and Shortcuts no longer claim broad completion and link to the
-    parity status. Searchable contextual action/setting/error help, offline coverage, link and
-    mapping checks, troubleshooting content, and novice study remain open.
+  - **Current:** `help/HelpCatalog.ts` carries topic content for every area the item names and,
+    more usefully, per-error troubleshooting for all 28 preflight codes. Those previously shared one
+    sentence — "Resolve this issue before slicing or sending" — which is true and no use to someone
+    who already knows something is wrong. Each code now says what the check saw and what clears it,
+    and the preflight panel shows the fix beside the issue's own help rather than replacing it,
+    because an issue's message can be specific to the values that tripped it in a way a
+    code-keyed catalog cannot.
+    Coverage is checked rather than maintained by hand: the test reads the codes out of
+    `preflight.ts` and fails both when a code has no help and when help exists for a code the app
+    no longer raises, so neither can drift. Links are checked for scheme and for pointing at a
+    maintained origin. `help_search` searches topics, troubleshooting, and the action catalog in
+    one index, in a live region so a screen reader hears the result count change, and every word of
+    it is bundled rather than fetched so it works in the offline conditions it might be needed in.
+  - **Outstanding:** the link check is static — scheme and allowlisted origin — and does not fetch,
+    because the gate must pass offline; a periodic networked check is still needed to catch a link
+    that rots. Setting-level help is not there: only actions and errors are covered, and the
+    generated settings surface has thousands of keys. There is no onboarding walkthrough beyond the
+    static tutorial, no release notes surface, and the novice task study the acceptance calls for
+    needs people, so this item cannot close from implementation alone. Help search declares an
+    `xrUnsupportedReason` for want of in-headset text entry.
 
 - [~] **P11.4 — Implement diagnostics and support export.** Structured bounded logs, capability/
   profile/engine/browser/XR/printer state, worker crashes, performance snapshot, and sanitized

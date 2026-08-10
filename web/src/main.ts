@@ -63,6 +63,7 @@ import {
   loadRememberedCredentials,
   saveRememberedCredentials,
 } from './settings/RememberedCredentials';
+import { HELP_TOPICS, TROUBLESHOOTING, searchHelp } from './help/HelpCatalog';
 import {
   DiagnosticsRecorder,
   buildDiagnosticsBundle,
@@ -927,6 +928,69 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     void registry.invoke(shortcut.actionId, 'keyboard', actionCtx, uiState.get());
   });
   workspace.onShowModal = ({ title, bodyHtml }) => buildModal(title, bodyHtml);
+
+  // Searchable help: topics, per-error troubleshooting, and the action catalog
+  // in one index, because someone typing "wipe tower" does not know whether
+  // their answer is a concept, an error, or a button.
+  workspace.onShowHelpSearch = () => {
+    const body = document.createElement('div');
+    const label = document.createElement('label');
+    label.htmlFor = 'help-search-input';
+    label.textContent = 'Search help';
+    label.style.cssText = 'display:block;margin-bottom:4px;color:var(--oxr-color-text-muted);';
+    const input = document.createElement('input');
+    input.id = 'help-search-input';
+    input.type = 'search';
+    input.className = 'text-input';
+    input.placeholder = 'wipe tower, cors, painting, token…';
+    input.dataset.helpSearch = 'true';
+    input.style.cssText = 'width:100%;box-sizing:border-box;margin-bottom:10px;';
+
+    const results = document.createElement('div');
+    results.dataset.helpResults = 'true';
+    // A live region, so a screen reader hears the count change as they type.
+    results.setAttribute('role', 'region');
+    results.setAttribute('aria-live', 'polite');
+    results.setAttribute('aria-label', 'Help results');
+
+    const render = () => {
+      const query = input.value.trim();
+      const hits = query.length >= 2 ? searchHelp(query, registry.all()) : [];
+      results.replaceChildren();
+
+      const summary = document.createElement('p');
+      summary.style.cssText = 'margin:0 0 8px;color:var(--oxr-color-text-muted);';
+      summary.textContent =
+        query.length < 2
+          ? `Type to search ${HELP_TOPICS.length} topics, ${TROUBLESHOOTING.length} error explanations, and every action.`
+          : `${hits.length} result${hits.length === 1 ? '' : 's'} for “${query}”.`;
+      results.appendChild(summary);
+
+      for (const hit of hits.slice(0, 40)) {
+        const entry = document.createElement('section');
+        entry.dataset.helpHit = hit.kind;
+        entry.style.cssText = 'margin-bottom:10px;';
+        const heading = document.createElement('h4');
+        heading.style.cssText = 'margin:0 0 2px;font-size:13px;';
+        heading.textContent = hit.title;
+        const kind = document.createElement('span');
+        kind.style.cssText = 'margin-left:6px;font-size:11px;opacity:.7;font-weight:400;';
+        kind.textContent = hit.kind === 'troubleshooting' ? 'error' : hit.kind;
+        heading.appendChild(kind);
+        const text = document.createElement('p');
+        text.style.cssText = 'margin:0;opacity:.9;';
+        text.textContent = hit.body;
+        entry.append(heading, text);
+        results.appendChild(entry);
+      }
+    };
+
+    input.addEventListener('input', render);
+    render();
+    body.append(label, input, results);
+    buildModal('Help', body);
+    input.focus();
+  };
 
   // Interactive setup wizard: reuse the live profile catalogue.
   workspace.onShowSetupWizard = () => {

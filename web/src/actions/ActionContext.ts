@@ -553,6 +553,9 @@ export class ActionContext {
   showAbout(): void {
     this.workspace.showModal('About OrcaXR', ABOUT_HTML);
   }
+  showHelpSearch(): void {
+    this.workspace.showHelpSearch();
+  }
   showShortcuts(): void {
     this.workspace.showModal('Keyboard Shortcuts', shortcutsHtml(this.registry.all()));
   }

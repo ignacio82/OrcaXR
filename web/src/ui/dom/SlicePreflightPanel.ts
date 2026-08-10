@@ -1,3 +1,4 @@
+import { troubleshootingFor } from '../../help/HelpCatalog';
 import type { ObjectTreeEntityRef } from '../../project/objects';
 import type { CanonicalSlicePreflightResult, SlicePreflightAction, SlicePreflightIssue } from '../../project/slicing';
 
@@ -93,6 +94,19 @@ export class SlicePreflightPanel {
     help.style.cssText = 'margin:0;color:inherit;opacity:.9;';
     help.textContent = issue.help;
     description.append(message, help);
+
+    // Per-code troubleshooting, added rather than substituted: an issue may
+    // carry help specific to the values that tripped it, which is stronger
+    // than anything a catalog keyed only on the code could say. What the
+    // catalog adds is the part the generic sentence never had — the fix.
+    const troubleshooting = troubleshootingFor(issue.code);
+    if (troubleshooting) {
+      const fix = document.createElement('p');
+      fix.dataset.preflightFix = '';
+      fix.style.cssText = 'margin:4px 0 0;color:inherit;opacity:.9;';
+      fix.textContent = troubleshooting.fix;
+      description.append(fix);
+    }
 
     if (issue.path) {
       const path = document.createElement('p');

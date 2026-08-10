@@ -26,6 +26,17 @@ export const helpActions: Action[] = [
     run: (ctx) => ctx.setupWizard(),
   },
   {
+    id: 'help_search',
+    label: 'Search Help',
+    icon: 'help',
+    group: 'help',
+    disclosure: 'menu',
+    menuSection: 'help',
+    hint: 'Search topics, error troubleshooting, and every action in one place',
+    xrUnsupportedReason: 'Help search needs typed text; no in-headset keyboard flow exists yet.',
+    run: (ctx) => ctx.showHelpSearch(),
+  },
+  {
     id: 'help_shortcuts',
     label: 'Keyboard Shortcuts',
     icon: 'keyboard',

@@ -49,12 +49,16 @@ test('the bundle records what a support case actually needs', () => {
  */
 test('tokens, keys, and addresses never reach the exported file', () => {
   const recorder = new DiagnosticsRecorder();
-  recorder.setSecrets(['TFEopAuNzkX7EZfBnTao9s4JlwmyDHCHmiLs0aOo']);
+  // Deliberately obvious placeholders. A realistic-looking value here would be
+  // indistinguishable from a real leak to a secret scanner, and the redactor
+  // strikes by key name and registered value rather than by entropy, so a fake
+  // proves exactly the same thing.
+  recorder.setSecrets(['EXAMPLE-NOT-A-REAL-TOKEN-0000']);
   recorder.record('error', 'slicer', 'POST http://192.168.1.228:3000/slice failed');
-  recorder.record('error', 'printer', 'Authorization: Bearer TFEopAuNzkX7EZfBnTao9s4JlwmyDHCHmiLs0aOo rejected');
+  recorder.record('error', 'printer', 'Authorization: Bearer EXAMPLE-NOT-A-REAL-TOKEN-0000 rejected');
   recorder.record('info', 'printer', 'connected', {
     endpoint: 'https://printer.tailnet.ts.net',
-    apiKey: 'abcd-1234-secret',
+    apiKey: 'EXAMPLE-NOT-A-REAL-KEY-0000',
     nested: { access_token: 'zzzz' },
   });
 
@@ -68,10 +72,10 @@ test('tokens, keys, and addresses never reach the exported file', () => {
   );
 
   for (const forbidden of [
-    'TFEopAuNzkX7EZfBnTao9s4JlwmyDHCHmiLs0aOo',
+    'EXAMPLE-NOT-A-REAL-TOKEN-0000',
     '192.168.1.228',
     'printer.tailnet.ts.net',
-    'abcd-1234-secret',
+    'EXAMPLE-NOT-A-REAL-KEY-0000',
     'zzzz',
   ]) {
     assert.equal(serialized.includes(forbidden), false, `${forbidden} must not survive into the bundle`);

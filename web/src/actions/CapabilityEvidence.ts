@@ -180,7 +180,7 @@ export const ACTION_IDS_BY_PARITY_TASK = {
     'view_show_outline',
     'view_show_printable_box',
   ],
-  'P11.3': ['help_tutorial', 'help_docs', 'help_report_bug', 'help_tip_of_day'],
+  'P11.3': ['help_search', 'help_tutorial', 'help_docs', 'help_report_bug', 'help_tip_of_day'],
   'P11.4': ['file_export_logs'],
   'P11.6': ['help_about'],
   'P11.7': ['help_config_folder', 'help_check_updates'],

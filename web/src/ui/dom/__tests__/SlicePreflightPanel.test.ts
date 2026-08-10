@@ -52,6 +52,8 @@ await test('renders stable structured evidence and only supported canonical acti
   );
   assert.match(blocking.querySelector('[data-preflight-message]')?.textContent ?? '', /below the build plate/);
   assert.match(blocking.querySelector('[data-preflight-help]')?.textContent ?? '', /Drop only after review/);
+  // The issue's own help survives; the catalog adds the fix beside it.
+  assert.match(blocking.querySelector('[data-preflight-fix]')?.textContent ?? '', /Drop to bed/);
   assert.equal(blocking.querySelector('[data-preflight-path]')?.textContent, 'plates.0.objects.0.instances.0');
   assert.equal(
     blocking.querySelector('[data-preflight-entity-kind="instance"]')?.textContent,
