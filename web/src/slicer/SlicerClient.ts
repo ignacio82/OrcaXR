@@ -1,4 +1,5 @@
 import { fetchLocalNetwork, normalizeHttpEndpoint } from '../net/LocalNetworkAccess';
+import { loadRememberedCredentials, saveRememberedCredentials } from '../settings/RememberedCredentials';
 import { PINNED_ENGINE_PROVENANCE } from './pinnedEngineProvenance';
 
 /**
@@ -69,16 +70,19 @@ interface Slic3rModule {
 }
 
 /**
- * Bearer token for a secured external slicer, held for this tab only.
+ * Bearer token for a secured external slicer.
  *
  * A server published beyond loopback refuses to start without a token, so
  * without somewhere to put one there is no way to reach a correctly secured
  * slicer at all — the attestation probe just 401s and canonical slicing stays
- * blocked forever. It is deliberately *not* persisted: it is a credential, and
- * the repo keeps credentials in session memory rather than in localStorage
- * where any later script can read them back.
+ * blocked forever.
+ *
+ * It is remembered on this device by default. Re-entering it on every reload
+ * made the external slicer unusable as a daily route, which is the whole point
+ * of configuring one. `RememberedCredentials` owns that storage, the switch
+ * that turns it off, and the reasoning; this module just holds the live value.
  */
-let externalSlicerToken = '';
+let externalSlicerToken = loadRememberedCredentials().slicerToken;
 
 const EXTERNAL_URL_KEY = 'external_slicer_url';
 const EXTERNAL_ENABLED_KEY = 'external_slicer_enabled';
@@ -142,11 +146,17 @@ export class SlicerClient {
   }
 
   /**
-   * Set or clear the bearer token for the configured external slicer. Kept in
-   * memory for this tab only; never written to storage and never logged.
+   * Set or clear the bearer token for the configured external slicer.
+   *
+   * Remembered on this device unless the operator turned that off; pass
+   * `persist: false` to change only the live value.
    */
-  static setExternalSlicerToken(token: string): void {
+  static setExternalSlicerToken(token: string, options: { readonly persist?: boolean } = {}): void {
     externalSlicerToken = token.trim();
+    if (options.persist === false) return;
+    const stored = loadRememberedCredentials();
+    if (!stored.remember) return;
+    saveRememberedCredentials({ ...stored, slicerToken: externalSlicerToken });
   }
 
   /** Whether a token is held, without revealing it. */

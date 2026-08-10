@@ -131,12 +131,22 @@ test('syncing from the printer rewrites exactly the reported tools and undoes', 
   assert.deepEqual(renderColors(h.project.getSnapshot().state), before);
 });
 
-test('a sync that matches the printer already is a no-op', () => {
+test('syncing twice changes nothing the second time', () => {
   const h = harness();
+  const ids = new UuidIdSource(seededRandom(9));
   const slots = COLORS.map((color, index) => ({ toolId: index, color, material: 'PLA' }));
-  const summary = SyncPhysicalFilamentsFromPrinterCommand.describe(h.project.getSnapshot().state, slots);
-  assert.deepEqual(summary.applied, [], 'nothing differs, so nothing is applied');
-  assert.deepEqual(summary.unmatched, []);
+
+  // The first sync still has work to do even when the colours already match:
+  // these tools name their material but never declared `filament_type`, and a
+  // tool that disagrees with its own config is what preflight rejects.
+  const first = SyncPhysicalFilamentsFromPrinterCommand.describe(h.project.getSnapshot().state, slots, true);
+  assert.deepEqual(first.applied, [0, 1, 2, 3]);
+  h.commands.execute(new SyncPhysicalFilamentsFromPrinterCommand(slots, ids));
+
+  const second = SyncPhysicalFilamentsFromPrinterCommand.describe(h.project.getSnapshot().state, slots, true);
+  assert.deepEqual(second.applied, [], 'nothing differs any more, so nothing is applied');
+  assert.deepEqual(second.added, []);
+  assert.deepEqual(second.unmatched, []);
 });
 
 /**
@@ -212,6 +222,47 @@ test('a tool the printer does not report is reported, never deleted', () => {
     state.filaments.physical.map((filament) => filament.toolId),
     [0, 1, 2, 3],
   );
+});
+
+/**
+ * The failure this reproduces: syncing wrote `material` but not
+ * `config.filament_type`, and the per-tool profile constraint is derived from
+ * that config. Preflight then rejected the very filament the printer had just
+ * reported as loaded — "PLA is not supported on tool 2".
+ */
+test('a synced tool agrees with itself about what material it holds', () => {
+  const h = harness();
+  const ids = new UuidIdSource(seededRandom(3));
+  const before = h.project.getSnapshot().state.filaments.physical[1];
+  assert.notEqual(before.material, 'PETG', 'the fixture starts on something else');
+
+  const slots = [{ toolId: 1, color: '#123456', material: 'PETG', vendor: 'Snapmaker' }];
+  h.commands.execute(new SyncPhysicalFilamentsFromPrinterCommand(slots, ids));
+
+  const synced = h.project.getSnapshot().state.filaments.physical.find((filament) => filament.toolId === 1)!;
+  assert.equal(synced.material, 'PETG');
+  assert.equal(
+    synced.config.filament_type,
+    'PETG',
+    'the config the profile constraint reads must say the same thing as the filament',
+  );
+});
+
+test('an adopted tool declares its type, not just its name', () => {
+  const h = harness();
+  const ids = new UuidIdSource(seededRandom(4));
+  // A slot beyond the project's tools, adopted as a new filament.
+  const toolId = h.project.getSnapshot().state.filaments.physical.length;
+  h.commands.execute(
+    new SyncPhysicalFilamentsFromPrinterCommand(
+      [{ toolId, color: '#ABCDEF', material: 'PLA', subType: 'Matte', vendor: 'Snapmaker' }],
+      ids,
+    ),
+  );
+  const added = h.project.getSnapshot().state.filaments.physical.find((filament) => filament.toolId === toolId)!;
+  assert.equal(added.material, 'PLA');
+  // Without this the tool reads as declaring no unambiguous type at all.
+  assert.equal(added.config.filament_type, 'PLA');
 });
 
 test('unusable printer slot facts are refused before any mutation', () => {

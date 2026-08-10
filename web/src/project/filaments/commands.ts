@@ -163,7 +163,12 @@ export class SyncPhysicalFilamentsFromPrinterCommand extends SnapshotFilamentCom
         continue;
       }
       const name = printerFilamentSlotName(slot);
-      if (filament.color !== slot.color || filament.material !== slot.material || (name && filament.name !== name)) {
+      if (
+        filament.color !== slot.color ||
+        filament.material !== slot.material ||
+        filament.config.filament_type !== slot.material ||
+        (name && filament.name !== name)
+      ) {
         applied.push(slot.toolId);
       }
     }
@@ -193,18 +198,32 @@ export class SyncPhysicalFilamentsFromPrinterCommand extends SnapshotFilamentCom
           material: slot.material,
           color: slot.color,
           ...(slot.vendor?.trim() ? { vendor: slot.vendor.trim() } : {}),
-          config: {},
+          // The same fact in the place the slicer and the profile constraints
+          // read it from. A tool carrying only `material` looks to preflight
+          // like a tool that declares no type at all.
+          config: { filament_type: slot.material },
           enabled: true,
         });
         continue;
       }
       filament.color = slot.color;
       filament.material = slot.material;
+      // `filament_type` is where both the exported 3MF and the per-tool profile
+      // constraint read the material. Updating only `material` left the two
+      // disagreeing, and preflight then rejected the very filament the printer
+      // had just reported as loaded — "PLA is not supported on tool 2".
+      filament.config.filament_type = slot.material;
       if (name) filament.name = name;
       if (slot.vendor?.trim()) filament.vendor = slot.vendor.trim();
     }
     // Tools stay in slot order so the palette and every tool index agree.
     state.filaments.physical.sort((left, right) => left.toolId - right.toolId);
+    // A machine reporting a slot the project has no room for is also reporting
+    // how many tools it has. Raising the count is part of adopting the slot;
+    // lowering it is not, because a tool that is merely unloaded may still have
+    // objects assigned to it.
+    const highestTool = state.filaments.physical.reduce((highest, filament) => Math.max(highest, filament.toolId), -1);
+    state.printer.toolCount = Math.max(state.printer.toolCount, highestTool + 1);
   }
 }
 

@@ -58,6 +58,11 @@ import { PaintPanel } from './ui/dom/PaintPanel';
 import { BrimEarsPanel } from './ui/dom/BrimEarsPanel';
 import { EmbossPanel } from './ui/dom/EmbossPanel';
 import { SvgPanel } from './ui/dom/SvgPanel';
+import {
+  forgetRememberedCredentials,
+  loadRememberedCredentials,
+  saveRememberedCredentials,
+} from './settings/RememberedCredentials';
 import { MeasurePanel } from './ui/dom/MeasurePanel';
 import { SmartPaintPanel } from './ui/dom/SmartPaintPanel';
 import { PlateManager } from './ui/dom/PlateManager';
@@ -549,6 +554,24 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   }
 
   window.addEventListener('pagehide', disposePrinterTransport, { once: true });
+
+  // First run: nothing configured yet, so offer the setup path directly rather
+  // than leaving a new operator to find the Printer tab. Both the printer and
+  // the slicer are remembered, so once either is set this never returns. The
+  // click handler is attached once the inspector exists, further down.
+  const emptySetupPrinter = document.getElementById('empty-setup-printer') as HTMLButtonElement;
+  const refreshFirstRunPrompt = () => {
+    const configured = Boolean(printerCfg.host.trim()) || Boolean(SlicerClient.getExternalSlicerUrl());
+    emptySetupPrinter.hidden = configured;
+  };
+  refreshFirstRunPrompt();
+  emptySetupPrinter.onclick = () => {
+    // Goes through the real tab control the inspector renders, so this stays
+    // correct if the tab set is ever reordered or relabelled.
+    document.getElementById('insp-tab-printer')?.click();
+    printerHost.focus();
+    statusText.textContent = 'Enter your printer address; it is saved on this device.';
+  };
 
   emptyLoadModel.onclick = () => {
     void registry
@@ -2176,9 +2199,51 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   printerHost.oninput = () => {
     printerCfg.host = printerHost.value.trim();
     savePrinterEndpointPreferences(printerCfg);
+    refreshFirstRunPrompt();
     disposePrinterTransport();
   };
-  printerApiKey.oninput = disposePrinterTransport;
+
+  // The printer key and the slicer token are remembered on this device so a
+  // configured machine stays configured across reloads. The switch below turns
+  // that off and erases what is stored, which is what a shared machine needs.
+  const rememberCredentials = document.getElementById('remember-credentials') as HTMLInputElement;
+  const btnForgetCredentials = document.getElementById('btn-forget-credentials') as HTMLButtonElement;
+  let remembered = loadRememberedCredentials();
+  printerApiKey.value = remembered.printerApiKey;
+  rememberCredentials.checked = remembered.remember;
+
+  const persistCredentials = () => {
+    remembered = {
+      printerApiKey: printerApiKey.value.trim(),
+      slicerToken: externalSlicerTokenValue(),
+      remember: rememberCredentials.checked,
+    };
+    saveRememberedCredentials(remembered);
+  };
+  const externalSlicerTokenValue = () =>
+    (document.getElementById('external-slicer-token') as HTMLInputElement | null)?.value.trim() ?? '';
+
+  printerApiKey.oninput = () => {
+    persistCredentials();
+    disposePrinterTransport();
+  };
+  rememberCredentials.onchange = () => {
+    persistCredentials();
+    statusText.textContent = rememberCredentials.checked
+      ? 'Credentials will be remembered on this device.'
+      : 'Stopped remembering credentials; the saved copies were erased.';
+  };
+  btnForgetCredentials.onclick = () => {
+    forgetRememberedCredentials();
+    printerApiKey.value = '';
+    const tokenField = document.getElementById('external-slicer-token') as HTMLInputElement | null;
+    if (tokenField) tokenField.value = '';
+    SlicerClient.setExternalSlicerToken('', { persist: false });
+    remembered = loadRememberedCredentials();
+    rememberCredentials.checked = remembered.remember;
+    disposePrinterTransport();
+    statusText.textContent = 'Forgot the saved printer key and slicer token on this device.';
+  };
   const externalSlicerUrl = document.getElementById('external-slicer-url') as HTMLInputElement;
   const externalSlicerStatus = document.getElementById('external-slicer-status') as HTMLSpanElement;
   const btnExternalSlicerConnect = document.getElementById('btn-external-slicer-connect') as HTMLButtonElement;
@@ -2190,8 +2255,10 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   const externalSlicerToken = document.getElementById('external-slicer-token') as HTMLInputElement;
   // Session-only by design: the token is a credential, so it is held in memory
   // for this tab rather than persisted where a later script could read it back.
+  externalSlicerToken.value = remembered.slicerToken;
   externalSlicerToken.addEventListener('input', () => {
     SlicerClient.setExternalSlicerToken(externalSlicerToken.value);
+    persistCredentials();
   });
 
   const updateExternalSlicerStatus = (connected: boolean) => {
@@ -2212,6 +2279,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     const configured = !!SlicerClient.getExternalSlicerUrl();
     externalSlicerControls.style.display = configured ? 'flex' : 'none';
     externalSlicerHint.style.display = configured ? 'block' : 'none';
+    refreshFirstRunPrompt();
     const enabled = SlicerClient.isExternalSlicerEnabled();
     externalSlicerEnabled.checked = enabled;
     externalSlicerHint.textContent = enabled

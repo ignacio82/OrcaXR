@@ -201,20 +201,25 @@ await test('a secured server is reached with the token the operator supplied', a
   assert.deepEqual(SlicerClient.externalAuthHeaders(), {}, 'clearing the token sends no header at all');
 });
 
-await test('the token is never persisted where a later script could read it', async () => {
+/**
+ * The token is remembered on this device on purpose. Re-entering it on every
+ * reload made a secured external slicer unusable as a daily route, which is
+ * the entire point of configuring one; `RememberedCredentials` owns the
+ * storage, the off switch, and the reasoning about what that costs.
+ */
+await test('the token is remembered across sessions, and can be told not to be', async () => {
   enabledExternal();
+  const storage = (globalThis as { localStorage: { getItem(key: string): string | null } }).localStorage;
+
   SlicerClient.setExternalSlicerToken('secret-token');
-  const storage = (
-    globalThis as {
-      localStorage: { length: number; key(index: number): string | null; getItem(key: string): string | null };
-    }
-  ).localStorage;
-  for (let index = 0; index < storage.length; index += 1) {
-    const key = storage.key(index);
-    if (key === null) continue;
-    assert.doesNotMatch(storage.getItem(key) ?? '', /secret-token/, `${key} must not hold the token`);
-    assert.doesNotMatch(key, /token/i, 'no storage key is even named for a token');
-  }
+  assert.match(storage.getItem('orcaxr.credentials') ?? '', /secret-token/, 'a reload must find it again');
+
+  // Not persisting is available for a caller that only wants the live value.
+  SlicerClient.setExternalSlicerToken('');
+  SlicerClient.setExternalSlicerToken('in-memory-only', { persist: false });
+  assert.equal(SlicerClient.hasExternalSlicerToken(), true);
+  assert.doesNotMatch(storage.getItem('orcaxr.credentials') ?? '', /in-memory-only/);
+
   SlicerClient.setExternalSlicerToken('');
 });
 

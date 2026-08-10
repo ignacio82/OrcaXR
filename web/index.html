@@ -759,6 +759,11 @@
               <div class="empty-step"><b>3</b><span>Slice and send the G-code</span></div>
             </div>
             <button id="empty-load-model" class="action-btn primary" type="button">Load a model</button>
+            <!-- Shown only until a printer or an external slicer is configured;
+                 both are remembered, so this is genuinely a first-run prompt. -->
+            <button id="empty-setup-printer" class="action-btn" type="button" hidden style="margin-top:8px;">
+              Set up your printer
+            </button>
           </section>
 
           <!-- Layer scrubber, mounted by main.ts once a preview exists. -->
@@ -886,8 +891,8 @@
                 </div>
                 <input id="printer-host" type="text" class="text-input" placeholder="http://192.168.1.50 or https://printer.tailnet-name.ts.net"
                   aria-label="Moonraker endpoint" autocomplete="url" style="margin-bottom:8px;font-family:var(--oxr-font-mono);" />
-                <label for="printer-api-key" style="display:block;font-size:11px;color:var(--oxr-text-muted);margin-bottom:4px;">Session API key (optional)</label>
-                <input id="printer-api-key" type="password" class="text-input" autocomplete="off" placeholder="Held only in this tab" style="margin-bottom:8px;" />
+                <label for="printer-api-key" style="display:block;font-size:11px;color:var(--oxr-text-muted);margin-bottom:4px;">API key (optional)</label>
+                <input id="printer-api-key" type="password" class="text-input" autocomplete="off" placeholder="Saved on this device" style="margin-bottom:8px;" />
                 <p class="field-note">
                   Chrome 142+: enter a full <code>http://</code> LAN URL, approve Local Network
                   Access, and add this page's exact origin to Moonraker
@@ -895,6 +900,17 @@
                   CORS is also required for cross-origin HTTPS. HTTP is unencrypted; use it
                   only on a trusted LAN. Otherwise use HTTPS or Tailscale Serve.
                 </p>
+                <label class="check-row" style="margin-bottom:8px;">
+                  <input id="remember-credentials" type="checkbox" checked style="accent-color:var(--oxr-ok);" />
+                  Remember the printer key and slicer token on this device
+                </label>
+                <p class="field-note" id="remember-credentials-note">
+                  Kept in this browser's storage so they survive a reload. Turn this off on a
+                  shared machine — it also erases what is already saved. Anything that can run
+                  script on this origin can read them; the app's CSP is what keeps that to code
+                  it ships itself.
+                </p>
+                <button id="btn-forget-credentials" class="action-btn" type="button" style="margin-bottom:8px;">Forget Saved Credentials</button>
                 <button id="btn-printer-test" class="action-btn" type="button" style="margin-bottom:8px;">Test Connection</button>
                 <div style="display:flex; gap:8px;">
                   <button id="btn-printer-send" class="action-btn" type="button" style="flex:1;margin-bottom:0;" disabled>Send unavailable</button>

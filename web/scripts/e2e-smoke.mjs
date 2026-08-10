@@ -2574,10 +2574,51 @@ try {
   );
   assert.ok(imported.every((plate) => plate.activeVisible === plate.count && plate.inactiveVisible === 0));
 
+  // ---- First run: configure once, and have it still be configured later ----
+  //
+  // A printer and a slicer that must be re-entered on every reload are not
+  // really configured, so this proves the whole loop in a real browser: the
+  // first-run prompt, the values surviving a fresh page, and the switch that
+  // erases them again.
+  await showInspectorTab(page, 'printer');
+  await setDomInput(page, '#printer-host', 'http://127.0.0.1:7125');
+  await setDomInput(page, '#printer-api-key', 'e2e-printer-key');
+  await setDomInput(page, '#external-slicer-token', 'e2e-slicer-token');
+  assert.equal(
+    await page.$eval('#empty-setup-printer', (element) => element.hidden),
+    true,
+    'the first-run prompt retires once a printer is configured',
+  );
+
+  const reloaded = await openReadyPage(browser, url, { width: 1280, height: 720 });
+  try {
+    assert.equal(await reloaded.$eval('#printer-host', (element) => element.value), 'http://127.0.0.1:7125');
+    assert.equal(await reloaded.$eval('#printer-api-key', (element) => element.value), 'e2e-printer-key');
+    assert.equal(await reloaded.$eval('#external-slicer-token', (element) => element.value), 'e2e-slicer-token');
+    assert.equal(
+      await reloaded.$eval('#empty-setup-printer', (element) => element.hidden),
+      true,
+      'a configured install never shows the first-run prompt again',
+    );
+
+    // Turning remembering off has to erase what is already stored, not merely
+    // stop writing more.
+    await showInspectorTab(reloaded, 'printer');
+    await reloaded.click('#btn-forget-credentials');
+    assert.equal(
+      await reloaded.evaluate(() => globalThis.localStorage.getItem('orcaxr.credentials')),
+      null,
+      'forgetting removes the stored credentials entirely',
+    );
+    assert.equal(await reloaded.$eval('#printer-api-key', (element) => element.value), '');
+  } finally {
+    await reloaded.close();
+  }
+
   assert.deepStrictEqual(pageErrors, [], `uncaught page errors: ${pageErrors.join('\n')}`);
   assert.deepStrictEqual(policyErrors, [], `CSP violations: ${policyErrors.join('\n')}`);
   console.log(
-    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, and a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel).',
+    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, and a printer plus slicer configured once that are still configured after a reload).',
   );
 } finally {
   await browser.close();
