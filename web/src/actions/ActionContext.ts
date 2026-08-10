@@ -445,6 +445,10 @@ export class ActionContext {
     this.workspace.svgPartTool();
   }
 
+  exportDiagnostics(): void {
+    this.workspace.exportDiagnostics();
+  }
+
   loadSvgDrawing(name: string, source: string): void {
     this.workspace.loadSvgDrawing(name, source);
   }

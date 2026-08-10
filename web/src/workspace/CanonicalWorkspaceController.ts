@@ -2476,6 +2476,37 @@ export class CanonicalWorkspaceController {
     return prepared;
   }
 
+  /**
+   * The project's shape for a diagnostics bundle: counts and names, never
+   * geometry. Lives here because the controller owns canonical state, and a
+   * support bundle must not become a reason to expose it more widely.
+   */
+  diagnosticsProjectSummary(): {
+    plateCount: number;
+    objectCount: number;
+    volumeCount: number;
+    triangleCount: number;
+    physicalFilamentCount: number;
+    mixedFilamentCount: number;
+    paintedVolumeCount: number;
+    objectNames: string[];
+  } {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    const objects = state.plates.flatMap((plate) => plate.objects);
+    const volumes = objects.flatMap((object) => object.volumes);
+    return {
+      plateCount: state.plates.length,
+      objectCount: objects.length,
+      volumeCount: volumes.length,
+      triangleCount: volumes.reduce((total, volume) => total + volume.source.triangleCount, 0),
+      physicalFilamentCount: state.filaments.physical.length,
+      mixedFilamentCount: state.filaments.mixed.length,
+      paintedVolumeCount: volumes.filter((volume) => volume.annotations.color.length > 0).length,
+      objectNames: objects.map((object) => object.name),
+    };
+  }
+
   /** The drawing parameters on one volume, when it is an SVG part. */
   getSvgPart(volumeId: VolumeId): EmbossSvgPart | undefined {
     this.assertActive();

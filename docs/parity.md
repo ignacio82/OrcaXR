@@ -2451,12 +2451,30 @@ Local starting seams: the [`action groups`](../web/src/actions/groups/),
     parity status. Searchable contextual action/setting/error help, offline coverage, link and
     mapping checks, troubleshooting content, and novice study remain open.
 
-- [ ] **P11.4 — Implement diagnostics and support export.** Structured bounded logs, capability/
+- [~] **P11.4 — Implement diagnostics and support export.** Structured bounded logs, capability/
   profile/engine/browser/XR/printer state, worker crashes, performance snapshot, and sanitized
   project summary export to one archive after a privacy preview. Never include G-code/project,
   tokens, LAN URLs, or model names without explicit selection.
   - **Accept:** injected failures are diagnosable; redaction tests prove known secret/PII patterns
     absent; export logs action is no longer a placeholder.
+  - **Current:** `diagnostics/DiagnosticsBundle.ts` records a bounded ring of structured entries —
+    200, oldest dropped first, because a crash is near the end of a session — and redacts each one
+    *as it is recorded* rather than on the way out, so a secret never sits in the buffer for some
+    other reader to find. Live credentials are registered with the recorder as they are entered.
+    The bundle carries app and engine version, route, browser and printer state, capability counts,
+    and the project's shape; it never carries geometry, G-code, addresses, or tokens, and model
+    names only on explicit opt-in, with the withheld list stated in the file itself.
+    The privacy preview and the export are the same object: `describeDiagnosticsBundle` renders the
+    bundle that will be written, so there is no summary that can drift from the file. `Export
+    Diagnostics…` is a real action; the placeholder reason is gone.
+    Proven in a real browser with an actual API key, slicer token, and LAN address typed in and an
+    injected `RangeError`: none of the three secrets appear in the written file, and the failure
+    does.
+  - **Outstanding:** the bundle is one JSON file rather than an archive, which is enough to read and
+    attach but does not yet carry worker crash dumps or profile snapshots as separate members; the
+    performance section is defined but not populated (no heap or uptime source is wired); XR state
+    is defined and unpopulated for the same reason; and the preview is a browser `confirm`, so the
+    action declares an `xrUnsupportedReason` until an in-headset review flow exists.
 
 - [~] **P11.5 — Make automation/MCP honest and safe.** Expose typed project/action APIs over the
   same command/capability layer with permission scopes, confirmation for destructive/send/print
@@ -2638,7 +2656,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Client/server/archive/printer/AI security | P10.7 | Bounded server/archive abuse, session-only AI/Moonraker secrets, purge/redaction, and fail-closed external-slicer opt-in/probe foundations pass; full threat/device review remains |
 | PWA offline, coherent updates, autosave/crash recovery | P10.8 | Offline/CSP/update contract and production reload smoke pass; a bounded versioned autosave ring proves quota pruning, corruption fallback, validation, recovery choice, and discard headlessly, while live capture/startup UX and atomic worker/WASM/schema updates remain |
 | Complete menus/cameras/views/shortcuts/help/preferences | P11.2–P11.3 | Shortcut help is generated from the guarded action catalog and basic help claims are truthful; many menu/view behaviors, contextual help, and preferences remain missing |
-| Diagnostics/log export and privacy preview | P11.4 | Placeholder |
+| Diagnostics/log export and privacy preview | P11.4 | Real bundle with record-time redaction and a preview that is the file itself; archive members, performance/XR population, and an XR review flow remain |
 | Typed permissioned MCP/voice/AI automation | P11.5 | Scaffolds; remote/unpinned risk |
 | Canonical docs, setup, license/provenance consistency | P11.6 | Core claims/commands/docs are corrected; DESIGN, root license/notices, link checks, and full qualification remain |
 | Native/cloud outcome adaptations | P11.7 | Register complete with per-row user-visible difference, risk, owner, and evidence; every row still `proposed` and awaiting product + engineering approval |

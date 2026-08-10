@@ -158,11 +158,14 @@ export const fileActions: Action[] = [
   },
   {
     id: 'file_export_logs',
-    label: 'Export Logs…',
+    label: 'Export Diagnostics…',
     icon: 'logs',
     group: 'file',
     disclosure: 'menu',
     menuSection: 'file',
-    hint: 'Export application logs as a ZIP for bug reports',
+    hint: 'Review and export a diagnostics bundle for a bug report; it carries no project or tokens',
+    xrUnsupportedReason:
+      'The privacy preview is a DOM confirmation and the result is a file download; no in-headset review or save flow exists yet.',
+    run: (ctx) => ctx.exportDiagnostics(),
   },
 ];

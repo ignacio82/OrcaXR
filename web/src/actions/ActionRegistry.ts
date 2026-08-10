@@ -364,7 +364,6 @@ const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
   file_export_all_plates: 'All-plate slicing and export is not implemented yet.',
   file_export_obj: 'Toolpath OBJ export is not implemented yet.',
   file_open_gcode: 'Standalone G-code import and viewing is not implemented yet.',
-  file_export_logs: 'A privacy-reviewed diagnostics bundle is not implemented yet.',
   help_config_folder: 'Browsers cannot reveal a native config folder; the web adaptation is not implemented yet.',
   view_perspective_toggle: 'Perspective/orthographic switching is not implemented yet.',
   view_auto_perspective: 'Automatic perspective switching is not implemented yet.',

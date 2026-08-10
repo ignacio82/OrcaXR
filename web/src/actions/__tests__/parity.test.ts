@@ -66,7 +66,6 @@ const UNAVAILABLE_IDS = [
   'file_export_all_plates',
   'file_export_obj',
   'file_open_gcode',
-  'file_export_logs',
   'help_config_folder',
   'view_perspective_toggle',
   'view_auto_perspective',

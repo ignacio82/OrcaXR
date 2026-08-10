@@ -18,6 +18,7 @@ import {
 } from '../project/objects/emboss';
 import { readTrueTypeOutlines } from '../project/objects/truetypeOutlines';
 import { readSvgShapes } from '../project/objects/svgShapes';
+import type { ProjectSummaryInput } from '../diagnostics/DiagnosticsBundle';
 import type { FilamentId, InstanceId, LayerRangeId, ObjectId, PlateId, VolumeId } from '../project/domain/ids';
 import { entityId, UuidIdSource } from '../project/domain/ids';
 import type {
@@ -2265,6 +2266,28 @@ export class OrcaWorkspace extends xb.Script {
   private svgDepthMm = 2;
   private svgWidthMm?: number;
   public onSvgStateChanged: (() => void) | null = null;
+
+  /**
+   * Ask the shell to build, preview, and export a diagnostics bundle.
+   *
+   * The workspace owns the facts, not the file: the shell decides how to show
+   * the privacy preview and how to hand over a download, because both differ
+   * between DOM and XR and neither belongs in canonical logic.
+   */
+  public onRequestDiagnosticsExport: (() => Promise<void> | void) | null = null;
+
+  public exportDiagnostics(): void {
+    if (!this.onRequestDiagnosticsExport) {
+      this.setStatus('Diagnostics export is unavailable in this shell.');
+      return;
+    }
+    void this.onRequestDiagnosticsExport();
+  }
+
+  /** The project's shape, with no geometry: counts and names only. */
+  public diagnosticsProjectSummary(): ProjectSummaryInput {
+    return this.canonicalProject.diagnosticsProjectSummary();
+  }
 
   public svgPartTool(): void {
     this.setTool('svg');

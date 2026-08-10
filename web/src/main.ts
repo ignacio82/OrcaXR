@@ -64,6 +64,13 @@ import {
   saveRememberedCredentials,
 } from './settings/RememberedCredentials';
 import {
+  DiagnosticsRecorder,
+  buildDiagnosticsBundle,
+  describeDiagnosticsBundle,
+  serializeDiagnosticsBundle,
+} from './diagnostics/DiagnosticsBundle';
+import { PINNED_ENGINE_PROVENANCE } from './slicer/pinnedEngineProvenance';
+import {
   applyPreferences,
   exportPreferences,
   importPreferences,
@@ -2220,6 +2227,10 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   printerApiKey.value = remembered.printerApiKey;
   rememberCredentials.checked = remembered.remember;
 
+  const refreshDiagnosticSecrets = () => {
+    diagnostics.setSecrets([printerApiKey.value.trim(), externalSlicerTokenValue()].filter(Boolean));
+  };
+
   const persistCredentials = () => {
     remembered = {
       printerApiKey: printerApiKey.value.trim(),
@@ -2227,6 +2238,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       remember: rememberCredentials.checked,
     };
     saveRememberedCredentials(remembered);
+    refreshDiagnosticSecrets();
   };
   const externalSlicerTokenValue = () =>
     (document.getElementById('external-slicer-token') as HTMLInputElement | null)?.value.trim() ?? '';
@@ -2241,6 +2253,62 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       ? 'Credentials will be remembered on this device.'
       : 'Stopped remembering credentials; the saved copies were erased.';
   };
+  // Diagnostics: a bounded, redacted record of this session. Secrets are
+  // registered so they are struck from every entry as it is recorded, not on
+  // the way out.
+  const diagnostics = new DiagnosticsRecorder();
+  window.addEventListener('error', (event) => diagnostics.recordError('window', event.error ?? event.message));
+  window.addEventListener('unhandledrejection', (event) => diagnostics.recordError('promise', event.reason));
+
+  // Diagnostics: the operator reads exactly what would be sent, then decides.
+  workspace.onRequestDiagnosticsExport = async () => {
+    const bundle = buildDiagnosticsBundle(
+      {
+        appVersion: window.ORCAXR_VERSION ?? 'unknown',
+        engine: {
+          commit: PINNED_ENGINE_PROVENANCE.commit,
+          route: SlicerClient.useExternalSlicer() ? 'external-server' : 'browser-wasm',
+        },
+        browser: {
+          userAgent: navigator.userAgent,
+          language: navigator.language,
+          ...(navigator.hardwareConcurrency ? { hardwareConcurrency: navigator.hardwareConcurrency } : {}),
+          crossOriginIsolated: globalThis.crossOriginIsolated === true,
+        },
+        printer: {
+          configured: Boolean(printerCfg.host.trim()),
+          connected: printJobSnapshot !== null,
+          ...(printJobSnapshot?.state ? { jobState: printJobSnapshot.state } : {}),
+        },
+        capabilities: {
+          actionCount: registry.all().length,
+          unavailableCount: registry.all().filter((action) => action.capability.status === 'unavailable').length,
+        },
+        project: workspace.diagnosticsProjectSummary(),
+        log: diagnostics.snapshot(),
+      },
+      { includeModelNames: false },
+    );
+
+    // The preview is the bundle's own description, so what is agreed to and
+    // what is written cannot drift apart.
+    const agreed = window.confirm(
+      `Export this diagnostics bundle?\n\n${describeDiagnosticsBundle(bundle)}\n\nNothing is sent anywhere; the file is saved to this device.`,
+    );
+    if (!agreed) {
+      statusText.textContent = 'Diagnostics export cancelled; nothing was written.';
+      return;
+    }
+    const blob = new Blob([serializeDiagnosticsBundle(bundle)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'orcaxr-diagnostics.json';
+    link.click();
+    URL.revokeObjectURL(url);
+    statusText.textContent = `Exported ${bundle.log.length} log entries. No project, addresses, or tokens are in the file.`;
+  };
+
   // Preferences: this device's setup, versioned and separate from the project.
   const prefReduceMotion = document.getElementById('pref-reduce-motion') as HTMLInputElement;
   const btnPrefsExport = document.getElementById('btn-prefs-export') as HTMLButtonElement;
@@ -2251,6 +2319,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   let preferences = loadPreferences();
   applyPreferences(preferences, document.documentElement);
   prefReduceMotion.checked = preferences.reduceMotion === 'always';
+  refreshDiagnosticSecrets();
   prefReduceMotion.onchange = () => {
     preferences = { ...preferences, reduceMotion: prefReduceMotion.checked ? 'always' : 'system' };
     savePreferences(preferences);
