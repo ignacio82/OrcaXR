@@ -1,4 +1,4 @@
-import { canonicalStringify, cloneJson, cloneProjectState } from '../domain/canonical';
+import { canonicalStringify, cloneJson, cloneProjectState, compareCanonicalText } from '../domain/canonical';
 import {
   facetAssignmentsFromRefinement,
   facetRefinementHasSplits,
@@ -371,7 +371,7 @@ function remapFacetColors(
     trianglesByFilament.set(filamentId, triangles);
   }
   return [...trianglesByFilament.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => compareCanonicalText(left, right))
     .map(([value, triangles]) => ({ value, triangles: [...triangles].sort((left, right) => left - right) }));
 }
 

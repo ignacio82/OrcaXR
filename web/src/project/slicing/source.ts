@@ -1,5 +1,12 @@
 import { assetBundleFingerprint, contentDigest, type AssetPayload, type AssetRepository } from '../assets';
-import { canonicalStringify, cloneJson, cloneProjectState, deepFreeze, projectFingerprint } from '../domain/canonical';
+import {
+  canonicalStringify,
+  cloneJson,
+  cloneProjectState,
+  compareCanonicalText,
+  deepFreeze,
+  projectFingerprint,
+} from '../domain/canonical';
 import type { ProjectState } from '../domain/model';
 import { assertValidProjectState } from '../domain/validation';
 import type { ProjectStorePort } from '../store';
@@ -96,7 +103,7 @@ function validateAssets(state: ProjectState, inputs: AssetPayload[]): AssetPaylo
   for (const descriptor of state.sourceAssets) {
     if (!seen.has(descriptor.id)) throw new Error(`Canonical slice bundle is missing asset ${descriptor.id}`);
   }
-  return assets.sort((left, right) => left.descriptor.id.localeCompare(right.descriptor.id));
+  return assets.sort((left, right) => compareCanonicalText(left.descriptor.id, right.descriptor.id));
 }
 
 function cloneAsset(asset: AssetPayload): AssetPayload {

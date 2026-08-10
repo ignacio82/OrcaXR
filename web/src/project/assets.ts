@@ -1,3 +1,4 @@
+import { compareCanonicalText } from './domain/canonical';
 import { canonicalStringify, cloneJson, fnv1a64 } from './domain/canonical';
 import type { AssetId } from './domain/ids';
 import type { SourceAssetDescriptor } from './domain/model';
@@ -31,7 +32,7 @@ export function assetBundleFingerprint(assets: readonly AssetPayload[]): string 
   const canonical = canonicalStringify(
     [...assets]
       .map((asset) => ({ descriptor: asset.descriptor, content: contentDigest(asset.bytes) }))
-      .sort((left, right) => left.descriptor.id.localeCompare(right.descriptor.id)),
+      .sort((left, right) => compareCanonicalText(left.descriptor.id, right.descriptor.id)),
   );
   return `fnv1a64:${fnv1a64(new TextEncoder().encode(canonical))}`;
 }
@@ -78,7 +79,7 @@ export class InMemoryAssetRepository implements AssetRepository {
 
   list(): AssetPayload[] {
     return Array.from(this.entries.values(), clonePayload).sort((a, b) =>
-      a.descriptor.id.localeCompare(b.descriptor.id),
+      compareCanonicalText(a.descriptor.id, b.descriptor.id),
     );
   }
 

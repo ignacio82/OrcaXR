@@ -1,4 +1,4 @@
-import { canonicalStringify, cloneProjectState } from '../domain/canonical';
+import { canonicalStringify, cloneProjectState, compareCanonicalText } from '../domain/canonical';
 import type { InstanceId } from '../domain/ids';
 import type { Transform } from '../domain/model';
 import { findInstance } from '../domain/selectors';
@@ -44,7 +44,7 @@ export class SetInstanceTransformsCommand implements ProjectCommand {
             transform: cloneTransform(change.transform),
           });
         })
-        .sort((left, right) => left.instanceId.localeCompare(right.instanceId)),
+        .sort((left, right) => compareCanonicalText(left.instanceId, right.instanceId)),
     );
     this.label = this.changes.length === 1 ? 'Transform instance' : `Transform ${this.changes.length} instances`;
     this.coalesceKey = canonicalStringify([this.type, gestureId, this.changes.map((change) => change.instanceId)]);

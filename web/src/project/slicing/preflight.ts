@@ -1,5 +1,5 @@
 import { InMemoryAssetRepository, type AssetRepository } from '../assets';
-import { cloneJson, deepFreeze } from '../domain/canonical';
+import { cloneJson, compareCanonicalText, deepFreeze } from '../domain/canonical';
 import { visitFacetRefinementAssignedValues } from '../domain/facetRefinement';
 import type {
   CustomGcodeId,
@@ -1048,8 +1048,8 @@ function finish(
   const issues = [...sourceIssues].sort(
     (left, right) =>
       severityRank(left.severity) - severityRank(right.severity) ||
-      left.code.localeCompare(right.code) ||
-      left.id.localeCompare(right.id),
+      compareCanonicalText(left.code, right.code) ||
+      compareCanonicalText(left.id, right.id),
   );
   const blockingCount = issues.filter((issue) => issue.severity === 'error').length;
   return Object.freeze({

@@ -1,4 +1,4 @@
-import { canonicalStringify, cloneJson, cloneProjectState } from '../domain/canonical';
+import { canonicalStringify, cloneJson, cloneProjectState, compareCanonicalText } from '../domain/canonical';
 import { isStableEntityId, type LayerRangeId, type ObjectId } from '../domain/ids';
 import type { LayerRange, ProjectObject, ProjectState } from '../domain/model';
 import { findObject } from '../domain/selectors';
@@ -367,7 +367,7 @@ function sortLayerRanges(ranges: LayerRange[]): void {
 }
 
 function compareLayerRanges(left: LayerRange, right: LayerRange): number {
-  return left.minZMm - right.minZMm || left.maxZMm - right.maxZMm || left.id.localeCompare(right.id);
+  return left.minZMm - right.minZMm || left.maxZMm - right.maxZMm || compareCanonicalText(left.id, right.id);
 }
 
 function repairSelectionAfterRemoval(

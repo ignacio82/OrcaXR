@@ -1,4 +1,4 @@
-import { canonicalStringify, cloneJson } from './canonical';
+import { canonicalStringify, cloneJson, compareCanonicalText } from './canonical';
 import type { FilamentId } from './ids';
 import {
   ORCA_REFINEMENT_ENCODING_VERSION,
@@ -282,7 +282,7 @@ export function facetAssignmentsFromRefinement<T extends JsonValue>(
     groups.set(key, group);
   });
   return [...groups.entries()]
-    .sort(([left], [right]) => left.localeCompare(right, 'en'))
+    .sort(([left], [right]) => compareCanonicalText(left, right))
     .map(([, assignment]) => assignment);
 }
 

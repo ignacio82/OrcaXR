@@ -1,4 +1,4 @@
-import { canonicalStringify, cloneJson } from '../domain/canonical';
+import { canonicalStringify, cloneJson, compareCanonicalText } from '../domain/canonical';
 import type { FacetAnnotations, JsonValue, TriangleAssignments } from '../domain/model';
 import { normalizeFacetRefinementEncoding, validateFacetRefinementChannel } from '../domain/facetRefinement';
 import type {
@@ -261,7 +261,7 @@ function normalizeChannel<T extends JsonValue>(
   }
   return [...groups.entries()]
     .filter(([, assignment]) => assignment.triangles.length > 0)
-    .sort(([left], [right]) => left.localeCompare(right, 'en'))
+    .sort(([left], [right]) => compareCanonicalText(left, right))
     .map(([, assignment]) => ({
       value: assignment.value,
       triangles: assignment.triangles.sort((left, right) => left - right),

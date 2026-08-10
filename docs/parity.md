@@ -2307,6 +2307,21 @@ This contract is part of every XR acceptance gate, not optional styling guidance
   make it feasible; document any geometry-direction exception.
   - **Accept:** no user-facing strings escape extraction except fixture/model data; pseudo-long
     and RTL runs have no clipped critical controls; locale never changes config serialization.
+  - **Current:** only the last clause is met, and it is the one with teeth. Canonical ordering used
+    `localeCompare` in eleven files, which collates by the *runtime's* locale — 'ä' sorts after 'z'
+    in Swedish and with 'a' in German — so anything ordered by it that reaches a saved project made
+    the bytes depend on the machine that produced them. Two operators would get different files
+    from the same project, and a hash-guarded artifact would disagree with itself across a locale
+    change. All eleven now use `compareCanonicalText`, which orders by code unit.
+    Three guards keep it that way: the same project serialises to identical bytes under a stubbed
+    foreign collation, the fingerprint does too, and a source scan fails the build on any new
+    `localeCompare` under `src/project/`. The scan matters most — the byte tests only catch a leak
+    the fixture happens to exercise, and the next one added may sort user-supplied names where the
+    difference is real.
+  - **Outstanding:** everything else. There is no message catalog, no message IDs, no extraction, no
+    runtime language switch, no plural or unit formatting, no pseudo-localization run, and no RTL
+    support; every user-facing string is still an English literal at its use site. This is the
+    largest untouched item in the plan and needs a dedicated pass, not an increment.
 
 - [ ] **P10.5 — Qualify XR as a complete surface.** World scale, origin/recenter, seated/standing
   reach, dominant hand, ray/direct interaction, grab/manipulator precision, panels, keyboard/text
@@ -2688,7 +2703,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Camera/console/macros/history | P9.6 | Snapshot scaffold; rest missing |
 | Responsive desktop/tablet/mobile IA and complete states | P10.1 | Useful recent shell work; parity unverified |
 | WCAG AA, keyboard, screen reader, non-color states | P10.2–P10.3 | Axe, headless tree semantics, keyboard menus/modal focus, registry-derived shortcut dispatch/help/ARIA metadata, and conflict tests pass; complete contexts/remapping workflows and manual assistive review remain |
-| Localization/pseudo-localization/RTL-safe layout | P10.4 | Missing |
+| Localization/pseudo-localization/RTL-safe layout | P10.4 | Locale-invariant serialization is proven and guarded; extraction, message IDs, runtime switching, pseudo-localization, and RTL are all missing |
 | XRBlocks typed design system, correct reactive API, local assets | P10.9 | Exact pins, local icons, audited UI/UIBlocks contract, and an exact-typed signal-aware action-button adapter with guarded states/disposal exist; full composite kit/gallery remains |
 | Complete XR workflows and common capability gating | P2.6, P10.5, P10.9–P10.10 | Shell exists and DOM-only printer submission is truthfully withheld from XR pending a native confirmation flow; many workflows and input modes remain missing |
 | XR update/input ownership, cleanup, comfort, headset budgets | P10.10 | Duplicate owners removed; per-controller sticky UI suppression, transition snapshots, actual-hit targeting, stale-event refusal, and idempotent handle/guard disposal are tested foundations; frame counters/headset budgets remain |

@@ -1,5 +1,17 @@
 import type { ProjectState } from './model';
 
+/**
+ * Order two strings the same way on every machine.
+ *
+ * `localeCompare` collates by the *runtime's* locale — in Swedish 'ä' sorts
+ * after 'z', in German it sorts with 'a' — so using it to order anything that
+ * reaches a saved project or a generated config makes the output depend on
+ * where it was produced. Canonical ordering is by code unit, always.
+ */
+export function compareCanonicalText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 export function cloneProjectState(state: ProjectState): ProjectState {
   return cloneJson(state);
 }

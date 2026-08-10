@@ -1,3 +1,4 @@
+import { compareCanonicalText } from '../domain/canonical';
 import type { FilamentId } from '../domain/ids';
 import { facetRefinementAssignedLeafCount } from '../domain/facetRefinement';
 import { resolveFilament } from '../domain/selectors';
@@ -54,7 +55,7 @@ export function projectObjectsTree(
   };
 
   for (const plate of [...state.plates].sort(
-    (left, right) => left.order - right.order || left.id.localeCompare(right.id),
+    (left, right) => left.order - right.order || compareCanonicalText(left.id, right.id),
   )) {
     const plateRef: ObjectTreeEntityRef = { kind: 'plate', id: plate.id };
     const plateKey = entityRowKey(plateRef);
@@ -76,7 +77,9 @@ export function projectObjectsTree(
     }
   }
 
-  for (const diagnostic of [...(options.diagnostics ?? [])].sort((left, right) => left.id.localeCompare(right.id))) {
+  for (const diagnostic of [...(options.diagnostics ?? [])].sort((left, right) =>
+    compareCanonicalText(left.id, right.id),
+  )) {
     addDiagnostic(diagnostic, rows, roots, entityRows, add);
   }
 
@@ -168,7 +171,7 @@ function projectObject(
     }),
   );
   [...object.layerRanges]
-    .sort((left, right) => left.minZMm - right.minZMm || left.id.localeCompare(right.id))
+    .sort((left, right) => left.minZMm - right.minZMm || compareCanonicalText(left.id, right.id))
     .forEach((range) => projectLayerRange(state, object, range, layerGroupKey, add, options));
 }
 

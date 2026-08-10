@@ -1,4 +1,4 @@
-import { canonicalStringify, cloneJson, deepFreeze } from '../domain/canonical';
+import { canonicalStringify, cloneJson, compareCanonicalText, deepFreeze } from '../domain/canonical';
 import type { PlateId } from '../domain/ids';
 import type { CancellationToken, ProjectSerializerPort, SerializedProject } from '../ports';
 import { Sha256SliceContentHasher } from './hash';
@@ -555,7 +555,7 @@ function selectPlateIds(
   }
   const printable = [...plates]
     .filter((plate) => plate.printable)
-    .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id))
+    .sort((left, right) => left.order - right.order || compareCanonicalText(left.id, right.id))
     .map((plate) => plate.id);
   if (printable.length === 0) throw new Error('Project has no printable plates');
   return printable;

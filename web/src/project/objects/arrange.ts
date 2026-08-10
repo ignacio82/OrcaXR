@@ -1,3 +1,4 @@
+import { compareCanonicalText } from '../domain/canonical';
 import type { AssetRepository } from '../assets';
 import type { InstanceId, PlateId } from '../domain/ids';
 import type { ProjectState, Transform, VolumeRole } from '../domain/model';
@@ -139,7 +140,7 @@ export function planPlateArrangement(
   // Deterministic order: largest depth, then width, then stable ID.
   candidates.sort(
     (left, right) =>
-      right.depth - left.depth || right.width - left.width || left.instanceId.localeCompare(right.instanceId),
+      right.depth - left.depth || right.width - left.width || compareCanonicalText(left.instanceId, right.instanceId),
   );
 
   const usable: ArrangeRegion = { minX: margin, minY: margin, maxX: bedX - margin, maxY: bedY - margin };
