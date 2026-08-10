@@ -2301,7 +2301,7 @@ This contract is part of every XR acceptance gate, not optional styling guidance
     Complete upstream mapping/context scopes, safe remapping, browser alternatives, `1–9`
     assignment, preview controls, and XR qualification remain open.
 
-- [ ] **P10.4 — Provide complete localization infrastructure.** Extract UI/help/errors, use
+- [~] **P10.4 — Provide complete localization infrastructure.** Extract UI/help/errors, use
   message IDs with plural/number/unit/date formatting, allow runtime language switch, avoid
   fixed-width strings, and test pseudo-localization. Support RTL layout where web primitives
   make it feasible; document any geometry-direction exception.
