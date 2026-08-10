@@ -2024,7 +2024,7 @@ implementations were removed when read-only live wiring moved to the typed bound
     and changing endpoint or session credentials disposes the connection. Multi-printer setup,
     complete auth/TLS guidance, mutation fault matrices, and printer evidence remain open.
 
-- [ ] **P9.2 — Add printer setup, discovery, and multi-printer management.** Support named manual
+- [~] **P9.2 — Add printer setup, discovery, and multi-printer management.** Support named manual
   endpoints, local-network discovery only with explicit permission and viable browser/proxy
   support, capability/profile association, default printer, online/offline state, edit/remove,
   and fast switching without state leakage.
@@ -2032,6 +2032,29 @@ implementations were removed when read-only live wiring moved to the typed bound
     Explain the proxy/manual alternative.
   - **Accept:** U1 and Elegoo CC can be added from a clean profile, reconnect after reload, switch
     safely, and retain independent queues/cameras/tool maps.
+  - **Current:** `printer/PrinterDirectory.ts` holds named printers with one default, stored beside
+    the other device settings. Each entry owns its address, its credential, and its reported
+    capabilities and tool count; switching rebuilds the transport rather than reusing it, so no
+    socket, key, or cached capability crosses from the machine that was selected before. A key that
+    follows a switch is a key sent to the wrong printer, which is the failure this shape exists to
+    prevent. Removing a printer deletes its credential with it, and removing the default promotes
+    another rather than leaving an id that resolves to nothing at send time.
+    An install configured before printers had names keeps working: its single endpoint is adopted
+    as the first entry rather than dropped. A duplicate address is refused in both add and edit,
+    because two entries for one machine each hold their own credential with no way to tell which a
+    job used.
+    Discovery is reported as unavailable rather than faked. A browser cannot enumerate a subnet, and
+    a Scan button that finds nothing reads as "you have no printers" — a worse answer than saying
+    the platform cannot do it — so `describeDiscovery` names the manual and proxy alternatives
+    instead.
+    Verified in the production browser with both machines: added from a clean profile, each keeping
+    its own address and key across switches, and both present with the default selected after a
+    reload.
+  - **Outstanding:** capability and tool count are stored but nothing writes them yet from a live
+    handshake, so they are populated only by explicit update; per-printer queues, cameras, and tool
+    maps are not separated because none of those exist per-printer yet; profile association is not
+    wired, so switching a printer does not switch the machine profile; and the acceptance names
+    hardware qualification on both machines, which needs the printers in front of someone.
 
 - [~] **P9.3 — Build pre-print selection and tool mapping.** Select printer/storage destination;
   refresh state; map every physical/mixed dependency to available head/tool/spool; validate
@@ -2659,7 +2682,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Layer pauses/custom G-code/color changes/filament sequences | P7.8 | Guarded canonical authoring from the inspector or the G-code preview's current layer, an engine-format `custom_gcode_per_layer.xml` projection that round-trips foreign projects, profile-gated event kinds, and located preview ticks are live; slider badges and filament sequences remain |
 | Calibration generators and real per-band output | P8.1–P8.3 | Exact pinned inventory covers 11 modes, 14 menu variants, tolerance, and device gates; a fingerprint-bound compiler validates all 15 manual workflows and emits bounded band/object/line plans with engine overrides, firmware commands, labels, fit data, result/preset schema, and slice assertions. Canonical geometry materialization, live workflows, and parsed sliced-G-code oracles remain; 11 bindings are still alpha geometry and four unbound |
 | Connected calibration wizard, save/history | P8.4–P8.6 | Missing |
-| Secure Moonraker connection and multi-printer setup | P9.1–P9.2 | Typed transport is live for registry-guarded handshake and read-only inspection; setup, multi-printer lifecycle, mutation matrices, and hardware evidence remain |
+| Secure Moonraker connection and multi-printer setup | P9.1–P9.2 | Typed transport plus a named-printer directory with per-printer credentials and leak-free switching, proven in the production browser; live capability capture, per-printer queues/cameras, profile association, and hardware evidence remain |
 | Pre-print validation/tool mapping/upload/start | P9.3–P9.4 | Send-time tool mapping, confirmed upload with unique naming and size verification, and an explicitly confirmed start are live and covered end-to-end against a Moonraker simulator in the production browser; destination/storage selection, queue and lifecycle control, reconnect during transfer, and hardware qualification remain |
 | Live status/control/storage/queue/history | P9.4–P9.5 | Push-driven job state, progress, layer, and temperatures plus state-derived pause/resume/cancel and an always-reachable emergency stop are live; storage browsing, queue reorder/remove, history, and hardware qualification remain |
 | Camera/console/macros/history | P9.6 | Snapshot scaffold; rest missing |

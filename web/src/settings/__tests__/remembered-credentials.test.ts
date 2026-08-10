@@ -26,7 +26,10 @@ function storage(initial: Record<string, string> = {}): KeyValueStorage & { entr
 
 test('a configured printer key and slicer token survive a reload', () => {
   const store = storage();
-  saveRememberedCredentials({ printerApiKey: 'printer-key', slicerToken: 'slicer-token', remember: true }, store);
+  saveRememberedCredentials(
+    { printerApiKey: 'printer-key', printerApiKeys: {}, slicerToken: 'slicer-token', remember: true },
+    store,
+  );
   const loaded = loadRememberedCredentials(store);
   assert.equal(loaded.printerApiKey, 'printer-key');
   assert.equal(loaded.slicerToken, 'slicer-token');
@@ -35,12 +38,18 @@ test('a configured printer key and slicer token survive a reload', () => {
 
 test('turning remembering off erases what was already stored', () => {
   const store = storage();
-  saveRememberedCredentials({ printerApiKey: 'printer-key', slicerToken: 'slicer-token', remember: true }, store);
+  saveRememberedCredentials(
+    { printerApiKey: 'printer-key', printerApiKeys: {}, slicerToken: 'slicer-token', remember: true },
+    store,
+  );
   assert.ok(JSON.stringify([...store.entries.values()]).includes('printer-key'));
 
   // Being told to stop remembering has to remove the secret, not just stop
   // writing new ones — otherwise the old one outlives the instruction.
-  saveRememberedCredentials({ printerApiKey: 'printer-key', slicerToken: 'slicer-token', remember: false }, store);
+  saveRememberedCredentials(
+    { printerApiKey: 'printer-key', printerApiKeys: {}, slicerToken: 'slicer-token', remember: false },
+    store,
+  );
   const raw = JSON.stringify([...store.entries.values()]);
   assert.equal(raw.includes('printer-key'), false);
   assert.equal(raw.includes('slicer-token'), false);
@@ -52,16 +61,21 @@ test('turning remembering off erases what was already stored', () => {
 
 test('forgetting removes the entry entirely', () => {
   const store = storage();
-  saveRememberedCredentials({ printerApiKey: 'k', slicerToken: 't', remember: true }, store);
+  saveRememberedCredentials({ printerApiKey: 'k', printerApiKeys: {}, slicerToken: 't', remember: true }, store);
   forgetRememberedCredentials(store);
   assert.equal(store.entries.size, 0);
-  assert.deepEqual(loadRememberedCredentials(store), { printerApiKey: '', slicerToken: '', remember: true });
+  assert.deepEqual(loadRememberedCredentials(store), {
+    printerApiKey: '',
+    printerApiKeys: {},
+    slicerToken: '',
+    remember: true,
+  });
 });
 
 test('clearing both secrets leaves nothing behind', () => {
   const store = storage();
-  saveRememberedCredentials({ printerApiKey: 'k', slicerToken: 't', remember: true }, store);
-  saveRememberedCredentials({ printerApiKey: '', slicerToken: '', remember: true }, store);
+  saveRememberedCredentials({ printerApiKey: 'k', printerApiKeys: {}, slicerToken: 't', remember: true }, store);
+  saveRememberedCredentials({ printerApiKey: '', printerApiKeys: {}, slicerToken: '', remember: true }, store);
   assert.equal(store.entries.size, 0, 'an empty pair is an absent entry, not an empty record');
 });
 
@@ -73,7 +87,10 @@ test('a corrupt or hostile store never throws and never yields junk', () => {
   }
   // An absurd value is refused rather than stored and handed back.
   const store = storage();
-  saveRememberedCredentials({ printerApiKey: 'x'.repeat(5000), slicerToken: 'fine', remember: true }, store);
+  saveRememberedCredentials(
+    { printerApiKey: 'x'.repeat(5000), printerApiKeys: {}, slicerToken: 'fine', remember: true },
+    store,
+  );
   assert.equal(loadRememberedCredentials(store).printerApiKey, '');
   assert.equal(loadRememberedCredentials(store).slicerToken, 'fine');
 });
@@ -98,14 +115,53 @@ test('storage that throws is survivable', () => {
       throw new Error('blocked');
     },
   };
-  assert.deepEqual(loadRememberedCredentials(hostile), { printerApiKey: '', slicerToken: '', remember: true });
-  saveRememberedCredentials({ printerApiKey: 'k', slicerToken: 't', remember: true }, hostile);
+  assert.deepEqual(loadRememberedCredentials(hostile), {
+    printerApiKey: '',
+    printerApiKeys: {},
+    slicerToken: '',
+    remember: true,
+  });
+  saveRememberedCredentials({ printerApiKey: 'k', printerApiKeys: {}, slicerToken: 't', remember: true }, hostile);
   forgetRememberedCredentials(hostile);
 });
 
 test('no storage at all still returns a usable default', () => {
-  assert.deepEqual(loadRememberedCredentials(null), { printerApiKey: '', slicerToken: '', remember: true });
-  saveRememberedCredentials({ printerApiKey: 'k', slicerToken: 't', remember: true }, null);
+  assert.deepEqual(loadRememberedCredentials(null), {
+    printerApiKey: '',
+    printerApiKeys: {},
+    slicerToken: '',
+    remember: true,
+  });
+  saveRememberedCredentials({ printerApiKey: 'k', printerApiKeys: {}, slicerToken: 't', remember: true }, null);
+});
+
+test('each printer keeps its own key, so switching cannot send the wrong one', () => {
+  const store = storage();
+  saveRememberedCredentials(
+    {
+      printerApiKey: '',
+      printerApiKeys: { 'printer-1': 'u1-key-value', 'printer-2': 'elegoo-key-value' },
+      slicerToken: '',
+      remember: true,
+    },
+    store,
+  );
+  const loaded = loadRememberedCredentials(store);
+  assert.equal(loaded.printerApiKeys['printer-1'], 'u1-key-value');
+  assert.equal(loaded.printerApiKeys['printer-2'], 'elegoo-key-value');
+
+  // Turning remembering off erases every printer's key, not just the active one.
+  saveRememberedCredentials({ ...loaded, remember: false }, store);
+  const raw = JSON.stringify([...store.entries.values()]);
+  assert.equal(raw.includes('u1-key-value'), false);
+  assert.equal(raw.includes('elegoo-key-value'), false);
+});
+
+test('a corrupt per-printer map yields no keys rather than junk', () => {
+  for (const raw of ['{"printerApiKeys":"no"}', '{"printerApiKeys":[1,2]}', '{"printerApiKeys":{"a":42}}']) {
+    const loaded = loadRememberedCredentials(storage({ 'orcaxr.credentials': raw }));
+    assert.deepEqual(loaded.printerApiKeys, {});
+  }
 });
 
 console.log(`\nRemembered credentials: ${passed} tests passed.`);

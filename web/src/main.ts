@@ -72,6 +72,16 @@ import {
 } from './diagnostics/DiagnosticsBundle';
 import { PINNED_ENGINE_PROVENANCE } from './slicer/pinnedEngineProvenance';
 import {
+  addPrinter,
+  adoptLegacyEndpoint,
+  defaultPrinter,
+  findPrinter,
+  loadPrinterDirectory,
+  removePrinter,
+  savePrinterDirectory,
+  setDefaultPrinter,
+} from './printer/PrinterDirectory';
+import {
   applyPreferences,
   exportPreferences,
   importPreferences,
@@ -2298,6 +2308,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   const persistCredentials = () => {
     remembered = {
       printerApiKey: printerApiKey.value.trim(),
+      printerApiKeys: remembered.printerApiKeys,
       slicerToken: externalSlicerTokenValue(),
       remember: rememberCredentials.checked,
     };
@@ -2307,7 +2318,124 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   const externalSlicerTokenValue = () =>
     (document.getElementById('external-slicer-token') as HTMLInputElement | null)?.value.trim() ?? '';
 
+  // ---- Named printers (P9.2) ----------------------------------------------
+  // Each entry owns its address and its credential. Switching carries nothing
+  // from the previous machine, because a key or a tool map that follows a
+  // switch is one sent to the wrong printer.
+  const printerSelect = document.getElementById('printer-select') as HTMLSelectElement;
+  const btnPrinterAdd = document.getElementById('btn-printer-add') as HTMLButtonElement;
+  const btnPrinterRemove = document.getElementById('btn-printer-remove') as HTMLButtonElement;
+  const printerStorage = (() => {
+    try {
+      return typeof localStorage === 'undefined' ? null : localStorage;
+    } catch {
+      return null;
+    }
+  })();
+
+  let printers = loadPrinterDirectory(printerStorage);
+  // An install configured before printers had names keeps working: its single
+  // endpoint becomes the first entry rather than being dropped.
+  printers = adoptLegacyEndpoint(printers, printerCfg.host.trim() ? printerCfg : undefined, () => crypto.randomUUID());
+  if (printers.printers.length > 0) savePrinterDirectory(printers, printerStorage);
+
+  const keyForPrinter = (id: string): string =>
+    remembered.printerApiKeys[id] ?? (id === printers.defaultId ? remembered.printerApiKey : '');
+
+  const renderPrinterSelect = () => {
+    printerSelect.replaceChildren();
+    for (const entry of printers.printers) {
+      const option = document.createElement('option');
+      option.value = entry.id;
+      option.textContent = entry.name;
+      option.selected = entry.id === printers.defaultId;
+      printerSelect.appendChild(option);
+    }
+    if (printers.printers.length === 0) {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'No printer saved yet';
+      option.disabled = true;
+      option.selected = true;
+      printerSelect.appendChild(option);
+    }
+    btnPrinterRemove.disabled = printers.printers.length === 0;
+  };
+
+  const activatePrinter = (id: string) => {
+    const entry = findPrinter(printers, id);
+    if (!entry) return;
+    printers = setDefaultPrinter(printers, id);
+    savePrinterDirectory(printers, printerStorage);
+    printerCfg.host = entry.host;
+    printerCfg.port = entry.port;
+    savePrinterEndpointPreferences(printerCfg);
+    printerHost.value = entry.host;
+    printerApiKey.value = keyForPrinter(id);
+    // The transport is rebuilt rather than reused, so no socket, credential, or
+    // cached capability crosses from the printer that was selected before.
+    disposePrinterTransport();
+    refreshDiagnosticSecrets();
+    renderPrinterSelect();
+    refreshFirstRunPrompt();
+    statusText.textContent = `Switched to ${entry.name}.`;
+  };
+
+  printerSelect.onchange = () => activatePrinter(printerSelect.value);
+
+  btnPrinterAdd.onclick = () => {
+    const host = printerHost.value.trim();
+    if (!host) {
+      statusText.textContent = 'Enter the printer address first, then Add names it.';
+      printerHost.focus();
+      return;
+    }
+    const name = window.prompt('Name this printer', `Printer ${printers.printers.length + 1}`);
+    if (name === null) return;
+    try {
+      printers = addPrinter(printers, { name, host, port: printerCfg.port }, () => crypto.randomUUID());
+      savePrinterDirectory(printers, printerStorage);
+      activatePrinter(printers.printers[printers.printers.length - 1].id);
+      statusText.textContent = `Saved ${name.trim()}. Switch between printers with the list above.`;
+    } catch (error) {
+      statusText.textContent = `Could not add that printer: ${(error as Error).message}`;
+    }
+  };
+
+  btnPrinterRemove.onclick = () => {
+    const entry = findPrinter(printers, printerSelect.value);
+    if (!entry) return;
+    if (!window.confirm(`Remove ${entry.name}? Its saved address and key are deleted from this device.`)) return;
+    printers = removePrinter(printers, entry.id);
+    // The credential goes with the printer; leaving it behind would attach it
+    // to whatever id happened to be reused later.
+    const { [entry.id]: _removed, ...rest } = remembered.printerApiKeys;
+    remembered = { ...remembered, printerApiKeys: rest };
+    saveRememberedCredentials(remembered);
+    savePrinterDirectory(printers, printerStorage);
+    const next = defaultPrinter(printers);
+    if (next) activatePrinter(next.id);
+    else {
+      printerHost.value = '';
+      printerApiKey.value = '';
+      printerCfg.host = '';
+      savePrinterEndpointPreferences(printerCfg);
+      disposePrinterTransport();
+      renderPrinterSelect();
+      refreshFirstRunPrompt();
+    }
+    statusText.textContent = `Removed ${entry.name}.`;
+  };
+
   printerApiKey.oninput = () => {
+    // The key belongs to the selected printer, not to the app.
+    const activeId = printers.defaultId;
+    if (activeId) {
+      remembered = {
+        ...remembered,
+        printerApiKeys: { ...remembered.printerApiKeys, [activeId]: printerApiKey.value.trim() },
+      };
+    }
     persistCredentials();
     disposePrinterTransport();
   };
@@ -2383,6 +2511,9 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   let preferences = loadPreferences();
   applyPreferences(preferences, document.documentElement);
   prefReduceMotion.checked = preferences.reduceMotion === 'always';
+  renderPrinterSelect();
+  const startupPrinter = defaultPrinter(printers);
+  if (startupPrinter) printerApiKey.value = keyForPrinter(startupPrinter.id);
   refreshDiagnosticSecrets();
   prefReduceMotion.onchange = () => {
     preferences = { ...preferences, reduceMotion: prefReduceMotion.checked ? 'always' : 'system' };

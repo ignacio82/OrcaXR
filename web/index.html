@@ -896,6 +896,11 @@
                     </div>
                   </div>
                 </div>
+                <div style="display:flex;gap:8px;margin-bottom:8px;">
+                  <select id="printer-select" class="text-input" aria-label="Active printer" style="flex:1;min-width:0;"></select>
+                  <button id="btn-printer-add" class="action-btn" type="button" style="width:auto;margin:0;padding:10px 12px;" title="Save the current address as another printer">Add</button>
+                  <button id="btn-printer-remove" class="action-btn" type="button" style="width:auto;margin:0;padding:10px 12px;" title="Remove the selected printer">Remove</button>
+                </div>
                 <input id="printer-host" type="text" class="text-input" placeholder="http://192.168.1.50 or https://printer.tailnet-name.ts.net"
                   aria-label="Moonraker endpoint" autocomplete="url" style="margin-bottom:8px;font-family:var(--oxr-font-mono);" />
                 <label for="printer-api-key" style="display:block;font-size:11px;color:var(--oxr-text-muted);margin-bottom:4px;">API key (optional)</label>

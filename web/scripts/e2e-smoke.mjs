@@ -2615,6 +2615,47 @@ try {
     await reloaded.close();
   }
 
+  // ---- Named printers: add two, switch, and keep them apart ----------------
+  //
+  // The acceptance criterion names both machines: they must add from a clean
+  // profile, switch safely, and keep independent credentials. A key that
+  // follows a switch is a key sent to the wrong printer.
+  await showInspectorTab(page, 'printer');
+  await page.evaluate(() => {
+    globalThis.prompt = (_message, fallback) => globalThis.__printerName ?? fallback;
+    globalThis.confirm = () => true;
+  });
+  await setDomInput(page, '#printer-host', 'http://127.0.0.1:7125');
+  await page.evaluate(() => {
+    globalThis.__printerName = 'Snapmaker U1';
+  });
+  await page.click('#btn-printer-add');
+  await setDomInput(page, '#printer-api-key', 'U1-KEY-EXAMPLE');
+
+  await setDomInput(page, '#printer-host', 'http://127.0.0.1:7126');
+  await page.evaluate(() => {
+    globalThis.__printerName = 'Elegoo Centauri Carbon';
+  });
+  await page.click('#btn-printer-add');
+  await setDomInput(page, '#printer-api-key', 'ELEGOO-KEY-EXAMPLE');
+
+  const printerNames = await page.$$eval('#printer-select option', (options) =>
+    options.map((option) => option.textContent),
+  );
+  assert.deepStrictEqual(printerNames, ['Snapmaker U1', 'Elegoo Centauri Carbon']);
+
+  const u1Value = await page.$$eval(
+    '#printer-select option',
+    (options) => options.filter((option) => option.textContent === 'Snapmaker U1').map((option) => option.value)[0],
+  );
+  await page.select('#printer-select', u1Value);
+  assert.equal(await page.$eval('#printer-host', (element) => element.value), 'http://127.0.0.1:7125');
+  assert.equal(
+    await page.$eval('#printer-api-key', (element) => element.value),
+    'U1-KEY-EXAMPLE',
+    'each printer keeps its own credential across a switch',
+  );
+
   // ---- Preferences: versioned, migrated, resettable without losing work ----
   await showInspectorTab(page, 'printer');
   await page.click('#pref-reduce-motion');
@@ -2642,7 +2683,7 @@ try {
   assert.deepStrictEqual(pageErrors, [], `uncaught page errors: ${pageErrors.join('\n')}`);
   assert.deepStrictEqual(policyErrors, [], `CSP violations: ${policyErrors.join('\n')}`);
   console.log(
-    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a printer plus slicer configured once that are still configured after a reload, and device preferences that apply live and reset without touching presets).',
+    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a printer plus slicer configured once that are still configured after a reload, device preferences that apply live and reset without touching presets, and two named printers that switch without their credentials following each other).',
   );
 } finally {
   await browser.close();
