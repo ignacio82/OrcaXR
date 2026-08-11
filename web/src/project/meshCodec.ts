@@ -2,9 +2,74 @@ import { contentDigest, type AssetPayload } from './assets';
 import { isStableEntityId, type AssetId } from './domain/ids';
 import type { SourceAssetDescriptor } from './domain/model';
 
+/**
+ * A decoded mesh, packed first and only expanded on demand.
+ *
+ * `vertices`/`triangles` are the ergonomic view, but they cost one JS array
+ * per vertex and per triangle: on a two-million-triangle model that is nearly
+ * three million short-lived objects and several hundred megabytes, paid by
+ * every consumer that only wanted to read coordinates. The flat typed arrays
+ * are the real representation; the tuple views are built lazily and cached, so
+ * a caller that never touches them never pays for them.
+ */
 export interface DecodedIndexedMesh {
+  /** Flat xyz triples, `vertexCount * 3` long. */
+  readonly positions: Float32Array;
+  /** Flat vertex indices, `triangleCount * 3` long. */
+  readonly indices: Uint32Array;
+  readonly vertexCount: number;
+  readonly triangleCount: number;
   readonly vertices: ReadonlyArray<readonly [number, number, number]>;
   readonly triangles: ReadonlyArray<readonly [number, number, number]>;
+}
+
+class PackedIndexedMesh implements DecodedIndexedMesh {
+  private vertexTuples: ReadonlyArray<readonly [number, number, number]> | undefined;
+  private triangleTuples: ReadonlyArray<readonly [number, number, number]> | undefined;
+
+  constructor(
+    readonly positions: Float32Array,
+    readonly indices: Uint32Array,
+  ) {}
+
+  get vertexCount(): number {
+    return this.positions.length / 3;
+  }
+
+  get triangleCount(): number {
+    return this.indices.length / 3;
+  }
+
+  get vertices(): ReadonlyArray<readonly [number, number, number]> {
+    if (!this.vertexTuples) {
+      const count = this.vertexCount;
+      const tuples: Array<readonly [number, number, number]> = new Array(count);
+      for (let index = 0; index < count; index += 1) {
+        const offset = index * 3;
+        tuples[index] = [this.positions[offset], this.positions[offset + 1], this.positions[offset + 2]];
+      }
+      this.vertexTuples = tuples;
+    }
+    return this.vertexTuples;
+  }
+
+  get triangles(): ReadonlyArray<readonly [number, number, number]> {
+    if (!this.triangleTuples) {
+      const count = this.triangleCount;
+      const tuples: Array<readonly [number, number, number]> = new Array(count);
+      for (let index = 0; index < count; index += 1) {
+        const offset = index * 3;
+        tuples[index] = [this.indices[offset], this.indices[offset + 1], this.indices[offset + 2]];
+      }
+      this.triangleTuples = tuples;
+    }
+    return this.triangleTuples;
+  }
+}
+
+/** Wrap already-packed buffers as a mesh, without copying or re-validating them. */
+export function packIndexedMesh(positions: Float32Array, indices: Uint32Array): DecodedIndexedMesh {
+  return new PackedIndexedMesh(positions, indices);
 }
 
 export interface EncodeIndexedMeshOptions {
@@ -32,21 +97,23 @@ export function decodeIndexedMeshAsset(payload: AssetPayload): DecodedIndexedMes
 
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const positionStride = mesh.positions.byteStride ?? mesh.positions.componentCount * 4;
-  const vertices: Array<readonly [number, number, number]> = [];
-  for (let index = 0; index < mesh.positions.count; index += 1) {
+  const vertexCount = mesh.positions.count;
+  const positions = new Float32Array(vertexCount * 3);
+  for (let index = 0; index < vertexCount; index += 1) {
     const offset = mesh.positions.byteOffset + index * positionStride;
-    const vertex: readonly [number, number, number] = [
-      view.getFloat32(offset, true),
-      view.getFloat32(offset + 4, true),
-      view.getFloat32(offset + 8, true),
-    ];
-    if (vertex.some((coordinate) => !Number.isFinite(coordinate))) {
+    const x = view.getFloat32(offset, true);
+    const y = view.getFloat32(offset + 4, true);
+    const z = view.getFloat32(offset + 8, true);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
       throw new Error('Mesh contains a non-finite vertex');
     }
-    vertices.push(vertex);
+    const target = index * 3;
+    positions[target] = x;
+    positions[target + 1] = y;
+    positions[target + 2] = z;
   }
 
-  const indices: number[] = [];
+  let indices: Uint32Array;
   if (mesh.indices) {
     if (mesh.indices.componentType !== 'uint16' && mesh.indices.componentType !== 'uint32') {
       throw new Error('Mesh indices must be uint16 or uint32 scalars');
@@ -55,12 +122,14 @@ export function decodeIndexedMeshAsset(payload: AssetPayload): DecodedIndexedMes
     const componentBytes = mesh.indices.componentType === 'uint16' ? 2 : 4;
     validateBufferView(mesh.indices, bytes.byteLength, componentBytes, 'index');
     const stride = mesh.indices.byteStride ?? componentBytes;
+    indices = new Uint32Array(mesh.indices.count);
     for (let index = 0; index < mesh.indices.count; index += 1) {
       const offset = mesh.indices.byteOffset + index * stride;
-      indices.push(componentBytes === 2 ? view.getUint16(offset, true) : view.getUint32(offset, true));
+      indices[index] = componentBytes === 2 ? view.getUint16(offset, true) : view.getUint32(offset, true);
     }
   } else {
-    for (let index = 0; index < vertices.length; index += 1) indices.push(index);
+    indices = new Uint32Array(vertexCount);
+    for (let index = 0; index < vertexCount; index += 1) indices[index] = index;
   }
 
   if (!Number.isInteger(mesh.triangleCount) || mesh.triangleCount < 0) {
@@ -69,15 +138,11 @@ export function decodeIndexedMeshAsset(payload: AssetPayload): DecodedIndexedMes
   if (indices.length % 3 !== 0 || indices.length / 3 !== mesh.triangleCount) {
     throw new Error('Mesh index count does not match the declared triangle count');
   }
-  const triangles: Array<readonly [number, number, number]> = [];
-  for (let index = 0; index < indices.length; index += 3) {
-    const triangle: readonly [number, number, number] = [indices[index], indices[index + 1], indices[index + 2]];
-    if (triangle.some((vertex) => vertex < 0 || vertex >= vertices.length)) {
-      throw new Error('Mesh index is outside the vertex buffer');
-    }
-    triangles.push(triangle);
+  for (let index = 0; index < indices.length; index += 1) {
+    // Unsigned by construction, so one bound is enough.
+    if (indices[index] >= vertexCount) throw new Error('Mesh index is outside the vertex buffer');
   }
-  return { vertices, triangles };
+  return new PackedIndexedMesh(positions, indices);
 }
 
 /** Encode tightly-packed float32 vertices plus optional uint32 indices deterministically. */
@@ -149,15 +214,15 @@ export function encodeIndexedMeshAsset(options: EncodeIndexedMeshOptions): Asset
 
 /** Expand an indexed mesh into Three/STL-friendly xyz triples without sharing source bytes. */
 export function expandIndexedMeshPositions(mesh: DecodedIndexedMesh): Float32Array {
-  const positions = new Float32Array(mesh.triangles.length * 9);
-  let cursor = 0;
-  for (const triangle of mesh.triangles) {
-    for (const vertexIndex of triangle) {
-      const vertex = mesh.vertices[vertexIndex];
-      positions[cursor++] = vertex[0];
-      positions[cursor++] = vertex[1];
-      positions[cursor++] = vertex[2];
-    }
+  const source = mesh.positions;
+  const indices = mesh.indices;
+  const positions = new Float32Array(indices.length * 3);
+  for (let index = 0; index < indices.length; index += 1) {
+    const from = indices[index] * 3;
+    const to = index * 3;
+    positions[to] = source[from];
+    positions[to + 1] = source[from + 1];
+    positions[to + 2] = source[from + 2];
   }
   return positions;
 }

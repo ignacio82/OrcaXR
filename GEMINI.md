@@ -82,7 +82,7 @@ engine (`libslic3r` via WASM) as the computational core.
   asset-guarded slice coordinator remain headless; live legacy state is only a
   migration source, never a second canonical model. Published G-code is bound
   to the exact submitted semantic snapshot; preview/download/send fail closed
-  after drift; printer mutation stays disabled until P9 safety. Mixed recipes use stable physical-head IDs, never virtual rows; live Match uses a bounded worker, while auto-pair generation defaults off and requires count-bound confirmation above four physical filaments. Refined facet selection uses the version-1 root/source-face and child-path encoding: source vertices precede float32 shared midpoints, commit applies leaf targets before recursively collapsing homogeneous children, and malformed/deep/shared trees fail closed. Live UI and slicing share exact catalog-backed canonical preflight; ambiguous profile/build/nozzle mappings block, and Three/display defaults are never safety inputs. Preview projections consume rich typed columns and must return explicit unsupported metadata for missing exact filament colors or authoritative layer durations rather than inventing palette/time values. Split-to-objects must capture the exact revision/hash/selection/object scope before confirmation, revalidate it at commit, and leave canonical state untouched on cancel, stale input, unsupported metadata, or topology failure. Calibration requests bind exact definition version/fingerprint plus printer/nozzle/filament/process/firmware prerequisites; vendor automatic execution and any unsafe/stale/unbounded plan fail closed before canonical mutation. G-code inspection derives layer, move, tick, tool, source-window, and focus state from unrenumbered rich record IDs, retains only bounded source text, exposes incomplete prefixes, and never treats headless projection as proof of live controls. Official statistics require a same-export engine sidecar plus an opaque rich-source handle created by streaming SHA-256 over the exact UTF-8 G-code; source/source-asset identities use canonical FNV-1a64, project/config/output/artifact identities use SHA-256, and job/plate/revision/engine bindings also match. Sidecars are exact-key JSON with canonical dense capped arrays and finite bounded arithmetic; `plannerBlockCount` bounds float32 partitions and move subsets, `volumeSampleCount` bounds double material reconciliation, nonempty ordered custom segments cover planner total while a synthetic tail remains conditional, and sparse role-by-tool volumes equal model + support + wipe tower with flush excluded. Rich columns remain observations, missing assumptions propagate unavailable, detected conflicts are non-exhaustive/partial, and all-plate sums group by tool plus profile, expose partial silent coverage, retain a sole known cost unit while affected totals stay unavailable, and never reuse first-plate metadata.
+  after drift; printer mutation stays disabled until P9 safety. Mixed recipes use stable physical-head IDs, never virtual rows; live Match uses a bounded worker, while auto-pair generation defaults off and requires count-bound confirmation above four physical filaments. Refined facet selection uses the version-2 subdivided-facet and child-path encoding: source vertices precede float32 shared midpoints, commit applies leaf targets before recursively collapsing homogeneous children, and malformed/deep/shared/duplicate/unordered trees fail closed. Live UI and slicing share exact catalog-backed canonical preflight; ambiguous profile/build/nozzle mappings block, and Three/display defaults are never safety inputs. Preview projections consume rich typed columns and must return explicit unsupported metadata for missing exact filament colors or authoritative layer durations rather than inventing palette/time values. Split-to-objects must capture the exact revision/hash/selection/object scope before confirmation, revalidate it at commit, and leave canonical state untouched on cancel, stale input, unsupported metadata, or topology failure. Calibration requests bind exact definition version/fingerprint plus printer/nozzle/filament/process/firmware prerequisites; vendor automatic execution and any unsafe/stale/unbounded plan fail closed before canonical mutation. G-code inspection derives layer, move, tick, tool, source-window, and focus state from unrenumbered rich record IDs, retains only bounded source text, exposes incomplete prefixes, and never treats headless projection as proof of live controls. Official statistics require a same-export engine sidecar plus an opaque rich-source handle created by streaming SHA-256 over the exact UTF-8 G-code; source/source-asset identities use canonical FNV-1a64, project/config/output/artifact identities use SHA-256, and job/plate/revision/engine bindings also match. Sidecars are exact-key JSON with canonical dense capped arrays and finite bounded arithmetic; `plannerBlockCount` bounds float32 partitions and move subsets, `volumeSampleCount` bounds double material reconciliation, nonempty ordered custom segments cover planner total while a synthetic tail remains conditional, and sparse role-by-tool volumes equal model + support + wipe tower with flush excluded. Rich columns remain observations, missing assumptions propagate unavailable, detected conflicts are non-exhaustive/partial, and all-plate sums group by tool plus profile, expose partial silent coverage, retain a sole known cost unit while affected totals stay unavailable, and never reuse first-plate metadata.
 - The live G-code viewer renders the bounded rich model plus the preview
   projection: `GcodePreviewSession` (UI-free) owns mode, layer window, and
   move-class filters, and `ui/preview/GcodePreviewSurface` draws exactly the
@@ -109,8 +109,8 @@ engine (`libslic3r` via WASM) as the computational core.
   support (enforce/block), seam (prefer/avoid), and fuzzy-skin facets - the
   active modal tool owns the channel, so `PAINT_TOOL_CHANNELS` is the only
   channel authority - and the XR rail is an explicit seven-action list, never
-  "every action with a tool". Refined state persists as the bounded version-1
-  source-root/child-path tree and uses the pinned uppercase BBS nibble codec for
+  "every action with a tool". Refined state persists as the bounded version-2
+  subdivided-facet/child-path tree and uses the pinned uppercase BBS nibble codec for
   `paint_color`, `paint_supports`, `paint_seam`, and `paint_fuzzy_skin` (plus the
   legacy `paint_fuzzy` reader alias). Color projection may use only material
   states `1..64`, even though the wire codec represents `1..255`; an unsupported
@@ -666,7 +666,79 @@ logic verified against `src/OrcaSlicer.cpp` in the submodule):
 - [`DESIGN.md`](DESIGN.md) — XR UX spec and baselines.
 - [`patches/README.md`](patches/README.md) — rules for patches against the OrcaSlicer submodule.
 
+## Large-model performance (load-bearing)
+
+Measured on `~/Downloads/narwhal.3mf` — 1,897,256 facets, 629k of them painted,
+stored as 161 MB of mesh XML inside a 28 MB archive. Every number below is from
+that project on a desktop; a Galaxy XR is several times slower, so these are
+floors, not ceilings.
+
+- **Canonical state must never hold one entry per triangle.** The single worst
+  offender was `FacetRefinementEncoding` version 1, which stored one root per
+  source facet: 137 of the project's 137.3 M canonical chars, two thirds of them
+  the literal default `{kind:'leaf',state:{kind:'unpainted'}}`. Because
+  `ProjectStore.replaceState` clones, validates, fingerprints, and deep-freezes
+  the whole state, **nudging an object one millimetre cost 24.3 s**. Version 2
+  stores only subdivided facets and derives the rest from the sparse
+  `TriangleAssignments` beside it; the same commit is now **1.3 s**. When adding
+  canonical state, ask what it costs *per commit*, not per save.
+- **A dense-per-facet shape is still the right working form mid-gesture.**
+  `FacetRefinedRootSet` (dense) is what selection and painting operate on;
+  `collapseFacetRefinementRoots` splits it into the sparse pair at the commit
+  boundary, and `expandFacetRefinementRoots` rebuilds it. Do not persist the
+  dense form, and do not make the selector work sparsely.
+- **A split that collapses to a uniform leaf must move its value into the sparse
+  assignments.** Remapping filaments, or resolving imported paint slots, can make
+  a subdivided facet uniform; dropping the collapsed split without carrying its
+  value across silently unpaints the facet. `remapFacetChannelValues` is the only
+  correct way to remap one channel — it handles both halves together.
+- **`fnv1a64` runs over hundreds of megabytes on import and save.** It is written
+  with 16-bit limbs and `Math.imul` so a round costs no floating-point division;
+  the naive `Math.floor(x / 2**32)` form ran at roughly 27 MB/s and dominated
+  every profile. `projectFingerprint` likewise streams canonical JSON straight
+  into the digest instead of materializing it — the string alone was 1.4 GB — and
+  emits safe integers digit by digit rather than allocating one string per
+  triangle index. All three are bit-identical to the old form, pinned by test.
+- **Per-element path strings are the hidden cost in validators.** Building
+  `` `${channel}[${i}].triangles[${j}]` `` for every triangle allocated hundreds of
+  thousands of strings per commit for the overwhelmingly common case where
+  nothing is wrong. Build the path only when an issue is actually reported.
+- **`ProjectStore.replaceState` validates once, on the candidate.** Validating the
+  caller's object as well doubled commit cost for no extra guarantee: a faithful
+  JSON clone cannot turn a valid state invalid.
+- **The mesh codec is packed; the tuple views are lazy.** `decodeIndexedMeshAsset`
+  returns `positions`/`indices` typed arrays and materializes
+  `vertices`/`triangles` only on demand. The eager tuple form cost 911 ms and
+  ~400 MB per call on a path shared by render, paint, bounds, and export.
+- **`ThreeProjectSurface.resolveGeometry` is cache-first.** It used to clone the
+  asset bytes and re-hash 33 MB on *every* projection — that is every canonical
+  change — before consulting its own geometry cache. It now `peek`s the
+  repository (no copy) and compares payload identity; the immutable repository
+  makes reference equality proof enough that the content is unchanged.
+- **Slice/save archive authoring runs on a worker.** `buildBbsCore` plus zip is
+  ~3 s and over a gigabyte of garbage for this project, so
+  `CanonicalWorkspaceSlicer` injects `WorkerProjectSerializer` rather than the
+  codec directly. The canonical BBS codec is still the only writer, on both the
+  worker and the no-worker fallback; `inspectWorkerSerializer` pins that.
+- **Remaining headroom, deliberately not taken.** A commit still re-validates and
+  re-fingerprints the whole state (~1.1 s of the 1.3 s). Scoping that to changed
+  subtrees needs structural sharing — commands would have to declare what they
+  touched — because `cloneProjectState` destroys object identity and any
+  identity-keyed digest cache would go stale silently the first time a command
+  mutated a shared subtree in place. Given that published G-code is bound to the
+  exact project hash, a cache that can go stale is not an acceptable trade.
+- **What the external slicer container can and cannot fix.** Offloading helps the
+  *slice* itself and nothing else: the costs above are all in the browser,
+  between the user's input and the scene updating, and cannot survive a network
+  round-trip. A server-side canonical importer is also explicitly the wrong
+  answer — it would be a second canonical import path. Render-side LOD is the one
+  genuinely container-shaped idea left, and it is not free: display meshes are
+  what `faceIndex` is resolved against for paint, measure, and brim ears, so a
+  decimated display mesh needs a separate full-resolution picking mesh first.
+
 ## Web UI UX gotchas
+
+- **Adopting a printer's filaments must move the bound preset, not just canonical state.** On a catalog-driven profile the *filament preset* bound to each head is what declares the material preflight checks a slice against (`ProfilePreflightConstraints` reads `filament_type` from `target.filamentProfiles[toolId]`), and `applyLiveSlicingConfiguration` rebuilds canonical filaments from the live palette plus those presets. A sync that wrote only canonical `material`/`config.filament_type` therefore produced two contradictory answers — the machine's own PLA came back as "PLA is not supported on tool 1" — and the next profile touch reverted the sync outright. `adoptPrinterFilamentPresets` re-points each reported tool at a compatible preset that declares that material and adopts the reported colour into the palette; a material with no compatible preset for the active printer/process is named in the status rather than silently left mismatched. An imported project is exempt: its embedded filament configuration is its own preflight authority.
 
 - **XR tool rail must stay finite.** The left XR card is a compact spatial
   surface, not a scrollable mirror of the desktop toolbar: render only the

@@ -83,8 +83,20 @@ export interface TriangleAssignments<T extends JsonValue> {
   value: T;
 }
 
-/** Stable version of Orca's per-source-facet TriangleSelector tree. */
-export const ORCA_REFINEMENT_ENCODING_VERSION = 1;
+/**
+ * Stable version of Orca's per-source-facet TriangleSelector tree.
+ *
+ * Version 2 stores only the *subdivided* source facets. Version 1 stored one
+ * root per source triangle, and on a real painted model that is ruinous: a
+ * 1.9M-facet narwhal carried 1.9M node objects in canonical state, of which
+ * fewer than 16k were actually subdivided and the rest merely restated what
+ * the sparse `TriangleAssignments` already said. Because canonical state is
+ * cloned, validated, hashed, frozen, and structure-cloned on *every* commit,
+ * that redundancy put roughly 24 s of work behind nudging an object one
+ * millimetre. An unsubdivided facet's root is exactly the leaf its sparse
+ * assignment implies, so it is derived rather than stored.
+ */
+export const ORCA_REFINEMENT_ENCODING_VERSION = 2;
 export const ORCA_REFINEMENT_MAX_DEPTH = 64;
 /** Ceiling on a *single* source facet's subdivision tree. */
 export const ORCA_REFINEMENT_MAX_NODES = 1_000_000;
@@ -121,20 +133,36 @@ export function refinementNodeBudget(triangleCount: number): number {
 export type FacetRefinementState<T extends JsonValue = JsonValue> =
   { readonly kind: 'unpainted' } | { readonly kind: 'assigned'; readonly value: T };
 
-export type FacetRefinementNode<T extends JsonValue = JsonValue> =
-  | { readonly kind: 'leaf'; readonly state: FacetRefinementState<T> }
-  | {
-      readonly kind: 'split';
-      readonly splitSides: 1 | 2 | 3;
-      readonly specialSide: 0 | 1 | 2;
-      /** Pinned child order; the length is exactly `splitSides + 1`. */
-      readonly children: readonly FacetRefinementNode<T>[];
-    };
+export interface FacetRefinementSplitNode<T extends JsonValue = JsonValue> {
+  readonly kind: 'split';
+  readonly splitSides: 1 | 2 | 3;
+  readonly specialSide: 0 | 1 | 2;
+  /** Pinned child order; the length is exactly `splitSides + 1`. */
+  readonly children: readonly FacetRefinementNode<T>[];
+}
 
-/** Root order is source-triangle order; child paths are stable refined-facet IDs. */
+export type FacetRefinementNode<T extends JsonValue = JsonValue> =
+  { readonly kind: 'leaf'; readonly state: FacetRefinementState<T> } | FacetRefinementSplitNode<T>;
+
+/** One subdivided source facet and the tree that subdivides it. */
+export interface FacetRefinementSplit<T extends JsonValue = JsonValue> {
+  readonly triangle: number;
+  readonly node: FacetRefinementSplitNode<T>;
+}
+
+/**
+ * The subdivided source facets of one channel, ascending by triangle.
+ *
+ * A source facet absent from `splits` is not unrefined-by-omission guesswork:
+ * its root is exactly the leaf its sparse `TriangleAssignments` entry implies,
+ * which the validator enforces in both directions. Child paths within a split
+ * remain stable refined-facet IDs.
+ */
 export interface FacetRefinementEncoding<T extends JsonValue = JsonValue> {
   readonly version: typeof ORCA_REFINEMENT_ENCODING_VERSION;
-  readonly roots: readonly FacetRefinementNode<T>[];
+  /** Source facets this refinement was authored against. */
+  readonly triangleCount: number;
+  readonly splits: readonly FacetRefinementSplit<T>[];
 }
 
 export interface FacetAnnotationRefinements {

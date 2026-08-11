@@ -1,9 +1,7 @@
 import { canonicalStringify, cloneJson, fnv1a64 } from '../domain/canonical';
 import {
-  facetAssignmentsFromRefinement,
-  facetRefinementHasSplits,
-  mapFacetRefinementStates,
-  normalizeFacetRefinementEncoding,
+  collapseFacetRefinementRoots,
+  remapFacetChannelValues,
   visitFacetRefinementAssignedValues,
 } from '../domain/facetRefinement';
 import { entityId, type CustomGcodeId, type FilamentId, type PlateId } from '../domain/ids';
@@ -29,14 +27,10 @@ import type {
   TriangleAssignments,
   VolumeRole,
 } from '../domain/model';
-import {
-  emptyFacetAnnotations,
-  ORCA_REFINEMENT_ENCODING_VERSION,
-  ORCA_REFINEMENT_MAX_AGGREGATE_NODES,
-} from '../domain/model';
+import { emptyFacetAnnotations, ORCA_REFINEMENT_MAX_AGGREGATE_NODES } from '../domain/model';
 import { importFullSpectrumDefinitions } from '../filaments/fullSpectrumImport';
 import { serializeFullSpectrumDefinition } from '../filaments/fullSpectrumRecipe';
-import { decodeIndexedMeshAsset, type DecodedIndexedMesh } from '../meshCodec';
+import { decodeIndexedMeshAsset, packIndexedMesh, type DecodedIndexedMesh } from '../meshCodec';
 import { validatePackagePath } from './deterministicZip';
 import { BRIM_EAR_POINTS_PATH, decodeBrimEarPoints, encodeBrimEarPoints } from './brimEarPoints';
 import {
@@ -395,13 +389,16 @@ export function buildBbsCore(state: ProjectState, assets: ReadonlyMap<string, As
           visitFacetRefinementAssignedValues(volume.annotations.refinement.color, (value) =>
             referencedFilaments.add(value),
           );
-          volume.annotations.refinement.color.roots.forEach((root, triangle) => {
+          volume.annotations.refinement.color.splits.forEach((split) => {
             if (
-              root.kind === 'split' &&
-              facetRootUsesUnsupportedBbsState(root, (value) => filamentSlots.get(value) ?? 0, MAX_BBS_COLOR_STATE)
+              facetRootUsesUnsupportedBbsState(
+                split.node,
+                (value) => filamentSlots.get(value) ?? 0,
+                MAX_BBS_COLOR_STATE,
+              )
             ) {
               warnings.push(
-                `Volume ${volume.id} source facet ${triangle} has a refined color root with a material state outside 1..${MAX_BBS_COLOR_STATE}; the entire standard BBS paint_color root was omitted and remains lossless in the OrcaXR extension`,
+                `Volume ${volume.id} source facet ${split.triangle} has a refined color root with a material state outside 1..${MAX_BBS_COLOR_STATE}; the entire standard BBS paint_color root was omitted and remains lossless in the OrcaXR extension`,
               );
             }
           });
@@ -1046,24 +1043,10 @@ function addBbsAnnotation<T extends JsonValue>(
   encodeAssigned: (value: T) => number,
   maxState = 255,
 ): void {
-  if (refinement) {
-    refinement.roots.forEach((root, triangle) => {
-      if (root.kind === 'leaf' && root.state.kind === 'unpainted') return;
-      if (
-        root.kind === 'leaf' &&
-        root.state.kind === 'assigned' &&
-        (encodeAssigned(root.state.value) <= 0 || encodeAssigned(root.state.value) > maxState)
-      ) {
-        return;
-      }
-      if (facetRootUsesUnsupportedBbsState(root, encodeAssigned, maxState)) return;
-      const encoded = encodeBbsFacetRoot(root, encodeAssigned);
-      const values = target.get(triangle) ?? new Map<string, string>();
-      values.set(name, encoded);
-      target.set(triangle, values);
-    });
-    return;
-  }
+  // A subdivided facet has no whole-facet assignment (canonical validation
+  // enforces both directions), so the two loops below cover every painted
+  // facet exactly once between them.
+  const subdivided = new Set((refinement?.splits ?? []).map((split) => split.triangle));
   for (const assignment of assignments) {
     const state = encodeAssigned(assignment.value);
     if (state <= 0 || state > maxState) continue;
@@ -1072,10 +1055,18 @@ function addBbsAnnotation<T extends JsonValue>(
       encodeAssigned,
     );
     for (const triangle of assignment.triangles) {
+      if (subdivided.has(triangle)) continue;
       const values = target.get(triangle) ?? new Map<string, string>();
       values.set(name, encoded);
       target.set(triangle, values);
     }
+  }
+  for (const split of refinement?.splits ?? []) {
+    if (facetRootUsesUnsupportedBbsState(split.node, encodeAssigned, maxState)) continue;
+    const encoded = encodeBbsFacetRoot(split.node, encodeAssigned);
+    const values = target.get(split.triangle) ?? new Map<string, string>();
+    values.set(name, encoded);
+    target.set(split.triangle, values);
   }
 }
 
@@ -1744,33 +1735,28 @@ export function importBbsCore(
     warnings.push(`FullSpectrum row ${issue.rowIndex + 1} ${issue.severity}: ${issue.message}`);
   }
   const assignmentFilaments = [...physical, ...mixed.filter((filament) => filament.enabled)];
+  const filamentForSlot = (slot: string): FilamentId => {
+    const match = /^import:3mf:paint-slot-(\d+)$/.exec(slot);
+    const filament = match ? assignmentFilaments[Number(match[1]) - 1] : undefined;
+    if (!filament) throw new Error(`3MF facet paint references unavailable material slot ${match?.[1] ?? slot}`);
+    return filament.id;
+  };
   for (const object of parsed.objects.values()) {
-    const colorRefinement = object.annotations.refinement?.color;
-    if (colorRefinement) {
-      const remapped = mapFacetRefinementStates(colorRefinement, (state) => {
-        if (state.kind === 'unpainted') return state;
-        const match = /^import:3mf:paint-slot-(\d+)$/.exec(state.value);
-        const filament = match ? assignmentFilaments[Number(match[1]) - 1] : undefined;
-        if (!filament) {
-          throw new Error(`3MF facet paint references unavailable material slot ${match?.[1] ?? state.value}`);
-        }
-        return { kind: 'assigned', value: filament.id };
-      });
-      object.annotations.color = facetAssignmentsFromRefinement(remapped);
-      if (facetRefinementHasSplits(remapped)) object.annotations.refinement!.color = remapped;
+    // Both halves of the channel resolve their slot placeholders together: a
+    // subdivided facet whose children all resolve to one filament is no longer
+    // subdivided, and its value belongs in the whole-facet assignments.
+    const remapped = remapFacetChannelValues(
+      object.annotations.color,
+      object.annotations.refinement?.color,
+      filamentForSlot,
+    );
+    object.annotations.color = remapped.assignments;
+    if (object.annotations.refinement) {
+      if (remapped.encoding) object.annotations.refinement.color = remapped.encoding;
       else {
-        delete object.annotations.refinement!.color;
-        if (Object.keys(object.annotations.refinement!).length === 0) delete object.annotations.refinement;
+        delete object.annotations.refinement.color;
+        if (Object.keys(object.annotations.refinement).length === 0) delete object.annotations.refinement;
       }
-    } else {
-      object.annotations.color = object.annotations.color.flatMap((assignment) => {
-        const match = /^import:3mf:paint-slot-(\d+)$/.exec(assignment.value);
-        const filament = match ? assignmentFilaments[Number(match[1]) - 1] : undefined;
-        if (!filament) {
-          throw new Error(`3MF facet paint references unavailable material slot ${match?.[1] ?? assignment.value}`);
-        }
-        return [{ ...assignment, value: filament.id }];
-      });
     }
   }
   if (projectConfig.mixedDefinitions && mixed.length === 0) {
@@ -1841,19 +1827,19 @@ export function importBbsCore(
       mesh: {
         positions: {
           byteOffset: 0,
-          byteLength: object.mesh.vertices.length * 12,
+          byteLength: object.mesh.vertexCount * 12,
           componentType: 'float32',
           componentCount: 3,
-          count: object.mesh.vertices.length,
+          count: object.mesh.vertexCount,
         },
         indices: {
-          byteOffset: object.mesh.vertices.length * 12,
-          byteLength: object.mesh.triangles.length * 12,
+          byteOffset: object.mesh.vertexCount * 12,
+          byteLength: object.mesh.triangleCount * 12,
           componentType: 'uint32',
           componentCount: 1,
-          count: object.mesh.triangles.length * 3,
+          count: object.mesh.triangleCount * 3,
         },
-        triangleCount: object.mesh.triangles.length,
+        triangleCount: object.mesh.triangleCount,
       },
     };
     meshAssetIds.set(referenceKey, id);
@@ -2147,7 +2133,7 @@ function parseModelPart(
     if (meshMatches.length + (componentsMatch ? 1 : 0) !== 1) {
       throw new Error(`${modelPath} object ${numericId} must contain exactly one mesh or components element`);
     }
-    const mesh = meshMatches[0]
+    const parsedMesh = meshMatches[0]
       ? parseMesh(meshMatches[0][1], namespaces, unitScaleMm, modelPath, numericId, facetDecodeBudget)
       : undefined;
     const components = [...(componentsMatch?.[1] ?? '').matchAll(/<component\b([^>]*)\/?\s*>/gi)].map((component) => {
@@ -2182,9 +2168,9 @@ function parseModelPart(
       ...(Number.isInteger(Number(attributes.pindex)) && Number(attributes.pindex) >= 0
         ? { materialIndex: Number(attributes.pindex) }
         : {}),
-      mesh,
+      mesh: parsedMesh?.mesh,
       components,
-      annotations: mesh?.annotations ?? emptyFacetAnnotations(0),
+      annotations: parsedMesh?.annotations ?? emptyFacetAnnotations(0),
       extensionAttributes: parseExtensionAttributes(match[1], namespaces, [
         'id',
         'type',
@@ -2194,7 +2180,7 @@ function parseModelPart(
         'thumbnail',
         'partnumber',
       ]),
-      facetExtensionAttributes: mesh?.facetExtensionAttributes ?? [],
+      facetExtensionAttributes: parsedMesh?.facetExtensionAttributes ?? [],
     });
   }
 
@@ -2368,36 +2354,87 @@ function parseMesh(
   modelPath: string,
   objectId: number,
   facetDecodeBudget: BbsFacetDecodeBudget,
-): DecodedIndexedMesh & {
+): {
+  mesh: DecodedIndexedMesh;
   annotations: FacetAnnotations;
   facetExtensionAttributes: FacetExtensionAttributes[];
 } {
-  const vertices = [...body.matchAll(/<vertex\b([^>]*)\/?\s*>/gi)].map((vertex) => {
-    const attrs = parseAttributes(vertex[1]);
-    const value: readonly [number, number, number] = [
-      Number(attrs.x) * unitScaleMm,
-      Number(attrs.y) * unitScaleMm,
-      Number(attrs.z) * unitScaleMm,
-    ];
-    if (value.some((coordinate) => !Number.isFinite(coordinate))) {
+  // Scanned one element at a time into packed buffers rather than through
+  // `matchAll` and an array of tuples. A real painted model runs to millions of
+  // facets: materializing every match and every three-number tuple made opening
+  // one a ~40 s allocation storm, and the geometry is consumed as flat buffers
+  // anyway.
+  const scratch = new Float64Array(3);
+  const vertexPattern = /<vertex\b([^>]*)\/?\s*>/gi;
+  let positions = new Float32Array(3 * 4096);
+  let vertexCount = 0;
+  let vertexMatch: RegExpExecArray | null;
+  while ((vertexMatch = vertexPattern.exec(body)) !== null) {
+    if (!readTripleAttribute(vertexMatch[1], 'x', 'y', 'z', scratch)) {
+      const attrs = parseAttributes(vertexMatch[1]);
+      scratch[0] = Number(attrs.x);
+      scratch[1] = Number(attrs.y);
+      scratch[2] = Number(attrs.z);
+    }
+    const x = scratch[0] * unitScaleMm;
+    const y = scratch[1] * unitScaleMm;
+    const z = scratch[2] * unitScaleMm;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
       throw new Error('3MF vertex has a non-finite coordinate');
     }
-    return value;
-  });
+    const offset = vertexCount * 3;
+    if (offset + 3 > positions.length) positions = growFloat32(positions);
+    positions[offset] = x;
+    positions[offset + 1] = y;
+    positions[offset + 2] = z;
+    vertexCount += 1;
+  }
+  positions = positions.slice(0, vertexCount * 3);
   const annotations = emptyFacetAnnotations(0);
   const facetExtensionAttributes: FacetExtensionAttributes[] = [];
   const colorRoots: Array<FacetRefinementNode<FilamentId> | undefined> = [];
   const supportRoots: Array<FacetRefinementNode<'enforce' | 'block'> | undefined> = [];
   const seamRoots: Array<FacetRefinementNode<'prefer' | 'avoid'> | undefined> = [];
   const fuzzySkinRoots: Array<FacetRefinementNode<true> | undefined> = [];
-  const triangles = [...body.matchAll(/<triangle\b([^>]*)\/?\s*>/gi)].map((triangle, triangleIndex) => {
-    const attrs = parseAttributes(triangle[1]);
-    const value: readonly [number, number, number] = [Number(attrs.v1), Number(attrs.v2), Number(attrs.v3)];
-    if (value.some((index) => !Number.isInteger(index) || index < 0 || index >= vertices.length)) {
-      throw new Error('3MF triangle references an invalid vertex');
+  const trianglePattern = /<triangle\b([^>]*)\/?\s*>/gi;
+  let indices = new Uint32Array(3 * 4096);
+  let triangleCount = 0;
+  let triangleMatch: RegExpExecArray | null;
+  while ((triangleMatch = trianglePattern.exec(body)) !== null) {
+    const triangleIndex = triangleCount;
+    const body_ = triangleMatch[1];
+    // Unpainted facets carry nothing but their three indices, which is the
+    // common case even in a heavily painted model; only the rest pay for a
+    // full attribute record.
+    const plain = readTripleAttribute(body_, 'v1', 'v2', 'v3', scratch);
+    const attrs = plain ? undefined : parseAttributes(body_);
+    if (attrs) {
+      scratch[0] = Number(attrs.v1);
+      scratch[1] = Number(attrs.v2);
+      scratch[2] = Number(attrs.v3);
+    }
+    for (let component = 0; component < 3; component += 1) {
+      const index = scratch[component];
+      if (!Number.isInteger(index) || index < 0 || index >= vertexCount) {
+        throw new Error('3MF triangle references an invalid vertex');
+      }
+    }
+    const offset = triangleCount * 3;
+    if (offset + 3 > indices.length) indices = growUint32(indices);
+    indices[offset] = scratch[0];
+    indices[offset + 1] = scratch[1];
+    indices[offset + 2] = scratch[2];
+    triangleCount += 1;
+    if (plain) {
+      // No paint, no seam, no extension attributes: nothing further to decode.
+      colorRoots.push(undefined);
+      supportRoots.push(undefined);
+      seamRoots.push(undefined);
+      fuzzySkinRoots.push(undefined);
+      continue;
     }
     const colorRoot = decodeImportedFacet(
-      attrs.paint_color,
+      attrs!.paint_color,
       'paint_color',
       triangleIndex,
       modelPath,
@@ -2407,7 +2444,7 @@ function parseMesh(
         state <= MAX_BBS_COLOR_STATE ? entityId<'physical-filament'>(`import:3mf:paint-slot-${state}`) : undefined,
     );
     const supportRoot = decodeImportedFacet(
-      attrs.paint_supports,
+      attrs!.paint_supports,
       'paint_supports',
       triangleIndex,
       modelPath,
@@ -2415,9 +2452,9 @@ function parseMesh(
       facetDecodeBudget,
       (state) => (state === 1 ? 'enforce' : state === 2 ? 'block' : undefined),
     );
-    const seamName = attrs.paint_seam !== undefined ? 'paint_seam' : undefined;
+    const seamName = attrs!.paint_seam !== undefined ? 'paint_seam' : undefined;
     const seamRoot = decodeImportedFacet(
-      seamName ? attrs[seamName] : undefined,
+      seamName ? attrs![seamName] : undefined,
       seamName ?? 'paint_seam',
       triangleIndex,
       modelPath,
@@ -2425,9 +2462,9 @@ function parseMesh(
       facetDecodeBudget,
       (state) => (state === 1 ? 'prefer' : state === 2 ? 'avoid' : undefined),
     );
-    const fuzzySkinName = attrs.paint_fuzzy_skin ? 'paint_fuzzy_skin' : attrs.paint_fuzzy ? 'paint_fuzzy' : undefined;
+    const fuzzySkinName = attrs!.paint_fuzzy_skin ? 'paint_fuzzy_skin' : attrs!.paint_fuzzy ? 'paint_fuzzy' : undefined;
     const fuzzySkinRoot = decodeImportedFacet(
-      fuzzySkinName ? attrs[fuzzySkinName] : undefined,
+      fuzzySkinName ? attrs![fuzzySkinName] : undefined,
       fuzzySkinName ?? 'paint_fuzzy_skin',
       triangleIndex,
       modelPath,
@@ -2444,12 +2481,12 @@ function parseMesh(
     if (supportRoot) knownAttributes.push('paint_supports');
     if (seamRoot && seamName) knownAttributes.push(seamName);
     if (fuzzySkinRoot && fuzzySkinName) knownAttributes.push(fuzzySkinName);
-    const extensionAttributes = parseExtensionAttributes(triangle[1], namespaces, knownAttributes);
+    const extensionAttributes = parseExtensionAttributes(body_, namespaces, knownAttributes);
     if (extensionAttributes.length > 0) {
       facetExtensionAttributes.push({ triangle: triangleIndex, attributes: extensionAttributes });
     }
-    return value;
-  });
+  }
+  indices = indices.slice(0, triangleCount * 3);
   const color = finalizeImportedFacetChannel(colorRoots, facetDecodeBudget);
   const support = finalizeImportedFacetChannel(supportRoots, facetDecodeBudget);
   const seam = finalizeImportedFacetChannel(seamRoots, facetDecodeBudget);
@@ -2482,7 +2519,67 @@ function parseMesh(
       fuzzySkin: fuzzySkin.refinement,
     };
   }
-  return { vertices, triangles, annotations, facetExtensionAttributes };
+  return { mesh: packIndexedMesh(positions, indices), annotations, facetExtensionAttributes };
+}
+
+function growFloat32(source: Float32Array<ArrayBuffer>): Float32Array<ArrayBuffer> {
+  const grown = new Float32Array(source.length * 2);
+  grown.set(source);
+  return grown;
+}
+
+function growUint32(source: Uint32Array<ArrayBuffer>): Uint32Array<ArrayBuffer> {
+  const grown = new Uint32Array(source.length * 2);
+  grown.set(source);
+  return grown;
+}
+
+/**
+ * Read exactly three named numeric attributes out of one element's attribute
+ * text, or report that this element needs the general parser.
+ *
+ * The fast path deliberately refuses anything unusual — a fourth attribute, an
+ * entity reference, a repeat — so the general `parseAttributes` keeps sole
+ * responsibility for duplicate detection, entity decoding, and paint metadata.
+ * Geometry-only elements are the overwhelming majority even in a painted model,
+ * and they are what makes a large import expensive.
+ */
+function readTripleAttribute(source: string, first: string, second: string, third: string, out: Float64Array): boolean {
+  let seen = 0;
+  let cursor = 0;
+  const length = source.length;
+  while (cursor < length) {
+    const code = source.charCodeAt(cursor);
+    if (code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d) {
+      cursor += 1;
+      continue;
+    }
+    if (code === 0x2f) break; // a trailing '/' on a self-closing element
+    const nameStart = cursor;
+    while (cursor < length && source.charCodeAt(cursor) !== 0x3d) cursor += 1;
+    if (cursor >= length) return false;
+    const name = source.slice(nameStart, cursor).trimEnd();
+    cursor += 1;
+    while (cursor < length && source.charCodeAt(cursor) === 0x20) cursor += 1;
+    const quote = source.charCodeAt(cursor);
+    if (quote !== 0x22 && quote !== 0x27) return false;
+    cursor += 1;
+    const valueStart = cursor;
+    while (cursor < length && source.charCodeAt(cursor) !== quote) cursor += 1;
+    if (cursor >= length) return false;
+    const value = source.slice(valueStart, cursor);
+    cursor += 1;
+    if (value.includes('&')) return false;
+    const slot = name === first ? 0 : name === second ? 1 : name === third ? 2 : -1;
+    if (slot < 0) return false;
+    const bit = 1 << slot;
+    if (seen & bit) return false;
+    seen |= bit;
+    const parsed = Number(value);
+    if (value.length === 0 || Number.isNaN(parsed)) return false;
+    out[slot] = parsed;
+  }
+  return seen === 0b111;
 }
 
 function parseProjectSettings(bytes: Uint8Array | undefined): {
@@ -2907,21 +3004,17 @@ function parseMetadataConfig(xml: string): ConfigMap {
 }
 
 function encodeMeshAsset(mesh: DecodedIndexedMesh): Uint8Array {
-  const positionBytes = mesh.vertices.length * 12;
-  const bytes = new Uint8Array(positionBytes + mesh.triangles.length * 12);
+  const positions = mesh.positions;
+  const indices = mesh.indices;
+  const positionBytes = positions.length * 4;
+  const bytes = new Uint8Array(positionBytes + indices.length * 4);
   const view = new DataView(bytes.buffer);
-  mesh.vertices.forEach((vertex, index) => {
-    const offset = index * 12;
-    view.setFloat32(offset, vertex[0], true);
-    view.setFloat32(offset + 4, vertex[1], true);
-    view.setFloat32(offset + 8, vertex[2], true);
-  });
-  mesh.triangles.forEach((triangle, index) => {
-    const offset = positionBytes + index * 12;
-    view.setUint32(offset, triangle[0], true);
-    view.setUint32(offset + 4, triangle[1], true);
-    view.setUint32(offset + 8, triangle[2], true);
-  });
+  for (let index = 0; index < positions.length; index += 1) {
+    view.setFloat32(index * 4, positions[index], true);
+  }
+  for (let index = 0; index < indices.length; index += 1) {
+    view.setUint32(positionBytes + index * 4, indices[index], true);
+  }
   return bytes;
 }
 
@@ -3060,7 +3153,7 @@ function facetAnnotationMaterializationUnits(annotations: FacetAnnotations, stop
   ] as const;
   for (const [assignments, encoding] of channels) {
     if (encoding) {
-      const stack: FacetRefinementNode[] = [...encoding.roots];
+      const stack: FacetRefinementNode[] = encoding.splits.map((split) => split.node);
       while (stack.length > 0) {
         const node = stack.pop()!;
         count += 1;
@@ -3080,21 +3173,6 @@ function finalizeImportedFacetChannel<T extends JsonValue>(
   roots: readonly (FacetRefinementNode<T> | undefined)[],
   budget: BbsFacetDecodeBudget,
 ): { assignments: TriangleAssignments<T>[]; refinement?: FacetRefinementEncoding<T> } {
-  if (!roots.some((root) => root?.kind === 'split')) {
-    const groups = new Map<string, TriangleAssignments<T>>();
-    roots.forEach((root, triangle) => {
-      if (root?.kind !== 'leaf' || root.state.kind !== 'assigned') return;
-      const key = canonicalStringify(root.state.value);
-      const group = groups.get(key) ?? { value: cloneJson(root.state.value), triangles: [] };
-      group.triangles.push(triangle);
-      groups.set(key, group);
-    });
-    return {
-      assignments: [...groups.entries()]
-        .sort(([left], [right]) => compareText(left, right))
-        .map(([, assignment]) => assignment),
-    };
-  }
   // The decode budget counts nodes actually decoded from a paint payload; it
   // exists so a hostile file cannot make us build an enormous tree. A triangle
   // the file says nothing about decoded nothing, so charging one node for it
@@ -3102,16 +3180,13 @@ function finalizeImportedFacetChannel<T extends JsonValue>(
   // model carrying even a single subdivided facet, which the pinned engine
   // opens without complaint. Materialization cost is bounded separately, by
   // the annotation materialization limit that is named for exactly that.
-  if (budget.remainingNodes < 0) {
+  if (roots.some((root) => root?.kind === 'split') && budget.remainingNodes < 0) {
     throw new Error('3MF facet refinement exceeds the aggregate node limit');
   }
-  const encoding = normalizeFacetRefinementEncoding({
-    version: ORCA_REFINEMENT_ENCODING_VERSION,
-    roots: roots.map((root) => root ?? unpaintedBbsFacetRoot<T>()),
-  });
+  const collapsed = collapseFacetRefinementRoots<T>(roots.map((root) => root ?? unpaintedBbsFacetRoot<T>()));
   return {
-    assignments: facetAssignmentsFromRefinement(encoding),
-    ...(facetRefinementHasSplits(encoding) ? { refinement: encoding } : {}),
+    assignments: collapsed.assignments,
+    ...(collapsed.encoding ? { refinement: collapsed.encoding } : {}),
   };
 }
 

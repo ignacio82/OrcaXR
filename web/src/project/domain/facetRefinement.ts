@@ -8,12 +8,26 @@ import {
   type FacetAnnotations,
   type FacetRefinementEncoding,
   type FacetRefinementNode,
+  type FacetRefinementSplit,
+  type FacetRefinementSplitNode,
   type FacetRefinementState,
   type JsonValue,
   type TriangleAssignments,
 } from './model';
 
 export type FacetRefinementChannel = keyof FacetAnnotationRefinements;
+
+/**
+ * A selector result: one root per source facet, dense and transient.
+ *
+ * This is the working form refined selection and painting operate on. Canonical
+ * state never stores it — see `collapseFacetRefinementRoots`, which splits it
+ * into sparse whole-facet assignments plus the subdivided facets alone.
+ */
+export interface FacetRefinedRootSet<T extends JsonValue = JsonValue> {
+  readonly version: number;
+  readonly roots: readonly FacetRefinementNode<T>[];
+}
 
 export type FacetRefinementChannelValue<Channel extends FacetRefinementChannel> =
   NonNullable<FacetAnnotationRefinements[Channel]> extends FacetRefinementEncoding<infer Value> ? Value : never;
@@ -44,11 +58,11 @@ export function validateFacetRefinementChannel(
   if (!isRecord(candidate)) {
     return [{ code: 'invalid-facet-refinement', path, message: 'Facet refinement must be an encoding object' }];
   }
-  if (!hasExactKeys(candidate, ['version', 'roots'])) {
+  if (!hasExactKeys(candidate, ['version', 'triangleCount', 'splits'])) {
     issues.push({
       code: 'invalid-facet-refinement-fields',
       path,
-      message: 'Facet refinement encodings may contain only version and roots',
+      message: 'Facet refinement encodings may contain only version, triangleCount, and splits',
     });
   }
   if (candidate.version !== ORCA_REFINEMENT_ENCODING_VERSION) {
@@ -58,40 +72,83 @@ export function validateFacetRefinementChannel(
       message: `Facet refinement version must be ${ORCA_REFINEMENT_ENCODING_VERSION}`,
     });
   }
-  if (!Array.isArray(candidate.roots)) {
+  if (candidate.triangleCount !== options.triangleCount) {
     issues.push({
-      code: 'invalid-facet-refinement-roots',
-      path: `${path}.roots`,
-      message: 'Facet refinement roots must be an array',
+      code: 'invalid-facet-refinement-triangle-count',
+      path: `${path}.triangleCount`,
+      message: 'Facet refinement must declare the source mesh triangle count',
+    });
+  }
+  if (!Array.isArray(candidate.splits)) {
+    issues.push({
+      code: 'invalid-facet-refinement-splits',
+      path: `${path}.splits`,
+      message: 'Facet refinement splits must be an array',
     });
     return issues;
   }
-  if (candidate.roots.length !== options.triangleCount) {
-    issues.push({
-      code: 'invalid-facet-refinement-root-count',
-      path: `${path}.roots`,
-      message: 'Facet refinement must contain exactly one root per source triangle',
-    });
-  }
-  // One root per triangle is already required above, so a flat cap on the root
-  // count would only be a cap on how many triangles a painted mesh may have.
   const nodeBudget = refinementNodeBudget(options.triangleCount);
 
-  const assignmentByTriangle = new Map<number, JsonValue>();
-  for (const assignment of assignments) {
-    for (const triangle of assignment.triangles) {
-      if (Number.isInteger(triangle) && triangle >= 0 && triangle < options.triangleCount) {
-        assignmentByTriangle.set(triangle, assignment.value);
+  // Only the subdivided facets can conflict with a whole-facet assignment, and
+  // there are far fewer of them than there are assignments: a painted model
+  // carries hundreds of thousands of assigned facets and a few thousand
+  // subdivided ones, so the small side is the one worth indexing.
+  const splitTriangles = new Set<number>();
+  for (const entry of candidate.splits as readonly unknown[]) {
+    if (isRecord(entry) && typeof entry.triangle === 'number') splitTriangles.add(entry.triangle);
+  }
+  const assignedSplitTriangles = new Set<number>();
+  if (splitTriangles.size > 0) {
+    for (const assignment of assignments) {
+      for (const triangle of assignment.triangles) {
+        if (splitTriangles.has(triangle)) assignedSplitTriangles.add(triangle);
       }
     }
   }
 
+  // Ascending, in range, and without repeats: a split list that could name the
+  // same facet twice would have two competing answers for one facet.
+  let previousTriangle = -1;
+  for (let index = 0; index < candidate.splits.length; index += 1) {
+    const entry: unknown = candidate.splits[index];
+    if (!isRecord(entry) || !hasExactKeys(entry, ['triangle', 'node'])) {
+      issues.push({
+        code: 'invalid-facet-refinement-split-entry',
+        path: `${path}.splits[${index}]`,
+        message: 'Each refinement split must contain only a triangle and its node',
+      });
+      continue;
+    }
+    const triangle = entry.triangle;
+    if (
+      typeof triangle !== 'number' ||
+      !Number.isInteger(triangle) ||
+      triangle < 0 ||
+      triangle >= options.triangleCount
+    ) {
+      issues.push({
+        code: 'invalid-facet-refinement-split-triangle',
+        path: `${path}.splits[${index}].triangle`,
+        message: 'A refinement split must name a source facet of this mesh',
+      });
+      continue;
+    }
+    if (triangle <= previousTriangle) {
+      issues.push({
+        code: 'invalid-facet-refinement-split-order',
+        path: `${path}.splits[${index}].triangle`,
+        message: 'Refinement splits must be ordered by ascending source facet without repeats',
+      });
+    }
+    previousTriangle = triangle;
+  }
+
   const seen = new Set<object>();
-  const stack: Array<{ node: unknown; sourceTriangle: number; nodePath: string; depth: number }> = candidate.roots
-    .map((node, sourceTriangle) => ({
-      node,
-      sourceTriangle,
-      nodePath: `${path}.roots[${sourceTriangle}]`,
+  const stack: Array<{ node: unknown; sourceTriangle: number; nodePath: string; depth: number }> = candidate.splits
+    .map((entry: unknown, index: number) => ({
+      node: isRecord(entry) ? entry.node : entry,
+      sourceTriangle: isRecord(entry) && typeof entry.triangle === 'number' ? entry.triangle : -1,
+      nodePath: `${path}.splits[${index}].node`,
       depth: 0,
     }))
     .reverse();
@@ -140,20 +197,16 @@ export function validateFacetRefinementChannel(
           path: `${entry.nodePath}.state`,
           message: `Refined leaf state is invalid for the ${channel} channel`,
         });
-      } else if (entry.depth === 0 && entry.sourceTriangle < options.triangleCount) {
-        const state = entry.node.state as FacetRefinementState;
-        const assigned = assignmentByTriangle.get(entry.sourceTriangle);
-        const consistent =
-          state.kind === 'unpainted'
-            ? assigned === undefined
-            : assigned !== undefined && canonicalStringify(assigned) === canonicalStringify(state.value);
-        if (!consistent) {
-          issues.push({
-            code: 'inconsistent-facet-refinement-state',
-            path: entry.nodePath,
-            message: 'Unsplit refinement roots must match the sparse source-facet assignment',
-          });
-        }
+      }
+      if (entry.depth === 0) {
+        // An unsubdivided facet is described entirely by its sparse
+        // assignment, so storing a leaf here would be a second, silently
+        // divergent copy of the same fact.
+        issues.push({
+          code: 'invalid-facet-refinement-split',
+          path: entry.nodePath,
+          message: 'A stored refinement entry must subdivide its source facet',
+        });
       }
       continue;
     }
@@ -169,7 +222,7 @@ export function validateFacetRefinementChannel(
     if (
       entry.depth === 0 &&
       entry.sourceTriangle < options.triangleCount &&
-      assignmentByTriangle.has(entry.sourceTriangle)
+      assignedSplitTriangles.has(entry.sourceTriangle)
     ) {
       issues.push({
         code: 'inconsistent-facet-refinement-state',
@@ -217,7 +270,7 @@ export function validateFacetRefinementChannel(
       });
     }
   }
-  if (!hasSplit && candidate.roots.length === options.triangleCount && options.requireSplit !== false) {
+  if (!hasSplit && options.requireSplit !== false) {
     issues.push({
       code: 'redundant-facet-refinement',
       path,
@@ -225,7 +278,8 @@ export function validateFacetRefinementChannel(
     });
   }
   if (issues.length === 0) {
-    if (hasCollapsibleFacetSplit(candidate.roots as FacetRefinementNode[])) {
+    const nodes = (candidate.splits as readonly FacetRefinementSplit[]).map((entry) => entry.node);
+    if (hasCollapsibleFacetSplit(nodes)) {
       issues.push({
         code: 'noncanonical-facet-refinement',
         path,
@@ -236,67 +290,190 @@ export function validateFacetRefinementChannel(
   return issues;
 }
 
-export function buildFacetRefinementEncoding<T extends JsonValue>(
+/**
+ * Expand a channel back to one root per source facet.
+ *
+ * Only code that genuinely walks every facet — a refined painting session, the
+ * BBS writer — should call this, and only for as long as it needs it. It is
+ * the expensive representation the canonical store deliberately no longer
+ * holds, so keeping the result alive re-creates the problem sparse storage
+ * exists to solve.
+ */
+export function expandFacetRefinementRoots<T extends JsonValue>(
+  encoding: FacetRefinementEncoding<T> | undefined,
   assignments: readonly TriangleAssignments<T>[],
   triangleCount: number,
-): FacetRefinementEncoding<T> {
-  const valueByTriangle = new Map<number, T>();
-  for (const assignment of assignments) {
-    for (const triangle of assignment.triangles) valueByTriangle.set(triangle, assignment.value);
+): FacetRefinementNode<T>[] {
+  const roots: FacetRefinementNode<T>[] = new Array(triangleCount);
+  for (let triangle = 0; triangle < triangleCount; triangle += 1) {
+    roots[triangle] = { kind: 'leaf', state: { kind: 'unpainted' } };
   }
-  return {
-    version: ORCA_REFINEMENT_ENCODING_VERSION,
-    roots: Array.from({ length: triangleCount }, (_, triangle) => {
-      const value = valueByTriangle.get(triangle);
-      return value === undefined
-        ? ({ kind: 'leaf', state: { kind: 'unpainted' } } as const)
-        : ({ kind: 'leaf', state: { kind: 'assigned', value: cloneJson(value) } } as const);
-    }),
-  };
+  for (const assignment of assignments) {
+    for (const triangle of assignment.triangles) {
+      if (triangle >= 0 && triangle < triangleCount) {
+        roots[triangle] = { kind: 'leaf', state: { kind: 'assigned', value: cloneJson(assignment.value) } };
+      }
+    }
+  }
+  for (const split of encoding?.splits ?? []) {
+    if (split.triangle >= 0 && split.triangle < triangleCount) roots[split.triangle] = cloneNode(split.node);
+  }
+  return roots;
 }
 
-/** Collapse homogeneous branches and clone a selector result for canonical storage. */
-export function normalizeFacetRefinementEncoding<T extends JsonValue>(
-  encoding: FacetRefinementEncoding<T>,
-): FacetRefinementEncoding<T> {
-  return {
-    version: ORCA_REFINEMENT_ENCODING_VERSION,
-    roots: encoding.roots.map((root) => normalizeNode(root)),
-  };
-}
-
-export function facetRefinementHasSplits(encoding: FacetRefinementEncoding): boolean {
-  return encoding.roots.some((root) => root.kind === 'split');
-}
-
-/** Sparse compatibility projection: subdivided roots intentionally have no whole-facet value. */
-export function facetAssignmentsFromRefinement<T extends JsonValue>(
-  encoding: FacetRefinementEncoding<T>,
-): TriangleAssignments<T>[] {
+/**
+ * Split a dense per-facet root list into the two things canonical state keeps:
+ * sparse whole-facet assignments, and the subdivided facets alone.
+ */
+export function collapseFacetRefinementRoots<T extends JsonValue>(
+  roots: readonly FacetRefinementNode<T>[],
+): { assignments: TriangleAssignments<T>[]; encoding: FacetRefinementEncoding<T> | undefined } {
   const groups = new Map<string, TriangleAssignments<T>>();
-  encoding.roots.forEach((root, triangle) => {
-    if (root.kind !== 'leaf' || root.state.kind !== 'assigned') return;
-    const key = canonicalStringify(root.state.value);
-    const group = groups.get(key) ?? { value: cloneJson(root.state.value), triangles: [] };
+  const splits: FacetRefinementSplit<T>[] = [];
+  for (let triangle = 0; triangle < roots.length; triangle += 1) {
+    const normalized = normalizeNode(roots[triangle]);
+    if (normalized.kind === 'split') {
+      splits.push({ triangle, node: normalized });
+      continue;
+    }
+    if (normalized.state.kind !== 'assigned') continue;
+    const key = canonicalStringify(normalized.state.value);
+    const group = groups.get(key) ?? { value: cloneJson(normalized.state.value), triangles: [] };
     group.triangles.push(triangle);
     groups.set(key, group);
-  });
+  }
+  const assignments = [...groups.entries()]
+    .sort(([left], [right]) => compareCanonicalText(left, right))
+    .map(([, assignment]) => assignment);
+  return {
+    assignments,
+    encoding:
+      splits.length === 0
+        ? undefined
+        : { version: ORCA_REFINEMENT_ENCODING_VERSION, triangleCount: roots.length, splits },
+  };
+}
+
+/**
+ * Remap every value of one channel, across both of its halves.
+ *
+ * Remapping can make a subdivided facet uniform — paint two of its children the
+ * same colour and it is no longer subdivided. That facet's value then belongs
+ * in the whole-facet assignments; dropping the collapsed split without moving
+ * its value there would silently unpaint the facet.
+ */
+export function remapFacetChannelValues<T extends JsonValue>(
+  assignments: readonly TriangleAssignments<T>[],
+  encoding: FacetRefinementEncoding<T> | undefined,
+  remap: (value: T) => T,
+): { assignments: TriangleAssignments<T>[]; encoding: FacetRefinementEncoding<T> | undefined } {
+  const valueByTriangle = new Map<number, T>();
+  for (const assignment of assignments) {
+    const value = remap(assignment.value);
+    for (const triangle of assignment.triangles) valueByTriangle.set(triangle, value);
+  }
+  const splits: FacetRefinementSplit<T>[] = [];
+  for (const split of encoding?.splits ?? []) {
+    const mapped = normalizeNode(
+      mapNodeStates<T, T>(split.node, (state) =>
+        state.kind === 'unpainted' ? state : { kind: 'assigned', value: cloneJson(remap(state.value)) },
+      ),
+    );
+    if (mapped.kind === 'split') {
+      splits.push({ triangle: split.triangle, node: mapped });
+    } else if (mapped.state.kind === 'assigned') {
+      valueByTriangle.set(split.triangle, mapped.state.value);
+    } else {
+      valueByTriangle.delete(split.triangle);
+    }
+  }
+  return {
+    assignments: groupTriangleAssignments(valueByTriangle),
+    encoding:
+      splits.length === 0
+        ? undefined
+        : {
+            version: ORCA_REFINEMENT_ENCODING_VERSION,
+            triangleCount: encoding?.triangleCount ?? 0,
+            splits: splits.sort((left, right) => left.triangle - right.triangle),
+          },
+  };
+}
+
+function groupTriangleAssignments<T extends JsonValue>(
+  valueByTriangle: ReadonlyMap<number, T>,
+): TriangleAssignments<T>[] {
+  const groups = new Map<string, TriangleAssignments<T>>();
+  for (const triangle of [...valueByTriangle.keys()].sort((left, right) => left - right)) {
+    const value = valueByTriangle.get(triangle)!;
+    const key = canonicalStringify(value);
+    const group = groups.get(key) ?? { value: cloneJson(value), triangles: [] };
+    group.triangles.push(triangle);
+    groups.set(key, group);
+  }
   return [...groups.entries()]
     .sort(([left], [right]) => compareCanonicalText(left, right))
     .map(([, assignment]) => assignment);
 }
 
-/** Replace whole source roots touched by a non-refined stroke. */
+function mapNodeStates<T extends JsonValue, U extends JsonValue>(
+  node: FacetRefinementNode<T>,
+  map: (state: FacetRefinementState<T>) => FacetRefinementState<U>,
+): FacetRefinementNode<U> {
+  return node.kind === 'leaf'
+    ? { kind: 'leaf', state: cloneState(map(node.state)) }
+    : {
+        kind: 'split',
+        splitSides: node.splitSides,
+        specialSide: node.specialSide,
+        children: node.children.map((child) => mapNodeStates(child, map)),
+      };
+}
+
+/**
+ * Collapse homogeneous branches and clone a selector result for canonical
+ * storage. A split that collapses entirely to a leaf is dropped — use
+ * `remapFacetChannelValues` when the collapsed value still has to be kept.
+ */
+export function normalizeFacetRefinementEncoding<T extends JsonValue>(
+  encoding: FacetRefinementEncoding<T>,
+): FacetRefinementEncoding<T> {
+  const splits: FacetRefinementSplit<T>[] = [];
+  for (const split of encoding.splits) {
+    const normalized = normalizeNode(split.node);
+    // A branch that collapses to a single leaf is no longer a subdivision, and
+    // the whole-facet value it collapsed to belongs in the sparse assignments.
+    if (normalized.kind === 'split') splits.push({ triangle: split.triangle, node: normalized });
+  }
+  splits.sort((left, right) => left.triangle - right.triangle);
+  return {
+    version: ORCA_REFINEMENT_ENCODING_VERSION,
+    triangleCount: encoding.triangleCount,
+    splits,
+  };
+}
+
+export function facetRefinementHasSplits(encoding: FacetRefinementEncoding): boolean {
+  return encoding.splits.length > 0;
+}
+
+/** The subdivision tree of one source facet, when it has one. */
+export function facetRefinementSplitAt<T extends JsonValue>(
+  encoding: FacetRefinementEncoding<T> | undefined,
+  triangle: number,
+): FacetRefinementSplitNode<T> | undefined {
+  return encoding?.splits.find((split) => split.triangle === triangle)?.node;
+}
+
+/** Drop the subdivision of every source facet a whole-facet stroke covered. */
 export function replaceFacetRefinementRoots<T extends JsonValue>(
   encoding: FacetRefinementEncoding<T>,
   triangles: ReadonlySet<number>,
-  target: FacetRefinementState<T>,
 ): FacetRefinementEncoding<T> {
   return normalizeFacetRefinementEncoding({
     version: ORCA_REFINEMENT_ENCODING_VERSION,
-    roots: encoding.roots.map((root, triangle) =>
-      triangles.has(triangle) ? { kind: 'leaf', state: cloneState(target) } : root,
-    ),
+    triangleCount: encoding.triangleCount,
+    splits: encoding.splits.filter((split) => !triangles.has(split.triangle)),
   });
 }
 
@@ -324,7 +501,13 @@ export function mapFacetRefinementStates<T extends JsonValue, U extends JsonValu
         };
   return normalizeFacetRefinementEncoding({
     version: ORCA_REFINEMENT_ENCODING_VERSION,
-    roots: encoding.roots.map(mapNode),
+    triangleCount: encoding.triangleCount,
+    splits: encoding.splits.map((split) => ({
+      triangle: split.triangle,
+      // A split's children are mapped, but the split itself stays a split;
+      // `normalizeFacetRefinementEncoding` drops it if mapping made it uniform.
+      node: mapNode(split.node) as FacetRefinementSplitNode<U>,
+    })),
   });
 }
 
@@ -332,11 +515,11 @@ export function visitFacetRefinementAssignedValues<T extends JsonValue>(
   encoding: FacetRefinementEncoding<T>,
   visitor: (value: T, path: string) => void,
 ): void {
-  const stack: Array<{ node: FacetRefinementNode<T>; path: string }> = encoding.roots
-    .map((node, index) => ({ node, path: `roots[${index}]` }))
+  const stack: Array<{ node: FacetRefinementNode<T>; path: string }> = encoding.splits
+    .map((split, index) => ({ node: split.node as FacetRefinementNode<T>, path: `splits[${index}].node` }))
     .reverse();
   const seen = new Set<object>();
-  const budget = refinementNodeBudget(encoding.roots.length);
+  const budget = refinementNodeBudget(encoding.triangleCount);
   while (stack.length > 0 && seen.size < budget) {
     const { node, path } = stack.pop()!;
     if (typeof node !== 'object' || node === null || seen.has(node)) continue;
@@ -390,6 +573,17 @@ function normalizeNode<T extends JsonValue>(node: FacetRefinementNode<T>): Facet
     specialSide: node.specialSide,
     children,
   };
+}
+
+function cloneNode<T extends JsonValue>(node: FacetRefinementNode<T>): FacetRefinementNode<T> {
+  return node.kind === 'leaf'
+    ? { kind: 'leaf', state: cloneState(node.state) }
+    : {
+        kind: 'split',
+        splitSides: node.splitSides,
+        specialSide: node.specialSide,
+        children: node.children.map(cloneNode),
+      };
 }
 
 function cloneState<T extends JsonValue>(state: FacetRefinementState<T>): FacetRefinementState<T> {

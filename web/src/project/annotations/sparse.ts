@@ -82,9 +82,16 @@ export function validateFacetAnnotations(
     });
   }
   for (const channel of CHANNELS) {
-    const seen = new Set<number>();
     const assignments = annotations[channel] as readonly TriangleAssignments<JsonValue>[];
-    assignments.forEach((assignment, assignmentIndex) => {
+    // A painted volume holds hundreds of thousands of triangle indices per
+    // channel, and this runs on every canonical commit. The index bitmap and
+    // the deferred path strings below keep the common all-valid case free of
+    // per-triangle allocation.
+    const bounded = Number.isSafeInteger(options.triangleCount) && options.triangleCount >= 0;
+    const seenFlags = bounded ? new Uint8Array(options.triangleCount) : undefined;
+    const seen = seenFlags ? undefined : new Set<number>();
+    for (let assignmentIndex = 0; assignmentIndex < assignments.length; assignmentIndex += 1) {
+      const assignment = assignments[assignmentIndex];
       if (!validChannelValue(channel, assignment.value, options.filamentIds)) {
         issues.push({
           code: 'invalid-facet-value',
@@ -92,24 +99,29 @@ export function validateFacetAnnotations(
           message: `Invalid ${channel} annotation value`,
         });
       }
-      assignment.triangles.forEach((triangle, triangleIndex) => {
-        const path = `${channel}[${assignmentIndex}].triangles[${triangleIndex}]`;
+      const triangles = assignment.triangles;
+      for (let triangleIndex = 0; triangleIndex < triangles.length; triangleIndex += 1) {
+        const triangle = triangles[triangleIndex];
         if (!Number.isInteger(triangle) || triangle < 0 || triangle >= options.triangleCount) {
           issues.push({
             code: 'facet-index-out-of-range',
-            path,
+            path: `${channel}[${assignmentIndex}].triangles[${triangleIndex}]`,
             message: `Triangle must be in [0, ${options.triangleCount - 1}]`,
           });
-        } else if (seen.has(triangle)) {
+          if (seen) seen.add(triangle);
+          continue;
+        }
+        if (seenFlags ? seenFlags[triangle] === 1 : seen!.has(triangle)) {
           issues.push({
             code: 'duplicate-facet-assignment',
-            path,
+            path: `${channel}[${assignmentIndex}].triangles[${triangleIndex}]`,
             message: `Triangle ${triangle} is assigned twice in ${channel}`,
           });
         }
-        seen.add(triangle);
-      });
-    });
+        if (seenFlags) seenFlags[triangle] = 1;
+        else seen!.add(triangle);
+      }
+    }
   }
   const refinement = annotations.refinement as unknown;
   if (refinement !== undefined) {

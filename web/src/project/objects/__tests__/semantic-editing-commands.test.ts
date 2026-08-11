@@ -156,16 +156,20 @@ await test('explains and atomically rejects lossy or engine-invalid role convers
     object.volumes[0].annotations.color = [];
     object.volumes[0].annotations.refinement = {
       color: {
-        version: 1,
-        roots: [
+        version: 2,
+        triangleCount: 1,
+        splits: [
           {
-            kind: 'split',
-            splitSides: 1,
-            specialSide: 0,
-            children: [
-              { kind: 'leaf', state: { kind: 'assigned', value: state.filaments.physical[0].id } },
-              { kind: 'leaf', state: { kind: 'assigned', value: state.filaments.physical[1].id } },
-            ],
+            triangle: 0,
+            node: {
+              kind: 'split',
+              splitSides: 1,
+              specialSide: 0,
+              children: [
+                { kind: 'leaf', state: { kind: 'assigned', value: state.filaments.physical[0].id } },
+                { kind: 'leaf', state: { kind: 'assigned', value: state.filaments.physical[1].id } },
+              ],
+            },
           },
         ],
       },

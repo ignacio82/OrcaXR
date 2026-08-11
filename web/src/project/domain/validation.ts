@@ -419,11 +419,26 @@ function validateExtensionData(data: Record<string, JsonValue> | undefined, path
 }
 
 function validateJson(value: JsonValue, path: string, add: AddIssue): void {
-  if (typeof value === 'number' && !Number.isFinite(value)) {
-    add('non-finite-number', path, 'JSON numbers must be finite');
-  } else if (Array.isArray(value)) {
-    value.forEach((child, index) => validateJson(child, `${path}[${index}]`, add));
-  } else if (value !== null && typeof value === 'object') {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) add('non-finite-number', path, 'JSON numbers must be finite');
+    return;
+  }
+  if (Array.isArray(value)) {
+    // The child path is built only when a child can actually report something.
+    // Building one per element allocated a string for every number in every
+    // config array on every canonical commit, which is pure waste in the
+    // overwhelmingly common case where nothing is wrong.
+    for (let index = 0; index < value.length; index += 1) {
+      const child = value[index];
+      if (child !== null && typeof child === 'object') {
+        validateJson(child, `${path}[${index}]`, add);
+      } else if (typeof child === 'number' && !Number.isFinite(child)) {
+        add('non-finite-number', `${path}[${index}]`, 'JSON numbers must be finite');
+      }
+    }
+    return;
+  }
+  if (value !== null && typeof value === 'object') {
     for (const [key, child] of Object.entries(value)) validateJson(child, `${path}.${key}`, add);
   }
 }

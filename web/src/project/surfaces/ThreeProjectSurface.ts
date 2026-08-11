@@ -118,6 +118,15 @@ interface GeometryEntry {
   readonly descriptorLayout: string;
   readonly actualContentDigest: string;
   readonly geometry: THREE.BufferGeometry;
+  /**
+   * The exact payload object whose bytes produced `actualContentDigest`.
+   *
+   * The repository is immutable by contract, so while it still hands back this
+   * same object the content behind the cached geometry is provably unchanged
+   * and the collision check below costs a reference comparison instead of
+   * re-hashing tens of megabytes on every projection.
+   */
+  verifiedPayload: AssetPayload | undefined;
   references: number;
 }
 
@@ -409,8 +418,17 @@ export class ThreeProjectSurface implements EditorSurfacePort {
     descriptor: ProjectState['sourceAssets'][number],
     newEntries: GeometryEntry[],
   ): GeometryEntry {
-    const payload = this.options.assets.get(assetId);
+    // Read-only, and deliberately not a copy: a projection runs on every
+    // canonical change, and copying a multi-million-triangle mesh just to
+    // confirm it is the one already on the GPU is pure latency.
+    const payload = this.options.assets.peek(assetId);
     if (!payload) throw new ProjectionBuildError('missing-asset', `Asset bytes are missing for ${assetId}`);
+    const cached = this.geometryByAsset.get(assetId)?.get(descriptor.digest);
+    if (cached && cached.verifiedPayload === payload) {
+      // Same repository object as the one already verified, so the descriptor
+      // comparison and the content hash can only reach the same answers.
+      return cached;
+    }
     if (canonicalStringify(payload.descriptor) !== canonicalStringify(descriptor)) {
       throw new ProjectionBuildError(
         'asset-mismatch',
@@ -420,7 +438,6 @@ export class ThreeProjectSurface implements EditorSurfacePort {
 
     const descriptorLayout = geometryDescriptorLayout(payload);
     const actualContentDigest = contentDigest(payload.bytes);
-    const cached = this.geometryByAsset.get(assetId)?.get(descriptor.digest);
     if (cached) {
       if (cached.descriptorLayout !== descriptorLayout || cached.actualContentDigest !== actualContentDigest) {
         throw new ProjectionBuildError(
@@ -428,19 +445,16 @@ export class ThreeProjectSurface implements EditorSurfacePort {
           `Asset ${assetId} reused digest ${descriptor.digest} for different mesh content`,
         );
       }
+      cached.verifiedPayload = payload;
       return cached;
     }
 
     let geometry: THREE.BufferGeometry;
     try {
       const decoded = decodeIndexedMeshAsset(payload);
-      const positions = new Float32Array(decoded.vertices.length * 3);
-      decoded.vertices.forEach((vertex, index) => positions.set(vertex, index * 3));
-      const indices = new Uint32Array(decoded.triangles.length * 3);
-      decoded.triangles.forEach((triangle, index) => indices.set(triangle, index * 3));
       geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+      geometry.setAttribute('position', new THREE.BufferAttribute(decoded.positions, 3));
+      geometry.setIndex(new THREE.BufferAttribute(decoded.indices, 1));
       geometry.computeVertexNormals();
       geometry.computeBoundingBox();
       geometry.computeBoundingSphere();
@@ -457,6 +471,7 @@ export class ThreeProjectSurface implements EditorSurfacePort {
       descriptorLayout,
       actualContentDigest,
       geometry,
+      verifiedPayload: payload,
       references: 0,
     };
     newEntries.push(entry);

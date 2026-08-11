@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { InMemoryAssetRepository } from '../../assets';
 import { materializeFacetRefinement, StaleFacetAnnotationResultError } from '../../annotations';
 import { canonicalStringify, cloneProjectState } from '../../domain/canonical';
+import { expandFacetRefinementRoots } from '../../domain/facetRefinement';
 import { entityId, seededRandom, UuidIdSource } from '../../domain/ids';
 import {
   createEmptyProject,
@@ -301,8 +302,17 @@ test('accumulates refined preview samples and commits them once with the first-s
   });
   assert.equal(result.status, 'applied');
   assert.equal(harness.commands.getHistorySnapshot().undoCount, 1);
-  const stored = harness.project.getSnapshot().state.plates[0].objects[0].volumes[0].annotations.refinement?.color;
-  assert.deepEqual(stored, second.refinementAfter);
+  const storedVolume = harness.project.getSnapshot().state.plates[0].objects[0].volumes[0];
+  const stored = storedVolume.annotations.refinement?.color;
+  // Canonical state keeps the subdivided facets and the sparse whole-facet
+  // assignments separately; together they reproduce exactly the working tree
+  // that was committed.
+  assert.deepEqual(
+    expandFacetRefinementRoots(stored, storedVolume.annotations.color, second.refinementAfter!.roots.length),
+    second.refinementAfter!.roots,
+  );
+  assert.ok(stored!.splits.length > 0);
+  assert.equal(stored!.triangleCount, second.refinementAfter!.roots.length);
   assert.equal(harness.commands.undo(), true);
   assert.equal(harness.project.getSnapshot().state.plates[0].objects[0].volumes[0].annotations.refinement, undefined);
 
@@ -332,18 +342,23 @@ test('Gap Fill commits each refined component to its snapshot-derived neighbour 
   annotations.color = [{ value: TOOL_TWO, triangles: [1] }];
   annotations.refinement = {
     color: {
-      version: 1,
-      roots: [
+      version: 2,
+      triangleCount: 2,
+      // Facet 1 is a whole-facet assignment, so it lives in `color` above; only
+      // the subdivided facet 0 belongs here.
+      splits: [
         {
-          kind: 'split',
-          splitSides: 1,
-          specialSide: 0,
-          children: [
-            { kind: 'leaf', state: { kind: 'assigned', value: TOOL_ONE } },
-            { kind: 'leaf', state: { kind: 'assigned', value: TOOL_TWO } },
-          ],
+          triangle: 0,
+          node: {
+            kind: 'split',
+            splitSides: 1,
+            specialSide: 0,
+            children: [
+              { kind: 'leaf', state: { kind: 'assigned', value: TOOL_ONE } },
+              { kind: 'leaf', state: { kind: 'assigned', value: TOOL_TWO } },
+            ],
+          },
         },
-        { kind: 'leaf', state: { kind: 'assigned', value: TOOL_TWO } },
       ],
     },
   };

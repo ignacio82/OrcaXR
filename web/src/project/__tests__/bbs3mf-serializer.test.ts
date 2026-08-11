@@ -108,72 +108,92 @@ await test('persists refined leaves and round-trips the exact BBS tree without t
   volume.annotations.color = [];
   volume.annotations.refinement = {
     color: {
-      version: 1,
-      roots: [
+      version: 2,
+      triangleCount: 1,
+      splits: [
         {
-          kind: 'split',
-          splitSides: 1,
-          specialSide: 0,
-          children: [
-            { kind: 'leaf', state: { kind: 'assigned', value: first.id } },
-            { kind: 'leaf', state: { kind: 'assigned', value: second.id } },
-          ],
+          triangle: 0,
+          node: {
+            kind: 'split',
+            splitSides: 1,
+            specialSide: 0,
+            children: [
+              { kind: 'leaf', state: { kind: 'assigned', value: first.id } },
+              { kind: 'leaf', state: { kind: 'assigned', value: second.id } },
+            ],
+          },
         },
       ],
     },
     support: {
-      version: 1,
-      roots: [
+      version: 2,
+      triangleCount: 1,
+      splits: [
         {
-          kind: 'split',
-          splitSides: 1,
-          specialSide: 0,
-          children: [
-            { kind: 'leaf', state: { kind: 'assigned', value: 'enforce' } },
-            { kind: 'leaf', state: { kind: 'assigned', value: 'block' } },
-          ],
+          triangle: 0,
+          node: {
+            kind: 'split',
+            splitSides: 1,
+            specialSide: 0,
+            children: [
+              { kind: 'leaf', state: { kind: 'assigned', value: 'enforce' } },
+              { kind: 'leaf', state: { kind: 'assigned', value: 'block' } },
+            ],
+          },
         },
       ],
     },
     seam: {
-      version: 1,
-      roots: [
+      version: 2,
+      triangleCount: 1,
+      splits: [
         {
-          kind: 'split',
-          splitSides: 1,
-          specialSide: 0,
-          children: [
-            { kind: 'leaf', state: { kind: 'assigned', value: 'prefer' } },
-            { kind: 'leaf', state: { kind: 'assigned', value: 'avoid' } },
-          ],
+          triangle: 0,
+          node: {
+            kind: 'split',
+            splitSides: 1,
+            specialSide: 0,
+            children: [
+              { kind: 'leaf', state: { kind: 'assigned', value: 'prefer' } },
+              { kind: 'leaf', state: { kind: 'assigned', value: 'avoid' } },
+            ],
+          },
         },
       ],
     },
     fuzzySkin: {
-      version: 1,
-      roots: [
+      version: 2,
+      triangleCount: 1,
+      splits: [
         {
-          kind: 'split',
-          splitSides: 1,
-          specialSide: 0,
-          children: [
-            { kind: 'leaf', state: { kind: 'assigned', value: true } },
-            { kind: 'leaf', state: { kind: 'unpainted' } },
-          ],
+          triangle: 0,
+          node: {
+            kind: 'split',
+            splitSides: 1,
+            specialSide: 0,
+            children: [
+              { kind: 'leaf', state: { kind: 'assigned', value: true } },
+              { kind: 'leaf', state: { kind: 'unpainted' } },
+            ],
+          },
         },
       ],
     },
     brim: {
-      version: 1,
-      roots: [
+      version: 2,
+      triangleCount: 1,
+      splits: [
         {
-          kind: 'split',
-          splitSides: 1,
-          specialSide: 0,
-          children: [
-            { kind: 'leaf', state: { kind: 'assigned', value: true } },
-            { kind: 'leaf', state: { kind: 'assigned', value: false } },
-          ],
+          triangle: 0,
+          node: {
+            kind: 'split',
+            splitSides: 1,
+            specialSide: 0,
+            children: [
+              { kind: 'leaf', state: { kind: 'assigned', value: true } },
+              { kind: 'leaf', state: { kind: 'assigned', value: false } },
+            ],
+          },
         },
       ],
     },
@@ -196,11 +216,11 @@ await test('persists refined leaves and round-trips the exact BBS tree without t
   const reopened = await serializer.deserialize(writeDeterministicZip(files));
   const importedVolume = reopened.state.plates[0].objects[0].volumes[0];
   assert.deepEqual(importedVolume.annotations.color, []);
-  assert.equal(importedVolume.annotations.refinement?.color?.roots[0].kind, 'split');
-  assert.equal(importedVolume.annotations.refinement?.support?.roots[0].kind, 'split');
-  assert.equal(importedVolume.annotations.refinement?.seam?.roots[0].kind, 'split');
-  assert.equal(importedVolume.annotations.refinement?.fuzzySkin?.roots[0].kind, 'split');
-  const importedRoot = importedVolume.annotations.refinement!.color!.roots[0];
+  assert.equal(importedVolume.annotations.refinement?.color?.splits[0].node.kind, 'split');
+  assert.equal(importedVolume.annotations.refinement?.support?.splits[0].node.kind, 'split');
+  assert.equal(importedVolume.annotations.refinement?.seam?.splits[0].node.kind, 'split');
+  assert.equal(importedVolume.annotations.refinement?.fuzzySkin?.splits[0].node.kind, 'split');
+  const importedRoot = importedVolume.annotations.refinement!.color!.splits[0].node;
   assert.deepEqual(
     importedRoot.kind === 'split'
       ? importedRoot.children.map((child) =>
@@ -262,16 +282,20 @@ await test('rejects malformed, deep, trailing, and unresolved BBS facet paint at
   volume.annotations.color = [];
   volume.annotations.refinement = {
     color: {
-      version: 1,
-      roots: [
+      version: 2,
+      triangleCount: 1,
+      splits: [
         {
-          kind: 'split',
-          splitSides: 1,
-          specialSide: 0,
-          children: [
-            { kind: 'leaf', state: { kind: 'assigned', value: snapshot.state.filaments.physical[0].id } },
-            { kind: 'leaf', state: { kind: 'assigned', value: snapshot.state.filaments.physical[1].id } },
-          ],
+          triangle: 0,
+          node: {
+            kind: 'split',
+            splitSides: 1,
+            specialSide: 0,
+            children: [
+              { kind: 'leaf', state: { kind: 'assigned', value: snapshot.state.filaments.physical[0].id } },
+              { kind: 'leaf', state: { kind: 'assigned', value: snapshot.state.filaments.physical[1].id } },
+            ],
+          },
         },
       ],
     },
@@ -385,16 +409,20 @@ await test('imports the pinned legacy paint_fuzzy attribute and enforces the 64-
   unavailableVolume.annotations.color = [];
   unavailableVolume.annotations.refinement = {
     color: {
-      version: 1,
-      roots: [
+      version: 2,
+      triangleCount: 1,
+      splits: [
         {
-          kind: 'split',
-          splitSides: 1,
-          specialSide: 0,
-          children: [
-            { kind: 'leaf', state: { kind: 'assigned', value: unavailableSplit.state.filaments.mixed[0].id } },
-            { kind: 'leaf', state: { kind: 'assigned', value: unavailableSplit.state.filaments.physical[0].id } },
-          ],
+          triangle: 0,
+          node: {
+            kind: 'split',
+            splitSides: 1,
+            specialSide: 0,
+            children: [
+              { kind: 'leaf', state: { kind: 'assigned', value: unavailableSplit.state.filaments.mixed[0].id } },
+              { kind: 'leaf', state: { kind: 'assigned', value: unavailableSplit.state.filaments.physical[0].id } },
+            ],
+          },
         },
       ],
     },

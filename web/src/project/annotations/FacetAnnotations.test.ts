@@ -259,20 +259,22 @@ test('validates strict persisted refinement DTOs and sparse-root consistency', (
   current.color = [];
   current.refinement = {
     color: {
-      version: 1,
-      roots: Array.from({ length: 12 }, (_, triangle) =>
-        triangle === 0
-          ? {
-              kind: 'split' as const,
-              splitSides: 1 as const,
-              specialSide: 0 as const,
-              children: [
-                { kind: 'leaf' as const, state: { kind: 'assigned' as const, value: h.fixture.ids.physical0 } },
-                { kind: 'leaf' as const, state: { kind: 'assigned' as const, value: h.fixture.ids.physical1 } },
-              ],
-            }
-          : { kind: 'leaf' as const, state: { kind: 'unpainted' as const } },
-      ),
+      version: 2,
+      triangleCount: 12,
+      splits: [
+        {
+          triangle: 0,
+          node: {
+            kind: 'split' as const,
+            splitSides: 1 as const,
+            specialSide: 0 as const,
+            children: [
+              { kind: 'leaf' as const, state: { kind: 'assigned' as const, value: h.fixture.ids.physical0 } },
+              { kind: 'leaf' as const, state: { kind: 'assigned' as const, value: h.fixture.ids.physical1 } },
+            ],
+          },
+        },
+      ],
     },
   };
   assert.deepEqual(
@@ -292,7 +294,7 @@ test('validates strict persisted refinement DTOs and sparse-root consistency', (
     ),
   );
   const unknownNode = cloneJson(current);
-  Object.assign(unknownNode.refinement!.color!.roots[0], { future: true });
+  Object.assign(unknownNode.refinement!.color!.splits[0].node, { future: true });
   assert.ok(
     validateFacetAnnotations(unknownNode, { topologyRevision: 0, triangleCount: 12 }).some(
       (issue) => issue.code === 'invalid-facet-refinement-fields',
@@ -307,26 +309,29 @@ test('validates strict persisted refinement DTOs and sparse-root consistency', (
   );
   const homogeneous = cloneJson(current);
   homogeneous.refinement!.color = {
-    version: 1,
-    roots: [
+    version: 2,
+    triangleCount: 12,
+    splits: [
       {
-        kind: 'split',
-        splitSides: 1,
-        specialSide: 0,
-        children: [
-          { kind: 'leaf', state: { kind: 'assigned', value: h.fixture.ids.physical0 } },
-          {
-            kind: 'split',
-            splitSides: 1,
-            specialSide: 0,
-            children: [
-              { kind: 'leaf', state: { kind: 'assigned', value: h.fixture.ids.physical0 } },
-              { kind: 'leaf', state: { kind: 'assigned', value: h.fixture.ids.physical0 } },
-            ],
-          },
-        ],
+        triangle: 0,
+        node: {
+          kind: 'split',
+          splitSides: 1,
+          specialSide: 0,
+          children: [
+            { kind: 'leaf', state: { kind: 'assigned', value: h.fixture.ids.physical0 } },
+            {
+              kind: 'split',
+              splitSides: 1,
+              specialSide: 0,
+              children: [
+                { kind: 'leaf', state: { kind: 'assigned', value: h.fixture.ids.physical0 } },
+                { kind: 'leaf', state: { kind: 'assigned', value: h.fixture.ids.physical0 } },
+              ],
+            },
+          ],
+        },
       },
-      ...homogeneous.refinement!.color!.roots.slice(1),
     ],
   };
   assert.ok(
@@ -343,20 +348,22 @@ test('whole-root strokes replace stored splits and omit refinement after collaps
   volume.annotations.color = [];
   volume.annotations.refinement = {
     color: {
-      version: 1,
-      roots: Array.from({ length: 12 }, (_, triangle) =>
-        triangle === 0
-          ? {
-              kind: 'split' as const,
-              splitSides: 1 as const,
-              specialSide: 0 as const,
-              children: [
-                { kind: 'leaf' as const, state: { kind: 'assigned' as const, value: h.fixture.ids.physical0 } },
-                { kind: 'leaf' as const, state: { kind: 'assigned' as const, value: h.fixture.ids.physical1 } },
-              ],
-            }
-          : { kind: 'leaf' as const, state: { kind: 'unpainted' as const } },
-      ),
+      version: 2,
+      triangleCount: 12,
+      splits: [
+        {
+          triangle: 0,
+          node: {
+            kind: 'split' as const,
+            splitSides: 1 as const,
+            specialSide: 0 as const,
+            children: [
+              { kind: 'leaf' as const, state: { kind: 'assigned' as const, value: h.fixture.ids.physical0 } },
+              { kind: 'leaf' as const, state: { kind: 'assigned' as const, value: h.fixture.ids.physical1 } },
+            ],
+          },
+        },
+      ],
     },
   };
   h.project.replaceState(state, { reason: 'test-setup', dirtyCategories: [] });

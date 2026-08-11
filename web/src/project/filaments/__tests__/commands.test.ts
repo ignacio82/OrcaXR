@@ -243,16 +243,20 @@ test('many-to-one remap collapses refined color leaves and remains byte-exact th
   annotations.color = [];
   annotations.refinement = {
     color: {
-      version: 1,
-      roots: [
+      version: 2,
+      triangleCount: 1,
+      splits: [
         {
-          kind: 'split',
-          splitSides: 1,
-          specialSide: 0,
-          children: [
-            { kind: 'leaf', state: { kind: 'assigned', value: fixture.ids.physical0 } },
-            { kind: 'leaf', state: { kind: 'assigned', value: fixture.ids.physical1 } },
-          ],
+          triangle: 0,
+          node: {
+            kind: 'split',
+            splitSides: 1,
+            specialSide: 0,
+            children: [
+              { kind: 'leaf', state: { kind: 'assigned', value: fixture.ids.physical0 } },
+              { kind: 'leaf', state: { kind: 'assigned', value: fixture.ids.physical1 } },
+            ],
+          },
         },
       ],
     },

@@ -1,19 +1,19 @@
 import { canonicalStringify, cloneJson, cloneProjectState, deepFreeze } from '../domain/canonical';
 import {
-  facetAssignmentsFromRefinement,
+  collapseFacetRefinementRoots,
   facetRefinementHasSplits,
   normalizeFacetRefinementEncoding,
   replaceFacetRefinementRoots,
   validateFacetRefinementChannel,
+  type FacetRefinedRootSet,
 } from '../domain/facetRefinement';
 import type { VolumeId } from '../domain/ids';
 import type {
   FacetAnnotationRefinements,
   FacetAnnotations,
   FacetRefinementEncoding,
-  FacetRefinementState,
+  FacetRefinementNode,
   JsonValue,
-  TriangleAssignments,
 } from '../domain/model';
 import { findVolume } from '../domain/selectors';
 import type { CommandContext, ProjectCommand } from '../history/command';
@@ -166,12 +166,16 @@ export function commitFacetAnnotationStroke<Channel extends FacetAnnotationChann
       for (const range of ranges) {
         for (let triangle = range.start; triangle < range.endExclusive; triangle += 1) triangles.add(triangle);
       }
-      const target =
-        request.operation.mode === 'paint'
-          ? ({ kind: 'assigned', value: cloneJson(request.operation.value) } as FacetRefinementState<JsonValue>)
-          : ({ kind: 'unpainted' } as const);
-      const nextRefinement = replaceFacetRefinementRoots(storedRefinement, triangles, target);
-      after[request.channel] = facetAssignmentsFromRefinement(nextRefinement) as FacetAnnotations[Channel];
+      // A whole-facet stroke says the same thing about every facet it covers,
+      // so those facets stop being subdivided and their new value lives in the
+      // sparse assignments, exactly as it would on a volume that never carried
+      // a refinement.
+      const nextRefinement = replaceFacetRefinementRoots(storedRefinement, triangles);
+      after[request.channel] = applyFacetChannelStroke(
+        normalizedBeforeChannel,
+        request.operation,
+        request.guard.triangleCount,
+      );
       setRefinementChannel(
         after,
         request.channel,
@@ -207,7 +211,12 @@ export function commitFacetAnnotationStroke<Channel extends FacetAnnotationChann
 export interface FacetRefinementCommitRequest<Channel extends FacetAnnotationChannel> {
   guard: FacetAnnotationGuard;
   channel: Channel;
-  encoding: FacetRefinementEncoding<FacetAnnotations[Channel][number]['value']>;
+  /**
+   * The selector result to persist: one root per source facet, dense. It is
+   * split here into the two things canonical state keeps — sparse whole-facet
+   * assignments, and the subdivided facets alone.
+   */
+  encoding: FacetRefinedRootSet<FacetAnnotations[Channel][number]['value']>;
   cancellation?: FacetStrokeRequest<Channel>['cancellation'];
   label?: string;
 }
@@ -254,23 +263,29 @@ export function commitFacetRefinement<Channel extends FacetAnnotationChannel>(
   if (beforeIssues.length > 0) throw new FacetAnnotationValidationError(beforeIssues);
 
   const before = cloneJson(found.volume.annotations);
-  const projectedAssignments = facetAssignmentsFromRefinement(request.encoding);
-  const encodingIssues = validateFacetRefinementChannel(
-    request.channel,
-    request.encoding,
-    projectedAssignments as TriangleAssignments<JsonValue>[],
-    {
+  if (request.encoding.roots.length !== request.guard.triangleCount) {
+    throw new FacetAnnotationValidationError([
+      {
+        code: 'invalid-facet-refinement-root-count',
+        path: `refinement.${request.channel}.roots`,
+        message: 'A refined selector result must contain exactly one root per source triangle',
+      },
+    ]);
+  }
+  const collapsed = collapseFacetRefinementRoots(request.encoding.roots as readonly FacetRefinementNode<JsonValue>[]);
+  if (collapsed.encoding) {
+    const encodingIssues = validateFacetRefinementChannel(request.channel, collapsed.encoding, collapsed.assignments, {
       triangleCount: request.guard.triangleCount,
       filamentIds,
       path: `refinement.${request.channel}`,
       requireSplit: false,
-    },
-  );
-  if (encodingIssues.length > 0) throw new FacetAnnotationValidationError(encodingIssues);
-  const encoding = normalizeFacetRefinementEncoding(request.encoding);
+    });
+    if (encodingIssues.length > 0) throw new FacetAnnotationValidationError(encodingIssues);
+  }
+  const encoding = collapsed.encoding ? normalizeFacetRefinementEncoding(collapsed.encoding) : undefined;
   const after = cloneJson(before);
-  after[request.channel] = facetAssignmentsFromRefinement(encoding) as FacetAnnotations[Channel];
-  setRefinementChannel(after, request.channel, facetRefinementHasSplits(encoding) ? encoding : undefined);
+  after[request.channel] = collapsed.assignments as FacetAnnotations[Channel];
+  setRefinementChannel(after, request.channel, encoding && facetRefinementHasSplits(encoding) ? encoding : undefined);
   const afterIssues = validateFacetAnnotations(after, {
     topologyRevision: request.guard.topologyRevision,
     triangleCount: request.guard.triangleCount,

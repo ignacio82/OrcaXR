@@ -211,16 +211,20 @@ test('includes stable filament IDs used only by refined leaves', () => {
   volume.annotations.color = [];
   volume.annotations.refinement = {
     color: {
-      version: 1,
-      roots: [
+      version: 2,
+      triangleCount: 1,
+      splits: [
         {
-          kind: 'split',
-          splitSides: 1,
-          specialSide: 0,
-          children: [
-            { kind: 'leaf', state: { kind: 'assigned', value: fixture.ids.mixed } },
-            { kind: 'leaf', state: { kind: 'assigned', value: fixture.ids.physical0 } },
-          ],
+          triangle: 0,
+          node: {
+            kind: 'split',
+            splitSides: 1,
+            specialSide: 0,
+            children: [
+              { kind: 'leaf', state: { kind: 'assigned', value: fixture.ids.mixed } },
+              { kind: 'leaf', state: { kind: 'assigned', value: fixture.ids.physical0 } },
+            ],
+          },
         },
       ],
     },

@@ -3,6 +3,7 @@ import { canonicalStringify, cloneJson, fnv1a64 } from '../domain/canonical';
 import { entityId, type AssetId } from '../domain/ids';
 import type { ExtensionBlob, ProjectState, SourceAssetDescriptor } from '../domain/model';
 import { refinementNodeBudget } from '../domain/model';
+import { migrateDenseFacetRefinements } from '../migration/denseFacetRefinement';
 import { assertValidProjectState } from '../domain/validation';
 import type { CancellationToken, ProjectArchiveSnapshot, ProjectSerializerPort, SerializedProject } from '../ports';
 import {
@@ -137,6 +138,15 @@ export class Bbs3mfProjectSerializer implements ProjectSerializerPort {
     const envelope = parseEnvelope(extensionBytes);
     const state = cloneJson(envelope.state);
     const warnings: string[] = [];
+    // Written by a build that stored one refinement root per source triangle.
+    const denseRefinementChannels = migrateDenseFacetRefinements(state);
+    if (denseRefinementChannels > 0) {
+      warnings.push(
+        `Converted ${denseRefinementChannels} facet refinement channel${
+          denseRefinementChannels === 1 ? '' : 's'
+        } from the per-triangle encoding to the subdivided-facet encoding`,
+      );
+    }
     const legacyFalseFuzzyAssignments = countLegacyFalseFuzzyAssignments(state);
     if (legacyFalseFuzzyAssignments > 0) {
       const validationState = cloneJson(state);

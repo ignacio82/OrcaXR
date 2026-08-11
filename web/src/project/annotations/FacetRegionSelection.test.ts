@@ -18,7 +18,7 @@ import {
   buildOrcaFaceNeighbors,
   constrainPainterDragPoint,
   selectFacetRegion,
-  type FacetRefinementEncoding,
+  type FacetRefinedRootSet,
   type FacetRefinementNode,
   type FacetRegionTool,
   type FacetSelectionMesh,
@@ -57,11 +57,19 @@ function assignedLeaf(value: FilamentId): FacetRefinementNode {
   return { kind: 'leaf', state: { kind: 'assigned', value } };
 }
 
-function refinement(roots: readonly FacetRefinementNode[]): FacetRefinementEncoding {
+/**
+ * The dense working form a selection operates on. Canonical state stores the
+ * sparse pair instead, so requests supply this through `refinedRoots`.
+ */
+function refinement(roots: readonly FacetRefinementNode[]): FacetRefinedRootSet {
   return {
     version: ORCA_REFINEMENT_ENCODING_VERSION,
     roots,
   };
+}
+
+function refinementRoots(roots: readonly FacetRefinementNode[]): readonly FacetRefinementNode[] {
+  return roots;
 }
 
 function stripMesh(): FacetSelectionMesh {
@@ -1710,7 +1718,7 @@ test('reconstructs every pinned split topology in deterministic root/child order
     const inputRefinement = refinement([expected.node]);
     const input = request(mesh, annotations(1), {
       tool: { kind: 'triangle', hit: [0.1, 0.1, 0] },
-      refinement: inputRefinement,
+      refinedRoots: inputRefinement.roots,
     });
     const first = selectFacetRegion(input);
     const second = selectFacetRegion(input);
@@ -1763,7 +1771,7 @@ test('reuses shared midpoints and propagates Fill between split leaves and a coa
   const splitNeighbor = selectFacetRegion(
     request(mesh, annotations(2), {
       tool: { kind: 'triangle', hit: [0.75, 0.1, 0] },
-      refinement: refinement([
+      refinedRoots: refinementRoots([
         prior.roots[0],
         {
           kind: 'split',
@@ -1789,7 +1797,7 @@ test('reuses shared midpoints and propagates Fill between split leaves and a coa
     request(mesh, annotations(2), {
       seedTriangle: 0,
       tool: { kind: 'fill', hit: [0.75, 0.1, 0], edgeDetection: false },
-      refinement: prior,
+      refinedRoots: prior.roots,
     }),
   );
 
@@ -1819,7 +1827,7 @@ test('reuses shared midpoints and propagates Fill between split leaves and a coa
     request(mesh, annotations(2), {
       seedTriangle: 0,
       tool: { kind: 'fill', hit: [0.8, 0.05, 0], edgeDetection: false },
-      refinement: refinement([
+      refinedRoots: refinementRoots([
         {
           kind: 'split',
           splitSides: 1,
@@ -1882,7 +1890,7 @@ test('Gap Fill measures and replaces a split-leaf component through propagated a
         maxAreaMm2: 0.3,
         stateOrder: [FILAMENT_A, FILAMENT_B],
       },
-      refinement: prior,
+      refinedRoots: prior.roots,
     }),
   );
 
@@ -2019,7 +2027,7 @@ test('refinement validation rejects malformed trees, invalid states, and ambiguo
     () =>
       selectFacetRegion(
         request(mesh, current, {
-          refinement: refinement([]),
+          refinedRoots: refinementRoots([]),
         }),
       ),
     'invalid-facet-refinement-root-count',
@@ -2028,7 +2036,7 @@ test('refinement validation rejects malformed trees, invalid states, and ambiguo
     () =>
       selectFacetRegion(
         request(mesh, current, {
-          refinement: refinement([
+          refinedRoots: refinementRoots([
             {
               kind: 'split',
               splitSides: 1,
@@ -2044,7 +2052,7 @@ test('refinement validation rejects malformed trees, invalid states, and ambiguo
     () =>
       selectFacetRegion(
         request(mesh, current, {
-          refinement: refinement([
+          refinedRoots: refinementRoots([
             {
               kind: 'leaf',
               state: { kind: 'assigned', value: true },
@@ -2059,7 +2067,7 @@ test('refinement validation rejects malformed trees, invalid states, and ambiguo
       selectFacetRegion(
         request(mesh, current, {
           tool: { kind: 'triangle' },
-          refinement: refinement([
+          refinedRoots: refinementRoots([
             {
               kind: 'split',
               splitSides: 1,
@@ -2098,7 +2106,7 @@ test('refined commit applies the target state and collapses homogeneous children
   const result = selectFacetRegion(
     request(mesh, annotations(1), {
       tool: { kind: 'triangle', hit: [0.1, 0.1, 0] },
-      refinement: inputRefinement,
+      refinedRoots: inputRefinement.roots,
     }),
   );
   const refined = result.refinement!;
@@ -2151,7 +2159,7 @@ test('refined per-leaf updates support Gap Fill and reject ambiguous targets', (
         maxAreaMm2: 0.3,
         stateOrder: [FILAMENT_A, FILAMENT_B],
       },
-      refinement: refinement([
+      refinedRoots: refinementRoots([
         {
           kind: 'split',
           splitSides: 1,

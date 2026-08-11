@@ -30,12 +30,12 @@ import {
   type TriangleRange,
 } from '../annotations';
 import { cloneJson, deepFreeze } from '../domain/canonical';
-import { buildFacetRefinementEncoding } from '../domain/facetRefinement';
+import { expandFacetRefinementRoots, type FacetRefinedRootSet } from '../domain/facetRefinement';
 import type { FilamentId, VolumeId } from '../domain/ids';
-import type {
-  FacetAnnotations,
-  FacetRefinementEncoding,
-  FacetRefinementNode,
+import {
+  ORCA_REFINEMENT_ENCODING_VERSION,
+  type FacetAnnotations,
+  type FacetRefinementNode,
   JsonValue,
   ProjectState,
   ProjectVolume,
@@ -118,7 +118,7 @@ export interface PaintStrokeRequest<Channel extends PaintChannel = 'color'> {
   readonly cancellation?: CancellationToken;
   readonly label?: string;
   /** Transient post-sample tree used while one streamed gesture is still open. */
-  readonly refinement?: FacetRefinementEncoding<FacetAnnotationValue<Channel>>;
+  readonly refinement?: FacetRefinedRootSet<FacetAnnotationValue<Channel>>;
   /** First-sample guard for a streamed gesture. */
   readonly guard?: FacetAnnotationGuard;
 }
@@ -132,7 +132,7 @@ export interface PaintStrokePreview {
   /** Stable leaf paths and pre-stroke tree when this sample used adaptive refinement. */
   readonly refinement?: FacetRefinedSelection;
   /** Post-sample tree for accumulating a streamed gesture without mutating canonical state. */
-  readonly refinementAfter?: FacetRefinementEncoding;
+  readonly refinementAfter?: FacetRefinedRootSet;
   readonly guard: FacetAnnotationGuard;
 }
 
@@ -280,7 +280,7 @@ export class PaintStrokeService {
   commitRefinement<Channel extends PaintChannel>(request: {
     readonly volumeId: VolumeId;
     readonly channel?: Channel;
-    readonly encoding: FacetRefinementEncoding<FacetAnnotationValue<Channel>>;
+    readonly encoding: FacetRefinedRootSet<FacetAnnotationValue<Channel>>;
     readonly mode?: 'paint' | 'erase';
     readonly cancellation?: CancellationToken;
     readonly label?: string;
@@ -424,12 +424,15 @@ export class PaintStrokeService {
       },
       seedTriangle: request.hit.triangleIndex,
       channel: (request.channel ?? 'color') as PaintChannel,
-      ...((request.refinement ?? volume.annotations.refinement?.[(request.channel ?? 'color') as PaintChannel])
-        ? {
-            refinement: (request.refinement ??
-              volume.annotations.refinement?.[(request.channel ?? 'color') as PaintChannel]) as never,
-          }
-        : {}),
+      // A gesture in flight owns the working tree; otherwise the canonical
+      // subdivisions plus the sparse channel are the whole prior state.
+      ...(request.refinement
+        ? { refinedRoots: request.refinement.roots as readonly FacetRefinementNode[] }
+        : volume.annotations.refinement?.[(request.channel ?? 'color') as PaintChannel]
+          ? {
+              refinement: volume.annotations.refinement[(request.channel ?? 'color') as PaintChannel] as never,
+            }
+          : {}),
       tool: this.tool(request, state),
       ...(request.settings.clippingPlane ? { clippingPlane: request.settings.clippingPlane } : {}),
       ...(request.hit.transform ? { transform: request.hit.transform } : {}),
@@ -518,7 +521,7 @@ function selectionRefinementAfter(
   assignments: FacetAnnotations[PaintChannel],
   triangleCount: number,
   target: FacetRegionState,
-): FacetRefinementEncoding | undefined {
+): FacetRefinedRootSet | undefined {
   if (selection.refinement) {
     if (selection.gapFillReplacements !== undefined) {
       return applyFacetRefinedStateUpdates(
@@ -536,7 +539,10 @@ function selectionRefinementAfter(
   }
   if (selection.gapFillReplacements === undefined) return undefined;
 
-  const encoding = buildFacetRefinementEncoding(
+  // Gap Fill without a refined selection still commits through the refined
+  // path, so it needs the dense root form the commit boundary collapses again.
+  const roots = expandFacetRefinementRoots(
+    undefined,
     assignments as readonly TriangleAssignments<JsonValue>[],
     triangleCount,
   );
@@ -545,8 +551,8 @@ function selectionRefinementAfter(
     for (const triangle of replacement.triangleIndices) replacementByTriangle.set(triangle, replacement.target);
   }
   return deepFreeze({
-    version: encoding.version,
-    roots: encoding.roots.map((root, triangle): FacetRefinementNode => {
+    version: ORCA_REFINEMENT_ENCODING_VERSION,
+    roots: roots.map((root, triangle): FacetRefinementNode => {
       const replacement = replacementByTriangle.get(triangle);
       if (!replacement) return root;
       return replacement.kind === 'unpainted'

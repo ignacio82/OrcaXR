@@ -12,6 +12,7 @@ import {
   type Vec3,
 } from '../domain/model';
 import { canonicalStringify, cloneJson, deepFreeze } from '../domain/canonical';
+import type { FacetRefinedRootSet } from '../domain/facetRefinement';
 import { triangleRangesFromIndices, validateFacetAnnotations } from './sparse';
 import {
   FacetAnnotationValidationError,
@@ -38,7 +39,7 @@ export const ORCA_GAP_AREA_STEP_MM2 = 0.2;
 export const ORCA_OVERHANG_ANGLE_MIN_DEGREES = 0;
 export const ORCA_OVERHANG_ANGLE_MAX_DEGREES = 90;
 export { ORCA_REFINEMENT_ENCODING_VERSION, ORCA_REFINEMENT_MAX_DEPTH, ORCA_REFINEMENT_MAX_NODES };
-export type { FacetRefinementEncoding, FacetRefinementNode };
+export type { FacetRefinementEncoding, FacetRefinementNode, FacetRefinedRootSet };
 
 export type FacetTriangle = readonly [number, number, number];
 
@@ -151,7 +152,7 @@ export interface FacetRefinedSelection {
   readonly edgeLimitMm?: number;
   /** Source vertices first, followed by deterministic shared midpoint order. */
   readonly vertices: readonly Vec3[];
-  readonly encoding: FacetRefinementEncoding;
+  readonly encoding: FacetRefinedRootSet;
   /**
    * Depth-first root/child order, including unselected leaves. The encoding
    * preserves pre-commit states while these flags identify the paint target;
@@ -177,8 +178,16 @@ export interface FacetRegionSelectionRequest<Channel extends FacetAnnotationChan
   readonly tool: FacetRegionTool;
   readonly clippingPlane?: FacetClippingPlane;
   readonly transform?: FacetSelectionTransform;
-  /** Prior per-leaf topology/state for this channel. */
+  /** Prior per-leaf topology for this channel, as canonical state stores it. */
   readonly refinement?: FacetRefinementEncoding;
+  /**
+   * Dense prior roots, overriding both `refinement` and the sparse channel.
+   *
+   * A streamed gesture accumulates states that are not in canonical state yet,
+   * so mid-gesture samples supply the whole working tree rather than the
+   * canonical pair.
+   */
+  readonly refinedRoots?: readonly FacetRefinementNode[];
   /**
    * Pinned `highlight_by_angle_deg` gate. Zero (and omission) disable it.
    * The color-painter path applies it to Circle, Sphere, and Height Range.
@@ -411,7 +420,7 @@ export function applyFacetRefinedSelection(
   channel: FacetAnnotationChannel,
   selection: FacetRefinedSelection,
   target: FacetRegionState,
-): FacetRefinementEncoding {
+): FacetRefinedRootSet {
   return applyFacetRefinedStateUpdates(
     channel,
     selection,
@@ -435,7 +444,7 @@ export function applyFacetRefinedStateUpdates(
   channel: FacetAnnotationChannel,
   selection: FacetRefinedSelection,
   updates: readonly FacetRefinedStateUpdate[],
-): FacetRefinementEncoding {
+): FacetRefinedRootSet {
   const encodedLeaves = validateRefinedCommitSelection(channel, selection);
   const available = new Set(encodedLeaves.map((leaf) => refinedLeafKey(leaf.sourceTriangle, leaf.path)));
   const targets = new Map<string, FacetRegionState>();
@@ -705,7 +714,7 @@ function cloneRefinementState(state: FacetRegionState): FacetRegionState {
 function usesRefinedSelection<Channel extends FacetAnnotationChannel>(
   request: FacetRegionSelectionRequest<Channel>,
 ): boolean {
-  if (request.refinement !== undefined) return true;
+  if (request.refinement !== undefined || request.refinedRoots !== undefined) return true;
   return (
     (request.tool.kind === 'circle' || request.tool.kind === 'sphere' || request.tool.kind === 'heightRange') &&
     request.tool.triangleSplitting === true
@@ -826,9 +835,20 @@ function buildRefinementWorkspace<Channel extends FacetAnnotationChannel>(
     ),
   };
 
-  request.refinement?.roots.forEach((node, sourceTriangle) => {
-    applyRefinementNode(workspace, roots[sourceTriangle], workspace.rootNeighbors[sourceTriangle], node, 0);
-  });
+  if (request.refinedRoots) {
+    request.refinedRoots.forEach((node, sourceTriangle) => {
+      if (sourceTriangle >= roots.length) return;
+      applyRefinementNode(workspace, roots[sourceTriangle], workspace.rootNeighbors[sourceTriangle], node, 0);
+    });
+    return workspace;
+  }
+  // Whole-facet states already came from the sparse assignments above, so only
+  // the subdivided facets have anything left to say.
+  for (const split of request.refinement?.splits ?? []) {
+    const sourceTriangle = split.triangle;
+    if (sourceTriangle < 0 || sourceTriangle >= roots.length) continue;
+    applyRefinementNode(workspace, roots[sourceTriangle], workspace.rootNeighbors[sourceTriangle], split.node, 0);
+  }
   return workspace;
 }
 
@@ -1790,7 +1810,7 @@ function freezeRefinedSelection(
       children: Object.freeze(triangle.children.map(encode)),
     }) as FacetRefinementNode;
   };
-  const encoding: FacetRefinementEncoding = Object.freeze({
+  const encoding: FacetRefinedRootSet = Object.freeze({
     version: ORCA_REFINEMENT_ENCODING_VERSION,
     roots: Object.freeze(workspace.roots.map(encode)),
   });
@@ -2582,7 +2602,7 @@ function validateRequest<Channel extends FacetAnnotationChannel>(request: FacetR
             });
           }
         });
-        for (const state of refinementLeafStates(request.refinement)) {
+        for (const state of priorRefinedStates(request)) {
           if (state.kind === 'assigned' && !seenStates.has(canonicalStringify(state.value))) {
             issues.push({
               code: 'missing-gap-fill-state',
@@ -2710,6 +2730,33 @@ function validateRefinementEncoding<Channel extends FacetAnnotationChannel>(
   request: FacetRegionSelectionRequest<Channel>,
   issues: FacetAnnotationIssue[],
 ): void {
+  if (request.refinedRoots !== undefined) {
+    // The dense working form supplied mid-gesture: one root per source facet.
+    const roots = request.refinedRoots as unknown;
+    if (!Array.isArray(roots)) {
+      issues.push({
+        code: 'invalid-facet-refinement-roots',
+        path: 'refinedRoots',
+        message: 'Dense facet refinement roots must be an array',
+      });
+      return;
+    }
+    if (roots.length !== request.guard.triangleCount) {
+      issues.push({
+        code: 'invalid-facet-refinement-root-count',
+        path: 'refinedRoots',
+        message: 'Facet refinement must contain exactly one root per source triangle',
+      });
+    }
+    walkRefinementNodes(
+      roots.map((node, index) => ({ node, path: `refinedRoots[${index}]`, depth: 0 })),
+      refinementNodeBudget(request.guard.triangleCount),
+      request.channel,
+      'refinedRoots',
+      issues,
+    );
+    return;
+  }
   if (request.refinement === undefined) return;
   const candidate = request.refinement as unknown;
   if (typeof candidate !== 'object' || candidate === null || Array.isArray(candidate)) {
@@ -2720,7 +2767,11 @@ function validateRefinementEncoding<Channel extends FacetAnnotationChannel>(
     });
     return;
   }
-  const encoding = candidate as { readonly version?: unknown; readonly roots?: unknown };
+  const encoding = candidate as {
+    readonly version?: unknown;
+    readonly triangleCount?: unknown;
+    readonly splits?: unknown;
+  };
   if (encoding.version !== ORCA_REFINEMENT_ENCODING_VERSION) {
     issues.push({
       code: 'invalid-facet-refinement-version',
@@ -2728,138 +2779,54 @@ function validateRefinementEncoding<Channel extends FacetAnnotationChannel>(
       message: `Facet refinement version must be ${ORCA_REFINEMENT_ENCODING_VERSION}`,
     });
   }
-  if (!Array.isArray(encoding.roots)) {
+  if (!Array.isArray(encoding.splits)) {
     issues.push({
-      code: 'invalid-facet-refinement-roots',
-      path: 'refinement.roots',
-      message: 'Facet refinement roots must be an array',
+      code: 'invalid-facet-refinement-splits',
+      path: 'refinement.splits',
+      message: 'Facet refinement splits must be an array',
     });
     return;
   }
-  if (encoding.roots.length !== request.guard.triangleCount) {
+  if (encoding.triangleCount !== request.guard.triangleCount) {
     issues.push({
-      code: 'invalid-facet-refinement-root-count',
-      path: 'refinement.roots',
-      message: 'Facet refinement must contain exactly one root per source triangle',
+      code: 'invalid-facet-refinement-triangle-count',
+      path: 'refinement.triangleCount',
+      message: 'Facet refinement must declare the source mesh triangle count',
     });
   }
-  // Derived from the root count, which the format requires to equal the source
-  // triangle count; a constant here would cap the size of a painted mesh.
-  const nodeBudget = refinementNodeBudget(encoding.roots.length);
+  // Derived from the source triangle count; a constant here would cap the size
+  // of a painted mesh.
+  const nodeBudget = refinementNodeBudget(request.guard.triangleCount);
 
-  const seen = new Set<object>();
-  const stack: { readonly node: unknown; readonly path: string; readonly depth: number }[] = encoding.roots.map(
-    (node, index) => ({
-      node,
-      path: `refinement.roots[${index}]`,
+  const stack: { readonly node: unknown; readonly path: string; readonly depth: number }[] = encoding.splits.map(
+    (split: unknown, index: number) => ({
+      node:
+        typeof split === 'object' && split !== null && !Array.isArray(split)
+          ? (split as { node?: unknown }).node
+          : split,
+      path: `refinement.splits[${index}].node`,
       depth: 0,
     }),
   );
-  let nodeCount = 0;
-  while (stack.length > 0) {
-    const { node, path, depth } = stack.pop()!;
-    nodeCount += 1;
-    if (nodeCount > nodeBudget) {
+  for (const [index, split] of encoding.splits.entries()) {
+    const triangle =
+      typeof split === 'object' && split !== null && !Array.isArray(split)
+        ? (split as { triangle?: unknown }).triangle
+        : undefined;
+    if (
+      typeof triangle !== 'number' ||
+      !Number.isInteger(triangle) ||
+      triangle < 0 ||
+      triangle >= request.guard.triangleCount
+    ) {
       issues.push({
-        code: 'facet-refinement-limit-exceeded',
-        path: 'refinement',
-        message: `Facet refinement may contain at most ${nodeBudget} nodes`,
-      });
-      return;
-    }
-    if (typeof node !== 'object' || node === null || Array.isArray(node)) {
-      issues.push({
-        code: 'invalid-facet-refinement-node',
-        path,
-        message: 'Facet refinement nodes must be objects',
-      });
-      continue;
-    }
-    if (seen.has(node)) {
-      issues.push({
-        code: 'invalid-facet-refinement-tree',
-        path,
-        message: 'Facet refinement must be an acyclic tree without shared nodes',
-      });
-      continue;
-    }
-    seen.add(node);
-    const record = node as {
-      readonly kind?: unknown;
-      readonly state?: unknown;
-      readonly splitSides?: unknown;
-      readonly specialSide?: unknown;
-      readonly children?: unknown;
-    };
-    if (record.kind === 'leaf') {
-      if (!isValidRefinementState(request.channel, record.state)) {
-        issues.push({
-          code: 'invalid-facet-refinement-state',
-          path: `${path}.state`,
-          message: `Refined leaf state is invalid for the ${request.channel} channel`,
-        });
-      }
-      continue;
-    }
-    if (record.kind !== 'split') {
-      issues.push({
-        code: 'invalid-facet-refinement-node',
-        path: `${path}.kind`,
-        message: 'Facet refinement node kind must be leaf or split',
-      });
-      continue;
-    }
-    const splitSides =
-      record.splitSides === 1 || record.splitSides === 2 || record.splitSides === 3 ? record.splitSides : undefined;
-    if (splitSides === undefined) {
-      issues.push({
-        code: 'invalid-facet-refinement-split',
-        path: `${path}.splitSides`,
-        message: 'Refined split side count must be 1, 2, or 3',
+        code: 'invalid-facet-refinement-split-triangle',
+        path: `refinement.splits[${index}].triangle`,
+        message: 'A refinement split must name a source facet of this mesh',
       });
     }
-    const specialSide =
-      record.specialSide === 0 || record.specialSide === 1 || record.specialSide === 2 ? record.specialSide : undefined;
-    if (specialSide === undefined || (splitSides === 3 && specialSide !== 0)) {
-      issues.push({
-        code: 'invalid-facet-refinement-special-side',
-        path: `${path}.specialSide`,
-        message: 'Refined special side must be 0, 1, or 2; a three-side split must use side 0',
-      });
-    }
-    if (!Array.isArray(record.children)) {
-      issues.push({
-        code: 'invalid-facet-refinement-children',
-        path: `${path}.children`,
-        message: 'Refined split children must be an array',
-      });
-      continue;
-    }
-    if (splitSides === undefined || record.children.length !== splitSides + 1) {
-      if (splitSides === undefined) continue;
-      issues.push({
-        code: 'invalid-facet-refinement-child-count',
-        path: `${path}.children`,
-        message: 'Refined child count must equal splitSides + 1',
-      });
-      continue;
-    }
-    if (depth >= ORCA_REFINEMENT_MAX_DEPTH) {
-      issues.push({
-        code: 'facet-refinement-limit-exceeded',
-        path,
-        message: `Facet refinement may contain at most ${ORCA_REFINEMENT_MAX_DEPTH} split levels`,
-      });
-      continue;
-    }
-    record.children.forEach((child, childIndex) => {
-      stack.push({
-        node: child,
-        path: `${path}.children[${childIndex}]`,
-        depth: depth + 1,
-      });
-    });
   }
+  walkRefinementNodes(stack, nodeBudget, request.channel, 'refinement', issues);
 }
 
 function isValidRefinementState(channel: FacetAnnotationChannel, state: unknown): state is FacetRegionState {
@@ -2871,14 +2838,29 @@ function isValidRefinementState(channel: FacetAnnotationChannel, state: unknown)
   );
 }
 
+/** Every assigned state the prior refinement carries, in either input form. */
+function priorRefinedStates<Channel extends FacetAnnotationChannel>(
+  request: FacetRegionSelectionRequest<Channel>,
+): FacetRegionState[] {
+  if (request.refinedRoots) return refinementNodeStates(request.refinedRoots);
+  return refinementLeafStates(request.refinement);
+}
+
 function refinementLeafStates(refinement: FacetRefinementEncoding | undefined): FacetRegionState[] {
-  if (refinement === undefined || !Array.isArray((refinement as { roots?: unknown }).roots)) {
+  if (refinement === undefined || !Array.isArray((refinement as { splits?: unknown }).splits)) {
     return [];
   }
+  return refinementNodeStates(
+    refinement.splits.map((split) => split?.node),
+    refinementNodeBudget(refinement.triangleCount),
+  );
+}
+
+function refinementNodeStates(nodes: readonly unknown[], nodeBudget?: number): FacetRegionState[] {
   const states: FacetRegionState[] = [];
-  const stack: unknown[] = [...refinement.roots];
+  const stack: unknown[] = [...nodes];
   const seen = new Set<object>();
-  const budget = refinementNodeBudget(refinement.roots.length);
+  const budget = nodeBudget ?? refinementNodeBudget(nodes.length);
   while (stack.length > 0 && seen.size <= budget) {
     const node = stack.pop();
     if (typeof node !== 'object' || node === null || Array.isArray(node) || seen.has(node)) continue;
@@ -3172,4 +3154,127 @@ function orcaFloatSubtract(left: number, right: number): number {
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
+}
+
+/**
+ * Walk refinement nodes, whatever container they arrived in.
+ *
+ * The dense working form and the sparse canonical form disagree about what
+ * the roots are, but the node rules below them are identical, so they are
+ * checked in one place rather than drifting apart in two.
+ */
+function walkRefinementNodes(
+  roots: Array<{ readonly node: unknown; readonly path: string; readonly depth: number }>,
+  nodeBudget: number,
+  channel: FacetAnnotationChannel,
+  rootPath: string,
+  issues: FacetAnnotationIssue[],
+): void {
+  const stack = [...roots];
+  const seen = new Set<object>();
+  let nodeCount = 0;
+  while (stack.length > 0) {
+    const { node, path, depth } = stack.pop()!;
+    nodeCount += 1;
+    if (nodeCount > nodeBudget) {
+      issues.push({
+        code: 'facet-refinement-limit-exceeded',
+        path: rootPath,
+        message: `Facet refinement may contain at most ${nodeBudget} nodes`,
+      });
+      return;
+    }
+    if (typeof node !== 'object' || node === null || Array.isArray(node)) {
+      issues.push({
+        code: 'invalid-facet-refinement-node',
+        path,
+        message: 'Facet refinement nodes must be objects',
+      });
+      continue;
+    }
+    if (seen.has(node)) {
+      issues.push({
+        code: 'invalid-facet-refinement-tree',
+        path,
+        message: 'Facet refinement must be an acyclic tree without shared nodes',
+      });
+      continue;
+    }
+    seen.add(node);
+    const record = node as {
+      readonly kind?: unknown;
+      readonly state?: unknown;
+      readonly splitSides?: unknown;
+      readonly specialSide?: unknown;
+      readonly children?: unknown;
+    };
+    if (record.kind === 'leaf') {
+      if (!isValidRefinementState(channel, record.state)) {
+        issues.push({
+          code: 'invalid-facet-refinement-state',
+          path: `${path}.state`,
+          message: `Refined leaf state is invalid for the ${channel} channel`,
+        });
+      }
+      continue;
+    }
+    if (record.kind !== 'split') {
+      issues.push({
+        code: 'invalid-facet-refinement-node',
+        path: `${path}.kind`,
+        message: 'Facet refinement node kind must be leaf or split',
+      });
+      continue;
+    }
+    const splitSides =
+      record.splitSides === 1 || record.splitSides === 2 || record.splitSides === 3 ? record.splitSides : undefined;
+    if (splitSides === undefined) {
+      issues.push({
+        code: 'invalid-facet-refinement-split',
+        path: `${path}.splitSides`,
+        message: 'Refined split side count must be 1, 2, or 3',
+      });
+    }
+    const specialSide =
+      record.specialSide === 0 || record.specialSide === 1 || record.specialSide === 2 ? record.specialSide : undefined;
+    if (specialSide === undefined || (splitSides === 3 && specialSide !== 0)) {
+      issues.push({
+        code: 'invalid-facet-refinement-special-side',
+        path: `${path}.specialSide`,
+        message: 'Refined special side must be 0, 1, or 2; a three-side split must use side 0',
+      });
+    }
+    if (!Array.isArray(record.children)) {
+      issues.push({
+        code: 'invalid-facet-refinement-children',
+        path: `${path}.children`,
+        message: 'Refined split children must be an array',
+      });
+      continue;
+    }
+    if (splitSides === undefined || record.children.length !== splitSides + 1) {
+      if (splitSides === undefined) continue;
+      issues.push({
+        code: 'invalid-facet-refinement-child-count',
+        path: `${path}.children`,
+        message: 'Refined child count must equal splitSides + 1',
+      });
+      continue;
+    }
+    if (depth >= ORCA_REFINEMENT_MAX_DEPTH) {
+      issues.push({
+        code: 'facet-refinement-limit-exceeded',
+        path,
+        message: `Facet refinement may contain at most ${ORCA_REFINEMENT_MAX_DEPTH} split levels`,
+      });
+      continue;
+    }
+    record.children.forEach((child, childIndex) => {
+      stack.push({
+        node: child,
+        path: `${path}.children[${childIndex}]`,
+        depth: depth + 1,
+      });
+    });
+  }
 }

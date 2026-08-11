@@ -11,6 +11,7 @@ export function inspectLiveCanonicalBoundaries(root) {
   const workspace = read('src/workspace/OrcaWorkspace.ts');
   const controller = read('src/workspace/CanonicalWorkspaceController.ts');
   const slicer = read('src/workspace/CanonicalWorkspaceSlicer.ts');
+  const workerSerializer = read('src/project/serialization/WorkerProjectSerializer.ts');
   const presentation = readSourceTree(root, 'src/ui');
   return [
     ...inspectMain(...main),
@@ -35,6 +36,7 @@ export function inspectLiveCanonicalBoundaries(root) {
     ...inspectOwner(...workspace),
     ...inspectController(...controller),
     ...inspectSlicer(...slicer),
+    ...inspectWorkerSerializer(...workerSerializer),
   ];
 }
 
@@ -202,6 +204,28 @@ export function selfTestLiveCanonicalBoundaries() {
        registry.invoke('filament_virtual_mutate', 'dom-inspector', actionCtx, state, invocation);
        workspace.mutateVirtualFilament(request);`,
       'Virtual filament UI cannot bypass the action registry',
+    ],
+    [
+      'main-thread archive authoring',
+      inspectSlicer,
+      `class CanonicalWorkspaceSlicer { constructor(options) {
+        const route = new CanonicalSlicerClientRoute({ client: options.client });
+        this.coordinator = new CanonicalSliceJobCoordinator({
+          source: options.workspace.createCanonicalSliceSource(),
+          serializer: new Bbs3mfProjectSerializer(),
+          profiles: new CanonicalStateProfileResolver(),
+          route,
+        });
+      } }`,
+      'off the main thread',
+    ],
+    [
+      'worker serializer writing another format',
+      inspectWorkerSerializer,
+      `class WorkerProjectSerializer { constructor(options) {
+        this.fallback = options.fallback ?? new PlainStlSerializer();
+      } }`,
+      'canonical BBS 3MF codec',
     ],
   ];
   const failures = [];
@@ -695,12 +719,28 @@ function inspectSlicer(file, source) {
   for (const [name, message] of Object.entries({
     CanonicalSlicerClientRoute: 'compose the canonical client route',
     CanonicalSliceJobCoordinator: 'compose the canonical job coordinator',
-    Bbs3mfProjectSerializer: 'serialize canonical BBS 3MF',
+    // The archive is authored on a worker, because writing a large plate's core
+    // model is seconds of CPU that used to freeze the UI on every slice. The
+    // canonical BBS codec is still the only writer: `WorkerProjectSerializer`
+    // owns a `Bbs3mfProjectSerializer` on both the worker and the fallback path,
+    // which `inspectWorkerSerializer` verifies.
+    WorkerProjectSerializer: 'serialize canonical BBS 3MF off the main thread',
     CanonicalStateProfileResolver: 'snapshot effective canonical profiles',
   })) {
     if (!all.news.some((entry) => entry.path === name)) check.fail(constructor, `slicer must ${message}`);
   }
   check.requireCall(all, 'options.workspace.createCanonicalSliceSource', 'slicer must consume only canonical source');
+  return check.failures;
+}
+
+function inspectWorkerSerializer(file, source) {
+  const check = context(file, source);
+  const constructor = check.constructor('WorkerProjectSerializer');
+  if (!constructor) return check.failures;
+  const all = facts(constructor);
+  if (!all.news.some((entry) => entry.path === 'Bbs3mfProjectSerializer')) {
+    check.fail(constructor, 'worker serializer must fall back to the canonical BBS 3MF codec, never to another format');
+  }
   return check.failures;
 }
 

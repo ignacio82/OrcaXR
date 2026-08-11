@@ -88,10 +88,40 @@ test('decodes bounded interleaved positions and strided uint16 indices', () => {
       triangleCount: 1,
     },
   };
-  assert.deepEqual(decodeIndexedMeshAsset({ descriptor, bytes }), {
-    vertices,
-    triangles: [[2, 0, 1]],
+  const strided = decodeIndexedMeshAsset({ descriptor, bytes });
+  assert.deepEqual(strided.vertices, vertices);
+  assert.deepEqual(strided.triangles, [[2, 0, 1]]);
+  // The packed buffers are the real representation; the tuple views above are
+  // derived from them, so both have to agree.
+  assert.deepEqual(Array.from(strided.positions), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  assert.deepEqual(Array.from(strided.indices), [2, 0, 1]);
+  assert.equal(strided.vertexCount, 3);
+  assert.equal(strided.triangleCount, 1);
+});
+
+test('exposes packed buffers and tuple views that stay in agreement', () => {
+  const asset = encodeIndexedMeshAsset({
+    id: entityId<'asset'>('import:test:mesh-codec-packed'),
+    positions: [0, 0, 0, 10, 0, 0, 10, 10, 0],
+    indices: [0, 1, 2],
   });
+  const decoded = decodeIndexedMeshAsset(asset);
+  assert.equal(decoded.vertexCount, 3);
+  assert.equal(decoded.triangleCount, 1);
+  assert.ok(decoded.positions instanceof Float32Array);
+  assert.ok(decoded.indices instanceof Uint32Array);
+  assert.deepEqual(Array.from(decoded.positions), [0, 0, 0, 10, 0, 0, 10, 10, 0]);
+  assert.deepEqual(Array.from(decoded.indices), [0, 1, 2]);
+  assert.deepEqual(decoded.vertices, [
+    [0, 0, 0],
+    [10, 0, 0],
+    [10, 10, 0],
+  ]);
+  assert.deepEqual(decoded.triangles, [[0, 1, 2]]);
+  // Materialized once and reused, so callers that read them repeatedly on a
+  // large mesh do not rebuild millions of tuples every time.
+  assert.equal(decoded.vertices, decoded.vertices);
+  assert.equal(decoded.triangles, decoded.triangles);
 });
 
 test('rejects malformed views, non-finite coordinates, bad indices, and digest drift', () => {

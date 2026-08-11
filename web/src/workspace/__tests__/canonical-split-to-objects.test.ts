@@ -234,20 +234,21 @@ await test('rejects connected-component splitting when paint exists only in refi
   volume.annotations.color = [];
   volume.annotations.refinement = {
     color: {
-      version: 1,
-      roots: [
+      version: 2,
+      triangleCount: 4,
+      splits: [
         {
-          kind: 'split',
-          splitSides: 1,
-          specialSide: 0,
-          children: [
-            { kind: 'leaf', state: { kind: 'assigned', value: fixture.ids.physical0 } },
-            { kind: 'leaf', state: { kind: 'assigned', value: fixture.ids.physical1 } },
-          ],
+          triangle: 0,
+          node: {
+            kind: 'split',
+            splitSides: 1,
+            specialSide: 0,
+            children: [
+              { kind: 'leaf', state: { kind: 'assigned', value: fixture.ids.physical0 } },
+              { kind: 'leaf', state: { kind: 'assigned', value: fixture.ids.physical1 } },
+            ],
+          },
         },
-        { kind: 'leaf', state: { kind: 'unpainted' } },
-        { kind: 'leaf', state: { kind: 'unpainted' } },
-        { kind: 'leaf', state: { kind: 'unpainted' } },
       ],
     },
   };

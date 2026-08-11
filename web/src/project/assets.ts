@@ -15,6 +15,18 @@ export interface AssetRepositorySnapshot {
 export interface AssetRepository {
   has(id: AssetId): boolean;
   get(id: AssetId): AssetPayload | undefined;
+  /**
+   * The stored payload itself, without copying it.
+   *
+   * `get` copies because callers may keep and mutate what they receive, and a
+   * mesh asset is tens of megabytes — copying one per projection put hundreds
+   * of milliseconds of pure memcpy on the render path of every canonical
+   * change. Read-only consumers on a hot path use this instead and must not
+   * mutate the descriptor or the bytes. The returned reference is also the
+   * repository's identity for those bytes: while it stays reference-equal, the
+   * content is unchanged, which lets a cache skip re-hashing them.
+   */
+  peek(id: AssetId): AssetPayload | undefined;
   put(descriptor: SourceAssetDescriptor, bytes: Uint8Array): void;
   remove(id: AssetId): void;
   list(): AssetPayload[];
@@ -51,6 +63,10 @@ export class InMemoryAssetRepository implements AssetRepository {
   get(id: AssetId): AssetPayload | undefined {
     const entry = this.entries.get(id);
     return entry ? clonePayload(entry) : undefined;
+  }
+
+  peek(id: AssetId): AssetPayload | undefined {
+    return this.entries.get(id);
   }
 
   put(descriptor: SourceAssetDescriptor, bytes: Uint8Array): void {

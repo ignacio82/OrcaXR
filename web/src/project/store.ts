@@ -52,7 +52,11 @@ export class ProjectStore implements ProjectStorePort {
     next: ProjectState,
     options: { reason?: string; dirtyCategories?: readonly DirtyCategory[] } = {},
   ): ProjectSnapshot {
-    assertValidProjectState(next);
+    // Validated once, on the copy that is actually stored. Validating the
+    // caller's object first as well doubled the cost of every commit for no
+    // extra guarantee: `cloneProjectState` is a faithful JSON clone, so it
+    // cannot turn a valid state into an invalid one, and validating the
+    // candidate is what proves the stored state is sound.
     const candidate = cloneProjectState(next);
     assertValidProjectState(candidate);
     const nextHash = projectFingerprint(candidate);

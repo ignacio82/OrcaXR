@@ -1,4 +1,4 @@
-import { Bbs3mfProjectSerializer } from '../project/serialization/Bbs3mfProjectSerializer';
+import { WorkerProjectSerializer } from '../project/serialization/WorkerProjectSerializer';
 import {
   CanonicalSliceJobCoordinator,
   type CanonicalSliceJobResult,
@@ -17,6 +17,7 @@ import {
 } from '../slicer/CanonicalSlicerClientRoute';
 import type { SlicerClientProjectRoute } from '../slicer/SlicerClient';
 import type { SliceEngineMetadata } from '../project/slicing/types';
+import type { ProjectSerializerPort } from '../project/ports';
 import type { CanonicalWorkspaceController } from './CanonicalWorkspaceController';
 
 export interface CanonicalWorkspaceSlicerOptions {
@@ -32,6 +33,8 @@ export interface CanonicalWorkspaceSlicerOptions {
   readonly defaults?: SliceJobOptions;
   readonly createJobId?: (sequence: number) => string;
   readonly now?: () => string;
+  /** Dependency seam: hosts without workers, and tests, supply their own. */
+  readonly serializer?: ProjectSerializerPort;
 }
 
 /**
@@ -40,6 +43,7 @@ export interface CanonicalWorkspaceSlicerOptions {
  */
 export class CanonicalWorkspaceSlicer {
   private readonly coordinator: CanonicalSliceJobCoordinator;
+  private readonly ownedSerializer: WorkerProjectSerializer | undefined;
   private disposed = false;
 
   constructor(options: CanonicalWorkspaceSlicerOptions) {
@@ -50,9 +54,12 @@ export class CanonicalWorkspaceSlicer {
       maxThreads: options.maxThreads,
       overrides: options.overrides,
     });
+    // Authoring a big plate's archive is seconds of pure CPU, so it runs on a
+    // worker; the coordinator only ever sees the port.
+    this.ownedSerializer = options.serializer ? undefined : new WorkerProjectSerializer();
     this.coordinator = new CanonicalSliceJobCoordinator({
       source: options.workspace.createCanonicalSliceSource(),
-      serializer: new Bbs3mfProjectSerializer(),
+      serializer: options.serializer ?? this.ownedSerializer!,
       profiles: options.profiles ?? new CanonicalStateProfileResolver(),
       route,
       preflight: options.preflight,
@@ -98,6 +105,7 @@ export class CanonicalWorkspaceSlicer {
     if (this.disposed) return;
     this.disposed = true;
     this.coordinator.cancelAll('Canonical workspace slicer disposed');
+    this.ownedSerializer?.dispose();
   }
 
   private assertActive(): void {

@@ -31,9 +31,9 @@ import type {
 } from '../project/domain/model';
 import { materializeFacetRefinement, type FacetAnnotationGuard } from '../project/annotations';
 import {
-  facetAssignmentsFromRefinement,
+  collapseFacetRefinementRoots,
+  type FacetRefinedRootSet,
   facetRefinementAssignedLeafCount,
-  facetRefinementHasSplits,
 } from '../project/domain/facetRefinement';
 import type { FullSpectrumAutoPairGenerationPreferences } from '../project/filaments/autoPairReconciliation';
 import type { ImportCommitConfirmation, ProjectImportPreview } from '../project/import/types';
@@ -1591,7 +1591,7 @@ export class OrcaWorkspace extends xb.Script {
     channel: PaintChannel;
     mode: 'paint' | 'erase';
     value?: JsonValue;
-    refinement?: FacetRefinementEncoding;
+    refinement?: FacetRefinedRootSet;
     guard?: FacetAnnotationGuard;
     previousLocal?: THREE.Vector3;
     pointerId: number;
@@ -2968,7 +2968,7 @@ export class OrcaWorkspace extends xb.Script {
   private renderPaintPreview(
     display: THREE.Mesh,
     triangles: ReadonlySet<number>,
-    refinement?: FacetRefinementEncoding,
+    refinement?: FacetRefinedRootSet,
     topologyRevision = 0,
     triangleCount?: number,
     channel: PaintChannel = this.paintChannel,
@@ -2983,11 +2983,14 @@ export class OrcaWorkspace extends xb.Script {
         canonicalOverlay.visible = false;
         this.paintPreviewHiddenOverlay = canonicalOverlay;
       }
+      // The in-flight tree is the dense working form; the overlay wants the
+      // same split the canonical store would take.
+      const collapsed = collapseFacetRefinementRoots(refinement.roots);
       geometry = this.buildPaintOverlayGeometry(
         display,
-        facetAssignmentsFromRefinement(refinement),
+        collapsed.assignments,
         channelOverlayColors(channel, paintPaletteColors(this.getPaintPalette(true))),
-        facetRefinementHasSplits(refinement) ? refinement : undefined,
+        collapsed.encoding,
         topologyRevision,
         triangleCount,
         channel,

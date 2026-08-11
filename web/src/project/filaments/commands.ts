@@ -1,9 +1,5 @@
-import { canonicalStringify, cloneJson, cloneProjectState, compareCanonicalText } from '../domain/canonical';
-import {
-  facetAssignmentsFromRefinement,
-  facetRefinementHasSplits,
-  remapFacetRefinementValues,
-} from '../domain/facetRefinement';
+import { canonicalStringify, cloneJson, cloneProjectState } from '../domain/canonical';
+import { remapFacetChannelValues } from '../domain/facetRefinement';
 import type { FilamentId, IdSource, LayerRangeId, ObjectId, PhysicalFilamentId, VolumeId } from '../domain/ids';
 import type { MixedFilament, ProjectState } from '../domain/model';
 import { findLayerRange, findObject, findVolume } from '../domain/selectors';
@@ -336,17 +332,21 @@ export class RemapFilamentsCommand extends SnapshotFilamentCommand {
         if (object.filamentId) object.filamentId = replacements.get(object.filamentId) ?? object.filamentId;
         for (const volume of object.volumes) {
           if (volume.filamentId) volume.filamentId = replacements.get(volume.filamentId) ?? volume.filamentId;
-          const colorRefinement = volume.annotations.refinement?.color;
-          if (colorRefinement) {
-            const remapped = remapFacetRefinementValues(colorRefinement, (value) => replacements.get(value) ?? value);
-            volume.annotations.color = facetAssignmentsFromRefinement(remapped);
-            if (facetRefinementHasSplits(remapped)) volume.annotations.refinement!.color = remapped;
+          // Both halves of the channel are remapped together, because a
+          // subdivided facet whose children all became the same filament is no
+          // longer subdivided and its value moves to the assignments.
+          const remapped = remapFacetChannelValues(
+            volume.annotations.color,
+            volume.annotations.refinement?.color,
+            (value) => replacements.get(value) ?? value,
+          );
+          volume.annotations.color = remapped.assignments;
+          if (volume.annotations.refinement) {
+            if (remapped.encoding) volume.annotations.refinement.color = remapped.encoding;
             else {
-              delete volume.annotations.refinement!.color;
-              if (Object.keys(volume.annotations.refinement!).length === 0) delete volume.annotations.refinement;
+              delete volume.annotations.refinement.color;
+              if (Object.keys(volume.annotations.refinement).length === 0) delete volume.annotations.refinement;
             }
-          } else {
-            volume.annotations.color = remapFacetColors(volume.annotations.color, replacements);
           }
         }
         for (const range of object.layerRanges) {
@@ -356,23 +356,6 @@ export class RemapFilamentsCommand extends SnapshotFilamentCommand {
     }
     state.filaments.mixed.forEach((filament) => remapMixedComponents(filament, replacements));
   }
-}
-
-function remapFacetColors(
-  assignments: ProjectState['plates'][number]['objects'][number]['volumes'][number]['annotations']['color'],
-  replacements: ReadonlyMap<FilamentId, FilamentId>,
-) {
-  if (!assignments.some((assignment) => replacements.has(assignment.value))) return assignments;
-  const trianglesByFilament = new Map<FilamentId, Set<number>>();
-  for (const assignment of assignments) {
-    const filamentId = replacements.get(assignment.value) ?? assignment.value;
-    const triangles = trianglesByFilament.get(filamentId) ?? new Set<number>();
-    assignment.triangles.forEach((triangle) => triangles.add(triangle));
-    trianglesByFilament.set(filamentId, triangles);
-  }
-  return [...trianglesByFilament.entries()]
-    .sort(([left], [right]) => compareCanonicalText(left, right))
-    .map(([value, triangles]) => ({ value, triangles: [...triangles].sort((left, right) => left - right) }));
 }
 
 /**
