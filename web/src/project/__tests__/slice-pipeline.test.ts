@@ -421,10 +421,76 @@ await test('cancellation and timeouts terminate publication even when a route st
   assert.equal(cancelled.coordinator.getLatestResult(), undefined);
 
   const timedOut = harness(stalled);
-  const timeoutHandle = timedOut.coordinator.startCurrentPlate({ maxAttempts: 1, attemptTimeoutMs: 5 });
+  const timeoutHandle = timedOut.coordinator.startCurrentPlate({ maxAttempts: 1, attemptIdleTimeoutMs: 5 });
   await assert.rejects(timeoutHandle.completion, SliceJobTimeoutError);
   assert.equal(timeoutHandle.getStatus().phase, 'timed-out');
   assert.equal(timedOut.coordinator.getLatestResult(), undefined);
+});
+
+await test('a slow route that keeps reporting progress is never cancelled for taking a long time', async () => {
+  // A two-million-facet model slices for many minutes. The attempt limit exists
+  // to catch a route that has stopped responding, so progress has to hold it
+  // off — otherwise the app cancels healthy work and reports it as a failure
+  // long after the operator watched it start.
+  let ticks = 0;
+  let release: (() => void) | undefined;
+  const slowButAlive: SliceRouteAdapterPort = {
+    metadata: new RecordingRoute().metadata,
+    execute(request, signal, onProgress) {
+      return new Promise((resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        const beat = setInterval(() => {
+          ticks += 1;
+          onProgress?.({ percent: Math.min(99, ticks), message: `slicing ${ticks}` });
+        }, 5);
+        release = () => {
+          clearInterval(beat);
+          resolve({
+            protocolVersion: request.protocolVersion,
+            jobId: request.jobId,
+            plateId: request.plateId,
+            inputHash: request.project.inputHash,
+            engine: { ...new RecordingRoute().metadata.engine },
+            gcode: new TextEncoder().encode('; slow but alive\n'),
+            warnings: [],
+            statistics: {},
+          });
+        };
+      });
+    },
+  };
+  const slow = harness(slowButAlive);
+  // An idle limit far shorter than the run: only the heartbeat keeps it alive.
+  const handle = slow.coordinator.startCurrentPlate({ maxAttempts: 1, attemptIdleTimeoutMs: 60 });
+  await waitUntil(() => ticks >= 20);
+  release?.();
+  await handle.completion;
+  assert.equal(handle.getStatus().phase, 'completed');
+  assert.ok(ticks >= 20, 'the route ran well past the idle limit while reporting progress');
+});
+
+await test('a route that goes silent is cancelled and says that is why', async () => {
+  let started = false;
+  const silent: SliceRouteAdapterPort = {
+    metadata: new RecordingRoute().metadata,
+    execute(_request, signal, onProgress) {
+      started = true;
+      // One beat, then silence.
+      onProgress?.({ percent: 1, message: 'started' });
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      });
+    },
+  };
+  const stuck = harness(silent);
+  const handle = stuck.coordinator.startCurrentPlate({ maxAttempts: 1, attemptIdleTimeoutMs: 20 });
+  await assert.rejects(handle.completion, (error: unknown) => {
+    assert.ok(error instanceof SliceJobTimeoutError, 'silence is reported as a timeout, not as a mystery');
+    assert.match(String((error as Error).message), /no progress/, 'and it says what actually happened');
+    return true;
+  });
+  assert.equal(started, true);
+  assert.equal(handle.getStatus().phase, 'timed-out');
 });
 
 await test('confirmed-cleanup routes delay cancellation until cleanup settles and fail unconfirmed cleanup honestly', async () => {

@@ -150,9 +150,16 @@ export class CanonicalSlicerClientRoute implements SliceRouteAdapterPort {
       }
       if (signal.aborted) {
         const reason = signalReason(signal);
-        throw new SliceRouteCancellationError('Canonical slice route cleanup confirmed', true, reason, {
-          cause: error,
-        });
+        // Confirming cleanup is not the interesting part — *why* the slice was
+        // aborted is, and it is the only thing the operator can act on. Saying
+        // only that cleanup was confirmed reported a timed-out slice of a large
+        // model as if nothing had gone wrong but the teardown.
+        throw new SliceRouteCancellationError(
+          `Canonical slice route stopped: ${boundedMessage(reason ?? error)}`,
+          true,
+          reason,
+          { cause: error },
+        );
       }
       if (error instanceof SliceRouteError) throw error;
       throw new SliceRouteError(`SlicerClient route failed: ${boundedMessage(error)}`, isRetryable(error));

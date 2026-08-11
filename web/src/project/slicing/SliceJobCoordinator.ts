@@ -131,8 +131,14 @@ interface MutableJob {
 const DEFAULT_OPTIONS: Required<SliceJobOptions> = {
   maxAttempts: 2,
   preflightTimeoutMs: 10_000,
-  attemptTimeoutMs: 120_000,
-  serializationTimeoutMs: 30_000,
+  attemptIdleTimeoutMs: 120_000,
+  // Writing the archive costs time in proportion to the model: a
+  // two-million-facet plate takes around twenty seconds, which left almost no
+  // margin under the previous thirty-second limit and would have failed the
+  // same slice on a slower machine. It reports no progress, so unlike the
+  // attempt limit this cannot measure silence — it is only here to bound a
+  // hang, and since the work runs on a worker a hang no longer freezes the UI.
+  serializationTimeoutMs: 600_000,
   recoveryTimeoutMs: 10_000,
 };
 
@@ -375,13 +381,18 @@ export class CanonicalSliceJobCoordinator {
       try {
         const response = await runRouteAbortable(
           job.controller.signal,
-          job.options.attemptTimeoutMs,
-          new SliceJobTimeoutError('Slice route attempt', job.options.attemptTimeoutMs),
+          job.options.attemptIdleTimeoutMs,
+          new SliceJobTimeoutError(
+            `Slice route attempt reported no progress for ${job.options.attemptIdleTimeoutMs} ms`,
+            job.options.attemptIdleTimeoutMs,
+          ),
           this.options.route.cancellation,
-          (signal) =>
-            this.options.route.execute(request, signal, (progress) =>
-              this.reportRouteProgress(job, plateId, attempt, progress),
-            ),
+          (signal, beat) =>
+            this.options.route.execute(request, signal, (progress) => {
+              // Progress is proof the route is alive, whatever the elapsed time.
+              beat();
+              this.reportRouteProgress(job, plateId, attempt, progress);
+            }),
         );
         this.assertFresh(job, archive);
         validateRouteResponse(response, request, this.routeMetadata);
@@ -822,22 +833,63 @@ function cancellationToken(signal: AbortSignal): CancellationToken {
   };
 }
 
+/**
+ * A deadline that measures silence rather than elapsed time.
+ *
+ * A slice of a two-million-facet model legitimately runs for many minutes, so a
+ * cap on total duration cancels healthy work — which is exactly what a fixed
+ * two-minute attempt limit did, and it surfaced as an unexplained failure well
+ * after the operator had watched it start. What the limit is really for is a
+ * route that has stopped responding, and both routes say so continuously: the
+ * external one polls its job roughly once a second, and the browser engine
+ * reports each stage it enters. Every one of those is a beat.
+ */
+class SilenceDeadline {
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  private fired = false;
+
+  constructor(
+    private readonly idleMs: number,
+    private readonly onSilent: () => void,
+  ) {}
+
+  arm(): void {
+    this.disarm();
+    if (this.fired) return;
+    this.timer = setTimeout(() => {
+      this.fired = true;
+      this.onSilent();
+    }, this.idleMs);
+  }
+
+  /** The route is still alive; start counting again. */
+  beat(): void {
+    if (!this.fired) this.arm();
+  }
+
+  disarm(): void {
+    if (this.timer !== undefined) clearTimeout(this.timer);
+    this.timer = undefined;
+  }
+}
+
 async function runAbortable<T>(
   parent: AbortSignal,
   timeoutMs: number,
   timeoutError: SliceJobTimeoutError,
-  operation: (signal: AbortSignal) => Promise<T>,
+  operation: (signal: AbortSignal, beat: () => void) => Promise<T>,
 ): Promise<T> {
   if (parent.aborted) throw abortReason(parent);
   const controller = new AbortController();
   const forwardAbort = () => controller.abort(parent.reason);
   parent.addEventListener('abort', forwardAbort, { once: true });
-  const timer = setTimeout(() => controller.abort(timeoutError), timeoutMs);
+  const deadline = new SilenceDeadline(timeoutMs, () => controller.abort(timeoutError));
+  deadline.arm();
   try {
-    const operationPromise = Promise.resolve().then(() => operation(controller.signal));
+    const operationPromise = Promise.resolve().then(() => operation(controller.signal, () => deadline.beat()));
     return await raceAbort(operationPromise, controller.signal);
   } finally {
-    clearTimeout(timer);
+    deadline.disarm();
     parent.removeEventListener('abort', forwardAbort);
   }
 }
@@ -847,7 +899,7 @@ async function runRouteAbortable<T>(
   timeoutMs: number,
   timeoutError: SliceJobTimeoutError,
   cancellation: SliceRouteAdapterPort['cancellation'],
-  operation: (signal: AbortSignal) => Promise<T>,
+  operation: (signal: AbortSignal, beat: () => void) => Promise<T>,
 ): Promise<T> {
   if (!cancellation) return runAbortable(parent, timeoutMs, timeoutError, operation);
   if (parent.aborted) {
@@ -860,8 +912,9 @@ async function runRouteAbortable<T>(
   const controller = new AbortController();
   const forwardAbort = () => controller.abort(parent.reason);
   parent.addEventListener('abort', forwardAbort, { once: true });
-  const timer = setTimeout(() => controller.abort(timeoutError), timeoutMs);
-  const operationPromise = Promise.resolve().then(() => operation(controller.signal));
+  const deadline = new SilenceDeadline(timeoutMs, () => controller.abort(timeoutError));
+  deadline.arm();
+  const operationPromise = Promise.resolve().then(() => operation(controller.signal, () => deadline.beat()));
   const settled = settlePromise(operationPromise);
   try {
     const first = await raceSettlementWithAbort(settled, controller.signal);
@@ -892,7 +945,7 @@ async function runRouteAbortable<T>(
       { cause: cleanup.error },
     );
   } finally {
-    clearTimeout(timer);
+    deadline.disarm();
     parent.removeEventListener('abort', forwardAbort);
   }
 }

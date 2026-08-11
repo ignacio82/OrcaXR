@@ -207,7 +207,13 @@ export interface SliceJobOptions {
   readonly maxAttempts?: number;
   readonly preflightTimeoutMs?: number;
   /** Per route attempt. */
-  readonly attemptTimeoutMs?: number;
+  /**
+   * How long one attempt may go **without reporting progress** before it is
+   * treated as stuck. It is not a cap on how long a slice may take: a large
+   * model legitimately runs for many minutes, and both routes report progress
+   * throughout, so a duration cap would cancel healthy work.
+   */
+  readonly attemptIdleTimeoutMs?: number;
   readonly serializationTimeoutMs?: number;
   readonly recoveryTimeoutMs?: number;
 }
