@@ -431,7 +431,7 @@ P10.10 still requires counters, repeated lifecycle leak checks, and Galaxy XR qu
 
 7. **`update_values_to_printer_extruders_for_multiple_filaments` null-derefs on filament-prefixed nullable options.** Patch `0013-toolchanger-handle-nullable-cast.patch` fixes this.
 
-8. **3MF loader dispatch is BBS-leaning and breaks on Prusa / MakerWorld files.** Use `Model::read_from_archive` which sniffs Prusa-vs-BBS. In browser imports, official BBS multi-plate membership lives in `Metadata/model_settings.config` as `(object_id, instance_id)` pairs; core `<build>` transforms use the global 1.2×-bed plate grid, so resolve exact membership and `printable_area` or fail closed, then subtract the source origin. Canonical transforms stay plate-local; only standard BBS export re-adds that virtual origin. Never guess from thumbnails or spatial clusters. Production-extension `p:path` IDs are model-part-local: key references by normalized package path plus ID, permit external paths only from the root model, recursively compose same-part child components including repeats, and reject missing/conflicting paths or IDs, traversal, cycles, depth over 64, and expansion over 16,384 nodes. Preserve original split `.model` members opaquely, but remove `p:path` from the generated flattened core. A read-only `MarbleRunTube_V7.3mf` smoke resolved 26 external parts into 5 plates/28 objects/29 volumes/28 instances and passed in-memory canonical save/reopen; this is headless evidence, not official GUI qualification. Do not add a blanket affine-shear rejection: that real Orca archive contains such build matrices, while arbitrary shear remains an explicit residual of the canonical TRS projection.
+8. **3MF loader dispatch is BBS-leaning and breaks on Prusa / MakerWorld files.** Use `Model::read_from_archive` which sniffs Prusa-vs-BBS. In browser imports, official BBS multi-plate membership lives in `Metadata/model_settings.config` as `(object_id, instance_id)` pairs; core `<build>` transforms use the global 1.2×-bed plate grid, so resolve exact membership and `printable_area` or fail closed, then subtract the source origin. Canonical transforms stay plate-local; only standard BBS export re-adds that virtual origin. Never guess from thumbnails or spatial clusters. Production-extension `p:path` IDs are model-part-local: key references by normalized package path plus ID, permit external paths only from the root model, recursively compose same-part child components including repeats, and reject missing/conflicting paths or IDs, traversal, cycles, depth over 64, and expansion over 16,384 nodes. Do not preserve original split `.model` members: the generated flattened core absorbs them, so keeping them stores the geometry twice and leaves a stale copy behind (see the large-model section). Remove `p:path` from that generated core, and let the relationship projection drop the now-dangling targets. A read-only `MarbleRunTube_V7.3mf` smoke resolved 26 external parts into 5 plates/28 objects/29 volumes/28 instances and passed in-memory canonical save/reopen; this is headless evidence, not official GUI qualification. Do not add a blanket affine-shear rejection: that real Orca archive contains such build matrices, while arbitrary shear remains an explicit residual of the canonical TRS projection.
 
 9. **`load_bbs_3mf` requires `LoadStrategy::LoadModel | LoadConfig | AddDefaultInstances`.** DO NOT add `LoadAuxiliary` (=16) as it fails on Android's read-only filesystem.
 
@@ -758,12 +758,34 @@ floors, not ceilings.
   had the same shape of bug — a 30 s cap on work that takes ~19 s for a
   two-million-facet plate — and archive authoring reports no progress, so it is
   simply bounded generously now that it runs on a worker.
-- **Regenerated archives compress worse than the originals.** The narwhal reopens
-  as an 85.7 MB archive where its source was 27.9 MB, from 182 MB of generated
-  core-model XML against the original's 161 MB. Number formatting in the writer
-  is the likely cause. It slices correctly and stays far inside the server's
-  256 MiB upload limit, but it is three times the bytes to send to an external
-  slicer and worth fixing.
+- **A regenerated archive was three times its source, for two independent
+  reasons — both fixed.** The narwhal reopened as 85.7 MB against a 27.9 MB
+  source; it is now 46.6 MB, and its core model XML is *smaller* and compresses
+  *better* than the file it came from (158.2 MB → 27.7 MB at 5.7x, against the
+  original's 161.6 MB → 29.6 MB at 5.5x).
+  - **Mesh coordinates are float32, so `String(value)` is the wrong formatter.**
+    It emits the shortest *double* that round-trips, which for a float32 is its
+    full binary expansion: a coordinate authored as `-25.7756138` came back out
+    as `-25.77561378479004`. Those digits name the same float32, so they carry
+    no information — they just cost ~60% more bytes each and, being effectively
+    noise, destroy compression. `formatMeshCoordinate` emits the shortest
+    decimal that still round-trips through `Math.fround`. Use it for mesh
+    positions only: `formatNumber` stays for canonical doubles such as layer
+    `top_z` and height-range bounds, where shortening would lose precision.
+  - **A referenced Production Extension part must not be preserved once the
+    generated core absorbs it.** BBS keeps its meshes in `3D/Objects/*.model`,
+    so this is every Orca/Bambu archive, not an exotic case: the writer resolved
+    those parts into the flattened `3D/3dmodel.model` *and* kept the originals
+    as opaque blobs, storing the geometry twice and leaving the copy frozen at
+    import while the core moved on. `ImportedCoreProject.absorbedIntoCorePaths`
+    names them, and they are excluded from preservation only when the core was
+    actually regenerated — if `buildBbsCore` could not run, the originals are
+    still the only carrier and must stay. The existing machinery already drops
+    the now-dangling OPC relationship, which is required: a relationship to a
+    missing part makes the pinned engine reject the whole archive.
+  - What remains is principled duplication, not waste: the XML core is for
+    foreign readers and the engine, and `Metadata/orcaxr/assets/*.bin` (17.2 MB
+    compressed here) is the byte-exact canonical mesh the envelope reopens from.
 
 - **What the external slicer container can and cannot fix.** Offloading helps the
   *slice* itself and nothing else: the costs above are all in the browser,

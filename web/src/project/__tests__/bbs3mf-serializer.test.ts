@@ -721,7 +721,7 @@ await test('fails closed instead of guessing a plate for contradictory BBS membe
   });
 });
 
-await test('imports qualified Production Extension graphs and preserves split members deterministically', async () => {
+await test('imports qualified Production Extension graphs and folds split members into one core', async () => {
   const serializer = new Bbs3mfProjectSerializer();
   const source = foreignSplitProductionArchive();
   const originalFiles = readSafeZip(source);
@@ -753,8 +753,11 @@ await test('imports qualified Production Extension graphs and preserves split me
   assert.equal(assemblyA.volumes[0].filamentId, imported.state.filaments.physical[0].id);
   assert.equal(assemblyB.volumes[0].name, 'B leaf');
   assert.equal(assemblyB.volumes[0].filamentId, imported.state.filaments.physical[1].id);
-  assert.ok(imported.state.extensionBlobs.some((blob) => blob.path === '3D/Objects/A.model'));
-  assert.ok(imported.state.extensionBlobs.some((blob) => blob.path === '3D/Objects/B.model'));
+  // The referenced parts were resolved into canonical objects and are re-emitted
+  // inside the generated core, so keeping the originals too would store the same
+  // geometry twice and leave the copy frozen at import while the core moves on.
+  assert.ok(!imported.state.extensionBlobs.some((blob) => blob.path === '3D/Objects/A.model'));
+  assert.ok(!imported.state.extensionBlobs.some((blob) => blob.path === '3D/Objects/B.model'));
 
   const snapshot = {
     state: imported.state,
@@ -766,10 +769,22 @@ await test('imports qualified Production Extension graphs and preserves split me
   const savedAgain = await serializer.serialize(snapshot);
   assert.deepEqual(savedAgain.bytes, saved.bytes);
   const output = readSafeZip(saved.bytes);
-  assert.deepEqual(output.get('3D/Objects/A.model'), originalFiles.get('3D/Objects/A.model'));
-  assert.deepEqual(output.get('3D/Objects/B.model'), originalFiles.get('3D/Objects/B.model'));
-  assert.doesNotMatch(text(output.get(CORE_MODEL_PATH)!), /\bp:path=/);
-  assert.match(text(output.get('3D/_rels/3dmodel.model.rels')!), /Target="\/3D\/Objects\/A\.model"/);
+  assert.equal(output.get('3D/Objects/A.model'), undefined);
+  assert.equal(output.get('3D/Objects/B.model'), undefined);
+  // Nothing was lost with them: the flattened core carries every resolved mesh,
+  // and it references no external part.
+  const writtenCore = text(output.get(CORE_MODEL_PATH)!);
+  assert.doesNotMatch(writtenCore, /\bp:path=/);
+  // Every referenced mesh is written out per resolved volume, so the core holds
+  // at least what the split parts did.
+  assert.ok(
+    (writtenCore.match(/<vertex /g) ?? []).length >=
+      (text(originalFiles.get('3D/Objects/A.model')!).match(/<vertex /g) ?? []).length +
+        (text(originalFiles.get('3D/Objects/B.model')!).match(/<vertex /g) ?? []).length,
+  );
+  // A relationship to a part this package no longer contains would make the
+  // whole archive unreadable to the pinned engine.
+  assert.doesNotMatch(text(output.get('3D/_rels/3dmodel.model.rels')!), /Target="\/3D\/Objects\//);
   const reopened = await serializer.deserialize(saved.bytes);
   assert.equal(canonicalStringify(reopened.state), canonicalStringify(imported.state));
   const resaved = await serializer.serialize({ ...snapshot, state: reopened.state, assets: reopened.assets });
@@ -1418,6 +1433,57 @@ await test('a BBS shape with no SVG reference is not mistaken for an SVG part', 
     false,
     'a shape without filepath3mf describes no drawing',
   );
+});
+
+await test('mesh coordinates are written as the shortest text that names the same float32', async () => {
+  // Canonical positions are float32. Printing one through `String` emits the
+  // shortest *double* that round-trips, which for a float32 is its full binary
+  // expansion: a coordinate authored as -25.7756138 came back out as
+  // -25.77561378479004. Those digits carry no information, cost ~60% more
+  // bytes, and being effectively noise they also wreck compression.
+  const fixture = createProjectFixture();
+  const authored = [-25.7756138, -76.1897888, -15.009243];
+  const bytes = fixture.asset.bytes.slice();
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  authored.forEach((coordinate, index) => view.setFloat32(index * 4, coordinate, true));
+  const asset = { descriptor: { ...fixture.asset.descriptor, digest: contentDigest(bytes) }, bytes };
+  const state = JSON.parse(JSON.stringify(fixture.state)) as typeof fixture.state;
+  state.sourceAssets = [{ ...asset.descriptor }];
+
+  const serializer = new Bbs3mfProjectSerializer();
+  const saved = await serializer.serialize({
+    state,
+    assets: [asset],
+    sourceRevision: 0,
+    sourceHash: projectFingerprint(state),
+  });
+  const core = text(readSafeZip(saved.bytes).get(CORE_MODEL_PATH)!);
+  const written = /<vertex x="([^"]*)" y="([^"]*)" z="([^"]*)"/.exec(core);
+  assert.ok(written, 'the core must contain the vertex');
+  authored.forEach((coordinate, index) => {
+    const emitted = written[index + 1];
+    assert.equal(
+      Math.fround(Number(emitted)),
+      Math.fround(coordinate),
+      'the emitted text must name exactly the stored float32',
+    );
+    assert.ok(
+      emitted.length <= String(Math.fround(coordinate)).length,
+      `${emitted} must be no longer than the full expansion ${String(Math.fround(coordinate))}`,
+    );
+  });
+
+  // And the archive still reopens to the same geometry it was written from.
+  const reopened = await serializer.deserialize(saved.bytes);
+  const reopenedAsset = reopened.assets.find((entry) => entry.descriptor.kind === 'mesh')!;
+  const reopenedView = new DataView(
+    reopenedAsset.bytes.buffer,
+    reopenedAsset.bytes.byteOffset,
+    reopenedAsset.bytes.byteLength,
+  );
+  authored.forEach((coordinate, index) => {
+    assert.equal(reopenedView.getFloat32(index * 4, true), Math.fround(coordinate));
+  });
 });
 
 await test('a variable layer-height profile round-trips through the archive', async () => {

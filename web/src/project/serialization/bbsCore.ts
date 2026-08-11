@@ -531,7 +531,7 @@ function buildCoreModel(
       lines.push('   <mesh>', '    <vertices>');
       for (const vertex of entry.mesh.vertices) {
         lines.push(
-          `     <vertex x="${formatNumber(vertex[0])}" y="${formatNumber(vertex[1])}" z="${formatNumber(vertex[2])}"/>`,
+          `     <vertex x="${formatMeshCoordinate(vertex[0])}" y="${formatMeshCoordinate(vertex[1])}" z="${formatMeshCoordinate(vertex[2])}"/>`,
         );
       }
       lines.push('    </vertices>', '    <triangles>');
@@ -1413,6 +1413,34 @@ function formatNumber(value: number): string {
   return Object.is(value, -0) ? '0' : String(value);
 }
 
+/**
+ * Write a mesh coordinate as the shortest decimal that still names the same
+ * float32.
+ *
+ * Canonical mesh positions are float32, and printing one through `String` emits
+ * the shortest *double* that round-trips — for a float32 that is its exact
+ * binary expansion, so a coordinate the source file wrote as `-25.7756138`
+ * comes back out as `-25.77561378479004`. Those trailing digits carry no
+ * information: they are the same float32 either way. They cost about 60% more
+ * bytes each, and because they are effectively noise they also wreck
+ * compression — reopening a 1.9M-facet model turned a 27.9 MB archive into an
+ * 85.7 MB one, which is what an external slicer then has to receive.
+ *
+ * Round-tripping is exact in both directions: the emitted text parses to this
+ * same float32, which is what the canonical asset stores.
+ */
+function formatMeshCoordinate(value: number): string {
+  if (!Number.isFinite(value)) throw new Error('Cannot serialize a non-finite coordinate');
+  if (Object.is(value, -0) || value === 0) return '0';
+  // Nine significant digits always suffice to name a float32 uniquely; the loop
+  // stops at the first precision that does, which is usually far fewer.
+  for (let precision = 1; precision <= 9; precision += 1) {
+    const candidate = Number(value.toPrecision(precision));
+    if (Math.fround(candidate) === value) return String(candidate);
+  }
+  return String(value);
+}
+
 function xmlAttribute(value: string): string {
   assertXmlValue(value, 'XML attribute');
   return value
@@ -1540,6 +1568,17 @@ export interface ImportedCoreProject {
   state: ProjectState;
   assets: AssetPayload[];
   consumedPaths: Set<string>;
+  /**
+   * Consumed parts whose content the generated *core* model carries, rather
+   * than a file of the same name.
+   *
+   * A referenced Production Extension part is resolved and re-emitted inside
+   * `3D/3dmodel.model`, so it is regenerated even though nothing is written back
+   * to its own path. Preserving it as well stores the same geometry twice —
+   * which is every BBS archive, since that is where BBS keeps its meshes — and
+   * leaves the copy frozen at import while the core moves on.
+   */
+  absorbedIntoCorePaths: Set<string>;
   warnings: string[];
 }
 
@@ -1775,7 +1814,7 @@ export function importBbsCore(
     warnings.push(
       `Resolved ${parsed.externalModelPaths.length} referenced 3MF Production Extension model part${
         parsed.externalModelPaths.length === 1 ? '' : 's'
-      }; the original split members remain preserved as opaque package entries`,
+      } into the generated core model; the original split members are not kept as a second copy`,
     );
   }
 
@@ -2032,14 +2071,28 @@ export function importBbsCore(
   };
   applyImportedBrimEars(files, plates, warnings);
   applyImportedLayerHeightProfiles(files, plates, warnings);
-  const consumedPaths = new Set([CORE_MODEL_PATH, ...consumedSvgPaths]);
+  // Referenced model parts are consumed exactly like the core part is: their
+  // objects are resolved and re-emitted into the generated flattened core, so
+  // preserving them too stores the same geometry twice. That is not merely
+  // wasteful — a BBS archive keeps its meshes in `3D/Objects/*.model`, so every
+  // reopened project carried a second full copy, and reopening a 1.9M-facet
+  // model wrote a 76 MB archive for a 27.9 MB source. It is also two disagreeing
+  // carriers of one fact: the preserved copy still holds the geometry as
+  // imported, while the core holds the geometry as it is now.
+  const consumedPaths = new Set([CORE_MODEL_PATH, ...consumedSvgPaths, ...parsed.externalModelPaths]);
   if (files.has(PROJECT_SETTINGS_PATH)) consumedPaths.add(PROJECT_SETTINGS_PATH);
   if (files.has(MODEL_SETTINGS_PATH)) consumedPaths.add(MODEL_SETTINGS_PATH);
   if (files.has(LAYER_RANGES_PATH)) consumedPaths.add(LAYER_RANGES_PATH);
   if (files.has(LAYER_EVENTS_PATH)) consumedPaths.add(LAYER_EVENTS_PATH);
   if (files.has(BRIM_EAR_POINTS_PATH)) consumedPaths.add(BRIM_EAR_POINTS_PATH);
   if (files.has(LAYER_HEIGHTS_PROFILE_PATH)) consumedPaths.add(LAYER_HEIGHTS_PROFILE_PATH);
-  return { state, assets, consumedPaths, warnings };
+  return {
+    state,
+    assets,
+    consumedPaths,
+    absorbedIntoCorePaths: new Set(parsed.externalModelPaths),
+    warnings,
+  };
 }
 
 interface ParsedModelPart {

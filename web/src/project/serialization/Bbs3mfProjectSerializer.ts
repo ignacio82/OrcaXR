@@ -280,6 +280,13 @@ export class Bbs3mfProjectSerializer implements ProjectSerializerPort {
     for (const path of imported.consumedPaths) {
       if (regeneratedPaths.has(path)) excluded.add(path);
     }
+    // Parts the generated core absorbed rather than reproduced under their own
+    // name. They are only superseded if the core was actually regenerated: when
+    // `buildBbsCore` could not run, the originals are still the only carrier of
+    // that geometry and must stay preserved.
+    if (regeneratedPaths.has(CORE_MODEL_PATH)) {
+      for (const path of imported.absorbedIntoCorePaths) excluded.add(path);
+    }
     preserveUnownedEntries(state, repository, files, excluded, archiveHash, imported.warnings);
     assertValidProjectState(state);
     return {
