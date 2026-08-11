@@ -584,6 +584,11 @@ export interface OrcaWorkspaceOptions {
   readonly fullSpectrumAutoPairPreferences?: FullSpectrumAutoPairGenerationPreferences;
   /** Renderer dependency seam used to fail closed without constructing test-sized GPU buffers. */
   readonly previewSurfaceFactory?: (options: GcodePreviewSurfaceOptions) => WorkspacePreviewSurface;
+  /**
+   * Already-loaded profile corpus, so a caller with no network (a test, an
+   * offline harness) drives the real preset graph instead of an empty one.
+   */
+  readonly catalog?: ProfileCatalog;
 }
 
 export type WorkspacePreviewSurface = Pick<GcodePreviewSurface, 'clear' | 'render' | 'setVisible'>;
@@ -705,6 +710,7 @@ export class OrcaWorkspace extends xb.Script {
     super();
     this.previewSurfaceFactory =
       options.previewSurfaceFactory ?? ((surfaceOptions) => new GcodePreviewSurface(surfaceOptions));
+    if (options.catalog) this.catalog = options.catalog;
     this.canonicalProject = CanonicalWorkspaceController.createEmpty({
       idSource: new UuidIdSource(cryptographicRandomWord),
       clock: () => new Date(),
@@ -2123,6 +2129,15 @@ export class OrcaWorkspace extends xb.Script {
         this.setStatus(`Project filaments already match the printer.${extra}`);
         return false;
       }
+      // The canonical filaments now say what the printer reported, but on a
+      // catalog-driven profile the *bound filament preset* is what supplies the
+      // material the slice is checked against, and it still names whatever the
+      // profile defaulted to. Leaving the two disagreeing reported the machine's
+      // own filament as unsupported ("PLA is not supported on tool 1"), and the
+      // next profile touch would have overwritten the sync outright, because
+      // `applyLiveSlicingConfiguration` rebuilds canonical filaments from the
+      // palette and the head presets.
+      const rebound = this.adoptPrinterFilamentPresets(slots);
       this.refreshPaintOverlays();
       this.recomputePreflight();
       this.onProfileChanged?.();
@@ -2130,14 +2145,100 @@ export class OrcaWorkspace extends xb.Script {
         summary.applied.length > 0 ? `updated ${summary.applied.length}` : '',
         summary.added.length > 0 ? `added ${summary.added.length}` : '',
       ].filter(Boolean);
-      this.setStatus(
-        `Synced filaments from the printer: ${parts.join(' and ')}. Undo restores the previous palette.${extra}`,
-      );
+      const unmatched =
+        rebound.unmatched.length > 0
+          ? ` No filament preset for ${rebound.unmatched
+              .map((entry) => `${entry.material} on tool ${entry.toolId + 1}`)
+              .join(', ')} is available for this printer and process, so ${
+              rebound.unmatched.length === 1 ? 'that tool keeps' : 'those tools keep'
+            } the previous preset — pick one, or the slice will refuse the mismatch.`
+          : '';
+      // Rebinding a preset is its own canonical change, so the sync is no longer
+      // a single undo step and saying otherwise would be wrong.
+      const undo =
+        rebound.rebound.length > 0
+          ? ` Tool ${rebound.rebound.map((toolId) => toolId + 1).join(', ')} also moved to a matching filament preset; undo steps back through both changes.`
+          : ' Undo restores the previous palette.';
+      this.setStatus(`Synced filaments from the printer: ${parts.join(' and ')}.${undo}${extra}${unmatched}`);
       return true;
     } catch (error) {
       this.setStatus(`Filament sync failed: ${(error as Error).message}`);
       return false;
     }
+  }
+
+  /**
+   * Point each reported tool at a filament preset that actually declares the
+   * material the printer says is loaded, and adopt its colour.
+   *
+   * Only the catalog-driven path needs this: an imported project's embedded
+   * filament configuration is its own preflight authority, and the canonical
+   * sync already updated `filament_type` there. A material with no compatible
+   * preset is reported rather than silently bound to something else.
+   */
+  private adoptPrinterFilamentPresets(slots: readonly { slotIndex: number; colorHex: string; material: string }[]): {
+    rebound: number[];
+    unmatched: Array<{ toolId: number; material: string }>;
+  } {
+    const rebound: number[] = [];
+    const unmatched: Array<{ toolId: number; material: string }> = [];
+    const profile = this.profile;
+    if (!profile || this.importedProjectOwnsSlicingConfiguration) return { rebound, unmatched };
+
+    const nextPresetIds = this.headFilaments.map((selection) => selection.presetId);
+    let changed = false;
+    for (const slot of slots) {
+      const toolId = slot.slotIndex;
+      if (toolId < 0 || toolId >= this.headFilaments.length) continue;
+      if (slot.colorHex) this.palette.setColor(toolId, slot.colorHex);
+      const material = slot.material.trim();
+      if (!material) continue;
+      if (this.headPresetMaterial(profile, toolId) === material.toLowerCase()) continue;
+      const match = this.filamentPresetForMaterial(profile, material);
+      if (!match) {
+        unmatched.push({ toolId, material: slot.material });
+        continue;
+      }
+      if (nextPresetIds[toolId] === match) continue;
+      nextPresetIds[toolId] = match;
+      rebound.push(toolId);
+      changed = true;
+    }
+    if (changed) this.selectProfilePresets({ filamentPresetIds: nextPresetIds });
+    else this.applyLiveSlicingConfiguration();
+    return { rebound, unmatched };
+  }
+
+  /** The material the tool's currently bound filament preset declares, lower-cased. */
+  private headPresetMaterial(profile: SlicerProfile, toolId: number): string | undefined {
+    const presetId = this.headFilaments[toolId]?.presetId;
+    if (!presetId) return undefined;
+    const bound = this.catalog.profiles.find(
+      (candidate) =>
+        candidate.machinePresetId === profile.machinePresetId &&
+        candidate.processPresetId === profile.processPresetId &&
+        candidate.filamentPresetId === presetId,
+    );
+    return bound ? unambiguousProfileScalar(bound.config['filament_type'])?.trim().toLowerCase() : undefined;
+  }
+
+  /** The first compatible filament preset whose own `filament_type` is `material`. */
+  private filamentPresetForMaterial(profile: SlicerProfile, material: string): WorkspacePresetId | undefined {
+    const wanted = material.trim().toLowerCase();
+    if (!wanted || !profile.machinePresetId || !profile.processPresetId) return undefined;
+    for (const candidate of this.catalog.profiles) {
+      if (
+        candidate.machinePresetId !== profile.machinePresetId ||
+        candidate.processPresetId !== profile.processPresetId ||
+        !candidate.filamentPresetId
+      ) {
+        continue;
+      }
+      if (unambiguousProfileScalar(candidate.config['filament_type'])?.trim().toLowerCase() === wanted) {
+        return candidate.filamentPresetId as WorkspacePresetId;
+      }
+    }
+    return undefined;
   }
 
   private embossFont?: { name: string; source: GlyphOutlineSource };
