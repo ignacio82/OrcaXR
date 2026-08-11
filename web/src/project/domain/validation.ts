@@ -1,5 +1,5 @@
 import { isStableEntityId } from './ids';
-import { canonicalStringify } from './canonical';
+import { assertCanonicalSerializable, canonicalStringify, isDeeplyFrozen } from './canonical';
 import {
   facetAnnotationsHaveAssignments,
   validateFacetRefinementChannel,
@@ -53,7 +53,31 @@ export function assertValidProjectState(state: ProjectState): void {
   if (issues.some((issue) => issue.severity === 'error')) throw new ProjectValidationError(issues);
 }
 
+/**
+ * Validation results for states that can never change again.
+ *
+ * Preflight validates the state it was handed, and on the live path that state
+ * came straight out of the store, which already validated and froze it. On a
+ * large painted project that repeat cost most of a second on every profile,
+ * filament, and placement change. The answer is a pure function of the state,
+ * so for a provably immutable one it is computed once.
+ */
+const frozenResults = new WeakMap<object, readonly ValidationIssue[]>();
+
 export function validateProjectState(state: ProjectState): ValidationIssue[] {
+  const memoized = frozenResults.get(state as unknown as object);
+  if (memoized) return memoized.map((issue) => ({ ...issue }));
+  const computed = computeProjectStateIssues(state);
+  if (isDeeplyFrozen(state)) {
+    frozenResults.set(
+      state as unknown as object,
+      computed.map((issue) => Object.freeze({ ...issue })),
+    );
+  }
+  return computed;
+}
+
+function computeProjectStateIssues(state: ProjectState): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const seenIds = new Map<string, string>();
   const add = (code: string, path: string, message: string, severity: ValidationSeverity = 'error') =>
@@ -66,7 +90,8 @@ export function validateProjectState(state: ProjectState): ValidationIssue[] {
   };
 
   try {
-    canonicalStringify(state);
+    // The exception is the whole point of this check; the string never was.
+    assertCanonicalSerializable(state);
   } catch (error) {
     add('non-serializable-state', '$', error instanceof Error ? error.message : 'Project state is not serializable');
     return issues;

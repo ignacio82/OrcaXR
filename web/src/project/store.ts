@@ -1,4 +1,10 @@
-import { canonicalStringify, cloneProjectState, deepFreeze, projectFingerprint } from './domain/canonical';
+import {
+  canonicalStringify,
+  cloneProjectState,
+  deepFreeze,
+  isDeeplyFrozen,
+  projectFingerprint,
+} from './domain/canonical';
 import type { DirtyCategory, ProjectState } from './domain/model';
 import { assertValidProjectState } from './domain/validation';
 
@@ -39,8 +45,10 @@ export class ProjectStore implements ProjectStorePort {
   private readonly subscribers = new Set<ProjectSubscriber>();
 
   constructor(initialState: ProjectState) {
-    assertValidProjectState(initialState);
+    // Same order as `replaceState`: validate the frozen copy that is kept, so
+    // the answer is memoized against the object every later reader will see.
     this.state = deepFreeze(cloneProjectState(initialState));
+    assertValidProjectState(this.state);
     this.hash = projectFingerprint(this.state);
   }
 
@@ -52,16 +60,22 @@ export class ProjectStore implements ProjectStorePort {
     next: ProjectState,
     options: { reason?: string; dirtyCategories?: readonly DirtyCategory[] } = {},
   ): ProjectSnapshot {
-    // Validated once, on the copy that is actually stored. Validating the
-    // caller's object first as well doubled the cost of every commit for no
-    // extra guarantee: `cloneProjectState` is a faithful JSON clone, so it
-    // cannot turn a valid state into an invalid one, and validating the
-    // candidate is what proves the stored state is sound.
-    const candidate = cloneProjectState(next);
+    // Validated once, on the state that is actually stored. Validating the
+    // caller's object as well doubled the cost of every commit for no extra
+    // guarantee: a faithful clone cannot turn a valid state into an invalid one.
+    //
+    // The defensive copy exists so a caller cannot mutate stored state behind
+    // the store's back; a state already frozen all the way down cannot be
+    // mutated by anyone, so copying it buys nothing. And freezing *before*
+    // validating and hashing is what makes those two answers reusable: both are
+    // pure functions of a state that can no longer change, so preflight,
+    // capture, the slice coordinator, and undo get them for free instead of
+    // re-deriving them on a state the store already vouched for.
+    const candidate = isDeeplyFrozen(next) ? next : deepFreeze(cloneProjectState(next));
     assertValidProjectState(candidate);
     const nextHash = projectFingerprint(candidate);
     const previous = this.getSnapshot();
-    this.state = deepFreeze(candidate);
+    this.state = candidate;
     this.revision += 1;
     this.hash = nextHash;
     const current = this.getSnapshot();

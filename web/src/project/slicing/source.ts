@@ -23,22 +23,34 @@ export class StoreProjectSliceSource implements CanonicalProjectSliceSourcePort 
     private readonly assets: AssetRepository,
   ) {}
 
+  /**
+   * The store validated this state, hashed it, and froze it when it committed
+   * it, and the repository is immutable by contract — so re-validating,
+   * re-cloning, and re-hashing all of it here is re-deriving what was just
+   * read, not checking it against anything. On a large painted project that
+   * cost 2.8 s, and preflight captures on every profile, filament, and
+   * placement change.
+   *
+   * The check that matters is unchanged: `SliceJobCoordinator` does not trust
+   * whatever source port it was handed, and still runs `validatedSnapshot` on
+   * every capture it slices.
+   */
   capture(): CanonicalProjectSliceSnapshot {
     const snapshot = this.project.getSnapshot();
     const assets = this.assets.list();
-    return validatedSnapshot({
+    return {
       state: snapshot.state,
       assets,
       sourceRevision: snapshot.revision,
       sourceHash: snapshot.hash,
-      sourceAssetHash: assetBundleFingerprint(assets),
-    });
+      sourceAssetHash: this.assets.bundleFingerprint(),
+    };
   }
 
   isCurrent(guard: CanonicalProjectSliceGuard): boolean {
     return (
       this.project.isCurrent({ revision: guard.sourceRevision, hash: guard.sourceHash }) &&
-      assetBundleFingerprint(this.assets.list()) === guard.sourceAssetHash
+      this.assets.bundleFingerprint() === guard.sourceAssetHash
     );
   }
 }

@@ -1,4 +1,4 @@
-import { canonicalStringify, cloneProjectState } from './domain/canonical';
+import { canonicalStringify, cloneProjectState, deepFreeze } from './domain/canonical';
 import {
   isStableEntityId,
   type CustomGcodeId,
@@ -42,11 +42,16 @@ export class ReplaceProjectCommand extends ProjectDataCommand {
     readonly label = 'Replace project',
   ) {
     super();
-    this.next = cloneProjectState(next);
+    // Frozen, so the store can adopt it without a second defensive copy and so
+    // its validation and fingerprint survive to whatever reads it next.
+    this.next = deepFreeze(cloneProjectState(next));
   }
 
   apply(context: CommandContext): void {
-    this.previous = cloneProjectState(context.project.getSnapshot().state);
+    // The committed state is already immutable; copying it to remember it
+    // defends against nothing and, on a large project, is what made undo as
+    // expensive as the edit it reverses.
+    this.previous = context.project.getSnapshot().state;
     context.project.replaceState(this.next, {
       reason: this.type,
       dirtyCategories: this.dirtyCategories,

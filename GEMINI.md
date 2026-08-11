@@ -727,6 +727,44 @@ floors, not ceilings.
   identity-keyed digest cache would go stale silently the first time a command
   mutated a shared subtree in place. Given that published G-code is bound to the
   exact project hash, a cache that can go stale is not an acceptable trade.
+- **A live edit re-derived what canonical state already guaranteed.** Changing a
+  printer profile or a filament ran a canonical capture, and
+  `StoreProjectSliceSource.capture()` validated, re-cloned, re-froze, and
+  re-hashed the state and every asset byte it had just read from the store —
+  2.8 s on the narwhal, on a path that runs on every profile, filament, and
+  placement change. The store already validated, hashed, and froze that state at
+  commit, and the repository is immutable by contract, so capture now trusts it;
+  the check that matters is unchanged, because `SliceJobCoordinator` never
+  trusted the source port anyway and still runs `validatedSnapshot` on every
+  capture it slices. Related: `deepFreeze` records the states it froze all the
+  way down, and validation and `projectFingerprint` are memoized against those,
+  so `replaceState` freezes *before* it validates and hashes; a repository
+  caches its own bundle fingerprint; and `ReplaceProjectCommand` stops cloning
+  the frozen state it is merely remembering, which is what made undo cost as
+  much as the edit. One profile change went from ~6 s to well under a second of
+  derived work, and undo/redo from seconds to ~120 ms.
+- **`validateProjectState` stringified the whole project to throw away the
+  string.** Its serializability check called `canonicalStringify` purely for the
+  exception — half the cost of validating. `assertCanonicalSerializable` walks
+  the same structure and throws the same errors without building anything.
+- **A slice attempt limit must measure silence, not duration.** `attemptTimeoutMs`
+  capped one attempt at 120 s, so a large model was cancelled mid-slice, retried,
+  and then failed — and the failure surfaced as "Canonical slice route cleanup
+  confirmed", which named the teardown rather than the cause. It is now
+  `attemptIdleTimeoutMs`: the deadline restarts on every progress report, and
+  both routes report continuously (the external one polls its job about once a
+  second, the browser engine reports each stage). The route also names why it
+  stopped instead of reporting that cleanup went fine. `serializationTimeoutMs`
+  had the same shape of bug — a 30 s cap on work that takes ~19 s for a
+  two-million-facet plate — and archive authoring reports no progress, so it is
+  simply bounded generously now that it runs on a worker.
+- **Regenerated archives compress worse than the originals.** The narwhal reopens
+  as an 85.7 MB archive where its source was 27.9 MB, from 182 MB of generated
+  core-model XML against the original's 161 MB. Number formatting in the writer
+  is the likely cause. It slices correctly and stays far inside the server's
+  256 MiB upload limit, but it is three times the bytes to send to an external
+  slicer and worth fixing.
+
 - **What the external slicer container can and cannot fix.** Offloading helps the
   *slice* itself and nothing else: the costs above are all in the browser,
   between the user's input and the scene updating, and cannot survive a network

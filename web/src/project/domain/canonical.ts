@@ -24,16 +24,72 @@ export function cloneJson<T>(value: T): T {
   return clone as T;
 }
 
+/**
+ * Objects this module froze all the way down, and can therefore prove will
+ * never change again.
+ *
+ * That proof is what lets anything derived purely from such an object — its
+ * canonical fingerprint, its validation result — be computed once instead of on
+ * every read. Membership is deliberately conservative: an object is recorded
+ * only when this call actually froze it *and* every descendant reported the
+ * same, so a structure that already contained a frozen subtree is never
+ * claimed.
+ */
+const deeplyFrozen = new WeakSet<object>();
+
 export function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value;
-  Object.freeze(value);
-  for (const child of Object.values(value)) deepFreeze(child);
+  freezeCompletely(value);
   return value;
+}
+
+function freezeCompletely(value: unknown): boolean {
+  if (value === null || typeof value !== 'object') return true;
+  if (deeplyFrozen.has(value)) return true;
+  // Preserves the original traversal exactly: an already-frozen object is left
+  // alone, children included. It just cannot be claimed as provably deep.
+  if (Object.isFrozen(value)) return false;
+  Object.freeze(value);
+  let complete = true;
+  for (const child of Object.values(value)) {
+    if (!freezeCompletely(child)) complete = false;
+  }
+  if (complete) deeplyFrozen.add(value);
+  return complete;
+}
+
+/** True when `value` was frozen all the way down by `deepFreeze`. */
+export function isDeeplyFrozen(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && deeplyFrozen.has(value);
 }
 
 /** Deterministic JSON: object keys sort lexically while array order remains semantic. */
 export function canonicalStringify(value: unknown): string {
   return stringifyCanonical(value);
+}
+
+/**
+ * Throw exactly what `canonicalStringify` would throw, without building the
+ * string it would have built.
+ *
+ * Validation only wanted the exception, and materializing a large project's
+ * canonical JSON to get it was half the cost of validating — on every commit,
+ * for a result that was immediately discarded.
+ */
+export function assertCanonicalSerializable(value: unknown): void {
+  if (value === null || typeof value === 'boolean' || typeof value === 'string') return;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new Error('Canonical JSON cannot contain non-finite numbers');
+    return;
+  }
+  if (value === undefined || typeof value === 'function' || typeof value === 'symbol' || typeof value === 'bigint') {
+    throw new Error(`Canonical JSON cannot contain ${typeof value}`);
+  }
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index += 1) assertCanonicalSerializable(value[index]);
+    return;
+  }
+  const record = value as Record<string, unknown>;
+  for (const key of Object.keys(record)) assertCanonicalSerializable(record[key]);
 }
 
 function stringifyCanonical(value: unknown): string {
@@ -168,10 +224,18 @@ export function projectFingerprint(state: ProjectState): string {
   // and allocating it on every commit is what made moving an object feel like
   // the app had hung. Streaming it into the digest is byte-for-byte the same
   // hash — pinned by test.
+  const cached = frozenFingerprints.get(state as unknown as object);
+  if (cached !== undefined) return cached;
   const hash = new Fnv1a64();
   hashCanonical(state, hash);
-  return `fnv1a64:${hash.digest()}`;
+  const digest = `fnv1a64:${hash.digest()}`;
+  // A state that can never change can never hash differently, and a large
+  // painted project is re-fingerprinted on every capture and freshness check.
+  if (isDeeplyFrozen(state)) frozenFingerprints.set(state as unknown as object, digest);
+  return digest;
 }
+
+const frozenFingerprints = new WeakMap<object, string>();
 
 /** Emit a safe integer's decimal digits without allocating its string. */
 function hashSafeInteger(value: number, hash: Fnv1a64): void {

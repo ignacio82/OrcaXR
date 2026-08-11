@@ -31,7 +31,7 @@ export function computeCanonicalInstanceBounds(
   const seen = new Set<InstanceId>();
   const includedRoles = options.volumeRoles ? new Set(options.volumeRoles) : undefined;
   const descriptors = new Map(state.sourceAssets.map((descriptor) => [descriptor.id, descriptor]));
-  const verticesByAsset = new Map<string, ReadonlyArray<readonly [number, number, number]>>();
+  const positionsByAsset = new Map<string, Float32Array>();
   const result = emptyBounds();
 
   for (const instanceId of instanceIds) {
@@ -43,22 +43,21 @@ export function computeCanonicalInstanceBounds(
     for (const volume of found.object.volumes) {
       if (includedRoles && !includedRoles.has(volume.role)) continue;
       const descriptor = descriptors.get(volume.source.assetId);
-      const payload = assets.get(volume.source.assetId);
+      // Read-only: copying the bytes just to measure them is a memcpy of the
+      // whole mesh, and this runs on every placement and preflight.
+      const payload = assets.peek(volume.source.assetId);
       if (!descriptor || !payload) {
         throw new Error(`Volume ${volume.id} references missing asset ${volume.source.assetId}`);
       }
       if (canonicalStringify(descriptor) !== canonicalStringify(payload.descriptor)) {
         throw new Error(`Asset repository metadata differs for ${volume.source.assetId}`);
       }
-      let vertices = verticesByAsset.get(volume.source.assetId);
-      if (!vertices) {
-        vertices = decodeIndexedMeshAsset(payload).vertices;
-        verticesByAsset.set(volume.source.assetId, vertices);
+      let positions = positionsByAsset.get(volume.source.assetId);
+      if (!positions) {
+        positions = decodeIndexedMeshAsset(payload).positions;
+        positionsByAsset.set(volume.source.assetId, positions);
       }
-      for (const vertex of vertices) {
-        const volumePoint = applyTransform(vertex, volume.transform);
-        include(result, applyTransform(volumePoint, found.instance.transform));
-      }
+      accumulateTransformedBounds(result, positions, volume.transform, found.instance.transform);
     }
   }
 
@@ -78,35 +77,82 @@ function emptyBounds(): { min: [number, number, number]; max: [number, number, n
   };
 }
 
-function include(bounds: { min: [number, number, number]; max: [number, number, number] }, point: Vec3): void {
-  for (let axis = 0; axis < 3; axis += 1) {
-    bounds.min[axis] = Math.min(bounds.min[axis], point[axis]);
-    bounds.max[axis] = Math.max(bounds.max[axis], point[axis]);
+/**
+ * Walk packed vertices through the volume and then the instance transform,
+ * widening `bounds` as it goes.
+ *
+ * This is deliberately the same arithmetic as `applyTransform` composed twice,
+ * written out in locals: every expression and its evaluation order is
+ * unchanged, so the result is bit-identical, but a mesh of a million vertices
+ * no longer allocates five short-lived arrays per vertex per transform, and the
+ * quaternions are normalized once instead of two million times.
+ */
+function accumulateTransformedBounds(
+  bounds: { min: [number, number, number]; max: [number, number, number] },
+  positions: Float32Array,
+  volume: Transform,
+  instance: Transform,
+): void {
+  const [vqx, vqy, vqz, vqw] = normalizedQuaternion(volume.rotation);
+  const [iqx, iqy, iqz, iqw] = normalizedQuaternion(instance.rotation);
+  const [vsx, vsy, vsz] = volume.scale;
+  const [isx, isy, isz] = instance.scale;
+  const [vtx, vty, vtz] = volume.translationMm;
+  const [itx, ity, itz] = instance.translationMm;
+  let minX = bounds.min[0];
+  let minY = bounds.min[1];
+  let minZ = bounds.min[2];
+  let maxX = bounds.max[0];
+  let maxY = bounds.max[1];
+  let maxZ = bounds.max[2];
+
+  for (let offset = 0; offset < positions.length; offset += 3) {
+    // Volume transform: scale, rotate, translate.
+    let x = positions[offset] * vsx;
+    let y = positions[offset + 1] * vsy;
+    let z = positions[offset + 2] * vsz;
+    let uvX = vqy * z - vqz * y;
+    let uvY = vqz * x - vqx * z;
+    let uvZ = vqx * y - vqy * x;
+    let uuvX = vqy * uvZ - vqz * uvY;
+    let uuvY = vqz * uvX - vqx * uvZ;
+    let uuvZ = vqx * uvY - vqy * uvX;
+    x = x + 2 * (vqw * uvX + uuvX) + vtx;
+    y = y + 2 * (vqw * uvY + uuvY) + vty;
+    z = z + 2 * (vqw * uvZ + uuvZ) + vtz;
+
+    // Instance transform, applied to the volume-space point.
+    x *= isx;
+    y *= isy;
+    z *= isz;
+    uvX = iqy * z - iqz * y;
+    uvY = iqz * x - iqx * z;
+    uvZ = iqx * y - iqy * x;
+    uuvX = iqy * uvZ - iqz * uvY;
+    uuvY = iqz * uvX - iqx * uvZ;
+    uuvZ = iqx * uvY - iqy * uvX;
+    x = x + 2 * (iqw * uvX + uuvX) + itx;
+    y = y + 2 * (iqw * uvY + uuvY) + ity;
+    z = z + 2 * (iqw * uvZ + uuvZ) + itz;
+
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (z < minZ) minZ = z;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+    if (z > maxZ) maxZ = z;
   }
+
+  bounds.min[0] = minX;
+  bounds.min[1] = minY;
+  bounds.min[2] = minZ;
+  bounds.max[0] = maxX;
+  bounds.max[1] = maxY;
+  bounds.max[2] = maxZ;
 }
 
-function applyTransform(point: Vec3, transform: Transform): Vec3 {
-  const scaled: Vec3 = [point[0] * transform.scale[0], point[1] * transform.scale[1], point[2] * transform.scale[2]];
-  const rotated = rotateVector(transform.rotation, scaled);
-  return [
-    rotated[0] + transform.translationMm[0],
-    rotated[1] + transform.translationMm[1],
-    rotated[2] + transform.translationMm[2],
-  ];
-}
-
-function rotateVector(quaternion: readonly [number, number, number, number], vector: Vec3): Vec3 {
+function normalizedQuaternion(quaternion: readonly [number, number, number, number]): [number, number, number, number] {
   const length = Math.hypot(quaternion[0], quaternion[1], quaternion[2], quaternion[3]);
   if (!Number.isFinite(length) || length === 0) throw new Error('A canonical transform quaternion must be non-zero');
-  const x = quaternion[0] / length;
-  const y = quaternion[1] / length;
-  const z = quaternion[2] / length;
-  const w = quaternion[3] / length;
-  const uv: Vec3 = [y * vector[2] - z * vector[1], z * vector[0] - x * vector[2], x * vector[1] - y * vector[0]];
-  const uuv: Vec3 = [y * uv[2] - z * uv[1], z * uv[0] - x * uv[2], x * uv[1] - y * uv[0]];
-  return [
-    vector[0] + 2 * (w * uv[0] + uuv[0]),
-    vector[1] + 2 * (w * uv[1] + uuv[1]),
-    vector[2] + 2 * (w * uv[2] + uuv[2]),
-  ];
+  return [quaternion[0] / length, quaternion[1] / length, quaternion[2] / length, quaternion[3] / length];
 }

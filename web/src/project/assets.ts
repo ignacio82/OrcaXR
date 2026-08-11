@@ -30,6 +30,16 @@ export interface AssetRepository {
   put(descriptor: SourceAssetDescriptor, bytes: Uint8Array): void;
   remove(id: AssetId): void;
   list(): AssetPayload[];
+  /**
+   * Deterministic identity of every stored asset's descriptor and bytes.
+   *
+   * Equivalent to `assetBundleFingerprint(list())`, but a repository knows when
+   * its own contents changed and an implementation is expected to reuse the
+   * previous answer until they do. Recomputing it hashes every byte the project
+   * holds — a couple of hundred megabytes on a large model — and it is asked for
+   * on every capture and every freshness check.
+   */
+  bundleFingerprint(): string;
   findByDigest(digest: string): AssetPayload | undefined;
   capture(): AssetRepositorySnapshot;
   restore(snapshot: AssetRepositorySnapshot): void;
@@ -55,6 +65,8 @@ export function assetBundleFingerprint(assets: readonly AssetPayload[]): string 
  */
 export class InMemoryAssetRepository implements AssetRepository {
   private entries = new Map<AssetId, AssetPayload>();
+  /** Cleared by every mutation, so it can never describe stale contents. */
+  private cachedBundleFingerprint: string | undefined;
 
   has(id: AssetId): boolean {
     return this.entries.has(id);
@@ -87,10 +99,16 @@ export class InMemoryAssetRepository implements AssetRepository {
       return;
     }
     this.entries.set(descriptor.id, next);
+    this.cachedBundleFingerprint = undefined;
   }
 
   remove(id: AssetId): void {
-    this.entries.delete(id);
+    if (this.entries.delete(id)) this.cachedBundleFingerprint = undefined;
+  }
+
+  bundleFingerprint(): string {
+    this.cachedBundleFingerprint ??= assetBundleFingerprint(this.list());
+    return this.cachedBundleFingerprint;
   }
 
   list(): AssetPayload[] {
@@ -123,6 +141,7 @@ export class InMemoryAssetRepository implements AssetRepository {
       restored.set(entry.descriptor.id, clonePayload(entry));
     }
     this.entries = restored;
+    this.cachedBundleFingerprint = undefined;
   }
 }
 
