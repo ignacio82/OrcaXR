@@ -281,12 +281,14 @@ export const advancedActions: Action[] = [
   },
   {
     id: 'view_webcam',
+    mcpTool: 'view_printer_camera',
     label: 'View Webcam',
     icon: 'webcam',
     group: 'advanced',
     disclosure: 'menu',
     menuSection: 'tools',
-    hint: 'View the live printer webcam feed',
+    hint: "Discover the printer's cameras and watch one as authenticated snapshots",
+    run: (ctx, invocation) => ctx.viewPrinterCamera(invocation.printerCameraUid),
   },
   {
     id: 'recreate_model_colors_fullspectrum',

@@ -41,6 +41,10 @@ export interface MoonrakerSimulatorOptions {
   /** Recorded jobs, newest first, as Moonraker's history component stores them. */
   readonly history?: readonly Record<string, unknown>[];
   readonly historyTotals?: Readonly<Record<string, number>>;
+  /** Cameras the printer reports, in Moonraker's own shape. */
+  readonly webcams?: readonly Record<string, unknown>[];
+  /** Path the snapshot endpoint answers on; defaults to `/webcam/snapshot`. */
+  readonly snapshotPath?: string;
 }
 
 export interface MoonrakerSimulator {
@@ -54,6 +58,8 @@ export interface MoonrakerSimulator {
   readonly started: string | null;
   /** Lifecycle and file-manager commands received, in order. */
   readonly commands: string[];
+  /** How many camera frames have been fetched. */
+  readonly snapshotRequests: number;
   readonly state: Record<string, unknown>;
   setSlots(slots: readonly MoonrakerSimulatorSlot[]): void;
   setState(patch: Record<string, unknown>): void;

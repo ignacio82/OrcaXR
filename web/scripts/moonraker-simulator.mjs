@@ -3,6 +3,11 @@ import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 
 const WEBSOCKET_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+/** A real 1x1 PNG, so a camera frame is decoded rather than merely counted. */
+const SNAPSHOT_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+);
 
 /**
  * A local stand-in for a Moonraker printer, good enough to drive the real send
@@ -39,7 +44,12 @@ export async function startMoonrakerSimulator(options = {}) {
     /** Recorded jobs, newest first, exactly as the history component stores them. */
     history: options.history ?? [],
     historyTotals: options.historyTotals ?? {},
+    /** Cameras the printer reports, in Moonraker's own shape. */
+    webcams: options.webcams ?? [],
+    /** Path the snapshot endpoint answers on. */
+    snapshotPath: options.snapshotPath ?? '/webcam/snapshot',
   };
+  let snapshotRequests = 0;
   const commands = [];
   const stored = new Map();
   const requests = [];
@@ -249,6 +259,17 @@ export async function startMoonrakerSimulator(options = {}) {
       notifyGcodeResponse(response);
       return json('ok');
     }
+    // Cameras: the list, plus a snapshot endpoint that answers with real bytes
+    // so an authenticated fetch is exercised rather than mocked.
+    if (url.pathname === '/server/webcams/list') {
+      return json({ webcams: state.webcams });
+    }
+    if (url.pathname === state.snapshotPath) {
+      snapshotRequests += 1;
+      response.writeHead(200, { ...cors, 'content-type': 'image/png' });
+      response.end(SNAPSHOT_PNG);
+      return;
+    }
     // The history the machine keeps of its own runs, paged the way Moonraker
     // pages it: a slice of the ordered list plus the total count.
     if (url.pathname === '/server/history/list') {
@@ -369,6 +390,10 @@ export async function startMoonrakerSimulator(options = {}) {
     },
     get state() {
       return state;
+    },
+    /** How many camera frames have been fetched, for polling assertions. */
+    get snapshotRequests() {
+      return snapshotRequests;
     },
     setSlots(slots) {
       state.slots = slots;

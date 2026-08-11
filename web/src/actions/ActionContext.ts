@@ -149,6 +149,9 @@ export class ActionContext {
   loadPrintHistory(start: number): Promise<void> {
     return this.workspace.loadPrintHistory(start);
   }
+  viewPrinterCamera(uid?: string): Promise<void> {
+    return this.workspace.viewPrinterCamera(uid);
+  }
   mutateVirtualFilament(request: CanonicalVirtualFilamentMutationRequest): void {
     this.workspace.mutateVirtualFilament(request);
   }

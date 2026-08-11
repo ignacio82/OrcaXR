@@ -3985,6 +3985,8 @@ export class OrcaWorkspace extends xb.Script {
   onRequestPrinterConsole: ((operation: PrinterConsoleOperation) => Promise<void>) | null = null;
   /** Injected by the live typed printer composition root. */
   onRequestPrintHistory: ((start: number) => Promise<void>) | null = null;
+  /** Injected by the live typed printer composition root. */
+  onRequestPrinterCamera: ((uid?: string) => Promise<void>) | null = null;
 
   public async testPrinterConnection(): Promise<void> {
     if (!this.onRequestPrinterConnectionTest) {
@@ -4078,6 +4080,15 @@ export class OrcaWorkspace extends xb.Script {
       return;
     }
     await this.onRequestPrintHistory(start);
+  }
+
+  /** Discover the printer's cameras, optionally selecting one (P9.6). */
+  public async viewPrinterCamera(uid?: string): Promise<void> {
+    if (!this.onRequestPrinterCamera) {
+      this.setStatus('Printer cameras are unavailable in this shell.');
+      return;
+    }
+    await this.onRequestPrinterCamera(uid);
   }
 
   // --- Import / Export Config (Orca File → Import / Export Config) -----

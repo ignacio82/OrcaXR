@@ -161,6 +161,8 @@ export interface ActionInvocation {
   printerConsole?: PrinterConsoleOperation;
   /** Offset into the printer's own job ordering, for a paged history surface. */
   printHistoryStart?: number;
+  /** Camera the surface wants shown; omitted keeps the current selection. */
+  printerCameraUid?: string;
   /** Exact canonical entity set requested by an Objects surface. */
   objectsSelection?: {
     readonly refs: readonly ObjectTreeEntityRef[];
@@ -378,7 +380,6 @@ const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
   ...CANONICAL_CUTOVER_GATED_REASONS,
   add_magnet: 'Magnet-hole geometry is not implemented yet; no model will be changed.',
   scan_network: 'Local-network printer discovery is not implemented yet.',
-  view_webcam: 'The registry webcam flow is not connected to a configured printer yet.',
   recreate_model_colors_fullspectrum:
     'Canonical Full-Spectrum color recreation with facet assignments, preview, undo, persistence, and slice validation is not implemented yet.',
   file_export_all_plates: 'All-plate slicing and export is not implemented yet.',
@@ -468,7 +469,7 @@ function prerequisitesFor(action: ActionDefinition): PrerequisiteId[] {
  * a menu, but the panel that configures them carries the same action as a
  * button; without the extra surface that button would be silently hidden.
  */
-const INSPECTOR_MIRRORED = new Set(['send_to_printer']);
+const INSPECTOR_MIRRORED = new Set(['send_to_printer', 'view_webcam']);
 
 function surfacesFor(action: ActionDefinition): ActionSurface[] {
   const surfaces: ActionSurface[] = ['command-palette'];

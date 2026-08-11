@@ -20,6 +20,7 @@ import {
   PrintJobStatusModel,
   PrintSubmissionError,
   PrintHistoryError,
+  PrinterCameraError,
   PrinterConsoleError,
   PrinterConsoleLog,
   PrinterStorageError,
@@ -27,7 +28,9 @@ import {
   buildMacroInvocation,
   deletePrinterFile,
   downloadPrinterFile,
+  fetchCameraSnapshot,
   listPrintHistory,
+  listPrinterCameras,
   listPrinterDirectory,
   listPrinterMacros,
   movePrinterFile,
@@ -51,6 +54,7 @@ import {
   type PrintJobSnapshot,
   type PrintHistoryPage,
   type PrintHistoryTotals,
+  type PrinterCamera,
   type PrinterConsoleOperation,
   type PrinterDirectoryListing,
   type PrinterFileMetadata,
@@ -78,6 +82,7 @@ import { askPrintSubmission } from './ui/dom/PrintSubmissionDialog';
 import { askPrintJobConfirmation } from './ui/dom/PrintJobConfirmDialog';
 import { PrintJobPanel } from './ui/dom/PrintJobPanel';
 import { PrintHistoryPanel } from './ui/dom/PrintHistoryPanel';
+import { PrinterCameraPanel } from './ui/dom/PrinterCameraPanel';
 import { PrinterConsolePanel } from './ui/dom/PrinterConsolePanel';
 import { PrinterStoragePanel } from './ui/dom/PrinterStoragePanel';
 import { GcodePreviewPanel, type GcodePreviewPanelAdapter } from './ui/dom/GcodePreviewPanel';
@@ -962,6 +967,131 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     });
     historyPanel.mount();
     window.addEventListener('pagehide', () => historyPanel.dispose(), { once: true });
+  }
+
+  // The camera. Every frame is its own authenticated request, so the panel owns
+  // a timer that stops the moment nobody can see it.
+  const cameraState: {
+    cameras: readonly PrinterCamera[];
+    selected?: string;
+    frameUrl?: string;
+    busy: boolean;
+    message?: string;
+  } = { cameras: [], busy: false };
+  const cameraListeners = new Set<() => void>();
+  const notifyCamera = () => {
+    for (const listener of cameraListeners) listener();
+  };
+  const releaseFrame = () => {
+    if (cameraState.frameUrl) URL.revokeObjectURL(cameraState.frameUrl);
+    delete cameraState.frameUrl;
+  };
+  const selectedCamera = () =>
+    cameraState.cameras.find((camera) => camera.uid === cameraState.selected) ?? cameraState.cameras[0];
+
+  workspace.onRequestPrinterCamera = async (uid) => {
+    if (!printerCfg.host.trim()) {
+      workspace.setStatus('Enter an explicit Moonraker endpoint first.');
+      return;
+    }
+    cameraState.busy = true;
+    notifyCamera();
+    try {
+      const { transport } = await connectConfiguredPrinter();
+      cameraState.cameras = await listPrinterCameras(transport);
+      // Prefer a camera that can actually be shown, so the first thing anyone
+      // sees is a picture rather than an explanation.
+      const requested = uid ?? cameraState.selected;
+      cameraState.selected =
+        cameraState.cameras.find((camera) => camera.uid === requested)?.uid ??
+        cameraState.cameras.find((camera) => camera.snapshotPath && camera.enabled)?.uid ??
+        cameraState.cameras[0]?.uid;
+      releaseFrame();
+      cameraState.message =
+        cameraState.cameras.length === 0
+          ? 'This printer reports no cameras.'
+          : `${cameraState.cameras.length} camera${cameraState.cameras.length === 1 ? '' : 's'} found.`;
+      document.getElementById('printer-camera-details')?.setAttribute('open', '');
+    } catch (error) {
+      const message =
+        error instanceof PrinterCameraError || error instanceof MoonrakerTransportError
+          ? error.message
+          : (error as Error).message;
+      cameraState.message = message;
+      workspace.setStatus(`Printer camera: ${message}`);
+    } finally {
+      cameraState.busy = false;
+      notifyCamera();
+    }
+  };
+
+  const printerCameraHost = document.getElementById('printer-camera-host');
+  if (printerCameraHost) {
+    const cameraDetails = document.getElementById('printer-camera-details') as HTMLDetailsElement | null;
+    const visibilityListeners = new Set<() => void>();
+    const announceVisibility = () => {
+      for (const listener of visibilityListeners) listener();
+    };
+    document.addEventListener('visibilitychange', announceVisibility);
+    cameraDetails?.addEventListener('toggle', announceVisibility);
+    const cameraPanel = new PrinterCameraPanel(
+      printerCameraHost,
+      {
+        getCameras: () => cameraState.cameras,
+        getSelected: () => selectedCamera(),
+        getFrameUrl: () => cameraState.frameUrl,
+        getStatus: () => ({
+          busy: cameraState.busy,
+          ...(cameraState.message ? { message: cameraState.message } : {}),
+        }),
+        subscribe: (listener) => {
+          cameraListeners.add(listener);
+          return () => cameraListeners.delete(listener);
+        },
+        select: (uid) => {
+          cameraState.selected = uid;
+          releaseFrame();
+          notifyCamera();
+        },
+        refresh: async () => {
+          await registry.invoke('view_webcam', 'dom-inspector', actionCtx, uiState.get());
+        },
+        captureFrame: async () => {
+          const camera = selectedCamera();
+          if (!camera?.snapshotPath) return;
+          try {
+            const { transport } = await connectConfiguredPrinter();
+            const bytes = await fetchCameraSnapshot(transport, camera);
+            releaseFrame();
+            cameraState.frameUrl = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'image/jpeg' }));
+            delete cameraState.message;
+          } catch (error) {
+            cameraState.message = error instanceof PrinterCameraError ? error.message : (error as Error).message;
+          }
+          notifyCamera();
+        },
+      },
+      {
+        // Hidden tab or collapsed section both mean nobody is watching.
+        isVisible: () => document.visibilityState === 'visible' && cameraDetails?.open !== false,
+        subscribeVisibility: (listener) => {
+          visibilityListeners.add(listener);
+          return () => visibilityListeners.delete(listener);
+        },
+        setInterval: (handler, ms) => window.setInterval(handler, ms),
+        clearInterval: (handle) => window.clearInterval(handle),
+      },
+    );
+    cameraPanel.mount();
+    window.addEventListener(
+      'pagehide',
+      () => {
+        releaseFrame();
+        cameraPanel.dispose();
+        document.removeEventListener('visibilitychange', announceVisibility);
+      },
+      { once: true },
+    );
   }
 
   const printJobHost = document.getElementById('printer-job-host');
@@ -3166,8 +3296,12 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     }
   };
   const btnPrinterWebcam = document.getElementById('btn-printer-webcam') as HTMLButtonElement;
-  btnPrinterWebcam.disabled = true;
-  btnPrinterWebcam.title = 'Unavailable until webcam discovery is routed through the shared printer connection.';
+  btnPrinterWebcam.disabled = false;
+  btnPrinterWebcam.textContent = 'Camera';
+  btnPrinterWebcam.title = "Discover this printer's cameras and watch one";
+  btnPrinterWebcam.onclick = () => {
+    void registry.invoke('view_webcam', 'dom-inspector', actionCtx, uiState.get());
+  };
   btnPrinterSend.onclick = () => {
     if (printSubmission) {
       printSubmission.abort();

@@ -61,7 +61,6 @@ const UNAVAILABLE_IDS = [
   'auto_place_wipe',
   'add_magnet',
   'scan_network',
-  'view_webcam',
   'recreate_model_colors_fullspectrum',
   'file_export_all_plates',
   'file_export_obj',

@@ -2229,9 +2229,21 @@ implementations were removed when read-only live wiring moved to the typed bound
     no duration and no filament rather than zeroes, an `end_time` of 0 reads as "not ended" instead
     of 1970, a file since deleted from the printer says so, and an outcome this build has never
     heard of is shown verbatim rather than relabelled.
-  - **Missing:** the camera is untouched — `view_webcam` still declares itself unavailable rather
-    than showing a feed, so there is no webcam discovery and no snapshot/MJPEG/WebRTC rendering.
-    The console, macros, and history are DOM only; XR has none of them.
+    The camera completes the set, and how to show one was the decision that mattered. An `<img src>`
+    or a `<video src>` pointed at the printer cannot carry the `x-api-key` header, so on any printer
+    that requires one the feed would simply be a broken image — and the only way to make it load
+    would be to put the key in the query string, which the transport refuses on purpose. Every
+    camera is therefore rendered the one way that keeps the credential in a header: authenticated
+    snapshots fetched as bytes and swapped into an object URL. Live MJPEG, WebRTC, and HLS are
+    reported as unsupported with that exact reason rather than half-offered — `ADAPT-12`.
+    The polling policy is part of the feature rather than an implementation detail, because every
+    frame is its own request. The declared frame rate is capped at 4 fps, and the timer stops the
+    moment nobody is watching: a hidden tab, a collapsed section, a disposed panel. A URL the camera
+    list points at another host keeps only its path, so the page cannot be turned into a request
+    forwarder by printer-host content, and a rotation or flip the camera declares is reproduced so
+    the picture matches how the machine is actually mounted.
+  - **Missing:** the console, macros, history, and camera are DOM only; XR has none of them. Live
+    stream transports, history deletion and filtering, and supervised hardware qualification remain.
 
 - [ ] **P9.7 — Make printer workflows first-class on mobile and XR.** A compact status surface
   stays glanceable without obscuring preparation; critical cancel/stop actions are reachable but
@@ -2781,7 +2793,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Secure Moonraker connection and multi-printer setup | P9.1–P9.2 | Typed transport plus a named-printer directory with per-printer credentials and leak-free switching, proven in the production browser; live capability capture, per-printer queues/cameras, profile association, and hardware evidence remain |
 | Pre-print validation/tool mapping/upload/start | P9.3–P9.4 | Send-time tool mapping, confirmed upload with unique naming and size verification, and an explicitly confirmed start are live and covered end-to-end against a Moonraker simulator in the production browser; destination/storage selection, queue and lifecycle control, reconnect during transfer, and hardware qualification remain |
 | Live status/control/storage/queue/history | P9.4–P9.5 | Push-driven job state, progress, layer, and temperatures plus state-derived pause/resume/cancel, an always-reachable emergency stop, and a storage browser that reprints, renames, downloads, and deletes the printer's own files are live; queue reorder/remove, history, update manager, and hardware qualification remain |
-| Camera/console/macros/history | P9.6 | A G-code console that classifies every command before it is sent, confirms anything that moves/heats/halts, reads the printer's own macros with the parameters their bodies declare, and a paged print history with totals and estimate comparison; camera and XR remain |
+| Camera/console/macros/history | P9.6 | A G-code console that classifies every command before it is sent, confirms anything that moves/heats/halts, reads the printer's own macros with the parameters their bodies declare, a paged print history with totals and estimate comparison, and cameras shown as authenticated snapshots that stop fetching when hidden; live stream transports (`ADAPT-12`) and XR remain |
 | Responsive desktop/tablet/mobile IA and complete states | P10.1 | Useful recent shell work; parity unverified |
 | WCAG AA, keyboard, screen reader, non-color states | P10.2–P10.3 | Axe, headless tree semantics, keyboard menus/modal focus, registry-derived shortcut dispatch/help/ARIA metadata, and conflict tests pass; complete contexts/remapping workflows and manual assistive review remain |
 | Localization/pseudo-localization/RTL-safe layout | P10.4 | Locale-invariant serialization is proven and guarded; extraction, message IDs, runtime switching, pseudo-localization, and RTL are all missing |
@@ -2950,6 +2962,7 @@ signed it off. Anything with no equivalent outcome is a `BLOCK-*` row, never a q
 | `ADAPT-09` | Desktop SVG import with full CSS and paint-server support | Filled shapes resolved to contours, with every unsupported construct reported by element and reason | Text, raster images, `use`, clip paths, masks, filters, gradients, and stroke-only shapes are named in the panel before cutting instead of quietly missing from the part | A drawing that cuts into a part the operator did not expect | Engineering | P5.3.4, 7,314-icon watertightness sweep | Platform-adapted / proposed |
 | `ADAPT-10` | Desktop credential storage in an OS profile | Printer API key and slicer token kept in this browser's storage, behind an explicit switch that also erases them | Secrets survive a reload as they would on the desktop, but anything able to run script on this origin can read them; the app's CSP — no remote script, nothing inlined — is what bounds that | A shared machine retaining a working printer credential | Product | P6.6, P9.1, P10.7, first-run E2E | Platform-adapted / proposed |
 | `ADAPT-11` | Desktop slicing with a locally trusted binary | The verified browser WASM engine, or an external server that proves its engine over `/engine` before receiving canonical work | An external slicer must publish provenance — matching WASM artifacts, or the pinned commit plus the pinned patch set for a CLI — and is refused by name otherwise | An unattested engine silently producing different G-code | Engineering | P7.1, P12.3, live CLI attestation and slice | Platform-adapted / proposed |
+| `ADAPT-12` | A live MJPEG, WebRTC, or HLS camera feed | Authenticated snapshots fetched through the same credentialed transport as every other printer call, at up to 4 fps, paused whenever nobody is watching | The picture updates a few times a second instead of continuously, and a camera that offers only a stream is listed with that reason rather than shown | An `<img>` or `<video>` pointed at the printer cannot send `x-api-key`, so on a secured printer the feed would be a broken image; making it load would mean putting the key in the URL, which the transport refuses. Snapshots keep the credential in a header and work for every service type | Engineering | P9.6, P10.7, hardware camera qualification | Platform-adapted / proposed |
 
 ### Decision and change log
 

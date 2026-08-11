@@ -960,6 +960,7 @@ async function sliceAndSendActivePlate(page, printer) {
   await browsePrinterStorage(page, printer);
   await usePrinterConsole(page, printer);
   await readPrintHistory(page);
+  await watchPrinterCamera(page, printer);
   await inspectAndAuthorFromPreview(page);
 
   await clickMenuAction(page, 'edit_undo');
@@ -1337,6 +1338,76 @@ async function readPrintHistory(page) {
   console.log('[e2e] print history read, paged to the last job, and back');
 }
 
+/**
+ * The camera, and the polling policy that comes with it.
+ *
+ * Each frame is a separate authenticated request, so the assertion that matters
+ * as much as the picture is that the requests stop when the section is closed.
+ */
+async function watchPrinterCamera(page, printer) {
+  await showInspectorTab(page, 'printer');
+  await page.$eval('#btn-printer-webcam', (button) => button.click());
+  await page.waitForSelector('[data-printer-camera-panel="true"]', { timeout: 30_000 });
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-printer-camera-select]')?.options.length === 2,
+    { timeout: 30_000 },
+  );
+
+  // The camera that can actually be shown is chosen first, and its frame is
+  // fetched as bytes: a blob URL, never a URL pointed at the printer.
+  await page.waitForFunction(
+    () => {
+      const image = globalThis.document.querySelector('[data-printer-camera-frame]');
+      return image && !image.hidden && image.src.startsWith('blob:');
+    },
+    { timeout: 30_000 },
+  );
+  assert.equal(await page.$eval('[data-printer-camera-select]', (select) => select.value), 'cam-nozzle');
+  assert.match(
+    await page.$eval('[data-printer-camera-caption]', (node) => node.textContent),
+    /Nozzle — mjpegstreamer-adaptive, shown as authenticated snapshots at up to 4 fps/,
+  );
+  // The mount is reproduced rather than ignored.
+  assert.equal(await page.$eval('[data-printer-camera-frame]', (image) => image.style.transform), 'rotate(180deg)');
+  assert.ok(printer.snapshotRequests > 0, 'frames were fetched from the printer');
+
+  // A stream-only camera is listed with its reason instead of being hidden.
+  await page.$eval('[data-printer-camera-select]', (select) => {
+    select.value = 'cam-chamber';
+    select.dispatchEvent(new globalThis.Event('change', { bubbles: true }));
+  });
+  await page.waitForFunction(
+    () =>
+      /cannot carry the printer API key/.test(
+        globalThis.document.querySelector('[data-printer-camera-placeholder]')?.textContent ?? '',
+      ),
+    { timeout: 30_000 },
+  );
+  assert.equal(await page.$eval('[data-printer-camera-live]', (button) => button.disabled), true);
+
+  // Back to the working camera, then close the section: polling must stop.
+  await page.$eval('[data-printer-camera-select]', (select) => {
+    select.value = 'cam-nozzle';
+    select.dispatchEvent(new globalThis.Event('change', { bubbles: true }));
+  });
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-printer-camera-live]')?.dataset.printerCameraPolling === 'true',
+    { timeout: 30_000 },
+  );
+  await page.$eval('#printer-camera-details', (details) => {
+    details.open = false;
+    details.dispatchEvent(new globalThis.Event('toggle'));
+  });
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-printer-camera-live]')?.dataset.printerCameraPolling === 'false',
+    { timeout: 30_000 },
+  );
+  const idle = printer.snapshotRequests;
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  assert.equal(printer.snapshotRequests, idle, 'a hidden camera fetches nothing');
+  console.log('[e2e] printer camera shown as authenticated snapshots, and stopped fetching once hidden');
+}
+
 function checksumOf(buffer) {
   let checksum = 5381;
   for (const byte of buffer) checksum = ((checksum * 33) ^ byte) >>> 0;
@@ -1401,6 +1472,20 @@ const printer = await startMoonrakerSimulator({
     exists: index !== 1,
     metadata: { estimated_time: 3000 },
   })),
+  // One camera that can be shown as snapshots, and one that only streams.
+  webcams: [
+    {
+      uid: 'cam-nozzle',
+      name: 'Nozzle',
+      service: 'mjpegstreamer-adaptive',
+      enabled: true,
+      target_fps: 10,
+      snapshot_url: '/webcam/snapshot',
+      stream_url: '/webcam/?action=stream',
+      rotation: 180,
+    },
+    { uid: 'cam-chamber', name: 'Chamber', service: 'webrtc-go2rtc', enabled: true, stream_url: '/webrtc' },
+  ],
   historyTotals: {
     total_jobs: 23,
     total_time: 82_800,
@@ -3057,7 +3142,7 @@ try {
   assert.deepStrictEqual(pageErrors, [], `uncaught page errors: ${pageErrors.join('\n')}`);
   assert.deepStrictEqual(policyErrors, [], `CSP violations: ${policyErrors.join('\n')}`);
   console.log(
-    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings that the same panel also writes to one object without touching the project, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a stored file browsed, reprinted without re-uploading, renamed, and deleted behind a confirmation, a console that answers a query over the socket, sends nothing when a stepper release is dismissed, and runs a macro with the parameters its own body declares, a print history paged by the count the printer reports, a printer plus slicer configured once that are still configured after a reload, device preferences that apply live and reset without touching presets, and two named printers that switch without their credentials following each other).',
+    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings that the same panel also writes to one object without touching the project, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a stored file browsed, reprinted without re-uploading, renamed, and deleted behind a confirmation, a console that answers a query over the socket, sends nothing when a stepper release is dismissed, and runs a macro with the parameters its own body declares, a print history paged by the count the printer reports, a camera shown as authenticated snapshots that stops fetching when hidden, a printer plus slicer configured once that are still configured after a reload, device preferences that apply live and reset without touching presets, and two named printers that switch without their credentials following each other).',
   );
 } finally {
   await browser.close();
