@@ -4983,6 +4983,9 @@ export class OrcaWorkspace extends xb.Script {
         : {}),
       ...(unsupportedReason ? { unsupportedReason } : {}),
       limitations: [
+        // First, because on a streamed print it explains what the viewer is
+        // actually looking at.
+        ...(session.windowNotice() ? [session.windowNotice()!] : []),
         ...projection.limitations.map((entry) => entry.message),
         ...inspection.limitations.map((entry) => entry.message),
       ],

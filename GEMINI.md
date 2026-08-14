@@ -808,9 +808,27 @@ floors, not ceilings.
   names the moves drawn and the height reached and states that the sliced G-code
   is complete, because "parser termination reason: record-cap" left the obvious
   and wrong conclusion — that the model had not been sliced — fully available.
-  The real ceiling has moved, not gone; a genuinely bigger print needs
-  layer-windowed streaming, which the preview's existing layer window makes
-  natural but which nothing implements yet.
+  **The ceiling is now a fallback rather than a cliff.** `indexRichGcodeLayers`
+  makes one pass that counts records without keeping any and captures a
+  `GcodeParserCheckpoint` at every layer boundary — all the machine state
+  (position, modality, tool, temperatures, fan, role, derived width/height) that
+  lets `parseRichGcodeLayerWindow` resume mid-file and produce exactly the
+  records a whole-file parse would have. Indexing the narwhal costs 3.9 s and
+  **1 MB**; a 50-layer window is 454 ms and 37 MB, one layer 21 ms. Equality is
+  pinned by test and was verified on the real print: all 3,173,016 records
+  across all 491 windows matched a whole-file parse with zero mismatches, which
+  is what proves the checkpoint misses no state. `GcodePreviewSession.fromGcode`
+  decides by *trying* the whole parse and asking the model whether it fit — never
+  by estimating from file size, because the one direction an estimate can be
+  wrong in is quietly dropping the top of a print. A print that fits is read
+  whole and behaves exactly as before; one that does not is indexed and windowed,
+  every layer stays reachable, and `windowNotice()` names the layers on screen
+  out of the total and says the slice is complete. Two traps worth remembering:
+  a window's budget must be `min(window budget, resolved record limit)` or a
+  caller that lowers the limit gets a window it cannot hold, and **the index pass
+  must not be bounded by the record cap at all** — it retains nothing, and
+  bounding it made it report a truncated *print*, which is the exact failure the
+  index exists to make impossible.
 
 - **What the external slicer container can and cannot fix.** Offloading helps the
   *slice* itself and nothing else: the costs above are all in the browser,

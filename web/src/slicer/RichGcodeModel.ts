@@ -88,6 +88,94 @@ export interface RichGcodeParseOptions {
   readonly filamentColors?: readonly string[];
   /** Requested values are clamped to the exported non-negotiable hard caps. */
   readonly limits?: Partial<RichGcodeLimits>;
+  /**
+   * Parse only this half-open character span instead of the whole input.
+   *
+   * Meaningful only together with `resumeFrom`: G-code is stateful, so a span
+   * starting mid-file describes nothing on its own.
+   */
+  readonly range?: { readonly startOffset: number; readonly endOffsetExclusive: number };
+  /** Machine state to begin from, as captured by `indexRichGcodeLayers`. */
+  readonly resumeFrom?: GcodeParserCheckpoint;
+}
+
+/**
+ * Everything a parser must know to continue at some offset as though it had
+ * read the whole file up to there.
+ *
+ * G-code is a stream of state changes, so position, modality, tool, and the
+ * derived width/height/flow all carry forward. A window parsed without this
+ * would produce plausible but wrong extrusions — which is worse than refusing.
+ */
+export interface GcodeParserCheckpoint {
+  readonly offset: number;
+  readonly line: number;
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly e: number;
+  readonly originX: number;
+  readonly originY: number;
+  readonly originZ: number;
+  readonly originE: number;
+  readonly unitsToMm: number;
+  readonly globalRelative: boolean;
+  readonly extruderRelative: boolean;
+  readonly feedrateMmPerSecond: number;
+  readonly fanPercent: number;
+  readonly forcedWidthMm: number;
+  readonly forcedHeightMm: number;
+  readonly currentWidthMm: number;
+  readonly currentHeightMm: number;
+  readonly extrudedLastZ: number;
+  readonly role: number;
+  readonly tool: number;
+  readonly filament: number;
+  readonly layerCount: number;
+  readonly wiping: boolean;
+  readonly defaultColorIndex: number;
+  readonly roles: readonly string[];
+  readonly filaments: readonly GcodeFilamentIdentity[];
+  readonly toolFilaments: readonly (readonly [number, number])[];
+  readonly hotendTemperatures: Float64Array;
+}
+
+/** One layer's span in the source, and the state to start reading it from. */
+export interface GcodeLayerIndexEntry {
+  /** Zero for everything before the first layer change, then one per layer. */
+  readonly layer: number;
+  readonly startOffset: number;
+  readonly endOffsetExclusive: number;
+  /** Records a whole-file parse emits before this layer, so a window can be budgeted. */
+  readonly recordsBefore: number;
+  readonly checkpoint: GcodeParserCheckpoint;
+}
+
+/**
+ * Where every layer lives in the source, and nothing else.
+ *
+ * Built by one pass that counts records without keeping them, so indexing a
+ * print costs a scan and a few hundred small checkpoints rather than hundreds
+ * of megabytes of columns. It is what lets the preview show any part of a print
+ * too large to hold all at once.
+ */
+export interface GcodeLayerIndex {
+  readonly entries: readonly GcodeLayerIndexEntry[];
+  readonly layerCount: number;
+  /** Records a whole-file parse would have produced. */
+  readonly recordCount: number;
+  readonly sourceLength: number;
+  readonly warnings: readonly GcodeParseWarning[];
+  readonly complete: boolean;
+  readonly terminationReason?: GcodeTerminationReason;
+  /** Resolved limits, so a window can be budgeted by what a parse will retain. */
+  readonly limits: RichGcodeLimits;
+}
+
+interface InternalParseOptions {
+  /** The index pass counts records without allocating columns for them. */
+  readonly retainRecords?: boolean;
+  readonly onLayerBoundary?: (checkpoint: GcodeParserCheckpoint, recordsBefore: number) => void;
 }
 
 export interface GcodeFilamentIdentity {
@@ -248,6 +336,86 @@ export function parseRichGcodeModel(gcode: string, options: RichGcodeParseOption
   return new RichGcodeParser(gcode, options).parse();
 }
 
+/**
+ * Locate every layer and the state each one starts from, without keeping a
+ * single record.
+ *
+ * One pass, bounded memory: a print too large to hold as columns is still
+ * entirely reachable, because any window can be parsed later from the
+ * checkpoint this leaves behind.
+ */
+export function indexRichGcodeLayers(gcode: string, options: RichGcodeParseOptions = {}): GcodeLayerIndex {
+  const boundaries: Array<{ checkpoint: GcodeParserCheckpoint; recordsBefore: number }> = [];
+  const parser = new RichGcodeParser(gcode, options, {
+    retainRecords: false,
+    onLayerBoundary: (checkpoint, recordsBefore) => boundaries.push({ checkpoint, recordsBefore }),
+  });
+  const model = parser.parse();
+  const parsedEnd = model.parsedCharacters;
+  const entries: GcodeLayerIndexEntry[] = [];
+  // Everything before the first layer change is the preamble: start, purge, and
+  // whatever the profile emits. It is layer zero so a window can include it.
+  const preambleEnd = boundaries[0]?.checkpoint.offset ?? parsedEnd;
+  entries.push({
+    layer: 0,
+    startOffset: 0,
+    endOffsetExclusive: preambleEnd,
+    recordsBefore: 0,
+    checkpoint: parser.initialCheckpoint(),
+  });
+  boundaries.forEach((boundary, index) => {
+    entries.push({
+      layer: index + 1,
+      startOffset: boundary.checkpoint.offset,
+      endOffsetExclusive: boundaries[index + 1]?.checkpoint.offset ?? parsedEnd,
+      recordsBefore: boundary.recordsBefore,
+      checkpoint: boundary.checkpoint,
+    });
+  });
+  return Object.freeze({
+    entries: Object.freeze(entries),
+    layerCount: model.layerCount,
+    recordCount: model.columns.count,
+    sourceLength: model.sourceLength,
+    warnings: model.warnings,
+    complete: model.complete,
+    ...(model.terminationReason ? { terminationReason: model.terminationReason } : {}),
+    limits: model.limits,
+  });
+}
+
+/**
+ * Parse exactly the layers `[firstLayer, lastLayer]` of an indexed print.
+ *
+ * The records are the ones a whole-file parse would have produced for that
+ * span, because parsing resumes from the state the index captured — pinned by
+ * test against a whole-file parse.
+ */
+export function parseRichGcodeLayerWindow(
+  gcode: string,
+  index: GcodeLayerIndex,
+  firstLayer: number,
+  lastLayer: number,
+  options: RichGcodeParseOptions = {},
+): RichGcodeModel {
+  if (index.entries.length === 0) throw new RangeError('An empty G-code layer index has no window to parse');
+  const first = clampLayerIndex(firstLayer, index);
+  const last = clampLayerIndex(lastLayer, index);
+  if (last < first) throw new RangeError('A G-code layer window must not end before it starts');
+  const from = index.entries[first];
+  const to = index.entries[last];
+  return new RichGcodeParser(gcode, {
+    ...options,
+    range: { startOffset: from.startOffset, endOffsetExclusive: to.endOffsetExclusive },
+    resumeFrom: from.checkpoint,
+  }).parse();
+}
+
+function clampLayerIndex(layer: number, index: GcodeLayerIndex): number {
+  if (!Number.isSafeInteger(layer)) throw new RangeError('A G-code layer window bound must be an integer');
+  return Math.min(Math.max(layer, 0), index.entries.length - 1);
+}
+
 class RichGcodeParser {
   private readonly limits: RichGcodeLimits;
   private readonly warnings: WarningCollector;
@@ -288,21 +456,122 @@ class RichGcodeParser {
   private defaultColorIndex = 0;
   private terminationReason: GcodeTerminationReason | undefined;
 
+  private readonly range: { readonly startOffset: number; readonly endOffsetExclusive: number } | undefined;
+  private readonly onLayerBoundary: ((checkpoint: GcodeParserCheckpoint, recordsBefore: number) => void) | undefined;
+  private readonly initial: GcodeParserCheckpoint;
+  private startLine = 1;
+
   constructor(
     private readonly gcode: string,
     options: RichGcodeParseOptions,
+    internal: InternalParseOptions = {},
   ) {
     this.limits = resolveLimits(options.limits);
     this.warnings = new WarningCollector(this.limits.warnings);
-    this.columns = new RecordColumnsBuilder(this.limits.records, this.limits.pathPoints);
+    // A pass that keeps nothing cannot run out of room for it. Bounding the
+    // index by the record cap would have made it report a *truncated* print —
+    // the exact failure the index exists to make impossible.
+    const retainRecords = internal.retainRecords !== false;
+    this.columns = new RecordColumnsBuilder(
+      retainRecords ? this.limits.records : Number.MAX_SAFE_INTEGER,
+      retainRecords ? this.limits.pathPoints : Number.MAX_SAFE_INTEGER,
+      retainRecords,
+    );
     this.filamentDiameters = normalizeFilamentDiameters(options.filamentDiametersMm);
     this.filamentColors = normalizeFilamentColors(options.filamentColors);
     this.filament = this.ensureToolFilament(0, wholeInputLocation());
+    this.onLayerBoundary = internal.onLayerBoundary;
+    this.range = options.range ? normalizeRange(options.range, gcode.length) : undefined;
+    if (options.resumeFrom) this.restoreCheckpoint(options.resumeFrom);
+    this.initial = this.captureCheckpoint(this.range?.startOffset ?? 0, this.startLine);
+  }
+
+  /** The state this parser began from, before it read anything. */
+  initialCheckpoint(): GcodeParserCheckpoint {
+    return this.initial;
+  }
+
+  /** State as of `offset`, sufficient to resume there. */
+  captureCheckpoint(offset: number, line: number): GcodeParserCheckpoint {
+    return Object.freeze({
+      offset,
+      line,
+      x: this.x,
+      y: this.y,
+      z: this.z,
+      e: this.e,
+      originX: this.originX,
+      originY: this.originY,
+      originZ: this.originZ,
+      originE: this.originE,
+      unitsToMm: this.unitsToMm,
+      globalRelative: this.globalRelative,
+      extruderRelative: this.extruderRelative,
+      feedrateMmPerSecond: this.feedrateMmPerSecond,
+      fanPercent: this.fanPercent,
+      forcedWidthMm: this.forcedWidthMm,
+      forcedHeightMm: this.forcedHeightMm,
+      currentWidthMm: this.currentWidthMm,
+      currentHeightMm: this.currentHeightMm,
+      extrudedLastZ: this.extrudedLastZ,
+      role: this.role,
+      tool: this.tool,
+      filament: this.filament,
+      layerCount: this.layerCount,
+      wiping: this.wiping,
+      defaultColorIndex: this.defaultColorIndex,
+      roles: Object.freeze([...this.roles]),
+      filaments: Object.freeze(this.filaments.map((entry) => Object.freeze({ ...entry }))),
+      toolFilaments: Object.freeze([...this.toolFilaments].map((pair) => Object.freeze([...pair]) as [number, number])),
+      hotendTemperatures: this.hotendTemperatures.slice(),
+    });
+  }
+
+  private restoreCheckpoint(checkpoint: GcodeParserCheckpoint): void {
+    this.x = checkpoint.x;
+    this.y = checkpoint.y;
+    this.z = checkpoint.z;
+    this.e = checkpoint.e;
+    this.originX = checkpoint.originX;
+    this.originY = checkpoint.originY;
+    this.originZ = checkpoint.originZ;
+    this.originE = checkpoint.originE;
+    this.unitsToMm = checkpoint.unitsToMm;
+    this.globalRelative = checkpoint.globalRelative;
+    this.extruderRelative = checkpoint.extruderRelative;
+    this.feedrateMmPerSecond = checkpoint.feedrateMmPerSecond;
+    this.fanPercent = checkpoint.fanPercent;
+    this.forcedWidthMm = checkpoint.forcedWidthMm;
+    this.forcedHeightMm = checkpoint.forcedHeightMm;
+    this.currentWidthMm = checkpoint.currentWidthMm;
+    this.currentHeightMm = checkpoint.currentHeightMm;
+    this.extrudedLastZ = checkpoint.extrudedLastZ;
+    this.role = checkpoint.role;
+    this.tool = checkpoint.tool;
+    this.filament = checkpoint.filament;
+    this.layerCount = checkpoint.layerCount;
+    this.wiping = checkpoint.wiping;
+    this.defaultColorIndex = checkpoint.defaultColorIndex;
+    this.roles.length = 0;
+    this.roles.push(...checkpoint.roles);
+    this.roleIndices.clear();
+    this.roles.forEach((name, index) => this.roleIndices.set(name, index));
+    this.filaments.length = 0;
+    this.filaments.push(...checkpoint.filaments.map((entry) => ({ ...entry })));
+    this.toolFilaments.clear();
+    for (const [tool, filament] of checkpoint.toolFilaments) this.toolFilaments.set(tool, filament);
+    this.hotendTemperatures.set(checkpoint.hotendTemperatures);
+    this.startLine = checkpoint.line;
   }
 
   parse(): RichGcodeModel {
-    const parseEnd = Math.min(this.gcode.length, this.limits.inputCharacters);
-    if (parseEnd < this.gcode.length) {
+    // The character budget bounds what one parse reads, so for a window it
+    // applies to the window: otherwise a span late in a large file would be
+    // refused for the size of everything before it.
+    const spanStart = this.range?.startOffset ?? 0;
+    const spanEnd = this.range?.endOffsetExclusive ?? this.gcode.length;
+    const parseEnd = Math.min(spanEnd, spanStart + this.limits.inputCharacters);
+    if (parseEnd < spanEnd) {
       this.terminationReason = 'input-cap';
       this.warn(
         'input-character-cap',
@@ -316,8 +585,8 @@ class RichGcodeParser {
       );
     }
 
-    let start = 0;
-    let line = 1;
+    let start = spanStart;
+    let line = this.startLine;
     while (start < parseEnd && !this.shouldStopImmediately()) {
       if (this.parsedLines >= this.limits.lines) {
         this.stop(
@@ -540,6 +809,9 @@ class RichGcodeParser {
 
     const exactComment = comment.trimEnd();
     if (exactComment === 'LAYER_CHANGE' || exactComment === ' CHANGE_LAYER') {
+      // Captured before the layer advances and before the marker is emitted, so
+      // resuming here reproduces this line rather than skipping it.
+      this.onLayerBoundary?.(this.captureCheckpoint(source.startOffset, source.line), this.columns.count);
       this.layerCount += 1;
       this.emitMarker(GCODE_RECORD_KIND.LAYER_CHANGE, source);
       return;
@@ -1580,6 +1852,24 @@ function resolveLimits(requested: Partial<RichGcodeLimits> | undefined): RichGco
   });
 }
 
+function normalizeRange(
+  range: { readonly startOffset: number; readonly endOffsetExclusive: number },
+  sourceLength: number,
+): { readonly startOffset: number; readonly endOffsetExclusive: number } {
+  const startOffset = range.startOffset;
+  const endOffsetExclusive = range.endOffsetExclusive;
+  if (
+    !Number.isSafeInteger(startOffset) ||
+    !Number.isSafeInteger(endOffsetExclusive) ||
+    startOffset < 0 ||
+    endOffsetExclusive < startOffset ||
+    endOffsetExclusive > sourceLength
+  ) {
+    throw new RangeError('G-code parse range must be a half-open span inside the source');
+  }
+  return Object.freeze({ startOffset, endOffsetExclusive });
+}
+
 function wholeInputLocation(): SourceLocation {
   return {
     line: 0,
@@ -1653,8 +1943,11 @@ class RecordColumnsBuilder {
   constructor(
     private readonly maximum: number,
     maximumPathPoints: number,
+    private readonly retain = true,
   ) {
-    this.capacity = Math.min(1_024, maximum);
+    // The index pass only needs to know how many records a whole parse would
+    // produce and where the layers are, so it keeps none of them.
+    this.capacity = retain ? Math.min(1_024, maximum) : 0;
     this.kind = new Uint8Array(this.capacity);
     this.startX = new Float32Array(this.capacity);
     this.startY = new Float32Array(this.capacity);
@@ -1713,6 +2006,11 @@ class RecordColumnsBuilder {
         value.pathPoints.z.length !== pathCount)
     ) {
       throw new Error('Arc interpolation point columns must have equal declared lengths');
+    }
+    if (!this.retain) {
+      // Counting only: the caller wants the shape of the parse, not its data.
+      this.length += 1;
+      return 'ok';
     }
     if (this.length === this.capacity) this.grow();
     const index = this.length;

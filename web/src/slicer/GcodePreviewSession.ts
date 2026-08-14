@@ -9,10 +9,38 @@ import { inspectGcode, type GcodeInspectionState } from './GcodeInspectionModel'
 import {
   GCODE_RECORD_KIND,
   GCODE_RECORD_KIND_NAMES,
+  RICH_GCODE_HARD_CAPS,
+  indexRichGcodeLayers,
+  parseRichGcodeLayerWindow,
   parseRichGcodeModel,
+  type GcodeLayerIndex,
   type RichGcodeModel,
   type RichGcodeParseOptions,
 } from './RichGcodeModel';
+
+/**
+ * Skip the whole-print attempt above this size.
+ *
+ * The decision to stream is made by *trying* to read the print whole and
+ * checking whether it fit, which needs no estimate of characters per record and
+ * cannot be wrong. This only avoids paying for an attempt that is certain to
+ * fail: past the parser's own character budget there is nothing to try.
+ */
+export const GCODE_PREVIEW_WHOLE_PARSE_CEILING_CHARACTERS = RICH_GCODE_HARD_CAPS.inputCharacters;
+
+/** Records one loaded window may hold — about 30 MB of columns. */
+export const GCODE_PREVIEW_WINDOW_RECORD_BUDGET = 240_000;
+
+interface StreamingSource {
+  readonly gcode: string;
+  readonly index: GcodeLayerIndex;
+  readonly options: RichGcodeParseOptions;
+  /** Records one window may hold; never more than a parse would retain. */
+  readonly recordBudget: number;
+  /** Inclusive index-entry bounds currently parsed into `model`. */
+  loadedFirst: number;
+  loadedLast: number;
+}
 
 /** Move classes a viewer can hide, in the order the panel lists them. */
 export const GCODE_PREVIEW_MOVE_FILTERS = Object.freeze([
@@ -54,12 +82,20 @@ export interface GcodePreviewSessionSource {
  */
 export class GcodePreviewSession {
   private view: GcodePreviewViewState;
+  private loaded: RichGcodeModel;
+  private readonly stream: StreamingSource | undefined;
 
   private constructor(
-    readonly model: RichGcodeModel,
+    model: RichGcodeModel,
     readonly source: GcodePreviewSessionSource,
+    stream?: StreamingSource,
   ) {
-    const bounds = layerBounds(model);
+    this.loaded = model;
+    this.stream = stream;
+    // What is shown starts as what is loaded. For a whole print that is every
+    // layer; for a streamed one it is the first window, and the slider still
+    // spans the entire print so the rest is one drag away.
+    const bounds = this.loadedLayerBounds;
     this.view = Object.freeze({
       mode: 'FeatureType' as GcodePreviewMode,
       layerRange: bounds,
@@ -73,16 +109,64 @@ export class GcodePreviewSession {
     });
   }
 
+  /**
+   * Read a print whole when it fits, and a window at a time when it does not.
+   *
+   * The choice is the file's size, not the caller's: a print large enough that
+   * one parse would cost hundreds of megabytes cannot be shown all at once by
+   * any budget, and reading it in windows is what keeps every layer reachable
+   * instead of silently stopping partway up.
+   */
   static fromGcode(
     gcode: string,
     source: GcodePreviewSessionSource,
     options: RichGcodeParseOptions = {},
   ): GcodePreviewSession {
-    return new GcodePreviewSession(parseRichGcodeModel(gcode, options), source);
+    if (gcode.length <= GCODE_PREVIEW_WHOLE_PARSE_CEILING_CHARACTERS) {
+      const whole = parseRichGcodeModel(gcode, options);
+      // It fit, so show all of it. Asking the model whether it fit is exact,
+      // where guessing from the file size would sometimes be wrong in the one
+      // direction that matters — quietly dropping the top of a print.
+      if (whole.complete) return new GcodePreviewSession(whole, source);
+    }
+    const index = indexRichGcodeLayers(gcode, options);
+    // A window can never hold more than one parse would keep, so a caller that
+    // lowers the record limit lowers the window with it.
+    const recordBudget = Math.min(GCODE_PREVIEW_WINDOW_RECORD_BUDGET, index.limits.records);
+    const stream: StreamingSource = { gcode, index, options, recordBudget, loadedFirst: 0, loadedLast: 0 };
+    const last = windowEnd(index, 0, recordBudget);
+    stream.loadedLast = last;
+    const model = parseRichGcodeLayerWindow(gcode, index, 0, last, options);
+    return new GcodePreviewSession(model, source, stream);
   }
 
+  /** The model behind the current window; whole-print when not streaming. */
+  get model(): RichGcodeModel {
+    return this.loaded;
+  }
+
+  /** True when only part of the print is held at once. */
+  get streaming(): boolean {
+    return this.stream !== undefined;
+  }
+
+  /** Inclusive layer bounds of the whole print, not of what is loaded. */
   get layerBounds(): readonly [number, number] {
-    return layerBounds(this.model);
+    if (this.stream) {
+      const entries = this.stream.index.entries;
+      return Object.freeze([entries[0].layer, entries[entries.length - 1].layer]) as readonly [number, number];
+    }
+    return layerBounds(this.loaded);
+  }
+
+  /** Inclusive layer bounds actually parsed right now. */
+  get loadedLayerBounds(): readonly [number, number] {
+    if (!this.stream) return this.layerBounds;
+    const entries = this.stream.index.entries;
+    return Object.freeze([entries[this.stream.loadedFirst].layer, entries[this.stream.loadedLast].layer]) as readonly [
+      number,
+      number,
+    ];
   }
 
   getView(): GcodePreviewViewState {
@@ -103,6 +187,9 @@ export class GcodePreviewSession {
     if (low > high) [low, high] = [high, low];
     const singleLayer = patch.singleLayer ?? this.view.singleLayer;
     if (singleLayer) low = high;
+    // Load before publishing the view, so a caller that projects immediately
+    // never sees a range the loaded window cannot answer for.
+    [low, high] = this.ensureWindow(low, high);
     this.view = Object.freeze({
       mode,
       layerRange: Object.freeze([low, high]) as readonly [number, number],
@@ -110,6 +197,28 @@ export class GcodePreviewSession {
       moveVisibility: Object.freeze({ ...this.view.moveVisibility, ...(patch.moveVisibility ?? {}) }),
     });
     return this.view;
+  }
+
+  /**
+   * Load whatever window covers `[low, high]`, and report the range that is
+   * actually readable.
+   *
+   * A request wider than one window is narrowed rather than partially served:
+   * the viewer is told which layers it is looking at instead of being shown a
+   * subset dressed up as the whole range.
+   */
+  private ensureWindow(low: number, high: number): [number, number] {
+    const stream = this.stream;
+    if (!stream) return [low, high];
+    const entries = stream.index.entries;
+    const first = entryForLayer(stream.index, low);
+    const last = Math.min(windowEnd(stream.index, first, stream.recordBudget), entryForLayer(stream.index, high));
+    if (first !== stream.loadedFirst || last !== stream.loadedLast) {
+      this.loaded = parseRichGcodeLayerWindow(stream.gcode, stream.index, first, last, stream.options);
+      stream.loadedFirst = first;
+      stream.loadedLast = last;
+    }
+    return [entries[first].layer, entries[last].layer];
   }
 
   /** Current projection for the active view; `unsupported` stays explicit. */
@@ -127,6 +236,25 @@ export class GcodePreviewSession {
     return inspectGcode(this.model, { layerRange: this.view.layerRange, singleLayer: this.view.singleLayer });
   }
 
+  /**
+   * What to tell the viewer when only part of the print is loaded.
+   *
+   * A window is a deliberate choice, not a failure, but leaving it unsaid would
+   * reproduce the bug it exists to solve: someone seeing a fraction of their
+   * model and concluding the slice went wrong.
+   */
+  windowNotice(): string | undefined {
+    const stream = this.stream;
+    if (!stream) return undefined;
+    const [low, high] = this.loadedLayerBounds;
+    const [, top] = this.layerBounds;
+    if (low <= this.layerBounds[0] && high >= top) return undefined;
+    return (
+      `Showing layers ${low}–${high} of ${top}. This print is too large to hold at once, ` +
+      'so it is read a window at a time — move the layer range to see the rest. The sliced G-code is complete.'
+    );
+  }
+
   /** Rich record-kind mask derived from the visible move classes. */
   private eventMask(): Uint8Array {
     const mask = new Uint8Array(GCODE_RECORD_KIND_NAMES.length);
@@ -137,6 +265,39 @@ export class GcodePreviewSession {
     }
     return mask;
   }
+}
+
+/**
+ * The last index entry that fits in the record budget starting at `first`.
+ *
+ * Always at least one layer: a single layer larger than the budget is still
+ * shown, because refusing to draw a layer is worse than briefly exceeding a
+ * self-imposed ceiling.
+ */
+function windowEnd(index: GcodeLayerIndex, first: number, budget: number): number {
+  const entries = index.entries;
+  const startRecords = entries[first].recordsBefore;
+  let last = first;
+  for (let candidate = first + 1; candidate < entries.length; candidate += 1) {
+    const through = entries[candidate].recordsBefore + recordsIn(index, candidate) - startRecords;
+    if (through > budget) break;
+    last = candidate;
+  }
+  return last;
+}
+
+function recordsIn(index: GcodeLayerIndex, entry: number): number {
+  const next = index.entries[entry + 1];
+  return (next ? next.recordsBefore : index.recordCount) - index.entries[entry].recordsBefore;
+}
+
+/** Index-entry position holding `layer`, clamped into range. */
+function entryForLayer(index: GcodeLayerIndex, layer: number): number {
+  const entries = index.entries;
+  for (let position = entries.length - 1; position >= 0; position -= 1) {
+    if (entries[position].layer <= layer) return position;
+  }
+  return 0;
 }
 
 function layerBounds(model: RichGcodeModel): readonly [number, number] {
