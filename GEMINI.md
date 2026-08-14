@@ -787,6 +787,31 @@ floors, not ceilings.
     foreign readers and the engine, and `Metadata/orcaxr/assets/*.bin` (17.2 MB
     compressed here) is the byte-exact canonical mesh the envelope reopens from.
 
+- **The preview's parse budget silently truncated a real print, and it looked
+  like a failed slice.** A 78 mm three-colour narwhal slices to 95 MB of G-code:
+  99.7M UTF-16 code units, 3.17M records, 490 layers. The old caps
+  (`inputCharacters` 64 MiB, `records` 1.5M) stopped the parser at Z 21.4 mm of
+  78.8 mm — a quarter of the print — and the preview drew that stump as though
+  it were the whole model. Both engines were fine: WASM and the external CLI
+  each produced 1472 layer markers over Z 0.200–78.440 from both the source
+  archive and OrcaXR's regenerated one, with identical per-tool move counts.
+  Only the preview was short. Caps are now sized from that measurement
+  (`inputCharacters` 256 MiB, `lines` 16M, `records` 4M, `pathPoints` 8M) and
+  `GCODE_RENDER_HARD_CAPS.segments` was raised to 4M with them — the renderer
+  *throws* above its cap rather than drawing part of a path, so a render cap
+  below the parser's turns "shows the whole print" into "shows no preview at
+  all". A surface that cannot afford that, the headset above all, passes its own
+  smaller `maxRenderedSegments`. Full parse costs ~4.4 s and ~400 MB of typed
+  columns at ~132 B per record, of which about a quarter is `RecordColumnsBuilder`
+  doubling slack that `finish()` keeps because it hands out `subarray` views.
+  **When a file still exceeds the budget the notice must be quantified**: it now
+  names the moves drawn and the height reached and states that the sliced G-code
+  is complete, because "parser termination reason: record-cap" left the obvious
+  and wrong conclusion — that the model had not been sliced — fully available.
+  The real ceiling has moved, not gone; a genuinely bigger print needs
+  layer-windowed streaming, which the preview's existing layer window makes
+  natural but which nothing implements yet.
+
 - **What the external slicer container can and cannot fix.** Offloading helps the
   *slice* itself and nothing else: the costs above are all in the browser,
   between the user's input and the scene updating, and cannot survive a network

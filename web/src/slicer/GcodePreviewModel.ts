@@ -893,14 +893,39 @@ function legendEntry(
   });
 }
 
+/**
+ * Say what a truncated parse means in terms the operator can act on.
+ *
+ * "Parser termination reason: record-cap" told someone looking at a quarter of
+ * their model nothing, and left the obvious and wrong conclusion available:
+ * that the slice itself had failed. The limit is the preview's, not the
+ * engine's, so the height actually drawn and the fact that the G-code is whole
+ * are the two things worth saying.
+ */
 function sourceLimitations(model: RichGcodeModel): readonly GcodePreviewLimitation[] {
   if (model.complete) return Object.freeze([]);
+  const drawnHeightMm = highestParsedZ(model);
+  const height = drawnHeightMm === undefined ? '' : ` up to Z ${drawnHeightMm.toFixed(2)} mm`;
   return Object.freeze([
     Object.freeze({
       code: 'source-incomplete',
-      message: `Projection covers only the parsed prefix; parser termination reason: ${model.terminationReason ?? 'unknown'}`,
+      message:
+        `This preview shows only the first ${model.columns.count.toLocaleString('en-US')} moves${height}, ` +
+        `because the G-code is larger than the preview can hold (${model.terminationReason ?? 'unknown limit'}). ` +
+        'The sliced G-code itself is complete — this affects what is drawn, not what will print.',
     }),
   ]);
+}
+
+function highestParsedZ(model: RichGcodeModel): number | undefined {
+  const endZ = model.columns.endZ;
+  let highest: number | undefined;
+  for (let record = 0; record < model.columns.count; record += 1) {
+    const value = endZ[record];
+    if (!Number.isFinite(value)) continue;
+    if (highest === undefined || value > highest) highest = value;
+  }
+  return highest;
 }
 
 function officialRole(name: string): number {

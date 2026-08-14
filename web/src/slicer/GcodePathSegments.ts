@@ -1,7 +1,17 @@
 import { GCODE_PATH_KIND, GCODE_RECORD_KIND, RICH_GCODE_HARD_CAPS, type RichGcodeModel } from './RichGcodeModel';
 
+/**
+ * Ceiling on drawn segments, kept in step with the parser's record cap.
+ *
+ * The renderer refuses rather than drawing part of a toolpath, so a cap below
+ * what the parser will hand it converts "shows the whole print" into "shows no
+ * preview at all". The real print behind `RICH_GCODE_HARD_CAPS` needs about
+ * 2.9M segments, at 48 bytes each for positions and colours. A surface that
+ * cannot afford that — the headset, most of all — passes its own smaller
+ * `maxRenderedSegments` rather than relying on this bound.
+ */
 export const GCODE_RENDER_HARD_CAPS = Object.freeze({
-  segments: 1_500_000,
+  segments: 4_000_000,
 });
 
 export class GcodePathSidecarError extends Error {

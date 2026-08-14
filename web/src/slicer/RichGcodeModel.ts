@@ -48,11 +48,24 @@ export const GCODE_RECORD_KIND_NAMES = Object.freeze([
   'wipe-end',
 ] as const);
 
+/**
+ * Bounds on what one parse may retain, so a hostile or enormous file cannot
+ * exhaust the tab.
+ *
+ * They are sized from a real print rather than a round number. A 78 mm
+ * three-colour model of 1.9M facets slices to 95 MB of G-code — 99.7M UTF-16
+ * code units, 3.17M records, 490 layers — and parses in 4.4 s for about 400 MB
+ * of typed columns. The previous 64 MiB / 1.5M-record budget stopped that file
+ * a quarter of the way up, at Z 21.4 mm of 78.8 mm, and the preview drew the
+ * stump as though it were the whole print. These leave headroom above that
+ * measurement without pretending the ceiling is gone: a file large enough to
+ * exceed them still terminates, and `sourceLimitations` says so in millimetres.
+ */
 export const RICH_GCODE_HARD_CAPS = Object.freeze({
-  inputCharacters: 64 * 1024 * 1024,
-  lines: 4_000_000,
-  records: 1_500_000,
-  pathPoints: 4_000_000,
+  inputCharacters: 256 * 1024 * 1024,
+  lines: 16_000_000,
+  records: 4_000_000,
+  pathPoints: 8_000_000,
   warnings: 2_048,
   lineCharacters: 64 * 1024,
   roles: 512,

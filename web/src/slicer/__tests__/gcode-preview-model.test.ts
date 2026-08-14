@@ -77,6 +77,47 @@ function fixture(): RichGcodeModel {
   );
 }
 
+test('a print that outgrows the preview budget says so in millimetres, and clears the slice', () => {
+  // A real 78 mm three-colour model slices to 95 MB and 3.17M records. Under the
+  // previous budget the parser stopped a quarter of the way up and the preview
+  // drew the stump as if it were the whole print, which reads as a failed slice.
+  const lines: string[] = ['M83'];
+  let z = 0.2;
+  for (let layer = 0; layer < 40; layer += 1) {
+    lines.push(';LAYER_CHANGE', `G1 Z${z.toFixed(2)} F600`);
+    for (let move = 0; move < 40; move += 1) {
+      lines.push(`G1 X${(10 + move).toFixed(3)} Y${(10 + layer).toFixed(3)} E0.02`);
+    }
+    z += 0.2;
+  }
+  const gcode = lines.join('\n');
+  const truncated = parseRichGcodeModel(gcode, { limits: { records: 200 } });
+  assert.equal(truncated.complete, false);
+  assert.equal(truncated.terminationReason, 'record-cap');
+
+  const projection = projectGcodePreview(truncated, { mode: 'FeatureType' });
+  const limitation = projection.limitations.find((entry) => entry.code === 'source-incomplete');
+  assert.ok(limitation, 'a truncated parse must be reported');
+  assert.match(limitation.message, /only the first [\d,]+ moves/, 'it must say how much was drawn');
+  assert.match(limitation.message, /up to Z \d+\.\d+ mm/, 'in a height the operator can compare to the model');
+  assert.match(
+    limitation.message,
+    /sliced G-code itself is complete/,
+    'and must not leave "my model was not fully sliced" as the available conclusion',
+  );
+
+  // The same input inside the budget reports nothing and reaches the last layer.
+  const whole = parseRichGcodeModel(gcode);
+  assert.equal(whole.complete, true);
+  assert.equal(whole.terminationReason, undefined);
+  assert.deepEqual(
+    projectGcodePreview(whole, { mode: 'FeatureType' }).limitations.filter(
+      (entry) => entry.code === 'source-incomplete',
+    ),
+    [],
+  );
+});
+
 test('inventory exactly covers the 12 pinned EViewType values with explicit units and scales', () => {
   assert.deepEqual(
     GCODE_PREVIEW_MODES.map(({ id }) => id),
