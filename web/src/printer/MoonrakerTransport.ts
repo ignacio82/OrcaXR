@@ -319,19 +319,19 @@ export class MoonrakerTransport {
   }
 
   async request<T>(path: string, options: MoonrakerRequestOptions = {}): Promise<T> {
-    if (this.stateValue.status !== 'connected') {
-      throw new MoonrakerTransportError('invalid_state', options.operation ?? 'request');
-    }
+    // Moonraker's REST API is served over HTTP and owes nothing to the JSON-RPC
+    // socket, so a reconnecting socket does not make a query invalid. Refusing
+    // here is what turned a momentary reconnect into "the operation is not valid
+    // in the current connection state" on the readiness check that precedes
+    // every send.
+    this.assertTransferable(options.operation ?? 'request');
     if (options.signal?.aborted) {
       throw new MoonrakerTransportError('cancelled', options.operation ?? 'request');
     }
     const generation = this.generation;
-    const socketEpoch = this.socketEpoch;
     const operation = safeOperationName(options.operation ?? 'request');
     const result = await this.fetchResult<T>(generation, path, options, operation);
-    if (this.stateValue.status !== 'connected' || this.generation !== generation || this.socketEpoch !== socketEpoch) {
-      throw new MoonrakerTransportError('cancelled', operation);
-    }
+    this.assertSameSession(generation, operation);
     return result;
   }
 
@@ -341,12 +341,38 @@ export class MoonrakerTransport {
    * response shape differs, so they get their own guarded entry point rather
    * than loosening the JSON-RPC contract every other call relies on.
    */
-  async upload<T>(path: string, body: FormData, options: MoonrakerRequestOptions = {}): Promise<T> {
-    if (this.stateValue.status !== 'connected') {
-      throw new MoonrakerTransportError('invalid_state', options.operation ?? 'upload');
+  /**
+   * A file transfer needs a live session, not a live websocket.
+   *
+   * Uploads and downloads go over Moonraker's HTTP file API, which owes nothing
+   * to the JSON-RPC socket. Requiring the socket to be up at this instant made
+   * a send fail with `invalid_state` when the socket happened to be
+   * re-establishing — which, after a slice long enough for one reconnect, is
+   * exactly when an operator presses Send.
+   */
+  private assertTransferable(operation: string): void {
+    if (this.disposed) throw new MoonrakerTransportError('invalid_state', operation);
+    if (this.stateValue.status !== 'connected' && this.stateValue.status !== 'reconnecting') {
+      throw new MoonrakerTransportError('invalid_state', operation);
     }
+  }
+
+  /**
+   * A completed HTTP transfer belongs to the session that started it.
+   *
+   * Only the session generation decides that. The socket epoch advances on
+   * every reconnect, so checking it here discarded a finished upload because
+   * the websocket blinked while it was in flight — reporting failure for a file
+   * that had already landed on the printer, which is worse than reporting
+   * nothing at all.
+   */
+  private assertSameSession(generation: number, operation: string): void {
+    if (this.generation !== generation) throw new MoonrakerTransportError('cancelled', operation);
+  }
+
+  async upload<T>(path: string, body: FormData, options: MoonrakerRequestOptions = {}): Promise<T> {
+    this.assertTransferable(options.operation ?? 'upload');
     const generation = this.generation;
-    const socketEpoch = this.socketEpoch;
     const operation = safeOperationName(options.operation ?? 'upload');
     const result = await this.fetchResult<T>(
       generation,
@@ -354,9 +380,7 @@ export class MoonrakerTransport {
       { ...options, method: 'POST', body, acceptBareEnvelope: true },
       operation,
     );
-    if (this.stateValue.status !== 'connected' || this.generation !== generation || this.socketEpoch !== socketEpoch) {
-      throw new MoonrakerTransportError('cancelled', operation);
-    }
+    this.assertSameSession(generation, operation);
     return result;
   }
 
@@ -424,11 +448,8 @@ export class MoonrakerTransport {
    * authenticate.
    */
   async download(path: string, options: MoonrakerRequestOptions = {}): Promise<Uint8Array> {
-    if (this.stateValue.status !== 'connected') {
-      throw new MoonrakerTransportError('invalid_state', options.operation ?? 'download');
-    }
+    this.assertTransferable(options.operation ?? 'download');
     const generation = this.generation;
-    const socketEpoch = this.socketEpoch;
     const operation = safeOperationName(options.operation ?? 'download');
     const bytes = await this.fetchWith(generation, path, options, operation, async (response) => {
       const declaredLength = Number(response.headers.get('content-length') ?? '0');
@@ -441,9 +462,7 @@ export class MoonrakerTransport {
       }
       return new Uint8Array(buffer);
     });
-    if (this.stateValue.status !== 'connected' || this.generation !== generation || this.socketEpoch !== socketEpoch) {
-      throw new MoonrakerTransportError('cancelled', operation);
-    }
+    this.assertSameSession(generation, operation);
     return bytes;
   }
 

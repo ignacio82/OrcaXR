@@ -440,4 +440,54 @@ async function connectHarness(harness: ReturnType<typeof createHarness>): Promis
   assert.doesNotMatch(credentialSource, /localStorage|sessionStorage|indexedDB/);
 }
 
+// A file transfer rides Moonraker's HTTP API, which owes nothing to the
+// JSON-RPC socket. Refusing while the socket reconnects is what reported
+// "invalid_state" on a send made after a slice long enough for one reconnect.
+{
+  const harness = createHarness();
+  await connectHarness(harness);
+  harness.sockets[0].remoteClose();
+  assert.equal(harness.transport.state.status, 'reconnecting', 'precondition: the socket is re-establishing');
+
+  const readiness = await harness.transport.request<{ ok: boolean }>('/printer/objects/query', {
+    operation: 'print_readiness',
+  });
+  assert.deepEqual(readiness, { ok: true }, 'a REST query still answers while the socket is down');
+
+  const form = new FormData();
+  form.set('file', new Blob(['G28\n'], { type: 'text/plain' }), 'plate.gcode');
+  const uploaded = await harness.transport.upload<{ ok: boolean }>('/server/files/upload', form, {
+    operation: 'upload_gcode',
+  });
+  assert.deepEqual(uploaded, { ok: true }, 'and an upload is not refused for it either');
+  harness.transport.dispose();
+}
+
+// A websocket that reconnects mid-transfer must not discard a finished upload:
+// the file is already on the printer, so reporting failure is worse than
+// reporting nothing.
+{
+  let resolveUpload: ((response: Response) => void) | undefined;
+  const harness = createHarness(async (input) => {
+    if (String(input).includes('/server/files/upload')) {
+      return new Promise<Response>((resolve) => {
+        resolveUpload = resolve;
+      });
+    }
+    return healthyFetcher()(input);
+  });
+  await connectHarness(harness);
+  const form = new FormData();
+  form.set('file', new Blob(['G28\n'], { type: 'text/plain' }), 'plate.gcode');
+  const pending = harness.transport.upload<{ ok: boolean }>('/server/files/upload', form, {
+    operation: 'upload_gcode',
+  });
+  await waitFor(() => resolveUpload !== undefined, 'upload did not reach the fetcher');
+  // The socket blinks while the bytes are still going out.
+  harness.sockets[0].remoteClose();
+  resolveUpload?.(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+  assert.deepEqual(await pending, { ok: true }, 'the completed upload is kept, not cancelled');
+  harness.transport.dispose();
+}
+
 console.log('Moonraker transport tests passed');

@@ -847,6 +847,22 @@ floors, not ceilings.
   while slicing. Removing an automatic stop without adding a manual one would
   have left a hung slice needing a page reload.
 
+- **Moonraker's HTTP API does not depend on its websocket.** Sending the narwhal
+  after a long slice failed with `invalid_state`, because `request`, `upload`,
+  and `download` all refused unless `state.status === 'connected'` — so a socket
+  that happened to be reconnecting blocked the readiness query that precedes
+  every send. Worse, each re-checked `socketEpoch` *after* the transfer, and that
+  epoch advances on every reconnect: a websocket blink during a multi-minute
+  upload discarded a file that had already landed on the printer, reported as
+  `cancelled`. Uploads, downloads, and REST queries go over HTTP and owe the
+  JSON-RPC socket nothing, so they now require only a live *session*
+  (`connected` or `reconnecting`, not disposed) and, afterwards, only that the
+  session `generation` is unchanged — generation moves when the operator
+  deliberately disconnects or switches printers, which is the only thing that
+  should invalidate a finished transfer. Separately, `main.ts` re-establishes the
+  connection *after* the send confirmation dialog: that dialog waits on a person,
+  and the connection does not wait with it.
+
 - **A transfer cannot be capped by duration.** Sending the narwhal to a printer
   failed with a timeout: `MoonrakerTransport` applied its flat 10 s
   `requestTimeoutMs` to every request including the upload, and 95 MB of G-code

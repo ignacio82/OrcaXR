@@ -522,6 +522,10 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
         workspace.setStatus('Send cancelled; nothing was uploaded.');
         return;
       }
+      // The dialog waits on a person, and a printer connection does not wait
+      // with it. Re-establish before committing to an upload that may take
+      // minutes, rather than discovering the session lapsed partway through.
+      await connectConfiguredPrinter();
       const result = await submitPrintJob(transport, {
         filename: intent.filename,
         gcode: intent.gcode,
