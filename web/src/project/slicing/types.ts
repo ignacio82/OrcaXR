@@ -209,11 +209,24 @@ export interface SliceJobOptions {
   /** Per route attempt. */
   /**
    * How long one attempt may go **without reporting progress** before it is
-   * treated as stuck. It is not a cap on how long a slice may take: a large
-   * model legitimately runs for many minutes, and both routes report progress
-   * throughout, so a duration cap would cancel healthy work.
+   * cancelled, or `null` to never cancel it — which is the default.
+   *
+   * Nothing can tell a slow engine from a stuck one from the outside. A fine
+   * layer height on a two-million-facet model spends minutes inside a single
+   * stage without a word, and cancelling that destroys work the operator was
+   * waiting for, at the point where they have waited longest. Silence is
+   * therefore reported and not acted on: the job says it has gone quiet, and the
+   * operator — who can see the printer, the machine, and the clock — decides
+   * whether to cancel. Set a value only where an unattended caller genuinely
+   * needs a ceiling.
    */
-  readonly attemptIdleTimeoutMs?: number;
+  readonly attemptIdleTimeoutMs?: number | null;
+  /**
+   * How long an attempt may be quiet before the job says so.
+   *
+   * This only changes what the operator is told. It never cancels anything.
+   */
+  readonly stallNoticeMs?: number;
   readonly serializationTimeoutMs?: number;
   readonly recoveryTimeoutMs?: number;
 }

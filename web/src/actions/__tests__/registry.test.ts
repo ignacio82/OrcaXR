@@ -80,14 +80,16 @@ test('every action has a known group', () => {
   }
 });
 
-test('primary bar has the four expected actions', () => {
+test('primary bar has the five expected actions', () => {
   const ids = buildRegistry()
     .byDisclosure('primary')
     .map((a) => a.id)
     .sort();
+  // Cancel sits beside Slice because stopping a slice is now the only thing
+  // that ends one: a quiet engine is left to work, however long it takes.
   assert.deepStrictEqual(
     ids,
-    ['load_model_from_path', 'save_gcode_to_downloads', 'slice_active_plate', 'toggle_preview'].sort(),
+    ['load_model_from_path', 'save_gcode_to_downloads', 'slice_active_plate', 'slice_cancel', 'toggle_preview'].sort(),
   );
 });
 

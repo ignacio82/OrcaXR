@@ -292,6 +292,10 @@ export class ActionContext {
   }
 
   // ---- Slicing --------------------------------------------------------
+  cancelSlice(): void {
+    this.workspace.cancelSlice();
+  }
+
   sliceAllPlates(): void {
     void this.workspace.sliceAllPlates();
   }

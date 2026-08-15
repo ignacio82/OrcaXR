@@ -131,7 +131,9 @@ interface MutableJob {
 const DEFAULT_OPTIONS: Required<SliceJobOptions> = {
   maxAttempts: 2,
   preflightTimeoutMs: 10_000,
-  attemptIdleTimeoutMs: 120_000,
+  // Off. Silence is reported, not punished — see `attemptIdleTimeoutMs`.
+  attemptIdleTimeoutMs: null,
+  stallNoticeMs: 30_000,
   // Writing the archive costs time in proportion to the model: a
   // two-million-facet plate takes around twenty seconds, which left almost no
   // margin under the previous thirty-second limit and would have failed the
@@ -378,22 +380,29 @@ export class CanonicalSliceJobCoordinator {
         profiles,
         this.routeMetadata,
       );
+      // Silence is worth saying out loud — a long quiet stage is exactly when
+      // an operator starts wondering whether anything is still happening — but
+      // it is not evidence of failure, so it changes the message and nothing
+      // else.
+      const stall = new StallNotice(job.options.stallNoticeMs, (silentMs) =>
+        this.reportStall(job, plateId, attempt, silentMs),
+      );
+      stall.arm();
       try {
         const response = await runRouteAbortable(
           job.controller.signal,
           job.options.attemptIdleTimeoutMs,
-          new SliceJobTimeoutError(
-            `Slice route attempt reported no progress for ${job.options.attemptIdleTimeoutMs} ms`,
-            job.options.attemptIdleTimeoutMs,
-          ),
+          new SliceJobTimeoutError('Slice route attempt (no progress reported)', job.options.attemptIdleTimeoutMs ?? 0),
           this.options.route.cancellation,
           (signal, beat) =>
             this.options.route.execute(request, signal, (progress) => {
               // Progress is proof the route is alive, whatever the elapsed time.
               beat();
+              stall.beat();
               this.reportRouteProgress(job, plateId, attempt, progress);
             }),
         );
+        stall.disarm();
         this.assertFresh(job, archive);
         validateRouteResponse(response, request, this.routeMetadata);
         const gcode = response.gcode.slice();
@@ -415,6 +424,7 @@ export class CanonicalSliceJobCoordinator {
           attempts: attempt,
         };
       } catch (error) {
+        stall.disarm();
         if (
           error instanceof SliceRouteCancellationError &&
           (!error.cancellationConfirmed || job.controller.signal.aborted)
@@ -507,6 +517,24 @@ export class CanonicalSliceJobCoordinator {
       progressMessage: undefined,
       cancellationConfirmed: error instanceof SliceRouteCancellationError ? error.cancellationConfirmed : undefined,
       errorName: error instanceof Error ? error.name : 'UnknownError',
+    };
+    this.emit(job);
+  }
+
+  /** Say that an attempt has gone quiet, without implying it has failed. */
+  private reportStall(job: MutableJob, plateId: PlateId, attempt: number, silentMs: number): void {
+    if (
+      this.activeJobs.get(job.id) !== job ||
+      job.controller.signal.aborted ||
+      job.status.activePlateId !== plateId ||
+      job.status.attempt !== attempt
+    ) {
+      return;
+    }
+    const seconds = Math.round(silentMs / 1000);
+    job.status = {
+      ...job.status,
+      progressMessage: `Still slicing — the engine has not reported for ${seconds} s. Large models spend minutes in one stage.`,
     };
     this.emit(job);
   }
@@ -816,9 +844,48 @@ function normalizedOptions(
 ): Required<SliceJobOptions> {
   const result = { ...DEFAULT_OPTIONS, ...base, ...overrides };
   for (const [name, value] of Object.entries(result)) {
-    if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${name} must be a positive integer`);
+    // `attemptIdleTimeoutMs` is the one option that may be switched off.
+    if (value === null && name === 'attemptIdleTimeoutMs') continue;
+    if (value === null || !Number.isSafeInteger(value) || value <= 0) {
+      throw new Error(`${name} must be a positive integer`);
+    }
   }
   return result;
+}
+
+/**
+ * Repeats a "still quiet" notice while an attempt says nothing.
+ *
+ * Deliberately not a deadline: it re-arms after every notice and never aborts,
+ * so a long silent stage keeps the operator informed instead of being killed at
+ * the moment they have waited longest for it.
+ */
+class StallNotice {
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  private silentSince = Date.now();
+
+  constructor(
+    private readonly noticeMs: number,
+    private readonly onQuiet: (silentMs: number) => void,
+  ) {}
+
+  arm(): void {
+    this.disarm();
+    this.timer = setTimeout(() => {
+      this.onQuiet(Date.now() - this.silentSince);
+      this.arm();
+    }, this.noticeMs);
+  }
+
+  beat(): void {
+    this.silentSince = Date.now();
+    this.arm();
+  }
+
+  disarm(): void {
+    if (this.timer !== undefined) clearTimeout(this.timer);
+    this.timer = undefined;
+  }
 }
 
 function cancellationToken(signal: AbortSignal): CancellationToken {
@@ -849,13 +916,14 @@ class SilenceDeadline {
   private fired = false;
 
   constructor(
-    private readonly idleMs: number,
+    private readonly idleMs: number | null,
     private readonly onSilent: () => void,
   ) {}
 
   arm(): void {
     this.disarm();
-    if (this.fired) return;
+    // A null budget means nothing here decides the work has failed.
+    if (this.fired || this.idleMs === null) return;
     this.timer = setTimeout(() => {
       this.fired = true;
       this.onSilent();
@@ -875,7 +943,7 @@ class SilenceDeadline {
 
 async function runAbortable<T>(
   parent: AbortSignal,
-  timeoutMs: number,
+  timeoutMs: number | null,
   timeoutError: SliceJobTimeoutError,
   operation: (signal: AbortSignal, beat: () => void) => Promise<T>,
 ): Promise<T> {
@@ -896,7 +964,7 @@ async function runAbortable<T>(
 
 async function runRouteAbortable<T>(
   parent: AbortSignal,
-  timeoutMs: number,
+  timeoutMs: number | null,
   timeoutError: SliceJobTimeoutError,
   cancellation: SliceRouteAdapterPort['cancellation'],
   operation: (signal: AbortSignal, beat: () => void) => Promise<T>,

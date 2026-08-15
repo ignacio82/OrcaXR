@@ -830,6 +830,23 @@ floors, not ceilings.
   bounding it made it report a truncated *print*, which is the exact failure the
   index exists to make impossible.
 
+- **A slice is not cancelled for going quiet.** Slicing the narwhal at 0.12 mm
+  failed with an idle timeout, because the engine legitimately says nothing for
+  long stretches: measured on that model, the longest silence is **77.8 s** — right
+  after `5% Slicing mesh` — with a second gap of 51.8 s, in a 248 s slice. A
+  browser worker is slower than that native measurement, so 120 s of silence is
+  reachable on real hardware, and no fixed number is right because the silence
+  belongs to one stage of one model. Nothing can tell a slow engine from a stuck
+  one from outside, so `attemptIdleTimeoutMs` now defaults to `null` — silence is
+  *reported* (`stallNoticeMs`, a repeating "still slicing, no update for N s"
+  status) and never acted on. An unattended caller can still set a ceiling. The
+  consequence is load-bearing: **stopping a slice is now only the operator's
+  call, so `slice_cancel` had to exist** — `OrcaWorkspace.cancelSlice()` was
+  already written but nothing invoked it, so before this there was no way to end
+  a running slice at all. It sits on the primary bar beside Slice, enabled only
+  while slicing. Removing an automatic stop without adding a manual one would
+  have left a hung slice needing a page reload.
+
 - **A transfer cannot be capped by duration.** Sending the narwhal to a printer
   failed with a timeout: `MoonrakerTransport` applied its flat 10 s
   `requestTimeoutMs` to every request including the upload, and 95 MB of G-code

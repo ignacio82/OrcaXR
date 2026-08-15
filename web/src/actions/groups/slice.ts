@@ -29,6 +29,20 @@ export const sliceActions: Action[] = [
     run: (ctx) => ctx.sliceAllPlates(),
   },
   {
+    id: 'slice_cancel',
+    mcpTool: 'cancel_slice',
+    label: 'Cancel Slice',
+    icon: 'slice',
+    group: 'slice',
+    disclosure: 'primary',
+    hint: 'Stop the slice that is running',
+    // Nothing else can end a slice now that a quiet engine is left to work:
+    // how long a large model takes is not knowable in advance, so stopping it
+    // is the operator's call and needs to be one click away while it runs.
+    isEnabled: (s) => s.isSlicing,
+    run: (ctx) => ctx.cancelSlice(),
+  },
+  {
     id: 'toggle_preview',
     label: 'Preview',
     icon: 'preview',

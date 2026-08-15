@@ -469,7 +469,45 @@ await test('a slow route that keeps reporting progress is never cancelled for ta
   assert.ok(ticks >= 20, 'the route ran well past the idle limit while reporting progress');
 });
 
-await test('a route that goes silent is cancelled and says that is why', async () => {
+await test('a route that goes silent is left alone unless a caller asked for a ceiling', async () => {
+  // Nothing can tell a slow engine from a stuck one, and a fine layer height on
+  // a large model spends minutes inside one stage. Cancelling that destroys the
+  // work at the moment the operator has waited longest for it.
+  let started = false;
+  let release: (() => void) | undefined;
+  const quiet: SliceRouteAdapterPort = {
+    metadata: new RecordingRoute().metadata,
+    execute(request, signal) {
+      started = true;
+      return new Promise((resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        release = () =>
+          resolve({
+            protocolVersion: request.protocolVersion,
+            jobId: request.jobId,
+            plateId: request.plateId,
+            inputHash: request.project.inputHash,
+            engine: { ...new RecordingRoute().metadata.engine },
+            gcode: new TextEncoder().encode('; quiet but working\n'),
+            warnings: [],
+            statistics: {},
+          });
+      });
+    },
+  };
+  const patient = harness(quiet);
+  const handle = patient.coordinator.startCurrentPlate({ maxAttempts: 1, stallNoticeMs: 10 });
+  await waitUntil(() => started);
+  // Long enough that any default idle ceiling would have fired by now.
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  assert.equal(handle.getStatus().phase, 'submitting', 'silence alone never ends the job');
+  assert.match(handle.getStatus().progressMessage ?? '', /Still slicing/, 'but the operator is told it has gone quiet');
+  release?.();
+  await handle.completion;
+  assert.equal(handle.getStatus().phase, 'completed');
+});
+
+await test('a route that goes silent is cancelled when a caller sets a ceiling', async () => {
   let started = false;
   const silent: SliceRouteAdapterPort = {
     metadata: new RecordingRoute().metadata,
