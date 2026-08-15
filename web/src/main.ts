@@ -532,6 +532,18 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
         startPrint: decision.choice === 'upload-and-print',
         overwrite: decision.overwrite,
         signal: controller.signal,
+        // An upload has no deadline, so the status line is what tells an
+        // operator it is alive. `fetch` cannot report bytes sent, so this
+        // counts time rather than inventing a percentage, and points at the
+        // button that stops it.
+        onUploadElapsed: ({ elapsedMs, totalBytes }) => {
+          const seconds = Math.floor(elapsedMs / 1000);
+          const clock = `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, '0')}s`;
+          workspace.setStatus(
+            `Uploading ${intent.filename} (${(totalBytes / 1048576).toFixed(1)} MB) — ${clock} elapsed. ` +
+              'Press Cancel send to stop.',
+          );
+        },
         onPhase: (phase) => {
           const message =
             phase === 'uploading'

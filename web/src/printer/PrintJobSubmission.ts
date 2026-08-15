@@ -25,8 +25,8 @@ export interface PrintSubmissionTransport {
     options?: {
       readonly signal?: AbortSignal;
       readonly operation?: string;
-      /** Transfers are sized, not prompt, so they carry their own deadline. */
-      readonly timeoutMs?: number;
+      /** `null` runs without a deadline; the operator cancels instead. */
+      readonly timeoutMs?: number | null;
     },
   ): Promise<T>;
 }
@@ -59,12 +59,19 @@ export interface PrintSubmissionRequest {
   /** Replace an existing file of the same name instead of picking a new one. */
   readonly overwrite?: boolean;
   readonly signal?: AbortSignal;
-  /**
-   * Slowest acceptable upload rate, used to derive the transfer deadline.
-   * Defaults to `MINIMUM_UPLOAD_BYTES_PER_SECOND`.
-   */
-  readonly minimumUploadBytesPerSecond?: number;
   readonly onPhase?: (phase: PrintSubmissionPhase) => void;
+  /**
+   * Called while the upload is in flight, so a transfer that takes minutes is
+   * visibly still running.
+   *
+   * It reports elapsed time and total size, never bytes sent: `fetch` does not
+   * expose upload progress, and reporting a percentage derived from elapsed
+   * time would be an invention. An honest "4m 12s of 93.0 MB" beats a
+   * confident lie.
+   */
+  readonly onUploadElapsed?: (elapsed: { readonly elapsedMs: number; readonly totalBytes: number }) => void;
+  /** Test seam; production ticks once a second. */
+  readonly elapsedTickMs?: number;
 }
 
 export interface PrintSubmissionResult {
@@ -205,30 +212,28 @@ export async function submitPrintJob(
   form.set('print', 'false');
   form.set('file', new Blob([bytes], { type: 'text/plain' }), filename);
   let uploaded: unknown;
-  const uploadTimeoutMs = uploadDeadlineMs(bytes.byteLength, request.minimumUploadBytesPerSecond);
+  // No deadline: see `MoonrakerRequestOptions.timeoutMs`. An upload's progress
+  // cannot be observed through `fetch`, so the only honest alternatives are to
+  // guess a floor rate — which fails transfers that are working, as a 93 MB
+  // print over a 237 kB/s link did — or to let it run and let the operator
+  // stop it. The caller is required to offer that stop; `main.ts` turns the
+  // send button into "Cancel send" for exactly this window.
+  const stopTicking = startElapsedTicks(request, bytes.byteLength);
   try {
     uploaded = await transport.upload<unknown>('/server/files/upload', form, {
       operation: 'upload_gcode',
-      timeoutMs: uploadTimeoutMs,
+      timeoutMs: null,
       ...(request.signal ? { signal: request.signal } : {}),
     });
   } catch (error) {
     if (isCancellation(error, request.signal)) throw new PrintSubmissionError('Upload cancelled.', 'cancelled');
-    if (error instanceof MoonrakerTransportError && error.code === 'timeout') {
-      // Say what the link would have had to do, because the operator is the
-      // only one who can tell "my printer is on slow wifi" from "it is stuck".
-      throw new PrintSubmissionError(
-        `Uploading ${filename} (${megabytes(bytes.byteLength)}) did not finish within ` +
-          `${Math.round(uploadTimeoutMs / 1000)} s, which is slower than ` +
-          `${Math.round((request.minimumUploadBytesPerSecond ?? MINIMUM_UPLOAD_BYTES_PER_SECOND) / 1024)} kB/s. ` +
-          'Nothing was started; the printer may hold a partial file.',
-        'upload-failed',
-      );
-    }
     throw new PrintSubmissionError(
-      `Uploading ${filename} failed (${error instanceof MoonrakerTransportError ? error.code : 'request failed'}).`,
+      `Uploading ${filename} (${megabytes(bytes.byteLength)}) failed (${describeTransportFailure(error)}). ` +
+        'Nothing was started; the printer may hold a partial file.',
       'upload-failed',
     );
+  } finally {
+    stopTicking();
   }
   const item = isRecord(uploaded) && isRecord(uploaded.item) ? uploaded.item : undefined;
   const path = typeof item?.path === 'string' && item.path.length > 0 ? item.path : filename;
@@ -330,31 +335,23 @@ function uniqueFilename(filename: string, existing: ReadonlySet<string>): string
   return `${stem}_${Date.now()}${extension}`;
 }
 
-/**
- * Slowest link an upload is still expected to complete on.
+/*
+ * There is deliberately no upload rate floor here any more.
  *
- * A print artifact is not a status query: a two-million-facet model slices to
- * around 95 MB, which cannot cross any real network inside the shared
- * ten-second request timeout, so sending it failed on the clock rather than on
- * anything being wrong. The deadline is derived from the payload instead, and
- * this floor is what turns "large" into "stuck" — generous enough for a printer
- * on poor wifi, short enough that a dead link does not hang for an hour.
+ * Three deadlines were tried and all three were wrong. The shared 10 s request
+ * timeout could not carry 95 MB. A size-derived deadline at a 256 kB/s floor
+ * collided with the transport's own 5-minute configuration bound and rejected
+ * every print over ~67 MB before a byte was sent. Raising that bound then
+ * failed a real 93 MB upload at 402 s, because the link was moving 237 kB/s —
+ * healthy, just below a floor invented on its behalf.
+ *
+ * The floor was always a guess about someone else's network, and `fetch`
+ * cannot report upload progress, so there is no way to tell a slow transfer
+ * from a stuck one from inside this module. The upload therefore runs without
+ * a deadline, reports elapsed time so it is visibly alive, and is cancelled by
+ * the operator — who can see the printer and the network, and is the only one
+ * here who actually knows.
  */
-export const MINIMUM_UPLOAD_BYTES_PER_SECOND = 256 * 1024;
-
-/** Fixed allowance for connection setup and the printer writing the file out. */
-const UPLOAD_OVERHEAD_MS = 30_000;
-
-/**
- * Exported so a test can check the deadline this asks for against the deadline
- * the transport will accept. The two disagreeing is exactly how a print over
- * ~67 MB came to fail before a byte was sent.
- */
-export function uploadDeadlineMs(byteLength: number, minimumBytesPerSecond?: number): number {
-  const floor =
-    minimumBytesPerSecond && minimumBytesPerSecond > 0 ? minimumBytesPerSecond : MINIMUM_UPLOAD_BYTES_PER_SECOND;
-  return Math.ceil(UPLOAD_OVERHEAD_MS + (byteLength / floor) * 1000);
-}
 
 /**
  * Name a transport failure the way an operator can act on.
@@ -368,6 +365,25 @@ export function describeTransportFailure(error: unknown): string {
   const status = error.httpStatus === undefined ? '' : `HTTP ${error.httpStatus}`;
   if (error.detail === undefined) return status === '' ? error.code : `${error.code}, ${status}`;
   return status === '' ? `${error.code}: ${error.detail}` : `${status}: ${error.detail}`;
+}
+
+/**
+ * Report elapsed time while the upload runs, and return a stop function.
+ *
+ * Without this an upload of a hundred megabytes is indistinguishable from a
+ * hung one, which is precisely the anxiety a fixed deadline used to answer —
+ * badly, by failing the transfer.
+ */
+function startElapsedTicks(request: PrintSubmissionRequest, totalBytes: number): () => void {
+  if (!request.onUploadElapsed) return () => {};
+  const startedAt = Date.now();
+  const intervalMs = request.elapsedTickMs ?? 1000;
+  const handle = setInterval(() => {
+    request.onUploadElapsed?.({ elapsedMs: Date.now() - startedAt, totalBytes });
+  }, intervalMs);
+  // Node keeps the process alive for a pending interval; a submission must not.
+  (handle as unknown as { unref?: () => void }).unref?.();
+  return () => clearInterval(handle);
 }
 
 function megabytes(byteLength: number): string {

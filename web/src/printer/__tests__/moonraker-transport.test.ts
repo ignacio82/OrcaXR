@@ -14,7 +14,6 @@ import {
   type MoonrakerScheduler,
   type MoonrakerSocket,
 } from '..';
-import { uploadDeadlineMs } from '../PrintJobSubmission';
 
 const SERVER_INFO = Object.freeze({
   api_version: [1, 0, 5],
@@ -508,23 +507,26 @@ async function connectHarness(harness: ReturnType<typeof createHarness>): Promis
   });
   assert.deepEqual(uploaded, { ok: true }, 'a long upload deadline is honoured, not rejected');
 
-  // The two modules have to agree about what a large print costs. Checking the
-  // real sizes narwhal produces — 95 MB at 0.20 mm, 124 MB at 0.12 mm — against
-  // the real transport is what the earlier tests missed: they only ever sent a
-  // few megabytes, which stayed under the bound by accident.
-  for (const megabytes of [95, 124, 512]) {
-    const deadline = uploadDeadlineMs(megabytes * 1048576);
-    const big = new FormData();
-    big.set('file', new Blob(['G28\n'], { type: 'text/plain' }), 'plate.gcode');
-    assert.deepEqual(
-      await harness.transport.upload<{ ok: boolean }>('/server/files/upload', big, {
-        operation: 'upload_gcode',
-        timeoutMs: deadline,
-      }),
-      { ok: true },
-      `a ${megabytes} MB print asks for ${Math.round(deadline / 1000)} s and the transport must accept it`,
-    );
-  }
+  // `null` means no deadline at all, which is what a print upload now asks for:
+  // a rate floor is a guess about someone else's network, and guessing wrong
+  // failed a 93 MB upload that was moving perfectly well at 237 kB/s.
+  const unbounded = new FormData();
+  unbounded.set('file', new Blob(['G28\n'], { type: 'text/plain' }), 'plate.gcode');
+  assert.deepEqual(
+    await harness.transport.upload<{ ok: boolean }>('/server/files/upload', unbounded, {
+      operation: 'upload_gcode',
+      timeoutMs: null,
+    }),
+    { ok: true },
+    'an upload may run without a deadline',
+  );
+  // Unbounded must mean no timer was ever armed, not a very long one. Only the
+  // heartbeat interval belongs to the live connection at this point.
+  assert.deepEqual(
+    harness.scheduler.pendingDelays(),
+    [100],
+    'an unbounded request arms no deadline timer that could fire later',
+  );
 
   // A deadline that is not a duration is still a caller mistake, and says so.
   await assert.rejects(

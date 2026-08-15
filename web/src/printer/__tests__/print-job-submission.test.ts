@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 
 import { MoonrakerTransportError } from '../MoonrakerTypes';
 import {
-  MINIMUM_UPLOAD_BYTES_PER_SECOND,
   PrintSubmissionError,
   queryPrintReadiness,
   sanitizeGcodeFilename,
@@ -23,6 +22,8 @@ interface FakeOptions {
   files?: readonly string[];
   storedSize?: number | null;
   failUpload?: MoonrakerTransportError;
+  /** Hold the upload open, so elapsed reporting can be observed. */
+  holdUpload?: Promise<void>;
   failStart?: MoonrakerTransportError;
   failQuery?: boolean;
 }
@@ -30,7 +31,7 @@ interface FakeOptions {
 function fakeTransport(options: FakeOptions = {}) {
   const calls: string[] = [];
   const uploads: { filename: string; size: number }[] = [];
-  const uploadTimeouts: (number | undefined)[] = [];
+  const uploadTimeouts: (number | null | undefined)[] = [];
   const transport: PrintSubmissionTransport = {
     async request<T>(path: string): Promise<T> {
       calls.push(path);
@@ -56,9 +57,10 @@ function fakeTransport(options: FakeOptions = {}) {
       }
       throw new Error(`unexpected request ${path}`);
     },
-    async upload<T>(path: string, body: FormData, uploadOptions?: { readonly timeoutMs?: number }): Promise<T> {
+    async upload<T>(path: string, body: FormData, uploadOptions?: { readonly timeoutMs?: number | null }): Promise<T> {
       calls.push(path);
       uploadTimeouts.push(uploadOptions?.timeoutMs);
+      if (options.holdUpload) await options.holdUpload;
       if (options.failUpload) throw options.failUpload;
       const file = body.get('file') as File;
       uploads.push({ filename: file.name, size: file.size });
@@ -183,37 +185,57 @@ await test('surfaces upload and start failures without claiming success', async 
   );
 });
 
-await test('an upload is given time in proportion to its size, not a flat deadline', async () => {
-  // A 95 MB artifact cannot cross any real network inside the shared
-  // ten-second request timeout, so sending a large print failed on the clock
-  // rather than on anything being wrong.
+await test('an upload is given no deadline, because a rate floor is a guess', async () => {
+  // Three deadlines were tried and all three were wrong; the last failed a real
+  // 93 MB upload at 402 s on a link moving 237 kB/s — healthy, just below a
+  // floor invented on its behalf. `fetch` cannot report upload progress, so
+  // nothing here can tell slow from stuck, and the operator decides instead.
   const small = fakeTransport();
   await submitPrintJob(small.transport, { filename: 'plate.gcode', gcode: 'G28\n' });
-  const smallTimeout = small.uploadTimeouts[0] ?? 0;
 
   const large = fakeTransport();
   const bigGcode = `G28\n${'G1 X10 Y10 E1\n'.repeat(400_000)}`;
   await submitPrintJob(large.transport, { filename: 'plate.gcode', gcode: bigGcode });
-  const largeTimeout = large.uploadTimeouts[0] ?? 0;
 
-  assert.ok(smallTimeout > 0, 'every upload carries an explicit deadline');
-  assert.ok(largeTimeout > smallTimeout, 'and a larger artifact is given longer');
-  const bytes = new TextEncoder().encode(bigGcode).byteLength;
-  assert.ok(
-    largeTimeout >= (bytes / MINIMUM_UPLOAD_BYTES_PER_SECOND) * 1000,
-    'at least long enough to complete at the declared floor rate',
-  );
+  assert.equal(small.uploadTimeouts[0], null, 'a small upload is unbounded');
+  assert.equal(large.uploadTimeouts[0], null, 'and so is a large one — size never decides this');
 });
 
-await test('an upload that times out says what the link would have had to sustain', async () => {
-  const stalled = fakeTransport({ failUpload: new MoonrakerTransportError('timeout', 'upload_gcode') });
+await test('a long upload reports elapsed time so it is visibly alive', async () => {
+  let release: (() => void) | undefined;
+  const { transport } = fakeTransport({ holdUpload: new Promise<void>((resolve) => (release = resolve)) });
+  const ticks: { elapsedMs: number; totalBytes: number }[] = [];
+  const gcode = 'G28\nG1 X10\n';
+  const expectedBytes = new TextEncoder().encode(gcode).byteLength;
+  const pending = submitPrintJob(transport, {
+    filename: 'plate.gcode',
+    gcode,
+    elapsedTickMs: 1,
+    onUploadElapsed: (elapsed) => ticks.push(elapsed),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  release?.();
+  await pending;
+
+  assert.ok(ticks.length > 0, 'an upload in flight reports that it is still running');
+  assert.ok(
+    ticks.every((tick) => tick.totalBytes === expectedBytes),
+    'it reports the size it is sending',
+  );
+  // Never a percentage: fetch cannot say how many bytes have left, and a
+  // progress bar derived from elapsed time would be an invention.
+  assert.ok(ticks.every((tick) => tick.elapsedMs >= 0));
+});
+
+await test('an upload that fails says so without inventing a cause', async () => {
+  const stalled = fakeTransport({ failUpload: new MoonrakerTransportError('network', 'upload_gcode') });
   await assert.rejects(
     () => submitPrintJob(stalled.transport, { filename: 'plate.gcode', gcode: 'G28\n' }),
     (error: unknown) =>
       error instanceof PrintSubmissionError &&
       error.code === 'upload-failed' &&
-      /kB\/s/.test(error.message) &&
-      /Nothing was started/.test(error.message),
+      /Nothing was started/.test(error.message) &&
+      !/kB\/s/.test(error.message),
   );
 });
 

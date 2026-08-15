@@ -139,8 +139,16 @@ export interface MoonrakerRequestOptions extends Omit<RequestInit, 'signal' | 'h
    * is broken. A transfer is different: how long it legitimately takes is a
    * function of how many bytes it moves, so capping it by duration means a
    * large enough artifact can never be sent, however healthy the link.
+   *
+   * `null` means no deadline at all. `fetch` reports no upload progress — and
+   * the alternatives that would (XHR, a streaming request body) are unavailable
+   * here, one because it cannot carry the Local Network Access opt-in and the
+   * other because it needs HTTP/2 — so a large upload cannot be judged by
+   * whether it is still moving. Any byte-rate floor is therefore a guess about
+   * someone else's network, and guessing wrong fails a transfer that was
+   * working. Callers that pass `null` must give the operator a way to cancel.
    */
-  readonly timeoutMs?: number;
+  readonly timeoutMs?: number | null;
 }
 
 export type MoonrakerObjectSubscription = Readonly<Record<string, readonly string[] | null>>;
@@ -523,10 +531,13 @@ export class MoonrakerTransport {
     this.activeRequestControllers.add(controller);
     let timedOut = false;
     const timeoutMs = requestDeadline(options.timeoutMs, this.requestTimeoutMs);
-    const timeout = this.scheduler.setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, timeoutMs);
+    const timeout =
+      timeoutMs === null
+        ? null
+        : this.scheduler.setTimeout(() => {
+            timedOut = true;
+            controller.abort();
+          }, timeoutMs);
     let bodyTimeout: unknown = null;
     const abort = () => controller.abort();
     this.sessionController?.signal.addEventListener('abort', abort, { once: true });
@@ -567,14 +578,17 @@ export class MoonrakerTransport {
       // different question: a request that answers promptly can still be
       // sending a hundred megabytes, and the same clock would abort it midway.
       // Once the headers say how much is coming, the body gets time to match.
-      this.scheduler.clearTimeout(timeout);
-      bodyTimeout = this.scheduler.setTimeout(
-        () => {
-          timedOut = true;
-          controller.abort();
-        },
-        transferDeadlineMs(response.headers.get('content-length'), timeoutMs),
-      );
+      if (timeout !== null) this.scheduler.clearTimeout(timeout);
+      // An unbounded request stays unbounded while its body arrives.
+      if (timeoutMs !== null) {
+        bodyTimeout = this.scheduler.setTimeout(
+          () => {
+            timedOut = true;
+            controller.abort();
+          },
+          transferDeadlineMs(response.headers.get('content-length'), timeoutMs),
+        );
+      }
       return await read(response);
     } catch (error) {
       const normalized =
@@ -586,7 +600,7 @@ export class MoonrakerTransport {
       this.log('request_failed', normalized.recoverable ? 'warn' : 'error', normalized);
       throw normalized;
     } finally {
-      this.scheduler.clearTimeout(timeout);
+      if (timeout !== null) this.scheduler.clearTimeout(timeout);
       if (bodyTimeout !== null) this.scheduler.clearTimeout(bodyTimeout);
       this.sessionController?.signal.removeEventListener('abort', abort);
       options.signal?.removeEventListener('abort', abort);
@@ -952,8 +966,9 @@ function positiveDuration(value: number | undefined, fallback: number): number {
  * argument: an hour is longer than any transfer this client makes, and still
  * finite, so no request can hang forever.
  */
-function requestDeadline(value: number | undefined, fallback: number): number {
+function requestDeadline(value: number | undefined | null, fallback: number): number | null {
   if (value === undefined) return fallback;
+  if (value === null) return null; // Explicitly unbounded; the caller owns cancellation.
   if (!Number.isFinite(value) || value <= 0 || value > MAXIMUM_REQUEST_DEADLINE_MS) {
     throw new MoonrakerTransportError('invalid_request', 'configure_request');
   }

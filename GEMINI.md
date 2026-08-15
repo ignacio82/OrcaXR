@@ -847,6 +847,26 @@ floors, not ceilings.
   while slicing. Removing an automatic stop without adding a manual one would
   have left a hung slice needing a page reload.
 
+- **An upload deadline is a guess about someone else's network, and there is no
+  way to measure the thing that would justify it.** Three deadlines were tried
+  and all three were wrong: the shared 10 s request timeout could not carry
+  95 MB; a size-derived deadline at a 256 kB/s floor collided with
+  `positiveDuration`'s 5-minute bound and rejected every print over ~67 MB; and
+  raising that bound then failed a real 93 MB upload at 402 s because the link
+  was moving 237 kB/s — healthy, merely below a floor invented on its behalf.
+  The tempting fix is "cancel only when progress stops", but **upload progress
+  is unobservable here**: `fetch` exposes none, `XMLHttpRequest` does but cannot
+  carry the `targetAddressSpace` opt-in that `fetchLocalNetwork` needs for
+  Chrome's Local Network Access, and a streaming request body needs HTTP/2,
+  which a LAN printer on HTTP/1.1 will not offer. So `timeoutMs: null` is now a
+  supported value meaning *no deadline at all* (no timer is armed, verified by
+  asserting the scheduler holds only the heartbeat), the upload reports elapsed
+  time — never a percentage, which would be invented — so it is visibly alive,
+  and the operator cancels via the send button, which already doubles as
+  "Cancel send". A caller passing `null` **must** offer that cancel. Downloads
+  keep their content-length-derived deadline: a response body's size is known
+  in advance, so it is measured rather than guessed.
+
 - **A hard reload removes cross-origin isolation; the guard against a reload
   loop must not also block recovery.** In-browser slicing needs
   SharedArrayBuffer, which needs cross-origin isolation, which on GitHub Pages
