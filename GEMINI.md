@@ -847,6 +847,29 @@ floors, not ceilings.
   while slicing. Removing an automatic stop without adding a manual one would
   have left a hung slice needing a page reload.
 
+- **A test double that accepts what the real server rejects is worse than no
+  double.** Starting a print failed with `http_error` because `/printer/print/
+  start` was sent as a **GET**; Moonraker serves it, and every other print
+  command, for POST only and answers 405. `MoonrakerTransport.request` defaults
+  to GET, and the call sites in `PrintJobSubmission` and `PrintJobControl`
+  simply omitted the method — so start, pause, resume, cancel, emergency-stop
+  and firmware-restart were *all* broken. Only the upload path worked, because
+  it sets `method: 'POST'` explicitly, and `PrinterStorage.startStoredPrint`
+  calls the identical endpoint correctly, which is what made the omission
+  visible. It survived because **both** doubles — `scripts/moonraker-simulator.
+  mjs` and the inline `Simulator` in `moonraker-print-simulator.test.ts` —
+  dispatched on `url.pathname` alone and never looked at the method, so every
+  test passed while nothing worked. Both now answer 405 exactly as Moonraker
+  does, `METHOD_ONLY_ENDPOINTS` in the transport refuses a mutation sent as a
+  GET before it reaches the wire (`invalid_request`), and the minimal transport
+  interfaces these modules declare now include `method` — omitting it had made
+  the correct call untypeable. Two further consequences worth keeping: a failed
+  response's body is now read into `MoonrakerTransportError.detail`, because
+  Moonraker explains its refusals there and discarding it left `http_error` as
+  the entire story; and that detail is routed through the credential redactor
+  first, since a server can echo back the API key it was sent — an existing
+  security test caught exactly that leak when `detail` was added raw.
+
 - **A per-request deadline is a property of the payload, not of the transport.**
   Sending the narwhal failed with `invalid_state` *before a byte left the
   browser*. `fetchWith` validated the caller's `timeoutMs` with

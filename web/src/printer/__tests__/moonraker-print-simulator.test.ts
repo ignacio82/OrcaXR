@@ -53,9 +53,22 @@ interface SimulatorOptions {
   reportedSizeDelta?: number;
 }
 
+/** Mirrors Moonraker's documented POST-only endpoints. */
+const REQUIRED_METHODS: Readonly<Record<string, string | undefined>> = Object.freeze({
+  '/printer/print/start': 'POST',
+  '/printer/print/pause': 'POST',
+  '/printer/print/resume': 'POST',
+  '/printer/print/cancel': 'POST',
+  '/printer/emergency_stop': 'POST',
+  '/printer/firmware_restart': 'POST',
+  '/printer/gcode/script': 'POST',
+  '/server/files/move': 'POST',
+});
+
 class Simulator {
   readonly stored = new Map<string, Buffer>();
   readonly requests: string[] = [];
+  readonly methods: string[] = [];
   readonly apiKeys: (string | undefined)[] = [];
   readonly lifecycle: string[] = [];
   started: string | null = null;
@@ -84,11 +97,22 @@ class Simulator {
   private async handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const url = new URL(request.url ?? '/', `http://127.0.0.1:${this.port}`);
     this.requests.push(url.pathname);
+    this.methods.push(`${request.method} ${url.pathname}`);
     this.apiKeys.push(request.headers['x-api-key'] as string | undefined);
     const json = (payload: unknown, bare = false) => {
       response.writeHead(200, { 'content-type': 'application/json' });
       response.end(JSON.stringify(bare ? payload : { result: payload }));
     };
+
+    // Real Moonraker serves these for POST only and answers 405 otherwise.
+    // Recording just the pathname let the client send every print command as a
+    // GET while these tests stayed green.
+    const requiredMethod = REQUIRED_METHODS[url.pathname];
+    if (requiredMethod !== undefined && request.method !== requiredMethod) {
+      response.writeHead(405, { 'content-type': 'application/json', allow: requiredMethod });
+      response.end(JSON.stringify({ error: { code: 405, message: `Method ${request.method} not allowed` } }));
+      return;
+    }
 
     if (url.pathname === '/server/info') return json(SERVER_INFO);
     if (url.pathname === '/printer/info') return json(PRINTER_INFO);
@@ -255,6 +279,10 @@ await test('uploads a multicolor artifact byte-for-byte and starts it once confi
       simulator.apiKeys.every((key) => key === 'simulator-key'),
       'every simulated request carried the session credential',
     );
+    assert.ok(
+      simulator.methods.includes('POST /printer/print/start'),
+      'starting a print is a POST; Moonraker answers a GET with 405',
+    );
   });
 });
 
@@ -349,6 +377,10 @@ await test('reads the live job and drives its lifecycle through the real transpo
     });
     assert.equal((await read()).state, 'cancelled');
     assert.deepEqual(simulator.lifecycle, ['pause', 'resume', 'cancel']);
+    // Every job command mutates the machine, so every one of them is a POST.
+    for (const command of ['pause', 'resume', 'cancel']) {
+      assert.ok(simulator.methods.includes(`POST /printer/print/${command}`), `${command} must be sent as a POST`);
+    }
   });
 });
 

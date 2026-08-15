@@ -15,7 +15,10 @@ export interface PrintJobIntent {
 
 /** Minimal transport surface a submission needs; the real transport satisfies it. */
 export interface PrintSubmissionTransport {
-  request<T>(path: string, options?: { readonly signal?: AbortSignal; readonly operation?: string }): Promise<T>;
+  request<T>(
+    path: string,
+    options?: { readonly signal?: AbortSignal; readonly operation?: string; readonly method?: string },
+  ): Promise<T>;
   upload<T>(
     path: string,
     body: FormData,
@@ -245,6 +248,7 @@ export async function submitPrintJob(
     request.onPhase?.('starting');
     try {
       await transport.request<unknown>(`/printer/print/start?filename=${encodeURIComponent(path)}`, {
+        method: 'POST',
         operation: 'start_print',
         ...(request.signal ? { signal: request.signal } : {}),
       });
@@ -252,9 +256,8 @@ export async function submitPrintJob(
     } catch (error) {
       if (isCancellation(error, request.signal)) throw new PrintSubmissionError('Print start cancelled.', 'cancelled');
       throw new PrintSubmissionError(
-        `${path} uploaded, but starting the print failed (${
-          error instanceof MoonrakerTransportError ? error.code : 'request failed'
-        }).`,
+        `${path} uploaded, but starting the print failed (${describeTransportFailure(error)}). ` +
+          'The file is on the printer and can be started from its file list.',
         'start-failed',
       );
     }
@@ -351,6 +354,20 @@ export function uploadDeadlineMs(byteLength: number, minimumBytesPerSecond?: num
   const floor =
     minimumBytesPerSecond && minimumBytesPerSecond > 0 ? minimumBytesPerSecond : MINIMUM_UPLOAD_BYTES_PER_SECOND;
   return Math.ceil(UPLOAD_OVERHEAD_MS + (byteLength / floor) * 1000);
+}
+
+/**
+ * Name a transport failure the way an operator can act on.
+ *
+ * The code alone ("http_error") says only that something went wrong. Moonraker
+ * usually says exactly what, so lead with its own words and keep the status
+ * beside them.
+ */
+export function describeTransportFailure(error: unknown): string {
+  if (!(error instanceof MoonrakerTransportError)) return 'request failed';
+  const status = error.httpStatus === undefined ? '' : `HTTP ${error.httpStatus}`;
+  if (error.detail === undefined) return status === '' ? error.code : `${error.code}, ${status}`;
+  return status === '' ? `${error.code}: ${error.detail}` : `${status}: ${error.detail}`;
 }
 
 function megabytes(byteLength: number): string {

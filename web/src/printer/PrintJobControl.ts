@@ -13,7 +13,13 @@ import { isActivePrintState, type PrintJobSnapshot } from './PrintJobStatus';
 export type PrintJobCommand = 'pause' | 'resume' | 'cancel' | 'emergency-stop' | 'firmware-restart';
 
 export interface PrintJobCommandTransport {
-  request<T>(path: string, options?: { readonly signal?: AbortSignal; readonly operation?: string }): Promise<T>;
+  request<T>(
+    path: string,
+    // `method` belongs here because every command below is a POST. Leaving it
+    // out of this minimal surface made the correct call untypeable, so the
+    // commands went out as GETs and Moonraker answered every one with 405.
+    options?: { readonly signal?: AbortSignal; readonly operation?: string; readonly method?: string },
+  ): Promise<T>;
 }
 
 export interface PrintJobCommandDescriptor {
@@ -142,6 +148,8 @@ export async function executePrintJobCommand(
 
   try {
     await transport.request<unknown>(PATHS[command], {
+      // Every one of these is a POST in Moonraker; a GET is answered with 405.
+      method: 'POST',
       operation: `print_${command.replace('-', '_')}`,
       ...(request.signal ? { signal: request.signal } : {}),
     });

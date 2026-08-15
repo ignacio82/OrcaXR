@@ -47,6 +47,9 @@ const MINIMUM_TRANSFER_BYTES_PER_SECOND = 256 * 1024;
  */
 const MAXIMUM_REQUEST_DEADLINE_MS = 60 * 60_000;
 
+/** Enough of a failed response's body to name the cause, and no more. */
+const MAX_ERROR_DETAIL_CHARS = 2048;
+
 /**
  * How long a body of `contentLength` may take, given it has already answered.
  *
@@ -515,6 +518,7 @@ export class MoonrakerTransport {
     const requestUrl = new URL(url);
     const credentialsInUrl = [...requestUrl.searchParams.values()].some((value) => this.credentials.matches(value));
     if (credentialsInUrl) throw new MoonrakerTransportError('invalid_endpoint', operation);
+    assertMethodSuitsEndpoint(requestUrl.pathname, options.method, operation);
     const controller = new AbortController();
     this.activeRequestControllers.add(controller);
     let timedOut = false;
@@ -551,7 +555,14 @@ export class MoonrakerTransport {
         redirect: 'error',
         credentials: this.endpoint.usesSameOriginProxy ? 'same-origin' : 'omit',
       });
-      if (!response.ok) throw httpStatusError(response.status, operation);
+      if (!response.ok) {
+        // The body is the server's text, and a server can echo back whatever it
+        // was sent — including the credential on the request that reached it.
+        // It goes through the same redaction as every other diagnostic before
+        // it is allowed to travel with the error.
+        const detail = this.credentials.redact(await readErrorDetail(response));
+        throw httpStatusError(response.status, operation, typeof detail === 'string' ? detail : undefined);
+      }
       // The deadline so far covered getting a reply. Reading the body is a
       // different question: a request that answers promptly can still be
       // sending a hundred megabytes, and the same clock would abort it midway.
@@ -1111,11 +1122,72 @@ function cloneObjectSubscription(subscription: MoonrakerObjectSubscription): Moo
   return Object.freeze(result);
 }
 
-function httpStatusError(status: number, operation: string): MoonrakerTransportError {
-  if (status === 401) return new MoonrakerTransportError('auth_required', operation, { httpStatus: status });
-  if (status === 403) return new MoonrakerTransportError('forbidden', operation, { httpStatus: status });
+/**
+ * Moonraker endpoints that exist for one method only.
+ *
+ * Sending one of these as a GET is answered with 405, and the client did
+ * exactly that for every print command — start, pause, resume, cancel,
+ * emergency stop — because `request` defaults to GET and the call sites simply
+ * omitted the method. The list is short, closed, and documented upstream, so
+ * naming it here turns a 405 discovered on a real printer into a failure the
+ * type-checker's own tests catch. A GET that mutates is a mistake in any HTTP
+ * client; this makes it one that cannot be committed.
+ */
+const METHOD_ONLY_ENDPOINTS: ReadonlyMap<string, string> = new Map([
+  ['/printer/print/start', 'POST'],
+  ['/printer/print/pause', 'POST'],
+  ['/printer/print/resume', 'POST'],
+  ['/printer/print/cancel', 'POST'],
+  ['/printer/emergency_stop', 'POST'],
+  ['/printer/firmware_restart', 'POST'],
+  ['/printer/restart', 'POST'],
+  ['/printer/gcode/script', 'POST'],
+  ['/server/files/move', 'POST'],
+  ['/server/files/copy', 'POST'],
+]);
+
+function assertMethodSuitsEndpoint(pathname: string, method: string | undefined, operation: string): void {
+  const normalizedPath = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+  const required = METHOD_ONLY_ENDPOINTS.get(normalizedPath);
+  if (required === undefined) return;
+  if ((method ?? 'GET').toUpperCase() !== required) {
+    throw new MoonrakerTransportError('invalid_request', operation);
+  }
+}
+
+/**
+ * Moonraker explains a refusal in the response body, as
+ * `{"error": {"message": "..."}}` or as plain text. Reading a bounded prefix of
+ * it costs one small read on a path that has already failed, and turns a bare
+ * `http_error` into the server's own account of what was wrong.
+ */
+async function readErrorDetail(response: Response): Promise<string | undefined> {
+  try {
+    const text = (await response.text()).slice(0, MAX_ERROR_DETAIL_CHARS);
+    if (text.trim() === '') return undefined;
+    try {
+      const parsed: unknown = JSON.parse(text);
+      const error = isRecord(parsed) ? parsed.error : undefined;
+      if (typeof error === 'string') return error;
+      if (isRecord(error) && typeof error.message === 'string') return error.message;
+      const message = isRecord(parsed) ? parsed.message : undefined;
+      if (typeof message === 'string') return message;
+    } catch {
+      // Not JSON: the raw text is still the server's own explanation.
+    }
+    return text;
+  } catch {
+    // A body that cannot be read must not replace the status we already have.
+    return undefined;
+  }
+}
+
+function httpStatusError(status: number, operation: string, detail?: string): MoonrakerTransportError {
+  const options = { httpStatus: status, ...(detail === undefined ? {} : { detail }) };
+  if (status === 401) return new MoonrakerTransportError('auth_required', operation, options);
+  if (status === 403) return new MoonrakerTransportError('forbidden', operation, options);
   return new MoonrakerTransportError('http_error', operation, {
-    httpStatus: status,
+    ...options,
     recoverable: status === 408 || status === 425 || status === 429 || status >= 500,
   });
 }

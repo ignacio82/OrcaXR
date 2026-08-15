@@ -3,6 +3,23 @@ import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 
 const WEBSOCKET_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+/**
+ * Endpoints real Moonraker serves for one method only, mirroring its API docs.
+ * Anything absent here accepts GET, as Moonraker's query endpoints do.
+ */
+const REQUIRED_METHODS = Object.freeze({
+  '/printer/print/start': 'POST',
+  '/printer/print/pause': 'POST',
+  '/printer/print/resume': 'POST',
+  '/printer/print/cancel': 'POST',
+  '/printer/emergency_stop': 'POST',
+  '/printer/firmware_restart': 'POST',
+  '/printer/restart': 'POST',
+  '/printer/gcode/script': 'POST',
+  '/server/files/move': 'POST',
+  '/server/files/copy': 'POST',
+});
+
 /** A real 1x1 PNG, so a camera frame is decoded rather than merely counted. */
 const SNAPSHOT_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
@@ -123,6 +140,22 @@ export async function startMoonrakerSimulator(options = {}) {
       response.writeHead(200, { ...cors, 'content-type': 'application/json' });
       response.end(JSON.stringify(bare ? payload : { result: payload }));
     };
+
+    // Real Moonraker answers 405 when a mutation arrives as a GET. Dispatching
+    // on the pathname alone made this simulator more permissive than the server
+    // it stands in for, so the whole client sent its print commands as GETs and
+    // every test still passed. A double that accepts what the real thing
+    // rejects is worse than no double at all.
+    const requiredMethod = REQUIRED_METHODS[url.pathname];
+    if (requiredMethod !== undefined && request.method !== requiredMethod) {
+      response.writeHead(405, { ...cors, 'content-type': 'application/json', allow: requiredMethod });
+      response.end(
+        JSON.stringify({
+          error: { code: 405, message: `Method ${request.method} not allowed`, traceback: null },
+        }),
+      );
+      return;
+    }
 
     if (url.pathname === '/server/info') {
       return json({

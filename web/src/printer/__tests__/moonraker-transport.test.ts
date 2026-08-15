@@ -535,4 +535,56 @@ async function connectHarness(harness: ReturnType<typeof createHarness>): Promis
   harness.transport.dispose();
 }
 
+// A mutation sent as a GET is answered by real Moonraker with 405. The client
+// sent every print command that way, and both test doubles dispatched on the
+// pathname alone, so nothing caught it until a printer did.
+{
+  const harness = createHarness();
+  await connectHarness(harness);
+  for (const path of [
+    '/printer/print/start?filename=plate.gcode',
+    '/printer/print/pause',
+    '/printer/print/resume',
+    '/printer/print/cancel',
+    '/printer/emergency_stop',
+    '/printer/firmware_restart',
+    '/printer/gcode/script?script=M117',
+    '/server/files/move?source=gcodes/a&dest=gcodes/b',
+  ]) {
+    await assert.rejects(
+      () => harness.transport.request(path, { operation: 'probe' }),
+      assertErrorCode('invalid_request'),
+      `${path} must not be reachable as a GET`,
+    );
+    // The same path with the method Moonraker documents goes through.
+    await harness.transport.request(path, { operation: 'probe', method: 'POST' });
+  }
+  harness.transport.dispose();
+}
+
+// A failure the server explained must not be reported as a bare code: the
+// explanation is the part that tells an operator what to do next.
+{
+  const harness = createHarness(async (input) => {
+    if (String(input).includes('/printer/print/start')) {
+      return new Response(JSON.stringify({ error: { code: 400, message: 'Klippy is not ready' } }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    return healthyFetcher()(input);
+  });
+  await connectHarness(harness);
+  await assert.rejects(
+    () => harness.transport.request('/printer/print/start?filename=plate.gcode', { operation: 'x', method: 'POST' }),
+    (error: unknown) =>
+      error instanceof MoonrakerTransportError &&
+      error.code === 'http_error' &&
+      error.httpStatus === 400 &&
+      error.detail === 'Klippy is not ready',
+    "the server's own account of the failure survives",
+  );
+  harness.transport.dispose();
+}
+
 console.log('Moonraker transport tests passed');

@@ -56,11 +56,19 @@ export class MoonrakerTransportError extends Error {
   readonly operation: string;
   readonly recoverable: boolean;
   readonly httpStatus?: number;
+  /**
+   * What the server itself said, when it said anything.
+   *
+   * Moonraker explains its refusals in the response body, and discarding that
+   * left `http_error` as the whole story — enough to know a send failed, not
+   * enough to know a print command had been sent with the wrong HTTP method.
+   */
+  readonly detail?: string;
 
   constructor(
     code: MoonrakerErrorCode,
     operation: string,
-    options: { readonly recoverable?: boolean; readonly httpStatus?: number } = {},
+    options: { readonly recoverable?: boolean; readonly httpStatus?: number; readonly detail?: string } = {},
   ) {
     super(ERROR_MESSAGES[code]);
     this.name = 'MoonrakerTransportError';
@@ -70,6 +78,8 @@ export class MoonrakerTransportError extends Error {
     if (Number.isInteger(options.httpStatus) && (options.httpStatus ?? 0) >= 100 && (options.httpStatus ?? 0) <= 599) {
       this.httpStatus = options.httpStatus;
     }
+    const detail = summarizeServerDetail(options.detail);
+    if (detail !== undefined) this.detail = detail;
   }
 
   toDiagnostic(): MoonrakerErrorDiagnostic {
@@ -79,12 +89,36 @@ export class MoonrakerTransportError extends Error {
       operation: this.operation,
       recoverable: this.recoverable,
       ...(this.httpStatus === undefined ? {} : { httpStatus: this.httpStatus }),
+      ...(this.detail === undefined ? {} : { detail: this.detail }),
     });
   }
 
   toJSON(): MoonrakerErrorDiagnostic {
     return this.toDiagnostic();
   }
+}
+
+/**
+ * Reduce a server's error body to one short, printable line.
+ *
+ * The body is attacker-adjacent text on the LAN, so it is stripped of control
+ * characters and capped rather than trusted: enough to name the cause in a
+ * message an operator reads, never enough to reformat that message.
+ */
+function summarizeServerDetail(value: string | undefined): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  // Classified by code point rather than by regex: a control character inside a
+  // pattern is itself easy to mistype invisibly, which is how an earlier draft
+  // of this line silently stripped ordinary punctuation.
+  let collapsed = '';
+  for (const character of value) {
+    const code = character.codePointAt(0) ?? 0;
+    if (code >= 0x20 && code !== 0x7f) collapsed += character;
+    else if (!collapsed.endsWith(' ')) collapsed += ' ';
+  }
+  collapsed = collapsed.replace(/\s+/g, ' ').trim();
+  if (collapsed === '') return undefined;
+  return collapsed.length > 200 ? `${collapsed.slice(0, 197)}...` : collapsed;
 }
 
 export function safeOperationName(value: string): string {
