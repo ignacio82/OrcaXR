@@ -11,7 +11,38 @@
  * resources use versioned shell/runtime caches, while slicer artifacts use a
  * separate bounded cache. Cross-origin requests bypass this worker.
  */
-if (typeof window === 'undefined') {
+// Long enough that a browser which simply cannot isolate reloads once and then
+// stops; short enough that a later un-isolated load still recovers.
+const COI_COOLDOWN_MS = 10_000;
+
+/**
+ * Should this load reload itself to become cross-origin isolated?
+ *
+ * The previous guard was a boolean set on the first reload and never cleared,
+ * which made it permanent for the tab. A reload that bypasses the service
+ * worker — the browser's hard reload does exactly this — delivers a document
+ * with no COOP/COEP headers, and the stale guard then suppressed the one reload
+ * that would have restored isolation. The tab stayed un-isolated for the rest of
+ * the session and in-browser slicing failed with "needs a cross-origin-isolated
+ * context".
+ *
+ * So: success clears the guard, and the guard is a timestamp rather than a flag.
+ * It exists to stop a reload *loop*, not to stop recovery.
+ */
+function decideCoiReload(state) {
+  if (state.crossOriginIsolated) return { reload: false, clearGuard: true };
+  if (!state.secureContext || !state.serviceWorkerAvailable) return { reload: false, clearGuard: false };
+  const lastAttemptMs = Number(state.lastAttemptMs) || 0;
+  const recentlyTried = lastAttemptMs > 0 && state.nowMs - lastAttemptMs < COI_COOLDOWN_MS;
+  return { reload: !recentlyTried, clearGuard: false };
+}
+
+// Test seam: the decision is pure, so it is checked directly rather than by
+// trying to reproduce a header-stripping reload in a headless browser. Neither
+// a page nor a service worker defines `module`.
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { decideCoiReload, COOLDOWN_MS: COI_COOLDOWN_MS };
+} else if (typeof window === 'undefined') {
   // ---------- service worker context ----------
   const CACHE_PREFIX = 'orcaxr-coi-';
   const SHELL_CACHE = `${CACHE_PREFIX}shell-v2`;
@@ -127,29 +158,52 @@ if (typeof window === 'undefined') {
     })());
   });
 } else {
-  // ---------- page context: register + one-time reload ----------
+  // ---------- page context: register + guarded recovery reload ----------
   (function () {
-    if (window.crossOriginIsolated) return;        // already isolated (real headers)
-    if (!window.isSecureContext) return;           // SW needs https or localhost
-    if (!('serviceWorker' in navigator)) return;
+    const KEY = 'coiReloadedAt';
+
+    const readGuard = () => {
+      try {
+        return sessionStorage.getItem(KEY);
+      } catch {
+        return null; // Storage can be blocked; treat it as "never tried".
+      }
+    };
+    const writeGuard = (value) => {
+      try {
+        if (value === null) sessionStorage.removeItem(KEY);
+        else sessionStorage.setItem(KEY, value);
+      } catch {
+        // A tab that cannot remember its attempt still reloads at most once
+        // per load, and the cooldown below is what prevents a tight loop.
+      }
+    };
+
+    const decision = decideCoiReload({
+      crossOriginIsolated: window.crossOriginIsolated === true,
+      secureContext: window.isSecureContext === true,
+      serviceWorkerAvailable: 'serviceWorker' in navigator,
+      lastAttemptMs: readGuard(),
+      nowMs: Date.now(),
+    });
+    if (decision.clearGuard) writeGuard(null);
+    if (window.crossOriginIsolated) return; // already isolated (real headers)
+
     const script = document.currentScript;
     const src = script && script.src;
     if (!src) return;
 
-    navigator.serviceWorker.register(src).then((reg) => {
-      // On first load we're not yet controlled; once the worker is ready,
-      // reload exactly once so the fresh document response carries the
-      // isolation headers. A session guard prevents any reload loop if the
-      // browser can't isolate (older/no-SW browsers just run un-isolated).
-      if (!navigator.serviceWorker.controller) {
-        const KEY = 'coiReloaded';
+    navigator.serviceWorker
+      .register(src)
+      .then(() => {
+        if (!decision.reload) return;
+        // Once the worker is ready the next document response carries the
+        // isolation headers, so one reload is what turns this page isolated.
         navigator.serviceWorker.ready.then(() => {
-          if (!sessionStorage.getItem(KEY)) {
-            sessionStorage.setItem(KEY, '1');
-            window.location.reload();
-          }
+          writeGuard(String(Date.now()));
+          window.location.reload();
         });
-      }
-    }).catch((err) => console.error('[coi] registration failed', err));
+      })
+      .catch((err) => console.error('[coi] registration failed', err));
   })();
 }

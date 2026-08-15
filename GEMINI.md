@@ -847,6 +847,27 @@ floors, not ceilings.
   while slicing. Removing an automatic stop without adding a manual one would
   have left a hung slice needing a page reload.
 
+- **A hard reload removes cross-origin isolation; the guard against a reload
+  loop must not also block recovery.** In-browser slicing needs
+  SharedArrayBuffer, which needs cross-origin isolation, which on GitHub Pages
+  comes from `public/coi-serviceworker.js` adding COOP/COEP to each response. A
+  **hard** reload (Ctrl+Shift+R) bypasses service workers, so the document
+  arrives with no isolation headers — it is the one kind of reload that removes
+  isolation rather than restoring it. The shim's recovery reload was gated on
+  `sessionStorage['coiReloaded']`, a boolean set on the first reload and *never
+  cleared*, so after one successful load that flag permanently suppressed the
+  recovery: the tab stayed un-isolated for the rest of the session and every
+  slice failed with "needs a cross-origin-isolated context". The guard is now a
+  timestamp with a 10 s cooldown and is **cleared on success** — it exists to
+  stop a loop, not to stop recovery. `decideCoiReload` is a pure function
+  exported through a CommonJS seam so the decision is unit-tested directly
+  rather than by trying to reproduce a header-stripping reload in a headless
+  browser. The three isolation errors in `SlicerClient` also shared one
+  developer-facing sentence ("serve the page with COOP/COEP headers"), which is
+  advice for whoever deploys the site, not for the person reading it; they now
+  share `isolationFailureMessage`, which says to reload normally and warns that
+  a hard reload is what breaks it.
+
 - **A test double that accepts what the real server rejects is worse than no
   double.** Starting a print failed with `http_error` because `/printer/print/
   start` was sent as a **GET**; Moonraker serves it, and every other print

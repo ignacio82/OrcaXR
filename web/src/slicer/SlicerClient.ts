@@ -85,6 +85,28 @@ interface Slic3rModule {
  */
 let externalSlicerToken = loadRememberedCredentials().slicerToken;
 
+/**
+ * Say what a person can actually do about lost isolation.
+ *
+ * The engine is a -pthread WASM build whose slice runs on a Worker thread, so
+ * it needs SharedArrayBuffer, which needs cross-origin isolation. On a static
+ * host that isolation comes from the COI service worker adding COOP/COEP to
+ * each response — and a *hard* reload bypasses service workers, so it is the
+ * one kind of reload that removes isolation instead of restoring it. Telling an
+ * operator to "serve the page with COOP/COEP headers" is advice for whoever
+ * deploys the site; the person looking at this message needs a plain reload.
+ */
+function isolationFailureMessage(subject: string): string {
+  const detail = `crossOriginIsolated=${String(globalThis.crossOriginIsolated)}, SharedArrayBuffer=${
+    typeof SharedArrayBuffer !== 'undefined'
+  }`;
+  return (
+    `${subject} needs a cross-origin-isolated context (SharedArrayBuffer), which is not active here (${detail}). ` +
+    'Reload the page normally — note that a hard reload (Ctrl+Shift+R) bypasses the helper that provides isolation. ' +
+    'An external slicer server does not need it and works either way.'
+  );
+}
+
 // Namespaced since preferences v2; an install written under the old
 // unnamespaced names is migrated by `Preferences.migrateLegacyKeys`, which
 // runs before anything reads them.
@@ -543,15 +565,7 @@ export class SlicerClient {
     // "hangs" at 0% forever with no error. Fail fast with an actionable
     // message instead. (The external-server path above needs none of this.)
     if (typeof SharedArrayBuffer === 'undefined' || !globalThis.crossOriginIsolated) {
-      throw new Error(
-        'In-browser slicing needs a cross-origin-isolated context (SharedArrayBuffer), ' +
-          'which is not active here (crossOriginIsolated=' +
-          String(globalThis.crossOriginIsolated) +
-          ', SharedArrayBuffer=' +
-          (typeof SharedArrayBuffer !== 'undefined') +
-          '). ' +
-          'Serve the page with COOP/COEP headers and reload, or configure an external slicer server.',
-      );
+      throw new Error(isolationFailureMessage('In-browser slicing'));
     }
 
     this.resetIfCrashed();
@@ -712,10 +726,7 @@ export class SlicerClient {
     }
 
     if (typeof SharedArrayBuffer === 'undefined' || !globalThis.crossOriginIsolated) {
-      throw new Error(
-        'In-browser slicing needs a cross-origin-isolated context (SharedArrayBuffer). ' +
-          'Serve the page with COOP/COEP headers and reload, or configure an external slicer server.',
-      );
+      throw new Error(isolationFailureMessage('In-browser slicing'));
     }
     if (this.slicing) throw new Error('a slice is already running');
     this.slicing = true;
@@ -852,10 +863,7 @@ export class SlicerClient {
     overrides: Record<string, string> = {},
   ): Promise<string> {
     if (typeof SharedArrayBuffer === 'undefined' || !globalThis.crossOriginIsolated) {
-      throw new Error(
-        'Painted slicing needs a cross-origin-isolated context (SharedArrayBuffer). ' +
-          'Serve the page with COOP/COEP headers and reload.',
-      );
+      throw new Error(isolationFailureMessage('Painted slicing'));
     }
     this.resetIfCrashed();
     if (this.slicing) throw new Error('a slice is already running');
