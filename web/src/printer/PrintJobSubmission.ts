@@ -19,7 +19,12 @@ export interface PrintSubmissionTransport {
   upload<T>(
     path: string,
     body: FormData,
-    options?: { readonly signal?: AbortSignal; readonly operation?: string },
+    options?: {
+      readonly signal?: AbortSignal;
+      readonly operation?: string;
+      /** Transfers are sized, not prompt, so they carry their own deadline. */
+      readonly timeoutMs?: number;
+    },
   ): Promise<T>;
 }
 
@@ -51,6 +56,11 @@ export interface PrintSubmissionRequest {
   /** Replace an existing file of the same name instead of picking a new one. */
   readonly overwrite?: boolean;
   readonly signal?: AbortSignal;
+  /**
+   * Slowest acceptable upload rate, used to derive the transfer deadline.
+   * Defaults to `MINIMUM_UPLOAD_BYTES_PER_SECOND`.
+   */
+  readonly minimumUploadBytesPerSecond?: number;
   readonly onPhase?: (phase: PrintSubmissionPhase) => void;
 }
 
@@ -192,13 +202,26 @@ export async function submitPrintJob(
   form.set('print', 'false');
   form.set('file', new Blob([bytes], { type: 'text/plain' }), filename);
   let uploaded: unknown;
+  const uploadTimeoutMs = uploadDeadlineMs(bytes.byteLength, request.minimumUploadBytesPerSecond);
   try {
     uploaded = await transport.upload<unknown>('/server/files/upload', form, {
       operation: 'upload_gcode',
+      timeoutMs: uploadTimeoutMs,
       ...(request.signal ? { signal: request.signal } : {}),
     });
   } catch (error) {
     if (isCancellation(error, request.signal)) throw new PrintSubmissionError('Upload cancelled.', 'cancelled');
+    if (error instanceof MoonrakerTransportError && error.code === 'timeout') {
+      // Say what the link would have had to do, because the operator is the
+      // only one who can tell "my printer is on slow wifi" from "it is stuck".
+      throw new PrintSubmissionError(
+        `Uploading ${filename} (${megabytes(bytes.byteLength)}) did not finish within ` +
+          `${Math.round(uploadTimeoutMs / 1000)} s, which is slower than ` +
+          `${Math.round((request.minimumUploadBytesPerSecond ?? MINIMUM_UPLOAD_BYTES_PER_SECOND) / 1024)} kB/s. ` +
+          'Nothing was started; the printer may hold a partial file.',
+        'upload-failed',
+      );
+    }
     throw new PrintSubmissionError(
       `Uploading ${filename} failed (${error instanceof MoonrakerTransportError ? error.code : 'request failed'}).`,
       'upload-failed',
@@ -302,6 +325,31 @@ function uniqueFilename(filename: string, existing: ReadonlySet<string>): string
     if (!existing.has(candidate)) return candidate;
   }
   return `${stem}_${Date.now()}${extension}`;
+}
+
+/**
+ * Slowest link an upload is still expected to complete on.
+ *
+ * A print artifact is not a status query: a two-million-facet model slices to
+ * around 95 MB, which cannot cross any real network inside the shared
+ * ten-second request timeout, so sending it failed on the clock rather than on
+ * anything being wrong. The deadline is derived from the payload instead, and
+ * this floor is what turns "large" into "stuck" — generous enough for a printer
+ * on poor wifi, short enough that a dead link does not hang for an hour.
+ */
+export const MINIMUM_UPLOAD_BYTES_PER_SECOND = 256 * 1024;
+
+/** Fixed allowance for connection setup and the printer writing the file out. */
+const UPLOAD_OVERHEAD_MS = 30_000;
+
+function uploadDeadlineMs(byteLength: number, minimumBytesPerSecond?: number): number {
+  const floor =
+    minimumBytesPerSecond && minimumBytesPerSecond > 0 ? minimumBytesPerSecond : MINIMUM_UPLOAD_BYTES_PER_SECOND;
+  return Math.ceil(UPLOAD_OVERHEAD_MS + (byteLength / floor) * 1000);
+}
+
+function megabytes(byteLength: number): string {
+  return `${(byteLength / 1048576).toFixed(1)} MB`;
 }
 
 function throwIfCancelled(signal?: AbortSignal): void {

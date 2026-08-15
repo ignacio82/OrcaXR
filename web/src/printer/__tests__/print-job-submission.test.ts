@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import { MoonrakerTransportError } from '../MoonrakerTypes';
 import {
+  MINIMUM_UPLOAD_BYTES_PER_SECOND,
   PrintSubmissionError,
   queryPrintReadiness,
   sanitizeGcodeFilename,
@@ -29,6 +30,7 @@ interface FakeOptions {
 function fakeTransport(options: FakeOptions = {}) {
   const calls: string[] = [];
   const uploads: { filename: string; size: number }[] = [];
+  const uploadTimeouts: (number | undefined)[] = [];
   const transport: PrintSubmissionTransport = {
     async request<T>(path: string): Promise<T> {
       calls.push(path);
@@ -54,15 +56,16 @@ function fakeTransport(options: FakeOptions = {}) {
       }
       throw new Error(`unexpected request ${path}`);
     },
-    async upload<T>(path: string, body: FormData): Promise<T> {
+    async upload<T>(path: string, body: FormData, uploadOptions?: { readonly timeoutMs?: number }): Promise<T> {
       calls.push(path);
+      uploadTimeouts.push(uploadOptions?.timeoutMs);
       if (options.failUpload) throw options.failUpload;
       const file = body.get('file') as File;
       uploads.push({ filename: file.name, size: file.size });
       return { item: { path: file.name, root: 'gcodes' } } as T;
     },
   };
-  return { transport, calls, uploads };
+  return { transport, calls, uploads, uploadTimeouts };
 }
 
 await test('sanitizes a filename into something Klipper accepts', async () => {
@@ -177,6 +180,40 @@ await test('surfaces upload and start failures without claiming success', async 
       error instanceof PrintSubmissionError &&
       error.code === 'start-failed' &&
       /uploaded, but starting/.test(error.message),
+  );
+});
+
+await test('an upload is given time in proportion to its size, not a flat deadline', async () => {
+  // A 95 MB artifact cannot cross any real network inside the shared
+  // ten-second request timeout, so sending a large print failed on the clock
+  // rather than on anything being wrong.
+  const small = fakeTransport();
+  await submitPrintJob(small.transport, { filename: 'plate.gcode', gcode: 'G28\n' });
+  const smallTimeout = small.uploadTimeouts[0] ?? 0;
+
+  const large = fakeTransport();
+  const bigGcode = `G28\n${'G1 X10 Y10 E1\n'.repeat(400_000)}`;
+  await submitPrintJob(large.transport, { filename: 'plate.gcode', gcode: bigGcode });
+  const largeTimeout = large.uploadTimeouts[0] ?? 0;
+
+  assert.ok(smallTimeout > 0, 'every upload carries an explicit deadline');
+  assert.ok(largeTimeout > smallTimeout, 'and a larger artifact is given longer');
+  const bytes = new TextEncoder().encode(bigGcode).byteLength;
+  assert.ok(
+    largeTimeout >= (bytes / MINIMUM_UPLOAD_BYTES_PER_SECOND) * 1000,
+    'at least long enough to complete at the declared floor rate',
+  );
+});
+
+await test('an upload that times out says what the link would have had to sustain', async () => {
+  const stalled = fakeTransport({ failUpload: new MoonrakerTransportError('timeout', 'upload_gcode') });
+  await assert.rejects(
+    () => submitPrintJob(stalled.transport, { filename: 'plate.gcode', gcode: 'G28\n' }),
+    (error: unknown) =>
+      error instanceof PrintSubmissionError &&
+      error.code === 'upload-failed' &&
+      /kB\/s/.test(error.message) &&
+      /Nothing was started/.test(error.message),
   );
 });
 

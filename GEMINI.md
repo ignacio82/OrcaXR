@@ -830,6 +830,26 @@ floors, not ceilings.
   bounding it made it report a truncated *print*, which is the exact failure the
   index exists to make impossible.
 
+- **A transfer cannot be capped by duration.** Sending the narwhal to a printer
+  failed with a timeout: `MoonrakerTransport` applied its flat 10 s
+  `requestTimeoutMs` to every request including the upload, and 95 MB of G-code
+  does not cross any real network in ten seconds. That timeout suits a status
+  query — which either answers promptly or is broken — but a transfer's honest
+  duration is a function of its bytes. Two complementary fixes, because the two
+  directions differ: an **upload** sends its body before any reply, so
+  `PrintJobSubmission` derives an explicit `timeoutMs` from the artifact size and
+  a declared floor (`MINIMUM_UPLOAD_BYTES_PER_SECOND`, 256 kB/s, plus a fixed
+  setup allowance); a **download** cannot be sized in advance, so `fetchWith`
+  keeps the short deadline for getting a reply and then re-arms from the
+  response's `content-length` once the headers say how much is coming. An
+  unknown length deliberately keeps the short deadline rather than guessing
+  generously, since that would turn a hung connection into a long wait. The
+  timeout message names the size and the rate the link would have had to
+  sustain, and says nothing was started — the operator is the only one who can
+  tell "my printer is on slow wifi" from "it is stuck". Note this is the same bug
+  shape as the slice attempt cap: whenever a limit guards work whose duration
+  scales with the input, it has to scale too, or measure silence instead.
+
 - **What the external slicer container can and cannot fix.** Offloading helps the
   *slice* itself and nothing else: the costs above are all in the browser,
   between the user's input and the scene updating, and cannot survive a network

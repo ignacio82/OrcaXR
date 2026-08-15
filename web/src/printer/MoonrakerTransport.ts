@@ -31,6 +31,26 @@ const MAX_JSON_RESPONSE_BYTES = 2 * 1024 * 1024;
  * refuses a response large enough to exhaust the tab.
  */
 const MAX_DOWNLOAD_BYTES = 256 * 1024 * 1024;
+
+/**
+ * Slowest link a body is still expected to arrive over.
+ *
+ * Kept in step with the upload floor in `PrintJobSubmission`: both answer the
+ * same question, which is when "large" becomes "stuck".
+ */
+const MINIMUM_TRANSFER_BYTES_PER_SECOND = 256 * 1024;
+
+/**
+ * How long a body of `contentLength` may take, given it has already answered.
+ *
+ * An unknown length keeps the request's own deadline: guessing generously for a
+ * body the server would not describe turns a hung connection into a long wait.
+ */
+function transferDeadlineMs(contentLength: string | null, requestTimeoutMs: number): number {
+  const declared = Number(contentLength);
+  if (!Number.isFinite(declared) || declared <= 0) return requestTimeoutMs;
+  return Math.max(requestTimeoutMs, Math.ceil((declared / MINIMUM_TRANSFER_BYTES_PER_SECOND) * 1000));
+}
 const MAX_SOCKET_MESSAGE_CHARS = 1024 * 1024;
 const KNOWN_COMPONENTS = new Set([
   'announcements',
@@ -102,6 +122,15 @@ export interface MoonrakerRequestOptions extends Omit<RequestInit, 'signal' | 'h
   readonly operation?: string;
   /** File uploads answer with a bare object instead of a `result` envelope. */
   readonly acceptBareEnvelope?: boolean;
+  /**
+   * Deadline for this one request, when the shared one does not describe it.
+   *
+   * The shared timeout suits a status query, which either answers promptly or
+   * is broken. A transfer is different: how long it legitimately takes is a
+   * function of how many bytes it moves, so capping it by duration means a
+   * large enough artifact can never be sent, however healthy the link.
+   */
+  readonly timeoutMs?: number;
 }
 
 export type MoonrakerObjectSubscription = Readonly<Record<string, readonly string[] | null>>;
@@ -463,10 +492,12 @@ export class MoonrakerTransport {
     const controller = new AbortController();
     this.activeRequestControllers.add(controller);
     let timedOut = false;
+    const timeoutMs = positiveDuration(options.timeoutMs, this.requestTimeoutMs);
     const timeout = this.scheduler.setTimeout(() => {
       timedOut = true;
       controller.abort();
-    }, this.requestTimeoutMs);
+    }, timeoutMs);
+    let bodyTimeout: unknown = null;
     const abort = () => controller.abort();
     this.sessionController?.signal.addEventListener('abort', abort, { once: true });
     options.signal?.addEventListener('abort', abort, { once: true });
@@ -484,6 +515,7 @@ export class MoonrakerTransport {
         headers: _ignoredHeaders,
         operation: _ignoredOperation,
         acceptBareEnvelope: _ignoredEnvelope,
+        timeoutMs: _ignoredTimeout,
         ...requestInit
       } = options;
       const response = await this.fetcher(url, {
@@ -494,6 +526,18 @@ export class MoonrakerTransport {
         credentials: this.endpoint.usesSameOriginProxy ? 'same-origin' : 'omit',
       });
       if (!response.ok) throw httpStatusError(response.status, operation);
+      // The deadline so far covered getting a reply. Reading the body is a
+      // different question: a request that answers promptly can still be
+      // sending a hundred megabytes, and the same clock would abort it midway.
+      // Once the headers say how much is coming, the body gets time to match.
+      this.scheduler.clearTimeout(timeout);
+      bodyTimeout = this.scheduler.setTimeout(
+        () => {
+          timedOut = true;
+          controller.abort();
+        },
+        transferDeadlineMs(response.headers.get('content-length'), timeoutMs),
+      );
       return await read(response);
     } catch (error) {
       const normalized =
@@ -506,6 +550,7 @@ export class MoonrakerTransport {
       throw normalized;
     } finally {
       this.scheduler.clearTimeout(timeout);
+      if (bodyTimeout !== null) this.scheduler.clearTimeout(bodyTimeout);
       this.sessionController?.signal.removeEventListener('abort', abort);
       options.signal?.removeEventListener('abort', abort);
       this.activeRequestControllers.delete(controller);

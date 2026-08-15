@@ -531,7 +531,9 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
         onPhase: (phase) => {
           const message =
             phase === 'uploading'
-              ? `Uploading ${intent.filename}…`
+              ? // Naming the size is what distinguishes "this is a big file" from
+                // "this has hung", on an upload that legitimately runs for minutes.
+                `Uploading ${intent.filename} (${(new Blob([intent.gcode]).size / 1048576).toFixed(1)} MB)…`
               : phase === 'verifying'
                 ? 'Verifying the stored file…'
                 : phase === 'starting'
