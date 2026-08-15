@@ -14,6 +14,7 @@ import {
   type MoonrakerScheduler,
   type MoonrakerSocket,
 } from '..';
+import { uploadDeadlineMs } from '../PrintJobSubmission';
 
 const SERVER_INFO = Object.freeze({
   api_version: [1, 0, 5],
@@ -487,6 +488,50 @@ async function connectHarness(harness: ReturnType<typeof createHarness>): Promis
   harness.sockets[0].remoteClose();
   resolveUpload?.(new Response(JSON.stringify({ ok: true }), { status: 200 }));
   assert.deepEqual(await pending, { ok: true }, 'the completed upload is kept, not cancelled');
+  harness.transport.dispose();
+}
+
+// A per-request deadline is a property of the payload, not of the transport's
+// configuration. Validating it against the constructor's 5-minute sanity bound
+// rejected every print larger than ~67 MB before a byte was sent, and reported
+// it as `invalid_state` — a connection-state code for an argument that was
+// never out of range.
+{
+  const harness = createHarness();
+  await connectHarness(harness);
+  const form = new FormData();
+  form.set('file', new Blob(['G28\n'], { type: 'text/plain' }), 'plate.gcode');
+  // What a 124 MB print legitimately asks for at the declared floor rate.
+  const uploaded = await harness.transport.upload<{ ok: boolean }>('/server/files/upload', form, {
+    operation: 'upload_gcode',
+    timeoutMs: 526_400,
+  });
+  assert.deepEqual(uploaded, { ok: true }, 'a long upload deadline is honoured, not rejected');
+
+  // The two modules have to agree about what a large print costs. Checking the
+  // real sizes narwhal produces — 95 MB at 0.20 mm, 124 MB at 0.12 mm — against
+  // the real transport is what the earlier tests missed: they only ever sent a
+  // few megabytes, which stayed under the bound by accident.
+  for (const megabytes of [95, 124, 512]) {
+    const deadline = uploadDeadlineMs(megabytes * 1048576);
+    const big = new FormData();
+    big.set('file', new Blob(['G28\n'], { type: 'text/plain' }), 'plate.gcode');
+    assert.deepEqual(
+      await harness.transport.upload<{ ok: boolean }>('/server/files/upload', big, {
+        operation: 'upload_gcode',
+        timeoutMs: deadline,
+      }),
+      { ok: true },
+      `a ${megabytes} MB print asks for ${Math.round(deadline / 1000)} s and the transport must accept it`,
+    );
+  }
+
+  // A deadline that is not a duration is still a caller mistake, and says so.
+  await assert.rejects(
+    () => harness.transport.request('/printer/info', { operation: 'probe', timeoutMs: -1 }),
+    assertErrorCode('invalid_request'),
+    'a nonsensical deadline is reported as a bad argument, not a bad connection',
+  );
   harness.transport.dispose();
 }
 

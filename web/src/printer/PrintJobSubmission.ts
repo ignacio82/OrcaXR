@@ -342,7 +342,12 @@ export const MINIMUM_UPLOAD_BYTES_PER_SECOND = 256 * 1024;
 /** Fixed allowance for connection setup and the printer writing the file out. */
 const UPLOAD_OVERHEAD_MS = 30_000;
 
-function uploadDeadlineMs(byteLength: number, minimumBytesPerSecond?: number): number {
+/**
+ * Exported so a test can check the deadline this asks for against the deadline
+ * the transport will accept. The two disagreeing is exactly how a print over
+ * ~67 MB came to fail before a byte was sent.
+ */
+export function uploadDeadlineMs(byteLength: number, minimumBytesPerSecond?: number): number {
   const floor =
     minimumBytesPerSecond && minimumBytesPerSecond > 0 ? minimumBytesPerSecond : MINIMUM_UPLOAD_BYTES_PER_SECOND;
   return Math.ceil(UPLOAD_OVERHEAD_MS + (byteLength / floor) * 1000);

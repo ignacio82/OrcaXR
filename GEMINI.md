@@ -847,11 +847,33 @@ floors, not ceilings.
   while slicing. Removing an automatic stop without adding a manual one would
   have left a hung slice needing a page reload.
 
-- **Moonraker's HTTP API does not depend on its websocket.** Sending the narwhal
-  after a long slice failed with `invalid_state`, because `request`, `upload`,
-  and `download` all refused unless `state.status === 'connected'` — so a socket
-  that happened to be reconnecting blocked the readiness query that precedes
-  every send. Worse, each re-checked `socketEpoch` *after* the transfer, and that
+- **A per-request deadline is a property of the payload, not of the transport.**
+  Sending the narwhal failed with `invalid_state` *before a byte left the
+  browser*. `fetchWith` validated the caller's `timeoutMs` with
+  `positiveDuration` — the helper that bounds the transport's own configuration
+  knobs (`requestTimeoutMs`, `socketOpenTimeoutMs`, the heartbeat pair) at five
+  minutes. Once `PrintJobSubmission` began deriving an upload deadline from the
+  artifact size, that bound silently became a **size** limit: at the 256 kB/s
+  floor plus 30 s of setup, anything over ~67.5 MB asks for more than 300 s, so
+  every print above that threshold was rejected outright — narwhal is 95 MB at
+  0.20 mm and 124 MB at 0.12 mm, so both were. Configuration knobs keep
+  `positiveDuration`; a per-request deadline now goes through `requestDeadline`,
+  bounded by `MAXIMUM_REQUEST_DEADLINE_MS` (1 hour) purely to catch a runaway
+  argument. Two lessons worth more than the fix. First, **a bad argument is not
+  a bad connection**: `invalid_state` sent the investigation to the connection
+  layer and cost a whole cycle chasing a real but unrelated bug, so argument
+  validation now raises `invalid_request`. Second, **a size threshold is only
+  found by testing a realistic size**: every existing test sent a few megabytes
+  and passed by staying under the bound by accident. The regression test feeds
+  the deadlines narwhal actually asks for (95/124/512 MB) through a real
+  transport, checking the contract *between* the two modules rather than each
+  side's opinion of it.
+
+- **Moonraker's HTTP API does not depend on its websocket.** While chasing the
+  `invalid_state` above — which this did *not* cause — `request`, `upload`, and
+  `download` turned out to refuse unless `state.status === 'connected'`, so a
+  socket that happened to be reconnecting blocked the readiness query that
+  precedes every send. Worse, each re-checked `socketEpoch` *after* the transfer, and that
   epoch advances on every reconnect: a websocket blink during a multi-minute
   upload discarded a file that had already landed on the printer, reported as
   `cancelled`. Uploads, downloads, and REST queries go over HTTP and owe the

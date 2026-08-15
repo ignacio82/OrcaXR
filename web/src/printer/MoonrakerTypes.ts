@@ -4,6 +4,7 @@ export type MoonrakerErrorCode =
   | 'invalid_endpoint'
   | 'invalid_credentials'
   | 'invalid_state'
+  | 'invalid_request'
   | 'cancelled'
   | 'timeout'
   | 'network'
@@ -22,6 +23,7 @@ const ERROR_MESSAGES: Readonly<Record<MoonrakerErrorCode, string>> = Object.free
   invalid_endpoint: 'The Moonraker endpoint is invalid or unsafe.',
   invalid_credentials: 'The Moonraker credentials are invalid.',
   invalid_state: 'The Moonraker operation is not valid in the current connection state.',
+  invalid_request: 'The Moonraker operation was given an invalid argument.',
   cancelled: 'The Moonraker operation was cancelled.',
   timeout: 'The Moonraker operation timed out.',
   network: 'Moonraker could not be reached.',

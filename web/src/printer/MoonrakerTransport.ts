@@ -41,6 +41,13 @@ const MAX_DOWNLOAD_BYTES = 256 * 1024 * 1024;
 const MINIMUM_TRANSFER_BYTES_PER_SECOND = 256 * 1024;
 
 /**
+ * Ceiling for a caller-supplied request deadline: a guard against a runaway
+ * argument, not a limit on how large a print may be. At the floor rate above
+ * this covers roughly 900 MB, well past anything this client sends.
+ */
+const MAXIMUM_REQUEST_DEADLINE_MS = 60 * 60_000;
+
+/**
  * How long a body of `contentLength` may take, given it has already answered.
  *
  * An unknown length keeps the request's own deadline: guessing generously for a
@@ -511,7 +518,7 @@ export class MoonrakerTransport {
     const controller = new AbortController();
     this.activeRequestControllers.add(controller);
     let timedOut = false;
-    const timeoutMs = positiveDuration(options.timeoutMs, this.requestTimeoutMs);
+    const timeoutMs = requestDeadline(options.timeoutMs, this.requestTimeoutMs);
     const timeout = this.scheduler.setTimeout(() => {
       timedOut = true;
       controller.abort();
@@ -912,10 +919,32 @@ function defaultScheduler(): MoonrakerScheduler {
   };
 }
 
+/**
+ * Bound for the transport's own configuration knobs — the request, socket-open
+ * and heartbeat timeouts. These describe how patient the transport is with a
+ * responsive server, so five minutes is generous for all of them.
+ */
 function positiveDuration(value: number | undefined, fallback: number): number {
   if (value === undefined) return fallback;
   if (!Number.isFinite(value) || value <= 0 || value > 300_000) {
-    throw new MoonrakerTransportError('invalid_state', 'configure_transport');
+    throw new MoonrakerTransportError('invalid_request', 'configure_transport');
+  }
+  return Math.floor(value);
+}
+
+/**
+ * A per-request deadline is a property of the payload, not of the transport.
+ *
+ * A 124 MB print needs ~9 minutes at the upload floor rate, so validating it
+ * against the configuration bound above rejected every print over ~67 MB
+ * before a byte was sent. The ceiling here exists only to catch a runaway
+ * argument: an hour is longer than any transfer this client makes, and still
+ * finite, so no request can hang forever.
+ */
+function requestDeadline(value: number | undefined, fallback: number): number {
+  if (value === undefined) return fallback;
+  if (!Number.isFinite(value) || value <= 0 || value > MAXIMUM_REQUEST_DEADLINE_MS) {
+    throw new MoonrakerTransportError('invalid_request', 'configure_request');
   }
   return Math.floor(value);
 }
@@ -937,7 +966,7 @@ function normalizeReconnectPolicy(input: Partial<MoonrakerReconnectPolicy> | und
     policy.jitterRatio < 0 ||
     policy.jitterRatio > 1
   ) {
-    throw new MoonrakerTransportError('invalid_state', 'configure_transport');
+    throw new MoonrakerTransportError('invalid_request', 'configure_transport');
   }
   return Object.freeze({ ...policy });
 }
@@ -946,7 +975,7 @@ function normalizeVersionPolicy(input: Partial<MoonrakerVersionPolicy> | undefin
   const minimum = input?.minimum ?? DEFAULT_VERSION_POLICY.minimum;
   const maximumMajor = input?.maximumMajor ?? DEFAULT_VERSION_POLICY.maximumMajor;
   if (!isApiVersion(minimum) || !Number.isInteger(maximumMajor) || maximumMajor < minimum[0]) {
-    throw new MoonrakerTransportError('invalid_state', 'configure_transport');
+    throw new MoonrakerTransportError('invalid_request', 'configure_transport');
   }
   return Object.freeze({ minimum: Object.freeze([...minimum] as MoonrakerApiVersion), maximumMajor });
 }
