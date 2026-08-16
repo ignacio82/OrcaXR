@@ -406,8 +406,16 @@ const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
   file_export_obj: 'Toolpath OBJ export is not implemented yet.',
   file_open_gcode: 'Standalone G-code import and viewing is not implemented yet.',
   help_config_folder: 'Browsers cannot reveal a native config folder; the web adaptation is not implemented yet.',
-  view_perspective_toggle: 'Perspective/orthographic switching is not implemented yet.',
-  view_auto_perspective: 'Automatic perspective switching is not implemented yet.',
+  // Not "not yet": the renderer's camera is created and owned by xrblocks as a
+  // PerspectiveCamera, and inside a session WebXR supplies its own projection
+  // matrix per view. Forcing an orthographic matrix onto it would render
+  // orthographically while `Raycaster` still branched on the camera type, so
+  // every pick would be computed against a projection the user is not looking
+  // through — right-looking and wrong. Recorded as ADAPT-14.
+  view_perspective_toggle:
+    'Orthographic projection is unavailable: the render camera belongs to the XR runtime, which supplies its own perspective projection. See ADAPT-14.',
+  view_auto_perspective:
+    "Auto-switching needs an orthographic mode, which the XR runtime's camera does not offer. See ADAPT-14.",
   view_show_gcode_window: 'The G-code text inspector is not implemented yet.',
   split_to_parts: 'Splitting an object into editable parts is not implemented yet.',
   tool_face_detector: 'Face detection and selection is not implemented yet.',

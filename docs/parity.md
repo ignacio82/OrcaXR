@@ -2724,10 +2724,16 @@ Local starting seams: the [`action groups`](../web/src/actions/groups/),
     XR-unsupported: in a headset the head is the camera and the workspace is already oriented in
     the room. Reachability for the DOM, touch, keyboard, and XR surfaces is now asserted by the
     registry tests added for P10.5.
-  - **Missing:** perspective/orthographic switching and auto-perspective remain unimplemented —
-    both need swapping the camera object that XR, OrbitControls, TransformControls, and the
-    preview surface all hold, so they are their own increment. The G-code window, the remaining
-    context-menu surfaces, and the P0 surface-manifest classification pass are untouched.
+    Perspective/orthographic switching and auto-perspective are now classified rather than
+    deferred. They are not "not yet": the render camera is created and owned by xrblocks as a
+    `PerspectiveCamera`, and inside a session WebXR supplies its own projection matrix per view.
+    Forcing an orthographic matrix onto that camera would render orthographically while
+    `Raycaster` still branched on the camera type, so every pick would be computed against a
+    projection the operator is not looking through — right-looking and wrong. Recorded as
+    `ADAPT-14`, and both actions now say that instead of implying an implementation is coming.
+  - **Missing:** the G-code window, the remaining context-menu surfaces, and the P0
+    surface-manifest classification pass are untouched. Neither the outline nor the navigator has
+    had a visual review.
 
 - [~] **P11.3 — Build contextual help and troubleshooting.** Help for each action/setting/error
   links to version-appropriate official docs or maintained OrcaXR adaptation docs. Include
@@ -3136,6 +3142,7 @@ signed it off. Anything with no equivalent outcome is a `BLOCK-*` row, never a q
 | `ADAPT-11` | Desktop slicing with a locally trusted binary | The verified browser WASM engine, or an external server that proves its engine over `/engine` before receiving canonical work | An external slicer must publish provenance — matching WASM artifacts, or the pinned commit plus the pinned patch set for a CLI — and is refused by name otherwise | An unattested engine silently producing different G-code | Engineering | P7.1, P12.3, live CLI attestation and slice | Platform-adapted / proposed |
 | `ADAPT-12` | A live MJPEG, WebRTC, or HLS camera feed | Authenticated snapshots fetched through the same credentialed transport as every other printer call, at up to 4 fps, paused whenever nobody is watching | The picture updates a few times a second instead of continuously, and a camera that offers only a stream is listed with that reason rather than shown | An `<img>` or `<video>` pointed at the printer cannot send `x-api-key`, so on a secured printer the feed would be a broken image; making it load would mean putting the key in the URL, which the transport refuses. Snapshots keep the credential in a header and work for every service type | Engineering | P9.6, P10.7, hardware camera qualification | Platform-adapted / proposed |
 | `ADAPT-13` | A modal confirmation dialog before a destructive printer command | On the compact status surface, a press-and-hold — 800 ms to cancel, 1200 ms for an emergency stop — that states the consequence while it fills and sends nothing if released early | The desktop panel keeps its dialog; on the phone bar and the spatial card the gesture is the confirmation, and no second dialog follows | A modal over a status bar on a phone is dismissed by the same thumb that opened it, and a controller ray has no comfortable way to reach a dialog button that appears where it was not looking. A hold is the one gesture a thumb, a mouse, and a ray perform identically, and it cannot be completed by a brush past the control. Two confirmations for one act teaches people to dismiss both without reading either | Engineering | P9.7, P9.4, P10.5, reference-device qualification | Platform-adapted / proposed |
+| `ADAPT-14` | Orthographic projection and automatic perspective switching | Perspective only, with both actions declaring the reason rather than a "not implemented yet" placeholder | The View menu keeps both entries and both explain why they are unavailable; the named camera actions (top, front, left, and the rest) still frame a model from any axis | The render camera is created and owned by the XR runtime as a perspective camera, and inside a session WebXR supplies its own projection matrix per view. Overriding it would render orthographically while `Raycaster` still branched on the camera type, so every pick would be computed against a projection the operator is not looking through. A wrong click target that looks correct is worse than a stated absence | Engineering | P11.2, P10.5, P5.1 | Platform-adapted / proposed |
 
 ### Decision and change log
 
