@@ -92,6 +92,16 @@ export interface SliceRouteRequest {
   readonly project: SliceRouteProjectInput;
   readonly profiles: SliceProfileSnapshot;
   readonly engine: SliceEngineMetadata;
+  /**
+   * The overrides owned by the plate being sliced, in engine wire form.
+   *
+   * A plate's settings ride in the archive, but the engine's project loader
+   * parses them into a structure the browser entry point discards
+   * (`wasm/slic3r_wasm.cpp`), so they never reach the print on their own. A
+   * slice is always of exactly one plate, so handing that plate's own keys to
+   * the engine's per-slice override channel is equivalent and does reach it.
+   */
+  readonly plateOverrides: Readonly<Record<string, string>>;
 }
 
 export interface SliceRouteResponse {

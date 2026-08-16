@@ -362,6 +362,7 @@ function requestFor(engine: SliceRouteRequest['engine']): SliceRouteRequest {
     },
     profiles: { references: [], effectiveConfigHash: 'sha256:profiles' },
     engine,
+    plateOverrides: {},
   };
 }
 

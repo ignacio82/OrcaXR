@@ -101,7 +101,9 @@ export class CanonicalSlicerClientRoute implements SliceRouteAdapterPort {
         this.route,
         {
           maxThreads: this.maxThreads,
-          overrides: this.options.overrides,
+          // The plate's own keys win: the static map is this composition's
+          // preference, while these belong to the plate actually being sliced.
+          overrides: { ...this.options.overrides, ...request.plateOverrides },
           signal,
           onProgress: (progress) => {
             emitProgress(onProgress, progress);

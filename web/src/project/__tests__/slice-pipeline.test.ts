@@ -111,9 +111,14 @@ const profiles: SliceProfileResolverPort = {
   },
 };
 
-function harness(route: SliceRouteAdapterPort = new RecordingRoute(), publisher?: SliceResultPublisherPort) {
+function harness(
+  route: SliceRouteAdapterPort = new RecordingRoute(),
+  publisher?: SliceResultPublisherPort,
+  plateConfig?: Record<string, unknown>,
+) {
   const fixture = createProjectFixture();
   const state = cloneProjectState(fixture.state);
+  if (plateConfig) state.plates[0].config = { ...state.plates[0].config, ...plateConfig } as never;
   state.printer.profileHash = 'sha256:0000000000000000000000000000000000000000000000000000000000000001';
   // Absolute extruder addressing, so the projection's relative-E layer reset
   // does not apply and this test keeps asserting exactly its own warning.
@@ -174,6 +179,31 @@ await test('submits only serialized canonical 3MF bytes and records complete pro
   published[0].plates[0].gcode[1] = 0;
   assert.notEqual(setup.coordinator.getLatestResult()!.plates[0].gcode[0], 0);
   assert.notEqual(setup.coordinator.getLatestResult()!.plates[0].gcode[1], 0);
+});
+
+await test("the sliced plate's own settings ride to the engine as per-slice overrides", async () => {
+  const route = new RecordingRoute();
+  const setup = harness(route, undefined, { spiral_mode: true });
+  const plateId = setup.project.getSnapshot().state.activePlateId;
+  // A plate's settings are in the archive, but the engine's browser entry point
+  // parses them into a structure it then discards, so they never reach the
+  // print on their own. A slice is always of exactly one plate, so that plate's
+  // keys go through the per-slice override channel instead — which a headless
+  // slice proves does reach the print (`EVID-056`).
+  await setup.coordinator.startCurrentPlate().completion;
+
+  const request = route.requests.at(-1)!;
+  assert.equal(request.plateId, plateId);
+  assert.equal(
+    request.plateOverrides.spiral_mode,
+    'true',
+    `the plate's own key must be handed to the engine: ${JSON.stringify(request.plateOverrides)}`,
+  );
+  // Bookkeeping the plate node also carries is not print configuration and
+  // would be rejected by the engine.
+  for (const key of ['plater_id', 'plater_name', 'locked', 'printable']) {
+    assert.equal(request.plateOverrides[key], undefined, `${key} is not print configuration`);
+  }
 });
 
 await test('blocks canonical preflight before serialization or route submission', async () => {
