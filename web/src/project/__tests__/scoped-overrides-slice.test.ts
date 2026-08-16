@@ -147,11 +147,11 @@ async function buildArchive(options: ArchiveOptions = {}): Promise<Uint8Array> {
   return (await new Bbs3mfProjectSerializer().serialize(snapshot)).bytes;
 }
 
-async function slice(archive: Uint8Array, label: string): Promise<string> {
+async function slice(archive: Uint8Array, label: string, overrides: Record<string, string> = {}): Promise<string> {
   const createEngine = (await import('../../../public/slicer/slic3r.mjs')).default;
   const engine = await createEngine();
   engine.FS.writeFile(`/tmp/${label}.3mf`, archive);
-  const output = engine.sliceProjectSync(`/tmp/${label}.3mf`, 1, '{}');
+  const output = engine.sliceProjectSync(`/tmp/${label}.3mf`, 1, JSON.stringify(overrides));
   if (output.startsWith('ORCAXR_ERROR:')) throw new Error(output.slice('ORCAXR_ERROR:'.length).trim());
   return output;
 }
@@ -264,7 +264,16 @@ await test('a part scope reaches the engine; a plate scope is discarded by the W
   assert.equal(
     filamentUsed(vasePlate),
     filamentUsed(plain),
-    'KNOWN GAP: plate-scope overrides are parsed and then discarded by the WASM entry point',
+    'the archive alone does not carry a plate override into the slice',
+  );
+
+  // The route the fix uses: the engine slices exactly one plate, so that
+  // plate's own overrides are handed to it through the same override channel
+  // every slice already uses. This proves the mechanism reaches the print.
+  const vaseByOverride = await slice(await buildArchive(), 'scope-plate-override', { spiral_mode: '1' });
+  assert.ok(
+    filamentUsed(vaseByOverride) < filamentUsed(plain) / 2,
+    `the override channel must reach the print: ${filamentUsed(vaseByOverride)} vs ${filamentUsed(plain)}`,
   );
 
   // A part-scope override on the only volume in the object.
