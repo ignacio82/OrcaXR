@@ -3256,6 +3256,41 @@ signed it off. Anything with no equivalent outcome is a `BLOCK-*` row, never a q
 | 2026-08-16 | Read the engine's own source for every gate and marker a slice test depends on, and treat a null result as a suspect fixture before a suspect feature | Four claims have now been put to the engine, and the score is one real bug and four fixture errors of mine — a cube with no overhang, a floating object the engine refuses outright, a marker string Orca does not use, and a config key the plate scope never owned. Every one of them produced exactly the symptom a genuine bug produces: a clean run with the feature missing. The discipline that separates them is cheap and mechanical — read the pinned source for the enum, the gate, and the label; check the archive actually carries what the test thinks it does; and only then believe the null. Without it this ledger would already contain four findings that are not true, which would make the one that is worthless | P4.6, P7.1, P0.2 | Support paint proven end to end through the engine, with the three corrected fixtures named (`EVID-058`) |
 | YYYY-MM-DD |  |  |  |  |
 
+## 20b. Engine-visible claims, and which have been asked
+
+An archive assertion proves the file, not the feature. Every claim in this
+table was passing at the archive level — the bytes were written, the format was
+pinned, the round trip held — and one of them was completely broken in the
+print. `src/project/__tests__/sliceHarness.ts` drives the shipped WASM engine
+headlessly in Node, so putting the question to the slicer costs one call.
+
+| Claim | Asked? | Result |
+| --- | --- | --- |
+| Placed brim ears appear in the print | Yes (`EVID-053`, `EVID-054`) | **Was broken.** Every ear discarded for being above the bed; fixed by storing the part base Z |
+| A height range changes its own band | Yes (`EVID-055`) | Holds |
+| An object override reaches the print | Yes (`EVID-055`) | Holds |
+| A part override reaches the print | Yes (`EVID-056`) | Holds |
+| A plate override reaches the print | Yes (`EVID-056`, `EVID-057`) | **Was missing.** Parsed then discarded by the WASM entry; fixed by routing plate keys through the per-slice override channel |
+| Painted support enforcers and blockers | Yes (`EVID-058`) | Holds |
+| Painted seam preference | Not yet | — |
+| Painted fuzzy skin | Not yet | Routes through per-region config; the gate must be read from `FuzzySkin.cpp` first |
+| Painted colour / FullSpectrum output | Browser only | The e2e slices a multicolour plate; no headless oracle |
+| Per-band calibration effects | Not yet | Blocked on canonical materialisation of a calibration job (P8.2) |
+| Authored layer events (pause, colour change) | Browser only | The e2e proves a pause reaches the G-code |
+
+Two rules earned the hard way, both recorded in the decision log:
+
+1. **Read the pinned source for every gate, enum, and marker a slice test
+   depends on.** Four of the five null results seen so far were the test's
+   fault, not the code's — a cube with no overhang, a floating object the
+   engine refuses outright, a marker string Orca does not use
+   (`;TYPE:Support`, not `;TYPE:Support material`), and a config key the
+   plate scope never owned.
+2. **Treat a null as a suspect fixture before a suspect feature.** Every one of
+   those produced exactly the symptom a real bug produces: a clean run with the
+   feature missing. A ledger that recorded them would be worth nothing, and
+   would make the two genuine findings worthless with it.
+
 ## 21. Verification interface and matrices
 
 The clean-clone repository interface now exists. It installs exact lockfiles and runs web,
