@@ -1,5 +1,5 @@
 /**
- * A height-range override reaches the engine and changes the print (P2.5, P7.1).
+ * Scoped overrides reach the engine and change the print (P2.5, P6.5, P7.1).
  *
  * This is the same class of claim the brim-ear bug hid in: the range is written
  * into `Metadata/layer_config_ranges.xml`, the archive round-trips, and the
@@ -85,7 +85,12 @@ async function baseConfig(): Promise<Record<string, string>> {
   return { ...profile.config };
 }
 
-async function buildArchive(withRange: boolean): Promise<Uint8Array> {
+interface ArchiveOptions {
+  readonly range?: boolean;
+  readonly objectConfig?: Record<string, unknown>;
+}
+
+async function buildArchive(options: ArchiveOptions = {}): Promise<Uint8Array> {
   const fixture = createProjectFixture();
   const mesh = cubeMesh();
   const descriptor = {
@@ -114,14 +119,15 @@ async function buildArchive(withRange: boolean): Promise<Uint8Array> {
   for (const plate of state.plates) {
     plate.config = {};
     for (const object of plate.objects) {
-      object.config = {};
+      object.config = (options.objectConfig ?? {}) as never;
       // Reuse the fixture's own stable range id: the canonical validator
       // refuses an invented one, and rightly so.
       const rangeId = fixture.state.plates[0].objects[0].layerRanges[0]?.id;
       assert.ok(rangeId, 'the fixture provides a stable range id');
-      object.layerRanges = withRange
-        ? [{ id: rangeId, minZMm: 0, maxZMm: RANGE_TOP_MM, config: { layer_height: RANGE_LAYER_MM } }]
-        : [];
+      object.layerRanges =
+        options.range === true
+          ? [{ id: rangeId, minZMm: 0, maxZMm: RANGE_TOP_MM, config: { layer_height: RANGE_LAYER_MM } }]
+          : [];
       for (const volume of object.volumes) {
         volume.source = { assetId: descriptor.id, topologyRevision: 0, triangleCount: mesh.triangleCount };
         volume.config = {};
@@ -164,7 +170,7 @@ function layersBelow(gcode: string, limitMm: number): number {
 }
 
 await test('a height range reaches the engine and changes the layers in its band', async () => {
-  const archive = await buildArchive(true);
+  const archive = await buildArchive({ range: true });
   const files = unzipSync(archive);
   const rangeFile = files['Metadata/layer_config_ranges.xml'];
   assert.ok(rangeFile, 'the archive carries the height-range file');
@@ -172,7 +178,7 @@ await test('a height range reaches the engine and changes the layers in its band
   assert.match(rangeText, /layer_height/, 'and the override it holds');
 
   const withRange = await slice(archive, 'with-range');
-  const withoutRange = await slice(await buildArchive(false), 'without-range');
+  const withoutRange = await slice(await buildArchive(), 'without-range');
 
   const bandWith = layersBelow(withRange, RANGE_TOP_MM);
   const bandWithout = layersBelow(withoutRange, RANGE_TOP_MM);
@@ -194,4 +200,35 @@ await test('a height range reaches the engine and changes the layers in its band
   );
 });
 
-console.log(`\nLayer range slicing: ${passed} tests passed.`);
+await test('an object-scope override reaches the engine and changes the walls', async () => {
+  // Same class of claim, different scope: P6.5 proves the canonical state and
+  // the generated config, and the archive round-trips — none of which says the
+  // engine honoured it. `wall_loops` is chosen because its effect is countable:
+  // more loops means more inner-wall extrusion sections in the program.
+  const plain = await slice(await buildArchive(), 'walls-default');
+  const thick = await slice(await buildArchive({ objectConfig: { wall_loops: 5 } }), 'walls-five');
+
+  // Counting `;TYPE:Inner wall` markers would count *sections*, one per layer
+  // either way; the loops live inside them. The engine's own filament total is
+  // the honest measure of "more wall".
+  const filamentUsed = (gcode: string): number => {
+    const match = /^; filament used \[mm\] = ([\d.]+)/m.exec(gcode);
+    assert.ok(match, 'the engine reports its own filament total');
+    return Number.parseFloat(match[1]);
+  };
+  assert.ok(filamentUsed(plain) > 0, 'the default run extrudes at all');
+  assert.ok(
+    filamentUsed(thick) > filamentUsed(plain),
+    `five wall loops must use more filament than the default: ${filamentUsed(thick)} vs ${filamentUsed(plain)}`,
+  );
+
+  // And the object override is what did it, not a project-wide change: the
+  // programs still print the same number of layers.
+  assert.equal(
+    layersBelow(thick, CUBE_MM),
+    layersBelow(plain, CUBE_MM),
+    'an object override must not change the layer count',
+  );
+});
+
+console.log(`\nScoped override slicing: ${passed} tests passed.`);
