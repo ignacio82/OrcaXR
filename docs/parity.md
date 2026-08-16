@@ -1363,8 +1363,11 @@ Local starting seams: [`MeshCut.ts`](../web/src/features/MeshCut.ts),
     The test asserts the observed behaviour as a tripwire rather than claiming it is correct: when
     placed ears start reaching the print, it fails and whoever fixed it updates the claim.
   - **Outstanding:** the acceptance bar is **not met**, and is now known not to be met rather than
-    merely untested — placed ears do not reach the sliced result, cause unidentified beyond the
-    archive and config being correct. The pinned gizmo's on-model ear preview is not implemented,
+    merely untested — placed ears do not reach the sliced result. The cause is narrowed but not
+    found: the archive is correct, the print config carries `brim_type = painted`, and setting it
+    as a per-object override as well changes nothing, so the config path is ruled out and the
+    remaining suspects are the ear points' coordinate frame relative to the object's centred
+    origin, and whether the WASM entry point loads them at all. The pinned gizmo's on-model ear preview is not implemented,
     and all five actions declare an `xrUnsupportedReason`.
 
 - [~] **P5.4 — Complete plate management.** Support up to the upstream limit (36): create,
