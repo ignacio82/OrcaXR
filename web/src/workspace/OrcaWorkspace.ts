@@ -139,6 +139,12 @@ import { renderXrActionButton, xrToolRailActions, type XrActionHandle } from '..
 import { xrBlocksUiAdapter } from '../ui/xr/XrUiAdapter';
 import { SceneGestureGuard, type SceneGestureSnapshot } from '../ui/xr/SceneGestureGuard';
 import { DEFAULT_BRIM_EAR_DETECTION, detectBrimEars } from '../project/objects/brimEarDetection';
+import {
+  BRIM_EAR_COLORS,
+  BRIM_EAR_DISC_HEIGHT_MM,
+  brimEarOutline,
+  findDisconnectedBrimEars,
+} from '../project/objects/brimEarPreview';
 import { CalibrationRampGenerator } from '../features/CalibrationRampGenerator';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 
@@ -443,6 +449,9 @@ export type WorkspaceGizmoTool =
   | 'emboss'
   | 'svg';
 
+/** Group name for the on-model ear discs, parented to a part's display mesh. */
+const BRIM_EAR_PREVIEW_NAME = 'brimEarPreview';
+
 /** Read-only view a brim-ear surface renders. */
 export interface BrimEarSnapshot {
   readonly active: boolean;
@@ -450,7 +459,14 @@ export interface BrimEarSnapshot {
   readonly objectId?: ObjectId;
   readonly radiusMm: number;
   readonly ears: readonly { readonly positionMm: Vec3; readonly headFrontRadiusMm: number }[];
+  /**
+   * Indices into `ears` that reach neither the part nor an ear that does, and
+   * so will print an island of brim holding nothing down.
+   */
+  readonly stranded: readonly number[];
   readonly hint: string;
+  /** Present only when `stranded` is non-empty; a surface should show it. */
+  readonly warning?: string;
 }
 
 /** A bounded change to the emboss recipe; absent fields keep their value. */
@@ -2517,10 +2533,23 @@ export class OrcaWorkspace extends xb.Script {
     return this.canonicalProject.getSvgPart(volumes[0]) ? volumes[0] : undefined;
   }
 
+  /**
+   * One call for both halves of an ear change: the panel and the model.
+   *
+   * They are wired together rather than side by side deliberately — a preview
+   * that can be updated independently of the list is a preview that will
+   * eventually disagree with it, and the whole point of this one is to be
+   * believed.
+   */
+  private notifyBrimEarChange(): void {
+    this.refreshBrimEarPreview();
+    this.onBrimEarStateChanged?.();
+  }
+
   public brimEarsTool(): void {
     this.setTool('brim_ears');
     this.setStatus('Brim ears: click the model where an ear should sit.');
-    this.onBrimEarStateChanged?.();
+    this.notifyBrimEarChange();
   }
 
   public setBrimEarRadius(radiusMm: number): void {
@@ -2529,20 +2558,123 @@ export class OrcaWorkspace extends xb.Script {
       return;
     }
     this.brimEarRadiusMm = radiusMm;
-    this.onBrimEarStateChanged?.();
+    this.notifyBrimEarChange();
   }
 
   public getBrimEarSnapshot(): BrimEarSnapshot {
     const objectId = this.brimEarTargetObject();
+    const ears = objectId ? this.canonicalProject.getBrimEars(objectId) : Object.freeze([]);
+    const stranded = this.strandedBrimEars(objectId);
     return Object.freeze({
       active: this.tool === 'brim_ears',
       ...(objectId ? { objectId } : {}),
       radiusMm: this.brimEarRadiusMm,
-      ears: objectId ? this.canonicalProject.getBrimEars(objectId) : Object.freeze([]),
+      ears,
+      stranded,
       hint: objectId
         ? 'Click the model to place an ear; each placement undoes on its own.'
         : 'Select one model part to place brim ears on it.',
+      ...(stranded.length > 0
+        ? {
+            warning:
+              stranded.length === 1
+                ? 'One ear does not reach the part and will hold nothing down.'
+                : `${stranded.length} ears do not reach the part and will hold nothing down.`,
+          }
+        : {}),
     });
+  }
+
+  /**
+   * Which of this object's ears reach neither the part nor an ear that does.
+   *
+   * The pinned gizmo paints these red (`GLGizmoBrimEars::find_single`), and the
+   * reason to port it is that nothing else ever says so: a stranded ear slices
+   * cleanly, prints a small island of brim, and holds nothing. Silence is the
+   * failure mode this whole feature keeps producing.
+   */
+  private strandedBrimEars(objectId: ObjectId | undefined): readonly number[] {
+    if (!objectId) return Object.freeze([]);
+    const ears = this.canonicalProject.getBrimEars(objectId);
+    if (ears.length === 0) return Object.freeze([]);
+    const target = this.paintTargets().find((entry) => entry.objectId === objectId);
+    const positions = target?.display.geometry.getAttribute('position');
+    if (!positions) return Object.freeze([]);
+    const outline = brimEarOutline(
+      positions.array as Float32Array,
+      target?.display.geometry.getIndex()?.array as Uint32Array | undefined,
+    );
+    if (!outline) return Object.freeze([]);
+    return findDisconnectedBrimEars(
+      ears.map((ear) => ({ x: ear.positionMm[0], y: ear.positionMm[1], radiusMm: ear.headFrontRadiusMm })),
+      outline.loops,
+    );
+  }
+
+  /**
+   * Draw each placed ear as the pinned flat disc, on the model, in the pinned
+   * colours — grey where it will work, red where it will not.
+   *
+   * The discs are children of the part's own display mesh, so they inherit its
+   * transform for free and cannot drift out of step with it. Their scale is
+   * then divided back out by the part's world scale, which is the pinned
+   * `instance_scaling_matrix_inverse`: an ear is a fixed number of millimetres
+   * on the bed, so a marker that grew with a scaled-up model would be lying
+   * about the size of the thing it stands for.
+   *
+   * Shown only while the tool is active, as upstream shows it only while the
+   * gizmo is open.
+   */
+  private refreshBrimEarPreview(): void {
+    const objectId = this.brimEarTargetObject();
+    const stranded = new Set(this.tool === 'brim_ears' ? this.strandedBrimEars(objectId) : []);
+    for (const target of this.paintTargets()) {
+      const existing = target.display.getObjectByName(BRIM_EAR_PREVIEW_NAME);
+      if (existing) {
+        target.display.remove(existing);
+        existing.traverse((node) => {
+          if (node instanceof THREE.Mesh) {
+            node.geometry.dispose();
+            (node.material as THREE.Material).dispose();
+          }
+        });
+      }
+      if (this.tool !== 'brim_ears' || target.objectId !== objectId) continue;
+      const ears = this.canonicalProject.getBrimEars(target.objectId);
+      if (ears.length === 0) continue;
+
+      target.display.updateWorldMatrix(true, false);
+      const worldScale = new THREE.Vector3();
+      target.display.matrixWorld.decompose(new THREE.Vector3(), new THREE.Quaternion(), worldScale);
+      const group = new THREE.Group();
+      group.name = BRIM_EAR_PREVIEW_NAME;
+      group.raycast = () => {};
+      ears.forEach((ear, index) => {
+        const paint = stranded.has(index) ? BRIM_EAR_COLORS.error : BRIM_EAR_COLORS.default;
+        const disc = new THREE.Mesh(
+          new THREE.CylinderGeometry(ear.headFrontRadiusMm, ear.headFrontRadiusMm, BRIM_EAR_DISC_HEIGHT_MM, 32),
+          new THREE.MeshBasicMaterial({
+            color: paint.color,
+            transparent: paint.opacity < 1,
+            opacity: paint.opacity,
+            depthWrite: false,
+          }),
+        );
+        // Three's cylinder stands on Y; an ear lies flat on the bed's XY.
+        disc.rotation.x = Math.PI / 2;
+        disc.position.set(ear.positionMm[0], ear.positionMm[1], ear.positionMm[2]);
+        // Scale is applied before rotation, so it is in the cylinder's own
+        // frame: its Y is the height axis, which the rotation sends to world Z.
+        // Hence the y/z swap — compensating the wrong parent axis would leave
+        // the disc the one thing on screen that is not the size it claims.
+        const inverse = (value: number): number => (value === 0 ? 1 : 1 / value);
+        disc.scale.set(inverse(worldScale.x), inverse(worldScale.z), inverse(worldScale.y));
+        disc.raycast = () => {};
+        disc.renderOrder = 2;
+        group.add(disc);
+      });
+      target.display.add(group);
+    }
   }
 
   /**
@@ -2586,7 +2718,7 @@ export class OrcaWorkspace extends xb.Script {
     this.setStatus(
       `Placed ${detected.ears.length} brim ear${detected.ears.length === 1 ? '' : 's'} on the corners that would lift; one undo removes them all.`,
     );
-    this.onBrimEarStateChanged?.();
+    this.notifyBrimEarChange();
     return true;
   }
 
@@ -2602,7 +2734,7 @@ export class OrcaWorkspace extends xb.Script {
     }
     this.canonicalProject.clearBrimEars(objectId);
     this.setStatus('Cleared the brim ears; undo restores them.');
-    this.onBrimEarStateChanged?.();
+    this.notifyBrimEarChange();
     return true;
   }
 
@@ -2612,7 +2744,7 @@ export class OrcaWorkspace extends xb.Script {
     try {
       this.canonicalProject.removeBrimEar(objectId, index);
       this.setStatus('Removed a brim ear.');
-      this.onBrimEarStateChanged?.();
+      this.notifyBrimEarChange();
       return true;
     } catch (error) {
       this.setStatus(`Brim ear: ${(error as Error).message}`);
@@ -2654,7 +2786,7 @@ export class OrcaWorkspace extends xb.Script {
           headFrontRadiusMm: this.brimEarRadiusMm,
         });
         this.setStatus(`Placed a ${this.brimEarRadiusMm} mm brim ear.`);
-        this.onBrimEarStateChanged?.();
+        this.notifyBrimEarChange();
         return true;
       } catch (error) {
         this.setStatus(`Brim ear: ${(error as Error).message}`);
@@ -6439,6 +6571,9 @@ export class OrcaWorkspace extends xb.Script {
   public setTool(tool: WorkspaceGizmoTool) {
     this.tool = tool;
     this.refreshToolButtons();
+    // Before any of the early returns below: leaving the brim-ear tool has to
+    // take its discs with it, and every path out of it lands here.
+    this.refreshBrimEarPreview();
     const channel = PAINT_TOOL_CHANNELS[tool];
     if (channel) {
       this.paintChannel = channel;

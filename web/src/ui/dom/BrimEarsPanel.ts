@@ -11,7 +11,11 @@ export interface BrimEarsPanelState {
   readonly minRadiusMm: number;
   readonly maxRadiusMm: number;
   readonly ears: readonly BrimEarView[];
+  /** Indices into `ears` that reach nothing and will hold nothing down. */
+  readonly stranded: readonly number[];
   readonly hint: string;
+  /** Present only when `stranded` is non-empty. */
+  readonly warning?: string;
 }
 
 export interface BrimEarsPanelAdapter {
@@ -125,6 +129,18 @@ export class BrimEarsPanel {
 
     const children: HTMLElement[] = [heading, controls, radiusLabel, hint];
 
+    if (state.warning) {
+      // An alert rather than a status: a stranded ear is silent everywhere else
+      // — it slices clean and prints an island — so this is the only place the
+      // operator can learn it before the print does.
+      const warning = document.createElement('p');
+      warning.dataset.brimEarsWarning = 'true';
+      warning.setAttribute('role', 'alert');
+      warning.style.cssText = 'margin:0;color:var(--oxr-color-danger,#ff4d4d);';
+      warning.textContent = state.warning;
+      children.push(warning);
+    }
+
     if (state.ears.length > 0) {
       const list = document.createElement('ol');
       list.dataset.brimEars = 'true';
@@ -134,8 +150,15 @@ export class BrimEarsPanel {
         const item = document.createElement('li');
         item.dataset.brimEarIndex = `${index}`;
         item.style.cssText = 'display:flex;align-items:center;gap:8px;';
+        const stranded = state.stranded.includes(index);
+        if (stranded) item.dataset.brimEarStranded = 'true';
         const label = document.createElement('span');
-        label.textContent = `${ear.positionMm.map(format).join(', ')} mm · ⌀${format(ear.headFrontRadiusMm * 2)} mm`;
+        // The colour matches the red disc on the model, so the list entry and
+        // the thing it names are recognisably the same ear.
+        if (stranded) label.style.cssText = 'color:var(--oxr-color-danger,#ff4d4d);';
+        label.textContent =
+          `${ear.positionMm.map(format).join(', ')} mm · ⌀${format(ear.headFrontRadiusMm * 2)} mm` +
+          (stranded ? ' · does not reach the part' : '');
         const remove = this.button(`brim-ear-remove-${index}`, 'Remove', () => this.adapter.onRemove(index));
         remove.style.cssText += 'min-height:28px;padding:2px 8px;';
         item.append(label, remove);

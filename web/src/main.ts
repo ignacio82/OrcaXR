@@ -3030,7 +3030,9 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
             positionMm: [ear.positionMm[0], ear.positionMm[1], ear.positionMm[2]] as const,
             headFrontRadiusMm: ear.headFrontRadiusMm,
           })),
+          stranded: snapshot.stranded,
           hint: snapshot.hint,
+          ...(snapshot.warning ? { warning: snapshot.warning } : {}),
         };
       },
       subscribe: (listener) => {

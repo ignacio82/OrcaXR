@@ -55,6 +55,7 @@ const base: BrimEarsPanelState = {
   minRadiusMm: 0.1,
   maxRadiusMm: 20,
   ears: [],
+  stranded: [],
   hint: 'Select one model part to place brim ears on it.',
 };
 
@@ -121,6 +122,41 @@ await test('the automatic placement control needs a target part', async () => {
   enabled.click();
   await Promise.resolve();
   assert.deepEqual(withTarget.calls, ['auto']);
+});
+
+await test('a stranded ear is called out in the list and above it', async () => {
+  const ears = [
+    { positionMm: [0, 0, 0] as const, headFrontRadiusMm: 5 },
+    { positionMm: [-40, 0, 0] as const, headFrontRadiusMm: 5 },
+  ];
+  const view = mount({
+    ...base,
+    objectId: 'object-1' as never,
+    ears,
+    stranded: [1],
+    warning: 'One ear does not reach the part and will hold nothing down.',
+  });
+
+  const alert = view.host.querySelector('[data-brim-ears-warning]');
+  assert.ok(alert, 'the warning is shown');
+  assert.equal(alert.getAttribute('role'), 'alert', 'and announced, since nothing else reports it');
+
+  const rows = view.host.querySelectorAll('[data-brim-ear-index]');
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].hasAttribute('data-brim-ear-stranded'), false, 'the ear on the part is not flagged');
+  assert.equal(rows[1].getAttribute('data-brim-ear-stranded'), 'true', 'the one that misses it is');
+  assert.match(rows[1].textContent ?? '', /does not reach the part/);
+});
+
+await test('no warning appears when every ear lands', async () => {
+  const view = mount({
+    ...base,
+    objectId: 'object-1' as never,
+    ears: [{ positionMm: [0, 0, 0] as const, headFrontRadiusMm: 5 }],
+    stranded: [],
+  });
+  assert.equal(view.host.querySelector('[data-brim-ears-warning]'), null);
+  assert.equal(view.host.querySelector('[data-brim-ear-stranded]'), null);
 });
 
 console.log(`\nBrim ears panel: ${passed} tests passed.`);
