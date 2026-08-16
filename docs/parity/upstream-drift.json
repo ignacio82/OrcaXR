@@ -1,0 +1,1227 @@
+{
+  "dispositions": {
+    "extraction": {
+      "decision": "accept the refusal; teach the extractor when the pin moves",
+      "rationale": "The extractor will not run against v2.3.5: its PrintConfig sanity check expects 744 active literal registrations and finds 749. That is the check working, not failing — it exists to refuse a structural change rather than extract through one. The five extra registrations are named settings, not a parse artefact: filament_colour_mode, filament_is_high_temperature, filament_multi_colors, filament_tower_ironing_area, wipe_tower_wall_gap, with none removed. Consequence, recorded plainly: the leaf-level inventory at v2.3.5 is unknown rather than unchanged, and this report says so instead of printing zeroes. Raising the constant is part of a deliberate bump, never a way to make this audit quiet.",
+      "tasks": [
+        "P12.1",
+        "P0.1"
+      ]
+    },
+    "source:src/libslic3r/PrintConfig.cpp": {
+      "decision": "five new settings; adopt with the pin, not before",
+      "rationale": "+42/-9. Five settings added, none removed or renamed: filament_colour_mode, filament_is_high_temperature, filament_multi_colors (the v2.3.5 filament colour-sync data model, backing a new src/slic3r/GUI/filamentsync/ subsystem of sixteen files), plus filament_tower_ironing_area and wipe_tower_wall_gap (wipe-tower tuning). This is the one delta that would grow the 789-definition inventory. None is required by an existing OrcaXR workflow, and adopting settings ahead of the engine that honours them would put five controls in the UI that the pinned WASM build ignores — a false success, which the plan forbids.",
+      "tasks": [
+        "P12.1",
+        "P6.1"
+      ]
+    },
+    "source:src/slic3r/GUI/GUI_App.cpp": {
+      "decision": "no parity impact; hold",
+      "rationale": "The file changed, but +256/-89 is desktop-application bootstrap: bundled flutter_web resource copying with deferred failure reporting, version logging, and Win32 device-notification registration. The parity signal this file feeds is untouched: zero file-wildcard or extension lines touched, so all 16 format filters it feeds are unchanged. The added concerns have no web analogue at all — OrcaXR ships no bundled desktop resource tree.",
+      "tasks": [
+        "P12.1"
+      ]
+    },
+    "source:src/slic3r/GUI/GUI_App.hpp": {
+      "decision": "no parity impact; hold",
+      "rationale": "The file changed, but +11/-0 declares only the new flutter_web copy helpers and their status enum. The parity signal this file feeds is untouched: no inventory leaf cites this header — it is read for context and feeds nothing — so the change cannot move a leaf.",
+      "tasks": [
+        "P12.1"
+      ]
+    },
+    "source:src/slic3r/GUI/MainFrame.cpp": {
+      "decision": "no parity impact; hold",
+      "rationale": "The file changed, but +38/-13 touches no menu construction at all. The parity signal this file feeds is untouched: zero append_menu_item, append_menu_check_item, append_submenu, AppendSubMenu, AddDropDownSubMenu, or new wxMenuItem lines were added or removed, so all 118 menu actions and 2 device pages it feeds are byte-identical in meaning.",
+      "tasks": [
+        "P12.1"
+      ]
+    },
+    "source:src/slic3r/GUI/Plater.cpp": {
+      "decision": "no parity impact; hold",
+      "rationale": "The file changed, but +1062/-26 is the largest change in the release and none of it is menu construction. The parity signal this file feeds is untouched: zero menu-signal lines touched, so both menu actions it feeds are unchanged; the bulk is the filament colour-sync surface, which reaches parity only through the five new PrintConfig settings dispositioned above.",
+      "tasks": [
+        "P12.1"
+      ]
+    },
+    "source:src/slic3r/GUI/PresetComboBoxes.cpp": {
+      "decision": "no parity impact; hold",
+      "rationale": "The file changed, but +356/-93 is preset-combo internals and colour-sync wiring. The parity signal this file feeds is untouched: zero menu-signal lines touched, so all 4 menu actions it feeds are unchanged.",
+      "tasks": [
+        "P12.1"
+      ]
+    },
+    "source:src/slic3r/GUI/Tab.cpp": {
+      "decision": "two new placements; adopt with the pin, not before",
+      "rationale": "+51/-15. Exactly two new append_single_option_line calls, for wipe_tower_wall_gap and filament_tower_ironing_area. The other three new settings are not tab-placed at v2.3.5 — they are the colour-sync data model. Tab groups and pages are otherwise unchanged, so the 93 groups and 21 pages this file feeds stand; only the 424 placements would become 426.",
+      "tasks": [
+        "P12.1",
+        "P6.2"
+      ]
+    },
+    "target": {
+      "decision": "hold at v2.3.4",
+      "rationale": "v2.3.5 is one release ahead. Its parity-visible surface is five new settings and two new tab placements; everything else it touches in the seventeen extracted files is inert for parity (verified per file below). That is not enough to justify re-pinning mid-plan: a bump reopens every hardware-sensitive item, forces a clean re-apply of the WASM patch set, and invalidates the engine artifact all current evidence was produced against. The pin moves when the plan reaches P12.3, or sooner if a later release touches something that is not inert.",
+      "tasks": [
+        "P12.1",
+        "P12.3"
+      ]
+    }
+  },
+  "drift": {
+    "counts": {},
+    "leaves": {
+      "added": null,
+      "anchorChanged": null,
+      "blobOnly": null,
+      "comparable": false,
+      "moved": null,
+      "removed": null,
+      "unchanged": null
+    },
+    "sourceFiles": {
+      "changed": [
+        {
+          "feeds": {
+            "settingDefinitions": 789
+          },
+          "latest": "c4881c23c9a6756d614038abb2e56177b365f459",
+          "path": "src/libslic3r/PrintConfig.cpp",
+          "pinned": "c0a2676191497a3f22733801939c4879c92f4dd3"
+        },
+        {
+          "feeds": {
+            "formatFilters": 16
+          },
+          "latest": "e9f4cceddfe6a53bbcf90fe6488b8511b0615e97",
+          "path": "src/slic3r/GUI/GUI_App.cpp",
+          "pinned": "7c8fa465d05090fa3cc05a2d3b8704706cb5f465"
+        },
+        {
+          "feeds": {},
+          "latest": "6b27317c6b79503ade3b123dfa2bed5ce76a41bb",
+          "path": "src/slic3r/GUI/GUI_App.hpp",
+          "pinned": "6d79ccdd18ea39beb74c8f8de5249d865bfbc341"
+        },
+        {
+          "feeds": {
+            "devicePages": 2,
+            "menuActions": 118
+          },
+          "latest": "ba317d2be972dc499f568651d369fa822ead5714",
+          "path": "src/slic3r/GUI/MainFrame.cpp",
+          "pinned": "96b1b08a3af019308d157f8339378433f8db0038"
+        },
+        {
+          "feeds": {
+            "menuActions": 2
+          },
+          "latest": "cc0e8ecef117995ccc8191c8f30062e8ca581d3a",
+          "path": "src/slic3r/GUI/Plater.cpp",
+          "pinned": "94ad6c3b2357c2f0bd2476265e83ea68babd6a9b"
+        },
+        {
+          "feeds": {
+            "menuActions": 4
+          },
+          "latest": "08a29271f03565580ec3f08a8f1242636a480086",
+          "path": "src/slic3r/GUI/PresetComboBoxes.cpp",
+          "pinned": "06fd0cb01310406e83b2b0d97a87db07e288f45f"
+        },
+        {
+          "feeds": {
+            "settingGroups": 93,
+            "settingPlacements": 424,
+            "settingTabs": 21
+          },
+          "latest": "58f5d8d5b1f3e7644a1d5ba7a3d4cea7fe037b24",
+          "path": "src/slic3r/GUI/Tab.cpp",
+          "pinned": "32588f85e0f36f8bf931a24654c200748b995d85"
+        }
+      ],
+      "removed": [],
+      "unchanged": 10
+    }
+  },
+  "extractionError": "PrintConfig registration sanity check failed: expected 744 active literal add calls + 45 new_def expansions, found 749 + 45",
+  "latest": {
+    "commit": "761718a5eaf6f52b818af236653f3807d091a613",
+    "tag": "v2.3.5"
+  },
+  "pinned": {
+    "commit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "releasesBehind": 1,
+    "tag": "v2.3.4",
+    "tree": "612a77a60f923a2b117de7fd695512e5451a179f"
+  },
+  "provenance": {
+    "engine": {
+      "count": 3,
+      "digest": "62b0bbd4fb714555af4dfb648ab4613b3204e1c37640d4a295eb9d5c78f94464",
+      "files": [
+        {
+          "blob": "84f9f1ac0834bc0527102b887a74b1e787cde575",
+          "path": "web/public/slicer/slic3r.d.mts",
+          "sha256": "92f6d00699ed936ecbf43b20ca5f3a332eb70389afd4dba7ad31c53c237e3332"
+        },
+        {
+          "blob": "69f0d9f8833becf1e6ba32b49c6b4927d65d2b32",
+          "path": "web/public/slicer/slic3r.mjs",
+          "sha256": "b90d06ccfeb526a4d0d7e08a56ebb5401175f7337f7d9b35c039bd738448f03e"
+        },
+        {
+          "blob": "67edbb2bc7b9cc12ffff14b8f8f38e2a99310e22",
+          "path": "web/public/slicer/slic3r.wasm",
+          "sha256": "746503927b36b2d86b63413937f4cef357ac5ab0fe42489bea7cebf41e72a221"
+        }
+      ],
+      "uncommitted": []
+    },
+    "patches": {
+      "count": 4,
+      "digest": "87a65014b1e5a967e69e04b4c39e75cc603051edb897fa936f55ebdfd66cf5f4",
+      "files": [
+        {
+          "blob": "bd986280058c67ee88039001a204418cff6d0411",
+          "path": "server/patches/0001-cli-safe-expand-plate-extruders.patch",
+          "sha256": "0b5cf28ff6c28d00a9a580297c4f97304d1dbcb2d9da6a7f93fc2a95a73a37da"
+        },
+        {
+          "blob": "090a2b98efad26d2cc0d89bad49b9079d7b44026",
+          "path": "server/patches/0002-normalize-fdm-partial-config-null-nozzle.patch",
+          "sha256": "7ae55127a840422c143846b932a579d648f7e11d0c8cd052abf301ef030e8b5a"
+        },
+        {
+          "blob": "564ee0e838f6704700cf7c6bd510c668731fcb60",
+          "path": "server/patches/0003-gcodeprocessor-fullspectrum-oob.patch",
+          "sha256": "73402637904ff1500e04e1ca60fe287df74d8d6b930e5b7889737c729f7d9a7a"
+        },
+        {
+          "blob": "52e4473873473a2e6441b6509ff3961a12357a19",
+          "path": "server/patches/0004-cli-safe-plate-name-texture.patch",
+          "sha256": "8d6df350cba4a0d3ec4b18cc71ba790129d0c00c0a3e5eb1c4a430f323ca1646"
+        }
+      ],
+      "uncommitted": []
+    },
+    "profiles": {
+      "count": 202,
+      "digest": "e39398c1b38880a9abccc37953f3f746f3e84ac9f656d9c03c86bae9c36339e2",
+      "files": [
+        {
+          "blob": "47dcf2dcd6a4edfd25c3dce2d2093b20715bac8c",
+          "path": "web/public/profiles/catalog.json",
+          "sha256": "5550be0f34902720169ea404ec09dee6de25c8d6d34b014bafd52c13da0743c2"
+        },
+        {
+          "blob": "7b287ca1d5853464fead5d03afd6683936a87683",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo ABS @0.2 nozzle.json",
+          "sha256": "8cb919ade3d43f4a2759c9cb56425ac104bb26ffb4c8a6777b2fff1466d2c947"
+        },
+        {
+          "blob": "c58811483af95ffb0aec8d5819d7f5def4a16b7c",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo ABS @base.json",
+          "sha256": "3bfdcbc56519158a972ec7a756160a82948b949165fc806cf9797fea6ec1355a"
+        },
+        {
+          "blob": "d61e1f94d258d022a9976d9e852b4fb84c9292a2",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo ABS @ECC.json",
+          "sha256": "3d20a576a8ebf72437ce5bba7b709ab70a01fb120a9f5b76f25b8779b87a8d57"
+        },
+        {
+          "blob": "1fdbdc443eb22704e87fec76dc6eae93cfc020c3",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo ASA @0.2 nozzle.json",
+          "sha256": "110b7156fec7a987f5baed6543a404d3b05589590600302f7cef13483498f5de"
+        },
+        {
+          "blob": "8dc4636dc589f85d4ac3bce3ec3c9660428b8355",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo ASA @base.json",
+          "sha256": "4fc75e73104915658a82b6ff111b7707277ab479279f0026f638061d5b680a6a"
+        },
+        {
+          "blob": "3f8a4d7995a26f66b66d9e66bd1aee0bf5d11dc5",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo ASA @ECC.json",
+          "sha256": "aecb78b2e4faabd39fa9d9b59fbc740d0609a04962b7dcc42bb768b7b55a842d"
+        },
+        {
+          "blob": "1f97d2498d9596275d08958587bf6395e7801169",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PAHT @base.json",
+          "sha256": "f86ec754b47f4bfadb30b057c92c5c7983bbc29a9d274358940fff6a50cf83e8"
+        },
+        {
+          "blob": "fa0148f806b3144762c577373f51ca832003353f",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PAHT-CF @ECC.json",
+          "sha256": "620234d32dd6b8938ec05e5aae60df7fcb114f17ef2eb42a9c45368f720d7562"
+        },
+        {
+          "blob": "2b972bbe650990d0282fa13672581af6e25e4947",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PC @0.2 nozzle.json",
+          "sha256": "9975b26eabd5493db2c63094ed3a7c159e019ae7f73f8700a054639a3a1ee2f1"
+        },
+        {
+          "blob": "6d6073974edc3876afb14e46a1b72ac7843ad3c0",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PC @base.json",
+          "sha256": "06bcac421a80f1b2d34bd73ad93c8b9a257b57110e32abde105c3c61f374d95f"
+        },
+        {
+          "blob": "19a220dd9406e7c057685ea675b5f2dcee299c17",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PC @ECC.json",
+          "sha256": "5d0f49371a36824693bd025734f7c63d0b9c48905a75a274a45b7db833732cb0"
+        },
+        {
+          "blob": "f4fe05822e053cfcc82383b206ccb8a30ec1c87f",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PC-FR @0.2 nozzle.json",
+          "sha256": "25475d120318cd4ca5fef5cfe725bbb8c5ce0bd3195072dc92b60774728b0f87"
+        },
+        {
+          "blob": "e1b3096a4a84ed7b4d6b80610e4dd45e0b41a808",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PC-FR @ECC.json",
+          "sha256": "22c3f524ebdc3fe1ac0add962cc2108e163dd802eda044e21783459242a8c284"
+        },
+        {
+          "blob": "be3dce7e5568cec453cf8e7336d7f5a45419bec2",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PETG @0.2 nozzle.json",
+          "sha256": "ac1d827bf0e9cf1f229ab7cdd3fa62e0b2c0000464d0589f46d94f7c5937ff72"
+        },
+        {
+          "blob": "43a7410f2ac90dac38987951ef1500bfce0649d3",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PETG @base.json",
+          "sha256": "ddd1043a4e5a87904cf67c7267ded12de4189a28258a870447bcc2c4674b3fcf"
+        },
+        {
+          "blob": "6229011e358850f906917daff4092002eefccf7b",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PETG @ECC.json",
+          "sha256": "1a1d7f6d24f9aa3a11afdc965fdcb610a6760121dface40e647d8536dd8ccd16"
+        },
+        {
+          "blob": "32c9912b62297f4eb5b9aa2c43ec1dd01353ab0f",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PETG PRO @0.2 nozzle.json",
+          "sha256": "4d879c41c9dbee7a27e9e60be00fe0134d259d47cf3f35480c0b08b57ac7c854"
+        },
+        {
+          "blob": "2b5113fa7475e4522af9ae9b86396cf50d26e7b1",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PETG PRO @ECC.json",
+          "sha256": "e7d9c8fa99aa0e1da7f0aad0fe58909dd7f260a7af8146ccdc6da78ea5d49672"
+        },
+        {
+          "blob": "faa1a7c75fdbb119df9f680917b42bc2e7334b06",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PETG Translucent @0.2 nozzle.json",
+          "sha256": "9e48cbb328ee80074e3e235ecf4701581ef369a4e78c56d0f5afc4826ef717f6"
+        },
+        {
+          "blob": "f105ec05f88df0cf245c6b1bbe676c7bd0e11abe",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PETG Translucent @ECC.json",
+          "sha256": "0d87fa5f0b6db7666c5d8f1aa5b28af41a46bfed775d426bee7a1acf6902144e"
+        },
+        {
+          "blob": "7cffe88f6c3d46541e6ee6640d1421a74fef0db2",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PETG-CF @ECC.json",
+          "sha256": "6aee3e5651d12a7647cfd08f63ba00ef31f33a04f2c9996880ee9f60340153cc"
+        },
+        {
+          "blob": "1a3c4b3af7b45940b047e7a883a4d74e650ddd29",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PETG-GF @ECC.json",
+          "sha256": "bd13c1a611d3a36af30d99bede46e21debd30c46c8290fb1b193cdcb7785ba05"
+        },
+        {
+          "blob": "4865dbe6d0ed9fe443d82e8e836a4818030568b6",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA @0.2 nozzle.json",
+          "sha256": "69b7d6f0aecd276ecb053947acc95130a1d193594bf93e0ebcc7e7f067fc4995"
+        },
+        {
+          "blob": "5b837fd23388559afe07d5be6f8aae7ecad90f55",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA @base.json",
+          "sha256": "4fa3c38239d29fd51be389c0fce42c25e67b13230662eeb9c125819ad61823ad"
+        },
+        {
+          "blob": "7215a2ffc6a521475dbc5a13113513567cde2aca",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA @ECC.json",
+          "sha256": "9a230144f9b32a72328800c0e3c6d2b00d741d25f81b140345147f1fbe5b3be7"
+        },
+        {
+          "blob": "e507562671821475df6e39a0d5ab997baf245703",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA Basic @0.2 nozzle.json",
+          "sha256": "4a42fdc4058b242e1cd764fe076926565ac368664540e0854b40f9fad331c079"
+        },
+        {
+          "blob": "ad18b32d94259d27c9bdd2127055b2f1c27b50bf",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA Basic @ECC.json",
+          "sha256": "0efd800be0a8a19659ae11d94a9cb57274d89ee2115eb1b440e6de9e383f3445"
+        },
+        {
+          "blob": "8b86568267073773f193971b571e6cc318ba14b5",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA Galaxy @ECC.json",
+          "sha256": "5ead943b5be68abe7dd8846d48aa22dbd12e6478cdca507013f6db19dfe84b5d"
+        },
+        {
+          "blob": "55617723aec58f1d026b42294e52bc3e0d10a434",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA Marble @ECC.json",
+          "sha256": "54626ada14abf46692d38ae7396924ee86ef188dbccadf743e9ab9e341dc8d80"
+        },
+        {
+          "blob": "af97500f83d2c3636dfd75f288e2c03e2bac4944",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA Matte @0.2 nozzle.json",
+          "sha256": "5b63d79ac278273fd03f00bebb08cad82af1bc4e1c395a5904f157d3c4fb6c4f"
+        },
+        {
+          "blob": "55c747b373827159a17ec6dfe9950a186be9cdb1",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA Matte @base.json",
+          "sha256": "348817b665b4a5002454bf58dcb05b400cb3a84a64a08cf1fc87769f07292f42"
+        },
+        {
+          "blob": "a0f89e8a56a944b181a65044e7e9e68da3c6de8e",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA Matte @ECC.json",
+          "sha256": "5c6b489e1fb7188fb924ffd32fbfe84507b33bc560eeb3d9b4cc0950028d0ebb"
+        },
+        {
+          "blob": "58d0e4936833a12642f2704d157fa8cd9488013e",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA PRO @0.2 nozzle.json",
+          "sha256": "97743d47a22800896d62e50cc7a5a718f5c648f04b3b05db9d9d90c0575449a6"
+        },
+        {
+          "blob": "e169374edb99471aeddeb37bbba476c196824d0f",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA PRO @ECC.json",
+          "sha256": "3be2fadbb7eb718e10be06d8918185e0322c2b13dcb38ec25f1d2d7331afca87"
+        },
+        {
+          "blob": "e5e588267c9cc93835c22df50373b9afc13889dd",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA Silk @0.2 nozzle.json",
+          "sha256": "2d53c0545e3685a2e95100068258e939a3cd7ac6c549bc8d63fdae2a67708da0"
+        },
+        {
+          "blob": "5d560c7932ec0ec555481d8552d953a2b83f24a4",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA Silk @ECC.json",
+          "sha256": "44e0b5686e261c19c30aabea1df43cb706268dfa8446207e6c1ec06c0043cb26"
+        },
+        {
+          "blob": "5af38b433635ace529259fa9cac517823ed46934",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA Sparkle @ECC.json",
+          "sha256": "3a9f4db675ed469e9cb82af69bc71f59a9d9a04a69eb36646dec883b8b5d884f"
+        },
+        {
+          "blob": "cae9b44e6895cf5e17fa5af91a867bb3ef592aae",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA Wood @ECC.json",
+          "sha256": "1bc71d68f4b444dcba8410336d242fd388b6d4c7e6d13f2021a055cac188a426"
+        },
+        {
+          "blob": "f2288e7929e77fb51c8cceda9ef9005d82906c1c",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA-CF @base.json",
+          "sha256": "9b1b99c570565bb54238b29fcf2939b264da0ee6c3f83bd621749957adc15c6b"
+        },
+        {
+          "blob": "f1205f9d1e62f0c38cdf18f7a1eeb5db9a56be12",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA-CF @ECC.json",
+          "sha256": "c9f0fd68d8541d0cc6337f6331c3e60e9723a5d7dc25735db6d0ede8c2f5009c"
+        },
+        {
+          "blob": "5ce10dbdda5457a4ef1305614aa4ac1626571463",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA+ @0.2 nozzle.json",
+          "sha256": "fb7d888c440229a04dc18db437cab8eb6c48952cb4b9a9bb5be767221f5d633e"
+        },
+        {
+          "blob": "21e0471e8a16d588a091a6fb98b4ec8b808f8e00",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo PLA+ @ECC.json",
+          "sha256": "a15035b37ed6cee056a8a604cd62620efd76be5c505d23b7280c35457ee6b6d2"
+        },
+        {
+          "blob": "36aa66c1708d72be76c395aea7b20a16220559c8",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo RAPID PETG @0.2 nozzle.json",
+          "sha256": "c05b1bf570e0bd29983ff041d0f3ac0e9ca920a379273fff00de3016c86ffe7c"
+        },
+        {
+          "blob": "a2b9676a1ce3a44b76e959fd8bd154112687850d",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo RAPID PETG @ECC.json",
+          "sha256": "0d5b53761815e99564c2bf44561548e0e02c42cf83b2ff657a6c88e7c0096bb7"
+        },
+        {
+          "blob": "0b46fda0028393000d55c2bfbc6c90dc43216e7f",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo RAPID PLA+ @0.2 nozzle.json",
+          "sha256": "a21ee237d60383cf9342e496fe83f3ba94859c87dee1a5b8140d0346f2aca274"
+        },
+        {
+          "blob": "d709f624fdd6f4dafc9968ca8d9c1213d5ed58a3",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo RAPID PLA+ @ECC.json",
+          "sha256": "b137997628b64daf7952fca1e14003a4cb703ff3581389041087959aa199475e"
+        },
+        {
+          "blob": "fdabc847007049ff664f655e1dc2917f9915a1f1",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo RAPID TPU 95A @ECC.json",
+          "sha256": "3c247c3a9899634c0840da4856d93c02a81e86f294bce71533c1643b9d161bc1"
+        },
+        {
+          "blob": "774622b16cd960579072f9036a6ef2e072f35cd9",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo TPU @base.json",
+          "sha256": "520d8a8fd8a174c389faca6aa179216cf500953660433f91b0aa976af4177f02"
+        },
+        {
+          "blob": "ebf32388178503464d627c7b5aa5d67a083769b3",
+          "path": "web/public/profiles/Elegoo/filament/Elegoo TPU 95A @ECC.json",
+          "sha256": "a20910c74a1532d45a6b979d678668ac900e8c9f14005df3d4e5154dec6621bb"
+        },
+        {
+          "blob": "df77feb47a36f25b15c71b048d91bb7c7d268dd2",
+          "path": "web/public/profiles/Elegoo/filament/fdm_elegoo_filament_common.json",
+          "sha256": "d167059b2a9421973852b5ba3471b90b8bb70cd4123e1f864a7a9dcd5fbc814b"
+        },
+        {
+          "blob": "360b0f2959166dfe6b46b82d8c0c17608613ae37",
+          "path": "web/public/profiles/Elegoo/filament/fdm_elegoo_filament_pla.json",
+          "sha256": "ac9ca03d3ff57180da316154069a9db0baefbbb11836b375455f95310417a670"
+        },
+        {
+          "blob": "a77b424e6fba38fb758706f31e6bb06cb79acf27",
+          "path": "web/public/profiles/Elegoo/filament/fdm_filament_abs.json",
+          "sha256": "75ab8f4334d16168821cd717c744bd86e09e89004308e9f9799f193576072e54"
+        },
+        {
+          "blob": "871e5b5c05787f825014c70453e4f870a2a33615",
+          "path": "web/public/profiles/Elegoo/filament/fdm_filament_asa.json",
+          "sha256": "28de43f7df5c58df540c41fb82fc779eb4f266e3eb1cc919e45b2faee278e99e"
+        },
+        {
+          "blob": "d51946aff50afe2375daccc716973d8fafe66729",
+          "path": "web/public/profiles/Elegoo/filament/fdm_filament_common.json",
+          "sha256": "52d25d9a09408ceb82224b84adb34cdf8d0d929abca6362758cb11f34f053538"
+        },
+        {
+          "blob": "7b055373e01ddac3c8463644bfc3d1ab5b5140a3",
+          "path": "web/public/profiles/Elegoo/filament/fdm_filament_hips.json",
+          "sha256": "0f3dc5e4d2f65e1bfcb7d95313b189a690163e1d2080a5d6c428a6713371b4ac"
+        },
+        {
+          "blob": "5fbb2bc2eace7e444c1eded7bee27a10c6a1d89e",
+          "path": "web/public/profiles/Elegoo/filament/fdm_filament_pa.json",
+          "sha256": "fb870e7ba19acea15ed440410f7b72b2ae6b114f4ea128f3514795538ba7f568"
+        },
+        {
+          "blob": "aa24b955139176ca605b56670a797e0fac8e885d",
+          "path": "web/public/profiles/Elegoo/filament/fdm_filament_paht.json",
+          "sha256": "37366be18de1b6a64947b4cfac2f32b6849f69b81f8b6b135dce45ea11a0dfce"
+        },
+        {
+          "blob": "4d89fba79d2feb9e235ae1e15e2d6a9f0cd7f8f1",
+          "path": "web/public/profiles/Elegoo/filament/fdm_filament_pc.json",
+          "sha256": "b8ab5e13eea591db164f21998c7c1040b80ce553545113542a9cbc8aae8ab2fa"
+        },
+        {
+          "blob": "81d99e537dc81045e49775acf8ecf7e23a9bfbf8",
+          "path": "web/public/profiles/Elegoo/filament/fdm_filament_pet.json",
+          "sha256": "0494e2dfd25eed8df94211d27c6694a6da031d334724352232d353cf0b847c56"
+        },
+        {
+          "blob": "7ed6ce35e517118a4fec1c4c212191c3a6d0b440",
+          "path": "web/public/profiles/Elegoo/filament/fdm_filament_pla.json",
+          "sha256": "d19aa884624610859abaebb2e4d0c33dec7c77d07a162a8daa505021737dc240"
+        },
+        {
+          "blob": "cc7422e94bc98d120d61723d35f27b9ea9f53ee2",
+          "path": "web/public/profiles/Elegoo/filament/fdm_filament_tpu.json",
+          "sha256": "0a0e04f51b787edb19f511b542a7106c0786f781e6f537c160d06fd25d3cc4b0"
+        },
+        {
+          "blob": "b63393de83c69edaa1e8af377f503d2cd6ed5b2c",
+          "path": "web/public/profiles/Elegoo/filament/Generic ABS @base.json",
+          "sha256": "71f74d34fff275ebd3a32f794e2f1202f722af771070ec1909c84d442bfd3fd7"
+        },
+        {
+          "blob": "ff00b4eeb3387a2f2419486b322e068838d89d58",
+          "path": "web/public/profiles/Elegoo/filament/Generic ABS @Elegoo Centauri.json",
+          "sha256": "f73ab2906ffbf6ce4e0790c699736a6e246468331f55c4a978dd85a4522d97e0"
+        },
+        {
+          "blob": "bde5fe4b3351b044fa5fc4477e7dd7316dc06d61",
+          "path": "web/public/profiles/Elegoo/filament/Generic ABS @Elegoo.json",
+          "sha256": "a8cdb7f58d5b4ce2e65ffcd972c223540d538cdded6544f80ab9d028bc4c8bbb"
+        },
+        {
+          "blob": "7dbf3976b9ba8eb93a1ad90229f36c8d7656a916",
+          "path": "web/public/profiles/Elegoo/filament/Generic ABS-CF @Elegoo Centauri.json",
+          "sha256": "be49e038d8d71bc9242991be8f54166fe5a825e4c42e67cc4cde1d2e78c31fb6"
+        },
+        {
+          "blob": "808e594f87917f31162f8c7fd309f4de3dd96d7a",
+          "path": "web/public/profiles/Elegoo/filament/Generic ASA @base.json",
+          "sha256": "c24e9a4ef9fc7f2a3e0f7853da2cefe6fe151f1b63e48c2412b838b72386bdfa"
+        },
+        {
+          "blob": "22e4c1ac953a61a39a151144b950cc9f825d8573",
+          "path": "web/public/profiles/Elegoo/filament/Generic ASA @Elegoo.json",
+          "sha256": "d72f7db593ce5a1aa46d16ebc55cc113b23fdeb283ba53b01f902d6d1a7acefa"
+        },
+        {
+          "blob": "efc829ead9d74e44a25d0b49816fd92ef893e746",
+          "path": "web/public/profiles/Elegoo/filament/Generic ASA-CF @Elegoo Centauri.json",
+          "sha256": "60d9263f30f03656adf157691dc1ba29e72ba778b196995e672137bbbe2ebe92"
+        },
+        {
+          "blob": "6a4af4645a58c0fa00aa8940286bb1c834f6b4c4",
+          "path": "web/public/profiles/Elegoo/filament/Generic PA @base.json",
+          "sha256": "acb0b6579850b841cf43e547a478b6cd6a5130b0a00fc3bbd0d9bda90b4a3d5b"
+        },
+        {
+          "blob": "bbb96cecc71426f50fad0577bb5480f8797c7098",
+          "path": "web/public/profiles/Elegoo/filament/Generic PA @Elegoo.json",
+          "sha256": "8791bfa780e15ee26daa8edc501454cf01c3ada84d3ec5a461374df1a0db1122"
+        },
+        {
+          "blob": "aa808a1e4f493417e18953b6235cc5bae161daf8",
+          "path": "web/public/profiles/Elegoo/filament/Generic PA6-CF @Elegoo.json",
+          "sha256": "3c901295131c72360ac7d8de53dfe59a5a01380bdfe8c193b3b288d53aed77a2"
+        },
+        {
+          "blob": "1df2d5ebfba9107734a81d0a6adc3a16cdcfbac5",
+          "path": "web/public/profiles/Elegoo/filament/Generic PC @base.json",
+          "sha256": "c00f7096d8fb139b9ee59dec6e2abf8a418c10b8135dbea79c2c6005f7777128"
+        },
+        {
+          "blob": "3f5513716251edc6525c61bd55260e2fe75724a2",
+          "path": "web/public/profiles/Elegoo/filament/Generic PC @Elegoo.json",
+          "sha256": "3586513eaa327e9d685267daf0fd1598b8142ebb7f2b54d0ab8315b5c74c6803"
+        },
+        {
+          "blob": "cc8459b61418259cbca5ebc72c405c70fae72f67",
+          "path": "web/public/profiles/Elegoo/filament/Generic PC-CF @Elegoo.json",
+          "sha256": "6cd62d2441a49111df1a604a873492a39c5f61f612bebd1bf18d654c0d666aaa"
+        },
+        {
+          "blob": "761d0f66233a0a261d5048c94aadfc7c7d4e3b07",
+          "path": "web/public/profiles/Elegoo/filament/Generic PET @base.json",
+          "sha256": "04a2f1790da088f24103ae500adbccec50eb539c63bc6e14ab14857b85bf2be9"
+        },
+        {
+          "blob": "416d330ddb7e9cc7e123f787ad4e7abc14eb596b",
+          "path": "web/public/profiles/Elegoo/filament/Generic PET @Elegoo Centauri.json",
+          "sha256": "e51fba2500fbcee36e5e83661c1e86b3ba74b3e232e09fcc5abfd7930ba1668a"
+        },
+        {
+          "blob": "672499ef30c40e22883e3350df14e6fb8c7c9e43",
+          "path": "web/public/profiles/Elegoo/filament/Generic PET-CF @Elegoo Centauri.json",
+          "sha256": "44e2a878f50ba09ec20aee044b9cb52068081b44516927e17d92a9f07b312a9a"
+        },
+        {
+          "blob": "503daba44a5c760700886dfb97df471275cbb553",
+          "path": "web/public/profiles/Elegoo/filament/Generic PETG @base.json",
+          "sha256": "acaca23bd48f8a9080efcf6fae255323e2ee51d0aa53e7966bbf514ad8fe0dc8"
+        },
+        {
+          "blob": "82f6336f631a0b174810e1c645c6d8915ccf3cdd",
+          "path": "web/public/profiles/Elegoo/filament/Generic PETG @Elegoo.json",
+          "sha256": "b4c598803f1961a13a4612616e9a11b03a805397a3351cf6c7df612c84f971f0"
+        },
+        {
+          "blob": "1e856fe1664cc4732b09496f68921331cd61692a",
+          "path": "web/public/profiles/Elegoo/filament/Generic PETG-CF @Elegoo Centauri.json",
+          "sha256": "73b146907a7e13fbcc465ef34c7d7cb5fb6faf724a9676066eb5ac979e749143"
+        },
+        {
+          "blob": "76b7f25b77dc76ec31305dd6ef659fd054a63639",
+          "path": "web/public/profiles/Elegoo/filament/Generic PLA @base.json",
+          "sha256": "1b74b3359ccdcdfa522d4eda197eacec468f55273e503fc4154b0bc02ea9e0e0"
+        },
+        {
+          "blob": "a1d50c52709be09401b88677b58e4262a5df0342",
+          "path": "web/public/profiles/Elegoo/filament/Generic PLA @Elegoo.json",
+          "sha256": "2f5c3d6d10a90f80863c1b3feb14f0181215a7c15c5c271e651ae35057b8427f"
+        },
+        {
+          "blob": "91238423ae02f99ceb2a3a8b2f9e517755754c08",
+          "path": "web/public/profiles/Elegoo/filament/Generic PLA Matte @Elegoo.json",
+          "sha256": "dbaec6018afbc283358995e78b54a8dfe45dc0ad7b83f4297c1e76a285c48e96"
+        },
+        {
+          "blob": "fc5d029775f4282c683318b97c5dae3892676925",
+          "path": "web/public/profiles/Elegoo/machine/Elegoo Centauri Carbon 0.2 nozzle.json",
+          "sha256": "defb9ed304dda7aff134a3380af21fb402a821381b9edbde0e3d4e515adc1676"
+        },
+        {
+          "blob": "7baeb537682fa10140d787951925c8b7911917e6",
+          "path": "web/public/profiles/Elegoo/machine/Elegoo Centauri Carbon 0.4 nozzle.json",
+          "sha256": "c49fa6a36db504d1e14e3b09184ac3d2c01bbb02ef24c93588c21efa6ab3c93b"
+        },
+        {
+          "blob": "1abadcb00885dbb2bf665aca8de910a699c1a365",
+          "path": "web/public/profiles/Elegoo/machine/Elegoo Centauri Carbon 0.6 nozzle.json",
+          "sha256": "1a34b00c5779b44ea99ddd6d7450068d5ab427229b3ed5df28df267cb73729b8"
+        },
+        {
+          "blob": "b0a0f0d9382851294ec6e7e2e95000fd63c9cb06",
+          "path": "web/public/profiles/Elegoo/machine/Elegoo Centauri Carbon 0.8 nozzle.json",
+          "sha256": "b958c41437ea154a2a2d960db1febec4811fa2ad4b0f8f4477a2e916c2349152"
+        },
+        {
+          "blob": "1f1d3158125ab6f916e21523543082c79a6de6b5",
+          "path": "web/public/profiles/Elegoo/machine/fdm_machine_ecc_common.json",
+          "sha256": "394b88883db4edf25cdc2c155b136d52e763c6f63456c8155393c03e997b18d1"
+        },
+        {
+          "blob": "8468e640cb4a8963b59ccab7b667b1696be16b1b",
+          "path": "web/public/profiles/Elegoo/machine/fdm_machine_ecc.json",
+          "sha256": "9887debebbeaa9cd1fea65ff04c15aafb33aac08292431f057bceec99e3596f4"
+        },
+        {
+          "blob": "fcb43c61f3d3f5285ae34e86b76c904f26d5b9f9",
+          "path": "web/public/profiles/Elegoo/process/0.08mm Optimal @Elegoo CC 0.2 nozzle.json",
+          "sha256": "fbfc89146a1a3c4338913656465893e9a8c46405a29caad0d1480179625f9e4d"
+        },
+        {
+          "blob": "bb8c41a84b73fe0ab1933449ba2c37e5708525e3",
+          "path": "web/public/profiles/Elegoo/process/0.10mm Standard @Elegoo CC 0.2 nozzle.json",
+          "sha256": "c072397f9e52c0ea049d457d75f9c2a4fce1949eac9373342f35b4196dd4a7c1"
+        },
+        {
+          "blob": "da184bf9abaae4887ec18c18f79917d6d60d3b30",
+          "path": "web/public/profiles/Elegoo/process/0.12mm Draft @Elegoo CC 0.2 nozzle.json",
+          "sha256": "5402100d57ad6b1552e7ac747c0235b529acfb42850c279c5bc830ee37fd6977"
+        },
+        {
+          "blob": "828d83c5f178be08e322a6f64af929e8d47a5ab2",
+          "path": "web/public/profiles/Elegoo/process/0.12mm Fine @Elegoo CC 0.4 nozzle.json",
+          "sha256": "0dfdccebb465123422f00e7a686b0a6ed5cf797972af5868e1f273cf93e6bf48"
+        },
+        {
+          "blob": "809d8196f72fc66f562f432fa236ec9aa74ab8d2",
+          "path": "web/public/profiles/Elegoo/process/0.14mm Extra Draft @Elegoo CC 0.2 nozzle.json",
+          "sha256": "ce96ec9744642799902784e027fececd15626fa058a77bfc5fbf05673da8a2f1"
+        },
+        {
+          "blob": "f4f7da09ff9a3f0e14111ca383e38e9c6ee4fb93",
+          "path": "web/public/profiles/Elegoo/process/0.16mm Extra Fine @Elegoo CC 0.8 nozzle.json",
+          "sha256": "e4e53b10dfeb43608321fa2ad4d35df36842ba75552f49bca4608e206390d393"
+        },
+        {
+          "blob": "fe1ba579a3336e3a493a78a6322e6acb3ae21595",
+          "path": "web/public/profiles/Elegoo/process/0.16mm Optimal @Elegoo CC 0.4 nozzle.json",
+          "sha256": "30fe61f863772ad4dc017c41f10ba4021e3b4284db7aeb609c9aa000270c1cba"
+        },
+        {
+          "blob": "07a5bbdd8bce68ab2f054f0a137329248a03c0d3",
+          "path": "web/public/profiles/Elegoo/process/0.18mm Fine @Elegoo CC 0.6 nozzle.json",
+          "sha256": "259f3c648785b6836088ac1624550425be9aba1c2c51dc9214eff482b6dd38b5"
+        },
+        {
+          "blob": "9093cfb6f61eb6128ea8adfae8512b9f1aeda9c3",
+          "path": "web/public/profiles/Elegoo/process/0.20mm Standard @Elegoo CC 0.4 nozzle.json",
+          "sha256": "8f44739af657faa1808e7d6d7e156b8b25b00c2906d58df2a0bc97ca964ce3d1"
+        },
+        {
+          "blob": "4e98db26ffb88ce0015eb5ec0dd25830a8741c47",
+          "path": "web/public/profiles/Elegoo/process/0.20mm Strength @Elegoo CC 0.4 nozzle.json",
+          "sha256": "881210750fbadc6ca70235c291b744a074a2e54308ff085262d0b37708523248"
+        },
+        {
+          "blob": "90ca65ed0a1813459e9a14e3bf2f32a03bb16cc7",
+          "path": "web/public/profiles/Elegoo/process/0.24mm Draft @Elegoo CC 0.4 nozzle.json",
+          "sha256": "4626de5be2f81f5166a46037ec05a22c97a58a3e7d3273cec13b4be37f983acd"
+        },
+        {
+          "blob": "13b52925cbed8bfc4ee81b9fbf61e522ea7bcb1b",
+          "path": "web/public/profiles/Elegoo/process/0.24mm Fine @Elegoo CC 0.8 nozzle.json",
+          "sha256": "4209db356f6bfbd3fc689690580f4e23c7350f940af8ab826509e7c414e224dd"
+        },
+        {
+          "blob": "30335b5c13730ac759a7b0ac403a0a3c948988cd",
+          "path": "web/public/profiles/Elegoo/process/0.24mm Optimal @Elegoo CC 0.6 nozzle.json",
+          "sha256": "32c8986e04f27d351d7d958b860d46baf14deb7546bc7191bcd54e415bb895a8"
+        },
+        {
+          "blob": "d76c9af87f978da6212e9e37a86b8e034df9ca12",
+          "path": "web/public/profiles/Elegoo/process/0.28mm Extra Draft @Elegoo CC 0.4 nozzle.json",
+          "sha256": "405b76a45312f4f67099d48dafbcc35c6b52a9b97ccfc9db1afc4d8334357932"
+        },
+        {
+          "blob": "9e67f6a229bd8b1041f99a48391bcc184142426b",
+          "path": "web/public/profiles/Elegoo/process/0.30mm Standard @Elegoo CC 0.6 nozzle.json",
+          "sha256": "9235df40627f417a17cab814d775a49b8f9ec1e2a69157c48dc2c983b5b1deea"
+        },
+        {
+          "blob": "5c7fc2956a6417d8adc1875c3fe94c5cd6c5c421",
+          "path": "web/public/profiles/Elegoo/process/0.30mm Strength @Elegoo CC 0.6 nozzle.json",
+          "sha256": "1af0f8b3df4784b3edc69a4c0f5d1f014f3bc00b09815865a3bc999adca7a524"
+        },
+        {
+          "blob": "fb936a157b99cfd81dad749cc052c3464da47327",
+          "path": "web/public/profiles/Elegoo/process/0.32mm Optimal @Elegoo CC 0.8 nozzle.json",
+          "sha256": "4e9cd54d391f0276143739e9f137a2e91f5688bb0e64b1899693d8ad0824285c"
+        },
+        {
+          "blob": "311f2f7f2bd7f018874d91faa52aa43387a6457f",
+          "path": "web/public/profiles/Elegoo/process/0.36mm Draft @Elegoo CC 0.6 nozzle.json",
+          "sha256": "d6bdbc1561c3c3b59ee9f92883e95122098a2ab7627afdb1c6d38302c78689be"
+        },
+        {
+          "blob": "9a29c8397c1e3e504efbbe491ae8e880249431d8",
+          "path": "web/public/profiles/Elegoo/process/0.40mm Standard @Elegoo CC 0.8 nozzle.json",
+          "sha256": "496298f0853642efd3bca38fac4f30cc648c5f9a55a06c5f0af34c47897dda73"
+        },
+        {
+          "blob": "048bd13d0088c951bdf65cafd379ce24d66392b6",
+          "path": "web/public/profiles/Elegoo/process/0.42mm Extra Draft @Elegoo CC 0.6 nozzle.json",
+          "sha256": "f9b5cda998c58f24b75d5c71b74d988ecdca4f8bb8f31942903cef1242703dba"
+        },
+        {
+          "blob": "6c65d0c21cc1ebe1e6d35e15a8c58bbab0d6450e",
+          "path": "web/public/profiles/Elegoo/process/0.48mm Draft @Elegoo CC 0.8 nozzle.json",
+          "sha256": "f7a4afa9dede7dade5fb05601758553d95ab23c03df8dea397bf2700a1afcf31"
+        },
+        {
+          "blob": "a5fce90a7070d12ee36dc153de9e032db2574abf",
+          "path": "web/public/profiles/Elegoo/process/fdm_process_ecc_02010.json",
+          "sha256": "b4b7b0c03209f751c1e33650a7ff4b66f8e754c0843f2b8e0d59338bdc208eab"
+        },
+        {
+          "blob": "ea9b7c3614eaed83414a63638b56eed7e9bfe0d1",
+          "path": "web/public/profiles/Elegoo/process/fdm_process_ecc_04020.json",
+          "sha256": "dc309516c58262415ea0efbab31c59b3a49a78bebf80eb884054844146e3e01c"
+        },
+        {
+          "blob": "4025c598c2daaedf4f1b971f390b03b4ebb8dbc1",
+          "path": "web/public/profiles/Elegoo/process/fdm_process_ecc_06030.json",
+          "sha256": "f3e936f0c8c8103fba70b26ba2da5d6c38fd408871f4d540df0df1a9a38ce271"
+        },
+        {
+          "blob": "a2a392b0d6cd4db65e97e18298f55c3cf74d0bf9",
+          "path": "web/public/profiles/Elegoo/process/fdm_process_ecc_08040.json",
+          "sha256": "4ecfd85ff965541cdcbadaca2f8ad727f9d72c7646192aa82dbb6f721f7c1a64"
+        },
+        {
+          "blob": "84c016929189a3213a1abca287071dac2445f4bf",
+          "path": "web/public/profiles/Elegoo/process/fdm_process_ecc_common.json",
+          "sha256": "c4339833f792f6cf02aa6fcb333698bc0ab61056ce21e8c49d6529e1ac65606f"
+        },
+        {
+          "blob": "11bc82b5c7ef4a4e619ac8bda7e7824e22a259d0",
+          "path": "web/public/profiles/Elegoo/process/fdm_process_ecc.json",
+          "sha256": "f6147205cc3d43c5646541048c01dba9e5331f2dd05a87dc21d9e3a5db0df9dc"
+        },
+        {
+          "blob": "c904eecff99fd09be111a9b25b75b3172f5bb8b7",
+          "path": "web/public/profiles/manifest.json",
+          "sha256": "d05afaf7df40369d2447724ed4d4ba443edcc1253fb4f5ab02b1de0777a0c739"
+        },
+        {
+          "blob": "d3347578fdfa3e7a06bf27950dbaf513e3b17eaf",
+          "path": "web/public/profiles/Snapmaker/filament/fdm_filament_abs_generic.json",
+          "sha256": "ddbb91a457b92ca6eba42646d811e9f9d71a8b5875747673a37dfdf3afaf5c67"
+        },
+        {
+          "blob": "594140cc4eb25029f6eb4525ab8176f7ea7440e0",
+          "path": "web/public/profiles/Snapmaker/filament/fdm_filament_abs.json",
+          "sha256": "6a83cb5b1eca2ac12c95cb1355068e04b8b38e6eb35aa398950015d19801984e"
+        },
+        {
+          "blob": "07a3b7fd052a19ff61e3221acf06c14e075e20a3",
+          "path": "web/public/profiles/Snapmaker/filament/fdm_filament_asa.json",
+          "sha256": "533d883b69d0eef4c7eab07f41c6a6b4cba475d88ed8a7c7cc57525ca087b586"
+        },
+        {
+          "blob": "153e224f95b37ad2effc9c18ec412924ac1b2573",
+          "path": "web/public/profiles/Snapmaker/filament/fdm_filament_common_generic.json",
+          "sha256": "24e4920907489bfdeb250ba749b005c97571d7a547416989af10df502896e99d"
+        },
+        {
+          "blob": "4e6b9230ff870b4d1705ccaaa8c69ac9d371b4e7",
+          "path": "web/public/profiles/Snapmaker/filament/fdm_filament_common.json",
+          "sha256": "45c3c99ed3820e3667b908d543162e2da832361da3302a19129ed40f52bbca50"
+        },
+        {
+          "blob": "553788156e76b24efe680c87bba2129304b6d5c4",
+          "path": "web/public/profiles/Snapmaker/filament/fdm_filament_pet_generic.json",
+          "sha256": "33f78fc9a87c83976a635d23c0303797bc9468c8a1c27ab2d1ef769ea66ac2d1"
+        },
+        {
+          "blob": "926a3f65a8ad166d3b3a3dede3079e17c294ff28",
+          "path": "web/public/profiles/Snapmaker/filament/fdm_filament_petg.json",
+          "sha256": "6a2cdbadad66f0d2d6cf02c6abd5cc4fc9ef70903255c373349347b1370ede1b"
+        },
+        {
+          "blob": "c000e030772c6f3fd22e54146e9e9414429f1a7b",
+          "path": "web/public/profiles/Snapmaker/filament/fdm_filament_pla_eco.json",
+          "sha256": "0c0e3527f9e099f3b1d35605a2f125c974a0a7e94116714895aaba12fbdfbd4e"
+        },
+        {
+          "blob": "7b6c7d89982eaaedf03489383a6d90b4f344bd89",
+          "path": "web/public/profiles/Snapmaker/filament/fdm_filament_pla_generic.json",
+          "sha256": "b815ff418638712ac57f740b5d735e231147128fcd13dc16a16c69011d3bd75a"
+        },
+        {
+          "blob": "c8dd88ef7e791aeccc6be5a86959dc78b8fbc21a",
+          "path": "web/public/profiles/Snapmaker/filament/fdm_filament_pla.json",
+          "sha256": "b879ee6acc8551559f2f190f37e060ac69e9454badd24adccf762d13b741254c"
+        },
+        {
+          "blob": "17016c45f0c007f0a26f12945b24004170a479e9",
+          "path": "web/public/profiles/Snapmaker/filament/filament_hot_bed_nozzles.json",
+          "sha256": "a824576f8d9fc26f0d9c32ad386ecd86f182ed907025aec0aa6df74b0d2c08e7"
+        },
+        {
+          "blob": "2c602c01de497c3a9375d993596d46630ef14001",
+          "path": "web/public/profiles/Snapmaker/filament/Generic ABS @base.json",
+          "sha256": "f1d741226f85b4171259b83ee0037fd6443234ce4194e8780190bd9a52df517e"
+        },
+        {
+          "blob": "97178a98dad05f693d4965c199bba1e3decac20a",
+          "path": "web/public/profiles/Snapmaker/filament/Generic ABS.json",
+          "sha256": "4a8664f3409c1aff3b798db19ee354e837f3d11e96c2176f98254f65507b9e4b"
+        },
+        {
+          "blob": "0c42ab16e269a45f6396f8e463b5f416c18d6fe8",
+          "path": "web/public/profiles/Snapmaker/filament/Generic PETG @base.json",
+          "sha256": "e46b5aac9d983eff69a18f6f2453fc2e5a28f1d581370195ef01c9d0d7032e57"
+        },
+        {
+          "blob": "1182917231d9b54d178e80d58201b78ec20152d3",
+          "path": "web/public/profiles/Snapmaker/filament/Generic PETG.json",
+          "sha256": "cd2d6cbd300abb4724b26611c0008ef0ff62ce8e73ea273462335f470d7bfee2"
+        },
+        {
+          "blob": "45a74b92cd61b275575b4fa4fa712ab586c15e32",
+          "path": "web/public/profiles/Snapmaker/filament/Generic PLA @base.json",
+          "sha256": "bfee7e83f1d76c862e36680ae3bccba55d45c88bc84bfdc489272f881fad9564"
+        },
+        {
+          "blob": "e72233f43dd5906d4cabf1e857d8b239020881ab",
+          "path": "web/public/profiles/Snapmaker/filament/Generic PLA-CF @base.json",
+          "sha256": "9aadbf9bfddd275f3b26043022895ed9f8a4baafd81982a7c208efe778a5328a"
+        },
+        {
+          "blob": "f6e134ab056bdc4cf248d8cc80b853fc2e27b311",
+          "path": "web/public/profiles/Snapmaker/filament/Generic PLA.json",
+          "sha256": "833361e0a42122c99bf4fb7c0ab584f66c1f203946e34be1d52ba2eaadb1df8c"
+        },
+        {
+          "blob": "3e91fe6a819c8a885a4625ca5346afb38a78316f",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker ABS @U1 base.json",
+          "sha256": "0fec70823fb7bc3bbf10825e27f4da7e8d744db2d424a6768d1b493880097232"
+        },
+        {
+          "blob": "eceb6571b227fc6da4d2bec387bf0d94bc950639",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker ABS @U1.json",
+          "sha256": "181aa6b1bf6c5a488878606b3c43ea747f6936e604161e42c56567eaf10e183b"
+        },
+        {
+          "blob": "273d20a18819ce13425f0d559d5581b3c76cc192",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker ASA @U1 base.json",
+          "sha256": "ae72d949f10e5e36bdc04660b081e56e3525fde0c13a10fa05c2df89850c26c4"
+        },
+        {
+          "blob": "2d8ac812b83bd68ebe228493572bf934c2ff0320",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker ASA @U1.json",
+          "sha256": "8a0757aef715bde499abd1314e736df34c994674284ff34203dd432eee96ddac"
+        },
+        {
+          "blob": "5e88c82c5197ec738cbd498155999d8aed3cbb65",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker PETG @U1 base.json",
+          "sha256": "1bd3c7c49cd881acd699b8de8f025cbf899734bac69abc4d3a76098796f56172"
+        },
+        {
+          "blob": "14f636d0887e7fe05a81b62ad0b8c3e8ecb06f22",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker PETG @U1.json",
+          "sha256": "98f626b3113b64bf22df8bf842f14b6c166af5f97a151ac9da932b2d334a025d"
+        },
+        {
+          "blob": "0bd298356aa6a1b7dc3b2e6b6c0b1f4bf3f65387",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker PETG-CF @U1 base.json",
+          "sha256": "a7eef4e07bd10774729669a5174de49bd8053a0b0ea936666b83478ee21011a1"
+        },
+        {
+          "blob": "e2f02c24a67b84004fd85a25656dae5e7727853d",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker PETG-CF @U1.json",
+          "sha256": "c31dfe2ee96dfa75b91d49125ecd1efdb2faf78f5761b2308b683fd00da267f3"
+        },
+        {
+          "blob": "04947e0840e1bdb9ef55d451f8d1128aef033238",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker PLA @U1 base.json",
+          "sha256": "be29895d4196cfab4700ca987ffaced13530f50809090ed77f3e9e9c5ea1791e"
+        },
+        {
+          "blob": "cc7c3a37fda9d6e87781a3b9cdee06ae84f20182",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker PLA @U1.json",
+          "sha256": "27dd719401b470d8c82cdcdd68dc7f48e0315069d6a6c6c37ab82f20fef5519d"
+        },
+        {
+          "blob": "ef7858c17e6ac9313c04f4b51718b417b1f8e39b",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker PLA Basic @U1 base.json",
+          "sha256": "2673ec3925d776d2d4228e3d4fd9414a2db40ef36a56d5dd462bf1055a503567"
+        },
+        {
+          "blob": "cb9ee0343172fd78ef13a006338dbbc439521e1b",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker PLA Eco @U1 base.json",
+          "sha256": "c4d2f3054057f08e256fe33c596f77f17d4bffaea8ea03a087391f70c39b6bad"
+        },
+        {
+          "blob": "c27ad00a44cf362bd45b95844ff3aca7a96163b5",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker PLA Eco @U1.json",
+          "sha256": "6c290cc1f31295e7c5e56737cbf654774b2ff6c58e992c1bca9254ad4218fcd4"
+        },
+        {
+          "blob": "be5b458fab5783815dccfc1c524bd5b63c08aa6c",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker PLA Matte @U1 base.json",
+          "sha256": "ab82fa90cc47d4dcab8d1d2279cc7a80e69469b8d72e7c4d2db6361d001a8680"
+        },
+        {
+          "blob": "6f3cee9da32246ebaa920097a5cc5d54a41eb04a",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker PLA Matte @U1.json",
+          "sha256": "96e63049b9e6dca48a6d8fd4d5a59de39a1af236949390da69685adc2620f77f"
+        },
+        {
+          "blob": "5214ccc286fee71e8ebd98c6b9a9cb10e0569017",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker PLA Metal @U1 base.json",
+          "sha256": "ed58b83f105cf6be57438e692a529027ca14a221c66ea071c58b629265da71f4"
+        },
+        {
+          "blob": "dfd5dcf1ffc1743aad279de5198a541e0fc65b04",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker PLA Metal @U1.json",
+          "sha256": "ecb57538368370d8c0a38c1291329df304fe0980bc9efcc7bfee33e042e4561d"
+        },
+        {
+          "blob": "720b171b36319cd3da419bf03e8876ed50e3990a",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker PLA Silk @U1 base.json",
+          "sha256": "c61dfdfa4e4f23f254c9779a8809210dfd8c2749469e3143b302ade652f94f1f"
+        },
+        {
+          "blob": "25fe6ea291b624772e79e16b3e763bb4da2918f4",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker PLA Silk @U1.json",
+          "sha256": "f6d687a0a45be9fd139f39046db47c0bcff46427b87b916bbacf984976d2b1cb"
+        },
+        {
+          "blob": "2e91cd39cd2410b4f7fa3b5401d9d980667e0e4c",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker PLA-CF @U1 base.json",
+          "sha256": "6cf39e273304e59e03bf5d2a192afd383d56dcc31b91f72bdc6abbe0e16f6960"
+        },
+        {
+          "blob": "c3271a48a6d831167dd889a63ba60ac499150cd9",
+          "path": "web/public/profiles/Snapmaker/filament/Snapmaker PLA-CF @U1.json",
+          "sha256": "0997a3e887b2e24419f1cf5ce4574fcf9202577cb019e5bfb9de888cdb80954f"
+        },
+        {
+          "blob": "dba13ed2ddf783ee8118c6a581dbf75305f816a3",
+          "path": "web/public/profiles/Snapmaker/LICENSE.txt",
+          "sha256": "57c8ff33c9c0cfc3ef00e650a1cc910d7ee479a8bc509f6c9209a7c2a11399d6"
+        },
+        {
+          "blob": "1d7ae66f6c55f84ba673d9789a81833f40eadce7",
+          "path": "web/public/profiles/Snapmaker/machine/fdm_klipper.json",
+          "sha256": "78dd750211347543368a8a0f136441ef7e23b3a4a09a9e33a370c91dbda273b9"
+        },
+        {
+          "blob": "d91f4bb610d520d64f03e6b6e5aa4c945d517227",
+          "path": "web/public/profiles/Snapmaker/machine/fdm_toolchanger.json",
+          "sha256": "b2ee2d2c31a26ddee7b0c8bd84c58934d9c01e84e1b8f7ae45e14acfd1f7b52a"
+        },
+        {
+          "blob": "f2a119b4a4e0d56f3d7e7428cc60be81f7c3bff3",
+          "path": "web/public/profiles/Snapmaker/machine/fdm_U1.json",
+          "sha256": "ff0724000b1436fcc3d77ffa74bb623a9b322474fc20c8a8d5a26ee164077046"
+        },
+        {
+          "blob": "98a2586871eb5a25b4336738a2d6bf129519debb",
+          "path": "web/public/profiles/Snapmaker/machine/Snapmaker U1 (0.2 nozzle).json",
+          "sha256": "564aeea0956ee539e54984b8d690b8911ea63edb98961b4291b2e0293ee0b8d6"
+        },
+        {
+          "blob": "06b63eb9af4a3aa547f2de2dc6ef3db005e52cfe",
+          "path": "web/public/profiles/Snapmaker/machine/Snapmaker U1 (0.4 nozzle).json",
+          "sha256": "9ff7c6f7f6cd8e9e5b2ad96885d86d1faa54aff3d536f9817477fa5dc26101ab"
+        },
+        {
+          "blob": "9c54ab2e190f7c6936e3712fbf1f5ac436bf4b01",
+          "path": "web/public/profiles/Snapmaker/machine/Snapmaker U1 (0.6 nozzle).json",
+          "sha256": "e6bc5db5902fab179e38a4ab6fbad53fdf2368e00857e962bc4db8b8fc2d74be"
+        },
+        {
+          "blob": "82d0b26ac24afd2cc5f08cfabfc01814f6fa0326",
+          "path": "web/public/profiles/Snapmaker/machine/Snapmaker U1 (0.8 nozzle).json",
+          "sha256": "6877584a830aacbf6793c23387665847fb1d438d1cacc99952ad5f05c5e75edb"
+        },
+        {
+          "blob": "70a2a493267ac21910ef8544cd3ceb69980e7cc1",
+          "path": "web/public/profiles/Snapmaker/process/0.06 High Quality @Snapmaker U1 (0.2 nozzle).json",
+          "sha256": "6fbbfc0712eacc8188706886c578a15e88ac9ac909da7d340a003e205bcdb66b"
+        },
+        {
+          "blob": "1504eff9b6639f17c317b20f2827d08e01593d68",
+          "path": "web/public/profiles/Snapmaker/process/0.06 Standard @Snapmaker U1 (0.2 nozzle).json",
+          "sha256": "277db21702748efcedae239bc78203b9afd22c6ec40901fc337108ff83b22ffe"
+        },
+        {
+          "blob": "c925573ac2052fc708e66daef4b4422aec3c8415",
+          "path": "web/public/profiles/Snapmaker/process/0.08 High Quality @Snapmaker U1 (0.2 nozzle).json",
+          "sha256": "f3bfa2ad46c76dc3e417be3f5bd7d567425ac9259381ca3396518ef6367ab62a"
+        },
+        {
+          "blob": "63d72d1ed15ff9e9f5ff14cc277af7bb1e01bed7",
+          "path": "web/public/profiles/Snapmaker/process/0.08 Standard @Snapmaker U1 (0.2 nozzle).json",
+          "sha256": "319748d81c1ae8497fd9bfc61d4e1b58ae092937c9dd655d05d0df1c316fc92c"
+        },
+        {
+          "blob": "6fc25224870b66367aa35d514aa83082ccf3d1f7",
+          "path": "web/public/profiles/Snapmaker/process/0.10 High Quality @Snapmaker U1 (0.2 nozzle).json",
+          "sha256": "34cbd7867083e6c159c6bb63f86d52e721f969b542d592ddd286d344d0aed1a7"
+        },
+        {
+          "blob": "a74965850baa3a3abbe0474f37d93264d3936ca5",
+          "path": "web/public/profiles/Snapmaker/process/0.10 Standard @Snapmaker U1 (0.2 nozzle).json",
+          "sha256": "c8987b79840567e3cc3f5e9dabe963d13d238839065f43859e677cf2e2a70f8e"
+        },
+        {
+          "blob": "ddd8be22f29cec60495ffae6ee9d5df7d5b2e051",
+          "path": "web/public/profiles/Snapmaker/process/0.12 Fine @Snapmaker U1 (0.4 nozzle).json",
+          "sha256": "a73aadc16f41ce827b5f20f324b563286faeabd00bf7aaafd0ad4f28c992f9a9"
+        },
+        {
+          "blob": "adace1637ab7ff5f7c42c65dbb2bff71381842fd",
+          "path": "web/public/profiles/Snapmaker/process/0.12 Standard @Snapmaker U1 (0.2 nozzle).json",
+          "sha256": "26932494a967d7cf68db81b83d726bb8d8eb8d7a73d292100a7e288fd7109ccd"
+        },
+        {
+          "blob": "8f8e351318eecfd2b350b9eeed050fa380636354",
+          "path": "web/public/profiles/Snapmaker/process/0.14 Standard @Snapmaker U1 (0.2 nozzle).json",
+          "sha256": "1d38427b6324f8ed084d1fa9af5d3c0c8ad2f8581a32b69ce0df411ed6334e61"
+        },
+        {
+          "blob": "a7e1357013eac24925485bc39eb8fe949f8f7731",
+          "path": "web/public/profiles/Snapmaker/process/0.18 Standard @Snapmaker U1 (0.6 nozzle).json",
+          "sha256": "42c21ecd0853de8188a64cb7e750fe21302a997ac5ec5352ffbe32b02992cf33"
+        },
+        {
+          "blob": "46f881b9203ede55dc86e852a21621bed000016f",
+          "path": "web/public/profiles/Snapmaker/process/0.20 Standard @Snapmaker U1 (0.4 nozzle).json",
+          "sha256": "3342dbe3e995b66ab5700245c676f446a88d35f56498b074ab6fe14039d67763"
+        },
+        {
+          "blob": "8ac3a97b79bd3e82c43e0e8b2513bf2ce0022dab",
+          "path": "web/public/profiles/Snapmaker/process/0.24 Standard @Snapmaker U1 (0.8 nozzle).json",
+          "sha256": "ab6f44b22985173f55cc4c1380a6fb8d4cfd6e033f2e7a58cc7812e5bf854b7b"
+        },
+        {
+          "blob": "5227b3b76a54a8d91a77c802b0343275a5e72171",
+          "path": "web/public/profiles/Snapmaker/process/0.28 Extra Draft @Snapmaker U1 (0.4 nozzle).json",
+          "sha256": "d3ada62d82a99081c578e15855054a9423c1e2fa6fde45cba4798363d6ddb28f"
+        },
+        {
+          "blob": "a0cb098392d4c8425aceaa58c62ccf473f29f113",
+          "path": "web/public/profiles/Snapmaker/process/0.30 Standard @Snapmaker U1 (0.6 nozzle).json",
+          "sha256": "93ac4018502e4495c2f28499398017cfbfbca8cf243cdc1a18196501af7e0015"
+        },
+        {
+          "blob": "fcdd3cf1bfa5328ec9b0e7ce296b7ec62b7bcf66",
+          "path": "web/public/profiles/Snapmaker/process/0.32 Standard @Snapmaker U1 (0.8 nozzle).json",
+          "sha256": "1fee83e472c2a35e10ed825c0f208ae0f465c9e1c068f35e9f94f8ca35fcbe8a"
+        },
+        {
+          "blob": "3f6e953f9488c4540a03ced22dcb2d763ffdbef1",
+          "path": "web/public/profiles/Snapmaker/process/0.40 Standard @Snapmaker U1 (0.8 nozzle).json",
+          "sha256": "aba3ac2674e388a47450535eeb6e08cc7ff21e426f0f28b1ee5dd47eaa32f755"
+        },
+        {
+          "blob": "0ca17fe8ca1acf4a2108ce5a8f4d59fde2488cc5",
+          "path": "web/public/profiles/Snapmaker/process/0.42 Standard @Snapmaker U1 (0.6 nozzle).json",
+          "sha256": "2e5452ff2bfc13251aef590c06c0816cbd6dbe3bcb972773042d9362beeec12a"
+        },
+        {
+          "blob": "7ac8b69bf6e0ddbe18de7c87c216d6a011da6dac",
+          "path": "web/public/profiles/Snapmaker/process/0.48 Standard @Snapmaker U1 (0.8 nozzle).json",
+          "sha256": "83f9e7144a456065b61e2faeb5d8b6208c0a5a0752336ec825509873c72d6bd5"
+        },
+        {
+          "blob": "b1733d386702ccbef133703d65610a5ba8a7c9ec",
+          "path": "web/public/profiles/Snapmaker/process/0.56 Standard @Snapmaker U1 (0.8 nozzle).json",
+          "sha256": "a8fbf46f6cca3cda3e065c6cdb35f5042dcdd11b702915776b847268551688b1"
+        },
+        {
+          "blob": "b028d9087a01c26582121fa56069f67b5340d2c2",
+          "path": "web/public/profiles/Snapmaker/process/fdm_process_U1_0.06_nozzle_0.2.json",
+          "sha256": "a8f3be466782cfdb1a8948f560851dcc9b26b5669c189d7d22f8b9b04dbdc707"
+        },
+        {
+          "blob": "79430d26d2d5c1438e123bb9eaf8cc6db9812d16",
+          "path": "web/public/profiles/Snapmaker/process/fdm_process_U1_0.08_nozzle_0.2.json",
+          "sha256": "8a01182e035a8bb484decca48ca5b1a018315f8e07c5cab14be33c6b2be70e30"
+        },
+        {
+          "blob": "3e47d1bf5ae3eb8874840f865810f2739c52a90d",
+          "path": "web/public/profiles/Snapmaker/process/fdm_process_U1_0.10_nozzle_0.2.json",
+          "sha256": "75c4de9ff3efb904ddc8b4aac34e80612b0ce106db53c8b698a1b368db1ee787"
+        },
+        {
+          "blob": "c52683cb8f4acb949697fabe77a588f48cd91658",
+          "path": "web/public/profiles/Snapmaker/process/fdm_process_U1_0.12_nozzle_0.2.json",
+          "sha256": "47dc362b918301b1beca8dfbe137091110d99d544e35540d1d58be3fb840288b"
+        },
+        {
+          "blob": "658db214e44057013482191d70df0c01ade8ada5",
+          "path": "web/public/profiles/Snapmaker/process/fdm_process_U1_0.12.json",
+          "sha256": "37b1969df3fc522389dfa5835ca52810a97c3ca52e385fc6c6dd110e79e32bfe"
+        },
+        {
+          "blob": "57119f0f0227a95a81d6918ccd2ed682f3cf6c6f",
+          "path": "web/public/profiles/Snapmaker/process/fdm_process_U1_0.14_nozzle_0.2.json",
+          "sha256": "cd4efad68bcc1002a15cafb8b39f278df1dbc10daa16b376f7124ef3b1a6a77e"
+        },
+        {
+          "blob": "7d10b214291d776daad8472d70628467f421f319",
+          "path": "web/public/profiles/Snapmaker/process/fdm_process_U1_0.18_nozzle_0.6.json",
+          "sha256": "c6c93690a03273287c82afdcedc84675a5cd6f686a86c6e84c1ac4a87c97dcd1"
+        },
+        {
+          "blob": "092e48ba27db4c35db41951894abe3b7a1efbd93",
+          "path": "web/public/profiles/Snapmaker/process/fdm_process_U1_0.20.json",
+          "sha256": "2df28dc2474b6aeb77d5416043b3a67e54ff7ea1cdf5a5daa9e97db7e5b034a6"
+        },
+        {
+          "blob": "5f0b60b231ab9009aa34d0ad66fdb7faf6bf29fe",
+          "path": "web/public/profiles/Snapmaker/process/fdm_process_U1_0.24_nozzle_0.8.json",
+          "sha256": "b5692b7abdecaefcd3961d74cb2a165a3fff77b192af4d17ba0ba44e24083cea"
+        },
+        {
+          "blob": "189d8d337ce1d6dc9cec3fbf62c9703b7b9a3870",
+          "path": "web/public/profiles/Snapmaker/process/fdm_process_U1_0.28.json",
+          "sha256": "3d76eff29966cf349768e3fba4fa7d1c1cb08f50f4cf1fb3947cddbfdbe0aa94"
+        },
+        {
+          "blob": "fcf87f69513e3920c07f6487431dab91dd6bf402",
+          "path": "web/public/profiles/Snapmaker/process/fdm_process_U1_0.30_nozzle_0.6.json",
+          "sha256": "64d0d5f6b7c95f2e4cd06c3c9344f7beac847fb1e2cfdafd73503092ee8ef5b9"
+        },
+        {
+          "blob": "43b3dc8f9b90951f27c5f52b04f719ea78e190c4",
+          "path": "web/public/profiles/Snapmaker/process/fdm_process_U1_0.32_nozzle_0.8.json",
+          "sha256": "3d1f8cce8832f32f07ff866c3c24a477c33fe34466ca1aebe55b46c2b4b719ea"
+        },
+        {
+          "blob": "45bd45c8a5464274f77228f07dc6ba93d72b0cd8",
+          "path": "web/public/profiles/Snapmaker/process/fdm_process_U1_0.40_nozzle_0.8.json",
+          "sha256": "4890dedafe47914a6609f8c453236eec23bd33d944f196b8c7249851f90b0be6"
+        },
+        {
+          "blob": "57cc629208c063db9dc1b07beafe4d2c594e2ab5",
+          "path": "web/public/profiles/Snapmaker/process/fdm_process_U1_0.42_nozzle_0.6.json",
+          "sha256": "17fd38e47b69eb5ec2a432d10f29eaaf730167b1592793cad1b490ccb42dad73"
+        },
+        {
+          "blob": "be97fb0672b63f6fd21c99a914036b6a33731e0e",
+          "path": "web/public/profiles/Snapmaker/process/fdm_process_U1_0.48_nozzle_0.8.json",
+          "sha256": "a78d8d433f9cf878b422ce5ffc46cb9c5d143e5c3fbbfd89db14d6ec1f8e0506"
+        },
+        {
+          "blob": "2aed528ea3a86f7dcdb1c9ada7cda0e5237fbeec",
+          "path": "web/public/profiles/Snapmaker/process/fdm_process_U1_0.56_nozzle_0.8.json",
+          "sha256": "3fb62688e4f8120a94893a6dd1c2b0482643c2a445dc0cce8c2931fadd916deb"
+        },
+        {
+          "blob": "4f9c8a340798c355fbe902d58ad0a2f19e992390",
+          "path": "web/public/profiles/Snapmaker/process/fdm_process_U1_common.json",
+          "sha256": "43fba9fe359864b265ffa8682cf404c2b935d12164ffe3d0048e5dcb0691db74"
+        },
+        {
+          "blob": "6c9935cce7bd98691a277d8d4e0a9c88dd7c0de2",
+          "path": "web/public/profiles/Snapmaker/process/fdm_process_U1.json",
+          "sha256": "66e9e51c4bd04cbbec49fa1a3a043bc3c6e329396c2b38a18db5a66b6e72b4e2"
+        }
+      ],
+      "uncommitted": []
+    }
+  },
+  "repository": "https://github.com/Snapmaker/OrcaSlicer.git",
+  "schemaVersion": 1
+}

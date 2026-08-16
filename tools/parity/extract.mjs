@@ -786,7 +786,7 @@ export function buildManifest({
       },
     },
     upstream: {
-      commit: UPSTREAM_COMMIT,
+      commit: source.commit,
       repository: UPSTREAM_REPOSITORY,
       tree: source.tree,
     },

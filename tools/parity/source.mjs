@@ -40,11 +40,11 @@ function git(repository, args, options = {}) {
   return run("git", ["-C", repository, ...args], options);
 }
 
-function containsCommit(repository) {
+function containsCommit(repository, commit) {
   if (!existsSync(repository)) return false;
   const result = spawnSync(
     "git",
-    ["-C", repository, "cat-file", "-e", `${UPSTREAM_COMMIT}^{commit}`],
+    ["-C", repository, "cat-file", "-e", `${commit}^{commit}`],
     {
       encoding: "utf8",
     },
@@ -52,19 +52,28 @@ function containsCommit(repository) {
   return result.status === 0;
 }
 
-/** Resolve a repository containing the exact pinned object without reading its worktree. */
-export function resolveSourceRepository({ allowFetch = true } = {}) {
+/**
+ * Resolve a repository containing the exact pinned object without reading its worktree.
+ *
+ * `commit` defaults to the pin. The drift audit (P12.1) is the only caller that
+ * passes anything else, and it passes a commit it discovered rather than one
+ * this module names — the pin is a constant here on purpose.
+ */
+export function resolveSourceRepository({
+  allowFetch = true,
+  commit = UPSTREAM_COMMIT,
+} = {}) {
   const configured = process.env.SNAPMAKER_ORCA_REPO;
   const candidates = [configured, LOCAL_CHECKOUT, FALLBACK_CACHE].filter(
     Boolean,
   );
   for (const candidate of candidates) {
-    if (containsCommit(candidate)) return resolve(candidate);
+    if (containsCommit(candidate, commit)) return resolve(candidate);
   }
 
   if (!allowFetch) {
     throw new Error(
-      `Snapmaker OrcaSlicer commit ${UPSTREAM_COMMIT} is unavailable. ` +
+      `Snapmaker OrcaSlicer commit ${commit} is unavailable. ` +
         "Set SNAPMAKER_ORCA_REPO to a Git repository containing it.",
     );
   }
@@ -80,12 +89,10 @@ export function resolveSourceRepository({ allowFetch = true } = {}) {
     "--no-tags",
     "--depth=1",
     UPSTREAM_REPOSITORY,
-    UPSTREAM_COMMIT,
+    commit,
   ]);
-  if (!containsCommit(FALLBACK_CACHE)) {
-    throw new Error(
-      `Fetch completed without the required commit ${UPSTREAM_COMMIT}`,
-    );
+  if (!containsCommit(FALLBACK_CACHE, commit)) {
+    throw new Error(`Fetch completed without the required commit ${commit}`);
   }
   return FALLBACK_CACHE;
 }
@@ -99,31 +106,30 @@ function syntheticBlobId(text) {
  * overrides; production extraction never reads dirty worktree files.
  */
 export class PinnedSource {
-  constructor({ repository, overrides = new Map(), allowFetch = true } = {}) {
-    this.repository = repository ?? resolveSourceRepository({ allowFetch });
+  constructor({
+    repository,
+    overrides = new Map(),
+    allowFetch = true,
+    commit = UPSTREAM_COMMIT,
+  } = {}) {
+    this.commit = commit;
+    this.repository =
+      repository ?? resolveSourceRepository({ allowFetch, commit });
     this.overrides =
       overrides instanceof Map ? overrides : new Map(Object.entries(overrides));
     const resolved = git(this.repository, [
       "rev-parse",
-      `${UPSTREAM_COMMIT}^{commit}`,
+      `${commit}^{commit}`,
     ]).trim();
-    if (resolved !== UPSTREAM_COMMIT) {
-      throw new Error(`Expected ${UPSTREAM_COMMIT}, resolved ${resolved}`);
+    if (resolved !== commit) {
+      throw new Error(`Expected ${commit}, resolved ${resolved}`);
     }
-    this.tree = git(this.repository, [
-      "rev-parse",
-      `${UPSTREAM_COMMIT}^{tree}`,
-    ]).trim();
+    this.tree = git(this.repository, ["rev-parse", `${commit}^{tree}`]).trim();
     this.cache = new Map();
   }
 
   listTree() {
-    return git(this.repository, [
-      "ls-tree",
-      "-r",
-      "--name-only",
-      UPSTREAM_COMMIT,
-    ])
+    return git(this.repository, ["ls-tree", "-r", "--name-only", this.commit])
       .split("\n")
       .filter(Boolean);
   }
@@ -132,7 +138,7 @@ export class PinnedSource {
     if (this.overrides.has(path)) return true;
     const result = spawnSync(
       "git",
-      ["-C", this.repository, "cat-file", "-e", `${UPSTREAM_COMMIT}:${path}`],
+      ["-C", this.repository, "cat-file", "-e", `${this.commit}:${path}`],
       { encoding: "utf8" },
     );
     return result.status === 0;
@@ -144,13 +150,10 @@ export class PinnedSource {
     if (this.cache.has(path)) return this.cache.get(path).text;
     const text = this.overrides.has(path)
       ? String(this.overrides.get(path))
-      : git(this.repository, ["show", `${UPSTREAM_COMMIT}:${path}`]);
+      : git(this.repository, ["show", `${this.commit}:${path}`]);
     const blob = this.overrides.has(path)
       ? syntheticBlobId(text)
-      : git(this.repository, [
-          "rev-parse",
-          `${UPSTREAM_COMMIT}:${path}`,
-        ]).trim();
+      : git(this.repository, ["rev-parse", `${this.commit}:${path}`]).trim();
     this.cache.set(path, { text, blob });
     return text;
   }
