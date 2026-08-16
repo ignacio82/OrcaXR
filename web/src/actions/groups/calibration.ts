@@ -169,6 +169,23 @@ export const calibrationActions: Action[] = [
       historyOperation(ctx, invocation.calibrationHistory, 'rerun', 'Re-run Calibration', 'Pick a recorded run first.'),
   },
   {
+    id: 'calib_apply_result',
+    mcpTool: 'apply_calibration_result',
+    label: 'Save Result To Preset',
+    icon: 'settings_import',
+    group: 'calibration',
+    disclosure: 'inspector',
+    hint: 'Write a measured result into the option it tunes, as one operator-authored preset',
+    run: (ctx, invocation) =>
+      historyOperation(
+        ctx,
+        invocation.calibrationHistory,
+        'apply',
+        'Save Result To Preset',
+        'Pick a recorded run whose conditions still hold first.',
+      ),
+  },
+  {
     id: 'calib_delete_result',
     label: 'Delete Calibration Result',
     icon: 'delete',

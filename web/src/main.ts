@@ -83,6 +83,7 @@ import { askPrintSubmission } from './ui/dom/PrintSubmissionDialog';
 import { askPrintJobConfirmation } from './ui/dom/PrintJobConfirmDialog';
 import { PrintJobPanel } from './ui/dom/PrintJobPanel';
 import { PrinterStatusBar } from './ui/dom/PrinterStatusBar';
+import type { PresetJsonValue } from './settings/presets/PresetGraph';
 import type {
   CalibrationComparison,
   CalibrationConditions,
@@ -94,6 +95,7 @@ import { guardedPrinterActions, summarizePrinterStatus } from './printer/Printer
 import {
   PresetLibraryStore,
   applyPresetLibraryOperation,
+  coerceOverrideValue,
   type PresetLibraryIssue,
   type PresetLibraryOperation,
 } from './settings/presets/PresetLibrary';
@@ -236,12 +238,21 @@ function safeLocalStorage(): Storage | null {
   }
 }
 
+/** Bump the patch component, so each save is a distinguishable preset version. */
+function nextPresetVersion(version: string): string {
+  const parts = version.split('.');
+  const patch = Number.parseInt(parts[2] ?? '', 10);
+  if (parts.length !== 3 || !Number.isFinite(patch)) return `${version}+1`;
+  return `${parts[0]}.${parts[1]}.${patch + 1}`;
+}
+
 /** Registry action that owns each calibration-ledger operation (P8.5). */
 const CALIBRATION_HISTORY_ACTION_IDS: Readonly<Record<CalibrationHistoryOperation['kind'], string>> = Object.freeze({
   refresh: 'calib_view_history',
   record: 'calib_record_result',
   compare: 'calib_compare_results',
   rerun: 'calib_rerun_result',
+  apply: 'calib_apply_result',
   delete: 'calib_delete_result',
   export: 'calib_export_history',
 });
@@ -1257,6 +1268,12 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   // the override only decides whether the operator has pinned or dismissed it,
   // and is dropped whenever the job state changes so a new print re-asserts the
   // default rather than staying hidden behind an old dismissal.
+  /**
+   * The operator's preset library, shared by the setup panel that owns it and
+   * the calibration ledger that writes results into it.
+   */
+  let presetStore: PresetLibraryStore | undefined;
+
   const printerStatusHost = document.getElementById('printer-status-host');
   if (printerStatusHost) {
     let statusOverride: boolean | undefined;
@@ -1368,6 +1385,8 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
           import('./project/calibration/history'),
           import('./project/calibration/definitions'),
         ]);
+      const { describeCalibrationApplication, planCalibrationApplication } =
+        await import('./project/calibration/application');
       const {
         UNKNOWN_CONDITION,
         assessCalibrationApplicability,
@@ -1482,6 +1501,81 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
                   : 'This run cannot be repeated.';
               return;
             }
+            case 'apply': {
+              const record = calibrationStore.history.get(operation.recordId);
+              if (!record) {
+                calibrationMessage = 'That run is no longer recorded.';
+                return;
+              }
+              const plan = planCalibrationApplication(record, liveCalibrationConditions());
+              calibrationIssues = plan.issues;
+              if (plan.manualTransfer.length > 0) {
+                // Nothing is written, and nothing pretends to have been: these
+                // values belong in the printer's own configuration.
+                calibrationMessage = `${describeCalibrationApplication(plan)} ${plan.manualTransfer.join('  ')}`;
+                return;
+              }
+              if (!plan.applicable) {
+                calibrationMessage = 'This result was not saved.';
+                return;
+              }
+              const store = presetStore;
+              if (!store) {
+                calibrationMessage = 'The preset library has not loaded yet.';
+                return;
+              }
+              const kind = plan.scope === 'process' ? 'process' : plan.scope === 'filament' ? 'filament' : 'machine';
+              const base = store.library.basePresetsFor(kind)[0];
+              if (!base) {
+                calibrationMessage = `No selectable ${kind} preset to derive from.`;
+                return;
+              }
+              // The write goes through the preset library's own validated path,
+              // so provenance, versioning, and the refusal of unknown or
+              // reserved keys all still apply — and each value is coerced into
+              // the shape the base already uses.
+              const overrides: Record<string, PresetJsonValue> = {};
+              for (const change of plan.overrides) {
+                overrides[change.presetKey] = coerceOverrideValue(base.effective[change.presetKey], change.value);
+              }
+              const presetName = `${base.name} — ${record.method.label}`;
+              const existing = store.library.customPresets(kind).find((preset) => preset.name === presetName);
+              const written = existing
+                ? applyPresetLibraryOperation(store.library, {
+                    kind: 'update',
+                    vendor: existing.vendor,
+                    presetKind: existing.kind,
+                    name: existing.name,
+                    draft: { overrides, version: nextPresetVersion(existing.provenance.version) },
+                  })
+                : applyPresetLibraryOperation(store.library, {
+                    kind: 'create',
+                    draft: {
+                      kind,
+                      name: presetName,
+                      inherits: base.name,
+                      overrides,
+                      note: `Saved from a ${record.method.label} result measured on ${record.conditions.printerModel}.`,
+                    },
+                  });
+              calibrationIssues = [
+                ...plan.issues,
+                ...written.issues.map((entry) => ({
+                  code: 'invalid-record' as const,
+                  severity: 'error' as const,
+                  path: '$.preset',
+                  message: entry.message,
+                })),
+              ];
+              if (!written.ok) {
+                calibrationMessage = 'The preset library refused this result.';
+                return;
+              }
+              store.save();
+              workspace.recomposeProfileCatalog();
+              calibrationMessage = `Saved to ${presetName}. ${describeCalibrationApplication(plan)}`;
+              return;
+            }
             case 'delete': {
               const record = calibrationStore.history.get(operation.recordId);
               const result = calibrationStore.history.delete(operation.recordId);
@@ -1528,6 +1622,10 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
           })),
         now: () => new Date().toISOString(),
         assess: (record) => assessCalibrationApplicability(record, liveCalibrationConditions()),
+        planApplication: (record) => {
+          const plan = planCalibrationApplication(record, liveCalibrationConditions());
+          return { applicable: plan.applicable, summary: describeCalibrationApplication(plan) };
+        },
         getComparison: () => calibrationComparison,
         getIssues: () => calibrationIssues,
         getStatus: () => ({
@@ -2410,7 +2508,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   // returns, so it is created inside the composer rather than ahead of it.
   const presetLibraryHost = document.getElementById('preset-library-host');
   const presetBundleFile = document.getElementById('preset-bundle-file') as HTMLInputElement | null;
-  let presetStore: PresetLibraryStore | undefined;
+
   let presetIssues: readonly PresetLibraryIssue[] = [];
   let presetBusy = false;
   let presetMessage: string | undefined;

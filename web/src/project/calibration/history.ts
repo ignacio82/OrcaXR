@@ -617,6 +617,7 @@ export type CalibrationHistoryOperation =
     }
   | { readonly kind: 'compare'; readonly leftId: string; readonly rightId: string }
   | { readonly kind: 'rerun'; readonly recordId: string }
+  | { readonly kind: 'apply'; readonly recordId: string }
   | { readonly kind: 'delete'; readonly recordId: string }
   | { readonly kind: 'export' };
 

@@ -39,6 +39,8 @@ export interface CalibrationHistoryPanelPort {
   now(): string;
   /** Whether each record still applies to what is loaded right now. */
   assess(record: CalibrationRecord): CalibrationApplicability;
+  /** What saving this result would change, and whether it may be saved. */
+  planApplication(record: CalibrationRecord): { readonly applicable: boolean; readonly summary: string };
   getComparison(): CalibrationComparison | undefined;
   getIssues(): readonly CalibrationHistoryIssue[];
   getStatus(): { readonly busy: boolean; readonly message?: string };
@@ -214,6 +216,17 @@ export class CalibrationHistoryPanel {
 
     const controls = doc.createElement('div');
     controls.style.cssText = 'display:flex;gap:6px;margin-top:2px;';
+    const application = this.port.planApplication(record);
+    const apply = doc.createElement('button');
+    apply.type = 'button';
+    apply.className = 'action-btn';
+    apply.dataset.calibrationHistoryApply = record.id;
+    apply.textContent = 'Save to preset';
+    apply.title = application.summary;
+    apply.style.cssText = 'margin:0;padding:3px 8px;font-size:11px;';
+    apply.disabled = busy || !application.applicable;
+    apply.addEventListener('click', () => void this.port.run({ kind: 'apply', recordId: record.id }));
+
     const rerun = doc.createElement('button');
     rerun.type = 'button';
     rerun.className = 'action-btn';
@@ -235,7 +248,7 @@ export class CalibrationHistoryPanel {
         await this.port.run({ kind: 'delete', recordId: record.id });
       })();
     });
-    controls.append(rerun, remove);
+    controls.append(apply, rerun, remove);
     row.appendChild(controls);
     return row;
   }
