@@ -441,6 +441,17 @@ export async function startMoonrakerSimulator(options = {}) {
       if (Object.keys(scan).length > 0) metadata.set(path, scan);
       if (modifiedSeconds !== undefined) modified.set(path, modifiedSeconds);
     },
+    /**
+     * Drop every open websocket without stopping the HTTP server, so a client
+     * sees exactly what a Wi-Fi blip looks like: the socket goes, the printer
+     * keeps printing, and reconnecting works.
+     */
+    dropSockets() {
+      const dropped = sockets.size;
+      for (const socket of sockets) socket.destroy();
+      sockets.clear();
+      return dropped;
+    },
     reset() {
       stored.clear();
       metadata.clear();

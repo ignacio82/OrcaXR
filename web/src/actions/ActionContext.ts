@@ -141,6 +141,9 @@ export class ActionContext {
   ): void {
     this.workspace.setScopedOverrides(target, overrides, guard);
   }
+  togglePrinterStatusBar(): void {
+    this.workspace.togglePrinterStatusBar();
+  }
   operatePresetLibrary(operation: PresetLibraryOperation): Promise<void> {
     return this.workspace.operatePresetLibrary(operation);
   }
@@ -446,8 +449,8 @@ export class ActionContext {
     return this.workspace.sendToPrinter();
   }
 
-  controlPrintJob(command: PrintJobCommand): Promise<void> {
-    return this.workspace.controlPrintJob(command);
+  controlPrintJob(command: PrintJobCommand, options?: { readonly preconfirmed?: boolean }): Promise<void> {
+    return this.workspace.controlPrintJob(command, options);
   }
 
   // ---- Advanced Features ----------------------------------------------

@@ -70,6 +70,8 @@ export interface MoonrakerSimulator {
     scan?: Record<string, unknown>,
     modifiedSeconds?: number,
   ): void;
+  /** Drop every websocket without stopping the server; returns how many. */
+  dropSockets(): number;
   reset(): void;
   close(): Promise<void>;
 }

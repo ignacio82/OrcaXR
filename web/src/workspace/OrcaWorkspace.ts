@@ -58,6 +58,7 @@ import type { PrintJobIntent } from '../printer/PrintJobSubmission';
 import type { PrinterConsoleOperation } from '../printer/PrinterConsole';
 import type { PrinterStorageOperation } from '../printer/PrinterStorage';
 import type { PresetLibraryOperation } from '../settings/presets/PresetLibrary';
+import { HoldToConfirm, type GuardedPrinterAction, type PrinterStatusSummary } from '../printer/PrinterStatusSummary';
 import { summarizeGcodeToolUsage } from '../printer/PrintToolMapping';
 import { serializePrintConfigArray } from '../settings/configSerialization';
 import type { ArrangeRegion } from '../project/objects/arrange';
@@ -3143,6 +3144,13 @@ export class OrcaWorkspace extends xb.Script {
     };
     const ints = input.intersectionsForController.get(event.target) ?? [];
 
+    // A trigger press on an armed printer control owns the whole gesture: it
+    // must not also paint or manipulate through the card behind it.
+    if (this.beginPrinterHold(event.target)) {
+      this.sceneGestureGuard.begin(event.target, true);
+      return;
+    }
+
     if (this.drag?.controller === event.target) this.drag = null;
     // A select that lands on UI owns the complete gesture. Remember that
     // decision so later `selecting` frames cannot paint/manipulate through the
@@ -3232,6 +3240,9 @@ export class OrcaWorkspace extends xb.Script {
 
   /** After any drag ends, keep models seated on the plate and inside it. */
   onSelectEnd(event?: { target: unknown }) {
+    if (this.printerHoldController !== null && (!event || event.target === this.printerHoldController)) {
+      this.endPrinterHold();
+    }
     if (event) this.sceneGestureGuard.end(event.target);
     else this.sceneGestureGuard.clear();
     const endedDrag = this.drag;
@@ -3878,6 +3889,12 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   update(_time: number, _frame: XRFrame) {
+    // A hold has to show its own progress or it is indistinguishable from a
+    // control that ignored the press.
+    if (this.printerHoldController !== null) {
+      const state = this.printerHold.poll();
+      if (state.phase === 'holding') this.paintPrinterHold(state.command, state.progress);
+    }
     if (this.needsRecenter) {
       const cam = xb.core.camera;
       if (cam.position.lengthSq() > 1e-6) {
@@ -4121,7 +4138,8 @@ export class OrcaWorkspace extends xb.Script {
   /** Injected by the live typed printer composition root; owns confirmation. */
   onRequestPrintSubmission: ((intent: PrintJobIntent) => Promise<void>) | null = null;
   /** Injected by the live typed printer composition root; owns confirmation. */
-  onRequestPrintJobCommand: ((command: PrintJobCommand) => Promise<void>) | null = null;
+  onRequestPrintJobCommand:
+    ((command: PrintJobCommand, options?: { readonly preconfirmed?: boolean }) => Promise<void>) | null = null;
   /** Injected by the live typed printer composition root; owns confirmation. */
   onRequestPrinterStorage: ((operation: PrinterStorageOperation) => Promise<void>) | null = null;
   /** Injected by the live typed printer composition root; owns confirmation. */
@@ -4132,6 +4150,15 @@ export class OrcaWorkspace extends xb.Script {
   onRequestPrinterCamera: ((uid?: string) => Promise<void>) | null = null;
   /** Injected by the shell that owns preset persistence (P6.4). */
   onRequestPresetLibrary: ((operation: PresetLibraryOperation) => Promise<void>) | null = null;
+  /** Injected by the shell that owns the compact printer status surface (P9.7). */
+  onTogglePrinterStatusBar: (() => void) | null = null;
+  /** Live status for the spatial card; the shell owns the connection (P9.7). */
+  onReadPrinterStatus: (() => { summary: PrinterStatusSummary; actions: readonly GuardedPrinterAction[] }) | null =
+    null;
+  /** Run one guarded lifecycle command that completed its hold in XR (P9.7). */
+  onRunPrinterStatusCommand: ((command: PrintJobCommand) => Promise<void>) | null = null;
+  /** Re-open a session the spatial card reports as lost (P9.7). */
+  onReconnectPrinter: (() => Promise<void>) | null = null;
 
   public async testPrinterConnection(): Promise<void> {
     if (!this.onRequestPrinterConnectionTest) {
@@ -4180,12 +4207,12 @@ export class OrcaWorkspace extends xb.Script {
    * printer state of its own: the shell owns the connection, the live snapshot
    * the operator is looking at, and any confirmation the command needs.
    */
-  public async controlPrintJob(command: PrintJobCommand): Promise<void> {
+  public async controlPrintJob(command: PrintJobCommand, options?: { readonly preconfirmed?: boolean }): Promise<void> {
     if (!this.onRequestPrintJobCommand) {
       this.setStatus('Printer controls are unavailable in this shell.');
       return;
     }
-    await this.onRequestPrintJobCommand(command);
+    await this.onRequestPrintJobCommand(command, options);
   }
 
   /**
@@ -4244,6 +4271,19 @@ export class OrcaWorkspace extends xb.Script {
    * has to outlive a reload, which means storage, and storage belongs to the
    * shell for the same reason the printer socket does.
    */
+  /**
+   * Show or hide the glanceable printer status (P9.7). The surface follows the
+   * live job on its own; this only overrides whether it is on screen, so an
+   * operator can pin it while preparing or dismiss it while it is idle.
+   */
+  public togglePrinterStatusBar(): void {
+    if (!this.onTogglePrinterStatusBar) {
+      this.setStatus('The printer status surface is unavailable in this shell.');
+      return;
+    }
+    this.onTogglePrinterStatusBar();
+  }
+
   public async operatePresetLibrary(operation: PresetLibraryOperation): Promise<void> {
     if (!this.onRequestPresetLibrary) {
       this.setStatus('Printer and preset setup is unavailable in this shell.');
@@ -5237,6 +5277,20 @@ export class OrcaWorkspace extends xb.Script {
   /** Live profile values shown in the XR profile picker. Icons alone made it
    * impossible to know what a click would change without looking back at 2D. */
   private xrProfileValueLabels: { part: 'machine' | 'process' | 'filament'; value: UIText }[] = [];
+  /** The spatial printer status card (P9.7) and everything it repaints. */
+  private printerStatusCard: ReturnType<UICore['createCard']> | null = null;
+  private printerStatusHeadline: UIText | null = null;
+  private printerStatusDetail: UIText | null = null;
+  private printerStatusRecovery: UIText | null = null;
+  private printerStatusProgressFill: UIPanel | null = null;
+  private printerStatusControls: UIPanel | null = null;
+  private printerStatusHoldNote: UIText | null = null;
+  private printerStatusHoldFills = new Map<PrintJobCommand, UIPanel>();
+  private printerStatusActions: readonly GuardedPrinterAction[] = [];
+  /** The control a ray is currently over; a trigger press starts its hold. */
+  private printerHoldTarget: GuardedPrinterAction | null = null;
+  private printerHoldController: unknown = null;
+  private readonly printerHold = new HoldToConfirm();
   // Design's top HUD strip (wordmark + mode switch) and bottom action bar.
   private topStripCard: UICard | null = null;
   private bottomBarCard: UICard | null = null;
@@ -5268,6 +5322,7 @@ export class OrcaWorkspace extends xb.Script {
     build('tool rail', () => this.addLeftToolbar());
     build('menu', () => this.addActionPanel()); // hidden dropdown, populated per section
     build('profile', () => this.addProfilePanel());
+    build('printer status', () => this.addPrinterStatusPanel());
     build('bottom bar', () => this.addBottomBar());
     build('slice progress', () => this.addSliceModal());
     this.refreshToolButtons();
@@ -6035,6 +6090,204 @@ export class OrcaWorkspace extends xb.Script {
     this.headsContainer = new UIPanel({ width: '100%', flexDirection: 'column', gap: 10 });
     root.add(this.headsContainer);
     this.refreshXrProfileValues();
+  }
+
+  /**
+   * The spatial printer status card (P9.7).
+   *
+   * It renders exactly what the phone bar renders — the same summary, the same
+   * guarded actions — because both come from `PrinterStatusSummary`. What
+   * differs is only the gesture: a controller ray hovers a control and the
+   * trigger is *held*, which is why the hold lives in a shared state machine
+   * rather than in either shell.
+   */
+  private addPrinterStatusPanel() {
+    const card = this.uiCore.createCard({
+      name: 'PrinterStatusPanel',
+      sizeX: 0.46,
+      sizeY: 0.34,
+      pixelSize: 0.0012,
+      position: new THREE.Vector3(-0.95, PLATE_Y + 0.3, PLATE_Z + 0.1),
+      width: 380,
+      alignItems: 'center',
+      behaviors: [
+        new ManipulationBehavior({
+          draggable: true,
+          faceCamera: true,
+          manipulationMargin: 16,
+          manipulationCornerRadius: 16,
+        }),
+      ],
+    });
+    card.visible = false;
+    this.printerStatusCard = card;
+
+    const root = new UIPanel({
+      width: '100%',
+      height: '100%',
+      flexDirection: 'column',
+      fillColor: '#0d141cF2',
+      cornerRadius: 18,
+      padding: 18,
+      gap: 8,
+      strokeWidth: 1,
+      strokeColor: '#ffffff14',
+    });
+    card.add(root);
+
+    this.printerStatusHeadline = new UIText('Printer', { fontSize: 22, fontWeight: 'bold', color: '#ffffff' });
+    root.add(this.printerStatusHeadline);
+    this.printerStatusDetail = new UIText('', { fontSize: 14, color: '#a0aab5' });
+    root.add(this.printerStatusDetail);
+
+    const track = new UIPanel({ width: '100%', height: 6, cornerRadius: 3, fillColor: '#ffffff1f' });
+    this.printerStatusProgressFill = new UIPanel({
+      width: '0%',
+      height: '100%',
+      cornerRadius: 3,
+      fillColor: '#4fc3f7',
+    });
+    track.add(this.printerStatusProgressFill);
+    root.add(track);
+
+    this.printerStatusRecovery = new UIText('', { fontSize: 13, color: '#ffb74d' });
+    root.add(this.printerStatusRecovery);
+
+    this.printerStatusControls = new UIPanel({ width: '100%', flexDirection: 'row', gap: 8 });
+    root.add(this.printerStatusControls);
+
+    this.printerStatusHoldNote = new UIText('', { fontSize: 12, color: '#a0aab5' });
+    root.add(this.printerStatusHoldNote);
+
+    this.refreshPrinterStatusCard();
+  }
+
+  /** Repaint the spatial card from the shell's live status (P9.7). */
+  public refreshPrinterStatusCard(): void {
+    const card = this.printerStatusCard;
+    if (!card) return;
+    const live = this.onReadPrinterStatus?.();
+    if (!live) {
+      card.visible = false;
+      return;
+    }
+    const { summary, actions } = live;
+    // Same rule as the phone bar: present itself when something is happening,
+    // and get out of the way of the plate when nothing is.
+    if (summary.present) card.show();
+    else card.hide();
+    if (!summary.present) {
+      this.printerHold.cancel();
+      this.printerHoldTarget = null;
+      return;
+    }
+
+    this.printerStatusHeadline?.setText(summary.headline);
+    this.printerStatusDetail?.setText(summary.detail);
+    this.printerStatusRecovery?.setText(
+      summary.recovery
+        ? summary.recovery.retryInS === undefined
+          ? summary.recovery.message
+          : `${summary.recovery.message} Next try in ${summary.recovery.retryInS} s.`
+        : '',
+    );
+    if (this.printerStatusProgressFill) {
+      this.printerStatusProgressFill.setProperties({ width: `${Math.round((summary.progress ?? 0) * 100)}%` });
+    }
+    if (!sameGuardedActions(this.printerStatusActions, actions)) {
+      this.printerStatusActions = actions;
+      this.rebuildPrinterStatusControls(actions);
+    }
+  }
+
+  private rebuildPrinterStatusControls(actions: readonly GuardedPrinterAction[]): void {
+    const host = this.printerStatusControls;
+    if (!host) return;
+    for (const child of [...host.children]) host.remove(child);
+    this.printerStatusHoldFills.clear();
+    for (const action of actions) {
+      if (action.command === 'firmware-restart') continue;
+      const btn = new UIPanel({
+        flexGrow: 1,
+        minHeight: 46,
+        justifyContent: 'center',
+        alignItems: 'center',
+        cornerRadius: 8,
+        fillColor: action.enabled ? '#ffffff14' : '#ffffff08',
+        strokeWidth: 1,
+        strokeColor: action.destructive ? '#ff525259' : '#ffffff1a',
+        onHoverEnter: () => {
+          // Hover arms the hold; the trigger press in onSelectStart begins it.
+          this.printerHoldTarget = action.enabled ? action : null;
+          btn.setFillColor(action.enabled ? '#ffffff26' : '#ffffff08');
+        },
+        onHoverExit: () => {
+          if (this.printerHoldTarget?.command === action.command) {
+            this.printerHoldTarget = null;
+            this.abandonPrinterHold(action);
+          }
+          btn.setFillColor(action.enabled ? '#ffffff14' : '#ffffff08');
+        },
+      });
+      const fill = new UIPanel({
+        width: '0%',
+        height: '100%',
+        cornerRadius: 8,
+        fillColor: action.destructive ? '#ff525233' : '#4fc3f733',
+      });
+      btn.add(fill);
+      this.printerStatusHoldFills.set(action.command, fill);
+      btn.add(
+        new UIText(action.holdMs > 0 ? `Hold · ${action.label}` : action.label, {
+          fontSize: 13,
+          fontWeight: 'bold',
+          color: action.enabled ? (action.destructive ? '#ff8a80' : '#ffffff') : '#8a94a0',
+        }),
+      );
+      host.add(btn);
+    }
+  }
+
+  /** Begin a hold when the trigger goes down on an armed control (P9.7). */
+  private beginPrinterHold(controller: unknown): boolean {
+    const target = this.printerHoldTarget;
+    if (!target) return false;
+    this.printerHoldController = controller;
+    this.printerHold.press(target);
+    this.printerStatusHoldNote?.setText(
+      target.holdMs > 0 ? (target.confirmation ?? `Keep holding to ${target.label.toLowerCase()}.`) : '',
+    );
+    return true;
+  }
+
+  /** Release the hold; only a satisfied one runs anything (P9.7). */
+  private endPrinterHold(): void {
+    const target = this.printerHoldTarget;
+    const released = this.printerHold.release();
+    this.printerHoldController = null;
+    this.paintPrinterHold(undefined, 0);
+    if (released.command) {
+      this.printerStatusHoldNote?.setText('');
+      void this.onRunPrinterStatusCommand?.(released.command);
+      return;
+    }
+    if (target && target.holdMs > 0) {
+      this.printerStatusHoldNote?.setText(`${target.label} needs a longer hold — nothing was sent.`);
+    }
+  }
+
+  private abandonPrinterHold(action: GuardedPrinterAction): void {
+    if (this.printerHold.poll().phase !== 'holding') return;
+    this.printerHold.cancel();
+    this.printerHoldController = null;
+    this.paintPrinterHold(undefined, 0);
+    if (action.holdMs > 0) this.printerStatusHoldNote?.setText(`${action.label} cancelled — nothing was sent.`);
+  }
+
+  private paintPrinterHold(command: PrintJobCommand | undefined, progress: number): void {
+    for (const [key, fill] of this.printerStatusHoldFills) {
+      fill.setProperties({ width: key === command ? `${Math.round(progress * 100)}%` : '0%' });
+    }
   }
 
   private toggleProfilePanel() {
@@ -7307,4 +7560,22 @@ function engineWireConfig(config: Readonly<Record<string, unknown>>): Record<str
         : String(value);
   }
   return wire;
+}
+
+/**
+ * Whether two guarded action lists would render the same controls. Rebuilding
+ * the row on every status tick would re-create the panels a ray is currently
+ * hovering, which drops the hold mid-gesture.
+ */
+function sameGuardedActions(left: readonly GuardedPrinterAction[], right: readonly GuardedPrinterAction[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((action, index) => {
+    const other = right[index];
+    return (
+      action.command === other.command &&
+      action.enabled === other.enabled &&
+      action.label === other.label &&
+      action.holdMs === other.holdMs
+    );
+  });
 }

@@ -39,6 +39,15 @@ const ERROR_MESSAGES: Readonly<Record<MoonrakerErrorCode, string>> = Object.free
   reconnect_exhausted: 'Moonraker reconnection attempts were exhausted.',
 });
 
+/**
+ * The sentence for one error code. A diagnostic deliberately carries no message
+ * — it must never retain a body, URL, or credential — so a surface that has
+ * only the diagnostic reads the phrase from here rather than writing its own.
+ */
+export function describeMoonrakerErrorCode(code: MoonrakerErrorCode): string {
+  return ERROR_MESSAGES[code];
+}
+
 export interface MoonrakerErrorDiagnostic {
   readonly name: 'MoonrakerTransportError';
   readonly code: MoonrakerErrorCode;

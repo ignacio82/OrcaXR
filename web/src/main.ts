@@ -49,6 +49,7 @@ import {
   PRINT_JOB_OBJECTS,
   PRINT_JOB_QUERY_PATH,
   type MoonrakerFilamentSlot,
+  type MoonrakerConnectionState,
   type MoonrakerHandshake,
   type PrintJobCommand,
   type PrintJobSnapshot,
@@ -81,11 +82,8 @@ import { askThreeMfIntake } from './ui/dom/FileIntakeDialog';
 import { askPrintSubmission } from './ui/dom/PrintSubmissionDialog';
 import { askPrintJobConfirmation } from './ui/dom/PrintJobConfirmDialog';
 import { PrintJobPanel } from './ui/dom/PrintJobPanel';
-import { PrintHistoryPanel } from './ui/dom/PrintHistoryPanel';
-import { PrinterCameraPanel } from './ui/dom/PrinterCameraPanel';
-import { PrinterConsolePanel } from './ui/dom/PrinterConsolePanel';
-import { PrinterStoragePanel } from './ui/dom/PrinterStoragePanel';
-import { PresetLibraryPanel } from './ui/dom/PresetLibraryPanel';
+import { PrinterStatusBar } from './ui/dom/PrinterStatusBar';
+import { guardedPrinterActions, summarizePrinterStatus } from './printer/PrinterStatusSummary';
 import {
   PresetLibraryStore,
   applyPresetLibraryOperation,
@@ -384,12 +382,32 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   // for — a job started at the printer's own screen appears here too.
   const printJobStatus = new PrintJobStatusModel();
   let printJobSnapshot: PrintJobSnapshot | null = null;
+  let printerConnectionState: MoonrakerConnectionState | null = null;
   let unsubscribePrintJob: (() => void) | null = null;
   const printJobListeners = new Set<() => void>();
   const publishPrintJob = (snapshot: PrintJobSnapshot | null) => {
     printJobSnapshot = snapshot;
     uiState.update({ printerJobState: snapshot?.state ?? 'disconnected' });
     for (const listener of printJobListeners) listener();
+  };
+
+  /** True only while the printer itself can confirm what it just reported. */
+  const printerReadingIsStale = (): boolean => printerConnectionState?.status !== 'connected';
+
+  const livePrinterStatus = () =>
+    summarizePrinterStatus({
+      snapshot: printJobSnapshot,
+      connection: printerConnectionState,
+      nowMs: Date.now(),
+      configured: Boolean(printerCfg.host.trim()),
+    });
+
+  const livePrinterActions = () => {
+    const summary = livePrinterStatus();
+    return guardedPrinterActions(printJobCommandAvailability(printJobSnapshot), {
+      stale: summary.stale,
+      ...(summary.recovery ? { staleReason: summary.recovery.message } : {}),
+    });
   };
 
   const disposePrinterTransport = () => {
@@ -452,11 +470,19 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
         .catch(() => publishPrintJob(null));
     };
     const stopState = transport.subscribeState((state) => {
-      if (state.status === 'connected') seed();
-      else if (state.status !== 'connecting') {
-        printJobStatus.reset();
-        publishPrintJob(null);
+      printerConnectionState = state;
+      if (state.status === 'connected') {
+        seed();
+        return;
       }
+      // The last reading is kept rather than blanked: mid-job it is still the
+      // most useful thing on screen, and the compact surface labels it with its
+      // age. What does change is that nothing may be *acted* on — canonical UI
+      // state drops to disconnected, so every guarded command is refused until
+      // the printer can confirm its own state again.
+      if (state.status !== 'connecting') printJobStatus.reset();
+      uiState.update({ printerJobState: 'disconnected' });
+      for (const listener of printJobListeners) listener();
     });
     unsubscribePrintJob = () => {
       stopNotifications();
@@ -639,12 +665,15 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   // Lifecycle commands act on a running machine, so each one is checked twice:
   // the registry gates it on the state the panel is showing, and the transport
   // call re-checks the freshly re-read state before anything is sent.
-  workspace.onRequestPrintJobCommand = async (command) => {
+  workspace.onRequestPrintJobCommand = async (command, options) => {
     if (!printerCfg.host.trim()) {
       workspace.setStatus('Enter an explicit Moonraker endpoint first.');
       return;
     }
-    const confirmation = PRINT_JOB_CONFIRMATIONS[command];
+    // A surface that already took an explicit confirmation gesture — the status
+    // surface's hold — does not get asked again. Two confirmations for one act
+    // teaches people to dismiss both without reading either.
+    const confirmation = options?.preconfirmed ? undefined : PRINT_JOB_CONFIRMATIONS[command];
     if (confirmation) {
       const filename = printJobSnapshot?.filename;
       const confirmed = await askPrintJobConfirmation({
@@ -807,60 +836,64 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
 
   const printerStorageHost = document.getElementById('printer-storage-host');
   if (printerStorageHost) {
-    const storagePanel = new PrinterStoragePanel(printerStorageHost, {
-      getListing: () => storageState.listing,
-      getMetadata: () => storageState.metadata,
-      getThumbnailUrl: () => storageState.thumbnailUrl,
-      getSelectedPath: () => storageState.selected,
-      getStatus: () => ({
-        busy: storageState.busy,
-        ...(storageState.message ? { message: storageState.message } : {}),
-      }),
-      subscribe: (listener) => {
-        storageListeners.add(listener);
-        return () => storageListeners.delete(listener);
-      },
-      select: (path) => {
-        storageState.selected = path;
-        delete storageState.metadata;
-        releaseThumbnail();
-        notifyStorage();
-        if (!path) return;
-        void connectConfiguredPrinter()
-          .then(({ transport }) => loadStorageSelection(transport, path))
-          .catch(() => {})
-          .finally(notifyStorage);
-      },
-      run: async (operation) => {
-        await registry.invoke(PRINTER_STORAGE_ACTION_IDS[operation.kind], 'dom-inspector', actionCtx, uiState.get(), {
-          printerStorage: operation,
-        });
-      },
-      askName: async (current) => {
-        const next = window.prompt('New name for this file on the printer', current);
-        return next === null ? undefined : next.trim();
-      },
-      confirmDelete: (path) =>
-        askPrintJobConfirmation({
-          title: 'Delete this file from the printer?',
-          message: path,
-          consequences: [
-            'The file is removed from the printer immediately.',
-            'This cannot be undone from OrcaXR, and the printer may be the only place it exists.',
-          ],
-          confirmLabel: 'Delete file',
-          dismissLabel: 'Keep it',
+    // Behind a closed <details>: loaded when it is opened, not at first paint.
+    void (async () => {
+      const { PrinterStoragePanel } = await import('./ui/dom/PrinterStoragePanel');
+      const storagePanel = new PrinterStoragePanel(printerStorageHost, {
+        getListing: () => storageState.listing,
+        getMetadata: () => storageState.metadata,
+        getThumbnailUrl: () => storageState.thumbnailUrl,
+        getSelectedPath: () => storageState.selected,
+        getStatus: () => ({
+          busy: storageState.busy,
+          ...(storageState.message ? { message: storageState.message } : {}),
         }),
-    });
-    storagePanel.mount();
-    window.addEventListener(
-      'pagehide',
-      () => {
-        releaseThumbnail();
-        storagePanel.dispose();
-      },
-      { once: true },
-    );
+        subscribe: (listener) => {
+          storageListeners.add(listener);
+          return () => storageListeners.delete(listener);
+        },
+        select: (path) => {
+          storageState.selected = path;
+          delete storageState.metadata;
+          releaseThumbnail();
+          notifyStorage();
+          if (!path) return;
+          void connectConfiguredPrinter()
+            .then(({ transport }) => loadStorageSelection(transport, path))
+            .catch(() => {})
+            .finally(notifyStorage);
+        },
+        run: async (operation) => {
+          await registry.invoke(PRINTER_STORAGE_ACTION_IDS[operation.kind], 'dom-inspector', actionCtx, uiState.get(), {
+            printerStorage: operation,
+          });
+        },
+        askName: async (current) => {
+          const next = window.prompt('New name for this file on the printer', current);
+          return next === null ? undefined : next.trim();
+        },
+        confirmDelete: (path) =>
+          askPrintJobConfirmation({
+            title: 'Delete this file from the printer?',
+            message: path,
+            consequences: [
+              'The file is removed from the printer immediately.',
+              'This cannot be undone from OrcaXR, and the printer may be the only place it exists.',
+            ],
+            confirmLabel: 'Delete file',
+            dismissLabel: 'Keep it',
+          }),
+      });
+      storagePanel.mount();
+      window.addEventListener(
+        'pagehide',
+        () => {
+          releaseThumbnail();
+          storagePanel.dispose();
+        },
+        { once: true },
+      );
+    })();
   }
 
   // The console: what is typed goes to the firmware, so nothing is sent until
@@ -939,39 +972,43 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
 
   const printerConsoleHost = document.getElementById('printer-console-host');
   if (printerConsoleHost) {
-    const consolePanel = new PrinterConsolePanel(printerConsoleHost, {
-      getEntries: () => consoleLog.entries,
-      getMacros: () => consoleState.macros,
-      getRecentCommands: () => recentCommands(consoleLog.entries),
-      assess: (script) => assessGcodeCommand(script, printJobSnapshot),
-      getStatus: () => ({
-        busy: consoleState.busy,
-        ...(consoleState.message ? { message: consoleState.message } : {}),
-      }),
-      subscribe: (listener) => {
-        consoleListeners.add(listener);
-        return () => consoleListeners.delete(listener);
-      },
-      run: async (operation) => {
-        await registry.invoke(PRINTER_CONSOLE_ACTION_IDS[operation.kind], 'dom-inspector', actionCtx, uiState.get(), {
-          printerConsole: operation,
-        });
-      },
-      askParameters: async (macro) => {
-        const values: Record<string, string> = {};
-        for (const parameter of macro.parameters) {
-          const supplied = window.prompt(
-            `${macro.name} — ${parameter.name}${parameter.required ? ' (required)' : ''}`,
-            parameter.defaultValue ?? '',
-          );
-          if (supplied === null) return undefined;
-          if (supplied.trim()) values[parameter.name] = supplied.trim();
-        }
-        return values;
-      },
-    });
-    consolePanel.mount();
-    window.addEventListener('pagehide', () => consolePanel.dispose(), { once: true });
+    // Behind a closed <details>: loaded when it is opened, not at first paint.
+    void (async () => {
+      const { PrinterConsolePanel } = await import('./ui/dom/PrinterConsolePanel');
+      const consolePanel = new PrinterConsolePanel(printerConsoleHost, {
+        getEntries: () => consoleLog.entries,
+        getMacros: () => consoleState.macros,
+        getRecentCommands: () => recentCommands(consoleLog.entries),
+        assess: (script) => assessGcodeCommand(script, printJobSnapshot),
+        getStatus: () => ({
+          busy: consoleState.busy,
+          ...(consoleState.message ? { message: consoleState.message } : {}),
+        }),
+        subscribe: (listener) => {
+          consoleListeners.add(listener);
+          return () => consoleListeners.delete(listener);
+        },
+        run: async (operation) => {
+          await registry.invoke(PRINTER_CONSOLE_ACTION_IDS[operation.kind], 'dom-inspector', actionCtx, uiState.get(), {
+            printerConsole: operation,
+          });
+        },
+        askParameters: async (macro) => {
+          const values: Record<string, string> = {};
+          for (const parameter of macro.parameters) {
+            const supplied = window.prompt(
+              `${macro.name} — ${parameter.name}${parameter.required ? ' (required)' : ''}`,
+              parameter.defaultValue ?? '',
+            );
+            if (supplied === null) return undefined;
+            if (supplied.trim()) values[parameter.name] = supplied.trim();
+          }
+          return values;
+        },
+      });
+      consolePanel.mount();
+      window.addEventListener('pagehide', () => consolePanel.dispose(), { once: true });
+    })();
   }
 
   // The printer's own record of what it has run. Paged rather than fetched
@@ -1016,25 +1053,29 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
 
   const printerHistoryHost = document.getElementById('printer-history-host');
   if (printerHistoryHost) {
-    const historyPanel = new PrintHistoryPanel(printerHistoryHost, {
-      getPage: () => historyState.page,
-      getTotals: () => historyState.totals,
-      getStatus: () => ({
-        busy: historyState.busy,
-        ...(historyState.message ? { message: historyState.message } : {}),
-      }),
-      subscribe: (listener) => {
-        historyListeners.add(listener);
-        return () => historyListeners.delete(listener);
-      },
-      load: async (start) => {
-        await registry.invoke('printer_view_history', 'dom-inspector', actionCtx, uiState.get(), {
-          printHistoryStart: start,
-        });
-      },
-    });
-    historyPanel.mount();
-    window.addEventListener('pagehide', () => historyPanel.dispose(), { once: true });
+    // Behind a closed <details>: loaded when it is opened, not at first paint.
+    void (async () => {
+      const { PrintHistoryPanel } = await import('./ui/dom/PrintHistoryPanel');
+      const historyPanel = new PrintHistoryPanel(printerHistoryHost, {
+        getPage: () => historyState.page,
+        getTotals: () => historyState.totals,
+        getStatus: () => ({
+          busy: historyState.busy,
+          ...(historyState.message ? { message: historyState.message } : {}),
+        }),
+        subscribe: (listener) => {
+          historyListeners.add(listener);
+          return () => historyListeners.delete(listener);
+        },
+        load: async (start) => {
+          await registry.invoke('printer_view_history', 'dom-inspector', actionCtx, uiState.get(), {
+            printHistoryStart: start,
+          });
+        },
+      });
+      historyPanel.mount();
+      window.addEventListener('pagehide', () => historyPanel.dispose(), { once: true });
+    })();
   }
 
   // The camera. Every frame is its own authenticated request, so the panel owns
@@ -1102,71 +1143,82 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     };
     document.addEventListener('visibilitychange', announceVisibility);
     cameraDetails?.addEventListener('toggle', announceVisibility);
-    const cameraPanel = new PrinterCameraPanel(
-      printerCameraHost,
-      {
-        getCameras: () => cameraState.cameras,
-        getSelected: () => selectedCamera(),
-        getFrameUrl: () => cameraState.frameUrl,
-        getStatus: () => ({
-          busy: cameraState.busy,
-          ...(cameraState.message ? { message: cameraState.message } : {}),
-        }),
-        subscribe: (listener) => {
-          cameraListeners.add(listener);
-          return () => cameraListeners.delete(listener);
-        },
-        select: (uid) => {
-          cameraState.selected = uid;
-          releaseFrame();
-          notifyCamera();
-        },
-        refresh: async () => {
-          await registry.invoke('view_webcam', 'dom-inspector', actionCtx, uiState.get());
-        },
-        captureFrame: async () => {
-          const camera = selectedCamera();
-          if (!camera?.snapshotPath) return;
-          try {
-            const { transport } = await connectConfiguredPrinter();
-            const bytes = await fetchCameraSnapshot(transport, camera);
+    // Behind a closed <details>: loaded when it is opened, not at first paint.
+    void (async () => {
+      const { PrinterCameraPanel } = await import('./ui/dom/PrinterCameraPanel');
+      const cameraPanel = new PrinterCameraPanel(
+        printerCameraHost,
+        {
+          getCameras: () => cameraState.cameras,
+          getSelected: () => selectedCamera(),
+          getFrameUrl: () => cameraState.frameUrl,
+          getStatus: () => ({
+            busy: cameraState.busy,
+            ...(cameraState.message ? { message: cameraState.message } : {}),
+          }),
+          subscribe: (listener) => {
+            cameraListeners.add(listener);
+            return () => cameraListeners.delete(listener);
+          },
+          select: (uid) => {
+            cameraState.selected = uid;
             releaseFrame();
-            cameraState.frameUrl = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'image/jpeg' }));
-            delete cameraState.message;
-          } catch (error) {
-            cameraState.message = error instanceof PrinterCameraError ? error.message : (error as Error).message;
-          }
-          notifyCamera();
+            notifyCamera();
+          },
+          refresh: async () => {
+            await registry.invoke('view_webcam', 'dom-inspector', actionCtx, uiState.get());
+          },
+          captureFrame: async () => {
+            const camera = selectedCamera();
+            if (!camera?.snapshotPath) return;
+            try {
+              const { transport } = await connectConfiguredPrinter();
+              const bytes = await fetchCameraSnapshot(transport, camera);
+              releaseFrame();
+              cameraState.frameUrl = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'image/jpeg' }));
+              delete cameraState.message;
+            } catch (error) {
+              cameraState.message = error instanceof PrinterCameraError ? error.message : (error as Error).message;
+            }
+            notifyCamera();
+          },
         },
-      },
-      {
-        // Hidden tab or collapsed section both mean nobody is watching.
-        isVisible: () => document.visibilityState === 'visible' && cameraDetails?.open !== false,
-        subscribeVisibility: (listener) => {
-          visibilityListeners.add(listener);
-          return () => visibilityListeners.delete(listener);
+        {
+          // Hidden tab or collapsed section both mean nobody is watching.
+          isVisible: () => document.visibilityState === 'visible' && cameraDetails?.open !== false,
+          subscribeVisibility: (listener) => {
+            visibilityListeners.add(listener);
+            return () => visibilityListeners.delete(listener);
+          },
+          setInterval: (handler, ms) => window.setInterval(handler, ms),
+          clearInterval: (handle) => window.clearInterval(handle),
         },
-        setInterval: (handler, ms) => window.setInterval(handler, ms),
-        clearInterval: (handle) => window.clearInterval(handle),
-      },
-    );
-    cameraPanel.mount();
-    window.addEventListener(
-      'pagehide',
-      () => {
-        releaseFrame();
-        cameraPanel.dispose();
-        document.removeEventListener('visibilitychange', announceVisibility);
-      },
-      { once: true },
-    );
+      );
+      cameraPanel.mount();
+      window.addEventListener(
+        'pagehide',
+        () => {
+          releaseFrame();
+          cameraPanel.dispose();
+          document.removeEventListener('visibilitychange', announceVisibility);
+        },
+        { once: true },
+      );
+    })();
   }
 
   const printJobHost = document.getElementById('printer-job-host');
   if (printJobHost) {
     const panel = new PrintJobPanel(printJobHost, {
       getSnapshot: () => printJobSnapshot,
-      getCommands: () => printJobCommandAvailability(printJobSnapshot),
+      getCommands: () =>
+        livePrinterActions().map((action) => ({
+          command: action.command,
+          label: action.label,
+          destructive: action.destructive,
+          allowed: action.enabled,
+          ...(action.reason ? { reason: action.reason } : {}),
+        })),
       subscribe: (listener) => {
         printJobListeners.add(listener);
         return () => printJobListeners.delete(listener);
@@ -1177,6 +1229,107 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     });
     panel.mount();
     window.addEventListener('pagehide', () => panel.dispose(), { once: true });
+  }
+
+  // The glanceable printer status (P9.7). It follows the live job on its own;
+  // the override only decides whether the operator has pinned or dismissed it,
+  // and is dropped whenever the job state changes so a new print re-asserts the
+  // default rather than staying hidden behind an old dismissal.
+  const printerStatusHost = document.getElementById('printer-status-host');
+  if (printerStatusHost) {
+    let statusOverride: boolean | undefined;
+    let lastJobState: string | undefined;
+
+    const statusListeners = new Set<() => void>();
+    const notifyStatusBar = () => {
+      for (const listener of statusListeners) listener();
+    };
+    printJobListeners.add(() => {
+      const state = printJobSnapshot?.state;
+      if (state !== lastJobState) {
+        lastJobState = state;
+        statusOverride = undefined;
+      }
+      notifyStatusBar();
+    });
+
+    const statusBar = new PrinterStatusBar(printerStatusHost, {
+      getSummary: () => {
+        const summary = livePrinterStatus();
+        return statusOverride === undefined ? summary : { ...summary, present: statusOverride };
+      },
+      getActions: () => livePrinterActions(),
+      subscribe: (listener) => {
+        statusListeners.add(listener);
+        return () => statusListeners.delete(listener);
+      },
+      run: async (command) => {
+        // The hold that got here *is* the confirmation, and it stated the
+        // consequence before it completed.
+        await registry.invoke(PRINT_JOB_ACTION_IDS[command], 'dom-inspector', actionCtx, uiState.get(), {
+          printJobPreconfirmed: true,
+        });
+      },
+      reconnect: async () => {
+        try {
+          await connectConfiguredPrinter();
+        } catch (error) {
+          workspace.setStatus(`Reconnect failed: ${(error as Error).message}`);
+        }
+        notifyStatusBar();
+      },
+      openDetails: () => {
+        document.getElementById('insp-tab-printer')?.click();
+        notifyStatusBar();
+      },
+    });
+    statusBar.mount();
+
+    // A stale reading's age is the only thing on the surface that changes with
+    // nothing else happening, so it gets its own slow tick — and only while it
+    // is actually stale, so an idle session schedules nothing.
+    const ageTimer = window.setInterval(() => {
+      if (printerReadingIsStale() && printJobSnapshot) notifyStatusBar();
+    }, 5_000);
+
+    // The spatial card renders the same summary and the same guarded actions;
+    // only the gesture differs, and that lives in the shared hold machine.
+    workspace.onReadPrinterStatus = () => {
+      const summary = livePrinterStatus();
+      return {
+        summary: statusOverride === undefined ? summary : { ...summary, present: statusOverride },
+        actions: livePrinterActions(),
+      };
+    };
+    workspace.onRunPrinterStatusCommand = async (command) => {
+      await registry.invoke(PRINT_JOB_ACTION_IDS[command], 'xr-menu', actionCtx, uiState.get(), {
+        printJobPreconfirmed: true,
+      });
+    };
+    workspace.onReconnectPrinter = async () => {
+      try {
+        await connectConfiguredPrinter();
+      } catch (error) {
+        workspace.setStatus(`Reconnect failed: ${(error as Error).message}`);
+      }
+      notifyStatusBar();
+    };
+    statusListeners.add(() => workspace.refreshPrinterStatusCard());
+
+    workspace.onTogglePrinterStatusBar = () => {
+      statusOverride = !(statusOverride ?? livePrinterStatus().present);
+      notifyStatusBar();
+      workspace.setStatus(statusOverride ? 'Printer status pinned over the plate.' : 'Printer status hidden.');
+    };
+
+    window.addEventListener(
+      'pagehide',
+      () => {
+        window.clearInterval(ageTimer);
+        statusBar.dispose();
+      },
+      { once: true },
+    );
   }
 
   window.addEventListener('pagehide', disposePrinterTransport, { once: true });
@@ -2090,53 +2243,58 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   };
 
   if (presetLibraryHost) {
-    const presetPanel = new PresetLibraryPanel(presetLibraryHost, {
-      getInventory: () => presetStore?.library.inventory() ?? { vendors: Object.freeze([]), models: Object.freeze([]) },
-      getCustomPresets: () => presetStore?.library.customPresets() ?? [],
-      getBases: (kind) => {
-        const selection = workspace.getProfileOptions();
-        return (
-          presetStore?.library.basePresetsFor(kind, {
-            ...(selection.machinePresetId ? { printerId: selection.machinePresetId } : {}),
-            ...(selection.processPresetId ? { processId: selection.processPresetId } : {}),
-          }) ?? []
-        );
-      },
-      getIssues: () => presetIssues,
-      getStatus: () => ({ busy: presetBusy, ...(presetMessage ? { message: presetMessage } : {}) }),
-      subscribe: (listener) => {
-        presetListeners.add(listener);
-        return () => presetListeners.delete(listener);
-      },
-      run: async (operation) => {
-        await registry.invoke(PRESET_LIBRARY_ACTION_IDS[operation.kind], 'dom-inspector', actionCtx, uiState.get(), {
-          presetLibrary: operation,
-        });
-      },
-      chooseBundle: () =>
-        new Promise<string | undefined>((resolve) => {
-          if (!presetBundleFile) {
-            resolve(undefined);
-            return;
-          }
-          presetBundleFile.value = '';
-          presetBundleFile.onchange = () => {
-            const file = presetBundleFile.files?.[0];
-            if (!file) {
+    // Behind a closed <details>: loaded when it is opened, not at first paint.
+    void (async () => {
+      const { PresetLibraryPanel } = await import('./ui/dom/PresetLibraryPanel');
+      const presetPanel = new PresetLibraryPanel(presetLibraryHost, {
+        getInventory: () =>
+          presetStore?.library.inventory() ?? { vendors: Object.freeze([]), models: Object.freeze([]) },
+        getCustomPresets: () => presetStore?.library.customPresets() ?? [],
+        getBases: (kind) => {
+          const selection = workspace.getProfileOptions();
+          return (
+            presetStore?.library.basePresetsFor(kind, {
+              ...(selection.machinePresetId ? { printerId: selection.machinePresetId } : {}),
+              ...(selection.processPresetId ? { processId: selection.processPresetId } : {}),
+            }) ?? []
+          );
+        },
+        getIssues: () => presetIssues,
+        getStatus: () => ({ busy: presetBusy, ...(presetMessage ? { message: presetMessage } : {}) }),
+        subscribe: (listener) => {
+          presetListeners.add(listener);
+          return () => presetListeners.delete(listener);
+        },
+        run: async (operation) => {
+          await registry.invoke(PRESET_LIBRARY_ACTION_IDS[operation.kind], 'dom-inspector', actionCtx, uiState.get(), {
+            presetLibrary: operation,
+          });
+        },
+        chooseBundle: () =>
+          new Promise<string | undefined>((resolve) => {
+            if (!presetBundleFile) {
               resolve(undefined);
               return;
             }
-            void file.text().then(resolve, () => resolve(undefined));
-          };
-          presetBundleFile.click();
-        }),
-      confirmDelete: async (name) =>
-        window.confirm(
-          `Delete your preset "${name}"? Projects already using it keep the values they were sliced with.`,
-        ),
-    });
-    presetPanel.mount();
-    window.addEventListener('pagehide', () => presetPanel.dispose(), { once: true });
+            presetBundleFile.value = '';
+            presetBundleFile.onchange = () => {
+              const file = presetBundleFile.files?.[0];
+              if (!file) {
+                resolve(undefined);
+                return;
+              }
+              void file.text().then(resolve, () => resolve(undefined));
+            };
+            presetBundleFile.click();
+          }),
+        confirmDelete: async (name) =>
+          window.confirm(
+            `Delete your preset "${name}"? Projects already using it keep the values they were sliced with.`,
+          ),
+      });
+      presetPanel.mount();
+      window.addEventListener('pagehide', () => presetPanel.dispose(), { once: true });
+    })();
   }
 
   const autoPairCheckbox = document.getElementById('chk-full-spectrum-auto-pairs') as HTMLInputElement | null;
@@ -3244,7 +3402,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
         },
         printer: {
           configured: Boolean(printerCfg.host.trim()),
-          connected: printJobSnapshot !== null,
+          connected: printerConnectionState?.status === 'connected',
           ...(printJobSnapshot?.state ? { jobState: printJobSnapshot.state } : {}),
         },
         capabilities: {

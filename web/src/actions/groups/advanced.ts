@@ -163,7 +163,7 @@ export const advancedActions: Action[] = [
     group: 'advanced',
     disclosure: 'inspector',
     hint: 'Stop the running print after an explicit confirmation',
-    run: (ctx) => ctx.controlPrintJob('cancel'),
+    run: (ctx, invocation) => ctx.controlPrintJob('cancel', { preconfirmed: invocation.printJobPreconfirmed === true }),
   },
   {
     id: 'printer_emergency_stop',
@@ -172,7 +172,8 @@ export const advancedActions: Action[] = [
     group: 'advanced',
     disclosure: 'inspector',
     hint: 'Halt the printer immediately; Klipper then needs a firmware restart',
-    run: (ctx) => ctx.controlPrintJob('emergency-stop'),
+    run: (ctx, invocation) =>
+      ctx.controlPrintJob('emergency-stop', { preconfirmed: invocation.printJobPreconfirmed === true }),
   },
   {
     id: 'printer_browse_storage',
@@ -268,6 +269,17 @@ export const advancedActions: Action[] = [
     disclosure: 'inspector',
     hint: "Read the macros from the connected printer's own configuration",
     run: (ctx) => ctx.operatePrinterConsole({ kind: 'refresh-macros' }),
+  },
+  {
+    id: 'printer_show_status',
+    mcpTool: 'show_printer_status',
+    label: 'Printer Status',
+    icon: 'printer_send',
+    group: 'advanced',
+    disclosure: 'menu',
+    menuSection: 'tools',
+    hint: 'Show the running print over the plate, on any tab and at any width',
+    run: (ctx) => ctx.togglePrinterStatusBar(),
   },
   {
     id: 'printer_view_history',

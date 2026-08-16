@@ -177,6 +177,7 @@ export const ACTION_IDS_BY_PARITY_TASK = {
     'printer_delete_stored_file',
   ],
   'P9.6': ['view_webcam', 'printer_console_send', 'printer_run_macro', 'printer_list_macros', 'printer_view_history'],
+  'P9.7': ['printer_show_status'],
   'P10.3': ['help_shortcuts'],
   'P11.1': ['file_new_project', 'file_open_project', 'file_save_project', 'file_save_project_as'],
   'P11.2': [

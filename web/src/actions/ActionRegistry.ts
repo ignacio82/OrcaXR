@@ -164,6 +164,12 @@ export interface ActionInvocation {
   printHistoryStart?: number;
   /** Camera the surface wants shown; omitted keeps the current selection. */
   printerCameraUid?: string;
+  /**
+   * True when the surface already took an explicit confirmation gesture for a
+   * destructive printer command — the status surface's hold (P9.7). The shell
+   * then does not ask a second time; one act, one confirmation.
+   */
+  printJobPreconfirmed?: boolean;
   /** One preset-library change requested by a setup surface (P6.4). */
   presetLibrary?: PresetLibraryOperation;
   /** Exact canonical entity set requested by an Objects surface. */

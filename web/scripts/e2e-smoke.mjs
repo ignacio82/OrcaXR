@@ -1153,6 +1153,7 @@ async function sliceAndSendActivePlate(page, printer) {
   );
 
   await controlRunningPrint(page, printer);
+  await watchPrintFromAPhone(page, printer);
   await browsePrinterStorage(page, printer);
   await usePrinterConsole(page, printer);
   await readPrintHistory(page);
@@ -1292,6 +1293,211 @@ async function controlRunningPrint(page, printer) {
     true,
     'a finished job offers nothing to cancel',
   );
+}
+
+/**
+ * Watching a print from a phone, and losing the connection while it runs (P9.7).
+ *
+ * The compact surface is the only printer UI someone sees when they are not on
+ * the Printer tab, so what it does when the session drops is the whole point:
+ * the last reading stays on screen, labelled with its age, and every command is
+ * refused until the machine can confirm its own state again.
+ *
+ * The other half is the confirmation gesture. Pause is one tap because being
+ * slow to reach it costs prints; cancel is a hold, and a hold released early
+ * must send nothing at all.
+ */
+async function watchPrintFromAPhone(page, printer) {
+  await page.setViewport({ width: 390, height: 844 });
+  await page.evaluate(() => globalThis.dispatchEvent(new globalThis.Event('resize')));
+
+  // Put the machine back to work; the previous step left it cancelled.
+  printer.setState({ printState: 'printing', progress: 0.37, currentLayer: 37, totalLayers: 100 });
+  const commandsBefore = printer.commands.length;
+
+  await page.waitForFunction(
+    () =>
+      globalThis.document.querySelector('[data-printer-status-bar]')?.dataset.printerStatusPresent === 'true' &&
+      globalThis.document.querySelector('[data-printer-status-bar]')?.hidden === false,
+    { timeout: 30_000 },
+  );
+  const glance = await page.evaluate(() => ({
+    headline: globalThis.document.querySelector('[data-printer-status-headline]')?.textContent,
+    detail: globalThis.document.querySelector('[data-printer-status-detail]')?.textContent,
+    tone: globalThis.document.querySelector('[data-printer-status-tone]')?.dataset.printerStatusTone,
+    stale: globalThis.document.querySelector('[data-printer-status-bar]')?.dataset.printerStatusStale,
+    width: globalThis.document.querySelector('[data-printer-status-bar]')?.getBoundingClientRect().width,
+    overflow: globalThis.document.documentElement.scrollWidth - globalThis.document.documentElement.clientWidth,
+    commands: [...globalThis.document.querySelectorAll('[data-printer-status-command]')].map((button) => [
+      button.dataset.printerStatusCommand,
+      button.dataset.printerStatusHoldMs,
+      button.disabled,
+    ]),
+  }));
+  assert.match(glance.headline ?? '', /^Printing /);
+  assert.match(glance.detail ?? '', /%/);
+  assert.equal(glance.tone, 'active');
+  assert.equal(glance.stale, 'false');
+  assert.ok(glance.overflow <= 1, `the status surface overflows a 390px shell by ${glance.overflow}px`);
+  assert.ok(glance.width <= 390, `the status surface is ${glance.width}px wide in a 390px shell`);
+  assert.deepEqual(
+    glance.commands,
+    [
+      ['pause', '0', false],
+      ['resume', '0', true],
+      ['cancel', '800', false],
+      ['emergency-stop', '1200', false],
+    ],
+    'exactly the destructive commands are held, and availability follows the machine',
+  );
+
+  // A tap on a held control sends nothing and says why.
+  await pressAndRelease(page, '[data-printer-status-command="cancel"]', 60);
+  await page.waitForFunction(
+    () => /longer hold/i.test(globalThis.document.querySelector('[data-printer-status-hold-note]')?.textContent ?? ''),
+    { timeout: 10_000 },
+  );
+  assert.equal(printer.commands.length, commandsBefore, 'a released-too-early cancel sends nothing');
+
+  // A hold that is abandoned mid-gesture also sends nothing.
+  await page.$eval('[data-printer-status-command="cancel"]', (button) => {
+    button.dispatchEvent(new globalThis.PointerEvent('pointerdown', { bubbles: true }));
+  });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  await page.$eval('[data-printer-status-command="cancel"]', (button) => {
+    button.dispatchEvent(new globalThis.PointerEvent('pointerleave', { bubbles: true }));
+  });
+  await page.waitForFunction(
+    () =>
+      /cancelled — nothing was sent/i.test(
+        globalThis.document.querySelector('[data-printer-status-hold-note]')?.textContent ?? '',
+      ),
+    { timeout: 10_000 },
+  );
+  assert.equal(printer.commands.length, commandsBefore, 'a hold the pointer left sends nothing');
+
+  // Pause is one tap, because being slow to reach it costs prints.
+  await pressAndRelease(page, '[data-printer-status-command="pause"]', 10);
+  await page.waitForFunction(
+    () => /^Paused/.test(globalThis.document.querySelector('[data-printer-status-headline]')?.textContent ?? ''),
+    { timeout: 30_000 },
+  );
+  assert.deepEqual(printer.commands.slice(commandsBefore), ['pause']);
+  await pressAndRelease(page, '[data-printer-status-command="resume"]', 10);
+  await page.waitForFunction(
+    () => /^Printing /.test(globalThis.document.querySelector('[data-printer-status-headline]')?.textContent ?? ''),
+    { timeout: 30_000 },
+  );
+  assert.deepEqual(printer.commands.slice(commandsBefore), ['pause', 'resume']);
+
+  // Lose the session the way a Wi-Fi blip does: the socket goes, the printer
+  // keeps printing, and this client has to say so honestly.
+  assert.ok(printer.dropSockets() > 0, 'the client had a live socket to lose');
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-printer-status-bar]')?.dataset.printerStatusStale === 'true',
+    { timeout: 30_000 },
+  );
+  const lost = await page.evaluate(() => ({
+    headline: globalThis.document.querySelector('[data-printer-status-headline]')?.textContent,
+    detail: globalThis.document.querySelector('[data-printer-status-detail]')?.textContent,
+    tone: globalThis.document.querySelector('[data-printer-status-tone]')?.dataset.printerStatusTone,
+    recovery: globalThis.document.querySelector('[data-printer-status-recovery-message]')?.textContent,
+    reconnect: globalThis.document.querySelector('[data-printer-status-reconnect]')?.textContent,
+    commands: [...globalThis.document.querySelectorAll('[data-printer-status-command]')].map((button) => [
+      button.dataset.printerStatusCommand,
+      button.disabled,
+      button.title,
+    ]),
+  }));
+  assert.match(lost.headline ?? '', /^Printing /, 'the last thing the machine said stays on screen');
+  assert.match(lost.detail ?? '', /^Last reading /, 'and it is labelled with its age, not presented as current');
+  assert.equal(lost.tone, 'attention', 'a dropped socket is not a failed print');
+  assert.ok(lost.recovery, 'a lost session says what is being done about it');
+  assert.match(lost.reconnect ?? '', /Reconnect|Connect/);
+  assert.equal(
+    lost.commands.every(([, disabled]) => disabled === true),
+    true,
+    'nothing may be commanded against a state nothing can confirm',
+  );
+  assert.equal(
+    lost.commands.every(([, , title]) => typeof title === 'string' && title.length > 0),
+    true,
+    'and each refusal says why',
+  );
+
+  // The transport retries on its own, so the recovery someone reads has to say
+  // that rather than demand an action. It then actually recovers, unassisted,
+  // and the surface goes back to showing a reading it can stand behind.
+  assert.match(lost.recovery ?? '', /Retrying on its own/);
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-printer-status-bar]')?.dataset.printerStatusStale === 'false',
+    { timeout: 60_000 },
+  );
+  assert.deepEqual(
+    printer.commands.slice(commandsBefore),
+    ['pause', 'resume'],
+    'nothing was sent while the state could not be confirmed',
+  );
+  assert.match(
+    await page.$eval('[data-printer-status-detail]', (node) => node.textContent),
+    /%/,
+    'a recovered session shows a live reading again',
+  );
+  assert.equal(
+    await page.$eval('[data-printer-status-command="cancel"]', (button) => button.disabled),
+    false,
+    'and commands are offered again once the machine can confirm its own state',
+  );
+
+  // And a completed hold does exactly what it said it would.
+  await pressAndRelease(page, '[data-printer-status-command="cancel"]', 1_100);
+  // The hold *is* the confirmation, so no second dialog stands between the
+  // gesture and the machine, and nothing is left on screen to dismiss.
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'cancelled',
+    { timeout: 30_000 },
+  );
+  assert.deepEqual(printer.commands.slice(commandsBefore), ['pause', 'resume', 'cancel']);
+  assert.equal(
+    await page.$('[data-print-job-confirm="true"]'),
+    null,
+    'the hold replaced the dialog rather than adding to it',
+  );
+
+  // Nothing is running, so the surface gets out of the way of the plate again.
+  await page.waitForFunction(() => globalThis.document.querySelector('[data-printer-status-bar]')?.hidden === true, {
+    timeout: 30_000,
+  });
+
+  // …unless it is deliberately pinned, which is what the menu action is for.
+  await clickMenuAction(page, 'printer_show_status');
+  await page.waitForFunction(() => globalThis.document.querySelector('[data-printer-status-bar]')?.hidden === false, {
+    timeout: 30_000,
+  });
+  assert.match(
+    await page.$eval('[data-printer-status-headline]', (node) => node.textContent),
+    /^Cancelled/,
+    'a pinned surface shows the outcome rather than the reading it hid on',
+  );
+  await clickMenuAction(page, 'printer_show_status');
+  await page.waitForFunction(() => globalThis.document.querySelector('[data-printer-status-bar]')?.hidden === true, {
+    timeout: 30_000,
+  });
+
+  await page.setViewport({ width: 1280, height: 720 });
+  await page.evaluate(() => globalThis.dispatchEvent(new globalThis.Event('resize')));
+  console.log('[e2e] print watched from a phone, survived a dropped session, and cancelled only on a full hold');
+}
+
+/** Press a control, hold it for `holdMs`, then release — the shipped gesture. */
+async function pressAndRelease(page, selector, holdMs) {
+  await page.$eval(selector, (button) => {
+    button.dispatchEvent(new globalThis.PointerEvent('pointerdown', { bubbles: true }));
+  });
+  await new Promise((resolve) => setTimeout(resolve, holdMs));
+  await page.$eval(selector, (button) => {
+    button.dispatchEvent(new globalThis.PointerEvent('pointerup', { bubbles: true }));
+  });
 }
 
 /**
@@ -3340,7 +3546,7 @@ try {
   assert.deepStrictEqual(pageErrors, [], `uncaught page errors: ${pageErrors.join('\n')}`);
   assert.deepStrictEqual(policyErrors, [], `CSP violations: ${policyErrors.join('\n')}`);
   console.log(
-    'Production E2E smoke passed (a browser configured from empty storage — two printers installed, a filament preset authored over a system base, and the whole setup exported and reimported as a bundle — canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings that the same panel also writes to one object without touching the project, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a stored file browsed, reprinted without re-uploading, renamed, and deleted behind a confirmation, a console that answers a query over the socket, sends nothing when a stepper release is dismissed, and runs a macro with the parameters its own body declares, a print history paged by the count the printer reports, a camera shown as authenticated snapshots that stops fetching when hidden, a printer plus slicer configured once that are still configured after a reload, device preferences that apply live and reset without touching presets, and two named printers that switch without their credentials following each other).',
+    'Production E2E smoke passed (a print watched from a phone that survived a dropped session and cancelled only on a full hold, a browser configured from empty storage — two printers installed, a filament preset authored over a system base, and the whole setup exported and reimported as a bundle — canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings that the same panel also writes to one object without touching the project, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a stored file browsed, reprinted without re-uploading, renamed, and deleted behind a confirmation, a console that answers a query over the socket, sends nothing when a stepper release is dismissed, and runs a macro with the parameters its own body declares, a print history paged by the count the printer reports, a camera shown as authenticated snapshots that stops fetching when hidden, a printer plus slicer configured once that are still configured after a reload, device preferences that apply live and reset without touching presets, and two named printers that switch without their credentials following each other).',
   );
 } finally {
   await browser.close();
