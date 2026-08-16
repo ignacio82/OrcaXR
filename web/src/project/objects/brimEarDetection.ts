@@ -242,7 +242,7 @@ export function detectBrimEars(
     for (const corner of detectOutlineCorners(loop, options.maxAngleDeg)) {
       detected.push({
         point: {
-          positionMm: [corner.point[0], corner.point[1], 0] as Vec3,
+          positionMm: [corner.point[0], corner.point[1], minZ] as Vec3,
           headFrontRadiusMm: options.headFrontRadiusMm,
         },
         angleDeg: corner.angleDeg,

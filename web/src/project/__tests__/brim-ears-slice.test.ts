@@ -194,13 +194,13 @@ function firstLayerExtrusion(gcode: string): number {
   return total;
 }
 
-await test('the archive carries placed ears, and the engine currently prints none', async () => {
+await test('a placed ear reaches the engine and shows up in the sliced result', async () => {
   const half = CUBE_MM / 2;
   const corners: BrimEarPoint[] = [
-    { positionMm: [-half, -half, 0], headFrontRadiusMm: 5 },
-    { positionMm: [half, -half, 0], headFrontRadiusMm: 5 },
-    { positionMm: [half, half, 0], headFrontRadiusMm: 5 },
-    { positionMm: [-half, half, 0], headFrontRadiusMm: 5 },
+    { positionMm: [-half, -half, -half], headFrontRadiusMm: 5 },
+    { positionMm: [half, -half, -half], headFrontRadiusMm: 5 },
+    { positionMm: [half, half, -half], headFrontRadiusMm: 5 },
+    { positionMm: [-half, half, -half], headFrontRadiusMm: 5 },
   ];
 
   // Half of the Accept clause: the ears are in the archive the engine reads,
@@ -225,11 +225,13 @@ await test('the archive carries placed ears, and the engine currently prints non
 
   // The other half, which does not hold yet. Asserted as observed so it trips
   // the moment it changes, in either direction.
-  assert.equal(/;TYPE:Brim/i.test(withEars), false, 'KNOWN GAP: placed ears produce no brim in the sliced result');
-  assert.equal(
-    firstLayerExtrusion(withEars),
-    firstLayerExtrusion(withoutEars),
-    'KNOWN GAP: the first layer is identical with and without ears',
+  assert.equal(/;TYPE:Brim/i.test(withEars), true, 'the placed ears produce brim in the sliced result');
+  assert.equal(/;TYPE:Brim/i.test(withoutEars), false, 'and the bare run has none, so the brim is the ears');
+  const earsExtrusion = firstLayerExtrusion(withEars);
+  const bareExtrusion = firstLayerExtrusion(withoutEars);
+  assert.ok(
+    earsExtrusion > bareExtrusion,
+    `four ears must add first-layer material: ${earsExtrusion} vs ${bareExtrusion}`,
   );
 });
 

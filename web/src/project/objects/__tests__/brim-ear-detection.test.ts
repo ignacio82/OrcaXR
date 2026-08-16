@@ -93,6 +93,19 @@ test('a box gets one ear on each of its four corners', () => {
   );
 });
 
+test('an ear sits at the part base, because the engine drops any ear above the bed', () => {
+  // The pinned engine discards an ear whose transformed world Z is above the
+  // bed (`Brim.cpp:867`), and an object's local origin is its centre — so an
+  // ear at z = 0 is at mid-height and is silently thrown away.
+  const raised = box(10, 10, 6).map((value, index) => (index % 3 === 2 ? value - 3 : value));
+  const result = detectBrimEars(raised, undefined, DEFAULT_BRIM_EAR_DETECTION);
+  assert.equal(result.ears.length, 4);
+  assert.ok(
+    result.ears.every((ear) => Math.abs(ear.point.positionMm[2] - -3) < 1e-6),
+    `every ear takes the part base: ${JSON.stringify(result.ears.map((ear) => ear.point.positionMm[2]))}`,
+  );
+});
+
 test('a smooth prism has nothing sharp enough to hold down', () => {
   const result = detectBrimEars(prism(48, 10, 5), undefined, DEFAULT_BRIM_EAR_DETECTION);
   assert.deepEqual(result.ears, []);

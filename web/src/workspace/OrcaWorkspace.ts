@@ -2643,9 +2643,14 @@ export class OrcaWorkspace extends xb.Script {
       const [hit] = raycaster.intersectObject(target.display, false);
       if (!hit) continue;
       const local = target.display.worldToLocal(hit.point.clone());
+      // An ear is a first-layer feature, so it takes the part's base height
+      // rather than wherever on the model the ray landed: the pinned engine
+      // discards any ear whose transformed world Z is above the bed
+      // (`Brim.cpp:867`), which silently dropped every ear placed up a wall.
+      const baseZ = partBaseZ(target.display) ?? local.z;
       try {
         this.canonicalProject.addBrimEar(objectId, {
-          positionMm: [local.x, local.y, local.z],
+          positionMm: [local.x, local.y, baseZ],
           headFrontRadiusMm: this.brimEarRadiusMm,
         });
         this.setStatus(`Placed a ${this.brimEarRadiusMm} mm brim ear.`);
@@ -7809,6 +7814,14 @@ function engineWireConfig(config: Readonly<Record<string, unknown>>): Record<str
         : String(value);
   }
   return wire;
+}
+
+/** The lowest local Z of a part's own geometry — where a brim ear belongs. */
+function partBaseZ(display: THREE.Object3D): number | undefined {
+  const geometry = (display as THREE.Mesh).geometry;
+  if (!geometry) return undefined;
+  geometry.computeBoundingBox();
+  return geometry.boundingBox?.min.z;
 }
 
 /**
