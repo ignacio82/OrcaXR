@@ -2720,6 +2720,11 @@ export class OrcaWorkspace extends xb.Script {
     this.setStatus(
       `Placed ${detected.ears.length} brim ear${detected.ears.length === 1 ? '' : 's'} on the corners that would lift; one undo removes them all.`,
     );
+    // Open the tool so the discs are on the model. In the DOM shell the panel
+    // already shows the result, but in a headset the scene is the only report
+    // there is — placing eight ears and showing nothing would be a false
+    // success, and this action is reachable in XR precisely because it is not.
+    if (this.tool !== 'brim_ears') this.setTool('brim_ears');
     this.notifyBrimEarChange();
     return true;
   }

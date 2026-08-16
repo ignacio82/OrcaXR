@@ -189,7 +189,7 @@ export const gizmoActions: Action[] = [
     disclosure: 'inspector',
     hint: 'Choose the front radius the next placed ear uses',
     xrUnsupportedReason:
-      'Brim-ear radius and the placed-ear list are edited in the DOM inspector; no in-headset flow exists yet.',
+      'Choosing a radius needs a numeric field; no in-headset entry flow exists yet. Automatic placement and clearing are available.',
     run: (ctx, invocation) => {
       const radius = invocation.brimEarRadiusMm;
       if (radius === undefined) {
@@ -207,7 +207,7 @@ export const gizmoActions: Action[] = [
     disclosure: 'inspector',
     hint: 'Remove one placed ear; it comes back at its original index on undo',
     xrUnsupportedReason:
-      'Brim-ear radius and the placed-ear list are edited in the DOM inspector; no in-headset flow exists yet.',
+      'Removing one ear needs the indexed list, which is a DOM panel. Clearing every ear is available in a headset.',
     run: (ctx, invocation) => {
       const index = invocation.brimEarIndex;
       if (index === undefined) {
@@ -224,8 +224,9 @@ export const gizmoActions: Action[] = [
     group: 'scene',
     disclosure: 'inspector',
     hint: 'Find the corners of the first layer that would peel, and put an ear on each',
-    xrUnsupportedReason:
-      'Brim-ear radius and the placed-ear list are edited in the DOM inspector; no in-headset flow exists yet.',
+    // Reachable in a headset: it takes no parameters, and since the on-model
+    // disc preview (P5.3.6) draws the placed ears in the scene — red where one
+    // reaches nothing — its result no longer lives only in the DOM list.
     run: (ctx) => ctx.autoPlaceBrimEars(),
   },
   {
@@ -235,8 +236,8 @@ export const gizmoActions: Action[] = [
     group: 'scene',
     disclosure: 'inspector',
     hint: 'Remove every brim ear from the selected part as one undoable command',
-    xrUnsupportedReason:
-      'Brim-ear radius and the placed-ear list are edited in the DOM inspector; no in-headset flow exists yet.',
+    // Same: no parameters, and the discs vanishing from the model is the
+    // confirmation, so a headset operator is not acting blind.
     run: (ctx) => ctx.clearBrimEars(),
   },
   {
