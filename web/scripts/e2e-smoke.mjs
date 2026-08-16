@@ -397,6 +397,202 @@ async function showInspectorTab(page, tabId) {
 }
 
 /**
+ * Set this browser up from nothing: install a printer, author a preset over a
+ * system base, and move the whole setup through a bundle (P6.4).
+ *
+ * The acceptance criterion is that clean browser storage can be configured
+ * without developer tools, so this drives the shipped controls and then reads
+ * the answer back out of the catalog everything else slices against. The
+ * export/import half is the part unit tests cannot reach: it goes through a
+ * real Blob, a real file picker, and a real reload.
+ */
+async function configurePrinterLibrary(page, directory) {
+  await showInspectorTab(page, 'settings');
+  await page.$eval('#preset-library-details', (details) => details.setAttribute('open', ''));
+  await page.waitForSelector('[data-preset-library-panel="true"]', { timeout: 60_000 });
+
+  const before = await page.evaluate(() => ({
+    machines: globalThis.window.workspace.getProfileOptions().machineOptions.length,
+    variants: [...globalThis.document.querySelectorAll('[data-preset-library-variant]')].map((box) => ({
+      id: box.dataset.presetLibraryVariant,
+      checked: box.checked,
+    })),
+  }));
+  assert.ok(before.machines > 1, 'an unconfigured browser still offers every printer the catalog ships');
+  assert.equal(
+    before.variants.some((variant) => variant.checked),
+    false,
+    'nothing is installed before setup',
+  );
+  assert.ok(
+    before.variants.some((variant) => variant.id === 'Snapmaker/Snapmaker U1/0.4'),
+    `the U1 is offered: ${JSON.stringify(before.variants.map((variant) => variant.id))}`,
+  );
+
+  // Install one nozzle. The picker narrows to exactly it, while the 0.2 and 0.6
+  // profiles stay in the catalog they inherit through — hidden, not dropped.
+  await page.$eval('[data-preset-library-variant="Snapmaker/Snapmaker U1/0.4"]', (box) => box.click());
+  await page.waitForFunction(
+    () => {
+      const options = globalThis.window.workspace.getProfileOptions();
+      return options.machineOptions.length === 1 && options.machine === 'Snapmaker U1 (0.4 nozzle)';
+    },
+    { timeout: 60_000 },
+  );
+
+  // A second machine is additive: installing one printer never uninstalls another.
+  await page.$eval('[data-preset-library-variant="Elegoo/Elegoo Centauri Carbon/0.4"]', (box) => box.click());
+  await page.waitForFunction(() => globalThis.window.workspace.getProfileOptions().machineOptions.length === 2, {
+    timeout: 60_000,
+  });
+
+  await page.reload({ waitUntil: 'networkidle0', timeout: 60_000 });
+  await page.waitForSelector('#app-boot.ready', { timeout: 60_000 });
+  await page.waitForFunction(() => globalThis.window.workspace?.getProfileOptions().machineOptions.length === 2, {
+    timeout: 60_000,
+  });
+  await showInspectorTab(page, 'settings');
+  await page.$eval('#preset-library-details', (details) => details.setAttribute('open', ''));
+  await page.waitForSelector('[data-preset-library-variant="Snapmaker/Snapmaker U1/0.4"]', { timeout: 60_000 });
+  assert.equal(
+    await page.$eval('[data-preset-library-variant="Snapmaker/Snapmaker U1/0.4"]', (box) => box.checked),
+    true,
+    'the installation survived a real reload',
+  );
+
+  // Author a filament preset over a system base, changing one value. The field
+  // is seeded with the inherited value, so what is typed is what is compared.
+  const draft = await page.evaluate(() => {
+    const base = globalThis.document.querySelector('[data-preset-library-draft-base]');
+    return { base: base?.value ?? '', options: base ? base.options.length : 0 };
+  });
+  assert.ok(draft.options > 0, 'the installed printer offers filament bases');
+  const presetName = 'E2E Dry Box PLA';
+  await page.$eval(
+    '[data-preset-library-draft-name]',
+    (input, value) => {
+      input.value = value;
+      input.dispatchEvent(new globalThis.Event('input', { bubbles: true }));
+    },
+    presetName,
+  );
+  await page.$eval('[data-preset-library-add-override]', (button) => button.click());
+  await page.waitForSelector('[data-preset-library-override]', { timeout: 30_000 });
+  const seeded = await page.$eval('[data-preset-library-override-value]', (input) => input.value);
+  assert.ok(seeded.length > 0, 'the override field is seeded with the value the base already holds');
+  await page.$eval('[data-preset-library-override-value]', (input) => {
+    input.value = '77';
+    input.dispatchEvent(new globalThis.Event('input', { bubbles: true }));
+  });
+  await page.$eval('[data-preset-library-create]', (button) => button.click());
+  await page.waitForSelector(`[data-preset-library-preset="filament/${presetName}"]`, { timeout: 30_000 });
+
+  const authored = await page.evaluate((name) => {
+    const row = globalThis.document.querySelector(`[data-preset-library-preset="filament/${name}"]`);
+    return {
+      provenance: row?.querySelector('[data-preset-library-provenance]')?.textContent ?? '',
+      offered: globalThis.window.workspace.getProfileOptions().filamentOptions.some((option) => option.name === name),
+    };
+  }, presetName);
+  assert.equal(authored.offered, true, 'the authored preset is selectable for the installed printer');
+  assert.match(authored.provenance, /^from .+ · v1\.0\.0 · All rights reserved/, authored.provenance);
+
+  // A name a system preset already owns is refused, and nothing is written.
+  await page.$eval(
+    '[data-preset-library-draft-name]',
+    (input, value) => {
+      input.value = value;
+      input.dispatchEvent(new globalThis.Event('input', { bubbles: true }));
+    },
+    draft.base,
+  );
+  await page.$eval('[data-preset-library-create]', (button) => button.click());
+  await page.waitForSelector('[data-preset-library-issue="duplicate-preset-name"]', { timeout: 30_000 });
+  assert.deepEqual(
+    await page.$$eval('[data-preset-library-preset]', (rows) => rows.map((row) => row.dataset.presetLibraryPreset)),
+    [`filament/${presetName}`],
+    'the refused draft wrote nothing',
+  );
+
+  // Export: the bytes leave through a Blob, so capture the Blob rather than
+  // the object URL the shell revokes as soon as the click returns.
+  await page.evaluate(() => {
+    const createObjectURL = globalThis.URL.createObjectURL.bind(globalThis.URL);
+    globalThis.URL.createObjectURL = (blob) => {
+      if (blob.type === 'application/json') globalThis.__presetBundleBlob = blob;
+      return createObjectURL(blob);
+    };
+    const click = globalThis.HTMLAnchorElement.prototype.click;
+    globalThis.HTMLAnchorElement.prototype.click = function patched() {
+      if (this.download === 'orcaxr-presets.json') return;
+      return click.call(this);
+    };
+  });
+  await page.$eval('[data-preset-library-export]', (button) => button.click());
+  const bundleText = await page.evaluate(async () => globalThis.__presetBundleBlob?.text());
+  assert.ok(bundleText, 'the export produced a bundle');
+  const bundle = JSON.parse(bundleText);
+  assert.equal(bundle.format, 'orcaxr.preset-bundle');
+  assert.deepEqual(bundle.installed, [
+    { vendor: 'Elegoo', model: 'Elegoo Centauri Carbon', variants: ['0.4'] },
+    { vendor: 'Snapmaker', model: 'Snapmaker U1', variants: ['0.4'] },
+  ]);
+  assert.equal(bundle.customPresets.length, 1);
+  assert.equal(bundle.customPresets[0].name, presetName);
+  assert.ok(bundle.engine.commit.length > 0, 'the bundle names the engine it was made against');
+
+  // Delete it, then bring it back from the bundle through the real file picker.
+  await page.evaluate(() => {
+    globalThis.window.confirm = () => true;
+  });
+  await page.$eval(`[data-preset-library-delete="filament/${presetName}"]`, (button) => button.click());
+  await page.waitForFunction(
+    (name) =>
+      globalThis.document.querySelector(`[data-preset-library-preset="filament/${name}"]`) === null &&
+      !globalThis.window.workspace.getProfileOptions().filamentOptions.some((option) => option.name === name),
+    { timeout: 30_000 },
+    presetName,
+  );
+
+  const bundlePath = join(directory, 'orcaxr-presets.json');
+  await writeFile(bundlePath, bundleText, 'utf8');
+  const [bundleChooser] = await Promise.all([
+    page.waitForFileChooser(),
+    page.$eval('[data-preset-library-import]', (button) => button.click()),
+  ]);
+  await bundleChooser.accept([bundlePath]);
+  await page.waitForFunction(
+    (name) =>
+      globalThis.document.querySelector(`[data-preset-library-preset="filament/${name}"]`) !== null &&
+      globalThis.window.workspace.getProfileOptions().filamentOptions.some((option) => option.name === name),
+    { timeout: 30_000 },
+    presetName,
+  );
+
+  // A bundle from another engine is refused whole, leaving the setup alone.
+  const foreignPath = join(directory, 'orcaxr-presets-foreign.json');
+  await writeFile(
+    foreignPath,
+    JSON.stringify({ ...bundle, engine: { ...bundle.engine, commit: '0'.repeat(40) }, customPresets: [] }),
+    'utf8',
+  );
+  const [foreignChooser] = await Promise.all([
+    page.waitForFileChooser(),
+    page.$eval('[data-preset-library-import]', (button) => button.click()),
+  ]);
+  await foreignChooser.accept([foreignPath]);
+  await page.waitForSelector('[data-preset-library-issue="engine-mismatch"]', { timeout: 30_000 });
+  assert.deepEqual(
+    await page.$$eval('[data-preset-library-preset]', (rows) => rows.map((row) => row.dataset.presetLibraryPreset)),
+    [`filament/${presetName}`],
+    'the refused bundle did not clear the preset it omitted',
+  );
+
+  await page.$eval('#preset-library-details', (details) => details.removeAttribute('open'));
+  console.log('[e2e] printer installed, preset authored over a system base, and the setup round-tripped as a bundle');
+}
+
+/**
  * Override one setting on an object and prove the scope is real (P6.5).
  *
  * The interesting failures here are invisible to unit tests: a panel that
@@ -1621,6 +1817,8 @@ try {
     },
     { timeout: 60_000 },
   );
+
+  await configurePrinterLibrary(page, fixtureDirectory);
 
   const initialHistory = await page.evaluate(() => globalThis.window.workspace.getCanonicalSummary().history);
   assert.equal(
@@ -3142,7 +3340,7 @@ try {
   assert.deepStrictEqual(pageErrors, [], `uncaught page errors: ${pageErrors.join('\n')}`);
   assert.deepStrictEqual(policyErrors, [], `CSP violations: ${policyErrors.join('\n')}`);
   console.log(
-    'Production E2E smoke passed (canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings that the same panel also writes to one object without touching the project, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a stored file browsed, reprinted without re-uploading, renamed, and deleted behind a confirmation, a console that answers a query over the socket, sends nothing when a stepper release is dismissed, and runs a macro with the parameters its own body declares, a print history paged by the count the printer reports, a camera shown as authenticated snapshots that stops fetching when hidden, a printer plus slicer configured once that are still configured after a reload, device preferences that apply live and reset without touching presets, and two named printers that switch without their credentials following each other).',
+    'Production E2E smoke passed (a browser configured from empty storage — two printers installed, a filament preset authored over a system base, and the whole setup exported and reimported as a bundle — canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings that the same panel also writes to one object without touching the project, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a stored file browsed, reprinted without re-uploading, renamed, and deleted behind a confirmation, a console that answers a query over the socket, sends nothing when a stepper release is dismissed, and runs a macro with the parameters its own body declares, a print history paged by the count the printer reports, a camera shown as authenticated snapshots that stops fetching when hidden, a printer plus slicer configured once that are still configured after a reload, device preferences that apply live and reset without touching presets, and two named printers that switch without their credentials following each other).',
   );
 } finally {
   await browser.close();

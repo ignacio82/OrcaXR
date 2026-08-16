@@ -21,6 +21,7 @@ import type { ObjectTreeEntityRef } from '../project/objects';
 import type { ScopedOverrideTarget } from '../project/scopedOverrides';
 import type { PrinterConsoleOperation } from '../printer/PrinterConsole';
 import type { PrinterStorageOperation } from '../printer/PrinterStorage';
+import type { PresetLibraryOperation } from '../settings/presets/PresetLibrary';
 import type { AssemblyAlignmentKind } from '../project/objects/assembly';
 import type { PaintChannel, PaintToolKind } from '../project/painting/PaintStrokeService';
 import type { GcodePreviewViewPatch } from '../slicer/GcodePreviewSession';
@@ -163,6 +164,8 @@ export interface ActionInvocation {
   printHistoryStart?: number;
   /** Camera the surface wants shown; omitted keeps the current selection. */
   printerCameraUid?: string;
+  /** One preset-library change requested by a setup surface (P6.4). */
+  presetLibrary?: PresetLibraryOperation;
   /** Exact canonical entity set requested by an Objects surface. */
   objectsSelection?: {
     readonly refs: readonly ObjectTreeEntityRef[];

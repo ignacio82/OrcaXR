@@ -57,6 +57,7 @@ import type { PrintJobCommand } from '../printer/PrintJobControl';
 import type { PrintJobIntent } from '../printer/PrintJobSubmission';
 import type { PrinterConsoleOperation } from '../printer/PrinterConsole';
 import type { PrinterStorageOperation } from '../printer/PrinterStorage';
+import type { PresetLibraryOperation } from '../settings/presets/PresetLibrary';
 import { summarizeGcodeToolUsage } from '../printer/PrintToolMapping';
 import { serializePrintConfigArray } from '../settings/configSerialization';
 import type { ArrangeRegion } from '../project/objects/arrange';
@@ -3326,6 +3327,44 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
+  /**
+   * Compose the operator's installation and authored presets into the profile
+   * corpus (P6.4). Installed once, then re-run on every library change.
+   *
+   * Composition is applied to the *fetched* corpus every time rather than to
+   * the last composed one, so uninstalling a printer restores it instead of
+   * narrowing the catalog one step further with each edit.
+   */
+  public installCatalogComposer(compose: (catalog: unknown) => unknown): void {
+    this.catalog.compose = compose;
+    if (this.catalog.rawCatalog !== undefined) this.recomposeProfileCatalog();
+  }
+
+  /** The exact profile corpus as fetched, for a shell that builds a library over it. */
+  public getRawProfileCatalog(): unknown {
+    return this.catalog.rawCatalog;
+  }
+
+  /**
+   * Recompile the corpus after a library change, and re-resolve the selection.
+   * A printer the operator just uninstalled is no longer in the compiled
+   * profiles, so holding on to it would leave the shell slicing against a
+   * machine its own picker no longer offers.
+   */
+  public recomposeProfileCatalog(): void {
+    if (!this.catalog.recompose()) return;
+    // Re-point at the *new* object for the same triple rather than keeping the
+    // one compiled before. Exact preset attestation is decided by identity
+    // (`catalog.profiles.includes`), so a surviving-but-stale object would
+    // silently drop this project out of exact-profile preflight.
+    const current = this.profile;
+    if (current) {
+      this.profile = this.catalog.profiles.find((candidate) => candidate.id === current.id) ?? null;
+    }
+    this.applyCatalogDefaultProfile();
+    this.onProfileChanged?.();
+  }
+
   /** Snapshot for pickers: current selection + available choices. */
   getProfileOptions() {
     const cur = this.profile;
@@ -4091,6 +4130,8 @@ export class OrcaWorkspace extends xb.Script {
   onRequestPrintHistory: ((start: number) => Promise<void>) | null = null;
   /** Injected by the live typed printer composition root. */
   onRequestPrinterCamera: ((uid?: string) => Promise<void>) | null = null;
+  /** Injected by the shell that owns preset persistence (P6.4). */
+  onRequestPresetLibrary: ((operation: PresetLibraryOperation) => Promise<void>) | null = null;
 
   public async testPrinterConnection(): Promise<void> {
     if (!this.onRequestPrinterConnectionTest) {
@@ -4193,6 +4234,22 @@ export class OrcaWorkspace extends xb.Script {
       return;
     }
     await this.onRequestPrinterCamera(uid);
+  }
+
+  /**
+   * Ask the shell to change which printers are installed, or which presets the
+   * operator has authored (P6.4).
+   *
+   * The workspace consumes the composed catalog but never owns it: the library
+   * has to outlive a reload, which means storage, and storage belongs to the
+   * shell for the same reason the printer socket does.
+   */
+  public async operatePresetLibrary(operation: PresetLibraryOperation): Promise<void> {
+    if (!this.onRequestPresetLibrary) {
+      this.setStatus('Printer and preset setup is unavailable in this shell.');
+      return;
+    }
+    await this.onRequestPresetLibrary(operation);
   }
 
   // --- Import / Export Config (Orca File → Import / Export Config) -----

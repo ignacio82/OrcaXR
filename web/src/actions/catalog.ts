@@ -13,6 +13,7 @@ import { sliceActions } from './groups/slice';
 import { outputActions } from './groups/output';
 import { calibrationActions } from './groups/calibration';
 import { advancedActions } from './groups/advanced';
+import { presetActions } from './groups/presets';
 import { helpActions } from './groups/help';
 import { objectsActions } from './groups/objects';
 import { paintingActions } from './groups/painting';
@@ -30,5 +31,6 @@ export function buildRegistry(): ActionRegistry {
     .addAll(outputActions)
     .addAll(calibrationActions)
     .addAll(advancedActions)
+    .addAll(presetActions)
     .addAll(helpActions);
 }

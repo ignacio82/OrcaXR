@@ -45,6 +45,11 @@ for (const file of js) {
 }
 const jsTotal = js.reduce((sum, file) => sum + file.bytes, 0);
 const cssTotal = css.reduce((sum, file) => sum + file.bytes, 0);
-assert.ok(jsTotal <= 10_000_000, `JavaScript total is ${jsTotal} bytes (budget 10,000,000).`);
+// Roughly 7.2 MB of the total is pinned vendor code — the splat renderer, three,
+// uikit, the bundled font, the XR Blocks vision/audio bundles — which no feature
+// work can move. The total is a ceiling on that floor, not the regression signal;
+// the main-chunk budget above is what actually catches a feature growing the app.
+// Raised from 10,000,000 on 2026-08-16 when P6.4 landed with 18 KB of headroom left.
+assert.ok(jsTotal <= 10_400_000, `JavaScript total is ${jsTotal} bytes (budget 10,400,000).`);
 assert.ok(cssTotal <= 200_000, `CSS total is ${cssTotal} bytes (budget 200,000).`);
 console.log(`Bundle budgets passed: main=${main.bytes}, JS total=${jsTotal}, CSS total=${cssTotal}.`);

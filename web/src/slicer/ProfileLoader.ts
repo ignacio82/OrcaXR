@@ -100,11 +100,34 @@ export class ProfileCatalog {
     profileCorpus: 'pinned-v2.3.4-overlay-with-locked-adaptations',
   });
   private graph?: PresetGraph;
+  private raw?: unknown;
+  /**
+   * Applied to the fetched corpus before it is compiled, so the operator's own
+   * installation and authored presets are part of what "the catalog" means
+   * everywhere downstream (P6.4). Kept as a hook rather than a constructor
+   * argument because the library is built from the corpus this fetch returns.
+   */
+  compose: ((catalog: unknown) => unknown) | null = null;
 
   static fromRaw(catalog: unknown): ProfileCatalog {
     const result = new ProfileCatalog();
     result.replaceFromRaw(catalog);
     return result;
+  }
+
+  /** The exact corpus as fetched, before composition. */
+  get rawCatalog(): unknown {
+    return this.raw;
+  }
+
+  /**
+   * Recompile the last fetched corpus through the current composer. Returns
+   * false when there is nothing loaded to recompose.
+   */
+  recompose(): boolean {
+    if (this.raw === undefined) return false;
+    this.replaceFromRaw(this.compose ? this.compose(this.raw) : this.raw, this.raw);
+    return true;
   }
 
   async load(): Promise<void> {
@@ -127,7 +150,7 @@ export class ProfileCatalog {
       return;
     }
     try {
-      this.replaceFromRaw(catalog);
+      this.replaceFromRaw(this.compose ? this.compose(catalog) : catalog, catalog);
       const blocking = this.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
       if (blocking.length > 0) {
         console.error(
@@ -145,8 +168,11 @@ export class ProfileCatalog {
    * Atomically replace the catalog after the complete graph validates. A bad
    * replacement never exposes a partial Cartesian product or mutates the last
    * known-good catalog.
+   *
+   * `source` is the pre-composition corpus to remember for a later
+   * {@link recompose}; it defaults to the catalog itself.
    */
-  replaceFromRaw(catalog: unknown): void {
+  replaceFromRaw(catalog: unknown, source: unknown = catalog): void {
     let graph: PresetGraph;
     try {
       graph = PresetGraph.build(catalog);
@@ -157,6 +183,7 @@ export class ProfileCatalog {
       });
     }
     const compiled = compileProfiles(graph);
+    this.raw = source;
     this.graph = graph;
     this.profiles = Object.freeze(compiled.profiles);
     this.diagnostics = Object.freeze(compiled.diagnostics);

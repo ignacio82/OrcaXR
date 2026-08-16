@@ -813,6 +813,11 @@
                 <select id="sel-machine" aria-label="Printer profile" class="action-btn" style="text-align:left;"></select>
                 <select id="sel-process" aria-label="Process profile" class="action-btn" style="text-align:left;"></select>
                 <select id="sel-filament" aria-label="Filament profile" class="action-btn" style="text-align:left;"></select>
+                <details id="preset-library-details">
+                  <summary class="insp-kicker" style="cursor:pointer;">Printers and presets</summary>
+                  <div id="preset-library-host" style="margin-top:8px;"></div>
+                </details>
+                <input id="preset-bundle-file" type="file" accept="application/json,.json" hidden />
               </div>
               <div class="panel" id="heads-panel" style="display:flex;flex-direction:column;gap:8px;"></div>
               <label class="check-row">

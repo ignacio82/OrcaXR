@@ -85,6 +85,13 @@ import { PrintHistoryPanel } from './ui/dom/PrintHistoryPanel';
 import { PrinterCameraPanel } from './ui/dom/PrinterCameraPanel';
 import { PrinterConsolePanel } from './ui/dom/PrinterConsolePanel';
 import { PrinterStoragePanel } from './ui/dom/PrinterStoragePanel';
+import { PresetLibraryPanel } from './ui/dom/PresetLibraryPanel';
+import {
+  PresetLibraryStore,
+  applyPresetLibraryOperation,
+  type PresetLibraryIssue,
+  type PresetLibraryOperation,
+} from './settings/presets/PresetLibrary';
 import { GcodePreviewPanel, type GcodePreviewPanelAdapter } from './ui/dom/GcodePreviewPanel';
 import { PreviewScrubber } from './ui/dom/PreviewScrubber';
 import { InspectorTabs } from './ui/dom/InspectorTabs';
@@ -210,6 +217,49 @@ const PRINTER_CONSOLE_ACTION_IDS: Readonly<Record<PrinterConsoleOperation['kind'
   macro: 'printer_run_macro',
   'refresh-macros': 'printer_list_macros',
 });
+
+/**
+ * The browser's own key/value store, or null when it refuses to hand it over
+ * (private mode, a blocked third-party context). Module-level so every caller
+ * reaches it the same way, whatever order the shell builds its panels in.
+ */
+function safeLocalStorage(): Storage | null {
+  try {
+    return typeof localStorage === 'undefined' ? null : localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/** Registry action that owns each preset-library operation (P6.4). */
+const PRESET_LIBRARY_ACTION_IDS: Readonly<Record<PresetLibraryOperation['kind'], string>> = Object.freeze({
+  install: 'presets_install_printer',
+  create: 'presets_create_custom',
+  update: 'presets_update_custom',
+  delete: 'presets_delete_custom',
+  export: 'presets_export_bundle',
+  import: 'presets_import_bundle',
+});
+
+/** What just changed, in the operator's terms rather than the operation's. */
+function describePresetChange(operation: PresetLibraryOperation): string {
+  switch (operation.kind) {
+    case 'install':
+      return operation.variants.length === 0
+        ? `Removed ${operation.model}.`
+        : `${operation.model} now offers ${operation.variants.map((variant) => `${variant} mm`).join(', ')}.`;
+    case 'create':
+      return `Created ${operation.draft.name}.`;
+    case 'update':
+      return `Updated ${operation.name}.`;
+    case 'delete':
+      return `Deleted ${operation.name}.`;
+    case 'import':
+      return 'Replaced this setup from the bundle.';
+    case 'export':
+      return 'Exported this setup.';
+  }
+}
 
 /** Commands that end or halt work already in progress get an explicit confirmation. */
 const PRINT_JOB_CONFIRMATIONS: Partial<
@@ -1975,6 +2025,120 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   renderProfileSelects();
   queuePersistedProfileRestore();
 
+  // Which printers this browser offers, and which presets the operator wrote
+  // over them (P6.4). The library is built from the corpus the catalog fetch
+  // returns, so it is created inside the composer rather than ahead of it.
+  const presetLibraryHost = document.getElementById('preset-library-host');
+  const presetBundleFile = document.getElementById('preset-bundle-file') as HTMLInputElement | null;
+  let presetStore: PresetLibraryStore | undefined;
+  let presetIssues: readonly PresetLibraryIssue[] = [];
+  let presetBusy = false;
+  let presetMessage: string | undefined;
+  const presetListeners = new Set<() => void>();
+  const notifyPresets = () => {
+    for (const listener of presetListeners) listener();
+  };
+
+  workspace.installCatalogComposer((raw) => {
+    if (!presetStore) {
+      presetStore = new PresetLibraryStore(raw, safeLocalStorage() ?? undefined);
+      presetIssues = presetStore.loadIssues;
+      if (presetIssues.length > 0) queueMicrotask(notifyPresets);
+    }
+    return presetStore.library.composeCatalog();
+  });
+
+  workspace.onRequestPresetLibrary = async (operation: PresetLibraryOperation) => {
+    const store = presetStore;
+    if (!store) {
+      presetMessage = 'The profile catalog has not loaded yet.';
+      notifyPresets();
+      return;
+    }
+    presetBusy = true;
+    notifyPresets();
+    try {
+      if (operation.kind === 'export') {
+        const blob = new Blob([store.library.exportBundle()], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'orcaxr-presets.json';
+        link.click();
+        URL.revokeObjectURL(url);
+        presetIssues = [];
+        presetMessage = 'Exported this setup. The bundle names the engine it was made against.';
+        return;
+      }
+      const result = applyPresetLibraryOperation(store.library, operation);
+      presetIssues = result.issues;
+      if (!result.ok) {
+        presetMessage = 'Nothing changed.';
+        return;
+      }
+      // Persist first, then recompose: a change the browser refused to store
+      // would otherwise be live until the next reload silently undid it.
+      const stored = store.save();
+      workspace.recomposeProfileCatalog();
+      presetMessage = stored
+        ? describePresetChange(operation)
+        : `${describePresetChange(operation)} This browser refused to save it, so it lasts until you reload.`;
+    } finally {
+      presetBusy = false;
+      notifyPresets();
+    }
+  };
+
+  if (presetLibraryHost) {
+    const presetPanel = new PresetLibraryPanel(presetLibraryHost, {
+      getInventory: () => presetStore?.library.inventory() ?? { vendors: Object.freeze([]), models: Object.freeze([]) },
+      getCustomPresets: () => presetStore?.library.customPresets() ?? [],
+      getBases: (kind) => {
+        const selection = workspace.getProfileOptions();
+        return (
+          presetStore?.library.basePresetsFor(kind, {
+            ...(selection.machinePresetId ? { printerId: selection.machinePresetId } : {}),
+            ...(selection.processPresetId ? { processId: selection.processPresetId } : {}),
+          }) ?? []
+        );
+      },
+      getIssues: () => presetIssues,
+      getStatus: () => ({ busy: presetBusy, ...(presetMessage ? { message: presetMessage } : {}) }),
+      subscribe: (listener) => {
+        presetListeners.add(listener);
+        return () => presetListeners.delete(listener);
+      },
+      run: async (operation) => {
+        await registry.invoke(PRESET_LIBRARY_ACTION_IDS[operation.kind], 'dom-inspector', actionCtx, uiState.get(), {
+          presetLibrary: operation,
+        });
+      },
+      chooseBundle: () =>
+        new Promise<string | undefined>((resolve) => {
+          if (!presetBundleFile) {
+            resolve(undefined);
+            return;
+          }
+          presetBundleFile.value = '';
+          presetBundleFile.onchange = () => {
+            const file = presetBundleFile.files?.[0];
+            if (!file) {
+              resolve(undefined);
+              return;
+            }
+            void file.text().then(resolve, () => resolve(undefined));
+          };
+          presetBundleFile.click();
+        }),
+      confirmDelete: async (name) =>
+        window.confirm(
+          `Delete your preset "${name}"? Projects already using it keep the values they were sliced with.`,
+        ),
+    });
+    presetPanel.mount();
+    window.addEventListener('pagehide', () => presetPanel.dispose(), { once: true });
+  }
+
   const autoPairCheckbox = document.getElementById('chk-full-spectrum-auto-pairs') as HTMLInputElement | null;
   const autoPairStatus = document.getElementById('full-spectrum-auto-pairs-status');
   const autoPairConfirmButton = document.getElementById(
@@ -2942,13 +3106,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   const printerSelect = document.getElementById('printer-select') as HTMLSelectElement;
   const btnPrinterAdd = document.getElementById('btn-printer-add') as HTMLButtonElement;
   const btnPrinterRemove = document.getElementById('btn-printer-remove') as HTMLButtonElement;
-  const printerStorage = (() => {
-    try {
-      return typeof localStorage === 'undefined' ? null : localStorage;
-    } catch {
-      return null;
-    }
-  })();
+  const printerStorage = safeLocalStorage();
 
   let printers = loadPrinterDirectory(printerStorage);
   // An install configured before printers had names keeps working: its single

@@ -21,6 +21,7 @@ import type { ScopedOverrideTarget } from '../project/scopedOverrides';
 import type { PrintJobCommand } from '../printer/PrintJobControl';
 import type { PrinterConsoleOperation } from '../printer/PrinterConsole';
 import type { PrinterStorageOperation } from '../printer/PrinterStorage';
+import type { PresetLibraryOperation } from '../settings/presets/PresetLibrary';
 import type { GcodePreviewViewPatch } from '../slicer/GcodePreviewSession';
 
 /** Modal tool that authors each facet channel. */
@@ -139,6 +140,9 @@ export class ActionContext {
     guard: Readonly<{ sourceRevision: number; sourceHash: string }>,
   ): void {
     this.workspace.setScopedOverrides(target, overrides, guard);
+  }
+  operatePresetLibrary(operation: PresetLibraryOperation): Promise<void> {
+    return this.workspace.operatePresetLibrary(operation);
   }
   operatePrinterStorage(operation: PrinterStorageOperation): Promise<void> {
     return this.workspace.operatePrinterStorage(operation);
