@@ -20,6 +20,8 @@ export interface BrimEarsPanelAdapter {
   onActivate(): void | Promise<void>;
   onSetRadius(radiusMm: number): void | Promise<void>;
   onRemove(index: number): void | Promise<void>;
+  /** Place ears on every corner that would peel, as one undoable entry. */
+  onAutoPlace(): void | Promise<void>;
   onClear(): void | Promise<void>;
   onError?(error: unknown): void;
 }
@@ -87,9 +89,12 @@ export class BrimEarsPanel {
       this.adapter.onActivate(),
     );
     activate.setAttribute('aria-pressed', state.active ? 'true' : 'false');
+    const auto = this.button('brim-ears-auto', 'Place on corners', () => this.adapter.onAutoPlace());
+    auto.disabled = state.objectId === undefined;
+    auto.title = 'Find the first-layer corners that would lift and put an ear on each';
     const clear = this.button('brim-ears-clear', 'Clear all', () => this.adapter.onClear());
     clear.disabled = state.ears.length === 0;
-    controls.append(activate, clear);
+    controls.append(activate, auto, clear);
 
     const radius = document.createElement('input');
     radius.type = 'number';

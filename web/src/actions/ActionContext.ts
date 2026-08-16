@@ -142,6 +142,9 @@ export class ActionContext {
   ): void {
     this.workspace.setScopedOverrides(target, overrides, guard);
   }
+  autoPlaceBrimEars(): void {
+    this.workspace.autoPlaceBrimEars();
+  }
   toggleSelectionOutline(): void {
     this.workspace.toggleSelectionOutline();
   }

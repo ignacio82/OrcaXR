@@ -90,6 +90,7 @@ export const ACTION_IDS_BY_PARITY_TASK = {
   'P5.3': [
     'tool_brim_ears',
     'brim_ears_configure',
+    'brim_ears_auto',
     'brim_ears_remove',
     'brim_ears_clear',
     'tool_measure',

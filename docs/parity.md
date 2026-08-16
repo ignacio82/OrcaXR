@@ -1343,11 +1343,16 @@ Local starting seams: [`MeshCut.ts`](../web/src/features/MeshCut.ts),
     enough, with the reason said out loud), a hexagon that passes at 125° and fails at 100°, an
     L-shape whose reflex corner is excluded and whose reversed winding gives the same answer, the
     thinning tie-break, and indexed versus non-indexed meshes agreeing.
+    The detector is wired: `brim_ears_auto` is a real registry action behind a "Place on corners"
+    control in the panel, inert until exactly one part is in scope. It places the whole detected
+    set through `AddBrimEarsCommand`, a new plural command, so one undo removes them all — eight
+    undo steps for one act is noise, since the operator asked for "hold this part down" rather than
+    for eight separate decisions. Existing ears are kept, so auto-placing after a manual placement
+    adds rather than replaces.
   - **Outstanding:** the acceptance bar is not met yet. Ears are written into the archive the
-    engine reads, but no test slices a project with ears and confirms them in the G-code. The
-    detector is not yet wired to an action or a panel control, so placement in the running app is
-    still manual, and the pinned gizmo's on-model ear preview is not implemented. All four actions
-    declare an `xrUnsupportedReason`.
+    engine reads, but no test slices a project with ears and confirms them in the G-code, which is
+    what the Accept clause asks for. The pinned gizmo's on-model ear preview is not implemented,
+    and all five actions declare an `xrUnsupportedReason`.
 
 - [~] **P5.4 — Complete plate management.** Support up to the upstream limit (36): create,
   select, rename, duplicate, delete, reorder, lock, printable/excluded state, move/copy selected

@@ -3061,6 +3061,10 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
         });
         if (!invoked) throw new Error('Removing a brim ear is unavailable.');
       },
+      onAutoPlace: async () => {
+        const invoked = await registry.invoke('brim_ears_auto', 'dom-inspector', actionCtx, uiState.get());
+        if (!invoked) throw new Error('Automatic brim-ear placement is unavailable.');
+      },
       onClear: async () => {
         const invoked = await registry.invoke('brim_ears_clear', 'dom-inspector', actionCtx, uiState.get());
         if (!invoked) throw new Error('Clearing brim ears is unavailable.');

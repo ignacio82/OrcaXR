@@ -84,6 +84,50 @@ export class AddBrimEarCommand implements ProjectCommand {
   }
 }
 
+/**
+ * Place a whole detected set as one entry.
+ *
+ * Automatic placement finds several corners at once, and eight undo steps for
+ * one act is noise: the operator asked for "hold this part down", not for eight
+ * separate decisions. Existing ears are kept, so auto-placing after a manual
+ * placement adds to it rather than replacing it.
+ */
+export class AddBrimEarsCommand implements ProjectCommand {
+  readonly type = 'add-brim-ears';
+  readonly label = 'Place brim ears';
+  readonly dirtyCategories = ['projectData'] as const;
+
+  private readonly points: readonly BrimEarPoint[];
+  private previous?: readonly BrimEarPoint[];
+
+  constructor(
+    private readonly objectId: ObjectId,
+    points: readonly BrimEarPoint[],
+  ) {
+    if (points.length === 0) {
+      throw new BrimEarError('Placing no brim ears is not a change', 'unknown-ear');
+    }
+    for (const point of points) assertBrimEarPoint(point);
+    this.points = Object.freeze(points.map((point) => cloneJson(point)));
+  }
+
+  apply(context: CommandContext): void {
+    const state = cloneProjectState(context.project.getSnapshot().state);
+    const object = findObject(state, this.objectId);
+    this.previous = object.brimEars ? Object.freeze(object.brimEars.map((point) => cloneJson(point))) : undefined;
+    object.brimEars = [...(object.brimEars ?? []), ...this.points.map((point) => cloneJson(point))];
+    context.project.replaceState(state, { reason: this.type, dirtyCategories: ['projectData'] });
+  }
+
+  revert(context: CommandContext): void {
+    const state = cloneProjectState(context.project.getSnapshot().state);
+    const object = findObject(state, this.objectId);
+    if (this.previous === undefined) delete object.brimEars;
+    else object.brimEars = this.previous.map((point) => cloneJson(point));
+    context.project.replaceState(state, { reason: this.type, dirtyCategories: ['projectData'] });
+  }
+}
+
 /** Remove one ear by index, so an accidental placement is easy to undo in place. */
 export class RemoveBrimEarCommand implements ProjectCommand {
   readonly type = 'remove-brim-ear';

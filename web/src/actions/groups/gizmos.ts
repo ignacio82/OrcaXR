@@ -218,6 +218,17 @@ export const gizmoActions: Action[] = [
     },
   },
   {
+    id: 'brim_ears_auto',
+    label: 'Place brim ears automatically',
+    icon: 'brim_ears',
+    group: 'scene',
+    disclosure: 'inspector',
+    hint: 'Find the corners of the first layer that would peel, and put an ear on each',
+    xrUnsupportedReason:
+      'Brim-ear radius and the placed-ear list are edited in the DOM inspector; no in-headset flow exists yet.',
+    run: (ctx) => ctx.autoPlaceBrimEars(),
+  },
+  {
     id: 'brim_ears_clear',
     label: 'Clear brim ears',
     icon: 'delete',

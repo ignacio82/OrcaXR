@@ -28,6 +28,9 @@ function mount(initial: BrimEarsPanelState) {
     onSetRadius: (radius) => {
       calls.push(`radius:${radius}`);
     },
+    onAutoPlace: () => {
+      calls.push('auto');
+    },
     onRemove: (index) => {
       calls.push(`remove:${index}`);
     },
@@ -103,6 +106,21 @@ await test('each placed ear lists its position and diameter and can be removed',
   button(view.host, 'brim-ears-clear')!.click();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(view.calls, ['remove:1', 'clear']);
+});
+
+await test('the automatic placement control needs a target part', async () => {
+  const withoutTarget = mount(base);
+  const disabled = button(withoutTarget.host, 'brim-ears-auto');
+  assert.ok(disabled, 'the control is always present, so its absence is never mistaken for a missing feature');
+  assert.equal(disabled.disabled, true, 'and it is inert until a part is selected');
+
+  const withTarget = mount({ ...base, objectId: 'object-1' as never, hint: 'Click the model.' });
+  const enabled = button(withTarget.host, 'brim-ears-auto');
+  assert.ok(enabled);
+  assert.equal(enabled.disabled, false);
+  enabled.click();
+  await Promise.resolve();
+  assert.deepEqual(withTarget.calls, ['auto']);
 });
 
 console.log(`\nBrim ears panel: ${passed} tests passed.`);

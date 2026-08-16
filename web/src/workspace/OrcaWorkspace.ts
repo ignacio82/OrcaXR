@@ -138,6 +138,7 @@ import type { ActionContext } from '../actions/ActionContext';
 import { renderXrActionButton, xrToolRailActions, type XrActionHandle } from '../ui/xr/XrShell';
 import { xrBlocksUiAdapter } from '../ui/xr/XrUiAdapter';
 import { SceneGestureGuard, type SceneGestureSnapshot } from '../ui/xr/SceneGestureGuard';
+import { DEFAULT_BRIM_EAR_DETECTION, detectBrimEars } from '../project/objects/brimEarDetection';
 import { CalibrationRampGenerator } from '../features/CalibrationRampGenerator';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 
@@ -2542,6 +2543,51 @@ export class OrcaWorkspace extends xb.Script {
         ? 'Click the model to place an ear; each placement undoes on its own.'
         : 'Select one model part to place brim ears on it.',
     });
+  }
+
+  /**
+   * Place ears on every corner of the selected part that would peel (P5.3.6).
+   *
+   * The detection reads the display mesh's own geometry, which is the space
+   * ears are stored in — the same space `placeBrimEar` converts a click into —
+   * so a detected point and a clicked one mean the same thing.
+   */
+  public autoPlaceBrimEars(): boolean {
+    const objectId = this.brimEarTargetObject();
+    if (!objectId) {
+      this.setStatus('Select one model part before placing brim ears on it.');
+      return false;
+    }
+    const target = this.paintTargets().find((record) => record.objectId === objectId);
+    const geometry = (target?.display as THREE.Mesh | undefined)?.geometry;
+    const position = geometry?.getAttribute('position');
+    if (!position) {
+      this.setStatus('That part has no geometry to read corners from.');
+      return false;
+    }
+    const detected = detectBrimEars(
+      position.array as Float32Array,
+      geometry?.index ? (geometry.index.array as Uint32Array) : undefined,
+      { ...DEFAULT_BRIM_EAR_DETECTION, headFrontRadiusMm: this.brimEarRadiusMm },
+    );
+    if (detected.ears.length === 0) {
+      this.setStatus(`No ears placed. ${detected.reason ?? ''}`.trim());
+      return false;
+    }
+    try {
+      this.canonicalProject.addBrimEars(
+        objectId,
+        detected.ears.map((ear) => ear.point),
+      );
+    } catch (error) {
+      this.setStatus(`Brim ears: ${(error as Error).message}`);
+      return false;
+    }
+    this.setStatus(
+      `Placed ${detected.ears.length} brim ear${detected.ears.length === 1 ? '' : 's'} on the corners that would lift; one undo removes them all.`,
+    );
+    this.onBrimEarStateChanged?.();
+    return true;
   }
 
   public clearBrimEars(): boolean {

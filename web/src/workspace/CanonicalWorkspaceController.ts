@@ -123,7 +123,12 @@ import {
 } from '../project/import/types';
 import { decodeIndexedMeshAsset, encodeIndexedMeshAsset } from '../project/meshCodec';
 import { ReplaceVolumeMeshCommand, type MeshTopologyReplacementGuard } from '../project/objects/topologyCommands';
-import { AddBrimEarCommand, ClearBrimEarsCommand, RemoveBrimEarCommand } from '../project/objects/brimEarCommands';
+import {
+  AddBrimEarCommand,
+  AddBrimEarsCommand,
+  ClearBrimEarsCommand,
+  RemoveBrimEarCommand,
+} from '../project/objects/brimEarCommands';
 import {
   DEFAULT_SIMPLIFY_CONFIGURATION,
   simplifyMesh,
@@ -2415,6 +2420,12 @@ export class CanonicalWorkspaceController {
   addBrimEar(objectId: ObjectId, point: BrimEarPoint): void {
     this.assertActive();
     this.session.commands.execute(new AddBrimEarCommand(objectId, point));
+  }
+
+  /** Place a detected set of ears as one undoable entry. */
+  addBrimEars(objectId: ObjectId, points: readonly BrimEarPoint[]): void {
+    this.assertActive();
+    this.session.commands.execute(new AddBrimEarsCommand(objectId, points));
   }
 
   removeBrimEar(objectId: ObjectId, index: number): void {
