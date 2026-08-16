@@ -484,6 +484,52 @@ const REQUIRED_ORCA_ACTIONS = [
   'help_about',
 ];
 
+/**
+ * P10.5's structural half: XR is a complete surface or says exactly where it
+ * is not. Before `xr-inspector` existed, 54 of 195 actions — every printer,
+ * preset, calibration, and settings control — reached no XR surface and
+ * declared no reason, which reads as "not built yet" and is indistinguishable
+ * from an oversight. An action may still be absent from XR; it just has to say
+ * so in `xrUnsupportedReason`.
+ */
+test('every action is reachable in XR or declares why it is not', () => {
+  const silent = actions.filter(
+    (action) => !action.capability.surfaces.some((surface) => surface.startsWith('xr')) && !action.xrUnsupportedReason,
+  );
+  assert.deepStrictEqual(
+    silent.map((action) => action.id),
+    [],
+    'these actions are absent from XR without saying so',
+  );
+
+  // The declared refusals are real sentences, not empty strings standing in for
+  // one, and they never claim a surface at the same time.
+  for (const action of actions.filter((candidate) => candidate.xrUnsupportedReason)) {
+    assert.ok((action.xrUnsupportedReason ?? '').trim().length > 10, `${action.id}: reason is not a sentence`);
+    assert.deepStrictEqual(
+      action.capability.surfaces.filter((surface) => surface.startsWith('xr')),
+      [],
+      `${action.id}: declares an XR reason and an XR surface`,
+    );
+  }
+});
+
+test('the inspector catalog is reachable through one XR menu section', () => {
+  const inspector = registry.forSurface('xr-inspector');
+  assert.ok(inspector.length > 0);
+  // Every one is inspector-disclosure: the Panels section is the XR home for
+  // exactly what the DOM shell keeps in its inspector, and nothing else.
+  assert.deepStrictEqual(
+    inspector.filter((action) => action.disclosure !== 'inspector').map((action) => action.id),
+    [],
+  );
+  const workspaceSource = readFileSync(
+    fileURLToPath(new URL('../../workspace/OrcaWorkspace.ts', import.meta.url)),
+    'utf8',
+  );
+  assert.match(workspaceSource, /forSurface\('xr-inspector'\)/, 'the XR shell renders the surface it declares');
+});
+
 test('required Snapmaker outcomes remain represented without implying completion', () => {
   assert.deepStrictEqual(
     REQUIRED_ORCA_ACTIONS.filter((id) => !registry.get(id)),

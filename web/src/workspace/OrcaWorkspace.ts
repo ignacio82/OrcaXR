@@ -133,7 +133,7 @@ import { PaintOverlayRegistry } from './PaintOverlayRegistry';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import type { Action, ActionRegistry, ActionSurface } from '../actions/ActionRegistry';
-import { MENU_SECTIONS } from '../actions/ActionRegistry';
+import { GROUPS, MENU_SECTIONS, XR_PANELS_SECTION_ID } from '../actions/ActionRegistry';
 import type { ActionContext } from '../actions/ActionContext';
 import { renderXrActionButton, xrToolRailActions, type XrActionHandle } from '../ui/xr/XrShell';
 import { xrBlocksUiAdapter } from '../ui/xr/XrUiAdapter';
@@ -5395,8 +5395,16 @@ export class OrcaWorkspace extends xb.Script {
     const menuBar = new UIPanel({ flexDirection: 'row', alignItems: 'center', gap: 2 });
     this.menuBarButtons = [];
     const reg = this.actionRegistry;
-    for (const sec of MENU_SECTIONS) {
-      const hasMenuItems = reg.forSurface('xr-menu').some((x) => x.menuSection === sec.id);
+    // The pinned menu sections, plus one for everything the DOM shell puts in
+    // its inspector. Without it the printer, preset, calibration, and settings
+    // controls would exist only on a screen.
+    const sections: { id: string; label: string }[] = [
+      ...MENU_SECTIONS,
+      ...(reg.forSurface('xr-inspector').length > 0 ? [{ id: XR_PANELS_SECTION_ID, label: 'Panels' }] : []),
+    ];
+    for (const sec of sections) {
+      const hasMenuItems =
+        sec.id === XR_PANELS_SECTION_ID || reg.forSurface('xr-menu').some((x) => String(x.menuSection) === sec.id);
       const hasToolOverflow =
         sec.id === 'tools' && reg.forSurface('xr-toolbar').some((action) => !xrToolRailActions([action]).length);
       if (!hasMenuItems && !hasToolOverflow) continue;
@@ -5573,9 +5581,15 @@ export class OrcaWorkspace extends xb.Script {
         /* detached */
       }
     }
-    const sec = MENU_SECTIONS.find((s) => s.id === id);
-    if (this.menuPanelTitle) this.menuPanelTitle.setText(sec ? sec.label : 'Menu');
+    const sec = MENU_SECTIONS.find((s) => String(s.id) === id);
+    if (this.menuPanelTitle) {
+      this.menuPanelTitle.setText(id === XR_PANELS_SECTION_ID ? 'Panels' : sec ? sec.label : 'Menu');
+    }
     const reg = this.actionRegistry;
+    if (id === XR_PANELS_SECTION_ID) {
+      this.populateXrPanelsSection(root);
+      return;
+    }
     const entries: { action: Action; surface: ActionSurface }[] = reg
       .forSurface('xr-menu')
       .filter((action) => action.menuSection === id)
@@ -5587,7 +5601,13 @@ export class OrcaWorkspace extends xb.Script {
         }
       }
     }
-    for (const { action: a, surface } of entries) {
+    for (const { action: a, surface } of entries) root.add(this.buildXrMenuRow(a, surface));
+  }
+
+  /** One menu row, gated exactly as the DOM gates the same action. */
+  private buildXrMenuRow(a: Action, surface: ActionSurface): UIPanel {
+    const reg = this.actionRegistry;
+    {
       const availability = this.actionContext
         ? reg.availability(a, surface, this.actionContext.ui.get())
         : { state: 'disabled' as const, reason: 'Workspace is still initializing.' };
@@ -5631,7 +5651,36 @@ export class OrcaWorkspace extends xb.Script {
       );
       if (unavailable)
         btn.add(new UIText('UNAVAILABLE', { fontSize: 10, fontWeight: 'bold', color: '#ffb74d', flexShrink: 0 }));
-      root.add(btn);
+      return btn;
+    }
+  }
+
+  /**
+   * Everything the DOM shell keeps in its inspector, grouped so a long list
+   * stays navigable in a headset. Rows are gated by the same capability and
+   * selection state the DOM uses, so an action disabled on a screen is
+   * disabled here for the same stated reason.
+   */
+  private populateXrPanelsSection(root: UIPanel): void {
+    const reg = this.actionRegistry;
+    const byGroup = new Map<string, Action[]>();
+    for (const action of reg.forSurface('xr-inspector')) {
+      const bucket = byGroup.get(action.group) ?? [];
+      bucket.push(action);
+      byGroup.set(action.group, bucket);
+    }
+    for (const group of GROUPS) {
+      const actions = byGroup.get(group.id);
+      if (!actions || actions.length === 0) continue;
+      root.add(
+        new UIText(group.label.toUpperCase(), {
+          fontSize: 11,
+          fontWeight: 'bold',
+          color: '#8a94a0',
+          paddingTop: 8,
+        }),
+      );
+      for (const action of actions) root.add(this.buildXrMenuRow(action, 'xr-inspector'));
     }
   }
 

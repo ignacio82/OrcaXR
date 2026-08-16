@@ -78,6 +78,7 @@ export type ActionSurface =
   | 'xr-primary'
   | 'xr-toolbar'
   | 'xr-menu'
+  | 'xr-inspector'
   | 'automation';
 
 export type PrerequisiteId =
@@ -346,6 +347,13 @@ export interface ActionGroup {
   order: number;
 }
 
+/**
+ * The XR menu's own section for everything the DOM shell puts in its
+ * inspector. It is not an upstream menu, so it is named here rather than in
+ * {@link MENU_SECTIONS}.
+ */
+export const XR_PANELS_SECTION_ID = 'xr-panels';
+
 export const GROUPS: readonly ActionGroup[] = [
   { id: 'file', label: 'File', icon: 'file', order: 0 },
   { id: 'edit', label: 'Edit', icon: 'edit', order: 1 },
@@ -494,7 +502,14 @@ function surfacesFor(action: ActionDefinition): ActionSurface[] {
   } else if (action.disclosure === 'menu') {
     surfaces.push('dom-menu');
     if (!action.xrUnsupportedReason) surfaces.push('xr-menu');
-  } else surfaces.push('dom-inspector');
+  } else {
+    surfaces.push('dom-inspector');
+    // An inspector action is reachable in XR through the Panels menu. Without
+    // this, every printer, preset, calibration, and settings control would be
+    // silently absent from the headset rather than declared unsupported — the
+    // registry test below refuses that outcome.
+    if (!action.xrUnsupportedReason) surfaces.push('xr-inspector');
+  }
   if (INSPECTOR_MIRRORED.has(action.id) && !surfaces.includes('dom-inspector')) surfaces.push('dom-inspector');
   if (action.shortcuts?.length) surfaces.push('keyboard');
   if (action.mcpTool) surfaces.push('automation');
