@@ -84,6 +84,7 @@ import {
   type PaintToolSettings,
 } from '../project/painting/PaintStrokeService';
 import { SIMPLIFY_DEFAULT_MAX_ERROR } from '../project/objects/simplify';
+import type { SimplifyConfiguration } from '../project/objects/simplify';
 import { BRIM_EAR_MAX_RADIUS_MM, BRIM_EAR_MIN_RADIUS_MM } from '../project/objects/brimEarCommands';
 import type { AiPaintSession } from '../project/painting/AiPaintSession';
 import {
@@ -119,6 +120,7 @@ import {
   type CanonicalVirtualFilamentMutationRequest,
   type CanonicalWorkspaceSummary,
 } from './CanonicalWorkspaceController';
+import type { PreparedSimplify } from './CanonicalWorkspaceController';
 import { runCanonicalSplitToObjectsFlow } from './CanonicalSplitToObjectsFlow';
 import { CanonicalWorkspaceSlicer } from './CanonicalWorkspaceSlicer';
 import {
@@ -4957,6 +4959,141 @@ export class OrcaWorkspace extends xb.Script {
     this.revalidatePublishedGcode();
     this.setStatus(printable ? 'Included build plate in print output.' : 'Excluded build plate from print output.');
     this.onPlatesChanged?.();
+  }
+
+  // --- Simplify preview (P5.3.5) --------------------------------------
+  /** Decimations computed and shown, but not yet installed. */
+  private simplifyPreview: {
+    readonly prepared: readonly PreparedSimplify[];
+    readonly restore: readonly { readonly display: THREE.Mesh; readonly geometry: THREE.BufferGeometry }[];
+    readonly configuration: SimplifyConfiguration;
+  } | null = null;
+  public onSimplifyStateChanged: (() => void) | null = null;
+
+  /**
+   * Decimate every selected part and show the result, without committing.
+   *
+   * The pinned gizmo previews before it applies, and the reason is not
+   * decoration: decimation is the one edit that cannot be inspected after the
+   * fact, because the thing it removed is gone. What is drawn here is the exact
+   * mesh {@link applySimplifyPreview} will install — the same prepared object,
+   * not a second run of the same settings — so the Accept clause's "the preview
+   * matches the applied result" holds by construction.
+   *
+   * Canonical state is untouched until apply, so cancel is a restore of the
+   * display and nothing else.
+   */
+  public previewSimplify(configuration: SimplifyConfiguration): boolean {
+    this.cancelSimplifyPreview();
+    const volumes = this.paintableSelectedVolumes();
+    if (volumes.length === 0) {
+      this.setStatus('Select a model to simplify.');
+      return false;
+    }
+    const prepared: PreparedSimplify[] = [];
+    try {
+      for (const volumeId of volumes) {
+        const result = this.canonicalProject.prepareSimplifyVolume(volumeId, configuration);
+        if (result) prepared.push(result);
+      }
+    } catch (error) {
+      this.setStatus(`Simplify failed: ${(error as Error).message}`);
+      return false;
+    }
+    if (prepared.length === 0) {
+      this.setStatus(
+        configuration.useCount ? 'Nothing to simplify at that ratio.' : 'Nothing to simplify within that error limit.',
+      );
+      this.onSimplifyStateChanged?.();
+      return false;
+    }
+
+    const byVolume = new Map(prepared.map((entry) => [entry.volumeId, entry]));
+    const restore: { display: THREE.Mesh; geometry: THREE.BufferGeometry }[] = [];
+    for (const target of this.paintTargets()) {
+      const entry = byVolume.get(target.volumeId);
+      if (!entry) continue;
+      restore.push({ display: target.display, geometry: target.display.geometry });
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute([...entry.positions], 3));
+      geometry.setIndex([...entry.indices]);
+      geometry.computeVertexNormals();
+      target.display.geometry = geometry;
+    }
+    this.simplifyPreview = { prepared, restore, configuration };
+    const before = prepared.reduce((sum, entry) => sum + entry.beforeTriangles, 0);
+    const after = prepared.reduce((sum, entry) => sum + entry.afterTriangles, 0);
+    this.setStatus(`Simplify preview: ${before} → ${after} triangles. Apply keeps it; cancel restores the model.`);
+    this.onSimplifyStateChanged?.();
+    return true;
+  }
+
+  /** Install exactly what the preview drew, as one undoable run. */
+  public applySimplifyPreview(): boolean {
+    const session = this.simplifyPreview;
+    if (!session) {
+      this.setStatus('There is no simplify preview to apply.');
+      return false;
+    }
+    let before = 0;
+    let after = 0;
+    try {
+      for (const entry of session.prepared) {
+        const result = this.canonicalProject.applyPreparedSimplify(entry);
+        before += result.beforeTriangles;
+        after += result.afterTriangles;
+      }
+    } catch (error) {
+      // The guard refused, which means the part moved on under the preview.
+      // Restore what the operator was looking at rather than leaving a stale
+      // mesh on screen claiming to be the model.
+      this.cancelSimplifyPreview();
+      this.setStatus(`Simplify failed: ${(error as Error).message}`);
+      return false;
+    }
+    this.simplifyPreview = null;
+    this.refreshPaintOverlays();
+    this.recomputePreflight();
+    this.setStatus(
+      `Simplified ${session.prepared.length} part(s): ${before} → ${after} triangles. ` +
+        'Painting was reset; undo restores both.',
+    );
+    this.onSimplifyStateChanged?.();
+    return true;
+  }
+
+  /** Put the original meshes back on screen; canonical state never moved. */
+  public cancelSimplifyPreview(): boolean {
+    const session = this.simplifyPreview;
+    if (!session) return false;
+    for (const entry of session.restore) {
+      const previewed = entry.display.geometry;
+      entry.display.geometry = entry.geometry;
+      if (previewed !== entry.geometry) previewed.dispose();
+    }
+    this.simplifyPreview = null;
+    this.onSimplifyStateChanged?.();
+    return true;
+  }
+
+  /** Read-only view a simplify surface renders. */
+  public getSimplifySnapshot(): {
+    readonly previewing: boolean;
+    readonly parts: number;
+    readonly beforeTriangles: number;
+    readonly afterTriangles: number;
+    readonly stoppedOnError: boolean;
+    readonly configuration: SimplifyConfiguration | null;
+  } {
+    const session = this.simplifyPreview;
+    return Object.freeze({
+      previewing: session !== null,
+      parts: session?.prepared.length ?? 0,
+      beforeTriangles: session?.prepared.reduce((sum, entry) => sum + entry.beforeTriangles, 0) ?? 0,
+      afterTriangles: session?.prepared.reduce((sum, entry) => sum + entry.afterTriangles, 0) ?? 0,
+      stoppedOnError: session?.prepared.some((entry) => entry.stoppedOnError) ?? false,
+      configuration: session?.configuration ?? null,
+    });
   }
 
   /** Projection-only simplification is forbidden until a canonical topology command owns it. */

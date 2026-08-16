@@ -751,6 +751,25 @@ export interface ImportedCanonicalModel {
  * a one-way projection: callers may pass stable IDs back into this controller,
  * but scene transforms are never read as canonical mutations.
  */
+/**
+ * A decimation that has been computed but not installed (P5.3.5).
+ *
+ * Carries the guard read when it was computed, so a volume that changed while
+ * an operator was looking at the preview is refused rather than overwritten.
+ */
+export interface PreparedSimplify {
+  readonly volumeId: VolumeId;
+  readonly guard: MeshTopologyReplacementGuard;
+  readonly positions: readonly number[];
+  readonly indices: readonly number[];
+  readonly beforeTriangles: number;
+  readonly afterTriangles: number;
+  readonly maxError: number;
+  /** True when the run stopped because the next edge exceeded `maxError`. */
+  readonly stoppedOnError: boolean;
+  readonly sourceFilename?: string;
+}
+
 export class CanonicalWorkspaceController {
   readonly surface: ThreeProjectSurface;
 
@@ -2348,11 +2367,24 @@ export class CanonicalWorkspaceController {
    * ownership — is one undoable entry. Staging happens before the command runs,
    * and a cancelled or failed run never touches canonical state.
    */
-  simplifyVolume(
+  /**
+   * Decimate a volume without touching canonical state (P5.3.5).
+   *
+   * Split out of {@link simplifyVolume} so a preview and the apply that follows
+   * it cannot disagree: the caller shows what this returns and then hands the
+   * very same object to {@link applyPreparedSimplify}, rather than decimating
+   * twice and hoping the second run lands where the first did. The Accept
+   * clause asks that "the preview matches the applied result", and this makes
+   * that structural instead of a property a test has to keep re-checking.
+   *
+   * Returns `null` when the run would remove nothing, which is a real answer —
+   * a ratio too small to collapse an edge is not a failure.
+   */
+  prepareSimplifyVolume(
     volumeId: VolumeId,
     configuration: SimplifyConfiguration = DEFAULT_SIMPLIFY_CONFIGURATION,
     options: SimplifyOptions = {},
-  ): { readonly beforeTriangles: number; readonly afterTriangles: number; readonly maxError: number } {
+  ): PreparedSimplify | null {
     this.assertActive();
     const state = this.session.project.getSnapshot().state;
     const found = findVolume(state, volumeId);
@@ -2373,30 +2405,65 @@ export class CanonicalWorkspaceController {
       configuration,
       options,
     );
-    if (simplified.triangles.length >= simplified.sourceTriangleCount) {
-      return {
-        beforeTriangles: simplified.sourceTriangleCount,
-        afterTriangles: simplified.sourceTriangleCount,
-        maxError: 0,
-      };
-    }
+    if (simplified.triangles.length >= simplified.sourceTriangleCount) return null;
 
     const positions: number[] = [];
     for (const vertex of simplified.vertices) positions.push(vertex[0], vertex[1], vertex[2]);
     const indices: number[] = [];
     for (const triangle of simplified.triangles) indices.push(triangle[0], triangle[1], triangle[2]);
-    const encoded = encodeIndexedMeshAsset({
-      id: this.options.idSource.next('asset'),
-      positions,
-      indices,
-      ...(payload.descriptor.sourceFilename ? { sourceFilename: payload.descriptor.sourceFilename } : {}),
-    });
-    this.session.commands.execute(new ReplaceVolumeMeshCommand(guard, encoded));
-    return {
+    return Object.freeze({
+      volumeId,
+      guard,
+      positions: Object.freeze(positions) as readonly number[],
+      indices: Object.freeze(indices) as readonly number[],
       beforeTriangles: simplified.sourceTriangleCount,
       afterTriangles: simplified.triangles.length,
       maxError: simplified.maxAppliedError,
+      stoppedOnError: simplified.stoppedOnError,
+      ...(payload.descriptor.sourceFilename ? { sourceFilename: payload.descriptor.sourceFilename } : {}),
+    });
+  }
+
+  /**
+   * Install a prepared decimation as one undoable topology replacement.
+   *
+   * The guard carried in the prepared result is the one read when it was
+   * computed, so a volume that changed underneath a long preview is refused by
+   * the existing command rather than silently overwritten.
+   */
+  applyPreparedSimplify(prepared: PreparedSimplify): {
+    readonly beforeTriangles: number;
+    readonly afterTriangles: number;
+    readonly maxError: number;
+  } {
+    this.assertActive();
+    const encoded = encodeIndexedMeshAsset({
+      id: this.options.idSource.next('asset'),
+      positions: [...prepared.positions],
+      indices: [...prepared.indices],
+      ...(prepared.sourceFilename ? { sourceFilename: prepared.sourceFilename } : {}),
+    });
+    this.session.commands.execute(new ReplaceVolumeMeshCommand(prepared.guard, encoded));
+    return {
+      beforeTriangles: prepared.beforeTriangles,
+      afterTriangles: prepared.afterTriangles,
+      maxError: prepared.maxError,
     };
+  }
+
+  simplifyVolume(
+    volumeId: VolumeId,
+    configuration: SimplifyConfiguration = DEFAULT_SIMPLIFY_CONFIGURATION,
+    options: SimplifyOptions = {},
+  ): { readonly beforeTriangles: number; readonly afterTriangles: number; readonly maxError: number } {
+    const prepared = this.prepareSimplifyVolume(volumeId, configuration, options);
+    if (!prepared) {
+      const state = this.session.project.getSnapshot().state;
+      const found = findVolume(state, volumeId);
+      const triangles = found?.volume.source.triangleCount ?? 0;
+      return { beforeTriangles: triangles, afterTriangles: triangles, maxError: 0 };
+    }
+    return this.applyPreparedSimplify(prepared);
   }
 
   /**
