@@ -88,6 +88,8 @@ async function baseConfig(): Promise<Record<string, string>> {
 interface ArchiveOptions {
   readonly range?: boolean;
   readonly objectConfig?: Record<string, unknown>;
+  readonly plateConfig?: Record<string, unknown>;
+  readonly partConfig?: Record<string, unknown>;
 }
 
 async function buildArchive(options: ArchiveOptions = {}): Promise<Uint8Array> {
@@ -117,7 +119,7 @@ async function buildArchive(options: ArchiveOptions = {}): Promise<Uint8Array> {
   state.config = config as never;
   state.sourceAssets = [descriptor];
   for (const plate of state.plates) {
-    plate.config = {};
+    plate.config = (options.plateConfig ?? {}) as never;
     for (const object of plate.objects) {
       object.config = (options.objectConfig ?? {}) as never;
       // Reuse the fixture's own stable range id: the canonical validator
@@ -130,7 +132,7 @@ async function buildArchive(options: ArchiveOptions = {}): Promise<Uint8Array> {
           : [];
       for (const volume of object.volumes) {
         volume.source = { assetId: descriptor.id, topologyRevision: 0, triangleCount: mesh.triangleCount };
-        volume.config = {};
+        volume.config = (options.partConfig ?? {}) as never;
         volume.annotations = emptyFacetAnnotations(0);
       }
     }
@@ -229,6 +231,51 @@ await test('an object-scope override reaches the engine and changes the walls', 
     layersBelow(plain, CUBE_MM),
     'an object override must not change the layer count',
   );
+});
+
+await test('a part scope reaches the engine; a plate scope is discarded by the WASM entry', async () => {
+  // The remaining two of P6.5's five scopes. Both are measured with the
+  // engine's own reported totals rather than by counting section markers,
+  // which count once per layer whatever the setting says.
+  const filamentUsed = (gcode: string): number => {
+    const match = /^; filament used \[mm\] = ([\d.]+)/m.exec(gcode);
+    assert.ok(match, 'the engine reports its own filament total');
+    return Number.parseFloat(match[1]);
+  };
+
+  const plain = await slice(await buildArchive(), 'scope-default');
+
+  // A plate-scope override has to use a key the plate actually owns: the
+  // generated table gives it exactly eight, and infill density is not among
+  // them — a first attempt used one and the serializer rightly dropped it.
+  // `spiral_mode` is unmistakable in the totals: a vase is one wall and no
+  // infill, so it uses far less material for the same solid.
+  //
+  // KNOWN GAP, with a located cause. The archive does carry plate settings —
+  // `buildBbsCore` writes them under `<plate>` in `model_settings.config` — and
+  // the engine does parse them, into `PlateDataPtrs`. But the WASM entry point
+  // deletes that structure immediately after loading and never applies it
+  // (`wasm/slic3r_wasm.cpp:346`), so the slice runs on the project config
+  // alone. Closing it needs a change to the C++ entry and a rebuilt engine
+  // artifact, which is not something a test can do.
+  //
+  // Asserted as observed so it trips the moment the behaviour changes.
+  const vasePlate = await slice(await buildArchive({ plateConfig: { spiral_mode: '1' } }), 'scope-plate');
+  assert.equal(
+    filamentUsed(vasePlate),
+    filamentUsed(plain),
+    'KNOWN GAP: plate-scope overrides are parsed and then discarded by the WASM entry point',
+  );
+
+  // A part-scope override on the only volume in the object.
+  const densePart = await slice(await buildArchive({ partConfig: { sparse_infill_density: '60%' } }), 'scope-part');
+  assert.ok(
+    filamentUsed(densePart) > filamentUsed(plain),
+    `a part override must reach the print: ${filamentUsed(densePart)} vs ${filamentUsed(plain)}`,
+  );
+
+  // The part override changes what fills the solid, not its height.
+  assert.equal(layersBelow(densePart, CUBE_MM), layersBelow(plain, CUBE_MM));
 });
 
 console.log(`\nScoped override slicing: ${passed} tests passed.`);

@@ -5,7 +5,21 @@ import process from 'node:process';
 
 const root = resolve(import.meta.dirname, '..');
 const sourceRoot = resolve(root, 'src');
-const filters = process.argv.slice(2);
+const args = process.argv.slice(2);
+// `--exclude <substring>` keeps a slow family out of a suite without moving the
+// files: the WASM slice tests belong with the project code they exercise, but
+// running them ahead of the browser suites starves those of CPU.
+const excludes = [];
+const filters = [];
+for (let index = 0; index < args.length; index += 1) {
+  if (args[index] === '--exclude') {
+    const value = args[index + 1];
+    if (value) excludes.push(value);
+    index += 1;
+    continue;
+  }
+  filters.push(args[index]);
+}
 
 function collect(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -17,6 +31,7 @@ function collect(dir) {
 const tests = collect(sourceRoot)
   .filter((file) => file.endsWith('.test.ts'))
   .filter((file) => filters.length === 0 || filters.some((filter) => file.includes(filter)))
+  .filter((file) => !excludes.some((exclude) => file.includes(exclude)))
   .sort();
 
 if (tests.length === 0) {
