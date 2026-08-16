@@ -270,6 +270,74 @@ async function fillPlateWithInstances(page) {
 }
 
 /** Mirror and centre run as canonical commands through the Edit menu. */
+/**
+ * Two View gaps that used to render as UNAVAILABLE (P11.2).
+ *
+ * Both are scene changes rather than panel changes, so this asserts the
+ * scene: an outline mesh exists on exactly the selected instance and is
+ * removed when the toggle goes off, and the navigator reports its state
+ * through the workspace rather than through a checkbox that could lie.
+ */
+async function toggleViewOverlays(page) {
+  const selected = await page.evaluate(
+    () => globalThis.window.workspace.getCanonicalSummary().selectedInstanceIds[0] ?? null,
+  );
+  assert.ok(selected, 'a model is selected to outline');
+
+  const countOutlines = () =>
+    page.evaluate(() => {
+      let found = 0;
+      globalThis.window.workspace.traverse((node) => {
+        if (node.name === 'selectionOutline') found += 1;
+      });
+      return found;
+    });
+
+  assert.equal(await countOutlines(), 0, 'nothing is outlined before the toggle');
+  await clickMenuAction(page, 'view_show_outline');
+  await page.waitForFunction(() => globalThis.window.workspace.isSelectionOutlineOn() === true, {
+    timeout: 30_000,
+  });
+  assert.equal(await countOutlines(), 1, 'exactly the selected instance is outlined');
+
+  // The outline follows the selection rather than sticking to what was
+  // selected when it was switched on.
+  await clickMenuAction(page, 'edit_deselect_all');
+  await page.waitForFunction(() => globalThis.window.workspace.getCanonicalSummary().selectedInstanceIds.length === 0, {
+    timeout: 30_000,
+  });
+  assert.equal(await countOutlines(), 0, 'deselecting removes the outline');
+  await clickMenuAction(page, 'edit_select_all');
+  await page.waitForFunction(() => globalThis.window.workspace.getCanonicalSummary().selectedInstanceIds.length > 0, {
+    timeout: 30_000,
+  });
+  assert.ok((await countOutlines()) > 0, 'reselecting brings it back');
+
+  await clickMenuAction(page, 'view_show_outline');
+  await page.waitForFunction(() => globalThis.window.workspace.isSelectionOutlineOn() === false, {
+    timeout: 30_000,
+  });
+  assert.equal(await countOutlines(), 0, 'switching it off disposes every outline');
+
+  await clickMenuAction(page, 'view_show_navigator');
+  await page.waitForFunction(() => globalThis.window.workspace.isNavigatorOn() === true, { timeout: 30_000 });
+  await clickMenuAction(page, 'view_show_navigator');
+  await page.waitForFunction(() => globalThis.window.workspace.isNavigatorOn() === false, { timeout: 30_000 });
+
+  // Neither action reports itself as unavailable any more.
+  const badges = await page.evaluate(() =>
+    ['view_show_outline', 'view_show_navigator'].map((id) => {
+      const item = globalThis.document.querySelector(`[data-action-id="${id}"]`);
+      return [id, item?.textContent?.includes('UNAVAILABLE') ?? false];
+    }),
+  );
+  assert.deepEqual(badges, [
+    ['view_show_outline', false],
+    ['view_show_navigator', false],
+  ]);
+  console.log('[e2e] selection outline follows the selection, and the navigator toggles');
+}
+
 async function transformImportedModels(page) {
   const instance = await page.evaluate(
     () => globalThis.window.workspace.getCanonicalSummary().selectedInstanceIds[0] ?? null,
@@ -2286,6 +2354,7 @@ try {
 
   await arrangeImportedModels(page);
   await transformImportedModels(page);
+  await toggleViewOverlays(page);
   await fillPlateWithInstances(page);
   await inspectStandaloneGcode(page, gcodeFixturePath);
   await paintImportedModel(page);

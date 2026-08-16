@@ -142,6 +142,12 @@ export class ActionContext {
   ): void {
     this.workspace.setScopedOverrides(target, overrides, guard);
   }
+  toggleSelectionOutline(): void {
+    this.workspace.toggleSelectionOutline();
+  }
+  toggleNavigator(): void {
+    this.workspace.toggleNavigator();
+  }
   togglePrinterStatusBar(): void {
     this.workspace.togglePrinterStatusBar();
   }

@@ -408,8 +408,6 @@ const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
   help_config_folder: 'Browsers cannot reveal a native config folder; the web adaptation is not implemented yet.',
   view_perspective_toggle: 'Perspective/orthographic switching is not implemented yet.',
   view_auto_perspective: 'Automatic perspective switching is not implemented yet.',
-  view_show_navigator: 'The 3D orientation navigator is not implemented yet.',
-  view_show_outline: 'Selection-outline rendering is not implemented yet.',
   view_show_gcode_window: 'The G-code text inspector is not implemented yet.',
   split_to_parts: 'Splitting an object into editable parts is not implemented yet.',
   tool_face_detector: 'Face detection and selection is not implemented yet.',

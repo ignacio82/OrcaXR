@@ -68,8 +68,6 @@ const UNAVAILABLE_IDS = [
   'help_config_folder',
   'view_perspective_toggle',
   'view_auto_perspective',
-  'view_show_navigator',
-  'view_show_outline',
   'view_show_gcode_window',
   'split_to_parts',
   'tool_face_detector',

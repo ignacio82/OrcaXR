@@ -748,6 +748,10 @@ export class OrcaWorkspace extends xb.Script {
         }
         if (change.sources.includes('selection') || change.sources.includes('project')) {
           if (!this.activeTransformGesture) this.syncTransformProxy();
+          // Every selection path lands here — click, select-all, the Objects
+          // tree, an action — so the outline follows the canonical selection
+          // rather than the one call site that happened to change it.
+          this.refreshSelectionOutlines();
           this.onSelectionChanged?.(this.canonicalProject.getObjectsTree().selection.refs.length > 0);
         }
         this.onCanonicalStateChanged?.(change.current);
@@ -3896,6 +3900,7 @@ export class OrcaWorkspace extends xb.Script {
       const state = this.printerHold.poll();
       if (state.phase === 'holding') this.paintPrinterHold(state.command, state.progress);
     }
+    this.renderNavigator();
     if (this.needsRecenter) {
       const cam = xb.core.camera;
       if (cam.position.lengthSq() > 1e-6) {
@@ -4426,6 +4431,7 @@ export class OrcaWorkspace extends xb.Script {
         if (this.labelsOn) this.applyLabel(entry, this.models.length - added.length + index, true);
         if (this.overhangOn) this.applyOverhang(entry, true);
       });
+      this.refreshSelectionOutlines();
       const last = added[added.length - 1];
       if (last) this.selectModel(last);
       this.recomputePreflight();
@@ -6981,6 +6987,136 @@ export class OrcaWorkspace extends xb.Script {
     this.models.forEach((m, i) => this.applyLabel(m, i, this.labelsOn));
     this.setStatus(`Object labels ${this.labelsOn ? 'on' : 'off'}.`);
     return this.labelsOn;
+  }
+
+  // --- Selection outline (Orca View → Show Selected Outline) ----------
+  private outlineOn = false;
+
+  /**
+   * A silhouette, drawn as an inverted hull: the same geometry, scaled a hair
+   * along its own normals, with front faces culled so only the rim shows past
+   * the model. This needs no post-processing pass, which matters because the
+   * XR renderer owns its own pipeline and a second pass there is not ours to
+   * add.
+   *
+   * It deliberately draws a *silhouette* rather than a bounding box: a box says
+   * where a model roughly is, which the transform gizmo already says, while an
+   * outline says which model is selected when two overlap.
+   */
+  private applyOutline(entry: ProjectedModelEntry, on: boolean): void {
+    const existing = entry.viewer.getObjectByName('selectionOutline') as THREE.Mesh | undefined;
+    if (!on) {
+      if (!existing) return;
+      entry.viewer.remove(existing);
+      existing.geometry.dispose();
+      (existing.material as THREE.Material).dispose();
+      return;
+    }
+    if (existing) return;
+    const source = entry.viewer.getObjectByProperty('isMesh', true) as THREE.Mesh | undefined;
+    if (!source?.geometry) return;
+    const outline = new THREE.Mesh(
+      source.geometry,
+      new THREE.MeshBasicMaterial({
+        color: 0xff9800,
+        side: THREE.BackSide,
+        depthWrite: false,
+        transparent: true,
+        opacity: 0.9,
+      }),
+    );
+    outline.name = 'selectionOutline';
+    outline.raycast = () => {}; // never intercept the model grab raycast
+    outline.renderOrder = -1;
+    outline.position.copy(source.position);
+    outline.quaternion.copy(source.quaternion);
+    outline.scale.copy(source.scale).multiplyScalar(1.02);
+    entry.viewer.add(outline);
+  }
+
+  /** Refresh outlines so exactly the selected instances carry one. */
+  private refreshSelectionOutlines(): void {
+    if (!this.outlineOn) return;
+    const selected = new Set(this.canonicalProject.getSummary().selectedInstanceIds);
+    for (const entry of this.models) this.applyOutline(entry, selected.has(entry.instanceId));
+  }
+
+  /** Toggle the selection outline (Orca View → Show Selected Outline). */
+  public toggleSelectionOutline(): boolean {
+    this.outlineOn = !this.outlineOn;
+    if (this.outlineOn) this.refreshSelectionOutlines();
+    else for (const entry of this.models) this.applyOutline(entry, false);
+    this.setStatus(`Selection outline ${this.outlineOn ? 'on' : 'off'}.`);
+    return this.outlineOn;
+  }
+
+  /** True while outlines are drawn; read by the DOM shell's checked state. */
+  public isSelectionOutlineOn(): boolean {
+    return this.outlineOn;
+  }
+
+  // --- Orientation navigator (Orca View → Show 3D Navigator) -----------
+  private navigatorOn = false;
+  private navigatorScene: THREE.Scene | null = null;
+  private navigatorCamera: THREE.PerspectiveCamera | null = null;
+
+  /**
+   * A corner axis triad that mirrors the main camera's orientation, drawn in a
+   * scissored viewport after the main pass. It reports orientation rather than
+   * accepting clicks: a click target this small is a miss on a touch screen and
+   * a fight with a controller ray, and the named camera actions already cover
+   * "put me on the front".
+   */
+  private buildNavigator(): void {
+    if (this.navigatorScene) return;
+    const scene = new THREE.Scene();
+    const axes = new THREE.AxesHelper(1);
+    (axes.material as THREE.Material).depthTest = false;
+    scene.add(axes);
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 10);
+    this.navigatorScene = scene;
+    this.navigatorCamera = camera;
+  }
+
+  /** Draw the navigator, if it is on. Called after the main render pass. */
+  private renderNavigator(): void {
+    const renderer = xb.core.renderer;
+    if (!this.navigatorOn || renderer.xr.isPresenting) return;
+    this.buildNavigator();
+    const scene = this.navigatorScene;
+    const camera = this.navigatorCamera;
+    if (!scene || !camera) return;
+    const size = new THREE.Vector2();
+    renderer.getSize(size);
+    const extent = Math.round(Math.min(120, Math.min(size.x, size.y) * 0.22));
+    if (extent < 24) return;
+    // The triad shows the *main* camera's orientation, so it is placed on a
+    // fixed radius along that camera's own view direction.
+    const direction = new THREE.Vector3();
+    xb.core.camera.getWorldDirection(direction);
+    camera.position.copy(direction.multiplyScalar(-3));
+    camera.up.copy(xb.core.camera.up);
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+
+    const margin = 12;
+    renderer.setScissorTest(true);
+    renderer.setViewport(size.x - extent - margin, margin, extent, extent);
+    renderer.setScissor(size.x - extent - margin, margin, extent, extent);
+    renderer.render(scene, camera);
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, size.x, size.y);
+  }
+
+  /** Toggle the orientation navigator (Orca View → Show 3D Navigator). */
+  public toggleNavigator(): boolean {
+    this.navigatorOn = !this.navigatorOn;
+    this.setStatus(`3D navigator ${this.navigatorOn ? 'on' : 'off'}.`);
+    return this.navigatorOn;
+  }
+
+  public isNavigatorOn(): boolean {
+    return this.navigatorOn;
   }
 
   // --- Overhang highlight (Orca View → Show Overhang) -----------------

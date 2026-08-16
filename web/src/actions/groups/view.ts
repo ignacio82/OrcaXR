@@ -86,6 +86,9 @@ export const viewActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'view',
     hint: 'Show the orientation navigator gizmo',
+    xrUnsupportedReason:
+      'The navigator reports the desktop camera orientation; in XR the head is the camera and the workspace is already oriented in the room.',
+    run: (ctx) => ctx.toggleNavigator(),
   },
   {
     id: 'view_show_outline',
@@ -95,6 +98,8 @@ export const viewActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'view',
     hint: 'Draw an outline around the selected object',
+    isEnabled: (s) => s.modelCount > 0,
+    run: (ctx) => ctx.toggleSelectionOutline(),
   },
   {
     id: 'view_show_gcode_window',
