@@ -269,7 +269,73 @@ async function fillPlateWithInstances(page) {
   );
 }
 
-/** Mirror and centre run as canonical commands through the Edit menu. */
+/**
+ * The shell holds together at every size it claims to support (P10.1).
+ *
+ * P10.1 defines its breakpoints by available space rather than by device
+ * names, so this walks the sizes that bracket them — phone portrait and
+ * landscape, tablet, desktop — plus the CSS-pixel budget a browser at 200%
+ * zoom leaves, which is the case a device-name breakpoint always misses.
+ *
+ * Two properties are checked at each. Nothing may overflow horizontally,
+ * because a shell that scrolls sideways has lost its layout rather than
+ * adapted it. And the palette must offer the same catalog it offers with
+ * room to spare: progressive disclosure is allowed to move a control, never
+ * to strand it, and the palette is the documented safety net for exactly
+ * that. The widest layout is walked first so it sets that reference — this
+ * compares the shell against itself, which is the strongest statement
+ * available without a test-only handle on the registry.
+ */
+async function surviveEveryViewport(page) {
+  const viewports = [
+    { label: 'desktop', width: 1280, height: 720 },
+    { label: 'tablet portrait', width: 820, height: 1180 },
+    { label: 'phone landscape', width: 844, height: 390 },
+    { label: 'phone portrait', width: 390, height: 844 },
+    { label: '200% zoom on a laptop', width: 640, height: 360 },
+  ];
+
+  // The reference is the widest layout: whatever the palette offers with room
+  // to spare is what every narrower one has to keep offering.
+  let catalogSize = null;
+
+  for (const viewport of viewports) {
+    await page.setViewport({ width: viewport.width, height: viewport.height });
+    await page.evaluate(() => globalThis.dispatchEvent(new globalThis.Event('resize')));
+
+    const overflow = await page.evaluate(
+      () => globalThis.document.documentElement.scrollWidth - globalThis.document.documentElement.clientWidth,
+    );
+    assert.ok(overflow <= 1, `${viewport.label} overflows horizontally by ${overflow}px`);
+
+    // The palette is the reachability guarantee, so it has to open and to
+    // list the whole catalog at every size — not a size-trimmed subset.
+    await page.keyboard.down('Control');
+    await page.keyboard.press('KeyK');
+    await page.keyboard.up('Control');
+    await page.waitForSelector('#command-palette.open', { timeout: 30_000 });
+    const listed = await page.$$eval('#cmd-list [data-action-id]', (rows) => rows.length);
+    assert.ok(listed > 0, `${viewport.label} lists no actions in the palette`);
+    catalogSize ??= listed;
+    assert.equal(
+      listed,
+      catalogSize,
+      `${viewport.label} offers ${listed} actions where a wider layout offers ${catalogSize}`,
+    );
+
+    const paletteOverflow = await page.evaluate(
+      () => globalThis.document.documentElement.scrollWidth - globalThis.document.documentElement.clientWidth,
+    );
+    assert.ok(paletteOverflow <= 1, `${viewport.label} overflows with the palette open by ${paletteOverflow}px`);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !globalThis.document.querySelector('#command-palette.open'));
+  }
+
+  await page.setViewport({ width: 1280, height: 720 });
+  await page.evaluate(() => globalThis.dispatchEvent(new globalThis.Event('resize')));
+  console.log(`[e2e] shell holds its layout and all ${catalogSize} palette actions at every supported size`);
+}
+
 /**
  * Two View gaps that used to render as UNAVAILABLE (P11.2).
  *
@@ -2313,12 +2379,7 @@ try {
     'closing the dialog returns focus to the control that opens the menu',
   );
 
-  await page.setViewport({ width: 390, height: 844 });
-  await page.evaluate(() => globalThis.dispatchEvent(new globalThis.Event('resize')));
-  const overflow = await page.evaluate(
-    () => globalThis.document.documentElement.scrollWidth - globalThis.document.documentElement.clientWidth,
-  );
-  assert.ok(overflow <= 1, `mobile shell overflows horizontally by ${overflow}px`);
+  await surviveEveryViewport(page);
 
   await page.setViewport({ width: 1280, height: 720 });
   await page.evaluate(() => {
