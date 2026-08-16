@@ -88,6 +88,12 @@ export const ACTION_IDS_BY_PARITY_TASK = {
     'tool_cut',
   ],
   'P5.3': [
+    // The preview session belongs with the pinned Simplify gizmo (P5.3.5),
+    // not with the one-shot topology command P5.2 owns. Same decimation
+    // underneath, different parity claim on top.
+    'simplify_preview',
+    'simplify_apply',
+    'simplify_cancel',
     'tool_brim_ears',
     'brim_ears_configure',
     'brim_ears_auto',

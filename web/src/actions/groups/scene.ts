@@ -2,6 +2,7 @@
  * Scene group — model import, the modal transform tools, and mesh operations.
  * Every handler routes through {@link ActionContext}; no logic lives here.
  */
+import { SIMPLIFY_DEFAULT_DECIMATE_RATIO, SIMPLIFY_DEFAULT_MAX_ERROR } from '../../project/objects/simplify';
 import type { ActionDefinition as Action } from '../ActionRegistry';
 
 export const sceneActions: Action[] = [
@@ -277,6 +278,52 @@ export const sceneActions: Action[] = [
     hint: 'Decimate the selected model; painting is reset and the whole change undoes as one entry',
     isEnabled: (s) => s.hasSelection,
     run: (ctx, invocation) => ctx.simplifySelected(invocation.simplifyRatio),
+  },
+  {
+    id: 'simplify_preview',
+    mcpTool: 'simplify_model',
+    label: 'Preview simplify',
+    icon: 'simplify',
+    group: 'scene',
+    disclosure: 'inspector',
+    menuSection: 'tools',
+    hint: 'Decimate the selected model on screen without committing; apply keeps it, cancel restores it',
+    isEnabled: (s) => s.hasSelection,
+    run: (ctx, invocation) => {
+      ctx.previewSimplify({
+        useCount: !invocation.simplifyByError,
+        decimateRatio: invocation.simplifyRatio ?? SIMPLIFY_DEFAULT_DECIMATE_RATIO,
+        maxError: invocation.simplifyMaxError ?? SIMPLIFY_DEFAULT_MAX_ERROR,
+      });
+    },
+  },
+  {
+    id: 'simplify_apply',
+    mcpTool: 'simplify_model',
+    label: 'Apply simplify',
+    icon: 'simplify',
+    group: 'scene',
+    disclosure: 'inspector',
+    menuSection: 'tools',
+    hint: 'Install exactly the decimated mesh the preview is showing, as one undoable entry',
+    isEnabled: (s) => s.simplifyPreviewing === true,
+    run: (ctx) => {
+      ctx.applySimplifyPreview();
+    },
+  },
+  {
+    id: 'simplify_cancel',
+    mcpTool: 'simplify_model',
+    label: 'Cancel simplify',
+    icon: 'simplify',
+    group: 'scene',
+    disclosure: 'inspector',
+    menuSection: 'tools',
+    hint: 'Put the original mesh back; canonical state was never changed',
+    isEnabled: (s) => s.simplifyPreviewing === true,
+    run: (ctx) => {
+      ctx.cancelSimplifyPreview();
+    },
   },
   {
     id: 'mesh_boolean_union',

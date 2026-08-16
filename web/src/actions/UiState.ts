@@ -34,6 +34,8 @@ export interface UiStateShape {
   plateCount: number;
   /** Whether any canonical Objects entity is currently selected. */
   hasSelection: boolean;
+  /** A simplify preview is on screen and not yet applied or cancelled. */
+  simplifyPreviewing?: boolean;
   /** Whether the primary selection is an independently transformable instance. */
   hasInstanceSelection: boolean;
   /** Canonical command-history availability. */
@@ -72,6 +74,7 @@ const INITIAL: UiStateShape = {
   modelCount: 0,
   plateCount: 1,
   hasSelection: false,
+  simplifyPreviewing: false,
   hasInstanceSelection: false,
   canUndo: false,
   canRedo: false,

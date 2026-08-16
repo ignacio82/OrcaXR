@@ -10,6 +10,7 @@
  */
 import type { EmbossRecipePatch } from '../workspace/OrcaWorkspace';
 import type { AssemblyAlignmentKind } from '../project/objects/assembly';
+import type { SimplifyConfiguration } from '../project/objects/simplify';
 import type { ActionInvocation } from './ActionRegistry';
 import type { OrcaWorkspace } from '../workspace/OrcaWorkspace';
 import type { FilamentPalette } from '../workspace/FilamentPalette';
@@ -190,6 +191,18 @@ export class ActionContext {
   addPrimitive(kind: 'cube' | 'cylinder' | 'sphere'): void {
     this.workspace.addPrimitive(kind);
   }
+  previewSimplify(configuration: SimplifyConfiguration): boolean {
+    return this.workspace.previewSimplify(configuration);
+  }
+
+  applySimplifyPreview(): boolean {
+    return this.workspace.applySimplifyPreview();
+  }
+
+  cancelSimplifyPreview(): boolean {
+    return this.workspace.cancelSimplifyPreview();
+  }
+
   simplifySelected(decimateRatio?: number): void {
     this.workspace.simplifySelected(decimateRatio);
   }

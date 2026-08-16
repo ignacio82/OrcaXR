@@ -103,7 +103,6 @@ import { GcodePreviewPanel, type GcodePreviewPanelAdapter } from './ui/dom/Gcode
 import { PreviewScrubber } from './ui/dom/PreviewScrubber';
 import { InspectorTabs } from './ui/dom/InspectorTabs';
 import { PaintPanel } from './ui/dom/PaintPanel';
-import { BrimEarsPanel } from './ui/dom/BrimEarsPanel';
 import { EmbossPanel } from './ui/dom/EmbossPanel';
 import { SvgPanel } from './ui/dom/SvgPanel';
 import {
@@ -3015,68 +3014,133 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     window.addEventListener('pagehide', () => measurePanel.dispose(), { once: true });
   }
 
+  const simplifyPanelHost = document.getElementById('simplify-panel-host');
+  if (simplifyPanelHost) {
+    // Disclosure-gated, so it is fetched when the inspector wants it rather
+    // than carried in the main chunk everyone pays for at first paint.
+    void (async () => {
+      let requested = { useCount: true, decimateRatio: 50, maxError: 1 };
+      const { SimplifyPanel } = await import('./ui/dom/SimplifyPanel');
+      const simplifyPanel = new SimplifyPanel(simplifyPanelHost, {
+        getState: () => {
+          const snapshot = workspace.getSimplifySnapshot();
+          return {
+            hasSelection: uiState.get().hasSelection,
+            previewing: snapshot.previewing,
+            useCount: snapshot.configuration?.useCount ?? requested.useCount,
+            decimateRatio: snapshot.configuration?.decimateRatio ?? requested.decimateRatio,
+            maxError: snapshot.configuration?.maxError ?? requested.maxError,
+            parts: snapshot.parts,
+            beforeTriangles: snapshot.beforeTriangles,
+            afterTriangles: snapshot.afterTriangles,
+            stoppedOnError: snapshot.stoppedOnError,
+          };
+        },
+        subscribe: (listener) => {
+          const unsubscribeCanonical = workspace.subscribeCanonicalState(listener);
+          const previous = workspace.onSimplifyStateChanged;
+          workspace.onSimplifyStateChanged = () => {
+            previous?.();
+            listener();
+          };
+          return () => {
+            unsubscribeCanonical();
+            workspace.onSimplifyStateChanged = previous;
+          };
+        },
+        onPreview: async (configuration) => {
+          requested = { ...configuration };
+          const invoked = await registry.invoke('simplify_preview', 'dom-inspector', actionCtx, uiState.get(), {
+            simplifyByError: !configuration.useCount,
+            simplifyRatio: configuration.decimateRatio,
+            simplifyMaxError: configuration.maxError,
+          });
+          if (!invoked) throw new Error('Select a model before previewing a simplify.');
+        },
+        onApply: async () => {
+          const invoked = await registry.invoke('simplify_apply', 'dom-inspector', actionCtx, uiState.get());
+          if (!invoked) throw new Error('There is no simplify preview to apply.');
+        },
+        onCancel: async () => {
+          const invoked = await registry.invoke('simplify_cancel', 'dom-inspector', actionCtx, uiState.get());
+          if (!invoked) throw new Error('There is no simplify preview to cancel.');
+        },
+        onError: (error) => {
+          statusText.textContent = `Simplify: ${error instanceof Error ? error.message : String(error)}`;
+        },
+      });
+      simplifyPanel.mount();
+      window.addEventListener('pagehide', () => simplifyPanel.dispose(), { once: true });
+    })();
+  }
+
   const brimEarsPanelHost = document.getElementById('brim-ears-panel-host');
   if (brimEarsPanelHost) {
-    const brimEarsPanel = new BrimEarsPanel(brimEarsPanelHost, {
-      getState: () => {
-        const snapshot = workspace.getBrimEarSnapshot();
-        return {
-          active: snapshot.active,
-          ...(snapshot.objectId ? { objectId: String(snapshot.objectId) } : {}),
-          radiusMm: snapshot.radiusMm,
-          minRadiusMm: 0.1,
-          maxRadiusMm: 20,
-          ears: snapshot.ears.map((ear) => ({
-            positionMm: [ear.positionMm[0], ear.positionMm[1], ear.positionMm[2]] as const,
-            headFrontRadiusMm: ear.headFrontRadiusMm,
-          })),
-          stranded: snapshot.stranded,
-          hint: snapshot.hint,
-          ...(snapshot.warning ? { warning: snapshot.warning } : {}),
-        };
-      },
-      subscribe: (listener) => {
-        const unsubscribeCanonical = workspace.subscribeCanonicalState(listener);
-        const previous = workspace.onBrimEarStateChanged;
-        workspace.onBrimEarStateChanged = () => {
-          previous?.();
-          listener();
-        };
-        return () => {
-          unsubscribeCanonical();
-          workspace.onBrimEarStateChanged = previous;
-        };
-      },
-      onActivate: async () => {
-        const invoked = await registry.invoke('tool_brim_ears', 'dom-toolbar', actionCtx, uiState.get());
-        if (!invoked) throw new Error('Select a model part before placing brim ears.');
-      },
-      onSetRadius: async (radiusMm) => {
-        const invoked = await registry.invoke('brim_ears_configure', 'dom-inspector', actionCtx, uiState.get(), {
-          brimEarRadiusMm: radiusMm,
-        });
-        if (!invoked) throw new Error('Setting the brim-ear radius is unavailable.');
-      },
-      onRemove: async (index) => {
-        const invoked = await registry.invoke('brim_ears_remove', 'dom-inspector', actionCtx, uiState.get(), {
-          brimEarIndex: index,
-        });
-        if (!invoked) throw new Error('Removing a brim ear is unavailable.');
-      },
-      onAutoPlace: async () => {
-        const invoked = await registry.invoke('brim_ears_auto', 'dom-inspector', actionCtx, uiState.get());
-        if (!invoked) throw new Error('Automatic brim-ear placement is unavailable.');
-      },
-      onClear: async () => {
-        const invoked = await registry.invoke('brim_ears_clear', 'dom-inspector', actionCtx, uiState.get());
-        if (!invoked) throw new Error('Clearing brim ears is unavailable.');
-      },
-      onError: (error) => {
-        statusText.textContent = `Brim ears: ${error instanceof Error ? error.message : String(error)}`;
-      },
-    });
-    brimEarsPanel.mount();
-    window.addEventListener('pagehide', () => brimEarsPanel.dispose(), { once: true });
+    // Disclosure-gated like the simplify panel beside it, and fetched the same
+    // way: the ear controls are a tool an operator opens, not first paint.
+    void (async () => {
+      const { BrimEarsPanel } = await import('./ui/dom/BrimEarsPanel');
+      const brimEarsPanel = new BrimEarsPanel(brimEarsPanelHost, {
+        getState: () => {
+          const snapshot = workspace.getBrimEarSnapshot();
+          return {
+            active: snapshot.active,
+            ...(snapshot.objectId ? { objectId: String(snapshot.objectId) } : {}),
+            radiusMm: snapshot.radiusMm,
+            minRadiusMm: 0.1,
+            maxRadiusMm: 20,
+            ears: snapshot.ears.map((ear) => ({
+              positionMm: [ear.positionMm[0], ear.positionMm[1], ear.positionMm[2]] as const,
+              headFrontRadiusMm: ear.headFrontRadiusMm,
+            })),
+            stranded: snapshot.stranded,
+            hint: snapshot.hint,
+            ...(snapshot.warning ? { warning: snapshot.warning } : {}),
+          };
+        },
+        subscribe: (listener) => {
+          const unsubscribeCanonical = workspace.subscribeCanonicalState(listener);
+          const previous = workspace.onBrimEarStateChanged;
+          workspace.onBrimEarStateChanged = () => {
+            previous?.();
+            listener();
+          };
+          return () => {
+            unsubscribeCanonical();
+            workspace.onBrimEarStateChanged = previous;
+          };
+        },
+        onActivate: async () => {
+          const invoked = await registry.invoke('tool_brim_ears', 'dom-toolbar', actionCtx, uiState.get());
+          if (!invoked) throw new Error('Select a model part before placing brim ears.');
+        },
+        onSetRadius: async (radiusMm) => {
+          const invoked = await registry.invoke('brim_ears_configure', 'dom-inspector', actionCtx, uiState.get(), {
+            brimEarRadiusMm: radiusMm,
+          });
+          if (!invoked) throw new Error('Setting the brim-ear radius is unavailable.');
+        },
+        onRemove: async (index) => {
+          const invoked = await registry.invoke('brim_ears_remove', 'dom-inspector', actionCtx, uiState.get(), {
+            brimEarIndex: index,
+          });
+          if (!invoked) throw new Error('Removing a brim ear is unavailable.');
+        },
+        onAutoPlace: async () => {
+          const invoked = await registry.invoke('brim_ears_auto', 'dom-inspector', actionCtx, uiState.get());
+          if (!invoked) throw new Error('Automatic brim-ear placement is unavailable.');
+        },
+        onClear: async () => {
+          const invoked = await registry.invoke('brim_ears_clear', 'dom-inspector', actionCtx, uiState.get());
+          if (!invoked) throw new Error('Clearing brim ears is unavailable.');
+        },
+        onError: (error) => {
+          statusText.textContent = `Brim ears: ${error instanceof Error ? error.message : String(error)}`;
+        },
+      });
+      brimEarsPanel.mount();
+      window.addEventListener('pagehide', () => brimEarsPanel.dispose(), { once: true });
+    })();
   }
 
   const embossPanelHost = document.getElementById('emboss-panel-host');
@@ -4035,6 +4099,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       modelCount: active?.instanceCount ?? 0,
       plateCount: summary.plates.length,
       hasSelection: workspace.getObjectsTreeSnapshot().selection.refs.length > 0,
+      simplifyPreviewing: workspace.getSimplifySnapshot().previewing,
       hasInstanceSelection: summary.primaryInstanceId !== undefined,
       canUndo: summary.history.undoCount > 0,
       canRedo: summary.history.redoCount > 0,
@@ -4056,6 +4121,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     const summary = workspace.getCanonicalSummary();
     uiState.update({
       hasSelection: workspace.getObjectsTreeSnapshot().selection.refs.length > 0,
+      simplifyPreviewing: workspace.getSimplifySnapshot().previewing,
       hasInstanceSelection: summary.primaryInstanceId !== undefined,
       modelCount: workspace.modelCount,
     });

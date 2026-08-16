@@ -246,6 +246,14 @@ export interface ActionInvocation {
   /** Percent of triangles to remove, matching the pinned decimate ratio. */
   simplifyRatio?: number;
   /**
+   * Drive decimation by quadric error instead of by count — the pinned
+   * `use_count` switch, inverted. When set, `simplifyMaxError` is the limit and
+   * `simplifyRatio` is ignored.
+   */
+  simplifyByError?: boolean;
+  /** Largest quadric error a collapse may cost, when driving by error. */
+  simplifyMaxError?: number;
+  /**
    * Bounded emboss request. The font arrives as bytes the operator picked: a
    * browser cannot enumerate installed fonts and the CSP forbids fetching one,
    * so there is no name-only form of this parameter.
