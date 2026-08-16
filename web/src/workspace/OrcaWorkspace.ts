@@ -58,6 +58,7 @@ import type { PrintJobIntent } from '../printer/PrintJobSubmission';
 import type { PrinterConsoleOperation } from '../printer/PrinterConsole';
 import type { PrinterStorageOperation } from '../printer/PrinterStorage';
 import type { PresetLibraryOperation } from '../settings/presets/PresetLibrary';
+import type { CalibrationHistoryOperation } from '../project/calibration/history';
 import { HoldToConfirm, type GuardedPrinterAction, type PrinterStatusSummary } from '../printer/PrinterStatusSummary';
 import { summarizeGcodeToolUsage } from '../printer/PrintToolMapping';
 import { serializePrintConfigArray } from '../settings/configSerialization';
@@ -4148,6 +4149,8 @@ export class OrcaWorkspace extends xb.Script {
   onRequestPrintHistory: ((start: number) => Promise<void>) | null = null;
   /** Injected by the live typed printer composition root. */
   onRequestPrinterCamera: ((uid?: string) => Promise<void>) | null = null;
+  /** Injected by the shell that owns the calibration ledger (P8.5). */
+  onRequestCalibrationHistory: ((operation: CalibrationHistoryOperation) => Promise<void>) | null = null;
   /** Injected by the shell that owns preset persistence (P6.4). */
   onRequestPresetLibrary: ((operation: PresetLibraryOperation) => Promise<void>) | null = null;
   /** Injected by the shell that owns the compact printer status surface (P9.7). */
@@ -4282,6 +4285,21 @@ export class OrcaWorkspace extends xb.Script {
       return;
     }
     this.onTogglePrinterStatusBar();
+  }
+
+  /**
+   * Ask the shell to change the calibration ledger (P8.5).
+   *
+   * The workspace does not hold the ledger for the same reason it does not hold
+   * the preset library: a record has to outlive the project it was measured in,
+   * which means storage, and storage belongs to the shell.
+   */
+  public async operateCalibrationHistory(operation: CalibrationHistoryOperation): Promise<void> {
+    if (!this.onRequestCalibrationHistory) {
+      this.setStatus('Calibration history is unavailable in this shell.');
+      return;
+    }
+    await this.onRequestCalibrationHistory(operation);
   }
 
   public async operatePresetLibrary(operation: PresetLibraryOperation): Promise<void> {

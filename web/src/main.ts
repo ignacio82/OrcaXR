@@ -83,6 +83,13 @@ import { askPrintSubmission } from './ui/dom/PrintSubmissionDialog';
 import { askPrintJobConfirmation } from './ui/dom/PrintJobConfirmDialog';
 import { PrintJobPanel } from './ui/dom/PrintJobPanel';
 import { PrinterStatusBar } from './ui/dom/PrinterStatusBar';
+import type {
+  CalibrationComparison,
+  CalibrationConditions,
+  CalibrationHistoryIssue,
+  CalibrationHistoryOperation,
+} from './project/calibration/history';
+import { fnv1a64Text } from './project/domain/canonical';
 import { guardedPrinterActions, summarizePrinterStatus } from './printer/PrinterStatusSummary';
 import {
   PresetLibraryStore,
@@ -228,6 +235,16 @@ function safeLocalStorage(): Storage | null {
     return null;
   }
 }
+
+/** Registry action that owns each calibration-ledger operation (P8.5). */
+const CALIBRATION_HISTORY_ACTION_IDS: Readonly<Record<CalibrationHistoryOperation['kind'], string>> = Object.freeze({
+  refresh: 'calib_view_history',
+  record: 'calib_record_result',
+  compare: 'calib_compare_results',
+  rerun: 'calib_rerun_result',
+  delete: 'calib_delete_result',
+  export: 'calib_export_history',
+});
 
 /** Registry action that owns each preset-library operation (P6.4). */
 const PRESET_LIBRARY_ACTION_IDS: Readonly<Record<PresetLibraryOperation['kind'], string>> = Object.freeze({
@@ -384,6 +401,11 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   let printJobSnapshot: PrintJobSnapshot | null = null;
   let printerConnectionState: MoonrakerConnectionState | null = null;
   let unsubscribePrintJob: (() => void) | null = null;
+  /**
+   * Surfaces that derive from the active profile subscribe here rather than
+   * each one racing to own `onProfileChanged`.
+   */
+  const profileChangeListeners = new Set<() => void>();
   const printJobListeners = new Set<() => void>();
   const publishPrintJob = (snapshot: PrintJobSnapshot | null) => {
     printJobSnapshot = snapshot;
@@ -1332,6 +1354,210 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     );
   }
 
+  // The calibration ledger (P8.5). It lives on this device rather than in the
+  // project, because a measurement belongs to the machine it was taken on and
+  // has to outlive every project sliced for it.
+  const calibrationHistoryHost = document.getElementById('calibration-history-host');
+  if (calibrationHistoryHost) {
+    // Behind a closed <details>, and it carries the whole pinned calibration
+    // catalog with it, so none of this belongs in first paint.
+    void (async () => {
+      const [{ CalibrationHistoryStore }, history, { CALIBRATION_JOB_DEFINITIONS, getCalibrationJobDefinition }] =
+        await Promise.all([
+          import('./project/calibration/historyStore'),
+          import('./project/calibration/history'),
+          import('./project/calibration/definitions'),
+        ]);
+      const {
+        UNKNOWN_CONDITION,
+        assessCalibrationApplicability,
+        calibrationMethodFromDefinition,
+        canRerunCalibration,
+        compareCalibrationRecords,
+        exportCalibrationHistory,
+        recordCalibrationRun,
+      } = history;
+      const calibrationStore = new CalibrationHistoryStore(safeLocalStorage() ?? undefined);
+      let calibrationIssues: readonly CalibrationHistoryIssue[] = calibrationStore.loadIssues;
+      let calibrationComparison: CalibrationComparison | undefined;
+      let calibrationBusy = false;
+      let calibrationMessage: string | undefined;
+      const calibrationListeners = new Set<() => void>();
+      const notifyCalibration = () => {
+        for (const listener of calibrationListeners) listener();
+      };
+      // Applicability is judged against the *live* profile, so a filament change
+      // has to redraw the ledger. Without this the rows keep claiming a result
+      // applies to a material it was never measured on.
+      profileChangeListeners.add(notifyCalibration);
+
+      // The conditions a result would be applied *to* right now. Read from the
+      // live profile rather than remembered, so switching filament immediately
+      // invalidates results measured on the previous one.
+      const liveCalibrationConditions = (): CalibrationConditions => {
+        const options = workspace.getProfileOptions();
+        const nozzle = Number.parseFloat(workspace.getHeadNozzle(0));
+        const physical = workspace.getVirtualFilamentLibrarySnapshot().physical;
+        return {
+          printerModel: options.machine || UNKNOWN_CONDITION,
+          // Firmware is only knowable through a live connection; a record made
+          // offline says so rather than claiming a flavor it never checked.
+          firmwareFlavor: printerHandshakeFlavor() ?? UNKNOWN_CONDITION,
+          firmwareVersion: printerHandshakeVersion() ?? UNKNOWN_CONDITION,
+          nozzleDiameterMm: Number.isFinite(nozzle) ? nozzle : 0.4,
+          filamentMaterial: physical[0]?.material ?? UNKNOWN_CONDITION,
+          filamentPresetHash: fnv1a64Text(options.filamentPresetIds.join('|')),
+          processPresetHash: fnv1a64Text(options.processPresetId ?? ''),
+        };
+      };
+
+      // Firmware facts come from the live handshake or not at all.
+      const printerHandshakeFlavor = (): string | undefined =>
+        printerConnectionState?.status === 'connected' ? 'klipper' : undefined;
+      const printerHandshakeVersion = (): string | undefined =>
+        printerConnectionState?.status === 'connected'
+          ? printerConnectionState.handshake.printer.softwareVersion || undefined
+          : undefined;
+
+      workspace.onRequestCalibrationHistory = async (operation: CalibrationHistoryOperation) => {
+        calibrationBusy = true;
+        notifyCalibration();
+        try {
+          switch (operation.kind) {
+            case 'refresh': {
+              calibrationIssues = [];
+              calibrationMessage = `${calibrationStore.history.size} recorded run${
+                calibrationStore.history.size === 1 ? '' : 's'
+              }.`;
+              return;
+            }
+            case 'record': {
+              const definition = getCalibrationJobDefinition(operation.definitionId as never);
+              if (!definition) {
+                calibrationIssues = [];
+                calibrationMessage = `Unknown calibration ${operation.definitionId}.`;
+                return;
+              }
+              const written = recordCalibrationRun(
+                calibrationMethodFromDefinition(
+                  definition,
+                  Object.fromEntries(definition.parameters.map((parameter) => [parameter.key, parameter.default])),
+                ),
+                liveCalibrationConditions(),
+                operation.entry,
+              );
+              calibrationIssues = written.issues;
+              if (!written.record) {
+                calibrationMessage = 'Nothing was recorded.';
+                return;
+              }
+              calibrationStore.history.add(written.record);
+              calibrationStore.save();
+              calibrationMessage = `Recorded ${definition.label}.`;
+              return;
+            }
+            case 'compare': {
+              const left = calibrationStore.history.get(operation.leftId);
+              const right = calibrationStore.history.get(operation.rightId);
+              if (!left || !right) {
+                calibrationMessage = 'Pick two recorded runs to compare.';
+                return;
+              }
+              calibrationComparison = compareCalibrationRecords(left, right);
+              calibrationIssues = [];
+              calibrationMessage = 'Comparing two runs.';
+              return;
+            }
+            case 'rerun': {
+              const record = calibrationStore.history.get(operation.recordId);
+              if (!record) {
+                calibrationMessage = 'That run is no longer recorded.';
+                return;
+              }
+              const definition = getCalibrationJobDefinition(record.method.definitionId);
+              calibrationIssues = canRerunCalibration(record, definition);
+              calibrationMessage =
+                calibrationIssues.length === 0
+                  ? `${record.method.label} can be run again with the same sweep.`
+                  : 'This run cannot be repeated.';
+              return;
+            }
+            case 'delete': {
+              const record = calibrationStore.history.get(operation.recordId);
+              const result = calibrationStore.history.delete(operation.recordId);
+              calibrationIssues = result.issues;
+              if (result.ok) {
+                calibrationStore.save();
+                calibrationComparison = undefined;
+                calibrationMessage = `Deleted ${record?.method.label ?? 'the run'}.`;
+              }
+              return;
+            }
+            case 'export': {
+              const exported = exportCalibrationHistory(calibrationStore.history.list(), new Date().toISOString());
+              calibrationIssues = exported.issues;
+              if (!exported.text) {
+                calibrationMessage = 'Export refused: the ledger carried something that may not be shared.';
+                return;
+              }
+              const blob = new Blob([exported.text], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = 'orcaxr-calibration-history.json';
+              link.click();
+              URL.revokeObjectURL(url);
+              calibrationMessage = 'Exported every recorded run. The file carries no address or credential.';
+              return;
+            }
+          }
+        } finally {
+          calibrationBusy = false;
+          notifyCalibration();
+        }
+      };
+
+      const { CalibrationHistoryPanel } = await import('./ui/dom/CalibrationHistoryPanel');
+      const calibrationPanel = new CalibrationHistoryPanel(calibrationHistoryHost, {
+        getRecords: () => calibrationStore.history.list(),
+        getMethods: () =>
+          CALIBRATION_JOB_DEFINITIONS.map((definition) => ({
+            id: definition.id,
+            label: definition.label,
+            resultFields: definition.resultFields,
+          })),
+        now: () => new Date().toISOString(),
+        assess: (record) => assessCalibrationApplicability(record, liveCalibrationConditions()),
+        getComparison: () => calibrationComparison,
+        getIssues: () => calibrationIssues,
+        getStatus: () => ({
+          busy: calibrationBusy,
+          ...(calibrationMessage ? { message: calibrationMessage } : {}),
+        }),
+        subscribe: (listener) => {
+          calibrationListeners.add(listener);
+          return () => calibrationListeners.delete(listener);
+        },
+        run: async (operation) => {
+          await registry.invoke(
+            CALIBRATION_HISTORY_ACTION_IDS[operation.kind],
+            'dom-inspector',
+            actionCtx,
+            uiState.get(),
+            { calibrationHistory: operation },
+          );
+        },
+        confirmDelete: async (record) =>
+          window.confirm(
+            `Delete the ${record.method.label} result measured on ${record.conditions.printerModel}? ` +
+              'The measurement cannot be recovered.',
+          ),
+      });
+      calibrationPanel.mount();
+      window.addEventListener('pagehide', () => calibrationPanel.dispose(), { once: true });
+    })();
+  }
+
   window.addEventListener('pagehide', disposePrinterTransport, { once: true });
 
   // First run: nothing configured yet, so offer the setup path directly rather
@@ -2167,6 +2393,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     workspace.selectProfilePresets({ filamentPresetIds });
   };
   workspace.onProfileChanged = () => {
+    for (const listener of profileChangeListeners) listener();
     renderProfileSelects();
     if (pendingPersistedSelection) queuePersistedProfileRestore();
     else persistProfileSelection();

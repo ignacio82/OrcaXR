@@ -22,6 +22,7 @@ import type { PrintJobCommand } from '../printer/PrintJobControl';
 import type { PrinterConsoleOperation } from '../printer/PrinterConsole';
 import type { PrinterStorageOperation } from '../printer/PrinterStorage';
 import type { PresetLibraryOperation } from '../settings/presets/PresetLibrary';
+import type { CalibrationHistoryOperation } from '../project/calibration/history';
 import type { GcodePreviewViewPatch } from '../slicer/GcodePreviewSession';
 
 /** Modal tool that authors each facet channel. */
@@ -143,6 +144,9 @@ export class ActionContext {
   }
   togglePrinterStatusBar(): void {
     this.workspace.togglePrinterStatusBar();
+  }
+  operateCalibrationHistory(operation: CalibrationHistoryOperation): Promise<void> {
+    return this.workspace.operateCalibrationHistory(operation);
   }
   operatePresetLibrary(operation: PresetLibraryOperation): Promise<void> {
     return this.workspace.operatePresetLibrary(operation);

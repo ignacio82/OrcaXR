@@ -1296,6 +1296,186 @@ async function controlRunningPrint(page, printer) {
 }
 
 /**
+ * The calibration ledger: what this machine was tuned for, and whether it
+ * still holds (P8.5).
+ *
+ * The rule under test is the one that makes a ledger worth keeping: a result
+ * measured on one nozzle and material is never offered as applicable to
+ * another. So this records runs through the shipped form, then changes the
+ * loaded nozzle and watches every row stop being applicable — without
+ * disappearing, because a record that no longer applies is still evidence.
+ */
+async function keepCalibrationHistory(page) {
+  const originalNozzle = await page.evaluate(() => globalThis.window.workspace.getHeadNozzle(0));
+  await showInspectorTab(page, 'plates');
+  await page.$eval('#calibration-history-details', (details) => details.setAttribute('open', ''));
+  await page.waitForSelector('[data-calibration-history-panel="true"]', { timeout: 30_000 });
+  assert.match(
+    await page.$eval('[data-calibration-history-list]', (node) => node.textContent),
+    /No calibration results recorded/,
+    'a fresh device has an empty ledger, and says so',
+  );
+
+  const recordRun = async (value) => {
+    await page.$eval('[data-calibration-history-entry-method]', (select) => {
+      select.value = 'retraction-tower';
+      select.dispatchEvent(new globalThis.Event('change', { bubbles: true }));
+    });
+    await page.waitForSelector('[data-calibration-history-entry-value="retractionLengthMm"]', {
+      timeout: 30_000,
+    });
+    await page.$eval(
+      '[data-calibration-history-entry-value="retractionLengthMm"]',
+      (input, text) => {
+        input.value = text;
+        input.dispatchEvent(new globalThis.Event('input', { bubbles: true }));
+      },
+      String(value),
+    );
+    await page.$eval('[data-calibration-history-entry-operator]', (input) => {
+      input.value = 'e2e';
+      input.dispatchEvent(new globalThis.Event('input', { bubbles: true }));
+    });
+    await page.$eval('[data-calibration-history-submit]', (button) => button.click());
+  };
+
+  await recordRun(0.6);
+  await page.waitForFunction(
+    () => globalThis.document.querySelectorAll('[data-calibration-history-record]').length === 1,
+    { timeout: 30_000 },
+  );
+  const first = await page.evaluate(() => {
+    const row = globalThis.document.querySelector('[data-calibration-history-record]');
+    return {
+      applicable: row?.dataset.calibrationHistoryApplicable,
+      chosen: row?.querySelector('[data-calibration-history-chosen]')?.textContent,
+      conditions: row?.querySelector('[data-calibration-history-conditions]')?.textContent,
+    };
+  });
+  assert.equal(first.applicable, 'true', 'a result measured on what is loaded now applies');
+  assert.equal(first.chosen, '0.6 mm');
+  assert.match(first.conditions ?? '', /e2e/, 'the row names who measured it');
+
+  await recordRun(0.8);
+  await page.waitForFunction(
+    () => globalThis.document.querySelectorAll('[data-calibration-history-record]').length === 2,
+    { timeout: 30_000 },
+  );
+
+  // A run with no measurement is refused, and writes nothing.
+  await page.$eval('[data-calibration-history-entry-value="retractionLengthMm"]', (input) => {
+    input.value = '';
+    input.dispatchEvent(new globalThis.Event('input', { bubbles: true }));
+  });
+  await page.$eval('[data-calibration-history-submit]', (button) => button.click());
+  await page.waitForSelector('[data-calibration-history-issue="missing-measurement"]', { timeout: 30_000 });
+  assert.equal((await page.$$('[data-calibration-history-record]')).length, 2, 'a refused record writes nothing');
+
+  // Two runs of one method under one set of conditions compare cleanly.
+  const ids = await page.$$eval('[data-calibration-history-record]', (rows) =>
+    rows.map((row) => row.dataset.calibrationHistoryRecord),
+  );
+  for (const id of ids) {
+    await page.$eval(`[data-calibration-history-select="${id}"]`, (box) => box.click());
+  }
+  await page.waitForSelector('[data-calibration-history-delta="retractionLengthMm"]', { timeout: 30_000 });
+  assert.match(
+    await page.$eval('[data-calibration-history-delta="retractionLengthMm"]', (node) => node.textContent),
+    /0\.8 → 0\.6 \(-0\.2\)|0\.6 → 0\.8 \(\+0\.2\)/,
+  );
+  assert.equal(
+    (await page.$$('[data-calibration-history-caveat]')).length,
+    0,
+    'two runs of one method under one set of conditions carry no caveats',
+  );
+
+  // Change the nozzle. The records stay — they are evidence — but they stop
+  // being applicable, and each says exactly which condition moved.
+  const swapped = await page.evaluate(() => {
+    const before = globalThis.window.workspace.getHeadNozzle(0);
+    globalThis.window.workspace.setHeadNozzle(0, before === '0.6' ? '0.4' : '0.6');
+    return globalThis.window.workspace.getHeadNozzle(0) !== before;
+  });
+  assert.ok(swapped, 'the loaded project has a nozzle that can be changed');
+  await page.$eval('[data-calibration-history-refresh]', (button) => button.click());
+  await page.waitForFunction(
+    () =>
+      [...globalThis.document.querySelectorAll('[data-calibration-history-record]')].every(
+        (row) => row.dataset.calibrationHistoryApplicable === 'false',
+      ),
+    { timeout: 30_000 },
+  );
+  assert.equal(
+    (await page.$$('[data-calibration-history-record]')).length,
+    2,
+    'a record that no longer applies is still a record',
+  );
+  assert.match(
+    await page.$eval('[data-calibration-history-mismatch]', (node) => node.textContent),
+    /measured with nozzleDiameterMm/i,
+    'and it names the condition that changed',
+  );
+
+  // The export is the file someone attaches to a forum post.
+  await page.evaluate(() => {
+    globalThis.__calibrationBlob = undefined;
+    const createObjectURL = globalThis.URL.createObjectURL.bind(globalThis.URL);
+    globalThis.URL.createObjectURL = (blob) => {
+      if (blob.type === 'application/json') globalThis.__calibrationBlob = blob;
+      return createObjectURL(blob);
+    };
+    const click = globalThis.HTMLAnchorElement.prototype.click;
+    globalThis.HTMLAnchorElement.prototype.click = function patched() {
+      if (this.download === 'orcaxr-calibration-history.json') return;
+      return click.call(this);
+    };
+  });
+  await page.$eval('[data-calibration-history-export]', (button) => button.click());
+  const exported = await page.evaluate(async () => globalThis.__calibrationBlob?.text());
+  assert.ok(exported, 'the export produced a file');
+  const ledger = JSON.parse(exported);
+  assert.equal(ledger.format, 'orcaxr.calibration-history');
+  assert.equal(ledger.records.length, 2);
+  assert.equal(
+    /token|apikey|password|secret|https?:\/\/|(?:\d{1,3}\.){3}\d{1,3}/i.test(exported),
+    false,
+    'the exported ledger carries no address and no credential',
+  );
+
+  // Deleting is confirmed, and stays deleted across a real reload.
+  await page.evaluate(() => {
+    globalThis.window.confirm = () => true;
+  });
+  await page.$eval('[data-calibration-history-delete]', (button) => button.click());
+  await page.waitForFunction(
+    () => globalThis.document.querySelectorAll('[data-calibration-history-record]').length === 1,
+    { timeout: 30_000 },
+  );
+
+  // The deletion is persisted, not merely removed from the list. Read the
+  // stored ledger rather than reloading: the suite's project is still open, and
+  // a reload here would throw away what the next steps inspect.
+  const persisted = await page.evaluate(() => globalThis.localStorage.getItem('orcaxr.calibration-history'));
+  assert.ok(persisted, 'the ledger is stored on this device');
+  const storedLedger = JSON.parse(persisted);
+  assert.equal(storedLedger.records.length, 1, 'the delete reached storage, not just the list');
+  assert.equal(
+    storedLedger.records[0].id,
+    (
+      await page.$$eval('[data-calibration-history-record]', (rows) =>
+        rows.map((row) => row.dataset.calibrationHistoryRecord),
+      )
+    )[0],
+    'and what is stored is what is shown',
+  );
+
+  // Put the nozzle back the way the project had it.
+  await page.evaluate((nozzle) => globalThis.window.workspace.setHeadNozzle(0, nozzle), originalNozzle);
+  await page.$eval('#calibration-history-details', (details) => details.removeAttribute('open'));
+  console.log('[e2e] calibration results recorded, compared, invalidated by a material change, exported, and deleted');
+}
+
+/**
  * Watching a print from a phone, and losing the connection while it runs (P9.7).
  *
  * The compact surface is the only printer UI someone sees when they are not on
@@ -3545,8 +3725,13 @@ try {
 
   assert.deepStrictEqual(pageErrors, [], `uncaught page errors: ${pageErrors.join('\n')}`);
   assert.deepStrictEqual(policyErrors, [], `CSP violations: ${policyErrors.join('\n')}`);
+  // Last of all: recording a result and then changing the loaded filament
+  // invalidates the sliced artifact and adds undoable commands, so this runs
+  // once nothing else depends on the preview or the history depth.
+  await keepCalibrationHistory(page);
+
   console.log(
-    'Production E2E smoke passed (a print watched from a phone that survived a dropped session and cancelled only on a full hold, a browser configured from empty storage — two printers installed, a filament preset authored over a system base, and the whole setup exported and reimported as a bundle — canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings that the same panel also writes to one object without touching the project, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a stored file browsed, reprinted without re-uploading, renamed, and deleted behind a confirmation, a console that answers a query over the socket, sends nothing when a stepper release is dismissed, and runs a macro with the parameters its own body declares, a print history paged by the count the printer reports, a camera shown as authenticated snapshots that stops fetching when hidden, a printer plus slicer configured once that are still configured after a reload, device preferences that apply live and reset without touching presets, and two named printers that switch without their credentials following each other).',
+    'Production E2E smoke passed (calibration results recorded, compared, invalidated by a nozzle change, exported and deleted, a print watched from a phone that survived a dropped session and cancelled only on a full hold, a browser configured from empty storage — two printers installed, a filament preset authored over a system base, and the whole setup exported and reimported as a bundle — canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings that the same panel also writes to one object without touching the project, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a stored file browsed, reprinted without re-uploading, renamed, and deleted behind a confirmation, a console that answers a query over the socket, sends nothing when a stepper release is dismissed, and runs a macro with the parameters its own body declares, a print history paged by the count the printer reports, a camera shown as authenticated snapshots that stops fetching when hidden, a printer plus slicer configured once that are still configured after a reload, device preferences that apply live and reset without touching presets, and two named printers that switch without their credentials following each other).',
   );
 } finally {
   await browser.close();
