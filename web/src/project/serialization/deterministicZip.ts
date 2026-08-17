@@ -140,6 +140,106 @@ export function validatePackagePath(path: string, maxPathBytes = 512): void {
   }
 }
 
+/**
+ * The ZIP64 end-of-central-directory record, when the classic one holds
+ * sentinels.
+ *
+ * Only the four fields the classic record could not hold are taken. Everything
+ * that bounds this archive — entry count, directory extent, per-path checks,
+ * total uncompressed size — is applied afterwards to these values exactly as it
+ * is to the classic ones, so a ZIP64 archive gets no more latitude than any
+ * other. Sizes are read as 64-bit and refused if they exceed what a browser
+ * should hold, which is the concern the outright refusal was standing in for.
+ */
+function readZip64Eocd(
+  archive: Uint8Array,
+  view: DataView,
+  eocd: number,
+): {
+  entriesOnDisk: number;
+  entryCount: number;
+  centralSize: number;
+  centralOffset: number;
+  recordOffset: number;
+} {
+  const locator = eocd - 20;
+  if (locator < 0 || view.getUint32(locator, true) !== 0x07064b50) {
+    throw new UnsafeThreeMfArchiveError('ZIP64 end-of-central-directory locator is missing');
+  }
+  if (view.getUint32(locator + 4, true) !== 0 || view.getUint32(locator + 16, true) !== 1) {
+    throw new UnsafeThreeMfArchiveError('Multi-disk ZIP64 archives are not supported');
+  }
+  const recordOffset = readUint64(view, locator + 8);
+  if (recordOffset < 0 || recordOffset + 56 > archive.byteLength) {
+    throw new UnsafeThreeMfArchiveError('ZIP64 end-of-central-directory record is out of bounds');
+  }
+  if (view.getUint32(recordOffset, true) !== 0x06064b50) {
+    throw new UnsafeThreeMfArchiveError('ZIP64 end-of-central-directory record is corrupt');
+  }
+  return {
+    entriesOnDisk: readUint64(view, recordOffset + 24),
+    entryCount: readUint64(view, recordOffset + 32),
+    centralSize: readUint64(view, recordOffset + 40),
+    centralOffset: readUint64(view, recordOffset + 48),
+    recordOffset,
+  };
+}
+
+/**
+ * A 64-bit little-endian field, refused rather than truncated when it exceeds
+ * what a browser can index safely.
+ */
+function readUint64(view: DataView, offset: number): number {
+  const value = view.getBigUint64(offset, true);
+  if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new UnsafeThreeMfArchiveError('ZIP64 field exceeds the supported browser envelope');
+  }
+  return Number(value);
+}
+
+/**
+ * The 0x0001 ZIP64 extended-information field of one central-directory entry.
+ *
+ * Its layout is positional: uncompressed size, compressed size, local header
+ * offset, disk number — each present only when the 32-bit field it replaces
+ * held a sentinel. Reading it as a fixed layout would take the wrong eight
+ * bytes for any entry that does not use all of them, which is why the caller
+ * says which ones it is missing.
+ */
+function readZip64ExtraField(
+  view: DataView,
+  extraStart: number,
+  extraLength: number,
+  wantUncompressed: boolean,
+  wantCompressed: boolean,
+  wantOffset: boolean,
+): { uncompressedSize?: number; compressedSize?: number; localOffset?: number } {
+  let cursor = extraStart;
+  const end = extraStart + extraLength;
+  while (cursor + 4 <= end) {
+    const headerId = view.getUint16(cursor, true);
+    const size = view.getUint16(cursor + 2, true);
+    if (cursor + 4 + size > end) throw new UnsafeThreeMfArchiveError('ZIP extra field overruns its record');
+    if (headerId === 0x0001) {
+      let field = cursor + 4;
+      const limit = field + size;
+      const take = (): number => {
+        if (field + 8 > limit) throw new UnsafeThreeMfArchiveError('ZIP64 extra field is truncated');
+        const value = readUint64(view, field);
+        field += 8;
+        return value;
+      };
+      const result: { uncompressedSize?: number; compressedSize?: number; localOffset?: number } = {};
+      if (wantUncompressed) result.uncompressedSize = take();
+      if (wantCompressed) result.compressedSize = take();
+      if (wantOffset) result.localOffset = take();
+      return result;
+    }
+    cursor += 4 + size;
+  }
+  throw new UnsafeThreeMfArchiveError('ZIP entry claims ZIP64 sizes but carries no ZIP64 extra field');
+}
+
 function inspectCentralDirectory(archive: Uint8Array, limits: ZipSafetyLimits): CentralEntry[] {
   if (archive.byteLength < 22) throw new UnsafeThreeMfArchiveError('ZIP is truncated');
   const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
@@ -158,17 +258,34 @@ function inspectCentralDirectory(archive: Uint8Array, limits: ZipSafetyLimits): 
   if (view.getUint16(eocd + 4, true) !== 0 || view.getUint16(eocd + 6, true) !== 0) {
     throw new UnsafeThreeMfArchiveError('Multi-disk ZIP archives are not supported');
   }
-  const entriesOnDisk = view.getUint16(eocd + 8, true);
-  const entryCount = view.getUint16(eocd + 10, true);
-  const centralSize = view.getUint32(eocd + 12, true);
-  const centralOffset = view.getUint32(eocd + 16, true);
+  let entriesOnDisk = view.getUint16(eocd + 8, true);
+  let entryCount = view.getUint16(eocd + 10, true);
+  let centralSize = view.getUint32(eocd + 12, true);
+  let centralOffset = view.getUint32(eocd + 16, true);
+  let directoryEnd = eocd;
   if (
     entriesOnDisk === 0xffff ||
     entryCount === 0xffff ||
     centralSize === 0xffff_ffff ||
     centralOffset === 0xffff_ffff
   ) {
-    throw new UnsafeThreeMfArchiveError('ZIP64 archives exceed the supported browser envelope');
+    // A sentinel means the real value lives in the ZIP64 record, not that the
+    // archive is large. Upstream's calibration 3MFs are 150 KB and still write
+    // one — refusing them outright kept genuinely small, entirely ordinary
+    // files out. The values are read from ZIP64 and then face **every** bound
+    // below unchanged: entry count, central-directory bounds, path safety, and
+    // the total-size limit. Widening what can be *parsed* is not widening what
+    // is accepted.
+    const zip64 = readZip64Eocd(archive, view, eocd);
+    entriesOnDisk = zip64.entriesOnDisk;
+    entryCount = zip64.entryCount;
+    centralSize = zip64.centralSize;
+    centralOffset = zip64.centralOffset;
+    // The ZIP64 record and its locator sit between the central directory and
+    // the classic end record, so the directory abuts *them*, not it. Still an
+    // equality: the directory must end exactly where the ZIP64 record begins,
+    // which leaves no unaccounted bytes for anything to hide in.
+    directoryEnd = zip64.recordOffset;
   }
   if (entriesOnDisk !== entryCount) {
     throw new UnsafeThreeMfArchiveError('ZIP central-directory entry count is inconsistent');
@@ -176,7 +293,7 @@ function inspectCentralDirectory(archive: Uint8Array, limits: ZipSafetyLimits): 
   if (entryCount > limits.maxEntries) {
     throw new UnsafeThreeMfArchiveError(`ZIP has ${entryCount} entries; limit is ${limits.maxEntries}`);
   }
-  if (centralOffset + centralSize !== eocd || centralOffset > archive.byteLength) {
+  if (centralOffset + centralSize !== directoryEnd || centralOffset > archive.byteLength) {
     throw new UnsafeThreeMfArchiveError('ZIP central-directory bounds are invalid');
   }
 
@@ -186,23 +303,41 @@ function inspectCentralDirectory(archive: Uint8Array, limits: ZipSafetyLimits): 
   let total = 0;
   let offset = centralOffset;
   for (let index = 0; index < entryCount; index += 1) {
-    if (offset + 46 > eocd || view.getUint32(offset, true) !== 0x02014b50) {
+    if (offset + 46 > directoryEnd || view.getUint32(offset, true) !== 0x02014b50) {
       throw new UnsafeThreeMfArchiveError('ZIP central-directory record is corrupt');
     }
     const flags = view.getUint16(offset + 8, true);
     const compression = view.getUint16(offset + 10, true);
     const expectedCrc32 = view.getUint32(offset + 16, true);
-    const compressedSize = view.getUint32(offset + 20, true);
-    const uncompressedSize = view.getUint32(offset + 24, true);
+    let compressedSize = view.getUint32(offset + 20, true);
+    let uncompressedSize = view.getUint32(offset + 24, true);
     const nameLength = view.getUint16(offset + 28, true);
     const extraLength = view.getUint16(offset + 30, true);
     const commentLength = view.getUint16(offset + 32, true);
     const diskStart = view.getUint16(offset + 34, true);
-    const localOffset = view.getUint32(offset + 42, true);
+    let localOffset = view.getUint32(offset + 42, true);
     const end = offset + 46 + nameLength + extraLength + commentLength;
-    if (end > eocd) throw new UnsafeThreeMfArchiveError('ZIP central entry is truncated');
+    if (end > directoryEnd) throw new UnsafeThreeMfArchiveError('ZIP central entry is truncated');
     if (flags & 0x1 || flags & 0x40) {
       throw new UnsafeThreeMfArchiveError('Encrypted ZIP entries are not supported');
+    }
+    // Per-entry ZIP64: the same sentinels appear on individual records, with
+    // the real values in the 0x0001 extra field. Read in the order the spec
+    // fixes — uncompressed, compressed, local offset — and only for the fields
+    // that actually carry a sentinel, since a present field shifts the ones
+    // after it.
+    if (compressedSize === 0xffff_ffff || uncompressedSize === 0xffff_ffff || localOffset === 0xffff_ffff) {
+      const wide = readZip64ExtraField(
+        view,
+        offset + 46 + nameLength,
+        extraLength,
+        uncompressedSize === 0xffff_ffff,
+        compressedSize === 0xffff_ffff,
+        localOffset === 0xffff_ffff,
+      );
+      if (wide.uncompressedSize !== undefined) uncompressedSize = wide.uncompressedSize;
+      if (wide.compressedSize !== undefined) compressedSize = wide.compressedSize;
+      if (wide.localOffset !== undefined) localOffset = wide.localOffset;
     }
     if (flags & 0x20 || flags & 0x2000) {
       throw new UnsafeThreeMfArchiveError('Patched or masked ZIP entries are not supported');
@@ -231,8 +366,8 @@ function inspectCentralDirectory(archive: Uint8Array, limits: ZipSafetyLimits): 
     const localFlags = view.getUint16(localOffset + 6, true);
     const localCompression = view.getUint16(localOffset + 8, true);
     const localCrc32 = view.getUint32(localOffset + 14, true);
-    const localCompressedSize = view.getUint32(localOffset + 18, true);
-    const localUncompressedSize = view.getUint32(localOffset + 22, true);
+    let localCompressedSize = view.getUint32(localOffset + 18, true);
+    let localUncompressedSize = view.getUint32(localOffset + 22, true);
     const localNameLength = view.getUint16(localOffset + 26, true);
     const localExtraLength = view.getUint16(localOffset + 28, true);
     const localDataOffset = localOffset + 30 + localNameLength + localExtraLength;
@@ -243,6 +378,22 @@ function inspectCentralDirectory(archive: Uint8Array, limits: ZipSafetyLimits): 
     const overlap = localRegions.find((region) => localOffset < region.end && region.start < localEnd);
     if (overlap) {
       throw new UnsafeThreeMfArchiveError(`ZIP entries ${overlap.path} and ${path} have overlapping local data`);
+    }
+    // The local header carries the same sentinels as the central record, in
+    // its own ZIP64 extra field. Comparing a sentinel against a real size is
+    // what made every upstream archive look inconsistent; both sides have to be
+    // widened before they can be compared at all.
+    if (localCompressedSize === 0xffff_ffff || localUncompressedSize === 0xffff_ffff) {
+      const wide = readZip64ExtraField(
+        view,
+        localOffset + 30 + localNameLength,
+        localExtraLength,
+        localUncompressedSize === 0xffff_ffff,
+        localCompressedSize === 0xffff_ffff,
+        false,
+      );
+      if (wide.uncompressedSize !== undefined) localUncompressedSize = wide.uncompressedSize;
+      if (wide.compressedSize !== undefined) localCompressedSize = wide.compressedSize;
     }
     localRegions.push({ start: localOffset, end: localEnd, path });
     if (localFlags !== flags || localCompression !== compression) {
@@ -275,7 +426,7 @@ function inspectCentralDirectory(archive: Uint8Array, limits: ZipSafetyLimits): 
     entries.push({ path, compressedSize, uncompressedSize, crc32: expectedCrc32, directory });
     offset = end;
   }
-  if (offset !== eocd) throw new UnsafeThreeMfArchiveError('ZIP central directory has trailing data');
+  if (offset !== directoryEnd) throw new UnsafeThreeMfArchiveError('ZIP central directory has trailing data');
   return entries;
 }
 
