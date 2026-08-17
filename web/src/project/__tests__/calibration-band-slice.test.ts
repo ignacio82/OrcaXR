@@ -96,4 +96,67 @@ await test('a band’s temperature reaches the program through its custom G-code
   assert.ok(commanded.size > BANDS.length, `the program commands distinct temperatures, not one: ${[...commanded]}`);
 });
 
+await test('a range-scoped wall speed does change the print, unlike a range-scoped temperature', async () => {
+  // The families that install with no custom G-code — max-volumetric-speed and
+  // vfa — rely entirely on `outer_wall_speed` in a layer range. Range-scoped
+  // `nozzle_temperature` turned out to be inert, so this cannot be assumed:
+  // if speed were inert too, both workflows would install cleanly and measure
+  // nothing.
+  const bandSpeed = 15;
+  const baseSpeed = 120;
+  const archive = await buildSliceArchive({
+    config: { outer_wall_speed: String(baseSpeed) },
+    mutate: (state) => {
+      for (const plate of state.plates) {
+        for (const object of plate.objects) {
+          object.layerRanges = [RANGE(1, 6, 12, { layer_height: '0.2', outer_wall_speed: String(bandSpeed) })];
+        }
+      }
+    },
+  });
+
+  const gcode = await sliceArchive(archive, 'band-speed');
+  // Feedrates are mm/min in the program and mm/s in the config.
+  const feedrates = new Set(
+    [...gcode.matchAll(/^G1 [^\n]*\bF([\d.]+)/gm)].map((match) => Math.round(Number(match[1]) / 60)),
+  );
+  assert.ok(
+    feedrates.has(bandSpeed),
+    `the banded wall speed appears in the program; it commanded ${[...feedrates].sort((a, b) => a - b).join(', ')} mm/s`,
+  );
+});
+
+await test('printer-specific band commands survive into the program verbatim', async () => {
+  // The pressure-advance, junction-deviation and input-shaping families each
+  // emit a different command through the same layer-event channel. The channel
+  // is proven for M104; these are not M104, and a G-code writer that filtered
+  // unknown commands would drop them silently.
+  const COMMANDS = [
+    { topZMm: 4, code: 'SET_PRESSURE_ADVANCE ADVANCE=0.035\n' },
+    { topZMm: 8, code: 'M205 J0.012\n' },
+    { topZMm: 12, code: 'SET_INPUT_SHAPER SHAPER_FREQ_X=42.5\n' },
+  ];
+  const archive = await buildSliceArchive({
+    mutate: (state) => {
+      state.customGcode = COMMANDS.map((command, index) => ({
+        id: `import:band:custom-gcode-${index + 1}` as never,
+        scope: 'plate',
+        plateId: state.plates[0].id,
+        trigger: 'before-layer',
+        code: command.code,
+        layerEvent: { type: 'custom', topZMm: command.topZMm },
+      })) as never;
+    },
+  });
+
+  const gcode = await sliceArchive(archive, 'band-commands');
+  for (const command of COMMANDS) {
+    const literal = command.code.trim();
+    assert.ok(
+      gcode.includes(literal),
+      `${literal.split(' ')[0]} reaches the program unchanged; a filtered command would calibrate nothing`,
+    );
+  }
+});
+
 console.log(`\nCalibration band slicing: ${passed} tests passed.`);
