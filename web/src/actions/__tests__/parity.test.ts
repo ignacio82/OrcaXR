@@ -285,6 +285,7 @@ test('every way of backing out of a state is reachable in a headset', () => {
     'brim_ears_auto',
     'simplify_cancel',
     'calib_session_discard',
+    'calib_reset_parameters',
   ]) {
     const action = registry.all().find((entry) => entry.id === id);
     assert.ok(action, `${id} is registered`);

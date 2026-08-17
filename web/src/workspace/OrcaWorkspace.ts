@@ -4937,6 +4937,64 @@ export class OrcaWorkspace extends xb.Script {
     };
   }
 
+  // --- Calibration parameters (P8.3) -----------------------------------
+  /**
+   * The workflow being configured and the edits typed into it.
+   *
+   * Held here rather than in the shell so the same state is reachable from the
+   * DOM panel, from an XR surface, and from an MCP tool. A panel that owns its
+   * own field values is a panel only that panel can drive, which is the rule
+   * this project sets against itself: every action an operator can take must be
+   * an action the registry can take.
+   */
+  private calibrationWorkflowId = 'temperature-tower';
+  private calibrationEdits: Record<string, string> = {};
+  public onCalibrationParametersChanged: (() => void) | null = null;
+
+  public getCalibrationWorkflowId(): string {
+    return this.calibrationWorkflowId;
+  }
+
+  public getCalibrationEdits(): Readonly<Record<string, string>> {
+    return { ...this.calibrationEdits };
+  }
+
+  /** Choose which calibration the parameter surface is configuring. */
+  public setCalibrationWorkflow(id: string): boolean {
+    // Not validated here on purpose. The pinned definitions are the authority
+    // on which calibrations exist, and `buildCalibrationForm` already reports
+    // an unknown one as `unknown-definition`. Importing the inventory to check
+    // it a second time pulled the whole generated catalog into the main chunk
+    // — 54 KB every visitor pays for a check that was already being made.
+    if (this.calibrationWorkflowId === id) return true;
+    this.calibrationWorkflowId = id;
+    // Edits belong to the calibration they were typed for: two definitions can
+    // share a parameter key and mean different things by it, so carrying them
+    // across would apply one workflow's numbers to another's parameters.
+    this.calibrationEdits = {};
+    this.onCalibrationParametersChanged?.();
+    return true;
+  }
+
+  /** Set one parameter, as text — parsing belongs to the form, not here. */
+  public setCalibrationParameter(key: string, text: string): boolean {
+    if (key.length === 0) {
+      this.setStatus('A calibration parameter needs a name.');
+      return false;
+    }
+    this.calibrationEdits = { ...this.calibrationEdits, [key]: text };
+    this.onCalibrationParametersChanged?.();
+    return true;
+  }
+
+  /** Put the definition's own defaults back. */
+  public resetCalibrationParameters(): boolean {
+    if (Object.keys(this.calibrationEdits).length === 0) return false;
+    this.calibrationEdits = {};
+    this.onCalibrationParametersChanged?.();
+    return true;
+  }
+
   public onCalibrationSessionChanged: (() => void) | null = null;
 
   /** Whether a calibration currently owns the editor instead of the project. */

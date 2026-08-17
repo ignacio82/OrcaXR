@@ -253,6 +253,10 @@ export interface ActionInvocation {
   simplifyByError?: boolean;
   /** Largest quadric error a collapse may cost, when driving by error. */
   simplifyMaxError?: number;
+  /** Which pinned calibration the parameter surface is configuring. */
+  calibrationWorkflowId?: string;
+  /** One calibration parameter, as typed; the form owns the parsing. */
+  calibrationParameter?: { readonly key: string; readonly text: string };
   /**
    * Bounded emboss request. The font arrives as bytes the operator picked: a
    * browser cannot enumerate installed fonts and the CSP forbids fetching one,

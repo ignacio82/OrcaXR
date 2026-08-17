@@ -134,7 +134,6 @@ import {
   resetPreferences,
   savePreferences,
 } from './settings/Preferences';
-import { MeasurePanel } from './ui/dom/MeasurePanel';
 import { SmartPaintPanel } from './ui/dom/SmartPaintPanel';
 import { PlateManager } from './ui/dom/PlateManager';
 import { SemanticObjectEditor } from './ui/dom/SemanticObjectEditor';
@@ -2957,59 +2956,63 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
 
   const measurePanelHost = document.getElementById('measure-panel-host');
   if (measurePanelHost) {
-    const measurePanel = new MeasurePanel(measurePanelHost, {
-      getState: () => {
-        const measure = workspace.getMeasureSnapshot();
-        if (measure.picks.length < 2) return measure;
-        const assembly = workspace.getAssemblySnapshot();
-        return {
-          ...measure,
-          assembly: {
-            canSetToParallel: assembly.available.canSetToParallel,
-            canSetToCenterCoincidence: assembly.available.canSetToCenterCoincidence,
-            canRotateAroundFaceCenter: assembly.available.canRotateAroundFaceCenter,
-            hasParallelDistance: assembly.available.hasParallelDistance,
-            parallelDistanceMm: assembly.available.parallelDistanceMm,
-            movable: assembly.movable,
-            hint: assembly.hint,
-          },
-        };
-      },
-      subscribe: (listener) => {
-        const unsubscribeCanonical = workspace.subscribeCanonicalState(listener);
-        const previous = workspace.onMeasureStateChanged;
-        workspace.onMeasureStateChanged = () => {
-          previous?.();
-          listener();
-        };
-        return () => {
-          unsubscribeCanonical();
-          workspace.onMeasureStateChanged = previous;
-        };
-      },
-      onActivate: async () => {
-        const invoked = await registry.invoke('tool_measure', 'dom-toolbar', actionCtx, uiState.get());
-        if (!invoked) throw new Error('Add a model before measuring it.');
-      },
-      onClear: async () => {
-        const invoked = await registry.invoke('measure_clear', 'dom-inspector', actionCtx, uiState.get());
-        if (!invoked) throw new Error('Clearing the measurement is unavailable.');
-      },
-      onAlign: async (kind, parameter) => {
-        const invoked = await registry.invoke('assembly_align', 'dom-inspector', actionCtx, uiState.get(), {
-          assemblyAlignment: {
-            kind: kind as NonNullable<ActionInvocation['assemblyAlignment']>['kind'],
-            ...(parameter !== undefined ? { parameter } : {}),
-          },
-        });
-        if (!invoked) throw new Error('Assembly alignment is unavailable.');
-      },
-      onError: (error) => {
-        statusText.textContent = `Measure: ${error instanceof Error ? error.message : String(error)}`;
-      },
-    });
-    measurePanel.mount();
-    window.addEventListener('pagehide', () => measurePanel.dispose(), { once: true });
+    // Tool-gated, like the emboss and SVG panels beside it.
+    void (async () => {
+      const { MeasurePanel } = await import('./ui/dom/MeasurePanel');
+      const measurePanel = new MeasurePanel(measurePanelHost, {
+        getState: () => {
+          const measure = workspace.getMeasureSnapshot();
+          if (measure.picks.length < 2) return measure;
+          const assembly = workspace.getAssemblySnapshot();
+          return {
+            ...measure,
+            assembly: {
+              canSetToParallel: assembly.available.canSetToParallel,
+              canSetToCenterCoincidence: assembly.available.canSetToCenterCoincidence,
+              canRotateAroundFaceCenter: assembly.available.canRotateAroundFaceCenter,
+              hasParallelDistance: assembly.available.hasParallelDistance,
+              parallelDistanceMm: assembly.available.parallelDistanceMm,
+              movable: assembly.movable,
+              hint: assembly.hint,
+            },
+          };
+        },
+        subscribe: (listener) => {
+          const unsubscribeCanonical = workspace.subscribeCanonicalState(listener);
+          const previous = workspace.onMeasureStateChanged;
+          workspace.onMeasureStateChanged = () => {
+            previous?.();
+            listener();
+          };
+          return () => {
+            unsubscribeCanonical();
+            workspace.onMeasureStateChanged = previous;
+          };
+        },
+        onActivate: async () => {
+          const invoked = await registry.invoke('tool_measure', 'dom-toolbar', actionCtx, uiState.get());
+          if (!invoked) throw new Error('Add a model before measuring it.');
+        },
+        onClear: async () => {
+          const invoked = await registry.invoke('measure_clear', 'dom-inspector', actionCtx, uiState.get());
+          if (!invoked) throw new Error('Clearing the measurement is unavailable.');
+        },
+        onAlign: async (kind, parameter) => {
+          const invoked = await registry.invoke('assembly_align', 'dom-inspector', actionCtx, uiState.get(), {
+            assemblyAlignment: {
+              kind: kind as NonNullable<ActionInvocation['assemblyAlignment']>['kind'],
+              ...(parameter !== undefined ? { parameter } : {}),
+            },
+          });
+          if (!invoked) throw new Error('Assembly alignment is unavailable.');
+        },
+        onError: (error) => {
+          statusText.textContent = `Measure: ${error instanceof Error ? error.message : String(error)}`;
+        },
+      });
+      measurePanel.mount();
+      window.addEventListener('pagehide', () => measurePanel.dispose(), { once: true });
+    })();
   }
 
   const calibrationParametersHost = document.getElementById('calibration-parameters-host');
@@ -3021,12 +3024,11 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
         import('./project/calibration/docs'),
         import('./features/calibrationInventory'),
       ]);
-      let workflow = inventory.CALIBRATION_WORKFLOW_IDS[0];
-      let edits: Record<string, string> = {};
       const listeners = new Set<() => void>();
       const announce = (): void => {
         for (const listener of listeners) listener();
       };
+      workspace.onCalibrationParametersChanged = announce;
 
       const chooser = document.createElement('label');
       chooser.style.cssText = 'display:flex;align-items:center;gap:6px;opacity:0.75;';
@@ -3040,12 +3042,9 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
         select.appendChild(option);
       }
       select.addEventListener('change', () => {
-        workflow = select.value as typeof workflow;
-        // Edits belong to the calibration they were typed for: carrying them
-        // across would silently apply one workflow's numbers to another's
-        // parameters wherever the keys happen to collide.
-        edits = {};
-        announce();
+        void registry.invoke('calib_choose', 'dom-inspector', actionCtx, uiState.get(), {
+          calibrationWorkflowId: select.value,
+        });
       });
       chooser.appendChild(select);
       const panelHost = document.createElement('div');
@@ -3053,10 +3052,16 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
 
       const panel = new CalibrationParametersPanel(panelHost, {
         getState: () => {
+          // The workspace holds the id as a plain string so it need not import
+          // the catalog; this surface already has the catalog loaded, so it is
+          // the right place to narrow, and an id the catalog does not know is
+          // reported by `buildCalibrationForm` rather than assumed away.
+          const workflow = workspace.getCalibrationWorkflowId() as (typeof inventory.CALIBRATION_WORKFLOW_IDS)[number];
+          select.value = workflow;
           const preview = form.buildCalibrationForm(
             workflow,
             workspace.calibrationPrerequisites(),
-            edits,
+            workspace.getCalibrationEdits(),
             'calibration:preview',
           );
           return {
@@ -3076,13 +3081,14 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
           listeners.add(listener);
           return () => listeners.delete(listener);
         },
-        onEdit: (key, text) => {
-          edits = { ...edits, [key]: text };
-          announce();
+        onEdit: async (key, text) => {
+          const invoked = await registry.invoke('calib_configure', 'dom-inspector', actionCtx, uiState.get(), {
+            calibrationParameter: { key, text },
+          });
+          if (!invoked) throw new Error('Setting a calibration parameter is unavailable.');
         },
-        onReset: () => {
-          edits = {};
-          announce();
+        onReset: async () => {
+          await registry.invoke('calib_reset_parameters', 'dom-inspector', actionCtx, uiState.get());
         },
         onGenerate: () => {
           throw new Error('Building a compiled calibration plan into the project is not available yet (P8.2).');

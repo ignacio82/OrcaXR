@@ -202,6 +202,54 @@ export const calibrationActions: Action[] = [
       ),
   },
   {
+    id: 'calib_choose',
+    mcpTool: 'choose_calibration',
+    label: 'Choose calibration to configure',
+    icon: 'calibration',
+    group: 'calibration',
+    disclosure: 'inspector',
+    hint: 'Pick which pinned calibration the parameter panel is editing',
+    run: (ctx, invocation) => {
+      const id = invocation.calibrationWorkflowId;
+      if (id === undefined) {
+        ctx.reportCapabilityUnavailable('Choose calibration', 'Name a calibration to configure.');
+        return;
+      }
+      ctx.setCalibrationWorkflow(id);
+    },
+  },
+  {
+    id: 'calib_configure',
+    mcpTool: 'configure_calibration',
+    label: 'Set a calibration parameter',
+    icon: 'settings',
+    group: 'calibration',
+    disclosure: 'inspector',
+    hint: 'Change one parameter of the calibration being configured; the preview recompiles',
+    run: (ctx, invocation) => {
+      const parameter = invocation.calibrationParameter;
+      if (!parameter) {
+        ctx.reportCapabilityUnavailable('Set a calibration parameter', 'Name a parameter and a value.');
+        return;
+      }
+      ctx.setCalibrationParameter(parameter.key, parameter.text);
+    },
+  },
+  {
+    id: 'calib_reset_parameters',
+    mcpTool: 'reset_calibration_parameters',
+    label: 'Reset calibration parameters',
+    icon: 'undo',
+    group: 'calibration',
+    disclosure: 'inspector',
+    hint: 'Put the definition’s own defaults back',
+    // A back-out action: never withheld in a headset, and covered by the
+    // registry invariant that says so.
+    run: (ctx) => {
+      ctx.resetCalibrationParameters();
+    },
+  },
+  {
     id: 'calib_session_discard',
     mcpTool: 'discard_calibration',
     label: 'Discard calibration, restore my project',

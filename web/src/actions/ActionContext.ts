@@ -191,6 +191,18 @@ export class ActionContext {
   addPrimitive(kind: 'cube' | 'cylinder' | 'sphere'): void {
     this.workspace.addPrimitive(kind);
   }
+  setCalibrationWorkflow(id: string): boolean {
+    return this.workspace.setCalibrationWorkflow(id);
+  }
+
+  setCalibrationParameter(key: string, text: string): boolean {
+    return this.workspace.setCalibrationParameter(key, text);
+  }
+
+  resetCalibrationParameters(): boolean {
+    return this.workspace.resetCalibrationParameters();
+  }
+
   discardCalibrationSession(): boolean {
     return this.workspace.discardCalibrationSession();
   }
