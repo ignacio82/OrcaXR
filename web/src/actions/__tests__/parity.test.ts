@@ -286,6 +286,7 @@ test('every way of backing out of a state is reachable in a headset', () => {
     'simplify_cancel',
     'calib_session_discard',
     'calib_reset_parameters',
+    'measure_clear',
   ]) {
     const action = registry.all().find((entry) => entry.id === id);
     assert.ok(action, `${id} is registered`);
@@ -355,16 +356,22 @@ test('all XR toolbar actions are reachable by finite rail or Tools overflow', ()
   const toolbar = registry.forSurface('xr-toolbar');
   const rail = xrToolRailActions(toolbar);
   const overflow = toolbar.filter((action) => !rail.includes(action));
-  // Smart Paint, Smart Paint (Image), Measure, Assembly, Brim Ears, and the
-  // SVG part tool are deliberately absent: each declares an XR exclusion
-  // because its flow is DOM-only. The SVG one needs a file picker.
-  assert.strictEqual(toolbar.length, 13);
+  // Smart Paint, Smart Paint (Image), Assembly, Brim Ears, and the SVG part
+  // tool are deliberately absent: each declares an XR exclusion for a reason a
+  // headset cannot yet satisfy — typed consent, a per-region list, an indexed
+  // list, a file picker.
+  //
+  // Measure is *not* in that list any more. Its exclusion said the readout was
+  // DOM-only, and the measurement is drawn on the model now; picking a feature
+  // is a ray against a mesh, which the four paint tools on this same toolbar
+  // already do in a headset. A reason that has stopped being true is worse
+  // than no reason, because it reads as a considered limit.
+  assert.strictEqual(toolbar.length, 14);
   assert.strictEqual(rail.length, 7);
-  assert.strictEqual(overflow.length, 6);
+  assert.strictEqual(overflow.length, 7);
   for (const excluded of [
     'tool_smart_paint',
     'tool_smart_paint_image',
-    'tool_measure',
     'tool_assembly',
     'tool_brim_ears',
     'tool_svg',

@@ -2029,6 +2029,10 @@ export class OrcaWorkspace extends xb.Script {
     }
     const result = measureSurfaceFeatures(this.measurePicks[0].feature, this.measurePicks[1].feature);
     const distance = result.distanceStrict ?? result.distanceInfinite;
+    // Drawn as well as reported. Upstream annotates the model, and until now
+    // the answer existed only in a DOM panel — which is also the reason the
+    // measure actions were withheld from XR.
+    this.drawMeasureAnnotation(distance ?? null);
     return Object.freeze({
       active,
       picks: Object.freeze(picks),
@@ -2046,6 +2050,62 @@ export class OrcaWorkspace extends xb.Script {
         : {}),
       hint: 'Click another feature to start a new measurement.',
     });
+  }
+
+  /** Scene group holding the current measurement's line and label. */
+  private measureAnnotation: THREE.Group | null = null;
+
+  /**
+   * Draw the measurement on the model (P5.3.1).
+   *
+   * A line between the two points the engine actually measured between, and the
+   * distance beside it. The endpoints come from the measurement result rather
+   * than from the picked features, because those differ: a point-to-plane
+   * distance is measured to the *foot* of the perpendicular, and drawing to the
+   * plane's origin instead would show a line that is not the length reported
+   * next to it.
+   *
+   * Removed and rebuilt on every call rather than updated, because a stale
+   * annotation left beside a new number is worse than none.
+   */
+  private drawMeasureAnnotation(
+    distance: { readonly distance: number; readonly from: Vec3; readonly to: Vec3 } | null,
+  ): void {
+    if (this.measureAnnotation) {
+      this.workspace.remove(this.measureAnnotation);
+      this.measureAnnotation.traverse((node) => {
+        if (node instanceof THREE.Line) node.geometry.dispose();
+        if (node instanceof THREE.Sprite) {
+          const material = node.material as THREE.SpriteMaterial;
+          material.map?.dispose();
+          material.dispose();
+        }
+      });
+      this.measureAnnotation = null;
+    }
+    if (!distance) return;
+
+    const scale = CURRENT_THREE_WORLD_UNITS_PER_MM;
+    const from = new THREE.Vector3(distance.from[0] * scale, distance.from[1] * scale, distance.from[2] * scale);
+    const to = new THREE.Vector3(distance.to[0] * scale, distance.to[1] * scale, distance.to[2] * scale);
+    const group = new THREE.Group();
+    group.name = 'measureAnnotation';
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([from, to]),
+      new THREE.LineBasicMaterial({ color: 0xffc107, depthTest: false, transparent: true }),
+    );
+    // Drawn over the model on purpose: a dimension hidden inside the geometry
+    // it describes is a dimension nobody can read.
+    line.renderOrder = 3;
+    line.raycast = () => {};
+    group.add(line);
+
+    const label = this.makeLabelSprite(`${Number(distance.distance.toFixed(3))} mm`);
+    label.position.copy(from.clone().add(to).multiplyScalar(0.5));
+    label.renderOrder = 4;
+    group.add(label);
+    this.workspace.add(group);
+    this.measureAnnotation = group;
   }
 
   /**

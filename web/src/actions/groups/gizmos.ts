@@ -311,7 +311,10 @@ export const gizmoActions: Action[] = [
     tool: 'measure',
     hint: 'Click two features to measure the distance, angle, or hole diameter between them',
     isEnabled: (s) => s.modelCount > 0,
-    xrUnsupportedReason: 'Measurements are read from the DOM inspector; no in-headset readout surface exists yet.',
+    // Reachable in a headset. Picking a feature is a ray against a mesh, which
+    // the paint family already does in XR, and the readout is no longer
+    // DOM-only: the measurement is drawn on the model as a line and a label
+    // (P5.3.1), which is what the withheld reason was actually about.
     run: (ctx) => ctx.measureTool(),
   },
   {
@@ -321,7 +324,10 @@ export const gizmoActions: Action[] = [
     group: 'scene',
     disclosure: 'inspector',
     hint: 'Drop both picked features and start a new measurement',
-    xrUnsupportedReason: 'Measurements are read from the DOM inspector; no in-headset readout surface exists yet.',
+    // Reachable in a headset. Picking a feature is a ray against a mesh, which
+    // the paint family already does in XR, and the readout is no longer
+    // DOM-only: the measurement is drawn on the model as a line and a label
+    // (P5.3.1), which is what the withheld reason was actually about.
     run: (ctx) => ctx.clearMeasureSelection(),
   },
   {
