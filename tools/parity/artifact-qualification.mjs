@@ -51,7 +51,12 @@ const CORPORA = Object.freeze([
   },
   { id: "cancellation", suite: "web/src/project/__tests__/session.test.ts" },
   { id: "memory", suite: "web/src/settings/generated/loader.test.ts" },
-  { id: "route-comparison", suite: null },
+  {
+    id: "route-comparison",
+    suite: "tools/parity/route-comparison.mjs",
+    runnable: false,
+    why: "needs the external OrcaSlicer CLI, which is absent outside the qualification container",
+  },
 ]);
 
 function git(args) {
@@ -115,14 +120,20 @@ export function qualifyArtifacts() {
     if (tracked.length === 0)
       problems.push(`${root} has no committed files at all`);
   }
+  // A corpus that exists but cannot run here is not the same as one that does
+  // not exist, and flattening the two would hide which is which.
   const missingCorpora = CORPORA.filter((corpus) => corpus.suite === null).map(
     (corpus) => corpus.id,
   );
+  const notRunnableHere = CORPORA.filter(
+    (corpus) => corpus.suite !== null && corpus.runnable === false,
+  ).map((corpus) => `${corpus.id} (${corpus.why})`);
   return {
     schemaVersion: 1,
     roots,
     corpora: CORPORA,
     missingCorpora,
+    notRunnableHere,
     qualified: problems.length === 0,
     problems,
     // Said in the result rather than left to a reader's inference: passing this
@@ -133,6 +144,9 @@ export function qualifyArtifacts() {
       ...(missingCorpora.length > 0
         ? [`corpora with no suite: ${missingCorpora.join(", ")}`]
         : []),
+      ...notRunnableHere.map(
+        (entry) => `corpus present but not runnable here: ${entry}`,
+      ),
     ],
   };
 }
