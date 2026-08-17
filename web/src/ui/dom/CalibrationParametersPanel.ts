@@ -24,6 +24,13 @@ export interface CalibrationParametersPanelState {
   readonly docHref: string;
   /** Human summary of the compiled plan; absent when nothing compiled. */
   readonly planSummary?: string;
+  /**
+   * Why building is unavailable even when the form compiles. Present while
+   * canonical materialisation of a compiled plan is still P8.2 work: the
+   * control stays visible and says why, rather than disappearing or —
+   * far worse — appearing to work and producing something else.
+   */
+  readonly generateUnavailableReason?: string;
 }
 
 export interface CalibrationParametersPanelAdapter {
@@ -100,7 +107,11 @@ export class CalibrationParametersPanel {
     const generate = this.button('calibration-generate', 'Add to project', () => this.adapter.onGenerate());
     // Nothing is built while the form does not compile: an operator pressing
     // this with a bad value must not get a plan made from a substituted one.
-    generate.disabled = state.preview.plan === null;
+    generate.disabled = state.preview.plan === null || state.generateUnavailableReason !== undefined;
+    if (state.generateUnavailableReason) {
+      generate.title = state.generateUnavailableReason;
+      generate.dataset.calibrationUnavailable = 'true';
+    }
     const reset = this.button('calibration-reset', 'Reset to defaults', () => this.adapter.onReset());
     reset.disabled = !state.preview.fields.some((field) => field.changed);
     controls.append(generate, reset);
@@ -109,8 +120,11 @@ export class CalibrationParametersPanel {
     summary.dataset.calibrationPreview = 'true';
     summary.setAttribute('role', 'status');
     summary.style.cssText = 'margin:0;opacity:0.75;';
+    // The plan summary is reported even when building is withheld: knowing what
+    // the settings would produce is the whole value of a preview, and it does
+    // not depend on being able to act on it yet.
     summary.textContent = state.preview.plan
-      ? (state.planSummary ?? 'Ready to add.')
+      ? [state.planSummary ?? 'Ready to add.', state.generateUnavailableReason].filter(Boolean).join(' ')
       : general.length > 0
         ? general.join(' ')
         : 'Fix the fields marked below to see what this will build.';

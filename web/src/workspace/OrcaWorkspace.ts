@@ -141,6 +141,7 @@ import { renderXrActionButton, xrToolRailActions, type XrActionHandle } from '..
 import { xrBlocksUiAdapter } from '../ui/xr/XrUiAdapter';
 import { SceneGestureGuard, type SceneGestureSnapshot } from '../ui/xr/SceneGestureGuard';
 import { DEFAULT_BRIM_EAR_DETECTION, detectBrimEars } from '../project/objects/brimEarDetection';
+import type { CalibrationJobPrerequisites } from '../project/calibration/types';
 import {
   BRIM_EAR_COLORS,
   BRIM_EAR_DISC_HEIGHT_MM,
@@ -4856,6 +4857,84 @@ export class OrcaWorkspace extends xb.Script {
         : `Added calibration ${kind}.`,
     );
     this.onCalibrationSessionChanged?.();
+  }
+
+  /**
+   * The printer, nozzle, filament, and process facts a calibration is compiled
+   * against, read from the live project (P8.3).
+   *
+   * Every field comes from the canonical config rather than a default, because
+   * the compiler uses these to decide what will fit on the bed and what
+   * temperatures are safe — a plausible-looking stand-in would produce a
+   * preview of a machine the operator does not have. Where the config genuinely
+   * does not carry a value, the fallback is the conservative one: a smaller
+   * bed, a narrower temperature window, a slower machine. A calibration refused
+   * for not fitting is a nuisance; one accepted because the bed was assumed
+   * larger than it is crashes a toolhead.
+   */
+  public calibrationPrerequisites(): CalibrationJobPrerequisites {
+    const config = this.canonicalProject.getSlicingConfiguration().config as Record<string, unknown>;
+    const num = (key: string, fallback: number): number => {
+      const raw = config[key];
+      const value = Array.isArray(raw) ? raw[0] : raw;
+      const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''));
+      return Number.isFinite(parsed) ? parsed : fallback;
+    };
+    const text = (key: string, fallback: string): string => {
+      const raw = config[key];
+      const value = Array.isArray(raw) ? raw[0] : raw;
+      return typeof value === 'string' && value.length > 0 ? value : fallback;
+    };
+    const nozzleDiameterMm = num('nozzle_diameter', 0.4);
+    const layerHeightMm = num('layer_height', 0.2);
+    return {
+      printer: {
+        id: `printer:${text('printer_model', 'unknown')}`,
+        manufacturer: text('printer_vendor', 'Unknown'),
+        model: text('printer_model', 'Unknown'),
+        bedWidthMm: this.bedMm.x,
+        bedDepthMm: this.bedMm.y,
+        buildHeightMm: num('printable_height', 100),
+        maxPrintSpeedMmPerS: num('machine_max_speed_x', 200),
+        maxAccelerationMmPerS2: num('machine_max_acceleration_x', 1000),
+      },
+      nozzle: {
+        diameterMm: nozzleDiameterMm,
+        minTemperatureC: num('nozzle_temperature_range_low', 170),
+        maxTemperatureC: num('nozzle_temperature_range_high', 300),
+        // Upstream's own guidance, and the reason this is derived rather than
+        // read: no config key states a maximum layer height.
+        maxLayerHeightMm: nozzleDiameterMm * 0.8,
+      },
+      filament: {
+        id: `filament:${text('filament_settings_id', 'unknown')}`,
+        name: text('filament_settings_id', 'Unknown filament'),
+        material: text('filament_type', 'PLA'),
+        minTemperatureC: num('nozzle_temperature_range_low', 190),
+        maxTemperatureC: num('nozzle_temperature_range_high', 240),
+        flowRatio: num('filament_flow_ratio', 1),
+        maxVolumetricSpeedMm3PerS: num('filament_max_volumetric_speed', 12),
+        retractionLengthMm: num('retraction_length', 0.8),
+      },
+      process: {
+        id: `process:${text('print_settings_id', 'unknown')}`,
+        layerHeightMm,
+        firstLayerHeightMm: num('initial_layer_print_height', layerHeightMm),
+        lineWidthMm: num('line_width', nozzleDiameterMm * 1.125),
+        outerWallSpeedMmPerS: num('outer_wall_speed', 60),
+        defaultAccelerationMmPerS2: num('default_acceleration', 1000),
+        xyHoleCompensationMm: num('xy_hole_compensation', 0),
+        xyContourCompensationMm: num('xy_contour_compensation', 0),
+      },
+      firmware: {
+        flavor: 'klipper',
+        nozzleTemperature: true,
+        pressureAdvance: true,
+        inputShaping: true,
+        junctionDeviation: false,
+        maxInputShapingFrequencyHz: 500,
+      },
+    };
   }
 
   public onCalibrationSessionChanged: (() => void) | null = null;

@@ -165,6 +165,21 @@ await test('reset is inert until something has been changed', () => {
   );
 });
 
+await test('a withheld build says why, and still reports what the settings would make', () => {
+  const view = mount({
+    ...base,
+    generateUnavailableReason: 'Building a compiled plan into the project is still P8.2 work.',
+  });
+  const generate = view.host.querySelector<HTMLButtonElement>('[data-calibration-action="calibration-generate"]');
+  assert.equal(generate?.disabled, true, 'withheld rather than pretending to work');
+  assert.equal(generate?.dataset.calibrationUnavailable, 'true');
+  assert.match(generate?.title ?? '', /P8\.2/, 'and it says why rather than being mysteriously grey');
+
+  const summary = view.host.querySelector('[data-calibration-preview]')?.textContent ?? '';
+  assert.match(summary, /13 bands/, 'the preview is still the point, even when acting on it is not offered');
+  assert.match(summary, /P8\.2/);
+});
+
 await test('edits report the text as typed, and the doc link is safe and pinned', async () => {
   const view = mount(base);
   const input = view.host.querySelector<HTMLInputElement>('[data-calibration-input="start"]')!;

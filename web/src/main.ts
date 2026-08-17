@@ -3013,6 +3013,90 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     window.addEventListener('pagehide', () => measurePanel.dispose(), { once: true });
   }
 
+  const calibrationParametersHost = document.getElementById('calibration-parameters-host');
+  if (calibrationParametersHost) {
+    void (async () => {
+      const [{ CalibrationParametersPanel }, form, docs, inventory] = await Promise.all([
+        import('./ui/dom/CalibrationParametersPanel'),
+        import('./project/calibration/form'),
+        import('./project/calibration/docs'),
+        import('./features/calibrationInventory'),
+      ]);
+      let workflow = inventory.CALIBRATION_WORKFLOW_IDS[0];
+      let edits: Record<string, string> = {};
+      const listeners = new Set<() => void>();
+      const announce = (): void => {
+        for (const listener of listeners) listener();
+      };
+
+      const chooser = document.createElement('label');
+      chooser.style.cssText = 'display:flex;align-items:center;gap:6px;opacity:0.75;';
+      chooser.textContent = 'Calibration';
+      const select = document.createElement('select');
+      select.dataset.calibrationWorkflow = 'true';
+      for (const id of inventory.CALIBRATION_WORKFLOW_IDS) {
+        const option = document.createElement('option');
+        option.value = id;
+        option.textContent = id;
+        select.appendChild(option);
+      }
+      select.addEventListener('change', () => {
+        workflow = select.value as typeof workflow;
+        // Edits belong to the calibration they were typed for: carrying them
+        // across would silently apply one workflow's numbers to another's
+        // parameters wherever the keys happen to collide.
+        edits = {};
+        announce();
+      });
+      chooser.appendChild(select);
+      const panelHost = document.createElement('div');
+      calibrationParametersHost.replaceChildren(chooser, panelHost);
+
+      const panel = new CalibrationParametersPanel(panelHost, {
+        getState: () => {
+          const preview = form.buildCalibrationForm(
+            workflow,
+            workspace.calibrationPrerequisites(),
+            edits,
+            'calibration:preview',
+          );
+          return {
+            workflowLabel: workflow,
+            preview,
+            docHref: docs.calibrationDocHref(workflow),
+            ...(preview.plan ? { planSummary: form.describeCalibrationPlan(preview.plan) } : {}),
+            // Withheld, not broken: the compiler produces a plan, but building
+            // one into the canonical project graph is still P8.2 work. Saying
+            // so beats a control that looks ready and would produce something
+            // other than what the preview describes.
+            generateUnavailableReason:
+              'Building a compiled plan into the project is still P8.2 work; the menu entries add the existing alpha geometry.',
+          };
+        },
+        subscribe: (listener) => {
+          listeners.add(listener);
+          return () => listeners.delete(listener);
+        },
+        onEdit: (key, text) => {
+          edits = { ...edits, [key]: text };
+          announce();
+        },
+        onReset: () => {
+          edits = {};
+          announce();
+        },
+        onGenerate: () => {
+          throw new Error('Building a compiled calibration plan into the project is not available yet (P8.2).');
+        },
+        onError: (error) => {
+          statusText.textContent = `Calibration: ${error instanceof Error ? error.message : String(error)}`;
+        },
+      });
+      panel.mount();
+      window.addEventListener('pagehide', () => panel.dispose(), { once: true });
+    })();
+  }
+
   const calibrationSessionHost = document.getElementById('calibration-session-host');
   if (calibrationSessionHost) {
     // In the viewport, so it is seen; loaded on demand, because it is empty
