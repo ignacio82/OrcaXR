@@ -15,6 +15,7 @@ import {
   SetPlatePrintableCommand,
 } from '../project/commands';
 import { canonicalStringify, cloneJson, cloneProjectState, deepFreeze } from '../project/domain/canonical';
+import type { CalibrationJobPlan } from '../project/calibration/types';
 import { facetAnnotationsHaveAssignments } from '../project/domain/facetRefinement';
 import type { EmbossTextConfiguration, EmbossedMesh, GlyphOutlineSource } from '../project/objects/emboss';
 import type { EmbossSvgPart } from '../project/domain/model';
@@ -1485,6 +1486,90 @@ export class CanonicalWorkspaceController {
       ),
     );
     return id;
+  }
+
+  /**
+   * Write a compiled calibration plan's effects onto an object (P8.2).
+   *
+   * A calibration is only a calibration if its bands actually change the print.
+   * P8.2 is explicit that "generated bands must carry real engine overrides
+   * rather than visual labels alone", and until now the compiler produced those
+   * overrides and nothing installed them — the geometry went into the project
+   * and the effects stayed in the plan.
+   *
+   * Each per-height effect becomes one canonical layer range carrying that
+   * band's `layer`-scope overrides, so the slicer sees them the same way it
+   * sees a hand-authored height range. Object-scope overrides go onto the
+   * object. The whole plan is one transaction: a calibration installed halfway
+   * is a tower whose upper bands print at the wrong settings and whose G-code
+   * looks perfectly reasonable.
+   *
+   * `print` scope is deliberately included and safe here, because a calibration
+   * owns its own session (see {@link beginCalibrationSession}) — the operator's
+   * project is held aside, so a project-wide setting written by a calibration
+   * cannot reach their work.
+   *
+   * Returns what was installed, so a caller can report it rather than assume.
+   */
+  applyCalibrationPlan(
+    objectId: ObjectId,
+    plan: CalibrationJobPlan,
+  ): { readonly bands: number; readonly objectKeys: number; readonly printKeys: number } {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    if (!findObject(state, objectId)) throw new Error(`Unknown object ${objectId}`);
+
+    const objectConfig: Record<string, string> = {};
+    const printConfig: Record<string, string> = {};
+    const bands: { minZMm: number; maxZMm: number; config: Record<string, string> }[] = [];
+
+    for (const effect of plan.effects) {
+      const layerConfig: Record<string, string> = {};
+      for (const override of effect.engineOverrides) {
+        // The engine reads strings; a number written as a number would be
+        // silently stringified later by whichever writer got there first.
+        const value = typeof override.value === 'boolean' ? (override.value ? '1' : '0') : String(override.value);
+        if (override.scope === 'layer') layerConfig[override.key] = value;
+        else if (override.scope === 'object') objectConfig[override.key] = value;
+        else printConfig[override.key] = value;
+      }
+      if (effect.zRangeMm && Object.keys(layerConfig).length > 0) {
+        bands.push({ minZMm: effect.zRangeMm[0], maxZMm: effect.zRangeMm[1], config: layerConfig });
+      }
+    }
+
+    this.session.transaction('Apply calibration plan', () => {
+      for (const band of bands) {
+        this.session.execute(
+          new AddLayerRangeCommand(objectId, {
+            id: this.options.idSource.next('layer-range'),
+            minZMm: band.minZMm,
+            maxZMm: band.maxZMm,
+            config: band.config as ConfigMap,
+          }),
+        );
+      }
+      if (Object.keys(objectConfig).length > 0) {
+        const snapshot = this.session.project.getSnapshot();
+        this.setScopedOverrides({ scope: 'object', objectId }, objectConfig as ConfigMap, {
+          sourceRevision: snapshot.revision,
+          sourceHash: snapshot.hash,
+        });
+      }
+      if (Object.keys(printConfig).length > 0) {
+        const snapshot = this.session.project.getSnapshot();
+        this.setScopedOverrides({ scope: 'project' }, printConfig as ConfigMap, {
+          sourceRevision: snapshot.revision,
+          sourceHash: snapshot.hash,
+        });
+      }
+    });
+
+    return {
+      bands: bands.length,
+      objectKeys: Object.keys(objectConfig).length,
+      printKeys: Object.keys(printConfig).length,
+    };
   }
 
   // --- Calibration sessions (P8.3) -------------------------------------

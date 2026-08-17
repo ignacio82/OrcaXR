@@ -20,6 +20,8 @@ import { CanonicalWorkspaceController } from '../CanonicalWorkspaceController';
 import { identityTransform } from '../../project/domain/model';
 import { projectFingerprint } from '../../project/domain/canonical';
 import type { EntityId, IdSource } from '../../project/domain/ids';
+import { compileCalibrationJob, createDefaultCalibrationJobRequest } from '../../project/calibration/compiler';
+import type { CalibrationJobPrerequisites } from '../../project/calibration/types';
 
 const NOW = '2026-08-01T12:00:00.000Z';
 const MAPPING = { bedSizeMm: [270, 270] as const, worldUnitsPerMm: 0.00175 };
@@ -47,6 +49,50 @@ function controller(): CanonicalWorkspaceController {
     mapping: MAPPING,
     projectImportParser: new BbsProjectImportParser(),
   });
+}
+
+function calibrationPrereqs(): CalibrationJobPrerequisites {
+  return {
+    printer: {
+      id: 'printer:snapmaker-u1',
+      manufacturer: 'Snapmaker',
+      model: 'U1',
+      bedWidthMm: 270,
+      bedDepthMm: 270,
+      buildHeightMm: 270,
+      maxPrintSpeedMmPerS: 300,
+      maxAccelerationMmPerS2: 10_000,
+    },
+    nozzle: { diameterMm: 0.4, minTemperatureC: 170, maxTemperatureC: 300, maxLayerHeightMm: 0.32 },
+    filament: {
+      id: 'filament:pla-red',
+      name: 'Red PLA',
+      material: 'PLA',
+      minTemperatureC: 180,
+      maxTemperatureC: 260,
+      flowRatio: 0.98,
+      maxVolumetricSpeedMm3PerS: 30,
+      retractionLengthMm: 0.8,
+    },
+    process: {
+      id: 'process:quality',
+      layerHeightMm: 0.2,
+      firstLayerHeightMm: 0.2,
+      lineWidthMm: 0.45,
+      outerWallSpeedMmPerS: 120,
+      defaultAccelerationMmPerS2: 5_000,
+      xyHoleCompensationMm: 0,
+      xyContourCompensationMm: 0,
+    },
+    firmware: {
+      flavor: 'klipper',
+      nozzleTemperature: true,
+      pressureAdvance: true,
+      inputShaping: true,
+      junctionDeviation: true,
+      maxInputShapingFrequencyHz: 500,
+    },
+  };
 }
 
 function cube(size = 10): THREE.BufferGeometry {
@@ -145,6 +191,75 @@ await test('cancelling without a session is refused rather than resetting the pr
   assert.equal(workspace.cancelCalibrationSession(), false);
   assert.equal(workspace.keepCalibrationSession(), false);
   assert.deepEqual(state(workspace), before, 'a refused call is not an excuse to clear anything');
+});
+
+/**
+ * Materialising a compiled plan (P8.2).
+ *
+ * The requirement is blunt: generated bands must carry real engine overrides
+ * rather than visual labels alone. Until this landed the compiler produced the
+ * overrides and nothing installed them, so a temperature tower was a tower
+ * shape printed entirely at one temperature — which looks exactly like a
+ * working calibration right up until the operator measures it.
+ */
+await test('a compiled plan installs its bands as canonical layer ranges carrying real overrides', () => {
+  const workspace = controller();
+  workspace.importBufferGeometry(cube(30), { name: 'Temperature tower' });
+  const objectId = state(workspace).plates[0].objects[0].id;
+
+  const plan = compileCalibrationJob(createDefaultCalibrationJobRequest('temperature-tower', calibrationPrereqs()), {
+    jobId: 'calibration:materialise-1',
+  });
+  const perHeight = plan.effects.filter((effect) => effect.zRangeMm !== null);
+  assert.ok(perHeight.length > 1, 'a tower has several bands to install');
+
+  const installed = workspace.applyCalibrationPlan(objectId, plan);
+  assert.equal(installed.bands, perHeight.length, 'every band with a z range became a layer range');
+
+  const ranges = state(workspace).plates[0].objects[0].layerRanges;
+  assert.equal(ranges.length, perHeight.length);
+  for (const [index, effect] of perHeight.entries()) {
+    const range = ranges[index];
+    assert.equal(range.minZMm, effect.zRangeMm![0]);
+    assert.equal(range.maxZMm, effect.zRangeMm![1]);
+    const layerKeys = effect.engineOverrides.filter((override) => override.scope === 'layer');
+    assert.ok(layerKeys.length > 0, 'the band carries an engine override, not just a label');
+    for (const override of layerKeys) {
+      assert.equal(
+        range.config[override.key],
+        String(override.value),
+        `band ${index} writes ${override.key} the engine will read`,
+      );
+    }
+  }
+});
+
+await test('installing a plan is one undoable act, not one per band', () => {
+  const workspace = controller();
+  workspace.importBufferGeometry(cube(30), { name: 'Temperature tower' });
+  const objectId = state(workspace).plates[0].objects[0].id;
+  const before = workspace.getSummary().history.undoCount;
+
+  const plan = compileCalibrationJob(createDefaultCalibrationJobRequest('temperature-tower', calibrationPrereqs()), {
+    jobId: 'calibration:materialise-2',
+  });
+  workspace.applyCalibrationPlan(objectId, plan);
+  assert.equal(
+    workspace.getSummary().history.undoCount,
+    before + 1,
+    'a tower installed halfway prints its upper bands at the wrong settings and looks fine in the G-code',
+  );
+
+  workspace.undo();
+  assert.deepEqual(state(workspace).plates[0].objects[0].layerRanges, [], 'one undo takes the whole plan back out');
+});
+
+await test('a plan cannot be installed onto an object that is not there', () => {
+  const workspace = controller();
+  const plan = compileCalibrationJob(createDefaultCalibrationJobRequest('temperature-tower', calibrationPrereqs()), {
+    jobId: 'calibration:materialise-3',
+  });
+  assert.throws(() => workspace.applyCalibrationPlan('import:missing:object-1' as never, plan), /Unknown object/);
 });
 
 console.log(`\nCalibration session: ${passed} tests passed.`);
