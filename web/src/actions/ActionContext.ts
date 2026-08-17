@@ -191,6 +191,14 @@ export class ActionContext {
   addPrimitive(kind: 'cube' | 'cylinder' | 'sphere'): void {
     this.workspace.addPrimitive(kind);
   }
+  setExplosionFactor(factor: number): boolean {
+    return this.workspace.setExplosionFactor(factor);
+  }
+
+  getExplosionFactor(): number {
+    return this.workspace.getExplosionFactor();
+  }
+
   placeCalibrationGeometry(): Promise<{ placed: number } | { reason: string }> {
     return this.workspace.placeCalibrationGeometry();
   }

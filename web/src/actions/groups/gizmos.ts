@@ -338,6 +338,27 @@ export const gizmoActions: Action[] = [
     run: (ctx) => ctx.assemblyView(),
   },
   {
+    id: 'assembly_explode',
+    mcpTool: 'explode_assembly',
+    label: 'Explode the assembly',
+    icon: 'assembly',
+    group: 'scene',
+    disclosure: 'inspector',
+    hint: 'Move the rendered parts apart to see inside; the project is not changed',
+    isEnabled: (s) => s.modelCount > 1,
+    // Not withheld from XR: this is a view control with a bounded factor, which
+    // is a stepper rather than a typed field, and looking inside an assembly is
+    // exactly what a headset is good for.
+    run: (ctx, invocation) => {
+      const factor = invocation.explosionFactor;
+      if (factor === undefined) {
+        ctx.reportCapabilityUnavailable('Explode the assembly', 'Choose how far apart the parts should move.');
+        return;
+      }
+      ctx.setExplosionFactor(factor);
+    },
+  },
+  {
     id: 'assembly_align',
     label: 'Align picked faces',
     icon: 'assembly',

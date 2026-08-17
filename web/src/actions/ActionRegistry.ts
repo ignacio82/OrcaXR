@@ -253,6 +253,8 @@ export interface ActionInvocation {
   simplifyByError?: boolean;
   /** Largest quadric error a collapse may cost, when driving by error. */
   simplifyMaxError?: number;
+  /** Exploded-view factor; 1 is fully assembled. View state, never canonical. */
+  explosionFactor?: number;
   /** Which pinned calibration the parameter surface is configuring. */
   calibrationWorkflowId?: string;
   /** One calibration parameter, as typed; the form owns the parsing. */

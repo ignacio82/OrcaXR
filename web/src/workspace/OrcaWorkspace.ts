@@ -141,6 +141,7 @@ import { renderXrActionButton, xrToolRailActions, type XrActionHandle } from '..
 import { xrBlocksUiAdapter } from '../ui/xr/XrUiAdapter';
 import { SceneGestureGuard, type SceneGestureSnapshot } from '../ui/xr/SceneGestureGuard';
 import { DEFAULT_BRIM_EAR_DETECTION, detectBrimEars } from '../project/objects/brimEarDetection';
+import { projectExplosion } from '../project/objects/assembly';
 import type { CalibrationJobPlan, CalibrationJobPrerequisites } from '../project/calibration/types';
 import { stepCalibrationValue } from '../project/calibration/stepper';
 import { pressureAdvanceLineProgram } from '../project/calibration/lineProgram';
@@ -5087,6 +5088,67 @@ export class OrcaWorkspace extends xb.Script {
     this.onCalibrationSessionChanged?.();
     return result;
   }
+
+  // --- Exploded assembly view (P5.3.2) ---------------------------------
+  /** 1 is assembled; above that the parts move apart. View state only. */
+  private explosionFactor = 1;
+  public onExplosionChanged: (() => void) | null = null;
+
+  public getExplosionFactor(): number {
+    return this.explosionFactor;
+  }
+
+  /**
+   * Move the rendered parts apart without moving the project (P5.3.2).
+   *
+   * The acceptance is explicit that explosion is a view-only projection which
+   * never mutates canonical placement, so this writes to the *display* objects
+   * and nothing else — the offsets are applied to the Three group each instance
+   * projects into, and the canonical transform behind it is untouched. That is
+   * why the factor is workspace state rather than a command: an exploded view
+   * that entered undo history would be an edit pretending to be a camera.
+   *
+   * `projectExplosion` returns offsets that are exactly zero at factor 1, so
+   * assembling again restores the projected positions rather than approximating
+   * them back.
+   */
+  public setExplosionFactor(factor: number): boolean {
+    if (!Number.isFinite(factor) || factor < 1) {
+      this.setStatus('An explosion factor must be at least 1, where 1 is fully assembled.');
+      return false;
+    }
+    this.explosionFactor = factor;
+    this.applyExplosion();
+    this.onExplosionChanged?.();
+    return true;
+  }
+
+  /** Re-place every rendered instance for the current factor. */
+  private applyExplosion(): void {
+    const entries = this.models.filter((entry) => entry.viewer.parent);
+    if (entries.length === 0) return;
+    const inputs = entries.map((entry) => {
+      const base = this.explosionBaseline.get(entry.instanceId) ?? entry.viewer.position.clone();
+      this.explosionBaseline.set(entry.instanceId, base);
+      return { id: String(entry.instanceId), centerMm: [base.x, base.y, base.z] as Vec3 };
+    });
+    const offsets = new Map(projectExplosion(inputs, this.explosionFactor).map((o) => [o.id, o.offsetMm]));
+    for (const entry of entries) {
+      const base = this.explosionBaseline.get(entry.instanceId);
+      const offset = offsets.get(String(entry.instanceId));
+      if (!base || !offset) continue;
+      entry.viewer.position.set(base.x + offset[0], base.y + offset[1], base.z + offset[2]);
+    }
+  }
+
+  /**
+   * Where each instance sits when assembled.
+   *
+   * Held separately so repeated factor changes compose from the assembled
+   * positions rather than from the last exploded ones, which would drift the
+   * parts further apart on every adjustment.
+   */
+  private readonly explosionBaseline = new Map<InstanceId, THREE.Vector3>();
 
   public onCalibrationParametersChanged: (() => void) | null = null;
 

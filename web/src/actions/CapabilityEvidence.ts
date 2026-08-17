@@ -88,6 +88,7 @@ export const ACTION_IDS_BY_PARITY_TASK = {
     'tool_cut',
   ],
   'P5.3': [
+    'assembly_explode',
     // The preview session belongs with the pinned Simplify gizmo (P5.3.5),
     // not with the one-shot topology command P5.2 owns. Same decimation
     // underneath, different parity claim on top.

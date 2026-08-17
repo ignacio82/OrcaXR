@@ -302,12 +302,17 @@ export function projectExplosion(parts: readonly ExplosionInput[], factor: numbe
   for (const part of parts) centroid = add(centroid, part.centerMm);
   centroid = multiply(centroid, 1 / parts.length);
   return Object.freeze(
-    parts.map((part) =>
-      Object.freeze({
+    parts.map((part) => {
+      const offset = multiply(subtract(part.centerMm, centroid), factor - 1);
+      return Object.freeze({
         id: part.id,
-        offsetMm: multiply(subtract(part.centerMm, centroid), factor - 1),
-      }),
-    ),
+        // Normalised away from `-0`. Multiplying a negative distance by zero at
+        // factor 1 yields `-0`, which is numerically zero but not `Object.is`
+        // zero — so a caller checking "is this assembled" with a strict or
+        // deep equality would be told the parts had moved when they had not.
+        offsetMm: offset.map((value) => (value === 0 ? 0 : value)) as unknown as Vec3,
+      });
+    }),
   );
 }
 
