@@ -134,6 +134,21 @@ function hashesFor(root) {
   return { count: entries.length, entries };
 }
 
+/**
+ * Evidence ids a commit message claims that the table does not carry.
+ *
+ * Pure, and separate from the git call, so the detection can be exercised
+ * rather than only ever observed passing — a guard nobody has seen fire is
+ * indistinguishable from one that cannot.
+ */
+export function findUnrecordedClaims(log, recordedIds) {
+  const recorded = new Set(recordedIds);
+  const claimed = new Set();
+  for (const match of log.matchAll(/Recorded as (EVID-\d+)/g))
+    claimed.add(match[1]);
+  return [...claimed].filter((id) => !recorded.has(id)).sort();
+}
+
 export function buildReleaseReport() {
   const plan = readFileSync(PLAN_PATH, "utf8");
   const tasks = readTasks(plan);
@@ -154,6 +169,21 @@ export function buildReleaseReport() {
     .filter((task) => task.state === "x" && !covered.has(task.id))
     .map((task) => task.id);
 
+  // Evidence ids claimed by a commit message but never written into the table.
+  // Three times this session a generated docs edit failed on a stale anchor
+  // while an `&&` chain committed the code anyway, so a commit said "Recorded
+  // as EVID-nnn" and nothing was. Each was caught by reading the output; this
+  // catches it without anyone having to.
+  const log = execFileSync(
+    "git",
+    ["-C", REPOSITORY_ROOT, "log", "--format=%B", "-n", "200"],
+    { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+  );
+  const claimedButUnrecorded = findUnrecordedClaims(
+    log,
+    evidence.map((row) => row.id),
+  );
+
   return {
     schemaVersion: 1,
     // Deliberately first: a reader who stops after one section should stop
@@ -171,6 +201,7 @@ export function buildReleaseReport() {
         .map((task) => task.id),
       completeWithoutEvidence,
     },
+    integrity: { claimedButUnrecorded },
     evidence: { rows: evidence.length, tasksCovered: covered.size },
     upstream: {
       repository: UPSTREAM_REPOSITORY,
@@ -219,6 +250,11 @@ export function main(argv = process.argv.slice(2)) {
       `${report.tasks.total} tasks (${report.tasks.byState.x ?? 0} complete, ${report.tasks.unstarted.length} unstarted); ` +
       `${report.evidence.rows} evidence rows.`,
   );
+  if (report.integrity.claimedButUnrecorded.length > 0) {
+    throw new Error(
+      `Commit messages claim evidence that the table does not carry: ${report.integrity.claimedButUnrecorded.join(", ")}`,
+    );
+  }
   if (report.tasks.completeWithoutEvidence.length > 0) {
     console.log(
       `Complete without evidence: ${report.tasks.completeWithoutEvidence.join(", ")}`,

@@ -22,6 +22,7 @@ import { verifyManifest } from "./verify.mjs";
 import { checkDrift, deltaKeys, parseReleaseRefs } from "./drift.mjs";
 import {
   buildReleaseReport,
+  findUnrecordedClaims,
   readEvidence,
   readTasks,
 } from "./release-report.mjs";
@@ -308,6 +309,40 @@ function releaseReportTests() {
     "including the ones only implied by the range",
   );
   assert.ok(evidence[1].tasks.includes("P8.3"));
+
+  // The integrity guard, exercised rather than only observed passing. Three
+  // times this session a generated docs edit failed on a stale anchor while an
+  // `&&` chain committed the code anyway, so a commit said "Recorded as
+  // EVID-nnn" and nothing was.
+  assert.deepEqual(
+    findUnrecordedClaims("Recorded as EVID-042\n\nRecorded as EVID-043", [
+      "EVID-042",
+    ]),
+    ["EVID-043"],
+    "a claim with no row is reported",
+  );
+  assert.deepEqual(
+    findUnrecordedClaims("Recorded as EVID-042", ["EVID-042", "EVID-099"]),
+    [],
+    "and a claim that was recorded is not",
+  );
+
+  // The integrity guard, exercised rather than only observed passing. Three
+  // times this session a generated docs edit failed on a stale anchor while an
+  // `&&` chain committed the code anyway, so a commit said "Recorded as
+  // EVID-nnn" and nothing was.
+  assert.deepEqual(
+    findUnrecordedClaims("Recorded as EVID-042\n\nRecorded as EVID-043", [
+      "EVID-042",
+    ]),
+    ["EVID-043"],
+    "a claim with no row is reported",
+  );
+  assert.deepEqual(
+    findUnrecordedClaims("Recorded as EVID-042", ["EVID-042", "EVID-099"]),
+    [],
+    "and a claim that was recorded is not",
+  );
 
   // The two statements the report exists to make, and must not be able to
   // stop making by accident.
