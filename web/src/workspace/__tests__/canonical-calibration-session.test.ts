@@ -335,4 +335,27 @@ await test('a plan whose pieces cannot differ says so, rather than blaming place
   );
 });
 
+await test('a single-layer line sweep says it is generated G-code, not a project', () => {
+  // `pressure-advance-line` is 51 lines that all sit at z 0.2 and differ only
+  // in Y. A layer range is a z band, so nothing in a model can tell them apart;
+  // the setting has to change mid-layer at a coordinate, which the
+  // model-to-slicer path has no hook for. Upstream writes this G-code itself.
+  // Calling that "not yet materialised" would promise a placement that is never
+  // going to be the mechanism.
+  const workspace = controller();
+  workspace.importBufferGeometry(cube(30), { name: 'PA line' });
+  const objectId = state(workspace).plates[0].objects[0].id;
+  const plan = compileCalibrationJob(
+    createDefaultCalibrationJobRequest('pressure-advance-line', calibrationPrereqs()),
+    { jobId: 'calibration:pa-line' },
+  );
+  const heights = new Set(plan.effects.map((effect) => effect.lineMm?.start[2]));
+  assert.equal(heights.size, 1, 'the premise: every line really is in one layer');
+  assert.ok(plan.effects.length > 1);
+  assert.throws(
+    () => workspace.applyCalibrationPlan(objectId, plan),
+    /lines in one layer.*generated G-code, not a sliced project/s,
+  );
+});
+
 console.log(`\nCalibration session: ${passed} tests passed.`);

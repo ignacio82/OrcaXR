@@ -1642,11 +1642,24 @@ export class CanonicalWorkspaceController {
       // placing them would produce identical parts under different labels — a
       // plate that measures nothing while looking exactly like a calibration.
       const carriesNothing = plan.effects.every((effect) => effect.engineOverrides.length === 0);
+      // Every line at one height is not a placement problem. A layer range is a
+      // z band, so nothing in a model can distinguish 51 lines that share a
+      // layer and differ only in Y — the setting would have to change *inside*
+      // a layer at a given coordinate, and the model-to-slicer path has no hook
+      // there. Upstream writes this G-code itself rather than slicing a model,
+      // so "cannot yet materialise" would promise a placement that is never
+      // going to be the mechanism.
+      const heights = new Set(plan.effects.map((effect) => effect.lineMm?.start[2]));
+      const singleLayerLines = plan.effects.every((effect) => effect.lineMm !== null) && heights.size === 1;
       throw new Error(
         carriesNothing
           ? `${plan.definitionId} has ${plan.effects.length} pieces and no setting that differs between them, ` +
               'so placing them would print identical parts under different labels. Nothing was changed.'
-          : `${plan.definitionId} places its ${plan.effects.length} effects per object or per line, ` +
+          : singleLayerLines
+            ? `${plan.definitionId} draws ${plan.effects.length} lines in one layer at z ${[...heights][0]} mm, ` +
+              'each needing its own setting mid-layer. No model can express that — it is generated G-code, ' +
+              'not a sliced project. Nothing was changed.'
+            : `${plan.definitionId} places its ${plan.effects.length} effects per object or per line, ` +
               'which this build cannot yet materialise. Nothing was changed.',
       );
     }
