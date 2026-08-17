@@ -96,8 +96,12 @@ export const paintingActions: Action[] = [
     group: 'paint',
     disclosure: 'inspector',
     hint: 'Drop the proposed mask; the project is left exactly as it was',
-    xrUnsupportedReason:
-      'Smart Paint destinations are chosen per region in a DOM list; no in-headset region editor exists yet.',
+    // Reachable in a headset, unlike the apply beside it. Discarding needs no
+    // region editor — that reason describes choosing destinations, which is
+    // what apply does. A mask proposed in the DOM shell survives into an
+    // immersive session, so blocking this was leaving an operator with pending
+    // state they could see and could not back out of. The proposal is a scene
+    // overlay, so its disappearance is the confirmation.
     run: (ctx) => ctx.cancelSmartPaint(),
   },
   {

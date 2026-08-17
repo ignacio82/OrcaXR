@@ -263,6 +263,37 @@ for (const action of actions.filter((item) => item.capability.status === 'partia
   });
 }
 
+/**
+ * Backing out is never DOM-only.
+ *
+ * An `xrUnsupportedReason` shared across a family of actions is how this got
+ * wrong twice. Five brim-ear actions carried one sentence about a radius field
+ * and an indexed list, which described two of them; the Smart Paint family
+ * carried one about a per-region destination list, which described apply and
+ * not the discard beside it. In both cases the effect was an operator who could
+ * enter a state in the DOM shell, see it in a headset, and not get out of it.
+ *
+ * These are the actions that only ever *remove* pending or placed state. They
+ * take no parameters, their result is visible in the scene, and none of them
+ * can be the thing a headset withholds.
+ */
+test('every way of backing out of a state is reachable in a headset', () => {
+  const registry = buildRegistry();
+  for (const id of ['paint_smart_cancel', 'brim_ears_clear', 'brim_ears_auto', 'simplify_cancel']) {
+    const action = registry.all().find((entry) => entry.id === id);
+    assert.ok(action, `${id} is registered`);
+    assert.equal(
+      action.xrUnsupportedReason,
+      undefined,
+      `${id} takes no parameters and shows its result in the scene, so it must not be withheld in XR`,
+    );
+    assert.ok(
+      action.capability.surfaces.some((surface: ActionSurface) => surface.startsWith('xr-')),
+      `${id} must reach an XR surface`,
+    );
+  }
+});
+
 test('every action declares command-palette plus only its truthful presentation surfaces', () => {
   const domPresentation: Record<string, ActionSurface> = {
     primary: 'dom-primary',
