@@ -4843,8 +4843,56 @@ export class OrcaWorkspace extends xb.Script {
         geo = gen.generateTolerance();
         break;
     }
+    // The operator's project is put aside rather than added to (P8.3). A
+    // calibration is a separate errand: it prints a test object, gets measured,
+    // and is thrown away, and doing that in the middle of someone's plate
+    // leaves them to notice and undo it. Opening a session is idempotent, so
+    // adding a second calibration replaces the first rather than nesting.
+    const opened = this.canonicalProject.beginCalibrationSession();
     this.loadModelFromGeometry(geo.toNonIndexed(), filename);
-    this.setStatus(`Added calibration ${kind}.`);
+    this.setStatus(
+      opened
+        ? `Added calibration ${kind}. Your project is held aside — finish or discard the calibration to get it back.`
+        : `Added calibration ${kind}.`,
+    );
+    this.onCalibrationSessionChanged?.();
+  }
+
+  public onCalibrationSessionChanged: (() => void) | null = null;
+
+  /** Whether a calibration currently owns the editor instead of the project. */
+  public get calibrationSessionOpen(): boolean {
+    return this.canonicalProject.calibrationSessionOpen;
+  }
+
+  /** Give the operator their project back, exactly as it was. */
+  public discardCalibrationSession(): boolean {
+    if (!this.canonicalProject.cancelCalibrationSession()) {
+      this.setStatus('There is no calibration to discard.');
+      return false;
+    }
+    // Same refresh the New Project path performs after a wholesale canonical
+    // reset: the scene, the toolpath preview, and every surface that caches a
+    // published result have to follow the state rather than the other way round.
+    this.clearToolpathPreview();
+    this.publishedGcode = null;
+    this.onDownloadReady?.(false);
+    this.onSelectionChanged?.(false);
+    this.onPlatesChanged?.();
+    this.setStatus('Calibration discarded; your project is back exactly as it was.');
+    this.onCalibrationSessionChanged?.();
+    return true;
+  }
+
+  /** Keep the calibration as the project, and let the held one go. */
+  public keepCalibrationSession(): boolean {
+    if (!this.canonicalProject.keepCalibrationSession()) {
+      this.setStatus('There is no calibration to keep.');
+      return false;
+    }
+    this.setStatus('Kept the calibration as your project; the held one was discarded.');
+    this.onCalibrationSessionChanged?.();
+    return true;
   }
 
   // ---- Multi-plate --------------------------------------------------------

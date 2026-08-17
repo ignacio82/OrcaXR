@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 import { BbsProjectImportWorkerClient } from '../import/BbsProjectImportWorkerClient';
-import { InMemoryAssetRepository, type AssetPayload } from '../project/assets';
+import { InMemoryAssetRepository, type AssetPayload, type AssetRepositorySnapshot } from '../project/assets';
 import {
   AddObjectWithAssetCommand,
   AddPlateCommand,
@@ -1485,6 +1485,86 @@ export class CanonicalWorkspaceController {
       ),
     );
     return id;
+  }
+
+  // --- Calibration sessions (P8.3) -------------------------------------
+  /** The operator's own project, held while a calibration occupies the editor. */
+  private calibrationSuspended: {
+    readonly state: ProjectState;
+    readonly assets: AssetRepositorySnapshot;
+  } | null = null;
+
+  /**
+   * Put the operator's project aside and hand the editor to a calibration.
+   *
+   * P8.3 asks that the original project be preserved in a separate session and
+   * that cancellation must not overwrite it. Adding a calibration model to the
+   * project in front of the operator satisfies neither: their arrangement is
+   * altered, and "undo it afterwards" is not preservation — it is a request
+   * that they remember to.
+   *
+   * So the whole canonical state is held aside and the editor is handed a clean
+   * project carrying the same printer, profile, and physical tools, which is
+   * what makes the calibration print on the machine being calibrated.
+   *
+   * The asset repository is held with the state rather than trusted to survive
+   * on its own. Assets look additive from the outside, but `session.reset`
+   * replaces the repository with the snapshot it is handed and validates the
+   * state against exactly that — so holding only the state produces a cancel
+   * that throws instead of restoring, which is a worse outcome than not
+   * offering one at all.
+   *
+   * Returns false when one is already open, because nesting would strand the
+   * outer project with nothing left holding a reference to it.
+   */
+  beginCalibrationSession(): boolean {
+    this.assertActive();
+    if (this.calibrationSuspended) return false;
+    this.calibrationSuspended = {
+      state: cloneProjectState(this.session.project.getSnapshot().state),
+      assets: this.assets.capture(),
+    };
+    this.resetProject();
+    return true;
+  }
+
+  /** Whether a calibration currently owns the editor. */
+  get calibrationSessionOpen(): boolean {
+    return this.calibrationSuspended !== null;
+  }
+
+  /**
+   * Give the editor back, exactly as it was.
+   *
+   * The held state is installed wholesale rather than un-done step by step,
+   * so whatever the calibration did — however many commands, however many new
+   * assets — cannot leave a trace in the project that was put aside.
+   */
+  cancelCalibrationSession(): boolean {
+    this.assertActive();
+    const held = this.calibrationSuspended;
+    if (!held) return false;
+    this.calibrationSuspended = null;
+    // The snapshot goes *through* reset rather than being restored around it:
+    // reset validates the state against the assets it was handed, not against
+    // the live repository, and then installs that same snapshot itself. A
+    // restore either side of the call is discarded.
+    this.session.reset(held.state, held.assets);
+    return true;
+  }
+
+  /**
+   * Keep the calibration and discard the held project.
+   *
+   * Deliberately explicit rather than implied by "the session ended": the only
+   * two ways out of a calibration session are "give me my project back" and
+   * "I meant to replace it", and a caller has to say which.
+   */
+  keepCalibrationSession(): boolean {
+    this.assertActive();
+    if (!this.calibrationSuspended) return false;
+    this.calibrationSuspended = null;
+    return true;
   }
 
   /** Start a clean project while retaining the selected base profile and physical tools. */
