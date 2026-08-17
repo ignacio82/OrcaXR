@@ -3064,6 +3064,10 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
             workspace.getCalibrationEdits(),
             'calibration:preview',
           );
+          // The XR surface renders steppers from the same fields this panel
+          // renders inputs from — one form, two shells, so they cannot show
+          // different values for the same parameter.
+          workspace.setCalibrationFormPreview(preview);
           return {
             workflowLabel: workflow,
             preview,

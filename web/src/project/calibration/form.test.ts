@@ -11,6 +11,7 @@
 import assert from 'node:assert/strict';
 
 import { buildCalibrationForm, describeCalibrationPlan } from './form';
+import { stepCalibrationValue } from './stepper';
 import { CALIBRATION_JOB_DEFINITIONS } from './definitions';
 import { compileCalibrationJob, createDefaultCalibrationJobRequest } from './compiler';
 import type { CalibrationFirmwareFlavor, CalibrationJobPrerequisites } from './types';
@@ -207,6 +208,64 @@ test('an edit naming a parameter the definition does not have is ignored, not sm
   );
   assert.deepEqual(withStray.plan, clean.plan);
   assert.equal(withStray.fields.length, clean.fields.length);
+});
+
+test('a stepper walks the definition’s own steps and stops at its bounds', () => {
+  // How a headset enters a number. The values it can reach must be exactly the
+  // ones the definition allows — a stepper that walked past a limit and then
+  // reported a compiler error would have lied about what it could do.
+  const form = buildCalibrationForm('temperature-tower', prerequisites(), {}, JOB);
+  const start = form.fields.find((field) => field.key === 'start')!;
+  assert.equal(start.range?.step, 5);
+
+  assert.equal(stepCalibrationValue(start, 1), '235', 'one press moves by the declared step');
+  assert.equal(stepCalibrationValue({ ...start, text: '350' }, 1), '350', 'and stops at the maximum');
+  assert.equal(stepCalibrationValue({ ...start, text: '170' }, -1), '170', 'and at the minimum');
+});
+
+test('a fixed parameter cannot be stepped either', () => {
+  const form = buildCalibrationForm('temperature-tower', prerequisites(), {}, JOB);
+  const fixed = form.fields.find((field) => !field.editable);
+  assert.ok(fixed, 'temperature-tower fixes its step size');
+  assert.equal(stepCalibrationValue(fixed, 1), null, 'the definition decides this on every surface, not just the DOM');
+});
+
+test('choices cycle and booleans toggle, because the definition enumerates them', () => {
+  const form = buildCalibrationForm('temperature-tower', prerequisites(), {}, JOB);
+  const choice = form.fields.find((field) => field.kind === 'choice' && field.editable);
+  if (choice) {
+    const next = stepCalibrationValue(choice, 1);
+    assert.ok(choice.choices.includes(next!), 'a step lands on a declared choice, never on free text');
+    // Wrapping rather than stopping: a cycle has no end to bump into.
+    const last = { ...choice, text: choice.choices[choice.choices.length - 1] };
+    assert.equal(stepCalibrationValue(last, 1), choice.choices[0]);
+  }
+  const boolean = { ...form.fields[0], kind: 'boolean' as const, text: 'false', editable: true };
+  assert.equal(stepCalibrationValue(boolean, 1), 'true');
+  assert.equal(stepCalibrationValue({ ...boolean, text: 'true' }, 1), 'false');
+});
+
+test('a fractional step does not show an operator a floating-point artefact', () => {
+  // 0.1 + 0.2 is the classic; a calibration field showing 0.30000000000000004
+  // is a field nobody trusts again.
+  const field = {
+    ...buildCalibrationForm('temperature-tower', prerequisites(), {}, JOB).fields[1],
+    kind: 'number' as const,
+    editable: true,
+    text: '0.2',
+    range: { min: 0, max: 5, step: 0.1, minInclusive: true, maxInclusive: true },
+  };
+  assert.equal(stepCalibrationValue(field, 1), '0.3');
+});
+
+test('an unreadable value cannot be stepped into a plausible one', () => {
+  const field = {
+    ...buildCalibrationForm('temperature-tower', prerequisites(), {}, JOB).fields[1],
+    kind: 'number' as const,
+    editable: true,
+    text: 'abc',
+  };
+  assert.equal(stepCalibrationValue(field, 1), null, 'stepping nonsense must not produce a number');
 });
 
 test('an unknown calibration is refused rather than compiled', () => {

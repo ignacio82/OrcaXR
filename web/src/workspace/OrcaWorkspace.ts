@@ -142,6 +142,8 @@ import { xrBlocksUiAdapter } from '../ui/xr/XrUiAdapter';
 import { SceneGestureGuard, type SceneGestureSnapshot } from '../ui/xr/SceneGestureGuard';
 import { DEFAULT_BRIM_EAR_DETECTION, detectBrimEars } from '../project/objects/brimEarDetection';
 import type { CalibrationJobPrerequisites } from '../project/calibration/types';
+import { stepCalibrationValue } from '../project/calibration/stepper';
+import type { CalibrationFormField } from '../project/calibration/form';
 import {
   BRIM_EAR_COLORS,
   BRIM_EAR_DISC_HEIGHT_MM,
@@ -6197,7 +6199,90 @@ export class OrcaWorkspace extends xb.Script {
         }),
       );
       for (const action of actions) root.add(this.buildXrMenuRow(action, 'xr-inspector'));
+      // The calibration group is the one whose actions are not enough on their
+      // own: `calib_configure` needs a *value*, and a menu row cannot supply
+      // one. The steppers below are that missing half.
+      if (group.id === 'calibration') this.addXrCalibrationParameters(root);
     }
+  }
+
+  /**
+   * Calibration parameters as steppers, which is how a headset does numbers.
+   *
+   * Several actions across this registry are withheld from XR with the same
+   * sentence — "no in-headset number entry exists yet" — and that was true. A
+   * text field needs a keyboard nobody wants in a headset, but a calibration
+   * parameter does not need free text: the pinned definition carries a `step`
+   * and a `range`, so the only values worth reaching are the ones a decrement
+   * and an increment walk through. Bounds come from the definition rather than
+   * from this surface, so a stepper cannot offer a value the compiler would
+   * refuse.
+   *
+   * Choices cycle and booleans toggle for the same reason: the definition
+   * enumerates them, so there is nothing to type.
+   */
+  private addXrCalibrationParameters(root: UIPanel): void {
+    const preview = this.calibrationFormPreview;
+    if (!preview) return;
+    for (const field of preview.fields) {
+      if (!field.editable) continue;
+      const row = new UIPanel({
+        width: '100%',
+        paddingLeft: 12,
+        paddingRight: 12,
+        paddingTop: 8,
+        paddingBottom: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        cornerRadius: 9,
+        fillColor: '#ffffff08',
+      });
+      const unit = field.unit ? ` ${field.unit}` : '';
+      const value = new UIText(`${field.text}${unit}`, { fontSize: 15, color: '#eef2f6', flexShrink: 0 });
+      row.add(new UIText(field.label, { fontSize: 15, color: '#c7ced6', flexGrow: 1, flexShrink: 1 }));
+      row.add(this.xrStepButton('−', () => this.stepCalibrationField(field, -1)));
+      row.add(value);
+      row.add(this.xrStepButton('+', () => this.stepCalibrationField(field, 1)));
+      root.add(row);
+    }
+  }
+
+  private xrStepButton(label: string, onPress: () => void): UIPanel {
+    const button = new UIPanel({
+      paddingLeft: 14,
+      paddingRight: 14,
+      paddingTop: 6,
+      paddingBottom: 6,
+      cornerRadius: 8,
+      fillColor: '#ffffff14',
+      flexShrink: 0,
+      onClick: () => {
+        onPress();
+        return true;
+      },
+      onHoverEnter: () => button.setFillColor('#ffffff28'),
+      onHoverExit: () => button.setFillColor('#ffffff14'),
+    });
+    button.add(new UIText(label, { fontSize: 17, color: '#eef2f6' }));
+    return button;
+  }
+
+  /** One press of a stepper; the arithmetic lives with the form it edits. */
+  private stepCalibrationField(field: CalibrationFormField, direction: 1 | -1): void {
+    const next = stepCalibrationValue(field, direction);
+    if (next !== null) this.setCalibrationParameter(field.key, next);
+    // Re-render the open section so the value beside the stepper is the value
+    // that was just set. Without this the number lags a press behind, which
+    // reads as the control not working.
+    if (this.openMenuSection !== null) this.populateMenuPanel(this.openMenuSection);
+  }
+
+  /** The form the XR surface renders; set by the shell that owns the catalog. */
+  private calibrationFormPreview: { readonly fields: readonly CalibrationFormField[] } | null = null;
+
+  public setCalibrationFormPreview(preview: { readonly fields: readonly CalibrationFormField[] } | null): void {
+    this.calibrationFormPreview = preview;
   }
 
   private setXrMode(mode: 'prepare' | 'paint' | 'preview') {
