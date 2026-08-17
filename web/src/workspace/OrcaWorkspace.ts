@@ -141,7 +141,7 @@ import { renderXrActionButton, xrToolRailActions, type XrActionHandle } from '..
 import { xrBlocksUiAdapter } from '../ui/xr/XrUiAdapter';
 import { SceneGestureGuard, type SceneGestureSnapshot } from '../ui/xr/SceneGestureGuard';
 import { DEFAULT_BRIM_EAR_DETECTION, detectBrimEars } from '../project/objects/brimEarDetection';
-import type { CalibrationJobPrerequisites } from '../project/calibration/types';
+import type { CalibrationJobPlan, CalibrationJobPrerequisites } from '../project/calibration/types';
 import { stepCalibrationValue } from '../project/calibration/stepper';
 import { pressureAdvanceLineProgram } from '../project/calibration/lineProgram';
 import { extractMachineEnvelope, wrapInMachineEnvelope } from '../project/calibration/machineEnvelope';
@@ -5000,6 +5000,49 @@ export class OrcaWorkspace extends xb.Script {
     } catch (error) {
       return { reason: error instanceof Error ? error.message : String(error) };
     }
+  }
+
+  /**
+   * Place a single-gauge calibration from its upstream resource (P8.2).
+   *
+   * `tolerance-extension` looked like six pieces needing six settings, and it
+   * is not. Its six effects carry no engine overrides at all, and the plan's
+   * required envelope — 57.937 × 14.401 × 6.401 mm — is the gauge's own
+   * bounding box plus a fit margin, measured at 57.936 × 14.400 × 6.400. Six
+   * copies of a 57.9 mm part cannot sit at the 38.6 mm spacing the effects
+   * give; they would overlap by nineteen millimetres. The effects are the
+   * *reading key* for one gauge whose clearances are cut into the geometry, and
+   * the sheet from `calibrationInstructions` is where they belong.
+   *
+   * So this places it once. The envelope check is what keeps that honest: if a
+   * future plan really did want several copies, its envelope would be wider
+   * than one gauge and this refuses rather than quietly printing a single part
+   * where six were meant.
+   */
+  public async placeSingleGaugeCalibration(
+    plan: CalibrationJobPlan,
+    geometry: THREE.BufferGeometry,
+  ): Promise<{ readonly placed: number } | { readonly reason: string }> {
+    if (plan.effects.some((effect) => effect.engineOverrides.length > 0)) {
+      return { reason: `${plan.definitionId} has per-piece settings, so it is not a single-gauge calibration.` };
+    }
+    geometry.computeBoundingBox();
+    const box = geometry.boundingBox;
+    if (!box) return { reason: 'The gauge has no geometry to place.' };
+    const size = [box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z];
+    const envelope = plan.geometry.requiredEnvelopeMm;
+    // A millimetre of slack: the plan's envelope carries a small fit margin,
+    // and the comparison is about "one copy or several", not about precision.
+    const matchesOneCopy = size.every((value, index) => Math.abs(value - envelope[index]) < 1);
+    if (!matchesOneCopy) {
+      return {
+        reason:
+          `${plan.definitionId} wants an envelope of ${envelope.join(' × ')} mm but the gauge is ` +
+          `${size.map((value) => value.toFixed(3)).join(' × ')} mm, so this is not one copy of it.`,
+      };
+    }
+    this.canonicalProject.importBufferGeometry(geometry, { name: plan.label });
+    return { placed: 1 };
   }
 
   public onCalibrationParametersChanged: (() => void) | null = null;
