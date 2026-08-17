@@ -3109,7 +3109,16 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     void (async () => {
       const { CalibrationSessionBar } = await import('./ui/dom/CalibrationSessionBar');
       const bar = new CalibrationSessionBar(calibrationSessionHost, {
-        getState: () => ({ open: workspace.calibrationSessionOpen }),
+        getState: () => {
+          const ui = uiState.get();
+          return {
+            open: workspace.calibrationSessionOpen,
+            sliced: ui.gcodeReady,
+            ...(ui.printerJobState === 'disconnected'
+              ? { sendUnavailableReason: 'No printer is connected, so there is nowhere to send it.' }
+              : {}),
+          };
+        },
         subscribe: (listener) => {
           const unsubscribeCanonical = workspace.subscribeCanonicalState(listener);
           const previous = workspace.onCalibrationSessionChanged;
@@ -3129,6 +3138,22 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
         onKeep: async () => {
           const invoked = await registry.invoke('calib_session_keep', 'dom-inspector', actionCtx, uiState.get());
           if (!invoked) throw new Error('There is no calibration to keep.');
+        },
+        // Routed through the same registry actions the toolbar uses: the
+        // calibration is an ordinary project while its session is open, so
+        // slicing and sending it must not take a second code path that could
+        // drift from the one everything else is tested against.
+        onSlice: async () => {
+          const invoked = await registry.invoke('slice_active_plate', 'dom-toolbar', actionCtx, uiState.get());
+          if (!invoked) throw new Error('Slicing the calibration is unavailable.');
+        },
+        onExport: async () => {
+          const invoked = await registry.invoke('save_gcode_to_downloads', 'dom-toolbar', actionCtx, uiState.get());
+          if (!invoked) throw new Error('Saving the calibration G-code is unavailable.');
+        },
+        onSend: async () => {
+          const invoked = await registry.invoke('send_to_printer', 'dom-toolbar', actionCtx, uiState.get());
+          if (!invoked) throw new Error('Sending the calibration is unavailable.');
         },
         onError: (error) => {
           statusText.textContent = `Calibration: ${error instanceof Error ? error.message : String(error)}`;

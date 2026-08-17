@@ -16,6 +16,10 @@ export interface CalibrationSessionBarState {
   readonly open: boolean;
   /** What the held project was called, so it is a thing rather than a promise. */
   readonly heldProjectName?: string;
+  /** True once the calibration has been sliced and there is G-code to move. */
+  readonly sliced?: boolean;
+  /** Absent when no printer is configured; a reason when sending is withheld. */
+  readonly sendUnavailableReason?: string;
 }
 
 export interface CalibrationSessionBarAdapter {
@@ -23,6 +27,12 @@ export interface CalibrationSessionBarAdapter {
   subscribe?(listener: () => void): () => void;
   onDiscard(): void | Promise<void>;
   onKeep(): void | Promise<void>;
+  /** Slice the calibration that currently owns the editor. */
+  onSlice(): void | Promise<void>;
+  /** Write the sliced calibration out as a file. */
+  onExport(): void | Promise<void>;
+  /** Send the sliced calibration to the connected printer. */
+  onSend(): void | Promise<void>;
   onError?(error: unknown): void;
 }
 
@@ -67,13 +77,33 @@ export class CalibrationSessionBar {
     // the banner is up. Crying wolf here would cost the alerts that matter.
     message.setAttribute('role', 'status');
     message.style.cssText = 'margin:0;flex:1 1 240px;';
-    message.textContent = state.heldProjectName
-      ? `Calibrating. “${state.heldProjectName}” is held aside and comes back exactly as it was.`
-      : 'Calibrating. Your project is held aside and comes back exactly as it was.';
+    // Names what will be sliced and sent, because that is the question the
+    // buttons beside it raise: with a session open they act on the calibration.
+    const held = state.heldProjectName
+      ? `“${state.heldProjectName}” is held aside and comes back exactly as it was.`
+      : 'Your project is held aside and comes back exactly as it was.';
+    message.textContent = `Calibrating — slicing and sending act on the calibration. ${held}`;
 
     const controls = doc.createElement('div');
-    controls.style.cssText = 'display:flex;gap:8px;';
+    controls.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;';
+    // Slice, export and send are offered *here* rather than left to the main
+    // toolbar because while a session is open those actions act on the
+    // calibration, not on the operator's project. Reaching them from the banner
+    // that says so is what keeps "send" from being ambiguous about what is
+    // about to be printed.
+    const slice = this.button('calibration-slice', 'Slice calibration', () => this.adapter.onSlice());
+    const exportGcode = this.button('calibration-export', 'Save G-code', () => this.adapter.onExport());
+    exportGcode.disabled = state.sliced !== true;
+    const send = this.button('calibration-send', 'Send to printer', () => this.adapter.onSend());
+    send.disabled = state.sliced !== true || state.sendUnavailableReason !== undefined;
+    if (state.sendUnavailableReason) {
+      send.title = state.sendUnavailableReason;
+      send.dataset.calibrationSendUnavailable = 'true';
+    }
     controls.append(
+      slice,
+      exportGcode,
+      send,
       this.button('calibration-discard', 'Discard, restore my project', () => this.adapter.onDiscard()),
       this.button('calibration-keep', 'Keep the calibration', () => this.adapter.onKeep()),
     );
