@@ -12,6 +12,56 @@ import type { CancellationToken } from '../ports';
 const THREE_MF_ZIP_SIGNATURES = new Set(['504b0304', '504b0506', '504b0708']);
 
 /**
+ * Settings this build round-trips faithfully but does not act on.
+ *
+ * Preserving them is right — dropping a setting silently loses someone's work,
+ * and a project exported from here should still carry what it arrived with.
+ * But *arriving* with one and saying nothing is its own silent divergence: the
+ * operator opens a project whose text is projected onto a curved surface, gets
+ * a flat extrusion, and has nothing to tell them the geometry is not what the
+ * file describes.
+ *
+ * So they are reported on import. Each entry is a setting the serializer
+ * preserves and no code applies; removing one from this list is part of
+ * implementing it, not a separate tidy-up.
+ */
+const UNHONOURED_SETTINGS = Object.freeze([
+  {
+    field: 'use_surface',
+    message:
+      'This project projects text or an SVG onto the model surface. OrcaXR preserves that setting but extrudes flat, so the imported geometry differs from what the file describes.',
+  },
+  {
+    field: 'per_glyph',
+    message:
+      'This project embosses each glyph as its own volume. OrcaXR preserves that setting but cuts one volume, so the imported geometry differs from what the file describes.',
+  },
+]);
+
+/** Which unhonoured settings this project actually carries. */
+function unhonouredSettings(state: unknown): ImportDiagnostic[] {
+  // Read from the serialized state rather than from the archive text, so this
+  // reports what was actually parsed rather than what happened to appear in a
+  // file — a comment mentioning `use_surface` would otherwise raise a warning
+  // about geometry nobody asked for.
+  const serialized = JSON.stringify(state ?? {});
+  const notices: ImportDiagnostic[] = [];
+  for (const setting of UNHONOURED_SETTINGS) {
+    const camel = setting.field.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
+    if (new RegExp(`"${camel}":true`).test(serialized)) {
+      notices.push({
+        id: `unhonoured-${setting.field}`,
+        code: `unhonoured-${setting.field}`,
+        path: `$.${setting.field}`,
+        severity: 'warning',
+        message: setting.message,
+      });
+    }
+  }
+  return notices;
+}
+
+/**
  * Pure replace-mode parser used inside the browser import worker. Merge-mode
  * entity policy belongs to the transactional coordinator and is deliberately
  * not guessed here.
@@ -36,11 +86,12 @@ export class BbsProjectImportParser implements ProjectImportParserPort {
 
     const parsed = await this.serializer.deserialize(bytes.slice(), cancellation);
     throwIfCancelled({ cancellation });
+    const unhonoured = unhonouredSettings(parsed.state);
     return {
       state: parsed.state,
       assets: parsed.assets,
       importedAssetIds: parsed.assets.map((asset) => asset.descriptor.id as AssetId),
-      diagnostics: warningsToDiagnostics(parsed.warnings),
+      diagnostics: [...warningsToDiagnostics(parsed.warnings), ...unhonoured],
     };
   }
 }
