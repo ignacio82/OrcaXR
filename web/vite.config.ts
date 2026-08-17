@@ -61,6 +61,13 @@ export default defineConfig({
               '**/assets/SimulatorAddons-*.js',
               '**/assets/genai-*.js',
               '**/assets/spark.module-*.js',
+              // Upstream calibration geometry: 1.7 MB that only matters to an
+              // operator actually running a flow or tolerance calibration.
+              // Precaching it would make every install pay for a feature most
+              // people never open, and it is verified by hash on arrival, so a
+              // cached-and-stale copy would be refused rather than used.
+              '**/calibration/*.3mf',
+              '**/calibration/*.stl',
             ],
             cleanupOutdatedCaches: true,
             runtimeCaching: [
