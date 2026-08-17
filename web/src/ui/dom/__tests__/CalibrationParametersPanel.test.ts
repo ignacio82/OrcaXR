@@ -13,6 +13,8 @@ import { JSDOM } from 'jsdom';
 
 import { CalibrationParametersPanel, type CalibrationParametersPanelState } from '../CalibrationParametersPanel';
 import type { CalibrationFormField } from '../../../project/calibration/form';
+import { compileCalibrationJob, createDefaultCalibrationJobRequest } from '../../../project/calibration/compiler';
+import type { CalibrationJobPrerequisites } from '../../../project/calibration/types';
 
 let passed = 0;
 async function test(name: string, run: () => void | Promise<void>): Promise<void> {
@@ -67,13 +69,62 @@ function mount(state: CalibrationParametersPanelState): {
   };
 }
 
+const PREREQS: CalibrationJobPrerequisites = {
+  printer: {
+    id: 'printer:snapmaker-u1',
+    manufacturer: 'Snapmaker',
+    model: 'U1',
+    bedWidthMm: 270,
+    bedDepthMm: 270,
+    buildHeightMm: 270,
+    maxPrintSpeedMmPerS: 300,
+    maxAccelerationMmPerS2: 10_000,
+  },
+  nozzle: { diameterMm: 0.4, minTemperatureC: 170, maxTemperatureC: 300, maxLayerHeightMm: 0.32 },
+  filament: {
+    id: 'filament:pla-red',
+    name: 'Red PLA',
+    material: 'PLA',
+    minTemperatureC: 180,
+    maxTemperatureC: 260,
+    flowRatio: 0.98,
+    maxVolumetricSpeedMm3PerS: 30,
+    retractionLengthMm: 0.8,
+  },
+  process: {
+    id: 'process:quality',
+    layerHeightMm: 0.2,
+    firstLayerHeightMm: 0.2,
+    lineWidthMm: 0.45,
+    outerWallSpeedMmPerS: 120,
+    defaultAccelerationMmPerS2: 5_000,
+    xyHoleCompensationMm: 0,
+    xyContourCompensationMm: 0,
+  },
+  firmware: {
+    flavor: 'klipper',
+    nozzleTemperature: true,
+    pressureAdvance: true,
+    inputShaping: true,
+    junctionDeviation: true,
+    maxInputShapingFrequencyHz: 500,
+  },
+};
+
+// A real compiled plan, not `{} as never`. The panel reads a plan's effects to
+// build the reading key, so a stub that claims to be one while holding nothing
+// is a fixture that agrees with no code path.
+const PLAN = compileCalibrationJob(createDefaultCalibrationJobRequest('temperature-tower', PREREQS), {
+  jobId: 'calibration:panel-fixture',
+});
+
 const DOC = 'https://github.com/Snapmaker/OrcaSlicer/blob/abc123/doc/calibration/temp-calib.md';
 
 const base: CalibrationParametersPanelState = {
   workflowLabel: 'Temperature Tower',
   docHref: DOC,
   planSummary: '13 bands, 30 × 30 × 130 mm on the bed',
-  preview: { fields: [numberField()], plan: {} as never, issues: [] },
+  preview: { fields: [numberField()], plan: PLAN, issues: [] },
 };
 
 await test('a compiling form offers to build and reports what it would build', () => {
@@ -140,7 +191,7 @@ await test('a fixed parameter is shown but not adjustable', () => {
     ...base,
     preview: {
       fields: [numberField({ key: 'step', label: 'Step', editable: false, text: '5' })],
-      plan: {} as never,
+      plan: PLAN,
       issues: [],
     },
   });
@@ -162,6 +213,34 @@ await test('reset is inert until something has been changed', () => {
   assert.equal(
     dirty.host.querySelector<HTMLButtonElement>('[data-calibration-action="calibration-reset"]')?.disabled,
     false,
+  );
+});
+
+await test('a compiled plan comes with the key to reading the print', () => {
+  // Built from a real compiled plan rather than a stub: the point of the sheet
+  // is that it matches what was installed, and a hand-written fixture could
+  // agree with nothing.
+  const compiled = compileCalibrationJob(createDefaultCalibrationJobRequest('temperature-tower', PREREQS), {
+    jobId: 'calibration:panel-instructions',
+  });
+  const view = mount({ ...base, preview: { fields: [numberField()], plan: compiled, issues: [] } });
+
+  const details = view.host.querySelector('[data-calibration-instructions]');
+  assert.ok(details, 'the key is present once there is a plan');
+  const bands = view.host.querySelectorAll('[data-calibration-band]');
+  assert.equal(
+    bands.length,
+    compiled.effects.length,
+    'every band is listed; the one you need is the one truncation hides',
+  );
+  assert.match(bands[0].textContent ?? '', /mm from the bed/, 'a tower is located by height');
+
+  const measure = view.host.querySelector('[data-calibration-measurements]');
+  assert.match(measure?.textContent ?? '', /Measure:/);
+  assert.match(
+    measure?.textContent ?? '',
+    /writes to/,
+    'the operator is told where a result lands before recording one',
   );
 });
 

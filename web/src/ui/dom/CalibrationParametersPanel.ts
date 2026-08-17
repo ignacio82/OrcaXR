@@ -16,6 +16,8 @@
  */
 
 import type { CalibrationFormField, CalibrationFormPreview } from '../../project/calibration/form';
+import { calibrationInstructions, describeBandLocation } from '../../project/calibration/instructions';
+import type { CalibrationJobPlan } from '../../project/calibration/types';
 
 export interface CalibrationParametersPanelState {
   readonly workflowLabel: string;
@@ -130,8 +132,48 @@ export class CalibrationParametersPanel {
         : 'Fix the fields marked below to see what this will build.';
 
     const children: HTMLElement[] = [heading, help, fields, summary, controls];
+    if (state.preview.plan) children.push(this.instructions(state.preview.plan));
     this.container.style.cssText = 'display:flex;flex-direction:column;gap:10px;';
     this.container.replaceChildren(...children);
+  }
+
+  /**
+   * What to look at once it is printed.
+   *
+   * Collapsed, because it is for after the print rather than before it, and an
+   * expanded list of three hundred bands would bury the controls above it. Open
+   * it and every band is there — a truncated key would be worse than none,
+   * since the band an operator wants is exactly the one they cannot see.
+   */
+  private instructions(plan: CalibrationJobPlan): HTMLElement {
+    const doc = this.container.ownerDocument;
+    const sheet = calibrationInstructions(plan);
+    const details = doc.createElement('details');
+    details.dataset.calibrationInstructions = 'true';
+    const summary = doc.createElement('summary');
+    summary.textContent = `How to read this print (${sheet.bands.length} to compare)`;
+    summary.style.cssText = 'cursor:pointer;';
+    details.appendChild(summary);
+
+    const list = doc.createElement('ol');
+    list.style.cssText = 'margin:6px 0;padding-left:20px;display:flex;flex-direction:column;gap:2px;';
+    for (const band of sheet.bands) {
+      const item = doc.createElement('li');
+      item.dataset.calibrationBand = `${band.ordinal}`;
+      const unit = band.unit ? ` ${band.unit}` : '';
+      item.textContent = `${band.label} — ${band.value}${unit}, ${describeBandLocation(band, sheet.layout)}`;
+      list.appendChild(item);
+    }
+    details.appendChild(list);
+
+    const measure = doc.createElement('p');
+    measure.dataset.calibrationMeasurements = 'true';
+    measure.style.cssText = 'margin:0;opacity:0.75;';
+    measure.textContent =
+      `Measure: ${sheet.measurements.map((field) => field.label).join(', ')}. ` +
+      `A recorded result writes to ${sheet.writesTo.join(', ')}.`;
+    details.appendChild(measure);
+    return details;
   }
 
   private field(field: CalibrationFormField, issues: readonly string[]): HTMLElement {
