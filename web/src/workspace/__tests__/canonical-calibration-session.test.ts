@@ -313,4 +313,26 @@ await test('every pinned workflow either installs or refuses by name — never s
   console.log(`    (${installed.length} install, ${refused.length} refuse: ${refused.join(', ')})`);
 });
 
+await test('a plan whose pieces cannot differ says so, rather than blaming placement', () => {
+  // `tolerance-extension` compiles to six pieces at six bed positions carrying
+  // *no* engine overrides, against a single-solid STL. Placing them would make
+  // six identical gauges labelled 0 mm through 0.4 mm — a plate that looks like
+  // a calibration and measures nothing. The refusal has to name that, because
+  // "cannot yet materialise" invites someone to fix it by placing six copies.
+  const workspace = controller();
+  workspace.importBufferGeometry(cube(30), { name: 'Tolerance' });
+  const objectId = state(workspace).plates[0].objects[0].id;
+  const plan = compileCalibrationJob(createDefaultCalibrationJobRequest('tolerance-extension', calibrationPrereqs()), {
+    jobId: 'calibration:tolerance',
+  });
+  assert.ok(
+    plan.effects.every((effect) => effect.engineOverrides.length === 0),
+    'the premise: this plan really does carry no per-piece setting',
+  );
+  assert.throws(
+    () => workspace.applyCalibrationPlan(objectId, plan),
+    /no setting that differs between them.*identical parts under different labels/s,
+  );
+});
+
 console.log(`\nCalibration session: ${passed} tests passed.`);

@@ -1636,9 +1636,18 @@ export class CanonicalWorkspaceController {
       (effect) => effect.zRangeMm === null && effect.engineOverrides.every((override) => override.scope === 'layer'),
     );
     if (bands.length === 0 && events.length === 0 && Object.keys(objectConfig).length === 0) {
+      // Two different situations reach here and they deserve different
+      // sentences. One is a shape this build has not learned to place. The
+      // other is a plan whose pieces carry nothing to tell them apart, where
+      // placing them would produce identical parts under different labels — a
+      // plate that measures nothing while looking exactly like a calibration.
+      const carriesNothing = plan.effects.every((effect) => effect.engineOverrides.length === 0);
       throw new Error(
-        `${plan.definitionId} places its ${plan.effects.length} effects per object or per line, which this build cannot yet materialise. ` +
-          'Nothing was changed.',
+        carriesNothing
+          ? `${plan.definitionId} has ${plan.effects.length} pieces and no setting that differs between them, ` +
+              'so placing them would print identical parts under different labels. Nothing was changed.'
+          : `${plan.definitionId} places its ${plan.effects.length} effects per object or per line, ` +
+              'which this build cannot yet materialise. Nothing was changed.',
       );
     }
     if (unsupported.length > 0) {
