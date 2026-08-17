@@ -15,6 +15,39 @@ import { BbsProjectImportParser } from '../BbsProjectImportParser';
 import { Bbs3mfProjectSerializer } from '../../serialization/Bbs3mfProjectSerializer';
 import { createProjectFixture } from '../../__tests__/fixtures';
 import { cloneProjectState, projectFingerprint } from '../../domain/canonical';
+import { buildEmbossedMesh, DEFAULT_EMBOSS_FONT_PROPERTY } from '../../objects/emboss';
+import type { EmbossTextConfiguration, GlyphOutline, GlyphOutlineSource } from '../../objects/emboss';
+
+/** A single square glyph, enough to produce a mesh worth comparing. */
+const SQUARE_GLYPH: GlyphOutline = {
+  advance: 1000,
+  contours: [
+    {
+      points: [
+        [0, 0],
+        [1000, 0],
+        [1000, 1000],
+        [0, 1000],
+      ],
+    },
+  ],
+};
+
+function squareFont(): GlyphOutlineSource {
+  return { unitsPerEm: 1000, outline: () => SQUARE_GLYPH };
+}
+
+function embossConfiguration(overrides: Partial<EmbossTextConfiguration> = {}): EmbossTextConfiguration {
+  return {
+    text: 'A',
+    styleName: 'Test',
+    fontDescriptor: 'test-descriptor',
+    fontDescriptorType: 'test',
+    font: DEFAULT_EMBOSS_FONT_PROPERTY,
+    projection: { depthMm: 1, useSurface: false },
+    ...overrides,
+  };
+}
 
 let passed = 0;
 async function test(name: string, run: () => Promise<void>): Promise<void> {
@@ -90,6 +123,32 @@ await test('the warning describes the divergence, not the missing feature', asyn
   const notice = (await diagnosticsFor(bytes)).find((entry) => entry.code === 'unhonoured-use_surface');
   assert.ok(notice);
   assert.doesNotMatch(notice.message, /unsupported|not implemented|roadmap/i);
+});
+
+/**
+ * The pairing that was unenforced until now.
+ *
+ * The warning list is maintained by hand, so implementing one of these settings
+ * without removing its entry would leave the app telling operators their
+ * geometry diverges when it no longer does — a lie that is harder to notice
+ * than the original silence, because it looks like diligence.
+ *
+ * This checks the list against *behaviour* rather than intent: while a setting
+ * genuinely changes nothing, the warning is honest. The moment someone makes it
+ * change something, this fails and the entry has to go with it.
+ */
+await test('every warned setting really does change nothing, or the warning has become a lie', async () => {
+  const flat = buildEmbossedMesh(embossConfiguration({ projection: { depthMm: 1, useSurface: false } }), squareFont());
+  const projected = buildEmbossedMesh(
+    embossConfiguration({ projection: { depthMm: 1, useSurface: true } }),
+    squareFont(),
+  );
+  assert.deepEqual(
+    projected.positions,
+    flat.positions,
+    'use_surface still produces identical geometry — remove it from UNHONOURED_SETTINGS once it does not',
+  );
+  assert.deepEqual(projected.indices, flat.indices);
 });
 
 console.log(`\nUnhonoured settings: ${passed} tests passed.`);
