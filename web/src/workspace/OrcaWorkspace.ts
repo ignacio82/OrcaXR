@@ -6203,6 +6203,7 @@ export class OrcaWorkspace extends xb.Script {
       // own: `calib_configure` needs a *value*, and a menu row cannot supply
       // one. The steppers below are that missing half.
       if (group.id === 'calibration') this.addXrCalibrationParameters(root);
+      if (group.id === 'scene') this.addXrSceneSteppers(root);
     }
   }
 
@@ -6246,6 +6247,83 @@ export class OrcaWorkspace extends xb.Script {
       row.add(this.xrStepButton('+', () => this.stepCalibrationField(field, 1)));
       root.add(row);
     }
+  }
+
+  /**
+   * The numeric settings a scene tool needs, as steppers.
+   *
+   * Same reasoning as the calibration parameters: these were withheld from XR
+   * because they are typed into a DOM field, and a bounded number does not have
+   * to be typed. Only settings whose limits are known are offered — a stepper
+   * with no bounds is a text field with extra steps, and would let a headset
+   * reach a value the DOM would have refused.
+   *
+   * The emboss recipe is deliberately absent: its blocker is *text*, not a
+   * number, and no stepper solves that.
+   */
+  private addXrSceneSteppers(root: UIPanel): void {
+    const ears = this.getBrimEarSnapshot();
+    if (ears.objectId) {
+      root.add(
+        this.xrStepperRow('Brim ear radius', `${ears.radiusMm}`, 'mm', (direction) => {
+          const next = Math.min(
+            BRIM_EAR_MAX_RADIUS_MM,
+            Math.max(BRIM_EAR_MIN_RADIUS_MM, Number((ears.radiusMm + direction * 0.5).toFixed(1))),
+          );
+          this.setBrimEarRadius(next);
+        }),
+      );
+    }
+    const svg = this.getSvgPartSnapshot();
+    if (svg.active) {
+      root.add(
+        this.xrStepperRow('SVG depth', `${svg.depthMm}`, 'mm', (direction) => {
+          // Depth is what makes the drawing solid, so it may not reach zero:
+          // a zero-depth part is geometry the slicer will silently discard.
+          const next = Math.min(50, Math.max(0.2, Number((svg.depthMm + direction * 0.2).toFixed(1))));
+          this.setSvgPartSize({ depthMm: next });
+        }),
+      );
+      if (svg.widthMm !== undefined) {
+        root.add(
+          this.xrStepperRow('SVG width', `${svg.widthMm}`, 'mm', (direction) => {
+            const next = Math.min(300, Math.max(1, Number((svg.widthMm! + direction * 1).toFixed(1))));
+            this.setSvgPartSize({ widthMm: next });
+          }),
+        );
+      }
+    }
+  }
+
+  /** One labelled value between a decrement and an increment. */
+  private xrStepperRow(label: string, value: string, unit: string, onStep: (direction: 1 | -1) => void): UIPanel {
+    const row = new UIPanel({
+      width: '100%',
+      paddingLeft: 12,
+      paddingRight: 12,
+      paddingTop: 8,
+      paddingBottom: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      cornerRadius: 9,
+      fillColor: '#ffffff08',
+    });
+    row.add(new UIText(label, { fontSize: 15, color: '#c7ced6', flexGrow: 1, flexShrink: 1 }));
+    row.add(
+      this.xrStepButton('−', () => {
+        onStep(-1);
+        if (this.openMenuSection !== null) this.populateMenuPanel(this.openMenuSection);
+      }),
+    );
+    row.add(new UIText(`${value} ${unit}`, { fontSize: 15, color: '#eef2f6', flexShrink: 0 }));
+    row.add(
+      this.xrStepButton('+', () => {
+        onStep(1);
+        if (this.openMenuSection !== null) this.populateMenuPanel(this.openMenuSection);
+      }),
+    );
+    return row;
   }
 
   private xrStepButton(label: string, onPress: () => void): UIPanel {

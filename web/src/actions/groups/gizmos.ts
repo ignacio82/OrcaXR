@@ -188,8 +188,9 @@ export const gizmoActions: Action[] = [
     group: 'scene',
     disclosure: 'inspector',
     hint: 'Choose the front radius the next placed ear uses',
-    xrUnsupportedReason:
-      'Choosing a radius needs a numeric field; no in-headset entry flow exists yet. Automatic placement and clearing are available.',
+    // Reachable in a headset now: the radius is bounded (0.1–20 mm), so it is
+    // a stepper rather than a typed field, and the XR Panels section renders
+    // one whenever a part is in scope.
     run: (ctx, invocation) => {
       const radius = invocation.brimEarRadiusMm;
       if (radius === undefined) {
@@ -399,7 +400,8 @@ export const gizmoActions: Action[] = [
     group: 'scene',
     disclosure: 'inspector',
     hint: 'Change the width or depth before cutting the drawing',
-    xrUnsupportedReason: 'The size is typed into a DOM panel; no in-headset number entry exists yet.',
+    // Bounded depth and width are steppers in XR; only the drawing itself
+    // still needs the DOM, and `svg_load_drawing` says so on its own.
     run: (ctx, invocation) => {
       const size = invocation.svg?.size;
       if (!size) {
