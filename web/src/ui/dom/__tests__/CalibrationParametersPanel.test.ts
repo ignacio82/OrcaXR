@@ -244,6 +244,20 @@ await test('a compiled plan comes with the key to reading the print', () => {
   );
 });
 
+await test('a plan that breaks its own definition cannot be built from, and says how', () => {
+  // Not a hypothetical: a consumer that drops effects produces exactly this,
+  // and the compiler would have returned the plan quite happily.
+  const broken = { ...PLAN, effects: PLAN.effects.slice(0, -1) };
+  const view = mount({ ...base, preview: { fields: [numberField()], plan: broken, issues: [] } });
+
+  const generate = view.host.querySelector<HTMLButtonElement>('[data-calibration-action="calibration-generate"]');
+  assert.equal(generate?.disabled, true, 'a plan that is no longer the calibration is not offered');
+  const alert = view.host.querySelector('[data-calibration-assertion-failures]');
+  assert.ok(alert, 'and the reason is shown');
+  assert.equal(alert.getAttribute('role'), 'alert');
+  assert.match(alert.textContent ?? '', /expected 9 bands, the plan has 8/);
+});
+
 await test('a withheld build says why, and still reports what the settings would make', () => {
   const view = mount({
     ...base,

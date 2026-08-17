@@ -17,6 +17,7 @@
 
 import type { CalibrationFormField, CalibrationFormPreview } from '../../project/calibration/form';
 import { calibrationInstructions, describeBandLocation } from '../../project/calibration/instructions';
+import { describeAssertionFailure, verifyCalibrationPlan } from '../../project/calibration/verify';
 import type { CalibrationJobPlan } from '../../project/calibration/types';
 
 export interface CalibrationParametersPanelState {
@@ -106,10 +107,16 @@ export class CalibrationParametersPanel {
 
     const controls = doc.createElement('div');
     controls.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;';
+    // A plan that fails its own declared assertions is not offered, whatever
+    // the compiler returned. These are the definition's statements about what a
+    // correct plan looks like; a plan that breaks one has stopped being the
+    // calibration it claims to be, and building it would print a shape.
+    const verification = state.preview.plan ? verifyCalibrationPlan(state.preview.plan) : null;
     const generate = this.button('calibration-generate', 'Add to project', () => this.adapter.onGenerate());
     // Nothing is built while the form does not compile: an operator pressing
     // this with a bad value must not get a plan made from a substituted one.
-    generate.disabled = state.preview.plan === null || state.generateUnavailableReason !== undefined;
+    generate.disabled =
+      state.preview.plan === null || state.generateUnavailableReason !== undefined || verification?.satisfied === false;
     if (state.generateUnavailableReason) {
       generate.title = state.generateUnavailableReason;
       generate.dataset.calibrationUnavailable = 'true';
@@ -132,6 +139,16 @@ export class CalibrationParametersPanel {
         : 'Fix the fields marked below to see what this will build.';
 
     const children: HTMLElement[] = [heading, help, fields, summary, controls];
+    if (verification && !verification.satisfied) {
+      const broken = doc.createElement('p');
+      broken.dataset.calibrationAssertionFailures = 'true';
+      broken.setAttribute('role', 'alert');
+      broken.style.cssText = 'margin:0;color:var(--oxr-color-danger,#ff4d4d);';
+      broken.textContent = `This plan breaks its own definition: ${verification.failures
+        .map(describeAssertionFailure)
+        .join('; ')}.`;
+      children.push(broken);
+    }
     if (state.preview.plan) children.push(this.instructions(state.preview.plan));
     this.container.style.cssText = 'display:flex;flex-direction:column;gap:10px;';
     this.container.replaceChildren(...children);
