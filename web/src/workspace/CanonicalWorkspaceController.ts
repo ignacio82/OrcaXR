@@ -16,6 +16,7 @@ import {
 } from '../project/commands';
 import { canonicalStringify, cloneJson, cloneProjectState, deepFreeze } from '../project/domain/canonical';
 import type { CalibrationJobPlan } from '../project/calibration/types';
+import { settingScopeAllows } from '../project/domain/settingScopes';
 import { facetAnnotationsHaveAssignments } from '../project/domain/facetRefinement';
 import type { EmbossTextConfiguration, EmbossedMesh, GlyphOutlineSource } from '../project/objects/emboss';
 import type { EmbossSvgPart } from '../project/domain/model';
@@ -1515,6 +1516,14 @@ export class CanonicalWorkspaceController {
    * transaction: a calibration installed halfway is a tower whose upper bands
    * print at the wrong settings and whose G-code looks perfectly reasonable.
    *
+   * **An effect this cannot install refuses the whole plan.** Seven of the
+   * fifteen pinned workflows express themselves per object or per line rather
+   * than per height — the flow families lay out a grid of patches, the
+   * pressure-advance line and pattern draw test lines — and installing only the
+   * height-banded part of one would produce a project that slices, prints, and
+   * calibrates nothing. Refusing names what is missing; a partial install
+   * cannot say anything at all.
+   *
    * `print` scope is deliberately included and safe here, because a calibration
    * owns its own session (see {@link beginCalibrationSession}) — the operator's
    * project is held aside, so a project-wide setting written by a calibration
@@ -1539,6 +1548,7 @@ export class CanonicalWorkspaceController {
     const printConfig: Record<string, string> = {};
     const bands: { minZMm: number; maxZMm: number; config: Record<string, string> }[] = [];
     const events: { topZMm: number; code: string }[] = [];
+    const collidingObjectKeys = new Set<string>();
     const layerHeightMm = plan.prerequisites.process.layerHeightMm;
 
     for (const effect of plan.effects) {
@@ -1548,8 +1558,16 @@ export class CanonicalWorkspaceController {
         // silently stringified later by whichever writer got there first.
         const value = typeof override.value === 'boolean' ? (override.value ? '1' : '0') : String(override.value);
         if (override.scope === 'layer') layerConfig[override.key] = value;
-        else if (override.scope === 'object') objectConfig[override.key] = value;
-        else printConfig[override.key] = value;
+        else if (override.scope === 'object') {
+          // Two effects writing the same object key with different values are a
+          // per-object sweep: the flow families lay out a grid of patches, each
+          // at its own flow ratio. There is one object here, so accumulating
+          // them would keep whichever came last and silently drop the rest —
+          // a project that slices, prints, and calibrates nothing.
+          const existing = objectConfig[override.key];
+          if (existing !== undefined && existing !== value) collidingObjectKeys.add(override.key);
+          objectConfig[override.key] = value;
+        } else printConfig[override.key] = value;
       }
       if (effect.zRangeMm && Object.keys(layerConfig).length > 0) {
         bands.push({
@@ -1573,6 +1591,41 @@ export class CanonicalWorkspaceController {
           }
         }
       }
+    }
+
+    const unsupported = plan.effects.filter(
+      (effect) => effect.zRangeMm === null && effect.engineOverrides.every((override) => override.scope === 'layer'),
+    );
+    if (bands.length === 0 && events.length === 0 && Object.keys(objectConfig).length === 0) {
+      throw new Error(
+        `${plan.definitionId} places its ${plan.effects.length} effects per object or per line, which this build cannot yet materialise. ` +
+          'Nothing was changed.',
+      );
+    }
+    if (unsupported.length > 0) {
+      throw new Error(
+        `${plan.definitionId} has ${unsupported.length} effect(s) with no height and only layer-scoped settings, ` +
+          'which would be silently dropped. Nothing was changed.',
+      );
+    }
+    if (collidingObjectKeys.size > 0) {
+      throw new Error(
+        `${plan.definitionId} sweeps ${[...collidingObjectKeys].join(', ')} across separate objects, and this build ` +
+          'places one — the values would collapse onto it and only the last would survive. Nothing was changed.',
+      );
+    }
+    // The base band's settings go to the project, and not every setting lives
+    // there: `retraction_length` is a filament option, so a retraction tower's
+    // starting value has nowhere to land in this build. Checked before the
+    // transaction opens so the failure names the workflow and the key rather
+    // than surfacing as a scope error from three layers down.
+    const homeless = Object.keys(printConfig).filter((key) => !settingScopeAllows('project', key));
+    if (homeless.length > 0) {
+      throw new Error(
+        `${plan.definitionId} sets ${homeless.join(', ')} for its base band, which the print preset does not hold — ` +
+          'it belongs to the filament preset, and writing a filament setting from a calibration is not built. ' +
+          'Nothing was changed.',
+      );
     }
 
     this.session.transaction('Apply calibration plan', () => {

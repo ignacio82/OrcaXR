@@ -22,6 +22,7 @@ import { projectFingerprint } from '../../project/domain/canonical';
 import type { EntityId, IdSource } from '../../project/domain/ids';
 import { compileCalibrationJob, createDefaultCalibrationJobRequest } from '../../project/calibration/compiler';
 import type { CalibrationJobPrerequisites } from '../../project/calibration/types';
+import { CALIBRATION_WORKFLOW_IDS } from '../../features/calibrationInventory';
 
 const NOW = '2026-08-01T12:00:00.000Z';
 const MAPPING = { bedSizeMm: [270, 270] as const, worldUnitsPerMm: 0.00175 };
@@ -267,6 +268,49 @@ await test('a plan cannot be installed onto an object that is not there', () => 
     jobId: 'calibration:materialise-3',
   });
   assert.throws(() => workspace.applyCalibrationPlan('import:missing:object-1' as never, plan), /Unknown object/);
+});
+
+await test('every pinned workflow either installs or refuses by name — never silently nothing', () => {
+  // The sweep that matters. Seven of the fifteen express their effects per
+  // object or per line rather than per height, and an earlier version of
+  // `applyCalibrationPlan` reported success on those while installing nothing
+  // at all: no bands, no events, a project that slices and calibrates nothing.
+  // A refusal is a fine answer here. Silence is not.
+  const installed: string[] = [];
+  const refused: string[] = [];
+  for (const id of CALIBRATION_WORKFLOW_IDS) {
+    const workspace = controller();
+    workspace.importBufferGeometry(cube(30), { name: id });
+    const objectId = state(workspace).plates[0].objects[0].id;
+    const prereqs = calibrationPrereqs();
+    const flavor = id === 'junction-deviation' ? 'marlin' : 'klipper';
+    const plan = compileCalibrationJob(
+      createDefaultCalibrationJobRequest(id, { ...prereqs, firmware: { ...prereqs.firmware, flavor } }),
+      { jobId: 'calibration:sweep' },
+    );
+    try {
+      const result = workspace.applyCalibrationPlan(objectId, plan);
+      assert.ok(
+        result.bands + result.events + result.objectKeys > 0,
+        `${id} reported success while installing nothing`,
+      );
+      installed.push(id);
+    } catch (error) {
+      const message = (error as Error).message;
+      assert.match(message, new RegExp(id), `${id} refuses by naming itself; got: ${message}`);
+      assert.match(message, /Nothing was changed/, `${id} says the project is untouched`);
+      // A refusal must leave no trace, or "nothing was changed" is a lie.
+      assert.deepEqual(state(workspace).plates[0].objects[0].layerRanges, [], `${id} left no half-installed bands`);
+      refused.push(id);
+    }
+  }
+  assert.ok(installed.length > 0, 'some workflows install');
+  assert.equal(
+    installed.length + refused.length,
+    CALIBRATION_WORKFLOW_IDS.length,
+    'every workflow gave a definite answer',
+  );
+  console.log(`    (${installed.length} install, ${refused.length} refuse: ${refused.join(', ')})`);
 });
 
 console.log(`\nCalibration session: ${passed} tests passed.`);
