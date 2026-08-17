@@ -17,7 +17,7 @@
 
 import assert from 'node:assert/strict';
 
-import { buildSliceArchive, sliceArchive } from './sliceHarness';
+import { buildSliceArchive, filamentUsedMm, sliceArchive } from './sliceHarness';
 
 let passed = 0;
 async function test(name: string, run: () => Promise<void>): Promise<void> {
@@ -157,6 +157,37 @@ await test('printer-specific band commands survive into the program verbatim', a
       `${literal.split(' ')[0]} reaches the program unchanged; a filtered command would calibrate nothing`,
     );
   }
+});
+
+await test('a range-scoped retraction length changes the print, so a retraction tower is a tower', async () => {
+  // The third answer at this boundary, and the three do not agree: a
+  // range-scoped `nozzle_temperature` is inert, `outer_wall_speed` works, and
+  // this decides retraction. It matters because `retraction-tower` emits only a
+  // *comment* as its custom G-code — if the range were inert too, the whole
+  // workflow would have no mechanism at all and its refusal would be permanent.
+  const config = { retraction_length: '0.8' };
+  const plain = await sliceArchive(await buildSliceArchive({ config }), 'retraction-plain');
+  const banded = await sliceArchive(
+    await buildSliceArchive({
+      config,
+      mutate: (state) => {
+        for (const plate of state.plates) {
+          for (const object of plate.objects) {
+            object.layerRanges = [RANGE(1, 4, 10, { layer_height: '0.2', retraction_length: '5' })];
+          }
+        }
+      },
+    }),
+    'retraction-banded',
+  );
+
+  // Retraction pulls filament back and pushes it out again, so a band retracting
+  // 5 mm where the rest retracts 0.8 mm cannot use the same filament.
+  assert.notEqual(
+    filamentUsedMm(plain),
+    filamentUsedMm(banded),
+    `a banded retraction length must change the program (both ${filamentUsedMm(plain)} mm)`,
+  );
 });
 
 console.log(`\nCalibration band slicing: ${passed} tests passed.`);

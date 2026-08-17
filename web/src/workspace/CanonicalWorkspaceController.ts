@@ -18,6 +18,18 @@ import { canonicalStringify, cloneJson, cloneProjectState, deepFreeze } from '..
 import type { CalibrationJobPlan } from '../project/calibration/types';
 import { settingScopeAllows } from '../project/domain/settingScopes';
 import { matchFlowPatches } from '../project/calibration/resourceObjects';
+
+/**
+ * Settings the pinned engine ignores when they sit in a layer range, so a band
+ * carrying one has to reach the print another way.
+ *
+ * Empirical, not derived: every entry is a slice trace. A range-scoped
+ * `nozzle_temperature` changes nothing (`EVID-076`), while `outer_wall_speed`
+ * (`EVID-078`) and `retraction_length` do change the print and are absent for
+ * that reason. Membership cannot be guessed from a setting's scope — all three
+ * are non-print options and they do not behave alike.
+ */
+const RANGE_INERT_KEYS = new Set(['nozzle_temperature']);
 import { facetAnnotationsHaveAssignments } from '../project/domain/facetRefinement';
 import type { EmbossTextConfiguration, EmbossedMesh, GlyphOutlineSource } from '../project/objects/emboss';
 import type { EmbossSvgPart } from '../project/domain/model';
@@ -1491,6 +1503,17 @@ export class CanonicalWorkspaceController {
   }
 
   /**
+   * Settings the pinned engine ignores when they sit in a layer range, so a
+   * band carrying one has to reach the print another way.
+   *
+   * Empirical, not derived: each entry is a slice trace. `nozzle_temperature`
+   * in a range changes nothing (`EVID-076`), while `outer_wall_speed`
+   * (`EVID-078`) and `retraction_length` do change the print and are therefore
+   * absent. Guessing membership from a setting's scope would be wrong in both
+   * directions — all three are non-print-scope options and they do not behave
+   * alike.
+   */
+  /**
    * Write a compiled calibration plan's effects onto an object (P8.2).
    *
    * A calibration is only a calibration if its bands actually change the print.
@@ -1579,16 +1602,31 @@ export class CanonicalWorkspaceController {
         });
       }
       if (effect.customGcode && effect.zRangeMm) {
-        // The first band starts at the plate, and a layer event there is
-        // refused — correctly, since there is no layer below it to change at.
-        // That band is not a change, it is the setting the print starts with,
-        // so its overrides go to print scope where the engine reads them.
-        if (effect.zRangeMm[0] > 0) events.push({ topZMm: effect.zRangeMm[0], code: effect.customGcode });
-        else {
-          for (const override of effect.engineOverrides) {
-            if (override.scope !== 'layer') continue;
-            const value = typeof override.value === 'boolean' ? (override.value ? '1' : '0') : String(override.value);
-            printConfig[override.key] = value;
+        // A comment is not a command. `retraction-tower` emits
+        // `; Calib_Retraction_tower: …`, which reaches the program and does
+        // nothing there; installing it as a layer event would add an event per
+        // band that changes no setting, and imply a mechanism that is not the
+        // one working.
+        const commands = effect.customGcode
+          .split('\n')
+          .filter((line) => line.trim().length > 0 && !line.trim().startsWith(';'));
+        if (commands.length > 0) {
+          // The first band starts at the plate, and a layer event there is
+          // refused — correctly, since there is no layer below it to change at.
+          // That band is not a change, it is the setting the print starts with.
+          if (effect.zRangeMm[0] > 0) events.push({ topZMm: effect.zRangeMm[0], code: effect.customGcode });
+          else {
+            for (const override of effect.engineOverrides) {
+              // Only keys whose range-scoped form the engine ignores need this.
+              // Routing every base-band key to print scope is what refused
+              // `retraction-tower`: `retraction_length` is a filament option the
+              // print preset does not hold, and it did not need to be there —
+              // a slice trace shows a range-scoped retraction changes the print,
+              // while a range-scoped temperature does not.
+              if (override.scope !== 'layer' || !RANGE_INERT_KEYS.has(override.key)) continue;
+              const value = typeof override.value === 'boolean' ? (override.value ? '1' : '0') : String(override.value);
+              printConfig[override.key] = value;
+            }
           }
         }
       }
