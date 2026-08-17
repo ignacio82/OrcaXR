@@ -38,18 +38,31 @@ export interface ResourceObjectMapping {
 }
 
 /**
- * Read the percentage a flow patch's name encodes.
+ * Read the flow ratio a patch's name stands for.
  *
- * `flowrate_15` is +15 %, `flowrate_m15` is −15 %, `flowrate_0` is the
- * unmodified one. Returns `null` for a name that is not of this shape rather
- * than guessing a number out of it.
+ * Upstream uses two encodings across the four flow resources, and they are
+ * told apart by the decimal point — a distinction derived by reading each
+ * archive's names against its plan's values, not assumed:
+ *
+ * - an **integer** is a percentage. `flowrate-test-pass1` runs `flowrate_m20`
+ *   … `flowrate_20` against ratios 0.8 … 1.2, and `flowrate-test-pass2` runs
+ *   `flowrate_m9` … `flowrate_0` against 0.91 … 1.
+ * - a **decimal** is an absolute offset from 1. `Orca-LinearFlow` runs
+ *   `flowrate_m0.05` … `flowrate_0.05` against 0.95 … 1.05, and its
+ *   `_fine` twin steps by 0.005.
+ *
+ * Reading `flowrate_0.05` as five percent would place it on the 1.05 patch's
+ * neighbour and silently mis-label the whole plate, which is why the two forms
+ * are distinguished rather than normalised. A name of neither shape returns
+ * `null` instead of a number guessed out of it.
  */
-export function flowPatchPercent(objectName: string): number | null {
-  const match = /^flowrate_(m?)(\d+)$/.exec(objectName.trim());
+export function flowPatchRatio(objectName: string): number | null {
+  const match = /^flowrate_(m?)(\d+(?:\.\d+)?)$/.exec(objectName.trim());
   if (!match) return null;
   const magnitude = Number(match[2]);
   if (!Number.isFinite(magnitude)) return null;
-  return match[1] === 'm' ? -magnitude : magnitude;
+  const offset = match[2].includes('.') ? magnitude : magnitude / 100;
+  return match[1] === 'm' ? 1 - offset : 1 + offset;
 }
 
 /** Compare ratios at the precision the plan states them in. */
@@ -73,12 +86,11 @@ export function matchFlowPatches(
   const usedEffects = new Set<number>();
 
   objectNames.forEach((objectName, objectIndex) => {
-    const percent = flowPatchPercent(objectName);
-    if (percent === null) {
+    const ratio = flowPatchRatio(objectName);
+    if (ratio === null) {
       problems.push(`“${objectName}” is not a flow patch name, so nothing can say what it should print at`);
       return;
     }
-    const ratio = 1 + percent / 100;
     const candidates = effects
       .map((effect, index) => ({ effect, index }))
       .filter((entry) => typeof entry.effect.value === 'number' && sameRatio(entry.effect.value, ratio));

@@ -9,7 +9,7 @@
 
 import assert from 'node:assert/strict';
 
-import { flowPatchPercent, matchFlowPatches } from './resourceObjects';
+import { flowPatchRatio, matchFlowPatches } from './resourceObjects';
 import { compileCalibrationJob, createDefaultCalibrationJobRequest } from './compiler';
 import type { CalibrationJobPrerequisites, CalibrationPlanEffect } from './types';
 
@@ -79,12 +79,19 @@ const flowEffects = (): readonly CalibrationPlanEffect[] =>
   compileCalibrationJob(createDefaultCalibrationJobRequest('flow-pass-1', PREREQS), { jobId: 'calibration:match' })
     .effects;
 
-test('a patch name is read as the percentage it means', () => {
-  assert.equal(flowPatchPercent('flowrate_0'), 0);
-  assert.equal(flowPatchPercent('flowrate_15'), 15);
-  assert.equal(flowPatchPercent('flowrate_m20'), -20);
-  assert.equal(flowPatchPercent('something_else'), null, 'an unrecognised name yields nothing, not a guess');
-  assert.equal(flowPatchPercent('flowrate_'), null);
+test('a patch name is read as the ratio it stands for, in both upstream encodings', () => {
+  // Integers are percentages; decimals are absolute offsets. Derived by reading
+  // each archive against its plan, not assumed — and the difference is not
+  // cosmetic: reading `flowrate_0.05` as five percent would put it on the wrong
+  // patch and mis-label the whole plate.
+  assert.equal(flowPatchRatio('flowrate_0'), 1);
+  assert.equal(flowPatchRatio('flowrate_15'), 1.15);
+  assert.equal(flowPatchRatio('flowrate_m20'), 0.8);
+  assert.equal(flowPatchRatio('flowrate_m9'), 0.91);
+  assert.ok(Math.abs(flowPatchRatio('flowrate_0.05')! - 1.05) < 1e-9);
+  assert.ok(Math.abs(flowPatchRatio('flowrate_m0.005')! - 0.995) < 1e-9);
+  assert.equal(flowPatchRatio('something_else'), null, 'an unrecognised name yields nothing, not a guess');
+  assert.equal(flowPatchRatio('flowrate_'), null);
 });
 
 test('the resource order is NOT the effect order — which is why this module exists', () => {

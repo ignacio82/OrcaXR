@@ -21,6 +21,8 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { BbsProjectImportParser } from '../import/BbsProjectImportParser';
+import { compileCalibrationJob, createDefaultCalibrationJobRequest } from '../calibration/compiler';
+import { matchFlowPatches } from '../calibration/resourceObjects';
 
 let passed = 0;
 async function test(name: string, run: () => Promise<void>): Promise<void> {
@@ -95,6 +97,80 @@ await test('a corrupted ZIP64 record is refused, not followed', async () => {
     new BbsProjectImportParser().parse({ mode: 'replace', bytes: damaged, fileName: 'bad.3mf' } as never),
     /ZIP64|ZIP/,
   );
+});
+
+await test('every flow archive maps onto its plan exactly, in both naming encodings', async () => {
+  // The real check on the encoding rule. Integers are percentages and decimals
+  // are absolute offsets — derived by reading these archives against these
+  // plans, so this is what says the derivation was right. A bijection across
+  // all four is a hard property: one wrong rule and some piece finds no
+  // effect, or some effect finds no piece.
+  const prereqs = {
+    printer: {
+      id: 'printer:snapmaker-u1',
+      manufacturer: 'Snapmaker',
+      model: 'U1',
+      bedWidthMm: 270,
+      bedDepthMm: 270,
+      buildHeightMm: 270,
+      maxPrintSpeedMmPerS: 300,
+      maxAccelerationMmPerS2: 10_000,
+    },
+    nozzle: { diameterMm: 0.4, minTemperatureC: 170, maxTemperatureC: 300, maxLayerHeightMm: 0.32 },
+    filament: {
+      id: 'filament:pla',
+      name: 'PLA',
+      material: 'PLA',
+      minTemperatureC: 180,
+      maxTemperatureC: 260,
+      flowRatio: 1,
+      maxVolumetricSpeedMm3PerS: 30,
+      retractionLengthMm: 0.8,
+    },
+    process: {
+      id: 'process:quality',
+      layerHeightMm: 0.2,
+      firstLayerHeightMm: 0.2,
+      lineWidthMm: 0.45,
+      outerWallSpeedMmPerS: 120,
+      defaultAccelerationMmPerS2: 5_000,
+      xyHoleCompensationMm: 0,
+      xyContourCompensationMm: 0,
+    },
+    firmware: {
+      flavor: 'klipper' as const,
+      nozzleTemperature: true,
+      pressureAdvance: true,
+      inputShaping: true,
+      junctionDeviation: true,
+      maxInputShapingFrequencyHz: 500,
+    },
+  };
+
+  const pairs = [
+    { file: 'flowrate-test-pass1.3mf', workflow: 'flow-pass-1' },
+    { file: 'flowrate-test-pass2.3mf', workflow: 'flow-pass-2' },
+    { file: 'Orca-LinearFlow.3mf', workflow: 'flow-yolo' },
+    { file: 'Orca-LinearFlow_fine.3mf', workflow: 'flow-yolo-perfectionist' },
+  ] as const;
+
+  for (const pair of pairs) {
+    const { objects } = await parse(pair.file);
+    const plan = compileCalibrationJob(createDefaultCalibrationJobRequest(pair.workflow, prereqs), {
+      jobId: 'calibration:archive-match',
+    });
+    const mapping = matchFlowPatches(
+      objects.map((object) => object.name),
+      plan.effects,
+    );
+    assert.deepEqual(mapping.problems, [], `${pair.file} maps onto ${pair.workflow}`);
+    assert.equal(mapping.matches.length, objects.length, `${pair.file} places every piece`);
+    assert.equal(
+      new Set(mapping.matches.map((match) => match.effect.value)).size,
+      plan.effects.length,
+      `${pair.file} uses every setting exactly once`,
+    );
+  }
 });
 
 console.log(`\nZIP64 calibration archives: ${passed} tests passed.`);
