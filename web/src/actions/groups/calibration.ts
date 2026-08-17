@@ -250,6 +250,23 @@ export const calibrationActions: Action[] = [
     },
   },
   {
+    id: 'calib_sweep_export',
+    mcpTool: 'export_calibration_sweep',
+    label: 'Save pressure-advance sweep G-code',
+    icon: 'settings_export',
+    group: 'calibration',
+    disclosure: 'inspector',
+    hint: 'Build the line-sweep program and save it for inspection; it borrows your machine’s own start sequence from a real slice',
+    run: (ctx) => {
+      const built = ctx.buildCalibrationSweepProgram();
+      if ('reason' in built) {
+        ctx.reportCapabilityUnavailable('Save pressure-advance sweep G-code', built.reason);
+        return;
+      }
+      ctx.saveTextToDownloads(built.filename, built.gcode);
+    },
+  },
+  {
     id: 'calib_session_discard',
     mcpTool: 'discard_calibration',
     label: 'Discard calibration, restore my project',

@@ -143,7 +143,9 @@ import { SceneGestureGuard, type SceneGestureSnapshot } from '../ui/xr/SceneGest
 import { DEFAULT_BRIM_EAR_DETECTION, detectBrimEars } from '../project/objects/brimEarDetection';
 import type { CalibrationJobPrerequisites } from '../project/calibration/types';
 import { stepCalibrationValue } from '../project/calibration/stepper';
-import type { CalibrationFormField } from '../project/calibration/form';
+import { pressureAdvanceLineProgram } from '../project/calibration/lineProgram';
+import { extractMachineEnvelope, wrapInMachineEnvelope } from '../project/calibration/machineEnvelope';
+import type { CalibrationFormField, CalibrationFormPreview } from '../project/calibration/form';
 import {
   BRIM_EAR_COLORS,
   BRIM_EAR_DISC_HEIGHT_MM,
@@ -4951,6 +4953,55 @@ export class OrcaWorkspace extends xb.Script {
    */
   private calibrationWorkflowId = 'temperature-tower';
   private calibrationEdits: Record<string, string> = {};
+  /**
+   * Build a complete pressure-advance sweep program (P8.2, P8.3).
+   *
+   * The two sweeps are generated G-code rather than sliced projects, and a
+   * generated program still has to prepare the machine. Rather than write a
+   * preamble — the U1's is 5,623 characters of template — this borrows the one
+   * the engine already produced for a real slice, which is why a sliced project
+   * is the precondition rather than an inconvenience.
+   *
+   * Returns the program, or a reason it could not be built. Never returns a
+   * partial program: an operator who receives a file expects to be able to
+   * print it.
+   */
+  public buildCalibrationSweepProgram():
+    { readonly gcode: string; readonly filename: string } | { readonly reason: string } {
+    const donor = this.getLastGcode();
+    if (!donor) {
+      return {
+        reason:
+          'Slice any project on this printer first. The sweep borrows your machine’s own start sequence from a real slice, ' +
+          'because writing one by hand would skip bed levelling and nozzle cleaning.',
+      };
+    }
+    const workflow = this.calibrationWorkflowId;
+    try {
+      const preview = this.calibrationFormPreview;
+      const plan = preview?.plan ?? null;
+      if (!plan) return { reason: 'The calibration parameters do not compile, so there is nothing to build.' };
+      const config = this.canonicalProject.getSlicingConfiguration().config as Record<string, unknown>;
+      const num = (key: string, fallback: number): number => {
+        const raw = config[key];
+        const value = Array.isArray(raw) ? raw[0] : raw;
+        const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''));
+        return Number.isFinite(parsed) ? parsed : fallback;
+      };
+      const body = pressureAdvanceLineProgram(plan, {
+        layerHeightMm: num('initial_layer_print_height', 0.2),
+        lineWidthMm: num('line_width', 0.42),
+        filamentDiameterMm: num('filament_diameter', 1.75),
+        printFeedMmPerMin: num('initial_layer_speed', 50) * 60,
+        travelFeedMmPerMin: num('travel_speed', 200) * 60,
+      });
+      const program = wrapInMachineEnvelope(body.body, extractMachineEnvelope(donor));
+      return { gcode: program, filename: `${workflow}.gcode` };
+    } catch (error) {
+      return { reason: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
   public onCalibrationParametersChanged: (() => void) | null = null;
 
   public getCalibrationWorkflowId(): string {
@@ -6357,9 +6408,9 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** The form the XR surface renders; set by the shell that owns the catalog. */
-  private calibrationFormPreview: { readonly fields: readonly CalibrationFormField[] } | null = null;
+  private calibrationFormPreview: CalibrationFormPreview | null = null;
 
-  public setCalibrationFormPreview(preview: { readonly fields: readonly CalibrationFormField[] } | null): void {
+  public setCalibrationFormPreview(preview: CalibrationFormPreview | null): void {
     this.calibrationFormPreview = preview;
   }
 

@@ -191,6 +191,10 @@ export class ActionContext {
   addPrimitive(kind: 'cube' | 'cylinder' | 'sphere'): void {
     this.workspace.addPrimitive(kind);
   }
+  buildCalibrationSweepProgram(): { gcode: string; filename: string } | { reason: string } {
+    return this.workspace.buildCalibrationSweepProgram();
+  }
+
   setCalibrationWorkflow(id: string): boolean {
     return this.workspace.setCalibrationWorkflow(id);
   }
@@ -459,6 +463,18 @@ export class ActionContext {
   downloadGcode(): void {
     const gcode = this.workspace.getLastGcode();
     if (gcode && this.workspace.onDownloadGcode) this.workspace.onDownloadGcode(gcode);
+  }
+
+  /**
+   * Hand a generated program to the same download path a sliced one uses.
+   *
+   * Deliberately the download path and not the send path. Saving a file an
+   * operator can open and read is the safe half of P8.3's export/send; putting
+   * a generated program straight onto a machine is the half no supervised
+   * print has cleared yet.
+   */
+  saveTextToDownloads(_filename: string, contents: string): void {
+    if (this.workspace.onDownloadGcode) this.workspace.onDownloadGcode(contents);
   }
   getLastGcode(): string | null {
     return this.workspace.getLastGcode();
