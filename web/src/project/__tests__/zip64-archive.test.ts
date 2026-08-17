@@ -21,6 +21,10 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { BbsProjectImportParser } from '../import/BbsProjectImportParser';
+import * as THREE from 'three';
+import { CanonicalWorkspaceController } from '../../workspace/CanonicalWorkspaceController';
+import type { EntityId, IdSource } from '../domain/ids';
+import type { ParsedProjectImport } from '../import/types';
 import { compileCalibrationJob, createDefaultCalibrationJobRequest } from '../calibration/compiler';
 import { matchFlowPatches } from '../calibration/resourceObjects';
 
@@ -32,6 +36,56 @@ async function test(name: string, run: () => Promise<void>): Promise<void> {
 }
 
 const PUBLIC = resolve(import.meta.dirname, '../../../public/calibration');
+
+class SequenceIdSource implements IdSource {
+  private nextNumber = 1;
+
+  next<Kind extends string>(kind: Kind): EntityId<Kind> {
+    return `import:flow-place:${kind}-${this.nextNumber++}` as EntityId<Kind>;
+  }
+}
+
+const PREREQS = {
+  printer: {
+    id: 'printer:snapmaker-u1',
+    manufacturer: 'Snapmaker',
+    model: 'U1',
+    bedWidthMm: 270,
+    bedDepthMm: 270,
+    buildHeightMm: 270,
+    maxPrintSpeedMmPerS: 300,
+    maxAccelerationMmPerS2: 10_000,
+  },
+  nozzle: { diameterMm: 0.4, minTemperatureC: 170, maxTemperatureC: 300, maxLayerHeightMm: 0.32 },
+  filament: {
+    id: 'filament:pla',
+    name: 'PLA',
+    material: 'PLA',
+    minTemperatureC: 180,
+    maxTemperatureC: 260,
+    flowRatio: 1,
+    maxVolumetricSpeedMm3PerS: 30,
+    retractionLengthMm: 0.8,
+  },
+  process: {
+    id: 'process:quality',
+    layerHeightMm: 0.2,
+    firstLayerHeightMm: 0.2,
+    lineWidthMm: 0.45,
+    outerWallSpeedMmPerS: 120,
+    defaultAccelerationMmPerS2: 5_000,
+    xyHoleCompensationMm: 0,
+    xyContourCompensationMm: 0,
+  },
+  firmware: {
+    flavor: 'klipper' as const,
+    nozzleTemperature: true,
+    pressureAdvance: true,
+    inputShaping: true,
+    junctionDeviation: true,
+    maxInputShapingFrequencyHz: 500,
+  },
+};
 
 /** Every shipped flow resource, and the pieces its plan expects. */
 const ARCHIVES = [
@@ -105,48 +159,7 @@ await test('every flow archive maps onto its plan exactly, in both naming encodi
   // plans, so this is what says the derivation was right. A bijection across
   // all four is a hard property: one wrong rule and some piece finds no
   // effect, or some effect finds no piece.
-  const prereqs = {
-    printer: {
-      id: 'printer:snapmaker-u1',
-      manufacturer: 'Snapmaker',
-      model: 'U1',
-      bedWidthMm: 270,
-      bedDepthMm: 270,
-      buildHeightMm: 270,
-      maxPrintSpeedMmPerS: 300,
-      maxAccelerationMmPerS2: 10_000,
-    },
-    nozzle: { diameterMm: 0.4, minTemperatureC: 170, maxTemperatureC: 300, maxLayerHeightMm: 0.32 },
-    filament: {
-      id: 'filament:pla',
-      name: 'PLA',
-      material: 'PLA',
-      minTemperatureC: 180,
-      maxTemperatureC: 260,
-      flowRatio: 1,
-      maxVolumetricSpeedMm3PerS: 30,
-      retractionLengthMm: 0.8,
-    },
-    process: {
-      id: 'process:quality',
-      layerHeightMm: 0.2,
-      firstLayerHeightMm: 0.2,
-      lineWidthMm: 0.45,
-      outerWallSpeedMmPerS: 120,
-      defaultAccelerationMmPerS2: 5_000,
-      xyHoleCompensationMm: 0,
-      xyContourCompensationMm: 0,
-    },
-    firmware: {
-      flavor: 'klipper' as const,
-      nozzleTemperature: true,
-      pressureAdvance: true,
-      inputShaping: true,
-      junctionDeviation: true,
-      maxInputShapingFrequencyHz: 500,
-    },
-  };
-
+  const prereqs = PREREQS;
   const pairs = [
     { file: 'flowrate-test-pass1.3mf', workflow: 'flow-pass-1' },
     { file: 'flowrate-test-pass2.3mf', workflow: 'flow-pass-2' },
@@ -171,6 +184,80 @@ await test('every flow archive maps onto its plan exactly, in both naming encodi
       `${pair.file} uses every setting exactly once`,
     );
   }
+});
+
+await test('a flow calibration installs as a plate whose every patch carries its own ratio', async () => {
+  // The end of the line this session has been walking: archive opens, geometry
+  // verified, pieces paired, and now placed. The assertion that matters is
+  // per-patch — nine patches all carrying the same ratio would satisfy any
+  // count-based check and calibrate nothing.
+  const workspace = CanonicalWorkspaceController.createEmpty({
+    idSource: new SequenceIdSource(),
+    clock: () => '2026-08-01T12:00:00.000Z',
+    parent: new THREE.Scene(),
+    mapping: { bedSizeMm: [270, 270] as const, worldUnitsPerMm: 0.00175 },
+    projectImportParser: new BbsProjectImportParser(),
+  });
+
+  const bytes = new Uint8Array(await readFile(resolve(PUBLIC, 'flowrate-test-pass1.3mf')));
+  const parsed = (await new BbsProjectImportParser().parse({
+    mode: 'replace',
+    bytes,
+    fileName: 'flowrate-test-pass1.3mf',
+  } as never)) as ParsedProjectImport;
+  const plan = compileCalibrationJob(createDefaultCalibrationJobRequest('flow-pass-1', PREREQS), {
+    jobId: 'calibration:flow-place',
+  });
+
+  const result = workspace.applyFlowCalibrationResource(plan, parsed);
+  assert.deepEqual(result.problems, []);
+  assert.equal(result.placed, 9);
+
+  const installed = workspace.createCanonicalSliceSource().capture().state;
+  const patches = installed.plates.flatMap((plate) => plate.objects);
+  assert.equal(patches.length, 9, 'the plate is the calibration now');
+
+  const ratios = new Map<string, string>();
+  for (const patch of patches) {
+    const ratio = (patch.config as Record<string, string>).print_flow_ratio;
+    assert.ok(ratio, `${patch.name} carries a flow ratio`);
+    ratios.set(patch.name, ratio);
+  }
+  assert.equal(new Set(ratios.values()).size, 9, 'nine distinct ratios, not one repeated nine times');
+  // And the specific pairing, since distinctness alone would survive a shuffle.
+  assert.equal(ratios.get('flowrate_0'), '1');
+  assert.equal(ratios.get('flowrate_m20'), '0.8');
+  assert.equal(ratios.get('flowrate_20'), '1.2');
+});
+
+await test('a plate that does not pair installs nothing at all', async () => {
+  const workspace = CanonicalWorkspaceController.createEmpty({
+    idSource: new SequenceIdSource(),
+    clock: () => '2026-08-01T12:00:00.000Z',
+    parent: new THREE.Scene(),
+    mapping: { bedSizeMm: [270, 270] as const, worldUnitsPerMm: 0.00175 },
+    projectImportParser: new BbsProjectImportParser(),
+  });
+  const bytes = new Uint8Array(await readFile(resolve(PUBLIC, 'flowrate-test-pass1.3mf')));
+  const parsed = (await new BbsProjectImportParser().parse({
+    mode: 'replace',
+    bytes,
+    fileName: 'flowrate-test-pass1.3mf',
+  } as never)) as ParsedProjectImport;
+  // pass-2's plan against pass-1's plate: the ratios do not line up.
+  const wrongPlan = compileCalibrationJob(createDefaultCalibrationJobRequest('flow-pass-2', PREREQS), {
+    jobId: 'calibration:flow-mismatch',
+  });
+
+  const result = workspace.applyFlowCalibrationResource(wrongPlan, parsed);
+  assert.ok(result.problems.length > 0, 'a mismatch is reported');
+  assert.equal(result.placed, 0);
+  const state = workspace.createCanonicalSliceSource().capture().state;
+  assert.deepEqual(
+    state.plates.flatMap((plate) => plate.objects),
+    [],
+    'and nothing was installed',
+  );
 });
 
 console.log(`\nZIP64 calibration archives: ${passed} tests passed.`);

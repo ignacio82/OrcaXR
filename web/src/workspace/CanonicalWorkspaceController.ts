@@ -17,6 +17,7 @@ import {
 import { canonicalStringify, cloneJson, cloneProjectState, deepFreeze } from '../project/domain/canonical';
 import type { CalibrationJobPlan } from '../project/calibration/types';
 import { settingScopeAllows } from '../project/domain/settingScopes';
+import { matchFlowPatches } from '../project/calibration/resourceObjects';
 import { facetAnnotationsHaveAssignments } from '../project/domain/facetRefinement';
 import type { EmbossTextConfiguration, EmbossedMesh, GlyphOutlineSource } from '../project/objects/emboss';
 import type { EmbossSvgPart } from '../project/domain/model';
@@ -1674,6 +1675,59 @@ export class CanonicalWorkspaceController {
       objectKeys: Object.keys(objectConfig).length,
       printKeys: Object.keys(printConfig).length,
     };
+  }
+
+  /**
+   * Install a per-object calibration from its upstream resource (P8.2).
+   *
+   * The flow families are a plate of patches, each printed at its own flow
+   * ratio. The patches are upstream geometry and the ratios are the compiled
+   * plan's; this puts them together and makes the result the project.
+   *
+   * Replacing the project wholesale is correct here rather than heavy-handed: a
+   * calibration owns its own session, so what is being replaced is the empty
+   * project the session handed over, and the operator's own work is held aside
+   * where `cancelCalibrationSession` can still bring it back untouched.
+   *
+   * The pairing is by name and refuses rather than approximates. A plate whose
+   * patches carry the wrong ratios slices, prints, and measures perfectly while
+   * teaching a wrong number, so a mapping with any problem installs nothing.
+   */
+  applyFlowCalibrationResource(
+    plan: CalibrationJobPlan,
+    parsed: { readonly state: ProjectState; readonly assets: readonly AssetPayload[] },
+  ): { readonly placed: number; readonly problems: readonly string[] } {
+    this.assertActive();
+    const objects = parsed.state.plates.flatMap((plate) => plate.objects);
+    const mapping = matchFlowPatches(
+      objects.map((object) => object.name),
+      plan.effects,
+    );
+    if (mapping.problems.length > 0) {
+      return { placed: 0, problems: mapping.problems };
+    }
+
+    // Config is written into the state before it is installed, so the project
+    // is never briefly a plate of patches printing at the same ratio — a state
+    // an autosave or a slice could otherwise catch.
+    const next = cloneProjectState(parsed.state);
+    const byName = new Map(mapping.matches.map((match) => [match.objectName, match.effect]));
+    for (const plate of next.plates) {
+      for (const object of plate.objects) {
+        const effect = byName.get(object.name);
+        if (!effect) continue;
+        const config: Record<string, string> = { ...(object.config as Record<string, string>) };
+        for (const override of effect.engineOverrides) {
+          if (override.scope !== 'object') continue;
+          config[override.key] =
+            typeof override.value === 'boolean' ? (override.value ? '1' : '0') : String(override.value);
+        }
+        object.config = config as never;
+      }
+    }
+
+    this.session.reset(next, { entries: parsed.assets.map((asset) => ({ ...asset })) });
+    return { placed: mapping.matches.length, problems: [] };
   }
 
   // --- Calibration sessions (P8.3) -------------------------------------
