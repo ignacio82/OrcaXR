@@ -1,0 +1,129 @@
+{
+  "artifacts": {
+    "calibrationGeometry": {
+      "count": 5,
+      "entries": [
+        {
+          "blob": "8be217beb575eb277abefb6b63c1cfc06d1891be",
+          "path": "web/public/calibration/Orca-LinearFlow.3mf"
+        },
+        {
+          "blob": "94f8e62fbf4d0a11f891562b1e8ddab8c616c1aa",
+          "path": "web/public/calibration/Orca-LinearFlow_fine.3mf"
+        },
+        {
+          "blob": "3f4e87eb9436d000b15b6f853675c262f821f45f",
+          "path": "web/public/calibration/OrcaToleranceTest.stl"
+        },
+        {
+          "blob": "20c997da020fc8b4d0b3481c04efa44454049c6e",
+          "path": "web/public/calibration/flowrate-test-pass1.3mf"
+        },
+        {
+          "blob": "97978494050f01e29cd2ffe7c7f4e0a74d70c295",
+          "path": "web/public/calibration/flowrate-test-pass2.3mf"
+        }
+      ]
+    },
+    "engine": {
+      "count": 3,
+      "entries": [
+        {
+          "blob": "84f9f1ac0834bc0527102b887a74b1e787cde575",
+          "path": "web/public/slicer/slic3r.d.mts"
+        },
+        {
+          "blob": "69f0d9f8833becf1e6ba32b49c6b4927d65d2b32",
+          "path": "web/public/slicer/slic3r.mjs"
+        },
+        {
+          "blob": "67edbb2bc7b9cc12ffff14b8f8f38e2a99310e22",
+          "path": "web/public/slicer/slic3r.wasm"
+        }
+      ]
+    },
+    "patches": {
+      "count": 4,
+      "entries": [
+        {
+          "blob": "bd986280058c67ee88039001a204418cff6d0411",
+          "path": "server/patches/0001-cli-safe-expand-plate-extruders.patch"
+        },
+        {
+          "blob": "090a2b98efad26d2cc0d89bad49b9079d7b44026",
+          "path": "server/patches/0002-normalize-fdm-partial-config-null-nozzle.patch"
+        },
+        {
+          "blob": "564ee0e838f6704700cf7c6bd510c668731fcb60",
+          "path": "server/patches/0003-gcodeprocessor-fullspectrum-oob.patch"
+        },
+        {
+          "blob": "52e4473873473a2e6441b6509ff3961a12357a19",
+          "path": "server/patches/0004-cli-safe-plate-name-texture.patch"
+        }
+      ]
+    }
+  },
+  "claim": {
+    "humanGatesOutstanding": [
+      {
+        "id": "P12.2",
+        "what": "An independent reviewer who did not implement the work runs the coverage matrix"
+      },
+      {
+        "id": "P12.4",
+        "what": "Target hardware qualification on recorded U1 and Elegoo CC firmware"
+      },
+      {
+        "id": "P8.6",
+        "what": "Supervised calibration prints on both target printers"
+      },
+      {
+        "id": "P12.5",
+        "what": "Release quality and security review sign-off"
+      },
+      {
+        "id": "P10.5",
+        "what": "A Galaxy XR headset session against the acceptance matrix"
+      }
+    ],
+    "parityClaimPermitted": false,
+    "why": "P12.6 permits the full-parity claim only after every gate is verified; none of the human gates below has been."
+  },
+  "evidence": {
+    "rows": 102,
+    "tasksCovered": 89
+  },
+  "schemaVersion": 1,
+  "tasks": {
+    "byState": {
+      "unstarted": 6,
+      "x": 2,
+      "~": 94
+    },
+    "completeWithoutEvidence": [],
+    "total": 102,
+    "unstarted": [
+      "P5.3",
+      "P8.6",
+      "P12.2",
+      "P12.3",
+      "P12.4",
+      "P12.5"
+    ]
+  },
+  "upstream": {
+    "commit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "drift": {
+      "changedSourceFiles": 7,
+      "deltasDispositioned": true,
+      "latestTag": "v2.3.5",
+      "pinnedTag": "v2.3.4",
+      "releasesBehind": 1
+    },
+    "families": 13,
+    "inventoryLeaves": 1622,
+    "repository": "https://github.com/Snapmaker/OrcaSlicer.git",
+    "sourceFiles": 17
+  }
+}

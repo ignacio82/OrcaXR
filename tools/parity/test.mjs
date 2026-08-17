@@ -20,6 +20,11 @@ import {
 import { PinnedSource, UPSTREAM_COMMIT } from "./source.mjs";
 import { verifyManifest } from "./verify.mjs";
 import { checkDrift, deltaKeys, parseReleaseRefs } from "./drift.mjs";
+import {
+  buildReleaseReport,
+  readEvidence,
+  readTasks,
+} from "./release-report.mjs";
 
 function expectFailure(fn, pattern, message) {
   assert.throws(fn, pattern, message);
@@ -160,6 +165,7 @@ export function main() {
   });
   mutationTests(overlay, firstSource);
   driftTests();
+  releaseReportTests();
   console.log(
     `Parity extractor self-tests passed (${first.counts.total} mapped leaves).`,
   );
@@ -263,6 +269,61 @@ function driftTests() {
     releases[1].commit,
     "c".repeat(40),
     "an annotated tag resolves to its peeled commit",
+  );
+}
+
+/**
+ * The release report, offline.
+ *
+ * Its first run named `P1.1` as complete with no evidence, which `EVID-003`
+ * covers plainly — the row writes `P1.1–P1.3` as a range and the parser read it
+ * as one opaque token. A false alarm in the section a reviewer is meant to
+ * trust most is worse than no report, so the range expansion is pinned here
+ * along with the two things the report must never soften.
+ */
+function releaseReportTests() {
+  const plan = [
+    "- [x] **P1.1 — Typed project entities.** Body.",
+    "- [~] **P8.3 — Calibration generators.** Body.",
+    "- [ ] **P12.4 — Hardware qualification.** Body.",
+    "",
+    "| `EVID-003` | P0.5, P1.1–P1.3 | commit | blob | date | cmd | env | pass | review |",
+    "| `EVID-070` | P8.3, P1.5, P0.2 | commit | blob | date | cmd | env | pass | review |",
+  ].join("\n");
+
+  const tasks = readTasks(plan);
+  assert.deepEqual(
+    tasks.map((task) => `${task.id}:${task.state}`),
+    ["P1.1:x", "P8.3:~", "P12.4:unstarted"],
+    "every checkbox state is read, including unstarted",
+  );
+
+  const evidence = readEvidence(plan);
+  assert.ok(
+    evidence[0].tasks.includes("P1.1") && evidence[0].tasks.includes("P1.3"),
+    "a task range covers every task inside it, not just its label",
+  );
+  assert.ok(
+    evidence[0].tasks.includes("P1.2"),
+    "including the ones only implied by the range",
+  );
+  assert.ok(evidence[1].tasks.includes("P8.3"));
+
+  // The two statements the report exists to make, and must not be able to
+  // stop making by accident.
+  const report = buildReleaseReport();
+  assert.equal(
+    report.claim.parityClaimPermitted,
+    false,
+    "the parity claim is never reported as permitted",
+  );
+  assert.ok(
+    report.claim.humanGatesOutstanding.length > 0,
+    "and the gates are named individually rather than counted away",
+  );
+  assert.ok(
+    report.claim.humanGatesOutstanding.every((gate) => gate.id && gate.what),
+    "each gate says which it is and what it requires",
   );
 }
 
