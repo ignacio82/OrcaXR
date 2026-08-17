@@ -154,6 +154,7 @@ export const ACTION_IDS_BY_PARITY_TASK = {
   'P7.7': ['save_gcode_to_downloads', 'view_open_gcode', 'save_all_plate_gcode'],
   'P7.8': ['layer_event_mutate'],
   'P8.3': [
+    'calib_place_geometry',
     'calib_sweep_export',
     'calib_choose',
     'calib_configure',

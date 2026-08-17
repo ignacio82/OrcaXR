@@ -77,7 +77,6 @@ import type { GeneratedSettingsPanelAdapter } from './ui/dom/GeneratedSettingsPa
 import { ScopedSettingsPanel } from './ui/dom/ScopedSettingsPanel';
 import { ObjectsPanel, type ObjectsPanelSelectionRequest } from './ui/dom/ObjectsPanel';
 import { FilamentAssignmentSelector } from './ui/dom/FilamentAssignmentSelector';
-import { LayerEventPanel } from './ui/dom/LayerEventPanel';
 import { askThreeMfIntake } from './ui/dom/FileIntakeDialog';
 import { askPrintSubmission } from './ui/dom/PrintSubmissionDialog';
 import { askPrintJobConfirmation } from './ui/dom/PrintJobConfirmDialog';
@@ -3511,22 +3510,26 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
 
   const layerEventHost = document.getElementById('layer-event-host');
   if (layerEventHost) {
-    const layerEvents = new LayerEventPanel(layerEventHost, {
-      getSnapshot: () => workspace.getLayerEventSnapshot(),
-      getCapabilities: () => workspace.getLayerEventCapabilities(),
-      subscribe: (listener) => workspace.subscribeCanonicalState(listener),
-      onMutate: async (request) => {
-        const invoked = await registry.invoke('layer_event_mutate', 'dom-inspector', actionCtx, uiState.get(), {
-          layerEventMutation: request,
-        });
-        if (!invoked) throw new Error('Layer-event authoring is unavailable in the current workspace state.');
-      },
-      onError: (error) => {
-        statusText.textContent = `Layer event: ${error instanceof Error ? error.message : String(error)}`;
-      },
-    });
-    layerEvents.mount();
-    window.addEventListener('pagehide', () => layerEvents.dispose(), { once: true });
+    // Inspector-gated: authored layer events are a tool, not first paint.
+    void (async () => {
+      const { LayerEventPanel } = await import('./ui/dom/LayerEventPanel');
+      const layerEvents = new LayerEventPanel(layerEventHost, {
+        getSnapshot: () => workspace.getLayerEventSnapshot(),
+        getCapabilities: () => workspace.getLayerEventCapabilities(),
+        subscribe: (listener) => workspace.subscribeCanonicalState(listener),
+        onMutate: async (request) => {
+          const invoked = await registry.invoke('layer_event_mutate', 'dom-inspector', actionCtx, uiState.get(), {
+            layerEventMutation: request,
+          });
+          if (!invoked) throw new Error('Layer-event authoring is unavailable in the current workspace state.');
+        },
+        onError: (error) => {
+          statusText.textContent = `Layer event: ${error instanceof Error ? error.message : String(error)}`;
+        },
+      });
+      layerEvents.mount();
+      window.addEventListener('pagehide', () => layerEvents.dispose(), { once: true });
+    })();
   }
 
   const plateManagerHost = document.getElementById('plate-manager-host');

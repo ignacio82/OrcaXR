@@ -191,6 +191,10 @@ export class ActionContext {
   addPrimitive(kind: 'cube' | 'cylinder' | 'sphere'): void {
     this.workspace.addPrimitive(kind);
   }
+  placeCalibrationGeometry(): Promise<{ placed: number } | { reason: string }> {
+    return this.workspace.placeCalibrationGeometry();
+  }
+
   buildCalibrationSweepProgram(): { gcode: string; filename: string } | { reason: string } {
     return this.workspace.buildCalibrationSweepProgram();
   }

@@ -145,6 +145,7 @@ import type { CalibrationJobPlan, CalibrationJobPrerequisites } from '../project
 import { stepCalibrationValue } from '../project/calibration/stepper';
 import { pressureAdvanceLineProgram } from '../project/calibration/lineProgram';
 import { extractMachineEnvelope, wrapInMachineEnvelope } from '../project/calibration/machineEnvelope';
+import { loadCalibrationResource } from '../project/calibration/resources';
 import type { CalibrationFormField, CalibrationFormPreview } from '../project/calibration/form';
 import {
   BRIM_EAR_COLORS,
@@ -5043,6 +5044,48 @@ export class OrcaWorkspace extends xb.Script {
     }
     this.canonicalProject.importBufferGeometry(geometry, { name: plan.label });
     return { placed: 1 };
+  }
+
+  /**
+   * Load and place the calibration geometry a workflow needs (P8.2, P8.3).
+   *
+   * The bytes go through `loadCalibrationResource`, so a resource that is not
+   * the audited one refuses the whole placement rather than being printed. That
+   * matters here more than it looks: the compiler's bed-fit numbers were
+   * audited from those exact bytes, and different geometry under the same name
+   * would place a calibration off the plate with nothing complaining.
+   *
+   * Only the single-gauge shape is handled. The flow families come through
+   * `applyFlowCalibrationResource`, and the line sweeps are generated programs
+   * rather than placements — asking this to cover them would mean one function
+   * pretending three different mechanisms are one.
+   */
+  public async placeCalibrationGeometry(): Promise<{ readonly placed: number } | { readonly reason: string }> {
+    const preview = this.calibrationFormPreview;
+    const plan = preview?.plan ?? null;
+    if (!plan) return { reason: 'The calibration parameters do not compile, so there is nothing to place.' };
+    const resource = plan.geometry.resources.find((entry) => entry.role === 'model');
+    if (!resource) return { reason: `${plan.definitionId} names no model resource to place.` };
+    let bytes: Uint8Array;
+    try {
+      bytes = await loadCalibrationResource(resource);
+    } catch (error) {
+      return { reason: error instanceof Error ? error.message : String(error) };
+    }
+    const geometry = new STLLoader().parse(
+      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+    );
+    const opened = this.canonicalProject.beginCalibrationSession();
+    const result = await this.placeSingleGaugeCalibration(plan, geometry);
+    if ('reason' in result) {
+      // A refused placement must not leave the operator inside an empty
+      // calibration session they did not ask for.
+      if (opened) this.canonicalProject.cancelCalibrationSession();
+      return result;
+    }
+    this.setStatus(`Placed ${plan.label}. ${opened ? 'Your project is held aside.' : ''}`.trim());
+    this.onCalibrationSessionChanged?.();
+    return result;
   }
 
   public onCalibrationParametersChanged: (() => void) | null = null;

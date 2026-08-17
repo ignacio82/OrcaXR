@@ -250,6 +250,21 @@ export const calibrationActions: Action[] = [
     },
   },
   {
+    id: 'calib_place_geometry',
+    mcpTool: 'place_calibration_geometry',
+    label: 'Place the calibration model',
+    icon: 'calibration',
+    group: 'calibration',
+    disclosure: 'inspector',
+    hint: 'Load the upstream gauge for this calibration, verified against the hash it was audited under',
+    run: async (ctx) => {
+      const result = await ctx.placeCalibrationGeometry();
+      if ('reason' in result) {
+        ctx.reportCapabilityUnavailable('Place the calibration model', result.reason);
+      }
+    },
+  },
+  {
     id: 'calib_sweep_export',
     mcpTool: 'export_calibration_sweep',
     label: 'Save pressure-advance sweep G-code',
