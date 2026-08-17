@@ -202,6 +202,35 @@ export const calibrationActions: Action[] = [
       ),
   },
   {
+    id: 'calib_session_discard',
+    mcpTool: 'discard_calibration',
+    label: 'Discard calibration, restore my project',
+    icon: 'undo',
+    group: 'calibration',
+    disclosure: 'inspector',
+    hint: 'Throw the calibration away and put the held project back exactly as it was',
+    isEnabled: (s) => s.calibrationSessionOpen === true,
+    // Never withheld in a headset. This is the way out of a state an operator
+    // can enter from either shell, and a way out that only one shell offers is
+    // a trap — see the back-out invariant in the registry parity traces.
+    run: (ctx) => {
+      ctx.discardCalibrationSession();
+    },
+  },
+  {
+    id: 'calib_session_keep',
+    mcpTool: 'keep_calibration',
+    label: 'Keep calibration as my project',
+    icon: 'check',
+    group: 'calibration',
+    disclosure: 'inspector',
+    hint: 'Adopt the calibration as the project and let the held one go',
+    isEnabled: (s) => s.calibrationSessionOpen === true,
+    run: (ctx) => {
+      ctx.keepCalibrationSession();
+    },
+  },
+  {
     id: 'calib_export_history',
     mcpTool: 'export_calibration_history',
     label: 'Export Calibration History',

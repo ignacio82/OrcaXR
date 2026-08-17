@@ -36,6 +36,8 @@ export interface UiStateShape {
   hasSelection: boolean;
   /** A simplify preview is on screen and not yet applied or cancelled. */
   simplifyPreviewing?: boolean;
+  /** A calibration owns the editor and the operator's project is held aside. */
+  calibrationSessionOpen?: boolean;
   /** Whether the primary selection is an independently transformable instance. */
   hasInstanceSelection: boolean;
   /** Canonical command-history availability. */
@@ -75,6 +77,7 @@ const INITIAL: UiStateShape = {
   plateCount: 1,
   hasSelection: false,
   simplifyPreviewing: false,
+  calibrationSessionOpen: false,
   hasInstanceSelection: false,
   canUndo: false,
   canRedo: false,

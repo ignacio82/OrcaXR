@@ -279,7 +279,13 @@ for (const action of actions.filter((item) => item.capability.status === 'partia
  */
 test('every way of backing out of a state is reachable in a headset', () => {
   const registry = buildRegistry();
-  for (const id of ['paint_smart_cancel', 'brim_ears_clear', 'brim_ears_auto', 'simplify_cancel']) {
+  for (const id of [
+    'paint_smart_cancel',
+    'brim_ears_clear',
+    'brim_ears_auto',
+    'simplify_cancel',
+    'calib_session_discard',
+  ]) {
     const action = registry.all().find((entry) => entry.id === id);
     assert.ok(action, `${id} is registered`);
     assert.equal(

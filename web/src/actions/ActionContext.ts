@@ -191,6 +191,14 @@ export class ActionContext {
   addPrimitive(kind: 'cube' | 'cylinder' | 'sphere'): void {
     this.workspace.addPrimitive(kind);
   }
+  discardCalibrationSession(): boolean {
+    return this.workspace.discardCalibrationSession();
+  }
+
+  keepCalibrationSession(): boolean {
+    return this.workspace.keepCalibrationSession();
+  }
+
   previewSimplify(configuration: SimplifyConfiguration): boolean {
     return this.workspace.previewSimplify(configuration);
   }

@@ -103,7 +103,6 @@ import { GcodePreviewPanel, type GcodePreviewPanelAdapter } from './ui/dom/Gcode
 import { PreviewScrubber } from './ui/dom/PreviewScrubber';
 import { InspectorTabs } from './ui/dom/InspectorTabs';
 import { PaintPanel } from './ui/dom/PaintPanel';
-import { EmbossPanel } from './ui/dom/EmbossPanel';
 import { SvgPanel } from './ui/dom/SvgPanel';
 import {
   forgetRememberedCredentials,
@@ -3014,6 +3013,43 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     window.addEventListener('pagehide', () => measurePanel.dispose(), { once: true });
   }
 
+  const calibrationSessionHost = document.getElementById('calibration-session-host');
+  if (calibrationSessionHost) {
+    // In the viewport, so it is seen; loaded on demand, because it is empty
+    // until someone starts a calibration.
+    void (async () => {
+      const { CalibrationSessionBar } = await import('./ui/dom/CalibrationSessionBar');
+      const bar = new CalibrationSessionBar(calibrationSessionHost, {
+        getState: () => ({ open: workspace.calibrationSessionOpen }),
+        subscribe: (listener) => {
+          const unsubscribeCanonical = workspace.subscribeCanonicalState(listener);
+          const previous = workspace.onCalibrationSessionChanged;
+          workspace.onCalibrationSessionChanged = () => {
+            previous?.();
+            listener();
+          };
+          return () => {
+            unsubscribeCanonical();
+            workspace.onCalibrationSessionChanged = previous;
+          };
+        },
+        onDiscard: async () => {
+          const invoked = await registry.invoke('calib_session_discard', 'dom-inspector', actionCtx, uiState.get());
+          if (!invoked) throw new Error('There is no calibration to discard.');
+        },
+        onKeep: async () => {
+          const invoked = await registry.invoke('calib_session_keep', 'dom-inspector', actionCtx, uiState.get());
+          if (!invoked) throw new Error('There is no calibration to keep.');
+        },
+        onError: (error) => {
+          statusText.textContent = `Calibration: ${error instanceof Error ? error.message : String(error)}`;
+        },
+      });
+      bar.mount();
+      window.addEventListener('pagehide', () => bar.dispose(), { once: true });
+    })();
+  }
+
   const simplifyPanelHost = document.getElementById('simplify-panel-host');
   if (simplifyPanelHost) {
     // Disclosure-gated, so it is fetched when the inspector wants it rather
@@ -3145,75 +3181,79 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
 
   const embossPanelHost = document.getElementById('emboss-panel-host');
   if (embossPanelHost) {
-    const embossPanel = new EmbossPanel(embossPanelHost, {
-      getState: () => {
-        const snapshot = workspace.getEmbossSnapshot();
-        return {
-          active: snapshot.active,
-          ...(snapshot.objectId ? { objectId: String(snapshot.objectId) } : {}),
-          ...(snapshot.volumeId ? { volumeId: String(snapshot.volumeId) } : {}),
-          ...(snapshot.fontName ? { fontName: snapshot.fontName } : {}),
-          text: snapshot.configuration.text,
-          sizeMm: snapshot.configuration.font.lineHeightMm,
-          depthMm: snapshot.configuration.projection.depthMm,
-          charGapMm: snapshot.configuration.font.charGapMm,
-          lineGapMm: snapshot.configuration.font.lineGapMm,
-          horizontal: snapshot.configuration.font.horizontal,
-          vertical: snapshot.configuration.font.vertical,
-          hint: snapshot.hint,
-        };
-      },
-      subscribe: (listener) => {
-        const unsubscribeCanonical = workspace.subscribeCanonicalState(listener);
-        const previous = workspace.onEmbossStateChanged;
-        workspace.onEmbossStateChanged = () => {
-          previous?.();
-          listener();
-        };
-        return () => {
-          unsubscribeCanonical();
-          workspace.onEmbossStateChanged = previous;
-        };
-      },
-      onActivate: async () => {
-        const invoked = await registry.invoke('add_emboss', 'dom-toolbar', actionCtx, uiState.get());
-        if (!invoked) throw new Error('Load a model before embossing text onto it.');
-      },
-      onLoadFont: async (name, bytes) => {
-        const invoked = await registry.invoke('emboss_load_font', 'dom-inspector', actionCtx, uiState.get(), {
-          emboss: { font: { name, bytes } },
-        });
-        if (!invoked) throw new Error('Loading an emboss font is unavailable.');
-      },
-      onConfigure: async (patch) => {
-        // The panel speaks in plain millimetres; the recipe keeps the pinned
-        // field names, so the mapping happens here rather than in the panel.
-        const recipe = {
-          ...(patch.text === undefined ? {} : { text: patch.text }),
-          font: {
-            ...(patch.sizeMm === undefined ? {} : { lineHeightMm: patch.sizeMm }),
-            ...(patch.charGapMm === undefined ? {} : { charGapMm: patch.charGapMm }),
-            ...(patch.lineGapMm === undefined ? {} : { lineGapMm: patch.lineGapMm }),
-            ...(patch.horizontal === undefined ? {} : { horizontal: patch.horizontal }),
-            ...(patch.vertical === undefined ? {} : { vertical: patch.vertical }),
-          },
-          ...(patch.depthMm === undefined ? {} : { projection: { depthMm: patch.depthMm } }),
-        };
-        const invoked = await registry.invoke('emboss_configure', 'dom-inspector', actionCtx, uiState.get(), {
-          emboss: { recipe },
-        });
-        if (!invoked) throw new Error('Changing the emboss recipe is unavailable.');
-      },
-      onApply: async () => {
-        const invoked = await registry.invoke('emboss_apply', 'dom-inspector', actionCtx, uiState.get());
-        if (!invoked) throw new Error('Adding embossed text is unavailable.');
-      },
-      onError: (error) => {
-        statusText.textContent = `Emboss: ${error instanceof Error ? error.message : String(error)}`;
-      },
-    });
-    embossPanel.mount();
-    window.addEventListener('pagehide', () => embossPanel.dispose(), { once: true });
+    // Disclosure-gated and font-heavy: fetched when the emboss tool wants it.
+    void (async () => {
+      const { EmbossPanel } = await import('./ui/dom/EmbossPanel');
+      const embossPanel = new EmbossPanel(embossPanelHost, {
+        getState: () => {
+          const snapshot = workspace.getEmbossSnapshot();
+          return {
+            active: snapshot.active,
+            ...(snapshot.objectId ? { objectId: String(snapshot.objectId) } : {}),
+            ...(snapshot.volumeId ? { volumeId: String(snapshot.volumeId) } : {}),
+            ...(snapshot.fontName ? { fontName: snapshot.fontName } : {}),
+            text: snapshot.configuration.text,
+            sizeMm: snapshot.configuration.font.lineHeightMm,
+            depthMm: snapshot.configuration.projection.depthMm,
+            charGapMm: snapshot.configuration.font.charGapMm,
+            lineGapMm: snapshot.configuration.font.lineGapMm,
+            horizontal: snapshot.configuration.font.horizontal,
+            vertical: snapshot.configuration.font.vertical,
+            hint: snapshot.hint,
+          };
+        },
+        subscribe: (listener) => {
+          const unsubscribeCanonical = workspace.subscribeCanonicalState(listener);
+          const previous = workspace.onEmbossStateChanged;
+          workspace.onEmbossStateChanged = () => {
+            previous?.();
+            listener();
+          };
+          return () => {
+            unsubscribeCanonical();
+            workspace.onEmbossStateChanged = previous;
+          };
+        },
+        onActivate: async () => {
+          const invoked = await registry.invoke('add_emboss', 'dom-toolbar', actionCtx, uiState.get());
+          if (!invoked) throw new Error('Load a model before embossing text onto it.');
+        },
+        onLoadFont: async (name, bytes) => {
+          const invoked = await registry.invoke('emboss_load_font', 'dom-inspector', actionCtx, uiState.get(), {
+            emboss: { font: { name, bytes } },
+          });
+          if (!invoked) throw new Error('Loading an emboss font is unavailable.');
+        },
+        onConfigure: async (patch) => {
+          // The panel speaks in plain millimetres; the recipe keeps the pinned
+          // field names, so the mapping happens here rather than in the panel.
+          const recipe = {
+            ...(patch.text === undefined ? {} : { text: patch.text }),
+            font: {
+              ...(patch.sizeMm === undefined ? {} : { lineHeightMm: patch.sizeMm }),
+              ...(patch.charGapMm === undefined ? {} : { charGapMm: patch.charGapMm }),
+              ...(patch.lineGapMm === undefined ? {} : { lineGapMm: patch.lineGapMm }),
+              ...(patch.horizontal === undefined ? {} : { horizontal: patch.horizontal }),
+              ...(patch.vertical === undefined ? {} : { vertical: patch.vertical }),
+            },
+            ...(patch.depthMm === undefined ? {} : { projection: { depthMm: patch.depthMm } }),
+          };
+          const invoked = await registry.invoke('emboss_configure', 'dom-inspector', actionCtx, uiState.get(), {
+            emboss: { recipe },
+          });
+          if (!invoked) throw new Error('Changing the emboss recipe is unavailable.');
+        },
+        onApply: async () => {
+          const invoked = await registry.invoke('emboss_apply', 'dom-inspector', actionCtx, uiState.get());
+          if (!invoked) throw new Error('Adding embossed text is unavailable.');
+        },
+        onError: (error) => {
+          statusText.textContent = `Emboss: ${error instanceof Error ? error.message : String(error)}`;
+        },
+      });
+      embossPanel.mount();
+      window.addEventListener('pagehide', () => embossPanel.dispose(), { once: true });
+    })();
   }
 
   const svgPanelHost = document.getElementById('svg-panel-host');
@@ -4100,6 +4140,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       plateCount: summary.plates.length,
       hasSelection: workspace.getObjectsTreeSnapshot().selection.refs.length > 0,
       simplifyPreviewing: workspace.getSimplifySnapshot().previewing,
+      calibrationSessionOpen: workspace.calibrationSessionOpen,
       hasInstanceSelection: summary.primaryInstanceId !== undefined,
       canUndo: summary.history.undoCount > 0,
       canRedo: summary.history.redoCount > 0,
@@ -4122,6 +4163,7 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     uiState.update({
       hasSelection: workspace.getObjectsTreeSnapshot().selection.refs.length > 0,
       simplifyPreviewing: workspace.getSimplifySnapshot().previewing,
+      calibrationSessionOpen: workspace.calibrationSessionOpen,
       hasInstanceSelection: summary.primaryInstanceId !== undefined,
       modelCount: workspace.modelCount,
     });
