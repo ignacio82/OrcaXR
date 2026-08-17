@@ -1497,12 +1497,23 @@ export class CanonicalWorkspaceController {
    * overrides and nothing installed them — the geometry went into the project
    * and the effects stayed in the plan.
    *
-   * Each per-height effect becomes one canonical layer range carrying that
-   * band's `layer`-scope overrides, so the slicer sees them the same way it
-   * sees a hand-authored height range. Object-scope overrides go onto the
-   * object. The whole plan is one transaction: a calibration installed halfway
-   * is a tower whose upper bands print at the wrong settings and whose G-code
-   * looks perfectly reasonable.
+   * A band reaches the print two ways, and it needs both.
+   *
+   * Its `customGcode` becomes an authored layer event at the band's start
+   * height. This is the channel upstream's own temperature tower uses, and the
+   * one proven to reach the sliced program (`EVID-062`) — a range-scoped
+   * `nozzle_temperature` is a filament option that the region-config path does
+   * not apply, so the override alone changes nothing.
+   *
+   * Its `layer`-scope overrides become a canonical layer range, and **that
+   * range always carries `layer_height`**. The pinned WASM engine crashes with
+   * an out-of-bounds memory access on a range whose config omits it — verified
+   * by slicing one, in `calibration-band-slice.test.ts` — so a band that only
+   * wanted to set a temperature would otherwise take the slicer down.
+   *
+   * Object-scope overrides go onto the object. The whole plan is one
+   * transaction: a calibration installed halfway is a tower whose upper bands
+   * print at the wrong settings and whose G-code looks perfectly reasonable.
    *
    * `print` scope is deliberately included and safe here, because a calibration
    * owns its own session (see {@link beginCalibrationSession}) — the operator's
@@ -1514,7 +1525,12 @@ export class CanonicalWorkspaceController {
   applyCalibrationPlan(
     objectId: ObjectId,
     plan: CalibrationJobPlan,
-  ): { readonly bands: number; readonly objectKeys: number; readonly printKeys: number } {
+  ): {
+    readonly bands: number;
+    readonly events: number;
+    readonly objectKeys: number;
+    readonly printKeys: number;
+  } {
     this.assertActive();
     const state = this.session.project.getSnapshot().state;
     if (!findObject(state, objectId)) throw new Error(`Unknown object ${objectId}`);
@@ -1522,6 +1538,8 @@ export class CanonicalWorkspaceController {
     const objectConfig: Record<string, string> = {};
     const printConfig: Record<string, string> = {};
     const bands: { minZMm: number; maxZMm: number; config: Record<string, string> }[] = [];
+    const events: { topZMm: number; code: string }[] = [];
+    const layerHeightMm = plan.prerequisites.process.layerHeightMm;
 
     for (const effect of plan.effects) {
       const layerConfig: Record<string, string> = {};
@@ -1534,7 +1552,26 @@ export class CanonicalWorkspaceController {
         else printConfig[override.key] = value;
       }
       if (effect.zRangeMm && Object.keys(layerConfig).length > 0) {
-        bands.push({ minZMm: effect.zRangeMm[0], maxZMm: effect.zRangeMm[1], config: layerConfig });
+        bands.push({
+          minZMm: effect.zRangeMm[0],
+          maxZMm: effect.zRangeMm[1],
+          // Never omitted: the pinned engine faults on a range without it.
+          config: { layer_height: String(layerHeightMm), ...layerConfig },
+        });
+      }
+      if (effect.customGcode && effect.zRangeMm) {
+        // The first band starts at the plate, and a layer event there is
+        // refused — correctly, since there is no layer below it to change at.
+        // That band is not a change, it is the setting the print starts with,
+        // so its overrides go to print scope where the engine reads them.
+        if (effect.zRangeMm[0] > 0) events.push({ topZMm: effect.zRangeMm[0], code: effect.customGcode });
+        else {
+          for (const override of effect.engineOverrides) {
+            if (override.scope !== 'layer') continue;
+            const value = typeof override.value === 'boolean' ? (override.value ? '1' : '0') : String(override.value);
+            printConfig[override.key] = value;
+          }
+        }
       }
     }
 
@@ -1556,6 +1593,19 @@ export class CanonicalWorkspaceController {
           sourceHash: snapshot.hash,
         });
       }
+      for (const event of events) {
+        // A band's height is where its command has to land, and a custom event
+        // is the only kind that carries its own G-code.
+        this.session.execute(
+          new AddLayerEventCommand({
+            id: this.options.idSource.next('custom-gcode'),
+            plateId: this.session.project.getSnapshot().state.activePlateId,
+            type: 'custom',
+            topZMm: event.topZMm,
+            code: event.code,
+          }),
+        );
+      }
       if (Object.keys(printConfig).length > 0) {
         const snapshot = this.session.project.getSnapshot();
         this.setScopedOverrides({ scope: 'project' }, printConfig as ConfigMap, {
@@ -1567,6 +1617,7 @@ export class CanonicalWorkspaceController {
 
     return {
       bands: bands.length,
+      events: events.length,
       objectKeys: Object.keys(objectConfig).length,
       printKeys: Object.keys(printConfig).length,
     };

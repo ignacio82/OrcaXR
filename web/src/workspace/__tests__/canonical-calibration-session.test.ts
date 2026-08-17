@@ -215,6 +215,10 @@ await test('a compiled plan installs its bands as canonical layer ranges carryin
 
   const installed = workspace.applyCalibrationPlan(objectId, plan);
   assert.equal(installed.bands, perHeight.length, 'every band with a z range became a layer range');
+  // The base band starts at the plate and becomes the print's starting setting
+  // rather than an event, so there is exactly one fewer event than band.
+  assert.equal(installed.events, perHeight.length - 1, 'every band above the plate carries its own command');
+  assert.ok(installed.printKeys > 0, 'and the base band set the temperature the print starts at');
 
   const ranges = state(workspace).plates[0].objects[0].layerRanges;
   assert.equal(ranges.length, perHeight.length);
@@ -231,6 +235,9 @@ await test('a compiled plan installs its bands as canonical layer ranges carryin
         `band ${index} writes ${override.key} the engine will read`,
       );
     }
+    // Never omitted: the pinned engine faults on a range without it, which a
+    // slice trace in `calibration-band-slice.test.ts` demonstrates directly.
+    assert.ok(range.config.layer_height, `band ${index} carries a layer height, or the slicer crashes on it`);
   }
 });
 
