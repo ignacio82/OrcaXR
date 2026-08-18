@@ -62,6 +62,7 @@ export const gizmoActions: Action[] = [
   // ---- Plate-level object ops (top toolbar in Orca) ----
   {
     id: 'arrange_all',
+    context: ['plate'],
     label: 'Auto-arrange Plate',
     icon: 'arrange',
     group: 'scene',
@@ -73,6 +74,7 @@ export const gizmoActions: Action[] = [
   },
   {
     id: 'duplicate_plate',
+    context: ['plate'],
     label: 'Duplicate Current Plate',
     icon: 'plate',
     group: 'scene',
@@ -84,6 +86,7 @@ export const gizmoActions: Action[] = [
   },
   {
     id: 'split_to_objects',
+    context: ['object'],
     label: 'Split to Objects',
     icon: 'split_objects',
     group: 'scene',

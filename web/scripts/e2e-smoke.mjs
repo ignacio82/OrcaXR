@@ -994,6 +994,117 @@ async function stepOneSettingWithoutAKeyboard(page) {
   );
 }
 
+/**
+ * The right-click menu, generated from the catalog (P11.2).
+ *
+ * The scene had no context menu at all, and the Objects tree had a hand-built
+ * one — two answers to the same right-click is the reachability gap P11.2
+ * exists to close. So this asserts the shipped page: right-clicking a model
+ * selects it and opens the object menu, right-clicking the bed opens the plate
+ * menu, the entries are the registry's for that target, choosing one has the
+ * canonical effect, and Escape closes without running anything.
+ */
+async function rightClickTheScene(page) {
+  const viewport = await page.$('#viewport');
+  assert.ok(viewport, 'the workspace viewport exists');
+  const box = await viewport.boundingBox();
+
+  const openAt = async (x, y) => {
+    await page.evaluate(
+      ({ x, y }) => {
+        const target = globalThis.document.querySelector('canvas');
+        target.dispatchEvent(
+          new globalThis.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y }),
+        );
+      },
+      { x, y },
+    );
+    await page.waitForSelector('[data-scene-context-menu="true"]', { timeout: 30_000 });
+    return page.evaluate(() => {
+      const menu = globalThis.document.querySelector('[data-scene-context-menu="true"]');
+      return {
+        target: menu.dataset.contextTarget,
+        instance: menu.dataset.contextInstance ?? null,
+        label: menu.getAttribute('aria-label'),
+        items: [...menu.querySelectorAll('[role="menuitem"]')].map((item) => ({
+          id: item.dataset.contextItem,
+          disabled: item.disabled,
+        })),
+      };
+    });
+  };
+
+  // The bed: nothing under the pointer, so this is the plate's menu.
+  const plate = await openAt(Math.round(box.x + 24), Math.round(box.y + box.height - 24));
+  assert.equal(plate.target, 'plate');
+  const plateIds = plate.items.map((item) => item.id);
+  assert.ok(plateIds.includes('arrange_all') && plateIds.includes('add_plate'), `plate menu was ${plateIds}`);
+  assert.equal(plateIds.includes('mirror_x'), false, 'a model action is not offered on the bed');
+
+  const dismiss = async () => {
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => globalThis.document.querySelector('[data-scene-context-menu="true"]') === null, {
+      timeout: 30_000,
+    });
+  };
+  await dismiss();
+
+  // Right-clicking a model selects it, which is what makes every
+  // selection-gated entry offerable rather than disabled. Where a model lands
+  // on screen depends on the camera, so this searches outward from the centre
+  // the same way the paint step does rather than asserting a fixed pixel.
+  await clickMenuAction(page, 'edit_deselect_all');
+  // Where the model actually is, asked of the camera that does the picking.
+  // Hunting pixels around the middle of the viewport is a test that passes for
+  // reasons nobody controls: earlier steps move the camera.
+  await clickMenuAction(page, 'edit_select_all');
+  const point = await page.evaluate(() => {
+    const workspace = globalThis.window.workspace;
+    const instanceId = workspace.getCanonicalSummary().selectedInstanceIds[0];
+    return instanceId ? workspace.getInstancePickPoint(instanceId) : null;
+  });
+  await clickMenuAction(page, 'edit_deselect_all');
+  if (!point) {
+    const scene = await page.evaluate(() => {
+      const workspace = globalThis.window.workspace;
+      return {
+        objects: workspace.getCanonicalSummary().objectCount,
+        selected: workspace.getCanonicalSummary().selectedInstanceIds.length,
+        placed: workspace.getAutomationSnapshot().placedModelsTotalAllPlates,
+        preview: workspace.getPreviewState().active,
+      };
+    });
+    assert.fail(`no point on screen picks a model: ${JSON.stringify(scene)}`);
+  }
+  const object = await openAt(Math.round(point.clientX), Math.round(point.clientY));
+  assert.equal(object.target, 'object', 'right-clicking a model opens the model menu');
+  assert.ok(object.instance, 'the menu names the instance it will act on');
+  const enabled = object.items.filter((item) => !item.disabled).map((item) => item.id);
+  assert.ok(enabled.includes('mirror_x'), `the object menu should be live after selecting: ${enabled}`);
+  assert.equal(
+    object.items.some((item) => item.id === 'add_plate'),
+    false,
+    'a plate action is not offered on a model',
+  );
+
+  const before = await page.evaluate(() => globalThis.window.workspace.getCanonicalSummary().history.undoCount);
+  await page.$eval('[data-context-item="mirror_x"]', (item) => item.click());
+  await page.waitForFunction(
+    (undoCount) => globalThis.window.workspace.getCanonicalSummary().history.undoCount === undoCount + 1,
+    { timeout: 30_000 },
+    before,
+  );
+  assert.equal(
+    await page.evaluate(() => globalThis.document.querySelector('[data-scene-context-menu="true"]')),
+    null,
+    'choosing an entry closes the menu',
+  );
+  await clickMenuAction(page, 'edit_undo');
+  console.log(
+    `[e2e] right-click gives the catalog's own menu (${plateIds.length} plate entries, ${object.items.length} object entries) and one press mirrored a model`,
+  );
+}
+
 async function clickPanelControl(page, selector) {
   await page.evaluate((target) => {
     const control = globalThis.document.querySelector(target);
@@ -3576,6 +3687,7 @@ try {
 
   await overrideOneObjectSetting(page);
   await stepOneSettingWithoutAKeyboard(page);
+  await rightClickTheScene(page);
 
   // The responsive PlateManager owns guarded canonical plate operations. Add
   // starts in the existing plate bar; every subsequent operation is driven

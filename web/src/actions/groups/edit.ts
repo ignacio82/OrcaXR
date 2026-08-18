@@ -65,6 +65,7 @@ export const editActions: Action[] = [
   },
   {
     id: 'edit_duplicate',
+    context: ['object'],
     label: 'Clone Selected',
     icon: 'duplicate',
     group: 'edit',
@@ -76,6 +77,7 @@ export const editActions: Action[] = [
   },
   {
     id: 'edit_delete_selected',
+    context: ['object'],
     mcpTool: 'delete_models',
     label: 'Delete Selected',
     icon: 'delete',
@@ -100,6 +102,7 @@ export const editActions: Action[] = [
   },
   {
     id: 'edit_select_all',
+    context: ['plate'],
     label: 'Select All',
     icon: 'select_all',
     group: 'edit',

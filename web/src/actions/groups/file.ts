@@ -34,6 +34,7 @@ export const fileActions: Action[] = [
   },
   {
     id: 'file_import_model',
+    context: ['plate'],
     mcpTool: 'load_model_from_path',
     label: 'Import Model…',
     icon: 'load',

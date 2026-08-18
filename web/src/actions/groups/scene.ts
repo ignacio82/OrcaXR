@@ -57,6 +57,7 @@ export const sceneActions: Action[] = [
   },
   {
     id: 'tool_lay_on_face',
+    context: ['object'],
     mcpTool: 'set_gizmo_tool',
     label: 'Lay flat',
     icon: 'lay_on_face',
@@ -79,6 +80,7 @@ export const sceneActions: Action[] = [
   },
   {
     id: 'add_instance',
+    context: ['object'],
     label: 'Add Instance',
     icon: 'duplicate',
     group: 'scene',
@@ -90,6 +92,7 @@ export const sceneActions: Action[] = [
   },
   {
     id: 'fill_bed_with_instances',
+    context: ['object'],
     label: 'Fill Bed with Instances',
     icon: 'arrange',
     group: 'scene',
@@ -101,6 +104,7 @@ export const sceneActions: Action[] = [
   },
   {
     id: 'mirror_x',
+    context: ['object'],
     label: 'Mirror on X',
     icon: 'scale',
     group: 'scene',
@@ -112,6 +116,7 @@ export const sceneActions: Action[] = [
   },
   {
     id: 'mirror_y',
+    context: ['object'],
     label: 'Mirror on Y',
     icon: 'scale',
     group: 'scene',
@@ -123,6 +128,7 @@ export const sceneActions: Action[] = [
   },
   {
     id: 'mirror_z',
+    context: ['object'],
     label: 'Mirror on Z',
     icon: 'scale',
     group: 'scene',
@@ -134,6 +140,7 @@ export const sceneActions: Action[] = [
   },
   {
     id: 'reset_rotation',
+    context: ['object'],
     label: 'Reset Rotation',
     icon: 'rotate',
     group: 'scene',
@@ -145,6 +152,7 @@ export const sceneActions: Action[] = [
   },
   {
     id: 'reset_scale',
+    context: ['object'],
     label: 'Reset Scale',
     icon: 'scale',
     group: 'scene',
@@ -156,6 +164,7 @@ export const sceneActions: Action[] = [
   },
   {
     id: 'center_on_plate',
+    context: ['object'],
     label: 'Centre on Plate',
     icon: 'arrange',
     group: 'scene',
@@ -167,6 +176,7 @@ export const sceneActions: Action[] = [
   },
   {
     id: 'drop_to_bed',
+    context: ['object'],
     mcpTool: 'transform_model',
     label: 'Drop to bed',
     icon: 'auto_orient',
@@ -202,6 +212,7 @@ export const sceneActions: Action[] = [
   },
   {
     id: 'add_primitive_cube',
+    context: ['plate'],
     mcpTool: 'add_primitive',
     label: 'Cube',
     icon: 'cube',
@@ -213,6 +224,7 @@ export const sceneActions: Action[] = [
   },
   {
     id: 'add_primitive_cylinder',
+    context: ['plate'],
     mcpTool: 'add_primitive',
     label: 'Cylinder',
     icon: 'cylinder',
@@ -224,6 +236,7 @@ export const sceneActions: Action[] = [
   },
   {
     id: 'add_primitive_sphere',
+    context: ['plate'],
     mcpTool: 'add_primitive',
     label: 'Sphere',
     icon: 'sphere',
@@ -269,6 +282,7 @@ export const sceneActions: Action[] = [
   },
   {
     id: 'simplify_model',
+    context: ['object'],
     mcpTool: 'simplify_model',
     label: 'Simplify (decimate)',
     icon: 'simplify',
@@ -339,6 +353,7 @@ export const sceneActions: Action[] = [
   },
   {
     id: 'add_plate',
+    context: ['plate'],
     mcpTool: 'add_plate',
     label: 'Add build plate',
     icon: 'plate',
@@ -367,6 +382,7 @@ export const sceneActions: Action[] = [
   },
   {
     id: 'delete_plate',
+    context: ['plate'],
     mcpTool: 'delete_plate',
     label: 'Delete build plate',
     icon: 'delete',

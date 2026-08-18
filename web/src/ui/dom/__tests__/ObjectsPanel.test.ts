@@ -38,6 +38,7 @@ interface Harness {
 }
 
 function createHarness(
+  extra: Partial<ObjectsPanelAdapter> = {},
   projection = fixtureProjection(),
   selection: ObjectTreeSelectionSnapshot = { refs: [] },
 ): Harness {
@@ -61,6 +62,7 @@ function createHarness(
     onRevealRequest: (request) => {
       reveals.push(request);
     },
+    ...extra,
   };
   const panel = new ObjectsPanel(container, adapter, {
     rowHeightPx: 32,
@@ -205,6 +207,31 @@ await test('supports roving keyboard navigation, inline rename, and keyboard rev
   harness.panel.dispose();
 });
 
+await test("a right-clicked row offers the catalog's actions under the panel's own", async () => {
+  const harness = createHarness({
+    listContextActions: (target) => [
+      {
+        label: target === 'plate' ? 'System' : 'Scene',
+        items: [{ id: `${target}_probe`, label: `${target} action`, onSelect: () => {} }],
+      },
+    ],
+  });
+  const { document, dom } = harness;
+  const target = row(document, 'object:import:test:object-a');
+  target.dispatchEvent(
+    new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 }),
+  );
+  const menu = document.querySelector<HTMLElement>('[data-objects-context-menu]');
+  assert.ok(menu);
+  assert.equal(menu.dataset.contextTarget, 'object', 'an object row opens the object menu');
+  assert.deepEqual(
+    [...menu.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent),
+    ['Reveal in scene', 'Rename', 'object action'],
+    "the panel's own operations come first, then the catalog",
+  );
+  harness.panel.dispose();
+});
+
 await test('opens the row context menu by touch long-press without changing selection', async () => {
   const harness = createHarness();
   const { document, dom, selections } = harness;
@@ -227,7 +254,7 @@ await test('opens the row context menu by touch long-press without changing sele
 await test('keeps a bounded fixed virtual window and a rendered roving tab stop', () => {
   const projection = largeProjection(10_000);
   const startedAt = performance.now();
-  const harness = createHarness(projection);
+  const harness = createHarness({}, projection);
   const firstRenderMs = performance.now() - startedAt;
   const { document, dom } = harness;
   const tree = document.querySelector<HTMLElement>('[data-objects-tree]')!;

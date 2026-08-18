@@ -8,6 +8,7 @@ import type { ActionDefinition as Action } from '../ActionRegistry';
 export const sliceActions: Action[] = [
   {
     id: 'slice_active_plate',
+    context: ['plate'],
     mcpTool: 'slice_active_plate',
     label: 'Slice',
     icon: 'slice',

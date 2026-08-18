@@ -135,7 +135,7 @@ import { PaintOverlayRegistry } from './PaintOverlayRegistry';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import type { Action, ActionRegistry, ActionSurface } from '../actions/ActionRegistry';
-import { GROUPS, MENU_SECTIONS, XR_PANELS_SECTION_ID } from '../actions/ActionRegistry';
+import { GROUPS, MENU_SECTIONS, XR_PANELS_SECTION_ID, type ContextTarget } from '../actions/ActionRegistry';
 import type { ActionContext } from '../actions/ActionContext';
 import { renderXrActionButton, xrToolRailActions, type XrActionHandle } from '../ui/xr/XrShell';
 import { xrBlocksUiAdapter } from '../ui/xr/XrUiAdapter';
@@ -158,6 +158,15 @@ import {
 } from '../project/objects/brimEarPreview';
 import { CalibrationRampGenerator } from '../features/CalibrationRampGenerator';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
+
+/** A classified right-click in the 3D scene (P11.2). */
+export interface SceneContextRequest {
+  readonly target: ContextTarget;
+  /** The instance under the pointer, so the menu can name what it will act on. */
+  readonly instanceId: InstanceId | null;
+  readonly clientX: number;
+  readonly clientY: number;
+}
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
@@ -706,9 +715,17 @@ export class OrcaWorkspace extends xb.Script {
   public onPreviewStateChanged: (() => void) | null = null;
   /** Injected by the shell: opens a standalone G-code picker. */
   public onRequestOpenGcode: (() => void) | null = null;
+  /**
+   * Injected by the shell: a right-click in the scene, already classified.
+   *
+   * The workspace owns picking, so it answers *what* was right-clicked and
+   * leaves *what to offer* to the shell that owns the action catalog.
+   */
+  public onRequestSceneContextMenu: ((request: SceneContextRequest) => void) | null = null;
   private needsRecenter = false;
 
   public orbitControls: OrbitControls | null = null;
+  private selectionCanvas: HTMLCanvasElement | null = null;
   private transformControls: TransformControls | null = null;
   private readonly transformProxy = new THREE.Object3D();
   private transformGestureSequence = 0;
@@ -1480,7 +1497,69 @@ export class OrcaWorkspace extends xb.Script {
     return this.tool === 'rotate' ? 'rotate' : this.tool === 'scale' ? 'scale' : 'move';
   }
 
+  /**
+   * A screen point where clicking really does hit this instance (automation).
+   *
+   * Where the model's *centre* projects is not the same question, and answering
+   * that one is what made this necessary: the fixture's own model has a
+   * projected centre that no ray through it intersects, which is ordinary for a
+   * shape that is not convex. So this searches the model's projected extent and
+   * returns a point **the picker itself confirms**, or null when there is
+   * genuinely none — a browser test that clicks a guessed pixel is a test that
+   * fails whenever the camera moves.
+   */
+  public getInstancePickPoint(instanceId: InstanceId): { clientX: number; clientY: number } | null {
+    const canvas = this.selectionCanvas;
+    const entry = this.models.find((model) => model.instanceId === instanceId);
+    if (!canvas || !entry) return null;
+    const rect = canvas.getBoundingClientRect();
+    const box = new THREE.Box3().setFromObject(entry.display);
+    if (box.isEmpty()) return null;
+    let left = Number.POSITIVE_INFINITY;
+    let right = Number.NEGATIVE_INFINITY;
+    let top = Number.POSITIVE_INFINITY;
+    let bottom = Number.NEGATIVE_INFINITY;
+    for (const x of [box.min.x, box.max.x]) {
+      for (const y of [box.min.y, box.max.y]) {
+        for (const z of [box.min.z, box.max.z]) {
+          const projected = new THREE.Vector3(x, y, z).project(xb.core.camera);
+          const clientX = rect.left + ((projected.x + 1) / 2) * rect.width;
+          const clientY = rect.top + ((1 - projected.y) / 2) * rect.height;
+          left = Math.min(left, clientX);
+          right = Math.max(right, clientX);
+          top = Math.min(top, clientY);
+          bottom = Math.max(bottom, clientY);
+        }
+      }
+    }
+    left = Math.max(left, rect.left);
+    right = Math.min(right, rect.right);
+    top = Math.max(top, rect.top);
+    bottom = Math.min(bottom, rect.bottom);
+    if (!(right > left) || !(bottom > top)) return null;
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const steps = 8;
+    for (let row = 0; row <= steps; row += 1) {
+      for (let column = 0; column <= steps; column += 1) {
+        const clientX = left + ((right - left) * column) / steps;
+        const clientY = top + ((bottom - top) * row) / steps;
+        pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(pointer, xb.core.camera);
+        if (raycaster.intersectObject(entry.display, true).length > 0) return { clientX, clientY };
+      }
+    }
+    return null;
+  }
+
+  /** True when this instance is already part of the canonical selection. */
+  private isInstanceSelected(instanceId: InstanceId): boolean {
+    return this.canonicalProject.getSummary().selectedInstanceIds.includes(instanceId);
+  }
+
   private setupSelectionRaycaster(canvas: HTMLCanvasElement) {
+    this.selectionCanvas = canvas;
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     let downX = 0,
@@ -1583,12 +1662,47 @@ export class OrcaWorkspace extends xb.Script {
       if (this.orbitControls) this.orbitControls.enabled = true;
       this.setStatus('Paint stroke cancelled.');
     };
+    /**
+     * Right-click classifies what is under the pointer and selects it (P11.2).
+     *
+     * Selecting first is what makes the menu truthful: every object action is
+     * gated on the selection, so a menu opened without selecting would offer
+     * rows disabled for a reason the operator just disproved by clicking the
+     * model. Upstream behaves the same way, and it is the behaviour that lets
+     * one action model serve the menu bar and the right-click alike.
+     */
+    const onContextMenu = (event: MouseEvent) => {
+      if (xb.core.renderer.xr.isPresenting) return;
+      const rect = canvas.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, xb.core.camera);
+      let target: ContextTarget = 'plate';
+      let instanceId: InstanceId | null = null;
+      for (const entry of this.models) {
+        if (raycaster.intersectObject(entry.display, true).length > 0) {
+          target = 'object';
+          instanceId = entry.instanceId;
+          // Additive selection is deliberately not honoured here: a right-click
+          // that silently extended a selection would run the chosen action on
+          // models the operator did not point at.
+          if (!this.isInstanceSelected(entry.instanceId)) this.selectModel(entry, false);
+          break;
+        }
+      }
+      if (!this.onRequestSceneContextMenu) return;
+      event.preventDefault();
+      this.onRequestSceneContextMenu({ target, instanceId, clientX: event.clientX, clientY: event.clientY });
+    };
+
+    canvas.addEventListener('contextmenu', onContextMenu);
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', onPointerUp);
     canvas.addEventListener('pointercancel', onPointerCancel);
     window.addEventListener('keydown', onPaintEscape);
     this.lifecycleDisposers.push(() => {
+      canvas.removeEventListener('contextmenu', onContextMenu);
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);
@@ -6447,6 +6561,7 @@ export class OrcaWorkspace extends xb.Script {
    */
   private populateXrPanelsSection(root: UIPanel): void {
     const reg = this.actionRegistry;
+    this.addXrContextSection(root);
     const byGroup = new Map<string, Action[]>();
     for (const action of reg.forSurface('xr-inspector')) {
       const bucket = byGroup.get(action.group) ?? [];
@@ -6472,6 +6587,31 @@ export class OrcaWorkspace extends xb.Script {
       if (group.id === 'scene') this.addXrSceneSteppers(root);
       if (group.id === 'advanced') this.addXrScopedSettings(root);
     }
+  }
+
+  /**
+   * The right-click menu, for a shell with no right button (P11.2).
+   *
+   * The catalog's context targets are a placement, not a second list, so the
+   * headset offers exactly what the scene's right-click offers for the same
+   * kind of node — chosen by what is selected rather than by what a pointer is
+   * over, because that is the addressing a headset actually has here. It leads
+   * the Panels section for the same reason a context menu leads a right-click:
+   * it is the answer to "what can I do with *this*".
+   */
+  private addXrContextSection(root: UIPanel): void {
+    const target: ContextTarget =
+      this.canonicalProject.getSummary().selectedInstanceIds.length > 0 ? 'object' : 'plate';
+    const actions = this.actionRegistry.forContext(target, 'xr-context');
+    if (actions.length === 0) return;
+    root.add(
+      new UIText(target === 'object' ? 'SELECTED MODEL' : 'THIS PLATE', {
+        fontSize: 11,
+        fontWeight: 'bold',
+        color: '#8a94a0',
+      }),
+    );
+    for (const action of actions) root.add(this.buildXrMenuRow(action, 'xr-context'));
   }
 
   /**

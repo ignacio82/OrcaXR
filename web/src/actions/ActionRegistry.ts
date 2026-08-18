@@ -73,13 +73,25 @@ export type ActionSurface =
   | 'dom-toolbar'
   | 'dom-menu'
   | 'dom-inspector'
+  | 'dom-context'
   | 'command-palette'
   | 'keyboard'
   | 'xr-primary'
   | 'xr-toolbar'
   | 'xr-menu'
   | 'xr-inspector'
+  | 'xr-context'
   | 'automation';
+
+/**
+ * What a context menu was opened *on* (P11.2).
+ *
+ * Upstream has two: right-click a model and right-click the bed. Empty space is
+ * the plate rather than a third target, because that is what a right-click on
+ * the bed means to the person doing it — "do something to this plate" — and a
+ * menu that split them would ask the operator to know where the plate ends.
+ */
+export type ContextTarget = 'object' | 'plate';
 
 export type PrerequisiteId =
   | 'has-model'
@@ -306,6 +318,16 @@ export interface ActionDefinition {
   /** For toolbar tools: the tool this action selects (drives active state). */
   tool?: string;
   /**
+   * Context menus this action belongs to, if any (P11.2).
+   *
+   * A context menu is a *placement*, not a second catalog: an action names the
+   * targets it makes sense on, and every shell renders the same set with the
+   * same availability. An action that needs a payload the menu cannot supply
+   * stays out — a row that can only report "pick one first" is worse than no
+   * row, because the operator already picked one.
+   */
+  context?: readonly ContextTarget[];
+  /**
    * Canonical Android MCP tool this action drives, when one exists. Several UI
    * actions may map onto one tool (e.g. the three `add_primitive_*` buttons →
    * `add_primitive`). The parity test asserts every `mcpTool` is a real member
@@ -531,6 +553,13 @@ function surfacesFor(action: ActionDefinition): ActionSurface[] {
     if (!action.xrUnsupportedReason) surfaces.push('xr-inspector');
   }
   if (INSPECTOR_MIRRORED.has(action.id) && !surfaces.includes('dom-inspector')) surfaces.push('dom-inspector');
+  if (action.context?.length) {
+    surfaces.push('dom-context');
+    // Same rule as every other XR surface: an action withheld from the headset
+    // for a stated reason is withheld here too, rather than advertised on a
+    // panel where it cannot be completed.
+    if (!action.xrUnsupportedReason) surfaces.push('xr-context');
+  }
   if (action.shortcuts?.length) surfaces.push('keyboard');
   if (action.mcpTool) surfaces.push('automation');
   return surfaces;
@@ -664,6 +693,16 @@ export class ActionRegistry {
 
   forSurface(surface: ActionSurface): Action[] {
     return this.actions.filter((action) => action.capability.surfaces.includes(surface));
+  }
+
+  /**
+   * What a context menu on one target offers, in catalog order (P11.2).
+   *
+   * Order is the catalog's, not the caller's, so the same right-click gives the
+   * same menu in the scene, in the Objects tree, and in the headset.
+   */
+  forContext(target: ContextTarget, surface: 'dom-context' | 'xr-context' = 'dom-context'): Action[] {
+    return this.forSurface(surface).filter((action) => action.context?.includes(target));
   }
 
   availability(actionOrId: Action | string, surface: ActionSurface, state: Readonly<UiStateShape>): ActionAvailability {

@@ -550,4 +550,39 @@ test('synchronous load handler runs before invoke yields user activation', () =>
   assert.strictEqual(pickerOpened, true);
 });
 
+test('context menus are a placement of the catalog, not a second catalog (P11.2)', () => {
+  const registry = buildRegistry();
+  const object = registry.forContext('object');
+  const plate = registry.forContext('plate');
+  assert.ok(object.length > 0 && plate.length > 0, 'both upstream context targets exist');
+
+  for (const action of [...object, ...plate]) {
+    // A context menu is a shortcut. An action that cannot run is still reachable
+    // in the menu bar and the palette, where its reason is stated; putting it
+    // here would fill the shortcut with rows that only ever explain themselves.
+    assert.notEqual(action.capability.status, 'unavailable', `${action.id} cannot run and should not be offered`);
+    assert.ok(action.run, `${action.id} has no handler`);
+    assert.ok(action.capability.surfaces.includes('dom-context'), `${action.id} lacks the DOM context surface`);
+    // The XR rule is the registry's, not this menu's: withheld only where a
+    // reason is stated, never by omission.
+    assert.equal(
+      action.capability.surfaces.includes('xr-context'),
+      !action.xrUnsupportedReason,
+      `${action.id} disagrees with its own XR reason`,
+    );
+  }
+
+  // Every context action is reachable somewhere else too, so a person who never
+  // right-clicks can still find it.
+  for (const action of [...object, ...plate]) {
+    const others = action.capability.surfaces.filter((surface) => !surface.endsWith('-context'));
+    assert.ok(others.length > 1, `${action.id} is reachable only from a context menu`);
+  }
+
+  // The two targets are distinct: a model action on the bed, or a plate action
+  // on a model, is a menu that lies about what it will affect.
+  const objectIds = new Set(object.map((action) => action.id));
+  for (const action of plate) assert.equal(objectIds.has(action.id), false, `${action.id} claims both targets`);
+});
+
 console.log(`\nRegistry: ${passed} tests passed.`);

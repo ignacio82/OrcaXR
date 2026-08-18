@@ -11,6 +11,8 @@ import {
   type ObjectTreeView,
   type ObjectTreeVisibleRow,
 } from '../../project/objects';
+import { ContextMenu, type ContextMenuGroup, type ContextMenuItem } from './ContextMenu';
+import type { ContextTarget } from '../../actions/ActionRegistry';
 
 type MaybePromise = void | Promise<void>;
 
@@ -53,6 +55,12 @@ export interface ObjectsPanelAdapter {
   onSelectionRequest(request: ObjectsPanelSelectionRequest): MaybePromise;
   onRenameRequest(request: ObjectsPanelRenameRequest): MaybePromise;
   onRevealRequest(request: ObjectsPanelRevealRequest): MaybePromise;
+  /**
+   * Catalog actions for a right-clicked node, from the shell that owns the
+   * registry. Omitted in tests and in any host without a catalog, which is why
+   * the panel's own two entries stand alone rather than assuming a shell.
+   */
+  listContextActions?(target: ContextTarget): readonly ContextMenuGroup[];
   onError?(error: unknown): void;
 }
 
@@ -93,8 +101,7 @@ export class ObjectsPanel {
   private focusedKey?: ObjectTreeRowKey;
   private anchorKey?: ObjectTreeRowKey;
   private renamingKey?: ObjectTreeRowKey;
-  private contextMenu?: HTMLElement;
-  private dismissContextMenu?: (event: Event) => void;
+  private readonly contextMenu: ContextMenu;
   private longPressTimer?: number;
   private longPressWindow?: Window;
   private longPressPointerId?: number;
@@ -112,6 +119,9 @@ export class ObjectsPanel {
     this.rowHeightPx = positiveFinite(options.rowHeightPx ?? DEFAULT_ROW_HEIGHT_PX, 'rowHeightPx');
     this.viewportHeightPx = positiveFinite(options.viewportHeightPx ?? DEFAULT_VIEWPORT_HEIGHT_PX, 'viewportHeightPx');
     this.overscanRows = nonNegativeInteger(options.overscanRows ?? 5, 'overscanRows');
+    // Same component the scene's right-click uses; only the dataset hook and the
+    // first group differ.
+    this.contextMenu = new ContextMenu(container, { datasetKey: 'objectsContextMenu' });
   }
 
   mount(): void {
@@ -389,7 +399,7 @@ export class ObjectsPanel {
     });
     item.addEventListener('contextmenu', (event) => {
       event.preventDefault();
-      if (this.contextMenu && this.suppressClickKey === row.key) return;
+      if (this.contextMenu.isOpen() && this.suppressClickKey === row.key) return;
       this.setRovingFocus(row.key);
       this.openContextMenu(row, item, event.clientX, event.clientY);
     });
@@ -715,6 +725,15 @@ export class ObjectsPanel {
     );
   }
 
+  /**
+   * The row's own operations, then the catalog's (P11.2).
+   *
+   * Reveal and Rename are panel operations — they exist nowhere in the action
+   * catalog because they act on this tree, not on the project. Everything below
+   * them is the same set the scene's right-click offers for the same kind of
+   * node, supplied by the shell that owns the registry, so the two menus cannot
+   * drift apart into two ideas of what an object can do.
+   */
   private openContextMenu(
     row: ObjectTreeVisibleRow,
     returnFocus: HTMLElement,
@@ -723,62 +742,29 @@ export class ObjectsPanel {
   ): void {
     if (!row.entity) return;
     this.closeContextMenu();
-    const document = this.container.ownerDocument;
-    const view = document.defaultView;
-    const menu = document.createElement('div');
-    menu.dataset.objectsContextMenu = 'true';
-    menu.setAttribute('role', 'menu');
-    menu.setAttribute('aria-label', `Actions for ${row.label}`);
-    const x = Math.max(8, Math.min(requestedX, (view?.innerWidth ?? 1024) - 188));
-    const y = Math.max(8, Math.min(requestedY, (view?.innerHeight ?? 768) - 120));
-    menu.style.cssText =
-      `position:fixed;z-index:1000;left:${x}px;top:${y}px;min-width:180px;padding:5px;` +
-      'display:flex;flex-direction:column;gap:3px;border:1px solid var(--oxr-color-stroke,#ffffff2b);' +
-      'border-radius:8px;background:var(--oxr-color-bg-card,#18212b);box-shadow:0 8px 24px #0008;';
-
-    const addAction = (label: string, run: () => void): void => {
-      const button = this.smallActionButton(label, label);
-      button.setAttribute('role', 'menuitem');
-      button.tabIndex = -1;
-      button.style.width = '100%';
-      button.style.height = '44px';
-      button.style.textAlign = 'left';
-      button.addEventListener('click', () => {
-        this.closeContextMenu();
-        run();
-      });
-      menu.appendChild(button);
-    };
-    addAction('Reveal in scene', () => {
-      this.emitReveal(row);
-      returnFocus.focus({ preventScroll: true });
+    const local: ContextMenuItem[] = [
+      {
+        id: 'objects_reveal_row',
+        label: 'Reveal in scene',
+        onSelect: () => this.emitReveal(row),
+      },
+    ];
+    if (isRenameable(row)) {
+      local.push({ id: 'objects_rename_row', label: 'Rename', onSelect: () => this.beginRename(row) });
+    }
+    const target = contextTargetForRow(row);
+    const groups: ContextMenuGroup[] = [
+      { label: '', items: local },
+      ...(target ? (this.adapter.listContextActions?.(target) ?? []) : []),
+    ];
+    this.contextMenu.open({
+      x: requestedX,
+      y: requestedY,
+      ariaLabel: `Actions for ${row.label}`,
+      groups,
+      returnFocus,
+      ...(target ? { target } : {}),
     });
-    if (isRenameable(row)) addAction('Rename', () => this.beginRename(row));
-
-    menu.addEventListener('keydown', (event) => {
-      const items = [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]')];
-      const index = Math.max(0, items.indexOf(document.activeElement as HTMLElement));
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        this.closeContextMenu();
-        returnFocus.focus({ preventScroll: true });
-      } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault();
-        const delta = event.key === 'ArrowDown' ? 1 : -1;
-        items[(index + delta + items.length) % items.length]?.focus();
-      } else if (event.key === 'Home' || event.key === 'End') {
-        event.preventDefault();
-        items[event.key === 'Home' ? 0 : items.length - 1]?.focus();
-      }
-    });
-    this.dismissContextMenu = (event) => {
-      if (!menu.contains(event.target as Node)) this.closeContextMenu();
-    };
-    document.addEventListener('pointerdown', this.dismissContextMenu, true);
-    document.addEventListener('focusin', this.dismissContextMenu, true);
-    this.root?.appendChild(menu);
-    this.contextMenu = menu;
-    menu.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
   }
 
   private beginLongPress(event: PointerEvent, row: ObjectTreeVisibleRow, item: HTMLElement): void {
@@ -826,14 +812,7 @@ export class ObjectsPanel {
   }
 
   private closeContextMenu(): void {
-    if (this.dismissContextMenu) {
-      const document = this.container.ownerDocument;
-      document.removeEventListener('pointerdown', this.dismissContextMenu, true);
-      document.removeEventListener('focusin', this.dismissContextMenu, true);
-      this.dismissContextMenu = undefined;
-    }
-    this.contextMenu?.remove();
-    this.contextMenu = undefined;
+    this.contextMenu.close();
   }
 
   private invokeAdapter(invoke: () => MaybePromise): void {
@@ -893,4 +872,17 @@ function positiveFinite(value: number, name: string): number {
 function nonNegativeInteger(value: number, name: string): number {
   if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${name} must be a non-negative integer`);
   return value;
+}
+
+/**
+ * Which context menu a tree row belongs to (P11.2).
+ *
+ * An instance is how a person points at an object, so it carries the object
+ * menu. A part and a height range carry none: every catalog action on them
+ * needs a payload this menu cannot supply, and a row that could only report
+ * "pick one first" is worse than no row.
+ */
+function contextTargetForRow(row: ObjectTreeVisibleRow): ContextTarget | undefined {
+  if (row.kind === 'plate') return 'plate';
+  return row.kind === 'object' || row.kind === 'instance' ? 'object' : undefined;
 }

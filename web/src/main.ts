@@ -73,6 +73,7 @@ import type { ActionInvocation, ActionRegistry } from './actions/ActionRegistry'
 import { buildShortcutCatalog, isShortcutEditingTarget, matchShortcut } from './actions/ShortcutCatalog';
 import { DomShell } from './ui/dom/DomShell';
 import { CommandPalette } from './ui/dom/CommandPalette';
+import { ContextMenu, contextMenuGroups } from './ui/dom/ContextMenu';
 import type { GeneratedSettingsPanelAdapter } from './ui/dom/GeneratedSettingsPanel';
 import { ObjectsPanel, type ObjectsPanelSelectionRequest } from './ui/dom/ObjectsPanel';
 import { FilamentAssignmentSelector } from './ui/dom/FilamentAssignmentSelector';
@@ -1861,6 +1862,25 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
 
   workspace.onProjectImportPreview = showProjectImportPreviewDialog;
 
+  // Right-click in the scene, answered by the catalog (P11.2). The workspace
+  // says what was clicked; the menu is generated from the same action model the
+  // menu bar and the command palette render, with the same availability, so a
+  // shortcut surface can never drift into a private list of operations.
+  const sceneContextMenu = new ContextMenu(document.body, { datasetKey: 'sceneContextMenu' });
+  workspace.onRequestSceneContextMenu = (request) => {
+    sceneContextMenu.open({
+      x: request.clientX,
+      y: request.clientY,
+      target: request.target,
+      ariaLabel: request.target === 'object' ? 'Actions for the selected model' : 'Actions for this plate',
+      instance: request.instanceId,
+      groups: contextMenuGroups(registry, request.target, uiState.get(), (action) => {
+        void registry.invoke(action.id, 'dom-context', actionCtx, uiState.get());
+      }),
+    });
+  };
+  window.addEventListener('pagehide', () => sceneContextMenu.dispose(), { once: true });
+
   // Open Project (File menu): every 3MF uses worker parse and explicit preview.
   const projInput = document.createElement('input');
   projInput.type = 'file';
@@ -2756,6 +2776,12 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
           objectsReveal: request.entity,
         });
       },
+      // The same catalog the scene's right-click renders, so an object offers
+      // the same operations wherever a person happens to right-click it.
+      listContextActions: (target) =>
+        contextMenuGroups(registry, target, uiState.get(), (action) => {
+          void registry.invoke(action.id, 'dom-context', actionCtx, uiState.get());
+        }),
       onError: (error) => {
         statusText.textContent = `Objects panel: ${error instanceof Error ? error.message : String(error)}`;
       },
