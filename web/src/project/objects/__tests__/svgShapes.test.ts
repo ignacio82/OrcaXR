@@ -229,4 +229,35 @@ test('real production SVG icons extrude to closed solids', () => {
   assert.deepEqual(open, [], 'every icon must close');
 });
 
+test('a line drawing wrapped in a group is refused, not silently made solid', () => {
+  // The shape every drawing tool actually emits. `fill` and `stroke` are
+  // inherited properties, and reading only an element's own attributes meant
+  // `<g fill="none" stroke="#000">` around a path left the path looking
+  // fillable — so line art from Illustrator, Inkscape or Figma extruded as a
+  // solid blob, and the `stroke-only` notice written for exactly this case
+  // never fired.
+  const grouped = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><g fill="none" stroke="#000"><path d="M0 0 L50 0 L50 50 Z"/></g></svg>`;
+  assert.throws(() => readSvgShapes(grouped), SvgError, 'a grouped line drawing has no solid area');
+
+  // The same through `style`, since a tool may write either.
+  const styled = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><g style="fill:none;stroke:#000"><path d="M0 0 L50 0 L50 50 Z"/></g></svg>`;
+  assert.throws(() => readSvgShapes(styled), SvgError);
+});
+
+test('a child that sets its own fill overrides the group that said none', () => {
+  // Inheritance has to stay inheritance. Treating an ancestor's `fill="none"`
+  // as final would discard filled shapes inside a mostly-stroked drawing, which
+  // is the opposite failure and just as silent.
+  const overridden = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><g fill="none" stroke="#000"><path fill="#f00" d="M0 0 L50 0 L50 50 Z"/></g></svg>`;
+  const shapes = readSvgShapes(overridden);
+  assert.equal(shapes.contours.length, 1, 'the filled child still becomes solid');
+});
+
+test('an ordinary grouped shape with no fill stated is still solid', () => {
+  // SVG defaults `fill` to black, so a path that says nothing is filled. This
+  // is the control: the fix must not make silence mean "none".
+  const plain = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><g><path d="M0 0 L50 0 L50 50 Z"/></g></svg>`;
+  assert.equal(readSvgShapes(plain).contours.length, 1);
+});
+
 console.log(`\nSVG shape reading: ${passed} tests passed.`);

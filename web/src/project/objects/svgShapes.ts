@@ -194,14 +194,47 @@ const UNSUPPORTED_ELEMENTS: Readonly<Record<string, { reason: SvgUnsupportedReas
   marker: { reason: 'paint-effect', detail: '<marker> decorates a stroke, which is not cut' },
 });
 
+/**
+ * Presentation a child inherits from its ancestors.
+ *
+ * `fill` and `stroke` are inherited properties in SVG, and until now only an
+ * element's *own* attributes were read. Every drawing tool wraps its output in
+ * groups, so `<g fill="none" stroke="#000">` around a path — the ordinary
+ * shape of line art from Illustrator, Inkscape or Figma — left the path with
+ * no fill of its own and it was extruded as a solid. Silently: the
+ * `stroke-only` notice that exists for exactly this never fired.
+ */
+interface InheritedPresentation {
+  readonly fill?: string;
+  readonly stroke?: string;
+}
+
+/** An element's own `fill`/`stroke`, from either the attribute or `style`. */
+function ownPresentation(attributes: Readonly<Record<string, string>>): InheritedPresentation {
+  const style = attributes.style ?? '';
+  const fill = attributes.fill ?? /(?:^|;)\s*fill\s*:\s*([^;]+)/i.exec(style)?.[1]?.trim();
+  const stroke = attributes.stroke ?? /(?:^|;)\s*stroke\s*:\s*([^;]+)/i.exec(style)?.[1]?.trim();
+  return { ...(fill === undefined ? {} : { fill }), ...(stroke === undefined ? {} : { stroke }) };
+}
+
+/** The child's own value where it has one, the ancestor's otherwise. */
+function resolvePresentation(
+  inherited: InheritedPresentation,
+  attributes: Readonly<Record<string, string>>,
+): InheritedPresentation {
+  return { ...inherited, ...ownPresentation(attributes) };
+}
+
 function collectElement(
   source: string,
   element: Element,
   parent: Matrix,
   contours: (readonly [number, number])[][],
   unsupported: SvgUnsupportedFeature[],
+  inherited: InheritedPresentation = {},
 ): void {
   const matrix = multiply(parent, parseTransform(element.attributes.transform, unsupported, element.name));
+  const here = resolvePresentation(inherited, element.attributes);
   if (element.selfClosing || element.name === 'svg' || element.name === 'g') {
     // Containers only contribute their transform.
   }
@@ -216,13 +249,13 @@ function collectElement(
       continue;
     }
     if (child.name === 'g' || child.name === 'svg' || child.name === 'a' || child.name === 'switch') {
-      collectElement(source, child, matrix, contours, unsupported);
+      collectElement(source, child, matrix, contours, unsupported, here);
       continue;
     }
     const childMatrix = multiply(matrix, parseTransform(child.attributes.transform, unsupported, child.name));
     // Checked before emptiness: an open stroked path yields no contour at all,
     // and reporting it as "empty" would hide why it vanished.
-    if (isStrokeOnly(child.attributes)) {
+    if (isStrokeOnly(resolvePresentation(here, child.attributes))) {
       unsupported.push({
         element: child.name,
         reason: 'stroke-only',
@@ -239,12 +272,19 @@ function collectElement(
   }
 }
 
-/** `fill="none"` with a stroke draws a line, which has no area to extrude. */
-function isStrokeOnly(attributes: Readonly<Record<string, string>>): boolean {
-  const style = attributes.style ?? '';
-  const fill = attributes.fill ?? /(?:^|;)\s*fill\s*:\s*([^;]+)/i.exec(style)?.[1]?.trim();
-  const stroke = attributes.stroke ?? /(?:^|;)\s*stroke\s*:\s*([^;]+)/i.exec(style)?.[1]?.trim();
-  return fill?.toLowerCase() === 'none' && stroke !== undefined && stroke.toLowerCase() !== 'none';
+/**
+ * `fill="none"` with a stroke draws a line, which has no area to extrude.
+ *
+ * Takes resolved presentation rather than raw attributes, so a value set on an
+ * ancestor counts. Reading only the element's own attributes made this return
+ * false for every grouped line drawing.
+ */
+function isStrokeOnly(presentation: InheritedPresentation): boolean {
+  return (
+    presentation.fill?.toLowerCase() === 'none' &&
+    presentation.stroke !== undefined &&
+    presentation.stroke.toLowerCase() !== 'none'
+  );
 }
 
 function shapeContours(element: Element, unsupported: SvgUnsupportedFeature[]): (readonly [number, number])[][] {
