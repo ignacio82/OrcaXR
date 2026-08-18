@@ -3016,6 +3016,38 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     })();
   }
 
+  const gcodePanelHost = document.getElementById('gcode-panel-host');
+  if (gcodePanelHost) {
+    // Inspector-gated and only useful after a slice, so it is fetched then.
+    void (async () => {
+      const [{ GcodePanel }, { GcodeDocument }] = await Promise.all([
+        import('./ui/dom/GcodePanel'),
+        import('./project/gcode/GcodeDocument'),
+      ]);
+      // Rebuilt only when the program itself changes: indexing is cheap but a
+      // fresh document on every canonical tick would drop the operator's
+      // scroll position and search while they were reading.
+      let lastGcode: string | null = null;
+      let document_: InstanceType<typeof GcodeDocument> | null = null;
+      const panel = new GcodePanel(gcodePanelHost, {
+        getState: () => {
+          const gcode = workspace.getLastGcode();
+          if (gcode !== lastGcode) {
+            lastGcode = gcode;
+            document_ = gcode === null ? null : new GcodeDocument(gcode);
+          }
+          return { document: document_, title: 'Sliced G-code' };
+        },
+        subscribe: (listener) => workspace.subscribeCanonicalState(listener),
+        onError: (error) => {
+          statusText.textContent = `G-code: ${error instanceof Error ? error.message : String(error)}`;
+        },
+      });
+      panel.mount();
+      window.addEventListener('pagehide', () => panel.dispose(), { once: true });
+    })();
+  }
+
   const calibrationParametersHost = document.getElementById('calibration-parameters-host');
   if (calibrationParametersHost) {
     void (async () => {
