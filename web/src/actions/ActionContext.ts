@@ -189,6 +189,9 @@ export class ActionContext {
   boolean(op: BooleanOp): Promise<void> {
     return this.workspace.booleanModels(op);
   }
+  scaleToFitPrintVolume(): boolean {
+    return this.workspace.scaleSelectionToFitPrintVolume();
+  }
   addPrimitive(kind: PrimitiveKind): void {
     this.workspace.addPrimitive(kind);
   }

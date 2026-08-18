@@ -10,7 +10,14 @@ export type MirrorAxis = 'x' | 'y' | 'z';
 export class TransformOperationError extends Error {
   constructor(
     message: string,
-    readonly code: 'unknown-instance' | 'empty-selection' | 'invalid-axis' | 'invalid-normal' | 'invalid-bed',
+    readonly code:
+      | 'unknown-instance'
+      | 'empty-selection'
+      | 'invalid-axis'
+      | 'invalid-normal'
+      | 'invalid-bed'
+      /** The selection has no measurable extent, so no factor would fit it. */
+      | 'degenerate-selection',
   ) {
     super(message);
     this.name = 'TransformOperationError';
@@ -86,6 +93,87 @@ export function centerInstancesOnPlate(
       transform.translationMm[1] + deltaY,
       transform.translationMm[2],
     ] as unknown as Transform['translationMm'],
+  }));
+}
+
+/** The printable box a selection is fitted into, in millimetres. */
+export interface PrintVolumeMm {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+}
+
+/**
+ * Upstream's tolerance: a hundredth of a millimetre on every side, so a model
+ * scaled to fit is not then reported as out of bounds by floating-point noise.
+ */
+const FIT_TOLERANCE_MM = 0.02;
+
+/**
+ * Scale the selection to fill the printable volume, then sit it on the bed.
+ *
+ * The pinned outcome (`Selection::scale_to_fit_print_volume`): one uniform
+ * factor, the smallest of the three axis ratios, applied about the selection's
+ * own centre so a multi-model layout keeps its relative arrangement. It scales
+ * **up** as readily as down — "fit" here means fill the volume, not merely stop
+ * overflowing it — and it finishes by centring the result on the bed and
+ * dropping it to Z = 0, because a model scaled about its centre would otherwise
+ * end up half underground.
+ *
+ * A factor of exactly 1 produces no changes rather than a no-op transaction: an
+ * undo entry that restores the same project teaches people that undo is
+ * unreliable.
+ */
+export function scaleInstancesToFitPrintVolume(
+  state: ProjectState,
+  assets: AssetRepository,
+  instanceIds: readonly InstanceId[],
+  volume: PrintVolumeMm,
+): InstanceTransformChange[] {
+  if (instanceIds.length === 0) throw new TransformOperationError('Nothing is selected', 'empty-selection');
+  const { x: volumeX, y: volumeY, z: volumeZ } = volume;
+  if (![volumeX, volumeY, volumeZ].every((size) => Number.isFinite(size) && size > 0)) {
+    throw new TransformOperationError('Scaling to fit needs a positive printable volume', 'invalid-bed');
+  }
+  const unique = [...new Set(instanceIds)];
+  const bounds = computeCanonicalInstanceBounds(state, assets, unique, { volumeRoles: ['model'] });
+  const size = [
+    bounds.max[0] - bounds.min[0] + FIT_TOLERANCE_MM,
+    bounds.max[1] - bounds.min[1] + FIT_TOLERANCE_MM,
+    bounds.max[2] - bounds.min[2] + FIT_TOLERANCE_MM,
+  ];
+  if (!size.every((extent) => Number.isFinite(extent) && extent > 0)) {
+    throw new TransformOperationError('The selection has no measurable size', 'degenerate-selection');
+  }
+  const factor = Math.min(volumeX / size[0], volumeY / size[1], volumeZ / size[2]);
+  if (!Number.isFinite(factor) || factor <= 0) {
+    throw new TransformOperationError('The selection cannot be scaled to this volume', 'degenerate-selection');
+  }
+  if (factor === 1) return [];
+
+  const centre = [
+    (bounds.min[0] + bounds.max[0]) / 2,
+    (bounds.min[1] + bounds.max[1]) / 2,
+    (bounds.min[2] + bounds.max[2]) / 2,
+  ];
+  // Where the scaled selection lands before it is placed: the same centre, with
+  // every extent multiplied. Computed rather than re-measured, so this stays a
+  // pure function of the bounds it already has.
+  const scaledMinZ = centre[2] - ((bounds.max[2] - bounds.min[2]) * factor) / 2;
+  const delta = [volumeX / 2 - centre[0], volumeY / 2 - centre[1], -scaledMinZ];
+
+  return eachInstance(state, unique, (transform) => ({
+    ...transform,
+    translationMm: [
+      centre[0] + (transform.translationMm[0] - centre[0]) * factor + delta[0],
+      centre[1] + (transform.translationMm[1] - centre[1]) * factor + delta[1],
+      centre[2] + (transform.translationMm[2] - centre[2]) * factor + delta[2],
+    ] as unknown as Transform['translationMm'],
+    scale: [
+      transform.scale[0] * factor,
+      transform.scale[1] * factor,
+      transform.scale[2] * factor,
+    ] as unknown as Transform['scale'],
   }));
 }
 

@@ -456,9 +456,8 @@
       "reason": "Replacing a mesh in place needs a path the browser never had; re-import is the route."
     },
     "MenuFactory::append_menu_item_scale_selection_to_fit_print_volume::Scale to build volume": {
-      "kind": "absent",
-      "task": "P5.1",
-      "reason": "Scale-to-fit is not implemented; scaling is manual."
+      "kind": "action",
+      "action": "scale_to_fit_volume"
     },
     "MenuFactory::append_menu_item_set_visible::Hide": {
       "kind": "absent",

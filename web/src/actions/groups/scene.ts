@@ -176,6 +176,20 @@ export const sceneActions: Action[] = [
     run: (ctx) => ctx.centerOnPlate(),
   },
   {
+    id: 'scale_to_fit_volume',
+    context: ['object'],
+    label: 'Scale to build volume',
+    icon: 'scale',
+    group: 'scene',
+    disclosure: 'menu',
+    menuSection: 'edit',
+    hint: 'Scale the selection uniformly to fill the printable volume, then place it on the bed',
+    isEnabled: (s) => s.modelCount > 0,
+    run: (ctx) => {
+      ctx.scaleToFitPrintVolume();
+    },
+  },
+  {
     id: 'drop_to_bed',
     context: ['object'],
     mcpTool: 'transform_model',

@@ -91,7 +91,7 @@
     "why": "P12.6 permits the full-parity claim only after every gate is verified; none of the human gates below has been."
   },
   "evidence": {
-    "rows": 126,
+    "rows": 127,
     "tasksCovered": 92
   },
   "integrity": {
@@ -157,10 +157,6 @@
         "owedBy": "P2.2"
       },
       {
-        "item": "MenuFactory::append_menu_item_scale_selection_to_fit_print_volume::Scale to build volume",
-        "owedBy": "P5.1"
-      },
-      {
         "item": "MenuFactory::append_menu_item_set_visible::Hide",
         "owedBy": "P2.1"
       },
@@ -190,8 +186,8 @@
       }
     ],
     "byKind": {
-      "absent": 22,
-      "action": 101,
+      "absent": 21,
+      "action": 102,
       "adaptation": 15,
       "container": 17,
       "panel": 7

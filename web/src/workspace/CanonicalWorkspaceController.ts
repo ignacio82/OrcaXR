@@ -165,10 +165,12 @@ import { SetInstanceTransformsCommand, type InstanceTransformChange } from '../p
 import {
   centerInstancesOnPlate,
   layInstanceOnFace,
+  scaleInstancesToFitPrintVolume,
   mirrorInstances,
   resetInstanceRotations,
   resetInstanceScales,
   type MirrorAxis,
+  type PrintVolumeMm,
 } from '../project/objects/transformOperations';
 import {
   arrangementTransformChanges,
@@ -3084,6 +3086,19 @@ export class CanonicalWorkspaceController {
     this.assertActive();
     const state = this.session.project.getSnapshot().state;
     this.setInstanceTransforms(centerInstancesOnPlate(state, this.assets, instanceIds, bedSizeMm), 'center');
+  }
+
+  /** Scale the selection to fill the printable volume, then place it on the bed. */
+  scaleInstancesToFitPrintVolume(instanceIds: readonly InstanceId[], volume: PrintVolumeMm): number {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    const changes = scaleInstancesToFitPrintVolume(state, this.assets, instanceIds, volume);
+    // No changes means the selection already fills the volume exactly. Writing
+    // an empty transaction would put an undo entry on the stack that restores
+    // the project it started from.
+    if (changes.length === 0) return 0;
+    this.setInstanceTransforms(changes, 'scale-to-fit');
+    return changes.length;
   }
 
   /** Rotate one instance so a chosen facet rests on the bed. */

@@ -7675,6 +7675,46 @@ export class OrcaWorkspace extends xb.Script {
     return false;
   }
 
+  /**
+   * Scale the selection to fill the printable volume, then place it on the bed.
+   *
+   * The build height comes from the live profile rather than a constant: a
+   * factor computed against an assumed 100 mm ceiling would confidently scale a
+   * model into the gantry of a shorter machine.
+   */
+  public scaleSelectionToFitPrintVolume(): boolean {
+    let instances = this.selectedInstanceIdsForTransform();
+    if (instances.length === 0) instances = this.projectedModels(this.activePlateId).map((entry) => entry.instanceId);
+    if (instances.length === 0) {
+      this.setStatus('Add a model before scaling to the build volume.');
+      return false;
+    }
+    const config = this.canonicalProject.getSlicingConfiguration().config as Record<string, unknown>;
+    const raw = config['printable_height'];
+    const height = Number.parseFloat(String(Array.isArray(raw) ? raw[0] : (raw ?? '')));
+    if (!Number.isFinite(height) || height <= 0) {
+      this.setStatus('This printer profile states no printable height, so a fitting scale cannot be computed.');
+      return false;
+    }
+    try {
+      const changed = this.canonicalProject.scaleInstancesToFitPrintVolume(instances, {
+        x: this.bedMm.x,
+        y: this.bedMm.y,
+        z: height,
+      });
+      this.recomputePreflight();
+      this.setStatus(
+        changed === 0
+          ? 'The selection already fills the build volume.'
+          : `Scaled ${changed} model(s) to the build volume.`,
+      );
+      return true;
+    } catch (error) {
+      this.setStatus(`Scale to build volume failed: ${(error as Error).message}`);
+      return false;
+    }
+  }
+
   /** Centre the selection (or the whole plate) on the printable area. */
   public centerSelectedOnPlate(): boolean {
     let instances = this.selectedInstanceIdsForTransform();

@@ -76,6 +76,7 @@ export const ACTION_IDS_BY_PARITY_TASK = {
     'reset_rotation',
     'reset_scale',
     'center_on_plate',
+    'scale_to_fit_volume',
   ],
   'P5.2': [
     'repair_model',
