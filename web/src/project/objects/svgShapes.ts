@@ -43,7 +43,9 @@ export type SvgUnsupportedReason =
   | 'stroke-only'
   | 'unsupported-unit'
   | 'unsupported-command'
-  | 'empty-shape';
+  | 'empty-shape'
+  /** A CSS rule whose selector is more than this parser reads. */
+  | 'css-selector';
 
 /** One thing the drawing asked for that a solid part cannot express. */
 export interface SvgUnsupportedFeature {
@@ -128,7 +130,8 @@ export function readSvgShapes(source: string, targetWidthMm?: number): SvgShapes
   ];
 
   const contours: (readonly [number, number])[][] = [];
-  collectElement(source, root, documentMatrix, contours, unsupported);
+  const stylesheet = readStylesheet(source, unsupported);
+  collectElement(source, root, documentMatrix, contours, unsupported, {}, stylesheet);
 
   if (contours.length === 0) {
     throw new SvgError(
@@ -195,6 +198,84 @@ const UNSUPPORTED_ELEMENTS: Readonly<Record<string, { reason: SvgUnsupportedReas
 });
 
 /**
+ * `fill` and `stroke` rules from a document's `<style>` blocks.
+ *
+ * Not a CSS engine, and it says so: only the selector forms a drawing tool
+ * actually emits — a bare element name, `.class`, `#id`, and comma-separated
+ * lists of those — are read, and anything else is reported through the same
+ * `unsupported` channel as every other thing this parser cannot honour.
+ *
+ * Ignoring stylesheets altogether was the previous behaviour and it was not
+ * neutral: a path whose `fill:none` came from a class extruded as a solid, the
+ * same silent wrong-geometry as inherited presentation. Every drawing tool that
+ * writes classes rather than attributes hit it.
+ */
+export interface SvgStylesheet {
+  readonly byElement: ReadonlyMap<string, InheritedPresentation>;
+  readonly byClass: ReadonlyMap<string, InheritedPresentation>;
+  readonly byId: ReadonlyMap<string, InheritedPresentation>;
+}
+
+const EMPTY_STYLESHEET: SvgStylesheet = {
+  byElement: new Map(),
+  byClass: new Map(),
+  byId: new Map(),
+};
+
+function readStylesheet(source: string, unsupported: SvgUnsupportedFeature[]): SvgStylesheet {
+  const byElement = new Map<string, InheritedPresentation>();
+  const byClass = new Map<string, InheritedPresentation>();
+  const byId = new Map<string, InheritedPresentation>();
+  for (const block of source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) {
+    // Comments first: a rule inside `/* … */` is not a rule, and reading one
+    // would apply a setting the document deliberately disabled.
+    const css = block[1].replace(/\/\*[\s\S]*?\*\//g, '');
+    for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const declarations = declarationsOf(rule[2]);
+      if (declarations.fill === undefined && declarations.stroke === undefined) continue;
+      for (const selector of rule[1].split(',').map((entry) => entry.trim())) {
+        if (/^[a-zA-Z][\w-]*$/.test(selector)) merge(byElement, selector.toLowerCase(), declarations);
+        else if (/^\.[\w-]+$/.test(selector)) merge(byClass, selector.slice(1), declarations);
+        else if (/^#[\w-]+$/.test(selector)) merge(byId, selector.slice(1), declarations);
+        else if (selector.length > 0) {
+          unsupported.push({
+            element: 'style',
+            reason: 'css-selector',
+            detail: `The rule "${selector}" is more than a simple element, class or id selector; its fill and stroke are not applied`,
+          });
+        }
+      }
+    }
+  }
+  return { byElement, byClass, byId };
+}
+
+function merge(into: Map<string, InheritedPresentation>, key: string, declarations: InheritedPresentation): void {
+  // Later rules win, matching the cascade for equal specificity.
+  into.set(key, { ...into.get(key), ...declarations });
+}
+
+function declarationsOf(body: string): InheritedPresentation {
+  const fill = /(?:^|;)\s*fill\s*:\s*([^;]+)/i.exec(body)?.[1]?.trim();
+  const stroke = /(?:^|;)\s*stroke\s*:\s*([^;]+)/i.exec(body)?.[1]?.trim();
+  return { ...(fill === undefined ? {} : { fill }), ...(stroke === undefined ? {} : { stroke }) };
+}
+
+/** What the stylesheet says about one element, in specificity order. */
+function stylesheetPresentation(
+  stylesheet: SvgStylesheet,
+  name: string,
+  attributes: Readonly<Record<string, string>>,
+): InheritedPresentation {
+  let resolved: InheritedPresentation = { ...stylesheet.byElement.get(name.toLowerCase()) };
+  for (const className of (attributes.class ?? '').split(/\s+/).filter(Boolean)) {
+    resolved = { ...resolved, ...stylesheet.byClass.get(className) };
+  }
+  if (attributes.id) resolved = { ...resolved, ...stylesheet.byId.get(attributes.id) };
+  return resolved;
+}
+
+/**
  * Presentation a child inherits from its ancestors.
  *
  * `fill` and `stroke` are inherited properties in SVG, and until now only an
@@ -209,20 +290,32 @@ interface InheritedPresentation {
   readonly stroke?: string;
 }
 
-/** An element's own `fill`/`stroke`, from either the attribute or `style`. */
-function ownPresentation(attributes: Readonly<Record<string, string>>): InheritedPresentation {
-  const style = attributes.style ?? '';
-  const fill = attributes.fill ?? /(?:^|;)\s*fill\s*:\s*([^;]+)/i.exec(style)?.[1]?.trim();
-  const stroke = attributes.stroke ?? /(?:^|;)\s*stroke\s*:\s*([^;]+)/i.exec(style)?.[1]?.trim();
-  return { ...(fill === undefined ? {} : { fill }), ...(stroke === undefined ? {} : { stroke }) };
-}
-
-/** The child's own value where it has one, the ancestor's otherwise. */
+/**
+ * One element's effective `fill` and `stroke`, in cascade order.
+ *
+ * The order is SVG's, not the intuitive one. A presentation *attribute*
+ * (`fill="none"`) is the weakest of the three — weaker than any stylesheet
+ * rule — while an inline `style=""` is the strongest. Getting that backwards
+ * would silently pick the wrong paint for any document that sets both, which is
+ * every document a drawing tool produces with a theme.
+ */
 function resolvePresentation(
   inherited: InheritedPresentation,
   attributes: Readonly<Record<string, string>>,
+  stylesheet: SvgStylesheet = EMPTY_STYLESHEET,
+  name = '',
 ): InheritedPresentation {
-  return { ...inherited, ...ownPresentation(attributes) };
+  const attribute: InheritedPresentation = {
+    ...(attributes.fill === undefined ? {} : { fill: attributes.fill }),
+    ...(attributes.stroke === undefined ? {} : { stroke: attributes.stroke }),
+  };
+  const inline = declarationsOf(attributes.style ?? '');
+  return {
+    ...inherited,
+    ...attribute,
+    ...stylesheetPresentation(stylesheet, name, attributes),
+    ...inline,
+  };
 }
 
 function collectElement(
@@ -232,9 +325,10 @@ function collectElement(
   contours: (readonly [number, number])[][],
   unsupported: SvgUnsupportedFeature[],
   inherited: InheritedPresentation = {},
+  stylesheet: SvgStylesheet = EMPTY_STYLESHEET,
 ): void {
   const matrix = multiply(parent, parseTransform(element.attributes.transform, unsupported, element.name));
-  const here = resolvePresentation(inherited, element.attributes);
+  const here = resolvePresentation(inherited, element.attributes, stylesheet, element.name);
   if (element.selfClosing || element.name === 'svg' || element.name === 'g') {
     // Containers only contribute their transform.
   }
@@ -249,13 +343,13 @@ function collectElement(
       continue;
     }
     if (child.name === 'g' || child.name === 'svg' || child.name === 'a' || child.name === 'switch') {
-      collectElement(source, child, matrix, contours, unsupported, here);
+      collectElement(source, child, matrix, contours, unsupported, here, stylesheet);
       continue;
     }
     const childMatrix = multiply(matrix, parseTransform(child.attributes.transform, unsupported, child.name));
     // Checked before emptiness: an open stroked path yields no contour at all,
     // and reporting it as "empty" would hide why it vanished.
-    if (isStrokeOnly(resolvePresentation(here, child.attributes))) {
+    if (isStrokeOnly(resolvePresentation(here, child.attributes, stylesheet, child.name))) {
       unsupported.push({
         element: child.name,
         reason: 'stroke-only',

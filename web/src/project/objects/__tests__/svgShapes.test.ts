@@ -229,6 +229,52 @@ test('real production SVG icons extrude to closed solids', () => {
   assert.deepEqual(open, [], 'every icon must close');
 });
 
+test('a fill from a stylesheet is honoured, in every selector form a tool emits', () => {
+  // Ignoring `<style>` was not neutral: a path whose `fill:none` came from a
+  // class extruded as a solid, exactly like the group case, and every drawing
+  // tool that writes classes rather than attributes hit it.
+  const sheet = '<style>.line{fill:none;stroke:#000}</style>';
+  const byClass = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">${sheet}<path class="line" d="M0 0 L50 0 L50 50 Z"/></svg>`;
+  assert.throws(() => readSvgShapes(byClass), SvgError, 'a class-styled line drawing has no solid area');
+
+  const onGroup = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">${sheet}<g class="line"><path d="M0 0 L50 0 L50 50 Z"/></g></svg>`;
+  assert.throws(() => readSvgShapes(onGroup), SvgError, 'and it still inherits through the group');
+
+  const byElement = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><style>path{fill:none;stroke:#000}</style><path d="M0 0 L50 0 L50 50 Z"/></svg>`;
+  assert.throws(() => readSvgShapes(byElement), SvgError, 'an element selector counts too');
+});
+
+test('the cascade runs in SVG’s order, not the intuitive one', () => {
+  // A presentation attribute is the *weakest* of the three — weaker than any
+  // stylesheet rule — while an inline style is the strongest. Getting this
+  // backwards picks the wrong paint for any document that sets both, which is
+  // every themed drawing a tool produces.
+  const cssOverAttribute = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><style>.line{fill:none;stroke:#000}</style><path class="line" fill="#f00" d="M0 0 L50 0 L50 50 Z"/></svg>`;
+  assert.throws(() => readSvgShapes(cssOverAttribute), SvgError, 'the stylesheet beats the attribute');
+
+  const inlineOverCss = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><style>.line{fill:none;stroke:#000}</style><path class="line" style="fill:#f00" d="M0 0 L50 0 L50 50 Z"/></svg>`;
+  assert.equal(readSvgShapes(inlineOverCss).contours.length, 1, 'and an inline style beats the stylesheet');
+});
+
+test('a commented-out rule is not a rule', () => {
+  // Reading one would apply a setting the document deliberately disabled.
+  const commented = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><style>/* .line{fill:none;stroke:#000} */</style><path class="line" d="M0 0 L50 0 L50 50 Z"/></svg>`;
+  assert.equal(readSvgShapes(commented).contours.length, 1);
+});
+
+test('a selector this parser cannot read is reported rather than ignored', () => {
+  // The honest half. Combinators and attribute selectors are not resolved, and
+  // a drawing relying on one will still extrude — but it says so, instead of
+  // producing a solid where a line was drawn and leaving no trace of why.
+  const complex = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><style>g > .line{fill:none;stroke:#000}</style><path class="line" d="M0 0 L50 0 L50 50 Z"/></svg>`;
+  const shapes = readSvgShapes(complex);
+  assert.equal(shapes.contours.length, 1);
+  assert.ok(
+    shapes.unsupported.some((entry) => entry.reason === 'css-selector'),
+    'the unread rule is named',
+  );
+});
+
 test('a line drawing wrapped in a group is refused, not silently made solid', () => {
   // The shape every drawing tool actually emits. `fill` and `stroke` are
   // inherited properties, and reading only an element's own attributes meant
