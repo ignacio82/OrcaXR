@@ -229,7 +229,7 @@ function readStylesheet(source: string, unsupported: SvgUnsupportedFeature[]): S
   for (const block of source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) {
     // Comments first: a rule inside `/* … */` is not a rule, and reading one
     // would apply a setting the document deliberately disabled.
-    const css = block[1].replace(/\/\*[\s\S]*?\*\//g, '');
+    const css = stripAtRules(block[1].replace(/\/\*[\s\S]*?\*\//g, ''), unsupported);
     for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const declarations = declarationsOf(rule[2]);
       const stated = { ...declarations.normal, ...declarations.important };
@@ -249,6 +249,65 @@ function readStylesheet(source: string, unsupported: SvgUnsupportedFeature[]): S
     }
   }
   return { byElement, byClass, byId };
+}
+
+/**
+ * Remove at-rule blocks before any rule inside them is read.
+ *
+ * The rule matcher pairs a selector with the next balanced `{…}`, which walks
+ * straight into `@media print { .line { fill: none } }` and applies a
+ * print-only declaration to the geometry. That is the *inverse* of the silent
+ * solids found elsewhere in this parser: a rule that should not apply at all
+ * turns a filled shape into nothing, and the whole drawing is refused with
+ * "nothing that can become a solid part" — for a rule the document scoped
+ * away.
+ *
+ * The block is dropped and reported. Guessing which media a printed part
+ * belongs to is not this parser's call to make.
+ */
+function stripAtRules(css: string, unsupported: SvgUnsupportedFeature[]): string {
+  let out = '';
+  let index = 0;
+  while (index < css.length) {
+    const at = css.indexOf('@', index);
+    if (at < 0) {
+      out += css.slice(index);
+      break;
+    }
+    out += css.slice(index, at);
+    const name = /^@([\w-]+)/.exec(css.slice(at))?.[1] ?? 'rule';
+    const brace = css.indexOf('{', at);
+    const semicolon = css.indexOf(';', at);
+    if (brace < 0 || (semicolon >= 0 && semicolon < brace)) {
+      // A statement at-rule such as `@import url(…);` — it ends at the
+      // semicolon and carries no declarations of its own.
+      unsupported.push({
+        element: 'style',
+        reason: 'css-selector',
+        detail: `The "@${name}" rule is not read; any fill or stroke it brings in is not applied`,
+      });
+      index = semicolon < 0 ? css.length : semicolon + 1;
+      continue;
+    }
+    // A block at-rule: skip to its matching close brace so nothing inside is
+    // mistaken for a top-level rule.
+    let depth = 0;
+    let cursor = brace;
+    for (; cursor < css.length; cursor += 1) {
+      if (css[cursor] === '{') depth += 1;
+      else if (css[cursor] === '}') {
+        depth -= 1;
+        if (depth === 0) break;
+      }
+    }
+    unsupported.push({
+      element: 'style',
+      reason: 'css-selector',
+      detail: `The "@${name}" block is conditional, so its fill and stroke are not applied`,
+    });
+    index = cursor + 1;
+  }
+  return out;
 }
 
 function merge(into: Map<string, StyleRule>, key: string, declarations: StyleRule): void {

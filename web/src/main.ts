@@ -74,7 +74,6 @@ import { buildShortcutCatalog, isShortcutEditingTarget, matchShortcut } from './
 import { DomShell } from './ui/dom/DomShell';
 import { CommandPalette } from './ui/dom/CommandPalette';
 import type { GeneratedSettingsPanelAdapter } from './ui/dom/GeneratedSettingsPanel';
-import { ScopedSettingsPanel } from './ui/dom/ScopedSettingsPanel';
 import { ObjectsPanel, type ObjectsPanelSelectionRequest } from './ui/dom/ObjectsPanel';
 import { FilamentAssignmentSelector } from './ui/dom/FilamentAssignmentSelector';
 import { askThreeMfIntake } from './ui/dom/FileIntakeDialog';
@@ -3705,20 +3704,24 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
       };
     };
 
-    const settingsPanel = new ScopedSettingsPanel(
-      settingsHost,
-      {
-        listTargets: () => workspace.listScopedOverrideTargets(),
-        subscribe: (listener) => workspace.subscribeCanonicalState(listener),
-        adapterFor: (option) => (option.scope === 'project' ? projectAdapter : nodeAdapter(option)),
-        onError: (error) => {
-          statusText.textContent = `Settings: ${error instanceof Error ? error.message : String(error)}`;
+    void (async () => {
+      // Inspector-gated: scoped overrides are a panel an operator opens.
+      const { ScopedSettingsPanel } = await import('./ui/dom/ScopedSettingsPanel');
+      const settingsPanel = new ScopedSettingsPanel(
+        settingsHost,
+        {
+          listTargets: () => workspace.listScopedOverrideTargets(),
+          subscribe: (listener) => workspace.subscribeCanonicalState(listener),
+          adapterFor: (option) => (option.scope === 'project' ? projectAdapter : nodeAdapter(option)),
+          onError: (error) => {
+            statusText.textContent = `Settings: ${error instanceof Error ? error.message : String(error)}`;
+          },
         },
-      },
-      { panel: { loadCatalog: () => catalogPromise } },
-    );
-    void settingsPanel.mount();
-    window.addEventListener('pagehide', () => settingsPanel.dispose(), { once: true });
+        { panel: { loadCatalog: () => catalogPromise } },
+      );
+      void settingsPanel.mount();
+      window.addEventListener('pagehide', () => settingsPanel.dispose(), { once: true });
+    })();
   }
 
   // Filament palette: color swatches that drive paint + 3MF display + slice.

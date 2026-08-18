@@ -278,6 +278,36 @@ test('an important rule outranks an inline style, and an ordinary one does not',
   assert.equal(readSvgShapes(ordinary).contours.length, 1, 'and an ordinary one loses to the inline style');
 });
 
+test('a conditional at-rule is skipped, not applied to the geometry', () => {
+  // The inverse of the silent solids elsewhere in this parser. The rule matcher
+  // pairs a selector with the next balanced block, so it walked straight into
+  // `@media print { … }` and applied a print-only declaration — turning a
+  // filled shape into nothing and refusing the whole drawing for a rule the
+  // document had scoped away.
+  const mediaOnly = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><style>@media print{.line{fill:none;stroke:#000}}</style><path class="line" d="M0 0 L50 0 L50 50 Z"/></svg>`;
+  const shapes = readSvgShapes(mediaOnly);
+  assert.equal(shapes.contours.length, 1, 'the print-only rule does not apply');
+  assert.ok(
+    shapes.unsupported.some((entry) => entry.reason === 'css-selector'),
+    'and it is reported',
+  );
+
+  // Nested blocks skip to the matching brace, not the first one.
+  const nested = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><style>@supports (fill:none){@media print{.line{fill:none}}}</style><path class="line" d="M0 0 L50 0 L50 50 Z"/></svg>`;
+  assert.equal(readSvgShapes(nested).contours.length, 1);
+});
+
+test('a real rule after an at-rule still applies', () => {
+  // The half that would be lost by skipping too much: dropping everything from
+  // the first `@` onward would silently ignore the stylesheet's actual content
+  // and put the parser back to solidifying line art.
+  const afterMedia = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><style>@media print{.x{fill:#0f0}}.line{fill:none;stroke:#000}</style><path class="line" d="M0 0 L50 0 L50 50 Z"/></svg>`;
+  assert.throws(() => readSvgShapes(afterMedia), SvgError, 'the rule outside the media block is honoured');
+
+  const afterImport = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><style>@import url(x.css);.line{fill:none;stroke:#000}</style><path class="line" d="M0 0 L50 0 L50 50 Z"/></svg>`;
+  assert.throws(() => readSvgShapes(afterImport), SvgError, 'a statement at-rule ends at its semicolon');
+});
+
 test('a commented-out rule is not a rule', () => {
   // Reading one would apply a setting the document deliberately disabled.
   const commented = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><style>/* .line{fill:none;stroke:#000} */</style><path class="line" d="M0 0 L50 0 L50 50 Z"/></svg>`;
