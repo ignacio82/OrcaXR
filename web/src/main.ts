@@ -3636,58 +3636,70 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
   const settingsHost = document.getElementById('settings-inspector-host');
   if (settingsHost) {
     const catalogPromise = loadEngineOptionCatalog();
-    let displayedRaw: ProjectSettingsOverrideSnapshot | undefined;
     const projectPanelSnapshot = (catalog: EngineOptionCatalog, raw: ProjectSettingsOverrideSnapshot) => ({
       revision: raw.sourceRevision,
       sourceHash: raw.sourceHash,
       inherited: decodeSettingsConfig(catalog, raw.inheritedConfig as unknown as Readonly<ConfigMap>).values,
       overrides: decodeSettingsConfig(catalog, raw.overrides as unknown as Readonly<ConfigMap>).values,
     });
-    const projectAdapter: GeneratedSettingsPanelAdapter = {
-      load: async () => {
-        const catalog = await catalogPromise;
-        displayedRaw = workspace.getProjectSettingsOverrideSnapshot();
-        return projectPanelSnapshot(catalog, displayedRaw);
-      },
-      subscribe: (listener) =>
-        workspace.subscribeCanonicalState(() => {
-          const current = workspace.getProjectSettingsOverrideSnapshot();
-          if (
-            !displayedRaw ||
-            current.sourceRevision !== displayedRaw.sourceRevision ||
-            current.sourceHash !== displayedRaw.sourceHash
-          ) {
-            listener();
+    // A factory rather than one shared object, because two surfaces now read
+    // through this adapter. The snapshot it last handed out is what its stale
+    // guard compares against, so a single instance shared between the panel and
+    // the headset would let one surface's apply move the other's guard — and the
+    // second surface would then be told its own draft was stale with no way to
+    // notice it had gone out of date.
+    const makeProjectAdapter = (): GeneratedSettingsPanelAdapter => {
+      let displayedRaw: ProjectSettingsOverrideSnapshot | undefined;
+      return {
+        load: async () => {
+          const catalog = await catalogPromise;
+          displayedRaw = workspace.getProjectSettingsOverrideSnapshot();
+          return projectPanelSnapshot(catalog, displayedRaw);
+        },
+        subscribe: (listener) =>
+          workspace.subscribeCanonicalState(() => {
+            const current = workspace.getProjectSettingsOverrideSnapshot();
+            if (
+              !displayedRaw ||
+              current.sourceRevision !== displayedRaw.sourceRevision ||
+              current.sourceHash !== displayedRaw.sourceHash
+            ) {
+              listener();
+            }
+          }),
+        apply: async (request) => {
+          const raw = displayedRaw;
+          if (!raw || raw.sourceRevision !== request.expectedRevision || raw.sourceHash !== request.sourceHash) {
+            throw new Error('The settings draft no longer matches the displayed canonical project snapshot.');
           }
-        }),
-      apply: async (request) => {
-        const raw = displayedRaw;
-        if (!raw || raw.sourceRevision !== request.expectedRevision || raw.sourceHash !== request.sourceHash) {
-          throw new Error('The settings draft no longer matches the displayed canonical project snapshot.');
-        }
-        const overrides = applySettingsCommitToConfig(raw.overrides as unknown as Readonly<ConfigMap>, request.commit);
-        const invoked = await registry.invoke('settings_apply_project', 'dom-inspector', actionCtx, uiState.get(), {
-          projectSettingsApply: {
-            inheritedConfig: raw.inheritedConfig as unknown as Readonly<ConfigMap>,
-            overrides,
-            sourceRevision: raw.sourceRevision,
-            sourceHash: raw.sourceHash,
-          },
-        });
-        if (!invoked) throw new Error('The project settings action is unavailable in the current workspace state.');
-        displayedRaw = workspace.getProjectSettingsOverrideSnapshot();
-        return projectPanelSnapshot(await catalogPromise, displayedRaw);
-      },
-      cancel: (request) => {
-        const raw = displayedRaw;
-        if (!raw || raw.sourceRevision !== request.expectedRevision || raw.sourceHash !== request.sourceHash) {
-          throw new Error('The settings draft no longer matches the displayed canonical project snapshot.');
-        }
-      },
-      onError: (error) => {
-        statusText.textContent = `Project settings: ${error instanceof Error ? error.message : String(error)}`;
-      },
+          const overrides = applySettingsCommitToConfig(
+            raw.overrides as unknown as Readonly<ConfigMap>,
+            request.commit,
+          );
+          const invoked = await registry.invoke('settings_apply_project', 'dom-inspector', actionCtx, uiState.get(), {
+            projectSettingsApply: {
+              inheritedConfig: raw.inheritedConfig as unknown as Readonly<ConfigMap>,
+              overrides,
+              sourceRevision: raw.sourceRevision,
+              sourceHash: raw.sourceHash,
+            },
+          });
+          if (!invoked) throw new Error('The project settings action is unavailable in the current workspace state.');
+          displayedRaw = workspace.getProjectSettingsOverrideSnapshot();
+          return projectPanelSnapshot(await catalogPromise, displayedRaw);
+        },
+        cancel: (request) => {
+          const raw = displayedRaw;
+          if (!raw || raw.sourceRevision !== request.expectedRevision || raw.sourceHash !== request.sourceHash) {
+            throw new Error('The settings draft no longer matches the displayed canonical project snapshot.');
+          }
+        },
+        onError: (error) => {
+          statusText.textContent = `Project settings: ${error instanceof Error ? error.message : String(error)}`;
+        },
+      };
     };
+    const projectAdapter = makeProjectAdapter();
 
     // A plate, object, part, or height range stores overrides alone, so its
     // adapter reads the resolved chain as "inherited" and writes only the map
@@ -3753,6 +3765,29 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     void (async () => {
       // Inspector-gated: scoped overrides are a panel an operator opens.
       const { ScopedSettingsPanel } = await import('./ui/dom/ScopedSettingsPanel');
+      const { ScopedSettingsStepper } = await import('./settings/editor/scopedStepper');
+
+      // The headset gets the same settings through the same adapters. Not a
+      // second settings implementation: one query, one draft editor, one commit
+      // path, and a different way of naming a value — pressed rather than typed
+      // (P6.5).
+      const stepper = new ScopedSettingsStepper({
+        loadCatalog: () => catalogPromise,
+        listTargets: () => workspace.listScopedOverrideTargets(),
+        adapterFor: (targetId) => {
+          if (targetId === 'project') return makeProjectAdapter();
+          const option = workspace.listScopedOverrideTargets().find((entry) => entry.id === targetId);
+          if (!option) throw new Error(`No settings target named ${targetId} is in the project.`);
+          return nodeAdapter(option);
+        },
+        onChange: () => workspace.refreshXrScopedSettings(),
+        onError: (error) => {
+          statusText.textContent = `Settings: ${error instanceof Error ? error.message : String(error)}`;
+        },
+      });
+      workspace.setScopedSettingsPort(stepper);
+      window.addEventListener('pagehide', () => stepper.dispose(), { once: true });
+
       const settingsPanel = new ScopedSettingsPanel(
         settingsHost,
         {

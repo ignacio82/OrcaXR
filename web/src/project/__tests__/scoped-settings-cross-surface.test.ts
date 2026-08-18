@@ -1,5 +1,5 @@
 /**
- * P6.5 acceptance: two surfaces, one draft/commit state.
+ * P6.5 acceptance: three surfaces, one draft/commit state.
  *
  * A desktop field and an XR control disagree about *input* — one is typed text,
  * the other is a stepped or cycled value produced without a keyboard — and that
@@ -10,6 +10,13 @@
  * identical. Nothing about the comparison is scoped to one surface's habits:
  * it is the whole project, including `Metadata/project_settings.config` and
  * `Metadata/model_settings.config`.
+ *
+ * The last trace closes the gap the others left. For a long time this file
+ * *described* the XR surface — it produced the serialized value a stepper would
+ * have reached and fed it to the shared editor — because no such surface
+ * existed. It does now, so the third surface is driven rather than imitated:
+ * the real controller the headset panel renders takes a press, and the project
+ * it produces is compared against the project a typed field produces.
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -34,12 +41,14 @@ import {
 } from '..';
 import { EngineOptionCatalog, parseEngineOptionSchema } from '../../settings/generated/loader';
 import {
+  ScopedSettingsStepper,
   SettingsDraftEditor,
   applySettingsCommitToConfig,
   decodeSettingsConfig,
+  guiSurfaceForScope,
   serializeSettingValue,
+  type SettingsDraftCommit,
 } from '../../settings/editor';
-import { guiSurfaceForScope } from '../../ui/dom/ScopedSettingsPanel';
 import { createProjectFixture } from './fixtures';
 
 let passed = 0;
@@ -78,6 +87,15 @@ function targetFor(project: ProjectStore, scope: (typeof SAMPLES)[number]['scope
   const option = scopedOverrideTargets(project.getSnapshot().state).find((entry) => entry.scope === scope);
   assert.ok(option, `no ${scope} target in the fixture`);
   return option.target;
+}
+
+type NodeScopedTarget = Exclude<ScopedOverrideTarget, { scope: 'project' }>;
+
+/** A target that stores overrides of its own, proven so rather than assumed. */
+function nodeTarget(project: ProjectStore, scope: (typeof SAMPLES)[number]['scope']): NodeScopedTarget {
+  const target = targetFor(project, scope);
+  assert.notEqual(target.scope, 'project');
+  return target as NodeScopedTarget;
 }
 
 function definitionFor(key: string) {
@@ -238,6 +256,97 @@ await test('a saved project reopens with every scope still overridden', async ()
     const stored = (view.overrides as ConfigMap)[sample.key];
     assert.ok(stored !== undefined, `${sample.key} was lost from the ${sample.scope} on reopen`);
   }
+});
+
+await test('a press on the real XR controller lands the same project a typed field does', async () => {
+  const xr = harness();
+  const typed = harness();
+
+  // The adapter the headset drives is the same shape the DOM panel drives, and
+  // it commits through the same canonical command. Nothing here is XR-specific
+  // except where the value came from.
+  // Narrowed on purpose: this trace edits an object, and the project scope
+  // stores its config through a different command entirely.
+  const adapterFor = (project: ProjectStore, bus: CommandBus, target: NodeScopedTarget) => {
+    let displayed = scopedOverrideSnapshot(project.getSnapshot(), target);
+    const present = () => ({
+      revision: displayed.sourceRevision,
+      sourceHash: displayed.sourceHash,
+      inherited: decodeSettingsConfig(catalog, displayed.inheritedConfig).values,
+      overrides: decodeSettingsConfig(catalog, displayed.overrides).values,
+    });
+    return {
+      load: () => {
+        displayed = scopedOverrideSnapshot(project.getSnapshot(), target);
+        return present();
+      },
+      apply: (request: { expectedRevision: number; sourceHash: string; commit: SettingsDraftCommit }) => {
+        assert.equal(request.expectedRevision, displayed.sourceRevision, 'the press carried a current guard');
+        assert.equal(request.sourceHash, displayed.sourceHash);
+        const overrides = applySettingsCommitToConfig(displayed.overrides, request.commit);
+        bus.execute(
+          new SetScopedOverridesCommand(
+            { sourceRevision: displayed.sourceRevision, sourceHash: displayed.sourceHash },
+            target,
+            overrides,
+          ),
+        );
+        displayed = scopedOverrideSnapshot(project.getSnapshot(), target);
+        return present();
+      },
+    };
+  };
+
+  const target = nodeTarget(xr.project, 'object');
+  const stepper = new ScopedSettingsStepper({
+    loadCatalog: async () => catalog,
+    listTargets: () => [{ id: 'object', scope: 'object', label: 'Cube', path: 'Plate 1 › Cube', overrideCount: 0 }],
+    adapterFor: () => adapterFor(xr.project, xr.bus, target),
+    onChange: () => {},
+    onError: (error) => assert.fail(String(error)),
+  });
+
+  stepper.getView();
+  await stepper.whenIdle();
+  const row = stepper.getView().rows.find((entry) => entry.key === 'wall_loops');
+  assert.ok(row?.steppable, 'wall loops is a bounded integer, so a controller can reach it');
+  const beforeValue = row.value;
+  stepper.step(row.fieldId, 1);
+  await stepper.whenIdle();
+
+  const after = stepper.getView().rows.find((entry) => entry.fieldId === row.fieldId);
+  assert.ok(after);
+  assert.notEqual(after.value, beforeValue, 'the press moved the value');
+
+  // The other surface types exactly what the press arrived at. If the two paths
+  // agree, the whole project agrees — not just the one key.
+  const typedTarget = nodeTarget(typed.project, 'object');
+  const view = scopedOverrideSnapshot(typed.project.getSnapshot(), typedTarget);
+  const editor = new SettingsDraftEditor(catalog, {
+    mode: 'simple',
+    technology: 'fff',
+    guiSurface: guiSurfaceForScope('object'),
+    scope: 'object',
+    inherited: decodeSettingsConfig(catalog, view.inheritedConfig).values,
+    overrides: decodeSettingsConfig(catalog, view.overrides).values,
+  });
+  editor.setDraft(definitionFor('wall_loops').id, after.value);
+  typed.bus.execute(
+    new SetScopedOverridesCommand(
+      { sourceRevision: view.sourceRevision, sourceHash: view.sourceHash },
+      typedTarget,
+      applySettingsCommitToConfig(view.overrides, editor.commit()),
+    ),
+  );
+
+  assert.equal(
+    canonicalStringify(xr.project.getSnapshot().state),
+    canonicalStringify(typed.project.getSnapshot().state),
+  );
+  const xrFiles = await exported(xr.project, xr.fixture.asset);
+  const typedFiles = await exported(typed.project, typed.fixture.asset);
+  assert.deepEqual(xrFiles.project, typedFiles.project);
+  assert.deepEqual(xrFiles.model, typedFiles.model);
 });
 
 console.log(`\nScoped settings cross-surface parity: ${passed} tests passed.`);

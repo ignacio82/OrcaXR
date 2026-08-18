@@ -24,6 +24,7 @@ class FakePanel {
   opacity: number;
   readonly opts: XrPanelProperties;
   readonly children: FakeIcon[] = [];
+  readonly nodes: (FakePanel | FakeText)[] = [];
   constructor(opts: XrPanelProperties) {
     this.opts = opts;
     this.fillColor = opts.fillColor ?? '#000000';
@@ -39,6 +40,14 @@ class FakePanel {
     this.opts.onHoverExit?.(new THREE.Object3D());
   }
 }
+class FakeText {
+  text: string;
+  readonly opts: unknown;
+  constructor(text: string, opts: unknown) {
+    this.text = text;
+    this.opts = opts;
+  }
+}
 class FakeIcon {
   color: XrImageColor;
   readonly name: string;
@@ -49,10 +58,15 @@ class FakeIcon {
       typeof color === 'string' || typeof color === 'number' || color instanceof THREE.Color ? color : '#ffffff';
   }
 }
-const adapter: XrUiAdapter<FakePanel, FakeIcon> = {
+const adapter: XrUiAdapter<FakePanel, FakeIcon, FakeText> = {
   createPanel: (opts) => new FakePanel(opts),
   createImage: (name, opts) => new FakeIcon(name, opts),
+  createText: (text, opts) => new FakeText(text, opts),
   appendImage: (panel, icon) => panel.children.push(icon),
+  appendChild: (panel, child) => panel.nodes.push(child),
+  setText: (text, value) => {
+    text.text = value;
+  },
   setPanelFill: (panel, fill) => {
     panel.fillColor = fill;
   },

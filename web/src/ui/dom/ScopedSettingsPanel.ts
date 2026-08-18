@@ -19,24 +19,18 @@
 
 import type { ScopedOverrideTargetOption } from '../../project/scopedOverrides';
 import type { SettingScope } from '../../settings/generated/settingScopes';
-import type { EngineGuiSurface } from '../../settings/generated/types';
 import {
   GeneratedSettingsPanel,
   type GeneratedSettingsPanelAdapter,
   type GeneratedSettingsPanelOptions,
 } from './GeneratedSettingsPanel';
 
-/**
- * Which upstream tab supplies the controls for a scope.
- *
- * Every model scope reads from the process tab: upstream's `TabPrintModel`
- * reuses the print tab's own pages and simply narrows which options it shows.
- * A plate is the exception — its handful of options are laid out on the plate
- * dialog and appear nowhere else.
- */
-export function guiSurfaceForScope(scope: SettingScope): EngineGuiSurface {
-  return scope === 'plate' ? 'plate' : 'process';
-}
+// One mapping, two shells: the XR stepper surface asks the same question of the
+// same function, so a plate cannot read its controls from one tab here and
+// another there.
+import { guiSurfaceForScope } from '../../settings/editor/scopedStepper';
+
+export { guiSurfaceForScope };
 
 const SCOPE_LABEL: Readonly<Record<SettingScope, string>> = {
   project: 'Project',

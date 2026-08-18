@@ -148,6 +148,8 @@ import { pressureAdvanceLineProgram } from '../project/calibration/lineProgram';
 import { extractMachineEnvelope, wrapInMachineEnvelope } from '../project/calibration/machineEnvelope';
 import { loadCalibrationResource } from '../project/calibration/resources';
 import type { CalibrationFormField, CalibrationFormPreview } from '../project/calibration/form';
+import type { ScopedStepperSurface, ScopedStepperView } from '../settings/editor/scopedStepper';
+import { renderXrScopedSettings, xrScopedSettingsSignature } from '../ui/xr/XrScopedSettings';
 import {
   BRIM_EAR_COLORS,
   BRIM_EAR_DISC_HEIGHT_MM,
@@ -6463,6 +6465,7 @@ export class OrcaWorkspace extends xb.Script {
       // one. The steppers below are that missing half.
       if (group.id === 'calibration') this.addXrCalibrationParameters(root);
       if (group.id === 'scene') this.addXrSceneSteppers(root);
+      if (group.id === 'advanced') this.addXrScopedSettings(root);
     }
   }
 
@@ -6551,6 +6554,71 @@ export class OrcaWorkspace extends xb.Script {
           }),
         );
       }
+    }
+  }
+
+  /**
+   * Scoped overrides in the headset (P6.5).
+   *
+   * P6.5 asks for one draft and one validation across desktop, touch and XR,
+   * and XR was the surface that had nothing: every route into a setting ended
+   * at a text field. `settings_apply_scoped` already appears in this panel as a
+   * row, and — exactly like `calib_configure` — a row cannot supply a *value*.
+   * These steppers are that missing half.
+   *
+   * Nothing about which settings exist is decided here, and nothing about how
+   * they are drawn either. The controller runs the same query the DOM panel
+   * runs and applies through the same adapter; the renderer draws through the
+   * mockable UI adapter, so both halves are asserted without a headset.
+   */
+  private addXrScopedSettings(root: UIPanel): void {
+    const port = this.scopedSettingsPort;
+    const render = renderXrScopedSettings(xrBlocksUiAdapter, root, port ? port.getView() : null, {
+      onCycleTarget: (direction) => port?.cycleTarget(direction),
+      onStep: (fieldId, direction) => port?.step(fieldId, direction),
+    });
+    this.xrScopedValueTexts = render.values;
+    this.xrScopedSignature = render.signature;
+  }
+
+  /** The scoped-settings engine; installed by the shell that owns the catalog. */
+  private scopedSettingsPort: ScopedStepperSurface | null = null;
+  private xrScopedValueTexts: ReadonlyMap<string, { node: UIText; unit: string }> = new Map();
+  private xrScopedSignature = '';
+
+  public setScopedSettingsPort(port: ScopedStepperSurface | null): void {
+    this.scopedSettingsPort = port;
+    this.refreshXrScopedSettings();
+  }
+
+  /** The rows the headset is showing; the automation seam an e2e run drives. */
+  public getScopedSettingsView(): ScopedStepperView | null {
+    return this.scopedSettingsPort?.getView() ?? null;
+  }
+
+  /** One press, addressed the way the rendered row addresses it. */
+  public stepScopedSetting(fieldId: string, direction: 1 | -1): void {
+    this.scopedSettingsPort?.step(fieldId, direction);
+  }
+
+  /**
+   * Bring the open panel up to date after a press or an outside edit.
+   *
+   * A press changes one number, and rebuilding forty rows of spatial panels to
+   * show it costs a visible hitch — so the common case writes the new text into
+   * the row that already exists. The panel is rebuilt only when the *shape*
+   * changed: a different node, a different row set, a message that appeared.
+   */
+  public refreshXrScopedSettings(): void {
+    if (this.openMenuSection !== XR_PANELS_SECTION_ID) return;
+    const view = this.scopedSettingsPort?.getView() ?? null;
+    if (xrScopedSettingsSignature(view) !== this.xrScopedSignature) {
+      this.populateMenuPanel(XR_PANELS_SECTION_ID);
+      return;
+    }
+    for (const row of view?.rows ?? []) {
+      const bound = this.xrScopedValueTexts.get(row.fieldId);
+      if (bound) bound.node.setText(`${row.value}${bound.unit}`);
     }
   }
 

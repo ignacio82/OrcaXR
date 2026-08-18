@@ -886,6 +886,77 @@ async function overrideOneObjectSetting(page) {
   console.log('[e2e] scoped object override applied, isolated from the project, and reversible');
 }
 
+/**
+ * The same settings, reached without a keyboard (P6.5).
+ *
+ * The XR shell cannot be driven in this browser — there is no headset — but the
+ * thing that has actually gone wrong before is not the drawing, it is the
+ * wiring: a panel that renders and changes nothing. That part is testable here,
+ * because the controller the headset renders is installed by the same code path
+ * the DOM panel is, in this page, against this project. If it were dead, or if
+ * the pinned schema failed to load over HTTP, this step fails.
+ */
+async function stepOneSettingWithoutAKeyboard(page) {
+  await page.waitForFunction(() => globalThis.window.workspace.getScopedSettingsView()?.status === 'ready', {
+    timeout: 60_000,
+  });
+  const before = await page.evaluate(() => {
+    const workspace = globalThis.window.workspace;
+    const view = workspace.getScopedSettingsView();
+    const row = view.rows.find((entry) => entry.steppable && entry.key === 'sparse_infill_density');
+    return {
+      scope: view.scope,
+      rows: view.rows.length,
+      unavailable: view.unavailable,
+      row,
+      overrides: workspace.getProjectSettingsOverrideSnapshot().overrides,
+      undoCount: workspace.getCanonicalSummary().history.undoCount,
+    };
+  });
+  assert.equal(before.scope, 'project', 'the headset opens on the project, the node every scene has');
+  assert.ok(before.rows > 10, `the headset should offer real settings, got ${before.rows}`);
+  assert.ok(before.row, 'sparse infill density is a bounded percentage, so a controller can reach it');
+  assert.equal(
+    Object.hasOwn(before.overrides, 'sparse_infill_density'),
+    false,
+    'the project has not overridden infill density yet',
+  );
+
+  await page.evaluate((fieldId) => globalThis.window.workspace.stepScopedSetting(fieldId, 1), before.row.fieldId);
+  await page.waitForFunction(
+    ({ undoCount, previous }) => {
+      const workspace = globalThis.window.workspace;
+      const stored = workspace.getProjectSettingsOverrideSnapshot().overrides.sparse_infill_density;
+      const shown = workspace
+        .getScopedSettingsView()
+        .rows.find((entry) => entry.key === 'sparse_infill_density')?.value;
+      return (
+        stored !== undefined &&
+        stored !== previous &&
+        shown === stored &&
+        workspace.getCanonicalSummary().history.undoCount === undoCount + 1
+      );
+    },
+    { timeout: 60_000 },
+    { undoCount: before.undoCount, previous: before.row.value },
+  );
+
+  // One press, one reversible canonical command — the same guarantee a typed
+  // field gets, because it is the same command.
+  await clickMenuAction(page, 'edit_undo');
+  await page.waitForFunction(
+    () =>
+      !Object.hasOwn(
+        globalThis.window.workspace.getProjectSettingsOverrideSnapshot().overrides,
+        'sparse_infill_density',
+      ),
+    { timeout: 30_000 },
+  );
+  console.log(
+    `[e2e] a keyboard-less press changed a project setting and undid it (${before.rows} rows offered, ${before.unavailable} unsupported)`,
+  );
+}
+
 async function clickPanelControl(page, selector) {
   await page.evaluate((target) => {
     const control = globalThis.document.querySelector(target);
@@ -3467,6 +3538,7 @@ try {
   );
 
   await overrideOneObjectSetting(page);
+  await stepOneSettingWithoutAKeyboard(page);
 
   // The responsive PlateManager owns guarded canonical plate operations. Add
   // starts in the existing plate bar; every subsequent operation is driven
