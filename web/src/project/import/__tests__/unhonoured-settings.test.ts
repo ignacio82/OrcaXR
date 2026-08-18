@@ -149,6 +149,24 @@ await test('every warned setting really does change nothing, or the warning has 
     'use_surface still produces identical geometry — remove it from UNHONOURED_SETTINGS once it does not',
   );
   assert.deepEqual(projected.indices, flat.indices);
+
+  // `per_glyph` needs more than one glyph to be able to differ at all: cutting
+  // one character separately is the same as not cutting it separately. A
+  // single-letter fixture would pass against an implementation that works.
+  const whole = buildEmbossedMesh(
+    embossConfiguration({ text: 'AB', font: { ...DEFAULT_EMBOSS_FONT_PROPERTY, perGlyph: false } }),
+    squareFont(),
+  );
+  const split = buildEmbossedMesh(
+    embossConfiguration({ text: 'AB', font: { ...DEFAULT_EMBOSS_FONT_PROPERTY, perGlyph: true } }),
+    squareFont(),
+  );
+  assert.deepEqual(
+    split.positions,
+    whole.positions,
+    'per_glyph still produces one identical mesh — remove it from UNHONOURED_SETTINGS once it does not',
+  );
+  assert.equal(split.triangleCount, whole.triangleCount);
 });
 
 console.log(`\nUnhonoured settings: ${passed} tests passed.`);
