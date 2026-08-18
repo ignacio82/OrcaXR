@@ -116,6 +116,7 @@ export interface ScopedStepperView {
 export interface ScopedStepperSurface {
   getView(): ScopedStepperView;
   cycleTarget(direction: 1 | -1): void;
+  selectTarget(targetId: string): void;
   step(fieldId: string, direction: 1 | -1): void;
 }
 
@@ -182,6 +183,24 @@ export class ScopedSettingsStepper implements ScopedStepperSurface {
    */
   whenIdle(): Promise<void> {
     return this.queue.then(() => undefined);
+  }
+
+  /**
+   * Edit a named node, if the project still has it.
+   *
+   * Used to follow a selection: pointing at a model in a headset is a far
+   * better way to choose what to edit than cycling past every plate and part.
+   * An id the project no longer has is ignored rather than throwing, because a
+   * selection can outlive the node it named — a deleted object should leave the
+   * panel where it was, not break it.
+   */
+  selectTarget(targetId: string): void {
+    if (targetId === this.selectedId) return;
+    if (!this.safeTargets().some((target) => target.id === targetId)) return;
+    this.selectedId = targetId;
+    this.editor = null;
+    this.snapshot = null;
+    this.enqueue(() => this.reload());
   }
 
   /** Move to the next or previous addressable node, wrapping at the ends. */

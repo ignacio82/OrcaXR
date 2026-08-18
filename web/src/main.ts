@@ -3786,6 +3786,16 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
         },
       });
       workspace.setScopedSettingsPort(stepper);
+      // The spatial panel follows what the operator is pointing at. Only on a
+      // *changed* selection: reasserting it on every canonical revision would
+      // drag the panel back off a plate or a part the operator had cycled to.
+      let followedTarget: string | null = null;
+      workspace.subscribeCanonicalState(() => {
+        const target = workspace.scopedOverrideTargetIdForSelection();
+        if (target === followedTarget) return;
+        followedTarget = target;
+        if (target) stepper.selectTarget(target);
+      });
       window.addEventListener('pagehide', () => stepper.dispose(), { once: true });
 
       const settingsPanel = new ScopedSettingsPanel(

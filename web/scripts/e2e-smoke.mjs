@@ -900,6 +900,12 @@ async function stepOneSettingWithoutAKeyboard(page) {
   await page.waitForFunction(() => globalThis.window.workspace.getScopedSettingsView()?.status === 'ready', {
     timeout: 60_000,
   });
+  // Earlier steps left a model selected, and the panel follows a selection, so
+  // the project scope is asked for rather than assumed.
+  await page.evaluate(() => globalThis.window.workspace.selectScopedSettingsTarget('project'));
+  await page.waitForFunction(() => globalThis.window.workspace.getScopedSettingsView()?.scope === 'project', {
+    timeout: 60_000,
+  });
   const before = await page.evaluate(() => {
     const workspace = globalThis.window.workspace;
     const view = workspace.getScopedSettingsView();
@@ -913,7 +919,7 @@ async function stepOneSettingWithoutAKeyboard(page) {
       undoCount: workspace.getCanonicalSummary().history.undoCount,
     };
   });
-  assert.equal(before.scope, 'project', 'the headset opens on the project, the node every scene has');
+  assert.equal(before.scope, 'project');
   assert.ok(before.rows > 10, `the headset should offer real settings, got ${before.rows}`);
   assert.ok(before.row, 'sparse infill density is a bounded percentage, so a controller can reach it');
   assert.equal(
@@ -952,8 +958,39 @@ async function stepOneSettingWithoutAKeyboard(page) {
       ),
     { timeout: 30_000 },
   );
+  // And the panel follows what the operator points at, which is how a spatial
+  // surface chooses a node: cycling past every plate and part is not an answer.
+  // Deselecting first is what makes this a *change* — the panel follows the
+  // selection moving, and deliberately stays where it is when a selection is
+  // merely cleared, since an operator mid-edit did not ask to be sent back to
+  // the project.
+  await clickMenuAction(page, 'edit_deselect_all');
+  await page.waitForFunction(() => globalThis.window.workspace.scopedOverrideTargetIdForSelection() === null, {
+    timeout: 30_000,
+  });
+  assert.equal(
+    await page.evaluate(() => globalThis.window.workspace.getScopedSettingsView().scope),
+    'project',
+    'clearing a selection leaves the panel where it was',
+  );
+  await clickMenuAction(page, 'edit_select_all');
+  await page.waitForFunction(
+    () => {
+      const workspace = globalThis.window.workspace;
+      const target = workspace.scopedOverrideTargetIdForSelection();
+      return target !== null && workspace.getScopedSettingsView()?.scope === 'object';
+    },
+    { timeout: 60_000 },
+  );
+  const followed = await page.evaluate(() => globalThis.window.workspace.getScopedSettingsView());
+  assert.ok(
+    followed.rows.every((row) => row.key !== 'print_sequence'),
+    'an object scope offers no plate-only setting, exactly as the DOM panel narrows',
+  );
+  await clickMenuAction(page, 'edit_deselect_all');
+
   console.log(
-    `[e2e] a keyboard-less press changed a project setting and undid it (${before.rows} rows offered, ${before.unavailable} unsupported)`,
+    `[e2e] a keyboard-less press changed a project setting and undid it, and the panel followed the selection (${before.rows} project rows, ${followed.rows.length} object rows, ${before.unavailable} unsupported)`,
   );
 }
 

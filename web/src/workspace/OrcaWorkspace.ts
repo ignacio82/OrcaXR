@@ -5655,6 +5655,11 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Every node a scoped edit can address, in containment order. */
+  /** The settings target the current selection names, for a panel that follows it. */
+  public scopedOverrideTargetIdForSelection(): string | null {
+    return this.canonicalProject.scopedOverrideTargetIdForSelection();
+  }
+
   public listScopedOverrideTargets(): readonly ScopedOverrideTargetOption[] {
     return this.canonicalProject.listScopedOverrideTargets();
   }
@@ -6594,6 +6599,11 @@ export class OrcaWorkspace extends xb.Script {
   /** The rows the headset is showing; the automation seam an e2e run drives. */
   public getScopedSettingsView(): ScopedStepperView | null {
     return this.scopedSettingsPort?.getView() ?? null;
+  }
+
+  /** Edit a named node, the way selecting a model does; the automation seam. */
+  public selectScopedSettingsTarget(targetId: string): void {
+    this.scopedSettingsPort?.selectTarget(targetId);
   }
 
   /** One press, addressed the way the rendered row addresses it. */

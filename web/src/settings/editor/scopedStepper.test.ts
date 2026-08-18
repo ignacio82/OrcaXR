@@ -229,4 +229,22 @@ await test('a stale guard is refused rather than applied to whatever is current'
   assert.equal(stepper.getView().status, 'error');
 });
 
+await test('a named target is selected directly, and an unknown one is ignored', async () => {
+  const authority = fakeAuthority();
+  const { stepper, errors } = controllerFor(authority);
+  await ready(stepper);
+
+  stepper.selectTarget('part:1');
+  await stepper.whenIdle();
+  await stepper.whenIdle();
+  assert.equal(stepper.getView().scope, 'part');
+
+  // A selection can outlive the node it named. Leaving the panel where it was
+  // beats throwing at a shell that is only reporting what was clicked.
+  stepper.selectTarget('object:deleted');
+  await stepper.whenIdle();
+  assert.equal(stepper.getView().scope, 'part');
+  assert.deepEqual(errors, []);
+});
+
 console.log(`\nScoped settings stepper: ${passed} tests passed.`);

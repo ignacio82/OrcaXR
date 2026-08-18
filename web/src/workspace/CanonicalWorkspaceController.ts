@@ -2014,6 +2014,23 @@ export class CanonicalWorkspaceController {
     return scopedOverrideSnapshot(this.session.project.getSnapshot(), target);
   }
 
+  /**
+   * The settings target the current selection names, if any.
+   *
+   * A spatial shell has no dropdown worth scrolling, so its settings panel
+   * follows what the operator is pointing at. Only an instance answers: a
+   * selected instance names its object, and nothing in the selection model
+   * names a part or a height range, so those stay reachable by cycling rather
+   * than being guessed at from a click.
+   */
+  scopedOverrideTargetIdForSelection(): string | null {
+    this.assertActive();
+    const primary = this.session.selection.getSnapshot().primary;
+    if (primary?.kind !== 'instance') return null;
+    const found = findInstance(this.session.project.getSnapshot().state, primary.id);
+    return found ? `object:${found.object.id}` : null;
+  }
+
   /** Every node a scoped edit can address, in containment order. */
   listScopedOverrideTargets(): readonly ScopedOverrideTargetOption[] {
     this.assertActive();
