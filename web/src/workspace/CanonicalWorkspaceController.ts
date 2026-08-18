@@ -158,6 +158,7 @@ import {
   DuplicateObjectCommand,
   RenameObjectCommand,
   RenameVolumeCommand,
+  SetInstancePrintableCommand,
 } from '../project/objects/commands';
 import { computeCanonicalInstanceBounds, type CanonicalBounds3 } from '../project/objects/bounds';
 import { exportCanonicalInstancesAsBinaryStl } from '../project/objects/stlExport';
@@ -2390,6 +2391,37 @@ export class CanonicalWorkspaceController {
       scope === 'object' ? new DeleteObjectCommand(objectId) : new DeleteInstanceCommand(instanceId),
     );
     return Object.freeze({ scope, instanceId, objectId }) as CanonicalInstanceDeletionSummary;
+  }
+
+  /**
+   * Include or exclude one placement from the print (P2.2).
+   *
+   * The engine honours this itself — the archive carries `printable="0"` and the
+   * slicer skips the instance — so this only has to write the flag and let the
+   * usual guarded command carry it. Each instance is its own history entry
+   * because each is its own decision.
+   */
+  setInstancePrintable(instanceIds: readonly InstanceId[], printable: boolean): number {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    let changed = 0;
+    for (const instanceId of [...new Set(instanceIds)]) {
+      const found = findInstance(state, instanceId);
+      if (!found) throw new Error(`Unknown instance ${instanceId}`);
+      // A no-op command would still land an undo entry that restores the
+      // project it started from.
+      if (found.instance.printable === printable) continue;
+      this.session.execute(new SetInstancePrintableCommand(instanceId, printable));
+      changed += 1;
+    }
+    return changed;
+  }
+
+  /** Whether every named placement is currently included in the print. */
+  areInstancesPrintable(instanceIds: readonly InstanceId[]): boolean {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    return instanceIds.every((instanceId) => findInstance(state, instanceId)?.instance.printable !== false);
   }
 
   /** Delete the primary selected instance; ambiguous/non-instance selection is a no-op. */

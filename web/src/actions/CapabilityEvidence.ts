@@ -26,6 +26,7 @@ export const ACTION_IDS_BY_PARITY_TASK = {
     'delete_models',
     'add_instance',
     'fill_bed_with_instances',
+    'toggle_printable',
   ],
   'P2.3': ['objects_assign_filament'],
   'P2.4': [

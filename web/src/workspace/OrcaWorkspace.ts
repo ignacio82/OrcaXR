@@ -7715,6 +7715,35 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
+  /**
+   * Include or exclude the selection from the print (P2.2, P11.2).
+   *
+   * A toggle rather than two actions, because upstream's menu entry is one
+   * checkbox: the selection's current state decides the direction, and a mixed
+   * selection is made printable rather than being half-flipped.
+   */
+  public toggleSelectedPrintable(): boolean {
+    const instances = this.selectedInstanceIdsForTransform();
+    if (instances.length === 0) {
+      this.setStatus('Select a model before changing whether it prints.');
+      return false;
+    }
+    try {
+      const printable = !this.canonicalProject.areInstancesPrintable(instances);
+      const changed = this.canonicalProject.setInstancePrintable(instances, printable);
+      this.recomputePreflight();
+      this.setStatus(
+        changed === 0
+          ? 'No change: the selection is already in that state.'
+          : `${printable ? 'Included' : 'Excluded'} ${changed} model(s) ${printable ? 'in' : 'from'} the print.`,
+      );
+      return true;
+    } catch (error) {
+      this.setStatus(`Printable toggle failed: ${(error as Error).message}`);
+      return false;
+    }
+  }
+
   /** Centre the selection (or the whole plate) on the printable area. */
   public centerSelectedOnPlate(): boolean {
     let instances = this.selectedInstanceIdsForTransform();

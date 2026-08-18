@@ -437,9 +437,8 @@
       "action": "tool_assembly"
     },
     "MenuFactory::append_menu_item_printable::Printable": {
-      "kind": "absent",
-      "task": "P2.2",
-      "reason": "Printability is a plate-level flag here; per-object printability is not implemented."
+      "kind": "action",
+      "action": "toggle_printable"
     },
     "MenuFactory::append_menu_item_reload_from_disk::Reload from disk": {
       "kind": "adaptation",

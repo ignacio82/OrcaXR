@@ -189,6 +189,9 @@ export class ActionContext {
   boolean(op: BooleanOp): Promise<void> {
     return this.workspace.booleanModels(op);
   }
+  togglePrintable(): boolean {
+    return this.workspace.toggleSelectedPrintable();
+  }
   scaleToFitPrintVolume(): boolean {
     return this.workspace.scaleSelectionToFitPrintVolume();
   }

@@ -176,6 +176,20 @@ export const sceneActions: Action[] = [
     run: (ctx) => ctx.centerOnPlate(),
   },
   {
+    id: 'toggle_printable',
+    context: ['object'],
+    label: 'Printable',
+    icon: 'slice',
+    group: 'scene',
+    disclosure: 'menu',
+    menuSection: 'edit',
+    hint: 'Include or exclude the selected models from the print',
+    isEnabled: (s) => s.hasInstanceSelection,
+    run: (ctx) => {
+      ctx.togglePrintable();
+    },
+  },
+  {
     id: 'scale_to_fit_volume',
     context: ['object'],
     label: 'Scale to build volume',
