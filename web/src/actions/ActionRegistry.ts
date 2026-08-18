@@ -329,7 +329,7 @@ export interface ActionDefinition {
   context?: readonly ContextTarget[];
   /**
    * Canonical Android MCP tool this action drives, when one exists. Several UI
-   * actions may map onto one tool (e.g. the three `add_primitive_*` buttons →
+   * actions may map onto one tool (e.g. the six `add_primitive_*` buttons →
    * `add_primitive`). The parity test asserts every `mcpTool` is a real member
    * of the 163-tool MCP surface, tying the web UI to the canonical catalogue.
    */

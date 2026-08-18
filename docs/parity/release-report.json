@@ -91,8 +91,8 @@
     "why": "P12.6 permits the full-parity claim only after every gate is verified; none of the human gates below has been."
   },
   "evidence": {
-    "rows": 125,
-    "tasksCovered": 91
+    "rows": 126,
+    "tasksCovered": 92
   },
   "integrity": {
     "claimedButUnrecorded": []
@@ -165,18 +165,6 @@
         "owedBy": "P2.1"
       },
       {
-        "item": "MenuFactory::append_submenu_add_generic::Cone",
-        "owedBy": "P5.8"
-      },
-      {
-        "item": "MenuFactory::append_submenu_add_generic::Disc",
-        "owedBy": "P5.8"
-      },
-      {
-        "item": "MenuFactory::append_submenu_add_generic::Torus",
-        "owedBy": "P5.8"
-      },
-      {
         "item": "MenuFactory::create_filament_action_menu::Merge with",
         "owedBy": "P4.5"
       },
@@ -202,8 +190,8 @@
       }
     ],
     "byKind": {
-      "absent": 25,
-      "action": 98,
+      "absent": 22,
+      "action": 101,
       "adaptation": 15,
       "container": 17,
       "panel": 7

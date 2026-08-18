@@ -498,9 +498,8 @@
       "note": "The object menu's Mirror submenu; the three axes are flat entries here."
     },
     "MenuFactory::append_submenu_add_generic::Cone": {
-      "kind": "absent",
-      "task": "P5.8",
-      "reason": "Cone is not among the primitives OrcaXR generates."
+      "kind": "action",
+      "action": "add_primitive_cone"
     },
     "MenuFactory::append_submenu_add_generic::Cube": {
       "kind": "action",
@@ -511,9 +510,8 @@
       "action": "add_primitive_cylinder"
     },
     "MenuFactory::append_submenu_add_generic::Disc": {
-      "kind": "absent",
-      "task": "P5.8",
-      "reason": "Disc is not among the primitives OrcaXR generates."
+      "kind": "action",
+      "action": "add_primitive_disc"
     },
     "MenuFactory::append_submenu_add_generic::Load...": {
       "kind": "action",
@@ -524,9 +522,8 @@
       "action": "add_primitive_sphere"
     },
     "MenuFactory::append_submenu_add_generic::Torus": {
-      "kind": "absent",
-      "task": "P5.8",
-      "reason": "Torus is not among the primitives OrcaXR generates."
+      "kind": "action",
+      "action": "add_primitive_torus"
     },
     "MenuFactory::create_bbl_part_menu::Split": {
       "kind": "container",

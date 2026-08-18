@@ -8,6 +8,7 @@
  * method or feature module. **No feature logic lives here** — this is routing,
  * so the DOM shell and the XR shell invoke identical behaviour.
  */
+import type { PrimitiveKind } from '../project/objects/primitives';
 import type { EmbossRecipePatch } from '../workspace/OrcaWorkspace';
 import type { AssemblyAlignmentKind } from '../project/objects/assembly';
 import type { SimplifyConfiguration } from '../project/objects/simplify';
@@ -188,7 +189,7 @@ export class ActionContext {
   boolean(op: BooleanOp): Promise<void> {
     return this.workspace.booleanModels(op);
   }
-  addPrimitive(kind: 'cube' | 'cylinder' | 'sphere'): void {
+  addPrimitive(kind: PrimitiveKind): void {
     this.workspace.addPrimitive(kind);
   }
   setExplosionFactor(factor: number): boolean {

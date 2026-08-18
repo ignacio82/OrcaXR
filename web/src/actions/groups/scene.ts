@@ -2,6 +2,7 @@
  * Scene group — model import, the modal transform tools, and mesh operations.
  * Every handler routes through {@link ActionContext}; no logic lives here.
  */
+import { PRIMITIVE_DESCRIPTIONS } from '../../project/objects/primitives';
 import { SIMPLIFY_DEFAULT_DECIMATE_RATIO, SIMPLIFY_DEFAULT_MAX_ERROR } from '../../project/objects/simplify';
 import type { ActionDefinition as Action } from '../ActionRegistry';
 
@@ -219,7 +220,7 @@ export const sceneActions: Action[] = [
     group: 'scene',
     disclosure: 'menu',
     menuSection: 'add',
-    hint: 'Add a 20 mm cube',
+    hint: PRIMITIVE_DESCRIPTIONS.cube,
     run: (ctx) => ctx.addPrimitive('cube'),
   },
   {
@@ -231,7 +232,7 @@ export const sceneActions: Action[] = [
     group: 'scene',
     disclosure: 'menu',
     menuSection: 'add',
-    hint: 'Add a 20 mm cylinder',
+    hint: PRIMITIVE_DESCRIPTIONS.cylinder,
     run: (ctx) => ctx.addPrimitive('cylinder'),
   },
   {
@@ -243,8 +244,44 @@ export const sceneActions: Action[] = [
     group: 'scene',
     disclosure: 'menu',
     menuSection: 'add',
-    hint: 'Add a 20 mm sphere',
+    hint: PRIMITIVE_DESCRIPTIONS.sphere,
     run: (ctx) => ctx.addPrimitive('sphere'),
+  },
+  {
+    id: 'add_primitive_cone',
+    context: ['plate'],
+    mcpTool: 'add_primitive',
+    label: 'Cone',
+    icon: 'cylinder',
+    group: 'scene',
+    disclosure: 'menu',
+    menuSection: 'add',
+    hint: PRIMITIVE_DESCRIPTIONS.cone,
+    run: (ctx) => ctx.addPrimitive('cone'),
+  },
+  {
+    id: 'add_primitive_disc',
+    context: ['plate'],
+    mcpTool: 'add_primitive',
+    label: 'Disc',
+    icon: 'cylinder',
+    group: 'scene',
+    disclosure: 'menu',
+    menuSection: 'add',
+    hint: PRIMITIVE_DESCRIPTIONS.disc,
+    run: (ctx) => ctx.addPrimitive('disc'),
+  },
+  {
+    id: 'add_primitive_torus',
+    context: ['plate'],
+    mcpTool: 'add_primitive',
+    label: 'Torus',
+    icon: 'cylinder',
+    group: 'scene',
+    disclosure: 'menu',
+    menuSection: 'add',
+    hint: PRIMITIVE_DESCRIPTIONS.torus,
+    run: (ctx) => ctx.addPrimitive('torus'),
   },
   {
     id: 'add_calibration_tower',

@@ -150,6 +150,7 @@ import { loadCalibrationResource } from '../project/calibration/resources';
 import type { CalibrationFormField, CalibrationFormPreview } from '../project/calibration/form';
 import type { ScopedStepperSurface, ScopedStepperView } from '../settings/editor/scopedStepper';
 import { renderXrScopedSettings, xrScopedSettingsSignature } from '../ui/xr/XrScopedSettings';
+import { primitiveFileName, primitiveGeometry, type PrimitiveKind } from '../project/objects/primitives';
 import {
   BRIM_EAR_COLORS,
   BRIM_EAR_DISC_HEIGHT_MM,
@@ -4957,21 +4958,14 @@ export class OrcaWorkspace extends xb.Script {
     if (!options.deferPostAdd) this.setStatus(`Loaded ${name}.`);
   }
 
-  /** Drop a stock primitive on the bed (20 mm, printer-frame Z-up). */
-  public addPrimitive(kind: 'cube' | 'cylinder' | 'sphere') {
-    let geo: THREE.BufferGeometry;
-    switch (kind) {
-      case 'cylinder':
-        geo = new THREE.CylinderGeometry(10, 10, 20, 48);
-        geo.rotateX(Math.PI / 2); // axis Y → printer Z
-        break;
-      case 'sphere':
-        geo = new THREE.SphereGeometry(10, 48, 32);
-        break;
-      default:
-        geo = new THREE.BoxGeometry(20, 20, 20);
-    }
-    this.loadModelFromGeometry(geo.toNonIndexed(), `${kind}.stl`);
+  /**
+   * Drop a stock primitive on the bed (printer-frame Z-up).
+   *
+   * The shapes live in `project/objects/primitives.ts` so their dimensions can
+   * be measured without a browser; this only places what that module built.
+   */
+  public addPrimitive(kind: PrimitiveKind) {
+    this.loadModelFromGeometry(primitiveGeometry(kind), primitiveFileName(kind));
     this.setStatus(`Added ${kind}.`);
   }
 
