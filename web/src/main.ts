@@ -3038,7 +3038,21 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
           }
           return { document: document_, title: 'Sliced G-code' };
         },
-        subscribe: (listener) => workspace.subscribeCanonicalState(listener),
+        // Both signals, because they are genuinely different things and the
+        // panel needs each. Canonical state changes when the project does;
+        // `gcodeReady` changes when a slice produces or invalidates a program,
+        // which is the only event that makes a listing appear or go stale.
+        // Subscribing to the canonical one alone left the window permanently
+        // empty — caught by the browser check rather than by the unit traces,
+        // which supply their own document.
+        subscribe: (listener) => {
+          const stopCanonical = workspace.subscribeCanonicalState(listener);
+          const stopUi = uiState.subscribe(listener);
+          return () => {
+            stopCanonical();
+            stopUi();
+          };
+        },
         onError: (error) => {
           statusText.textContent = `G-code: ${error instanceof Error ? error.message : String(error)}`;
         },

@@ -337,6 +337,68 @@ async function surviveEveryViewport(page) {
 }
 
 /**
+ * The G-code window, in a browser that has a real viewport (P11.2).
+ *
+ * Its virtualization is unit-tested against jsdom, which reports a zero client
+ * height — so what those traces prove is that the overscan is bounded, not that
+ * the viewport arithmetic works. This is the part only a real browser can
+ * answer: that a program of thousands of lines puts a handful of rows on the
+ * page, that scrolling changes which ones, and that the count beside them is
+ * still the whole program.
+ */
+async function readTheProgramInABrowser(page, artifact) {
+  // The listing lives in the Preview inspector tab beside the G-code preview,
+  // inside a section an operator opens. A panel in a hidden tab or a closed
+  // `<details>` has no height, so the window has nothing to measure against
+  // until both are open — which is exactly the state a real reader is in.
+  await page.evaluate(() => {
+    const sidebar = globalThis.document.querySelector('#right-sidebar');
+    sidebar?.classList.remove('collapsed');
+    const tab = globalThis.document.querySelector('#insp-tab-preview');
+    if (tab instanceof globalThis.HTMLElement) tab.click();
+    const host = globalThis.document.querySelector('#gcode-panel-host');
+    const section = host?.closest('details');
+    if (section) section.open = true;
+  });
+  await page.waitForSelector('#gcode-panel-host [data-gcode-scroller]', { timeout: 30_000 });
+
+  const initial = await page.$$eval('#gcode-panel-host [data-gcode-line]', (rows) =>
+    rows.map((row) => Number(row.dataset.gcodeLine)),
+  );
+  assert.ok(initial.length > 0, 'the window renders rows once a program exists');
+  assert.ok(
+    initial.length < 400,
+    `a program of ${artifact.byteLength} bytes must not put every line on the page (${initial.length} rows)`,
+  );
+  assert.equal(initial[0], 1, 'and it starts at the first line');
+
+  // The count is of the program, not of what is rendered — the distinction the
+  // whole window is built around.
+  const status = await page.$eval('#gcode-panel-host [data-gcode-status]', (node) => node.textContent ?? '');
+  const reported = Number(/^([\d,]+) lines/.exec(status)?.[1].replace(/,/g, '') ?? '0');
+  assert.ok(reported > initial.length * 4, `the status reports the whole program (${reported} lines)`);
+
+  const geometry = await page.$eval('#gcode-panel-host [data-gcode-scroller]', (node) => {
+    node.scrollTop = Math.floor(node.scrollHeight / 2);
+    node.dispatchEvent(new Event('scroll'));
+    return {
+      scrollHeight: node.scrollHeight,
+      clientHeight: node.clientHeight,
+      scrollTop: node.scrollTop,
+      offsetParent: node.offsetParent !== null,
+    };
+  });
+  assert.ok(geometry.scrollTop > 0, `the listing must be scrollable to be readable (${JSON.stringify(geometry)})`);
+  const scrolled = await page.$$eval('#gcode-panel-host [data-gcode-line]', (rows) =>
+    rows.map((row) => Number(row.dataset.gcodeLine)),
+  );
+  assert.ok(scrolled[0] > initial[0], 'scrolling moves the window rather than re-rendering the same rows');
+  assert.ok(scrolled.length < 400, 'and the window stays bounded wherever it is');
+
+  console.log('[e2e] sliced program read in a windowed viewer that never renders the whole file');
+}
+
+/**
  * Two View gaps that used to render as UNAVAILABLE (P11.2).
  *
  * Both are scene changes rather than panel changes, so this asserts the
@@ -1211,6 +1273,7 @@ async function sliceAndSendActivePlate(page, printer) {
       pauseBody: /^;PAUSE_PRINT\n(.+)$/m.exec(gcode)?.[1] ?? '',
     };
   });
+  await readTheProgramInABrowser(page, artifact);
   assert.deepEqual(artifact.tools, [0, 1], 'the assigned second filament reaches the G-code as a second tool');
   assert.ok(artifact.colours.length >= 2 && artifact.types.length >= 2, 'the artifact declares its filaments');
   assert.equal(artifact.pauses, 1, 'the authored pause reaches the engine and appears once in the G-code');
