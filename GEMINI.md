@@ -204,6 +204,20 @@ engine (`libslic3r` via WASM) as the computational core.
   committed inventory's schema, pinned commit, and per-source blob hashes. Both
   print that upstream re-derivation was skipped; `--write`/sync still requires
   the checkout. Never make a gate silently pass when the checkout is missing.
+  **The same rule binds tests, not just the generator gates.** Three calibration
+  traces once hard-threw on the missing tree and so failed every CI run; the fix
+  is not to skip them but to give them a committed artifact to check against.
+  The calibration inventory therefore records each workflow's documentation
+  target with its blob at the pinned commit (`documentation[]`), and `docs.ts`
+  reads that instead of keeping a second hand-maintained table — a Git blob id
+  can only have come from resolving the path in that tree, so the link check
+  stays real without the clone. Shipped resources are held to upstream the same
+  way: the bytes are hashed to a Git blob id and compared to the recorded one.
+  Where the clone *is* present, read blobs at the pinned commit
+  (`git rev-parse <commit>:<path>`, `git show <commit>:<path>`), never off the
+  worktree — a checkout left on another branch must not be able to make a
+  provenance check pass. Traces that could not reach upstream say so on the
+  result line rather than printing a bare tick.
 - The browser engine must link with `-sDYNAMIC_EXECUTION=0`: embind otherwise
   builds its invokers with `new Function`, which the app's CSP (`script-src
   'self' 'wasm-unsafe-eval'`) refuses, so every in-browser slice fails while

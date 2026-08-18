@@ -128,6 +128,18 @@ export interface CalibrationWorkflow {
   readonly notes: readonly string[];
 }
 
+/**
+ * The upstream guide a workflow is documented by, resolved to a Git blob at the
+ * pinned commit. The blob is what makes the link checkable without the upstream
+ * clone: it could only have been produced by resolving the path in that tree,
+ * so a build with no checkout still verifies the target it links to existed.
+ */
+export interface CalibrationDocumentationTarget {
+  readonly workflowId: CalibrationWorkflowId;
+  readonly path: string;
+  readonly blob: string;
+}
+
 export interface CalibrationInventory {
   readonly schemaVersion: 1;
   readonly upstream: {
@@ -151,6 +163,7 @@ export interface CalibrationInventory {
     readonly description: string;
   }[];
   readonly workflows: readonly CalibrationWorkflow[];
+  readonly documentation: readonly CalibrationDocumentationTarget[];
   readonly deviceAutomation: {
     readonly orcaxrPolicy: 'manual-only';
     readonly supportedTransport: 'moonraker';
@@ -630,6 +643,7 @@ export function parseCalibrationInventory(input: unknown): CalibrationInventory 
     'sources',
     'effectCategories',
     'workflows',
+    'documentation',
     'deviceAutomation',
     'localImplementation',
   ]);
@@ -721,6 +735,21 @@ export function parseCalibrationInventory(input: unknown): CalibrationInventory 
       fail('$.workflows', `unexpected workflow coverage for ${mode}`);
     }
   }
+
+  const documentation = array(root.documentation, '$.documentation');
+  if (documentation.length !== CALIBRATION_WORKFLOW_IDS.length) {
+    fail('$.documentation', 'every workflow must name exactly one documentation target');
+  }
+  documentation.forEach((value, index) => {
+    const targetPath = `$.documentation[${index}]`;
+    const target = record(value, targetPath, ['workflowId', 'blob', 'path']);
+    literal(target.workflowId, CALIBRATION_WORKFLOW_IDS[index], `${targetPath}.workflowId`);
+    const documentPath = string(target.path, `${targetPath}.path`);
+    if (!/^doc\/calibration\/[a-z0-9-]+\.md$/.test(documentPath)) {
+      fail(`${targetPath}.path`, 'expected an upstream calibration guide under doc/calibration/');
+    }
+    gitBlob(target.blob, `${targetPath}.blob`);
+  });
 
   validateDeviceAutomation(root.deviceAutomation, '$.deviceAutomation');
   validateLocalImplementation(root.localImplementation, '$.localImplementation');

@@ -15,17 +15,22 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { CalibrationResourceError, calibrationResourceFile, gitBlobId, loadCalibrationResource } from './resources';
-import { calibrationInventory } from '../../features/calibrationInventory';
+import { calibrationInventory, PINNED_CALIBRATION_COMMIT } from '../../features/calibrationInventory';
 
 let passed = 0;
-async function test(name: string, run: () => Promise<void> | void): Promise<void> {
-  await run();
+/**
+ * A trace may return a note, which is printed on the result line, so a run that
+ * could not reach upstream never reads as one that did.
+ */
+async function test(name: string, run: () => Promise<void | string> | void | string): Promise<void> {
+  const note = await run();
   passed += 1;
-  console.log(`  ✓ ${name}`);
+  console.log(`  ✓ ${name}${note ? ` — ${note}` : ''}`);
 }
 
 const PUBLIC = resolve(import.meta.dirname, '../../../public/calibration');
 const PINNED_TREE = resolve(import.meta.dirname, '../../../../third_party/SnapmakerOrca');
+const hasPinnedTree = existsSync(resolve(PINNED_TREE, '.git'));
 
 /** Serve the shipped copies from disk, standing in for the network. */
 const fromDisk: typeof fetch = (async (input: RequestInfo | URL) => {
@@ -58,14 +63,28 @@ await test('every shipped resource is the audited bytes', async () => {
   }
 });
 
-await test('the shipped copy is byte-identical to the pinned tree', async () => {
-  if (!existsSync(PINNED_TREE)) {
-    throw new Error('The pinned tree is not checked out, so the shipped copies cannot be compared to their source.');
-  }
+await test('the shipped copy hashes to the blob the inventory audited', async () => {
+  // This is the comparison to upstream that survives having no clone. A Git
+  // blob id is the content, so a shipped file that hashes to the recorded blob
+  // *is* the upstream bytes — and the recorded blob is held to the pinned
+  // commit by `features/__tests__/calibration-resources.test.ts`. Together the
+  // two make "was copied, not regenerated" checkable everywhere.
   for (const resource of shipped) {
     const copy = await readFile(resolve(PUBLIC, calibrationResourceFile(resource.path)));
-    const upstream = await readFile(resolve(PINNED_TREE, resource.path));
-    assert.deepEqual(copy, upstream, `${resource.path} was copied, not regenerated`);
+    assert.equal(await gitBlobId(copy), resource.blob, `${resource.path} was copied, not regenerated`);
+  }
+});
+
+await test('and is byte-identical to the pinned commit itself where it can be read', async () => {
+  if (!hasPinnedTree) return 'not compared: no pinned checkout';
+  for (const resource of shipped) {
+    const copy = await readFile(resolve(PUBLIC, calibrationResourceFile(resource.path)));
+    // `git show` at the pin rather than the worktree file: the point is what
+    // upstream published at that commit, not what this clone happens to hold.
+    const upstream = execFileSync('git', ['-C', PINNED_TREE, 'show', `${PINNED_CALIBRATION_COMMIT}:${resource.path}`], {
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    assert.deepEqual(copy, upstream, `${resource.path} matches the pinned commit`);
   }
 });
 
@@ -90,4 +109,7 @@ await test('a resource that was never shipped says so, rather than yielding noth
   );
 });
 
-console.log(`\nCalibration resources loading: ${passed} tests passed (${shipped.length} shipped).`);
+console.log(
+  `\nCalibration resources loading: ${passed} tests passed (${shipped.length} shipped` +
+    `${hasPinnedTree ? ', compared to the pinned commit' : ', upstream byte comparison skipped'}).`,
+);

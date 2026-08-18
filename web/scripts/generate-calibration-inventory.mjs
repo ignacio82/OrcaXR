@@ -1211,6 +1211,45 @@ assertEqual(
   'documented non-enum extensions',
 );
 
+/**
+ * Where each workflow is documented upstream (P8.3).
+ *
+ * The mapping is editorial — upstream does not link a guide from the menu — so
+ * it is authored here and then *proved*: every path is resolved to a Git blob
+ * at the pinned commit, which fails outright if the file is not there. Emitting
+ * the result into the inventory is what lets a checkout without the upstream
+ * clone verify the same links, because a blob id could only have come from the
+ * tree.
+ */
+const documentationSpecs = [
+  { workflowId: 'temperature-tower', file: 'temp-calib.md' },
+  { workflowId: 'flow-pass-1', file: 'flow-rate-calib.md' },
+  { workflowId: 'flow-pass-2', file: 'flow-rate-calib.md' },
+  { workflowId: 'flow-yolo', file: 'flow-rate-calib.md' },
+  { workflowId: 'flow-yolo-perfectionist', file: 'flow-rate-calib.md' },
+  { workflowId: 'pressure-advance-tower', file: 'pressure-advance-calib.md' },
+  { workflowId: 'pressure-advance-line', file: 'pressure-advance-calib.md' },
+  { workflowId: 'pressure-advance-pattern', file: 'adaptive-pressure-advance-calib.md' },
+  { workflowId: 'retraction-tower', file: 'retraction-calib.md' },
+  { workflowId: 'max-volumetric-speed', file: 'volumetric-speed-calib.md' },
+  { workflowId: 'junction-deviation', file: 'cornering-calib.md' },
+  { workflowId: 'input-shaping-frequency', file: 'input-shaping-calib.md' },
+  { workflowId: 'input-shaping-damping', file: 'input-shaping-calib.md' },
+  { workflowId: 'vfa', file: 'vfa-calib.md' },
+  { workflowId: 'tolerance-extension', file: 'tolerance-calib.md' },
+];
+
+assertEqual(
+  documentationSpecs.map((spec) => spec.workflowId).sort(),
+  workflows.map((workflow) => workflow.id).sort(),
+  'documented workflow coverage',
+);
+
+const documentation = documentationSpecs.map((spec) => {
+  const path = `doc/calibration/${spec.file}`;
+  return { workflowId: spec.workflowId, path, blob: pinnedBlob(path) };
+});
+
 const mappedModeCounts = Object.fromEntries(expectedModes.map((mode) => [mode, 0]));
 for (const workflow of workflows) {
   if (workflow.enumMode !== null) mappedModeCounts[workflow.enumMode]++;
@@ -1266,6 +1305,7 @@ const catalog = {
     },
   ],
   workflows,
+  documentation,
   deviceAutomation: {
     orcaxrPolicy: 'manual-only',
     supportedTransport: 'moonraker',
@@ -1364,6 +1404,29 @@ function verifyCommittedInventory() {
   for (const source of parsed?.sources ?? []) {
     if (!/^[0-9a-f]{40}$/.test(source?.blob ?? '')) problems.push(`source ${source?.id} has no pinned blob hash`);
   }
+  // The blobs below are what a checkout without the upstream clone verifies
+  // against: the shipped calibration geometry is hashed on load and compared to
+  // `resources[].blob`, and the documentation links are compared to
+  // `documentation[].path`. A Git blob id could only have been produced from
+  // the pinned tree, so a malformed one means the artifact was not generated.
+  for (const workflow of parsed?.workflows ?? []) {
+    for (const resource of workflow?.resources ?? []) {
+      if (!/^[0-9a-f]{40}$/.test(resource?.blob ?? '')) {
+        problems.push(`resource ${resource?.path} of ${workflow?.id} has no pinned blob hash`);
+      }
+    }
+  }
+  if (!Array.isArray(parsed?.documentation) || parsed.documentation.length === 0) {
+    problems.push('no documentation targets are recorded');
+  }
+  for (const entry of parsed?.documentation ?? []) {
+    if (!/^[0-9a-f]{40}$/.test(entry?.blob ?? '')) {
+      problems.push(`documentation target ${entry?.path} has no pinned blob hash`);
+    }
+    if (!/^doc\/calibration\/[a-z0-9-]+\.md$/.test(entry?.path ?? '')) {
+      problems.push(`documentation target ${entry?.path} is not an upstream calibration guide`);
+    }
+  }
   if (problems.length > 0) {
     console.error(
       `Committed calibration inventory failed verification:\n${problems.map((line) => `  ${line}`).join('\n')}`,
@@ -1372,7 +1435,8 @@ function verifyCommittedInventory() {
     return;
   }
   console.log(
-    `Calibration inventory: ${parsed.workflows.length} workflows and ${parsed.modes.length} modes recorded at ${PINNED_COMMIT} ` +
+    `Calibration inventory: ${parsed.workflows.length} workflows, ${parsed.modes.length} modes and ` +
+      `${parsed.documentation.length} documentation targets recorded at ${PINNED_COMMIT} ` +
       '(upstream re-derivation skipped: no pinned checkout).',
   );
 }

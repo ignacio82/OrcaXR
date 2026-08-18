@@ -2180,6 +2180,83 @@
       ]
     }
   ],
+  "documentation": [
+    {
+      "workflowId": "temperature-tower",
+      "path": "doc/calibration/temp-calib.md",
+      "blob": "acdece9a97b076f3f2edd9a53709b9b6479d6eb5"
+    },
+    {
+      "workflowId": "flow-pass-1",
+      "path": "doc/calibration/flow-rate-calib.md",
+      "blob": "21fd73d93ab974eed6377d1b336a340a80c5bddd"
+    },
+    {
+      "workflowId": "flow-pass-2",
+      "path": "doc/calibration/flow-rate-calib.md",
+      "blob": "21fd73d93ab974eed6377d1b336a340a80c5bddd"
+    },
+    {
+      "workflowId": "flow-yolo",
+      "path": "doc/calibration/flow-rate-calib.md",
+      "blob": "21fd73d93ab974eed6377d1b336a340a80c5bddd"
+    },
+    {
+      "workflowId": "flow-yolo-perfectionist",
+      "path": "doc/calibration/flow-rate-calib.md",
+      "blob": "21fd73d93ab974eed6377d1b336a340a80c5bddd"
+    },
+    {
+      "workflowId": "pressure-advance-tower",
+      "path": "doc/calibration/pressure-advance-calib.md",
+      "blob": "d34ebf135cfbf342536a9c706366f885ff407bf1"
+    },
+    {
+      "workflowId": "pressure-advance-line",
+      "path": "doc/calibration/pressure-advance-calib.md",
+      "blob": "d34ebf135cfbf342536a9c706366f885ff407bf1"
+    },
+    {
+      "workflowId": "pressure-advance-pattern",
+      "path": "doc/calibration/adaptive-pressure-advance-calib.md",
+      "blob": "a6ed751626b35e451c07b0cb54635a7086cc8593"
+    },
+    {
+      "workflowId": "retraction-tower",
+      "path": "doc/calibration/retraction-calib.md",
+      "blob": "61872dc223195064ca9275ef13f2483b1074ffcb"
+    },
+    {
+      "workflowId": "max-volumetric-speed",
+      "path": "doc/calibration/volumetric-speed-calib.md",
+      "blob": "872a068aa3d5e95931d0925e93d16076ca2315b6"
+    },
+    {
+      "workflowId": "junction-deviation",
+      "path": "doc/calibration/cornering-calib.md",
+      "blob": "4ce4a1b2dddaf0c36ae89737ce95e92a55f54cac"
+    },
+    {
+      "workflowId": "input-shaping-frequency",
+      "path": "doc/calibration/input-shaping-calib.md",
+      "blob": "fd0dfcc0b16c3d5a33af9095937588189948778c"
+    },
+    {
+      "workflowId": "input-shaping-damping",
+      "path": "doc/calibration/input-shaping-calib.md",
+      "blob": "fd0dfcc0b16c3d5a33af9095937588189948778c"
+    },
+    {
+      "workflowId": "vfa",
+      "path": "doc/calibration/vfa-calib.md",
+      "blob": "0a064cd13c32c1f83be08a4ddebc6d668b835a78"
+    },
+    {
+      "workflowId": "tolerance-extension",
+      "path": "doc/calibration/tolerance-calib.md",
+      "blob": "23f948de474e6c156215e4aeb04cdf26534342de"
+    }
+  ],
   "deviceAutomation": {
     "orcaxrPolicy": "manual-only",
     "supportedTransport": "moonraker",
