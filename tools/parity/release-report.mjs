@@ -33,6 +33,12 @@ import {
 } from "./source.mjs";
 
 const PLAN_PATH = resolve(REPOSITORY_ROOT, "docs", "parity.md");
+const SURFACE_MAP_PATH = resolve(
+  REPOSITORY_ROOT,
+  "tools",
+  "parity",
+  "surface-map.json",
+);
 export const REPORT_PATH = resolve(
   REPOSITORY_ROOT,
   "docs",
@@ -149,6 +155,34 @@ export function findUnrecordedClaims(log, recordedIds) {
   return [...claimed].filter((id) => !recorded.has(id)).sort();
 }
 
+/**
+ * How each upstream menu item is answered here (P11.2).
+ *
+ * Counted rather than listed, because the list is 162 rows and the reviewer's
+ * question is smaller: how much of the upstream surface is reached, how much is
+ * deliberately different, and how much is simply missing. The distinction
+ * between the last two is the one that matters — an adaptation says the item
+ * will not arrive, an absence says it has not arrived yet — so they are never
+ * summed together.
+ */
+function surfaceClassification() {
+  if (!existsSync(SURFACE_MAP_PATH)) return null;
+  const map = JSON.parse(readFileSync(SURFACE_MAP_PATH, "utf8"));
+  const byKind = {};
+  for (const entry of Object.values(map.mappings)) {
+    byKind[entry.kind] = (byKind[entry.kind] ?? 0) + 1;
+  }
+  return {
+    family: map.family,
+    items: Object.keys(map.mappings).length,
+    byKind,
+    absent: Object.entries(map.mappings)
+      .filter(([, entry]) => entry.kind === "absent")
+      .map(([key, entry]) => ({ item: key, owedBy: entry.task }))
+      .sort((left, right) => left.item.localeCompare(right.item, "en")),
+  };
+}
+
 export function buildReleaseReport() {
   const plan = readFileSync(PLAN_PATH, "utf8");
   const tasks = readTasks(plan);
@@ -202,6 +236,7 @@ export function buildReleaseReport() {
       completeWithoutEvidence,
     },
     integrity: { claimedButUnrecorded },
+    surfaces: surfaceClassification(),
     evidence: { rows: evidence.length, tasksCovered: covered.size },
     upstream: {
       repository: UPSTREAM_REPOSITORY,

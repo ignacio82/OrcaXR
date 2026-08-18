@@ -91,13 +91,126 @@
     "why": "P12.6 permits the full-parity claim only after every gate is verified; none of the human gates below has been."
   },
   "evidence": {
-    "rows": 124,
-    "tasksCovered": 90
+    "rows": 125,
+    "tasksCovered": 91
   },
   "integrity": {
     "claimedButUnrecorded": []
   },
   "schemaVersion": 1,
+  "surfaces": {
+    "absent": [
+      {
+        "item": "AuxiliaryList::on_context_menu::Delete",
+        "owedBy": "P1.3"
+      },
+      {
+        "item": "AuxiliaryList::on_context_menu::Import File",
+        "owedBy": "P1.3"
+      },
+      {
+        "item": "AuxiliaryList::on_context_menu::New Folder",
+        "owedBy": "P1.3"
+      },
+      {
+        "item": "AuxiliaryList::on_context_menu::Open",
+        "owedBy": "P1.3"
+      },
+      {
+        "item": "AuxiliaryList::on_context_menu::Rename",
+        "owedBy": "P1.3"
+      },
+      {
+        "item": "MainFrame::init_menubar_as_editor::Export all objects as STLs",
+        "owedBy": "P5.7"
+      },
+      {
+        "item": "MainFrame::init_menubar_as_editor::Input Shaping Damping/zeta factor",
+        "owedBy": "P8.1"
+      },
+      {
+        "item": "MainFrame::init_menubar_as_editor::Input Shaping Frequency",
+        "owedBy": "P8.1"
+      },
+      {
+        "item": "MainFrame::init_menubar_as_editor::Junction Deviation",
+        "owedBy": "P8.1"
+      },
+      {
+        "item": "MainFrame::init_menubar_as_editor::YOLO (perfectionist version)",
+        "owedBy": "P8.3"
+      },
+      {
+        "item": "MainFrame::on_sys_color_changed::Check for Process Preset Updates",
+        "owedBy": "P6.3"
+      },
+      {
+        "item": "MenuFactory::append_menu_item_export_stl::Export as STLs",
+        "owedBy": "P5.7"
+      },
+      {
+        "item": "MenuFactory::append_menu_item_instance_to_object::Set as an individual object",
+        "owedBy": "P2.2"
+      },
+      {
+        "item": "MenuFactory::append_menu_item_printable::Printable",
+        "owedBy": "P2.2"
+      },
+      {
+        "item": "MenuFactory::append_menu_item_scale_selection_to_fit_print_volume::Scale to build volume",
+        "owedBy": "P5.1"
+      },
+      {
+        "item": "MenuFactory::append_menu_item_set_visible::Hide",
+        "owedBy": "P2.1"
+      },
+      {
+        "item": "MenuFactory::append_submenu_add_generic::Cone",
+        "owedBy": "P5.8"
+      },
+      {
+        "item": "MenuFactory::append_submenu_add_generic::Disc",
+        "owedBy": "P5.8"
+      },
+      {
+        "item": "MenuFactory::append_submenu_add_generic::Torus",
+        "owedBy": "P5.8"
+      },
+      {
+        "item": "MenuFactory::create_filament_action_menu::Merge with",
+        "owedBy": "P4.5"
+      },
+      {
+        "item": "MenuFactory::create_sla_object_menu::Auto orientation",
+        "owedBy": "P0.1"
+      },
+      {
+        "item": "MenuFactory::create_sla_object_menu::Split",
+        "owedBy": "P0.1"
+      },
+      {
+        "item": "runtime::Merge with mixed filament target",
+        "owedBy": "P4.5"
+      },
+      {
+        "item": "runtime::Merge with physical filament target",
+        "owedBy": "P4.5"
+      },
+      {
+        "item": "runtime::Open recent project entry",
+        "owedBy": "P11.1"
+      }
+    ],
+    "byKind": {
+      "absent": 25,
+      "action": 98,
+      "adaptation": 15,
+      "container": 17,
+      "panel": 7
+    },
+    "family": "menuActions",
+    "items": 162
+  },
   "tasks": {
     "byState": {
       "unstarted": 5,

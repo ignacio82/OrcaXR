@@ -1,0 +1,695 @@
+{
+  "schemaVersion": 1,
+  "family": "menuActions",
+  "upstreamCommit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+  "mappings": {
+    "<global>::New Window": {
+      "kind": "adaptation",
+      "adaptation": "ADAPT-06",
+      "reason": "A browser tab is the window; the app opens no second one of its own."
+    },
+    "AuxiliaryList::on_context_menu::Delete": {
+      "kind": "absent",
+      "task": "P1.3",
+      "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+    },
+    "AuxiliaryList::on_context_menu::Import File": {
+      "kind": "absent",
+      "task": "P1.3",
+      "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+    },
+    "AuxiliaryList::on_context_menu::New Folder": {
+      "kind": "absent",
+      "task": "P1.3",
+      "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+    },
+    "AuxiliaryList::on_context_menu::Open": {
+      "kind": "absent",
+      "task": "P1.3",
+      "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+    },
+    "AuxiliaryList::on_context_menu::Rename": {
+      "kind": "absent",
+      "task": "P1.3",
+      "reason": "OrcaXR has no auxiliary-file browser; a project's `Auxiliaries/` entries survive a round trip but cannot be edited."
+    },
+    "MainFrame::init_menubar_as_editor::Auto Perspective": {
+      "kind": "action",
+      "action": "view_auto_perspective"
+    },
+    "MainFrame::init_menubar_as_editor::Clone selected": {
+      "kind": "action",
+      "action": "edit_duplicate"
+    },
+    "MainFrame::init_menubar_as_editor::Copy": {
+      "kind": "action",
+      "action": "edit_copy"
+    },
+    "MainFrame::init_menubar_as_editor::Cornering": {
+      "kind": "container",
+      "note": "Calibration submenu heading for the junction-deviation flows."
+    },
+    "MainFrame::init_menubar_as_editor::Cut": {
+      "kind": "action",
+      "action": "edit_cut"
+    },
+    "MainFrame::init_menubar_as_editor::Delete all": {
+      "kind": "action",
+      "action": "edit_delete_all"
+    },
+    "MainFrame::init_menubar_as_editor::Delete selected": {
+      "kind": "action",
+      "action": "edit_delete_selected"
+    },
+    "MainFrame::init_menubar_as_editor::Deselect all": {
+      "kind": "action",
+      "action": "edit_deselect_all"
+    },
+    "MainFrame::init_menubar_as_editor::Duplicate Current Plate": {
+      "kind": "action",
+      "action": "duplicate_plate"
+    },
+    "MainFrame::init_menubar_as_editor::Edit": {
+      "kind": "container",
+      "note": "The Edit menu itself."
+    },
+    "MainFrame::init_menubar_as_editor::Export": {
+      "kind": "container",
+      "note": "The File menu's Export submenu."
+    },
+    "MainFrame::init_menubar_as_editor::Export G-code": {
+      "kind": "action",
+      "action": "file_export_gcode"
+    },
+    "MainFrame::init_menubar_as_editor::Export Generic 3MF": {
+      "kind": "action",
+      "action": "file_export_3mf"
+    },
+    "MainFrame::init_menubar_as_editor::Export Preset Bundle": {
+      "kind": "action",
+      "action": "presets_export_bundle"
+    },
+    "MainFrame::init_menubar_as_editor::Export all objects as STLs": {
+      "kind": "absent",
+      "task": "P5.7",
+      "reason": "Only the single-mesh STL export exists; one file per object is P5.7 work."
+    },
+    "MainFrame::init_menubar_as_editor::Export all objects as one STL": {
+      "kind": "action",
+      "action": "file_export_stl"
+    },
+    "MainFrame::init_menubar_as_editor::Export all plate sliced file": {
+      "kind": "action",
+      "action": "file_export_all_plates"
+    },
+    "MainFrame::init_menubar_as_editor::Export plate sliced file": {
+      "kind": "action",
+      "action": "file_export_gcode"
+    },
+    "MainFrame::init_menubar_as_editor::Flow rate": {
+      "kind": "container",
+      "note": "Calibration submenu heading for the flow-rate passes."
+    },
+    "MainFrame::init_menubar_as_editor::Help": {
+      "kind": "container",
+      "note": "The Help menu itself."
+    },
+    "MainFrame::init_menubar_as_editor::Import": {
+      "kind": "container",
+      "note": "The File menu's Import submenu."
+    },
+    "MainFrame::init_menubar_as_editor::Import 3MF/STL/STEP/SVG/OBJ/AMF": {
+      "kind": "action",
+      "action": "file_import_model"
+    },
+    "MainFrame::init_menubar_as_editor::Import Configs": {
+      "kind": "action",
+      "action": "file_import_config"
+    },
+    "MainFrame::init_menubar_as_editor::Import Zip Archive": {
+      "kind": "action",
+      "action": "file_import_zip"
+    },
+    "MainFrame::init_menubar_as_editor::Input Shaping": {
+      "kind": "container",
+      "note": "Calibration submenu heading for the input-shaping flows."
+    },
+    "MainFrame::init_menubar_as_editor::Input Shaping Damping/zeta factor": {
+      "kind": "absent",
+      "task": "P8.1",
+      "reason": "Input-shaping calibration is not generated yet; P8.1 owns the inventory it comes from."
+    },
+    "MainFrame::init_menubar_as_editor::Input Shaping Frequency": {
+      "kind": "absent",
+      "task": "P8.1",
+      "reason": "Input-shaping calibration is not generated yet; P8.1 owns the inventory it comes from."
+    },
+    "MainFrame::init_menubar_as_editor::Junction Deviation": {
+      "kind": "absent",
+      "task": "P8.1",
+      "reason": "Junction-deviation calibration is not generated yet."
+    },
+    "MainFrame::init_menubar_as_editor::Max flowrate": {
+      "kind": "action",
+      "action": "calib_max_flow"
+    },
+    "MainFrame::init_menubar_as_editor::New Project": {
+      "kind": "action",
+      "action": "file_new_project"
+    },
+    "MainFrame::init_menubar_as_editor::New Window": {
+      "kind": "adaptation",
+      "adaptation": "ADAPT-06",
+      "reason": "A browser tab is the window; the app opens no second one of its own."
+    },
+    "MainFrame::init_menubar_as_editor::Open Project": {
+      "kind": "action",
+      "action": "file_open_project"
+    },
+    "MainFrame::init_menubar_as_editor::Pass 1": {
+      "kind": "action",
+      "action": "calib_flow_pass1"
+    },
+    "MainFrame::init_menubar_as_editor::Pass 2": {
+      "kind": "action",
+      "action": "calib_flow_pass2"
+    },
+    "MainFrame::init_menubar_as_editor::Paste": {
+      "kind": "action",
+      "action": "edit_paste"
+    },
+    "MainFrame::init_menubar_as_editor::Preferences": {
+      "kind": "panel",
+      "where": "Inspector → Preferences, which is a panel rather than a catalogued action (P6.6)."
+    },
+    "MainFrame::init_menubar_as_editor::Pressure advance": {
+      "kind": "action",
+      "action": "calib_pressure_advance"
+    },
+    "MainFrame::init_menubar_as_editor::Quit": {
+      "kind": "adaptation",
+      "adaptation": "ADAPT-06",
+      "reason": "Closing the tab is quitting; the app cannot close its own window."
+    },
+    "MainFrame::init_menubar_as_editor::Recent projects": {
+      "kind": "container",
+      "note": "The File menu's Open Recent submenu (P11.1)."
+    },
+    "MainFrame::init_menubar_as_editor::Redo": {
+      "kind": "action",
+      "action": "edit_redo"
+    },
+    "MainFrame::init_menubar_as_editor::Reset Window Layout": {
+      "kind": "adaptation",
+      "adaptation": "ADAPT-06",
+      "reason": "Layout is responsive rather than dockable, so there is nothing to reset."
+    },
+    "MainFrame::init_menubar_as_editor::Retraction test": {
+      "kind": "action",
+      "action": "calib_retraction"
+    },
+    "MainFrame::init_menubar_as_editor::Save Project": {
+      "kind": "action",
+      "action": "file_save_project"
+    },
+    "MainFrame::init_menubar_as_editor::Save Project as": {
+      "kind": "action",
+      "action": "file_save_project_as"
+    },
+    "MainFrame::init_menubar_as_editor::Select all": {
+      "kind": "action",
+      "action": "edit_select_all"
+    },
+    "MainFrame::init_menubar_as_editor::Show &G-code Window": {
+      "kind": "action",
+      "action": "view_show_gcode_window"
+    },
+    "MainFrame::init_menubar_as_editor::Show &Labels": {
+      "kind": "action",
+      "action": "view_show_labels"
+    },
+    "MainFrame::init_menubar_as_editor::Show &Overhang": {
+      "kind": "action",
+      "action": "view_show_overhang"
+    },
+    "MainFrame::init_menubar_as_editor::Show 3D Navigator": {
+      "kind": "action",
+      "action": "view_show_navigator"
+    },
+    "MainFrame::init_menubar_as_editor::Show Selected Outline (beta)": {
+      "kind": "action",
+      "action": "view_show_outline"
+    },
+    "MainFrame::init_menubar_as_editor::Temperature": {
+      "kind": "action",
+      "action": "calib_temperature"
+    },
+    "MainFrame::init_menubar_as_editor::Tutorial": {
+      "kind": "action",
+      "action": "help_tutorial"
+    },
+    "MainFrame::init_menubar_as_editor::Undo": {
+      "kind": "action",
+      "action": "edit_undo"
+    },
+    "MainFrame::init_menubar_as_editor::VFA": {
+      "kind": "action",
+      "action": "calib_vfa"
+    },
+    "MainFrame::init_menubar_as_editor::View": {
+      "kind": "container",
+      "note": "The View menu itself."
+    },
+    "MainFrame::init_menubar_as_editor::YOLO (Recommended)": {
+      "kind": "action",
+      "action": "calib_flow_yolo"
+    },
+    "MainFrame::init_menubar_as_editor::YOLO (perfectionist version)": {
+      "kind": "absent",
+      "task": "P8.3",
+      "reason": "Only the recommended YOLO flow-rate variant is generated."
+    },
+    "MainFrame::init_menubar_as_gcodeviewer::&Open G-code": {
+      "kind": "action",
+      "action": "view_open_gcode"
+    },
+    "MainFrame::init_menubar_as_gcodeviewer::&Quit": {
+      "kind": "adaptation",
+      "adaptation": "ADAPT-06",
+      "reason": "Closing the tab is quitting; the app cannot close its own window."
+    },
+    "MainFrame::init_menubar_as_gcodeviewer::Export &Toolpaths as OBJ": {
+      "kind": "action",
+      "action": "file_export_obj"
+    },
+    "MainFrame::init_menubar_as_gcodeviewer::Open &Slicer": {
+      "kind": "adaptation",
+      "adaptation": "ADAPT-06",
+      "reason": "One app: the G-code viewer is a mode here, not a separate program to launch."
+    },
+    "MainFrame::init_menubar_as_gcodeviewer::Re&load from Disk": {
+      "kind": "adaptation",
+      "adaptation": "ADAPT-01",
+      "reason": "A browser cannot re-read a file it was handed; re-opening it is a fresh pick."
+    },
+    "MainFrame::on_sys_color_changed::Bottom": {
+      "kind": "action",
+      "action": "view_camera_bottom"
+    },
+    "MainFrame::on_sys_color_changed::Check for Process Preset Updates": {
+      "kind": "absent",
+      "task": "P6.3",
+      "reason": "System presets ship with the app; there is no update feed to check."
+    },
+    "MainFrame::on_sys_color_changed::Check for Update": {
+      "kind": "action",
+      "action": "help_check_updates"
+    },
+    "MainFrame::on_sys_color_changed::Check for Web Resource Updates": {
+      "kind": "adaptation",
+      "adaptation": "ADAPT-05",
+      "reason": "No vendor resource service is contacted."
+    },
+    "MainFrame::on_sys_color_changed::Default View": {
+      "kind": "action",
+      "action": "view_camera_default"
+    },
+    "MainFrame::on_sys_color_changed::Download Models": {
+      "kind": "adaptation",
+      "adaptation": "ADAPT-05",
+      "reason": "No in-app model marketplace."
+    },
+    "MainFrame::on_sys_color_changed::Export Logs": {
+      "kind": "action",
+      "action": "file_export_logs"
+    },
+    "MainFrame::on_sys_color_changed::Front": {
+      "kind": "action",
+      "action": "view_camera_front"
+    },
+    "MainFrame::on_sys_color_changed::Import Profile": {
+      "kind": "action",
+      "action": "file_import_config"
+    },
+    "MainFrame::on_sys_color_changed::Import Web Resource": {
+      "kind": "adaptation",
+      "adaptation": "ADAPT-05",
+      "reason": "No vendor resource service is contacted."
+    },
+    "MainFrame::on_sys_color_changed::Keyboard Shortcuts": {
+      "kind": "action",
+      "action": "help_shortcuts"
+    },
+    "MainFrame::on_sys_color_changed::Left": {
+      "kind": "action",
+      "action": "view_camera_left"
+    },
+    "MainFrame::on_sys_color_changed::Open Network Test": {
+      "kind": "adaptation",
+      "adaptation": "ADAPT-03",
+      "reason": "There is no vendor cloud to test a route to; the printer is reached directly."
+    },
+    "MainFrame::on_sys_color_changed::Rear": {
+      "kind": "action",
+      "action": "view_camera_rear"
+    },
+    "MainFrame::on_sys_color_changed::Right": {
+      "kind": "action",
+      "action": "view_camera_right"
+    },
+    "MainFrame::on_sys_color_changed::Setup Wizard": {
+      "kind": "action",
+      "action": "help_setup_wizard"
+    },
+    "MainFrame::on_sys_color_changed::Show Configuration Folder": {
+      "kind": "action",
+      "action": "help_config_folder"
+    },
+    "MainFrame::on_sys_color_changed::Show Tip of the Day": {
+      "kind": "action",
+      "action": "help_tip_of_day"
+    },
+    "MainFrame::on_sys_color_changed::Top": {
+      "kind": "action",
+      "action": "view_camera_top"
+    },
+    "MainFrame::on_sys_color_changed::Upload Models": {
+      "kind": "adaptation",
+      "adaptation": "ADAPT-05",
+      "reason": "No in-app publishing."
+    },
+    "MenuFactory::append_menu_item_center::Center": {
+      "kind": "action",
+      "action": "center_on_plate"
+    },
+    "MenuFactory::append_menu_item_change_type::Change type": {
+      "kind": "action",
+      "action": "objects_convert_volume_role"
+    },
+    "MenuFactory::append_menu_item_clone::Clone": {
+      "kind": "action",
+      "action": "edit_duplicate"
+    },
+    "MenuFactory::append_menu_item_delete::Delete": {
+      "kind": "action",
+      "action": "delete_models"
+    },
+    "MenuFactory::append_menu_item_drop::Drop": {
+      "kind": "action",
+      "action": "drop_to_bed"
+    },
+    "MenuFactory::append_menu_item_export_stl::Export as STLs": {
+      "kind": "absent",
+      "task": "P5.7",
+      "reason": "Only the single-mesh STL export exists; one file per object is P5.7 work."
+    },
+    "MenuFactory::append_menu_item_export_stl::Export as one STL": {
+      "kind": "action",
+      "action": "file_export_stl"
+    },
+    "MenuFactory::append_menu_item_fill_bed::Fill bed with copies": {
+      "kind": "action",
+      "action": "fill_bed_with_instances"
+    },
+    "MenuFactory::append_menu_item_fix_through_netfabb::Fix model": {
+      "kind": "action",
+      "action": "repair_model"
+    },
+    "MenuFactory::append_menu_item_instance_to_object::Set as an individual object": {
+      "kind": "absent",
+      "task": "P2.2",
+      "reason": "Promoting one instance to its own object is not implemented."
+    },
+    "MenuFactory::append_menu_item_layers_editing::Height range Modifier": {
+      "kind": "action",
+      "action": "add_height_range"
+    },
+    "MenuFactory::append_menu_item_merge_parts_to_single_part::Mesh boolean": {
+      "kind": "action",
+      "action": "mesh_boolean_union"
+    },
+    "MenuFactory::append_menu_item_merge_to_multipart_object::Assemble": {
+      "kind": "action",
+      "action": "tool_assembly"
+    },
+    "MenuFactory::append_menu_item_merge_to_single_object::Assemble": {
+      "kind": "action",
+      "action": "tool_assembly"
+    },
+    "MenuFactory::append_menu_item_printable::Printable": {
+      "kind": "absent",
+      "task": "P2.2",
+      "reason": "Printability is a plate-level flag here; per-object printability is not implemented."
+    },
+    "MenuFactory::append_menu_item_reload_from_disk::Reload from disk": {
+      "kind": "adaptation",
+      "adaptation": "ADAPT-01",
+      "reason": "A browser cannot re-read a file it was handed; re-opening it is a fresh pick."
+    },
+    "MenuFactory::append_menu_item_rename::Rename": {
+      "kind": "action",
+      "action": "objects_rename"
+    },
+    "MenuFactory::append_menu_item_replace_with_stl::Replace with STL": {
+      "kind": "adaptation",
+      "adaptation": "ADAPT-01",
+      "reason": "Replacing a mesh in place needs a path the browser never had; re-import is the route."
+    },
+    "MenuFactory::append_menu_item_scale_selection_to_fit_print_volume::Scale to build volume": {
+      "kind": "absent",
+      "task": "P5.1",
+      "reason": "Scale-to-fit is not implemented; scaling is manual."
+    },
+    "MenuFactory::append_menu_item_set_visible::Hide": {
+      "kind": "absent",
+      "task": "P2.1",
+      "reason": "Per-row visibility is not implemented in the Objects tree."
+    },
+    "MenuFactory::append_menu_item_simplify::Simplify Model": {
+      "kind": "action",
+      "action": "simplify_model"
+    },
+    "MenuFactory::append_menu_items_flush_options::Flush into objects' infill": {
+      "kind": "panel",
+      "where": "Settings → object scope, `flush_into_infill`."
+    },
+    "MenuFactory::append_menu_items_flush_options::Flush into objects' support": {
+      "kind": "panel",
+      "where": "Settings → object scope, `flush_into_support`."
+    },
+    "MenuFactory::append_menu_items_flush_options::Flush into this object": {
+      "kind": "panel",
+      "where": "Settings → object scope, `flush_into_objects`."
+    },
+    "MenuFactory::append_menu_items_mirror::Along X axis": {
+      "kind": "action",
+      "action": "mirror_x"
+    },
+    "MenuFactory::append_menu_items_mirror::Along Y axis": {
+      "kind": "action",
+      "action": "mirror_y"
+    },
+    "MenuFactory::append_menu_items_mirror::Along Z axis": {
+      "kind": "action",
+      "action": "mirror_z"
+    },
+    "MenuFactory::append_menu_items_mirror::Mirror": {
+      "kind": "container",
+      "note": "The object menu's Mirror submenu; the three axes are flat entries here."
+    },
+    "MenuFactory::append_submenu_add_generic::Cone": {
+      "kind": "absent",
+      "task": "P5.8",
+      "reason": "Cone is not among the primitives OrcaXR generates."
+    },
+    "MenuFactory::append_submenu_add_generic::Cube": {
+      "kind": "action",
+      "action": "add_primitive_cube"
+    },
+    "MenuFactory::append_submenu_add_generic::Cylinder": {
+      "kind": "action",
+      "action": "add_primitive_cylinder"
+    },
+    "MenuFactory::append_submenu_add_generic::Disc": {
+      "kind": "absent",
+      "task": "P5.8",
+      "reason": "Disc is not among the primitives OrcaXR generates."
+    },
+    "MenuFactory::append_submenu_add_generic::Load...": {
+      "kind": "action",
+      "action": "load_model_from_path"
+    },
+    "MenuFactory::append_submenu_add_generic::Sphere": {
+      "kind": "action",
+      "action": "add_primitive_sphere"
+    },
+    "MenuFactory::append_submenu_add_generic::Torus": {
+      "kind": "absent",
+      "task": "P5.8",
+      "reason": "Torus is not among the primitives OrcaXR generates."
+    },
+    "MenuFactory::create_bbl_part_menu::Split": {
+      "kind": "container",
+      "note": "The part menu's Split submenu."
+    },
+    "MenuFactory::create_bbl_part_menu::To objects": {
+      "kind": "action",
+      "action": "split_to_objects"
+    },
+    "MenuFactory::create_bbl_part_menu::To parts": {
+      "kind": "action",
+      "action": "split_to_parts"
+    },
+    "MenuFactory::create_default_menu::Add Handy models": {
+      "kind": "action",
+      "action": "add_handy_model"
+    },
+    "MenuFactory::create_default_menu::Add Models": {
+      "kind": "action",
+      "action": "file_import_model"
+    },
+    "MenuFactory::create_default_menu::Add Primitive": {
+      "kind": "container",
+      "note": "The empty-space menu's Add Primitive submenu."
+    },
+    "MenuFactory::create_default_menu::Show Labels": {
+      "kind": "action",
+      "action": "view_show_labels"
+    },
+    "MenuFactory::create_extra_object_menu::Split": {
+      "kind": "container",
+      "note": "The object menu's Split submenu."
+    },
+    "MenuFactory::create_extra_object_menu::To objects": {
+      "kind": "action",
+      "action": "split_to_objects"
+    },
+    "MenuFactory::create_extra_object_menu::To parts": {
+      "kind": "action",
+      "action": "split_to_parts"
+    },
+    "MenuFactory::create_filament_action_menu::Delete": {
+      "kind": "action",
+      "action": "filament_virtual_mutate"
+    },
+    "MenuFactory::create_filament_action_menu::Edit": {
+      "kind": "action",
+      "action": "filament_virtual_mutate"
+    },
+    "MenuFactory::create_filament_action_menu::Merge with": {
+      "kind": "absent",
+      "task": "P4.5",
+      "reason": "Merging one filament into another is not implemented; remapping is per-object."
+    },
+    "MenuFactory::create_object_menu::Split": {
+      "kind": "container",
+      "note": "The object menu's Split submenu."
+    },
+    "MenuFactory::create_object_menu::To objects": {
+      "kind": "action",
+      "action": "split_to_objects"
+    },
+    "MenuFactory::create_object_menu::To parts": {
+      "kind": "action",
+      "action": "split_to_parts"
+    },
+    "MenuFactory::create_part_menu::Split": {
+      "kind": "container",
+      "note": "The part menu's Split submenu."
+    },
+    "MenuFactory::create_plate_menu::Add Handy models": {
+      "kind": "action",
+      "action": "add_handy_model"
+    },
+    "MenuFactory::create_plate_menu::Add Models": {
+      "kind": "action",
+      "action": "file_import_model"
+    },
+    "MenuFactory::create_plate_menu::Add Primitive": {
+      "kind": "container",
+      "note": "The plate menu's Add Primitive submenu."
+    },
+    "MenuFactory::create_plate_menu::Arrange": {
+      "kind": "action",
+      "action": "arrange_all"
+    },
+    "MenuFactory::create_plate_menu::Auto Rotate": {
+      "kind": "action",
+      "action": "tool_face_detector"
+    },
+    "MenuFactory::create_plate_menu::Delete All": {
+      "kind": "action",
+      "action": "edit_delete_all"
+    },
+    "MenuFactory::create_plate_menu::Delete Plate": {
+      "kind": "action",
+      "action": "delete_plate"
+    },
+    "MenuFactory::create_plate_menu::Reload All": {
+      "kind": "adaptation",
+      "adaptation": "ADAPT-01",
+      "reason": "A browser cannot re-read the files it was handed; re-opening them is a fresh pick."
+    },
+    "MenuFactory::create_plate_menu::Select All": {
+      "kind": "action",
+      "action": "edit_select_all"
+    },
+    "MenuFactory::create_sla_object_menu::Auto orientation": {
+      "kind": "absent",
+      "task": "P0.1",
+      "reason": "SLA-only menu. OrcaXR targets FFF machines, so this leaf is classified as out of scope rather than left unmapped."
+    },
+    "MenuFactory::create_sla_object_menu::Split": {
+      "kind": "absent",
+      "task": "P0.1",
+      "reason": "SLA-only menu. OrcaXR targets FFF machines, so this leaf is classified as out of scope rather than left unmapped."
+    },
+    "MenuFactory::multi_selection_menu::Split": {
+      "kind": "container",
+      "note": "The multi-selection menu's Split submenu."
+    },
+    "MenuFactory::multi_selection_menu::To objects": {
+      "kind": "action",
+      "action": "split_to_objects"
+    },
+    "MenuFactory::multi_selection_menu::To parts": {
+      "kind": "action",
+      "action": "split_to_parts"
+    },
+    "PlaterPresetComboBox::show_add_menu::Add/Remove presets": {
+      "kind": "panel",
+      "where": "Inspector → Presets, where a preset is installed, created, or deleted."
+    },
+    "PlaterPresetComboBox::show_edit_menu::Add/Remove presets": {
+      "kind": "panel",
+      "where": "Inspector → Presets, where a preset is installed, created, or deleted."
+    },
+    "PlaterPresetComboBox::show_edit_menu::Change extruder color": {
+      "kind": "panel",
+      "where": "Inspector → Filament palette, where a slot's colour is set."
+    },
+    "PlaterPresetComboBox::show_edit_menu::Edit preset": {
+      "kind": "action",
+      "action": "presets_update_custom"
+    },
+    "runtime::About application": {
+      "kind": "action",
+      "action": "help_about"
+    },
+    "runtime::Merge with mixed filament target": {
+      "kind": "absent",
+      "task": "P4.5",
+      "reason": "Merging one filament into another is not implemented; remapping is per-object."
+    },
+    "runtime::Merge with physical filament target": {
+      "kind": "absent",
+      "task": "P4.5",
+      "reason": "Merging one filament into another is not implemented; remapping is per-object."
+    },
+    "runtime::Open recent project entry": {
+      "kind": "absent",
+      "task": "P11.1",
+      "reason": "Recent projects are not offered yet; every open is an explicit pick."
+    }
+  }
+}
