@@ -211,9 +211,9 @@ const UNSUPPORTED_ELEMENTS: Readonly<Record<string, { reason: SvgUnsupportedReas
  * writes classes rather than attributes hit it.
  */
 export interface SvgStylesheet {
-  readonly byElement: ReadonlyMap<string, InheritedPresentation>;
-  readonly byClass: ReadonlyMap<string, InheritedPresentation>;
-  readonly byId: ReadonlyMap<string, InheritedPresentation>;
+  readonly byElement: ReadonlyMap<string, StyleRule>;
+  readonly byClass: ReadonlyMap<string, StyleRule>;
+  readonly byId: ReadonlyMap<string, StyleRule>;
 }
 
 const EMPTY_STYLESHEET: SvgStylesheet = {
@@ -223,16 +223,17 @@ const EMPTY_STYLESHEET: SvgStylesheet = {
 };
 
 function readStylesheet(source: string, unsupported: SvgUnsupportedFeature[]): SvgStylesheet {
-  const byElement = new Map<string, InheritedPresentation>();
-  const byClass = new Map<string, InheritedPresentation>();
-  const byId = new Map<string, InheritedPresentation>();
+  const byElement = new Map<string, StyleRule>();
+  const byClass = new Map<string, StyleRule>();
+  const byId = new Map<string, StyleRule>();
   for (const block of source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) {
     // Comments first: a rule inside `/* … */` is not a rule, and reading one
     // would apply a setting the document deliberately disabled.
     const css = block[1].replace(/\/\*[\s\S]*?\*\//g, '');
     for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const declarations = declarationsOf(rule[2]);
-      if (declarations.fill === undefined && declarations.stroke === undefined) continue;
+      const stated = { ...declarations.normal, ...declarations.important };
+      if (stated.fill === undefined && stated.stroke === undefined) continue;
       for (const selector of rule[1].split(',').map((entry) => entry.trim())) {
         if (/^[a-zA-Z][\w-]*$/.test(selector)) merge(byElement, selector.toLowerCase(), declarations);
         else if (/^\.[\w-]+$/.test(selector)) merge(byClass, selector.slice(1), declarations);
@@ -250,15 +251,44 @@ function readStylesheet(source: string, unsupported: SvgUnsupportedFeature[]): S
   return { byElement, byClass, byId };
 }
 
-function merge(into: Map<string, InheritedPresentation>, key: string, declarations: InheritedPresentation): void {
+function merge(into: Map<string, StyleRule>, key: string, declarations: StyleRule): void {
   // Later rules win, matching the cascade for equal specificity.
-  into.set(key, { ...into.get(key), ...declarations });
+  const existing = into.get(key);
+  into.set(key, {
+    normal: { ...existing?.normal, ...declarations.normal },
+    important: { ...existing?.important, ...declarations.important },
+  });
 }
 
-function declarationsOf(body: string): InheritedPresentation {
-  const fill = /(?:^|;)\s*fill\s*:\s*([^;]+)/i.exec(body)?.[1]?.trim();
-  const stroke = /(?:^|;)\s*stroke\s*:\s*([^;]+)/i.exec(body)?.[1]?.trim();
-  return { ...(fill === undefined ? {} : { fill }), ...(stroke === undefined ? {} : { stroke }) };
+/** One rule's declarations, kept in their two precedence tiers. */
+interface StyleRule {
+  readonly normal: InheritedPresentation;
+  readonly important: InheritedPresentation;
+}
+
+/**
+ * `fill` and `stroke` from a declaration block, with `!important` split off.
+ *
+ * Stripping it is not cosmetic. The flag lives in the *value*, so
+ * `fill: none !important` compared unequal to `none` and a stroked path
+ * carrying it was read as filled — the same silent solid this parser has now
+ * produced three ways, and reachable from a plain inline `style`. Its
+ * precedence is recorded rather than discarded, since an important rule
+ * outranks an inline style and dropping that would swap the paint on any
+ * document that uses one.
+ */
+function declarationsOf(body: string): StyleRule {
+  const normal: Record<string, string> = {};
+  const important: Record<string, string> = {};
+  for (const property of ['fill', 'stroke'] as const) {
+    const raw = new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+)`, 'i').exec(body)?.[1]?.trim();
+    if (raw === undefined) continue;
+    const flagged = /!\s*important\s*$/i.test(raw);
+    const value = raw.replace(/!\s*important\s*$/i, '').trim();
+    if (value.length === 0) continue;
+    (flagged ? important : normal)[property] = value;
+  }
+  return { normal, important };
 }
 
 /** What the stylesheet says about one element, in specificity order. */
@@ -266,13 +296,23 @@ function stylesheetPresentation(
   stylesheet: SvgStylesheet,
   name: string,
   attributes: Readonly<Record<string, string>>,
-): InheritedPresentation {
-  let resolved: InheritedPresentation = { ...stylesheet.byElement.get(name.toLowerCase()) };
-  for (const className of (attributes.class ?? '').split(/\s+/).filter(Boolean)) {
-    resolved = { ...resolved, ...stylesheet.byClass.get(className) };
+): StyleRule {
+  const rules = [
+    stylesheet.byElement.get(name.toLowerCase()),
+    ...(attributes.class ?? '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((className) => stylesheet.byClass.get(className)),
+    ...(attributes.id ? [stylesheet.byId.get(attributes.id)] : []),
+  ];
+  let normal: InheritedPresentation = {};
+  let important: InheritedPresentation = {};
+  for (const rule of rules) {
+    if (!rule) continue;
+    normal = { ...normal, ...rule.normal };
+    important = { ...important, ...rule.important };
   }
-  if (attributes.id) resolved = { ...resolved, ...stylesheet.byId.get(attributes.id) };
-  return resolved;
+  return { normal, important };
 }
 
 /**
@@ -310,11 +350,17 @@ function resolvePresentation(
     ...(attributes.stroke === undefined ? {} : { stroke: attributes.stroke }),
   };
   const inline = declarationsOf(attributes.style ?? '');
+  const sheet = stylesheetPresentation(stylesheet, name, attributes);
+  // Weakest to strongest: attribute, ordinary rule, inline style, then anything
+  // marked important — an `!important` rule outranks an inline style, which is
+  // the one place CSS and the intuitive order disagree.
   return {
     ...inherited,
     ...attribute,
-    ...stylesheetPresentation(stylesheet, name, attributes),
-    ...inline,
+    ...sheet.normal,
+    ...inline.normal,
+    ...sheet.important,
+    ...inline.important,
   };
 }
 

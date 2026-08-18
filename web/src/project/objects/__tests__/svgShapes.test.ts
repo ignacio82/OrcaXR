@@ -256,6 +256,28 @@ test('the cascade runs in SVG’s order, not the intuitive one', () => {
   assert.equal(readSvgShapes(inlineOverCss).contours.length, 1, 'and an inline style beats the stylesheet');
 });
 
+test('!important is read as a flag, not as part of the colour', () => {
+  // The flag lives in the value, so `fill: none !important` compared unequal to
+  // `none` and a stroked path carrying it was read as filled — reachable from a
+  // plain inline style, with no stylesheet involved at all.
+  const inline = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><path style="fill:none !important;stroke:#000" d="M0 0 L50 0 L50 50 Z"/></svg>`;
+  assert.throws(() => readSvgShapes(inline), SvgError);
+
+  const viaClass = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><style>.line{fill:none !important;stroke:#000}</style><path class="line" d="M0 0 L50 0 L50 50 Z"/></svg>`;
+  assert.throws(() => readSvgShapes(viaClass), SvgError);
+});
+
+test('an important rule outranks an inline style, and an ordinary one does not', () => {
+  // The one place CSS and the intuitive order disagree. Both directions are
+  // pinned because honouring only the first would make every inline style
+  // useless, and only the second would ignore !important entirely.
+  const important = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><style>.line{fill:none !important;stroke:#000}</style><path class="line" style="fill:#f00" d="M0 0 L50 0 L50 50 Z"/></svg>`;
+  assert.throws(() => readSvgShapes(important), SvgError, 'the important rule wins');
+
+  const ordinary = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><style>.line{fill:none;stroke:#000}</style><path class="line" style="fill:#f00" d="M0 0 L50 0 L50 50 Z"/></svg>`;
+  assert.equal(readSvgShapes(ordinary).contours.length, 1, 'and an ordinary one loses to the inline style');
+});
+
 test('a commented-out rule is not a rule', () => {
   // Reading one would apply a setting the document deliberately disabled.
   const commented = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><style>/* .line{fill:none;stroke:#000} */</style><path class="line" d="M0 0 L50 0 L50 50 Z"/></svg>`;
