@@ -69,6 +69,8 @@ import { injectTokenCss } from './ui/tokens';
 import { UiState } from './actions/UiState';
 import { ActionContext } from './actions/ActionContext';
 import { buildRegistry } from './actions/catalog';
+import { Localizer, createCatalogLoader } from './l10n/Localizer';
+import { findLocale, negotiateLocale, selectableLocales } from './l10n/locales';
 import type { ActionInvocation, ActionRegistry } from './actions/ActionRegistry';
 import { buildShortcutCatalog, isShortcutEditingTarget, matchShortcut } from './actions/ShortcutCatalog';
 import { DomShell } from './ui/dom/DomShell';
@@ -129,6 +131,7 @@ import {
   applyPreferences,
   exportPreferences,
   importPreferences,
+  LANGUAGE_KEY,
   loadPreferences,
   resetPreferences,
   savePreferences,
@@ -351,7 +354,13 @@ function objectsSelectionForRequest(
 }
 
 /** 2D-page UI wiring for standard web slicer mode. */
-function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: ActionContext, registry: ActionRegistry) {
+function setupDomUI(
+  workspace: OrcaWorkspace,
+  uiState: UiState,
+  actionCtx: ActionContext,
+  registry: ActionRegistry,
+  l10n: () => Localizer,
+) {
   workspace.onRequestNewProjectConfirmation = () =>
     window.confirm('Discard the current unsaved project and start a new project?');
   workspace.onRequestSplitToObjectsConfirmation = (confirmation) =>
@@ -2090,6 +2099,58 @@ function setupDomUI(workspace: OrcaWorkspace, uiState: UiState, actionCtx: Actio
     body.append(label, input, results);
     buildModal('Help', body);
     input.focus();
+  };
+
+  // ---- Language (P10.4) ------------------------------------------------
+  //
+  // The picker lives with the other modals because it is one; the localizer
+  // itself is owned by the entry point, which is why it arrives as a getter —
+  // `setupDomUI` runs before it exists.
+  workspace.onShowLanguagePicker = () => {
+    const body = document.createElement('div');
+    const intro = document.createElement('p');
+    intro.textContent = 'OrcaXR is translated from the pinned Snapmaker OrcaSlicer catalogues.';
+    intro.style.cssText = 'margin:0 0 8px;color:var(--oxr-color-text-muted);';
+    const list = document.createElement('div');
+    list.style.cssText = 'display:grid;gap:4px;max-height:52vh;overflow:auto;';
+    const showPseudo = new URLSearchParams(location.search).has('pseudo');
+    for (const locale of selectableLocales(showPseudo)) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'oxr-btn';
+      button.style.cssText = 'justify-content:space-between;width:100%;';
+      button.setAttribute('lang', locale.id);
+      button.setAttribute('aria-pressed', String(locale.id === l10n().locale));
+      // The endonym leads: a picker that offers "German" to someone who reads
+      // only German is a list they cannot use. The English name follows for an
+      // operator picking a language they cannot yet read.
+      const name = document.createElement('span');
+      name.textContent = locale.endonym;
+      const english = document.createElement('span');
+      english.textContent = locale.englishName;
+      english.style.cssText = 'color:var(--oxr-color-text-muted);margin-inline-start:12px;';
+      english.setAttribute('lang', 'en');
+      button.append(name, english);
+      button.onclick = () => {
+        void (async () => {
+          const applied = await l10n().setLocale(locale.id);
+          if (!applied) {
+            workspace.setStatus(`Could not load ${locale.englishName}; OrcaXR is still in ${l10n().locale}.`);
+            return;
+          }
+          try {
+            localStorage.setItem(LANGUAGE_KEY, locale.id);
+          } catch {
+            // Private mode: the language still applies for this session.
+          }
+          workspace.setStatus(`Language: ${locale.endonym}.`);
+          closeModal();
+        })();
+      };
+      list.appendChild(button);
+    }
+    body.append(intro, list);
+    buildModal('Language', body);
   };
 
   // Interactive setup wizard: reuse the live profile catalogue.
@@ -4571,6 +4632,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   options.uikit.enable(uikit);
 
   const registry = buildRegistry();
+  // Localization is attached to the registry rather than to each shell: every
+  // surface already reads its text through `all()` and `get()`, so one seam
+  // covers DOM, XR, the palette, and context menus at the same instant. A menu
+  // that translated while a tooltip did not reads as a broken translation.
+  // No `reference` is passed: the English for every message is already at its
+  // call site as the `source` argument, so shipping a second copy in the bundle
+  // would cost every operator ~80 KB to render text the code already contains.
+  const l10n = new Localizer({
+    load: createCatalogLoader('l10n/'),
+    onProblem: (problem) => console.warn(`[orcaxr-web] message ${problem.id ?? ''}: ${problem.message}`),
+  });
+  registry.useTextSource(l10n);
+  (window as unknown as { __orcaL10n: unknown }).__orcaL10n = l10n;
+
   const workspace = new OrcaWorkspace(registry, {
     fullSpectrumAutoPairPreferences: loadFullSpectrumAutoPairPreferences(),
   });
@@ -4604,7 +4679,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   (window as unknown as { __orcaRenderer: unknown }).__orcaRenderer = xb.core.renderer;
   (window as unknown as { THREE: unknown }).THREE = THREE;
   (window as unknown as { __orca: unknown }).__orca = workspace;
-  setupDomUI(workspace, uiState, actionCtx, registry);
+  setupDomUI(workspace, uiState, actionCtx, registry, () => l10n);
 
   // Render the tool rail, primary bar, Add/Tools menus, and mode control from
   // the shared registry (the same catalog the XR shell renders). Mounted after
@@ -4612,14 +4687,51 @@ document.addEventListener('DOMContentLoaded', async () => {
   // is in place.
   const byId = (id: string) => document.getElementById(id) as HTMLElement;
   const domShell = new DomShell(registry, actionCtx, uiState);
-  domShell.mount({
+  const domShellHosts = {
     toolbar: byId('left-toolbar'),
     primary: byId('action-panel'),
     stageBar: byId('stage-bar'),
     menuBar: byId('menu-bar-host'),
     menuButton: byId('menu-button') as HTMLButtonElement,
     calibration: byId('calibration-grid'),
+  };
+  domShell.mount(domShellHosts);
+
+  // ---- Language (P10.4) ------------------------------------------------
+  //
+  // `lang` and `dir` are not decoration: `lang` is what a screen reader picks a
+  // voice from, and `dir` is what mirrors the layout. Both move with the same
+  // subscription that repaints, so the app is never announcing German text in
+  // an English voice.
+  //
+  // The repaint is a full remount rather than a refresh, because every label in
+  // the rail, the primary bar, and the menu columns was written at build time.
+  // A surface that kept its old words until it next opened would leave the
+  // operator unable to tell which parts of the switch took effect.
+  const applyDocumentLanguage = () => {
+    document.documentElement.lang = l10n.locale;
+    document.documentElement.dir = l10n.direction;
+  };
+  applyDocumentLanguage();
+  l10n.subscribe(() => {
+    applyDocumentLanguage();
+    domShell.mount(domShellHosts);
+    uiState.update({});
   });
+
+  // A stored choice is a decision and outranks the browser's list; only an
+  // operator who has never chosen gets one negotiated for them.
+  void (async () => {
+    let stored: string | null;
+    try {
+      stored = localStorage.getItem(LANGUAGE_KEY);
+    } catch {
+      // Private mode: nothing was stored, so the browser's list decides.
+      stored = null;
+    }
+    const target = stored && findLocale(stored) ? stored : negotiateLocale([...(navigator.languages ?? [])]);
+    if (target !== l10n.locale) await l10n.setLocale(target);
+  })();
 
   // Six named inspector tabs replace the old single scroll of disclosures.
   // Every panel still exists; the tabs decide which one is on screen.

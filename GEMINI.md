@@ -218,6 +218,36 @@ engine (`libslic3r` via WASM) as the computational core.
   worktree — a checkout left on another branch must not be able to make a
   provenance check pass. Traces that could not reach upstream say so on the
   result line rather than printing a bare tick.
+- **Localization has one seam, and canonical code may not touch it (P10.4).** User-facing text
+  resolves through `src/l10n/`, and it is attached to the *action registry*
+  (`ActionRegistry.useTextSource`), not to a shell: every surface already reads
+  labels through `all()`/`get()`, so DOM, XR, the command palette, and context
+  menus switch language at the same instant. A shell that localized on its own
+  would translate half the app, which reads as a broken translation rather than
+  an absent one. With no text source the registry returns its declared objects
+  unchanged, so headless tests pay nothing.
+  Message ids for actions are **derived** (`action.<id>.{label,hint,reason,xrUnsupported}`) and
+  extracted by reading the registry itself — never hand-listed, so an action's
+  label cannot escape the catalogue. Everything else uses `t('dotted.id', 'English source')`
+  with **both arguments string literals**; `scripts/generate-messages.mjs` walks the
+  TypeScript AST and fails on anything computed. Run `l10n:sync` after touching an
+  action's text and commit the regenerated `src/l10n/generated/` and `public/l10n/`;
+  `l10n:verify` runs in `quality` and degrades honestly without the pinned checkout.
+  **Never compile a reference catalogue into the bundle.** The English is already at every
+  call site as `t`'s `source` argument, so `public/l10n/en.json` is a *second* copy — it
+  ships as a fetched file and only the pseudo-locales pull it. Doing this the other way
+  cost 83 KB of main chunk and broke `size:check`; done right the whole feature costs 17 KB.
+  Translations are **seeded from upstream's twenty pinned `.po` catalogues** by exact
+  English match (plus accelerator/ellipsis normalisation) — never machine-translated, and
+  a translation that drops a placeholder is refused rather than shipped, because a
+  sentence that lost `{count}` renders "objects will be deleted" with no number in it.
+  Plural category comes from `Intl.PluralRules`; never write a `count === 1` rule, which
+  is wrong in Russian and Polish in a way an English reviewer cannot see.
+  **`src/project/` may not import `src/l10n/`**, and `architecture:check` enforces it as an
+  import rule so it cannot be satisfied by re-exporting. Everything in `l10n` is
+  locale-dependent by construction and everything under `project/` decides the bytes of a
+  saved file; canonical ordering already used `localeCompare` in eleven files once, which
+  made a project's bytes depend on the machine that produced them.
 - The browser engine must link with `-sDYNAMIC_EXECUTION=0`: embind otherwise
   builds its invokers with `new Function`, which the app's CSP (`script-src
   'self' 'wasm-unsafe-eval'`) refuses, so every in-browser slice fails while

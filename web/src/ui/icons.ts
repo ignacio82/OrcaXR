@@ -109,6 +109,7 @@ const ICONS: Record<string, IconGlyph> = {
   // Help menu
   wizard: { xr: 'wand_stars', dom: '🪄' },
   keyboard: { xr: 'keyboard', dom: '⌨' },
+  language: { xr: 'language', dom: '🌐' },
   school: { xr: 'school', dom: '🎓' },
   book: { xr: 'menu_book', dom: '📖' },
   bug: { xr: 'bug_report', dom: '🐛' },

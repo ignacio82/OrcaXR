@@ -28,10 +28,22 @@ export const SLICER_URL_KEY = 'orcaxr.slicer.url';
 export const SLICER_ENABLED_KEY = 'orcaxr.slicer.enabled';
 
 /** Every key this app owns that is a preference rather than project data. */
+/**
+ * The language the operator chose (P10.4).
+ *
+ * A preference, not project data: it says how this browser shows the app, and
+ * a reset should return it to "follow the browser" along with everything else.
+ * Stored so a stored choice is never overruled by re-reading
+ * `navigator.languages` on the next load — someone who picked English on a
+ * German machine picked it deliberately.
+ */
+export const LANGUAGE_KEY = 'orcaxr.language';
+
 export const PREFERENCE_KEYS: readonly string[] = Object.freeze([
   STORAGE_KEY,
   SLICER_URL_KEY,
   SLICER_ENABLED_KEY,
+  LANGUAGE_KEY,
   'orcaxr.printer',
   'orcaxr.credentials',
 ]);

@@ -3066,10 +3066,124 @@ This contract is part of every XR acceptance gate, not optional styling guidance
     `localeCompare` under `src/project/`. The scan matters most — the byte tests only catch a leak
     the fixture happens to exercise, and the next one added may sort user-supplied names where the
     difference is real.
-  - **Outstanding:** everything else. There is no message catalog, no message IDs, no extraction, no
-    runtime language switch, no plural or unit formatting, no pseudo-localization run, and no RTL
-    support; every user-facing string is still an English literal at its use site. This is the
-    largest untouched item in the plan and needs a dedicated pass, not an increment.
+  - **Split (2026-08-18):** the dedicated pass began, and the item immediately proved to be two
+    different kinds of work sharing one checkbox: mechanism, which is finite and testable, and
+    extraction, which is a long sweep across roughly 113,000 lines of surface code. Tracking them
+    together made the mechanism unreportable and made the sweep look like it had not started. Split
+    into the children below, which remove no scope — P10.4 closes only when all five are `[x]`.
+  - **Current:** the locale-invariance clause was met before this pass and still is (see below);
+    P10.4.1 and P10.4.2 are now `[x]`, so the machinery exists and the action catalogue is fully
+    extracted and rendering translated. What remains is the sweep and the layout gates.
+
+- [x] **P10.4.1 — Localization mechanism.** Message identity, ICU formatting, runtime language
+  switch, locale negotiation, direction, and pseudo-localization, with nothing locale-dependent
+  able to reach canonical state.
+  - **Accept:** plurals are chosen by CLDR rather than by an English rule; a malformed translation
+    renders readably instead of throwing; a switch that fails leaves the previous language intact;
+    pseudo-localization preserves ICU structure; and canonical code cannot import the module.
+  - **Current:** `src/l10n/` carries it (`EVID-128`). `icu.ts` is a deliberately small
+    MessageFormat subset — interpolation, `plural`, `select`, `number`, `unit`, `date` — with
+    plural category from `Intl.PluralRules`, so Russian's three categories and Polish's four are
+    right rather than English-shaped. A message that does not parse renders as itself and reports
+    through `onProblem`, because twenty catalogues written by twenty people will eventually contain
+    one unbalanced brace and a panel that disappears is worse than a label showing its source.
+    `locales.ts` carries the twenty upstream languages plus English, each with its endonym and
+    direction; direction is stored rather than derived because `Intl.Locale.getTextInfo` is not
+    available everywhere OrcaXR runs and a wrong guess mirrors the whole layout. `Localizer.ts`
+    loads a catalogue *before* the active locale moves, so a slow network shows the current
+    language rather than a screen of English on the way to German, and a superseded switch loses
+    to the later one. `pseudo.ts` generates `en-XA` (accented, 40% longer, bracketed) and `ar-XB`
+    (mirrored) from the reference, traversing the real grammar so branch bodies are transformed and
+    branch keys are not — an earlier brace-counting version accented `other` and produced messages
+    that stopped parsing.
+  - **Evidence:** 44 traces across `icu.test.ts`, `localizer.test.ts`, and `catalogs.test.ts`.
+    `architecture:check` gained a rule that no file under `src/project/` may import `src/l10n/`,
+    proven to bite by introducing a violation; it is stated as an import rule rather than a naming
+    rule so it cannot be satisfied by re-exporting. That guard is what keeps the locale-invariance
+    clause of P10.4 true as localization spreads: canonical ordering already used `localeCompare`
+    in eleven files once, and a hash-guarded artifact then disagreed with itself across a locale
+    change.
+
+- [x] **P10.4.2 — The action catalogue is extracted and rendered translated.** Every label, hint,
+  disabled reason, and XR-withheld reason in the registry carries a message id and resolves through
+  the active language on every surface.
+  - **Accept:** no action string can escape extraction; one seam localizes DOM, XR, palette, and
+    context menus together; and the reference language costs nothing.
+  - **Current:** extraction is by construction (`EVID-128`). `scripts/generate-messages.mjs` reads
+    the registry itself and derives `action.<id>.{label,hint,reason,xrUnsupported}` — there is no
+    second table to fall behind, and adding an action whose label escapes the catalogue is not
+    possible, it is a test failure. Rendering is one seam: `ActionRegistry.useTextSource` rebuilds
+    its view on a language change, and since every shell already reads through `all()`/`get()`,
+    DOM, XR, the command palette, and context menus switch at the same instant. A menu that
+    translated while a tooltip did not would read as a broken translation rather than an absent
+    one. With no text source the registry returns its declared objects unchanged, so the 200-odd
+    headless tests that build it pay nothing — not an allocation, not a changed identity.
+    659 messages are extracted, all 659 from the action catalogue.
+  - **The English catalogue is fetched, not bundled.** Every message's English is already in the
+    build, at its call site, as the `source` argument `t` falls back to; compiling a reference
+    catalogue in as well was a second copy of the same text and cost 83 KB of main chunk. It ships
+    as `public/l10n/en.json` and is fetched only by what needs the whole set at once — the
+    pseudo-locales — so the entire localization machinery costs 17 KB rather than 100 KB, and a
+    pseudo-locale that cannot reach it is refused rather than shown half-applied.
+  - **Translations are upstream's own, not invented.** Snapmaker OrcaSlicer ships twenty reviewed
+    `.po` catalogues at the parity commit, and a large part of this menu surface says exactly what
+    upstream's does. Seeding is exact-match on the English with two recorded normalisations —
+    wxWidgets accelerator markers removed, a trailing ellipsis lifted off before matching and put
+    back after — so a reviewer can see which rule produced each translation. Nothing is
+    machine-translated. 1,114 translations landed across 19 languages; each catalogue records the
+    pinned `.po` blob it came from, which is what lets a checkout without the upstream clone verify
+    the same data. `l10n:verify` runs in `quality` and degrades honestly without the checkout.
+  - **A translation that dropped a placeholder is refused, not shipped.** Both the generator and
+    the catalogue traces compare the argument list of every translation to its source, because a
+    translated sentence that lost `{count}` renders "objects will be deleted" with no number in it,
+    and the operator confirms a destructive action without the fact they needed.
+  - **Runtime switching is a real control.** `help_language` is a registry action like any other —
+    reachable from the menu, the command palette, XR, and automation — because an operator who
+    cannot read the current language needs the one control that fixes that to be findable by more
+    than one route. The picker leads with each language's endonym; a list that offers "German" to
+    someone who reads only German is a list they cannot use. The choice persists under
+    `orcaxr.language` and outranks `navigator.languages`, and `document.documentElement.lang`/`dir`
+    move with it, because `lang` is what a screen reader picks a voice from.
+
+- [~] **P10.4.3 — Extract the remaining user-facing strings.** Panels, dialogs, status lines,
+  errors, help content, and preflight explanations still hold English literals at their use sites.
+  - **Accept:** the extraction scan finds no user-facing string outside the catalogue except
+    fixture and model data, and the allowlist that permits any exception is empty.
+  - **Current:** the mechanism for this exists and is enforced for the shape it covers:
+    `t(id, source)` calls are found by walking the TypeScript AST, and a non-literal id or source
+    is an error rather than a string that quietly never gets translated. The English stays at the
+    call site — there is only one copy of it — and the reference catalogue is derived.
+  - **Outstanding:** the sweep itself, across roughly 113,000 lines. No `t()` call sites exist yet
+    outside the derived action namespace, so every panel, dialog, and status line is still English.
+    The scan cannot yet be made exhaustive — turning it on repo-wide today would report thousands
+    of findings and could only be silenced by an allowlist, which is the failure mode this plan
+    exists to prevent. It becomes a real gate as the sweep lands, surface by surface.
+
+- [~] **P10.4.4 — Pseudo-localization and RTL layout gates.** The expanded and mirrored runs must
+  fail the build on a clipped or mis-mirrored critical control, not merely be available.
+  - **Accept:** a pseudo-long and a mirrored run of the canonical tasks clip no critical control
+    and reverse no directional affordance; documented geometry-direction exceptions are recorded.
+  - **Current:** both pseudo-locales are generated for the whole catalogue and proven to keep every
+    message parseable and argument-preserving, and the expanded locale is materially longer, which
+    is the property that finds a clipped control. `?pseudo` exposes them in the picker.
+  - **Outstanding:** the runs are not yet wired into `test:a11y` or the e2e smoke, so nothing fails
+    on a clipped control — only a human looking at it would notice. The DOM also has to be audited
+    for physical `left`/`right` CSS before a mirrored run means anything; the language picker uses
+    `margin-inline-start` but the rest of the ~1,000-line stylesheet is unaudited. Note that none
+    of the twenty upstream languages is RTL, which is a fact about upstream's catalogue rather than
+    a reason to skip this: the mirrored pseudo-locale is what keeps the path honest.
+
+- [~] **P10.4.5 — Translation completeness and upkeep.** The languages OrcaXR offers must be
+  substantially complete, and staying complete must be someone's job with a gate behind it.
+  - **Accept:** every offered language covers the catalogue above an agreed threshold, or is
+    labelled as partial where it is offered; a message added without a translation is visible.
+  - **Current:** coverage is measured and reported honestly rather than asserted upward —
+    1,114 of a possible 12,521 across 19 languages, best case 60 of 659. The `Localizer` records
+    every fallback to English per locale, which is the raw material for the gate.
+  - **Outstanding:** 8.9% is a seed, not a translation. Nothing yet routes new strings to
+    translators, nothing labels a partial language as partial in the picker, and no threshold is
+    enforced. Offering a language whose catalogue is one-tenth full without saying so overstates
+    what an operator will get.
 
 - [~] **P10.5 — Qualify XR as a complete surface.** World scale, origin/recenter, seated/standing
   reach, dominant hand, ray/direct interaction, grab/manipulator precision, panels, keyboard/text
@@ -3621,7 +3735,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Camera/console/macros/history | P9.6 | A G-code console that classifies every command before it is sent, confirms anything that moves/heats/halts, reads the printer's own macros with the parameters their bodies declare, a paged print history with totals and estimate comparison, and cameras shown as authenticated snapshots that stop fetching when hidden; live stream transports (`ADAPT-12`) and XR remain |
 | Responsive desktop/tablet/mobile IA and complete states | P10.1 | Layout and full palette reachability gated across five viewports (`EVID-063`); comparative task studies and visual review unmet |
 | WCAG AA, keyboard, screen reader, non-color states | P10.2–P10.3 | Axe, headless tree semantics, keyboard menus/modal focus, registry-derived shortcut dispatch/help/ARIA metadata, and conflict tests pass; complete contexts/remapping workflows and manual assistive review remain |
-| Localization/pseudo-localization/RTL-safe layout | P10.4 | Locale-invariant serialization is proven and guarded; extraction, message IDs, runtime switching, pseudo-localization, and RTL are all missing |
+| Localization/pseudo-localization/RTL-safe layout | P10.4 | Locale-invariant serialization is proven and guarded by an import rule; message IDs, ICU formatting, runtime switching, and both pseudo-locales exist, and the 659-message action catalogue is extracted and translated from upstream's pinned catalogues; the string sweep across the remaining surfaces, the pseudo/RTL build gates, and translation completeness are open as P10.4.3–P10.4.5 |
 | XRBlocks typed design system, correct reactive API, local assets | P10.9 | Exact pins, local icons, audited UI/UIBlocks contract, and an exact-typed signal-aware action-button adapter with guarded states/disposal exist; full composite kit/gallery remains |
 | Complete XR workflows and common capability gating | P2.6, P10.5, P10.9–P10.10 | Shell exists and DOM-only printer submission is truthfully withheld from XR pending a native confirmation flow; many workflows and input modes remain missing |
 | XR update/input ownership, cleanup, comfort, headset budgets | P10.10 | Duplicate owners removed; per-controller sticky UI suppression, transition snapshots, actual-hit targeting, stale-event refusal, and idempotent handle/guard disposal are tested foundations; frame counters/headset budgets remain |
@@ -3850,6 +3964,7 @@ second false finding out of this ledger. The browser suites were re-run alone af
 | `EVID-125` | P5.8, P11.2, P0.2 | Current worktree atop `48eef76`; commit pending | `9fd12ff...` | 2026-08-18 | `npm --prefix web run quality`; `src/project/objects/__tests__/primitives.test.ts`; upstream `src/slic3r/GUI/GUI_ObjectList.cpp::create_mesh` and `libslic3r/TriangleMesh.cpp` | Node 22.21.0; **no headset, no hardware** | Pass: three of the six stock primitives were missing — cone, disc and torus — and the three that existed were built inline in the XR workspace where nothing could measure them. Both are fixed the same way: `project/objects/primitives.ts` generates all six from geometry alone, so what an operator gets is measurable in Node. **The dimensions are upstream's**, read from `create_mesh` with its `side` at the 20 mm this app already used: a cone is radius 0.5×side by side tall, a torus is 0.5×side major by 0.125×side tube — 25 mm across and 5 mm tall — and **a disc is 0.2 mm thick because upstream's disc is a cylinder of literal height 0.2**, not a proportion; scaling it would have silently produced the short cylinder upstream already offers separately. 4 traces measure the bounding boxes, prove a cone stands on its base rather than its point, prove the torus hole is real at exactly 7.5 mm, and require the catalog to offer exactly the kinds the module builds — a shape nobody can add and a menu entry with no shape both fail. The three new entries are on the Add menu and the plate context menu, and the classification overlay moved them from `absent` to `action`, so the gap list shrank because something was built rather than relabelled. 202/202 unit, 5/5 integration, 86/86 project, 12/12 slice, 10/10 settings, and 1/1 XR files pass; bundle main 2,171,485 bytes | Automated review; **tessellation is deliberately not upstream's** — its torus is 120 × 120 segments (28,800 triangles) for a 20 mm decoration and this one is 96 × 32, on the grounds that the shape is what gets printed. Nothing here has been sliced or printed: no G-code was generated from any of the three, and no watertightness check beyond finite coordinates was run |
 | `EVID-126` | P5.1, P11.2, P0.2 | Current worktree atop `90831a0`; commit pending | `9fd12ff...` | 2026-08-18 | `npm --prefix web run quality`; `src/project/objects/__tests__/transform-operations.test.ts`; upstream `src/slic3r/GUI/Selection.cpp::scale_to_fit_print_volume` | Node 22.21.0; **no headset, no hardware** | Pass: scale-to-build-volume, one of the 22 items the classification named as absent, is built with upstream's own semantics. One uniform factor — the smallest of the three axis ratios — applied about the selection's centre, so a multi-model layout keeps its arrangement; then centred on the bed and dropped to Z = 0, because a model scaled about its centre otherwise ends up half underground. It scales **up** as readily as down, which is what upstream means by fit. Upstream's 0.02 mm tolerance is reproduced, so a fitted model is not then reported as out of bounds by floating-point noise. **The build height is read from the live profile**, and the action refuses rather than assuming one: a factor computed against a taller machine scales a model into the gantry, and one trace pins exactly that — a 60 mm ceiling limits the factor and the footprint ends well inside the bed. An exact fit returns no changes at all rather than an empty transaction, because an undo entry that restores the same project teaches people that undo is unreliable. 4 traces cover fill/centre/rest, the short machine, three models keeping their spacing (the gap grows by exactly the factor), and the refusals. 203/203 unit, 5/5 integration, 87/87 project, 12/12 slice, 10/10 settings, and 1/1 XR files pass; bundle main 2,173,959 bytes | Automated review; a **rectangular** build volume only. Upstream also fits to a circular bed and to a custom printable-area polygon; this takes the profile's bed extents as a box, which is right for both target printers and wrong for a delta. Nothing was sliced or printed, and no browser drove the new action — its traces are the canonical operation, not the button |
 | `EVID-127` | P2.2, P7.1, P11.2, P0.2 | Current worktree atop `4b55d45`; commit pending | `9fd12ff...` | 2026-08-18 | `npm --prefix web run quality`; `src/project/__tests__/printable-slice.test.ts` driving the shipped WASM engine | Node 22.21.0; **no hardware** | Pass, and the interesting part is what was already there. The canonical model has carried `printable` on every instance since P1, `SetInstancePrintableCommand` existed **unused**, the serializer writes the flag, and arrange already skipped an excluded instance — everything except a way to set it and any evidence the engine honours it. That second gap was the real question, and an archive assertion could not answer it: writing `printable="0"` and watching it round-trip says nothing about whether the slicer skips the instance. **So the engine was asked.** Two cubes on a plate use 1.7× the filament of one; with the second marked unprintable the program lands within 5% of the one-cube program rather than the two-cube one. The engine honours it, so no exclusion logic was added to the serializer — the correct amount of new slicing code here was none. What was added is the toggle: one action, direction decided by the selection's current state, a mixed selection made printable rather than half-flipped, and no history entry for an instance already in the requested state. A second trace pins the flag through a save/reopen and an undo. The Objects tree already renders "Not printable", so the state was visible before it was settable. 204/204 unit, 5/5 integration, 88/88 project, 13/13 slice, 10/10 settings, and 1/1 XR files pass; bundle main 2,175,995 bytes | Automated review; **no browser drove the toggle** — the traces are the canonical command and the engine, not the menu entry. Upstream also toggles printability on a whole object and on a plate from the same checkbox; this is per instance, which is where the canonical model keeps it. No hardware print has confirmed that an excluded model is absent from a physical plate |
+| `EVID-128` | P10.4.1, P10.4.2, P10.4, P0.2 | Current worktree atop `ecef377`; commit pending | `9fd12ff...` | 2026-08-18 | `npm --prefix web run quality`; `src/l10n/__tests__/{icu,localizer,catalogs}.test.ts`; `npm --prefix web run l10n:verify`; `architecture:check` | Node 22.21.0; Chrome for Testing 150.0.7871.24; **no headset, no hardware** | Pass: OrcaXR can be used in a language other than English, and the 659-message action catalogue — every label, hint, disabled reason, and XR-withheld reason — is extracted and rendering translated. **Extraction is by construction rather than by discipline:** the generator reads the action registry itself and derives `action.<id>.<field>` ids, so there is no second table to fall behind and adding an action whose label escapes the catalogue is a test failure, not an oversight. **Translations are upstream's own work, not invented:** Snapmaker OrcaSlicer ships twenty reviewed `.po` catalogues at the parity commit and a large part of this menu surface says exactly what upstream's does, so 1,114 translations across 19 languages were seeded by exact English match plus two recorded normalisations (accelerator markers, trailing ellipsis), each catalogue naming the pinned `.po` blob it came from. Nothing is machine-translated. **Rendering is one seam:** `ActionRegistry.useTextSource` means DOM, XR, the command palette, and context menus switch at the same instant — a menu that translated while a tooltip did not would read as a broken translation rather than an absent one — and with no text source the registry returns its declared objects unchanged, so the headless tests that build it pay nothing. Plural category comes from `Intl.PluralRules`, so Russian's three categories and Polish's four are right rather than English-shaped; a malformed translation renders as itself and reports instead of throwing inside a render; a switch that fails leaves the previous language intact; and both pseudo-locales are generated for the whole catalogue with ICU structure preserved. `architecture:check` gained a rule that no file under `src/project/` may import `src/l10n/`, **proven to bite by introducing a violation**, which is what keeps P10.4's locale-invariance clause true as localization spreads. The English catalogue ships as a fetched file rather than a compiled-in module, because the English is already at every call site — that took the cost of the whole feature from 83 KB of main chunk to 17 KB. 206/206 unit, 5/5 integration, 86/86 project, 13/13 slice, 10/10 settings, 3/3 l10n, and 1/1 XR files pass | Automated review; **this is mechanism plus one surface, not a localized application.** 8.9% catalogue coverage is a seed: the fullest language has 60 of 659 messages, and no language is complete. Every panel, dialog, status line, and error is still an English literal at its use site — no `t()` call sites exist outside the derived action namespace — so P10.4.3 tracks a sweep across roughly 113,000 lines. The pseudo-long and mirrored runs exist and are proven structurally sound but are **not wired into any build gate**, so nothing fails on a clipped control (P10.4.4); the ~1,000-line stylesheet is unaudited for physical `left`/`right`. Seeding by English match cannot distinguish a shared label from a coincidence — the placeholder-preservation check catches the dangerous class, not the merely wrong one — and no language is labelled partial in the picker despite being one (P10.4.5). No headset has rendered a non-English XR menu |
 
 Correction note (2026-07-20): the provisional local-commit cells in `EVID-001`–`EVID-012`
 were filled with the commit that landed those runs. Their historical commands, counts, results,

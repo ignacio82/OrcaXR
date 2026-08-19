@@ -670,6 +670,17 @@ export class ActionContext {
   showHelpSearch(): void {
     this.workspace.showHelpSearch();
   }
+  /**
+   * Open the language picker (P10.4).
+   *
+   * Routed like every other action rather than owned by the DOM header, so the
+   * choice is reachable from the command palette, from XR, and from automation
+   * — an operator who cannot read the current language needs the one control
+   * that fixes that to be findable by more than one route.
+   */
+  chooseLanguage(): void {
+    this.workspace.showLanguagePicker();
+  }
   showShortcuts(): void {
     this.workspace.showModal('Keyboard Shortcuts', shortcutsHtml(this.registry.all()));
   }

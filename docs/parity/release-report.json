@@ -91,8 +91,8 @@
     "why": "P12.6 permits the full-parity claim only after every gate is verified; none of the human gates below has been."
   },
   "evidence": {
-    "rows": 128,
-    "tasksCovered": 92
+    "rows": 129,
+    "tasksCovered": 95
   },
   "integrity": {
     "claimedButUnrecorded": []
@@ -194,11 +194,11 @@
   "tasks": {
     "byState": {
       "unstarted": 5,
-      "x": 2,
-      "~": 95
+      "x": 4,
+      "~": 98
     },
     "completeWithoutEvidence": [],
-    "total": 102,
+    "total": 107,
     "unstarted": [
       "P5.3",
       "P8.6",

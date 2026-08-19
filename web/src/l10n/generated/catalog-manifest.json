@@ -1,0 +1,245 @@
+{
+  "schemaVersion": 1,
+  "upstream": {
+    "repository": "https://github.com/Snapmaker/OrcaSlicer.git",
+    "commit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+    "catalogRoot": "localization/i18n"
+  },
+  "policy": {
+    "reference": "Every id below is extracted from source: action ids are derived from the registry, the rest from t(id, source) calls. The English is the source text at the call site, so there is only one copy of it.",
+    "seeding": "Translations are upstream msgstr values for the same English, matched exactly or after removing a wxWidgets accelerator marker or a trailing ellipsis. Nothing is machine-translated."
+  },
+  "referenceLocale": "en",
+  "messageCount": 659,
+  "actionMessageCount": 659,
+  "catalogs": [
+    {
+      "locale": "ca",
+      "upstreamPath": "localization/i18n/ca/Snapmaker_Orca_ca.po",
+      "blob": "0737b5c756a3e5c11c892a80737795b296cfea92",
+      "upstreamMessages": 4200,
+      "translated": 61,
+      "seededBy": {
+        "exact": 54,
+        "accelerator": 0,
+        "ellipsis": 7
+      }
+    },
+    {
+      "locale": "cs",
+      "upstreamPath": "localization/i18n/cs/Snapmaker_Orca_cs.po",
+      "blob": "d633f3367bce92e53a02010743a7fbcee9fd317f",
+      "upstreamMessages": 3415,
+      "translated": 54,
+      "seededBy": {
+        "exact": 48,
+        "accelerator": 0,
+        "ellipsis": 6
+      }
+    },
+    {
+      "locale": "de",
+      "upstreamPath": "localization/i18n/de/Snapmaker_Orca_de.po",
+      "blob": "2e8de07b287a5739af9ee6fd1dbe2c87f9dd04de",
+      "upstreamMessages": 4427,
+      "translated": 61,
+      "seededBy": {
+        "exact": 54,
+        "accelerator": 0,
+        "ellipsis": 7
+      }
+    },
+    {
+      "locale": "es",
+      "upstreamPath": "localization/i18n/es/Snapmaker_Orca_es.po",
+      "blob": "8c38ff57e1e33476a86f20b220cae746f7105e36",
+      "upstreamMessages": 4053,
+      "translated": 60,
+      "seededBy": {
+        "exact": 53,
+        "accelerator": 0,
+        "ellipsis": 7
+      }
+    },
+    {
+      "locale": "fr",
+      "upstreamPath": "localization/i18n/fr/Snapmaker_Orca_fr.po",
+      "blob": "7810c5d55a5ab388807f9d611f35564e97105495",
+      "upstreamMessages": 4178,
+      "translated": 61,
+      "seededBy": {
+        "exact": 54,
+        "accelerator": 0,
+        "ellipsis": 7
+      }
+    },
+    {
+      "locale": "hu",
+      "upstreamPath": "localization/i18n/hu/Snapmaker_Orca_hu.po",
+      "blob": "f8bb441f9c48c488d0c1dbe21888cd1783ac0bd8",
+      "upstreamMessages": 2710,
+      "translated": 53,
+      "seededBy": {
+        "exact": 47,
+        "accelerator": 0,
+        "ellipsis": 6
+      }
+    },
+    {
+      "locale": "it",
+      "upstreamPath": "localization/i18n/it/Snapmaker_Orca_it.po",
+      "blob": "925baf5108f06504a2251ee2502b6acaa6620c22",
+      "upstreamMessages": 4231,
+      "translated": 61,
+      "seededBy": {
+        "exact": 54,
+        "accelerator": 0,
+        "ellipsis": 7
+      }
+    },
+    {
+      "locale": "ja",
+      "upstreamPath": "localization/i18n/ja/Snapmaker_Orca_ja.po",
+      "blob": "dc5b113cbcf1d66a4584788aeaad0817de07b5c3",
+      "upstreamMessages": 2565,
+      "translated": 51,
+      "seededBy": {
+        "exact": 46,
+        "accelerator": 0,
+        "ellipsis": 5
+      }
+    },
+    {
+      "locale": "ko",
+      "upstreamPath": "localization/i18n/ko/Snapmaker_Orca_ko.po",
+      "blob": "9d02bec2c92d0297b625e21a603e29e030908054",
+      "upstreamMessages": 4199,
+      "translated": 61,
+      "seededBy": {
+        "exact": 54,
+        "accelerator": 0,
+        "ellipsis": 7
+      }
+    },
+    {
+      "locale": "lt",
+      "upstreamPath": "localization/i18n/lt/Snapmaker_Orca_lt.po",
+      "blob": "85c8dcbb56a0d995c12ae61ae24e7c242701e22e",
+      "upstreamMessages": 4154,
+      "translated": 61,
+      "seededBy": {
+        "exact": 54,
+        "accelerator": 0,
+        "ellipsis": 7
+      }
+    },
+    {
+      "locale": "nl",
+      "upstreamPath": "localization/i18n/nl/Snapmaker_Orca_nl.po",
+      "blob": "64a4ba2c47a0a7ed99235c4d4297999f89857077",
+      "upstreamMessages": 3013,
+      "translated": 52,
+      "seededBy": {
+        "exact": 47,
+        "accelerator": 0,
+        "ellipsis": 5
+      }
+    },
+    {
+      "locale": "pl",
+      "upstreamPath": "localization/i18n/pl/Snapmaker_Orca_pl.po",
+      "blob": "5029d4c66e61fcd0f9191813de649ccbdf90db89",
+      "upstreamMessages": 4198,
+      "translated": 61,
+      "seededBy": {
+        "exact": 54,
+        "accelerator": 0,
+        "ellipsis": 7
+      }
+    },
+    {
+      "locale": "pt-BR",
+      "upstreamPath": "localization/i18n/pt_BR/Snapmaker_Orca_pt_BR.po",
+      "blob": "1db2c2de942fb3dbae6beefe3f2c543f330bf47b",
+      "upstreamMessages": 4400,
+      "translated": 61,
+      "seededBy": {
+        "exact": 54,
+        "accelerator": 0,
+        "ellipsis": 7
+      }
+    },
+    {
+      "locale": "ru",
+      "upstreamPath": "localization/i18n/ru/Snapmaker_Orca_ru.po",
+      "blob": "4a062ee0f99374f06e7c8186cba7f30430846b57",
+      "upstreamMessages": 4246,
+      "translated": 61,
+      "seededBy": {
+        "exact": 54,
+        "accelerator": 0,
+        "ellipsis": 7
+      }
+    },
+    {
+      "locale": "sv",
+      "upstreamPath": "localization/i18n/sv/Snapmaker_Orca_sv.po",
+      "blob": "9bfd4cef479d0023e47b7732649f5af82e9146d1",
+      "upstreamMessages": 2821,
+      "translated": 52,
+      "seededBy": {
+        "exact": 46,
+        "accelerator": 0,
+        "ellipsis": 6
+      }
+    },
+    {
+      "locale": "tr",
+      "upstreamPath": "localization/i18n/tr/Snapmaker_Orca_tr.po",
+      "blob": "ee26650ea2aafc6169112be1c0224e0cba734d79",
+      "upstreamMessages": 4425,
+      "translated": 61,
+      "seededBy": {
+        "exact": 54,
+        "accelerator": 0,
+        "ellipsis": 7
+      }
+    },
+    {
+      "locale": "uk",
+      "upstreamPath": "localization/i18n/uk/Snapmaker_Orca_uk.po",
+      "blob": "32596f96fdf9a679f1c0d89a236455db6cda85d4",
+      "upstreamMessages": 4163,
+      "translated": 60,
+      "seededBy": {
+        "exact": 53,
+        "accelerator": 0,
+        "ellipsis": 7
+      }
+    },
+    {
+      "locale": "zh-Hans",
+      "upstreamPath": "localization/i18n/zh_CN/Snapmaker_Orca_zh_CN.po",
+      "blob": "6cc731d73aff7a1da2890a0ad508695919c699fa",
+      "upstreamMessages": 4431,
+      "translated": 61,
+      "seededBy": {
+        "exact": 54,
+        "accelerator": 0,
+        "ellipsis": 7
+      }
+    },
+    {
+      "locale": "zh-Hant",
+      "upstreamPath": "localization/i18n/zh_TW/Snapmaker_Orca_zh_TW.po",
+      "blob": "5bf5cc3f5a8507811aeb417443d5372d8c5a05a8",
+      "upstreamMessages": 4251,
+      "translated": 61,
+      "seededBy": {
+        "exact": 54,
+        "accelerator": 0,
+        "ellipsis": 7
+      }
+    }
+  ]
+}

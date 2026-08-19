@@ -354,6 +354,45 @@ export interface ActionDefinition {
 /** Fully normalized entry returned by ActionRegistry. */
 export type Action = ActionDefinition & { readonly capability: Capability };
 
+/**
+ * One action's user-facing text, read from the active catalogue.
+ *
+ * Four fields carry text an operator reads: the label, the tooltip, the reason
+ * a control is disabled, and the reason it is absent from XR. The last two are
+ * shown verbatim when something is withheld, which is precisely the moment an
+ * untranslated sentence is least excusable — the operator is already blocked
+ * and is being told why.
+ */
+function localizeAction(action: Action, source: ActionTextSource): Action {
+  const label = source.t(`action.${action.id}.label`, action.label);
+  const hint = action.hint === undefined ? undefined : source.t(`action.${action.id}.hint`, action.hint);
+  const xrUnsupportedReason =
+    action.xrUnsupportedReason === undefined
+      ? undefined
+      : source.t(`action.${action.id}.xrUnsupported`, action.xrUnsupportedReason);
+  const reason =
+    action.capability.reason === undefined
+      ? undefined
+      : source.t(`action.${action.id}.reason`, action.capability.reason);
+  if (
+    label === action.label &&
+    hint === action.hint &&
+    xrUnsupportedReason === action.xrUnsupportedReason &&
+    reason === action.capability.reason
+  ) {
+    // The reference language resolves to the declared text, so identity is kept
+    // rather than allocating a copy of the whole catalog per read.
+    return action;
+  }
+  return {
+    ...action,
+    label,
+    ...(hint === undefined ? {} : { hint }),
+    ...(xrUnsupportedReason === undefined ? {} : { xrUnsupportedReason }),
+    capability: reason === undefined ? action.capability : { ...action.capability, reason },
+  };
+}
+
 export type ActionAvailability =
   { state: 'hidden'; reason: string } | { state: 'disabled'; reason: string } | { state: 'enabled' };
 
@@ -629,9 +668,23 @@ const PREREQUISITES: Readonly<
   },
 };
 
+/**
+ * Reads localized text for the registry (P10.4).
+ *
+ * Structurally typed rather than importing `Localizer`, so the registry — which
+ * every headless test builds — does not acquire a localization dependency to
+ * hold English text it already has.
+ */
+export interface ActionTextSource {
+  t(id: string, source: string): string;
+  readonly locale: string;
+}
+
 export class ActionRegistry {
   private actions: Action[] = [];
   private byId = new Map<string, Action>();
+  private textSource?: ActionTextSource;
+  private localized?: { locale: string; actions: Action[]; byId: Map<string, Action> };
 
   /** Register one action (throws on duplicate id — a parity/wiring bug). */
   add(definition: ActionDefinition): this {
@@ -674,25 +727,65 @@ export class ActionRegistry {
     return this;
   }
 
+  /**
+   * Render this catalog in the operator's language.
+   *
+   * Localization is applied *here* rather than at each of the dozens of places
+   * that draw a label, because a menu that translated and a tooltip that did
+   * not is worse than an untranslated app: it looks like the translation is
+   * broken rather than absent. Every shell already reads text through `all()`
+   * and `get()`, so one seam covers DOM, XR, the palette, and context menus.
+   *
+   * Ids are derived from the action id, which is what lets the extractor take
+   * them straight off the registry — there is no second table to maintain and
+   * no way to add an action whose label escapes the catalogue.
+   */
+  useTextSource(source: ActionTextSource | undefined): this {
+    this.textSource = source;
+    this.localized = undefined;
+    return this;
+  }
+
   get(id: string): Action | undefined {
-    return this.byId.get(id);
+    return this.view().byId.get(id);
   }
 
   all(): readonly Action[] {
+    return this.view().actions;
+  }
+
+  /** The catalog as declared, in English, whatever language is active. */
+  allSource(): readonly Action[] {
     return this.actions;
+  }
+
+  /**
+   * The localized view, rebuilt only when the language changes.
+   *
+   * Without a text source the declared objects are returned unchanged, so a
+   * headless caller keeps referential identity and pays nothing.
+   */
+  private view(): { actions: Action[]; byId: Map<string, Action> } {
+    const source = this.textSource;
+    if (!source) return { actions: this.actions, byId: this.byId };
+    if (this.localized?.locale === source.locale) return this.localized;
+    const actions = this.actions.map((action) => localizeAction(action, source));
+    const byId = new Map(actions.map((action) => [action.id, action]));
+    this.localized = { locale: source.locale, actions, byId };
+    return this.localized;
   }
 
   /** Actions with a given disclosure, optionally filtered by group. */
   byDisclosure(disclosure: Disclosure, group?: GroupId): Action[] {
-    return this.actions.filter((a) => a.disclosure === disclosure && (group === undefined || a.group === group));
+    return this.view().actions.filter((a) => a.disclosure === disclosure && (group === undefined || a.group === group));
   }
 
   byGroup(group: GroupId): Action[] {
-    return this.actions.filter((a) => a.group === group);
+    return this.view().actions.filter((a) => a.group === group);
   }
 
   forSurface(surface: ActionSurface): Action[] {
-    return this.actions.filter((action) => action.capability.surfaces.includes(surface));
+    return this.view().actions.filter((action) => action.capability.surfaces.includes(surface));
   }
 
   /**

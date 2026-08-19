@@ -4743,6 +4743,14 @@ export class OrcaWorkspace extends xb.Script {
   /** Injected by the shell; owns a live, searchable help surface. */
   public onShowHelpSearch: (() => void) | null = null;
 
+  /** Injected by main.ts: opens the language picker (P10.4). */
+  public onShowLanguagePicker: (() => void) | null = null;
+
+  public showLanguagePicker(): void {
+    if (this.onShowLanguagePicker) this.onShowLanguagePicker();
+    else this.setStatus('Language selection is unavailable in this shell.');
+  }
+
   public showHelpSearch(): void {
     if (this.onShowHelpSearch) this.onShowHelpSearch();
     else this.setStatus('Help search is unavailable in this shell.');

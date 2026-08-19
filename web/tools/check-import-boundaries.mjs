@@ -11,7 +11,7 @@ import { inspectLiveCanonicalBoundaries, selfTestLiveCanonicalBoundaries } from 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const protectedRoots = [path.join(root, 'src/project/domain'), path.join(root, 'src/project/history')];
 const forbiddenPackages = ['three', 'three-mesh-bvh', 'xrblocks', '@pmndrs/uikit', 'lit'];
-const forbiddenProjectSegments = new Set(['actions', 'features', 'mcp', 'net', 'slicer', 'ui', 'workspace']);
+const forbiddenProjectSegments = new Set(['actions', 'features', 'l10n', 'mcp', 'net', 'slicer', 'ui', 'workspace']);
 const browserGlobals = new Set([
   'window',
   'document',
@@ -36,14 +36,76 @@ const failures = [];
 for (const directory of protectedRoots) {
   for (const file of walk(directory)) inspect(file);
 }
-failures.push(...inspectLiveCanonicalBoundaries(root), ...selfTestLiveCanonicalBoundaries());
+failures.push(
+  ...inspectLiveCanonicalBoundaries(root),
+  ...selfTestLiveCanonicalBoundaries(),
+  ...inspectLocaleIndependence(),
+);
 
 if (failures.length > 0) {
   console.error('Architecture boundary violations:');
   for (const failure of failures) console.error(`  ${failure}`);
   process.exitCode = 1;
 } else {
-  console.log('Architecture boundaries: domain/history are platform-neutral and live project I/O is canonical.');
+  console.log(
+    'Architecture boundaries: domain/history are platform-neutral, live project I/O is canonical, ' +
+      'and no canonical code can localize.',
+  );
+}
+
+/**
+ * Nothing under `src/project/` may reach `src/l10n/` (P10.4).
+ *
+ * Everything in the localization module is locale-dependent by construction —
+ * number formats, collation, plural choice — and everything under `src/project/`
+ * decides the bytes of a saved file. The two must not meet. This is not a
+ * hypothetical: canonical ordering already used `localeCompare` in eleven files
+ * once, which made a project's bytes depend on the machine that produced it,
+ * and a hash-guarded artifact then disagreed with itself across a locale
+ * change. A translated error message inside canonical code is how that returns.
+ *
+ * Wider than the two protected roots above because serialization is not
+ * confined to them, and stated as an import rule rather than a naming rule so
+ * it cannot be satisfied by re-exporting.
+ */
+function inspectLocaleIndependence() {
+  const found = [];
+  const projectRoot = path.join(root, 'src/project');
+  for (const file of walk(projectRoot)) {
+    const sourceText = fs.readFileSync(file, 'utf8');
+    if (!sourceText.includes('l10n')) continue;
+    const source = ts.createSourceFile(file, sourceText, ts.ScriptTarget.Latest, true);
+    const relative = path.relative(root, file);
+    const check = (node, specifier) => {
+      const resolved = specifier.startsWith('.')
+        ? path.relative(path.join(root, 'src'), path.resolve(path.dirname(file), specifier))
+        : specifier;
+      if (!resolved.split(/[/\\]/).includes('l10n')) return;
+      found.push(
+        `${relative}:${lineOf(source, node)} imports ${specifier} — canonical code must stay locale-independent`,
+      );
+    };
+    const visit = (node) => {
+      if (
+        (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+        node.moduleSpecifier &&
+        ts.isStringLiteral(node.moduleSpecifier)
+      ) {
+        check(node.moduleSpecifier, node.moduleSpecifier.text);
+      }
+      if (
+        ts.isCallExpression(node) &&
+        node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+        node.arguments.length === 1 &&
+        ts.isStringLiteral(node.arguments[0])
+      ) {
+        check(node.arguments[0], node.arguments[0].text);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+  return found;
 }
 
 function inspect(file) {

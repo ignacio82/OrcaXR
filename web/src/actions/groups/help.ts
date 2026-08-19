@@ -106,6 +106,16 @@ export const helpActions: Action[] = [
     run: (ctx) => ctx.checkForUpdates(),
   },
   {
+    id: 'help_language',
+    label: 'Language…',
+    icon: 'language',
+    group: 'help',
+    disclosure: 'menu',
+    menuSection: 'help',
+    hint: 'Choose the language OrcaXR is shown in',
+    run: (ctx) => ctx.chooseLanguage(),
+  },
+  {
     id: 'help_about',
     label: 'About OrcaXR',
     icon: 'info',

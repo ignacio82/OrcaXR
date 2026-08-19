@@ -21,6 +21,8 @@
     "profiles:verify": "node scripts/verify-pinned-profile-overlays.mjs && node scripts/generate-profile-catalog.mjs --check",
     "calibration:sync": "node scripts/generate-calibration-inventory.mjs",
     "calibration:verify": "node scripts/generate-calibration-inventory.mjs --check",
+    "l10n:sync": "node --import tsx scripts/generate-messages.mjs",
+    "l10n:verify": "node --import tsx scripts/generate-messages.mjs --check",
     "settings:scopes": "node ../tools/settings-schema/generate-scopes.mjs",
     "settings:verify": "npm run profiles:verify && node ../tools/settings-schema/generate.mjs --check && node ../tools/settings-schema/generate-scopes.mjs --check && node ../tools/settings-schema/self-test.mjs",
     "security:check": "node scripts/security-contract.mjs",
@@ -37,11 +39,12 @@
     "test:local-network": "node scripts/run-tests.mjs local-network.test.ts",
     "test:project": "node scripts/run-tests.mjs src/project/ --exclude -slice.test.ts",
     "test:settings": "node scripts/run-tests.mjs src/settings/",
+    "test:l10n": "node scripts/run-tests.mjs src/l10n/",
     "test:xr": "node scripts/run-tests.mjs xr-shell.test.ts",
     "test:e2e": "npm run build && npm run offline:check && node scripts/e2e-smoke.mjs && node scripts/offline-smoke.mjs",
     "test:a11y": "npm run build && node scripts/a11y-smoke.mjs",
     "size:check": "node scripts/size-check.mjs",
-    "quality": "npm run icons:verify && npm run security:check && npm run format:check && npm run lint && npm run typecheck && npm run architecture:check && npm run test:unit && npm run test:integration && npm run test:project && npm run test:settings && npm run test:xr && npm run parity:verify && npm run parity:drift && npm run parity:artifacts && npm run parity:report:check && npm run settings:verify && npm run calibration:verify && npm run parity:oracles && npm run test:e2e && npm run test:a11y && npm run test:slice && npm run size:check",
+    "quality": "npm run icons:verify && npm run security:check && npm run format:check && npm run lint && npm run typecheck && npm run architecture:check && npm run test:unit && npm run test:integration && npm run test:project && npm run test:settings && npm run test:l10n && npm run test:xr && npm run parity:verify && npm run parity:drift && npm run parity:artifacts && npm run parity:report:check && npm run settings:verify && npm run calibration:verify && npm run l10n:verify && npm run parity:oracles && npm run test:e2e && npm run test:a11y && npm run test:slice && npm run size:check",
     "test:slice": "node scripts/run-tests.mjs -slice.test.ts"
   },
   "dependencies": {

@@ -6,3 +6,4 @@ public/
 # `settings:verify` and `calibration:verify`, so formatting must not touch them.
 src/settings/generated/
 src/features/generated/
+src/l10n/generated/

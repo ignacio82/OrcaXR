@@ -627,7 +627,14 @@ test('composition root injects one registry into the workspace and DOM shell', (
   assert.ok(workspaceConstruction > registryConstruction, 'workspace must receive the composition-root registry');
   assert.ok(domShellConstruction > workspaceConstruction, 'DOM shell must receive that same registry variable');
   assert.strictEqual(mainSource.match(/\bbuildRegistry\s*\(/g)?.length, 1, 'main must construct exactly one registry');
-  assert.match(mainSource, /setupDomUI\(workspace, uiState, actionCtx, registry\)/);
+  assert.match(mainSource, /setupDomUI\(workspace, uiState, actionCtx, registry[,)]/);
+  // Localization is attached to the composition-root registry, not to a shell
+  // (P10.4). Every surface reads its text through `all()`/`get()`, so this one
+  // line is what keeps DOM, XR, the palette, and context menus in one language;
+  // a shell that localized on its own would translate half the app.
+  const textSourceWiring = mainSource.indexOf('registry.useTextSource(l10n)');
+  assert.ok(textSourceWiring > registryConstruction, 'the registry must localize before any shell renders it');
+  assert.ok(textSourceWiring < domShellConstruction, 'and before the DOM shell mounts from it');
   assert.match(mainSource, /new ActionContext\(workspace, uiState, registry\)/);
   assert.match(mainSource, /registerWorkspaceTools\(mcp, workspace, registry, actionCtx\)/);
 
