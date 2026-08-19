@@ -116,7 +116,7 @@ export class MeasurePanel {
     const picks = document.createElement('ol');
     picks.dataset.measurePicks = 'true';
     picks.setAttribute('aria-label', 'Picked features');
-    picks.style.cssText = 'margin:0;padding-left:18px;display:flex;flex-direction:column;gap:2px;';
+    picks.style.cssText = 'margin:0;padding-inline-start:18px;display:flex;flex-direction:column;gap:2px;';
     for (const pick of state.picks) {
       const item = document.createElement('li');
       item.dataset.measurePickKind = pick.kind;

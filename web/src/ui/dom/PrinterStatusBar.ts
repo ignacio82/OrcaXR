@@ -236,7 +236,8 @@ export class PrinterStatusBar {
     fill.dataset.printerStatusHoldFill = action.command;
     fill.setAttribute('aria-hidden', 'true');
     fill.style.cssText =
-      'position:absolute;left:0;top:0;bottom:0;width:0%;background:#ff525233;pointer-events:none;z-index:0;';
+      'position:absolute;inset-inline-start:0;top:0;bottom:0;width:0%;background:#ff525233;' +
+      'pointer-events:none;z-index:0;';
     this.holdBars.set(action.command, fill);
 
     if (action.holdMs > 0) {

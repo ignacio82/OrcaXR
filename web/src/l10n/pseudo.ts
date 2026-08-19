@@ -4,7 +4,8 @@
  * Both are invisible in English and expensive to find late. A German label is
  * routinely 35% longer than its English source, so a button sized to "Slice"
  * clips "Aufschneiden"; and a right-to-left layout mirrors every row, so an
- * icon pinned with `margin-left` ends up on the wrong side of its text. Waiting
+ * icon pinned with a physical `margin-left` ends up on the wrong side of its text.
+ * Waiting
  * for a translator to report either means shipping it.
  *
  * So both are generated from the reference catalogue and run on every build:

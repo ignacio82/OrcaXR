@@ -177,7 +177,7 @@ export class FilamentAssignmentSelector {
     const options = new Map(snapshot.options.map((option) => [option.id, option]));
     const list = document.createElement('ul');
     list.dataset.filamentAssignmentScopes = 'true';
-    list.style.cssText = 'display:grid;gap:3px;margin:5px 0 0;padding-left:20px;';
+    list.style.cssText = 'display:grid;gap:3px;margin:5px 0 0;padding-inline-start:20px;';
     for (const scope of snapshot.scopes) {
       const item = document.createElement('li');
       item.dataset.filamentAssignmentScope = scope.entity.kind;
@@ -311,7 +311,7 @@ export class FilamentAssignmentSelector {
     if (option.warnings.length > 0) {
       const warnings = document.createElement('ul');
       warnings.dataset.filamentWarnings = 'true';
-      warnings.style.cssText = 'margin:3px 0 0;padding-left:17px;color:#ffd18b;font-size:11px;';
+      warnings.style.cssText = 'margin:3px 0 0;padding-inline-start:17px;color:#ffd18b;font-size:11px;';
       for (const warning of option.warnings) {
         const item = document.createElement('li');
         item.textContent = warning;

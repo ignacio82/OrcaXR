@@ -125,7 +125,7 @@ export class GcodePanel {
     this.rows = doc.createElement('div');
     this.rows.dataset.gcodeRows = 'true';
     this.rows.style.cssText =
-      'position:absolute;left:0;right:0;top:0;font-family:ui-monospace,monospace;font-size:12px;';
+      'position:absolute;inset-inline:0;top:0;font-family:ui-monospace,monospace;font-size:12px;';
 
     this.spacer = doc.createElement('div');
     this.spacer.style.cssText = `position:relative;height:${state.document.lineCount * ROW_HEIGHT}px;`;
@@ -197,7 +197,7 @@ export class GcodePanel {
       row.style.cssText = `display:flex;gap:10px;height:${ROW_HEIGHT}px;line-height:${ROW_HEIGHT}px;white-space:pre;`;
       if (matches.has(line.number)) row.style.cssText += 'background:var(--oxr-color-accent-soft,#ffc10733);';
       const number = owner.createElement('span');
-      number.style.cssText = 'opacity:0.5;min-width:5ch;text-align:right;user-select:none;';
+      number.style.cssText = 'opacity:0.5;min-width:5ch;text-align: end;user-select:none;';
       number.textContent = `${line.number}`;
       const text = owner.createElement('span');
       // Inserted as text, never as markup: a program is untrusted input and may

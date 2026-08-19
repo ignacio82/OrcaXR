@@ -237,6 +237,25 @@ engine (`libslic3r` via WASM) as the computational core.
   call site as `t`'s `source` argument, so `public/l10n/en.json` is a *second* copy — it
   ships as a fetched file and only the pseudo-locales pull it. Doing this the other way
   cost 83 KB of main chunk and broke `size:check`; done right the whole feature costs 17 KB.
+- **Two gates keep a translated layout honest (P10.4.4), and both are in `quality`.**
+  `direction:check` refuses physical direction in CSS — `margin-left`, `text-align: left`,
+  `border-right`, a physical `left:`/`right:` inset — in the `index.html` stylesheet and in
+  every inline style set from TypeScript. Write the logical property
+  (`margin-inline-start`, `text-align: start`, `border-inline-end`, `inset-inline-start`).
+  `left: 50%` is allowed and must **stay** physical: fifty percent is the same distance from
+  either edge, and converting the `translateX(-50%)` centring idiom to `inset-inline-start`
+  actively breaks RTL. A genuinely physical position declares itself with a
+  `direction:physical` comment and its reason — a context menu opens at the pointer's
+  viewport coordinate in any writing direction.
+  `test:pseudo` renders the built app in `en-XA` (40% longer) and `ar-XB` (mirrored) and
+  measures 152 critical controls for geometric overflow; it refuses to run against fewer
+  than forty, because a green "none clipped" over an empty selector list is worse than no
+  gate. **Size chrome to its content, never to the English word in it** — the tool rail was
+  a fixed 158 px and truncated eight labels the first time this ran.
+  Note that `DomShell.mount` is re-entrant *because* a language change remounts it; it
+  appends to the primary bar (the hidden file input lives there) and tracks what it added,
+  so anything else that appends to a host it does not own must do the same or a language
+  switch will duplicate it.
   Translations are **seeded from upstream's twenty pinned `.po` catalogues** by exact
   English match (plus accelerator/ellipsis normalisation) — never machine-translated, and
   a translation that drops a placeholder is refused rather than shipped, because a

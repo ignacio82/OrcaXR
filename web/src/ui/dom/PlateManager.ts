@@ -253,7 +253,7 @@ export class PlateManager {
       primary.disabled = Boolean(this.busyLabel);
       primary.style.cssText =
         'display:flex;min-width:160px;min-height:48px;flex:1 1 180px;align-items:center;gap:9px;' +
-        'border:0;border-radius:7px;background:transparent;color:inherit;padding:6px 8px;text-align:left;font:inherit;';
+        'border:0;border-radius:7px;background:transparent;color:inherit;padding:6px 8px;text-align: start;font:inherit;';
       const ordinal = document.createElement('span');
       ordinal.textContent = String(index + 1);
       ordinal.setAttribute('aria-hidden', 'true');

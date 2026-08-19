@@ -44,7 +44,9 @@
     "test:e2e": "npm run build && npm run offline:check && node scripts/e2e-smoke.mjs && node scripts/offline-smoke.mjs",
     "test:a11y": "npm run build && node scripts/a11y-smoke.mjs",
     "size:check": "node scripts/size-check.mjs",
-    "quality": "npm run icons:verify && npm run security:check && npm run format:check && npm run lint && npm run typecheck && npm run architecture:check && npm run test:unit && npm run test:integration && npm run test:project && npm run test:settings && npm run test:l10n && npm run test:xr && npm run parity:verify && npm run parity:drift && npm run parity:artifacts && npm run parity:report:check && npm run settings:verify && npm run calibration:verify && npm run l10n:verify && npm run parity:oracles && npm run test:e2e && npm run test:a11y && npm run test:slice && npm run size:check",
+    "direction:check": "node scripts/direction-contract.mjs",
+    "test:pseudo": "npm run build && node scripts/pseudo-smoke.mjs",
+    "quality": "npm run icons:verify && npm run security:check && npm run format:check && npm run lint && npm run typecheck && npm run architecture:check && npm run direction:check && npm run test:unit && npm run test:integration && npm run test:project && npm run test:settings && npm run test:l10n && npm run test:xr && npm run parity:verify && npm run parity:drift && npm run parity:artifacts && npm run parity:report:check && npm run settings:verify && npm run calibration:verify && npm run l10n:verify && npm run parity:oracles && npm run test:e2e && npm run test:a11y && npm run test:pseudo && npm run test:slice && npm run size:check",
     "test:slice": "node scripts/run-tests.mjs -slice.test.ts"
   },
   "dependencies": {

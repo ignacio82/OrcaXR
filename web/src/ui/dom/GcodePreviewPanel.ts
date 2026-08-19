@@ -377,7 +377,7 @@ export class GcodePreviewPanel {
       button.type = 'button';
       button.dataset.previewTickGoto = String(tick.layer);
       button.textContent = `${tick.label} — layer ${tick.layer} (${tick.zMm.toFixed(2)} mm)`;
-      button.style.cssText = `${controlStyle(false)};width:100%;text-align:left;`;
+      button.style.cssText = `${controlStyle(false)};width:100%;text-align: start;`;
       button.onclick = () =>
         void this.run(() => this.adapter.onUpdateView({ layerRange: [tick.layer, tick.layer], singleLayer: true }));
       item.append(button);
@@ -444,7 +444,7 @@ export class GcodePreviewPanel {
     };
     const readout = document.createElement('span');
     readout.textContent = String(value);
-    readout.style.cssText = 'min-width:32px;text-align:right;';
+    readout.style.cssText = 'min-width:32px;text-align: end;';
     wrapper.append(text, input, readout);
     return wrapper;
   }

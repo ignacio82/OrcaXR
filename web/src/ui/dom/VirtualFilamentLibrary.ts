@@ -813,7 +813,7 @@ export class VirtualFilamentLibrary {
     preview.dataset.virtualDraftPreview = 'true';
     preview.setAttribute('role', 'status');
     preview.setAttribute('aria-live', 'polite');
-    preview.style.cssText = `${MUTED_STYLE}box-sizing:border-box;min-height:44px;padding:7px 9px;border-left:12px solid transparent;`;
+    preview.style.cssText = `${MUTED_STYLE}box-sizing:border-box;min-height:44px;padding:7px 9px;border-inline-start:12px solid transparent;`;
     card.appendChild(preview);
     this.dialogPreview = preview;
 
@@ -1704,7 +1704,7 @@ export class VirtualFilamentLibrary {
     if (issues.length === 0) return;
     const document = host.ownerDocument;
     const list = document.createElement('ul');
-    list.style.cssText = 'display:grid;gap:5px;margin:0;padding-left:20px;';
+    list.style.cssText = 'display:grid;gap:5px;margin:0;padding-inline-start:20px;';
     for (const issue of issues) {
       const item = document.createElement('li');
       if (issue.field === 'cycle-pattern' && issue.startOffset !== undefined && issue.endOffset !== undefined) {
@@ -1717,7 +1717,7 @@ export class VirtualFilamentLibrary {
           startOffset + 1,
           endOffset,
         )}.`;
-        button.style.cssText = `${TOUCH_BUTTON_STYLE}min-width:0;text-align:left;`;
+        button.style.cssText = `${TOUCH_BUTTON_STYLE}min-width:0;text-align: start;`;
         button.addEventListener('click', () => {
           const input = this.dialogCard?.querySelector<HTMLTextAreaElement>('[data-virtual-field="cycle-pattern"]');
           input?.focus();

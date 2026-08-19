@@ -145,7 +145,7 @@ export class BrimEarsPanel {
       const list = document.createElement('ol');
       list.dataset.brimEars = 'true';
       list.setAttribute('aria-label', 'Placed brim ears');
-      list.style.cssText = 'margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;';
+      list.style.cssText = 'margin:0;padding-inline-start:18px;display:flex;flex-direction:column;gap:4px;';
       for (const [index, ear] of state.ears.entries()) {
         const item = document.createElement('li');
         item.dataset.brimEarIndex = `${index}`;

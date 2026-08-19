@@ -79,7 +79,7 @@ export class SlicePreflightPanel {
     severity.textContent = issue.severity === 'error' ? 'Error' : 'Warning';
     const code = document.createElement('code');
     code.dataset.preflightStableCode = issue.code;
-    code.style.cssText = 'margin-left:6px;color:inherit;';
+    code.style.cssText = 'margin-inline-start:6px;color:inherit;';
     code.textContent = issue.detailCode ? `${issue.code} / ${issue.detailCode}` : issue.code;
     heading.append(severity, ' ', code);
 
@@ -123,7 +123,7 @@ export class SlicePreflightPanel {
       const entities = document.createElement('ul');
       entities.setAttribute('aria-label', 'Affected canonical entities');
       entities.dataset.preflightEntities = '';
-      entities.style.cssText = 'margin:5px 0 0;padding-left:18px;';
+      entities.style.cssText = 'margin:5px 0 0;padding-inline-start:18px;';
       for (const entity of issue.entities) {
         const entityItem = document.createElement('li');
         entityItem.dataset.preflightEntityKind = entity.kind;

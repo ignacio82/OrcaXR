@@ -683,7 +683,7 @@ export class GeneratedSettingsPanel {
     issues.id = `${controlId}-issues`;
     issues.dataset.settingsIssues = field.id;
     issues.setAttribute('role', 'alert');
-    issues.style.cssText = 'grid-column:1/-1;margin:0;padding-left:20px;color:#ffb4ab;font-size:12px;';
+    issues.style.cssText = 'grid-column:1/-1;margin:0;padding-inline-start:20px;color:#ffb4ab;font-size:12px;';
     this.renderIssues(issues, fieldIssues);
     row.appendChild(issues);
     describedBy.push(issues.id);

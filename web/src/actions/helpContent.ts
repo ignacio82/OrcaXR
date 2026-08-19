@@ -35,7 +35,7 @@ export function shortcutsHtml(actions: readonly Action[]): string {
     the command palette and find any catalogued action by name. Actions that are not
     available in the current build remain disabled.</p>
     <table style="width:100%;border-collapse:collapse;font-size:13px">
-      <thead><tr><th scope="col" style="text-align:left">Shortcut</th><th scope="col" style="text-align:left">Action</th></tr></thead>
+      <thead><tr><th scope="col" style="text-align: start">Shortcut</th><th scope="col" style="text-align: start">Action</th></tr></thead>
       <tbody>
         <tr><td><kbd>Ctrl+K</kbd> / <kbd>⌘+K</kbd></td><td>Command palette</td></tr>
         ${rows}
@@ -46,7 +46,7 @@ export function shortcutsHtml(actions: readonly Action[]): string {
 
 export const TUTORIAL_HTML = `
   <p>This is the basic browser workflow in the current alpha:</p>
-  <ol style="margin:0;padding-left:20px;line-height:1.7">
+  <ol style="margin:0;padding-inline-start:20px;line-height:1.7">
     <li><strong>Import</strong> a model (File → Import) or drop in a primitive (Add).</li>
     <li><strong>Place</strong> it with Move / Rotate / Scale, or hit Auto-arrange.</li>
     <li><strong>Pick a profile</strong> — printer, process and filament — up top.</li>

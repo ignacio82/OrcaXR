@@ -2083,7 +2083,7 @@ function setupDomUI(
         heading.style.cssText = 'margin:0 0 2px;font-size:13px;';
         heading.textContent = hit.title;
         const kind = document.createElement('span');
-        kind.style.cssText = 'margin-left:6px;font-size:11px;opacity:.7;font-weight:400;';
+        kind.style.cssText = 'margin-inline-start:6px;font-size:11px;opacity:.7;font-weight:400;';
         kind.textContent = hit.kind === 'troubleshooting' ? 'error' : hit.kind;
         heading.appendChild(kind);
         const text = document.createElement('p');
@@ -3923,7 +3923,8 @@ function setupDomUI(
       del.textContent = '×';
       del.title = 'Remove filament';
       del.style.cssText =
-        'position:absolute;top:-6px;right:-6px;width:16px;height:16px;line-height:14px;border-radius:50%;border:none;background:#333;color:#fff;font-size:11px;cursor:pointer;';
+        'position:absolute;top:-6px;inset-inline-end:-6px;width:16px;height:16px;line-height:14px;' +
+        'border-radius:50%;border:none;background:#333;color:#fff;font-size:11px;cursor:pointer;';
       del.onclick = () => workspace.removeAuxiliaryFilamentSlot(i);
       cell.appendChild(input);
       if (i >= workspace.extruderCount) cell.appendChild(del);
@@ -3950,7 +3951,7 @@ function setupDomUI(
       const idTag = document.createElement('span');
       idTag.textContent = String(vf.id);
       idTag.style.cssText =
-        'position:absolute;bottom:-4px;right:-4px;background:#111;color:#cfd8dc;' +
+        'position:absolute;bottom:-4px;inset-inline-end:-4px;background:#111;color:#cfd8dc;' +
         'font-size:8px;line-height:1;padding:1px 2px;border-radius:3px;';
       chip.appendChild(idTag);
       vWrap.appendChild(chip);

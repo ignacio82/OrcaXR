@@ -173,7 +173,7 @@ export class CalibrationParametersPanel {
     details.appendChild(summary);
 
     const list = doc.createElement('ol');
-    list.style.cssText = 'margin:6px 0;padding-left:20px;display:flex;flex-direction:column;gap:2px;';
+    list.style.cssText = 'margin:6px 0;padding-inline-start:20px;display:flex;flex-direction:column;gap:2px;';
     for (const band of sheet.bands) {
       const item = doc.createElement('li');
       item.dataset.calibrationBand = `${band.ordinal}`;

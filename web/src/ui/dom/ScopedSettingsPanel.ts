@@ -97,7 +97,7 @@ export class ScopedSettingsPanel {
     select.id = `${root.id}-target`;
     select.dataset.scopedSettingsTarget = 'true';
     select.className = 'action-btn';
-    select.style.cssText = 'text-align:left;';
+    select.style.cssText = 'text-align: start;';
     select.addEventListener('change', () => {
       this.selectedId = select.value;
       void this.rebuildPanel();

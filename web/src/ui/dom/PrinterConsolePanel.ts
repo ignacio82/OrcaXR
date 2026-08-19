@@ -145,7 +145,7 @@ export class PrinterConsolePanel {
     refresh.className = 'action-btn';
     refresh.dataset.printerConsoleRefreshMacros = 'true';
     refresh.textContent = 'Refresh';
-    refresh.style.cssText = 'margin:0;margin-left:auto;';
+    refresh.style.cssText = 'margin:0;margin-inline-start:auto;';
     refresh.addEventListener('click', () => void this.port.run({ kind: 'refresh-macros' }));
     macroHeader.appendChild(refresh);
     root.appendChild(macroHeader);

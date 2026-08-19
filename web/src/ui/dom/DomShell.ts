@@ -68,6 +68,15 @@ export class DomShell {
   private stageButtons: { stage: Stage; el: HTMLButtonElement; index: number }[] = [];
   private unsubscribe: (() => void) | null = null;
   private eventDisposers: Array<() => void> = [];
+  /**
+   * Nodes this shell added to a host it does not own outright (P10.4.4).
+   *
+   * The primary bar holds a hidden file input the shell did not create, so
+   * mount appends rather than clearing. That was fine while mount ran once;
+   * remounting on a language change made it append a second set of buttons.
+   * Tracking what was added is what lets a remount replace its own work.
+   */
+  private appended: Element[] = [];
   private menuBar: HTMLElement | null = null;
   private menuButton: HTMLButtonElement | null = null;
 
@@ -88,9 +97,14 @@ export class DomShell {
       hosts.toolbar.appendChild(this.toolButton(a));
     }
 
-    // Primary bar (keep any existing children, e.g. the hidden file input)
+    // Primary bar. Existing children are kept — the hidden file input the Load
+    // action depends on lives here — so only what a previous mount added is
+    // removed, which is what makes a language change repaint rather than
+    // duplicate.
     for (const a of this.registry.forSurface('dom-primary')) {
-      hosts.primary.appendChild(this.actionButton(a, a.id === 'slice_active_plate'));
+      const button = this.actionButton(a, a.id === 'slice_active_plate');
+      hosts.primary.appendChild(button);
+      this.appended.push(button);
     }
 
     // Mega menu — one column per Orca menu section, in bar order. A section
@@ -122,6 +136,7 @@ export class DomShell {
   dispose(): void {
     this.unsubscribe?.();
     this.unsubscribe = null;
+    for (const node of this.appended.splice(0)) node.remove();
     for (const dispose of this.eventDisposers.splice(0).reverse()) dispose();
     for (const { el } of this.bound) el.onclick = null;
     this.bound = [];

@@ -41,7 +41,7 @@ export interface PrinterStoragePanelPort {
 
 const ROW_STYLE =
   'display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border-radius:6px;' +
-  'background:transparent;border:1px solid transparent;color:inherit;text-align:left;cursor:pointer;';
+  'background:transparent;border:1px solid transparent;color:inherit;text-align: start;cursor:pointer;';
 
 export class PrinterStoragePanel {
   private root?: HTMLElement;

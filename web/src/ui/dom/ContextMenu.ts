@@ -117,6 +117,10 @@ export class ContextMenu {
     const viewportHeight = view?.innerHeight ?? 768;
     const x = Math.max(8, Math.min(request.x, viewportWidth - MENU_WIDTH - 8));
     const y = Math.max(8, Math.min(request.y, viewportHeight - 120));
+    // direction:physical — `x` is a pointer's viewport coordinate, so the menu
+    // opens where the click was in any writing direction; mirroring it to
+    // `inset-inline-start` would put the menu on the far side of the screen
+    // from the thing it was opened on.
     menu.style.cssText =
       `position:fixed;z-index:1000;left:${x}px;top:${y}px;width:${MENU_WIDTH}px;padding:5px;` +
       // A long menu scrolls inside itself rather than running off the bottom of
@@ -191,7 +195,7 @@ export class ContextMenu {
     if (item.disabled) button.setAttribute('aria-disabled', 'true');
     button.disabled = Boolean(item.disabled);
     button.style.cssText =
-      'width:100%;min-height:36px;padding:6px 8px;text-align:left;border:0;border-radius:6px;' +
+      'width:100%;min-height:36px;padding:6px 8px;text-align: start;border:0;border-radius:6px;' +
       `background:transparent;color:inherit;font:inherit;cursor:${item.disabled ? 'default' : 'pointer'};` +
       `opacity:${item.disabled ? '0.5' : '1'};`;
     button.addEventListener('pointerenter', () => {

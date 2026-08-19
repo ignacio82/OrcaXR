@@ -131,7 +131,8 @@ export class SvgPanel {
       const list = document.createElement('ul');
       list.dataset.svgUnsupported = 'true';
       list.setAttribute('aria-label', 'Parts of this drawing that cannot be cut');
-      list.style.cssText = 'margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;opacity:0.85;';
+      list.style.cssText =
+        'margin:0;padding-inline-start:18px;display:flex;flex-direction:column;gap:4px;opacity:0.85;';
       for (const entry of state.unsupported) {
         const item = document.createElement('li');
         item.textContent = entry.detail;

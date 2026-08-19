@@ -73,7 +73,7 @@ export class PrinterCameraPanel {
     select.className = 'action-btn';
     select.dataset.printerCameraSelect = 'true';
     select.setAttribute('aria-label', 'Camera');
-    select.style.cssText = 'flex:1;min-width:0;text-align:left;';
+    select.style.cssText = 'flex:1;min-width:0;text-align: start;';
     select.addEventListener('change', () => this.port.select(select.value));
     controls.appendChild(select);
 

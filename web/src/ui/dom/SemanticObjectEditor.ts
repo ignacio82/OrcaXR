@@ -384,7 +384,7 @@ export class SemanticObjectEditor {
     }
     const list = document.createElement('ol');
     list.dataset.layerRangeList = 'true';
-    list.style.cssText = 'display:grid;gap:4px;margin:0;padding-left:22px;';
+    list.style.cssText = 'display:grid;gap:4px;margin:0;padding-inline-start:22px;';
     for (const range of ranges) {
       const item = document.createElement('li');
       item.dataset.layerRangeId = range.id;

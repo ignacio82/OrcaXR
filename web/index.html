@@ -2,9 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' data: blob: http: https: ws: wss:; form-action 'self'">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' data: blob: http: https: ws: wss:; form-action 'self'"
+    />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="manifest.json" />
     <!-- Cross-origin isolation shim: on static hosts (GitHub Pages) that can't
          send COOP/COEP headers, this service worker adds them so the WASM
          slicer's SharedArrayBuffer threads work. No-op where headers already
@@ -89,32 +92,74 @@
          A small, honest readiness cue is much better than a silent canvas on
          slower headsets or a cold service-worker launch. */
       #app-boot {
-        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-        background: radial-gradient(circle at center, rgba(10,16,24,.62), rgba(5,7,10,.84));
-        backdrop-filter: blur(5px); pointer-events: auto; z-index: 110;
-        transition: opacity .22s ease, visibility .22s ease;
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle at center, rgba(10, 16, 24, 0.62), rgba(5, 7, 10, 0.84));
+        backdrop-filter: blur(5px);
+        pointer-events: auto;
+        z-index: 110;
+        transition:
+          opacity 0.22s ease,
+          visibility 0.22s ease;
       }
-      #app-boot.ready { opacity: 0; visibility: hidden; pointer-events: none; }
+      #app-boot.ready {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
       .boot-card {
-        display: flex; flex-direction: column; align-items: center; gap: 10px;
-        color: var(--oxr-text); text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        color: var(--oxr-text);
+        text-align: center;
       }
       .boot-mark {
-        width: 42px; height: 42px; display: grid; place-items: center;
-        border-radius: 13px; color: var(--oxr-accent-soft);
-        border: 1px solid rgba(255,109,0,.42); background: rgba(255,109,0,.16);
-        font-size: 22px; animation: boot-pulse 1.25s ease-in-out infinite;
+        width: 42px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        border-radius: 13px;
+        color: var(--oxr-accent-soft);
+        border: 1px solid rgba(255, 109, 0, 0.42);
+        background: rgba(255, 109, 0, 0.16);
+        font-size: 22px;
+        animation: boot-pulse 1.25s ease-in-out infinite;
       }
-      .boot-card strong { font-family: var(--oxr-font-display); font-size: 17px; letter-spacing: -.2px; }
-      .boot-card span { color: var(--oxr-text-muted); font-size: 13px; }
-      @keyframes boot-pulse { 50% { transform: scale(1.08); box-shadow: 0 0 26px rgba(255,109,0,.28); } }
-      @keyframes oxr-pulse { 50% { opacity: .45; } }
+      .boot-card strong {
+        font-family: var(--oxr-font-display);
+        font-size: 17px;
+        letter-spacing: -0.2px;
+      }
+      .boot-card span {
+        color: var(--oxr-text-muted);
+        font-size: 13px;
+      }
+      @keyframes boot-pulse {
+        50% {
+          transform: scale(1.08);
+          box-shadow: 0 0 26px rgba(255, 109, 0, 0.28);
+        }
+      }
+      @keyframes oxr-pulse {
+        50% {
+          opacity: 0.45;
+        }
+      }
 
       /* ---- Header -------------------------------------------------------- */
       #top-bar {
         position: relative;
-        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-        min-height: var(--header-h); box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        min-height: var(--header-h);
+        box-sizing: border-box;
         padding: 8px 14px;
         border-bottom: 1px solid var(--oxr-stroke);
         background: var(--oxr-bg-card);
@@ -122,274 +167,684 @@
         pointer-events: auto;
         z-index: 40;
       }
-      .brand { display: flex; align-items: center; gap: 9px; flex: 0 0 auto; }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        flex: 0 0 auto;
+      }
       .brand-mark {
-        width: 26px; height: 26px; border-radius: 9px; display: grid; place-items: center;
-        background: rgba(255,109,0,.16); border: 1px solid rgba(255,109,0,.42);
-        color: var(--oxr-accent-soft); font-size: 14px;
+        width: 26px;
+        height: 26px;
+        border-radius: 9px;
+        display: grid;
+        place-items: center;
+        background: rgba(255, 109, 0, 0.16);
+        border: 1px solid rgba(255, 109, 0, 0.42);
+        color: var(--oxr-accent-soft);
+        font-size: 14px;
       }
       #app-title {
         font-family: var(--oxr-font-display);
-        font-weight: 700; font-size: 15px; letter-spacing: -.3px;
+        font-weight: 700;
+        font-size: 15px;
+        letter-spacing: -0.3px;
       }
-      .header-spacer { flex: 1 1 auto; min-width: 0; }
+      .header-spacer {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
 
       /* Menu trigger + the full-width mega menu it opens. */
       #menu-button {
-        display: inline-flex; align-items: center; gap: 7px;
-        background: var(--oxr-surface); color: var(--oxr-text);
-        border: 1px solid var(--oxr-stroke); border-radius: var(--radius-sm);
-        padding: 7px 11px; font-size: 13px; font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        background: var(--oxr-surface);
+        color: var(--oxr-text);
+        border: 1px solid var(--oxr-stroke);
+        border-radius: var(--radius-sm);
+        padding: 7px 11px;
+        font-size: 13px;
+        font-weight: 600;
         transition: background var(--dur-base) var(--ease-ui);
       }
-      #menu-button:hover { background: var(--oxr-surface-hover); }
-      #menu-button[aria-expanded='true'] { background: var(--oxr-surface-hover); border-color: var(--oxr-stroke-strong); }
+      #menu-button:hover {
+        background: var(--oxr-surface-hover);
+      }
+      #menu-button[aria-expanded='true'] {
+        background: var(--oxr-surface-hover);
+        border-color: var(--oxr-stroke-strong);
+      }
       #menu-bar-host {
-        position: absolute; top: calc(100% + 6px); left: 14px; z-index: 70;
-        display: none; gap: 10px; padding: 12px;
-        max-width: calc(100vw - 28px); max-height: calc(100vh - var(--header-h) - 24px);
+        position: absolute;
+        top: calc(100% + 6px);
+        inset-inline-start: 14px;
+        z-index: 70;
+        display: none;
+        gap: 10px;
+        padding: 12px;
+        max-width: calc(100vw - 28px);
+        max-height: calc(100vh - var(--header-h) - 24px);
         overflow: auto;
-        background: var(--oxr-bg-elevated); backdrop-filter: blur(18px);
-        border: 1px solid var(--oxr-stroke-strong); border-radius: var(--radius-lg);
+        background: var(--oxr-bg-elevated);
+        backdrop-filter: blur(18px);
+        border: 1px solid var(--oxr-stroke-strong);
+        border-radius: var(--radius-lg);
         box-shadow: var(--shadow-menu);
       }
-      #menu-bar-host.open { display: flex; }
-      .menu-host { min-width: 0; width: 182px; flex: 0 0 auto; }
+      #menu-bar-host.open {
+        display: flex;
+      }
+      .menu-host {
+        min-width: 0;
+        width: 182px;
+        flex: 0 0 auto;
+      }
       /* Inside the mega menu every section is open at once; the trigger stays a
          real button so keyboard users can jump straight into a column. */
       .menu-trigger {
-        display: block; width: 100%; text-align: left;
-        background: transparent; border: none; padding: 4px 8px 8px;
+        display: block;
+        width: 100%;
+        text-align: start;
+        background: transparent;
+        border: none;
+        padding: 4px 8px 8px;
         color: var(--oxr-accent-soft);
         font-family: var(--oxr-font-sans);
-        font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
       }
-      .menu-trigger:hover { color: var(--oxr-accent); }
-      .menu-dropdown { display: flex; flex-direction: column; gap: 1px; }
+      .menu-trigger:hover {
+        color: var(--oxr-accent);
+      }
+      .menu-dropdown {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
       .menu-item {
-        background: transparent; color: var(--oxr-text); border: none; text-align: left;
-        padding: 6px 8px; border-radius: 7px; font-size: 12.5px;
-        display: flex; align-items: center; gap: 9px; row-gap: 2px; flex-wrap: wrap; width: 100%;
+        background: transparent;
+        color: var(--oxr-text);
+        border: none;
+        text-align: start;
+        padding: 6px 8px;
+        border-radius: 7px;
+        font-size: 12.5px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        row-gap: 2px;
+        flex-wrap: wrap;
+        width: 100%;
         transition: background var(--dur-fast) var(--ease-ui);
       }
-      .menu-item:hover:not(:disabled) { background: var(--oxr-surface-hover); }
-      .menu-item:disabled { opacity: .45; cursor: not-allowed; }
-      .menu-item .glyph { width: 15px; text-align: center; opacity: .8; flex: 0 0 auto; }
+      .menu-item:hover:not(:disabled) {
+        background: var(--oxr-surface-hover);
+      }
+      .menu-item:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .menu-item .glyph {
+        width: 15px;
+        text-align: center;
+        opacity: 0.8;
+        flex: 0 0 auto;
+      }
       /* One line per command keeps a 7-column menu scannable; the full label
          stays available as the button's tooltip and accessible name. */
-      .menu-item-label { flex: 1 1 100px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .menu-item-label {
+        flex: 1 1 100px;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
       /* "UNAVAILABLE" badge on parity placeholders — features present in
          Snapmaker Orca that OrcaXR has not built yet (see docs/parity.md). */
       /* Parity truth stays readable: when the badge cannot share a line with
          the command it drops to its own row rather than truncating the label. */
       .soon-badge {
-        font-size: 9px; font-weight: 700; letter-spacing: .5px; line-height: 1;
-        padding: 3px 5px; border-radius: 4px; margin-left: 24px; flex: 0 0 auto;
-        background: var(--oxr-accent); color: var(--oxr-on-accent); opacity: .8;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        line-height: 1;
+        padding: 3px 5px;
+        border-radius: 4px;
+        margin-inline-start: 24px;
+        flex: 0 0 auto;
+        background: var(--oxr-accent);
+        color: var(--oxr-on-accent);
+        opacity: 0.8;
       }
-      .cmd-item .soon-badge { margin-left: 8px; }
+      .cmd-item .soon-badge {
+        margin-inline-start: 8px;
+      }
 
       /* Command-palette trigger reads as a search field, not a button. */
       #cmd-search-btn {
-        display: inline-flex; align-items: center; gap: 8px; min-width: 210px;
-        background: var(--oxr-bg-sunken); color: var(--oxr-text-muted);
-        border: 1px solid var(--oxr-stroke); border-radius: var(--radius-sm);
-        padding: 7px 12px; font-size: 12.5px;
-        transition: color var(--dur-base) var(--ease-ui), border-color var(--dur-base) var(--ease-ui);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 210px;
+        background: var(--oxr-bg-sunken);
+        color: var(--oxr-text-muted);
+        border: 1px solid var(--oxr-stroke);
+        border-radius: var(--radius-sm);
+        padding: 7px 12px;
+        font-size: 12.5px;
+        transition:
+          color var(--dur-base) var(--ease-ui),
+          border-color var(--dur-base) var(--ease-ui);
       }
-      #cmd-search-btn:hover { color: var(--oxr-text); border-color: var(--oxr-stroke-strong); }
-      #cmd-search-btn .cmd-search-label { flex: 1; text-align: left; }
+      #cmd-search-btn:hover {
+        color: var(--oxr-text);
+        border-color: var(--oxr-stroke-strong);
+      }
+      #cmd-search-btn .cmd-search-label {
+        flex: 1;
+        text-align: start;
+      }
       #cmd-search-btn kbd {
-        font-family: var(--oxr-font-mono); font-size: 11px; background: none; color: inherit;
+        font-family: var(--oxr-font-mono);
+        font-size: 11px;
+        background: none;
+        color: inherit;
       }
 
       /* Prepare → Slice → Preview → Send. A stage is both a status readout and
          the control that moves the job forward. */
-      #stage-bar { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+      #stage-bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex: 0 0 auto;
+      }
       .stage-btn {
-        display: flex; align-items: center; gap: 8px;
-        background: transparent; border: 1px solid var(--oxr-stroke); color: var(--oxr-text-muted);
-        border-radius: var(--radius-sm); padding: 6px 13px;
-        font-size: 13px; font-weight: 600; white-space: nowrap;
-        transition: background var(--dur-base) var(--ease-ui), color var(--dur-base) var(--ease-ui),
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: transparent;
+        border: 1px solid var(--oxr-stroke);
+        color: var(--oxr-text-muted);
+        border-radius: var(--radius-sm);
+        padding: 6px 13px;
+        font-size: 13px;
+        font-weight: 600;
+        white-space: nowrap;
+        transition:
+          background var(--dur-base) var(--ease-ui),
+          color var(--dur-base) var(--ease-ui),
           border-color var(--dur-base) var(--ease-ui);
       }
-      .stage-btn:hover:not(:disabled) { background: var(--oxr-surface); color: var(--oxr-text); }
-      .stage-btn:disabled { opacity: .45; cursor: not-allowed; }
-      .stage-btn .stage-n {
-        width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
-        background: var(--oxr-surface); color: var(--oxr-text-muted);
-        font-family: var(--oxr-font-mono); font-size: 10px; font-weight: 700; flex: 0 0 auto;
+      .stage-btn:hover:not(:disabled) {
+        background: var(--oxr-surface);
+        color: var(--oxr-text);
       }
-      .stage-btn.active { background: rgba(255,109,0,.16); border-color: rgba(255,109,0,.45); color: var(--oxr-text); }
-      .stage-btn.active .stage-n { background: var(--oxr-accent); color: var(--oxr-on-accent); }
-      .stage-btn.done .stage-n { background: rgba(76,175,80,.25); color: var(--oxr-ok); }
+      .stage-btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .stage-btn .stage-n {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: var(--oxr-surface);
+        color: var(--oxr-text-muted);
+        font-family: var(--oxr-font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        flex: 0 0 auto;
+      }
+      .stage-btn.active {
+        background: rgba(255, 109, 0, 0.16);
+        border-color: rgba(255, 109, 0, 0.45);
+        color: var(--oxr-text);
+      }
+      .stage-btn.active .stage-n {
+        background: var(--oxr-accent);
+        color: var(--oxr-on-accent);
+      }
+      .stage-btn.done .stage-n {
+        background: rgba(76, 175, 80, 0.25);
+        color: var(--oxr-ok);
+      }
 
-      #plate-bar { display: flex; align-items: center; gap: 5px; flex: 0 0 auto; }
+      #plate-bar {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        flex: 0 0 auto;
+      }
       .plate-chip {
-        display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-        background: var(--oxr-surface); color: var(--oxr-text-muted);
-        border: 1px solid var(--oxr-stroke); border-radius: var(--radius-sm);
-        padding: 6px 10px; font-size: 12px; font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        background: var(--oxr-surface);
+        color: var(--oxr-text-muted);
+        border: 1px solid var(--oxr-stroke);
+        border-radius: var(--radius-sm);
+        padding: 6px 10px;
+        font-size: 12px;
+        font-weight: 600;
         transition: background var(--dur-fast) var(--ease-ui);
       }
-      .plate-chip:hover { background: var(--oxr-surface-hover); }
-      .plate-chip.active { background: var(--oxr-accent); color: var(--oxr-on-accent); border-color: transparent; }
-      .plate-chip .plate-del { cursor: pointer; opacity: .6; font-size: 13px; line-height: 1; }
-      .plate-chip .plate-del:hover { opacity: 1; }
-      .plate-add {
-        cursor: pointer; background: var(--oxr-surface); color: var(--oxr-text);
-        border: 1px solid var(--oxr-stroke); border-radius: var(--radius-sm);
-        width: 28px; height: 28px; font-size: 15px; line-height: 1;
+      .plate-chip:hover {
+        background: var(--oxr-surface-hover);
       }
-      .plate-add:hover { background: var(--oxr-surface-hover); }
+      .plate-chip.active {
+        background: var(--oxr-accent);
+        color: var(--oxr-on-accent);
+        border-color: transparent;
+      }
+      .plate-chip .plate-del {
+        cursor: pointer;
+        opacity: 0.6;
+        font-size: 13px;
+        line-height: 1;
+      }
+      .plate-chip .plate-del:hover {
+        opacity: 1;
+      }
+      .plate-add {
+        cursor: pointer;
+        background: var(--oxr-surface);
+        color: var(--oxr-text);
+        border: 1px solid var(--oxr-stroke);
+        border-radius: var(--radius-sm);
+        width: 28px;
+        height: 28px;
+        font-size: 15px;
+        line-height: 1;
+      }
+      .plate-add:hover {
+        background: var(--oxr-surface-hover);
+      }
       .icon-btn {
-        background: var(--oxr-surface); color: var(--oxr-text); border: 1px solid var(--oxr-stroke);
-        width: 34px; height: 34px; border-radius: var(--radius-sm); font-size: 15px;
-        display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
+        background: var(--oxr-surface);
+        color: var(--oxr-text);
+        border: 1px solid var(--oxr-stroke);
+        width: 34px;
+        height: 34px;
+        border-radius: var(--radius-sm);
+        font-size: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
         transition: background var(--dur-base) var(--ease-ui);
       }
-      .icon-btn:hover { background: var(--oxr-surface-hover); }
+      .icon-btn:hover {
+        background: var(--oxr-surface-hover);
+      }
 
       /* ---- Tool rail ----------------------------------------------------- */
       #tool-rail {
-        flex: 0 0 auto; width: var(--rail-w); box-sizing: border-box;
-        display: flex; flex-direction: column; gap: 3px;
+        flex: 0 0 auto;
+        /* Sized to its longest label rather than to a number measured in
+           English (P10.4.4). 158px fits "Support Painting" and clips
+           "Stützstrukturen bemalen"; the pseudo-localized run found eight such
+           labels truncated at once. `max-content` lets the rail follow whatever
+           language it is rendering, `min-width` keeps it from collapsing to the
+           icons on a short language, and the cap stops a compound German noun
+           from taking a fifth of the viewport. */
+        width: max-content;
+        min-width: var(--rail-w);
+        max-width: min(280px, 22vw);
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
         padding: 10px 8px;
-        border-right: 1px solid var(--oxr-stroke);
-        background: var(--oxr-bg-card); backdrop-filter: var(--glass-blur);
-        pointer-events: auto; min-height: 0;
+        border-inline-end: 1px solid var(--oxr-stroke);
+        background: var(--oxr-bg-card);
+        backdrop-filter: var(--glass-blur);
+        pointer-events: auto;
+        min-height: 0;
         transition: width var(--dur-slow) var(--ease-ui);
       }
-      #tool-rail.collapsed { width: var(--rail-w-collapsed); }
-      #tool-rail.collapsed .tool-label { display: none; }
-      #tool-rail.collapsed .tool-btn { justify-content: center; padding: 9px 4px; }
+      #tool-rail.collapsed {
+        width: var(--rail-w-collapsed);
+        min-width: var(--rail-w-collapsed);
+      }
+      #tool-rail.collapsed .tool-label {
+        display: none;
+      }
+      #tool-rail.collapsed .tool-btn {
+        justify-content: center;
+        padding: 9px 4px;
+      }
       #left-toolbar {
-        display: flex; flex-direction: column; gap: 3px;
-        flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
         scrollbar-width: thin;
       }
-      #left-toolbar::-webkit-scrollbar { width: 6px; }
-      #left-toolbar::-webkit-scrollbar-thumb { background: #ffffff24; border-radius: 6px; }
-      #left-toolbar::-webkit-scrollbar-track { background: transparent; }
-      .tool-btn {
-        display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box;
-        background: transparent; color: var(--oxr-text);
-        border: 1px solid transparent; border-radius: 9px;
-        padding: 9px 10px; font-size: 13px; font-weight: 500; text-align: left; white-space: nowrap;
-        transition: background var(--dur-slow) var(--ease-ui), color var(--dur-slow) var(--ease-ui);
+      #left-toolbar::-webkit-scrollbar {
+        width: 6px;
       }
-      .tool-icon { width: 18px; flex: 0 0 18px; text-align: center; font-size: 15px; line-height: 1; }
-      .tool-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
-      .tool-btn:hover:not(:disabled) { background: var(--oxr-surface-hover); }
-      .tool-btn:disabled { opacity: .4; cursor: not-allowed; }
+      #left-toolbar::-webkit-scrollbar-thumb {
+        background: #ffffff24;
+        border-radius: 6px;
+      }
+      #left-toolbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .tool-btn {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        box-sizing: border-box;
+        background: transparent;
+        color: var(--oxr-text);
+        border: 1px solid transparent;
+        border-radius: 9px;
+        padding: 9px 10px;
+        font-size: 13px;
+        font-weight: 500;
+        text-align: start;
+        /* Wraps rather than clips (P10.4.4). The rail is capped so a compound
+           noun cannot take a fifth of the viewport, which means a long-enough
+           label has to go somewhere; a second line costs a few pixels of height
+           and a truncated one costs the operator the name of the tool. */
+        white-space: normal;
+        transition:
+          background var(--dur-slow) var(--ease-ui),
+          color var(--dur-slow) var(--ease-ui);
+      }
+      .tool-icon {
+        width: 18px;
+        flex: 0 0 18px;
+        text-align: center;
+        font-size: 15px;
+        line-height: 1;
+      }
+      .tool-label {
+        flex: 1;
+        /* No `overflow: hidden` / ellipsis: hiding the end of a tool's name is
+           the failure the pseudo-localized run exists to catch, and an ellipsis
+           makes it look intentional. */
+        overflow-wrap: anywhere;
+      }
+      .tool-btn:hover:not(:disabled) {
+        background: var(--oxr-surface-hover);
+      }
+      .tool-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
       .tool-btn.active {
-        background: rgba(255,109,0,.2); color: var(--oxr-accent); border-color: rgba(255,109,0,.45);
+        background: rgba(255, 109, 0, 0.2);
+        color: var(--oxr-accent);
+        border-color: rgba(255, 109, 0, 0.45);
       }
       #toolbar-toggle {
-        flex: 0 0 auto; display: flex; align-items: center; gap: 10px;
-        background: transparent; color: var(--oxr-text-muted);
-        border: 1px solid var(--oxr-stroke); border-radius: 9px;
-        padding: 9px 10px; font-size: 12px; margin-top: 6px;
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: transparent;
+        color: var(--oxr-text-muted);
+        border: 1px solid var(--oxr-stroke);
+        border-radius: 9px;
+        padding: 9px 10px;
+        font-size: 12px;
+        margin-top: 6px;
       }
-      #toolbar-toggle:hover { background: var(--oxr-surface-hover); color: var(--oxr-text); }
-      #toolbar-toggle[hidden] { display: none; }
+      #toolbar-toggle:hover {
+        background: var(--oxr-surface-hover);
+        color: var(--oxr-text);
+      }
+      #toolbar-toggle[hidden] {
+        display: none;
+      }
 
       /* ---- Inspector ----------------------------------------------------- */
       #right-sidebar {
-        flex: 0 0 auto; width: var(--inspector-w); box-sizing: border-box;
-        display: flex; flex-direction: column; min-height: 0;
-        border-left: 1px solid var(--oxr-stroke);
-        background: var(--oxr-bg-card); backdrop-filter: var(--glass-blur);
+        flex: 0 0 auto;
+        width: var(--inspector-w);
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        border-inline-start: 1px solid var(--oxr-stroke);
+        background: var(--oxr-bg-card);
+        backdrop-filter: var(--glass-blur);
         pointer-events: auto;
       }
       #inspector-tabs {
-        flex: 0 0 auto; display: flex; gap: 2px; padding: 8px;
-        border-bottom: 1px solid var(--oxr-stroke); overflow-x: auto; scrollbar-width: none;
+        flex: 0 0 auto;
+        display: flex;
+        gap: 2px;
+        padding: 8px;
+        border-bottom: 1px solid var(--oxr-stroke);
+        overflow-x: auto;
+        scrollbar-width: none;
       }
-      #inspector-tabs::-webkit-scrollbar { display: none; }
+      #inspector-tabs::-webkit-scrollbar {
+        display: none;
+      }
       .insp-tab {
-        flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px;
-        background: transparent; border: none; color: var(--oxr-text-muted);
-        border-radius: 9px; padding: 8px 4px;
-        transition: background var(--dur-base) var(--ease-ui), color var(--dur-base) var(--ease-ui);
+        flex: 1 1 0;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        background: transparent;
+        border: none;
+        color: var(--oxr-text-muted);
+        border-radius: 9px;
+        padding: 8px 4px;
+        transition:
+          background var(--dur-base) var(--ease-ui),
+          color var(--dur-base) var(--ease-ui);
       }
-      .insp-tab:hover { color: var(--oxr-text); }
-      .insp-tab .insp-tab-glyph { font-size: 15px; line-height: 1; }
-      .insp-tab .insp-tab-label { font-size: 10.5px; font-weight: 600; letter-spacing: .02em; white-space: nowrap; }
-      .insp-tab[aria-selected='true'] { background: rgba(255,109,0,.18); color: var(--oxr-accent); }
+      .insp-tab:hover {
+        color: var(--oxr-text);
+      }
+      .insp-tab .insp-tab-glyph {
+        font-size: 15px;
+        line-height: 1;
+      }
+      .insp-tab .insp-tab-label {
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+      }
+      .insp-tab[aria-selected='true'] {
+        background: rgba(255, 109, 0, 0.18);
+        color: var(--oxr-accent);
+      }
       #inspector-head {
-        flex: 0 0 auto; display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+        flex: 0 0 auto;
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
         padding: 12px 14px 8px;
       }
       #inspector-title {
-        margin: 0; font-family: var(--oxr-font-display); font-size: 17px; font-weight: 700;
-        letter-spacing: -.3px; color: var(--oxr-text);
+        margin: 0;
+        font-family: var(--oxr-font-display);
+        font-size: 17px;
+        font-weight: 700;
+        letter-spacing: -0.3px;
+        color: var(--oxr-text);
       }
-      #inspector-meta { font-family: var(--oxr-font-mono); font-size: 11px; color: var(--oxr-text-muted); }
-      #preflight-banners { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; padding: 0 14px; }
-      #preflight-banners:empty { display: none; }
-      #inspector-scroll {
-        flex: 1 1 auto; min-height: 0; overflow-y: auto;
-        padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 12px;
-      }
-      #inspector-scroll::-webkit-scrollbar { width: 6px; }
-      #inspector-scroll::-webkit-scrollbar-track { background: transparent; }
-      #inspector-scroll::-webkit-scrollbar-thumb { background: #ffffff33; border-radius: 3px; }
-      .insp-panel[hidden] { display: none; }
-      .insp-panel { display: flex; flex-direction: column; gap: 12px; }
-      /* Collapsible inspector sections — tame the wall of always-open panels. */
-      .insp-section { border-top: 1px solid var(--oxr-stroke); padding-top: 12px; }
-      .insp-section > summary {
-        cursor: pointer; list-style: none; user-select: none;
-        font-size: .8rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+      #inspector-meta {
+        font-family: var(--oxr-font-mono);
+        font-size: 11px;
         color: var(--oxr-text-muted);
-        display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
       }
-      .insp-section > summary::-webkit-details-marker { display: none; }
+      #preflight-banners {
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 0 14px;
+      }
+      #preflight-banners:empty {
+        display: none;
+      }
+      #inspector-scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 12px 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      #inspector-scroll::-webkit-scrollbar {
+        width: 6px;
+      }
+      #inspector-scroll::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      #inspector-scroll::-webkit-scrollbar-thumb {
+        background: #ffffff33;
+        border-radius: 3px;
+      }
+      .insp-panel[hidden] {
+        display: none;
+      }
+      .insp-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      /* Collapsible inspector sections — tame the wall of always-open panels. */
+      .insp-section {
+        border-top: 1px solid var(--oxr-stroke);
+        padding-top: 12px;
+      }
+      .insp-section > summary {
+        cursor: pointer;
+        list-style: none;
+        user-select: none;
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--oxr-text-muted);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .insp-section > summary::-webkit-details-marker {
+        display: none;
+      }
       .insp-section > summary::before {
-        content: '\25B8'; font-size: .7rem; transition: transform var(--dur-base) var(--ease-ui);
+        content: '\25B8';
+        font-size: 0.7rem;
+        transition: transform var(--dur-base) var(--ease-ui);
         color: var(--oxr-accent-soft);
       }
-      .insp-section[open] > summary::before { transform: rotate(90deg); }
+      .insp-section[open] > summary::before {
+        transform: rotate(90deg);
+      }
       .insp-kicker {
-        font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-        color: var(--oxr-text-muted); display: flex; align-items: center; gap: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--oxr-text-muted);
+        display: flex;
+        align-items: center;
+        gap: 6px;
       }
       .insp-card {
-        border: 1px solid var(--oxr-stroke); border-radius: var(--radius-sm);
-        padding: 11px; display: flex; flex-direction: column; gap: 9px; background: #ffffff05;
+        border: 1px solid var(--oxr-stroke);
+        border-radius: var(--radius-sm);
+        padding: 11px;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+        background: #ffffff05;
       }
       .calibration-card {
-        display: flex; flex-direction: column; gap: 2px; text-align: left;
-        background: #ffffff05; border: 1px solid var(--oxr-stroke); border-radius: var(--radius-sm);
-        color: var(--oxr-text); padding: 9px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        text-align: start;
+        background: #ffffff05;
+        border: 1px solid var(--oxr-stroke);
+        border-radius: var(--radius-sm);
+        color: var(--oxr-text);
+        padding: 9px;
         transition: background var(--dur-base) var(--ease-ui);
       }
-      .calibration-card:hover:not(:disabled) { background: var(--oxr-surface-hover); }
-      .calibration-card:disabled { opacity: .4; cursor: not-allowed; }
-      .calibration-name { font-size: 12px; font-weight: 600; }
+      .calibration-card:hover:not(:disabled) {
+        background: var(--oxr-surface-hover);
+      }
+      .calibration-card:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .calibration-name {
+        font-size: 12px;
+        font-weight: 600;
+      }
       .calibration-hint {
-        font-size: 10.5px; color: var(--oxr-text-muted); line-height: 1.3;
-        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+        font-size: 10.5px;
+        color: var(--oxr-text-muted);
+        line-height: 1.3;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
       }
 
       /* ---- Controls ------------------------------------------------------ */
       .action-btn {
-        background: var(--oxr-surface); color: var(--oxr-text);
-        border: 1px solid var(--oxr-stroke); padding: 11px 14px; border-radius: var(--radius-md);
-        font-weight: 600; font-size: 14px; text-align: center; box-sizing: border-box;
-        transition: background var(--dur-slow) var(--ease-ui), box-shadow var(--dur-slow) var(--ease-ui),
+        background: var(--oxr-surface);
+        color: var(--oxr-text);
+        border: 1px solid var(--oxr-stroke);
+        padding: 11px 14px;
+        border-radius: var(--radius-md);
+        font-weight: 600;
+        font-size: 14px;
+        text-align: center;
+        box-sizing: border-box;
+        transition:
+          background var(--dur-slow) var(--ease-ui),
+          box-shadow var(--dur-slow) var(--ease-ui),
           transform var(--dur-slow) var(--ease-ui);
       }
-      #inspector-scroll .action-btn { width: 100%; margin-bottom: 10px; }
-      .action-btn:hover:not(:disabled) { background: var(--oxr-surface-hover); transform: translateY(-1px); }
-      .action-btn:active:not(:disabled) { transform: translateY(1px); }
-      .action-btn.primary {
-        background: var(--oxr-grad-accent); color: var(--oxr-on-accent);
-        border: none; box-shadow: var(--shadow-accent);
+      #inspector-scroll .action-btn {
+        width: 100%;
+        margin-bottom: 10px;
       }
-      .action-btn.primary:hover:not(:disabled) { box-shadow: var(--shadow-accent-hover); }
+      .action-btn:hover:not(:disabled) {
+        background: var(--oxr-surface-hover);
+        transform: translateY(-1px);
+      }
+      .action-btn:active:not(:disabled) {
+        transform: translateY(1px);
+      }
+      .action-btn.primary {
+        background: var(--oxr-grad-accent);
+        color: var(--oxr-on-accent);
+        border: none;
+        box-shadow: var(--shadow-accent);
+      }
+      .action-btn.primary:hover:not(:disabled) {
+        box-shadow: var(--shadow-accent-hover);
+      }
       select.action-btn {
         appearance: none;
         -webkit-appearance: none;
@@ -397,131 +852,298 @@
         background-repeat: no-repeat;
         background-position: right 14px center;
         background-size: 16px;
-        padding-right: 40px;
+        padding-inline-end: 40px;
         font-size: 13px;
       }
-      select.action-btn option { background: #26292d; color: #fff; }
-      .action-btn:disabled { opacity: .4; cursor: not-allowed; }
-      .text-input {
-        width: 100%; box-sizing: border-box;
-        background: var(--oxr-bg-sunken); color: var(--oxr-text);
-        border: 1px solid var(--oxr-stroke); border-radius: var(--radius-sm);
-        padding: 10px; font-size: 13px; font-family: var(--oxr-font-sans);
+      select.action-btn option {
+        background: #26292d;
+        color: #fff;
       }
-      .field-note { font-size: 11px; color: #8892a0; margin: 0 0 8px; line-height: 1.4; }
+      .action-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .text-input {
+        width: 100%;
+        box-sizing: border-box;
+        background: var(--oxr-bg-sunken);
+        color: var(--oxr-text);
+        border: 1px solid var(--oxr-stroke);
+        border-radius: var(--radius-sm);
+        padding: 10px;
+        font-size: 13px;
+        font-family: var(--oxr-font-sans);
+      }
+      .field-note {
+        font-size: 11px;
+        color: #8892a0;
+        margin: 0 0 8px;
+        line-height: 1.4;
+      }
       .check-row {
-        display: flex; align-items: center; gap: 8px; font-size: 13px; color: #e0e6ee;
-        cursor: pointer; user-select: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: #e0e6ee;
+        cursor: pointer;
+        user-select: none;
       }
       .check-row input[type='checkbox'] {
-        width: 16px; height: 16px; accent-color: var(--oxr-accent-soft); cursor: pointer; flex: 0 0 auto;
+        width: 16px;
+        height: 16px;
+        accent-color: var(--oxr-accent-soft);
+        cursor: pointer;
+        flex: 0 0 auto;
       }
 
       /* ---- Inspector footer: status + primary actions -------------------- */
       #inspector-footer {
-        flex: 0 0 auto; display: flex; flex-direction: column; gap: 9px;
-        padding: 12px 14px; border-top: 1px solid var(--oxr-stroke); background: #0c1014b3;
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+        padding: 12px 14px;
+        border-top: 1px solid var(--oxr-stroke);
+        background: #0c1014b3;
       }
-      .status-panel { display: flex; flex-direction: column; gap: 6px; }
-      .status-line { display: flex; align-items: center; gap: 8px; }
+      .status-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .status-line {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
       #status-dot {
-        width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto;
-        background: var(--oxr-text-muted); transition: background var(--dur-base) var(--ease-ui);
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex: 0 0 auto;
+        background: var(--oxr-text-muted);
+        transition: background var(--dur-base) var(--ease-ui);
       }
-      #status-dot.busy { background: var(--oxr-accent); animation: oxr-pulse 1.2s ease-in-out infinite; }
-      #status-dot.ready { background: var(--oxr-ok); }
+      #status-dot.busy {
+        background: var(--oxr-accent);
+        animation: oxr-pulse 1.2s ease-in-out infinite;
+      }
+      #status-dot.ready {
+        background: var(--oxr-ok);
+      }
       #status-text {
-        margin: 0; flex: 1; min-width: 0; font-size: .78rem; color: var(--oxr-text-muted);
-        white-space: pre-wrap; line-height: 1.4; font-family: var(--oxr-font-mono);
-        max-height: 3.6em; overflow-y: auto;
+        margin: 0;
+        flex: 1;
+        min-width: 0;
+        font-size: 0.78rem;
+        color: var(--oxr-text-muted);
+        white-space: pre-wrap;
+        line-height: 1.4;
+        font-family: var(--oxr-font-mono);
+        max-height: 3.6em;
+        overflow-y: auto;
       }
-      #bottom-action-bar { display: flex; }
-      #action-panel { display: flex; gap: 8px; width: 100%; }
+      #bottom-action-bar {
+        display: flex;
+      }
+      #action-panel {
+        display: flex;
+        gap: 8px;
+        width: 100%;
+      }
       #action-panel .action-btn {
-        flex: 1 1 0; min-width: 0; margin-bottom: 0; padding: 9px 6px;
-        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+        flex: 1 1 0;
+        min-width: 0;
+        margin-bottom: 0;
+        padding: 9px 6px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
       }
-      #action-panel .action-btn.primary { flex: 2 1 0; }
-      .action-glyph { font-size: 15px; line-height: 1; }
+      #action-panel .action-btn.primary {
+        flex: 2 1 0;
+      }
+      .action-glyph {
+        font-size: 15px;
+        line-height: 1;
+      }
       .action-label {
-        font-size: 10px; font-weight: 600;
-        max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        font-size: 10px;
+        font-weight: 600;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
-      #action-panel .action-btn.primary .action-glyph { font-size: 16px; }
-      #action-panel .action-btn.primary .action-label { font-size: 12.5px; font-weight: 700; }
+      #action-panel .action-btn.primary .action-glyph {
+        font-size: 16px;
+      }
+      #action-panel .action-btn.primary .action-label {
+        font-size: 12.5px;
+        font-weight: 700;
+      }
 
       /* ---- Viewport overlays --------------------------------------------- */
       /* First-run guidance sits over the otherwise empty build plate. It is
          deliberately light-weight: it disappears as soon as a model loads,
          leaving the workspace completely unobstructed for experienced users. */
       #workspace-empty-state {
-        position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-        box-sizing: border-box; width: min(430px, calc(100% - 48px)); padding: 26px;
-        background: linear-gradient(145deg, rgba(20, 28, 38, .94), rgba(8, 12, 17, .88));
-        backdrop-filter: blur(18px); border: 1px solid var(--oxr-stroke-strong);
-        border-radius: var(--radius-lg); box-shadow: var(--shadow-modal);
-        text-align: center; pointer-events: auto; z-index: 4;
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        box-sizing: border-box;
+        width: min(430px, calc(100% - 48px));
+        padding: 26px;
+        background: linear-gradient(145deg, rgba(20, 28, 38, 0.94), rgba(8, 12, 17, 0.88));
+        backdrop-filter: blur(18px);
+        border: 1px solid var(--oxr-stroke-strong);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-modal);
+        text-align: center;
+        pointer-events: auto;
+        z-index: 4;
       }
-      #workspace-empty-state[hidden] { display: none; }
+      #workspace-empty-state[hidden] {
+        display: none;
+      }
       .empty-state-mark {
-        width: 44px; height: 44px; margin: 0 auto 12px; display: grid; place-items: center;
-        background: rgba(255,109,0,.16); color: var(--oxr-accent-soft); border: 1px solid rgba(255,109,0,.38);
-        border-radius: 14px; font-size: 23px;
+        width: 44px;
+        height: 44px;
+        margin: 0 auto 12px;
+        display: grid;
+        place-items: center;
+        background: rgba(255, 109, 0, 0.16);
+        color: var(--oxr-accent-soft);
+        border: 1px solid rgba(255, 109, 0, 0.38);
+        border-radius: 14px;
+        font-size: 23px;
       }
       #workspace-empty-state h1 {
-        margin: 0; font-family: var(--oxr-font-display); font-size: 21px; letter-spacing: -.4px;
+        margin: 0;
+        font-family: var(--oxr-font-display);
+        font-size: 21px;
+        letter-spacing: -0.4px;
       }
       #workspace-empty-state p {
-        margin: 8px 0 18px; color: var(--oxr-text-muted); font-size: 14px; line-height: 1.5; text-wrap: pretty;
+        margin: 8px 0 18px;
+        color: var(--oxr-text-muted);
+        font-size: 14px;
+        line-height: 1.5;
+        text-wrap: pretty;
       }
-      .empty-steps { display: grid; gap: 8px; margin: 0 0 18px; text-align: left; }
-      .empty-step { display: flex; align-items: center; gap: 10px; color: var(--oxr-text-muted); font-size: 13px; }
+      .empty-steps {
+        display: grid;
+        gap: 8px;
+        margin: 0 0 18px;
+        text-align: start;
+      }
+      .empty-step {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--oxr-text-muted);
+        font-size: 13px;
+      }
       .empty-step b {
-        display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto;
-        border-radius: 50%; background: var(--oxr-surface); color: var(--oxr-accent-soft); font-size: 11px;
+        display: grid;
+        place-items: center;
+        width: 20px;
+        height: 20px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: var(--oxr-surface);
+        color: var(--oxr-accent-soft);
+        font-size: 11px;
       }
-      #empty-load-model { width: 100%; }
+      #empty-load-model {
+        width: 100%;
+      }
 
       /* Layer scrubber docked to the bottom of the viewport during preview. */
       #preview-scrubber-host {
-        position: absolute; left: 16px; right: 16px; bottom: 16px; z-index: 6;
+        position: absolute;
+        inset-inline: 16px;
+        bottom: 16px;
+        z-index: 6;
         pointer-events: auto;
       }
-      #preview-scrubber-host[hidden] { display: none; }
+      #preview-scrubber-host[hidden] {
+        display: none;
+      }
       .preview-scrubber {
-        display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-        padding: 11px 16px; box-sizing: border-box;
-        background: var(--glass-fill); backdrop-filter: var(--glass-blur);
-        border: 1px solid var(--oxr-stroke); border-radius: var(--radius-lg);
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+        padding: 11px 16px;
+        box-sizing: border-box;
+        background: var(--glass-fill);
+        backdrop-filter: var(--glass-blur);
+        border: 1px solid var(--oxr-stroke);
+        border-radius: var(--radius-lg);
         box-shadow: var(--shadow-panel);
       }
       .preview-scrubber-layer {
-        font-family: var(--oxr-font-mono); font-size: 12px; color: var(--oxr-accent-soft);
-        min-width: 84px; flex: 0 0 auto;
+        font-family: var(--oxr-font-mono);
+        font-size: 12px;
+        color: var(--oxr-accent-soft);
+        min-width: 84px;
+        flex: 0 0 auto;
       }
-      .preview-scrubber-range { flex: 1 1 160px; min-width: 120px; accent-color: var(--oxr-accent); }
+      .preview-scrubber-range {
+        flex: 1 1 160px;
+        min-width: 120px;
+        accent-color: var(--oxr-accent);
+      }
       .preview-scrubber-z {
-        font-family: var(--oxr-font-mono); font-size: 12px; color: var(--oxr-text-muted);
-        min-width: 92px; text-align: right; flex: 0 0 auto;
+        font-family: var(--oxr-font-mono);
+        font-size: 12px;
+        color: var(--oxr-text-muted);
+        min-width: 92px;
+        text-align: end;
+        flex: 0 0 auto;
       }
       .preview-scrubber-legend {
-        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-        padding-left: 12px; border-left: 1px solid var(--oxr-stroke);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding-inline-start: 12px;
+        border-inline-start: 1px solid var(--oxr-stroke);
       }
-      .preview-scrubber-legend:empty { display: none; }
+      .preview-scrubber-legend:empty {
+        display: none;
+      }
       .preview-scrubber-role {
-        display: inline-flex; align-items: center; gap: 6px;
-        font-size: 11.5px; color: var(--oxr-text-muted); white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11.5px;
+        color: var(--oxr-text-muted);
+        white-space: nowrap;
       }
-      .preview-scrubber-swatch { width: 9px; height: 9px; border-radius: 3px; flex: 0 0 auto; }
+      .preview-scrubber-swatch {
+        width: 9px;
+        height: 9px;
+        border-radius: 3px;
+        flex: 0 0 auto;
+      }
 
       /* Contextual transform readout, shown in the Objects tab. */
-      #tool-settings-panel { color: var(--oxr-text); }
+      #tool-settings-panel {
+        color: var(--oxr-text);
+      }
 
       /* When there is nothing on the plate the rail and most of the inspector
          have nothing to act on. This is progressive disclosure, not removed
          access — everything returns the moment a model loads. */
-      #ui-container.no-model #tool-rail { display: none; }
+      #ui-container.no-model #tool-rail {
+        display: none;
+      }
       #ui-container.no-model #bottom-action-bar [data-action-id]:not([data-action-id='load_model_from_path']) {
         display: none !important;
       }
@@ -539,68 +1161,144 @@
          the viewport hole so it never sits on top of the docked chrome. */
       #XRButtonWrapper {
         position: fixed !important;
-        bottom: 24px !important; right: calc(var(--inspector-w, 380px) + 24px) !important;
-        top: auto !important; left: auto !important; width: auto !important; height: auto !important;
-        pointer-events: auto !important; z-index: 10;
+        bottom: 24px !important;
+        inset-inline-end: calc(var(--inspector-w, 380px) + 24px) !important;
+        top: auto !important;
+        inset-inline-start: auto !important;
+        width: auto !important;
+        height: auto !important;
+        pointer-events: auto !important;
+        z-index: 10;
       }
-      #XRButtonWrapper h1 { display: none; /* Hide the big title in 2D mode */ }
+      #XRButtonWrapper h1 {
+        display: none; /* Hide the big title in 2D mode */
+      }
       .XRButton {
-        background: var(--oxr-surface) !important; color: var(--oxr-text) !important;
-        backdrop-filter: blur(8px); border: 1px solid var(--oxr-stroke-strong) !important;
-        border-radius: var(--radius-pill); font-weight: 600; font-size: 1rem !important;
-        display: flex; align-items: center; justify-content: center;
-        padding: 14px 24px !important; min-width: auto !important;
-        box-shadow: var(--shadow-panel) !important; transition: all var(--dur-slow) var(--ease-ui);
+        background: var(--oxr-surface) !important;
+        color: var(--oxr-text) !important;
+        backdrop-filter: blur(8px);
+        border: 1px solid var(--oxr-stroke-strong) !important;
+        border-radius: var(--radius-pill);
+        font-weight: 600;
+        font-size: 1rem !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 14px 24px !important;
+        min-width: auto !important;
+        box-shadow: var(--shadow-panel) !important;
+        transition: all var(--dur-slow) var(--ease-ui);
       }
-      .XRButton:hover { background: var(--oxr-surface-hover) !important; transform: scale(1.05); }
+      .XRButton:hover {
+        background: var(--oxr-surface-hover) !important;
+        transform: scale(1.05);
+      }
 
       /* ---- Command palette ----------------------------------------------- */
       #command-palette {
-        position: fixed; inset: 0; background: rgba(4,6,9,.55); backdrop-filter: blur(6px);
-        display: none; align-items: flex-start; justify-content: center; z-index: 90; pointer-events: auto;
+        position: fixed;
+        inset: 0;
+        background: rgba(4, 6, 9, 0.55);
+        backdrop-filter: blur(6px);
+        display: none;
+        align-items: flex-start;
+        justify-content: center;
+        z-index: 90;
+        pointer-events: auto;
       }
-      #command-palette.open { display: flex; }
+      #command-palette.open {
+        display: flex;
+      }
       .cmd-box {
-        margin-top: 11vh; width: min(600px, 92vw);
-        background: var(--oxr-bg-elevated); backdrop-filter: blur(20px);
-        border: 1px solid var(--oxr-stroke-strong); border-radius: var(--radius-lg);
-        box-shadow: var(--shadow-modal); overflow: hidden;
+        margin-top: 11vh;
+        width: min(600px, 92vw);
+        background: var(--oxr-bg-elevated);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--oxr-stroke-strong);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-modal);
+        overflow: hidden;
       }
       .cmd-input {
-        width: 100%; box-sizing: border-box; background: transparent; color: var(--oxr-text);
-        border: none; border-bottom: 1px solid var(--oxr-stroke);
-        padding: 16px 20px; font-size: 15px; font-family: var(--oxr-font-sans); outline: none;
+        width: 100%;
+        box-sizing: border-box;
+        background: transparent;
+        color: var(--oxr-text);
+        border: none;
+        border-bottom: 1px solid var(--oxr-stroke);
+        padding: 16px 20px;
+        font-size: 15px;
+        font-family: var(--oxr-font-sans);
+        outline: none;
       }
-      .cmd-list { max-height: 48vh; overflow-y: auto; padding: 6px; }
+      .cmd-list {
+        max-height: 48vh;
+        overflow-y: auto;
+        padding: 6px;
+      }
       .cmd-item {
-        display: flex; align-items: center; gap: 12px; padding: 10px 13px;
-        border-radius: var(--radius-sm); cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 13px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
       }
-      .cmd-item .glyph { width: 20px; text-align: center; opacity: .85; }
-      .cmd-item .cmd-label { font-size: 13.5px; }
+      .cmd-item .glyph {
+        width: 20px;
+        text-align: center;
+        opacity: 0.85;
+      }
+      .cmd-item .cmd-label {
+        font-size: 13.5px;
+      }
       .cmd-item .cmd-hint {
-        margin-left: auto; font-size: 11.5px; color: var(--oxr-text-muted);
-        max-width: 46%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        margin-inline-start: auto;
+        font-size: 11.5px;
+        color: var(--oxr-text-muted);
+        max-width: 46%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
-      .cmd-item.sel { background: var(--oxr-surface-hover); }
-      .cmd-item.disabled { opacity: .4; }
-      .cmd-empty { padding: 20px; color: var(--oxr-text-muted); font-size: 13px; text-align: center; }
+      .cmd-item.sel {
+        background: var(--oxr-surface-hover);
+      }
+      .cmd-item.disabled {
+        opacity: 0.4;
+      }
+      .cmd-empty {
+        padding: 20px;
+        color: var(--oxr-text-muted);
+        font-size: 13px;
+        text-align: center;
+      }
 
       /* ---- Tooltips ------------------------------------------------------- */
-      .u1-tooltip { position: relative; display: inline-flex; align-items: center; cursor: help; }
+      .u1-tooltip {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        cursor: help;
+      }
       .u1-tooltip .tooltip-content {
         visibility: hidden;
         width: 280px;
         background-color: #2a2f35;
         color: #e0e6ee;
-        text-align: left;
+        text-align: start;
         border-radius: var(--radius-sm);
         padding: 12px;
         position: absolute;
         z-index: 10000;
         bottom: 125%;
+        /* Centred on the trigger. `left: 50%` with a self-relative translate is
+           direction-neutral — 50% means the same from either edge — whereas the
+           `margin-inline-start: -140px` this replaced would have pulled the box
+           the wrong way under RTL, and the physical `margin-left` before that
+           hard-coded half of a width that is declared three lines above. */
         left: 50%;
-        margin-left: -140px;
+        transform: translateX(-50%);
         font-size: 11.5px;
         font-weight: normal;
         box-shadow: var(--shadow-menu);
@@ -610,74 +1308,176 @@
         pointer-events: none;
         text-transform: none;
       }
-      .u1-tooltip:hover .tooltip-content { visibility: visible; opacity: 1; pointer-events: auto; }
+      .u1-tooltip:hover .tooltip-content {
+        visibility: visible;
+        opacity: 1;
+        pointer-events: auto;
+      }
 
       @media (prefers-reduced-motion: reduce) {
-        *, *::before, *::after {
-          scroll-behavior: auto !important; transition-duration: .01ms !important;
-          animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
         }
       }
       /* The same suppression, requested in-app rather than by the OS. */
       html[data-reduce-motion='always'] *,
       html[data-reduce-motion='always'] *::before,
       html[data-reduce-motion='always'] *::after {
-        scroll-behavior: auto !important; transition-duration: .01ms !important;
-        animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
       }
 
       /* ---- Tablet: give the viewport back some width ---------------------- */
       @media (max-width: 1180px) {
-        #ui-container { --inspector-w: 320px; }
-        #cmd-search-btn { min-width: 0; }
-        #cmd-search-btn .cmd-search-label { display: none; }
+        #ui-container {
+          --inspector-w: 320px;
+        }
+        #cmd-search-btn {
+          min-width: 0;
+        }
+        #cmd-search-btn .cmd-search-label {
+          display: none;
+        }
       }
 
       /* ---- Phones: the docked columns become stacked sheets --------------- */
       @media (max-width: 768px) {
-        #ui-container { --inspector-w: auto; }
-        #top-bar { gap: 6px; padding: 6px 8px; justify-content: center; }
-        #app-title { display: none; }
-        .header-spacer { display: none; }
-        #menu-bar-host { left: 8px; right: 8px; max-width: none; flex-wrap: wrap; }
-        #stage-bar { order: 3; width: 100%; justify-content: center; }
-        .stage-btn { padding: 6px 9px; font-size: 12px; }
-        #workspace-row { position: relative; display: block; }
+        #ui-container {
+          --inspector-w: auto;
+        }
+        #top-bar {
+          gap: 6px;
+          padding: 6px 8px;
+          justify-content: center;
+        }
+        #app-title {
+          display: none;
+        }
+        .header-spacer {
+          display: none;
+        }
+        #menu-bar-host {
+          inset-inline: 8px;
+          max-width: none;
+          flex-wrap: wrap;
+        }
+        #stage-bar {
+          order: 3;
+          width: 100%;
+          justify-content: center;
+        }
+        .stage-btn {
+          padding: 6px 9px;
+          font-size: 12px;
+        }
+        #workspace-row {
+          position: relative;
+          display: block;
+        }
         /* The rail becomes a horizontal strip pinned above the inspector sheet. */
         #tool-rail {
-          position: absolute; left: 8px; right: 8px; bottom: 8px; width: auto; z-index: 25;
-          flex-direction: row; align-items: center; gap: 4px; padding: 6px;
-          border: 1px solid var(--oxr-stroke); border-radius: var(--radius-md);
+          position: absolute;
+          inset-inline: 8px;
+          bottom: 8px;
+          width: auto;
+          z-index: 25;
+          flex-direction: row;
+          align-items: center;
+          gap: 4px;
+          padding: 6px;
+          border: 1px solid var(--oxr-stroke);
+          border-radius: var(--radius-md);
         }
-        #tool-rail.collapsed { width: auto; }
+        #tool-rail.collapsed {
+          width: auto;
+        }
         #left-toolbar {
-          flex-direction: row; overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+          flex-direction: row;
+          overflow-x: auto;
+          overflow-y: hidden;
+          scrollbar-width: none;
         }
-        #left-toolbar::-webkit-scrollbar { display: none; }
-        .tool-btn { width: auto; padding: 10px 12px; font-size: 13px; white-space: nowrap; gap: 7px; }
-        #toolbar-toggle { margin-top: 0; }
-        #viewport { position: absolute; inset: 0; }
+        #left-toolbar::-webkit-scrollbar {
+          display: none;
+        }
+        .tool-btn {
+          width: auto;
+          padding: 10px 12px;
+          font-size: 13px;
+          white-space: nowrap;
+          gap: 7px;
+        }
+        #toolbar-toggle {
+          margin-top: 0;
+        }
+        #viewport {
+          position: absolute;
+          inset: 0;
+        }
         /* The inspector turns into a bottom sheet whose header toggles it. */
         #right-sidebar {
-          position: absolute; left: 8px; right: 8px; bottom: 68px; top: auto; z-index: 24;
-          width: auto; max-height: 56vh;
-          border: 1px solid var(--oxr-stroke); border-radius: var(--radius-md);
+          position: absolute;
+          inset-inline: 8px;
+          bottom: 68px;
+          top: auto;
+          z-index: 24;
+          width: auto;
+          max-height: 56vh;
+          border: 1px solid var(--oxr-stroke);
+          border-radius: var(--radius-md);
         }
-        #inspector-title { font-size: 1.02rem; cursor: pointer; }
-        #inspector-title::after { content: ' ▾'; color: var(--oxr-accent-soft); font-size: .8em; }
+        #inspector-title {
+          font-size: 1.02rem;
+          cursor: pointer;
+        }
+        #inspector-title::after {
+          content: ' ▾';
+          color: var(--oxr-accent-soft);
+          font-size: 0.8em;
+        }
         #right-sidebar.collapsed #inspector-scroll,
         #right-sidebar.collapsed #inspector-footer,
-        #right-sidebar.collapsed #preflight-banners { display: none; }
-        #right-sidebar.collapsed #inspector-title::after { content: ' ▸'; }
-        #preview-scrubber-host { left: 8px; right: 8px; bottom: 76px; }
-        #workspace-empty-state { top: 42%; padding: 20px; width: min(360px, calc(100% - 32px)); }
+        #right-sidebar.collapsed #preflight-banners {
+          display: none;
+        }
+        #right-sidebar.collapsed #inspector-title::after {
+          content: ' ▸';
+        }
+        #preview-scrubber-host {
+          inset-inline: 8px;
+          bottom: 76px;
+        }
+        #workspace-empty-state {
+          top: 42%;
+          padding: 20px;
+          width: min(360px, calc(100% - 32px));
+        }
         /* 16px inputs stop iOS Safari from zooming into focused fields. */
-        .action-btn, .cmd-input, .text-input { font-size: 16px; }
-        #XRButtonWrapper { bottom: 10px !important; right: 8px !important; }
-        .XRButton { padding: 13px 16px !important; font-size: .85rem !important; }
+        .action-btn,
+        .cmd-input,
+        .text-input {
+          font-size: 16px;
+        }
+        #XRButtonWrapper {
+          bottom: 10px !important;
+          inset-inline-end: 8px !important;
+        }
+        .XRButton {
+          padding: 13px 16px !important;
+          font-size: 0.85rem !important;
+        }
         /* XR Blocks' desktop-simulator settings gear — meaningless on touch
            devices and it lands on top of the bottom tool rail. */
-        xrblocks-simulator-settings { display: none !important; }
+        xrblocks-simulator-settings {
+          display: none !important;
+        }
       }
     </style>
   </head>
@@ -692,25 +1492,151 @@
       </div>
 
       <!-- 2D Slice Progress Modal -->
-      <div id="dom-slice-modal" role="dialog" aria-modal="true" aria-labelledby="dom-slice-title" aria-live="polite" style="display:none; position:fixed; inset:0; background:rgba(4,6,9,0.72); backdrop-filter:blur(10px); z-index:100; justify-content:center; align-items:center;">
-        <div style="background:var(--oxr-bg-elevated); padding:30px; border-radius:var(--radius-lg); border:1px solid var(--oxr-stroke-strong); width:min(430px,90vw); box-sizing:border-box; text-align:center; box-shadow:var(--shadow-modal);">
-          <div aria-hidden="true" style="width:44px; height:44px; margin:0 auto 14px; display:grid; place-items:center; border-radius:14px; background:rgba(255,109,0,.16); border:1px solid rgba(255,109,0,.38); color:var(--oxr-accent-soft); font-size:20px; animation:oxr-pulse 1.2s ease-in-out infinite;">▶</div>
-          <h2 id="dom-slice-title" style="margin:0 0 6px; font-family:var(--oxr-font-display); font-size:20px; color:var(--oxr-text);">Slicing in Progress</h2>
-          <p id="dom-slice-text" style="margin:0 0 20px; font-size:13px; color:var(--oxr-text-muted); font-family:var(--oxr-font-mono);">Initializing...</p>
-          <div role="progressbar" aria-label="Slice progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="dom-slice-progress" style="width:100%; height:8px; background:#ffffff14; border-radius:5px; overflow:hidden;">
-            <div id="dom-slice-bar" style="width:0%; height:100%; background:var(--oxr-grad-progress); transition:width 0.15s linear;"></div>
+      <div
+        id="dom-slice-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="dom-slice-title"
+        aria-live="polite"
+        style="
+          display: none;
+          position: fixed;
+          inset: 0;
+          background: rgba(4, 6, 9, 0.72);
+          backdrop-filter: blur(10px);
+          z-index: 100;
+          justify-content: center;
+          align-items: center;
+        "
+      >
+        <div
+          style="
+            background: var(--oxr-bg-elevated);
+            padding: 30px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--oxr-stroke-strong);
+            width: min(430px, 90vw);
+            box-sizing: border-box;
+            text-align: center;
+            box-shadow: var(--shadow-modal);
+          "
+        >
+          <div
+            aria-hidden="true"
+            style="
+              width: 44px;
+              height: 44px;
+              margin: 0 auto 14px;
+              display: grid;
+              place-items: center;
+              border-radius: 14px;
+              background: rgba(255, 109, 0, 0.16);
+              border: 1px solid rgba(255, 109, 0, 0.38);
+              color: var(--oxr-accent-soft);
+              font-size: 20px;
+              animation: oxr-pulse 1.2s ease-in-out infinite;
+            "
+          >
+            ▶
+          </div>
+          <h2
+            id="dom-slice-title"
+            style="margin: 0 0 6px; font-family: var(--oxr-font-display); font-size: 20px; color: var(--oxr-text)"
+          >
+            Slicing in Progress
+          </h2>
+          <p
+            id="dom-slice-text"
+            style="margin: 0 0 20px; font-size: 13px; color: var(--oxr-text-muted); font-family: var(--oxr-font-mono)"
+          >
+            Initializing...
+          </p>
+          <div
+            role="progressbar"
+            aria-label="Slice progress"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            id="dom-slice-progress"
+            style="width: 100%; height: 8px; background: #ffffff14; border-radius: 5px; overflow: hidden"
+          >
+            <div
+              id="dom-slice-bar"
+              style="width: 0%; height: 100%; background: var(--oxr-grad-progress); transition: width 0.15s linear"
+            ></div>
           </div>
         </div>
       </div>
 
       <!-- Loading Modal for heavy synchronous tasks like 3MF parsing -->
-      <div id="loading-modal" role="status" aria-live="assertive" aria-label="Loading model" style="display: none; position: fixed; inset: 0; background: rgba(4,6,9,0.7); backdrop-filter: blur(8px); z-index: 9999; align-items: center; justify-content: center;">
-        <div style="background: var(--oxr-bg-elevated); padding: 32px 40px; border-radius: var(--radius-lg); border: 1px solid var(--oxr-stroke-strong); box-shadow: var(--shadow-modal); width: min(420px, 85vw); box-sizing: border-box; text-align: center; display: flex; flex-direction: column; gap: 16px;">
-          <h3 id="loading-modal-title" style="margin: 0; font-family: var(--oxr-font-display); font-size: 20px; color: var(--oxr-text); font-weight: 600;">Loading...</h3>
-          <div style="width: 100%; background: #ffffff14; border-radius: 8px; height: 10px; overflow: hidden; position: relative;">
-            <div id="loading-modal-bar" style="position: absolute; left: 0; top: 0; height: 100%; width: 0%; background: var(--oxr-grad-progress); border-radius: 8px; transition: width 0.1s linear;"></div>
+      <div
+        id="loading-modal"
+        role="status"
+        aria-live="assertive"
+        aria-label="Loading model"
+        style="
+          display: none;
+          position: fixed;
+          inset: 0;
+          background: rgba(4, 6, 9, 0.7);
+          backdrop-filter: blur(8px);
+          z-index: 9999;
+          align-items: center;
+          justify-content: center;
+        "
+      >
+        <div
+          style="
+            background: var(--oxr-bg-elevated);
+            padding: 32px 40px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--oxr-stroke-strong);
+            box-shadow: var(--shadow-modal);
+            width: min(420px, 85vw);
+            box-sizing: border-box;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+          "
+        >
+          <h3
+            id="loading-modal-title"
+            style="
+              margin: 0;
+              font-family: var(--oxr-font-display);
+              font-size: 20px;
+              color: var(--oxr-text);
+              font-weight: 600;
+            "
+          >
+            Loading...
+          </h3>
+          <div
+            style="
+              width: 100%;
+              background: #ffffff14;
+              border-radius: 8px;
+              height: 10px;
+              overflow: hidden;
+              position: relative;
+            "
+          >
+            <div
+              id="loading-modal-bar"
+              style="
+                position: absolute;
+                left: 0;
+                top: 0;
+                height: 100%;
+                width: 0%;
+                background: var(--oxr-grad-progress);
+                border-radius: 8px;
+                transition: width 0.1s linear;
+              "
+            ></div>
           </div>
-          <p id="loading-modal-text" style="margin: 0; font-size: 14px; color: var(--oxr-text-muted);">Please wait</p>
+          <p id="loading-modal-text" style="margin: 0; font-size: 14px; color: var(--oxr-text-muted)">Please wait</p>
         </div>
       </div>
 
@@ -729,7 +1655,12 @@
         </button>
         <div id="menu-bar-host" class="menu-bar" role="group" aria-label="Application menus"></div>
 
-        <button id="cmd-search-btn" type="button" title="Command palette (Ctrl/⌘ K)" aria-keyshortcuts="Control+K Meta+K">
+        <button
+          id="cmd-search-btn"
+          type="button"
+          title="Command palette (Ctrl/⌘ K)"
+          aria-keyshortcuts="Control+K Meta+K"
+        >
           <span aria-hidden="true">⌕</span>
           <span class="cmd-search-label">Search actions &amp; settings</span>
           <kbd aria-hidden="true">⌘K</kbd>
@@ -741,7 +1672,15 @@
         <div id="stage-bar" role="group" aria-label="Print workflow"></div>
 
         <div id="plate-bar" title="Build plates"></div>
-        <button id="cmd-ai-config" class="icon-btn" type="button" title="AI Configuration" aria-label="AI configuration">⚙</button>
+        <button
+          id="cmd-ai-config"
+          class="icon-btn"
+          type="button"
+          title="AI Configuration"
+          aria-label="AI configuration"
+        >
+          ⚙
+        </button>
       </header>
 
       <!-- ========================== Workspace ========================== -->
@@ -774,7 +1713,7 @@
             <button id="empty-load-model" class="action-btn primary" type="button">Load a model</button>
             <!-- Shown only until a printer or an external slicer is configured;
                  both are remembered, so this is genuinely a first-run prompt. -->
-            <button id="empty-setup-printer" class="action-btn" type="button" hidden style="margin-top:8px;">
+            <button id="empty-setup-printer" class="action-btn" type="button" hidden style="margin-top: 8px">
               Set up your printer
             </button>
           </section>
@@ -797,266 +1736,545 @@
           <div id="inspector-scroll">
             <!-- ---------------------------- Objects ---------------------------- -->
             <section class="insp-panel" id="insp-panel-objects" role="tabpanel" aria-labelledby="insp-tab-objects">
-              <div id="objects-panel-host" class="panel" style="min-height:0;"></div>
+              <div id="objects-panel-host" class="panel" style="min-height: 0"></div>
 
               <!-- Numeric transform readout for the active gizmo. -->
-              <div id="tool-settings-panel" class="insp-card" style="display:none;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div id="tool-settings-panel" class="insp-card" style="display: none">
+                <div style="display: flex; justify-content: space-between; align-items: center">
                   <span id="tool-settings-title" class="insp-kicker">Tool Settings</span>
-                  <button id="btn-close-tool-settings" type="button" aria-label="Close tool settings" style="background:none; border:none; color:var(--oxr-text-muted); font-size:16px; line-height:1;">×</button>
+                  <button
+                    id="btn-close-tool-settings"
+                    type="button"
+                    aria-label="Close tool settings"
+                    style="
+                      background: none;
+                      border: none;
+                      color: var(--oxr-text-muted);
+                      font-size: 16px;
+                      line-height: 1;
+                    "
+                  >
+                    ×
+                  </button>
                 </div>
-                <div id="tool-settings-content" style="display:flex; flex-direction:column; gap:12px;"></div>
+                <div id="tool-settings-content" style="display: flex; flex-direction: column; gap: 12px"></div>
               </div>
 
-              <details class="insp-section"><summary>Semantic object editing</summary>
-                <div id="semantic-object-editor-host" class="panel" style="min-height:0;"></div>
+              <details class="insp-section">
+                <summary>Semantic object editing</summary>
+                <div id="semantic-object-editor-host" class="panel" style="min-height: 0"></div>
               </details>
             </section>
 
             <!-- ---------------------------- Settings --------------------------- -->
-            <section class="insp-panel" id="insp-panel-settings" role="tabpanel" aria-labelledby="insp-tab-settings" hidden>
-              <div class="panel" id="profile-panel" style="display:flex;flex-direction:column;gap:8px;">
-                <select id="sel-machine" aria-label="Printer profile" class="action-btn" style="text-align:left;"></select>
-                <select id="sel-process" aria-label="Process profile" class="action-btn" style="text-align:left;"></select>
-                <select id="sel-filament" aria-label="Filament profile" class="action-btn" style="text-align:left;"></select>
+            <section
+              class="insp-panel"
+              id="insp-panel-settings"
+              role="tabpanel"
+              aria-labelledby="insp-tab-settings"
+              hidden
+            >
+              <div class="panel" id="profile-panel" style="display: flex; flex-direction: column; gap: 8px">
+                <select
+                  id="sel-machine"
+                  aria-label="Printer profile"
+                  class="action-btn"
+                  style="text-align: start"
+                ></select>
+                <select
+                  id="sel-process"
+                  aria-label="Process profile"
+                  class="action-btn"
+                  style="text-align: start"
+                ></select>
+                <select
+                  id="sel-filament"
+                  aria-label="Filament profile"
+                  class="action-btn"
+                  style="text-align: start"
+                ></select>
                 <details id="preset-library-details">
-                  <summary class="insp-kicker" style="cursor:pointer;">Printers and presets</summary>
-                  <div id="preset-library-host" style="margin-top:8px;"></div>
+                  <summary class="insp-kicker" style="cursor: pointer">Printers and presets</summary>
+                  <div id="preset-library-host" style="margin-top: 8px"></div>
                 </details>
                 <input id="preset-bundle-file" type="file" accept="application/json,.json" hidden />
               </div>
-              <div class="panel" id="heads-panel" style="display:flex;flex-direction:column;gap:8px;"></div>
+              <div class="panel" id="heads-panel" style="display: flex; flex-direction: column; gap: 8px"></div>
               <label class="check-row">
                 <input id="chk-wipe-tower-auto" type="checkbox" checked />
                 Auto-position wipe tower
               </label>
               <!-- Data-driven Settings Inspector -->
-              <div id="settings-inspector-host" style="display:flex; flex-direction:column; min-height:200px;"></div>
+              <div id="settings-inspector-host" style="display: flex; flex-direction: column; min-height: 200px"></div>
             </section>
 
             <!-- ---------------------------- Filament --------------------------- -->
-            <section class="insp-panel" id="insp-panel-filament" role="tabpanel" aria-labelledby="insp-tab-filament" hidden>
+            <section
+              class="insp-panel"
+              id="insp-panel-filament"
+              role="tabpanel"
+              aria-labelledby="insp-tab-filament"
+              hidden
+            >
               <div class="panel" id="filament-panel">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
                   <span class="insp-kicker">Filaments</span>
-                  <button id="btn-add-filament" type="button" aria-label="Add filament" style="background:var(--oxr-surface);color:var(--oxr-text);border:1px solid var(--oxr-stroke);border-radius:6px;width:26px;height:26px;font-size:16px;line-height:1;">+</button>
+                  <button
+                    id="btn-add-filament"
+                    type="button"
+                    aria-label="Add filament"
+                    style="
+                      background: var(--oxr-surface);
+                      color: var(--oxr-text);
+                      border: 1px solid var(--oxr-stroke);
+                      border-radius: 6px;
+                      width: 26px;
+                      height: 26px;
+                      font-size: 16px;
+                      line-height: 1;
+                    "
+                  >
+                    +
+                  </button>
                 </div>
-                <div id="filament-swatches" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+                <div id="filament-swatches" style="display: flex; flex-wrap: wrap; gap: 8px"></div>
                 <!-- Legacy-only preview fallback; canonical mixed rows live in the editor below. -->
-                <div id="virtual-filament-panel" style="display:none;margin-top:10px;">
-                  <div id="virtual-filament-title" class="insp-kicker" style="margin-bottom:6px;"></div>
-                  <div id="virtual-filament-swatches" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+                <div id="virtual-filament-panel" style="display: none; margin-top: 10px">
+                  <div id="virtual-filament-title" class="insp-kicker" style="margin-bottom: 6px"></div>
+                  <div id="virtual-filament-swatches" style="display: flex; flex-wrap: wrap; gap: 6px"></div>
                 </div>
               </div>
 
               <details id="virtual-filament-library-section" class="insp-section">
                 <summary>Virtual filaments</summary>
-                <div class="panel" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;">
-                  <label class="check-row" style="align-items:flex-start;">
-                    <input id="chk-full-spectrum-auto-pairs" type="checkbox" style="margin-top:1px;" />
+                <div class="panel" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px">
+                  <label class="check-row" style="align-items: flex-start">
+                    <input id="chk-full-spectrum-auto-pairs" type="checkbox" style="margin-top: 1px" />
                     Generate automatic physical-filament pairs
                   </label>
-                  <p id="full-spectrum-auto-pairs-status" aria-live="polite" style="margin:0;color:var(--oxr-text-muted);font-size:11px;line-height:1.35;"></p>
-                  <button id="btn-confirm-full-spectrum-auto-pairs" type="button" class="action-btn" style="display:none;text-align:left;font-size:12px;"></button>
+                  <p
+                    id="full-spectrum-auto-pairs-status"
+                    aria-live="polite"
+                    style="margin: 0; color: var(--oxr-text-muted); font-size: 11px; line-height: 1.35"
+                  ></p>
+                  <button
+                    id="btn-confirm-full-spectrum-auto-pairs"
+                    type="button"
+                    class="action-btn"
+                    style="display: none; text-align: start; font-size: 12px"
+                  ></button>
                 </div>
-                <div id="virtual-filament-library-host" class="panel" style="min-height:0;"></div>
+                <div id="virtual-filament-library-host" class="panel" style="min-height: 0"></div>
               </details>
 
-              <details class="insp-section"><summary>Filament assignment</summary>
-                <div id="filament-assignment-host" class="panel" style="min-height:0;"></div>
+              <details class="insp-section">
+                <summary>Filament assignment</summary>
+                <div id="filament-assignment-host" class="panel" style="min-height: 0"></div>
               </details>
 
-              <details class="insp-section"><summary>Colour painting</summary>
-                <div id="paint-panel-host" class="panel" style="min-height:0;"></div>
+              <details class="insp-section">
+                <summary>Colour painting</summary>
+                <div id="paint-panel-host" class="panel" style="min-height: 0"></div>
               </details>
 
-              <details class="insp-section"><summary>Smart Paint</summary>
-                <div id="smart-paint-panel-host" class="panel" style="min-height:0;"></div>
+              <details class="insp-section">
+                <summary>Smart Paint</summary>
+                <div id="smart-paint-panel-host" class="panel" style="min-height: 0"></div>
               </details>
 
-              <details class="insp-section"><summary>Measure</summary>
-                <div id="measure-panel-host" class="panel" style="min-height:0;"></div>
+              <details class="insp-section">
+                <summary>Measure</summary>
+                <div id="measure-panel-host" class="panel" style="min-height: 0"></div>
               </details>
 
-              <details class="insp-section"><summary>Brim ears</summary>
-                <div id="brim-ears-panel-host" class="panel" style="min-height:0;"></div>
-                <div id="emboss-panel-host" class="panel" style="min-height:0;"></div>
-                <div id="svg-panel-host" class="panel" style="min-height:0;"></div>
+              <details class="insp-section">
+                <summary>Brim ears</summary>
+                <div id="brim-ears-panel-host" class="panel" style="min-height: 0"></div>
+                <div id="emboss-panel-host" class="panel" style="min-height: 0"></div>
+                <div id="svg-panel-host" class="panel" style="min-height: 0"></div>
               </details>
-              <details class="insp-section"><summary>Simplify</summary>
-                <div id="simplify-panel-host" class="panel" style="min-height:0;"></div>
+              <details class="insp-section">
+                <summary>Simplify</summary>
+                <div id="simplify-panel-host" class="panel" style="min-height: 0"></div>
               </details>
-              <details class="insp-section"><summary>Calibration parameters</summary>
-                <div id="calibration-parameters-host" class="panel" style="min-height:0;"></div>
+              <details class="insp-section">
+                <summary>Calibration parameters</summary>
+                <div id="calibration-parameters-host" class="panel" style="min-height: 0"></div>
               </details>
             </section>
 
             <!-- ---------------------------- Preview ---------------------------- -->
-            <section class="insp-panel" id="insp-panel-preview" role="tabpanel" aria-labelledby="insp-tab-preview" hidden>
-              <details class="insp-section"><summary>G-code listing</summary>
-                <div id="gcode-panel-host" class="panel" style="min-height:0;"></div>
+            <section
+              class="insp-panel"
+              id="insp-panel-preview"
+              role="tabpanel"
+              aria-labelledby="insp-tab-preview"
+              hidden
+            >
+              <details class="insp-section">
+                <summary>G-code listing</summary>
+                <div id="gcode-panel-host" class="panel" style="min-height: 0"></div>
               </details>
-              <details class="insp-section" open><summary>G-code preview</summary>
-                <div id="gcode-preview-panel-host" class="panel" style="min-height:0;"></div>
+              <details class="insp-section" open>
+                <summary>G-code preview</summary>
+                <div id="gcode-preview-panel-host" class="panel" style="min-height: 0"></div>
               </details>
-              <details class="insp-section"><summary>Layer events</summary>
-                <div id="layer-event-host" class="panel" style="min-height:0;"></div>
+              <details class="insp-section">
+                <summary>Layer events</summary>
+                <div id="layer-event-host" class="panel" style="min-height: 0"></div>
               </details>
             </section>
 
             <!-- ---------------------------- Printer ---------------------------- -->
-            <section class="insp-panel" id="insp-panel-printer" role="tabpanel" aria-labelledby="insp-tab-printer" hidden>
+            <section
+              class="insp-panel"
+              id="insp-panel-printer"
+              role="tabpanel"
+              aria-labelledby="insp-tab-printer"
+              hidden
+            >
               <div class="panel" id="printer-panel">
-                <div class="insp-kicker" style="margin-bottom:8px;">
+                <div class="insp-kicker" style="margin-bottom: 8px">
                   Printer (Moonraker)
                   <div class="u1-tooltip">
-                    <span aria-hidden="true" style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:#ffffff33;color:#fff;font-size:10px;">?</span>
+                    <span
+                      aria-hidden="true"
+                      style="
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        width: 14px;
+                        height: 14px;
+                        border-radius: 50%;
+                        background: #ffffff33;
+                        color: #fff;
+                        font-size: 10px;
+                      "
+                      >?</span
+                    >
                     <div class="tooltip-content">
-                      <b style="color:var(--oxr-accent-soft);">Local HTTP:</b><br/>Chrome 142+ can connect directly after you approve Local Network Access. Enter <code>http://printer-ip</code> explicitly and add this page's exact origin to Moonraker <code>cors_domains</code> (hosted app: <code>https://orcaxr.martinez.fyi</code>).<br/><br/><b>Fallback:</b> Join the headset and printer to the same tailnet, then use <a href="https://github.com/paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware" target="_blank" rel="noreferrer" style="color:#4db6ac;text-decoration:underline;">Extended Firmware</a> with Tailscale Serve:<br/><code style="display:block;margin-top:6px;padding:6px;background:#1a1e23;border-radius:4px;color:#81c784;font-family:var(--oxr-font-mono);">tailscale serve --bg http://127.0.0.1:80</code>
+                      <b style="color: var(--oxr-accent-soft)">Local HTTP:</b><br />Chrome 142+ can connect directly
+                      after you approve Local Network Access. Enter <code>http://printer-ip</code> explicitly and add
+                      this page's exact origin to Moonraker <code>cors_domains</code> (hosted app:
+                      <code>https://orcaxr.martinez.fyi</code>).<br /><br /><b>Fallback:</b> Join the headset and
+                      printer to the same tailnet, then use
+                      <a
+                        href="https://github.com/paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware"
+                        target="_blank"
+                        rel="noreferrer"
+                        style="color: #4db6ac; text-decoration: underline"
+                        >Extended Firmware</a
+                      >
+                      with Tailscale Serve:<br /><code
+                        style="
+                          display: block;
+                          margin-top: 6px;
+                          padding: 6px;
+                          background: #1a1e23;
+                          border-radius: 4px;
+                          color: #81c784;
+                          font-family: var(--oxr-font-mono);
+                        "
+                        >tailscale serve --bg http://127.0.0.1:80</code
+                      >
                     </div>
                   </div>
                 </div>
-                <div style="display:flex;gap:8px;margin-bottom:8px;">
-                  <select id="printer-select" class="text-input" aria-label="Active printer" style="flex:1;min-width:0;"></select>
-                  <button id="btn-printer-add" class="action-btn" type="button" style="width:auto;margin:0;padding:10px 12px;" title="Save the current address as another printer">Add</button>
-                  <button id="btn-printer-remove" class="action-btn" type="button" style="width:auto;margin:0;padding:10px 12px;" title="Remove the selected printer">Remove</button>
+                <div style="display: flex; gap: 8px; margin-bottom: 8px">
+                  <select
+                    id="printer-select"
+                    class="text-input"
+                    aria-label="Active printer"
+                    style="flex: 1; min-width: 0"
+                  ></select>
+                  <button
+                    id="btn-printer-add"
+                    class="action-btn"
+                    type="button"
+                    style="width: auto; margin: 0; padding: 10px 12px"
+                    title="Save the current address as another printer"
+                  >
+                    Add
+                  </button>
+                  <button
+                    id="btn-printer-remove"
+                    class="action-btn"
+                    type="button"
+                    style="width: auto; margin: 0; padding: 10px 12px"
+                    title="Remove the selected printer"
+                  >
+                    Remove
+                  </button>
                 </div>
-                <input id="printer-host" type="text" class="text-input" placeholder="http://192.168.1.50 or https://printer.tailnet-name.ts.net"
-                  aria-label="Moonraker endpoint" autocomplete="url" style="margin-bottom:8px;font-family:var(--oxr-font-mono);" />
-                <label for="printer-api-key" style="display:block;font-size:11px;color:var(--oxr-text-muted);margin-bottom:4px;">API key (optional)</label>
-                <input id="printer-api-key" type="password" class="text-input" autocomplete="off" placeholder="Saved on this device" style="margin-bottom:8px;" />
+                <input
+                  id="printer-host"
+                  type="text"
+                  class="text-input"
+                  placeholder="http://192.168.1.50 or https://printer.tailnet-name.ts.net"
+                  aria-label="Moonraker endpoint"
+                  autocomplete="url"
+                  style="margin-bottom: 8px; font-family: var(--oxr-font-mono)"
+                />
+                <label
+                  for="printer-api-key"
+                  style="display: block; font-size: 11px; color: var(--oxr-text-muted); margin-bottom: 4px"
+                  >API key (optional)</label
+                >
+                <input
+                  id="printer-api-key"
+                  type="password"
+                  class="text-input"
+                  autocomplete="off"
+                  placeholder="Saved on this device"
+                  style="margin-bottom: 8px"
+                />
                 <p class="field-note">
-                  Chrome 142+: enter a full <code>http://</code> LAN URL, approve Local Network
-                  Access, and add this page's exact origin to Moonraker
-                  <code>cors_domains</code> (hosted app: <code>https://orcaxr.martinez.fyi</code>).
-                  CORS is also required for cross-origin HTTPS. HTTP is unencrypted; use it
-                  only on a trusted LAN. Otherwise use HTTPS or Tailscale Serve.
+                  Chrome 142+: enter a full <code>http://</code> LAN URL, approve Local Network Access, and add this
+                  page's exact origin to Moonraker <code>cors_domains</code> (hosted app:
+                  <code>https://orcaxr.martinez.fyi</code>). CORS is also required for cross-origin HTTPS. HTTP is
+                  unencrypted; use it only on a trusted LAN. Otherwise use HTTPS or Tailscale Serve.
                 </p>
-                <label class="check-row" style="margin-bottom:8px;">
-                  <input id="remember-credentials" type="checkbox" checked style="accent-color:var(--oxr-ok);" />
+                <label class="check-row" style="margin-bottom: 8px">
+                  <input id="remember-credentials" type="checkbox" checked style="accent-color: var(--oxr-ok)" />
                   Remember the printer key and slicer token on this device
                 </label>
                 <p class="field-note" id="remember-credentials-note">
-                  Kept in this browser's storage so they survive a reload. Turn this off on a
-                  shared machine — it also erases what is already saved. Anything that can run
-                  script on this origin can read them; the app's CSP is what keeps that to code
-                  it ships itself.
+                  Kept in this browser's storage so they survive a reload. Turn this off on a shared machine — it also
+                  erases what is already saved. Anything that can run script on this origin can read them; the app's CSP
+                  is what keeps that to code it ships itself.
                 </p>
-                <button id="btn-forget-credentials" class="action-btn" type="button" style="margin-bottom:8px;">Forget Saved Credentials</button>
-                <div class="insp-kicker" style="margin:12px 0 8px;">This device</div>
-                <label class="check-row" style="margin-bottom:8px;">
-                  <input id="pref-reduce-motion" type="checkbox" style="accent-color:var(--oxr-ok);" />
+                <button id="btn-forget-credentials" class="action-btn" type="button" style="margin-bottom: 8px">
+                  Forget Saved Credentials
+                </button>
+                <div class="insp-kicker" style="margin: 12px 0 8px">This device</div>
+                <label class="check-row" style="margin-bottom: 8px">
+                  <input id="pref-reduce-motion" type="checkbox" style="accent-color: var(--oxr-ok)" />
                   Always reduce motion
                 </label>
                 <p class="field-note">
-                  Off follows your system's reduced-motion setting, which this app already honours.
-                  On suppresses animation here regardless of it.
+                  Off follows your system's reduced-motion setting, which this app already honours. On suppresses
+                  animation here regardless of it.
                 </p>
-                <div style="display:flex;gap:8px;margin-bottom:8px;">
-                  <button id="btn-prefs-export" class="action-btn" type="button" style="flex:1;margin:0;">Export Settings</button>
-                  <button id="btn-prefs-import" class="action-btn" type="button" style="flex:1;margin:0;">Import Settings</button>
+                <div style="display: flex; gap: 8px; margin-bottom: 8px">
+                  <button id="btn-prefs-export" class="action-btn" type="button" style="flex: 1; margin: 0">
+                    Export Settings
+                  </button>
+                  <button id="btn-prefs-import" class="action-btn" type="button" style="flex: 1; margin: 0">
+                    Import Settings
+                  </button>
                 </div>
                 <input id="prefs-import-file" type="file" accept="application/json,.json" hidden />
-                <button id="btn-prefs-reset" class="action-btn" type="button" style="margin-bottom:8px;">Reset Settings</button>
+                <button id="btn-prefs-reset" class="action-btn" type="button" style="margin-bottom: 8px">
+                  Reset Settings
+                </button>
                 <p class="field-note">
-                  An export carries this device's setup but never a token, so it is safe to share or
-                  attach to a bug report. Reset clears the setup only — projects and presets stay.
+                  An export carries this device's setup but never a token, so it is safe to share or attach to a bug
+                  report. Reset clears the setup only — projects and presets stay.
                 </p>
-                <button id="btn-printer-test" class="action-btn" type="button" style="margin-bottom:8px;">Test Connection</button>
-                <div style="display:flex; gap:8px;">
-                  <button id="btn-printer-send" class="action-btn" type="button" style="flex:1;margin-bottom:0;" disabled>Send unavailable</button>
-                  <button id="btn-printer-webcam" class="action-btn" type="button" style="flex:1;margin-bottom:0;">Camera</button>
+                <button id="btn-printer-test" class="action-btn" type="button" style="margin-bottom: 8px">
+                  Test Connection
+                </button>
+                <div style="display: flex; gap: 8px">
+                  <button
+                    id="btn-printer-send"
+                    class="action-btn"
+                    type="button"
+                    style="flex: 1; margin-bottom: 0"
+                    disabled
+                  >
+                    Send unavailable
+                  </button>
+                  <button id="btn-printer-webcam" class="action-btn" type="button" style="flex: 1; margin-bottom: 0">
+                    Camera
+                  </button>
                 </div>
                 <div id="printer-job-host"></div>
-                <details id="printer-storage-details" style="margin-top:8px;">
-                  <summary class="insp-kicker" style="cursor:pointer;">Files on the printer</summary>
-                  <div id="printer-storage-host" style="margin-top:8px;"></div>
+                <details id="printer-storage-details" style="margin-top: 8px">
+                  <summary class="insp-kicker" style="cursor: pointer">Files on the printer</summary>
+                  <div id="printer-storage-host" style="margin-top: 8px"></div>
                 </details>
-                <details id="printer-console-details" style="margin-top:8px;">
-                  <summary class="insp-kicker" style="cursor:pointer;">Console and macros</summary>
-                  <div id="printer-console-host" style="margin-top:8px;"></div>
+                <details id="printer-console-details" style="margin-top: 8px">
+                  <summary class="insp-kicker" style="cursor: pointer">Console and macros</summary>
+                  <div id="printer-console-host" style="margin-top: 8px"></div>
                 </details>
-                <details id="printer-camera-details" style="margin-top:8px;">
-                  <summary class="insp-kicker" style="cursor:pointer;">Camera</summary>
-                  <div id="printer-camera-host" style="margin-top:8px;"></div>
+                <details id="printer-camera-details" style="margin-top: 8px">
+                  <summary class="insp-kicker" style="cursor: pointer">Camera</summary>
+                  <div id="printer-camera-host" style="margin-top: 8px"></div>
                 </details>
-                <details id="printer-history-details" style="margin-top:8px;">
-                  <summary class="insp-kicker" style="cursor:pointer;">Print history</summary>
-                  <div id="printer-history-host" style="margin-top:8px;"></div>
+                <details id="printer-history-details" style="margin-top: 8px">
+                  <summary class="insp-kicker" style="cursor: pointer">Print history</summary>
+                  <div id="printer-history-host" style="margin-top: 8px"></div>
                 </details>
               </div>
 
               <div class="panel" id="external-slicer-panel">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
                   <div class="insp-kicker">
                     External slicer
                     <div class="u1-tooltip">
-                      <span aria-hidden="true" style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:#ffffff33;color:#fff;font-size:10px;">?</span>
-                      <div class="tooltip-content" style="width:300px;margin-left:-150px;">
-                        <b style="color:var(--oxr-accent-soft);">Why use an external slicer?</b><br/>
-                        The in-browser WebAssembly (WASM) slicer has a hard memory limit of 4GB, which can crash on very large models.<br/><br/>
-                        By running the <a href="https://github.com/ignacio82/OrcaXR/tree/main/server" target="_blank" rel="noreferrer" style="color:#4db6ac;text-decoration:underline;">External Slicer via Docker</a>, you use the <b>official Snapmaker Orca Slicer native binary</b> instead, which avoids this memory limit and slices significantly faster.
+                      <span
+                        aria-hidden="true"
+                        style="
+                          display: inline-flex;
+                          align-items: center;
+                          justify-content: center;
+                          width: 14px;
+                          height: 14px;
+                          border-radius: 50%;
+                          background: #ffffff33;
+                          color: #fff;
+                          font-size: 10px;
+                        "
+                        >?</span
+                      >
+                      <div class="tooltip-content" style="width: 300px; margin-inline-start: -150px">
+                        <b style="color: var(--oxr-accent-soft)">Why use an external slicer?</b><br />
+                        The in-browser WebAssembly (WASM) slicer has a hard memory limit of 4GB, which can crash on very
+                        large models.<br /><br />
+                        By running the
+                        <a
+                          href="https://github.com/ignacio82/OrcaXR/tree/main/server"
+                          target="_blank"
+                          rel="noreferrer"
+                          style="color: #4db6ac; text-decoration: underline"
+                          >External Slicer via Docker</a
+                        >, you use the <b>official Snapmaker Orca Slicer native binary</b> instead, which avoids this
+                        memory limit and slices significantly faster.
                       </div>
                     </div>
                   </div>
-                  <span id="external-slicer-status" title="Disconnected" style="font-family:var(--oxr-font-mono);font-size:11px;color:var(--oxr-danger);display:flex;align-items:center;gap:4px;">
-                    <span aria-hidden="true" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--oxr-danger);"></span> Offline
+                  <span
+                    id="external-slicer-status"
+                    title="Disconnected"
+                    style="
+                      font-family: var(--oxr-font-mono);
+                      font-size: 11px;
+                      color: var(--oxr-danger);
+                      display: flex;
+                      align-items: center;
+                      gap: 4px;
+                    "
+                  >
+                    <span
+                      aria-hidden="true"
+                      style="
+                        display: inline-block;
+                        width: 8px;
+                        height: 8px;
+                        border-radius: 50%;
+                        background: var(--oxr-danger);
+                      "
+                    ></span>
+                    Offline
                   </span>
                 </div>
-                <div style="display:flex;gap:8px;margin-bottom:8px;">
-                  <input id="external-slicer-url" type="text" class="text-input" placeholder="URL (e.g. http://localhost:3000)" style="flex:1;min-width:0;font-family:var(--oxr-font-mono);" />
-                  <button id="btn-external-slicer-connect" class="action-btn" type="button" style="width:auto;margin:0;padding:10px 16px;">Connect</button>
+                <div style="display: flex; gap: 8px; margin-bottom: 8px">
+                  <input
+                    id="external-slicer-url"
+                    type="text"
+                    class="text-input"
+                    placeholder="URL (e.g. http://localhost:3000)"
+                    style="flex: 1; min-width: 0; font-family: var(--oxr-font-mono)"
+                  />
+                  <button
+                    id="btn-external-slicer-connect"
+                    class="action-btn"
+                    type="button"
+                    style="width: auto; margin: 0; padding: 10px 16px"
+                  >
+                    Connect
+                  </button>
                 </div>
-                <div style="display:flex;gap:8px;margin-bottom:8px;">
-                  <input id="external-slicer-token" type="password" class="text-input" autocomplete="off" placeholder="Access token (only if the server requires one)" style="flex:1;min-width:0;font-family:var(--oxr-font-mono);" />
+                <div style="display: flex; gap: 8px; margin-bottom: 8px">
+                  <input
+                    id="external-slicer-token"
+                    type="password"
+                    class="text-input"
+                    autocomplete="off"
+                    placeholder="Access token (only if the server requires one)"
+                    style="flex: 1; min-width: 0; font-family: var(--oxr-font-mono)"
+                  />
                 </div>
                 <p class="field-note">
-                  A local <code>http://</code> server works on Chrome 142+ after Local Network
-                  Access permission. The Docker server already enables CORS; use HTTPS for
-                  untrusted or remote networks. A server published beyond loopback requires
-                  <code>ORCAXR_SERVER_TOKEN</code> — paste it above. The token is kept for this
+                  A local <code>http://</code> server works on Chrome 142+ after Local Network Access permission. The
+                  Docker server already enables CORS; use HTTPS for untrusted or remote networks. A server published
+                  beyond loopback requires <code>ORCAXR_SERVER_TOKEN</code> — paste it above. The token is kept for this
                   tab only and is never saved to disk, so re-enter it after a reload.
                 </p>
-                <div id="external-slicer-controls" style="display:none;justify-content:space-between;align-items:center;gap:8px;">
+                <div
+                  id="external-slicer-controls"
+                  style="display: none; justify-content: space-between; align-items: center; gap: 8px"
+                >
                   <label class="check-row">
-                    <input id="external-slicer-enabled" type="checkbox" style="accent-color:var(--oxr-ok);" />
+                    <input id="external-slicer-enabled" type="checkbox" style="accent-color: var(--oxr-ok)" />
                     Use external slicer
                   </label>
-                  <button id="btn-external-slicer-delete" class="action-btn" type="button"
-                    style="width:auto;margin:0;padding:8px 14px;background:var(--oxr-danger-surface);border-color:transparent;color:var(--oxr-danger);">Delete</button>
+                  <button
+                    id="btn-external-slicer-delete"
+                    class="action-btn"
+                    type="button"
+                    style="
+                      width: auto;
+                      margin: 0;
+                      padding: 8px 14px;
+                      background: var(--oxr-danger-surface);
+                      border-color: transparent;
+                      color: var(--oxr-danger);
+                    "
+                  >
+                    Delete
+                  </button>
                 </div>
-                <p id="external-slicer-hint" style="display:none;margin:6px 0 0;font-size:12px;color:#8b95a1;">Off — slicing locally in‑browser.</p>
+                <p id="external-slicer-hint" style="display: none; margin: 6px 0 0; font-size: 12px; color: #8b95a1">
+                  Off — slicing locally in‑browser.
+                </p>
               </div>
 
-              <div class="panel" id="mcp-panel" style="display:flex;flex-direction:column;gap:8px;">
+              <div class="panel" id="mcp-panel" style="display: flex; flex-direction: column; gap: 8px">
                 <div class="insp-kicker">MCP server</div>
                 <label class="check-row">
                   <input id="chk-mcp-enabled" type="checkbox" />
                   Enable local MCP Server
                 </label>
-                <div id="mcp-controls" style="display:none;flex-direction:column;gap:8px;">
-                  <input id="in-mcp-token" type="password" class="text-input" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="One-use WebMCP connection token" placeholder="Paste Auth Token" style="font-family:var(--oxr-font-mono);" />
-                  <button id="btn-mcp-connect" class="action-btn" type="button" style="margin:0;">Connect Server</button>
-                  <button id="btn-mcp-share" class="action-btn" type="button" style="margin:0;">Share Connection Snippet</button>
+                <div id="mcp-controls" style="display: none; flex-direction: column; gap: 8px">
+                  <input
+                    id="in-mcp-token"
+                    type="password"
+                    class="text-input"
+                    autocomplete="off"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    aria-label="One-use WebMCP connection token"
+                    placeholder="Paste Auth Token"
+                    style="font-family: var(--oxr-font-mono)"
+                  />
+                  <button id="btn-mcp-connect" class="action-btn" type="button" style="margin: 0">
+                    Connect Server
+                  </button>
+                  <button id="btn-mcp-share" class="action-btn" type="button" style="margin: 0">
+                    Share Connection Snippet
+                  </button>
                 </div>
               </div>
 
-              <div class="panel" id="ai-panel" style="display:flex;flex-direction:column;gap:8px;">
+              <div class="panel" id="ai-panel" style="display: flex; flex-direction: column; gap: 8px">
                 <div class="insp-kicker">AI features</div>
-                <p style="margin:0;color:var(--oxr-text-muted);font-size:12px;line-height:1.4;">Configure a session-only key with the header gear, then use Smart Paint from the shared Tools menu.</p>
+                <p style="margin: 0; color: var(--oxr-text-muted); font-size: 12px; line-height: 1.4">
+                  Configure a session-only key with the header gear, then use Smart Paint from the shared Tools menu.
+                </p>
               </div>
             </section>
 
             <!-- ----------------------------- Plates ---------------------------- -->
             <section class="insp-panel" id="insp-panel-plates" role="tabpanel" aria-labelledby="insp-tab-plates" hidden>
-              <div id="plate-manager-host" class="panel" style="min-height:0;"></div>
+              <div id="plate-manager-host" class="panel" style="min-height: 0"></div>
               <div class="insp-card">
                 <div class="insp-kicker">Calibration prints</div>
                 <!-- Rendered from the registry's Calibration menu section by DomShell. -->
-                <div id="calibration-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:7px;"></div>
-                <details id="calibration-history-details" style="margin-top:8px;">
-                  <summary class="insp-kicker" style="cursor:pointer;">Calibration history</summary>
-                  <div id="calibration-history-host" style="margin-top:8px;"></div>
+                <div id="calibration-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 7px"></div>
+                <details id="calibration-history-details" style="margin-top: 8px">
+                  <summary class="insp-kicker" style="cursor: pointer">Calibration history</summary>
+                  <div id="calibration-history-host" style="margin-top: 8px"></div>
                 </details>
               </div>
             </section>
@@ -1068,14 +2286,32 @@
                 <span id="status-dot" aria-hidden="true"></span>
                 <p id="status-text" role="status" aria-live="polite">Ready. Load a model to begin.</p>
               </div>
-              <div id="progress-container" style="display: none; width: 100%; background-color: #ffffff14; border-radius: 4px;">
-                <div id="progress-bar" style="width: 0%; height: 6px; background: var(--oxr-grad-progress); border-radius: 4px; transition: width 0.1s linear;"></div>
+              <div
+                id="progress-container"
+                style="display: none; width: 100%; background-color: #ffffff14; border-radius: 4px"
+              >
+                <div
+                  id="progress-bar"
+                  style="
+                    width: 0%;
+                    height: 6px;
+                    background: var(--oxr-grad-progress);
+                    border-radius: 4px;
+                    transition: width 0.1s linear;
+                  "
+                ></div>
               </div>
             </div>
             <!-- Primary actions — rendered from the ActionRegistry by DomShell. -->
             <div id="bottom-action-bar">
               <div id="action-panel">
-                <input type="file" id="file-input" accept=".3mf,.stl,.obj,.amf,.amfz,.zip,.gcode,.gco,.g" multiple style="display:none;" />
+                <input
+                  type="file"
+                  id="file-input"
+                  accept=".3mf,.stl,.obj,.amf,.amfz,.zip,.gcode,.gco,.g"
+                  multiple
+                  style="display: none"
+                />
               </div>
             </div>
           </div>
@@ -1085,7 +2321,14 @@
       <!-- Command palette overlay (every action, searchable). -->
       <div id="command-palette">
         <div class="cmd-box">
-          <input id="cmd-input" class="cmd-input" type="text" aria-label="Search actions" placeholder="Search every action…" autocomplete="off" />
+          <input
+            id="cmd-input"
+            class="cmd-input"
+            type="text"
+            aria-label="Search actions"
+            placeholder="Search every action…"
+            autocomplete="off"
+          />
           <div id="cmd-list" class="cmd-list"></div>
         </div>
       </div>
