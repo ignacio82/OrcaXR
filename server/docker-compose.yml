@@ -8,10 +8,11 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     environment:
-      - HOST=127.0.0.1
+      - HOST=0.0.0.0
       - PORT=3000
       - SLICER_ENGINE=cli
       - ORCAXR_TRUST=same-origin
+      - ORCAXR_ACCEPT_LAN_EXPOSURE=yes-i-understand
     volumes:
       - orcaxr-data:/home/orcaxr/.orcaxr
     restart: unless-stopped

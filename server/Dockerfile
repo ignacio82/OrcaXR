@@ -24,9 +24,12 @@ RUN apt-get update && apt-get install -y \
 # flags and profile schemas shift between releases — never track "latest").
 ARG ORCA_VERSION=2.3.4
 ARG ORCA_COMMIT=9fd12ffb2b1b80c9fb4c14564754d2ec1573a626
-RUN git clone --filter=blob:none --no-checkout \
-    https://github.com/Snapmaker/OrcaSlicer.git /orca \
-    && git -C /orca fetch --depth 1 origin "${ORCA_COMMIT}" \
+RUN for i in 1 2 3 4 5; do \
+      git clone --filter=blob:none --no-checkout https://github.com/Snapmaker/OrcaSlicer.git /orca && break || { echo "git clone retry $i"; rm -rf /orca; sleep 5; }; \
+    done \
+    && for i in 1 2 3 4 5; do \
+      git -C /orca fetch --depth 1 origin "${ORCA_COMMIT}" && break || { echo "git fetch retry $i"; sleep 5; }; \
+    done \
     && git -C /orca checkout --detach "${ORCA_COMMIT}" \
     && test "$(git -C /orca rev-parse HEAD)" = "${ORCA_COMMIT}"
 
@@ -54,8 +57,11 @@ RUN set -eu; \
 # ---- Stage 2: web-builder — build the production Web UI from source
 FROM node:22-slim AS web-builder
 
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+WORKDIR /build
+COPY wasm/artifact-provenance.json ./wasm/artifact-provenance.json
+COPY web/package*.json ./web/
 WORKDIR /build/web
-COPY web/package*.json ./
 RUN npm ci
 COPY web/ ./
 RUN npm run build
@@ -127,21 +133,21 @@ COPY --from=web-builder /build/web/src/slicer/pinnedEngineProvenance.ts /tmp/pin
 
 # Build-time coherence check: verify the compiled front-end's engine pin
 # matches the image's engine provenance.
-RUN node -e '
-  const fs = require("fs");
-  const prov = JSON.parse(fs.readFileSync("/app/orca/engine-provenance.json", "utf8"));
-  const pinnedTs = fs.readFileSync("/tmp/pinnedEngineProvenance.ts", "utf8");
-  if (!pinnedTs.includes(prov.engine.commit)) {
-    console.error("COHERENCE FAILURE: Front-end pinned commit does not match server engine commit.");
-    process.exit(1);
-  }
-  for (const patch of prov.patches) {
-    if (!pinnedTs.includes(patch.sha256)) {
-      console.error("COHERENCE FAILURE: Front-end does not pin patch " + patch.name + " (" + patch.sha256 + ")");
-      process.exit(1);
-    }
-  }
-  console.log("Coherence check passed: front-end pins match engine provenance.");
+RUN node -e '\
+  const fs = require("fs"); \
+  const prov = JSON.parse(fs.readFileSync("/app/orca/engine-provenance.json", "utf8")); \
+  const pinnedTs = fs.readFileSync("/tmp/pinnedEngineProvenance.ts", "utf8"); \
+  if (!pinnedTs.includes(prov.engine.commit)) { \
+    console.error("COHERENCE FAILURE: Front-end pinned commit does not match server engine commit."); \
+    process.exit(1); \
+  } \
+  for (const patch of prov.patches) { \
+    if (!pinnedTs.includes(patch.sha256)) { \
+      console.error("COHERENCE FAILURE: Front-end does not pin patch " + patch.name + " (" + patch.sha256 + ")"); \
+      process.exit(1); \
+    } \
+  } \
+  console.log("Coherence check passed: front-end pins match engine provenance."); \
 ' && rm -f /tmp/pinnedEngineProvenance.ts
 
 # Copy Tailscale binaries
@@ -160,8 +166,9 @@ RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin orcaxr \
 
 EXPOSE 3000
 ENV PORT=3000
-ENV HOST=127.0.0.1
+ENV HOST=0.0.0.0
 ENV ORCAXR_TRUST=same-origin
+ENV ORCAXR_ACCEPT_LAN_EXPOSURE=yes-i-understand
 ENV HOME=/home/orcaxr
 
 ENTRYPOINT ["/app/entrypoint.sh"]

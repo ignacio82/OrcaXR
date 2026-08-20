@@ -41,7 +41,7 @@ chown -R orcaxr:orcaxr /home/orcaxr
 
 # Drop privileges to user 'orcaxr' if running as root
 if [ "$(id -u)" = "0" ]; then
-  exec setpriv --reuid=orcaxr --regid=orcaxr --init-groups --reset-env node /app/server.js "$@"
+  exec setpriv --reuid=orcaxr --regid=orcaxr --init-groups node /app/server.js "$@"
 else
   exec node /app/server.js "$@"
 fi
