@@ -699,6 +699,7 @@
   "app.main.enterThePrinterAddressFirst": "Enter the printer address first, then Add names it.",
   "app.main.enterYourPrinterAddressIt": "Enter your printer address; it is saved on this device.",
   "app.main.exportedThisDeviceSSettings": "Exported this device’s settings. The file carries no tokens.",
+  "app.main.externalSlicerAutoDiscoveredAttested": "External slicer auto-discovered — slicing on container.",
   "app.main.externalSlicerConnectedExternalSlicing": "External slicer connected — external slicing is on.",
   "app.main.externalSlicerConnectionFailedSlicing": "External slicer connection failed — slicing locally.",
   "app.main.externalSlicerRemovedSlicingLocally": "External slicer removed — slicing locally.",

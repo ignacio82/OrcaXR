@@ -4333,10 +4333,15 @@ function setupDomUI(
     persistCredentials();
   });
 
-  const updateExternalSlicerStatus = (connected: boolean) => {
+  const updateExternalSlicerStatus = (connected: boolean, autoDiscovered = false) => {
     if (connected) {
-      externalSlicerStatus.innerHTML =
-        '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4caf50;"></span> Online';
+      if (autoDiscovered || SlicerClient.getExternalSlicerOriginType() === 'auto-discovered') {
+        externalSlicerStatus.innerHTML =
+          '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4caf50;"></span> Slicing here · attested';
+      } else {
+        externalSlicerStatus.innerHTML =
+          '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4caf50;"></span> Online';
+      }
       externalSlicerStatus.style.color = '#4caf50';
     } else {
       externalSlicerStatus.innerHTML =
@@ -4429,10 +4434,34 @@ function setupDomUI(
   };
 
   refreshExternalSlicerControls();
+  const insecureWarning = document.getElementById('external-slicer-insecure-warning');
+  if (insecureWarning && typeof window !== 'undefined' && window.isSecureContext === false) {
+    const isLoopback =
+      ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname) ||
+      window.location.hostname.endsWith('.localhost');
+    if (!isLoopback) {
+      insecureWarning.style.display = 'block';
+    }
+  }
+
   if (SlicerClient.useExternalSlicer()) {
     // Re-check only a route the user explicitly left enabled. A saved-but-off
     // URL remains completely idle on page load.
     void connectExternalSlicerCandidate(externalSlicerUrl.value);
+  } else {
+    // Auto-discover when served from all-in-one container
+    void (async () => {
+      const discovery = await SlicerClient.autoDiscoverExternalSlicer();
+      if (discovery.discovered) {
+        externalSlicerUrl.value = discovery.endpoint;
+        updateExternalSlicerStatus(true, true);
+        refreshExternalSlicerControls();
+        statusText.textContent = t(
+          'app.main.externalSlicerAutoDiscoveredAttested',
+          'External slicer auto-discovered — slicing on container.',
+        );
+      }
+    })();
   }
 
   btnPrinterTest.onclick = async () => {

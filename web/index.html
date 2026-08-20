@@ -2228,6 +2228,15 @@
                 <p id="external-slicer-hint" style="display: none; margin: 6px 0 0; font-size: 12px; color: #8b95a1">
                   Off — slicing locally in‑browser.
                 </p>
+                <p
+                  id="external-slicer-insecure-warning"
+                  class="field-note"
+                  style="display: none; color: var(--oxr-warning); margin: 8px 0 0"
+                >
+                  Plain-HTTP LAN access is not a secure context: WebXR, in-browser WASM slicing (SharedArrayBuffer), and
+                  service workers are unavailable. Use http://localhost:3000 or Tailscale Serve (HTTPS) for full
+                  capability.
+                </p>
               </div>
 
               <div class="panel" id="mcp-panel" style="display: flex; flex-direction: column; gap: 8px">

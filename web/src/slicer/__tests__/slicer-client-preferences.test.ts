@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { SlicerClient } from '../SlicerClient.ts';
+import { PINNED_ENGINE_PROVENANCE } from '../pinnedEngineProvenance.ts';
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -99,6 +100,80 @@ try {
   await assert.rejects(cancelledConnection, /superseded/);
   assert.equal(SlicerClient.getExternalSlicerUrl(), '', 'deleting during a probe must not resurrect the endpoint');
   assert.equal(SlicerClient.useExternalSlicer(), false);
+
+  // ---- Auto-Discovery Tests ----
+  const originalWindow = globalThis.window;
+  try {
+    const attestedCli = {
+      schemaVersion: 1,
+      engine: 'cli',
+      attested: true,
+      upstream: {
+        name: 'snapmaker-orca',
+        version: PINNED_ENGINE_PROVENANCE.cliVersion,
+        commit: PINNED_ENGINE_PROVENANCE.commit,
+      },
+      patches: Object.entries(PINNED_ENGINE_PROVENANCE.cliPatches).map(([name, sha256]) => ({ name, sha256 })),
+      artifacts: { 'snapmaker-orca': 'c0ffee' },
+    };
+
+    // 1. Successful auto-discovery
+    storage.clear();
+    (globalThis as { window?: unknown }).window = {
+      location: {
+        origin: 'http://localhost:3000',
+        hostname: 'localhost',
+        protocol: 'http:',
+      },
+    };
+
+    const discovery = await SlicerClient.autoDiscoverExternalSlicer(async () => ({
+      ok: true,
+      json: async () => attestedCli,
+    }));
+    assert.equal(discovery.discovered, true);
+    assert.equal(SlicerClient.getExternalSlicerUrl(), 'http://localhost:3000');
+    assert.equal(SlicerClient.isExternalSlicerEnabled(), true);
+    assert.equal(SlicerClient.getExternalSlicerOriginType(), 'auto-discovered');
+
+    // 2. Explicit user configuration is NOT overwritten by auto-discovery
+    await SlicerClient.connectExternalSlicer('http://user-configured.local:3000', async () => ({ ok: true }));
+    assert.equal(SlicerClient.getExternalSlicerOriginType(), 'user');
+    assert.equal(SlicerClient.getExternalSlicerUrl(), 'http://user-configured.local:3000');
+
+    const discoveryAttempt = await SlicerClient.autoDiscoverExternalSlicer(async () => ({
+      ok: true,
+      json: async () => attestedCli,
+    }));
+    assert.equal(discoveryAttempt.discovered, false, 'user-configured endpoints must not be overwritten');
+    assert.equal(SlicerClient.getExternalSlicerUrl(), 'http://user-configured.local:3000');
+    assert.equal(SlicerClient.getExternalSlicerOriginType(), 'user');
+
+    // 3. Failed attestation reverts and leaves route disabled
+    storage.clear();
+    const failedDiscovery = await SlicerClient.autoDiscoverExternalSlicer(async () => ({
+      ok: true,
+      json: async () => ({ schemaVersion: 1, engine: 'cli', attested: false, reason: 'Drift detected' }),
+    }));
+    assert.equal(failedDiscovery.discovered, false);
+    assert.equal(SlicerClient.useExternalSlicer(), false);
+    assert.equal(SlicerClient.getExternalSlicerUrl(), '');
+
+    // 4. Static hosting environment skips discovery
+    (globalThis as { window?: unknown }).window = {
+      location: {
+        origin: 'https://ignacio82.github.io',
+        hostname: 'ignacio82.github.io',
+        protocol: 'https:',
+      },
+    };
+    const ghPagesDiscovery = await SlicerClient.autoDiscoverExternalSlicer();
+    assert.equal(ghPagesDiscovery.discovered, false);
+    assert.match(ghPagesDiscovery.reason, /Static hosting environment/);
+  } finally {
+    if (originalWindow) (globalThis as { window?: unknown }).window = originalWindow;
+    else Reflect.deleteProperty(globalThis, 'window');
+  }
 
   const mainSource = readFileSync(new URL('../../main.ts', import.meta.url), 'utf8');
   assert.match(

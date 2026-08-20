@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { createSlicerService } from "./server.js";
 import { loadServerConfig } from "./security.mjs";
@@ -477,5 +479,191 @@ test("rate limits return 429 with Retry-After", async () => {
     );
   } finally {
     await preflightInstance.close();
+  }
+});
+
+test("Web UI static serving, cache headers, and SPA fallback", async () => {
+  const tempWebRoot = await fs.mkdtemp(path.join(os.tmpdir(), "orcaxr-web-test-"));
+  const assetsDir = path.join(tempWebRoot, "assets");
+  await fs.mkdir(assetsDir, { recursive: true });
+
+  const indexContent = "<!DOCTYPE html><html><head><title>OrcaXR</title></head><body>OrcaXR App</body></html>";
+  const jsContent = "console.log('test-asset');";
+  const swContent = "self.addEventListener('install', () => {});";
+  const manifestContent = '{"name":"OrcaXR"}';
+
+  await fs.writeFile(path.join(tempWebRoot, "index.html"), indexContent);
+  await fs.writeFile(path.join(tempWebRoot, "sw.js"), swContent);
+  await fs.writeFile(path.join(tempWebRoot, "manifest.webmanifest"), manifestContent);
+  await fs.writeFile(path.join(assetsDir, "index-D1234567.js"), jsContent);
+
+  const prevWebRoot = process.env.ORCAXR_WEB_ROOT;
+  process.env.ORCAXR_WEB_ROOT = tempWebRoot;
+
+  let instance;
+  try {
+    instance = await fixture({
+      config: {
+        trustMode: "same-origin",
+      },
+    });
+
+    // 1. Root index.html document request
+    const rootRes = await fetch(`${instance.url}/`, {
+      headers: { Accept: "text/html" },
+    });
+    assert.equal(rootRes.status, 200);
+    assert.equal(await rootRes.text(), indexContent);
+    assert.equal(rootRes.headers.get("cache-control"), "no-cache");
+    assert.equal(rootRes.headers.get("cross-origin-opener-policy"), "same-origin");
+    assert.equal(rootRes.headers.get("cross-origin-embedder-policy"), "credentialless");
+
+    // 2. Content-hashed asset gets immutable cache
+    const assetRes = await fetch(`${instance.url}/assets/index-D1234567.js`);
+    assert.equal(assetRes.status, 200);
+    assert.equal(await assetRes.text(), jsContent);
+    assert.equal(assetRes.headers.get("cache-control"), "public, max-age=31536000, immutable");
+    assert.equal(assetRes.headers.get("cross-origin-opener-policy"), "same-origin");
+
+    // 3. Unhashed assets get no-cache
+    const swRes = await fetch(`${instance.url}/sw.js`);
+    assert.equal(swRes.status, 200);
+    assert.equal(await swRes.text(), swContent);
+    assert.equal(swRes.headers.get("cache-control"), "no-cache");
+
+    const manifestRes = await fetch(`${instance.url}/manifest.webmanifest`);
+    assert.equal(manifestRes.status, 200);
+    assert.equal(await manifestRes.text(), manifestContent);
+    assert.equal(manifestRes.headers.get("cache-control"), "no-cache");
+
+    // 4. SPA fallback for HTML client navigation
+    const spaRes = await fetch(`${instance.url}/plates/1`, {
+      headers: { Accept: "text/html,application/xhtml+xml" },
+    });
+    assert.equal(spaRes.status, 200);
+    assert.equal(await spaRes.text(), indexContent);
+    assert.equal(spaRes.headers.get("cache-control"), "no-cache");
+
+    // 5. Non-HTML unknown route returns JSON 404
+    const apiNotFound = await fetch(`${instance.url}/unknown/api`, {
+      headers: { Accept: "application/json" },
+    });
+    assert.equal(apiNotFound.status, 404);
+    assert.equal((await apiNotFound.json()).error.code, "NOT_FOUND");
+
+    // 6. Missing asset with extension returns 404, not index.html
+    const missingAsset = await fetch(`${instance.url}/assets/missing.png`, {
+      headers: { Accept: "text/html,image/png" },
+    });
+    assert.equal(missingAsset.status, 404);
+
+    // 7. Unknown job ID does NOT return HTML SPA fallback
+    const jobNotFound = await fetch(`${instance.url}/jobs/00000000-0000-0000-0000-000000000000`, {
+      headers: { Accept: "text/html" },
+    });
+    assert.equal(jobNotFound.status, 404);
+    assert.equal((await jobNotFound.json()).error.code, "JOB_NOT_FOUND");
+  } finally {
+    if (instance) await instance.close();
+    if (prevWebRoot !== undefined) process.env.ORCAXR_WEB_ROOT = prevWebRoot;
+    else delete process.env.ORCAXR_WEB_ROOT;
+    await fs.rm(tempWebRoot, { recursive: true, force: true });
+  }
+});
+
+test("same-origin trust allows browser slicing without bearer token and denies forge attempts", async () => {
+  const instance = await fixture({
+    config: {
+      trustMode: "same-origin",
+    },
+  });
+
+  const validModel = valid3mf();
+
+  try {
+    // 1. Same-origin browser slice (matching Origin + sec-fetch-site) succeeds without token
+    const originHeaders = {
+      Origin: instance.url,
+      "Sec-Fetch-Site": "same-origin",
+    };
+    const browserSlice = await fetch(`${instance.url}/slice`, {
+      method: "POST",
+      headers: originHeaders,
+      body: modelForm(validModel, "{}", "project.3mf"),
+    });
+    assert.equal(browserSlice.status, 200);
+
+    // 2. Non-browser POST with missing Origin gets 401 AUTH_REQUIRED
+    const nonBrowserSlice = await fetch(`${instance.url}/slice`, {
+      method: "POST",
+      body: modelForm(validModel, "{}", "project.3mf"),
+    });
+    assert.equal(nonBrowserSlice.status, 401);
+    assert.equal((await nonBrowserSlice.json()).error.code, "AUTH_REQUIRED");
+
+    // 3. Cross-origin browser POST with foreign Origin gets 403 ORIGIN_DENIED
+    const foreignSlice = await fetch(`${instance.url}/slice`, {
+      method: "POST",
+      headers: {
+        Origin: "http://malicious.example.com",
+        "Sec-Fetch-Site": "cross-site",
+      },
+      body: modelForm(validModel, "{}", "project.3mf"),
+    });
+    assert.equal(foreignSlice.status, 403);
+    assert.equal((await foreignSlice.json()).error.code, "ORIGIN_DENIED");
+
+    // 4. Non-browser POST with Bearer token succeeds
+    const tokenSlice = await fetch(`${instance.url}/slice`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${instance.service.config.token}`,
+      },
+      body: modelForm(validModel, "{}", "project.3mf"),
+    });
+    assert.equal(tokenSlice.status, 200);
+  } finally {
+    await instance.close();
+  }
+});
+
+test("trusted proxy rate-limits by Tailscale-User-Login header", async () => {
+  const instance = await fixture({
+    config: {
+      maxRequestsPerWindow: 1,
+      trustedProxy: true,
+      trustMode: "same-origin",
+    },
+  });
+
+  try {
+    const originHeaders = {
+      Origin: instance.url,
+      "Sec-Fetch-Site": "same-origin",
+    };
+
+    // User Alice: first request ok, second 429
+    const alice1 = await fetch(`${instance.url}/ping`, {
+      headers: { ...originHeaders, "Tailscale-User-Login": "alice@tailnet" },
+    });
+    assert.equal(alice1.status, 200);
+
+    const alice2 = await fetch(`${instance.url}/ping`, {
+      headers: { ...originHeaders, "Tailscale-User-Login": "alice@tailnet" },
+    });
+    assert.equal(alice2.status, 429);
+
+    // User Bob: independent bucket, first request ok
+    const bob1 = await fetch(`${instance.url}/ping`, {
+      headers: { ...originHeaders, "Tailscale-User-Login": "bob@tailnet" },
+    });
+    assert.equal(bob1.status, 200);
+
+    const bob2 = await fetch(`${instance.url}/ping`, {
+      headers: { ...originHeaders, "Tailscale-User-Login": "bob@tailnet" },
+    });
+    assert.equal(bob2.status, 429);
+  } finally {
+    await instance.close();
   }
 });

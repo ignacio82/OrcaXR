@@ -16,6 +16,7 @@ import {
   inspectStl,
   isLoopbackHost,
   isOriginAllowed,
+  isSameOriginRequest,
   loadServerConfig,
   parseOverridesJson,
   validateServerConfig,
@@ -549,9 +550,25 @@ class Scheduler {
   }
 }
 
-function createRateMiddleware(limiter) {
+export const WEB_SECURITY_HEADERS = {
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Cross-Origin-Embedder-Policy": "credentialless",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy":
+    "camera=(self), microphone=(), geolocation=(), xr-spatial-tracking=(self)",
+};
+
+export const applyWebHeaders = (res) => {
+  for (const [k, v] of Object.entries(WEB_SECURITY_HEADERS)) res.setHeader(k, v);
+};
+
+function createRateMiddleware(limiter, config = {}) {
   return (req, res, next) => {
-    const key = req.socket.remoteAddress || "unknown";
+    const userLogin = config.trustedProxy
+      ? req.get("tailscale-user-login")
+      : null;
+    const key =
+      userLogin || req.ip || req.socket?.remoteAddress || "unknown";
     const result = limiter.consume(key);
     res.setHeader("X-RateLimit-Remaining", String(result.remaining));
     if (!result.allowed) {
@@ -581,7 +598,27 @@ function sendError(res, error) {
 
 function normalizeConfig(base, overrides = {}) {
   const config = { ...base, ...overrides };
-  config.authRequired = Boolean(config.token) || !isLoopbackHost(config.host);
+  if (overrides.trustMode !== undefined) {
+    config.trustMode = overrides.trustMode;
+  } else if (overrides.host !== undefined) {
+    config.trustMode = isLoopbackHost(overrides.host)
+      ? base.trustMode || "loopback"
+      : "token";
+  }
+  if (config.trustMode === "same-origin") {
+    config.trustSameOrigin = true;
+    config.authRequired = true;
+    if (!config.token) {
+      config.token = crypto.randomBytes(32).toString("hex");
+    }
+  } else if (config.trustMode === "token") {
+    config.trustSameOrigin = false;
+    config.authRequired = true;
+  } else {
+    config.trustSameOrigin = false;
+    config.authRequired =
+      Boolean(config.token) || !isLoopbackHost(config.host);
+  }
   config.allowLoopbackOrigins = isLoopbackHost(config.host);
   return validateServerConfig(config);
 }
@@ -622,34 +659,38 @@ export function createSlicerService(options = {}) {
   let pendingUploads = 0;
 
   app.disable("x-powered-by");
-  app.set("trust proxy", false);
+  app.set("trust proxy", config.trustedProxy ? "loopback" : false);
   app.use((req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
     next();
   });
-  app.use(createRateMiddleware(generalLimiter));
+  app.use(createRateMiddleware(generalLimiter, config));
   app.use(
-    cors({
-      origin(origin, callback) {
-        if (isOriginAllowed(origin, config)) callback(null, true);
-        else
-          callback(
-            new HttpError(
-              403,
-              "ORIGIN_DENIED",
-              "This browser origin is not allowed.",
-            ),
-          );
-      },
-      methods: ["GET", "POST", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Authorization", "Content-Type"],
-      credentials: false,
-      maxAge: 600,
+    cors((req, callback) => {
+      const origin = req.get("origin");
+      if (isOriginAllowed(origin, config, req)) {
+        callback(null, {
+          origin: true,
+          methods: ["GET", "POST", "DELETE", "OPTIONS"],
+          allowedHeaders: ["Authorization", "Content-Type"],
+          credentials: false,
+          maxAge: 600,
+        });
+      } else {
+        callback(
+          new HttpError(
+            403,
+            "ORIGIN_DENIED",
+            "This browser origin is not allowed.",
+          ),
+        );
+      }
     }),
   );
   app.use((req, res, next) => {
     if (req.method === "OPTIONS" || !config.authRequired) return next();
+    if (config.trustSameOrigin && isSameOriginRequest(req, config)) return next();
     if (!bearerTokenMatches(req.get("authorization"), config.token)) {
       res.setHeader("WWW-Authenticate", 'Bearer realm="OrcaXR slicer"');
       return sendError(
@@ -829,7 +870,7 @@ export function createSlicerService(options = {}) {
 
   app.post(
     "/slice",
-    createRateMiddleware(sliceLimiter),
+    createRateMiddleware(sliceLimiter, config),
     reserveUpload,
     upload.single("file"),
     asyncRoute(async (req, res) => {
@@ -1043,6 +1084,44 @@ export function createSlicerService(options = {}) {
     }),
   );
 
+  const WEB_ROOT =
+    process.env.ORCAXR_WEB_ROOT || path.join(__dirname, "public");
+  const SERVES_WEB_UI = existsSync(path.join(WEB_ROOT, "index.html"));
+
+  if (SERVES_WEB_UI) {
+    app.use(
+      express.static(WEB_ROOT, {
+        index: false,
+        etag: true,
+        lastModified: true,
+        setHeaders: (res, filePath) => {
+          applyWebHeaders(res);
+          const rel = path.relative(WEB_ROOT, filePath);
+          const contentHashed =
+            rel.startsWith("assets" + path.sep) &&
+            /-[A-Za-z0-9_-]{8,}\./.test(rel);
+          res.setHeader(
+            "Cache-Control",
+            contentHashed
+              ? "public, max-age=31536000, immutable"
+              : "no-cache",
+          );
+        },
+      }),
+    );
+
+    const INDEX_HTML = path.join(WEB_ROOT, "index.html");
+    // Registered after every API route: anything that reaches here matched none
+    // of them. Only real document navigations get the SPA shell.
+    app.get(/.*/, (req, res, next) => {
+      if (!req.accepts("html")) return next(); // fetch/XHR → JSON 404
+      if (path.extname(req.path)) return next(); // missing asset → 404
+      applyWebHeaders(res);
+      res.setHeader("Cache-Control", "no-cache");
+      res.sendFile(INDEX_HTML, (error) => (error ? next() : undefined));
+    });
+  }
+
   app.use(async (error, req, res, next) => {
     if (req.file?.path) await cleanupPaths(req.file.path);
     req.releaseAdmission?.();
@@ -1116,6 +1195,16 @@ export function createSlicerService(options = {}) {
       logger.log(
         `OrcaXR External Slicer Server listening on ${config.host}:${actualPort} (engine: ${engine})`,
       );
+      if (config.tokenGenerated && config.token) {
+        logger.log(
+          `[security] Generated server token persisted to ${config.generatedTokenPath}: Authorization: Bearer ${config.token}`,
+        );
+      }
+      if (config.acceptLanExposure && !isLoopbackHost(config.host)) {
+        logger.warn(
+          `[security] WARNING: ORCAXR_TRUST=same-origin is active on non-loopback host ${config.host} (ORCAXR_ACCEPT_LAN_EXPOSURE=yes-i-understand). Unauthenticated LAN requests can slice.`,
+        );
+      }
     });
     server.requestTimeout = config.httpRequestTimeoutMs;
     server.timeout = config.httpRequestTimeoutMs;

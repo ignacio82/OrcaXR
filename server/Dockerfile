@@ -51,32 +51,48 @@ RUN set -eu; \
       "${ORCA_VERSION}" "${ORCA_COMMIT}" "${patches}" \
       > /orca/build/package/engine-provenance.json
 
-# ---- Stage 2: runtime — HTTP slicer server wrapping the patched CLI.
+# ---- Stage 2: web-builder — build the production Web UI from source
+FROM node:22-slim AS web-builder
+
+WORKDIR /build/web
+COPY web/package*.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+
+# ---- Stage 3: tailscale — extract official Tailscale daemon and client binaries
+FROM tailscale/tailscale:v1.78.1 AS tailscale
+
+# ---- Stage 4: runtime — all-in-one OrcaXR container (Web UI + Slicer Server + optional Tailscale)
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Runtime libraries for the GUI-linked CLI binary (run under xvfb) + Node.
+# Runtime libraries for the GUI-linked CLI binary (run under xvfb), Node, and Tailscale networking.
 RUN apt-get update && apt-get install -y \
+    ca-certificates \
     curl \
-    wget \
-    unzip \
-    p7zip-full \
-    libgtk-3-0 \
-    libgl1 \
+    iptables \
+    iproute2 \
     libegl1 \
+    libgl1 \
     libglew2.2 \
+    libgstreamer-plugins-base1.0-0 \
+    libgstreamer1.0-0 \
+    libgtk-3-0 \
+    libmspack0t64 \
+    libosmesa6 \
+    libsecret-1-0 \
+    libspnav0 \
     libssl-dev \
     libwebkit2gtk-4.1-0 \
-    libosmesa6 \
-    libgstreamer1.0-0 \
-    libgstreamer-plugins-base1.0-0 \
-    libsecret-1-0 \
-    libmspack0t64 \
-    libspnav0 \
-    xvfb \
     nodejs \
     npm \
+    p7zip-full \
+    unzip \
+    util-linux \
+    wget \
+    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -101,28 +117,52 @@ RUN set -eu; \
 COPY server/package*.json ./
 RUN npm ci --omit=dev
 
-# The WASM engine, with the provenance manifest beside it. Both the slice
-# worker and `GET /engine` resolve this one directory (slice_worker.mjs
-# resolveWasmDir), so the digests the server attests are the digests it runs.
-# The manifest lives at `wasm/artifact-provenance.json` in the repository, one
-# level above the artifacts it describes; publishing it beside them here keeps
-# the image's layout self-contained.
+# The WASM engine, with the provenance manifest beside it.
 COPY wasm/dist /app/wasm-dist
 COPY wasm/artifact-provenance.json /app/wasm-dist/artifact-provenance.json
 
-# Copy server code
-COPY server/server.js server/security.mjs server/slice_worker.mjs server/preset_key_types.json ./
+# Copy compiled Web UI static assets
+COPY --from=web-builder /build/web/dist /app/public
+COPY --from=web-builder /build/web/src/slicer/pinnedEngineProvenance.ts /tmp/pinnedEngineProvenance.ts
 
-# The slicer and Node service do not need root. Project/config/output files
-# live in /tmp with per-file 0600 permissions.
+# Build-time coherence check: verify the compiled front-end's engine pin
+# matches the image's engine provenance.
+RUN node -e '
+  const fs = require("fs");
+  const prov = JSON.parse(fs.readFileSync("/app/orca/engine-provenance.json", "utf8"));
+  const pinnedTs = fs.readFileSync("/tmp/pinnedEngineProvenance.ts", "utf8");
+  if (!pinnedTs.includes(prov.engine.commit)) {
+    console.error("COHERENCE FAILURE: Front-end pinned commit does not match server engine commit.");
+    process.exit(1);
+  }
+  for (const patch of prov.patches) {
+    if (!pinnedTs.includes(patch.sha256)) {
+      console.error("COHERENCE FAILURE: Front-end does not pin patch " + patch.name + " (" + patch.sha256 + ")");
+      process.exit(1);
+    }
+  }
+  console.log("Coherence check passed: front-end pins match engine provenance.");
+' && rm -f /tmp/pinnedEngineProvenance.ts
+
+# Copy Tailscale binaries
+COPY --from=tailscale /usr/local/bin/tailscale /usr/local/bin/tailscale
+COPY --from=tailscale /usr/local/bin/tailscaled /usr/local/bin/tailscaled
+
+# Copy server code and entrypoint
+COPY server/server.js server/security.mjs server/slice_worker.mjs server/preset_key_types.json ./
+COPY server/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# User and state directories
 RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin orcaxr \
-    && test -d /home/orcaxr
+    && mkdir -p /var/lib/tailscale /run/tailscale /home/orcaxr/.orcaxr \
+    && chown -R orcaxr:orcaxr /home/orcaxr /var/lib/tailscale /run/tailscale
 
 EXPOSE 3000
 ENV PORT=3000
 ENV HOST=127.0.0.1
+ENV ORCAXR_TRUST=same-origin
 ENV HOME=/home/orcaxr
 
-USER orcaxr
-
-CMD ["node", "server.js"]
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["server.js"]

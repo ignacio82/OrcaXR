@@ -112,6 +112,7 @@ function isolationFailureMessage(subject: string): string {
 // runs before anything reads them.
 const EXTERNAL_URL_KEY = SLICER_URL_KEY;
 const EXTERNAL_ENABLED_KEY = SLICER_ENABLED_KEY;
+const SLICER_ORIGIN_STORAGE_KEY = 'oxr_slicer_origin';
 
 export class SlicerClient {
   private static externalConnectionEpoch = 0;
@@ -154,6 +155,11 @@ export class SlicerClient {
     else localStorage.removeItem(EXTERNAL_URL_KEY);
   }
 
+  static getExternalSlicerOriginType(): 'user' | 'auto-discovered' | 'none' {
+    if (!SlicerClient.getExternalSlicerUrl()) return 'none';
+    return localStorage.getItem(SLICER_ORIGIN_STORAGE_KEY) === 'auto-discovered' ? 'auto-discovered' : 'user';
+  }
+
   static isExternalSlicerEnabled(): boolean {
     if (!SlicerClient.getExternalSlicerUrl()) return false;
     // Fail closed for legacy URL-only preferences. An external endpoint may
@@ -172,6 +178,7 @@ export class SlicerClient {
     SlicerClient.externalConnectionEpoch += 1;
     localStorage.removeItem(EXTERNAL_URL_KEY);
     localStorage.removeItem(EXTERNAL_ENABLED_KEY);
+    localStorage.removeItem(SLICER_ORIGIN_STORAGE_KEY);
   }
 
   /**
@@ -316,9 +323,84 @@ export class SlicerClient {
     }
 
     SlicerClient.setExternalSlicerUrl(endpoint);
+    localStorage.setItem(SLICER_ORIGIN_STORAGE_KEY, 'user');
     // This is intentionally the sole code path that writes enabled=true.
     localStorage.setItem(EXTERNAL_ENABLED_KEY, 'true');
     return endpoint;
+  }
+
+  /**
+   * Probe the origin that served the app for an attested external slicer.
+   *
+   * Only activates if the server passes full engine attestation. Reverts to
+   * browser-wasm on any failure. Explicit user-configured endpoints are never
+   * overwritten.
+   */
+  static async autoDiscoverExternalSlicer(
+    fetcher?: (url: string) => Promise<{ ok: boolean; status?: number; json?: () => Promise<unknown> }>,
+  ): Promise<
+    | { readonly discovered: true; readonly endpoint: string; readonly commit: string }
+    | { readonly discovered: false; readonly reason: string }
+  > {
+    if (SlicerClient.getExternalSlicerUrl() && SlicerClient.getExternalSlicerOriginType() === 'user') {
+      return { discovered: false, reason: 'A user-configured slicer endpoint is already set.' };
+    }
+
+    if (typeof window === 'undefined' || !window.location?.origin) {
+      return { discovered: false, reason: 'No window location available.' };
+    }
+    const origin = window.location.origin;
+    if (window.location.protocol === 'file:' || window.location.hostname.endsWith('github.io')) {
+      return { discovered: false, reason: 'Static hosting environment does not run an external slicer.' };
+    }
+
+    let canonicalCandidate: string;
+    try {
+      canonicalCandidate = canonicalExternalEndpoint(origin);
+    } catch (error) {
+      return {
+        discovered: false,
+        reason: error instanceof Error ? error.message : 'Invalid candidate origin.',
+      };
+    }
+
+    const savedUrl = SlicerClient.getExternalSlicerUrl();
+    const savedEnabled = localStorage.getItem(EXTERNAL_ENABLED_KEY);
+    const savedOriginType = localStorage.getItem(SLICER_ORIGIN_STORAGE_KEY);
+
+    SlicerClient.setExternalSlicerUrl(canonicalCandidate);
+    localStorage.setItem(EXTERNAL_ENABLED_KEY, 'true');
+
+    try {
+      const attestation = await SlicerClient.attestExternalEngine(fetcher);
+      if (attestation.attested) {
+        localStorage.setItem(SLICER_ORIGIN_STORAGE_KEY, 'auto-discovered');
+        return { discovered: true, endpoint: canonicalCandidate, commit: attestation.commit };
+      }
+
+      SlicerClient.disableExternalSlicer();
+      if (savedUrl && savedOriginType === 'user') {
+        SlicerClient.setExternalSlicerUrl(savedUrl);
+        if (savedEnabled !== null) localStorage.setItem(EXTERNAL_ENABLED_KEY, savedEnabled);
+        if (savedOriginType !== null) localStorage.setItem(SLICER_ORIGIN_STORAGE_KEY, savedOriginType);
+      } else {
+        SlicerClient.clearExternalSlicer();
+      }
+      return { discovered: false, reason: attestation.reason };
+    } catch (error) {
+      SlicerClient.disableExternalSlicer();
+      if (savedUrl && savedOriginType === 'user') {
+        SlicerClient.setExternalSlicerUrl(savedUrl);
+        if (savedEnabled !== null) localStorage.setItem(EXTERNAL_ENABLED_KEY, savedEnabled);
+        if (savedOriginType !== null) localStorage.setItem(SLICER_ORIGIN_STORAGE_KEY, savedOriginType);
+      } else {
+        SlicerClient.clearExternalSlicer();
+      }
+      return {
+        discovered: false,
+        reason: error instanceof Error ? error.message : 'Attestation request failed.',
+      };
+    }
   }
 
   async load(): Promise<void> {

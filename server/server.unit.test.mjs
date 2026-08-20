@@ -6,13 +6,19 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { app, createSlicerService, terminateProcessTree } from "./server.js";
+import {
+  app,
+  createSlicerService,
+  terminateProcessTree,
+  WEB_SECURITY_HEADERS,
+} from "./server.js";
 import {
   bearerTokenMatches,
   HttpError,
   inspect3mf,
   inspectStl,
   isOriginAllowed,
+  isSameOriginRequest,
   loadServerConfig,
   parseOverridesJson,
   validateServerConfig,
@@ -68,6 +74,29 @@ async function withModel(buffer, callback) {
 test("server exports an Express handler without listening on import", () => {
   assert.equal(typeof app, "function");
   assert.equal(typeof createSlicerService, "function");
+});
+
+test("web security headers match web/vite.config.ts to guarantee isolation and WebXR support", async () => {
+  const viteConfigPath = path.join(import.meta.dirname, "..", "web", "vite.config.ts");
+  if (await fs.stat(viteConfigPath).then(() => true).catch(() => false)) {
+    const viteSource = await fs.readFile(viteConfigPath, "utf8");
+    assert(
+      viteSource.includes(`'Cross-Origin-Opener-Policy': '${WEB_SECURITY_HEADERS["Cross-Origin-Opener-Policy"]}'`),
+      "Cross-Origin-Opener-Policy must match",
+    );
+    assert(
+      viteSource.includes(`'Cross-Origin-Embedder-Policy': '${WEB_SECURITY_HEADERS["Cross-Origin-Embedder-Policy"]}'`),
+      "Cross-Origin-Embedder-Policy must match",
+    );
+    assert(
+      viteSource.includes(`'Referrer-Policy': '${WEB_SECURITY_HEADERS["Referrer-Policy"]}'`),
+      "Referrer-Policy must match",
+    );
+    assert(
+      viteSource.includes(`'Permissions-Policy': '${WEB_SECURITY_HEADERS["Permissions-Policy"]}'`),
+      "Permissions-Policy must match",
+    );
+  }
 });
 
 test("WASM worker preserves project 3MF semantics and keeps STL on the model entry point", () => {
@@ -174,6 +203,155 @@ test("origin and bearer checks are exact", () => {
   assert.equal(bearerTokenMatches(`Bearer ${token}`, token), true);
   assert.equal(bearerTokenMatches(`Bearer ${token}x`, token), false);
   assert.equal(bearerTokenMatches(`Basic ${token}`, token), false);
+});
+
+test("same-origin trust modes and predicates enforce authorization boundaries", async () => {
+  // 1. same-origin on loopback
+  const loopbackSo = validateServerConfig(
+    loadServerConfig({ ORCAXR_TRUST: "same-origin", HOST: "127.0.0.1" }),
+  );
+  assert.equal(loopbackSo.trustMode, "same-origin");
+  assert.equal(loopbackSo.trustSameOrigin, true);
+  assert.equal(loopbackSo.authRequired, true);
+
+  // 2. same-origin on non-loopback without exposure acceptance fails closed
+  assert.throws(
+    () =>
+      validateServerConfig(
+        loadServerConfig({ ORCAXR_TRUST: "same-origin", HOST: "0.0.0.0" }),
+      ),
+    /Tailscale Serve/,
+  );
+
+  // 3. same-origin on non-loopback with explicit exposure acceptance succeeds
+  const lanExposed = validateServerConfig(
+    loadServerConfig({
+      ORCAXR_TRUST: "same-origin",
+      HOST: "0.0.0.0",
+      ORCAXR_ACCEPT_LAN_EXPOSURE: "yes-i-understand",
+    }),
+  );
+  assert.equal(lanExposed.acceptLanExposure, true);
+
+  // 4. Token file loading
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "orcaxr-token-test-"));
+  const tokenFilePath = path.join(tempDir, "token.txt");
+  const testSecret = "my-test-secret-token-12345678901234567890";
+  await fs.writeFile(tokenFilePath, `${testSecret}\n`);
+  try {
+    const fileConfig = loadServerConfig({
+      ORCAXR_SERVER_TOKEN_FILE: tokenFilePath,
+    });
+    assert.equal(fileConfig.token, testSecret);
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+
+  // 5. isSameOriginRequest predicate
+  const mockReq = (headers = {}, method = "GET", protocol = "http") => ({
+    method,
+    protocol,
+    get: (name) => headers[name.toLowerCase()],
+  });
+
+  const soConfig = {
+    trustSameOrigin: true,
+    trustedProxy: false,
+  };
+
+  // GET / HEAD
+  assert.equal(
+    isSameOriginRequest(
+      mockReq({ host: "localhost:3000", "sec-fetch-site": "same-origin" }),
+      soConfig,
+    ),
+    true,
+  );
+  assert.equal(
+    isSameOriginRequest(
+      mockReq({ host: "localhost:3000", "sec-fetch-site": "none" }),
+      soConfig,
+    ),
+    true,
+  );
+  assert.equal(
+    isSameOriginRequest(
+      mockReq({ host: "localhost:3000", origin: "http://localhost:3000" }),
+      soConfig,
+    ),
+    true,
+  );
+  assert.equal(
+    isSameOriginRequest(
+      mockReq({ host: "localhost:3000", origin: "http://attacker.example" }),
+      soConfig,
+    ),
+    false,
+  );
+
+  // State-changing (POST)
+  assert.equal(
+    isSameOriginRequest(
+      mockReq(
+        {
+          host: "localhost:3000",
+          origin: "http://localhost:3000",
+          "sec-fetch-site": "same-origin",
+        },
+        "POST",
+      ),
+      soConfig,
+    ),
+    true,
+  );
+  assert.equal(
+    isSameOriginRequest(
+      mockReq({ host: "localhost:3000" }, "POST"),
+      soConfig,
+    ),
+    false,
+    "missing Origin on POST must NOT be treated as same-origin",
+  );
+  assert.equal(
+    isSameOriginRequest(
+      mockReq(
+        { host: "localhost:3000", origin: "http://attacker.example" },
+        "POST",
+      ),
+      soConfig,
+    ),
+    false,
+  );
+
+  // Trusted proxy forwarding
+  const proxyConfig = { trustSameOrigin: true, trustedProxy: true };
+  assert.equal(
+    isSameOriginRequest(
+      mockReq(
+        {
+          host: "orcaxr.tailnet.ts.net",
+          "x-forwarded-proto": "https",
+          origin: "https://orcaxr.tailnet.ts.net",
+          "sec-fetch-site": "same-origin",
+        },
+        "POST",
+        "http",
+      ),
+      proxyConfig,
+    ),
+    true,
+  );
+
+  // Dynamic origin allowance in isOriginAllowed
+  const dynReq = mockReq({ host: "orcaxr.tailnet.ts.net", "x-forwarded-proto": "https" }, "POST", "http");
+  assert.equal(
+    isOriginAllowed("https://orcaxr.tailnet.ts.net", proxyConfig, dynReq),
+    true,
+  );
+  assert.equal(
+    isOriginAllowed("https://evil.ts.net", proxyConfig, dynReq),
+    false,
+  );
 });
 
 test("overrides parser bounds structure and rejects prototype keys", () => {

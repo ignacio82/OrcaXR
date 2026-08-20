@@ -1,7 +1,16 @@
 import fs from "node:fs/promises";
-import { createReadStream } from "node:fs";
-import { createHash, timingSafeEqual } from "node:crypto";
+import {
+  chmodSync,
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createInflateRaw } from "node:zlib";
+import os from "node:os";
+import path from "node:path";
 
 const MiB = 1024 * 1024;
 const LOOPBACK_ORIGIN =
@@ -77,13 +86,85 @@ function parseOrigins(raw) {
 
 export function loadServerConfig(env = process.env) {
   const host = env.HOST?.trim() || "127.0.0.1";
-  const token = env.ORCAXR_SERVER_TOKEN || "";
+  const trustRaw = env.ORCAXR_TRUST?.trim().toLowerCase() || "";
+  let trustMode;
+  if (trustRaw) {
+    if (!["loopback", "same-origin", "token"].includes(trustRaw)) {
+      throw new Error("Invalid ORCAXR_TRUST: must be loopback, same-origin, or token");
+    }
+    trustMode = trustRaw;
+  } else {
+    trustMode = isLoopbackHost(host) ? "loopback" : "token";
+  }
+
+  const trustedProxy =
+    env.ORCAXR_TRUSTED_PROXY === "loopback" ||
+    env.ORCAXR_TRUSTED_PROXY === "true" ||
+    env.ORCAXR_TRUSTED_PROXY === "1";
+  const acceptLanExposure = env.ORCAXR_ACCEPT_LAN_EXPOSURE === "yes-i-understand";
+
+  let token = "";
+  let tokenFile = env.ORCAXR_SERVER_TOKEN_FILE?.trim() || "";
+  if (tokenFile) {
+    token = readFileSync(tokenFile, "utf8").trim();
+  } else if (env.ORCAXR_SERVER_TOKEN) {
+    token = env.ORCAXR_SERVER_TOKEN.trim();
+  }
+
+  let tokenGenerated = false;
+  let generatedTokenPath = null;
+  if (!token && trustMode === "same-origin" && isLoopbackHost(host)) {
+    const homeDir = env.HOME || os.homedir();
+    const tokenDir = path.join(homeDir, ".orcaxr");
+    const tokenPath = path.join(tokenDir, "server-token");
+    generatedTokenPath = tokenPath;
+    let existingToken = "";
+    if (existsSync(tokenPath)) {
+      try {
+        existingToken = readFileSync(tokenPath, "utf8").trim();
+      } catch {
+        existingToken = "";
+      }
+    }
+    if (existingToken && existingToken.length >= 32) {
+      token = existingToken;
+    } else {
+      token = randomBytes(32).toString("hex");
+      try {
+        if (!existsSync(tokenDir)) {
+          mkdirSync(tokenDir, { recursive: true, mode: 0o700 });
+        }
+        writeFileSync(tokenPath, token + "\n", { mode: 0o600, encoding: "utf8" });
+        try {
+          chmodSync(tokenPath, 0o600);
+        } catch {}
+        tokenGenerated = true;
+      } catch {
+        // In-memory only if disk persistence fails
+      }
+    }
+  }
+
   const configuredOrigins = parseOrigins(env.ORCAXR_ALLOWED_ORIGINS);
+  const trustSameOrigin = trustMode === "same-origin";
+  const authRequired =
+    trustMode === "same-origin"
+      ? true
+      : trustMode === "token"
+        ? true
+        : Boolean(token) || !isLoopbackHost(host);
+
   return {
     host,
     port: integerFromEnv(env, "PORT", 3000, 0, 65535),
     token,
-    authRequired: Boolean(token) || !isLoopbackHost(host),
+    tokenGenerated,
+    generatedTokenPath,
+    trustMode,
+    trustSameOrigin,
+    trustedProxy,
+    acceptLanExposure,
+    authRequired,
     explicitOrigins: configuredOrigins,
     allowLoopbackOrigins: isLoopbackHost(host),
     maxUploadBytes: integerFromEnv(
@@ -237,18 +318,27 @@ export function validateServerConfig(config) {
       "ORCAXR_SERVER_TOKEN may not contain whitespace or control characters",
     );
   }
-  if (!isLoopbackHost(config.host)) {
-    if (!config.token || Buffer.byteLength(config.token) < 32) {
+  if (config.trustMode === "same-origin") {
+    if (!isLoopbackHost(config.host) && !config.acceptLanExposure) {
       throw new Error(
-        "Non-loopback HOST requires ORCAXR_SERVER_TOKEN with at least 32 bytes",
+        "ORCAXR_TRUST=same-origin is only supported on a loopback HOST (such as 127.0.0.1). To reach the server securely over a network, use Tailscale Serve to proxy to loopback. To expose an unauthenticated slicer on the LAN anyway, set ORCAXR_ACCEPT_LAN_EXPOSURE=yes-i-understand",
       );
     }
-    if (!config.explicitOrigins?.length) {
-      throw new Error(
-        "Non-loopback HOST requires an explicit ORCAXR_ALLOWED_ORIGINS list",
-      );
+  } else if (config.trustMode === "token" || !isLoopbackHost(config.host)) {
+    if (!isLoopbackHost(config.host)) {
+      if (!config.token || Buffer.byteLength(config.token) < 32) {
+        throw new Error(
+          "Non-loopback HOST requires ORCAXR_SERVER_TOKEN with at least 32 bytes",
+        );
+      }
+      if (!config.explicitOrigins?.length) {
+        throw new Error(
+          "Non-loopback HOST requires an explicit ORCAXR_ALLOWED_ORIGINS list",
+        );
+      }
     }
-  } else if (config.token && Buffer.byteLength(config.token) < 32) {
+  }
+  if (config.token && Buffer.byteLength(config.token) < 32) {
     throw new Error(
       "ORCAXR_SERVER_TOKEN must contain at least 32 bytes when configured",
     );
@@ -261,10 +351,45 @@ export function validateServerConfig(config) {
   return config;
 }
 
-export function isOriginAllowed(origin, config) {
+export function isSameOriginRequest(req, config) {
+  const forwardedProto = config.trustedProxy ? req.get("x-forwarded-proto") : null;
+  const scheme = (forwardedProto || req.protocol || "http").split(",")[0].trim();
+  const host = req.get("host");
+  if (!host) return false;
+  const self = `${scheme}://${host}`.toLowerCase();
+
+  const fetchSite = req.get("sec-fetch-site")?.toLowerCase();
+  const origin = req.get("origin");
+
+  if (req.method === "GET" || req.method === "HEAD") {
+    // Documents and subresources: `none` is a typed-in URL or bookmark.
+    if (fetchSite === "same-origin" || fetchSite === "none") return true;
+    if (origin) return origin.toLowerCase() === self;
+    // Direct top-level document, asset requests, or CLI/test GET requests
+    // with no Origin claim are permitted for reading.
+    return true;
+  }
+
+  // State-changing requests must carry a matching Origin. A missing Origin is
+  // NOT treated as same-origin here, unlike the CORS layer: that is the
+  // difference between "no CORS preflight needed" and "authorized to slice".
+  if (!origin || origin.toLowerCase() !== self) return false;
+  return fetchSite === undefined || fetchSite === "same-origin";
+}
+
+export function isOriginAllowed(origin, config, req = null) {
   if (!origin) return true; // Non-browser clients do not send Origin.
-  if (config.explicitOrigins.includes(origin)) return true;
-  return config.allowLoopbackOrigins && LOOPBACK_ORIGIN.test(origin);
+  if (config.explicitOrigins?.includes(origin)) return true;
+  if (config.allowLoopbackOrigins && LOOPBACK_ORIGIN.test(origin)) return true;
+  if (config.trustSameOrigin && req) {
+    const forwardedProto = config.trustedProxy ? req.get("x-forwarded-proto") : null;
+    const scheme = (forwardedProto || req.protocol || "http").split(",")[0].trim();
+    const host = req.get("host");
+    if (host && origin.toLowerCase() === `${scheme}://${host}`.toLowerCase()) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function bearerTokenMatches(header, expected) {

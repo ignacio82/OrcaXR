@@ -38,19 +38,23 @@ For the Snapmaker U1, the [extended firmware](https://github.com/paxx12-snapmake
 
 Enter the resulting address in OrcaXR, for example `https://lava.taild5c213.ts.net`.
 
-### External Slicer (Docker)
-OrcaXR runs slicing locally in the browser via WebAssembly (WASM). However, WASM has a hard memory limit of 4GB, which can cause out-of-memory crashes on extremely large or complex models.
+### Self-Hosting / All-in-One Container (Docker)
 
-To solve this, you can run the **External Slicer** via Docker. This offloads slicing to a dedicated server and uses a native CLI built from the pinned Snapmaker Orca v2.3.4 source instead of the browser WASM runtime.
+OrcaXR can be self-hosted as an all-in-one container that packages the full Web UI, the native Snapmaker Orca CLI engine, the WASM engine, and optional Tailscale HTTPS support:
 
-To start the external slicer:
 ```bash
-cd server
-docker compose up -d
+docker compose -f server/docker-compose.yml up -d
 ```
-Then, in the OrcaXR web app, open the **EXTERNAL SLICER** panel and connect to your Docker instance (e.g., `http://localhost:3000`).
 
-From the hosted app, Chrome 142+ can also reach a LAN address such as `http://192.168.1.20:3000` after Local Network Access permission. The Docker server enables CORS; use HTTP only on a trusted LAN and prefer HTTPS for remote access.
+- **Web UI & Slicing**: Navigate to `http://localhost:3000`. The browser UI automatically discovers the native CLI slicer on the container with zero configuration.
+- **Same-Origin Trust**: Slicing from the served UI is authorized automatically without requiring bearer tokens. Non-browser API clients use the persistent bearer token saved to `~/.orcaxr/server-token`.
+- **Headset / WebXR Access via Tailscale**: For spatial slicing on standalone XR headsets (such as the Samsung Galaxy XR) which require a secure HTTPS context for WebXR, launch with your Tailscale auth key:
+
+```bash
+TS_AUTHKEY="tskey-auth-..." docker compose -f server/docker-compose.yml up -d
+```
+
+Tailscale Serve will automatically provision HTTPS certificates at `https://orcaxr.<your-tailnet>.ts.net`, giving headsets immediate access to WebXR, full-power CLI slicing, and 3D spatial interaction.
 
 ## Project Status
 
