@@ -27,6 +27,7 @@
   "action.help_shortcuts.label": "Klávesové zkratky",
   "action.help_tip_of_day.label": "Ukázat Tip Dne",
   "action.help_tutorial.label": "Výukový program",
+  "action.instance_to_object.label": "Nastavit jako samostatný objekt",
   "action.load_model_from_path.label": "Načíst",
   "action.paint_erase_all.label": "Vymazat všechny malby",
   "action.reset_rotation.label": "Výchozí Natočení",
@@ -52,5 +53,10 @@
   "action.view_camera_rear.label": "Pohled zezadu",
   "action.view_camera_right.label": "Pohled zprava",
   "action.view_camera_top.label": "Pohled svrchu",
-  "action.view_open_gcode.label": "Otevřít G-kód…"
+  "action.view_open_gcode.label": "Otevřít G-kód…",
+  "actions.actionContext.keyboardShortcuts": "Klávesové zkratky",
+  "ui.brimEarsPanel.brimEars": "Uši límce",
+  "ui.generatedSettingsPanel.detailLevel": "Úroveň detailu",
+  "ui.printSubmissionDialog.sendToPrinter": "Odeslat do tiskárny",
+  "ui.semanticObjectEditor.heightRanges": "Výškové rozsahy"
 }

@@ -19,6 +19,7 @@ import type { CalibrationFormField, CalibrationFormPreview } from '../../project
 import { calibrationInstructions, describeBandLocation } from '../../project/calibration/instructions';
 import { describeAssertionFailure, verifyCalibrationPlan } from '../../project/calibration/verify';
 import type { CalibrationJobPlan } from '../../project/calibration/types';
+import { t } from '../../l10n/t';
 
 export interface CalibrationParametersPanelState {
   readonly workflowLabel: string;
@@ -96,7 +97,7 @@ export class CalibrationParametersPanel {
     // is a documentation host, but the project's own rule is that untrusted
     // navigation never gets a handle back.
     help.rel = 'noopener noreferrer';
-    help.textContent = 'How this calibration works';
+    help.textContent = t('ui.calibrationParametersPanel.howThisCalibrationWorks', 'How this calibration works');
     help.style.cssText = 'font-size:0.85rem;';
 
     const fields = doc.createElement('div');

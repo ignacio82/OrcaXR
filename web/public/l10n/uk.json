@@ -16,6 +16,7 @@
   "action.edit_redo.label": "Повторити",
   "action.edit_select_all.label": "Вибрати все",
   "action.edit_undo.label": "Скасувати",
+  "action.file_export_all_stls.label": "Експортувати всі об’єкти як файли STL…",
   "action.file_export_gcode.label": "Експорт G-коду…",
   "action.file_export_obj.label": "Експорт траєкторій як OBJ…",
   "action.file_export_stl.label": "Експортувати як один STL…",
@@ -30,6 +31,7 @@
   "action.help_shortcuts.label": "Гарячі клавіші",
   "action.help_tip_of_day.label": "Показати пораду дня",
   "action.help_tutorial.label": "Посібник",
+  "action.instance_to_object.label": "Встановити як окремий об'єкт",
   "action.load_model_from_path.label": "Завантажити",
   "action.paint_erase_all.label": "Стерти всі малюнки",
   "action.presets_export_bundle.label": "Експорт пакету профілів",
@@ -58,5 +60,10 @@
   "action.view_camera_top.label": "Вид зверху",
   "action.view_open_gcode.label": "Відкрити G-код…",
   "action.view_show_gcode_window.label": "Показати вікно G-коду",
-  "action.view_show_navigator.label": "Показати 3D-навігатор"
+  "action.view_show_navigator.label": "Показати 3D-навігатор",
+  "actions.actionContext.keyboardShortcuts": "Гарячі клавіші",
+  "ui.brimEarsPanel.brimEars": "Вушка кайми",
+  "ui.generatedSettingsPanel.detailLevel": "Рівень деталізації",
+  "ui.printSubmissionDialog.sendToPrinter": "Надіслати на принтер",
+  "ui.semanticObjectEditor.heightRanges": "Діапазон висот шарів"
 }

@@ -1,3 +1,4 @@
+import { t } from '../../l10n/t';
 export interface EmbossPanelState {
   readonly active: boolean;
   /** Absent when the selection does not resolve to exactly one part. */
@@ -90,7 +91,7 @@ export class EmbossPanel {
 
     const heading = document.createElement('h3');
     heading.id = `orcaxr-emboss-heading-${this.instanceId}`;
-    heading.textContent = 'Emboss text';
+    heading.textContent = t('ui.embossPanel.embossText', 'Emboss text');
     heading.style.cssText = 'margin:0;font-size:13px;font-weight:600;';
 
     const controls = document.createElement('div');

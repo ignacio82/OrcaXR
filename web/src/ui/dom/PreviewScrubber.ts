@@ -13,6 +13,7 @@
  */
 import type { UiState } from '../../actions/UiState';
 import type { GcodePreviewPanelAdapter, GcodePreviewPanelState } from './GcodePreviewPanel';
+import { t } from '../../l10n/t';
 
 export class PreviewScrubber {
   private root?: HTMLElement;
@@ -45,7 +46,7 @@ export class PreviewScrubber {
     slider.step = '1';
     slider.className = 'preview-scrubber-range';
     slider.dataset.previewScrubberRange = 'true';
-    slider.setAttribute('aria-label', 'Top visible layer');
+    slider.setAttribute('aria-label', t('ui.previewScrubber.topVisibleLayer', 'Top visible layer'));
     slider.oninput = () => this.commit(Number(slider.value));
 
     const zReadout = document.createElement('span');

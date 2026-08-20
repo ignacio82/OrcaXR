@@ -1,0 +1,58 @@
+# The slicer image builds with the repository root as its context
+# (server/docker-compose.yml uses `context: ..`). Without this file that is a
+# ~16 GB upload to the daemon before the first instruction runs, almost all of
+# it `third_party/` and installed node_modules.
+#
+# Keep this in step with server/Dockerfile: anything a stage COPYs must NOT be
+# excluded here. Today that is server/ (including server/patches/), wasm/dist,
+# and wasm/artifact-provenance.json.
+
+# The developer source checkout of Snapmaker Orca (~14 GB). The build stage
+# clones the pinned commit itself, so the local worktree is never an input —
+# and per GEMINI.md a dirty worktree must never become one.
+third_party/
+
+# Git history is not a build input, and .git alone is large.
+.git/
+.gitignore
+.gitmodules
+.gitleaks.toml
+
+# Installed dependencies: every stage runs its own `npm ci` from the lockfile.
+# Copying these in would also overwrite a freshly installed tree with the
+# host's, whose native binaries are built for the host's architecture.
+node_modules/
+**/node_modules/
+
+# Build outputs, regenerated inside the image when a stage needs them.
+web/dist/
+docs/slicer/
+docs/images/
+
+# A local publish of wasm/dist that is gitignored and may be stale; the image
+# copies the canonical wasm/dist plus wasm/artifact-provenance.json instead.
+server/wasm-dist/
+
+# Secrets and local state must never enter an image layer.
+**/.env
+**/.env.*
+secrets/
+*.pem
+*.key
+
+# Agent, editor, and CI scratch.
+.claude/
+.gemini/
+.antigravitycli/
+.github/
+.idea/
+.vscode/
+**/tmp_3mf/
+**/*.log
+**/.DS_Store
+
+# Root-level docs, media, and one-off scripts (matches the root only, so
+# nothing nested is affected).
+*.md
+*.png
+*.py

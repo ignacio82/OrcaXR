@@ -15,6 +15,7 @@
   "action.edit_redo.label": "Opnieuw doen",
   "action.edit_select_all.label": "Alles selecteren",
   "action.edit_undo.label": "Ongedaan maken",
+  "action.file_export_all_stls.label": "Alle objecten exporteren als STL's…",
   "action.file_export_gcode.label": "Exporteer G-code…",
   "action.file_export_obj.label": "Exporteer Toolpaths als OBJ…",
   "action.file_export_stl.label": "Exporteren als één STL…",
@@ -27,6 +28,7 @@
   "action.help_shortcuts.label": "Sneltoesten",
   "action.help_tip_of_day.label": "Toon Tip van de dag",
   "action.help_tutorial.label": "Tutorial",
+  "action.instance_to_object.label": "Instellen als individueel object",
   "action.paint_erase_all.label": "Alle getekende delen wissen",
   "action.reset_rotation.label": "Rotatie herstellen",
   "action.save_gcode_to_downloads.label": "Downloaden",
@@ -50,5 +52,10 @@
   "action.view_camera_rear.label": "Achteraanzicht",
   "action.view_camera_right.label": "Rechterzijde bekijken",
   "action.view_camera_top.label": "Bovenaanzicht",
-  "action.view_open_gcode.label": "Open G-code…"
+  "action.view_open_gcode.label": "Open G-code…",
+  "actions.actionContext.keyboardShortcuts": "Sneltoesten",
+  "ui.brimEarsPanel.brimEars": "Rand oren",
+  "ui.generatedSettingsPanel.detailLevel": "Detailniveau",
+  "ui.printSubmissionDialog.sendToPrinter": "Stuur naar printer",
+  "ui.semanticObjectEditor.heightRanges": "Hoogtebereiken"
 }

@@ -581,6 +581,8 @@ disconnected [`PlacedModels.ts`](../web/src/features/PlacedModels.ts),
     delete, independent duplicate with collision-checked injected IDs, shared instance
     create/delete, precomputed multi-instance placement as one transaction, cross-plate move,
     no-op suppression, selection repair, and byte-exact undo/redo without deleting shared assets.
+    Set as an individual object (`instance_to_object` / `ConvertInstanceToIndependentObjectCommand`)
+    promotes a selected instance to its own independent object with deep-copied parts and parameter overrides.
     Live DOM object/part rename is registry-routed and browser-tested. Add Instance and Fill Bed
     with Instances are live registry actions: the first shares the selected object's parts and
     paint, the second plans deterministic copies into the plate's remaining free space without
@@ -987,6 +989,7 @@ Local starting seams: [`Paint3mf.ts`](../web/src/features/Paint3mf.ts),
     physical recipe components, coalesces collided facet/component data, recursively collapses
     homogeneous remapped leaves, preserves source definitions, rejects self/disabled destinations
     and virtual destinations for physical-only recipe components, and round-trips through history.
+    `filament_remap` action routes through `ActionContext.remapFilaments` and executes `RemapFilamentsCommand`.
     Reference discovery/preview UX,
     default-state and deletion/reorder hooks, cancellation flow, tombstone retention policy,
     live legends/surfaces, save/reopen, and G-code comparison remain open.
@@ -1590,11 +1593,14 @@ Local starting seams: [`MeshCut.ts`](../web/src/features/MeshCut.ts),
   - **Accept:** every visible format produces a non-empty valid artifact accepted by its oracle;
     unavailable browser-specific destinations use a documented equivalent flow.
   - **Current:** canonical project 3MF save and guarded current-plate G-code downloads are live.
-    Export as one STL now merges an exact stable-ID selection (or active plate), composes
+    Export as one STL merges an exact stable-ID selection (or active plate), composes
     volume/instance TRS from immutable indexed assets, fixes mirrored winding/normals, excludes
     non-printing modifiers, fails closed when negative-volume CSG is required, and downloads a
-    deterministic binary artifact without reading Three. Generic/core or sliced 3MF variants,
-    separate/multi STL, slice-all G-code, OBJ, standalone G-code viewing, File System Access,
+    deterministic binary artifact without reading Three.
+    Export all objects as STLs (`file_export_all_stls`) exports each model on the active plate
+    as separate binary STLs packaged in a deterministic ZIP archive (or direct binary STL for single model).
+    Generic/core or sliced 3MF variants,
+    slice-all G-code, OBJ, standalone G-code viewing, File System Access,
     progress/cancel/overwrite flows, and official format oracles remain open.
 
 - [~] **P5.8 — Add primitives and model sources coherently.** Match official primitive types,

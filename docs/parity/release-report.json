@@ -121,10 +121,6 @@
         "owedBy": "P1.3"
       },
       {
-        "item": "MainFrame::init_menubar_as_editor::Export all objects as STLs",
-        "owedBy": "P5.7"
-      },
-      {
         "item": "MainFrame::init_menubar_as_editor::Input Shaping Damping/zeta factor",
         "owedBy": "P8.1"
       },
@@ -145,22 +141,6 @@
         "owedBy": "P6.3"
       },
       {
-        "item": "MenuFactory::append_menu_item_export_stl::Export as STLs",
-        "owedBy": "P5.7"
-      },
-      {
-        "item": "MenuFactory::append_menu_item_instance_to_object::Set as an individual object",
-        "owedBy": "P2.2"
-      },
-      {
-        "item": "MenuFactory::append_menu_item_set_visible::Hide",
-        "owedBy": "P2.1"
-      },
-      {
-        "item": "MenuFactory::create_filament_action_menu::Merge with",
-        "owedBy": "P4.5"
-      },
-      {
         "item": "MenuFactory::create_sla_object_menu::Auto orientation",
         "owedBy": "P0.1"
       },
@@ -169,21 +149,13 @@
         "owedBy": "P0.1"
       },
       {
-        "item": "runtime::Merge with mixed filament target",
-        "owedBy": "P4.5"
-      },
-      {
-        "item": "runtime::Merge with physical filament target",
-        "owedBy": "P4.5"
-      },
-      {
         "item": "runtime::Open recent project entry",
         "owedBy": "P11.1"
       }
     ],
     "byKind": {
-      "absent": 20,
-      "action": 103,
+      "absent": 13,
+      "action": 110,
       "adaptation": 15,
       "container": 17,
       "panel": 7

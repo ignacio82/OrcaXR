@@ -314,10 +314,32 @@ engine (`libslic3r` via WASM) as the computational core.
   server's `GET /engine` hashes the artifacts it will actually load and reports
   the pinned commit; the client compares both against
   `slicer/pinnedEngineProvenance.ts`, generated from
-  `wasm/artifact-provenance.json`. A CLI engine cannot be proven and is refused
-  by design. `server/wasm-dist` is a published copy of the verified artifacts
-  and is listed in the manifest's `publishedCopies`; letting it drift is what
-  makes an external route silently unverifiable.
+  `wasm/artifact-provenance.json`. Both engines can prove themselves, and they
+  prove different things: a WASM server must match the exact artifact digests
+  the client verified for itself, while the native CLI has no WASM artifacts to
+  compare and instead proves its upstream commit plus the exact
+  `server/patches/` set by name and digest (`PINNED_ENGINE_PROVENANCE.cliPatches`
+  ↔ the image's `engine-provenance.json`). Requiring WASM digests of a native
+  binary is what once made the CLI route refuse itself. `server/wasm-dist` is a
+  gitignored local publish listed under `optionalPublishedCopies`; the committed
+  copies are `wasm/dist` and `web/public/slicer`, and letting any of them drift
+  is what makes an external route silently unverifiable.
+- **`slice_worker.mjs`'s `resolveWasmDir()` is the sole WASM directory
+  authority**, and `GET /engine` must hash what that resolver returns. They were
+  once separate — the attestation looked only in `<server>/wasm-dist` while the
+  worker loaded `<server>/wasm/dist` or `<repo>/wasm/dist` — so the container
+  (whose Dockerfile populated `/app/wasm/dist`) executed a real engine while
+  reporting `attested: false`, and the client refused a route that was in fact
+  sound. Attesting a directory you do not load is the same defect in the other
+  direction, and is worse. The resolver order is `ORCAXR_WASM_DIR` →
+  `<server>/wasm-dist` → `<server>/wasm/dist` → `<repo>/wasm/dist`; the
+  provenance manifest is read beside the artifacts, falling back one level up
+  because `wasm/dist` publishes its manifest at `wasm/artifact-provenance.json`.
+- The Docker build context is the repository root, so `/.dockerignore` is
+  load-bearing: without it the daemon receives ~16 GB (`third_party/` is 14 GB)
+  before the first instruction. Anything a stage `COPY`s must not be excluded
+  there — today `server/` including `server/patches/`, `wasm/dist`, and
+  `wasm/artifact-provenance.json`.
 - Never emit an OPC relationship whose target is not in the same package: the
   pinned engine rejects the entire archive ("Archive does not contain a valid
   model"). Projections that drop preserved members must drop their

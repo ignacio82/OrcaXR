@@ -1,6 +1,7 @@
 import type { FilamentId } from '../../project/domain/ids';
 import type { PaintPalette, PaintPaletteEntry } from '../../project/painting/paintPalette';
 import type { PaintChannel, PaintToolKind, PaintToolSettings } from '../../project/painting/PaintStrokeService';
+import { t } from '../../l10n/t';
 
 export interface PaintPanelState {
   readonly palette: PaintPalette;
@@ -126,7 +127,7 @@ export class PaintPanel {
 
     const heading = document.createElement('h3');
     heading.id = `orcaxr-paint-heading-${this.instanceId}`;
-    heading.textContent = 'Colour painting';
+    heading.textContent = t('ui.paintPanel.colourPainting', 'Colour painting');
     heading.style.cssText = 'margin:0;font-size:13px;font-weight:600;';
     root.append(heading);
 
@@ -155,7 +156,7 @@ export class PaintPanel {
     const eraseAll = document.createElement('button');
     eraseAll.type = 'button';
     eraseAll.dataset.paintEraseAll = 'true';
-    eraseAll.textContent = 'Erase all painting on selection';
+    eraseAll.textContent = t('ui.paintPanel.eraseAllPaintingOnSelection', 'Erase all painting on selection');
     eraseAll.style.cssText = buttonStyle(false);
     eraseAll.onclick = () => void this.run(() => this.adapter.onEraseAll());
     root.append(eraseAll);
@@ -172,7 +173,7 @@ export class PaintPanel {
     group.append(legend);
     const list = document.createElement('div');
     list.setAttribute('role', 'radiogroup');
-    list.setAttribute('aria-label', 'Paint channel');
+    list.setAttribute('aria-label', t('ui.paintPanel.paintChannel', 'Paint channel'));
     list.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
     for (const entry of CHANNELS) {
       const button = document.createElement('button');
@@ -201,7 +202,7 @@ export class PaintPanel {
     group.append(legend);
     const list = document.createElement('div');
     list.setAttribute('role', 'radiogroup');
-    list.setAttribute('aria-label', 'Paint state');
+    list.setAttribute('aria-label', t('ui.paintPanel.paintState', 'Paint state'));
     list.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
     const states = CHANNELS.find((entry) => entry.channel === state.channel)?.states ?? [];
     for (const option of states) {
@@ -247,7 +248,7 @@ export class PaintPanel {
 
     const list = document.createElement('div');
     list.setAttribute('role', 'radiogroup');
-    list.setAttribute('aria-label', 'Paint filament');
+    list.setAttribute('aria-label', t('ui.paintPanel.paintFilament', 'Paint filament'));
     list.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
     for (const entry of state.palette.entries) {
       list.append(this.renderSwatch(entry, state));
@@ -318,7 +319,7 @@ export class PaintPanel {
 
     const list = document.createElement('div');
     list.setAttribute('role', 'radiogroup');
-    list.setAttribute('aria-label', 'Paint tool');
+    list.setAttribute('aria-label', t('ui.paintPanel.paintTool', 'Paint tool'));
     list.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
     for (const tool of TOOLS) {
       const button = document.createElement('button');

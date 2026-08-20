@@ -15,6 +15,7 @@
   "action.edit_redo.label": "Mégis",
   "action.edit_select_all.label": "Összes kijelölése",
   "action.edit_undo.label": "Visszavonás",
+  "action.file_export_all_stls.label": "Az összes objektum exportálása STL-ként…",
   "action.file_export_gcode.label": "G-kód exportálása…",
   "action.file_export_obj.label": "Szerszámút exportálása OBJ-ként…",
   "action.file_export_stl.label": "Exportálás egy STL-ként…",
@@ -28,6 +29,7 @@
   "action.help_shortcuts.label": "Gyorsbillentyűk",
   "action.help_tip_of_day.label": "A nap tippjének megjelenítése",
   "action.help_tutorial.label": "Útmutató",
+  "action.instance_to_object.label": "Beállítás különálló objektumként",
   "action.paint_erase_all.label": "Minden festés törlése",
   "action.reset_rotation.label": "Forgatás visszaállítása",
   "action.save_gcode_to_downloads.label": "Letöltés",
@@ -51,5 +53,9 @@
   "action.view_camera_rear.label": "Hátulnézet",
   "action.view_camera_right.label": "Jobb nézet",
   "action.view_camera_top.label": "Felülnézet",
-  "action.view_open_gcode.label": "G-kód megnyitása…"
+  "action.view_open_gcode.label": "G-kód megnyitása…",
+  "actions.actionContext.keyboardShortcuts": "Gyorsbillentyűk",
+  "ui.brimEarsPanel.brimEars": "Karimás fülek",
+  "ui.generatedSettingsPanel.detailLevel": "Részletesség szintje",
+  "ui.printSubmissionDialog.sendToPrinter": "Nyomtatóra küldés"
 }

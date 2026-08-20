@@ -4,6 +4,7 @@ import type {
   CanonicalLayerEventSnapshot,
 } from '../../workspace/CanonicalWorkspaceController';
 import type { LayerEventCapability } from '../../workspace/OrcaWorkspace';
+import { t } from '../../l10n/t';
 
 type MaybePromise = void | Promise<void>;
 
@@ -47,7 +48,7 @@ export class LayerEventPanel {
     const document = this.container.ownerDocument;
     const root = document.createElement('section');
     root.dataset.layerEventPanel = 'true';
-    root.setAttribute('aria-label', 'Layer events');
+    root.setAttribute('aria-label', t('ui.layerEventPanel.layerEvents', 'Layer events'));
     root.style.cssText = 'display:flex;flex-direction:column;gap:8px;font:13px/1.45 system-ui,sans-serif;';
 
     const list = document.createElement('ul');
@@ -68,7 +69,7 @@ export class LayerEventPanel {
 
     const heightLabel = document.createElement('label');
     heightLabel.style.cssText = 'display:flex;flex-direction:column;gap:3px;font-size:11px;color:#a0aab5;';
-    heightLabel.textContent = 'Height (mm)';
+    heightLabel.textContent = t('ui.layerEventPanel.heightMm', 'Height (mm)');
     const heightInput = document.createElement('input');
     heightInput.type = 'number';
     heightInput.min = '0.05';
@@ -81,7 +82,7 @@ export class LayerEventPanel {
     const detailLabel = document.createElement('label');
     detailLabel.style.cssText = 'display:flex;flex-direction:column;gap:3px;font-size:11px;color:#a0aab5;';
     const detailText = document.createElement('span');
-    detailText.textContent = 'Message (optional)';
+    detailText.textContent = t('ui.layerEventPanel.messageOptional', 'Message (optional)');
     const detailInput = document.createElement('input');
     detailInput.type = 'text';
     detailInput.dataset.layerEventDetail = 'true';
@@ -92,7 +93,7 @@ export class LayerEventPanel {
     addButton.type = 'button';
     addButton.className = 'action-btn';
     addButton.dataset.layerEventAdd = 'true';
-    addButton.textContent = 'Add event';
+    addButton.textContent = t('ui.layerEventPanel.addEvent', 'Add event');
     addButton.style.cssText = 'min-height:36px;';
     addButton.onclick = () => void this.add();
 
@@ -161,7 +162,7 @@ export class LayerEventPanel {
     if (snapshot.events.length === 0) {
       const empty = this.container.ownerDocument.createElement('li');
       empty.dataset.layerEventEmpty = 'true';
-      empty.textContent = 'No layer events on this plate.';
+      empty.textContent = t('ui.layerEventPanel.noLayerEventsOnThis', 'No layer events on this plate.');
       empty.style.cssText = 'color:#8892a0;';
       this.list.appendChild(empty);
       return;
@@ -197,7 +198,8 @@ export class LayerEventPanel {
     const type = (this.typeSelect?.value ?? 'pause') as LayerEventType;
     const topZMm = Number(this.heightInput?.value ?? '');
     if (!Number.isFinite(topZMm) || topZMm <= 0) {
-      if (this.status) this.status.textContent = 'Enter a height above the plate.';
+      if (this.status)
+        this.status.textContent = t('ui.layerEventPanel.enterAHeightAboveThe', 'Enter a height above the plate.');
       return;
     }
     const detail = this.detailInput?.value.trim() ?? '';

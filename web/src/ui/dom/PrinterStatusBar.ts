@@ -18,6 +18,7 @@
 import type { PrintJobCommand } from '../../printer/PrintJobControl';
 import type { GuardedPrinterAction, PrinterStatusSummary } from '../../printer/PrinterStatusSummary';
 import { HoldToConfirm } from '../../printer/PrinterStatusSummary';
+import { t } from '../../l10n/t';
 
 export interface PrinterStatusBarPort {
   getSummary(): PrinterStatusSummary;
@@ -69,7 +70,7 @@ export class PrinterStatusBar {
     const doc = this.container.ownerDocument;
     const root = doc.createElement('section');
     root.dataset.printerStatusBar = 'true';
-    root.setAttribute('aria-label', 'Printer status');
+    root.setAttribute('aria-label', t('ui.printerStatusBar.printerStatus', 'Printer status'));
     root.hidden = true;
     root.style.cssText =
       'position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:5;box-sizing:border-box;' +

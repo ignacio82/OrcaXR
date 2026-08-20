@@ -1,3 +1,4 @@
+import { t } from '../../l10n/t';
 /**
  * The pinned Simplify gizmo's controls (P5.3.5).
  *
@@ -84,7 +85,7 @@ export class SimplifyPanel {
     const mode = doc.createElement('fieldset');
     mode.style.cssText = 'border:0;margin:0;padding:0;display:flex;gap:12px;align-items:center;';
     const legend = doc.createElement('legend');
-    legend.textContent = 'Decimate by';
+    legend.textContent = t('ui.simplifyPanel.decimateBy', 'Decimate by');
     legend.style.cssText = 'padding:0;opacity:0.75;';
     mode.appendChild(legend);
     for (const option of [
@@ -140,9 +141,13 @@ export class SimplifyPanel {
     status.dataset.simplifyStatus = 'true';
     status.setAttribute('role', 'status');
     status.style.cssText = 'margin:0;opacity:0.75;';
-    if (!state.hasSelection) status.textContent = 'Select a model to simplify.';
+    if (!state.hasSelection)
+      status.textContent = t('ui.simplifyPanel.selectAModelToSimplify', 'Select a model to simplify.');
     else if (!state.previewing)
-      status.textContent = 'Preview shows the result on the model; nothing is changed until you apply.';
+      status.textContent = t(
+        'ui.simplifyPanel.previewShowsTheResultOn',
+        'Preview shows the result on the model; nothing is changed until you apply.',
+      );
     else {
       const removed = state.beforeTriangles - state.afterTriangles;
       const share = state.beforeTriangles > 0 ? Math.round((removed / state.beforeTriangles) * 100) : 0;

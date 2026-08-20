@@ -1,6 +1,7 @@
 import { formatArtifactDuration, type GcodeArtifactSummary } from '../../slicer/GcodeArtifactSummary';
 import type { GcodePreviewMode } from '../../slicer/GcodePreviewModel';
 import type { GcodePreviewMoveFilterId, GcodePreviewViewPatch } from '../../slicer/GcodePreviewSession';
+import { t } from '../../l10n/t';
 
 export interface GcodePreviewPanelLegendEntry {
   readonly id: string;
@@ -117,7 +118,7 @@ export class GcodePreviewPanel {
 
     const heading = document.createElement('h3');
     heading.id = `orcaxr-preview-heading-${this.instanceId}`;
-    heading.textContent = 'G-code preview';
+    heading.textContent = t('ui.gcodePreviewPanel.gCodePreview', 'G-code preview');
     heading.style.cssText = 'margin:0;font-size:13px;font-weight:600;';
     root.append(heading);
 
@@ -125,7 +126,7 @@ export class GcodePreviewPanel {
       const open = document.createElement('button');
       open.type = 'button';
       open.dataset.previewOpenGcode = 'true';
-      open.textContent = 'Open G-code file…';
+      open.textContent = t('ui.gcodePreviewPanel.openGCodeFile', 'Open G-code file…');
       open.style.cssText = controlStyle(false);
       open.onclick = () => void this.run(() => this.adapter.onOpenGcode?.());
       root.append(open);
@@ -229,7 +230,7 @@ export class GcodePreviewPanel {
     checkbox.style.cssText = 'width:18px;height:18px;';
     checkbox.onchange = () => void this.run(() => this.adapter.onUpdateView({ singleLayer: checkbox.checked }));
     const label = document.createElement('span');
-    label.textContent = 'Single layer';
+    label.textContent = t('ui.gcodePreviewPanel.singleLayer', 'Single layer');
     single.append(checkbox, label);
     group.append(single);
     return group;
@@ -391,7 +392,7 @@ export class GcodePreviewPanel {
     const document = this.container.ownerDocument;
     const list = document.createElement('ul');
     list.dataset.previewLegend = 'true';
-    list.setAttribute('aria-label', 'Preview legend');
+    list.setAttribute('aria-label', t('ui.gcodePreviewPanel.previewLegend', 'Preview legend'));
     list.style.cssText = 'list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;';
     for (const entry of state.legend) {
       const item = document.createElement('li');

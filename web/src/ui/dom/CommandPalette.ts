@@ -9,6 +9,7 @@ import type { Action, ActionRegistry } from '../../actions/ActionRegistry';
 import type { ActionContext } from '../../actions/ActionContext';
 import type { UiState } from '../../actions/UiState';
 import { domIcon } from '../icons';
+import { t } from '../../l10n/t';
 
 export class CommandPalette {
   private overlay!: HTMLElement;
@@ -105,7 +106,7 @@ export class CommandPalette {
     if (this.matches.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'cmd-empty';
-      empty.textContent = 'No matching actions';
+      empty.textContent = t('ui.commandPalette.noMatchingActions', 'No matching actions');
       this.list.appendChild(empty);
       return;
     }

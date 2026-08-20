@@ -16,6 +16,7 @@
   "action.edit_redo.label": "Ponów",
   "action.edit_select_all.label": "Zaznacz wszystko",
   "action.edit_undo.label": "Cofnij",
+  "action.file_export_all_stls.label": "Eksportuj wszystkie obiekty jako pliki STL…",
   "action.file_export_gcode.label": "Eksportuj plik G-code…",
   "action.file_export_obj.label": "Eksportuj ścieżki narzędzi jako OBJ…",
   "action.file_export_stl.label": "Eksportuj jako pojedynczy STL…",
@@ -30,6 +31,7 @@
   "action.help_shortcuts.label": "Skróty klawiszowe",
   "action.help_tip_of_day.label": "Wyświetl poradę dnia",
   "action.help_tutorial.label": "Samouczek",
+  "action.instance_to_object.label": "Ustaw jako osobny obiekt",
   "action.load_model_from_path.label": "Ładuj",
   "action.paint_erase_all.label": "Wymaż wszystko",
   "action.presets_export_bundle.label": "Eksportuj zestaw ustawień",
@@ -59,5 +61,10 @@
   "action.view_camera_top.label": "Widok z góry",
   "action.view_open_gcode.label": "Otwórz plik G-code…",
   "action.view_show_gcode_window.label": "Wyświetlanie okna G-code",
-  "action.view_show_navigator.label": "Wyświetlanie nawigatora 3D"
+  "action.view_show_navigator.label": "Wyświetlanie nawigatora 3D",
+  "actions.actionContext.keyboardShortcuts": "Skróty klawiszowe",
+  "ui.brimEarsPanel.brimEars": "Uszy brim",
+  "ui.generatedSettingsPanel.detailLevel": "Poziom szczegółowości",
+  "ui.printSubmissionDialog.sendToPrinter": "Wyślij do drukarki",
+  "ui.semanticObjectEditor.heightRanges": "Zakresy wysokości"
 }

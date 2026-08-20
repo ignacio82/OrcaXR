@@ -16,6 +16,7 @@
   "action.edit_redo.label": "Повтор действия",
   "action.edit_select_all.label": "Выбрать всё",
   "action.edit_undo.label": "Отмена действия",
+  "action.file_export_all_stls.label": "Экспорт всех моделей в отдельные STL…",
   "action.file_export_gcode.label": "Экспорт в G-код…",
   "action.file_export_obj.label": "Экспорт траектории инструмента в OBJ…",
   "action.file_export_stl.label": "Экспорт в один STL…",
@@ -30,6 +31,7 @@
   "action.help_shortcuts.label": "Горячие клавиши",
   "action.help_tip_of_day.label": "Показать полезный совет",
   "action.help_tutorial.label": "Руководство",
+  "action.instance_to_object.label": "Задать как отдельную модель",
   "action.load_model_from_path.label": "Выдавить",
   "action.paint_erase_all.label": "Очистить всё",
   "action.presets_export_bundle.label": "Экспорт пакета профилей",
@@ -59,5 +61,10 @@
   "action.view_camera_top.label": "Вид сверху",
   "action.view_open_gcode.label": "Открыть файл G-кода…",
   "action.view_show_gcode_window.label": "Показать окно G-кода",
-  "action.view_show_navigator.label": "Показать навигационный куб"
+  "action.view_show_navigator.label": "Показать навигационный куб",
+  "actions.actionContext.keyboardShortcuts": "Горячие клавиши",
+  "ui.brimEarsPanel.brimEars": "Ушки каймы",
+  "ui.generatedSettingsPanel.detailLevel": "Уровень детализации",
+  "ui.printSubmissionDialog.sendToPrinter": "Отправить на принтер",
+  "ui.semanticObjectEditor.heightRanges": "Диапазон высот слоёв"
 }

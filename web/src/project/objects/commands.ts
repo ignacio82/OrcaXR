@@ -334,6 +334,124 @@ export class CreateInstanceCommand extends ObjectLifecycleCommand {
   }
 }
 
+export interface IndependentSingleInstanceObjectIds {
+  objectId: ObjectId;
+  volumeIds: readonly VolumeId[];
+  instanceId: InstanceId;
+  layerRangeIds: readonly LayerRangeId[];
+}
+
+export class ConvertInstanceToIndependentObjectCommand extends ObjectLifecycleCommand {
+  readonly type = 'convert-instance-to-object';
+  readonly label = 'Set as individual object';
+  private newObject?: ProjectObject;
+  private removedInstance?: ProjectInstance;
+  private sourceInstanceIndex = -1;
+  private sourceObjectId?: ObjectId;
+  private plateId?: PlateId;
+  private readonly ids: IndependentSingleInstanceObjectIds;
+
+  constructor(
+    private readonly instanceId: InstanceId,
+    ids: IndependentSingleInstanceObjectIds,
+    private readonly newName?: string,
+  ) {
+    super();
+    this.ids = {
+      objectId: ids.objectId,
+      volumeIds: [...ids.volumeIds],
+      instanceId: ids.instanceId,
+      layerRangeIds: [...ids.layerRangeIds],
+    };
+  }
+
+  apply(context: CommandContext): void {
+    const state = cloneProjectState(context.project.getSnapshot().state);
+    const found = requireInstance(state, this.instanceId);
+    if (found.object.instances.length <= 1) {
+      throw new Error('Cannot convert sole instance to individual object');
+    }
+    this.sourceObjectId = found.object.id;
+    this.plateId = found.plate.id;
+    this.sourceInstanceIndex = found.object.instances.findIndex((i) => i.id === this.instanceId);
+    this.removedInstance = cloneJson(found.object.instances[this.sourceInstanceIndex]);
+
+    if (!this.newObject) {
+      if (this.ids.volumeIds.length !== found.object.volumes.length) {
+        throw new Error(`Expected ${found.object.volumes.length} volume IDs, received ${this.ids.volumeIds.length}`);
+      }
+      if (this.ids.layerRangeIds.length !== found.object.layerRanges.length) {
+        throw new Error(
+          `Expected ${found.object.layerRanges.length} layer-range IDs, received ${this.ids.layerRangeIds.length}`,
+        );
+      }
+      assertIdsAvailable(state, [
+        this.ids.objectId,
+        ...this.ids.volumeIds,
+        this.ids.instanceId,
+        ...this.ids.layerRangeIds,
+      ]);
+      const duplicate: ProjectObject = cloneJson(found.object);
+      duplicate.id = this.ids.objectId;
+      duplicate.name = this.newName ?? this.removedInstance.name ?? `${found.object.name} copy`;
+      duplicate.volumes.forEach((vol, idx) => {
+        vol.id = this.ids.volumeIds[idx];
+      });
+      duplicate.layerRanges.forEach((range, idx) => {
+        range.id = this.ids.layerRangeIds[idx];
+      });
+      const newInstance: ProjectInstance = {
+        id: this.ids.instanceId,
+        transform: cloneJson(this.removedInstance.transform),
+        printable: this.removedInstance.printable,
+      };
+      if (this.removedInstance.name !== undefined) {
+        newInstance.name = this.removedInstance.name;
+      }
+      duplicate.instances = [newInstance];
+      this.newObject = duplicate;
+    } else {
+      assertIdsAvailable(state, allObjectIds(this.newObject));
+    }
+
+    found.object.instances.splice(this.sourceInstanceIndex, 1);
+    const objIndex = found.plate.objects.findIndex((o) => o.id === found.object.id);
+    found.plate.objects.splice(objIndex + 1, 0, cloneJson(this.newObject));
+
+    replaceProject(context, state, this.type);
+    context.selection.set([{ kind: 'instance', id: this.newObject.instances[0].id }]);
+  }
+
+  revert(context: CommandContext): void {
+    if (
+      !this.newObject ||
+      !this.sourceObjectId ||
+      !this.plateId ||
+      this.sourceInstanceIndex < 0 ||
+      !this.removedInstance
+    ) {
+      throw new Error('ConvertInstanceToIndependentObjectCommand has not been applied');
+    }
+    const state = cloneProjectState(context.project.getSnapshot().state);
+    const plate = state.plates.find((p) => p.id === this.plateId);
+    if (!plate) throw new Error(`Plate ${this.plateId} not found`);
+    const newObjIndex = plate.objects.findIndex((o) => o.id === this.newObject!.id);
+    if (newObjIndex >= 0) {
+      plate.objects.splice(newObjIndex, 1);
+    }
+    const sourceObj = plate.objects.find((o) => o.id === this.sourceObjectId);
+    if (sourceObj) {
+      sourceObj.instances.splice(this.sourceInstanceIndex, 0, cloneJson(this.removedInstance));
+    }
+    replaceProject(context, state, `revert:${this.type}`);
+    context.selection.set([{ kind: 'instance', id: this.instanceId }]);
+  }
+
+  estimateBytes(): number {
+    return this.newObject ? canonicalStringify(this.newObject).length : 1;
+  }
+}
+
 export class DeleteInstanceCommand extends ObjectLifecycleCommand {
   readonly type = 'delete-instance';
   readonly label = 'Delete instance';

@@ -23,6 +23,8 @@
     "calibration:verify": "node scripts/generate-calibration-inventory.mjs --check",
     "l10n:sync": "node --import tsx scripts/generate-messages.mjs",
     "l10n:verify": "node --import tsx scripts/generate-messages.mjs --check",
+    "l10n:sweep": "node scripts/string-sweep.mjs",
+    "l10n:sweep:write": "node scripts/string-sweep.mjs --write",
     "settings:scopes": "node ../tools/settings-schema/generate-scopes.mjs",
     "settings:verify": "npm run profiles:verify && node ../tools/settings-schema/generate.mjs --check && node ../tools/settings-schema/generate-scopes.mjs --check && node ../tools/settings-schema/self-test.mjs",
     "security:check": "node scripts/security-contract.mjs",
@@ -46,7 +48,7 @@
     "size:check": "node scripts/size-check.mjs",
     "direction:check": "node scripts/direction-contract.mjs",
     "test:pseudo": "npm run build && node scripts/pseudo-smoke.mjs",
-    "quality": "npm run icons:verify && npm run security:check && npm run format:check && npm run lint && npm run typecheck && npm run architecture:check && npm run direction:check && npm run test:unit && npm run test:integration && npm run test:project && npm run test:settings && npm run test:l10n && npm run test:xr && npm run parity:verify && npm run parity:drift && npm run parity:artifacts && npm run parity:report:check && npm run settings:verify && npm run calibration:verify && npm run l10n:verify && npm run parity:oracles && npm run test:e2e && npm run test:a11y && npm run test:pseudo && npm run test:slice && npm run size:check",
+    "quality": "npm run icons:verify && npm run security:check && npm run format:check && npm run lint && npm run typecheck && npm run architecture:check && npm run direction:check && npm run test:unit && npm run test:integration && npm run test:project && npm run test:settings && npm run test:l10n && npm run test:xr && npm run parity:verify && npm run parity:drift && npm run parity:artifacts && npm run parity:report:check && npm run settings:verify && npm run calibration:verify && npm run l10n:verify && npm run l10n:sweep && npm run parity:oracles && npm run test:e2e && npm run test:a11y && npm run test:pseudo && npm run test:slice && npm run size:check",
     "test:slice": "node scripts/run-tests.mjs -slice.test.ts"
   },
   "dependencies": {

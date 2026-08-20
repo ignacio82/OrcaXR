@@ -71,6 +71,7 @@ import { ActionContext } from './actions/ActionContext';
 import { buildRegistry } from './actions/catalog';
 import { Localizer, createCatalogLoader } from './l10n/Localizer';
 import { findLocale, negotiateLocale, selectableLocales } from './l10n/locales';
+import { installLocalizer } from './l10n/t';
 import type { ActionInvocation, ActionRegistry } from './actions/ActionRegistry';
 import { buildShortcutCatalog, isShortcutEditingTarget, matchShortcut } from './actions/ShortcutCatalog';
 import { DomShell } from './ui/dom/DomShell';
@@ -155,6 +156,7 @@ import { loadEngineOptionCatalog, type EngineOptionCatalog } from './settings/ge
 import { applySettingsCommitToConfig, decodeSettingsConfig } from './settings/editor';
 import type { ProjectSettingsOverrideSnapshot } from './project/settingsOverrides';
 import type { ScopedOverrideSnapshot, ScopedOverrideTargetOption } from './project/scopedOverrides';
+import { t } from './l10n/t';
 
 declare global {
   interface Window {
@@ -362,7 +364,9 @@ function setupDomUI(
   l10n: () => Localizer,
 ) {
   workspace.onRequestNewProjectConfirmation = () =>
-    window.confirm('Discard the current unsaved project and start a new project?');
+    window.confirm(
+      t('app.main.discardTheCurrentUnsavedProject', 'Discard the current unsaved project and start a new project?'),
+    );
   workspace.onRequestSplitToObjectsConfirmation = (confirmation) =>
     window.confirm(
       `Split “${confirmation.objectName}” into separate objects?\n\n` +
@@ -538,10 +542,12 @@ function setupDomUI(
 
   workspace.onRequestPrinterConnectionTest = async () => {
     if (!printerCfg.host.trim()) {
-      workspace.setStatus('Enter an explicit Moonraker endpoint first.');
+      workspace.setStatus(
+        t('app.main.enterAnExplicitMoonrakerEndpoint', 'Enter an explicit Moonraker endpoint first.'),
+      );
       return;
     }
-    workspace.setStatus('Testing printer connection…');
+    workspace.setStatus(t('app.main.testingPrinterConnection', 'Testing printer connection…'));
     try {
       const { handshake } = await connectConfiguredPrinter();
       const capabilities = [
@@ -559,10 +565,14 @@ function setupDomUI(
 
   workspace.onRequestPrinterFilamentInspection = async () => {
     if (!printerCfg.host.trim()) {
-      workspace.setStatus('Enter an explicit Moonraker endpoint first.');
+      workspace.setStatus(
+        t('app.main.enterAnExplicitMoonrakerEndpoint2', 'Enter an explicit Moonraker endpoint first.'),
+      );
       return;
     }
-    workspace.setStatus('Reading filament slots from the connected printer…');
+    workspace.setStatus(
+      t('app.main.readingFilamentSlotsFromThe', 'Reading filament slots from the connected printer…'),
+    );
     try {
       const { transport, handshake } = await connectConfiguredPrinter();
       if (!handshake.capabilities.klippyConnected) {
@@ -570,7 +580,7 @@ function setupDomUI(
       }
       const slots = await queryMoonrakerFilamentSlots(transport);
       if (slots.length === 0) {
-        workspace.setStatus('The printer reported no loaded filament slots.');
+        workspace.setStatus(t('app.main.thePrinterReportedNoLoaded', 'The printer reported no loaded filament slots.'));
         return;
       }
       const summary = slots.map((slot) => `H${slot.slotIndex + 1}: ${slot.material} ${slot.colorHex}`).join('; ');
@@ -590,21 +600,30 @@ function setupDomUI(
 
   workspace.onRequestPrintSubmission = async (intent) => {
     if (printSubmission) {
-      workspace.setStatus('A send is already in progress; cancel it before starting another.');
+      workspace.setStatus(
+        t('app.main.aSendIsAlreadyIn', 'A send is already in progress; cancel it before starting another.'),
+      );
       return;
     }
     if (!printerCfg.host.trim()) {
-      workspace.setStatus('Enter an explicit Moonraker endpoint first.');
+      workspace.setStatus(
+        t('app.main.enterAnExplicitMoonrakerEndpoint3', 'Enter an explicit Moonraker endpoint first.'),
+      );
       return;
     }
     const controller = new AbortController();
     printSubmission = controller;
     setPrinterSendBusy(true);
     try {
-      workspace.setStatus('Connecting to the printer…');
+      workspace.setStatus(t('app.main.connectingToThePrinter', 'Connecting to the printer…'));
       const { transport, handshake } = await connectConfiguredPrinter();
       if (!handshake.capabilities.fileManagement) {
-        workspace.setStatus('This Moonraker instance does not expose file management; nothing was sent.');
+        workspace.setStatus(
+          t(
+            'app.main.thisMoonrakerInstanceDoesNot',
+            'This Moonraker instance does not expose file management; nothing was sent.',
+          ),
+        );
         return;
       }
       // Read the machine's own facts before asking anything: what it is doing,
@@ -631,7 +650,7 @@ function setupDomUI(
         warnings: mapping.warnings.map((notice) => notice.message),
       });
       if (decision.choice === 'cancel') {
-        workspace.setStatus('Send cancelled; nothing was uploaded.');
+        workspace.setStatus(t('app.main.sendCancelledNothingWasUploaded', 'Send cancelled; nothing was uploaded.'));
         return;
       }
       // The dialog waits on a person, and a printer connection does not wait
@@ -703,7 +722,9 @@ function setupDomUI(
   // call re-checks the freshly re-read state before anything is sent.
   workspace.onRequestPrintJobCommand = async (command, options) => {
     if (!printerCfg.host.trim()) {
-      workspace.setStatus('Enter an explicit Moonraker endpoint first.');
+      workspace.setStatus(
+        t('app.main.enterAnExplicitMoonrakerEndpoint4', 'Enter an explicit Moonraker endpoint first.'),
+      );
       return;
     }
     // A surface that already took an explicit confirmation gesture — the status
@@ -791,7 +812,9 @@ function setupDomUI(
 
   workspace.onRequestPrinterStorage = async (operation) => {
     if (!printerCfg.host.trim()) {
-      workspace.setStatus('Enter an explicit Moonraker endpoint first.');
+      workspace.setStatus(
+        t('app.main.enterAnExplicitMoonrakerEndpoint5', 'Enter an explicit Moonraker endpoint first.'),
+      );
       return;
     }
     storageState.busy = true;
@@ -905,7 +928,10 @@ function setupDomUI(
           });
         },
         askName: async (current) => {
-          const next = window.prompt('New name for this file on the printer', current);
+          const next = window.prompt(
+            t('app.main.newNameForThisFile', 'New name for this file on the printer'),
+            current,
+          );
           return next === null ? undefined : next.trim();
         },
         confirmDelete: (path) =>
@@ -958,7 +984,9 @@ function setupDomUI(
 
   workspace.onRequestPrinterConsole = async (operation) => {
     if (!printerCfg.host.trim()) {
-      workspace.setStatus('Enter an explicit Moonraker endpoint first.');
+      workspace.setStatus(
+        t('app.main.enterAnExplicitMoonrakerEndpoint6', 'Enter an explicit Moonraker endpoint first.'),
+      );
       return;
     }
     consoleState.busy = true;
@@ -1062,7 +1090,9 @@ function setupDomUI(
 
   workspace.onRequestPrintHistory = async (start) => {
     if (!printerCfg.host.trim()) {
-      workspace.setStatus('Enter an explicit Moonraker endpoint first.');
+      workspace.setStatus(
+        t('app.main.enterAnExplicitMoonrakerEndpoint7', 'Enter an explicit Moonraker endpoint first.'),
+      );
       return;
     }
     historyState.busy = true;
@@ -1136,7 +1166,9 @@ function setupDomUI(
 
   workspace.onRequestPrinterCamera = async (uid) => {
     if (!printerCfg.host.trim()) {
-      workspace.setStatus('Enter an explicit Moonraker endpoint first.');
+      workspace.setStatus(
+        t('app.main.enterAnExplicitMoonrakerEndpoint8', 'Enter an explicit Moonraker endpoint first.'),
+      );
       return;
     }
     cameraState.busy = true;
@@ -1676,7 +1708,10 @@ function setupDomUI(
     // correct if the tab set is ever reordered or relabelled.
     document.getElementById('insp-tab-printer')?.click();
     printerHost.focus();
-    statusText.textContent = 'Enter your printer address; it is saved on this device.';
+    statusText.textContent = t(
+      'app.main.enterYourPrinterAddressIt',
+      'Enter your printer address; it is saved on this device.',
+    );
   };
 
   emptyLoadModel.onclick = () => {
@@ -1734,7 +1769,7 @@ function setupDomUI(
           if (isProjectArchive) {
             const choice = await askThreeMfIntake(file.name);
             if (choice === 'cancel') {
-              statusText.textContent = 'Load cancelled.';
+              statusText.textContent = t('app.main.loadCancelled', 'Load cancelled.');
               continue;
             }
             await workspace.openFile(file.name, bytes, { threeMfMode: choice });
@@ -1756,7 +1791,7 @@ function setupDomUI(
   dropOverlay.dataset.fileDropOverlay = 'true';
   dropOverlay.setAttribute('role', 'status');
   dropOverlay.hidden = true;
-  dropOverlay.textContent = 'Drop a 3MF, STL, OBJ, AMF, ZIP, or G-code file to load it';
+  dropOverlay.textContent = t('app.main.dropA3MFSTLOBJ', 'Drop a 3MF, STL, OBJ, AMF, ZIP, or G-code file to load it');
   dropOverlay.style.cssText =
     'position:fixed;inset:16px;z-index:9998;display:none;align-items:center;justify-content:center;' +
     'border:2px dashed var(--oxr-color-accent,#4fc3f7);border-radius:16px;background:rgba(6,10,16,0.72);' +
@@ -2045,13 +2080,13 @@ function setupDomUI(
     const body = document.createElement('div');
     const label = document.createElement('label');
     label.htmlFor = 'help-search-input';
-    label.textContent = 'Search help';
+    label.textContent = t('app.main.searchHelp', 'Search help');
     label.style.cssText = 'display:block;margin-bottom:4px;color:var(--oxr-color-text-muted);';
     const input = document.createElement('input');
     input.id = 'help-search-input';
     input.type = 'search';
     input.className = 'text-input';
-    input.placeholder = 'wipe tower, cors, painting, token…';
+    input.placeholder = t('app.main.wipeTowerCorsPaintingToken', 'wipe tower, cors, painting, token…');
     input.dataset.helpSearch = 'true';
     input.style.cssText = 'width:100%;box-sizing:border-box;margin-bottom:10px;';
 
@@ -2060,7 +2095,7 @@ function setupDomUI(
     // A live region, so a screen reader hears the count change as they type.
     results.setAttribute('role', 'region');
     results.setAttribute('aria-live', 'polite');
-    results.setAttribute('aria-label', 'Help results');
+    results.setAttribute('aria-label', t('app.main.helpResults', 'Help results'));
 
     const render = () => {
       const query = input.value.trim();
@@ -2109,7 +2144,10 @@ function setupDomUI(
   workspace.onShowLanguagePicker = () => {
     const body = document.createElement('div');
     const intro = document.createElement('p');
-    intro.textContent = 'OrcaXR is translated from the pinned Snapmaker OrcaSlicer catalogues.';
+    intro.textContent = t(
+      'app.main.orcaXRIsTranslatedFromThe',
+      'OrcaXR is translated from the pinned Snapmaker OrcaSlicer catalogues.',
+    );
     intro.style.cssText = 'margin:0 0 8px;color:var(--oxr-color-text-muted);';
     const list = document.createElement('div');
     list.style.cssText = 'display:grid;gap:4px;max-height:52vh;overflow:auto;';
@@ -2158,7 +2196,10 @@ function setupDomUI(
     const opts = workspace.getProfileOptions();
     const body = document.createElement('div');
     const intro = document.createElement('p');
-    intro.textContent = 'Pick your printer, print process and filament to get started.';
+    intro.textContent = t(
+      'app.main.pickYourPrinterPrintProcess',
+      'Pick your printer, print process and filament to get started.',
+    );
     intro.style.cssText = 'margin:0 0 6px;color:var(--oxr-color-text-muted);';
     body.appendChild(intro);
     const fill = (
@@ -2218,7 +2259,7 @@ function setupDomUI(
     renderProfileSelectionStatus(wizardStatus, { unavailableReasons: opts.unavailableReasons });
     body.appendChild(wizardStatus);
     const apply = document.createElement('button');
-    apply.textContent = 'Apply & Close';
+    apply.textContent = t('app.main.applyClose', 'Apply & Close');
     apply.setAttribute('data-testid', 'wizard-apply');
     apply.style.cssText =
       'margin-top:14px;width:100%;padding:10px;border:none;border-radius:8px;background:linear-gradient(90deg,#ffb74d,#ff9800);color:#1a1a1a;font-weight:600;font-size:14px;cursor:pointer;';
@@ -2308,7 +2349,7 @@ function setupDomUI(
       // dead, label-less box. The placeholder is replaced as soon as the
       // catalog loads (onProfileChanged → renderProfileSelects).
       const opt = document.createElement('option');
-      opt.textContent = 'Loading profiles…';
+      opt.textContent = t('app.main.loadingProfiles', 'Loading profiles…');
       opt.disabled = true;
       opt.selected = true;
       sel.appendChild(opt);
@@ -2332,7 +2373,7 @@ function setupDomUI(
     sel.innerHTML = '';
     if (items.length === 0) {
       const opt = document.createElement('option');
-      opt.textContent = 'No compatible presets';
+      opt.textContent = t('app.main.noCompatiblePresets', 'No compatible presets');
       opt.disabled = true;
       opt.selected = true;
       sel.appendChild(opt);
@@ -2346,7 +2387,7 @@ function setupDomUI(
     if (current === undefined) {
       const placeholder = document.createElement('option');
       placeholder.value = '';
-      placeholder.textContent = 'Using the project’s own settings';
+      placeholder.textContent = t('app.main.usingTheProjectSOwn', 'Using the project’s own settings');
       placeholder.disabled = true;
       placeholder.selected = true;
       placeholder.dataset.presetPlaceholder = 'true';
@@ -2386,7 +2427,7 @@ function setupDomUI(
       syncBtn.className = 'action-btn';
       syncBtn.style.cssText =
         'background: #2E7D32; color: white; border: none; padding: 8px; margin-bottom: 8px; border-radius: 8px; cursor: pointer; font-size: 13px; width: 100%;';
-      syncBtn.textContent = 'Sync Filaments From Printer';
+      syncBtn.textContent = t('app.main.syncFilamentsFromPrinter', 'Sync Filaments From Printer');
       syncBtn.onclick = async () => {
         syncBtn.disabled = true;
         syncBtn.setAttribute('aria-busy', 'true');
@@ -2459,7 +2500,7 @@ function setupDomUI(
       openVirtualLibrary.className = 'action-btn';
       openVirtualLibrary.style.cssText =
         'background:rgba(255,183,77,0.12);color:#ffcc80;padding:8px;margin-top:4px;border-radius:8px;cursor:pointer;font-size:13px;width:100%;border:1px solid rgba(255,183,77,0.35);';
-      openVirtualLibrary.textContent = 'Open virtual filament library';
+      openVirtualLibrary.textContent = t('app.main.openVirtualFilamentLibrary', 'Open virtual filament library');
       openVirtualLibrary.onclick = () => {
         const section = document.getElementById('virtual-filament-library-section') as HTMLDetailsElement | null;
         section?.setAttribute('open', '');
@@ -3905,7 +3946,10 @@ function setupDomUI(
   // Filament palette: color swatches that drive paint + 3MF display + slice.
   const swatchWrap = document.getElementById('filament-swatches') as HTMLDivElement;
   const btnAddFilament = document.getElementById('btn-add-filament') as HTMLButtonElement;
-  btnAddFilament.title = 'Add an auxiliary palette color (not a virtual recipe)';
+  btnAddFilament.title = t(
+    'app.main.addAnAuxiliaryPaletteColor',
+    'Add an auxiliary palette color (not a virtual recipe)',
+  );
   btnAddFilament.setAttribute('aria-label', btnAddFilament.title);
   const renderPalette = () => {
     swatchWrap.innerHTML = '';
@@ -3921,7 +3965,7 @@ function setupDomUI(
       input.oninput = () => workspace.palette.setColor(i, input.value);
       const del = document.createElement('button');
       del.textContent = '×';
-      del.title = 'Remove filament';
+      del.title = t('app.main.removeFilament', 'Remove filament');
       del.style.cssText =
         'position:absolute;top:-6px;inset-inline-end:-6px;width:16px;height:16px;line-height:14px;' +
         'border-radius:50%;border:none;background:#333;color:#fff;font-size:11px;cursor:pointer;';
@@ -4032,7 +4076,7 @@ function setupDomUI(
     if (printers.printers.length === 0) {
       const option = document.createElement('option');
       option.value = '';
-      option.textContent = 'No printer saved yet';
+      option.textContent = t('app.main.noPrinterSavedYet', 'No printer saved yet');
       option.disabled = true;
       option.selected = true;
       printerSelect.appendChild(option);
@@ -4064,11 +4108,17 @@ function setupDomUI(
   btnPrinterAdd.onclick = () => {
     const host = printerHost.value.trim();
     if (!host) {
-      statusText.textContent = 'Enter the printer address first, then Add names it.';
+      statusText.textContent = t(
+        'app.main.enterThePrinterAddressFirst',
+        'Enter the printer address first, then Add names it.',
+      );
       printerHost.focus();
       return;
     }
-    const name = window.prompt('Name this printer', `Printer ${printers.printers.length + 1}`);
+    const name = window.prompt(
+      t('app.main.nameThisPrinter', 'Name this printer'),
+      `Printer ${printers.printers.length + 1}`,
+    );
     if (name === null) return;
     try {
       printers = addPrinter(printers, { name, host, port: printerCfg.port }, () => crypto.randomUUID());
@@ -4166,7 +4216,10 @@ function setupDomUI(
       `Export this diagnostics bundle?\n\n${describeDiagnosticsBundle(bundle)}\n\nNothing is sent anywhere; the file is saved to this device.`,
     );
     if (!agreed) {
-      statusText.textContent = 'Diagnostics export cancelled; nothing was written.';
+      statusText.textContent = t(
+        'app.main.diagnosticsExportCancelledNothingWas',
+        'Diagnostics export cancelled; nothing was written.',
+      );
       return;
     }
     const blob = new Blob([serializeDiagnosticsBundle(bundle)], { type: 'application/json' });
@@ -4207,7 +4260,10 @@ function setupDomUI(
     link.download = 'orcaxr-settings.json';
     link.click();
     URL.revokeObjectURL(url);
-    statusText.textContent = 'Exported this device\u2019s settings. The file carries no tokens.';
+    statusText.textContent = t(
+      'app.main.exportedThisDeviceSSettings',
+      'Exported this device’s settings. The file carries no tokens.',
+    );
   };
 
   btnPrefsImport.onclick = () => prefsImportFile.click();
@@ -4240,7 +4296,10 @@ function setupDomUI(
     prefReduceMotion.checked = preferences.reduceMotion === 'always';
     applyPreferences(preferences, document.documentElement);
     refreshFirstRunPrompt();
-    statusText.textContent = 'Reset this device\u2019s settings. Your projects and presets are untouched.';
+    statusText.textContent = t(
+      'app.main.resetThisDeviceSSettings',
+      'Reset this device’s settings. Your projects and presets are untouched.',
+    );
   };
 
   btnForgetCredentials.onclick = () => {
@@ -4252,7 +4311,10 @@ function setupDomUI(
     remembered = loadRememberedCredentials();
     rememberCredentials.checked = remembered.remember;
     disposePrinterTransport();
-    statusText.textContent = 'Forgot the saved printer key and slicer token on this device.';
+    statusText.textContent = t(
+      'app.main.forgotTheSavedPrinterKey',
+      'Forgot the saved printer key and slicer token on this device.',
+    );
   };
   const externalSlicerUrl = document.getElementById('external-slicer-url') as HTMLInputElement;
   const externalSlicerStatus = document.getElementById('external-slicer-status') as HTMLSpanElement;
@@ -4309,13 +4371,19 @@ function setupDomUI(
       const endpoint = await connection;
       externalSlicerUrl.value = endpoint;
       updateExternalSlicerStatus(true);
-      statusText.textContent = 'External slicer connected — external slicing is on.';
+      statusText.textContent = t(
+        'app.main.externalSlicerConnectedExternalSlicing',
+        'External slicer connected — external slicing is on.',
+      );
     } catch {
       // A failed candidate never replaces the last verified URL and the
       // previous route stays disabled. Restore what can actually be enabled.
       externalSlicerUrl.value = SlicerClient.getExternalSlicerUrl();
       updateExternalSlicerStatus(false);
-      statusText.textContent = 'External slicer connection failed — slicing locally.';
+      statusText.textContent = t(
+        'app.main.externalSlicerConnectionFailedSlicing',
+        'External slicer connection failed — slicing locally.',
+      );
     } finally {
       btnExternalSlicerConnect.disabled = false;
       btnExternalSlicerConnect.textContent = 'Connect';
@@ -4343,7 +4411,10 @@ function setupDomUI(
     externalSlicerUrl.value = '';
     updateExternalSlicerStatus(false);
     refreshExternalSlicerControls();
-    statusText.textContent = 'External slicer removed — slicing locally.';
+    statusText.textContent = t(
+      'app.main.externalSlicerRemovedSlicingLocally',
+      'External slicer removed — slicing locally.',
+    );
   };
 
   btnExternalSlicerConnect.onclick = async () => {
@@ -4377,14 +4448,14 @@ function setupDomUI(
   const btnPrinterWebcam = document.getElementById('btn-printer-webcam') as HTMLButtonElement;
   btnPrinterWebcam.disabled = false;
   btnPrinterWebcam.textContent = 'Camera';
-  btnPrinterWebcam.title = "Discover this printer's cameras and watch one";
+  btnPrinterWebcam.title = t('app.main.discoverThisPrinterSCameras', "Discover this printer's cameras and watch one");
   btnPrinterWebcam.onclick = () => {
     void registry.invoke('view_webcam', 'dom-inspector', actionCtx, uiState.get());
   };
   btnPrinterSend.onclick = () => {
     if (printSubmission) {
       printSubmission.abort();
-      workspace.setStatus('Cancelling the send…');
+      workspace.setStatus(t('app.main.cancellingTheSend', 'Cancelling the send…'));
       return;
     }
     void registry
@@ -4431,7 +4502,7 @@ function setupDomUI(
     const add = document.createElement('button');
     add.className = 'plate-add';
     add.textContent = '+';
-    add.title = 'Add build plate';
+    add.title = t('app.main.addBuildPlate', 'Add build plate');
     add.onclick = () => {
       void registry
         .invoke('add_plate', 'dom-menu', actionCtx, uiState.get())
@@ -4554,7 +4625,10 @@ function setupDomUI(
     mcpControls.style.display = chkMcpEnabled.checked ? 'flex' : 'none';
     if (chkMcpEnabled.checked) {
       ensureMcpClient();
-      statusText.textContent = 'WebMCP tools are ready. Paste a local bridge token and connect.';
+      statusText.textContent = t(
+        'app.main.webMCPToolsAreReadyPaste',
+        'WebMCP tools are ready. Paste a local bridge token and connect.',
+      );
     } else {
       mcp?.disconnect('WebMCP tools disabled.');
     }
@@ -4568,7 +4642,7 @@ function setupDomUI(
     }
     const token = inMcpToken.value.trim();
     if (!token) {
-      statusText.textContent = 'Please paste a token first.';
+      statusText.textContent = t('app.main.pleasePasteATokenFirst', 'Please paste a token first.');
       return;
     }
     try {
@@ -4595,9 +4669,15 @@ function setupDomUI(
     };
     try {
       await navigator.clipboard.writeText(JSON.stringify(snippet, null, 2));
-      statusText.textContent = 'Claude Desktop MCP config snippet copied to clipboard.';
+      statusText.textContent = t(
+        'app.main.claudeDesktopMCPConfigSnippet',
+        'Claude Desktop MCP config snippet copied to clipboard.',
+      );
     } catch {
-      statusText.textContent = 'Clipboard access was denied. Copy the MCP snippet from a secure browser context.';
+      statusText.textContent = t(
+        'app.main.clipboardAccessWasDeniedCopy',
+        'Clipboard access was denied. Copy the MCP snippet from a secure browser context.',
+      );
     }
   };
 
@@ -4645,6 +4725,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     onProblem: (problem) => console.warn(`[orcaxr-web] message ${problem.id ?? ''}: ${problem.message}`),
   });
   registry.useTextSource(l10n);
+  // Every surface outside the action catalogue reads its text through `t`,
+  // which finds the localizer here rather than being handed one; installing it
+  // before anything is built is what makes that true from the first frame.
+  installLocalizer(l10n);
   (window as unknown as { __orcaL10n: unknown }).__orcaL10n = l10n;
 
   const workspace = new OrcaWorkspace(registry, {

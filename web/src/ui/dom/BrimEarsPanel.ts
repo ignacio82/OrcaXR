@@ -1,3 +1,4 @@
+import { t } from '../../l10n/t';
 export interface BrimEarView {
   readonly positionMm: readonly [number, number, number];
   readonly headFrontRadiusMm: number;
@@ -84,7 +85,7 @@ export class BrimEarsPanel {
 
     const heading = document.createElement('h3');
     heading.id = `orcaxr-brim-ears-heading-${this.instanceId}`;
-    heading.textContent = 'Brim ears';
+    heading.textContent = t('ui.brimEarsPanel.brimEars', 'Brim ears');
     heading.style.cssText = 'margin:0;font-size:13px;font-weight:600;';
 
     const controls = document.createElement('div');
@@ -95,7 +96,10 @@ export class BrimEarsPanel {
     activate.setAttribute('aria-pressed', state.active ? 'true' : 'false');
     const auto = this.button('brim-ears-auto', 'Place on corners', () => this.adapter.onAutoPlace());
     auto.disabled = state.objectId === undefined;
-    auto.title = 'Find the first-layer corners that would lift and put an ear on each';
+    auto.title = t(
+      'ui.brimEarsPanel.findTheFirstLayerCorners',
+      'Find the first-layer corners that would lift and put an ear on each',
+    );
     const clear = this.button('brim-ears-clear', 'Clear all', () => this.adapter.onClear());
     clear.disabled = state.ears.length === 0;
     controls.append(activate, auto, clear);
@@ -117,7 +121,7 @@ export class BrimEarsPanel {
     });
     const radiusLabel = document.createElement('label');
     radiusLabel.htmlFor = radius.id;
-    radiusLabel.textContent = 'Ear radius (mm)';
+    radiusLabel.textContent = t('ui.brimEarsPanel.earRadiusMm', 'Ear radius (mm)');
     radiusLabel.style.cssText = 'display:flex;align-items:center;gap:6px;opacity:0.75;';
     radiusLabel.appendChild(radius);
 
@@ -144,7 +148,7 @@ export class BrimEarsPanel {
     if (state.ears.length > 0) {
       const list = document.createElement('ol');
       list.dataset.brimEars = 'true';
-      list.setAttribute('aria-label', 'Placed brim ears');
+      list.setAttribute('aria-label', t('ui.brimEarsPanel.placedBrimEars', 'Placed brim ears'));
       list.style.cssText = 'margin:0;padding-inline-start:18px;display:flex;flex-direction:column;gap:4px;';
       for (const [index, ear] of state.ears.entries()) {
         const item = document.createElement('li');

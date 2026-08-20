@@ -1,5 +1,6 @@
 import { isStableEntityId, type LayerRangeId, type ObjectId, type VolumeId } from '../../project/domain/ids';
 import type { VolumeRole } from '../../project/domain/model';
+import { t } from '../../l10n/t';
 import {
   ORCA_VOLUME_ROLE_ORDER,
   type VolumeRoleConversionDecision,
@@ -195,7 +196,10 @@ export class SemanticObjectEditor {
     if (!snapshot) {
       const empty = document.createElement('p');
       empty.dataset.semanticObjectEmpty = 'true';
-      empty.textContent = 'Select an object, instance, part, or height range to edit semantic properties.';
+      empty.textContent = t(
+        'ui.semanticObjectEditor.selectAnObjectInstancePart',
+        'Select an object, instance, part, or height range to edit semantic properties.',
+      );
       empty.style.cssText = mutedTextStyle;
       fragment.appendChild(empty);
       root.replaceChildren(fragment);
@@ -248,7 +252,7 @@ export class SemanticObjectEditor {
     section.style.cssText = sectionStyle;
     const heading = document.createElement('h3');
     heading.id = this.id('volume-heading');
-    heading.textContent = 'Volume role';
+    heading.textContent = t('ui.semanticObjectEditor.volumeRole', 'Volume role');
     heading.style.cssText = subsectionHeadingStyle;
     section.setAttribute('aria-labelledby', heading.id);
     section.appendChild(heading);
@@ -256,7 +260,10 @@ export class SemanticObjectEditor {
     const selected = snapshot.selectedVolume;
     if (!selected) {
       const empty = document.createElement('p');
-      empty.textContent = 'Select a part or semantic volume to inspect its role.';
+      empty.textContent = t(
+        'ui.semanticObjectEditor.selectAPartOrSemantic',
+        'Select a part or semantic volume to inspect its role.',
+      );
       empty.style.cssText = mutedTextStyle;
       section.appendChild(empty);
       return section;
@@ -272,7 +279,7 @@ export class SemanticObjectEditor {
     fieldset.disabled = snapshotBlocked;
     fieldset.style.cssText = fieldsetStyle;
     const legend = document.createElement('legend');
-    legend.textContent = 'Convert to';
+    legend.textContent = t('ui.semanticObjectEditor.convertTo', 'Convert to');
     legend.style.cssText = legendStyle;
     fieldset.appendChild(legend);
 
@@ -340,7 +347,7 @@ export class SemanticObjectEditor {
     section.style.cssText = sectionStyle;
     const heading = document.createElement('h3');
     heading.id = this.id('ranges-heading');
-    heading.textContent = 'Height ranges';
+    heading.textContent = t('ui.semanticObjectEditor.heightRanges', 'Height ranges');
     heading.style.cssText = subsectionHeadingStyle;
     section.setAttribute('aria-labelledby', heading.id);
     section.appendChild(heading);
@@ -353,7 +360,10 @@ export class SemanticObjectEditor {
     const selected = selection ? ordered.find((range) => range.id === selection.id) : undefined;
     if (!selection || !selected) {
       const empty = document.createElement('p');
-      empty.textContent = 'Select a height range to edit, split, merge, or delete it.';
+      empty.textContent = t(
+        'ui.semanticObjectEditor.selectAHeightRangeTo',
+        'Select a height range to edit, split, merge, or delete it.',
+      );
       empty.style.cssText = mutedTextStyle;
       section.appendChild(empty);
       return section;
@@ -378,7 +388,7 @@ export class SemanticObjectEditor {
     if (ranges.length === 0) {
       const empty = document.createElement('p');
       empty.dataset.layerRangeEmpty = 'true';
-      empty.textContent = 'No height ranges are defined.';
+      empty.textContent = t('ui.semanticObjectEditor.noHeightRangesAreDefined', 'No height ranges are defined.');
       empty.style.cssText = mutedTextStyle;
       return empty;
     }
@@ -505,7 +515,7 @@ export class SemanticObjectEditor {
     form.dataset.layerRangeOperation = 'split';
     form.style.cssText = fieldsetStyle;
     const heading = document.createElement('h4');
-    heading.textContent = 'Split range';
+    heading.textContent = t('ui.semanticObjectEditor.splitRange', 'Split range');
     heading.style.cssText = 'margin:0;font-size:13px;';
     form.appendChild(heading);
     const splitInput = this.createNumberInput(form, 'split-z', 'Split at Z (mm)', undefined);
@@ -521,7 +531,7 @@ export class SemanticObjectEditor {
     const submit = document.createElement('button');
     submit.type = 'submit';
     submit.dataset.layerRangeSubmit = 'split';
-    submit.textContent = 'Split range';
+    submit.textContent = t('ui.semanticObjectEditor.splitRange2', 'Split range');
     submit.style.cssText = touchButtonStyle;
     form.appendChild(submit);
 
@@ -582,7 +592,7 @@ export class SemanticObjectEditor {
     fieldset.disabled = snapshotBlocked;
     fieldset.style.cssText = fieldsetStyle;
     const legend = document.createElement('legend');
-    legend.textContent = 'Merge range';
+    legend.textContent = t('ui.semanticObjectEditor.mergeRange', 'Merge range');
     legend.style.cssText = legendStyle;
     fieldset.appendChild(legend);
     fieldset.appendChild(this.createMergeChoice(snapshot, selected, selection.mergePrevious, ordered, 'previous'));
@@ -647,7 +657,7 @@ export class SemanticObjectEditor {
     const button = document.createElement('button');
     button.type = 'button';
     button.dataset.layerRangeDelete = selected.id;
-    button.textContent = 'Delete selected range';
+    button.textContent = t('ui.semanticObjectEditor.deleteSelectedRange', 'Delete selected range');
     button.disabled = snapshotBlocked;
     button.style.cssText = `${touchButtonStyle}border-color:#ef535088;color:#ffb4ab;`;
     button.addEventListener('click', () => {

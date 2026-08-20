@@ -1,5 +1,6 @@
 import type { PrintJobCommand, PrintJobCommandDescriptor } from '../../printer/PrintJobControl';
 import { describePrintJobState, formatDuration, type PrintJobSnapshot } from '../../printer/PrintJobStatus';
+import { t } from '../../l10n/t';
 
 export interface PrintJobPanelAdapter {
   /** The live snapshot, or null when this session has no printer connection. */
@@ -38,7 +39,7 @@ export class PrintJobPanel {
     const document = this.container.ownerDocument;
     const root = document.createElement('section');
     root.dataset.printJobPanel = 'true';
-    root.setAttribute('aria-label', 'Printer job');
+    root.setAttribute('aria-label', t('ui.printJobPanel.printerJob', 'Printer job'));
     root.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-top:10px;';
 
     const headline = document.createElement('p');

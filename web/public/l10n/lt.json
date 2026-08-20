@@ -16,6 +16,7 @@
   "action.edit_redo.label": "Perdaryti",
   "action.edit_select_all.label": "Pasirinkti viską",
   "action.edit_undo.label": "Anuliuoti",
+  "action.file_export_all_stls.label": "Eksportuoti visus objektus kaip STL…",
   "action.file_export_gcode.label": "Eksportuoti G-kodą…",
   "action.file_export_obj.label": "Eksportas ir įrankių trajektorijos kaip OBJ…",
   "action.file_export_stl.label": "Eksportuoti kaip vieną STL…",
@@ -30,6 +31,7 @@
   "action.help_shortcuts.label": "Klaviatūros nuorodos",
   "action.help_tip_of_day.label": "Rodyti dienos patarimą",
   "action.help_tutorial.label": "Pamokos",
+  "action.instance_to_object.label": "Nustatyti kaip atskirą objektą",
   "action.load_model_from_path.label": "Įkelti",
   "action.paint_erase_all.label": "Ištrinti visą piešinį",
   "action.presets_export_bundle.label": "Eksportuoti parametrų rinkinį",
@@ -59,5 +61,10 @@
   "action.view_camera_top.label": "Vaizdas iš viršaus",
   "action.view_open_gcode.label": "Atidaryti G-kodą…",
   "action.view_show_gcode_window.label": "Rodyti G-kodo langą",
-  "action.view_show_navigator.label": "Rodyti 3D navigatorių"
+  "action.view_show_navigator.label": "Rodyti 3D navigatorių",
+  "actions.actionContext.keyboardShortcuts": "Klaviatūros nuorodos",
+  "ui.brimEarsPanel.brimEars": "Krašto \"ausys\"",
+  "ui.generatedSettingsPanel.detailLevel": "Detalių lygis",
+  "ui.printSubmissionDialog.sendToPrinter": "Siųsti į spausdintuvą",
+  "ui.semanticObjectEditor.heightRanges": "Aukščio diapazonai"
 }

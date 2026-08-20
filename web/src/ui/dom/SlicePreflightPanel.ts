@@ -1,6 +1,7 @@
 import { troubleshootingFor } from '../../help/HelpCatalog';
 import type { ObjectTreeEntityRef } from '../../project/objects';
 import type { CanonicalSlicePreflightResult, SlicePreflightAction, SlicePreflightIssue } from '../../project/slicing';
+import { t } from '../../l10n/t';
 
 export type SupportedSlicePreflightAction =
   | (SlicePreflightAction & {
@@ -39,7 +40,7 @@ export class SlicePreflightPanel {
     if (result.issues.length === 0) return;
 
     const list = this.container.ownerDocument.createElement('ol');
-    list.setAttribute('aria-label', 'Slice preflight issues');
+    list.setAttribute('aria-label', t('ui.slicePreflightPanel.slicePreflightIssues', 'Slice preflight issues'));
     list.dataset.slicePreflightIssues = '';
     list.style.cssText = 'display:grid;gap:8px;list-style:none;margin:0;padding:0;';
     for (const [index, issue] of result.issues.entries()) {
@@ -121,7 +122,10 @@ export class SlicePreflightPanel {
 
     if (issue.entities.length > 0) {
       const entities = document.createElement('ul');
-      entities.setAttribute('aria-label', 'Affected canonical entities');
+      entities.setAttribute(
+        'aria-label',
+        t('ui.slicePreflightPanel.affectedCanonicalEntities', 'Affected canonical entities'),
+      );
       entities.dataset.preflightEntities = '';
       entities.style.cssText = 'margin:5px 0 0;padding-inline-start:18px;';
       for (const entity of issue.entities) {
@@ -140,7 +144,10 @@ export class SlicePreflightPanel {
     });
     if (actions.length > 0) {
       const controls = document.createElement('div');
-      controls.setAttribute('aria-label', 'Supported preflight actions');
+      controls.setAttribute(
+        'aria-label',
+        t('ui.slicePreflightPanel.supportedPreflightActions', 'Supported preflight actions'),
+      );
       controls.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;';
       for (const action of actions) {
         const button = document.createElement('button');

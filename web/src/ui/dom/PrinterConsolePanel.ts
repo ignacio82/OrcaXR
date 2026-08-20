@@ -1,3 +1,4 @@
+import { t } from '../../l10n/t';
 /**
  * The G-code console and the printer's own macros (P9.6).
  *
@@ -72,14 +73,14 @@ export class PrinterConsolePanel {
     const doc = this.container.ownerDocument;
     const root = doc.createElement('section');
     root.dataset.printerConsolePanel = 'true';
-    root.setAttribute('aria-label', 'Printer G-code console');
+    root.setAttribute('aria-label', t('ui.printerConsolePanel.printerGCodeConsole', 'Printer G-code console'));
     root.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
 
     const transcript = doc.createElement('div');
     transcript.dataset.printerConsoleTranscript = 'true';
     transcript.setAttribute('role', 'log');
     transcript.setAttribute('aria-live', 'polite');
-    transcript.setAttribute('aria-label', 'Console transcript');
+    transcript.setAttribute('aria-label', t('ui.printerConsolePanel.consoleTranscript', 'Console transcript'));
     transcript.style.cssText =
       'display:flex;flex-direction:column;gap:2px;max-height:200px;overflow-y:auto;' +
       'font-family:ui-monospace,monospace;font-size:11px;background:#0006;border-radius:6px;padding:8px;';
@@ -94,8 +95,8 @@ export class PrinterConsolePanel {
     const input = doc.createElement('input');
     input.type = 'text';
     input.dataset.printerConsoleInput = 'true';
-    input.setAttribute('aria-label', 'G-code command');
-    input.placeholder = 'e.g. M115';
+    input.setAttribute('aria-label', t('ui.printerConsolePanel.gCodeCommand', 'G-code command'));
+    input.placeholder = t('ui.printerConsolePanel.eGM115', 'e.g. M115');
     input.autocomplete = 'off';
     input.spellcheck = false;
     input.style.cssText =
@@ -207,7 +208,7 @@ export class PrinterConsolePanel {
       if (entries.length === 0) {
         const empty = doc.createElement('p');
         empty.style.cssText = 'margin:0;opacity:0.6;';
-        empty.textContent = 'Nothing sent yet.';
+        empty.textContent = t('ui.printerConsolePanel.nothingSentYet', 'Nothing sent yet.');
         transcript.appendChild(empty);
       }
       for (const entry of entries) {
@@ -229,7 +230,10 @@ export class PrinterConsolePanel {
       if (macros.length === 0) {
         const empty = doc.createElement('p');
         empty.style.cssText = 'margin:0;font-size:12px;opacity:0.7;';
-        empty.textContent = 'Refresh to read the macros this printer defines.';
+        empty.textContent = t(
+          'ui.printerConsolePanel.refreshToReadTheMacros',
+          'Refresh to read the macros this printer defines.',
+        );
         macroList.appendChild(empty);
       }
       for (const macro of macros) {

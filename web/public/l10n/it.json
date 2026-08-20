@@ -16,6 +16,7 @@
   "action.edit_redo.label": "Ripeti",
   "action.edit_select_all.label": "Seleziona tutto",
   "action.edit_undo.label": "Annulla",
+  "action.file_export_all_stls.label": "Esporta tutti gli oggetti come STL multipli…",
   "action.file_export_gcode.label": "Esporta G-code…",
   "action.file_export_obj.label": "Esporta percorso strumento come OBJ…",
   "action.file_export_stl.label": "Esporta come STL unico…",
@@ -30,6 +31,7 @@
   "action.help_shortcuts.label": "Scorciatoie da tastiera",
   "action.help_tip_of_day.label": "Suggerimento del giorno",
   "action.help_tutorial.label": "Tutorial",
+  "action.instance_to_object.label": "Imposta come singolo oggetto",
   "action.load_model_from_path.label": "Carica",
   "action.paint_erase_all.label": "Cancella tutto",
   "action.presets_export_bundle.label": "Esporta pacchetto profili",
@@ -59,5 +61,10 @@
   "action.view_camera_top.label": "Vista dall'alto",
   "action.view_open_gcode.label": "Apri G-code…",
   "action.view_show_gcode_window.label": "Mostra finestra del G-code",
-  "action.view_show_navigator.label": "Mostra navigatore 3D"
+  "action.view_show_navigator.label": "Mostra navigatore 3D",
+  "actions.actionContext.keyboardShortcuts": "Scorciatoie da tastiera",
+  "ui.brimEarsPanel.brimEars": "Tesa ad orecchio",
+  "ui.generatedSettingsPanel.detailLevel": "Livello di dettaglio",
+  "ui.printSubmissionDialog.sendToPrinter": "Invia alla stampante",
+  "ui.semanticObjectEditor.heightRanges": "Intervalli di altezza"
 }

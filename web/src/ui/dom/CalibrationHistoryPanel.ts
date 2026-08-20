@@ -1,3 +1,4 @@
+import { t } from '../../l10n/t';
 /**
  * What this machine has been calibrated for (parity P8.5).
  *
@@ -73,7 +74,7 @@ export class CalibrationHistoryPanel {
     const doc = this.container.ownerDocument;
     const root = doc.createElement('section');
     root.dataset.calibrationHistoryPanel = 'true';
-    root.setAttribute('aria-label', 'Calibration history');
+    root.setAttribute('aria-label', t('ui.calibrationHistoryPanel.calibrationHistory', 'Calibration history'));
     root.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
 
     const header = doc.createElement('div');
@@ -156,7 +157,10 @@ export class CalibrationHistoryPanel {
     if (records.length === 0) {
       const empty = doc.createElement('p');
       empty.style.cssText = 'margin:0;font-size:12px;opacity:0.7;';
-      empty.textContent = 'No calibration results recorded on this device yet.';
+      empty.textContent = t(
+        'ui.calibrationHistoryPanel.noCalibrationResultsRecordedOn',
+        'No calibration results recorded on this device yet.',
+      );
       host.appendChild(empty);
       return;
     }
@@ -221,7 +225,7 @@ export class CalibrationHistoryPanel {
     apply.type = 'button';
     apply.className = 'action-btn';
     apply.dataset.calibrationHistoryApply = record.id;
-    apply.textContent = 'Save to preset';
+    apply.textContent = t('ui.calibrationHistoryPanel.saveToPreset', 'Save to preset');
     apply.title = application.summary;
     apply.style.cssText = 'margin:0;padding:3px 8px;font-size:11px;';
     apply.disabled = busy || !application.applicable;
@@ -300,7 +304,7 @@ export class CalibrationHistoryPanel {
     operator.type = 'text';
     operator.dataset.calibrationHistoryEntryOperator = 'true';
     operator.value = this.draftOperator;
-    operator.placeholder = 'who measured it';
+    operator.placeholder = t('ui.calibrationHistoryPanel.whoMeasuredIt', 'who measured it');
     operator.style.cssText = FIELD_STYLE;
     operator.addEventListener('input', () => {
       this.draftOperator = operator.value;
@@ -311,7 +315,7 @@ export class CalibrationHistoryPanel {
     submit.type = 'button';
     submit.className = 'action-btn';
     submit.dataset.calibrationHistorySubmit = 'true';
-    submit.textContent = 'Record result';
+    submit.textContent = t('ui.calibrationHistoryPanel.recordResult', 'Record result');
     submit.style.cssText = 'margin:0;';
     submit.disabled = busy;
     submit.addEventListener('click', () => {
@@ -375,7 +379,7 @@ export class CalibrationHistoryPanel {
       const line = doc.createElement('span');
       line.dataset.calibrationHistoryDelta = 'none';
       line.style.cssText = 'opacity:0.85;';
-      line.textContent = 'Both runs measured the same values.';
+      line.textContent = t('ui.calibrationHistoryPanel.bothRunsMeasuredTheSame', 'Both runs measured the same values.');
       host.appendChild(line);
     }
   }

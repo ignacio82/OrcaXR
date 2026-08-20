@@ -1,4 +1,5 @@
 import type { FilamentId } from '../../project/domain/ids';
+import { t } from '../../l10n/t';
 import type {
   CanonicalFilamentAssignableEntityRef,
   CanonicalFilamentAssignmentSnapshot,
@@ -116,7 +117,10 @@ export class FilamentAssignmentSelector {
     } else if (snapshot.scopes.length === 0) {
       const empty = document.createElement('p');
       empty.dataset.filamentAssignmentEmpty = 'true';
-      empty.textContent = 'Select one or more objects, parts, or height ranges to assign a filament.';
+      empty.textContent = t(
+        'ui.filamentAssignmentSelector.selectOneOrMoreObjects',
+        'Select one or more objects, parts, or height ranges to assign a filament.',
+      );
       empty.style.cssText = 'margin:0;color:var(--oxr-color-text-muted,#a0aab5);';
       fragment.appendChild(empty);
     }
@@ -128,7 +132,7 @@ export class FilamentAssignmentSelector {
       'display:grid;gap:8px;margin:0;padding:10px;border:1px solid var(--oxr-color-stroke,#ffffff2b);' +
       'border-radius:8px;min-width:0;';
     const legend = document.createElement('legend');
-    legend.textContent = 'Choose assignment';
+    legend.textContent = t('ui.filamentAssignmentSelector.chooseAssignment', 'Choose assignment');
     legend.style.cssText = 'padding:0 4px;font-weight:650;';
     fieldset.appendChild(legend);
     fieldset.appendChild(this.createInheritChoice(snapshot));
@@ -211,7 +215,7 @@ export class FilamentAssignmentSelector {
     label.appendChild(radio);
     const copy = document.createElement('span');
     const name = document.createElement('strong');
-    name.textContent = 'Default / inherit';
+    name.textContent = t('ui.filamentAssignmentSelector.defaultInherit', 'Default / inherit');
     const detail = document.createElement('span');
     detail.textContent = snapshot.scopes.some((scope) => scope.entity.kind === 'object')
       ? 'Remove local assignments. Objects return to no explicit default; child scopes inherit their object.'
@@ -236,7 +240,7 @@ export class FilamentAssignmentSelector {
     group.appendChild(title);
     if (options.length === 0) {
       const empty = document.createElement('p');
-      empty.textContent = 'No configured options.';
+      empty.textContent = t('ui.filamentAssignmentSelector.noConfiguredOptions', 'No configured options.');
       empty.style.cssText = 'margin:0;color:var(--oxr-color-text-muted,#a0aab5);';
       group.appendChild(empty);
       return group;

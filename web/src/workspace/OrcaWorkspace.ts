@@ -189,6 +189,7 @@ import { SlicerClient, type SlicerClientProjectRoute } from '../slicer/SlicerCli
 import { exportConfigJson, parseConfigJson } from '../features/ConfigIO';
 import { virtualFilamentsFromConfig, type VirtualFilament } from '../features/MixedFilamentPreview';
 import { xrIcon } from '../ui/icons';
+import { t } from '../l10n/t';
 
 export type WorkspacePresetId = NonNullable<SlicerProfile['machinePresetId']>;
 
@@ -994,14 +995,16 @@ export class OrcaWorkspace extends xb.Script {
   public convertSemanticVolumeRole(request: CanonicalSemanticVolumeRoleRequest): void {
     this.canonicalProject.convertSemanticVolumeRole(request);
     this.revalidatePublishedGcode();
-    this.setStatus('Updated the selected part role.');
+    this.setStatus(t('workspace.orcaWorkspace.updatedTheSelectedPartRole', 'Updated the selected part role.'));
   }
 
   public editSemanticLayerRange(request: CanonicalSemanticLayerRangeRequest): void {
     this.canonicalProject.editSemanticLayerRange(request);
     this.revalidatePublishedGcode();
     this.onSelectionChanged?.(false);
-    this.setStatus('Updated the selected object height ranges.');
+    this.setStatus(
+      t('workspace.orcaWorkspace.updatedTheSelectedObjectHeight', 'Updated the selected object height ranges.'),
+    );
   }
 
   /** Rename only entity kinds with a canonical editable-name command. */
@@ -1110,7 +1113,12 @@ export class OrcaWorkspace extends xb.Script {
           await this.catalog.load();
         }
         if (this.catalog.profiles.length === 0) {
-          this.setStatus('Profile catalog failed to load — check the connection and reload.');
+          this.setStatus(
+            t(
+              'workspace.orcaWorkspace.profileCatalogFailedToLoad',
+              'Profile catalog failed to load — check the connection and reload.',
+            ),
+          );
           return;
         }
         this.applyCatalogDefaultProfile();
@@ -1340,7 +1348,9 @@ export class OrcaWorkspace extends xb.Script {
   public dropSelectedToBed(): void {
     const selection = this.captureSelectedInstanceOrigins();
     if (!selection) {
-      this.setStatus('Select a model instance to drop to the bed.');
+      this.setStatus(
+        t('workspace.orcaWorkspace.selectAModelInstanceTo', 'Select a model instance to drop to the bed.'),
+      );
       return;
     }
     const result = this.canonicalProject.dropInstancesToBed(selection.origins.map((origin) => origin.instanceId));
@@ -1428,7 +1438,7 @@ export class OrcaWorkspace extends xb.Script {
       this.transformControls.detach();
       this.transformControls.getHelper().visible = false;
       this.remove(this.transformControls.getHelper());
-      this.setStatus('Model unselected');
+      this.setStatus(t('workspace.orcaWorkspace.modelUnselected', 'Model unselected'));
     }
     if (this.onSelectionChanged) this.onSelectionChanged(false);
   }
@@ -1661,7 +1671,7 @@ export class OrcaWorkspace extends xb.Script {
       if (event.key !== 'Escape' || !this.paintStroke) return;
       this.cancelPaintStroke();
       if (this.orbitControls) this.orbitControls.enabled = true;
-      this.setStatus('Paint stroke cancelled.');
+      this.setStatus(t('workspace.orcaWorkspace.paintStrokeCancelled', 'Paint stroke cancelled.'));
     };
     /**
      * Right-click classifies what is under the pointer and selects it (P11.2).
@@ -1834,7 +1844,7 @@ export class OrcaWorkspace extends xb.Script {
         (candidate: PaintPalette['entries'][number]) => candidate.filamentId === filamentId,
       );
       if (!entry) {
-        this.setStatus('That filament is not in this project.');
+        this.setStatus(t('workspace.orcaWorkspace.thatFilamentIsNotIn', 'That filament is not in this project.'));
         return;
       }
       if (!entry.selectable) {
@@ -1847,7 +1857,7 @@ export class OrcaWorkspace extends xb.Script {
     } else {
       this.paintFilamentId = undefined;
       this.paintMode = 'erase';
-      this.setStatus('Paint colour: erase to default');
+      this.setStatus(t('workspace.orcaWorkspace.paintColourEraseToDefault', 'Paint colour: erase to default'));
     }
     this.onPaintStateChanged?.();
   }
@@ -2011,7 +2021,9 @@ export class OrcaWorkspace extends xb.Script {
         this.smartPaintError = outcome.message;
         this.setStatus(`Smart Paint: ${outcome.message}`);
       } else if (outcome.status === 'cancelled') {
-        this.setStatus('Smart Paint was cancelled; nothing changed.');
+        this.setStatus(
+          t('workspace.orcaWorkspace.smartPaintWasCancelledNothing', 'Smart Paint was cancelled; nothing changed.'),
+        );
       } else {
         this.setStatus(
           `Smart Paint proposed ${outcome.preview.regions.length} region(s). Choose a destination, then apply.`,
@@ -2036,7 +2048,9 @@ export class OrcaWorkspace extends xb.Script {
     this.smartPaintSessionInstance?.cancel();
     this.smartPaintError = undefined;
     this.clearPaintPreview();
-    this.setStatus('Smart Paint mask discarded; the project is unchanged.');
+    this.setStatus(
+      t('workspace.orcaWorkspace.smartPaintMaskDiscardedThe', 'Smart Paint mask discarded; the project is unchanged.'),
+    );
     this.onSmartPaintStateChanged?.();
   }
 
@@ -2054,10 +2068,17 @@ export class OrcaWorkspace extends xb.Script {
         this.setStatus(this.smartPaintError);
         break;
       case 'cancelled':
-        this.setStatus('Smart Paint was cancelled; nothing changed.');
+        this.setStatus(
+          t('workspace.orcaWorkspace.smartPaintWasCancelledNothing2', 'Smart Paint was cancelled; nothing changed.'),
+        );
         break;
       default:
-        this.setStatus('Choose a destination for at least one region before applying.');
+        this.setStatus(
+          t(
+            'workspace.orcaWorkspace.chooseADestinationForAt',
+            'Choose a destination for at least one region before applying.',
+          ),
+        );
     }
     this.clearPaintPreview();
     this.refreshPaintOverlays();
@@ -2116,13 +2137,18 @@ export class OrcaWorkspace extends xb.Script {
   public measureTool(): void {
     this.setTool('measure');
     this.measurePicks = [];
-    this.setStatus('Measure: click two features (a face, edge, corner, or hole).');
+    this.setStatus(
+      t(
+        'workspace.orcaWorkspace.measureClickTwoFeaturesA',
+        'Measure: click two features (a face, edge, corner, or hole).',
+      ),
+    );
     this.onMeasureStateChanged?.();
   }
 
   public clearMeasureSelection(): void {
     this.measurePicks = [];
-    this.setStatus('Measurement cleared.');
+    this.setStatus(t('workspace.orcaWorkspace.measurementCleared', 'Measurement cleared.'));
     this.onMeasureStateChanged?.();
   }
 
@@ -2253,18 +2279,23 @@ export class OrcaWorkspace extends xb.Script {
   /** Commit one pinned alignment as a single undoable instance transform. */
   public applyAssemblyAlignment(kind: AssemblyAlignmentKind, parameter?: number): boolean {
     if (this.measurePicks.length < 2) {
-      this.setStatus('Pick two faces before aligning.');
+      this.setStatus(t('workspace.orcaWorkspace.pickTwoFacesBeforeAligning', 'Pick two faces before aligning.'));
       return false;
     }
     const [first, second] = this.measurePicks;
     const target = second.instanceId;
     if (!target || target === first.instanceId) {
-      this.setStatus('Assembly alignment needs two faces on different models.');
+      this.setStatus(
+        t(
+          'workspace.orcaWorkspace.assemblyAlignmentNeedsTwoFaces',
+          'Assembly alignment needs two faces on different models.',
+        ),
+      );
       return false;
     }
     const current = this.canonicalProject.getInstanceTransform(target);
     if (!current) {
-      this.setStatus('The model to align is no longer on this plate.');
+      this.setStatus(t('workspace.orcaWorkspace.theModelToAlignIs', 'The model to align is no longer on this plate.'));
       return false;
     }
     try {
@@ -2276,7 +2307,9 @@ export class OrcaWorkspace extends xb.Script {
         ...(parameter !== undefined ? { parameter } : {}),
       });
       if (plan.noop) {
-        this.setStatus('Those faces are already aligned; nothing moved.');
+        this.setStatus(
+          t('workspace.orcaWorkspace.thoseFacesAreAlreadyAligned', 'Those faces are already aligned; nothing moved.'),
+        );
         return false;
       }
       this.canonicalProject.setInstanceTransform(target, plan.transform);
@@ -2315,7 +2348,12 @@ export class OrcaWorkspace extends xb.Script {
     }[],
   ): boolean {
     if (slots.length === 0) {
-      this.setStatus('The printer reported no loaded filament slots; nothing was changed.');
+      this.setStatus(
+        t(
+          'workspace.orcaWorkspace.thePrinterReportedNoLoaded',
+          'The printer reported no loaded filament slots; nothing was changed.',
+        ),
+      );
       return false;
     }
     try {
@@ -2532,7 +2570,7 @@ export class OrcaWorkspace extends xb.Script {
   public applyEmboss(): boolean {
     const font = this.embossFont;
     if (!font) {
-      this.setStatus('Choose a .ttf font file before embossing.');
+      this.setStatus(t('workspace.orcaWorkspace.chooseATtfFontFile', 'Choose a .ttf font file before embossing.'));
       return false;
     }
     const volumeId = this.embossTargetVolume();
@@ -2568,7 +2606,9 @@ export class OrcaWorkspace extends xb.Script {
   private addEmbossToSelectedObject(source: GlyphOutlineSource): EmbossedMesh | undefined {
     const objectId = this.brimEarTargetObject();
     if (!objectId) {
-      this.setStatus('Select one model part to add embossed text to.');
+      this.setStatus(
+        t('workspace.orcaWorkspace.selectOneModelPartTo', 'Select one model part to add embossed text to.'),
+      );
       return undefined;
     }
     return this.canonicalProject.addEmbossText(objectId, this.embossRecipe, source).mesh;
@@ -2597,7 +2637,12 @@ export class OrcaWorkspace extends xb.Script {
 
   public exportDiagnostics(): void {
     if (!this.onRequestDiagnosticsExport) {
-      this.setStatus('Diagnostics export is unavailable in this shell.');
+      this.setStatus(
+        t(
+          'workspace.orcaWorkspace.diagnosticsExportIsUnavailableIn',
+          'Diagnostics export is unavailable in this shell.',
+        ),
+      );
       return;
     }
     void this.onRequestDiagnosticsExport();
@@ -2677,7 +2722,7 @@ export class OrcaWorkspace extends xb.Script {
   public applySvgPart(): boolean {
     const drawing = this.svgDrawing;
     if (!drawing) {
-      this.setStatus('Choose an .svg file before adding a part.');
+      this.setStatus(t('workspace.orcaWorkspace.chooseAnSvgFileBefore', 'Choose an .svg file before adding a part.'));
       return false;
     }
     const options = {
@@ -2693,7 +2738,9 @@ export class OrcaWorkspace extends xb.Script {
       } else {
         const objectId = this.brimEarTargetObject();
         if (!objectId) {
-          this.setStatus('Select one model part to add the drawing to.');
+          this.setStatus(
+            t('workspace.orcaWorkspace.selectOneModelPartTo2', 'Select one model part to add the drawing to.'),
+          );
           return false;
         }
         prepared = this.canonicalProject.addSvgPart(objectId, drawing.source, options).prepared;
@@ -2734,7 +2781,9 @@ export class OrcaWorkspace extends xb.Script {
 
   public brimEarsTool(): void {
     this.setTool('brim_ears');
-    this.setStatus('Brim ears: click the model where an ear should sit.');
+    this.setStatus(
+      t('workspace.orcaWorkspace.brimEarsClickTheModel', 'Brim ears: click the model where an ear should sit.'),
+    );
     this.notifyBrimEarChange();
   }
 
@@ -2873,14 +2922,18 @@ export class OrcaWorkspace extends xb.Script {
   public autoPlaceBrimEars(): boolean {
     const objectId = this.brimEarTargetObject();
     if (!objectId) {
-      this.setStatus('Select one model part before placing brim ears on it.');
+      this.setStatus(
+        t('workspace.orcaWorkspace.selectOneModelPartBefore', 'Select one model part before placing brim ears on it.'),
+      );
       return false;
     }
     const target = this.paintTargets().find((record) => record.objectId === objectId);
     const geometry = (target?.display as THREE.Mesh | undefined)?.geometry;
     const position = geometry?.getAttribute('position');
     if (!position) {
-      this.setStatus('That part has no geometry to read corners from.');
+      this.setStatus(
+        t('workspace.orcaWorkspace.thatPartHasNoGeometry', 'That part has no geometry to read corners from.'),
+      );
       return false;
     }
     const detected = detectBrimEars(
@@ -2916,15 +2969,17 @@ export class OrcaWorkspace extends xb.Script {
   public clearBrimEars(): boolean {
     const objectId = this.brimEarTargetObject();
     if (!objectId) {
-      this.setStatus('Select one model part before clearing its brim ears.');
+      this.setStatus(
+        t('workspace.orcaWorkspace.selectOneModelPartBefore2', 'Select one model part before clearing its brim ears.'),
+      );
       return false;
     }
     if (this.canonicalProject.getBrimEars(objectId).length === 0) {
-      this.setStatus('That part has no brim ears.');
+      this.setStatus(t('workspace.orcaWorkspace.thatPartHasNoBrim', 'That part has no brim ears.'));
       return false;
     }
     this.canonicalProject.clearBrimEars(objectId);
-    this.setStatus('Cleared the brim ears; undo restores them.');
+    this.setStatus(t('workspace.orcaWorkspace.clearedTheBrimEarsUndo', 'Cleared the brim ears; undo restores them.'));
     this.notifyBrimEarChange();
     return true;
   }
@@ -2934,7 +2989,7 @@ export class OrcaWorkspace extends xb.Script {
     if (!objectId) return false;
     try {
       this.canonicalProject.removeBrimEar(objectId, index);
-      this.setStatus('Removed a brim ear.');
+      this.setStatus(t('workspace.orcaWorkspace.removedABrimEar', 'Removed a brim ear.'));
       this.notifyBrimEarChange();
       return true;
     } catch (error) {
@@ -2958,7 +3013,9 @@ export class OrcaWorkspace extends xb.Script {
   private placeBrimEar(raycaster: THREE.Raycaster): boolean {
     const objectId = this.brimEarTargetObject();
     if (!objectId) {
-      this.setStatus('Select one model part before placing brim ears.');
+      this.setStatus(
+        t('workspace.orcaWorkspace.selectOneModelPartBefore3', 'Select one model part before placing brim ears.'),
+      );
       return false;
     }
     for (const target of this.paintTargets()) {
@@ -2984,7 +3041,9 @@ export class OrcaWorkspace extends xb.Script {
         return false;
       }
     }
-    this.setStatus('Click the selected model to place a brim ear.');
+    this.setStatus(
+      t('workspace.orcaWorkspace.clickTheSelectedModelTo', 'Click the selected model to place a brim ear.'),
+    );
     return false;
   }
 
@@ -3020,7 +3079,12 @@ export class OrcaWorkspace extends xb.Script {
           m[15],
         ]);
         if (!worldFeature) {
-          this.setStatus('That hole is scaled unevenly, so it has no single radius to measure.');
+          this.setStatus(
+            t(
+              'workspace.orcaWorkspace.thatHoleIsScaledUnevenly',
+              'That hole is scaled unevenly, so it has no single radius to measure.',
+            ),
+          );
           this.onMeasureStateChanged?.();
           return false;
         }
@@ -3038,7 +3102,7 @@ export class OrcaWorkspace extends xb.Script {
         return false;
       }
     }
-    this.setStatus('Click a model surface to measure it.');
+    this.setStatus(t('workspace.orcaWorkspace.clickAModelSurfaceTo', 'Click a model surface to measure it.'));
     return false;
   }
 
@@ -3466,7 +3530,9 @@ export class OrcaWorkspace extends xb.Script {
 
   public addFilamentSlot(): void {
     if (this.palette.count() >= 16) {
-      this.setStatus('The 16-slot filament limit has been reached.');
+      this.setStatus(
+        t('workspace.orcaWorkspace.the16SlotFilamentLimit', 'The 16-slot filament limit has been reached.'),
+      );
       return;
     }
     this.headFilaments.push(this.headSelectionFromProfile(this.profile));
@@ -4544,7 +4610,12 @@ export class OrcaWorkspace extends xb.Script {
 
   public async testPrinterConnection(): Promise<void> {
     if (!this.onRequestPrinterConnectionTest) {
-      this.setStatus('Printer connection is unavailable in this shell.');
+      this.setStatus(
+        t(
+          'workspace.orcaWorkspace.printerConnectionIsUnavailableIn',
+          'Printer connection is unavailable in this shell.',
+        ),
+      );
       return;
     }
     await this.onRequestPrinterConnectionTest();
@@ -4552,7 +4623,12 @@ export class OrcaWorkspace extends xb.Script {
 
   public async inspectPrinterFilaments(): Promise<void> {
     if (!this.onRequestPrinterFilamentInspection) {
-      this.setStatus('Printer filament inspection is unavailable in this shell.');
+      this.setStatus(
+        t(
+          'workspace.orcaWorkspace.printerFilamentInspectionIsUnavailable',
+          'Printer filament inspection is unavailable in this shell.',
+        ),
+      );
       return;
     }
     await this.onRequestPrinterFilamentInspection();
@@ -4565,12 +4641,19 @@ export class OrcaWorkspace extends xb.Script {
    */
   public async sendToPrinter(): Promise<void> {
     if (!this.onRequestPrintSubmission) {
-      this.setStatus('Sending to a printer is unavailable in this shell.');
+      this.setStatus(
+        t('workspace.orcaWorkspace.sendingToAPrinterIs', 'Sending to a printer is unavailable in this shell.'),
+      );
       return;
     }
     const gcode = this.getLastGcode();
     if (!gcode) {
-      this.setStatus('Slice the active plate before sending it to the printer.');
+      this.setStatus(
+        t(
+          'workspace.orcaWorkspace.sliceTheActivePlateBefore',
+          'Slice the active plate before sending it to the printer.',
+        ),
+      );
       return;
     }
     const summary = this.canonicalProject.getSummary();
@@ -4591,7 +4674,9 @@ export class OrcaWorkspace extends xb.Script {
    */
   public async controlPrintJob(command: PrintJobCommand, options?: { readonly preconfirmed?: boolean }): Promise<void> {
     if (!this.onRequestPrintJobCommand) {
-      this.setStatus('Printer controls are unavailable in this shell.');
+      this.setStatus(
+        t('workspace.orcaWorkspace.printerControlsAreUnavailableIn', 'Printer controls are unavailable in this shell.'),
+      );
       return;
     }
     await this.onRequestPrintJobCommand(command, options);
@@ -4606,7 +4691,9 @@ export class OrcaWorkspace extends xb.Script {
    */
   public async operatePrinterStorage(operation: PrinterStorageOperation): Promise<void> {
     if (!this.onRequestPrinterStorage) {
-      this.setStatus('Printer storage is unavailable in this shell.');
+      this.setStatus(
+        t('workspace.orcaWorkspace.printerStorageIsUnavailableIn', 'Printer storage is unavailable in this shell.'),
+      );
       return;
     }
     await this.onRequestPrinterStorage(operation);
@@ -4621,7 +4708,12 @@ export class OrcaWorkspace extends xb.Script {
    */
   public async operatePrinterConsole(operation: PrinterConsoleOperation): Promise<void> {
     if (!this.onRequestPrinterConsole) {
-      this.setStatus('The printer console is unavailable in this shell.');
+      this.setStatus(
+        t(
+          'workspace.orcaWorkspace.thePrinterConsoleIsUnavailable',
+          'The printer console is unavailable in this shell.',
+        ),
+      );
       return;
     }
     await this.onRequestPrinterConsole(operation);
@@ -4630,7 +4722,9 @@ export class OrcaWorkspace extends xb.Script {
   /** Ask the shell for one page of the printer's own job history (P9.6). */
   public async loadPrintHistory(start = 0): Promise<void> {
     if (!this.onRequestPrintHistory) {
-      this.setStatus('Print history is unavailable in this shell.');
+      this.setStatus(
+        t('workspace.orcaWorkspace.printHistoryIsUnavailableIn', 'Print history is unavailable in this shell.'),
+      );
       return;
     }
     await this.onRequestPrintHistory(start);
@@ -4639,7 +4733,9 @@ export class OrcaWorkspace extends xb.Script {
   /** Discover the printer's cameras, optionally selecting one (P9.6). */
   public async viewPrinterCamera(uid?: string): Promise<void> {
     if (!this.onRequestPrinterCamera) {
-      this.setStatus('Printer cameras are unavailable in this shell.');
+      this.setStatus(
+        t('workspace.orcaWorkspace.printerCamerasAreUnavailableIn', 'Printer cameras are unavailable in this shell.'),
+      );
       return;
     }
     await this.onRequestPrinterCamera(uid);
@@ -4660,7 +4756,12 @@ export class OrcaWorkspace extends xb.Script {
    */
   public togglePrinterStatusBar(): void {
     if (!this.onTogglePrinterStatusBar) {
-      this.setStatus('The printer status surface is unavailable in this shell.');
+      this.setStatus(
+        t(
+          'workspace.orcaWorkspace.thePrinterStatusSurfaceIs',
+          'The printer status surface is unavailable in this shell.',
+        ),
+      );
       return;
     }
     this.onTogglePrinterStatusBar();
@@ -4675,7 +4776,12 @@ export class OrcaWorkspace extends xb.Script {
    */
   public async operateCalibrationHistory(operation: CalibrationHistoryOperation): Promise<void> {
     if (!this.onRequestCalibrationHistory) {
-      this.setStatus('Calibration history is unavailable in this shell.');
+      this.setStatus(
+        t(
+          'workspace.orcaWorkspace.calibrationHistoryIsUnavailableIn',
+          'Calibration history is unavailable in this shell.',
+        ),
+      );
       return;
     }
     await this.onRequestCalibrationHistory(operation);
@@ -4683,7 +4789,9 @@ export class OrcaWorkspace extends xb.Script {
 
   public async operatePresetLibrary(operation: PresetLibraryOperation): Promise<void> {
     if (!this.onRequestPresetLibrary) {
-      this.setStatus('Printer and preset setup is unavailable in this shell.');
+      this.setStatus(
+        t('workspace.orcaWorkspace.printerAndPresetSetupIs', 'Printer and preset setup is unavailable in this shell.'),
+      );
       return;
     }
     await this.onRequestPresetLibrary(operation);
@@ -4706,18 +4814,18 @@ export class OrcaWorkspace extends xb.Script {
   public exportActiveConfig() {
     const json = this.buildConfigJson();
     if (!json) {
-      this.setStatus('No active profile to export.');
+      this.setStatus(t('workspace.orcaWorkspace.noActiveProfileToExport', 'No active profile to export.'));
       return;
     }
     if (this.onDownloadFile) this.onDownloadFile('orcaxr_config.json', json, 'application/json');
-    this.setStatus('Exported config.');
+    this.setStatus(t('workspace.orcaWorkspace.exportedConfig', 'Exported config.'));
   }
 
   /** Apply an imported config bundle over the current profile (File → Import Config). */
   public importConfig(text: string): boolean {
     const b = parseConfigJson(text);
     if (!b) {
-      this.setStatus('Not a valid config file.');
+      this.setStatus(t('workspace.orcaWorkspace.notAValidConfigFile', 'Not a valid config file.'));
       return false;
     }
     // Merge over the current config so a partial bundle still yields a working
@@ -4748,12 +4856,21 @@ export class OrcaWorkspace extends xb.Script {
 
   public showLanguagePicker(): void {
     if (this.onShowLanguagePicker) this.onShowLanguagePicker();
-    else this.setStatus('Language selection is unavailable in this shell.');
+    else
+      this.setStatus(
+        t(
+          'workspace.orcaWorkspace.languageSelectionIsUnavailableIn',
+          'Language selection is unavailable in this shell.',
+        ),
+      );
   }
 
   public showHelpSearch(): void {
     if (this.onShowHelpSearch) this.onShowHelpSearch();
-    else this.setStatus('Help search is unavailable in this shell.');
+    else
+      this.setStatus(
+        t('workspace.orcaWorkspace.helpSearchIsUnavailableIn', 'Help search is unavailable in this shell.'),
+      );
   }
 
   public showModal(title: string, bodyHtml: string) {
@@ -4795,7 +4912,7 @@ export class OrcaWorkspace extends xb.Script {
           if (!confirm) throw new Error('This import changes or drops source data and needs a confirmation surface.');
           const decision = await confirm(preview);
           if (!decision) {
-            this.setStatus('Import cancelled.');
+            this.setStatus(t('workspace.orcaWorkspace.importCancelled', 'Import cancelled.'));
             return 0;
           }
           prepared.confirm(decision);
@@ -4856,7 +4973,7 @@ export class OrcaWorkspace extends xb.Script {
         if (!confirm) throw new Error('Geometry import needs an explicit confirmation surface.');
         const decision = await confirm(preview);
         if (!decision) {
-          this.setStatus('Import cancelled.');
+          this.setStatus(t('workspace.orcaWorkspace.importCancelled2', 'Import cancelled.'));
           return 0;
         }
         prepared.confirm(decision);
@@ -5292,7 +5409,12 @@ export class OrcaWorkspace extends xb.Script {
    */
   public setExplosionFactor(factor: number): boolean {
     if (!Number.isFinite(factor) || factor < 1) {
-      this.setStatus('An explosion factor must be at least 1, where 1 is fully assembled.');
+      this.setStatus(
+        t(
+          'workspace.orcaWorkspace.anExplosionFactorMustBe',
+          'An explosion factor must be at least 1, where 1 is fully assembled.',
+        ),
+      );
       return false;
     }
     this.explosionFactor = factor;
@@ -5358,7 +5480,7 @@ export class OrcaWorkspace extends xb.Script {
   /** Set one parameter, as text — parsing belongs to the form, not here. */
   public setCalibrationParameter(key: string, text: string): boolean {
     if (key.length === 0) {
-      this.setStatus('A calibration parameter needs a name.');
+      this.setStatus(t('workspace.orcaWorkspace.aCalibrationParameterNeedsA', 'A calibration parameter needs a name.'));
       return false;
     }
     this.calibrationEdits = { ...this.calibrationEdits, [key]: text };
@@ -5384,7 +5506,7 @@ export class OrcaWorkspace extends xb.Script {
   /** Give the operator their project back, exactly as it was. */
   public discardCalibrationSession(): boolean {
     if (!this.canonicalProject.cancelCalibrationSession()) {
-      this.setStatus('There is no calibration to discard.');
+      this.setStatus(t('workspace.orcaWorkspace.thereIsNoCalibrationTo', 'There is no calibration to discard.'));
       return false;
     }
     // Same refresh the New Project path performs after a wholesale canonical
@@ -5395,7 +5517,12 @@ export class OrcaWorkspace extends xb.Script {
     this.onDownloadReady?.(false);
     this.onSelectionChanged?.(false);
     this.onPlatesChanged?.();
-    this.setStatus('Calibration discarded; your project is back exactly as it was.');
+    this.setStatus(
+      t(
+        'workspace.orcaWorkspace.calibrationDiscardedYourProjectIs',
+        'Calibration discarded; your project is back exactly as it was.',
+      ),
+    );
     this.onCalibrationSessionChanged?.();
     return true;
   }
@@ -5403,10 +5530,15 @@ export class OrcaWorkspace extends xb.Script {
   /** Keep the calibration as the project, and let the held one go. */
   public keepCalibrationSession(): boolean {
     if (!this.canonicalProject.keepCalibrationSession()) {
-      this.setStatus('There is no calibration to keep.');
+      this.setStatus(t('workspace.orcaWorkspace.thereIsNoCalibrationTo2', 'There is no calibration to keep.'));
       return false;
     }
-    this.setStatus('Kept the calibration as your project; the held one was discarded.');
+    this.setStatus(
+      t(
+        'workspace.orcaWorkspace.keptTheCalibrationAsYour',
+        'Kept the calibration as your project; the held one was discarded.',
+      ),
+    );
     this.onCalibrationSessionChanged?.();
     return true;
   }
@@ -5506,7 +5638,7 @@ export class OrcaWorkspace extends xb.Script {
       this.onSelectionChanged?.(false);
       this.setStatus(`Deleted plate; switched to ${next.name}.`);
     } else {
-      this.setStatus('Plate deleted.');
+      this.setStatus(t('workspace.orcaWorkspace.plateDeleted', 'Plate deleted.'));
     }
     this.onPlatesChanged?.();
   }
@@ -5519,7 +5651,7 @@ export class OrcaWorkspace extends xb.Script {
 
   public reorderPlates(ids: readonly PlateId[], expectedRevision?: number): void {
     this.canonicalProject.reorderPlates(ids, expectedRevision);
-    this.setStatus('Reordered build plates.');
+    this.setStatus(t('workspace.orcaWorkspace.reorderedBuildPlates', 'Reordered build plates.'));
     this.onPlatesChanged?.();
   }
 
@@ -5556,7 +5688,7 @@ export class OrcaWorkspace extends xb.Script {
     this.cancelSimplifyPreview();
     const volumes = this.paintableSelectedVolumes();
     if (volumes.length === 0) {
-      this.setStatus('Select a model to simplify.');
+      this.setStatus(t('workspace.orcaWorkspace.selectAModelToSimplify', 'Select a model to simplify.'));
       return false;
     }
     const prepared: PreparedSimplify[] = [];
@@ -5601,7 +5733,7 @@ export class OrcaWorkspace extends xb.Script {
   public applySimplifyPreview(): boolean {
     const session = this.simplifyPreview;
     if (!session) {
-      this.setStatus('There is no simplify preview to apply.');
+      this.setStatus(t('workspace.orcaWorkspace.thereIsNoSimplifyPreview', 'There is no simplify preview to apply.'));
       return false;
     }
     let before = 0;
@@ -5674,7 +5806,7 @@ export class OrcaWorkspace extends xb.Script {
   public simplifySelected(decimateRatio = 50): boolean {
     const volumes = this.paintableSelectedVolumes();
     if (volumes.length === 0) {
-      this.setStatus('Select a model to simplify.');
+      this.setStatus(t('workspace.orcaWorkspace.selectAModelToSimplify2', 'Select a model to simplify.'));
       return false;
     }
     let before = 0;
@@ -5696,7 +5828,7 @@ export class OrcaWorkspace extends xb.Script {
       }
     }
     if (changed === 0) {
-      this.setStatus('Nothing to simplify at that ratio.');
+      this.setStatus(t('workspace.orcaWorkspace.nothingToSimplifyAtThat', 'Nothing to simplify at that ratio.'));
       return false;
     }
     this.refreshPaintOverlays();
@@ -6027,7 +6159,9 @@ export class OrcaWorkspace extends xb.Script {
   /** Apply a bounded preview view change and redraw. */
   public updatePreviewView(patch: GcodePreviewViewPatch): boolean {
     if (!this.previewSession) {
-      this.setStatus('Slice or open G-code before changing the preview.');
+      this.setStatus(
+        t('workspace.orcaWorkspace.sliceOrOpenGCode', 'Slice or open G-code before changing the preview.'),
+      );
       return false;
     }
     try {
@@ -6057,7 +6191,7 @@ export class OrcaWorkspace extends xb.Script {
   togglePreview(): boolean {
     if (this.previewOn) {
       this.clearToolpathPreview();
-      this.setStatus('model view');
+      this.setStatus(t('workspace.orcaWorkspace.modelView', 'model view'));
       return true;
     } else {
       const gcode = this.getLastGcode();
@@ -6070,7 +6204,7 @@ export class OrcaWorkspace extends xb.Script {
         return false;
       }
       if (!this.showToolpathPreview(gcode)) return false;
-      this.setStatus('toolpath preview');
+      this.setStatus(t('workspace.orcaWorkspace.toolpathPreview', 'toolpath preview'));
       return true;
     }
   }
@@ -6080,7 +6214,7 @@ export class OrcaWorkspace extends xb.Script {
     const selected = this.selectedModel;
     const instance = selected ? this.canonicalProject.getInstance(selected.instanceId) : undefined;
     if (!selected || !instance) {
-      this.setStatus('no model');
+      this.setStatus(t('workspace.orcaWorkspace.noModel', 'no model'));
       return;
     }
     let transform = instance.transform;
@@ -6399,7 +6533,7 @@ export class OrcaWorkspace extends xb.Script {
     utility('tune', 'Profile settings', () => this.toggleProfilePanel());
     utility('view_default', 'Recenter workspace', () => {
       this.needsRecenter = true;
-      this.setStatus('Recentering workspace…');
+      this.setStatus(t('workspace.orcaWorkspace.recenteringWorkspace', 'Recentering workspace…'));
     });
 
     const exitBtn = new UIPanel({
@@ -6851,7 +6985,9 @@ export class OrcaWorkspace extends xb.Script {
         // prior tool and making the control feel broken.
         this.actionContext.setMode('prepare');
         this.actionContext.setTool('paint');
-        this.setStatus('Paint mode — choose a color, then pinch the model');
+        this.setStatus(
+          t('workspace.orcaWorkspace.paintModeChooseAColor', 'Paint mode — choose a color, then pinch the model'),
+        );
       } else if (mode === 'preview') {
         this.actionContext.setMode('preview');
         if (!this.previewOn) this.actionContext.togglePreview();
@@ -7556,7 +7692,9 @@ export class OrcaWorkspace extends xb.Script {
       return;
     }
     if (tool === 'lay_on_face') {
-      this.setStatus('Lay flat: click the facet that should rest on the bed.');
+      this.setStatus(
+        t('workspace.orcaWorkspace.layFlatClickTheFacet', 'Lay flat: click the facet that should rest on the bed.'),
+      );
       return;
     }
     this.setStatus(`tool: ${tool} - pinch-drag the model`);
@@ -7568,7 +7706,12 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public autoOrientSelectedModel() {
-    this.setStatus('Auto-orient is unavailable until its analysis commits a canonical transform.');
+    this.setStatus(
+      t(
+        'workspace.orcaWorkspace.autoOrientIsUnavailableUntil',
+        'Auto-orient is unavailable until its analysis commits a canonical transform.',
+      ),
+    );
   }
 
   /** Stable instance IDs the transform actions operate on. */
@@ -7581,11 +7724,13 @@ export class OrcaWorkspace extends xb.Script {
   public addInstanceToSelection(): boolean {
     const duplicate = this.canonicalProject.duplicateSelectedInstance();
     if (!duplicate) {
-      this.setStatus('Select a model to add another instance.');
+      this.setStatus(t('workspace.orcaWorkspace.selectAModelToAdd', 'Select a model to add another instance.'));
       return false;
     }
     this.recomputePreflight();
-    this.setStatus('Added an instance — arrange or move it into place.');
+    this.setStatus(
+      t('workspace.orcaWorkspace.addedAnInstanceArrangeOr', 'Added an instance — arrange or move it into place.'),
+    );
     return true;
   }
 
@@ -7593,7 +7738,7 @@ export class OrcaWorkspace extends xb.Script {
   public fillPlateWithSelection(): number {
     const primary = this.canonicalProject.getSummary().selectedInstanceIds.at(-1);
     if (!primary) {
-      this.setStatus('Select a model to fill the plate with.');
+      this.setStatus(t('workspace.orcaWorkspace.selectAModelToFill', 'Select a model to fill the plate with.'));
       return 0;
     }
     try {
@@ -7620,7 +7765,7 @@ export class OrcaWorkspace extends xb.Script {
   public mirrorSelected(axis: 'x' | 'y' | 'z'): boolean {
     const instances = this.selectedInstanceIdsForTransform();
     if (instances.length === 0) {
-      this.setStatus('Select a model to mirror.');
+      this.setStatus(t('workspace.orcaWorkspace.selectAModelToMirror', 'Select a model to mirror.'));
       return false;
     }
     try {
@@ -7638,7 +7783,7 @@ export class OrcaWorkspace extends xb.Script {
   public resetSelectedTransform(target: 'rotation' | 'scale' | 'both'): boolean {
     const instances = this.selectedInstanceIdsForTransform();
     if (instances.length === 0) {
-      this.setStatus('Select a model to reset.');
+      this.setStatus(t('workspace.orcaWorkspace.selectAModelToReset', 'Select a model to reset.'));
       return false;
     }
     try {
@@ -7672,14 +7817,14 @@ export class OrcaWorkspace extends xb.Script {
       try {
         this.canonicalProject.layInstanceOnFace(instance, normal);
         this.recomputePreflight();
-        this.setStatus('Laid the chosen facet on the bed.');
+        this.setStatus(t('workspace.orcaWorkspace.laidTheChosenFacetOn', 'Laid the chosen facet on the bed.'));
         return true;
       } catch (error) {
         this.setStatus(`Lay flat failed: ${(error as Error).message}`);
         return false;
       }
     }
-    this.setStatus('Click a model facet to lay it flat.');
+    this.setStatus(t('workspace.orcaWorkspace.clickAModelFacetTo', 'Click a model facet to lay it flat.'));
     return false;
   }
 
@@ -7694,14 +7839,21 @@ export class OrcaWorkspace extends xb.Script {
     let instances = this.selectedInstanceIdsForTransform();
     if (instances.length === 0) instances = this.projectedModels(this.activePlateId).map((entry) => entry.instanceId);
     if (instances.length === 0) {
-      this.setStatus('Add a model before scaling to the build volume.');
+      this.setStatus(
+        t('workspace.orcaWorkspace.addAModelBeforeScaling', 'Add a model before scaling to the build volume.'),
+      );
       return false;
     }
     const config = this.canonicalProject.getSlicingConfiguration().config as Record<string, unknown>;
     const raw = config['printable_height'];
     const height = Number.parseFloat(String(Array.isArray(raw) ? raw[0] : (raw ?? '')));
     if (!Number.isFinite(height) || height <= 0) {
-      this.setStatus('This printer profile states no printable height, so a fitting scale cannot be computed.');
+      this.setStatus(
+        t(
+          'workspace.orcaWorkspace.thisPrinterProfileStatesNo',
+          'This printer profile states no printable height, so a fitting scale cannot be computed.',
+        ),
+      );
       return false;
     }
     try {
@@ -7733,7 +7885,9 @@ export class OrcaWorkspace extends xb.Script {
   public toggleSelectedPrintable(): boolean {
     const instances = this.selectedInstanceIdsForTransform();
     if (instances.length === 0) {
-      this.setStatus('Select a model before changing whether it prints.');
+      this.setStatus(
+        t('workspace.orcaWorkspace.selectAModelBeforeChanging', 'Select a model before changing whether it prints.'),
+      );
       return false;
     }
     try {
@@ -7757,7 +7911,7 @@ export class OrcaWorkspace extends xb.Script {
     let instances = this.selectedInstanceIdsForTransform();
     if (instances.length === 0) instances = this.projectedModels(this.activePlateId).map((entry) => entry.instanceId);
     if (instances.length === 0) {
-      this.setStatus('Add a model before centring the plate.');
+      this.setStatus(t('workspace.orcaWorkspace.addAModelBeforeCentring', 'Add a model before centring the plate.'));
       return false;
     }
     try {
@@ -8037,7 +8191,7 @@ export class OrcaWorkspace extends xb.Script {
     if (changed) {
       this.syncTransformProxy();
       this.revalidatePublishedGcode();
-      this.setStatus('Undid the last project edit.');
+      this.setStatus(t('workspace.orcaWorkspace.undidTheLastProjectEdit', 'Undid the last project edit.'));
     }
     return changed;
   }
@@ -8047,7 +8201,7 @@ export class OrcaWorkspace extends xb.Script {
     if (changed) {
       this.syncTransformProxy();
       this.revalidatePublishedGcode();
-      this.setStatus('Redid the project edit.');
+      this.setStatus(t('workspace.orcaWorkspace.redidTheProjectEdit', 'Redid the project edit.'));
     }
     return changed;
   }
@@ -8060,7 +8214,12 @@ export class OrcaWorkspace extends xb.Script {
 
   /** Delete every model on the ACTIVE plate (Orca's Edit → Delete all). */
   public deleteAllModels() {
-    this.setStatus('Delete All is unavailable until it is one canonical transaction.');
+    this.setStatus(
+      t(
+        'workspace.orcaWorkspace.deleteAllIsUnavailableUntil',
+        'Delete All is unavailable until it is one canonical transaction.',
+      ),
+    );
   }
 
   /**
@@ -8073,7 +8232,12 @@ export class OrcaWorkspace extends xb.Script {
     if (dirty) {
       const confirm = this.onRequestNewProjectConfirmation;
       if (!confirm || !(await confirm(true))) {
-        this.setStatus('New Project cancelled; the current project was not changed.');
+        this.setStatus(
+          t(
+            'workspace.orcaWorkspace.newProjectCancelledTheCurrent',
+            'New Project cancelled; the current project was not changed.',
+          ),
+        );
         return false;
       }
     }
@@ -8083,7 +8247,7 @@ export class OrcaWorkspace extends xb.Script {
     this.onDownloadReady?.(false);
     this.onSelectionChanged?.(false);
     this.onPlatesChanged?.();
-    this.setStatus('Started a new project.');
+    this.setStatus(t('workspace.orcaWorkspace.startedANewProject', 'Started a new project.'));
     return true;
   }
 
@@ -8093,11 +8257,13 @@ export class OrcaWorkspace extends xb.Script {
    */
   public cloneSelectedModel() {
     if (!this.selectedModel) {
-      this.setStatus('Select a model to clone first.');
+      this.setStatus(t('workspace.orcaWorkspace.selectAModelToClone', 'Select a model to clone first.'));
       return;
     }
     this.canonicalProject.duplicateSelectedInstance();
-    this.setStatus('Model cloned — use the Move tool to reposition the copy.');
+    this.setStatus(
+      t('workspace.orcaWorkspace.modelClonedUseTheMove', 'Model cloned — use the Move tool to reposition the copy.'),
+    );
   }
 
   public async splitSelectedToObjects(): Promise<boolean> {
@@ -8112,7 +8278,12 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public cutSelectedByPlane() {
-    this.setStatus('Cut is unavailable until topology and annotations commit atomically.');
+    this.setStatus(
+      t(
+        'workspace.orcaWorkspace.cutIsUnavailableUntilTopology',
+        'Cut is unavailable until topology and annotations commit atomically.',
+      ),
+    );
   }
   // --- Edit clipboard (canonical implementation pending) ----------------
   public get hasClipboard(): boolean {
@@ -8120,17 +8291,32 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public copySelectedModel(): boolean {
-    this.setStatus('Copy is unavailable until the canonical clipboard preserves full object semantics.');
+    this.setStatus(
+      t(
+        'workspace.orcaWorkspace.copyIsUnavailableUntilThe',
+        'Copy is unavailable until the canonical clipboard preserves full object semantics.',
+      ),
+    );
     return false;
   }
 
   public cutSelectedModel(): boolean {
-    this.setStatus('Cut is unavailable until the canonical clipboard preserves full object semantics.');
+    this.setStatus(
+      t(
+        'workspace.orcaWorkspace.cutIsUnavailableUntilThe',
+        'Cut is unavailable until the canonical clipboard preserves full object semantics.',
+      ),
+    );
     return false;
   }
 
   public pasteClipboard() {
-    this.setStatus('Paste is unavailable until the canonical clipboard preserves full object semantics.');
+    this.setStatus(
+      t(
+        'workspace.orcaWorkspace.pasteIsUnavailableUntilThe',
+        'Paste is unavailable until the canonical clipboard preserves full object semantics.',
+      ),
+    );
   }
   // --- View overlays (Orca View → Show Wireframe / Printable Box) ------
   private wireframeOn = false;
@@ -8413,7 +8599,7 @@ export class OrcaWorkspace extends xb.Script {
       this.printableBox.geometry.dispose();
       (this.printableBox.material as THREE.Material).dispose();
       this.printableBox = null;
-      this.setStatus('Printable box off.');
+      this.setStatus(t('workspace.orcaWorkspace.printableBoxOff', 'Printable box off.'));
       return false;
     }
     const vis = MM * WORKSPACE_SCALE;
@@ -8431,7 +8617,7 @@ export class OrcaWorkspace extends xb.Script {
     box.position.set(0, sy / 2, 0);
     this.workspace.add(box);
     this.printableBox = box;
-    this.setStatus('Printable box on.');
+    this.setStatus(t('workspace.orcaWorkspace.printableBoxOn', 'Printable box on.'));
     return true;
   }
 
@@ -8444,7 +8630,7 @@ export class OrcaWorkspace extends xb.Script {
     const summary = this.canonicalProject.getSummary();
     const plate = summary.plates.find((candidate) => candidate.active);
     if (!plate || plate.instanceCount === 0) {
-      this.setStatus('Add a model before arranging the plate.');
+      this.setStatus(t('workspace.orcaWorkspace.addAModelBeforeArranging', 'Add a model before arranging the plate.'));
       return 0;
     }
     try {
@@ -8499,19 +8685,66 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
+  public exportAllObjectsAsStls() {
+    const summary = this.canonicalProject.getSummary();
+    const selected = summary.selectedInstanceIds.filter(
+      (instanceId) => this.canonicalProject.getInstance(instanceId)?.plateId === summary.activePlateId,
+    );
+    const instanceIds = selected.length > 0 ? selected : undefined;
+    try {
+      const exported = this.canonicalProject.exportCanonicalAllStls(instanceIds);
+      this.onDownloadFile?.(exported.suggestedFilename, ownedArrayBuffer(exported.bytes), exported.mediaType);
+      this.setStatus(t('workspace.orcaWorkspace.exportedAllStls', 'Exported all models as separate STL files.'));
+    } catch (error) {
+      this.setStatus(t('workspace.orcaWorkspace.stlExportFailed', 'STL export failed.'));
+      throw error;
+    }
+  }
+
+  public convertInstanceToIndependentObject(instanceId?: InstanceId): void {
+    const targetId = instanceId ?? this.canonicalProject.getSummary().selectedInstanceIds[0];
+    if (!targetId) return;
+    try {
+      this.canonicalProject.convertInstanceToIndependentObject(targetId);
+      this.setStatus(t('workspace.orcaWorkspace.convertedToIndependent', 'Set instance as independent object.'));
+    } catch {
+      this.setStatus(t('workspace.orcaWorkspace.setAsIndependentFailed', 'Set as independent object failed.'));
+    }
+  }
+
+  public remapFilaments(sourceIds: readonly FilamentId[], destinationId: FilamentId): void {
+    try {
+      this.canonicalProject.remapFilaments(sourceIds, destinationId);
+      this.setStatus(t('workspace.orcaWorkspace.filamentsRemapped', 'Filaments remapped.'));
+    } catch (error) {
+      this.setStatus(t('workspace.orcaWorkspace.filamentRemapFailed', 'Filament remap failed.'));
+      throw error;
+    }
+  }
+
   public build3mfBytes(): Uint8Array | null {
-    this.setStatus('Geometry-only 3MF export is unavailable; use canonical project save.');
+    this.setStatus(
+      t(
+        'workspace.orcaWorkspace.geometryOnly3MFExportIs',
+        'Geometry-only 3MF export is unavailable; use canonical project save.',
+      ),
+    );
     return null;
   }
 
   public exportPlate3mf() {
-    this.setStatus('Geometry-only 3MF export is unavailable; use canonical project save.');
+    this.setStatus(
+      t(
+        'workspace.orcaWorkspace.geometryOnly3MFExportIs2',
+        'Geometry-only 3MF export is unavailable; use canonical project save.',
+      ),
+    );
   }
   // --- Save / Open Project (Orca File → Save / Open Project) -----------
   /** Save the project as a downloadable OrcaXR .3mf (File → Save Project). */
   public async saveProject(): Promise<void> {
     if (this.canonicalProject.getSummary().objectCount === 0) {
-      this.setStatus('Nothing to save — add a model first.');
+      this.setStatus(t('workspace.orcaWorkspace.nothingToSaveAddA', 'Nothing to save — add a model first.'));
       return;
     }
     try {
@@ -8551,7 +8784,7 @@ export class OrcaWorkspace extends xb.Script {
           );
         }
         if (!decision) {
-          this.setStatus('Project open cancelled.');
+          this.setStatus(t('workspace.orcaWorkspace.projectOpenCancelled', 'Project open cancelled.'));
           return false;
         }
         prepared.confirm(decision);
@@ -8620,7 +8853,7 @@ export class OrcaWorkspace extends xb.Script {
     if (this.activeCanonicalSlicer) return;
     const activePlate = this.canonicalProject.getSummary().plates.find((plate) => plate.id === this.activePlateId);
     if (!activePlate || activePlate.instanceCount === 0) {
-      this.setStatus('No models to slice.');
+      this.setStatus(t('workspace.orcaWorkspace.noModelsToSlice', 'No models to slice.'));
       return;
     }
     const route = await this.resolveCanonicalSliceRoute();
@@ -8692,7 +8925,7 @@ export class OrcaWorkspace extends xb.Script {
     const summary = this.canonicalProject.getSummary();
     const printable = summary.plates.filter((plate) => plate.printable && plate.instanceCount > 0);
     if (printable.length === 0) {
-      this.setStatus('No printable plate has models to slice.');
+      this.setStatus(t('workspace.orcaWorkspace.noPrintablePlateHasModels', 'No printable plate has models to slice.'));
       return 0;
     }
     const route = await this.resolveCanonicalSliceRoute();
@@ -8779,11 +9012,21 @@ export class OrcaWorkspace extends xb.Script {
   public downloadAllPlateGcode(): number {
     const published = this.publishedPlateGcode;
     if (!published || published.plates.size === 0) {
-      this.setStatus('Slice all plates before downloading their G-code.');
+      this.setStatus(
+        t(
+          'workspace.orcaWorkspace.sliceAllPlatesBeforeDownloading',
+          'Slice all plates before downloading their G-code.',
+        ),
+      );
       return 0;
     }
     if (!this.revalidatePublishedGcode()) {
-      this.setStatus('The project changed since the last slice; slice again before downloading.');
+      this.setStatus(
+        t(
+          'workspace.orcaWorkspace.theProjectChangedSinceThe',
+          'The project changed since the last slice; slice again before downloading.',
+        ),
+      );
       return 0;
     }
     const names = new Map(this.canonicalProject.getSummary().plates.map((plate) => [plate.id, plate.name]));
@@ -8854,7 +9097,12 @@ export class OrcaWorkspace extends xb.Script {
   /** Toggle wipe-tower auto-positioning (Section 1 pre-flight). */
   public setWipeTowerAuto(on: boolean): void {
     void on;
-    this.setStatus('Automatic wipe-tower placement is unavailable until canonical collision placement lands.');
+    this.setStatus(
+      t(
+        'workspace.orcaWorkspace.automaticWipeTowerPlacementIs',
+        'Automatic wipe-tower placement is unavailable until canonical collision placement lands.',
+      ),
+    );
   }
 
   /** Fail closed until canonical active-plate validation has produced evidence. */
@@ -8881,7 +9129,12 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public async fixSelectedModel(): Promise<void> {
-    this.setStatus('Repair is unavailable until topology and annotations commit atomically.');
+    this.setStatus(
+      t(
+        'workspace.orcaWorkspace.repairIsUnavailableUntilTopology',
+        'Repair is unavailable until topology and annotations commit atomically.',
+      ),
+    );
   }
 
   public async booleanModels(op: 'UNION' | 'A_NOT_B' | 'INTERSECTION'): Promise<void> {

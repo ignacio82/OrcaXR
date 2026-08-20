@@ -16,6 +16,7 @@
   "action.edit_redo.label": "重做",
   "action.edit_select_all.label": "全選",
   "action.edit_undo.label": "復原",
+  "action.file_export_all_stls.label": "將所有物件匯出為 STL 檔案…",
   "action.file_export_gcode.label": "匯出 G-code…",
   "action.file_export_obj.label": "將工具路徑匯出為 OBJ 格式…",
   "action.file_export_stl.label": "匯出為單一 STL…",
@@ -30,6 +31,7 @@
   "action.help_shortcuts.label": "快捷鍵",
   "action.help_tip_of_day.label": "顯示每日小提示",
   "action.help_tutorial.label": "教學",
+  "action.instance_to_object.label": "設定為獨立物件",
   "action.load_model_from_path.label": "匯入",
   "action.paint_erase_all.label": "擦除所有自訂支撐",
   "action.presets_export_bundle.label": "匯出設定檔組",
@@ -59,5 +61,10 @@
   "action.view_camera_top.label": "頂部視圖",
   "action.view_open_gcode.label": "打開 G-code…",
   "action.view_show_gcode_window.label": "顯示 G-code",
-  "action.view_show_navigator.label": "顯示 3D 導覽器"
+  "action.view_show_navigator.label": "顯示 3D 導覽器",
+  "actions.actionContext.keyboardShortcuts": "快捷鍵",
+  "ui.brimEarsPanel.brimEars": "耳狀 Brim",
+  "ui.generatedSettingsPanel.detailLevel": "細節等級",
+  "ui.printSubmissionDialog.sendToPrinter": "傳送到列印設備",
+  "ui.semanticObjectEditor.heightRanges": "高度範圍"
 }

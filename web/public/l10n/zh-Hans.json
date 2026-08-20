@@ -16,6 +16,7 @@
   "action.edit_redo.label": "重做",
   "action.edit_select_all.label": "全选",
   "action.edit_undo.label": "撤销",
+  "action.file_export_all_stls.label": "导出所有对象为多个STL…",
   "action.file_export_gcode.label": "导出 G-code…",
   "action.file_export_obj.label": "将工具路径导出为OBJ格式…",
   "action.file_export_stl.label": "导出为一个STL…",
@@ -30,6 +31,7 @@
   "action.help_shortcuts.label": "快捷键",
   "action.help_tip_of_day.label": "展示每日小贴士",
   "action.help_tutorial.label": "教程",
+  "action.instance_to_object.label": "设置为独立对象",
   "action.load_model_from_path.label": "进料",
   "action.paint_erase_all.label": "擦除所有绘制",
   "action.presets_export_bundle.label": "导出预设包",
@@ -59,5 +61,10 @@
   "action.view_camera_top.label": "顶部视图",
   "action.view_open_gcode.label": "打开G-code…",
   "action.view_show_gcode_window.label": "显示G-code窗口",
-  "action.view_show_navigator.label": "显示3D导航器"
+  "action.view_show_navigator.label": "显示3D导航器",
+  "actions.actionContext.keyboardShortcuts": "快捷键",
+  "ui.brimEarsPanel.brimEars": "圆盘",
+  "ui.generatedSettingsPanel.detailLevel": "细节等级",
+  "ui.printSubmissionDialog.sendToPrinter": "发送到打印机",
+  "ui.semanticObjectEditor.heightRanges": "高度范围"
 }

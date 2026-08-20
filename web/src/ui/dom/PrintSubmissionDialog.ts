@@ -1,3 +1,4 @@
+import { t } from '../../l10n/t';
 export interface PrintSubmissionDialogInput {
   readonly filename: string;
   readonly plateName: string;
@@ -44,7 +45,7 @@ export function askPrintSubmission(input: PrintSubmissionDialogInput): Promise<P
 
   const title = document.createElement('h2');
   title.id = 'orcaxr-print-send-title';
-  title.textContent = 'Send to printer';
+  title.textContent = t('ui.printSubmissionDialog.sendToPrinter', 'Send to printer');
   title.style.cssText = 'margin:0;font-size:16px;';
 
   const body = document.createElement('div');
@@ -80,7 +81,10 @@ export function askPrintSubmission(input: PrintSubmissionDialogInput): Promise<P
   overwrite.id = 'orcaxr-print-send-overwrite';
   overwrite.dataset.printSubmissionOverwrite = 'true';
   const overwriteText = document.createElement('span');
-  overwriteText.textContent = 'Replace a stored file with the same name';
+  overwriteText.textContent = t(
+    'ui.printSubmissionDialog.replaceAStoredFileWith',
+    'Replace a stored file with the same name',
+  );
   overwriteLabel.append(overwrite, overwriteText);
 
   const actions = document.createElement('div');
@@ -117,7 +121,10 @@ export function askPrintSubmission(input: PrintSubmissionDialogInput): Promise<P
     startButton.disabled = true;
     startButton.style.opacity = '0.5';
     startButton.style.cursor = 'not-allowed';
-    startButton.title = 'Resolve the filament mapping problems above before starting this print';
+    startButton.title = t(
+      'ui.printSubmissionDialog.resolveTheFilamentMappingProblems',
+      'Resolve the filament mapping problems above before starting this print',
+    );
   }
   actions.append(
     startButton,

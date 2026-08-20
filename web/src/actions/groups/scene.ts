@@ -92,6 +92,18 @@ export const sceneActions: Action[] = [
     run: (ctx) => ctx.addInstance(),
   },
   {
+    id: 'instance_to_object',
+    context: ['object'],
+    label: 'Set as an individual object',
+    icon: 'duplicate',
+    group: 'scene',
+    disclosure: 'menu',
+    menuSection: 'edit',
+    hint: 'Convert this instance into its own independent object',
+    isEnabled: (s) => s.hasInstanceSelection,
+    run: (ctx) => ctx.convertInstanceToIndependentObject(),
+  },
+  {
     id: 'fill_bed_with_instances',
     context: ['object'],
     label: 'Fill Bed with Instances',

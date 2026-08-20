@@ -20,6 +20,7 @@ import type {
   PrinterStorageOperation,
 } from '../../printer/PrinterStorage';
 import { formatStorageSize, parentStorageDirectory } from '../../printer/PrinterStorage';
+import { t } from '../../l10n/t';
 
 export interface PrinterStoragePanelPort {
   /** Current listing, or undefined before the first browse. */
@@ -65,7 +66,7 @@ export class PrinterStoragePanel {
     const root = doc.createElement('section');
     root.dataset.printerStoragePanel = 'true';
     root.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
-    root.setAttribute('aria-label', 'Files on the printer');
+    root.setAttribute('aria-label', t('ui.printerStoragePanel.filesOnThePrinter', 'Files on the printer'));
 
     const header = doc.createElement('div');
     header.style.cssText = 'display:flex;align-items:center;gap:8px;';
@@ -87,7 +88,7 @@ export class PrinterStoragePanel {
     const list = doc.createElement('div');
     list.dataset.printerStorageList = 'true';
     list.setAttribute('role', 'listbox');
-    list.setAttribute('aria-label', 'Printer files');
+    list.setAttribute('aria-label', t('ui.printerStoragePanel.printerFiles', 'Printer files'));
     list.style.cssText = 'display:flex;flex-direction:column;gap:2px;max-height:260px;overflow-y:auto;';
     root.appendChild(list);
 
@@ -174,7 +175,10 @@ export class PrinterStoragePanel {
       if (!listing) {
         const empty = doc.createElement('p');
         empty.style.cssText = 'margin:0;font-size:12px;opacity:0.7;';
-        empty.textContent = 'Connect to a printer and refresh to see the files it holds.';
+        empty.textContent = t(
+          'ui.printerStoragePanel.connectToAPrinterAnd',
+          'Connect to a printer and refresh to see the files it holds.',
+        );
         this.list.appendChild(empty);
       } else {
         const parent = parentStorageDirectory(listing.path);
@@ -215,7 +219,7 @@ export class PrinterStoragePanel {
         if (listing.directories.length === 0 && listing.files.length === 0) {
           const empty = doc.createElement('p');
           empty.style.cssText = 'margin:0;font-size:12px;opacity:0.7;';
-          empty.textContent = 'This folder is empty.';
+          empty.textContent = t('ui.printerStoragePanel.thisFolderIsEmpty', 'This folder is empty.');
           this.list.appendChild(empty);
         }
       }

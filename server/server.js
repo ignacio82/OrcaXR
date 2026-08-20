@@ -21,6 +21,7 @@ import {
   validateServerConfig,
   WindowRateLimiter,
 } from "./security.mjs";
+import { resolveWasmDir, resolveWasmProvenancePath } from "./slice_worker.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ENGINE = (process.env.SLICER_ENGINE || "cli").toLowerCase();
@@ -50,8 +51,6 @@ const MACHINE_KEYS = new Set(KEY_TYPES.machine);
  * A hand-assembled deployment with no manifest still reports honestly that it
  * cannot prove its engine, and the client refuses that route.
  */
-const WASM_DIST_DIR = path.join(__dirname, "wasm-dist");
-const WASM_PROVENANCE_PATH = path.join(WASM_DIST_DIR, "artifact-provenance.json");
 const CLI_PROVENANCE_PATH =
   process.env.ORCAXR_CLI_PROVENANCE || "/app/orca/engine-provenance.json";
 
@@ -118,9 +117,21 @@ function buildCliAttestation(engine) {
 
 function buildEngineAttestation(engine) {
   if (engine !== "wasm") return buildCliAttestation(engine);
+  // Resolved per request, through the same resolver `slice_worker.mjs` uses to
+  // load the module: the digests below must belong to the build that would
+  // actually run, not to a second copy that happens to sit beside the server.
+  const wasmDistDir = resolveWasmDir();
+  if (wasmDistDir === null) {
+    return {
+      schemaVersion: 1,
+      engine,
+      attested: false,
+      reason: "The server could not read its own WASM engine artifacts.",
+    };
+  }
   const artifacts = {
-    "slic3r.mjs": sha256File(path.join(WASM_DIST_DIR, "slic3r.mjs")),
-    "slic3r.wasm": sha256File(path.join(WASM_DIST_DIR, "slic3r.wasm")),
+    "slic3r.mjs": sha256File(path.join(wasmDistDir, "slic3r.mjs")),
+    "slic3r.wasm": sha256File(path.join(wasmDistDir, "slic3r.wasm")),
   };
   if (Object.values(artifacts).some((value) => value === null)) {
     return {
@@ -132,7 +143,9 @@ function buildEngineAttestation(engine) {
   }
   let provenance = null;
   try {
-    provenance = JSON.parse(readFileSync(WASM_PROVENANCE_PATH, "utf8"));
+    provenance = JSON.parse(
+      readFileSync(resolveWasmProvenancePath(wasmDistDir), "utf8"),
+    );
   } catch {
     return {
       schemaVersion: 1,

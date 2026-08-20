@@ -25,6 +25,7 @@ import {
   formatOverrideValue,
 } from '../../settings/presets/PresetLibrary';
 import type { PresetJsonValue, PresetKind, PresetNode } from '../../settings/presets/PresetGraph';
+import { t } from '../../l10n/t';
 
 export interface PresetLibraryPanelPort {
   getInventory(): PrinterInventory;
@@ -88,7 +89,7 @@ export class PresetLibraryPanel {
     const doc = this.container.ownerDocument;
     const root = doc.createElement('section');
     root.dataset.presetLibraryPanel = 'true';
-    root.setAttribute('aria-label', 'Printer and preset setup');
+    root.setAttribute('aria-label', t('ui.presetLibraryPanel.printerAndPresetSetup', 'Printer and preset setup'));
     root.style.cssText = 'display:flex;flex-direction:column;gap:10px;';
 
     root.appendChild(this.buildHeading(doc, 'Installed printers'));
@@ -116,14 +117,14 @@ export class PresetLibraryPanel {
     exportButton.type = 'button';
     exportButton.className = 'action-btn';
     exportButton.dataset.presetLibraryExport = 'true';
-    exportButton.textContent = 'Export bundle';
+    exportButton.textContent = t('ui.presetLibraryPanel.exportBundle', 'Export bundle');
     exportButton.style.cssText = 'margin:0;flex:1;';
     exportButton.addEventListener('click', () => void this.port.run({ kind: 'export' }));
     const importButton = doc.createElement('button');
     importButton.type = 'button';
     importButton.className = 'action-btn';
     importButton.dataset.presetLibraryImport = 'true';
-    importButton.textContent = 'Import bundle';
+    importButton.textContent = t('ui.presetLibraryPanel.importBundle', 'Import bundle');
     importButton.style.cssText = 'margin:0;flex:1;';
     importButton.addEventListener('click', () => {
       void (async () => {
@@ -336,7 +337,10 @@ export class PresetLibraryPanel {
     licenseInput.type = 'text';
     licenseInput.dataset.presetLibraryDraftLicense = 'true';
     licenseInput.value = this.draftLicense;
-    licenseInput.placeholder = 'All rights reserved (operator-authored)';
+    licenseInput.placeholder = t(
+      'ui.presetLibraryPanel.allRightsReservedOperatorAuthored',
+      'All rights reserved (operator-authored)',
+    );
     licenseInput.style.cssText = FIELD_STYLE;
     licenseInput.addEventListener('input', () => {
       this.draftLicense = licenseInput.value;
@@ -364,7 +368,7 @@ export class PresetLibraryPanel {
     add.type = 'button';
     add.className = 'action-btn';
     add.dataset.presetLibraryAddOverride = 'true';
-    add.textContent = 'Change a setting';
+    add.textContent = t('ui.presetLibraryPanel.changeASetting', 'Change a setting');
     add.style.cssText = 'margin:0;';
     add.disabled = !base || keys.length === 0;
     add.addEventListener('click', () => {
@@ -381,7 +385,7 @@ export class PresetLibraryPanel {
     create.type = 'button';
     create.className = 'action-btn';
     create.dataset.presetLibraryCreate = 'true';
-    create.textContent = 'Create preset';
+    create.textContent = t('ui.presetLibraryPanel.createPreset', 'Create preset');
     create.style.cssText = 'margin:0;';
     this.createButton = create;
     this.draftHasBase = base !== undefined;

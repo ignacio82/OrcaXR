@@ -16,6 +16,7 @@
   "action.edit_redo.label": "Refazer",
   "action.edit_select_all.label": "Selecionar Tudo",
   "action.edit_undo.label": "Desfazer",
+  "action.file_export_all_stls.label": "Exportar todos os objetos como STLs…",
   "action.file_export_gcode.label": "Exportar G-code…",
   "action.file_export_obj.label": "Exportar Trilhas de Ferramentas como OBJ…",
   "action.file_export_stl.label": "Exportar como um STL…",
@@ -30,6 +31,7 @@
   "action.help_shortcuts.label": "Atalhos de Teclado",
   "action.help_tip_of_day.label": "Mostrar Dica do Dia",
   "action.help_tutorial.label": "Tutorial",
+  "action.instance_to_object.label": "Definir como objeto individual",
   "action.load_model_from_path.label": "Carregar",
   "action.paint_erase_all.label": "Apagar toda a pintura",
   "action.presets_export_bundle.label": "Exportar Pacote de Predefinições",
@@ -59,5 +61,10 @@
   "action.view_camera_top.label": "Vista Superior",
   "action.view_open_gcode.label": "Abrir G-code…",
   "action.view_show_gcode_window.label": "Mostrar Janela G-code",
-  "action.view_show_navigator.label": "Mostrar Navegador 3D"
+  "action.view_show_navigator.label": "Mostrar Navegador 3D",
+  "actions.actionContext.keyboardShortcuts": "Atalhos de Teclado",
+  "ui.brimEarsPanel.brimEars": "Orelhas da borda",
+  "ui.generatedSettingsPanel.detailLevel": "Nível de detalhe",
+  "ui.printSubmissionDialog.sendToPrinter": "Enviar para a impressora",
+  "ui.semanticObjectEditor.heightRanges": "Intervalos de altura"
 }

@@ -13,6 +13,7 @@ import {
 } from '../../project/objects';
 import { ContextMenu, type ContextMenuGroup, type ContextMenuItem } from './ContextMenu';
 import type { ContextTarget } from '../../actions/ActionRegistry';
+import { t } from '../../l10n/t';
 
 type MaybePromise = void | Promise<void>;
 
@@ -179,7 +180,7 @@ export class ObjectsPanel {
 
     const searchLabel = document.createElement('label');
     searchLabel.htmlFor = `orcaxr-objects-search-${this.instanceId}`;
-    searchLabel.textContent = 'Search objects';
+    searchLabel.textContent = t('ui.objectsPanel.searchObjects', 'Search objects');
     searchLabel.style.cssText = 'font-size:12px;color:var(--oxr-color-text-muted,#a0aab5);';
     root.appendChild(searchLabel);
 
@@ -187,7 +188,7 @@ export class ObjectsPanel {
     search.id = searchLabel.htmlFor;
     search.type = 'search';
     search.dataset.objectsSearch = 'true';
-    search.placeholder = 'Name, type, setting, or filament';
+    search.placeholder = t('ui.objectsPanel.nameTypeSettingOrFilament', 'Name, type, setting, or filament');
     search.setAttribute('autocomplete', 'off');
     search.setAttribute('aria-controls', `orcaxr-objects-tree-${this.instanceId}`);
     search.style.cssText =

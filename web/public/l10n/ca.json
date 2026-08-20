@@ -16,6 +16,7 @@
   "action.edit_redo.label": "Refer",
   "action.edit_select_all.label": "Seleccionar-ho tot",
   "action.edit_undo.label": "Desfer",
+  "action.file_export_all_stls.label": "Exportar tots els objectes com a diferents STLs…",
   "action.file_export_gcode.label": "Exportar el Codi-G…",
   "action.file_export_obj.label": "Exportar Trajectòries d'eina com OBJ…",
   "action.file_export_stl.label": "Exporta com un STL…",
@@ -30,6 +31,7 @@
   "action.help_shortcuts.label": "Dreceres de teclat",
   "action.help_tip_of_day.label": "Mostra Consell del dia",
   "action.help_tutorial.label": "Tutorial",
+  "action.instance_to_object.label": "Definir com a objecte individual",
   "action.load_model_from_path.label": "Carregar",
   "action.paint_erase_all.label": "Esborrar tota el pintat",
   "action.presets_export_bundle.label": "Exportar el Paquet de Perfil",
@@ -59,5 +61,10 @@
   "action.view_camera_top.label": "Vista superior",
   "action.view_open_gcode.label": "Obrir Codi-G…",
   "action.view_show_gcode_window.label": "Mostra Finestra %Codi-G",
-  "action.view_show_navigator.label": "Mostrar el navegador 3D"
+  "action.view_show_navigator.label": "Mostrar el navegador 3D",
+  "actions.actionContext.keyboardShortcuts": "Dreceres de teclat",
+  "ui.brimEarsPanel.brimEars": "Orelles de la Vora d'Adherència",
+  "ui.generatedSettingsPanel.detailLevel": "Nivell de detall",
+  "ui.printSubmissionDialog.sendToPrinter": "Enviar a la impressora",
+  "ui.semanticObjectEditor.heightRanges": "Intervals d'alçada"
 }

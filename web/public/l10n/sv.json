@@ -14,6 +14,7 @@
   "action.edit_redo.label": "Gör om",
   "action.edit_select_all.label": "Välj Alla",
   "action.edit_undo.label": "Ångra",
+  "action.file_export_all_stls.label": "Exportera alla objekt som STL…",
   "action.file_export_gcode.label": "Exportera G-kod…",
   "action.file_export_obj.label": "Exportera Toolpaths som OBJ…",
   "action.file_export_stl.label": "Exportera som en STL…",
@@ -27,6 +28,7 @@
   "action.help_shortcuts.label": "Kortkommando",
   "action.help_tip_of_day.label": "Visa dagens tips",
   "action.help_tutorial.label": "Guide",
+  "action.instance_to_object.label": "Ställ in som ett enskilt objekt",
   "action.paint_erase_all.label": "Radera all färgläggning",
   "action.reset_rotation.label": "Återställ Rotation",
   "action.save_gcode_to_downloads.label": "Ladda ner",
@@ -50,5 +52,10 @@
   "action.view_camera_rear.label": "Vy Bakifrån",
   "action.view_camera_right.label": "Vy Höger",
   "action.view_camera_top.label": "Vy Top",
-  "action.view_open_gcode.label": "Öppna G-kod…"
+  "action.view_open_gcode.label": "Öppna G-kod…",
+  "actions.actionContext.keyboardShortcuts": "Kortkommando",
+  "ui.brimEarsPanel.brimEars": "Brätte öron",
+  "ui.generatedSettingsPanel.detailLevel": "Detaljnivå",
+  "ui.printSubmissionDialog.sendToPrinter": "Skicka till skrivare",
+  "ui.semanticObjectEditor.heightRanges": "Höjd intervall"
 }

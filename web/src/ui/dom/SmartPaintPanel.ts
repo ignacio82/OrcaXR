@@ -1,5 +1,6 @@
 import type { PaintPalette } from '../../project/painting/paintPalette';
 import type { PaintChannel } from '../../project/painting/PaintStrokeService';
+import { t } from '../../l10n/t';
 
 export interface SmartPaintRegionView {
   readonly id: string;
@@ -119,7 +120,7 @@ export class SmartPaintPanel {
 
     const heading = document.createElement('h3');
     heading.id = `orcaxr-smart-paint-heading-${this.instanceId}`;
-    heading.textContent = 'Smart Paint';
+    heading.textContent = t('ui.smartPaintPanel.smartPaint', 'Smart Paint');
     heading.style.cssText = 'margin:0;font-size:13px;font-weight:600;';
 
     const provider = document.createElement('p');
@@ -158,7 +159,7 @@ export class SmartPaintPanel {
     group.dataset.smartPaintConsent = 'true';
     group.style.cssText = 'margin:0;padding:8px;border:1px solid var(--oxr-color-border,#30363d);border-radius:8px;';
     const legend = document.createElement('legend');
-    legend.textContent = 'What may be sent';
+    legend.textContent = t('ui.smartPaintPanel.whatMayBeSent', 'What may be sent');
     legend.style.cssText = 'padding:0 4px;font-weight:600;';
     group.appendChild(legend);
 
@@ -222,14 +223,17 @@ export class SmartPaintPanel {
     wrapper.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
     const label = document.createElement('label');
     label.htmlFor = `orcaxr-smart-paint-prompt-${this.instanceId}`;
-    label.textContent = 'Describe the regions you want';
+    label.textContent = t('ui.smartPaintPanel.describeTheRegionsYouWant', 'Describe the regions you want');
     const input = document.createElement('textarea');
     input.id = label.htmlFor;
     input.dataset.smartPaintPrompt = 'true';
     input.rows = 3;
     input.value = state.prompt;
     input.disabled = state.busy;
-    input.placeholder = 'For example: the top surface and the downward-facing overhangs';
+    input.placeholder = t(
+      'ui.smartPaintPanel.forExampleTheTopSurface',
+      'For example: the top surface and the downward-facing overhangs',
+    );
     input.style.cssText =
       'min-height:60px;padding:6px;border-radius:6px;border:1px solid var(--oxr-color-border,#30363d);' +
       'background:var(--oxr-color-surface,#0d1117);color:inherit;font:inherit;resize:vertical;';
@@ -241,7 +245,7 @@ export class SmartPaintPanel {
       const attached = document.createElement('p');
       attached.dataset.smartPaintImageAttached = 'true';
       attached.style.cssText = 'margin:0;opacity:0.75;';
-      attached.textContent = 'A reference image is attached.';
+      attached.textContent = t('ui.smartPaintPanel.aReferenceImageIsAttached', 'A reference image is attached.');
       wrapper.appendChild(attached);
     }
     return wrapper;
@@ -266,7 +270,10 @@ export class SmartPaintPanel {
       busy.setAttribute('role', 'status');
       busy.dataset.smartPaintBusy = 'true';
       busy.style.cssText = 'margin:0;flex-basis:100%;opacity:0.75;';
-      busy.textContent = 'Waiting for the assistant. Nothing has changed in the project.';
+      busy.textContent = t(
+        'ui.smartPaintPanel.waitingForTheAssistantNothing',
+        'Waiting for the assistant. Nothing has changed in the project.',
+      );
       row.appendChild(busy);
     }
     return row;
@@ -309,7 +316,10 @@ export class SmartPaintPanel {
       const hint = document.createElement('p');
       hint.dataset.smartPaintApplyHint = 'true';
       hint.style.cssText = 'margin:0;opacity:0.75;';
-      hint.textContent = 'Choose a destination for at least one region before applying.';
+      hint.textContent = t(
+        'ui.smartPaintPanel.chooseADestinationForAt',
+        'Choose a destination for at least one region before applying.',
+      );
       section.appendChild(hint);
     }
     return section;
@@ -352,7 +362,7 @@ export class SmartPaintPanel {
 
     const none = document.createElement('option');
     none.value = '';
-    none.textContent = 'Leave unpainted';
+    none.textContent = t('ui.smartPaintPanel.leaveUnpainted', 'Leave unpainted');
     select.appendChild(none);
     for (const option of this.destinations(state, preview.channel)) {
       const element = document.createElement('option');

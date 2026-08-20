@@ -15,7 +15,7 @@ import type { SimplifyConfiguration } from '../project/objects/simplify';
 import type { ActionInvocation } from './ActionRegistry';
 import type { OrcaWorkspace } from '../workspace/OrcaWorkspace';
 import type { FilamentPalette } from '../workspace/FilamentPalette';
-import type { FilamentId, PlateId } from '../project/domain/ids';
+import type { FilamentId, InstanceId, PlateId } from '../project/domain/ids';
 import type { ConfigMap } from '../project/domain/model';
 import type { ObjectTreeEntityRef } from '../project/objects';
 import type { PaintChannel, PaintToolKind } from '../project/painting/PaintStrokeService';
@@ -44,6 +44,7 @@ import type {
 import type { ActionRegistry, ActionSurface } from './ActionRegistry';
 import type { UiState, WorkspaceMode } from './UiState';
 import { ABOUT_HTML, TUTORIAL_HTML, shortcutsHtml, tipOfTheDayHtml } from './helpContent';
+import { t } from '../l10n/t';
 
 export type BooleanOp = 'UNION' | 'A_NOT_B' | 'INTERSECTION';
 export type ToolName =
@@ -305,6 +306,9 @@ export class ActionContext {
   exportStl(): void {
     this.workspace.exportPlateStl();
   }
+  exportAllObjectsAsStls(): void {
+    this.workspace.exportAllObjectsAsStls();
+  }
   export3mf(): void {
     this.workspace.exportPlate3mf();
   }
@@ -350,8 +354,17 @@ export class ActionContext {
     this.workspace.addInstanceToSelection();
   }
 
+  convertInstanceToIndependentObject(instanceId?: InstanceId): void {
+    this.workspace.convertInstanceToIndependentObject(instanceId);
+  }
+
   fillBedWithInstances(): void {
     this.workspace.fillPlateWithSelection();
+  }
+
+  // ---- Filaments ------------------------------------------------------
+  remapFilaments(sourceIds: readonly FilamentId[], destinationId: FilamentId): void {
+    this.workspace.remapFilaments(sourceIds, destinationId);
   }
 
   // ---- Transforms -----------------------------------------------------
@@ -601,7 +614,9 @@ export class ActionContext {
 
   assemblyView(): void {
     this.workspace.measureTool();
-    this.workspace.setStatus('Assembly: pick a face on each model, then choose an alignment.');
+    this.workspace.setStatus(
+      t('actions.actionContext.assemblyPickAFaceOn', 'Assembly: pick a face on each model, then choose an alignment.'),
+    );
   }
 
   applyAssemblyAlignment(kind: AssemblyAlignmentKind, parameter?: number): void {
@@ -644,14 +659,21 @@ export class ActionContext {
   /** Check the PWA service worker for a newer OrcaXR build (Help → Check for Update). */
   async checkForUpdates(): Promise<void> {
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
-      this.workspace.setStatus('Update check is unavailable in this browser.');
+      this.workspace.setStatus(
+        t('actions.actionContext.updateCheckIsUnavailableIn', 'Update check is unavailable in this browser.'),
+      );
       return;
     }
-    this.workspace.setStatus('Checking for updates…');
+    this.workspace.setStatus(t('actions.actionContext.checkingForUpdates', 'Checking for updates…'));
     try {
       const reg = await navigator.serviceWorker.getRegistration();
       if (!reg) {
-        this.workspace.setStatus('OrcaXR is running the latest version (no update channel).');
+        this.workspace.setStatus(
+          t(
+            'actions.actionContext.orcaXRIsRunningTheLatest',
+            'OrcaXR is running the latest version (no update channel).',
+          ),
+        );
         return;
       }
       await reg.update();
@@ -665,7 +687,7 @@ export class ActionContext {
 
   // ---- Help modals (informational) -----------------------------------
   showAbout(): void {
-    this.workspace.showModal('About OrcaXR', ABOUT_HTML);
+    this.workspace.showModal(t('actions.actionContext.aboutOrcaXR', 'About OrcaXR'), ABOUT_HTML);
   }
   showHelpSearch(): void {
     this.workspace.showHelpSearch();
@@ -682,18 +704,24 @@ export class ActionContext {
     this.workspace.showLanguagePicker();
   }
   showShortcuts(): void {
-    this.workspace.showModal('Keyboard Shortcuts', shortcutsHtml(this.registry.all()));
+    this.workspace.showModal(
+      t('actions.actionContext.keyboardShortcuts', 'Keyboard Shortcuts'),
+      shortcutsHtml(this.registry.all()),
+    );
   }
   showTutorial(): void {
-    this.workspace.showModal('Getting Started', TUTORIAL_HTML);
+    this.workspace.showModal(t('actions.actionContext.gettingStarted', 'Getting Started'), TUTORIAL_HTML);
   }
   showTip(): void {
-    this.workspace.showModal('Tip of the Day', tipOfTheDayHtml());
+    this.workspace.showModal(t('actions.actionContext.tipOfTheDay', 'Tip of the Day'), tipOfTheDayHtml());
   }
   /** Interactive printer / filament setup wizard (built by the DOM shell). */
   setupWizard(): void {
     if (this.workspace.onShowSetupWizard) this.workspace.onShowSetupWizard();
-    else this.workspace.setStatus('Setup wizard is unavailable in this shell.');
+    else
+      this.workspace.setStatus(
+        t('actions.actionContext.setupWizardIsUnavailableIn', 'Setup wizard is unavailable in this shell.'),
+      );
   }
 
   /** Open an external URL in a new tab (Help → report bug / docs). */

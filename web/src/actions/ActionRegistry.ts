@@ -220,6 +220,11 @@ export interface ActionInvocation {
     readonly enabled: boolean;
     readonly confirmedPhysicalCount?: number;
   };
+  /** Bounded filament remap request across all canonical usages. */
+  filamentRemap?: {
+    readonly sourceIds: readonly FilamentId[];
+    readonly destinationId: FilamentId;
+  };
   /**
    * Bounded colour-paint configuration from a paint surface. `filamentId`
    * carries a stable physical or mixed identity; `null` selects erase-to-inherit.

@@ -12,6 +12,7 @@
  */
 
 import type { PrintHistoryJob, PrintHistoryPage, PrintHistoryTotals } from '../../printer/PrinterHistory';
+import { t } from '../../l10n/t';
 import {
   describeHistoryStatus,
   estimateDelta,
@@ -58,7 +59,7 @@ export class PrintHistoryPanel {
     const doc = this.container.ownerDocument;
     const root = doc.createElement('section');
     root.dataset.printHistoryPanel = 'true';
-    root.setAttribute('aria-label', 'Print history');
+    root.setAttribute('aria-label', t('ui.printHistoryPanel.printHistory', 'Print history'));
     root.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
 
     const header = doc.createElement('div');
@@ -118,12 +119,15 @@ export class PrintHistoryPanel {
       if (!page) {
         const empty = doc.createElement('p');
         empty.style.cssText = 'margin:0;font-size:12px;opacity:0.7;';
-        empty.textContent = 'Refresh to read what this printer has printed.';
+        empty.textContent = t(
+          'ui.printHistoryPanel.refreshToReadWhatThis',
+          'Refresh to read what this printer has printed.',
+        );
         list.appendChild(empty);
       } else if (page.jobs.length === 0) {
         const empty = doc.createElement('p');
         empty.style.cssText = 'margin:0;font-size:12px;opacity:0.7;';
-        empty.textContent = 'This printer has no recorded jobs.';
+        empty.textContent = t('ui.printHistoryPanel.thisPrinterHasNoRecorded', 'This printer has no recorded jobs.');
         list.appendChild(empty);
       } else {
         for (const job of page.jobs) list.appendChild(this.buildRow(doc, job));
@@ -189,7 +193,7 @@ export class PrintHistoryPanel {
     if (!job.fileExists) {
       const missing = doc.createElement('span');
       missing.dataset.printHistoryMissing = 'true';
-      missing.textContent = 'No longer on the printer';
+      missing.textContent = t('ui.printHistoryPanel.noLongerOnThePrinter', 'No longer on the printer');
       missing.style.cssText = 'font-size:11px;color:#ffb74d;';
       row.appendChild(missing);
     }

@@ -23,6 +23,7 @@ import type { ActionContext } from '../../actions/ActionContext';
 import { ariaShortcutValue } from '../../actions/ShortcutCatalog';
 import type { UiState, UiStateShape } from '../../actions/UiState';
 import { domIcon } from '../icons';
+import { t } from '../../l10n/t';
 
 interface Hosts {
   toolbar: HTMLElement;
@@ -415,7 +416,7 @@ export class DomShell {
           availability.state === 'disabled' && !alreadyThere ? availability.reason : `${stage.label} the active plate`;
       } else {
         el.disabled = false;
-        el.title = 'Return to the prepare view';
+        el.title = t('ui.domShell.returnToThePrepareView', 'Return to the prepare view');
       }
     }
   }

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   CommandBus,
+  ConvertInstanceToIndependentObjectCommand,
   CreateInstanceCommand,
   DeleteInstanceCommand,
   DeleteObjectCommand,
@@ -21,6 +22,7 @@ import {
   identityTransform,
   seededRandom,
   type IndependentObjectIds,
+  type IndependentSingleInstanceObjectIds,
   type InstanceId,
   type ProjectPlate,
 } from '../..';
@@ -283,6 +285,57 @@ test('moves across plates, omits same-plate no-ops, and preserves state/selectio
   const missing = entityId<'plate'>('import:test:missing-plate');
   assert.throws(() => bus.execute(new MoveObjectToPlateCommand(fixture.ids.object, missing)), /missing/);
   assert.equal(projectBytes(project), before);
+});
+
+test('converts an instance into an independent object and preserves state through undo and redo', () => {
+  const { fixture, project, selection, bus } = harness();
+  const ids = new UuidIdSource(seededRandom(0x2205));
+  const secondInstanceId = ids.next('instance');
+  // First add a second instance to the object
+  bus.execute(
+    new CreateInstanceCommand(fixture.ids.object, {
+      id: secondInstanceId,
+      name: 'Instance 2',
+      transform: identityTransform(),
+      printable: true,
+    }),
+  );
+  assert.equal(project.getSnapshot().state.plates[0].objects[0].instances.length, 2);
+  const beforeConversion = projectBytes(project);
+
+  const convertIds: IndependentSingleInstanceObjectIds = {
+    objectId: ids.next('object'),
+    volumeIds: [ids.next('volume')],
+    instanceId: ids.next('instance'),
+    layerRangeIds: [ids.next('layer-range')],
+  };
+
+  bus.execute(new ConvertInstanceToIndependentObjectCommand(secondInstanceId, convertIds, 'Promoted Object'));
+  const stateAfter = project.getSnapshot().state;
+  const plate = stateAfter.plates[0];
+  assert.equal(plate.objects.length, 2);
+  assert.equal(plate.objects[0].instances.length, 1);
+  assert.equal(plate.objects[1].id, convertIds.objectId);
+  assert.equal(plate.objects[1].name, 'Promoted Object');
+  assert.equal(plate.objects[1].instances.length, 1);
+  assert.equal(plate.objects[1].instances[0].id, convertIds.instanceId);
+  assert.deepEqual(selection.getSnapshot().refs, [{ kind: 'instance', id: convertIds.instanceId }]);
+
+  // Converting sole instance should throw
+  assert.throws(
+    () => bus.execute(new ConvertInstanceToIndependentObjectCommand(convertIds.instanceId, convertIds)),
+    /sole instance/i,
+  );
+
+  // Undo restores original 2-instance object
+  bus.undo();
+  assert.equal(projectBytes(project), beforeConversion);
+  assert.equal(project.getSnapshot().state.plates[0].objects.length, 1);
+  assert.equal(project.getSnapshot().state.plates[0].objects[0].instances.length, 2);
+
+  // Redo re-promotes
+  bus.redo();
+  assert.equal(project.getSnapshot().state.plates[0].objects.length, 2);
 });
 
 console.log(`\nObject lifecycle commands: ${passed} tests passed.`);

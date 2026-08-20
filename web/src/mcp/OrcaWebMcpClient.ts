@@ -1,4 +1,5 @@
 import type { McpToolArguments, McpToolHandler, McpToolHost, McpToolInputSchema } from './McpToolHost';
+import { t } from '../l10n/t';
 
 const SOCKET_CONNECTING = 0;
 const SOCKET_OPEN = 1;
@@ -227,11 +228,17 @@ export class OrcaWebMcpClient implements McpToolHost {
     try {
       const connection = this.decodeConnectionToken(encodedToken);
       const channelHost = formatHost(this.pageHost());
-      this.setStatus('registering', 'Registering this browser tab with WebMCP…');
+      this.setStatus(
+        'registering',
+        t('mcp.orcaWebMcpClient.registeringThisBrowserTabWith', 'Registering this browser tab with WebMCP…'),
+      );
       const sessionToken = await this.register(connection, channelHost, attempt);
       this.assertCurrentAttempt(attempt);
 
-      this.setStatus('connecting', 'Connecting the WebMCP tool channel…');
+      this.setStatus(
+        'connecting',
+        t('mcp.orcaWebMcpClient.connectingTheWebMCPToolChannel', 'Connecting the WebMCP tool channel…'),
+      );
       await this.openChannel(connection.server, channelHost, sessionToken, attempt);
     } catch (value) {
       const error = toError(value, 'WebMCP connection failed.');
@@ -446,7 +453,10 @@ export class OrcaWebMcpClient implements McpToolHost {
         opened = true;
         this.connected = true;
         this.tools.forEach((tool) => this.sendToolRegistration(tool));
-        this.setStatus('connected', 'WebMCP connected to this browser tab.');
+        this.setStatus(
+          'connected',
+          t('mcp.orcaWebMcpClient.webMCPConnectedToThisBrowser', 'WebMCP connected to this browser tab.'),
+        );
         settle(resolve);
       };
       socket.onmessage = (event) => {
@@ -459,7 +469,10 @@ export class OrcaWebMcpClient implements McpToolHost {
           if (isRecord(message)) void this.handleMessage(message);
         } catch (error) {
           const protocolError = toError(error, 'WebMCP returned an invalid message.');
-          this.setStatus('error', 'The WebMCP bridge sent an invalid message.');
+          this.setStatus(
+            'error',
+            t('mcp.orcaWebMcpClient.theWebMCPBridgeSentAn', 'The WebMCP bridge sent an invalid message.'),
+          );
           this.reportError(protocolError);
         }
       };
@@ -489,7 +502,7 @@ export class OrcaWebMcpClient implements McpToolHost {
         }
         if (attempt !== this.attempt) return;
         this.connected = false;
-        this.setStatus('disconnected', 'WebMCP disconnected.');
+        this.setStatus('disconnected', t('mcp.orcaWebMcpClient.webMCPDisconnected', 'WebMCP disconnected.'));
       };
     });
   }

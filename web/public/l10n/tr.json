@@ -16,6 +16,7 @@
   "action.edit_redo.label": "İleri Al",
   "action.edit_select_all.label": "Hepsini seç",
   "action.edit_undo.label": "Geri al",
+  "action.file_export_all_stls.label": "Tüm nesneleri STLs olarak dışa aktarın…",
   "action.file_export_gcode.label": "G-kodunu dışa aktar…",
   "action.file_export_obj.label": "Takımyollarını OBJ olarak dışa aktar…",
   "action.file_export_stl.label": "STL olarak dışa aktar…",
@@ -30,6 +31,7 @@
   "action.help_shortcuts.label": "Klavye kısayolları",
   "action.help_tip_of_day.label": "Günün İpucunu Göster",
   "action.help_tutorial.label": "Öğretici",
+  "action.instance_to_object.label": "Ayrı bir nesne olarak ayarla",
   "action.load_model_from_path.label": "Yükle",
   "action.paint_erase_all.label": "Tüm boyamayı sil",
   "action.presets_export_bundle.label": "Ön Ayar Paketini Dışa Aktar",
@@ -59,5 +61,10 @@
   "action.view_camera_top.label": "Üstten görünüm",
   "action.view_open_gcode.label": "G kodunu aç…",
   "action.view_show_gcode_window.label": "G-code Penceresini Göster",
-  "action.view_show_navigator.label": "3D Gezgini Göster"
+  "action.view_show_navigator.label": "3D Gezgini Göster",
+  "actions.actionContext.keyboardShortcuts": "Klavye kısayolları",
+  "ui.brimEarsPanel.brimEars": "Kenar  kulakları",
+  "ui.generatedSettingsPanel.detailLevel": "Detay seviyesi",
+  "ui.printSubmissionDialog.sendToPrinter": "Yazıcıya gönder",
+  "ui.semanticObjectEditor.heightRanges": "Yükseklik aralıkları"
 }

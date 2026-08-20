@@ -90,9 +90,8 @@
       "action": "presets_export_bundle"
     },
     "MainFrame::init_menubar_as_editor::Export all objects as STLs": {
-      "kind": "absent",
-      "task": "P5.7",
-      "reason": "Only the single-mesh STL export exists; one file per object is P5.7 work."
+      "kind": "action",
+      "action": "file_export_all_stls"
     },
     "MainFrame::init_menubar_as_editor::Export all objects as one STL": {
       "kind": "action",
@@ -399,9 +398,8 @@
       "action": "drop_to_bed"
     },
     "MenuFactory::append_menu_item_export_stl::Export as STLs": {
-      "kind": "absent",
-      "task": "P5.7",
-      "reason": "Only the single-mesh STL export exists; one file per object is P5.7 work."
+      "kind": "action",
+      "action": "file_export_all_stls"
     },
     "MenuFactory::append_menu_item_export_stl::Export as one STL": {
       "kind": "action",
@@ -416,9 +414,8 @@
       "action": "repair_model"
     },
     "MenuFactory::append_menu_item_instance_to_object::Set as an individual object": {
-      "kind": "absent",
-      "task": "P2.2",
-      "reason": "Promoting one instance to its own object is not implemented."
+      "kind": "action",
+      "action": "instance_to_object"
     },
     "MenuFactory::append_menu_item_layers_editing::Height range Modifier": {
       "kind": "action",
@@ -459,9 +456,8 @@
       "action": "scale_to_fit_volume"
     },
     "MenuFactory::append_menu_item_set_visible::Hide": {
-      "kind": "absent",
-      "task": "P2.1",
-      "reason": "Per-row visibility is not implemented in the Objects tree."
+      "kind": "action",
+      "action": "toggle_printable"
     },
     "MenuFactory::append_menu_item_simplify::Simplify Model": {
       "kind": "action",
@@ -572,9 +568,8 @@
       "action": "filament_virtual_mutate"
     },
     "MenuFactory::create_filament_action_menu::Merge with": {
-      "kind": "absent",
-      "task": "P4.5",
-      "reason": "Merging one filament into another is not implemented; remapping is per-object."
+      "kind": "action",
+      "action": "filament_remap"
     },
     "MenuFactory::create_object_menu::Split": {
       "kind": "container",
@@ -672,14 +667,12 @@
       "action": "help_about"
     },
     "runtime::Merge with mixed filament target": {
-      "kind": "absent",
-      "task": "P4.5",
-      "reason": "Merging one filament into another is not implemented; remapping is per-object."
+      "kind": "action",
+      "action": "filament_remap"
     },
     "runtime::Merge with physical filament target": {
-      "kind": "absent",
-      "task": "P4.5",
-      "reason": "Merging one filament into another is not implemented; remapping is per-object."
+      "kind": "action",
+      "action": "filament_remap"
     },
     "runtime::Open recent project entry": {
       "kind": "absent",

@@ -1,6 +1,7 @@
 import { EngineOptionCatalog, loadEngineOptionCatalog } from '../../settings/generated/loader';
 import type { SettingScope } from '../../settings/generated/settingScopes';
 import type { EngineGuiSurface, EngineOptionValue } from '../../settings/generated/types';
+import { t } from '../../l10n/t';
 import {
   SettingsDraftCommitError,
   SettingsDraftEditor,
@@ -207,7 +208,10 @@ export class GeneratedSettingsPanel {
     schemaStatus.dataset.settingsSchemaStatus = 'true';
     schemaStatus.setAttribute('role', 'status');
     schemaStatus.setAttribute('aria-live', 'polite');
-    schemaStatus.textContent = 'Loading the pinned engine settings schema…';
+    schemaStatus.textContent = t(
+      'ui.generatedSettingsPanel.loadingThePinnedEngineSettings',
+      'Loading the pinned engine settings schema…',
+    );
     schemaStatus.style.cssText = 'margin:0;color:var(--oxr-color-text-muted,#a0aab5);';
     form.appendChild(schemaStatus);
 
@@ -228,12 +232,17 @@ export class GeneratedSettingsPanel {
     const conflictCopy = document.createElement('p');
     conflictCopy.dataset.settingsConflictMessage = 'true';
     conflictCopy.style.cssText = 'margin:0;';
-    conflictCopy.textContent =
-      'Project settings changed after this draft began. The draft is preserved, but it cannot be applied to the stale revision.';
+    conflictCopy.textContent = t(
+      'ui.generatedSettingsPanel.projectSettingsChangedAfterThis',
+      'Project settings changed after this draft began. The draft is preserved, but it cannot be applied to the stale revision.',
+    );
     const conflictReload = document.createElement('button');
     conflictReload.type = 'button';
     conflictReload.dataset.settingsConflictReload = 'true';
-    conflictReload.textContent = 'Discard draft and reload current settings';
+    conflictReload.textContent = t(
+      'ui.generatedSettingsPanel.discardDraftAndReloadCurrent',
+      'Discard draft and reload current settings',
+    );
     conflictReload.addEventListener('click', () => void this.discardConflictAndReload());
     conflictStatus.append(conflictCopy, conflictReload);
     form.appendChild(conflictStatus);
@@ -241,7 +250,7 @@ export class GeneratedSettingsPanel {
     const retry = document.createElement('button');
     retry.type = 'button';
     retry.dataset.settingsRetry = 'true';
-    retry.textContent = 'Retry loading settings';
+    retry.textContent = t('ui.generatedSettingsPanel.retryLoadingSettings', 'Retry loading settings');
     retry.hidden = true;
     retry.addEventListener('click', () => {
       this.loadPromise = this.load();
@@ -254,7 +263,7 @@ export class GeneratedSettingsPanel {
       'display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:8px;border:1px solid ' +
       'var(--oxr-color-stroke,#ffffff2b);border-radius:8px;';
     const modeLegend = document.createElement('legend');
-    modeLegend.textContent = 'Detail level';
+    modeLegend.textContent = t('ui.generatedSettingsPanel.detailLevel', 'Detail level');
     modeLegend.style.cssText = 'padding:0 4px;font-weight:650;';
     modeFieldset.appendChild(modeLegend);
     for (const mode of MODES) {
@@ -279,7 +288,7 @@ export class GeneratedSettingsPanel {
 
     const searchLabel = document.createElement('label');
     searchLabel.htmlFor = `orcaxr-generated-settings-search-${this.instanceId}`;
-    searchLabel.textContent = 'Search settings';
+    searchLabel.textContent = t('ui.generatedSettingsPanel.searchSettings', 'Search settings');
     searchLabel.style.cssText = 'font-weight:650;';
     form.appendChild(searchLabel);
 
@@ -288,7 +297,10 @@ export class GeneratedSettingsPanel {
     search.type = 'search';
     search.dataset.settingsSearch = 'true';
     search.value = this.search;
-    search.placeholder = 'Name, key, category, tooltip, alias, or enum value';
+    search.placeholder = t(
+      'ui.generatedSettingsPanel.nameKeyCategoryTooltipAlias',
+      'Name, key, category, tooltip, alias, or enum value',
+    );
     search.autocomplete = 'off';
     search.setAttribute('aria-controls', `orcaxr-generated-settings-fields-${this.instanceId}`);
     search.style.cssText =
@@ -365,7 +377,11 @@ export class GeneratedSettingsPanel {
     this.loadFailed = false;
     this.clearError();
     this.setOperationMessage('');
-    if (this.schemaStatus) this.schemaStatus.textContent = 'Loading the pinned engine settings schema…';
+    if (this.schemaStatus)
+      this.schemaStatus.textContent = t(
+        'ui.generatedSettingsPanel.loadingThePinnedEngineSettings2',
+        'Loading the pinned engine settings schema…',
+      );
     this.fieldsContainer?.replaceChildren();
     this.syncControlState();
     try {
@@ -393,7 +409,11 @@ export class GeneratedSettingsPanel {
     } catch (error) {
       if (lifecycle !== this.lifecycle || !this.root) return;
       this.loadFailed = true;
-      if (this.schemaStatus) this.schemaStatus.textContent = 'Engine settings could not be loaded.';
+      if (this.schemaStatus)
+        this.schemaStatus.textContent = t(
+          'ui.generatedSettingsPanel.engineSettingsCouldNotBe',
+          'Engine settings could not be loaded.',
+        );
       this.showError(error, 'Loading settings failed');
     } finally {
       if (lifecycle === this.lifecycle && this.root) {
@@ -475,7 +495,10 @@ export class GeneratedSettingsPanel {
 
     if (fields.length === 0) {
       const empty = container.ownerDocument.createElement('p');
-      empty.textContent = 'No settings match this search and detail level.';
+      empty.textContent = t(
+        'ui.generatedSettingsPanel.noSettingsMatchThisSearch',
+        'No settings match this search and detail level.',
+      );
       empty.style.cssText =
         'margin:0;padding:12px;border:1px solid var(--oxr-color-stroke,#ffffff1f);border-radius:8px;';
       container.replaceChildren(empty);
@@ -604,7 +627,7 @@ export class GeneratedSettingsPanel {
       inherit.dataset.settingsResetInherited = field.id;
       inherit.dataset.settingsEditable = 'true';
       inherit.dataset.settingsDependencyEnabled = String(dependencyEnabled);
-      inherit.textContent = 'Use inherited';
+      inherit.textContent = t('ui.generatedSettingsPanel.useInherited', 'Use inherited');
       inherit.addEventListener('click', () => {
         editor.resetToInherited(field.id);
         this.drafts.set(field.id, { kind: 'remove' });
@@ -618,7 +641,7 @@ export class GeneratedSettingsPanel {
         resetDefault.dataset.settingsResetDefault = field.id;
         resetDefault.dataset.settingsEditable = 'true';
         resetDefault.dataset.settingsDependencyEnabled = String(dependencyEnabled);
-        resetDefault.textContent = 'Use default';
+        resetDefault.textContent = t('ui.generatedSettingsPanel.useDefault', 'Use default');
         resetDefault.addEventListener('click', () => {
           editor.resetToDefault(field.id);
           const nextState = editor.getFieldState(field.id);
@@ -661,8 +684,10 @@ export class GeneratedSettingsPanel {
       const special = document.createElement('p');
       special.id = `${controlId}-structured-editor`;
       special.dataset.settingsStructuredEditor = specialEditor.editorId;
-      special.textContent =
-        'Managed by the structured FullSpectrum recipe editor. Raw serialized definition editing is disabled here.';
+      special.textContent = t(
+        'ui.generatedSettingsPanel.managedByTheStructuredFullSpectrum',
+        'Managed by the structured FullSpectrum recipe editor. Raw serialized definition editing is disabled here.',
+      );
       special.style.cssText = 'grid-column:1/-1;margin:0;color:#ffd180;font-size:12px;';
       row.appendChild(special);
       describedBy.push(special.id);
@@ -672,8 +697,10 @@ export class GeneratedSettingsPanel {
       dependencyMessage.id = `${controlId}-dependency`;
       dependencyMessage.dataset.settingsDependencyState = 'disabled';
       dependencyMessage.dataset.settingsDependencyController = dependency.controllerKey;
-      dependencyMessage.textContent =
-        'Not applicable while Subdivide Mix Layer is off. Enable it to edit this Local-Z option.';
+      dependencyMessage.textContent = t(
+        'ui.generatedSettingsPanel.notApplicableWhileSubdivideMix',
+        'Not applicable while Subdivide Mix Layer is off. Enable it to edit this Local-Z option.',
+      );
       dependencyMessage.style.cssText =
         'grid-column:1/-1;margin:0;color:var(--oxr-color-text-muted,#a0aab5);font-size:12px;';
       row.appendChild(dependencyMessage);
@@ -760,7 +787,7 @@ export class GeneratedSettingsPanel {
       if (definition.storage.nullable) {
         const nil = document.createElement('option');
         nil.value = definition.storage.serialization.nilToken ?? 'nil';
-        nil.textContent = 'Not set';
+        nil.textContent = t('ui.generatedSettingsPanel.notSet', 'Not set');
         select.appendChild(nil);
       }
       for (const choice of field.enumChoices) {
@@ -823,13 +850,13 @@ export class GeneratedSettingsPanel {
     if (state.draftChanged) {
       const draft = document.createElement('span');
       draft.dataset.settingsDraft = 'changed';
-      draft.textContent = 'Draft changed';
+      draft.textContent = t('ui.generatedSettingsPanel.draftChanged', 'Draft changed');
       badges.push(draft);
     }
     if (specialEditor) {
       const structured = document.createElement('span');
       structured.dataset.settingsAvailability = 'structured-editor';
-      structured.textContent = 'Structured editor';
+      structured.textContent = t('ui.generatedSettingsPanel.structuredEditor', 'Structured editor');
       badges.push(structured);
     } else if (state.field.support.status === 'unavailable') {
       const unavailable = document.createElement('span');
@@ -840,7 +867,7 @@ export class GeneratedSettingsPanel {
     if (dependency && !dependency.enabled) {
       const notApplicable = document.createElement('span');
       notApplicable.dataset.settingsApplicability = 'not-applicable';
-      notApplicable.textContent = 'Not applicable';
+      notApplicable.textContent = t('ui.generatedSettingsPanel.notApplicable', 'Not applicable');
       badges.push(notApplicable);
     }
     for (const badge of badges) {
@@ -999,7 +1026,10 @@ export class GeneratedSettingsPanel {
         this.drafts.clear();
         this.loadFailed = true;
         if (this.schemaStatus) {
-          this.schemaStatus.textContent = 'The settings result must be reloaded before editing can continue.';
+          this.schemaStatus.textContent = t(
+            'ui.generatedSettingsPanel.theSettingsResultMustBe',
+            'The settings result must be reloaded before editing can continue.',
+          );
         }
         this.fieldsContainer?.replaceChildren();
       }

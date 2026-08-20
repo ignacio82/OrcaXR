@@ -92,6 +92,7 @@ import {
   type LayerEventPatch,
 } from '../project/layerEventCommands';
 import {
+  RemapFilamentsCommand,
   SetFilamentAssignmentsCommand,
   SyncPhysicalFilamentsFromPrinterCommand,
   type PrinterFilamentSyncSummary,
@@ -151,6 +152,7 @@ import {
   type SimplifyOptions,
 } from '../project/objects/simplify';
 import {
+  ConvertInstanceToIndependentObjectCommand,
   CreateInstanceCommand,
   createInstancesAtTransforms,
   DeleteInstanceCommand,
@@ -159,9 +161,11 @@ import {
   RenameObjectCommand,
   RenameVolumeCommand,
   SetInstancePrintableCommand,
+  type IndependentSingleInstanceObjectIds,
 } from '../project/objects/commands';
 import { computeCanonicalInstanceBounds, type CanonicalBounds3 } from '../project/objects/bounds';
 import { exportCanonicalInstancesAsBinaryStl } from '../project/objects/stlExport';
+import { writeDeterministicZip } from '../project/serialization/deterministicZip';
 import { SetInstanceTransformsCommand, type InstanceTransformChange } from '../project/objects/transformCommands';
 import {
   centerInstancesOnPlate,
@@ -354,7 +358,7 @@ export interface CanonicalDropToBedResult {
 
 export interface CanonicalStlExport {
   readonly bytes: Uint8Array;
-  readonly mediaType: 'model/stl';
+  readonly mediaType: 'model/stl' | 'application/zip';
   readonly suggestedFilename: string;
   readonly sourceRevision: number;
   readonly sourceHash: string;
@@ -3165,6 +3169,78 @@ export class CanonicalWorkspaceController {
       triangleCount: exported.triangleCount,
       instanceCount: exported.instanceCount,
     });
+  }
+
+  /** Export selected instances (or all instances on the active plate) as individual STLs (packaged into a ZIP if multiple). */
+  exportCanonicalAllStls(instanceIds?: readonly InstanceId[]): CanonicalStlExport {
+    this.assertActive();
+    const project = this.session.project.getSnapshot();
+    const activePlate = findPlate(project.state, project.state.activePlateId);
+    const ids =
+      instanceIds && instanceIds.length > 0
+        ? instanceIds
+        : (activePlate?.objects.flatMap((obj) => obj.instances.map((i) => i.id)) ?? []);
+    if (ids.length === 0) throw new Error('No models to export');
+    if (ids.length === 1) {
+      return this.exportCanonicalStl(ids);
+    }
+    const files = new Map<string, Uint8Array>();
+    const usedNames = new Set<string>();
+    let totalTriangles = 0;
+    for (const id of ids) {
+      const found = findInstance(project.state, id);
+      if (!found) continue;
+      const baseName =
+        (found.instance.name || found.object.name || 'model')
+          .replace(/[^a-zA-Z0-9_-]+/g, '_')
+          .replace(/^_+|_+$/g, '') || 'model';
+      let filename = `${baseName}.stl`;
+      let counter = 2;
+      while (usedNames.has(filename.toLowerCase())) {
+        filename = `${baseName}_${counter}.stl`;
+        counter += 1;
+      }
+      usedNames.add(filename.toLowerCase());
+      const exported = exportCanonicalInstancesAsBinaryStl(project.state, this.assets, [id]);
+      totalTriangles += exported.triangleCount;
+      files.set(filename, exported.bytes);
+    }
+    const zipBytes = writeDeterministicZip(files);
+    const projectName =
+      (project.state.name || 'models').replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'models';
+    return Object.freeze({
+      bytes: zipBytes,
+      mediaType: 'application/zip',
+      suggestedFilename: `${projectName}_stls.zip`,
+      sourceRevision: project.revision,
+      sourceHash: project.hash,
+      triangleCount: totalTriangles,
+      instanceCount: ids.length,
+    });
+  }
+
+  /** Promote an instance to its own independent object with isolated parts and parameters. */
+  convertInstanceToIndependentObject(instanceId: InstanceId, newName?: string): void {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    const found = findInstance(state, instanceId);
+    if (!found) throw new Error(`Unknown instance ${instanceId}`);
+    if (found.object.instances.length <= 1) {
+      throw new Error('Cannot convert sole instance to individual object');
+    }
+    const ids: IndependentSingleInstanceObjectIds = {
+      objectId: this.options.idSource.next('object'),
+      volumeIds: found.object.volumes.map(() => this.options.idSource.next('volume')),
+      instanceId: this.options.idSource.next('instance'),
+      layerRangeIds: found.object.layerRanges.map(() => this.options.idSource.next('layer-range')),
+    };
+    this.session.execute(new ConvertInstanceToIndependentObjectCommand(instanceId, ids, newName));
+  }
+
+  /** Remap one or more source filaments to a destination filament across all scene objects, annotations, and wipes. */
+  remapFilaments(sourceIds: readonly FilamentId[], destinationId: FilamentId): void {
+    this.assertActive();
+    this.session.execute(new RemapFilamentsCommand(sourceIds, destinationId));
   }
 
   saveCanonical3mf(cancellation?: CancellationToken): Promise<SerializedProject> {

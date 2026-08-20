@@ -29,6 +29,7 @@ import {
 // same function, so a plate cannot read its controls from one tab here and
 // another there.
 import { guiSurfaceForScope } from '../../settings/editor/scopedStepper';
+import { t } from '../../l10n/t';
 
 export { guiSurfaceForScope };
 
@@ -89,7 +90,7 @@ export class ScopedSettingsPanel {
 
     const label = doc.createElement('label');
     label.htmlFor = `${root.id}-target`;
-    label.textContent = 'Settings for';
+    label.textContent = t('ui.scopedSettingsPanel.settingsFor', 'Settings for');
     label.style.cssText = 'font-size:11px;letter-spacing:0.04em;text-transform:uppercase;opacity:0.7;';
     root.appendChild(label);
 

@@ -69,6 +69,22 @@ export const objectsActions: Action[] = [
     },
   },
   {
+    id: 'filament_remap',
+    label: 'Merge with filament',
+    icon: 'filament',
+    group: 'filament',
+    disclosure: 'inspector',
+    hint: 'Remap one or more filaments to a target filament across all objects, annotations, and wipes',
+    run: (ctx, invocation) => {
+      const request = invocation.filamentRemap;
+      if (!request) {
+        ctx.reportCapabilityUnavailable('Merge with filament', 'Choose source and target filaments to merge.');
+        return;
+      }
+      ctx.remapFilaments(request.sourceIds, request.destinationId);
+    },
+  },
+  {
     id: 'objects_convert_volume_role',
     label: 'Convert semantic volume role',
     icon: 'modifier',

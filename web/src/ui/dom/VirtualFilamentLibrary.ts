@@ -16,6 +16,7 @@ import {
   parseOrcaMixedColor,
 } from '../../project/filaments/filamentPigmentMixer';
 import { FULL_SPECTRUM_MAX_SURFACE_OFFSET_MM } from '../../project/filaments/fullSpectrumRecipe';
+import { t } from '../../l10n/t';
 import {
   appendManualCycleQuickToken,
   parseManualCyclePattern,
@@ -389,7 +390,7 @@ export class VirtualFilamentLibrary {
     const add = document.createElement('button');
     add.type = 'button';
     add.dataset.virtualFilamentAdd = 'true';
-    add.textContent = 'Add virtual filament';
+    add.textContent = t('ui.virtualFilamentLibrary.addVirtualFilament', 'Add virtual filament');
     add.style.cssText = TOUCH_BUTTON_STYLE;
     add.addEventListener('click', () => this.openAuthorDialog('add', undefined, add));
     header.append(heading, add);
@@ -416,11 +417,13 @@ export class VirtualFilamentLibrary {
     physicalSection.style.cssText = PANEL_STYLE;
     const physicalHeading = document.createElement('h3');
     physicalHeading.id = this.id('physical-heading');
-    physicalHeading.textContent = 'Physical components';
+    physicalHeading.textContent = t('ui.virtualFilamentLibrary.physicalComponents', 'Physical components');
     physicalHeading.style.cssText = 'margin:0;font-size:14px;';
     const physicalHelp = document.createElement('p');
-    physicalHelp.textContent =
-      'Recipes reference these stable physical heads. Disabled or incompatible heads remain visible but cannot be newly selected.';
+    physicalHelp.textContent = t(
+      'ui.virtualFilamentLibrary.recipesReferenceTheseStablePhysical',
+      'Recipes reference these stable physical heads. Disabled or incompatible heads remain visible but cannot be newly selected.',
+    );
     physicalHelp.style.cssText = MUTED_STYLE;
     const physicalHost = document.createElement('ul');
     physicalHost.dataset.virtualPhysicalChoices = 'true';
@@ -433,7 +436,7 @@ export class VirtualFilamentLibrary {
     mixedSection.style.cssText = PANEL_STYLE;
     const mixedHeading = document.createElement('h3');
     mixedHeading.id = this.id('mixed-heading');
-    mixedHeading.textContent = 'Virtual library';
+    mixedHeading.textContent = t('ui.virtualFilamentLibrary.virtualLibrary', 'Virtual library');
     mixedHeading.style.cssText = 'margin:0;font-size:14px;';
     const rows = document.createElement('ul');
     rows.dataset.virtualFilamentRows = 'true';
@@ -665,8 +668,10 @@ export class VirtualFilamentLibrary {
     heading.style.cssText = 'margin:0;font-size:18px;';
     const description = document.createElement('p');
     description.id = this.id('dialog-description');
-    description.textContent =
-      'Deletion is sent as one guarded canonical request. This dialog does not remove or remap anything itself.';
+    description.textContent = t(
+      'ui.virtualFilamentLibrary.deletionIsSentAsOne',
+      'Deletion is sent as one guarded canonical request. This dialog does not remove or remap anything itself.',
+    );
     description.style.cssText = MUTED_STYLE;
     card.append(heading, description);
 
@@ -725,8 +730,10 @@ export class VirtualFilamentLibrary {
     heading.style.cssText = 'margin:0;font-size:18px;';
     const description = document.createElement('p');
     description.id = this.id('dialog-description');
-    description.textContent =
-      'Choose physical heads and author one pinned FullSpectrum mode. Apply is available only for a complete validated recipe.';
+    description.textContent = t(
+      'ui.virtualFilamentLibrary.choosePhysicalHeadsAndAuthor',
+      'Choose physical heads and author one pinned FullSpectrum mode. Apply is available only for a complete validated recipe.',
+    );
     description.style.cssText = MUTED_STYLE;
     card.append(heading, description);
 
@@ -768,7 +775,7 @@ export class VirtualFilamentLibrary {
       'display:flex;flex-wrap:wrap;gap:7px;margin:0;padding:9px;border:1px solid ' +
       'var(--oxr-color-stroke,#ffffff2b);border-radius:8px;';
     const legend = document.createElement('legend');
-    legend.textContent = 'Authoring mode';
+    legend.textContent = t('ui.virtualFilamentLibrary.authoringMode', 'Authoring mode');
     legend.style.cssText = 'padding:0 4px;font-weight:700;';
     modeFieldset.appendChild(legend);
     for (const mode of ['ratio', 'cycle', 'match', 'gradient'] as const) {
@@ -883,7 +890,7 @@ export class VirtualFilamentLibrary {
     ratio.style.cssText =
       'display:grid;grid-template-columns:minmax(180px,1fr) minmax(100px,160px);gap:9px;align-items:end;';
     const sliderLabel = document.createElement('label');
-    sliderLabel.textContent = 'Component B percent';
+    sliderLabel.textContent = t('ui.virtualFilamentLibrary.componentBPercent', 'Component B percent');
     sliderLabel.style.cssText = 'display:grid;gap:5px;font-weight:650;';
     const slider = document.createElement('input');
     slider.type = 'range';
@@ -904,7 +911,7 @@ export class VirtualFilamentLibrary {
     });
     sliderLabel.appendChild(slider);
     const numericLabel = document.createElement('label');
-    numericLabel.textContent = 'Exact percent';
+    numericLabel.textContent = t('ui.virtualFilamentLibrary.exactPercent', 'Exact percent');
     numericLabel.style.cssText = 'display:grid;gap:5px;font-weight:650;';
     numericLabel.appendChild(number);
     ratio.append(sliderLabel, numericLabel);
@@ -916,7 +923,7 @@ export class VirtualFilamentLibrary {
         'display:grid;grid-template-columns:repeat(3,minmax(90px,1fr));gap:8px;margin:0;padding:9px;border:1px solid ' +
         'var(--oxr-color-stroke,#ffffff2b);border-radius:8px;';
       const weightsLegend = document.createElement('legend');
-      weightsLegend.textContent = 'Triangle proportions';
+      weightsLegend.textContent = t('ui.virtualFilamentLibrary.triangleProportions', 'Triangle proportions');
       weights.appendChild(weightsLegend);
       const weightInputs: HTMLInputElement[] = [];
       state.ratio.triangleWeights.forEach((value, index) => {
@@ -933,8 +940,10 @@ export class VirtualFilamentLibrary {
       weights.appendChild(this.ratioTrianglePicker(state, weightInputs));
       panel.appendChild(weights);
       const note = document.createElement('p');
-      note.textContent =
-        'These are triangle coordinates. The preview below reports the exact clamped, renormalized integer weights that will be submitted.';
+      note.textContent = t(
+        'ui.virtualFilamentLibrary.theseAreTriangleCoordinatesThe',
+        'These are triangle coordinates. The preview below reports the exact clamped, renormalized integer weights that will be submitted.',
+      );
       note.style.cssText = MUTED_STYLE;
       panel.appendChild(note);
     }
@@ -957,7 +966,13 @@ export class VirtualFilamentLibrary {
     svg.setAttribute('viewBox', '0 0 240 216');
     svg.setAttribute('role', 'slider');
     svg.setAttribute('tabindex', '0');
-    svg.setAttribute('aria-label', 'Three-filament Ratio triangle. Use arrow keys or drag the marker.');
+    svg.setAttribute(
+      'aria-label',
+      t(
+        'ui.virtualFilamentLibrary.threeFilamentRatioTriangleUse',
+        'Three-filament Ratio triangle. Use arrow keys or drag the marker.',
+      ),
+    );
     svg.setAttribute('aria-valuemin', '0');
     svg.setAttribute('aria-valuemax', '100');
     svg.style.cssText =
@@ -1086,7 +1101,7 @@ export class VirtualFilamentLibrary {
     const document = panel.ownerDocument;
     const label = document.createElement('label');
     label.htmlFor = this.id('cycle-pattern');
-    label.textContent = 'Manual cycle pattern';
+    label.textContent = t('ui.virtualFilamentLibrary.manualCyclePattern', 'Manual cycle pattern');
     label.style.cssText = 'font-weight:700;';
     const input = document.createElement('textarea');
     input.id = label.htmlFor;
@@ -1103,14 +1118,19 @@ export class VirtualFilamentLibrary {
     });
     const help = document.createElement('p');
     help.id = this.id('cycle-help');
-    help.textContent =
-      'Use compact 1–9 IDs, [N] for multi-digit IDs, or slash-delimited authoring; commas start a new perimeter group.';
+    help.textContent = t(
+      'ui.virtualFilamentLibrary.useCompact19IDs',
+      'Use compact 1–9 IDs, [N] for multi-digit IDs, or slash-delimited authoring; commas start a new perimeter group.',
+    );
     help.style.cssText = MUTED_STYLE;
     panel.append(label, input, help);
 
     const quick = document.createElement('div');
     quick.setAttribute('role', 'group');
-    quick.setAttribute('aria-label', 'Insert physical filament token');
+    quick.setAttribute(
+      'aria-label',
+      t('ui.virtualFilamentLibrary.insertPhysicalFilamentToken', 'Insert physical filament token'),
+    );
     quick.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
     for (const choice of this.snapshot?.physicalChoices ?? []) {
       const button = document.createElement('button');
@@ -1132,7 +1152,7 @@ export class VirtualFilamentLibrary {
     const comma = document.createElement('button');
     comma.type = 'button';
     comma.dataset.virtualQuickGroup = 'true';
-    comma.textContent = 'New perimeter group';
+    comma.textContent = t('ui.virtualFilamentLibrary.newPerimeterGroup', 'New perimeter group');
     comma.style.cssText = TOUCH_BUTTON_STYLE;
     comma.addEventListener('click', () => {
       state.cycle.manualPattern += ',';
@@ -1162,14 +1182,14 @@ export class VirtualFilamentLibrary {
     const fields = document.createElement('div');
     fields.style.cssText = 'display:grid;grid-template-columns:minmax(180px,1fr) minmax(130px,180px);gap:9px;';
     const targetLabel = document.createElement('label');
-    targetLabel.textContent = 'Target hex color';
+    targetLabel.textContent = t('ui.virtualFilamentLibrary.targetHexColor', 'Target hex color');
     targetLabel.style.cssText = 'display:grid;gap:5px;font-weight:650;';
     const target = document.createElement('input');
     target.type = 'text';
     target.inputMode = 'text';
     target.value = state.match.targetColor;
     target.maxLength = 7;
-    target.placeholder = '#RRGGBB';
+    target.placeholder = t('ui.virtualFilamentLibrary.rRGGBB', '#RRGGBB');
     target.dataset.virtualField = 'match-target';
     target.style.cssText = INPUT_STYLE;
     target.addEventListener('input', () => {
@@ -1180,7 +1200,7 @@ export class VirtualFilamentLibrary {
     });
     targetLabel.appendChild(target);
     const minimumLabel = document.createElement('label');
-    minimumLabel.textContent = 'Minimum component %';
+    minimumLabel.textContent = t('ui.virtualFilamentLibrary.minimumComponent', 'Minimum component %');
     minimumLabel.style.cssText = 'display:grid;gap:5px;font-weight:650;';
     minimumLabel.appendChild(
       this.numberInput('match-minimum', state.match.minComponentPercent, '0', '50', '1', (value) => {
@@ -1197,7 +1217,7 @@ export class VirtualFilamentLibrary {
     candidates.style.cssText =
       'display:grid;gap:7px;margin:0;padding:9px;border:1px solid var(--oxr-color-stroke,#ffffff2b);border-radius:8px;';
     const legend = document.createElement('legend');
-    legend.textContent = 'Ranked supplied candidates';
+    legend.textContent = t('ui.virtualFilamentLibrary.rankedSuppliedCandidates', 'Ranked supplied candidates');
     candidates.appendChild(legend);
     panel.appendChild(candidates);
     this.matchCandidatesHost = candidates;
@@ -1247,7 +1267,10 @@ export class VirtualFilamentLibrary {
     panel.appendChild(direction);
 
     const sublayersLabel = document.createElement('label');
-    sublayersLabel.textContent = 'Local-Z sublayers per nominal layer';
+    sublayersLabel.textContent = t(
+      'ui.virtualFilamentLibrary.localZSublayersPerNominal',
+      'Local-Z sublayers per nominal layer',
+    );
     sublayersLabel.style.cssText = 'display:grid;max-width:260px;gap:5px;font-weight:650;';
     sublayersLabel.appendChild(
       this.numberInput('gradient-sublayers', state.gradient.localZMaxSublayers, '2', undefined, '1', (value) => {
@@ -1271,13 +1294,13 @@ export class VirtualFilamentLibrary {
     const wrapper = document.createElement('div');
     wrapper.style.cssText = 'display:grid;grid-template-columns:1fr 52px;gap:6px;align-items:end;';
     const textLabel = document.createElement('label');
-    textLabel.textContent = 'Display badge color';
+    textLabel.textContent = t('ui.virtualFilamentLibrary.displayBadgeColor', 'Display badge color');
     textLabel.style.cssText = 'display:grid;gap:5px;font-weight:650;';
     const text = document.createElement('input');
     text.type = 'text';
     text.value = state.displayColor;
     text.maxLength = 7;
-    text.placeholder = '#RRGGBB';
+    text.placeholder = t('ui.virtualFilamentLibrary.rRGGBB2', '#RRGGBB');
     text.dataset.virtualField = 'display-color';
     text.style.cssText = INPUT_STYLE;
     const pickerLabel = document.createElement('label');
@@ -1287,7 +1310,10 @@ export class VirtualFilamentLibrary {
     picker.type = 'color';
     picker.value = /^#[0-9a-f]{6}$/i.test(state.displayColor) ? state.displayColor : '#808080';
     picker.dataset.virtualField = 'display-color-picker';
-    picker.setAttribute('aria-label', 'Choose display badge color');
+    picker.setAttribute(
+      'aria-label',
+      t('ui.virtualFilamentLibrary.chooseDisplayBadgeColor', 'Choose display badge color'),
+    );
     picker.style.cssText = 'box-sizing:border-box;width:52px;min-height:44px;padding:3px;';
     text.addEventListener('input', () => {
       state.displayColor = text.value;
@@ -1384,7 +1410,7 @@ export class VirtualFilamentLibrary {
     select.style.cssText = INPUT_STYLE;
     const placeholder = document.createElement('option');
     placeholder.value = '';
-    placeholder.textContent = 'Choose a physical head';
+    placeholder.textContent = t('ui.virtualFilamentLibrary.chooseAPhysicalHead', 'Choose a physical head');
     placeholder.disabled = true;
     select.appendChild(placeholder);
     for (const choice of this.snapshot?.physicalChoices ?? []) {
@@ -1581,7 +1607,10 @@ export class VirtualFilamentLibrary {
     }
     if (!predictedColor || !method) {
       visual.style.background = '#555';
-      visual.textContent = 'Complete the Ratio recipe to predict its live mix color.';
+      visual.textContent = t(
+        'ui.virtualFilamentLibrary.completeTheRatioRecipeTo',
+        'Complete the Ratio recipe to predict its live mix color.',
+      );
       visual.setAttribute('aria-label', visual.textContent);
       return;
     }
@@ -1599,7 +1628,10 @@ export class VirtualFilamentLibrary {
     const bottom = state.gradient.direction === 'a-to-b' ? second : first;
     if (!first || !second) {
       visual.style.background = '#555';
-      visual.textContent = 'Choose two physical heads for the vertical gradient preview.';
+      visual.textContent = t(
+        'ui.virtualFilamentLibrary.chooseTwoPhysicalHeadsFor',
+        'Choose two physical heads for the vertical gradient preview.',
+      );
       visual.setAttribute('aria-label', visual.textContent);
       return;
     }
@@ -1628,7 +1660,10 @@ export class VirtualFilamentLibrary {
       status.dataset.virtualMatchPending = 'true';
       status.setAttribute('role', 'status');
       status.setAttribute('aria-live', 'polite');
-      status.textContent = 'Searching the compatible physical palette…';
+      status.textContent = t(
+        'ui.virtualFilamentLibrary.searchingTheCompatiblePhysicalPalette',
+        'Searching the compatible physical palette…',
+      );
       status.style.cssText = MUTED_STYLE;
       host.appendChild(status);
     }

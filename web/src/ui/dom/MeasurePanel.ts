@@ -1,3 +1,4 @@
+import { t } from '../../l10n/t';
 export interface MeasurePickView {
   readonly kind: 'point' | 'edge' | 'circle' | 'plane';
   readonly summary: string;
@@ -115,7 +116,7 @@ export class MeasurePanel {
 
     const picks = document.createElement('ol');
     picks.dataset.measurePicks = 'true';
-    picks.setAttribute('aria-label', 'Picked features');
+    picks.setAttribute('aria-label', t('ui.measurePanel.pickedFeatures', 'Picked features'));
     picks.style.cssText = 'margin:0;padding-inline-start:18px;display:flex;flex-direction:column;gap:2px;';
     for (const pick of state.picks) {
       const item = document.createElement('li');
@@ -207,7 +208,7 @@ export class MeasurePanel {
       'background:var(--oxr-color-surface,#0d1117);color:inherit;font:inherit;';
     const distanceLabel = document.createElement('label');
     distanceLabel.htmlFor = distance.id;
-    distanceLabel.textContent = 'Gap (mm)';
+    distanceLabel.textContent = t('ui.measurePanel.gapMm', 'Gap (mm)');
     distanceLabel.style.cssText = 'opacity:0.75;display:flex;align-items:center;gap:6px;margin-top:6px;';
     distanceLabel.appendChild(distance);
     align('align-parallel-distance', 'Set gap', assembly.hasParallelDistance, () => Number(distance.value));

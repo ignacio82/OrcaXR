@@ -21,6 +21,8 @@ import {
 import { buildZip, valid3mf } from "./test-helpers.mjs";
 import {
   detectSliceInputKind,
+  resolveWasmDir,
+  resolveWasmProvenancePath,
   startSliceInput,
 } from "./slice_worker.mjs";
 
@@ -315,13 +317,15 @@ test(
 
 test("engine attestation proves the WASM build and refuses to claim one for CLI", async () => {
   const { createSlicerService } = await import("./server.js");
-  // `wasm-dist/` holds build output and is not committed, so a clean checkout —
-  // CI included — has no engine to attest. The refusal path is the one that
-  // must hold everywhere; the proof path is asserted wherever a build exists.
+  // Follow the resolver rather than one hard-coded directory: the attestation
+  // must describe whichever build the slice worker would load, and a
+  // deployment may publish it beside the server or leave it in `wasm/dist`.
+  // A tree with no build at all still has to reach the refusal path.
+  const wasmDir = resolveWasmDir();
   let provenance = null;
   try {
     provenance = JSON.parse(
-      await fs.readFile(new URL("./wasm-dist/artifact-provenance.json", import.meta.url), "utf8"),
+      await fs.readFile(resolveWasmProvenancePath(wasmDir ?? "/nonexistent"), "utf8"),
     );
   } catch {
     provenance = null;
@@ -371,6 +375,81 @@ test("engine attestation proves the WASM build and refuses to claim one for CLI"
   assert.equal(cli.engine, "cli");
   assert.match(cli.reason, /no engine provenance manifest/i);
 });
+
+test("the WASM attestation hashes the same directory the slice worker loads", async (t) => {
+  // The container layout: artifacts and manifest published beside the server as
+  // `wasm-dist/`. The attestation used to look only there while the worker
+  // loaded `wasm/dist`, so an image could execute one build and prove another —
+  // and as `server/Dockerfile` actually shipped it, the server executed a real
+  // engine while reporting `attested: false`, which the client refuses.
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "orcaxr-wasm-attest-"));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const distDir = path.join(dir, "wasm-dist");
+  await fs.mkdir(distDir, { recursive: true });
+  await fs.writeFile(path.join(distDir, "slic3r.mjs"), "export default () => ({});\n");
+  await fs.writeFile(path.join(distDir, "slic3r.wasm"), "\0asm-original");
+  const digest = async (name) =>
+    createHash("sha256")
+      .update(await fs.readFile(path.join(distDir, name)))
+      .digest("hex");
+  const outputs = {
+    "slic3r.mjs": await digest("slic3r.mjs"),
+    "slic3r.wasm": await digest("slic3r.wasm"),
+  };
+  await fs.writeFile(
+    path.join(distDir, "artifact-provenance.json"),
+    JSON.stringify({ engine: { commit: PINNED_ENGINE_COMMIT }, outputs }),
+  );
+
+  const previous = process.env.ORCAXR_WASM_DIR;
+  process.env.ORCAXR_WASM_DIR = distDir;
+  t.after(() => {
+    if (previous === undefined) delete process.env.ORCAXR_WASM_DIR;
+    else process.env.ORCAXR_WASM_DIR = previous;
+  });
+
+  // One resolver for both consumers, so they cannot drift apart again.
+  assert.equal(resolveWasmDir(), distDir);
+  assert.equal(
+    resolveWasmProvenancePath(resolveWasmDir()),
+    path.join(distDir, "artifact-provenance.json"),
+  );
+
+  const readEngine = () =>
+    new Promise((resolve, reject) => {
+      const server = createSlicerService({ engine: "wasm" }).app.listen(0, "127.0.0.1", () => {
+        http
+          .get({ host: "127.0.0.1", port: server.address().port, path: "/engine" }, (res) => {
+            let body = "";
+            res.on("data", (chunk) => (body += chunk));
+            res.on("end", () => {
+              server.close();
+              resolve(JSON.parse(body));
+            });
+          })
+          .on("error", (error) => {
+            server.close();
+            reject(error);
+          });
+      });
+    });
+
+  const attestation = await readEngine();
+  assert.equal(attestation.engine, "wasm");
+  assert.equal(attestation.attested, true, "a published wasm-dist/ proves its engine");
+  assert.equal(attestation.upstream.commit, PINNED_ENGINE_COMMIT);
+  // Digests come from the files on disk, not from the manifest, so a swapped
+  // artifact cannot inherit the manifest's good name.
+  assert.deepEqual(attestation.artifacts, outputs);
+
+  // Swap one artifact: the manifest still claims the old digest, and the server
+  // must report the mismatch rather than vouch for what it now holds.
+  await fs.writeFile(path.join(distDir, "slic3r.wasm"), "\0asm-tampered");
+  const swapped = await readEngine();
+  assert.equal(swapped.attested, false, "a swapped artifact cannot keep attesting");
+  assert.match(swapped.reason, /do not match the provenance manifest/i);
+});
+
 
 test("a CLI engine attests its upstream commit, patch set, and the binary it will run", async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "orcaxr-cli-attest-"));

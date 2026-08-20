@@ -101,8 +101,14 @@ RUN set -eu; \
 COPY server/package*.json ./
 RUN npm ci --omit=dev
 
-# Copy WASM module
-COPY wasm/dist /app/wasm/dist
+# The WASM engine, with the provenance manifest beside it. Both the slice
+# worker and `GET /engine` resolve this one directory (slice_worker.mjs
+# resolveWasmDir), so the digests the server attests are the digests it runs.
+# The manifest lives at `wasm/artifact-provenance.json` in the repository, one
+# level above the artifacts it describes; publishing it beside them here keeps
+# the image's layout self-contained.
+COPY wasm/dist /app/wasm-dist
+COPY wasm/artifact-provenance.json /app/wasm-dist/artifact-provenance.json
 
 # Copy server code
 COPY server/server.js server/security.mjs server/slice_worker.mjs server/preset_key_types.json ./

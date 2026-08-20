@@ -15,6 +15,7 @@
 
 import type { PrinterCamera } from '../../printer/PrinterCamera';
 import { cameraPollIntervalMs, cameraTransform, describeCameraService } from '../../printer/PrinterCamera';
+import { t } from '../../l10n/t';
 
 export interface PrinterCameraPanelPort {
   getCameras(): readonly PrinterCamera[];
@@ -64,7 +65,7 @@ export class PrinterCameraPanel {
     const doc = this.container.ownerDocument;
     const root = doc.createElement('section');
     root.dataset.printerCameraPanel = 'true';
-    root.setAttribute('aria-label', 'Printer camera');
+    root.setAttribute('aria-label', t('ui.printerCameraPanel.printerCamera', 'Printer camera'));
     root.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
 
     const controls = doc.createElement('div');
@@ -93,7 +94,7 @@ export class PrinterCameraPanel {
     refresh.type = 'button';
     refresh.className = 'action-btn';
     refresh.dataset.printerCameraRefresh = 'true';
-    refresh.textContent = 'Find cameras';
+    refresh.textContent = t('ui.printerCameraPanel.findCameras', 'Find cameras');
     refresh.style.cssText = 'margin:0;';
     refresh.addEventListener('click', () => void this.port.refresh());
     controls.appendChild(refresh);
@@ -105,7 +106,7 @@ export class PrinterCameraPanel {
       'display:flex;align-items:center;justify-content:center;';
     const image = doc.createElement('img');
     image.dataset.printerCameraFrame = 'true';
-    image.alt = 'Live view from the printer camera';
+    image.alt = t('ui.printerCameraPanel.liveViewFromThePrinter', 'Live view from the printer camera');
     image.hidden = true;
     image.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;';
     frame.appendChild(image);

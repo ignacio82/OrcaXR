@@ -119,6 +119,17 @@ export const fileActions: Action[] = [
     run: (ctx) => ctx.exportStl(),
   },
   {
+    id: 'file_export_all_stls',
+    label: 'Export all objects as STLs…',
+    icon: 'file_stl',
+    group: 'file',
+    disclosure: 'menu',
+    menuSection: 'file',
+    hint: 'Export every model on the active plate as separate STL files in a ZIP archive',
+    isEnabled: (s) => s.modelCount > 0,
+    run: (ctx) => ctx.exportAllObjectsAsStls(),
+  },
+  {
     id: 'file_export_3mf',
     label: 'Export as 3MF…',
     icon: 'file_3mf',

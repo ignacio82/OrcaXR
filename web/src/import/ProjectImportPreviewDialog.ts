@@ -1,4 +1,5 @@
 import type { ImportCommitConfirmation, ProjectImportPreview } from '../project/import/types';
+import { t } from '../l10n/t';
 
 interface PreviewNoticeRow {
   readonly id: string;
@@ -95,14 +96,17 @@ export function showProjectImportPreviewDialog(
   dialog.appendChild(summary);
 
   const noticeList = document.createElement('div');
-  noticeList.setAttribute('aria-label', 'Import notices');
+  noticeList.setAttribute('aria-label', t('import.projectImportPreviewDialog.importNotices', 'Import notices'));
   noticeList.style.cssText = 'display:grid;gap:8px;';
   dialog.appendChild(noticeList);
 
   const requiredInputs = new Map<string, HTMLInputElement>();
   if (rows.length === 0) {
     const none = document.createElement('p');
-    none.textContent = 'No repairs, conflicts, dropped fields, or diagnostics were reported.';
+    none.textContent = t(
+      'import.projectImportPreviewDialog.noRepairsConflictsDroppedFields',
+      'No repairs, conflicts, dropped fields, or diagnostics were reported.',
+    );
     none.style.cssText = 'margin:0;padding:12px;background:#ffffff0a;border-radius:8px;';
     noticeList.appendChild(none);
   } else {
@@ -153,7 +157,7 @@ export function showProjectImportPreviewDialog(
 
   const confirm = document.createElement('button');
   confirm.type = 'button';
-  confirm.textContent = 'Replace project';
+  confirm.textContent = t('import.projectImportPreviewDialog.replaceProject', 'Replace project');
   confirm.style.cssText =
     'border:0;background:#2477db;color:#fff;border-radius:8px;padding:9px 16px;font-weight:650;cursor:pointer;';
   if (!preview.blocked) actions.appendChild(confirm);

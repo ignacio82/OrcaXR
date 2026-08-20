@@ -17,6 +17,7 @@
  */
 
 import type { GcodeDocument } from '../../project/gcode/GcodeDocument';
+import { t } from '../../l10n/t';
 
 /** Row height in pixels; the spacer and the window both derive from it. */
 const ROW_HEIGHT = 18;
@@ -76,7 +77,7 @@ export class GcodePanel {
       empty.dataset.gcodeEmpty = 'true';
       empty.setAttribute('role', 'status');
       empty.style.cssText = 'margin:0;opacity:0.75;';
-      empty.textContent = 'Slice a project to read its G-code here.';
+      empty.textContent = t('ui.gcodePanel.sliceAProjectToRead', 'Slice a project to read its G-code here.');
       this.container.replaceChildren(empty);
       return;
     }
@@ -91,7 +92,7 @@ export class GcodePanel {
     search.id = searchId;
     search.dataset.gcodeSearch = 'true';
     search.value = this.query;
-    search.placeholder = 'Find a command';
+    search.placeholder = t('ui.gcodePanel.findACommand', 'Find a command');
     search.style.cssText =
       'flex:1 1 160px;padding:6px;border-radius:6px;border:1px solid var(--oxr-color-border,#30363d);' +
       'background:var(--oxr-color-surface,#0d1117);color:inherit;font:inherit;';
@@ -106,7 +107,7 @@ export class GcodePanel {
     const next = doc.createElement('button');
     next.type = 'button';
     next.dataset.gcodeAction = 'next-match';
-    next.textContent = 'Next match';
+    next.textContent = t('ui.gcodePanel.nextMatch', 'Next match');
     next.style.cssText =
       'min-height:32px;padding:4px 10px;border-radius:6px;border:1px solid currentColor;' +
       'background:transparent;color:inherit;cursor:pointer;';
@@ -135,7 +136,7 @@ export class GcodePanel {
     this.scroller.dataset.gcodeScroller = 'true';
     this.scroller.tabIndex = 0;
     this.scroller.setAttribute('role', 'region');
-    this.scroller.setAttribute('aria-label', 'G-code listing');
+    this.scroller.setAttribute('aria-label', t('ui.gcodePanel.gCodeListing', 'G-code listing'));
     this.scroller.style.cssText =
       'overflow:auto;max-height:340px;min-height:120px;border-radius:6px;' +
       'border:1px solid var(--oxr-color-border,#30363d);background:var(--oxr-color-surface,#0d1117);';

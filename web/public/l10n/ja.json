@@ -25,6 +25,7 @@
   "action.help_setup_wizard.label": "セットアップ ウィザード",
   "action.help_shortcuts.label": "ショートカット",
   "action.help_tip_of_day.label": "「毎日のヒント」を表示",
+  "action.instance_to_object.label": "個別オブジェクトとして設定",
   "action.paint_erase_all.label": "全てを消去",
   "action.presets_export_bundle.label": "プリセットバンドルをエクスポート",
   "action.reset_rotation.label": "回転をリセット",
@@ -49,5 +50,8 @@
   "action.view_camera_rear.label": "背面",
   "action.view_camera_right.label": "右面",
   "action.view_camera_top.label": "トップ",
-  "action.view_open_gcode.label": "G-codeを開く…"
+  "action.view_open_gcode.label": "G-codeを開く…",
+  "actions.actionContext.keyboardShortcuts": "ショートカット",
+  "ui.generatedSettingsPanel.detailLevel": "細部レベル",
+  "ui.printSubmissionDialog.sendToPrinter": "プリンタへ送信"
 }

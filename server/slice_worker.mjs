@@ -57,6 +57,52 @@ export function startSliceInput(
   return { kind, inputPath };
 }
 
+/**
+ * The candidate WASM artifact directories, most specific first.
+ *
+ * This is the *sole* resolver: `GET /engine` must hash the artifacts this
+ * server would actually load, so the attestation and this worker have to agree
+ * on one directory. They did not — the attestation looked only in
+ * `<server>/wasm-dist` while the worker loaded `<server>/wasm/dist` or
+ * `<repo>/wasm/dist` — which let a container execute one build while proving
+ * (or failing to prove) another.
+ */
+export function wasmDirCandidates(env = process.env) {
+  return [
+    env.ORCAXR_WASM_DIR,
+    // Container image, and the local publish target of `wasm/`'s build script.
+    path.resolve(__dirname, "wasm-dist"),
+    path.resolve(__dirname, "wasm/dist"),
+    // Repository checkout: `wasm/dist` is committed, so a clean clone has an
+    // engine to attest even before anything is published beside the server.
+    path.resolve(__dirname, "../wasm/dist"),
+  ].filter(Boolean);
+}
+
+/** The first candidate that actually holds a loadable module, or null. */
+export function resolveWasmDir(env = process.env) {
+  return (
+    wasmDirCandidates(env).find((candidate) =>
+      fs.existsSync(path.join(candidate, "slic3r.mjs")),
+    ) ?? null
+  );
+}
+
+/**
+ * The provenance manifest for a resolved artifact directory.
+ *
+ * Published copies carry the manifest beside the artifacts; the repository's
+ * own `wasm/dist` is published one level below its `wasm/artifact-provenance.json`.
+ * Returns the beside-path when neither exists, so the caller reports the
+ * location it looked for rather than a silent null.
+ */
+export function resolveWasmProvenancePath(wasmDir) {
+  const beside = path.join(wasmDir, "artifact-provenance.json");
+  if (fs.existsSync(beside)) return beside;
+  const above = path.resolve(wasmDir, "..", "artifact-provenance.json");
+  return fs.existsSync(above) ? above : beside;
+}
+
 async function run() {
   const modelPath = process.argv[2];
   const configPath = process.argv[3];
@@ -71,18 +117,10 @@ async function run() {
 
   const overridesJson = fs.readFileSync(configPath, "utf8");
 
-  const configuredWasmDir = process.env.ORCAXR_WASM_DIR;
-  const candidates = [
-    configuredWasmDir,
-    path.resolve(__dirname, "wasm/dist"),
-    path.resolve(__dirname, "../wasm/dist"),
-  ].filter(Boolean);
-  const wasmDir = candidates.find((candidate) =>
-    fs.existsSync(path.join(candidate, "slic3r.mjs")),
-  );
+  const wasmDir = resolveWasmDir();
   if (!wasmDir) {
     throw new Error(
-      `WASM artifacts not found; checked: ${candidates.join(", ")}`,
+      `WASM artifacts not found; checked: ${wasmDirCandidates().join(", ")}`,
     );
   }
   const wasmPath = path.join(wasmDir, "slic3r.mjs");

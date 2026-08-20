@@ -16,6 +16,7 @@
   "action.edit_redo.label": "다시 실행",
   "action.edit_select_all.label": "모두 선택",
   "action.edit_undo.label": "실행 취소",
+  "action.file_export_all_stls.label": "모든 객체를 여러 STL로 내보내기…",
   "action.file_export_gcode.label": "Gcode 내보내기…",
   "action.file_export_obj.label": "툴 경로를 OBJ로 내보내기 (T)…",
   "action.file_export_stl.label": "하나의 STL로 내보내기…",
@@ -30,6 +31,7 @@
   "action.help_shortcuts.label": "키보드 단축키",
   "action.help_tip_of_day.label": "오늘의 팁 표시",
   "action.help_tutorial.label": "설명서",
+  "action.instance_to_object.label": "개별 객체로 설정",
   "action.load_model_from_path.label": "불러오기",
   "action.paint_erase_all.label": "모든 페인팅 삭제",
   "action.presets_export_bundle.label": "프리셋 번들 내보내기",
@@ -59,5 +61,10 @@
   "action.view_camera_top.label": "위에서 보기",
   "action.view_open_gcode.label": "Gcode 열기 (O)…",
   "action.view_show_gcode_window.label": "Gcode 창 표시 (G)",
-  "action.view_show_navigator.label": "3D 내비게이터 표시"
+  "action.view_show_navigator.label": "3D 내비게이터 표시",
+  "actions.actionContext.keyboardShortcuts": "키보드 단축키",
+  "ui.brimEarsPanel.brimEars": "브림 귀",
+  "ui.generatedSettingsPanel.detailLevel": "세부 레벨",
+  "ui.printSubmissionDialog.sendToPrinter": "프린터로 전송",
+  "ui.semanticObjectEditor.heightRanges": "높이 범위"
 }

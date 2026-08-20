@@ -1,3 +1,4 @@
+import { t } from '../../l10n/t';
 export interface ProfileSelectionStatusFeedback {
   readonly applied: boolean;
   readonly severity: 'info' | 'warning' | 'error';
@@ -44,7 +45,10 @@ export function renderProfileSelectionStatus(target: HTMLElement, input: Profile
   }
 
   target.dataset.profileSelectionState = 'compatible';
-  target.textContent = 'Only compatible process and filament presets are shown.';
+  target.textContent = t(
+    'ui.profileSelectionStatus.onlyCompatibleProcessAndFilament',
+    'Only compatible process and filament presets are shown.',
+  );
   target.title = target.textContent;
   applyStatusStyle(target, 'info');
 }
