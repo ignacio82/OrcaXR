@@ -17,7 +17,7 @@ const bundledCatalog = JSON.parse(
 
 test('compiles only compatible bundled triples and keeps legacy profile IDs stable', () => {
   const catalog = ProfileCatalog.fromRaw(bundledCatalog);
-  assert.equal(catalog.profiles.length, 694);
+  assert.equal(catalog.profiles.length, 1482);
   assert.equal(catalog.provenance.profileCorpus, 'pinned-v2.3.4-overlay-with-locked-adaptations');
   assert.ok(catalog.diagnostics.some((diagnostic) => diagnostic.code === 'profile-corpus-pinned-overlay'));
 
@@ -61,29 +61,88 @@ test('removes name-substring false positives and incompatible filament exposure'
     false,
   );
   const u106 = catalog.profiles.filter((profile) => profile.machineName === 'Snapmaker U1 (0.6 nozzle)');
-  assert.deepEqual([...new Set(u106.map((profile) => profile.filamentName))], []);
-  assert.equal(catalog.find('Snapmaker U1 (0.6 nozzle)', '0.30 Standard', 'Snapmaker PLA'), null);
+  assert.equal(u106.length > 0, true, 'the 0.6 mm U1 is sliceable');
+  assert.equal(
+    u106.every((profile) => (profile.filamentPresetName ?? '').endsWith('@U1 0.6 nozzle')),
+    true,
+    'only the pinned 0.6 mm filament presets reach the 0.6 mm U1',
+  );
   assert.match(
-    catalog.explainUnavailable('Snapmaker U1 (0.6 nozzle)', '0.30 Standard', 'Snapmaker PLA') ?? '',
+    catalog.explainUnavailable(
+      'Snapmaker U1 (0.6 nozzle)',
+      '0.30 Standard @Snapmaker U1 (0.6 nozzle)',
+      'Snapmaker PLA @U1',
+    ) ?? '',
     /not compatible/,
+    'the 0.4 mm-only filament preset stays rejected by its exact compatible list',
   );
 });
 
-test('fails incomplete machines closed and emits actionable corpus diagnostics', () => {
+test('every bundled nozzle variant resolves complete sliceable triples', () => {
   const catalog = ProfileCatalog.fromRaw(bundledCatalog);
-  assert.equal(
-    catalog.profiles.some((profile) => profile.machineName === 'Snapmaker U1 (0.2 nozzle)'),
-    false,
+  assert.deepEqual(
+    catalog.diagnostics.filter((diagnostic) => diagnostic.severity === 'error'),
+    [],
+    'no bundled printer/process pair is left without a filament',
   );
-  const diagnostics = catalog.diagnostics.filter(
-    (diagnostic) =>
-      diagnostic.code === 'no-compatible-filament' && diagnostic.machineName === 'Snapmaker U1 (0.2 nozzle)',
-  );
-  assert.equal(diagnostics.length, 8);
-  assert.ok(diagnostics.every((diagnostic) => diagnostic.severity === 'error'));
-  assert.ok(diagnostics.every((diagnostic) => diagnostic.message.includes('no visible compatible filament')));
+  for (const nozzle of ['0.2', '0.4', '0.6', '0.8']) {
+    const machineName = `Snapmaker U1 (${nozzle} nozzle)`;
+    const variant = catalog.profiles.filter((profile) => profile.machineName === machineName);
+    assert.equal(variant.length > 0, true, `${machineName} has sliceable combinations`);
+    assert.equal(
+      new Set(variant.map((profile) => profile.processName)).size > 0 &&
+        new Set(variant.map((profile) => profile.filamentPresetName)).size > 0,
+      true,
+      `${machineName} exposes both process and filament presets`,
+    );
+  }
+});
+
+test('an incomplete machine still fails closed with an actionable corpus diagnostic', () => {
+  const catalog = ProfileCatalog.fromRaw({
+    V: {
+      machine: [
+        {
+          type: 'machine',
+          name: 'Printer',
+          from: 'system',
+          instantiation: 'true',
+          default_print_profile: 'Process',
+          default_filament_profile: ['PLA'],
+          nozzle_diameter: ['0.4'],
+        },
+      ],
+      process: [
+        {
+          type: 'process',
+          name: 'Process',
+          from: 'system',
+          instantiation: 'true',
+          compatible_printers: ['Printer'],
+          layer_height: '0.2',
+        },
+      ],
+      filament: [
+        {
+          type: 'filament',
+          name: 'PLA',
+          from: 'system',
+          instantiation: 'true',
+          compatible_printers: ['Other Printer'],
+          filament_type: ['PLA'],
+        },
+      ],
+    },
+  });
+  assert.deepEqual(catalog.profiles, []);
+  const diagnostics = catalog.diagnostics.filter((diagnostic) => diagnostic.code === 'no-compatible-filament');
+  assert.equal(diagnostics.length, 1);
+  assert.equal(diagnostics[0].severity, 'error');
+  assert.equal(diagnostics[0].machineName, 'Printer');
+  assert.equal(diagnostics[0].processName, 'Process');
+  assert.ok(diagnostics[0].message.includes('no visible compatible filament'));
   assert.match(
-    catalog.explainUnavailable('Snapmaker U1 (0.2 nozzle)', '0.10 Standard', 'Snapmaker PLA') ?? '',
+    catalog.explainUnavailable('Printer', 'Process', 'PLA') ?? '',
     /Unknown filament profile|not compatible/,
   );
 });

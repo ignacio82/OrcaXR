@@ -51,6 +51,18 @@
       "sha256": "d19aa884624610859abaebb2e4d0c33dec7c77d07a162a8daa505021737dc240"
     },
     {
+      "path": "Snapmaker/filament/Generic ABS @U1 0.2 nozzle.json",
+      "sha256": "d761af513816567fd851ea1e688443d831a5f3a7d10e975bc741ab33c6cb8ec5"
+    },
+    {
+      "path": "Snapmaker/filament/Generic ABS @U1 0.6 nozzle.json",
+      "sha256": "ade9181039d6ade5a88d18852a931c3df7e915f05c3164eea06a3b0b2c4c095a"
+    },
+    {
+      "path": "Snapmaker/filament/Generic ABS @U1 0.8 nozzle.json",
+      "sha256": "0719d170ad9060a771b88f8ef4c4e85a197c3bc5f9606d32245604e1836f9fdf"
+    },
+    {
       "path": "Snapmaker/filament/Generic ABS @base.json",
       "sha256": "f1d741226f85b4171259b83ee0037fd6443234ce4194e8780190bd9a52df517e"
     },
@@ -59,24 +71,304 @@
       "sha256": "4a8664f3409c1aff3b798db19ee354e837f3d11e96c2176f98254f65507b9e4b"
     },
     {
+      "path": "Snapmaker/filament/Generic ASA.json",
+      "sha256": "0731da2b550f30a5c2778258d47ab64d9b26ec5b17481c42180305d9b3d08032"
+    },
+    {
+      "path": "Snapmaker/filament/Generic BVOH @base.json",
+      "sha256": "ca687bbfb4ff487fa1f59f55c07de7487748d7b6189275478dff99736cdb3e9a"
+    },
+    {
+      "path": "Snapmaker/filament/Generic BVOH.json",
+      "sha256": "ef3939c2d72c7fd34f53187f6dd6c1f88fad9bc36b6079dd8eed701e8a9f7438"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PA-CF.json",
+      "sha256": "a95764ad4bd4d5e6d9f1c6f53264d0b53d5a10b4a84e910a442b40c7acccd983"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PA.json",
+      "sha256": "7834caa3483b232c1d7884b2396b59e6af84917fda257955266eb90f72250911"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PC @U1 0.6 nozzle.json",
+      "sha256": "651db899aa95bc91d8efe4b57ee00b104d36270f43f3a762a9a28980eb71c257"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PC @U1 0.8 nozzle.json",
+      "sha256": "218bc946084faf60455ed598637b712357d351cd5e911ee0a237f4dc9f05ba8d"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PC.json",
+      "sha256": "d56754e78dd4f45f79852ed12d718050e9dfa6851ac5ac7e5f6b8d3e084d53e9"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PCTG @base.json",
+      "sha256": "29fff0567c8dc6c946e2ebbcd8822079c20f04b0fed7af73353c4c0f21c6a061"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PCTG.json",
+      "sha256": "7fae80b07a1ac53372b94705ff03d314245aedd8fdfeb67bc001ddc1f57b5ebd"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG @U1 0.2 nozzle.json",
+      "sha256": "5dea198379001711f3a034dd306e7e568510167e194fabfc88016a5aa7f8707e"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG @U1 0.6 nozzle.json",
+      "sha256": "46367ab0c4e1a6150338202180a60387dd39a35aa4b10ada32619f6a9b0a53e7"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG @U1 0.8 nozzle.json",
+      "sha256": "61eea6455c8f1c6134c4438895abcb69c49d88d02e42128363a1c33c08020e2e"
+    },
+    {
       "path": "Snapmaker/filament/Generic PETG @base.json",
       "sha256": "e46b5aac9d983eff69a18f6f2453fc2e5a28f1d581370195ef01c9d0d7032e57"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG @base2.json",
+      "sha256": "8e7a089e558c6843f6730cc7eda67c4ea2cee013a504e6ff2873baa54a6a099c"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG HF @U1 0.2 nozzle.json",
+      "sha256": "570ec40582397bf82ae97c35aaff5effb88bb68d0be1b619e301460ad98b9735"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG HF @U1 0.6 nozzle.json",
+      "sha256": "89723c10eb74e0c621ad852e4c12a78ed216b3567a0658785bce9ccc173c46bd"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG HF @U1 0.8 nozzle.json",
+      "sha256": "1565230d558f2201c3542ebb449c69eaad1f7854a911a8d7fa818fc64caf2479"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG HF @base.json",
+      "sha256": "eeaa4a72c29d64b979f452f4da64b18ece2516d48029e0ae6b3bc6fd8369d489"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG HF @base2.json",
+      "sha256": "a02d1fc6ebe63419a416032c87df2e4faf65fbb928de2388048efe29657733e5"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG HF.json",
+      "sha256": "14b366835eb24628eb2983f000a1fb4e5db1684203ac388ffb5673caf81e51ce"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG-CF @U1 0.6 nozzle.json",
+      "sha256": "82d8babf85bf13f36e538a0129dbb1dbeaa36f2c225f67ca9b50d890dd83904e"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG-CF @U1 0.8 nozzle.json",
+      "sha256": "129404d590a3deffacfb22306922ecda3afa1b9068d220f1776d2bf21d33de69"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG-CF @base.json",
+      "sha256": "4fbb537d50a95deb3040e546def3e723722b1c24597b4183f36f0b94834a01dd"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG-CF @base2.json",
+      "sha256": "b2638bbc3f94341b07f1347823d3c19e7da0dfb13aef62421052483fe86fa9c6"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG-CF.json",
+      "sha256": "8df76f25a3f0e576be615446a8343a07e6dd60b12d470e001d92c3765fc7c95e"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG-GF @U1 0.6 nozzle.json",
+      "sha256": "f60386788c61436181006ff7a9a63d12fc1d7309d6c6a33298d8e330c3ba59b2"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG-GF @U1 0.8 nozzle.json",
+      "sha256": "5e0426e0ded6580f2cf039abd56ee65717f2e7c8f799ecc3b03fcbc6a4eb56da"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG-GF @base.json",
+      "sha256": "eeed4f7a3280e372098ce06d42adacb3d7048f866af884af52f1023ab4f1c043"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG-GF @base2.json",
+      "sha256": "873ab79b402cb6d2a6651fa28543e9471cfc26a6e2c5f6530fe4a90c80b450f6"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PETG-GF.json",
+      "sha256": "773c582da7522bd7ded0ec527c7c16573740a7273cb333ee44a78f6e38c8f92a"
     },
     {
       "path": "Snapmaker/filament/Generic PETG.json",
       "sha256": "cd2d6cbd300abb4724b26611c0008ef0ff62ce8e73ea273462335f470d7bfee2"
     },
     {
+      "path": "Snapmaker/filament/Generic PLA @U1 0.2 nozzle.json",
+      "sha256": "dee7e781c09c788d9a3dc2af33ac97e4886fdf8ae2c3d8f4a7cbe8f4c68db004"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PLA @U1 0.6 nozzle.json",
+      "sha256": "5698ad1e02fc0b89242d80b0805293689a616206ed1cafc02960606dc64f9ade"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PLA @U1 0.8 nozzle.json",
+      "sha256": "b4c8988165080e1f9cabaceb976dea7f7dbfb6bb20fda1f943afd71de81ba0fb"
+    },
+    {
       "path": "Snapmaker/filament/Generic PLA @base.json",
       "sha256": "bfee7e83f1d76c862e36680ae3bccba55d45c88bc84bfdc489272f881fad9564"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PLA @base2.json",
+      "sha256": "fc29c8bb27f93b9643ac1062014aca470897ddbbb6655dc99bb69c254cd3544c"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PLA High Speed @U1 0.2 nozzle.json",
+      "sha256": "d6e0085fe3665205067bd6b36ff033eb988dc8c3b685f471c72240cb325d7e7f"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PLA High Speed @U1 0.6 nozzle.json",
+      "sha256": "1a352ebb1e3747317e58af86175353125d87deb4ae3849be3be17f5e439385d6"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PLA High Speed @U1 0.8 nozzle.json",
+      "sha256": "740123c5443e4cd93a644428e14ae4fdedf376f1031b167a18104a11548f97d0"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PLA High Speed @base.json",
+      "sha256": "777362d49e059f8976824c3346f165cf0ffada6dcfb8fd5ea9e43d820b822c6e"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PLA High Speed @base2.json",
+      "sha256": "5a4aa19afcf0c9a27fde0541de0bcfd2fe6af845c9d2c844fe8066d69364e74b"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PLA High Speed.json",
+      "sha256": "04843ec683b680443604bdf7ffdf5635404fcb8366332111bdb56f7637a1b109"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PLA Silk @U1 0.2 nozzle.json",
+      "sha256": "97d93874db3632cf45389d0557b4236fc7bfb9e5e13a1eecb2e4bfba8f292f56"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PLA Silk @U1 0.6 nozzle.json",
+      "sha256": "763f379203c8c1f1410dbb809849304803d120d4c17c6ad93eefdd0bd3c9e39a"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PLA Silk @U1 0.8 nozzle.json",
+      "sha256": "85b3eefcb09d98ffb330782395d5f63117ec7ee03882664bb0ea8ce0e93527f2"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PLA Silk @base.json",
+      "sha256": "0a1077db89c2d31c8d846188955d2d4b73d3112a9fcfead7654a072f28749ad7"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PLA Silk @base2.json",
+      "sha256": "8796fb50ecc6a535d4b18d2b2212c86b29be9ebc9a1eccd92634a7d8eef766cd"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PLA Silk.json",
+      "sha256": "03fc952d9b2c64e23b40f51250068d9c218296245ef09672694b446934713417"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PLA-CF @U1 0.6 nozzle.json",
+      "sha256": "9dcc16de4d5014642e91691d18c5320468013ce62830e87a433d927cefc387b2"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PLA-CF @U1 0.8 nozzle.json",
+      "sha256": "dbe7aa8b623a27db02a351eb89c82f4d0c859b6cb9dc11717581ed6a896f0765"
     },
     {
       "path": "Snapmaker/filament/Generic PLA-CF @base.json",
       "sha256": "9aadbf9bfddd275f3b26043022895ed9f8a4baafd81982a7c208efe778a5328a"
     },
     {
+      "path": "Snapmaker/filament/Generic PLA-CF @base2.json",
+      "sha256": "c99806a402538b99b9113cf815fd1317426558be65620cd8bcaa74eb98cc08c0"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PLA-CF.json",
+      "sha256": "3bff242af614340e69482fbcacce800bdab93015e49d1be63f9f79ddd1caa683"
+    },
+    {
       "path": "Snapmaker/filament/Generic PLA.json",
       "sha256": "833361e0a42122c99bf4fb7c0ab584f66c1f203946e34be1d52ba2eaadb1df8c"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PVA @base.json",
+      "sha256": "d179066232ec02765883123778e6d9ea382e06ddcb6607437553a48efe1f353d"
+    },
+    {
+      "path": "Snapmaker/filament/Generic PVA.json",
+      "sha256": "30e9de3720a3ad91a079d544a5a34c4d206dbe2dbe367e2a3b2fd2519f916d8d"
+    },
+    {
+      "path": "Snapmaker/filament/Generic Support For PLA @U1 0.2 nozzle.json",
+      "sha256": "55bbb7aa40c01e617a9aa60336128e505142ad7173ba5ed40079b59db9aa62fe"
+    },
+    {
+      "path": "Snapmaker/filament/Generic Support For PLA @U1 0.6 nozzle.json",
+      "sha256": "2d38e4eea45693da4bc2e276c88608eb33d4c2db8eec98d9680ce53ab157f7e5"
+    },
+    {
+      "path": "Snapmaker/filament/Generic Support For PLA @U1 0.8 nozzle.json",
+      "sha256": "70f433ce05b6c4c3c36a1950083c46b9497fc6bf1ca3170d17c0f2ea41fd4353"
+    },
+    {
+      "path": "Snapmaker/filament/Generic Support For PLA @base.json",
+      "sha256": "e2a4bf0e407cc1c25ca02d59f12c33da022d2b3f5fdb600049fe882e5c065faa"
+    },
+    {
+      "path": "Snapmaker/filament/Generic Support For PLA.json",
+      "sha256": "6363156f240e2e52cc69e71b55a58dc1cbd7bf217b1cd9da38b73663a43c9217"
+    },
+    {
+      "path": "Snapmaker/filament/Generic TPU 95A HF @U1 0.6 nozzle.json",
+      "sha256": "5b3a61c4b6bd3026321d4d90d5eb85d488e2fdd8b1485594777d7382656238a1"
+    },
+    {
+      "path": "Snapmaker/filament/Generic TPU 95A HF @U1 0.8 nozzle.json",
+      "sha256": "f3604feed4114d499e6a288d82dc61da7df024019674695a6580d01afa6ec385"
+    },
+    {
+      "path": "Snapmaker/filament/Generic TPU 95A HF @base.json",
+      "sha256": "5b9146c9a43b02c7bd5f5b933908fce14015b90a4ea2e60ba04961a0cd294fea"
+    },
+    {
+      "path": "Snapmaker/filament/Generic TPU 95A HF @base2.json",
+      "sha256": "b4af4256d9a10d9f0e2020b5cbb0ef555fe20434309f43237301b6fdeaec6eed"
+    },
+    {
+      "path": "Snapmaker/filament/Generic TPU 95A HF.json",
+      "sha256": "3baa701376be6f68b6bd15cbed73a4ef57cb6025d8d33aa264863813108f9814"
+    },
+    {
+      "path": "Snapmaker/filament/Generic TPU @U1 0.6 nozzle.json",
+      "sha256": "1bbc1e963eae8ccd244972ac2748cc5f35036dc112541983c7dddaa82ec1a24b"
+    },
+    {
+      "path": "Snapmaker/filament/Generic TPU @U1 0.8 nozzle.json",
+      "sha256": "20698c1a5b720d335746c58d48a99f305b4603be56451f93844ce9a380695a7d"
+    },
+    {
+      "path": "Snapmaker/filament/Generic TPU @base2.json",
+      "sha256": "767af35c3b999be6124f2ecbe4d88e7a7af7232f441bc8e40c6d612114c5ef80"
+    },
+    {
+      "path": "Snapmaker/filament/Generic TPU.json",
+      "sha256": "b84e6130fd25594f2edaa82ad7630f745d4669957daf008b3d9330f33326b0a8"
+    },
+    {
+      "path": "Snapmaker/filament/Polymaker General PLA Family @U1.json",
+      "sha256": "f00f7fafe56e31edf88893909c37af7b9928ee2542cf2ff0d81362d3951037f6"
+    },
+    {
+      "path": "Snapmaker/filament/Polymaker PLA @U1 base.json",
+      "sha256": "f9770b13c948e0249c09741babda89f8a6b16a0302f1a9f5e86cc2d3e57e3f96"
+    },
+    {
+      "path": "Snapmaker/filament/Polymaker Silk PLA Family @U1.json",
+      "sha256": "4070234dbad4af3617e66feb487d6895d4bfcadb1ae0c9296ae774be234b4c47"
+    },
+    {
+      "path": "Snapmaker/filament/Polymaker Tough PLA Family @U1.json",
+      "sha256": "ff14d23704094bfbbc345b8c25de8dfd610c085ca0264b08a91b6a1d03b8898d"
     },
     {
       "path": "Snapmaker/filament/Snapmaker ABS @U1 base.json",
@@ -95,12 +387,76 @@
       "sha256": "8a0757aef715bde499abd1314e736df34c994674284ff34203dd432eee96ddac"
     },
     {
+      "path": "Snapmaker/filament/Snapmaker Breakaway Support @base.json",
+      "sha256": "35194595ef0dae5ac2c1f351f4c69d8fc7696986127e07743d116f37a42160fa"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker Breakaway Support For PLA @U1 0.2 nozzle.json",
+      "sha256": "7165bcb1a5560f05a45f586fb0a477d46770ef3b40fc9858fcaf717bcc12495e"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker Breakaway Support For PLA @U1 0.6 nozzle.json",
+      "sha256": "e38df4a21ab8aa67c9569cbfec486918ecebcd1356e3eafb72edb4443ce93d8d"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker Breakaway Support For PLA @U1 0.8 nozzle.json",
+      "sha256": "9403b9337c4edcceee04faa32df07520282aa1a5ddc3c692f491a1bc787e680d"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker Breakaway Support For PLA @U1.json",
+      "sha256": "0d93c6533203d091b36ef4575387752737ae40241a7941da0b855b30decb9b2c"
+    },
+    {
       "path": "Snapmaker/filament/Snapmaker PETG @U1 base.json",
       "sha256": "1bd3c7c49cd881acd699b8de8f025cbf899734bac69abc4d3a76098796f56172"
     },
     {
       "path": "Snapmaker/filament/Snapmaker PETG @U1.json",
       "sha256": "98f626b3113b64bf22df8bf842f14b6c166af5f97a151ac9da932b2d334a025d"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PETG HF @U1 0.2 nozzle.json",
+      "sha256": "00ff4c4aa1cb32fe757f42c7e938e781e5434c6d7359a2cdf7eb7dc590a0fcd1"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PETG HF @U1 0.6 nozzle.json",
+      "sha256": "e96456373dc4f4ad7b2a6c9d0c5948ddcc61540d28fa64a91ef42dc2965f323a"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PETG HF @U1 0.8 nozzle.json",
+      "sha256": "92ff1134cbae377d5fd1756e4caf5baf70af2e41e247af5e04edba6c05cd5ca8"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PETG HF @U1 base2.json",
+      "sha256": "3654ab11f69be4b6d6788c471618806627ce673c28b68b5d406362390bc9ed5b"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PETG HF @base.json",
+      "sha256": "5024773f1ce8638aa773887685859aad2f108f62e8cf2603ad8ab9421befcfde"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PETG HF.json",
+      "sha256": "f8dac2005e62c91d379a245cc4114f531629cde3dd284ecd2915ec69f84d1b04"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PETG Translucent @U1 0.2 nozzle.json",
+      "sha256": "e6d32227e6927b67d4e724c95193b72a5c0fd92c0189bc0923be81b5ecd3ca75"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PETG Translucent @U1 0.4 nozzle.json",
+      "sha256": "7d585576a6ce9046391c542c01b7acbb2cecdaa48ac73d60c83cffc921820ab9"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PETG Translucent @U1 0.6 nozzle.json",
+      "sha256": "de373ab912ecd22a175abc387337fa6dcadc4bafd6132fe4828feb48dc00e2e8"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PETG Translucent @U1 0.8 nozzle.json",
+      "sha256": "cba229a6d07ab179f4715601715520af0dc53df7602eb3c1e7c92ac1405968d1"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PETG Translucent @U1 base.json",
+      "sha256": "59bce07e129a6895508afd06eaf3d34cd493f17a38a4a3ef4cd80755c39a290d"
     },
     {
       "path": "Snapmaker/filament/Snapmaker PETG-CF @U1 base.json",
@@ -123,6 +479,10 @@
       "sha256": "2673ec3925d776d2d4228e3d4fd9414a2db40ef36a56d5dd462bf1055a503567"
     },
     {
+      "path": "Snapmaker/filament/Snapmaker PLA Basic @U1.json",
+      "sha256": "8a8f4e0aa44405c89a8a0b2888e87e899b4fd8c23e84c42feb0b1373d98eff27"
+    },
+    {
       "path": "Snapmaker/filament/Snapmaker PLA Eco @U1 base.json",
       "sha256": "c4d2f3054057f08e256fe33c596f77f17d4bffaea8ea03a087391f70c39b6bad"
     },
@@ -131,8 +491,36 @@
       "sha256": "6c290cc1f31295e7c5e56737cbf654774b2ff6c58e992c1bca9254ad4218fcd4"
     },
     {
+      "path": "Snapmaker/filament/Snapmaker PLA Full Spectrum @U1 0.4 nozzle.json",
+      "sha256": "a69fef730be5386a157ace8e1c50518bb2b308eb5061cdf7f468454e9a4070d6"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA Glow @U1 0.4 nozzle.json",
+      "sha256": "d63a8d52a67e0575699567f932953accf0650a4937345b46bf8ffcd70fcc4db3"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA Glow @U1 base.json",
+      "sha256": "ebd152067851d25669ba21374dd58e4b7bef9675d6f02ea61cab9db63f1b90f8"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA Matte @U1 0.2 nozzle.json",
+      "sha256": "d1e0928c70970a3da34d01058b3ab97f656960ce94dffcca110a194b942c8284"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA Matte @U1 0.6 nozzle.json",
+      "sha256": "1c0063d396883279fa85e5d4a1e929b17ce3d724f2c90b2a5d030108de7e3207"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA Matte @U1 0.8 nozzle.json",
+      "sha256": "3f64b780e4c0f21c720b53667b2b0309951db722ddb6ec89340f20ee22ef50c6"
+    },
+    {
       "path": "Snapmaker/filament/Snapmaker PLA Matte @U1 base.json",
       "sha256": "ab82fa90cc47d4dcab8d1d2279cc7a80e69469b8d72e7c4d2db6361d001a8680"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA Matte @U1 base2.json",
+      "sha256": "dba237f9d2693e1643a577bcd047fd50b47244659fe49452b7e9ff34c63b7446"
     },
     {
       "path": "Snapmaker/filament/Snapmaker PLA Matte @U1.json",
@@ -147,6 +535,18 @@
       "sha256": "ecb57538368370d8c0a38c1291329df304fe0980bc9efcc7bfee33e042e4561d"
     },
     {
+      "path": "Snapmaker/filament/Snapmaker PLA Silk @U1 0.2 nozzle.json",
+      "sha256": "cf2ffac8e7d0de34f50578c2a56f0e484c091754a952f88af73c85ff5126def6"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA Silk @U1 0.6 nozzle.json",
+      "sha256": "5802ae84b44d78a0cb9c8f646ce4deb60a311aa08e1442c649e725402ac56dd6"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA Silk @U1 0.8 nozzle.json",
+      "sha256": "9a9dc9dfeb1734b5826beacf31344c6d4355f741e8d054fbe3a655488f4ff04a"
+    },
+    {
       "path": "Snapmaker/filament/Snapmaker PLA Silk @U1 base.json",
       "sha256": "c61dfdfa4e4f23f254c9779a8809210dfd8c2749469e3143b302ade652f94f1f"
     },
@@ -155,12 +555,124 @@
       "sha256": "f6d687a0a45be9fd139f39046db47c0bcff46427b87b916bbacf984976d2b1cb"
     },
     {
+      "path": "Snapmaker/filament/Snapmaker PLA SnapSpeed @U1 0.2 nozzle.json",
+      "sha256": "41ddecca4a2dbd12a04eadd3e2128fca3c0eb39eb564d8356ef2861e0bf29608"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA SnapSpeed @U1 0.6 nozzle.json",
+      "sha256": "c346ac6f4d66aa776392dcbabcae66b555b6ef5a74e39cfcc8ad8f47ed86a49a"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA SnapSpeed @U1 0.8 nozzle.json",
+      "sha256": "a023bed8a661510e7ceca8aab9444142f469668a77fcb2b3d9f8ccca78767e0c"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA SnapSpeed @U1 base.json",
+      "sha256": "845752a17a57057505dde1264b6a30795e7388be998e777c993476e49faa9c11"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA SnapSpeed @U1 base2.json",
+      "sha256": "6d426d0b5e4c5fbe889526cc5d831949b3d42614db4781a5a0698837df40cd03"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA SnapSpeed @U1.json",
+      "sha256": "ad15dcea96df17e688ad610798b87592e3345824000c40533b5f88402403ec4e"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA Translucent @U1 0.2 nozzle.json",
+      "sha256": "0ba70c6c8ae8c1b6f24b8e051497b5f8738a0caa61bfa061d3f4c7357837a56c"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA Translucent @U1 0.4 nozzle.json",
+      "sha256": "cf705c862ca29ea2e425faa234331e22ad48313b33c0fb51f50501a7bc0b73b3"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA Translucent @U1 0.6 nozzle.json",
+      "sha256": "4b4112eb3ae36a7a7950ef942d59134df141b040d83389da716fc6c1f81abf14"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA Translucent @U1 0.8 nozzle.json",
+      "sha256": "821fe30963f7424269b4c9e7ad97e59b003ad87407037ef386b9685194bf9a31"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA Translucent @U1 base.json",
+      "sha256": "eea5d5180b42784bc141b12f3ab310c22013ae4f97e75b0f7f238a1d901cc6a6"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA Wood @U1 0.4 nozzle.json",
+      "sha256": "754e54e6b796166c8bd8608a1f6c19aec81406b5ce716250762f99453700fa96"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA Wood @U1 0.6 nozzle.json",
+      "sha256": "ba82238e1dc2a2d79fba20146066860aea5670945037d284de808b008228239f"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA Wood @U1 0.8 nozzle.json",
+      "sha256": "9d96f2c41cc89d0763cb1faffcd2cb4b00b45a6c952076620f2382a1a5d97aad"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA-CF @U1 0.4 nozzle.json",
+      "sha256": "ec808898187b4f408bd215e8b9689816104f1c66ffa89510c404d705706aaf45"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA-CF @U1 0.6 nozzle.json",
+      "sha256": "a5ed123077ed671569c201833a0919d2462ce0306e12734a716941d539dbb6d6"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PLA-CF @U1 0.8 nozzle.json",
+      "sha256": "9f2c9fcbb4ff8840a827f78f24763c7fd91d8a808f8b024a7f3e318cc90d12d3"
+    },
+    {
       "path": "Snapmaker/filament/Snapmaker PLA-CF @U1 base.json",
       "sha256": "6cf39e273304e59e03bf5d2a192afd383d56dcc31b91f72bdc6abbe0e16f6960"
     },
     {
       "path": "Snapmaker/filament/Snapmaker PLA-CF @U1.json",
       "sha256": "0997a3e887b2e24419f1cf5ce4574fcf9202577cb019e5bfb9de888cdb80954f"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PVA @J1 base.json",
+      "sha256": "8c8315942660607cfd25d3a3e9ffbb2a8b7c4956d48ec05a8dfb8d9f992b7539"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PVA @J1.json",
+      "sha256": "a8b3dacce12a3dff9a64f071777706bcee63cb25f20af85e70b00499d33cf4ab"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PVA @U1 0.6 nozzle.json",
+      "sha256": "d3e6e97047e1f76c8cf6c33743c46c6aa2790b784d4d784e84f505d87fbee04f"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PVA @U1 0.8 nozzle.json",
+      "sha256": "dfba680bee4c257d27bd095427a84e3e6b307ae9a05f53cddf27899cd0a99f0e"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker PVA @U1 base.json",
+      "sha256": "ebd6d58be25dea18c43ac99a1fa7b0fd909cd642639dd2de07153fd5b5f4efe1"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker TPU 90A @U1 0.6 nozzle.json",
+      "sha256": "5d1cc27f55615627e066077d33902e47db8882016d9b160c4e89e24260b8f1e3"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker TPU 90A @U1 0.8 nozzle.json",
+      "sha256": "e9a191c4c172bf9dc2c59287dbcd6d6e1f1fa0cf33b7b5fbc35cf327713c8089"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker TPU 90A @U1.json",
+      "sha256": "49169dec11d56d6514752c7e4b457833e577f6df448b587ef7842c465e58570f"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker TPU 95A HF @U1 0.6 nozzle.json",
+      "sha256": "5bacdf7c9b7b1b0a85f1aa827f11049ee46fb75e6f514fe269ec44ce3a44daeb"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker TPU 95A HF @U1 0.8 nozzle.json",
+      "sha256": "4bb0ee788bef60e4a691cc880fc748f79439cb0f478c2e0f694dd83cabd6cd87"
+    },
+    {
+      "path": "Snapmaker/filament/Snapmaker TPU 95A HF @U1.json",
+      "sha256": "79e20f1534aaef5c8ed6739a2943300c8dc969606910c870a765d8bbaea9129b"
     },
     {
       "path": "Snapmaker/filament/fdm_filament_abs.json",
@@ -175,12 +687,36 @@
       "sha256": "533d883b69d0eef4c7eab07f41c6a6b4cba475d88ed8a7c7cc57525ca087b586"
     },
     {
+      "path": "Snapmaker/filament/fdm_filament_bvoh_generic.json",
+      "sha256": "e04352ebb78aa7005cfef5dee51249e3dab45c3894421269f18d67eabcf4ef05"
+    },
+    {
       "path": "Snapmaker/filament/fdm_filament_common.json",
       "sha256": "45c3c99ed3820e3667b908d543162e2da832361da3302a19129ed40f52bbca50"
     },
     {
+      "path": "Snapmaker/filament/fdm_filament_common2.json",
+      "sha256": "25ae9bdf8a8c31ae9a7a9e00e60fe7f504e8dc8338173e26da73729da08a3b2a"
+    },
+    {
       "path": "Snapmaker/filament/fdm_filament_common_generic.json",
       "sha256": "24e4920907489bfdeb250ba749b005c97571d7a547416989af10df502896e99d"
+    },
+    {
+      "path": "Snapmaker/filament/fdm_filament_common_poly.json",
+      "sha256": "ea111ac929ad6d131237c25eba3af23f802a61afee3bea099eea6c93212ecbbc"
+    },
+    {
+      "path": "Snapmaker/filament/fdm_filament_pa_generic.json",
+      "sha256": "00c04ec8b57b1a8cffdd10626d4fa2e083809bd782aa64409589dd04636f0c9e"
+    },
+    {
+      "path": "Snapmaker/filament/fdm_filament_pctg_generic.json",
+      "sha256": "46cfda63dd97f7fe067c0767bdcb6bacea0ca25eba39b81d66992d8dd2299482"
+    },
+    {
+      "path": "Snapmaker/filament/fdm_filament_pet2.json",
+      "sha256": "9723c64a7397a701fb66ae6de25b4c8b23b7a9909097588b3b90344e11f0be85"
     },
     {
       "path": "Snapmaker/filament/fdm_filament_pet_generic.json",
@@ -195,12 +731,36 @@
       "sha256": "b879ee6acc8551559f2f190f37e060ac69e9454badd24adccf762d13b741254c"
     },
     {
+      "path": "Snapmaker/filament/fdm_filament_pla2.json",
+      "sha256": "8685f447da8a28fe98b584e8ff52eefa72af90fd134f15c0abefa4d1c9635dcb"
+    },
+    {
       "path": "Snapmaker/filament/fdm_filament_pla_eco.json",
       "sha256": "0c0e3527f9e099f3b1d35605a2f125c974a0a7e94116714895aaba12fbdfbd4e"
     },
     {
       "path": "Snapmaker/filament/fdm_filament_pla_generic.json",
       "sha256": "b815ff418638712ac57f740b5d735e231147128fcd13dc16a16c69011d3bd75a"
+    },
+    {
+      "path": "Snapmaker/filament/fdm_filament_pla_poly.json",
+      "sha256": "b3aa7fda86cec0cb9c6bee3bb600aa44a54f962fc7c8350bfd6e82d1295bc533"
+    },
+    {
+      "path": "Snapmaker/filament/fdm_filament_pva.json",
+      "sha256": "4fa0784bd481f6808308875d986832a87fd5e9df1ca420720b6b3e4dce34497b"
+    },
+    {
+      "path": "Snapmaker/filament/fdm_filament_pva_generic.json",
+      "sha256": "32234acb4d976f4c38826b61edbf977e0c475705bc087d8fec677df90018dbe0"
+    },
+    {
+      "path": "Snapmaker/filament/fdm_filament_tpu2.json",
+      "sha256": "6ee8b490a9f4602abcf69340185e0b690c7c1762f51c17247345284fa4c87fee"
+    },
+    {
+      "path": "Snapmaker/filament/fdm_filament_tpu_generic.json",
+      "sha256": "f16341c05aaddfef5920b81d8500f537f696b128d29539c8b39d4df5e7e28ad7"
     },
     {
       "path": "Snapmaker/filament/filament_hot_bed_nozzles.json",
@@ -243,8 +803,16 @@
       "sha256": "277db21702748efcedae239bc78203b9afd22c6ec40901fc337108ff83b22ffe"
     },
     {
+      "path": "Snapmaker/process/0.08 Extra Fine @Snapmaker U1 (0.4 nozzle).json",
+      "sha256": "dfb5bf5ce28e4d0b26f98dbb6b9bd8de72c705e84419ea6166851135ff0181c9"
+    },
+    {
       "path": "Snapmaker/process/0.08 High Quality @Snapmaker U1 (0.2 nozzle).json",
       "sha256": "f3bfa2ad46c76dc3e417be3f5bd7d567425ac9259381ca3396518ef6367ab62a"
+    },
+    {
+      "path": "Snapmaker/process/0.08 High Quality @Snapmaker U1 (0.4 nozzle).json",
+      "sha256": "abdeb125e0ff3b038127e945f901da4d106420c2ef130b3e32ab7614582cebf0"
     },
     {
       "path": "Snapmaker/process/0.08 Standard @Snapmaker U1 (0.2 nozzle).json",
@@ -263,6 +831,10 @@
       "sha256": "a73aadc16f41ce827b5f20f324b563286faeabd00bf7aaafd0ad4f28c992f9a9"
     },
     {
+      "path": "Snapmaker/process/0.12 High Quality @Snapmaker U1 (0.4 nozzle).json",
+      "sha256": "e45156576d96db7d50b2ad440ef9e0e2ff2f1f2b05a964112a9e6f4bec3c6870"
+    },
+    {
       "path": "Snapmaker/process/0.12 Standard @Snapmaker U1 (0.2 nozzle).json",
       "sha256": "26932494a967d7cf68db81b83d726bb8d8eb8d7a73d292100a7e288fd7109ccd"
     },
@@ -271,12 +843,32 @@
       "sha256": "1d38427b6324f8ed084d1fa9af5d3c0c8ad2f8581a32b69ce0df411ed6334e61"
     },
     {
+      "path": "Snapmaker/process/0.16 High Quality @Snapmaker U1 (0.4 nozzle).json",
+      "sha256": "dfd0c5997da4de4f01d08208d804ea362d6cfeaaa292e8a8b8ca097b93b4176a"
+    },
+    {
+      "path": "Snapmaker/process/0.16 Optimal @Snapmaker U1 (0.4 nozzle).json",
+      "sha256": "bfb64e68447d3b3503d1b63b0a5ded9f72a8292d294736a21a3edf11072f1e0c"
+    },
+    {
       "path": "Snapmaker/process/0.18 Standard @Snapmaker U1 (0.6 nozzle).json",
       "sha256": "42c21ecd0853de8188a64cb7e750fe21302a997ac5ec5352ffbe32b02992cf33"
     },
     {
       "path": "Snapmaker/process/0.20 Standard @Snapmaker U1 (0.4 nozzle).json",
       "sha256": "3342dbe3e995b66ab5700245c676f446a88d35f56498b074ab6fe14039d67763"
+    },
+    {
+      "path": "Snapmaker/process/0.20 Strength @Snapmaker U1 (0.4 nozzle).json",
+      "sha256": "3368ba1c346ddfe93c7b9d22442c201a57a9d8a5973c21f28294943cd77df97b"
+    },
+    {
+      "path": "Snapmaker/process/0.24 Draft @Snapmaker U1 (0.4 nozzle).json",
+      "sha256": "3574199e77dcf11841ccee20a770a1d7908d5656333db533f40466ec4ff5a457"
+    },
+    {
+      "path": "Snapmaker/process/0.24 Standard @Snapmaker U1 (0.6 nozzle).json",
+      "sha256": "a2fca3f05a662788488df4019d1740978637c254bc572ea3f07992fc9e072069"
     },
     {
       "path": "Snapmaker/process/0.24 Standard @Snapmaker U1 (0.8 nozzle).json",
@@ -291,8 +883,16 @@
       "sha256": "93ac4018502e4495c2f28499398017cfbfbca8cf243cdc1a18196501af7e0015"
     },
     {
+      "path": "Snapmaker/process/0.30 Strength @Snapmaker U1 (0.6 nozzle).json",
+      "sha256": "75c17879699a61354255055f2ea298de1799b989daf271c85a4ec078099a083a"
+    },
+    {
       "path": "Snapmaker/process/0.32 Standard @Snapmaker U1 (0.8 nozzle).json",
       "sha256": "1fee83e472c2a35e10ed825c0f208ae0f465c9e1c068f35e9f94f8ca35fcbe8a"
+    },
+    {
+      "path": "Snapmaker/process/0.36 Standard @Snapmaker U1 (0.6 nozzle).json",
+      "sha256": "5bc24fce4320448dbbb4d3965f1c5f4c67a6bc5575c0ab2b1f11280d1a4f1f25"
     },
     {
       "path": "Snapmaker/process/0.40 Standard @Snapmaker U1 (0.8 nozzle).json",
@@ -319,6 +919,10 @@
       "sha256": "a8f3be466782cfdb1a8948f560851dcc9b26b5669c189d7d22f8b9b04dbdc707"
     },
     {
+      "path": "Snapmaker/process/fdm_process_U1_0.08.json",
+      "sha256": "018d613040ac01d46e39914ee5638d2a0a42081de540b7d37a44315a6b187737"
+    },
+    {
       "path": "Snapmaker/process/fdm_process_U1_0.08_nozzle_0.2.json",
       "sha256": "8a01182e035a8bb484decca48ca5b1a018315f8e07c5cab14be33c6b2be70e30"
     },
@@ -339,12 +943,24 @@
       "sha256": "cd4efad68bcc1002a15cafb8b39f278df1dbc10daa16b376f7124ef3b1a6a77e"
     },
     {
+      "path": "Snapmaker/process/fdm_process_U1_0.16.json",
+      "sha256": "e1479969fe1fdbf7996097be0537b21946cf7c0a1e178995dac53cef6ef6888a"
+    },
+    {
       "path": "Snapmaker/process/fdm_process_U1_0.18_nozzle_0.6.json",
       "sha256": "c6c93690a03273287c82afdcedc84675a5cd6f686a86c6e84c1ac4a87c97dcd1"
     },
     {
       "path": "Snapmaker/process/fdm_process_U1_0.20.json",
       "sha256": "2df28dc2474b6aeb77d5416043b3a67e54ff7ea1cdf5a5daa9e97db7e5b034a6"
+    },
+    {
+      "path": "Snapmaker/process/fdm_process_U1_0.24.json",
+      "sha256": "9ea0f1b62fc339e99aff26159b9501c296360d81191616cc165b4ea03b15cd65"
+    },
+    {
+      "path": "Snapmaker/process/fdm_process_U1_0.24_nozzle_0.6.json",
+      "sha256": "20a90a10ce8e81666652715a3dbc80360d4dba42ffbc2b42db38ec99ed54ee80"
     },
     {
       "path": "Snapmaker/process/fdm_process_U1_0.24_nozzle_0.8.json",
@@ -361,6 +977,10 @@
     {
       "path": "Snapmaker/process/fdm_process_U1_0.32_nozzle_0.8.json",
       "sha256": "3d1f8cce8832f32f07ff866c3c24a477c33fe34466ca1aebe55b46c2b4b719ea"
+    },
+    {
+      "path": "Snapmaker/process/fdm_process_U1_0.36_nozzle_0.6.json",
+      "sha256": "ea1a6ceaef8c5857f4c2e9c5759e65124d699e22c633c4bd3e5d9f95239fcdf4"
     },
     {
       "path": "Snapmaker/process/fdm_process_U1_0.40_nozzle_0.8.json",

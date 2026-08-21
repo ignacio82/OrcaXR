@@ -364,10 +364,16 @@ test('proves the live bundled corpus contains name-heuristic false positives tha
     compatible04.some((candidate) => candidate.id === wrongNameHeuristic.id),
     false,
   );
-  assert.deepEqual(
-    compatible06Filaments.map((candidate) => candidate.name),
-    [],
-    'the pinned corpus explicitly limits these generic presets to the 0.4 mm U1',
+  assert.equal(compatible06Filaments.length > 0, true, 'the 0.6 mm U1 has its own pinned filament presets');
+  assert.equal(
+    compatible06Filaments.every((candidate) => candidate.name.endsWith('@U1 0.6 nozzle')),
+    true,
+    'the pinned corpus scopes each filament preset to one nozzle by exact compatible list',
+  );
+  assert.equal(
+    compatible06Filaments.some((candidate) => candidate.name === 'Snapmaker PLA @U1'),
+    false,
+    'the 0.4 mm-only preset never leaks onto the 0.6 mm U1 by name similarity',
   );
   assert.equal(graph.auxiliaryPayloads.length, 1);
 });
