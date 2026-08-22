@@ -6,6 +6,8 @@
   "action.add_primitive_disc.label": "Scheibe",
   "action.add_primitive_sphere.label": "Kugel",
   "action.add_primitive_torus.label": "Torus",
+  "action.calib_input_shaping_frequency.label": "Input Shaping Frequenz",
+  "action.calib_junction_deviation.label": "Junction-Deviation",
   "action.delete_models.label": "Löschen",
   "action.duplicate_plate.label": "Aktuelle Druckplatte duplizieren",
   "action.edit_copy.label": "Kopieren",
@@ -69,6 +71,7 @@
   "ui.selectionFilamentBar.default": "Standard",
   "ui.selectionFilamentBar.selectedScopes": "Ausgewählt",
   "ui.semanticObjectEditor.heightRanges": "Höhenbereiche",
+  "ui.slicePreflightPanel.show": "Anzeigen",
   "workspace.orcaWorkspace.defaultFilament": "Standard",
   "workspace.orcaWorkspace.selectedScopes": "Ausgewählt"
 }

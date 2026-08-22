@@ -60,6 +60,7 @@
   "ui.selectionFilamentBar.default": "Standaard",
   "ui.selectionFilamentBar.selectedScopes": "geselecteerd",
   "ui.semanticObjectEditor.heightRanges": "Hoogtebereiken",
+  "ui.slicePreflightPanel.show": "Weergeven",
   "workspace.orcaWorkspace.defaultFilament": "Standaard",
   "workspace.orcaWorkspace.selectedScopes": "geselecteerd"
 }

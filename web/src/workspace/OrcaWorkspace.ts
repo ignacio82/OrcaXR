@@ -158,6 +158,7 @@ import {
   findDisconnectedBrimEars,
 } from '../project/objects/brimEarPreview';
 import { CalibrationRampGenerator } from '../features/CalibrationRampGenerator';
+import { recentProjectsStore } from '../project/persistence/recentProjects';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 
 /** A classified right-click in the 3D scene (P11.2). */
@@ -4962,7 +4963,9 @@ export class OrcaWorkspace extends xb.Script {
       this.recomputePreflight();
       this.warmSlicerAfterFirstModel();
       const objects = new Set(added.map((entry) => entry.objectId)).size;
-      this.setStatus(`Imported ${name} — ${objects} object${objects === 1 ? '' : 's'}.`);
+      this.setStatus(
+        `Imported ${name} — ${objects} object${objects === 1 ? '' : 's'}.` + this.describeImportRepairs(preview),
+      );
       return objects;
     } finally {
       this.projectImportInProgress = false;
@@ -5128,11 +5131,15 @@ export class OrcaWorkspace extends xb.Script {
       | 'flow_pass1'
       | 'flow_pass2'
       | 'flow_yolo'
+      | 'flow_yolo_perfectionist'
       | 'pressure_advance'
       | 'retraction'
       | 'max_flow'
       | 'vfa'
-      | 'tolerance',
+      | 'tolerance'
+      | 'input_shaping_frequency'
+      | 'input_shaping_damping'
+      | 'junction_deviation',
   ) {
     const gen = new CalibrationRampGenerator();
     let geo: THREE.BufferGeometry;
@@ -5155,6 +5162,9 @@ export class OrcaWorkspace extends xb.Script {
       case 'flow_yolo':
         geo = gen.generateFlowYolo();
         break;
+      case 'flow_yolo_perfectionist':
+        geo = gen.generateFlowYoloPerfectionist();
+        break;
       case 'pressure_advance':
         geo = gen.generatePressureAdvance();
         break;
@@ -5169,6 +5179,15 @@ export class OrcaWorkspace extends xb.Script {
         break;
       case 'tolerance':
         geo = gen.generateTolerance();
+        break;
+      case 'input_shaping_frequency':
+        geo = gen.generateInputShapingFrequency();
+        break;
+      case 'input_shaping_damping':
+        geo = gen.generateInputShapingDamping();
+        break;
+      case 'junction_deviation':
+        geo = gen.generateJunctionDeviation();
         break;
     }
     // The operator's project is put aside rather than added to (P8.3). A
@@ -8892,6 +8911,14 @@ export class OrcaWorkspace extends xb.Script {
     try {
       const saved = await this.canonicalProject.saveCanonical3mf();
       this.onDownloadFile?.(saved.suggestedFilename, ownedArrayBuffer(saved.bytes), saved.mediaType);
+      const summary = this.canonicalProject.getSummary();
+      recentProjectsStore.add({
+        name: saved.suggestedFilename,
+        storageOrigin: 'local-file',
+        sizeBytes: saved.bytes.byteLength,
+        plateCount: summary.plates.length,
+        modelCount: summary.objectCount,
+      });
       const warnings = saved.warnings?.length ?? 0;
       this.setStatus(`Project saved${warnings > 0 ? ` (${warnings} compatibility warning(s))` : ''}.`);
     } catch (error) {
@@ -8916,9 +8943,19 @@ export class OrcaWorkspace extends xb.Script {
         prepared.cancel('no import confirmation surface');
         throw new Error('Project import needs an explicit preview confirmation surface.');
       }
+      // The preview exists to put a decision in front of the operator. There
+      // are exactly three: a blocked import they must read, notices that lose
+      // or reinterpret what they authored, and replacing work that is already
+      // open. Opening a project into an EMPTY workspace is none of those — it
+      // is just opening the file they picked — so it goes straight through.
+      // Anything the importer repaired on the way in is reported afterwards.
+      const replacesOpenWork = this.modelCount > 0;
+      const needsDecision = preview.blocked || preview.requiredAcknowledgementIds.length > 0 || replacesOpenWork;
       let committed = false;
       try {
-        const decision = await confirm(preview);
+        const decision = needsDecision
+          ? await confirm(preview)
+          : ({ confirmed: true, acknowledgedNoticeIds: [] } as ImportCommitConfirmation);
         if (preview.blocked) {
           const errors = preview.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
           throw new Error(
@@ -8961,14 +8998,62 @@ export class OrcaWorkspace extends xb.Script {
       this.onProfileChanged?.();
       this.recomputePreflight();
       const summary = this.canonicalProject.getSummary();
+      recentProjectsStore.add({
+        name: filename,
+        storageOrigin: 'imported-archive',
+        sizeBytes: bytes.byteLength,
+        plateCount: summary.plates.length,
+        modelCount: summary.objectCount,
+      });
       this.setStatus(
-        `Opened ${summary.projectName} — ${summary.objectCount} model${summary.objectCount === 1 ? '' : 's'}, ${summary.plates.length} plate${summary.plates.length === 1 ? '' : 's'}.`,
+        `Opened ${summary.projectName} — ${summary.objectCount} model${summary.objectCount === 1 ? '' : 's'}, ${summary.plates.length} plate${summary.plates.length === 1 ? '' : 's'}.` +
+          this.describeImportRepairs(preview),
       );
       return true;
     } finally {
       this.projectImportInProgress = false;
       this.applyCatalogDefaultProfile();
     }
+  }
+
+  /**
+   * One clause describing what the importer fixed on the way in, or '' when it
+   * fixed nothing. Repairs no longer interrupt the open (see `openProject`), so
+   * this is how they stay visible: the operator is told what happened, and undo
+   * steps back through the whole import as one command if they disagree.
+   */
+  private describeImportRepairs(preview: ProjectImportPreview): string {
+    const repaired = preview.repairs.length;
+    const dropped = preview.droppedFields.length;
+    if (repaired === 0 && dropped === 0) return '';
+    const parts: string[] = [];
+    if (repaired > 0) parts.push(`repaired ${repaired} item${repaired === 1 ? '' : 's'}`);
+    if (dropped > 0) parts.push(`dropped ${dropped} unsupported field${dropped === 1 ? '' : 's'}`);
+    return ` Automatically ${parts.join(' and ')} — undo to step back.`;
+  }
+
+  public listRecentProjects() {
+    return recentProjectsStore.list();
+  }
+
+  public openRecentProject(id?: string): void {
+    const list = recentProjectsStore.list();
+    if (list.length === 0) {
+      this.setStatus(t('workspace.orcaWorkspace.noRecentProjectsFound', 'No recent projects found.'));
+      return;
+    }
+    const entry = id ? list.find((item) => item.id === id) : list[0];
+    if (!entry) {
+      this.setStatus(t('workspace.orcaWorkspace.recentProjectNotFound', 'Recent project not found.'));
+      return;
+    }
+    this.setStatus(
+      t(
+        'workspace.orcaWorkspace.selectedRecentProjectUseOpen',
+        'Selected recent project: {name}. Use Open Project to choose its file.',
+        { name: entry.name },
+      ),
+    );
   }
 
   /**

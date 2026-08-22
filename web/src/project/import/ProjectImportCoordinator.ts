@@ -395,6 +395,10 @@ function normalizeParsedImport(
           field: 'sourceFilename/provenance',
           message: `Duplicate asset metadata was superseded by the provenance retained for ${canonicalId}`,
           value: discarded,
+          // The assets are byte-identical — only the remembered source filename
+          // differs, and one of them is kept. Nothing the operator modelled is
+          // lost, so this is reported rather than gated.
+          requiresConfirmation: false,
         });
       }
     }
@@ -568,10 +572,19 @@ function validateNoticeIds(normalized: NormalizedImport): void {
   }
 }
 
+/**
+ * An acknowledgement is owed when the import would lose or reinterpret what the
+ * operator authored — a dropped field, or a conflict the parser resolved by
+ * picking one of several defensible candidates. It is NOT owed for a repair,
+ * which is lossless work already done (see `ImportRepairNotice`), so repairs
+ * must opt IN by setting `requiresConfirmation: true`. Everything else defaults
+ * to needing a human, which keeps a notice kind nobody has classified yet on the
+ * safe side of the line.
+ */
 function collectRequiredAcknowledgements(normalized: NormalizedImport): string[] {
   const result: string[] = [];
   for (const repair of normalized.repairs) {
-    if (repair.requiresConfirmation !== false) result.push(repair.id);
+    if (repair.requiresConfirmation === true) result.push(repair.id);
   }
   for (const conflict of normalized.conflicts) {
     if (conflict.resolution && conflict.requiresConfirmation !== false) result.push(conflict.id);

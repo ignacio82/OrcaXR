@@ -6,6 +6,8 @@
   "action.add_primitive_disc.label": "Disco",
   "action.add_primitive_sphere.label": "Esfera",
   "action.add_primitive_torus.label": "Toro",
+  "action.calib_input_shaping_frequency.label": "Frequência da Modelagem de Entrada",
+  "action.calib_junction_deviation.label": "Desvio de Junção",
   "action.delete_models.label": "Excluir",
   "action.duplicate_plate.label": "Duplicar Placa Atual",
   "action.edit_copy.label": "Copiar",
@@ -69,6 +71,7 @@
   "ui.selectionFilamentBar.default": "Padrão",
   "ui.selectionFilamentBar.selectedScopes": "selecionado",
   "ui.semanticObjectEditor.heightRanges": "Intervalos de altura",
+  "ui.slicePreflightPanel.show": "Mostrar",
   "workspace.orcaWorkspace.defaultFilament": "Padrão",
   "workspace.orcaWorkspace.selectedScopes": "selecionado"
 }

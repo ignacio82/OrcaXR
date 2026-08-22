@@ -6,6 +6,8 @@
   "action.add_primitive_disc.label": "圆盘",
   "action.add_primitive_sphere.label": "球",
   "action.add_primitive_torus.label": "环面",
+  "action.calib_input_shaping_frequency.label": "输入整形频率",
+  "action.calib_junction_deviation.label": "结点偏差",
   "action.delete_models.label": "删除",
   "action.duplicate_plate.label": "复制当前打印板",
   "action.edit_copy.label": "复制",
@@ -69,6 +71,7 @@
   "ui.selectionFilamentBar.default": "缺省",
   "ui.selectionFilamentBar.selectedScopes": "已选中",
   "ui.semanticObjectEditor.heightRanges": "高度范围",
+  "ui.slicePreflightPanel.show": "显示",
   "workspace.orcaWorkspace.defaultFilament": "缺省",
   "workspace.orcaWorkspace.selectedScopes": "已选中"
 }

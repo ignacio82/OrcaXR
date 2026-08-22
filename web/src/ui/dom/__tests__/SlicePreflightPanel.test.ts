@@ -135,6 +135,50 @@ function result(): CanonicalSlicePreflightResult {
   };
 }
 
+await test('an issue can be hidden, stays hidden across recompute, and is always recoverable', async () => {
+  const dom = new JSDOM('<!doctype html><html><body><main id="host"></main></body></html>', {
+    url: 'https://example.test/',
+  });
+  const document = dom.window.document as Document;
+  const host = document.querySelector<HTMLElement>('#host')!;
+  const panel = new SlicePreflightPanel(host, { runAction: () => {} });
+  panel.render(result());
+
+  const issueIds = () =>
+    [...host.querySelectorAll<HTMLElement>('[data-preflight-issue-id]')].map((node) => node.dataset.preflightIssueId);
+  assert.equal(issueIds().length, 2);
+
+  // Every issue offers the control, errors included: a standing fault should not
+  // be able to bury the panel it sits in.
+  const hideButtons = host.querySelectorAll<HTMLButtonElement>('[data-preflight-hide]');
+  assert.equal(hideButtons.length, 2);
+  const hiddenId = hideButtons[0].dataset.preflightHide;
+  hideButtons[0].click();
+
+  assert.equal(issueIds().length, 1);
+  assert.equal(issueIds().includes(hiddenId), false);
+  // Hidden is never gone: the count and the way back both stay on screen.
+  assert.equal(host.querySelector<HTMLElement>('[data-preflight-hidden-summary]')?.dataset.preflightHiddenSummary, '1');
+
+  // Preflight recomputes after every edit; the same fault must not come back.
+  panel.render(result());
+  assert.equal(issueIds().length, 1);
+  assert.equal(issueIds().includes(hiddenId), false);
+
+  host.querySelector<HTMLButtonElement>('[data-preflight-show-hidden]')!.click();
+  assert.equal(issueIds().length, 2);
+  assert.equal(host.querySelector('[data-preflight-hidden-summary]'), null);
+
+  // A fault that clears and later returns is a new occurrence, not the one that
+  // was dismissed, so it shows again on its own.
+  host.querySelector<HTMLButtonElement>('[data-preflight-hide]')!.click();
+  assert.equal(issueIds().length, 1);
+  panel.render({ ...result(), issues: [] });
+  assert.equal(issueIds().length, 0);
+  panel.render(result());
+  assert.equal(issueIds().length, 2);
+});
+
 async function flush(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }

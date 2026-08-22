@@ -1768,7 +1768,13 @@ function setupDomUI(
           const bytes = await file.arrayBuffer();
           const isProjectArchive = /\.3mf$/i.test(file.name);
           if (isProjectArchive) {
-            const choice = await askThreeMfIntake(file.name);
+            // "Open as project" vs "import geometry only" is a question about
+            // what to do with work that is already open. With an empty
+            // workspace there is nothing to preserve and nothing to replace,
+            // and opening as a project is strictly the more complete of the
+            // two — it keeps the plates, settings, filaments and paint that
+            // geometry-only would discard. So don't ask; just open it.
+            const choice = workspace.modelCount === 0 ? 'project' : await askThreeMfIntake(file.name);
             if (choice === 'cancel') {
               statusText.textContent = t('app.main.loadCancelled', 'Load cancelled.');
               continue;

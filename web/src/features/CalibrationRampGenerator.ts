@@ -92,4 +92,32 @@ export class CalibrationRampGenerator {
   generateTolerance(): THREE.BufferGeometry {
     return this.generateCalibrationCube();
   }
+
+  generateFlowYoloPerfectionist(): THREE.BufferGeometry {
+    const parts: THREE.BufferGeometry[] = [];
+    const size = 20;
+    const spacing = 5;
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j < 3; j++) {
+        const patch = new THREE.BoxGeometry(size, size, 2);
+        patch.translate((i - 1.5) * (size + spacing), (j - 1) * (size + spacing), 1);
+        parts.push(patch);
+      }
+    }
+    const merged = BufferGeometryUtils.mergeGeometries(parts, false);
+    merged.computeVertexNormals();
+    return merged;
+  }
+
+  generateInputShapingFrequency(): THREE.BufferGeometry {
+    return this.generateTemperatureTower(6, 10, 20);
+  }
+
+  generateInputShapingDamping(): THREE.BufferGeometry {
+    return this.generateTemperatureTower(6, 10, 20);
+  }
+
+  generateJunctionDeviation(): THREE.BufferGeometry {
+    return this.generateTemperatureTower(6, 10, 20);
+  }
 }

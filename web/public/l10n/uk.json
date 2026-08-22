@@ -68,6 +68,7 @@
   "ui.selectionFilamentBar.default": "За замовчуванням",
   "ui.selectionFilamentBar.selectedScopes": "вибрані",
   "ui.semanticObjectEditor.heightRanges": "Діапазон висот шарів",
+  "ui.slicePreflightPanel.show": "Показати",
   "workspace.orcaWorkspace.defaultFilament": "За замовчуванням",
   "workspace.orcaWorkspace.selectedScopes": "вибрані"
 }

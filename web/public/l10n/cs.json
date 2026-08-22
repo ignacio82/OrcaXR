@@ -61,6 +61,7 @@
   "ui.selectionFilamentBar.default": "Výchozí",
   "ui.selectionFilamentBar.selectedScopes": "vybráno",
   "ui.semanticObjectEditor.heightRanges": "Výškové rozsahy",
+  "ui.slicePreflightPanel.show": "Zobrazit",
   "workspace.orcaWorkspace.defaultFilament": "Výchozí",
   "workspace.orcaWorkspace.selectedScopes": "vybráno"
 }

@@ -257,11 +257,15 @@ export class ActionContext {
       | 'flow_pass1'
       | 'flow_pass2'
       | 'flow_yolo'
+      | 'flow_yolo_perfectionist'
       | 'pressure_advance'
       | 'retraction'
       | 'max_flow'
       | 'vfa'
-      | 'tolerance',
+      | 'tolerance'
+      | 'input_shaping_frequency'
+      | 'input_shaping_damping'
+      | 'junction_deviation',
   ): void {
     this.workspace.addCalibration(kind);
   }
@@ -317,6 +321,9 @@ export class ActionContext {
   }
   openProject(): void {
     this.workspace.onRequestLoadProject?.();
+  }
+  openRecentProject(id?: string): void {
+    this.workspace.openRecentProject(id);
   }
   exportConfig(): void {
     this.workspace.exportActiveConfig();

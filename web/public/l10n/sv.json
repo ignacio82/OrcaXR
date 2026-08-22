@@ -60,6 +60,7 @@
   "ui.selectionFilamentBar.default": "Standard",
   "ui.selectionFilamentBar.selectedScopes": "vald",
   "ui.semanticObjectEditor.heightRanges": "Höjd intervall",
+  "ui.slicePreflightPanel.show": "Visa",
   "workspace.orcaWorkspace.defaultFilament": "Standard",
   "workspace.orcaWorkspace.selectedScopes": "vald"
 }

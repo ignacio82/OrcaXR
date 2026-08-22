@@ -91,7 +91,7 @@
     "why": "P12.6 permits the full-parity claim only after every gate is verified; none of the human gates below has been."
   },
   "evidence": {
-    "rows": 130,
+    "rows": 131,
     "tasksCovered": 96
   },
   "integrity": {
@@ -121,22 +121,6 @@
         "owedBy": "P1.3"
       },
       {
-        "item": "MainFrame::init_menubar_as_editor::Input Shaping Damping/zeta factor",
-        "owedBy": "P8.1"
-      },
-      {
-        "item": "MainFrame::init_menubar_as_editor::Input Shaping Frequency",
-        "owedBy": "P8.1"
-      },
-      {
-        "item": "MainFrame::init_menubar_as_editor::Junction Deviation",
-        "owedBy": "P8.1"
-      },
-      {
-        "item": "MainFrame::init_menubar_as_editor::YOLO (perfectionist version)",
-        "owedBy": "P8.3"
-      },
-      {
         "item": "MainFrame::on_sys_color_changed::Check for Process Preset Updates",
         "owedBy": "P6.3"
       },
@@ -147,15 +131,11 @@
       {
         "item": "MenuFactory::create_sla_object_menu::Split",
         "owedBy": "P0.1"
-      },
-      {
-        "item": "runtime::Open recent project entry",
-        "owedBy": "P11.1"
       }
     ],
     "byKind": {
-      "absent": 13,
-      "action": 110,
+      "absent": 8,
+      "action": 115,
       "adaptation": 15,
       "container": 17,
       "panel": 7

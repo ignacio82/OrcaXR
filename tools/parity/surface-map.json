@@ -134,19 +134,16 @@
       "note": "Calibration submenu heading for the input-shaping flows."
     },
     "MainFrame::init_menubar_as_editor::Input Shaping Damping/zeta factor": {
-      "kind": "absent",
-      "task": "P8.1",
-      "reason": "Input-shaping calibration is not generated yet; P8.1 owns the inventory it comes from."
+      "kind": "action",
+      "action": "calib_input_shaping_damping"
     },
     "MainFrame::init_menubar_as_editor::Input Shaping Frequency": {
-      "kind": "absent",
-      "task": "P8.1",
-      "reason": "Input-shaping calibration is not generated yet; P8.1 owns the inventory it comes from."
+      "kind": "action",
+      "action": "calib_input_shaping_frequency"
     },
     "MainFrame::init_menubar_as_editor::Junction Deviation": {
-      "kind": "absent",
-      "task": "P8.1",
-      "reason": "Junction-deviation calibration is not generated yet."
+      "kind": "action",
+      "action": "calib_junction_deviation"
     },
     "MainFrame::init_menubar_as_editor::Max flowrate": {
       "kind": "action",
@@ -264,9 +261,8 @@
       "action": "calib_flow_yolo"
     },
     "MainFrame::init_menubar_as_editor::YOLO (perfectionist version)": {
-      "kind": "absent",
-      "task": "P8.3",
-      "reason": "Only the recommended YOLO flow-rate variant is generated."
+      "kind": "action",
+      "action": "calib_flow_yolo_perfectionist"
     },
     "MainFrame::init_menubar_as_gcodeviewer::&Open G-code": {
       "kind": "action",
@@ -675,9 +671,8 @@
       "action": "filament_remap"
     },
     "runtime::Open recent project entry": {
-      "kind": "absent",
-      "task": "P11.1",
-      "reason": "Recent projects are not offered yet; every open is an explicit pick."
+      "kind": "action",
+      "action": "file_open_recent"
     }
   }
 }

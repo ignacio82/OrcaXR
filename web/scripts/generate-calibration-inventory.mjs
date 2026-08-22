@@ -325,11 +325,15 @@ const expectedActionBindings = {
   calib_flow_pass1: 'flow_pass1',
   calib_flow_pass2: 'flow_pass2',
   calib_flow_yolo: 'flow_yolo',
+  calib_flow_yolo_perfectionist: 'flow_yolo_perfectionist',
   calib_pressure_advance: 'pressure_advance',
   calib_retraction: 'retraction',
   calib_max_flow: 'max_flow',
   calib_vfa: 'vfa',
   calib_tolerance: 'tolerance',
+  calib_junction_deviation: 'junction_deviation',
+  calib_input_shaping_frequency: 'input_shaping_frequency',
+  calib_input_shaping_damping: 'input_shaping_damping',
 };
 assertEqual(Object.fromEntries(actionBindings), expectedActionBindings, 'current local calibration action bindings');
 assertIncludes(workspaceSource, 'new CalibrationRampGenerator()', 'local alpha calibration generator');

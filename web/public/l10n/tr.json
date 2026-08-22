@@ -6,6 +6,8 @@
   "action.add_primitive_disc.label": "Disk",
   "action.add_primitive_sphere.label": "Küre",
   "action.add_primitive_torus.label": "Simit",
+  "action.calib_input_shaping_frequency.label": "Input shaping Frekansı",
+  "action.calib_junction_deviation.label": "Köşe sapması",
   "action.delete_models.label": "Sil",
   "action.duplicate_plate.label": "Geçerli plakayı çoğalt",
   "action.edit_copy.label": "Kopyala",
@@ -69,6 +71,7 @@
   "ui.selectionFilamentBar.default": "Varsayılan",
   "ui.selectionFilamentBar.selectedScopes": "Seçili",
   "ui.semanticObjectEditor.heightRanges": "Yükseklik aralıkları",
+  "ui.slicePreflightPanel.show": "Göster",
   "workspace.orcaWorkspace.defaultFilament": "Varsayılan",
   "workspace.orcaWorkspace.selectedScopes": "Seçili"
 }

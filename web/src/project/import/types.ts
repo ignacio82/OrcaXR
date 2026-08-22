@@ -35,6 +35,19 @@ export interface ProjectImportParseRequest {
   cancellation?: CancellationToken;
 }
 
+/**
+ * Something the importer already fixed, losslessly, on the way in: a unit
+ * conversion, byte-identical assets consolidated, a colliding name remapped, a
+ * broken mesh made printable.
+ *
+ * A repair is NOT a decision. The operator's decision is whether to import at
+ * all, and the import commits as one undoable command either way, so gating each
+ * repair behind its own checkbox asks them to approve work they cannot
+ * meaningfully refuse — a 3MF with 24 duplicated meshes turned an open into 24
+ * clicks. Repairs are reported after the fact instead. `requiresConfirmation`
+ * therefore defaults to FALSE here; set it to `true` only for a repair that
+ * genuinely changes what the operator authored, and expect it to interrupt them.
+ */
 export interface ImportRepairNotice {
   id: string;
   kind: 'unit-conversion' | 'asset-deduplication' | 'identifier-remap' | 'geometry-repair' | 'other';
@@ -42,7 +55,7 @@ export interface ImportRepairNotice {
   message: string;
   before?: JsonValue;
   after?: JsonValue;
-  /** Defaults to true. */
+  /** Defaults to FALSE — see the note above. */
   requiresConfirmation?: boolean;
 }
 

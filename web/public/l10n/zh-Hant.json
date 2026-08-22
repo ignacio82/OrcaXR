@@ -6,6 +6,8 @@
   "action.add_primitive_disc.label": "圓盤",
   "action.add_primitive_sphere.label": "球體",
   "action.add_primitive_torus.label": "環面",
+  "action.calib_input_shaping_frequency.label": "輸入震動抑制頻率",
+  "action.calib_junction_deviation.label": "轉折偏移值",
   "action.delete_models.label": "刪除",
   "action.duplicate_plate.label": "複製列印板",
   "action.edit_copy.label": "複製",
@@ -69,6 +71,7 @@
   "ui.selectionFilamentBar.default": "預設",
   "ui.selectionFilamentBar.selectedScopes": "已選取",
   "ui.semanticObjectEditor.heightRanges": "高度範圍",
+  "ui.slicePreflightPanel.show": "顯示",
   "workspace.orcaWorkspace.defaultFilament": "預設",
   "workspace.orcaWorkspace.selectedScopes": "已選取"
 }

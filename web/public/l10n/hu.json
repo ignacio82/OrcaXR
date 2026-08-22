@@ -60,6 +60,7 @@
   "ui.printSubmissionDialog.sendToPrinter": "Nyomtatóra küldés",
   "ui.selectionFilamentBar.default": "Alapértelmezett",
   "ui.selectionFilamentBar.selectedScopes": "kiválasztva",
+  "ui.slicePreflightPanel.show": "Megjelenítés",
   "workspace.orcaWorkspace.defaultFilament": "Alapértelmezett",
   "workspace.orcaWorkspace.selectedScopes": "kiválasztva"
 }

@@ -69,6 +69,7 @@
   "ui.selectionFilamentBar.default": "Per defecte",
   "ui.selectionFilamentBar.selectedScopes": "sel·leccionat",
   "ui.semanticObjectEditor.heightRanges": "Intervals d'alçada",
+  "ui.slicePreflightPanel.show": "Mostrar",
   "workspace.orcaWorkspace.defaultFilament": "Per defecte",
   "workspace.orcaWorkspace.selectedScopes": "sel·leccionat"
 }

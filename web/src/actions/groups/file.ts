@@ -33,6 +33,16 @@ export const fileActions: Action[] = [
     run: (ctx) => ctx.openProject(),
   },
   {
+    id: 'file_open_recent',
+    label: 'Open Recent Project…',
+    icon: 'folder_open',
+    group: 'file',
+    disclosure: 'menu',
+    menuSection: 'file',
+    hint: 'Open a recently opened or saved project',
+    run: (ctx) => ctx.openRecentProject(),
+  },
+  {
     id: 'file_import_model',
     context: ['plate'],
     mcpTool: 'load_model_from_path',

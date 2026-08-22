@@ -6,6 +6,7 @@
   "action.add_primitive_disc.label": "Диск",
   "action.add_primitive_sphere.label": "Сфера",
   "action.add_primitive_torus.label": "Тороид",
+  "action.calib_input_shaping_frequency.label": "Частота Input Shaping ",
   "action.delete_models.label": "Удалить",
   "action.duplicate_plate.label": "Дублировать печатную пластину",
   "action.edit_copy.label": "Копировать",
@@ -69,6 +70,7 @@
   "ui.selectionFilamentBar.default": "По умолчанию",
   "ui.selectionFilamentBar.selectedScopes": "выбрано",
   "ui.semanticObjectEditor.heightRanges": "Диапазон высот слоёв",
+  "ui.slicePreflightPanel.show": "Показать",
   "workspace.orcaWorkspace.defaultFilament": "По умолчанию",
   "workspace.orcaWorkspace.selectedScopes": "выбрано"
 }

@@ -69,6 +69,7 @@
   "ui.selectionFilamentBar.default": "Défaut",
   "ui.selectionFilamentBar.selectedScopes": "sélectionné",
   "ui.semanticObjectEditor.heightRanges": "Plages de hauteur",
+  "ui.slicePreflightPanel.show": "Afficher",
   "workspace.orcaWorkspace.defaultFilament": "Défaut",
   "workspace.orcaWorkspace.selectedScopes": "sélectionné"
 }

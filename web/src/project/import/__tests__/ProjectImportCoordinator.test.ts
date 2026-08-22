@@ -204,6 +204,35 @@ await test('previews repairs/conflicts/drops, deduplicates by content, and commi
   assert.ok(prepared.preview.droppedFields.some((notice) => notice.field === 'sourceFilename/provenance'));
   assert.ok(Object.isFrozen(prepared.preview));
 
+  // Acknowledgement policy: an operator is asked about what the import LOSES or
+  // REINTERPRETS, never about lossless work the importer already did. A 3MF with
+  // two dozen duplicated meshes used to open as two dozen checkboxes.
+  const required = new Set(prepared.preview.requiredAcknowledgementIds);
+  const idsOfRepairs = (kind: string) =>
+    prepared.preview.repairs.filter((notice) => notice.kind === kind).map((notice) => notice.id);
+  for (const kind of ['unit-conversion', 'asset-deduplication']) {
+    for (const id of idsOfRepairs(kind)) {
+      assert.equal(required.has(id), false, `${kind} is a repair and must not gate the import`);
+    }
+  }
+  const droppedId = (field: string) =>
+    prepared.preview.droppedFields.find((notice) => notice.field === field)?.id ?? '';
+  assert.equal(
+    required.has(droppedId('vendor_private_flag')),
+    true,
+    'a dropped authored field is a real loss and still needs a human',
+  );
+  assert.equal(
+    required.has(droppedId('sourceFilename/provenance')),
+    false,
+    'byte-identical assets keep one provenance; nothing modelled is lost',
+  );
+  for (const conflict of prepared.preview.conflicts) {
+    if (conflict.resolution) {
+      assert.equal(required.has(conflict.id), true, 'a resolved conflict picked one candidate and still needs a human');
+    }
+  }
+
   assert.throws(
     () => prepared.confirm({ confirmed: true, acknowledgedNoticeIds: [] }),
     (error: unknown) => error instanceof ImportConfirmationError && error.missingAcknowledgementIds.length > 0,

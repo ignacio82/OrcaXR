@@ -51,16 +51,20 @@ export function projectImportNoticeRows(preview: ProjectImportPreview): readonly
 }
 
 /**
- * Accessible DOM counterpart for the worker import preview. Every required
- * repair/conflict/drop must be individually visible and acknowledged; the
- * caller receives only the IDs the user actually checked.
+ * Accessible DOM counterpart for the worker import preview.
+ *
+ * Every notice stays individually VISIBLE — that is what informs the decision.
+ * Acknowledging them is one act, not one per row: the import commits as a
+ * single undoable command, so ticking 47 boxes before the button unlocks was
+ * ceremony, not consent, and it turned opening a large 3MF into a chore. The
+ * caller receives the full required set when the operator confirms, and nothing
+ * at all when they cancel. A blocked preview still cannot be confirmed.
  */
 export function showProjectImportPreviewDialog(
   preview: ProjectImportPreview,
 ): Promise<ImportCommitConfirmation | null> {
   const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const rows = projectImportNoticeRows(preview);
-  const acknowledged = new Set<string>();
 
   const overlay = document.createElement('div');
   overlay.dataset.projectImportPreview = 'true';
@@ -100,7 +104,6 @@ export function showProjectImportPreviewDialog(
   noticeList.style.cssText = 'display:grid;gap:8px;';
   dialog.appendChild(noticeList);
 
-  const requiredInputs = new Map<string, HTMLInputElement>();
   if (rows.length === 0) {
     const none = document.createElement('p');
     none.textContent = t(
@@ -111,26 +114,15 @@ export function showProjectImportPreviewDialog(
     noticeList.appendChild(none);
   } else {
     for (const row of rows) {
-      const item = document.createElement(row.required ? 'label' : 'div');
+      const item = document.createElement('div');
       item.dataset.noticeId = row.id;
+      // A row that carries the decision is marked so it reads apart from the
+      // reported ones, but it is not a control: confirming is one act below.
+      if (row.required) item.dataset.acknowledgementId = row.id;
+      const accent = row.blocking ? '#ef535066' : row.required ? '#f0a02066' : '#ffffff1f';
+      const wash = row.blocking ? '#7f1d1d40' : row.required ? '#78350f2e' : '#ffffff08';
       item.style.cssText =
-        `display:grid;grid-template-columns:${row.required ? '22px 1fr' : '1fr'};gap:9px;` +
-        `padding:11px;border:1px solid ${row.blocking ? '#ef535066' : '#ffffff1f'};` +
-        `border-radius:8px;background:${row.blocking ? '#7f1d1d40' : '#ffffff08'};`;
-      if (row.required) {
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.dataset.acknowledgementId = row.id;
-        checkbox.setAttribute('aria-label', `Acknowledge ${row.category}: ${row.message}`);
-        checkbox.style.cssText = 'width:18px;height:18px;margin:2px 0 0;';
-        checkbox.addEventListener('change', () => {
-          if (checkbox.checked) acknowledged.add(row.id);
-          else acknowledged.delete(row.id);
-          updateConfirmAvailability();
-        });
-        requiredInputs.set(row.id, checkbox);
-        item.appendChild(checkbox);
-      }
+        `display:grid;gap:9px;padding:11px;border:1px solid ${accent};` + `border-radius:8px;background:${wash};`;
       const copy = document.createElement('div');
       const heading = document.createElement('strong');
       heading.textContent = `${row.category}: ${row.message}`;
@@ -177,7 +169,7 @@ export function showProjectImportPreviewDialog(
   };
   const requiredIds = [...preview.requiredAcknowledgementIds];
   function updateConfirmAvailability() {
-    confirm.disabled = preview.blocked || requiredIds.some((id) => !acknowledged.has(id));
+    confirm.disabled = preview.blocked;
     confirm.setAttribute('aria-disabled', String(confirm.disabled));
     confirm.style.opacity = confirm.disabled ? '0.5' : '1';
     confirm.style.cursor = confirm.disabled ? 'not-allowed' : 'pointer';
@@ -204,7 +196,8 @@ export function showProjectImportPreviewDialog(
   cancel.addEventListener('click', () => settle(null));
   confirm.addEventListener('click', () => {
     if (confirm.disabled) return;
-    settle({ confirmed: true, acknowledgedNoticeIds: requiredIds.filter((id) => acknowledged.has(id)) });
+    // Confirming is acknowledging what the dialog just listed.
+    settle({ confirmed: true, acknowledgedNoticeIds: requiredIds });
   });
   overlay.addEventListener('mousedown', (event) => {
     if (event.target === overlay) settle(null);
@@ -212,6 +205,6 @@ export function showProjectImportPreviewDialog(
   document.addEventListener('keydown', onKeyDown, true);
   document.body.appendChild(overlay);
   updateConfirmAvailability();
-  (requiredInputs.values().next().value ?? cancel).focus();
+  (preview.blocked ? cancel : confirm).focus();
   return promise;
 }

@@ -57,6 +57,8 @@ await test('requires an acknowledged preview before the live controller replaces
       return {
         ...parsed,
         repairs: [
+          // A repair is lossless work already done, so it reports rather than
+          // gates — unless a producer opts in, which is what this one proves.
           {
             id: 'live-preview-repair',
             kind: 'other',
@@ -64,6 +66,13 @@ await test('requires an acknowledged preview before the live controller replaces
             message: 'Synthetic repair proving the live acknowledgement boundary',
             before: 'source',
             after: 'normalized',
+            requiresConfirmation: true,
+          },
+          {
+            id: 'live-preview-routine-repair',
+            kind: 'asset-deduplication',
+            path: '$.sourceAssets',
+            message: 'Synthetic routine repair that must not interrupt the open',
           },
         ],
       };

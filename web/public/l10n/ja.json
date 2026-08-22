@@ -55,5 +55,6 @@
   "ui.generatedSettingsPanel.detailLevel": "細部レベル",
   "ui.printSubmissionDialog.sendToPrinter": "プリンタへ送信",
   "ui.selectionFilamentBar.default": "デフォルト",
+  "ui.slicePreflightPanel.show": "表示",
   "workspace.orcaWorkspace.defaultFilament": "デフォルト"
 }

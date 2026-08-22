@@ -69,6 +69,7 @@
   "ui.selectionFilamentBar.default": "Numatytas",
   "ui.selectionFilamentBar.selectedScopes": "pasirinkta",
   "ui.semanticObjectEditor.heightRanges": "Aukščio diapazonai",
+  "ui.slicePreflightPanel.show": "Rodyti",
   "workspace.orcaWorkspace.defaultFilament": "Numatytas",
   "workspace.orcaWorkspace.selectedScopes": "pasirinkta"
 }

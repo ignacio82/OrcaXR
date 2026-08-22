@@ -30,6 +30,20 @@ const COLORS = {
 
 /** Accessible structured rendering for immutable canonical preflight evidence. */
 export class SlicePreflightPanel {
+  /**
+   * Issues the operator has hidden, by `SlicePreflightIssue.id` — which is
+   * stable across repeated evaluation of the same canonical fault, so a hidden
+   * issue stays hidden through the recompute that follows every edit.
+   *
+   * Hiding changes nothing canonical: preflight still evaluates the fault and
+   * slicing still refuses on a blocking one. It only stops a standing issue from
+   * burying the panel underneath it — an overlap warning on two of thirteen
+   * objects should not cost the operator the object list. A fault that clears
+   * and later returns is a new occurrence and shows again, because ids that are
+   * no longer present get pruned below.
+   */
+  private readonly hidden = new Set<string>();
+
   constructor(
     private readonly container: HTMLElement,
     private readonly adapter: SlicePreflightPanelAdapter,
@@ -37,23 +51,71 @@ export class SlicePreflightPanel {
 
   render(result: CanonicalSlicePreflightResult): void {
     this.container.replaceChildren();
-    if (result.issues.length === 0) return;
+    if (result.issues.length === 0) {
+      this.hidden.clear();
+      return;
+    }
 
-    const list = this.container.ownerDocument.createElement('ol');
+    const present = new Set(result.issues.map((issue) => issue.id));
+    for (const id of [...this.hidden]) if (!present.has(id)) this.hidden.delete(id);
+
+    const visible = result.issues.filter((issue) => !this.hidden.has(issue.id));
+    const document = this.container.ownerDocument;
+    const list = document.createElement('ol');
     list.setAttribute('aria-label', t('ui.slicePreflightPanel.slicePreflightIssues', 'Slice preflight issues'));
     list.dataset.slicePreflightIssues = '';
     list.style.cssText = 'display:grid;gap:8px;list-style:none;margin:0;padding:0;';
-    for (const [index, issue] of result.issues.entries()) {
-      list.appendChild(this.renderIssue(issue, index));
+    for (const [index, issue] of visible.entries()) {
+      list.appendChild(this.renderIssue(issue, index, () => this.hide(issue.id, result)));
     }
     this.container.appendChild(list);
+
+    const hiddenCount = result.issues.length - visible.length;
+    if (hiddenCount > 0) this.container.appendChild(this.renderHiddenSummary(hiddenCount, result));
   }
 
   dispose(): void {
     this.container.replaceChildren();
   }
 
-  private renderIssue(issue: SlicePreflightIssue, index: number): HTMLLIElement {
+  private hide(id: string, result: CanonicalSlicePreflightResult): void {
+    this.hidden.add(id);
+    this.render(result);
+  }
+
+  /**
+   * Hidden issues are never silently gone: what is left is a count and the one
+   * control that brings them all back.
+   */
+  private renderHiddenSummary(count: number, result: CanonicalSlicePreflightResult): HTMLElement {
+    const document = this.container.ownerDocument;
+    const bar = document.createElement('div');
+    bar.dataset.preflightHiddenSummary = String(count);
+    bar.style.cssText =
+      'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;' +
+      'padding:6px 10px;border:1px dashed #ffffff2e;border-radius:8px;color:#aeb8c1;font-size:12px;';
+    const label = document.createElement('span');
+    label.textContent = t(
+      'ui.slicePreflightPanel.hiddenIssues',
+      '{count, plural, one {# hidden issue} other {# hidden issues}}',
+      { count },
+    );
+    const show = document.createElement('button');
+    show.type = 'button';
+    show.dataset.preflightShowHidden = '';
+    show.textContent = t('ui.slicePreflightPanel.show', 'Show');
+    show.style.cssText =
+      'min-height:28px;padding:2px 10px;border:1px solid #ffffff38;background:#ffffff0d;color:inherit;' +
+      'border-radius:6px;cursor:pointer;font:inherit;';
+    show.addEventListener('click', () => {
+      this.hidden.clear();
+      this.render(result);
+    });
+    bar.append(label, show);
+    return bar;
+  }
+
+  private renderIssue(issue: SlicePreflightIssue, index: number, onHide: () => void): HTMLLIElement {
     const document = this.container.ownerDocument;
     const item = document.createElement('li');
     const article = document.createElement('article');
@@ -72,9 +134,13 @@ export class SlicePreflightPanel {
       `background:${colors.background};border:1px solid ${colors.border};color:${colors.foreground};` +
       'border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.4;';
 
+    // The heading row carries the dismiss control, so every issue can be put
+    // away from the place the operator is already reading.
+    const headingRow = document.createElement('div');
+    headingRow.style.cssText = 'display:flex;align-items:flex-start;gap:8px;';
     const heading = document.createElement('h3');
     heading.id = headingId;
-    heading.style.cssText = 'font:inherit;font-weight:700;margin:0 0 4px;';
+    heading.style.cssText = 'font:inherit;font-weight:700;margin:0 0 4px;flex:1;min-width:0;';
     const severity = document.createElement('span');
     severity.dataset.preflightSeverity = issue.severity;
     severity.textContent = issue.severity === 'error' ? 'Error' : 'Warning';
@@ -83,6 +149,22 @@ export class SlicePreflightPanel {
     code.style.cssText = 'margin-inline-start:6px;color:inherit;';
     code.textContent = issue.detailCode ? `${issue.code} / ${issue.detailCode}` : issue.code;
     heading.append(severity, ' ', code);
+
+    const hide = document.createElement('button');
+    hide.type = 'button';
+    hide.dataset.preflightHide = issue.id;
+    hide.textContent = '\u00d7';
+    hide.title = t('ui.slicePreflightPanel.hideThisIssue', 'Hide this issue');
+    hide.setAttribute(
+      'aria-label',
+      `${t('ui.slicePreflightPanel.hideThisIssue', 'Hide this issue')}: ${issue.severity === 'error' ? 'Error' : 'Warning'} ${issue.code}`,
+    );
+    hide.style.cssText =
+      'flex:0 0 auto;min-width:28px;min-height:28px;padding:0 6px;border:1px solid transparent;' +
+      'background:transparent;color:inherit;border-radius:6px;cursor:pointer;font:inherit;' +
+      'font-size:16px;line-height:1;opacity:.75;';
+    hide.addEventListener('click', onHide);
+    headingRow.append(heading, hide);
 
     const description = document.createElement('div');
     description.id = descriptionId;
@@ -174,7 +256,7 @@ export class SlicePreflightPanel {
       description.appendChild(controls);
     }
 
-    article.append(heading, description);
+    article.append(headingRow, description);
     item.appendChild(article);
     return item;
   }

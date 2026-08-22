@@ -2719,6 +2719,25 @@ try {
   assert.ok(openProject, 'Open Project action is available');
   const [projectChooser] = await Promise.all([page.waitForFileChooser(), openProject.click()]);
   await projectChooser.accept([fixturePath]);
+  // The workspace is empty here, so there is no decision to put in front of
+  // anyone: nothing is replaced, nothing authored is lost, and repairs report
+  // themselves afterwards. The project must simply open.
+  await page.waitForFunction(() => (globalThis.window.workspace?.getCanonicalSummary?.().objectCount ?? 0) === 2, {
+    timeout: 60_000,
+  });
+  assert.equal(
+    await page.$('[data-project-import-preview="true"]'),
+    null,
+    'opening a project into an empty workspace must not interrupt with a preview',
+  );
+
+  // Opening a project OVER open work is a decision, so the preview appears.
+  await page.$eval('[data-action-id="file_open_project"]', (item) => {
+    item.closest('.menu-host')?.querySelector('.menu-trigger')?.click();
+  });
+  const replaceOverOpenWork = await page.$('[data-action-id="file_open_project"]');
+  const [replaceChooser] = await Promise.all([page.waitForFileChooser(), replaceOverOpenWork.click()]);
+  await replaceChooser.accept([fixturePath]);
   await page.waitForSelector('[data-project-import-preview="true"] [role="dialog"]', { timeout: 60_000 });
   const importPreview = await page.$eval('[data-project-import-preview="true"]', (overlay) => {
     const replace = [...overlay.querySelectorAll('button')].find((button) => button.textContent === 'Replace project');
@@ -2728,7 +2747,7 @@ try {
       summary: overlay.querySelector('#project-import-preview-summary')?.textContent,
       notices: notices.map((notice) => notice.textContent),
       noticesVisible: notices.every((notice) => notice.getClientRects().length > 0),
-      requiredAcknowledgements: overlay.querySelectorAll('input[data-acknowledgement-id]').length,
+      markedNotices: overlay.querySelectorAll('[data-notice-id][data-acknowledgement-id]').length,
       replaceDisabled: replace?.disabled,
     };
   });
@@ -2737,17 +2756,21 @@ try {
   assert.match(importPreview.summary, /one undoable canonical command/i);
   assert.ok(importPreview.notices.length > 0, 'foreign project import notices are listed');
   assert.equal(importPreview.noticesVisible, true, 'every project import notice is visible');
-  assert.equal(importPreview.replaceDisabled, importPreview.requiredAcknowledgements > 0);
-
-  const requiredAcknowledgements = await page.$$('[data-project-import-preview="true"] input[data-acknowledgement-id]');
-  for (const acknowledgement of requiredAcknowledgements) await acknowledgement.click();
+  // Acknowledging is one act, not one per row: every notice stays visible, and
+  // the notices that carry the decision are marked, but confirming is what
+  // acknowledges them. An unblocked preview is therefore confirmable on arrival.
+  assert.equal(importPreview.replaceDisabled, false, 'an unblocked preview confirms without per-notice ticking');
+  // This fixture's notices are all reported ones (repairs and diagnostics), so
+  // none is marked. The preview appeared purely because work was already open —
+  // which is the decision it exists to put in front of the operator.
+  assert.equal(importPreview.markedNotices, 0, 'nothing here loses authored data, so nothing is marked');
   assert.equal(
     await page.$eval(
       '[data-project-import-preview="true"]',
-      (overlay) =>
-        [...overlay.querySelectorAll('button')].find((button) => button.textContent === 'Replace project')?.disabled,
+      (overlay) => overlay.querySelectorAll('input[data-acknowledgement-id]').length,
     ),
-    false,
+    0,
+    'the per-notice checkbox gate is gone',
   );
   const previewButtons = await page.$$('[data-project-import-preview="true"] button');
   const replaceProject = (
@@ -2758,7 +2781,20 @@ try {
     )
   ).find(Boolean);
   assert.ok(replaceProject, 'Replace project confirmation is available');
-  await replaceProject.click();
+  // Cancelling leaves the project that is already open exactly as it was, which
+  // is what makes the preview a decision rather than a formality.
+  const cancelPreview = (
+    await Promise.all(
+      previewButtons.map(async (button) =>
+        (await button.evaluate((node) => node.textContent)) === 'Cancel' ? button : null,
+      ),
+    )
+  ).find(Boolean);
+  assert.ok(cancelPreview, 'the preview can be declined');
+  await cancelPreview.click();
+  await page.waitForFunction(() => !globalThis.document.querySelector('[data-project-import-preview="true"]'), {
+    timeout: 30_000,
+  });
   await page.waitForFunction(
     (initialUndoCount) => {
       const snapshot = globalThis.window.workspace?.getAutomationSnapshot?.();

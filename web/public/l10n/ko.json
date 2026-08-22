@@ -69,6 +69,7 @@
   "ui.selectionFilamentBar.default": "기본값",
   "ui.selectionFilamentBar.selectedScopes": "선택됨",
   "ui.semanticObjectEditor.heightRanges": "높이 범위",
+  "ui.slicePreflightPanel.show": "보이기",
   "workspace.orcaWorkspace.defaultFilament": "기본값",
   "workspace.orcaWorkspace.selectedScopes": "선택됨"
 }
