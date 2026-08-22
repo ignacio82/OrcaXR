@@ -399,6 +399,14 @@ function setupDomUI(
   // is what the toolbar's `‹›` control writes, so one state serves both.
   const sidebar = document.getElementById('param-sidebar') as HTMLElement;
   const sidebarHandle = document.getElementById('sidebar-handle') as HTMLButtonElement;
+  // On a phone the sheet starts folded, so the first thing an operator sees is
+  // the plate rather than a settings panel over it. The same class folds the
+  // docked column on desktop, so this is asked of the layout rather than
+  // applied unconditionally.
+  if (window.matchMedia('(max-width: 768px)').matches) {
+    sidebar.classList.add('collapsed');
+    sidebarHandle.setAttribute('aria-expanded', 'false');
+  }
   sidebarHandle.addEventListener('click', () => {
     sidebar.classList.toggle('collapsed');
     sidebarHandle.setAttribute('aria-expanded', String(!sidebar.classList.contains('collapsed')));

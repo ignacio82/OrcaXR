@@ -107,6 +107,10 @@
         inset: 0;
         display: grid;
         grid-template-rows: auto minmax(0, 1fr);
+        /* The single column is capped rather than sized to its content: the tab
+           strip's own intrinsic width would otherwise stretch the whole shell
+           past a narrow window and take the sidebar and toolbar with it. */
+        grid-template-columns: minmax(0, 1fr);
         pointer-events: none;
         z-index: 5;
       }
@@ -192,6 +196,7 @@
         position: relative;
         display: flex;
         align-items: center;
+        min-width: 0;
         gap: 2px;
         height: var(--menu-h);
         box-sizing: border-box;
@@ -304,6 +309,11 @@
         align-items: center;
         gap: 0;
         min-width: 0;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      #menu-bar-host::-webkit-scrollbar {
+        display: none;
       }
       #menu-button {
         display: none;
@@ -416,6 +426,7 @@
       #tab-strip {
         display: flex;
         align-items: flex-end;
+        min-width: 0;
         gap: 8px;
         height: var(--tabs-h);
         box-sizing: border-box;
@@ -488,6 +499,7 @@
       #print-actions {
         display: flex;
         align-items: center;
+        flex: 0 0 auto;
         gap: 8px;
         margin-bottom: 6px;
       }
@@ -609,7 +621,11 @@
       .card-head {
         display: flex;
         align-items: center;
-        gap: 7px;
+        /* A band can carry a title, a scope switch and a toggle. On a narrow
+           sidebar those wrap onto a second line rather than being cut off at
+           the panel edge. */
+        flex-wrap: wrap;
+        gap: 4px 7px;
         min-height: 30px;
         padding: 4px 8px;
         background: var(--oxr-bg-sunken);
@@ -1834,8 +1850,19 @@
           padding-inline: 11px;
           font-size: 12.5px;
         }
+        /* Icon-only: the two teal buttons and four tabs cannot both have words
+           at 390px, and the tabs are the navigation. The label stays the
+           accessible name. */
         .print-btn {
-          padding-inline: 10px;
+          padding-inline: 9px;
+        }
+        .print-btn span:not([class]) {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          overflow: hidden;
+          clip-path: inset(50%);
+          white-space: nowrap;
         }
         #workspace-row {
           position: relative;
@@ -1870,7 +1897,10 @@
         #param-sidebar.collapsed {
           width: auto;
         }
-        #sidebar-handle {
+        /* More specific than the collapsed-child rule above, so the folded
+           sheet keeps the one control that unfolds it. */
+        #param-sidebar > #sidebar-handle,
+        #param-sidebar.collapsed > #sidebar-handle {
           display: flex;
         }
         #param-sidebar.collapsed #param-scroll,
