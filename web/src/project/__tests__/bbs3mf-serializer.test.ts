@@ -5,6 +5,7 @@ import { zipSync } from 'fflate';
 import {
   BbsPlateCoordinateError,
   Bbs3mfProjectSerializer,
+  DEFAULT_ZIP_LIMITS,
   ORCAXR_EXTENSION_PATH,
   UnsafeThreeMfArchiveError,
   canonicalStringify,
@@ -551,6 +552,10 @@ await test('rejects traversal, truncation, corrupt metadata, size violations, an
   assert.ok(payloadOffset >= 0);
   damaged[payloadOffset + 3] ^= 0xff;
   assert.throws(() => readSafeZip(damaged), /CRC-32 integrity check/);
+
+  assert.equal(DEFAULT_ZIP_LIMITS.maxArchiveBytes, 1024 * 1024 * 1024);
+  assert.equal(DEFAULT_ZIP_LIMITS.maxEntryBytes, 512 * 1024 * 1024);
+  assert.equal(DEFAULT_ZIP_LIMITS.maxTotalUncompressedBytes, 2048 * 1024 * 1024);
 
   const tinyLimit = new Bbs3mfProjectSerializer({ zipLimits: { maxEntryBytes: 16 } });
   await assert.rejects(tinyLimit.deserialize(serialized.bytes), /per-entry size limit/i);

@@ -18,10 +18,10 @@ export interface ZipSafetyLimits {
 }
 
 export const DEFAULT_ZIP_LIMITS: ZipSafetyLimits = Object.freeze({
-  maxArchiveBytes: 512 * 1024 * 1024,
+  maxArchiveBytes: 1024 * 1024 * 1024,
   maxEntries: 4096,
-  maxEntryBytes: 256 * 1024 * 1024,
-  maxTotalUncompressedBytes: 1024 * 1024 * 1024,
+  maxEntryBytes: 512 * 1024 * 1024,
+  maxTotalUncompressedBytes: 2048 * 1024 * 1024,
   maxCompressionRatio: 1000,
   maxPathBytes: 512,
 });

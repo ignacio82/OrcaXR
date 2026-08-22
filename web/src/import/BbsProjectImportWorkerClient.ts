@@ -10,7 +10,7 @@ import {
   type ProjectImportParserPort,
 } from '../project/import/types';
 
-const DEFAULT_TIMEOUT_MS = 120_000;
+const DEFAULT_TIMEOUT_MS = 180_000;
 const MAX_TIMEOUT_MS = 10 * 60_000;
 const CANCELLATION_POLL_MS = 25;
 
