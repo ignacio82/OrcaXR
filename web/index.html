@@ -304,16 +304,17 @@
       /* One trigger per upstream menu section, each opening its own dropdown —
          a menu bar, not a mega panel. `#menu-button` is the same bar collapsed
          behind a hamburger, which is what narrow windows get. */
+      /* Never a scroll container: `overflow` other than `visible` clips
+         absolutely-positioned descendants, and every dropdown here is one — it
+         would keep its layout box, report itself visible, and paint nothing, so
+         a click would land on whatever is behind the strip. The bar is ~343px
+         wide and the hamburger takes over below 768px, so it has no reason to
+         scroll. */
       #menu-bar-host {
         display: flex;
         align-items: center;
         gap: 0;
         min-width: 0;
-        overflow-x: auto;
-        scrollbar-width: none;
-      }
-      #menu-bar-host::-webkit-scrollbar {
-        display: none;
       }
       #menu-button {
         display: none;
@@ -1845,6 +1846,18 @@
         }
         #menu-bar-host.open {
           display: flex;
+        }
+        /* In the sheet the triggers wrap, so a dropdown anchored to its own
+           trigger can open past the edge of a 390px screen — laid out, and
+           unreachable. Anchoring to the sheet instead drops every menu below
+           it at full width, on screen wherever its trigger wrapped to. */
+        .menu-host {
+          position: static;
+        }
+        .menu-dropdown {
+          inset-inline: 0;
+          min-width: 0;
+          max-height: 60vh;
         }
         .view-tab {
           padding-inline: 11px;

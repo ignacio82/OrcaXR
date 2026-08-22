@@ -329,6 +329,41 @@ async function surviveEveryViewport(page) {
     assert.ok(paletteOverflow <= 1, `${viewport.label} overflows with the palette open by ${paletteOverflow}px`);
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !globalThis.document.querySelector('#command-palette.open'));
+
+    // An open menu has to be *hit-testable*, not merely laid out. A clipping
+    // ancestor — `overflow` anything but `visible` on the bar, a stacking
+    // context above it — leaves every row with a correct box, `visibility:
+    // visible`, and nothing painted, so a click silently lands on whatever is
+    // behind the strip. That shipped once; this is the check that would have
+    // caught it, at every width and in every section rather than only in the
+    // handful of rows the flow below happens to press.
+    const buried = await page.evaluate(() => {
+      const covered = [];
+      // Below the menu-bar breakpoint the whole bar sits behind the hamburger,
+      // which is the first thing an operator presses.
+      const bar = globalThis.document.getElementById('menu-bar-host');
+      const hidden = bar && globalThis.getComputedStyle(bar).display === 'none';
+      if (hidden) globalThis.document.getElementById('menu-button')?.click();
+      for (const host of globalThis.document.querySelectorAll('.menu-host')) {
+        const trigger = host.querySelector('.menu-trigger');
+        const wasOpen = host.classList.contains('open');
+        if (!wasOpen) trigger?.click();
+        const row = host.querySelector('.menu-dropdown [role="menuitem"]');
+        if (row) {
+          const rect = row.getBoundingClientRect();
+          const top = globalThis.document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+          if (rect.width < 1 || rect.height < 1) {
+            covered.push(`${trigger?.textContent}: no box`);
+          } else if (top !== row && !row.contains(top)) {
+            covered.push(`${trigger?.textContent}: ${top ? `${top.tagName}.${top.className}` : 'nothing'} is on top`);
+          }
+        }
+        if (!wasOpen) host.classList.remove('open');
+      }
+      if (hidden) globalThis.document.getElementById('menu-button')?.click();
+      return covered;
+    });
+    assert.deepEqual(buried, [], `${viewport.label} buries an open menu behind the layout`);
   }
 
   await page.setViewport({ width: 1280, height: 720 });
