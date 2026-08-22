@@ -165,9 +165,13 @@ engine (`libslic3r` via WASM) as the computational core.
   Tools · Calibration · Help, one dropdown each, plus save/undo/redo), a tab
   strip (⌂ · Prepare · Preview · Device · Project, with `Slice plate` and
   `Print` at the inline end), a **parameter sidebar docked to the inline
-  START** (Printer / Filament / Color Mixing / Process / Objects / tools /
-  Preview, as fold-away cards), and the 3D viewport with the model tools
-  floating over its top edge. The viewport is a transparent hole so pointer
+  START** (Preview — hidden outside the Preview view and therefore first —
+  then Printer / Filament / Color Mixing / Process / Objects / object tools, as
+  fold-away cards), and the 3D viewport with the model tools floating over its
+  top edge. On a phone the sidebar is a bottom sheet that starts folded and is
+  unfolded by `#sidebar-handle`; the shell's grid column is capped at
+  `minmax(0, 1fr)` because the tab strip's intrinsic width would otherwise size
+  the whole shell past a narrow window. The viewport is a transparent hole so pointer
   input reaches the renderer, and the page — not the renderer — paints the wash
   the plate is seen against (`--oxr-grad-viewport`).
   `ui/tokens.ts` is the only source of colour, radius, shadow, type and motion;
@@ -196,7 +200,10 @@ engine (`libslic3r` via WASM) as the computational core.
   viewport** that leave the mode alone. A folded card and a hidden page both
   have no layout, so any test or automation that clicks inside one must select
   its view and unfold its card first (`showInspectorTab` in `e2e-smoke.mjs` does
-  exactly that). `UiState.mode` follows `workspace.onPreviewStateChanged`,
+  exactly that). The Project page carries `ProjectSummaryPanel` — plate/model
+  counts, the canonical dirty flag, and the recent-projects store — and routes
+  Open and Save through the registry, which is why `file_open_project` and
+  `file_save_project` are in `INSPECTOR_MIRRORED`. `UiState.mode` follows `workspace.onPreviewStateChanged`,
   because the workspace opens the toolpath preview by itself after a slice;
   without that the tab strip would read "Prepare" over a visible toolpath.
   `PreviewScrubber` is a second view of the *same* `GcodePreviewPanelAdapter`
