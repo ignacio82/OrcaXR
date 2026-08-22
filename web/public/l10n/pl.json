@@ -63,6 +63,7 @@
   "action.view_show_gcode_window.label": "Wyświetlanie okna G-code",
   "action.view_show_navigator.label": "Wyświetlanie nawigatora 3D",
   "actions.actionContext.keyboardShortcuts": "Skróty klawiszowe",
+  "dialog.recreateModelColors.cancel": "Anuluj",
   "ui.brimEarsPanel.brimEars": "Uszy brim",
   "ui.generatedSettingsPanel.detailLevel": "Poziom szczegółowości",
   "ui.printSubmissionDialog.sendToPrinter": "Wyślij do drukarki",

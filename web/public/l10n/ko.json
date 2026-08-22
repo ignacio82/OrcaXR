@@ -63,6 +63,7 @@
   "action.view_show_gcode_window.label": "Gcode 창 표시 (G)",
   "action.view_show_navigator.label": "3D 내비게이터 표시",
   "actions.actionContext.keyboardShortcuts": "키보드 단축키",
+  "dialog.recreateModelColors.cancel": "취소",
   "ui.brimEarsPanel.brimEars": "브림 귀",
   "ui.generatedSettingsPanel.detailLevel": "세부 레벨",
   "ui.printSubmissionDialog.sendToPrinter": "프린터로 전송",

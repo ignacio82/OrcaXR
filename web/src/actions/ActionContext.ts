@@ -41,6 +41,7 @@ import type {
   CanonicalSemanticVolumeRoleRequest,
   CanonicalVirtualFilamentMutationRequest,
 } from '../workspace/CanonicalWorkspaceController';
+import type { RecreateModelColorsOptions } from '../project/filaments/recreateModelColors';
 import type { ActionRegistry, ActionSurface } from './ActionRegistry';
 import type { UiState, WorkspaceMode } from './UiState';
 import { ABOUT_HTML, TUTORIAL_HTML, shortcutsHtml, tipOfTheDayHtml } from './helpContent';
@@ -183,6 +184,9 @@ export class ActionContext {
       enabled,
       confirmedPhysicalCount === undefined ? undefined : { confirmedPhysicalCount },
     );
+  }
+  recreateModelColors(options?: RecreateModelColorsOptions): Promise<boolean> {
+    return this.workspace.recreateModelColors(options);
   }
   repairSelected(): Promise<void> {
     return this.workspace.fixSelectedModel();

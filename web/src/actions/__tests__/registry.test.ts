@@ -437,6 +437,27 @@ test('virtual filament mutations cross the registry unchanged and missing drafts
   assert.match(reports[0], /open the virtual filament editor/i);
 });
 
+test('recreate_model_colors_fullspectrum runs through ActionRegistry and checks modelCount', () => {
+  let calledOptions: any = null;
+  const ctx = {
+    recreateModelColors: async (options: any) => {
+      calledOptions = options;
+      return true;
+    },
+  } as unknown as ActionContext;
+  const registry = buildRegistry();
+  const action = registry.get('recreate_model_colors_fullspectrum')!;
+  assert.ok(action, 'Action recreate_model_colors_fullspectrum should exist');
+  assert.equal(action.group, 'advanced');
+  assert.equal(action.menuSection, 'tools');
+  assert.equal(action.isEnabled?.({ modelCount: 0 } as any), false);
+  assert.equal(action.isEnabled?.({ modelCount: 2 } as any), true);
+
+  const testOpts = { allowNewFullSpectrumRecipes: true };
+  void action.run!(ctx, { recreateModelColors: testOpts });
+  assert.deepStrictEqual(calledOptions, testOpts);
+});
+
 test('guarded plate lifecycle requests forward every field without altering presentation payloads', () => {
   const first = entityId<'plate'>('import:registry-test:guarded-plate-1');
   const second = entityId<'plate'>('import:registry-test:guarded-plate-2');

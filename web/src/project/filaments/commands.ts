@@ -17,7 +17,7 @@ export interface FilamentAssignmentChange {
   filamentId: FilamentId | null;
 }
 
-abstract class SnapshotFilamentCommand implements ProjectCommand {
+export abstract class SnapshotFilamentCommand implements ProjectCommand {
   abstract readonly type: string;
   abstract readonly label: string;
   readonly dirtyCategories = ['projectData'] as const;

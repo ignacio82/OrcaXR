@@ -64,6 +64,7 @@
   "action.view_show_gcode_window.label": "Показать окно G-кода",
   "action.view_show_navigator.label": "Показать навигационный куб",
   "actions.actionContext.keyboardShortcuts": "Горячие клавиши",
+  "dialog.recreateModelColors.cancel": "Отмена",
   "ui.brimEarsPanel.brimEars": "Ушки каймы",
   "ui.generatedSettingsPanel.detailLevel": "Уровень детализации",
   "ui.printSubmissionDialog.sendToPrinter": "Отправить на принтер",

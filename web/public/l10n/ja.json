@@ -52,6 +52,7 @@
   "action.view_camera_top.label": "トップ",
   "action.view_open_gcode.label": "G-codeを開く…",
   "actions.actionContext.keyboardShortcuts": "ショートカット",
+  "dialog.recreateModelColors.cancel": "取消し",
   "ui.generatedSettingsPanel.detailLevel": "細部レベル",
   "ui.printSubmissionDialog.sendToPrinter": "プリンタへ送信",
   "ui.selectionFilamentBar.default": "デフォルト",

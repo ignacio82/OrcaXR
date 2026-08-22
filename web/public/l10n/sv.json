@@ -54,6 +54,7 @@
   "action.view_camera_top.label": "Vy Top",
   "action.view_open_gcode.label": "Öppna G-kod…",
   "actions.actionContext.keyboardShortcuts": "Kortkommando",
+  "dialog.recreateModelColors.cancel": "Avbryt",
   "ui.brimEarsPanel.brimEars": "Brätte öron",
   "ui.generatedSettingsPanel.detailLevel": "Detaljnivå",
   "ui.printSubmissionDialog.sendToPrinter": "Skicka till skrivare",

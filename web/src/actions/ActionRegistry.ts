@@ -33,6 +33,7 @@ import type {
   CanonicalSemanticVolumeRoleRequest,
   CanonicalVirtualFilamentMutationRequest,
 } from '../workspace/CanonicalWorkspaceController';
+import type { RecreateModelColorsOptions } from '../project/filaments/recreateModelColors';
 import {
   parityHelpHrefForTask,
   parityTaskForAction,
@@ -225,6 +226,8 @@ export interface ActionInvocation {
     readonly sourceIds: readonly FilamentId[];
     readonly destinationId: FilamentId;
   };
+  /** Options for matching/recreating model colors using available filaments / FullSpectrum. */
+  recreateModelColors?: RecreateModelColorsOptions;
   /**
    * Bounded colour-paint configuration from a paint surface. `filamentId`
    * carries a stable physical or mixed identity; `null` selects erase-to-inherit.
@@ -480,8 +483,6 @@ const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
   ...CANONICAL_CUTOVER_GATED_REASONS,
   add_magnet: 'Magnet-hole geometry is not implemented yet; no model will be changed.',
   scan_network: 'Local-network printer discovery is not implemented yet.',
-  recreate_model_colors_fullspectrum:
-    'Canonical Full-Spectrum color recreation with facet assignments, preview, undo, persistence, and slice validation is not implemented yet.',
   file_export_all_plates: 'All-plate slicing and export is not implemented yet.',
   file_export_obj: 'Toolpath OBJ export is not implemented yet.',
   file_open_gcode: 'Standalone G-code import and viewing is not implemented yet.',

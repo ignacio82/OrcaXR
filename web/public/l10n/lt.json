@@ -63,6 +63,7 @@
   "action.view_show_gcode_window.label": "Rodyti G-kodo langą",
   "action.view_show_navigator.label": "Rodyti 3D navigatorių",
   "actions.actionContext.keyboardShortcuts": "Klaviatūros nuorodos",
+  "dialog.recreateModelColors.cancel": "Atšaukti",
   "ui.brimEarsPanel.brimEars": "Krašto \"ausys\"",
   "ui.generatedSettingsPanel.detailLevel": "Detalių lygis",
   "ui.printSubmissionDialog.sendToPrinter": "Siųsti į spausdintuvą",

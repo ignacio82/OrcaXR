@@ -65,6 +65,7 @@
   "action.view_show_gcode_window.label": "G-code Penceresini Göster",
   "action.view_show_navigator.label": "3D Gezgini Göster",
   "actions.actionContext.keyboardShortcuts": "Klavye kısayolları",
+  "dialog.recreateModelColors.cancel": "İptal",
   "ui.brimEarsPanel.brimEars": "Kenar  kulakları",
   "ui.generatedSettingsPanel.detailLevel": "Detay seviyesi",
   "ui.printSubmissionDialog.sendToPrinter": "Yazıcıya gönder",

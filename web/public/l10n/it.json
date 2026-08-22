@@ -63,6 +63,7 @@
   "action.view_show_gcode_window.label": "Mostra finestra del G-code",
   "action.view_show_navigator.label": "Mostra navigatore 3D",
   "actions.actionContext.keyboardShortcuts": "Scorciatoie da tastiera",
+  "dialog.recreateModelColors.cancel": "Annulla",
   "ui.brimEarsPanel.brimEars": "Tesa ad orecchio",
   "ui.generatedSettingsPanel.detailLevel": "Livello di dettaglio",
   "ui.printSubmissionDialog.sendToPrinter": "Invia alla stampante",

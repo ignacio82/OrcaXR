@@ -62,6 +62,7 @@
   "action.view_show_gcode_window.label": "Показати вікно G-коду",
   "action.view_show_navigator.label": "Показати 3D-навігатор",
   "actions.actionContext.keyboardShortcuts": "Гарячі клавіші",
+  "dialog.recreateModelColors.cancel": "Скасувати",
   "ui.brimEarsPanel.brimEars": "Вушка кайми",
   "ui.generatedSettingsPanel.detailLevel": "Рівень деталізації",
   "ui.printSubmissionDialog.sendToPrinter": "Надіслати на принтер",

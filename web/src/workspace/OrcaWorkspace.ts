@@ -36,6 +36,8 @@ import {
   facetRefinementAssignedLeafCount,
 } from '../project/domain/facetRefinement';
 import type { FullSpectrumAutoPairGenerationPreferences } from '../project/filaments/autoPairReconciliation';
+import type { RecreateModelColorsPlan, RecreateModelColorsOptions } from '../project/filaments/recreateModelColors';
+import { askRecreateModelColors } from '../ui/dom/RecreateModelColorsDialog';
 import type { ImportCommitConfirmation, ProjectImportPreview } from '../project/import/types';
 import type { ObjectTreeEntityRef } from '../project/objects';
 import {
@@ -8879,6 +8881,43 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus(t('workspace.orcaWorkspace.filamentsRemapped', 'Filaments remapped.'));
     } catch (error) {
       this.setStatus(t('workspace.orcaWorkspace.filamentRemapFailed', 'Filament remap failed.'));
+      throw error;
+    }
+  }
+
+  public planRecreateModelColors(options?: RecreateModelColorsOptions): RecreateModelColorsPlan {
+    return this.canonicalProject.planRecreateModelColors(options);
+  }
+
+  public async recreateModelColors(options?: RecreateModelColorsOptions): Promise<boolean> {
+    try {
+      const plan = this.canonicalProject.planRecreateModelColors(options);
+      if (plan.matches.length === 0) {
+        this.setStatus(
+          t('workspace.orcaWorkspace.noColorsToRecreate', 'No model colors to match; add a model to the plate first.'),
+        );
+        return false;
+      }
+
+      let overrides: ReadonlyMap<string, FilamentId> | undefined;
+      if (typeof document !== 'undefined' && document.body) {
+        const result = await askRecreateModelColors(plan, this.getVirtualFilamentLibrarySnapshot());
+        if (!result.confirmed) {
+          this.setStatus(t('workspace.orcaWorkspace.recreateColorsCancelled', 'Recreate model colors cancelled.'));
+          return false;
+        }
+        overrides = result.overrides;
+      }
+
+      const applied = this.canonicalProject.recreateModelColors(plan, overrides);
+      if (applied) {
+        this.setStatus(
+          t('workspace.orcaWorkspace.recreateColorsApplied', 'Recreated model colors with available filaments.'),
+        );
+      }
+      return applied;
+    } catch (error) {
+      this.setStatus(t('workspace.orcaWorkspace.recreateColorsFailed', 'Recreating model colors failed.'));
       throw error;
     }
   }

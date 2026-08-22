@@ -310,5 +310,11 @@ export const advancedActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'tools',
     hint: 'Recreate model colors using printer filaments via Full-Spectrum dithering',
+    isEnabled: (s) => s.modelCount > 0,
+    xrUnsupportedReason:
+      'Recreating model colors uses a DOM configuration and preview dialog; no in-headset color mapping editor exists yet.',
+    run: async (ctx, invocation) => {
+      await ctx.recreateModelColors(invocation.recreateModelColors);
+    },
   },
 ];

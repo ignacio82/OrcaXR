@@ -10,3 +10,4 @@ export * from './fullSpectrumRecipe';
 export * from './manualCyclePattern';
 export * from './mixedCommands';
 export * from './mixedFilamentAuthoring';
+export * from './recreateModelColors';

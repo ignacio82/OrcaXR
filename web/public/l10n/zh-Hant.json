@@ -65,6 +65,7 @@
   "action.view_show_gcode_window.label": "顯示 G-code",
   "action.view_show_navigator.label": "顯示 3D 導覽器",
   "actions.actionContext.keyboardShortcuts": "快捷鍵",
+  "dialog.recreateModelColors.cancel": "取消",
   "ui.brimEarsPanel.brimEars": "耳狀 Brim",
   "ui.generatedSettingsPanel.detailLevel": "細節等級",
   "ui.printSubmissionDialog.sendToPrinter": "傳送到列印設備",

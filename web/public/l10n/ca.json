@@ -63,6 +63,7 @@
   "action.view_show_gcode_window.label": "Mostra Finestra %Codi-G",
   "action.view_show_navigator.label": "Mostrar el navegador 3D",
   "actions.actionContext.keyboardShortcuts": "Dreceres de teclat",
+  "dialog.recreateModelColors.cancel": "Cancel·lar",
   "ui.brimEarsPanel.brimEars": "Orelles de la Vora d'Adherència",
   "ui.generatedSettingsPanel.detailLevel": "Nivell de detall",
   "ui.printSubmissionDialog.sendToPrinter": "Enviar a la impressora",

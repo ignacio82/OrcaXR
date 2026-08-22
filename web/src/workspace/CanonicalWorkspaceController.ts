@@ -122,6 +122,12 @@ import {
   SetMixedFilamentEnabledCommand,
   TombstoneMixedFilamentCommand,
 } from '../project/filaments/mixedCommands';
+import {
+  planRecreateModelColors,
+  executeRecreateModelColors,
+  type RecreateModelColorsPlan,
+  type RecreateModelColorsOptions,
+} from '../project/filaments/recreateModelColors';
 import type { CommandHistorySnapshot } from '../project/history/commandBus';
 import { PreparedProjectImport, ProjectImportCoordinator } from '../project/import/ProjectImportCoordinator';
 import { ModelImportParser, type ModelImportPlacement } from '../project/import/ModelImportParser';
@@ -3247,6 +3253,24 @@ export class CanonicalWorkspaceController {
   remapFilaments(sourceIds: readonly FilamentId[], destinationId: FilamentId): void {
     this.assertActive();
     this.session.execute(new RemapFilamentsCommand(sourceIds, destinationId));
+  }
+
+  /** Calculate a color recreation plan matching model colors to available filaments / FullSpectrum. */
+  planRecreateModelColors(options?: RecreateModelColorsOptions): RecreateModelColorsPlan {
+    this.assertActive();
+    const snapshot = this.session.project.getSnapshot();
+    const plan = planRecreateModelColors(snapshot.state, options);
+    return Object.freeze({
+      ...plan,
+      sourceRevision: snapshot.revision,
+      sourceHash: snapshot.hash,
+    });
+  }
+
+  /** Execute a calculated color recreation plan atomically on the canonical project session. */
+  recreateModelColors(plan: RecreateModelColorsPlan, overrides?: ReadonlyMap<string, FilamentId>): boolean {
+    this.assertActive();
+    return executeRecreateModelColors(this.session, plan, this.options.idSource, overrides);
   }
 
   saveCanonical3mf(cancellation?: CancellationToken): Promise<SerializedProject> {

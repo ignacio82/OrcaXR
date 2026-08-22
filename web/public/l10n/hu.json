@@ -55,6 +55,7 @@
   "action.view_camera_top.label": "Felülnézet",
   "action.view_open_gcode.label": "G-kód megnyitása…",
   "actions.actionContext.keyboardShortcuts": "Gyorsbillentyűk",
+  "dialog.recreateModelColors.cancel": "Mégse",
   "ui.brimEarsPanel.brimEars": "Karimás fülek",
   "ui.generatedSettingsPanel.detailLevel": "Részletesség szintje",
   "ui.printSubmissionDialog.sendToPrinter": "Nyomtatóra küldés",

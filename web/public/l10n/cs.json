@@ -55,6 +55,7 @@
   "action.view_camera_top.label": "Pohled svrchu",
   "action.view_open_gcode.label": "Otevřít G-kód…",
   "actions.actionContext.keyboardShortcuts": "Klávesové zkratky",
+  "dialog.recreateModelColors.cancel": "Zrušit",
   "ui.brimEarsPanel.brimEars": "Uši límce",
   "ui.generatedSettingsPanel.detailLevel": "Úroveň detailu",
   "ui.printSubmissionDialog.sendToPrinter": "Odeslat do tiskárny",

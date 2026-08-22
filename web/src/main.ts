@@ -2838,6 +2838,19 @@ function setupDomUI(
     window.addEventListener('pagehide', unsubscribeAutoPairStatus, { once: true });
   }
 
+  const recreateColorsButton = document.getElementById('btn-recreate-model-colors') as HTMLButtonElement | null;
+  if (recreateColorsButton) {
+    recreateColorsButton.onclick = async () => {
+      try {
+        await registry.invoke('recreate_model_colors_fullspectrum', 'dom-inspector', actionCtx, uiState.get(), {
+          recreateModelColors: { allowNewFullSpectrumRecipes: true },
+        });
+      } catch (error) {
+        console.error('Failed to recreate model colors:', error);
+      }
+    };
+  }
+
   const virtualFilamentHost = document.getElementById('virtual-filament-library-host');
   if (virtualFilamentHost) {
     const colorMatchSearch = new ColorMatchSearchWorkerClient();

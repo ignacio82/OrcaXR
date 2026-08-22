@@ -54,6 +54,7 @@
   "action.view_camera_top.label": "Bovenaanzicht",
   "action.view_open_gcode.label": "Open G-code…",
   "actions.actionContext.keyboardShortcuts": "Sneltoesten",
+  "dialog.recreateModelColors.cancel": "Annuleren",
   "ui.brimEarsPanel.brimEars": "Rand oren",
   "ui.generatedSettingsPanel.detailLevel": "Detailniveau",
   "ui.printSubmissionDialog.sendToPrinter": "Stuur naar printer",
