@@ -156,7 +156,7 @@ export class SemanticObjectEditor {
     root.dataset.semanticObjectEditor = 'true';
     root.setAttribute('aria-labelledby', this.id('heading'));
     root.style.cssText =
-      'display:flex;min-width:0;flex-direction:column;gap:12px;color:var(--oxr-color-text,#fff);' +
+      'display:flex;min-width:0;flex-direction:column;gap:12px;color:var(--oxr-color-text);' +
       'font:13px/1.4 system-ui,sans-serif;';
     this.container.replaceChildren(root);
     this.root = root;
@@ -212,7 +212,7 @@ export class SemanticObjectEditor {
     context.dataset.semanticObjectContext = 'true';
     context.dataset.objectId = snapshot.objectId;
     context.textContent = snapshot.objectName;
-    context.style.cssText = 'margin:0;color:var(--oxr-color-text-muted,#a0aab5);';
+    context.style.cssText = 'margin:0;color:var(--oxr-color-text-muted);';
     fragment.appendChild(context);
 
     const status = document.createElement('p');
@@ -222,7 +222,7 @@ export class SemanticObjectEditor {
     status.setAttribute('aria-live', 'polite');
     status.textContent = this.status.message;
     status.style.cssText = `margin:0;min-height:1.4em;color:${
-      this.status.kind === 'error' ? '#ffb4ab' : 'var(--oxr-color-text-muted,#a0aab5)'
+      this.status.kind === 'error' ? 'var(--oxr-danger)' : 'var(--oxr-color-text-muted,var(--oxr-text-muted))'
     };`;
     fragment.appendChild(status);
     this.statusNode = status;
@@ -659,7 +659,7 @@ export class SemanticObjectEditor {
     button.dataset.layerRangeDelete = selected.id;
     button.textContent = t('ui.semanticObjectEditor.deleteSelectedRange', 'Delete selected range');
     button.disabled = snapshotBlocked;
-    button.style.cssText = `${touchButtonStyle}border-color:#ef535088;color:#ffb4ab;`;
+    button.style.cssText = `${touchButtonStyle}border-color:var(--oxr-danger);color:var(--oxr-danger);`;
     button.addEventListener('click', () => {
       const request = freezeRequest<DeleteSemanticLayerRangeRequest>({
         ...requestGuard(snapshot),
@@ -754,7 +754,7 @@ export class SemanticObjectEditor {
     status.dataset.semanticEditorStatus = kind;
     status.setAttribute('role', kind === 'error' ? 'alert' : 'status');
     status.textContent = message;
-    status.style.color = kind === 'error' ? '#ffb4ab' : 'var(--oxr-color-text-muted,#a0aab5)';
+    status.style.color = kind === 'error' ? 'var(--oxr-danger)' : 'var(--oxr-color-text-muted,var(--oxr-text-muted))';
   }
 
   private setControlsPending(pending: boolean): void {
@@ -917,21 +917,21 @@ function errorMessage(errorValue: unknown): string {
 }
 
 const sectionStyle =
-  'display:grid;gap:9px;margin:0;padding:10px;border:1px solid var(--oxr-color-stroke,#ffffff2b);' +
+  'display:grid;gap:9px;margin:0;padding:10px;border:1px solid var(--oxr-color-stroke);' +
   'border-radius:8px;min-width:0;';
 const fieldsetStyle =
-  'display:grid;gap:7px;margin:0;padding:9px;border:1px solid var(--oxr-color-stroke,#ffffff2b);' +
+  'display:grid;gap:7px;margin:0;padding:9px;border:1px solid var(--oxr-color-stroke);' +
   'border-radius:7px;min-width:0;';
 const subsectionHeadingStyle = 'margin:0;font-size:14px;line-height:1.3;';
 const legendStyle = 'padding:0 4px;font-weight:650;';
-const mutedTextStyle = 'margin:0;color:var(--oxr-color-text-muted,#a0aab5);font-size:12px;';
-const validationStyle = 'margin:0;min-height:1.3em;color:#ffb4ab;font-size:12px;';
+const mutedTextStyle = 'margin:0;color:var(--oxr-color-text-muted);font-size:12px;';
+const validationStyle = 'margin:0;min-height:1.3em;color:var(--oxr-danger);font-size:12px;';
 const touchButtonStyle =
-  'min-inline-size:44px;min-block-size:44px;padding:8px 11px;border:1px solid var(--oxr-color-stroke,#ffffff2b);' +
-  'border-radius:7px;background:var(--oxr-color-surface,#20242b);color:inherit;font:inherit;font-weight:650;' +
+  'min-inline-size:44px;min-block-size:44px;padding:8px 11px;border:1px solid var(--oxr-color-stroke);' +
+  'border-radius:7px;background:var(--oxr-color-surface,var(--oxr-bg-sunken));color:inherit;font:inherit;font-weight:650;' +
   'touch-action:manipulation;';
 const touchInputStyle =
-  'box-sizing:border-box;min-block-size:44px;width:100%;padding:8px;border:1px solid var(--oxr-color-stroke,#ffffff2b);' +
-  'border-radius:6px;background:var(--oxr-color-surface,#20242b);color:inherit;font:inherit;';
+  'box-sizing:border-box;min-block-size:44px;width:100%;padding:8px;border:1px solid var(--oxr-color-stroke);' +
+  'border-radius:6px;background:var(--oxr-color-surface,var(--oxr-bg-sunken));color:inherit;font:inherit;';
 const alertStyle =
-  'margin:0;padding:8px;border:1px solid #ef535066;border-radius:7px;background:#7f1d1d35;color:#ffd9d7;';
+  'margin:0;padding:8px;border:1px solid var(--oxr-danger);border-radius:7px;background:var(--oxr-danger-surface);color:var(--oxr-danger);';

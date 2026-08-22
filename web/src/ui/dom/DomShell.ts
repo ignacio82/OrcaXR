@@ -2,39 +2,53 @@
  * DomShell — renders the flat workspace chrome from the shared
  * {@link ActionRegistry}.
  *
- * Everything the header, tool rail, inspector footer and calibration grid show
- * comes from the same registry the XR shell renders, so presentation
+ * Everything the menu bar, model toolbar, sidebar footer and calibration grid
+ * show comes from the same registry the XR shell renders, so presentation
  * reachability cannot drift silently. Every control subscribes to
  * {@link UiState}, so enabled / active / visible state updates automatically —
  * no scattered `btn.disabled = …`.
  *
- * Surfaces owned here:
- *  - the tool rail (`dom-toolbar`),
- *  - the inspector's primary action bar (`dom-primary`),
- *  - the mega menu: one column per Orca menu section (`dom-menu`),
- *  - the Prepare → Slice → Preview → Send stage bar, which drives the same
- *    slice / preview / send actions the rest of the app uses,
- *  - the Plates tab's calibration grid, a second presentation of the
+ * The chrome is arranged as the official Snapmaker Orca application arranges
+ * it, and each surface here is one of that application's own:
+ *
+ *  - the menu bar (`dom-menu`): one trigger per upstream section, each opening
+ *    its own dropdown, in the strip along the top of the window;
+ *  - the quick actions beside it — save, undo, redo — which upstream also
+ *    keeps as bare icons next to the menus;
+ *  - the model toolbar (`dom-toolbar`), floating over the top edge of the 3D
+ *    view rather than docked as a rail;
+ *  - `Slice plate` and `Print` at the inline end of the tab strip, which are
+ *    presentation of the same two registry actions the rest of the app uses
+ *    and never a second slice path;
+ *  - the sidebar footer's primary bar (`dom-primary`);
+ *  - the Project page's calibration grid, a second presentation of the
  *    Calibration menu section.
+ *
+ * The four workspace tabs (Prepare / Preview / Device / Project) are *not*
+ * here: they own view state rather than actions, and they live in
+ * {@link WorkspaceViews}.
  */
 import type { Action, ActionRegistry, ActionSurface } from '../../actions/ActionRegistry';
 import { MENU_SECTIONS } from '../../actions/ActionRegistry';
 import type { ActionContext } from '../../actions/ActionContext';
 import { ariaShortcutValue } from '../../actions/ShortcutCatalog';
 import type { UiState, UiStateShape } from '../../actions/UiState';
-import { domIcon } from '../icons';
+import { applyIcon } from '../icons';
 import { t } from '../../l10n/t';
 
 interface Hosts {
+  /** Floating model-tool strip over the viewport. */
   toolbar: HTMLElement;
   primary: HTMLElement;
-  /** Prepare → Slice → Preview → Send stepper in the header. */
-  stageBar: HTMLElement;
-  /** Container the File/Edit/View/Add/Tools/Calibration/Help columns mount into. */
+  /** Save / undo / redo, in the menu strip. */
+  quickActions: HTMLElement;
+  /** `Slice plate` and `Print`, at the end of the tab strip. */
+  printActions: HTMLElement;
+  /** Container the File/Edit/View/Add/Tools/Calibration/Help menus mount into. */
   menuBar: HTMLElement;
-  /** The `☰ Menu` button that opens {@link Hosts.menuBar}. */
+  /** The `☰` button that reveals {@link Hosts.menuBar} on a narrow window. */
   menuButton: HTMLButtonElement;
-  /** Grid in the Plates tab that mirrors the Calibration menu section. */
+  /** Grid on the Project page that mirrors the Calibration menu section. */
   calibration: HTMLElement;
 }
 
@@ -45,28 +59,32 @@ interface Bound {
 }
 
 /**
- * One step of the print workflow. `actionId` is the registry entry the step
- * runs and whose availability it reports — a step is never a decoration that
- * pretends to work.
+ * The first binding of an `aria-keyshortcuts` list, spelled the way a menu
+ * spells it. Presentation only — matching still runs off the catalog.
  */
-interface Stage {
-  id: string;
-  label: string;
-  /** Registry action this step invokes, or null when it only restores a mode. */
-  actionId: string | null;
-  surface: ActionSurface;
+function shortcutHint(shortcuts: string): string {
+  const [first = ''] = shortcuts.split(' ');
+  return first
+    .split('+')
+    .map((part) => (part === 'Control' ? 'Ctrl' : part === 'Meta' ? '⌘' : part === 'Shift' ? '⇧' : part))
+    .join('+');
 }
 
-const STAGES: readonly Stage[] = [
-  { id: 'prepare', label: 'Prepare', actionId: null, surface: 'dom-primary' },
-  { id: 'slice', label: 'Slice', actionId: 'slice_active_plate', surface: 'dom-primary' },
-  { id: 'preview', label: 'Preview', actionId: 'toggle_preview', surface: 'dom-primary' },
-  { id: 'send', label: 'Send', actionId: 'send_to_printer', surface: 'dom-inspector' },
+/** Registry actions the menu strip keeps as bare icons, in upstream's order. */
+const QUICK_ACTIONS: readonly string[] = ['file_save_project', 'edit_undo', 'edit_redo'];
+
+/**
+ * The two buttons at the end of the tab strip. `primary` is the filled one;
+ * both invoke a registry action and report its availability, so a disabled
+ * `Print` says why rather than pretending.
+ */
+const PRINT_ACTIONS: readonly { id: string; surface: ActionSurface }[] = [
+  { id: 'slice_active_plate', surface: 'dom-primary' },
+  { id: 'send_to_printer', surface: 'dom-inspector' },
 ];
 
 export class DomShell {
   private bound: Bound[] = [];
-  private stageButtons: { stage: Stage; el: HTMLButtonElement; index: number }[] = [];
   private unsubscribe: (() => void) | null = null;
   private eventDisposers: Array<() => void> = [];
   /**
@@ -80,6 +98,8 @@ export class DomShell {
   private appended: Element[] = [];
   private menuBar: HTMLElement | null = null;
   private menuButton: HTMLButtonElement | null = null;
+  private menuHosts: HTMLElement[] = [];
+  private sliceButton: HTMLButtonElement | null = null;
 
   constructor(
     private readonly registry: ActionRegistry,
@@ -92,9 +112,20 @@ export class DomShell {
     this.menuBar = hosts.menuBar;
     this.menuButton = hosts.menuButton;
 
-    // Tool rail
+    // Model toolbar. A hairline goes in wherever the action group changes, the
+    // way upstream's toolbar separates move/rotate/scale from the mesh
+    // operations from the painting tools — twenty undifferentiated icons is a
+    // strip nobody can aim at.
     hosts.toolbar.innerHTML = '';
+    let previousGroup: string | null = null;
     for (const a of this.registry.forSurface('dom-toolbar')) {
+      if (previousGroup !== null && a.group !== previousGroup) {
+        const separator = document.createElement('span');
+        separator.className = 'tool-sep';
+        separator.setAttribute('aria-hidden', 'true');
+        hosts.toolbar.appendChild(separator);
+      }
+      previousGroup = a.group;
       hosts.toolbar.appendChild(this.toolButton(a));
     }
 
@@ -108,19 +139,24 @@ export class DomShell {
       this.appended.push(button);
     }
 
-    // Mega menu — one column per Orca menu section, in bar order. A section
-    // with no actions is skipped so the panel stays tidy.
+    // Menu bar — one dropdown per upstream section, in bar order. A section
+    // with no actions is skipped so the bar stays tidy.
     const menu = this.registry.forSurface('dom-menu');
     hosts.menuBar.innerHTML = '';
+    this.menuHosts = [];
     for (const section of MENU_SECTIONS) {
       const items = menu.filter((a) => a.menuSection === section.id);
       if (items.length === 0) continue;
       const host = document.createElement('div');
       host.className = 'menu-host';
       hosts.menuBar.appendChild(host);
+      this.menuHosts.push(host);
       this.buildMenu(host, section.label, items);
     }
     this.bindMenuButton(hosts.menuButton, hosts.menuBar);
+
+    this.buildQuickActions(hosts.quickActions);
+    this.buildPrintActions(hosts.printActions);
 
     // The calibration grid is a second presentation of the same menu entries,
     // shown where a maker looks for them: next to the plates they print on.
@@ -128,8 +164,6 @@ export class DomShell {
       hosts.calibration,
       menu.filter((a) => a.menuSection === 'calibration'),
     );
-
-    this.buildStageBar(hosts.stageBar);
 
     this.unsubscribe = this.ui.subscribe((s) => this.refresh(s));
   }
@@ -141,9 +175,10 @@ export class DomShell {
     for (const dispose of this.eventDisposers.splice(0).reverse()) dispose();
     for (const { el } of this.bound) el.onclick = null;
     this.bound = [];
-    this.stageButtons = [];
     this.menuBar = null;
     this.menuButton = null;
+    this.menuHosts = [];
+    this.sliceButton = null;
   }
 
   private toolButton(a: Action): HTMLButtonElement {
@@ -152,16 +187,17 @@ export class DomShell {
     btn.className = 'tool-btn';
     btn.dataset.actionId = a.id;
     btn.title = a.hint ?? a.label;
-    btn.setAttribute('aria-label', a.hint ?? a.label);
+    btn.setAttribute('aria-label', a.label);
     const shortcuts = ariaShortcutValue(a.shortcuts);
     if (shortcuts) btn.setAttribute('aria-keyshortcuts', shortcuts);
     const icon = document.createElement('span');
     icon.className = 'tool-icon';
     icon.setAttribute('aria-hidden', 'true');
-    icon.textContent = domIcon(a.icon);
+    applyIcon(icon, a.icon);
     const label = document.createElement('span');
-    // The rail collapses to icons only; the label class is what CSS hides, so
-    // the accessible name above still describes the button when it does.
+    // A toolbar is icons; the label is the accessible name and the tooltip, and
+    // CSS hides it visually except on the phone layout where a bare 32px icon
+    // is not enough to act on.
     label.className = 'tool-label';
     label.textContent = a.label;
     btn.append(icon, label);
@@ -178,12 +214,12 @@ export class DomShell {
     btn.title = a.hint ?? a.label;
     const shortcuts = ariaShortcutValue(a.shortcuts);
     if (shortcuts) btn.setAttribute('aria-keyshortcuts', shortcuts);
-    // Glyph over label: four actions have to share the inspector footer, and a
+    // Glyph over label: four actions have to share the sidebar footer, and a
     // stacked button keeps every one of them legible instead of truncated.
     const glyph = document.createElement('span');
     glyph.className = 'action-glyph';
     glyph.setAttribute('aria-hidden', 'true');
-    glyph.textContent = domIcon(a.icon);
+    applyIcon(glyph, a.icon);
     const label = document.createElement('span');
     label.className = 'action-label';
     label.textContent = a.label;
@@ -193,8 +229,60 @@ export class DomShell {
     return btn;
   }
 
-  // ---- Mega menu ----------------------------------------------------------
+  // ---- Menu strip ---------------------------------------------------------
 
+  private buildQuickActions(host: HTMLElement): void {
+    host.innerHTML = '';
+    for (const id of QUICK_ACTIONS) {
+      const a = this.registry.get(id);
+      if (!a) continue;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'strip-btn';
+      btn.dataset.actionId = a.id;
+      btn.title = a.hint ?? a.label;
+      btn.setAttribute('aria-label', a.label);
+      const shortcuts = ariaShortcutValue(a.shortcuts);
+      if (shortcuts) btn.setAttribute('aria-keyshortcuts', shortcuts);
+      const icon = document.createElement('span');
+      icon.setAttribute('aria-hidden', 'true');
+      applyIcon(icon, a.icon);
+      btn.append(icon);
+      btn.onclick = () => this.run(a, 'dom-menu');
+      this.bound.push({ el: btn, action: a, surface: 'dom-menu' });
+      host.appendChild(btn);
+    }
+  }
+
+  private buildPrintActions(host: HTMLElement): void {
+    host.innerHTML = '';
+    this.sliceButton = null;
+    for (const { id, surface } of PRINT_ACTIONS) {
+      const a = this.registry.get(id);
+      if (!a) continue;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'print-btn';
+      btn.dataset.actionId = a.id;
+      btn.dataset.printAction = a.id;
+      const shortcuts = ariaShortcutValue(a.shortcuts);
+      if (shortcuts) btn.setAttribute('aria-keyshortcuts', shortcuts);
+      const icon = document.createElement('span');
+      icon.setAttribute('aria-hidden', 'true');
+      applyIcon(icon, a.icon);
+      const label = document.createElement('span');
+      label.textContent = a.label;
+      btn.append(icon, label);
+      btn.onclick = () => this.run(a, surface);
+      this.bound.push({ el: btn, action: a, surface });
+      if (id === 'slice_active_plate') this.sliceButton = btn;
+      host.appendChild(btn);
+    }
+  }
+
+  // ---- Menus --------------------------------------------------------------
+
+  /** True while the bar itself is revealed (the narrow-window hamburger). */
   private isMenuOpen(): boolean {
     return this.menuBar?.classList.contains('open') ?? false;
   }
@@ -202,6 +290,20 @@ export class DomShell {
   private setMenuOpen(open: boolean): void {
     this.menuBar?.classList.toggle('open', open);
     this.menuButton?.setAttribute('aria-expanded', String(open));
+    if (!open) this.closeAllSections();
+  }
+
+  /** Open exactly one section's dropdown, or none. */
+  private openSection(host: HTMLElement | null): void {
+    for (const other of this.menuHosts) {
+      const open = other === host;
+      other.classList.toggle('open', open);
+      other.querySelector('.menu-trigger')?.setAttribute('aria-expanded', String(open));
+    }
+  }
+
+  private closeAllSections(): void {
+    this.openSection(null);
   }
 
   private bindMenuButton(button: HTMLButtonElement, panel: HTMLElement): void {
@@ -212,17 +314,22 @@ export class DomShell {
     button.addEventListener('click', onClick);
     this.eventDisposers.push(() => button.removeEventListener('click', onClick));
 
-    // Click-away and Escape both close the panel, and Escape returns focus to
-    // the control that opened it.
+    // Click-away and Escape both close whatever is open, and Escape returns
+    // focus to the control that opened it.
     const onDocumentClick = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (!panel.contains(target) && !button.contains(target)) this.setMenuOpen(false);
+      if (panel.contains(target) || button.contains(target)) return;
+      this.closeAllSections();
+      this.setMenuOpen(false);
     };
     document.addEventListener('click', onDocumentClick);
     this.eventDisposers.push(() => document.removeEventListener('click', onDocumentClick));
 
     const onKeydown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || !this.isMenuOpen()) return;
+      if (e.key !== 'Escape') return;
+      const hadSection = this.menuHosts.some((host) => host.classList.contains('open'));
+      if (!hadSection && !this.isMenuOpen()) return;
+      this.closeAllSections();
       this.setMenuOpen(false);
       button.focus();
     };
@@ -240,6 +347,8 @@ export class DomShell {
     trigger.type = 'button';
     trigger.className = 'menu-trigger';
     trigger.textContent = triggerLabel;
+    trigger.setAttribute('aria-haspopup', 'true');
+    trigger.setAttribute('aria-expanded', 'false');
     const dropdown = document.createElement('div');
     dropdown.className = 'menu-dropdown';
     dropdown.setAttribute('role', 'menu');
@@ -258,9 +367,28 @@ export class DomShell {
       if (shortcuts) item.setAttribute('aria-keyshortcuts', shortcuts);
       const unavailable = a.capability.status === 'unavailable' || a.capability.status === 'blocked';
       item.title = unavailable ? (a.capability.reason ?? a.label) : (a.hint ?? a.label);
-      const badge = unavailable ? '<span class="soon-badge">UNAVAILABLE</span>' : '';
-      item.innerHTML = `<span class="glyph">${domIcon(a.icon)}</span><span class="menu-item-label">${a.label}</span>${badge}`;
+      const glyph = document.createElement('span');
+      glyph.className = 'glyph';
+      glyph.setAttribute('aria-hidden', 'true');
+      applyIcon(glyph, a.icon);
+      const label = document.createElement('span');
+      label.className = 'menu-item-label';
+      label.textContent = a.label;
+      item.append(glyph, label);
+      if (unavailable) {
+        const badge = document.createElement('span');
+        badge.className = 'soon-badge';
+        badge.textContent = t('ui.domShell.unavailable', 'Unavailable');
+        item.append(badge);
+      } else if (shortcuts) {
+        const hint = document.createElement('span');
+        hint.className = 'shortcut';
+        hint.setAttribute('aria-hidden', 'true');
+        hint.textContent = shortcutHint(shortcuts);
+        item.append(hint);
+      }
       item.onclick = () => {
+        this.closeAllSections();
         this.setMenuOpen(false);
         this.run(a, 'dom-menu');
       };
@@ -268,21 +396,25 @@ export class DomShell {
       dropdown.appendChild(item);
     }
 
-    // Every column lives inside one popover, so the section header opens that
-    // popover rather than a dropdown of its own. Clicking a header when the
-    // panel is already open is a no-op the pointer user never notices, and it
-    // keeps a keyboard/automation entry point per section.
     trigger.onclick = (e) => {
       e.stopPropagation();
-      this.setMenuOpen(true);
+      this.openSection(host.classList.contains('open') ? null : host);
     };
+    // Once a menu is open, moving across the bar switches to that section —
+    // the behaviour every desktop menu bar has, and the reason a menu bar is
+    // faster to browse than a panel of columns.
+    const onEnter = () => {
+      if (this.menuHosts.some((other) => other.classList.contains('open'))) this.openSection(host);
+    };
+    trigger.addEventListener('mouseenter', onEnter);
+    this.eventDisposers.push(() => trigger.removeEventListener('mouseenter', onEnter));
 
     const enabledItems = () =>
       [...dropdown.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].filter((item) => !item.disabled);
     const onTriggerKeydown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        this.setMenuOpen(true);
+        this.openSection(host);
         enabledItems()[0]?.focus();
       }
     };
@@ -322,64 +454,26 @@ export class DomShell {
       btn.dataset.actionId = a.id;
       btn.dataset.calibrationCard = 'true';
       btn.title = a.hint ?? a.label;
-      btn.innerHTML =
-        `<span class="calibration-name">${domIcon(a.icon)} ${a.label}</span>` +
-        (a.hint ? `<span class="calibration-hint">${a.hint}</span>` : '');
+      const name = document.createElement('span');
+      name.className = 'calibration-name';
+      const glyph = document.createElement('span');
+      glyph.setAttribute('aria-hidden', 'true');
+      applyIcon(glyph, a.icon);
+      name.append(glyph, document.createTextNode(` ${a.label}`));
+      btn.append(name);
+      if (a.hint) {
+        const hint = document.createElement('span');
+        hint.className = 'calibration-hint';
+        hint.textContent = a.hint;
+        btn.append(hint);
+      }
       btn.onclick = () => this.run(a, 'dom-menu');
       this.bound.push({ el: btn, action: a, surface: 'dom-menu' });
       host.appendChild(btn);
     }
   }
 
-  // ---- Stage bar ----------------------------------------------------------
-
-  private buildStageBar(host: HTMLElement): void {
-    host.innerHTML = '';
-    STAGES.forEach((stage, index) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'stage-btn';
-      btn.dataset.stage = stage.id;
-      const n = document.createElement('span');
-      n.className = 'stage-n';
-      n.setAttribute('aria-hidden', 'true');
-      n.textContent = String(index + 1);
-      const label = document.createElement('span');
-      label.textContent = stage.label;
-      btn.append(n, label);
-      btn.onclick = () => this.runStage(stage);
-      this.stageButtons.push({ stage, el: btn, index });
-      host.appendChild(btn);
-    });
-  }
-
-  private runStage(stage: Stage): void {
-    const state = this.ui.get();
-    if (stage.id === 'prepare') {
-      // Prepare is the base surface: leaving the preview is the only work.
-      if (state.mode !== 'preview') return;
-      this.runById('toggle_preview', 'dom-primary');
-      return;
-    }
-    if (stage.id === 'preview' && state.mode === 'preview') return;
-    if (stage.actionId) this.runById(stage.actionId, stage.surface);
-  }
-
-  private stageIndexFor(s: Readonly<UiStateShape>): number {
-    if (s.isSlicing) return 1;
-    return s.mode === 'preview' ? 2 : 0;
-  }
-
   // ---- Shared plumbing ----------------------------------------------------
-
-  private runById(id: string, surface: ActionSurface): void {
-    const action = this.registry.get(id);
-    if (!action) {
-      this.ctx.reportCapabilityUnavailable(id, `The "${id}" action is not registered.`);
-      return;
-    }
-    this.run(action, surface);
-  }
 
   private run(a: Action, surface: ActionSurface): void {
     void this.registry
@@ -395,29 +489,8 @@ export class DomShell {
       el.title = availability.state === 'disabled' ? availability.reason : (action.hint ?? action.label);
       if (action.tool) el.classList.toggle('active', s.activeTool === action.tool);
     }
-
-    const current = this.stageIndexFor(s);
-    for (const { stage, el, index } of this.stageButtons) {
-      const active = index === current;
-      // A step is "done" once the workflow has moved past it. Slice also
-      // reports done while sitting in Prepare with a fresh artifact in hand.
-      const done = index < current || (stage.id === 'slice' && s.gcodeReady && !s.isSlicing);
-      el.classList.toggle('active', active);
-      el.classList.toggle('done', !active && done);
-      el.setAttribute('aria-current', active ? 'step' : 'false');
-      const marker = el.querySelector<HTMLElement>('.stage-n');
-      if (marker) marker.textContent = !active && done ? '✓' : String(index + 1);
-
-      if (stage.actionId) {
-        const availability = this.registry.availability(stage.actionId, stage.surface, s);
-        const alreadyThere = stage.id === 'preview' && s.mode === 'preview';
-        el.disabled = !alreadyThere && availability.state !== 'enabled';
-        el.title =
-          availability.state === 'disabled' && !alreadyThere ? availability.reason : `${stage.label} the active plate`;
-      } else {
-        el.disabled = false;
-        el.title = t('ui.domShell.returnToThePrepareView', 'Return to the prepare view');
-      }
-    }
+    // The slice button is the one control that reports work in progress, the
+    // same way upstream's does: it stays put and pulses rather than moving.
+    this.sliceButton?.classList.toggle('busy', s.isSlicing);
   }
 }

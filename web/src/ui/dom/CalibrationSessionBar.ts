@@ -68,8 +68,8 @@ export class CalibrationSessionBar {
     this.container.dataset.calibrationSession = 'open';
     this.container.style.cssText =
       'display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 12px;' +
-      'border:1px solid var(--oxr-color-border,#30363d);border-radius:8px;' +
-      'background:var(--oxr-color-surface,#0d1117);';
+      'border:1px solid var(--oxr-stroke);border-radius:8px;' +
+      'background:var(--oxr-color-surface);';
 
     const message = doc.createElement('p');
     message.dataset.calibrationSessionMessage = 'true';

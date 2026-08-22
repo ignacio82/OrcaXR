@@ -23,9 +23,22 @@ export interface SlicePreflightPanelAdapter {
   readonly onError?: (error: unknown) => void;
 }
 
+/**
+ * The two banner tones. The card's own text is body text — the severity is
+ * carried by the fill and the border, not by tinting a paragraph until it is
+ * hard to read.
+ */
 const COLORS = {
-  error: { background: '#3a1e1e', border: '#f4433699', foreground: '#ff8a80' },
-  warning: { background: '#3a331e', border: '#ffb74d99', foreground: '#ffcc80' },
+  error: {
+    background: 'var(--oxr-danger-surface)',
+    border: 'var(--oxr-danger)',
+    foreground: 'var(--oxr-text)',
+  },
+  warning: {
+    background: 'var(--oxr-warn-surface)',
+    border: 'var(--oxr-warn)',
+    foreground: 'var(--oxr-text)',
+  },
 } as const;
 
 /** Accessible structured rendering for immutable canonical preflight evidence. */
@@ -93,7 +106,7 @@ export class SlicePreflightPanel {
     bar.dataset.preflightHiddenSummary = String(count);
     bar.style.cssText =
       'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;' +
-      'padding:6px 10px;border:1px dashed #ffffff2e;border-radius:8px;color:#aeb8c1;font-size:12px;';
+      'padding:6px 10px;border:1px dashed var(--oxr-stroke-strong);border-radius:8px;color:var(--oxr-text-muted);font-size:12px;';
     const label = document.createElement('span');
     label.textContent = t(
       'ui.slicePreflightPanel.hiddenIssues',
@@ -105,7 +118,7 @@ export class SlicePreflightPanel {
     show.dataset.preflightShowHidden = '';
     show.textContent = t('ui.slicePreflightPanel.show', 'Show');
     show.style.cssText =
-      'min-height:28px;padding:2px 10px;border:1px solid #ffffff38;background:#ffffff0d;color:inherit;' +
+      'min-height:28px;padding:2px 10px;border:1px solid var(--oxr-stroke-strong);background:var(--oxr-surface);color:inherit;' +
       'border-radius:6px;cursor:pointer;font:inherit;';
     show.addEventListener('click', () => {
       this.hidden.clear();

@@ -65,7 +65,7 @@ export class MeasurePanel {
     root.dataset.measurePanel = 'true';
     root.setAttribute('aria-labelledby', `orcaxr-measure-heading-${this.instanceId}`);
     root.style.cssText =
-      'display:flex;min-width:0;flex-direction:column;gap:10px;color:var(--oxr-color-text,#fff);' +
+      'display:flex;min-width:0;flex-direction:column;gap:10px;color:var(--oxr-color-text);' +
       'font:13px/1.4 system-ui,sans-serif;';
     this.container.replaceChildren(root);
     this.root = root;
@@ -174,7 +174,7 @@ export class MeasurePanel {
     const document = this.container.ownerDocument;
     const group = document.createElement('fieldset');
     group.dataset.measureAssembly = 'true';
-    group.style.cssText = 'margin:0;padding:8px;border:1px solid var(--oxr-color-border,#30363d);border-radius:8px;';
+    group.style.cssText = 'margin:0;padding:8px;border:1px solid var(--oxr-stroke);border-radius:8px;';
     const legend = document.createElement('legend');
     legend.textContent = 'Align';
     legend.style.cssText = 'padding:0 4px;font-weight:600;';
@@ -204,8 +204,8 @@ export class MeasurePanel {
     distance.value = `${Number(assembly.parallelDistanceMm.toFixed(3))}`;
     distance.disabled = !assembly.hasParallelDistance || !assembly.movable;
     distance.style.cssText =
-      'width:90px;padding:6px;border-radius:6px;border:1px solid var(--oxr-color-border,#30363d);' +
-      'background:var(--oxr-color-surface,#0d1117);color:inherit;font:inherit;';
+      'width:90px;padding:6px;border-radius:6px;border:1px solid var(--oxr-stroke);' +
+      'background:var(--oxr-color-surface);color:inherit;font:inherit;';
     const distanceLabel = document.createElement('label');
     distanceLabel.htmlFor = distance.id;
     distanceLabel.textContent = t('ui.measurePanel.gapMm', 'Gap (mm)');

@@ -144,7 +144,7 @@ export class CalibrationParametersPanel {
       const broken = doc.createElement('p');
       broken.dataset.calibrationAssertionFailures = 'true';
       broken.setAttribute('role', 'alert');
-      broken.style.cssText = 'margin:0;color:var(--oxr-color-danger,#ff4d4d);';
+      broken.style.cssText = 'margin:0;color:var(--oxr-color-danger);';
       broken.textContent = `This plan breaks its own definition: ${verification.failures
         .map(describeAssertionFailure)
         .join('; ')}.`;
@@ -244,11 +244,11 @@ export class CalibrationParametersPanel {
     input.dataset.calibrationInput = field.key;
     input.disabled = !field.editable;
     input.style.cssText =
-      'padding:6px;border-radius:6px;border:1px solid var(--oxr-color-border,#30363d);' +
-      'background:var(--oxr-color-surface,#0d1117);color:inherit;font:inherit;';
+      'padding:6px;border-radius:6px;border:1px solid var(--oxr-stroke);' +
+      'background:var(--oxr-color-surface);color:inherit;font:inherit;';
     if (issues.length > 0) {
       input.setAttribute('aria-invalid', 'true');
-      input.style.cssText += 'border-color:var(--oxr-color-danger,#ff4d4d);';
+      input.style.cssText += 'border-color:var(--oxr-color-danger,var(--oxr-danger));';
     }
     input.addEventListener('change', () => {
       void this.run(() => this.adapter.onEdit(field.key, (input as HTMLInputElement).value));
@@ -259,7 +259,7 @@ export class CalibrationParametersPanel {
       const message = doc.createElement('p');
       message.dataset.calibrationFieldIssue = field.key;
       message.setAttribute('role', 'alert');
-      message.style.cssText = 'margin:0;color:var(--oxr-color-danger,#ff4d4d);font-size:0.85rem;';
+      message.style.cssText = 'margin:0;color:var(--oxr-color-danger);font-size:0.85rem;';
       message.textContent = issues.join(' ');
       const describedBy = `${inputId}-issue`;
       message.id = describedBy;

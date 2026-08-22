@@ -211,8 +211,8 @@ export class PrinterStoragePanel {
           row.dataset.printerStorageFile = file.path;
           row.setAttribute('aria-selected', String(file.path === selected));
           if (file.path === selected) {
-            row.style.background = '#ffffff1a';
-            row.style.borderColor = '#ffb74d66';
+            row.style.background = 'var(--oxr-stroke)';
+            row.style.borderColor = 'var(--oxr-warn)';
           }
           this.list.appendChild(row);
         }
@@ -229,7 +229,7 @@ export class PrinterStoragePanel {
     for (const [kind, button] of this.buttons) {
       button.disabled = state.busy || !selected;
       button.title = selected ? `${button.textContent} ${selected}` : 'Select a file on the printer first.';
-      if (kind === 'delete') button.style.borderColor = selected ? '#ff8a8066' : '';
+      if (kind === 'delete') button.style.borderColor = selected ? 'var(--oxr-danger)' : '';
     }
   }
 

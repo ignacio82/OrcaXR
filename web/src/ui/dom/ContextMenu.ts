@@ -126,8 +126,8 @@ export class ContextMenu {
       // A long menu scrolls inside itself rather than running off the bottom of
       // the window, which is where a fourteen-entry object menu would end up.
       `max-height:${Math.max(160, viewportHeight - y - 16)}px;overflow-y:auto;` +
-      'display:flex;flex-direction:column;gap:2px;border:1px solid var(--oxr-color-stroke,#ffffff2b);' +
-      'border-radius:8px;background:var(--oxr-color-bg-card,#18212b);box-shadow:0 8px 24px #0008;';
+      'display:flex;flex-direction:column;gap:2px;border:1px solid var(--oxr-color-stroke);' +
+      'border-radius:8px;background:var(--oxr-color-bg-card,var(--oxr-bg-elevated));box-shadow:0 8px 24px #0008;';
 
     for (const [index, group] of groups.entries()) {
       if (group.label) {
@@ -199,7 +199,7 @@ export class ContextMenu {
       `background:transparent;color:inherit;font:inherit;cursor:${item.disabled ? 'default' : 'pointer'};` +
       `opacity:${item.disabled ? '0.5' : '1'};`;
     button.addEventListener('pointerenter', () => {
-      if (!item.disabled) button.style.background = 'var(--oxr-color-surface,#ffffff14)';
+      if (!item.disabled) button.style.background = 'var(--oxr-color-surface,var(--oxr-surface))';
     });
     button.addEventListener('pointerleave', () => {
       button.style.background = 'transparent';

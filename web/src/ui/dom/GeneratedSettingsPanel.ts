@@ -95,6 +95,12 @@ const MODES: readonly { readonly id: SettingsEditorMode; readonly label: string 
   { id: 'develop', label: 'Develop' },
 ];
 
+/** The small per-row reset commands, sized to sit inside the row. */
+const COMMAND_BUTTON_STYLE =
+  'padding:1px 6px;font-size:10.5px;line-height:16px;color:var(--oxr-color-text-muted);' +
+  'background:var(--oxr-color-bg-card);border:1px solid var(--oxr-color-stroke);' +
+  'border-radius:var(--oxr-radius-sm);cursor:pointer;';
+
 let panelSequence = 0;
 
 /** Accessible DOM surface for the pinned, generated engine-settings schema. */
@@ -191,8 +197,8 @@ export class GeneratedSettingsPanel {
     form.noValidate = true;
     form.setAttribute('aria-labelledby', `orcaxr-generated-settings-title-${this.instanceId}`);
     form.style.cssText =
-      'display:flex;min-height:0;flex-direction:column;gap:12px;color:var(--oxr-color-text,#fff);' +
-      'font:13px/1.4 system-ui,sans-serif;';
+      'display:flex;min-height:0;flex-direction:column;gap:8px;color:var(--oxr-color-text);' +
+      'font:12.5px/1.4 var(--oxr-font-sans);';
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       void this.applyDrafts();
@@ -201,7 +207,7 @@ export class GeneratedSettingsPanel {
     const heading = document.createElement('h2');
     heading.id = `orcaxr-generated-settings-title-${this.instanceId}`;
     heading.textContent = this.options.heading ?? 'Engine settings';
-    heading.style.cssText = 'margin:0;font-size:18px;line-height:1.3;';
+    heading.style.cssText = 'margin:0;font-size:13px;font-weight:700;line-height:1.3;';
     form.appendChild(heading);
 
     const schemaStatus = document.createElement('p');
@@ -212,14 +218,23 @@ export class GeneratedSettingsPanel {
       'ui.generatedSettingsPanel.loadingThePinnedEngineSettings',
       'Loading the pinned engine settings schema…',
     );
-    schemaStatus.style.cssText = 'margin:0;color:var(--oxr-color-text-muted,#a0aab5);';
-    form.appendChild(schemaStatus);
+    // The provenance is a paragraph, and a paragraph belongs behind a
+    // disclosure in a parameter sidebar: it is what the schema *is*, read once,
+    // not something an operator re-reads while changing a layer height.
+    schemaStatus.style.cssText = 'margin:6px 0 0;color:var(--oxr-color-text-muted);font-size:11px;';
+    const schemaDetails = document.createElement('details');
+    schemaDetails.style.cssText = 'margin:0;';
+    const schemaSummary = document.createElement('summary');
+    schemaSummary.textContent = t('ui.generatedSettingsPanel.schema', 'Schema');
+    schemaSummary.style.cssText = 'cursor:pointer;font-size:11px;color:var(--oxr-color-text-muted);list-style:revert;';
+    schemaDetails.append(schemaSummary, schemaStatus);
+    form.appendChild(schemaDetails);
 
     const errorStatus = document.createElement('p');
     errorStatus.dataset.settingsError = 'true';
     errorStatus.setAttribute('role', 'alert');
     errorStatus.hidden = true;
-    errorStatus.style.cssText = 'margin:0;color:#ffb4ab;';
+    errorStatus.style.cssText = 'margin:0;color:var(--oxr-danger);';
     form.appendChild(errorStatus);
 
     const conflictStatus = document.createElement('section');
@@ -227,8 +242,8 @@ export class GeneratedSettingsPanel {
     conflictStatus.setAttribute('role', 'alert');
     conflictStatus.hidden = true;
     conflictStatus.style.cssText =
-      'display:grid;gap:8px;margin:0;padding:10px;border:1px solid #ffb74d88;border-radius:8px;' +
-      'background:#6d4c4133;color:#ffe0b2;';
+      'display:grid;gap:8px;margin:0;padding:10px;border:1px solid var(--oxr-warn);' +
+      'border-radius:var(--oxr-radius-md);background:var(--oxr-warn-surface);color:var(--oxr-text);';
     const conflictCopy = document.createElement('p');
     conflictCopy.dataset.settingsConflictMessage = 'true';
     conflictCopy.style.cssText = 'margin:0;';
@@ -261,10 +276,10 @@ export class GeneratedSettingsPanel {
     modeFieldset.dataset.settingsModes = 'true';
     modeFieldset.style.cssText =
       'display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:8px;border:1px solid ' +
-      'var(--oxr-color-stroke,#ffffff2b);border-radius:8px;';
+      'var(--oxr-color-stroke,var(--oxr-stroke-strong));border-radius:8px;';
     const modeLegend = document.createElement('legend');
     modeLegend.textContent = t('ui.generatedSettingsPanel.detailLevel', 'Detail level');
-    modeLegend.style.cssText = 'padding:0 4px;font-weight:650;';
+    modeLegend.style.cssText = 'padding:0 4px;font-weight:600;font-size:11px;color:var(--oxr-color-text-muted);';
     modeFieldset.appendChild(modeLegend);
     for (const mode of MODES) {
       const label = document.createElement('label');
@@ -289,7 +304,7 @@ export class GeneratedSettingsPanel {
     const searchLabel = document.createElement('label');
     searchLabel.htmlFor = `orcaxr-generated-settings-search-${this.instanceId}`;
     searchLabel.textContent = t('ui.generatedSettingsPanel.searchSettings', 'Search settings');
-    searchLabel.style.cssText = 'font-weight:650;';
+    searchLabel.style.cssText = 'font-weight:600;font-size:11px;color:var(--oxr-color-text-muted);';
     form.appendChild(searchLabel);
 
     const search = document.createElement('input');
@@ -304,7 +319,7 @@ export class GeneratedSettingsPanel {
     search.autocomplete = 'off';
     search.setAttribute('aria-controls', `orcaxr-generated-settings-fields-${this.instanceId}`);
     search.style.cssText =
-      'box-sizing:border-box;width:100%;border:1px solid var(--oxr-color-stroke,#ffffff2b);' +
+      'box-sizing:border-box;width:100%;border:1px solid var(--oxr-color-stroke);' +
       'border-radius:7px;background:var(--oxr-color-bg-sunken,#0006);color:inherit;padding:8px 10px;';
     search.addEventListener('input', () => {
       this.search = search.value;
@@ -324,21 +339,21 @@ export class GeneratedSettingsPanel {
     resultStatus.dataset.settingsResults = 'true';
     resultStatus.setAttribute('role', 'status');
     resultStatus.setAttribute('aria-live', 'polite');
-    resultStatus.style.cssText = 'min-height:1.4em;margin:0;color:var(--oxr-color-text-muted,#a0aab5);';
+    resultStatus.style.cssText = 'min-height:1.4em;margin:0;color:var(--oxr-color-text-muted);';
     form.appendChild(resultStatus);
 
     const fields = document.createElement('div');
     fields.id = `orcaxr-generated-settings-fields-${this.instanceId}`;
     fields.dataset.settingsFields = 'true';
     fields.setAttribute('aria-describedby', resultStatus.id);
-    fields.style.cssText = 'display:flex;min-height:80px;flex-direction:column;gap:16px;overflow:auto;';
+    fields.style.cssText = 'display:flex;min-height:80px;flex-direction:column;gap:12px;overflow:auto;';
     form.appendChild(fields);
 
     const operationStatus = document.createElement('p');
     operationStatus.dataset.settingsOperationStatus = 'true';
     operationStatus.setAttribute('role', 'status');
     operationStatus.setAttribute('aria-live', 'polite');
-    operationStatus.style.cssText = 'min-height:1.4em;margin:0;color:var(--oxr-color-text-muted,#a0aab5);';
+    operationStatus.style.cssText = 'min-height:1.4em;margin:0;color:var(--oxr-color-text-muted);';
     form.appendChild(operationStatus);
 
     const actions = document.createElement('div');
@@ -499,8 +514,7 @@ export class GeneratedSettingsPanel {
         'ui.generatedSettingsPanel.noSettingsMatchThisSearch',
         'No settings match this search and detail level.',
       );
-      empty.style.cssText =
-        'margin:0;padding:12px;border:1px solid var(--oxr-color-stroke,#ffffff1f);border-radius:8px;';
+      empty.style.cssText = 'margin:0;padding:12px;border:1px solid var(--oxr-color-stroke);border-radius:8px;';
       container.replaceChildren(empty);
       this.syncControlState();
       return;
@@ -544,12 +558,15 @@ export class GeneratedSettingsPanel {
       section.dataset.settingsPage = location.tab.label;
       section.dataset.settingsGroup = location.group.label;
     }
-    section.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
+    section.style.cssText = 'display:flex;flex-direction:column;gap:2px;';
     const heading = document.createElement('h3');
     heading.id = headingId;
     heading.textContent = category;
+    // A settings group header, the way the desktop panel writes one: small,
+    // bold, and separated from the rows by a hairline rather than a gap.
     heading.style.cssText =
-      'margin:0;padding-bottom:5px;border-bottom:1px solid var(--oxr-color-stroke,#ffffff1f);font-size:14px;';
+      'margin:0 0 4px;padding-bottom:4px;border-bottom:1px solid var(--oxr-color-stroke);' +
+      'font-size:12px;font-weight:700;';
     section.appendChild(heading);
     fields.forEach((field, fieldIndex) =>
       section.appendChild(this.buildField(field, `${categoryIndex}-${fieldIndex}`, fullSpectrumValues)),
@@ -575,20 +592,23 @@ export class GeneratedSettingsPanel {
         ? 'applicable'
         : 'not-applicable'
       : field.applicability;
+    // One line per setting: name at the inline start, control after it. The
+    // boxed card this replaced turned a page of thirty settings into a page of
+    // thirty cards, which is not how a slicer's parameter panel reads.
     row.style.cssText =
-      'display:grid;grid-template-columns:minmax(160px,1fr) minmax(180px,1fr);gap:8px 14px;' +
-      'padding:10px;border:1px solid var(--oxr-color-stroke,#ffffff1f);border-radius:8px;' +
-      'background:var(--oxr-color-surface,#ffffff0a);';
+      'display:grid;grid-template-columns:minmax(96px,1fr) minmax(110px,1fr);gap:2px 10px;' +
+      'align-items:center;padding:3px 0;';
 
     const controlId = `orcaxr-settings-control-${this.instanceId}-${index}`;
     const labelBlock = document.createElement('div');
     const label = document.createElement('label');
     label.htmlFor = controlId;
     label.textContent = field.label;
-    label.style.cssText = 'display:block;font-weight:650;';
+    label.style.cssText = 'display:block;font-size:12px;';
     const key = document.createElement('code');
     key.textContent = field.key;
-    key.style.cssText = 'display:block;margin-top:2px;color:var(--oxr-color-text-muted,#a0aab5);font-size:11px;';
+    key.style.cssText =
+      'display:block;color:var(--oxr-color-text-muted);font-size:10px;background:none;border:none;padding:0;';
     labelBlock.append(label, key);
     row.appendChild(labelBlock);
 
@@ -608,7 +628,7 @@ export class GeneratedSettingsPanel {
       const unit = document.createElement('span');
       unit.textContent = field.unit;
       unit.dataset.settingsUnit = 'true';
-      unit.style.cssText = 'color:var(--oxr-color-text-muted,#a0aab5);white-space:nowrap;';
+      unit.style.cssText = 'color:var(--oxr-color-text-muted);white-space:nowrap;';
       controlBlock.appendChild(unit);
     }
     row.appendChild(controlBlock);
@@ -628,6 +648,7 @@ export class GeneratedSettingsPanel {
       inherit.dataset.settingsEditable = 'true';
       inherit.dataset.settingsDependencyEnabled = String(dependencyEnabled);
       inherit.textContent = t('ui.generatedSettingsPanel.useInherited', 'Use inherited');
+      inherit.style.cssText = COMMAND_BUTTON_STYLE;
       inherit.addEventListener('click', () => {
         editor.resetToInherited(field.id);
         this.drafts.set(field.id, { kind: 'remove' });
@@ -642,6 +663,7 @@ export class GeneratedSettingsPanel {
         resetDefault.dataset.settingsEditable = 'true';
         resetDefault.dataset.settingsDependencyEnabled = String(dependencyEnabled);
         resetDefault.textContent = t('ui.generatedSettingsPanel.useDefault', 'Use default');
+        resetDefault.style.cssText = COMMAND_BUTTON_STYLE;
         resetDefault.addEventListener('click', () => {
           editor.resetToDefault(field.id);
           const nextState = editor.getFieldState(field.id);
@@ -666,9 +688,14 @@ export class GeneratedSettingsPanel {
       const help = document.createElement('p');
       help.id = `${controlId}-help`;
       help.textContent = field.tooltip;
+      // Upstream shows a setting's explanation on hover, and a sidebar of forty
+      // settings is unreadable with a paragraph under each one. The text stays
+      // in the DOM — `aria-describedby` points at it, so a screen reader still
+      // reads it — and the row carries it as a tooltip for the pointer.
       help.style.cssText =
-        'grid-column:1/-1;margin:0;color:var(--oxr-color-text-muted,#a0aab5);font-size:12px;overflow-wrap:anywhere;';
+        'position:absolute;width:1px;height:1px;margin:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;';
       row.appendChild(help);
+      row.title = field.tooltip;
       describedBy.push(help.id);
     }
     if (field.support.status === 'unavailable') {
@@ -676,7 +703,7 @@ export class GeneratedSettingsPanel {
       unavailable.id = `${controlId}-unavailable`;
       unavailable.dataset.settingsUnavailableReason = field.support.reason ?? 'unspecified';
       unavailable.textContent = `Unavailable: ${formatUnavailableReason(field.support.reason)}`;
-      unavailable.style.cssText = 'grid-column:1/-1;margin:0;color:#ffd180;font-size:12px;';
+      unavailable.style.cssText = 'grid-column:1/-1;margin:0;color:var(--oxr-warn);font-size:12px;';
       row.appendChild(unavailable);
       describedBy.push(unavailable.id);
     }
@@ -688,7 +715,7 @@ export class GeneratedSettingsPanel {
         'ui.generatedSettingsPanel.managedByTheStructuredFullSpectrum',
         'Managed by the structured FullSpectrum recipe editor. Raw serialized definition editing is disabled here.',
       );
-      special.style.cssText = 'grid-column:1/-1;margin:0;color:#ffd180;font-size:12px;';
+      special.style.cssText = 'grid-column:1/-1;margin:0;color:var(--oxr-warn);font-size:12px;';
       row.appendChild(special);
       describedBy.push(special.id);
     }
@@ -701,8 +728,7 @@ export class GeneratedSettingsPanel {
         'ui.generatedSettingsPanel.notApplicableWhileSubdivideMix',
         'Not applicable while Subdivide Mix Layer is off. Enable it to edit this Local-Z option.',
       );
-      dependencyMessage.style.cssText =
-        'grid-column:1/-1;margin:0;color:var(--oxr-color-text-muted,#a0aab5);font-size:12px;';
+      dependencyMessage.style.cssText = 'grid-column:1/-1;margin:0;color:var(--oxr-color-text-muted);font-size:12px;';
       row.appendChild(dependencyMessage);
       describedBy.push(dependencyMessage.id);
     }
@@ -710,7 +736,8 @@ export class GeneratedSettingsPanel {
     issues.id = `${controlId}-issues`;
     issues.dataset.settingsIssues = field.id;
     issues.setAttribute('role', 'alert');
-    issues.style.cssText = 'grid-column:1/-1;margin:0;padding-inline-start:20px;color:#ffb4ab;font-size:12px;';
+    issues.style.cssText =
+      'grid-column:1/-1;margin:0;padding-inline-start:20px;color:var(--oxr-danger);font-size:12px;';
     this.renderIssues(issues, fieldIssues);
     row.appendChild(issues);
     describedBy.push(issues.id);
@@ -825,7 +852,7 @@ export class GeneratedSettingsPanel {
     if ('disabled' in control) control.disabled = !editable || !dependencyEnabled || this.busy || this.loading;
     control.setAttribute('aria-invalid', String(invalid));
     control.style.cssText +=
-      'box-sizing:border-box;min-width:0;width:100%;border:1px solid var(--oxr-color-stroke,#ffffff2b);' +
+      'box-sizing:border-box;min-width:0;width:100%;border:1px solid var(--oxr-color-stroke);' +
       'border-radius:6px;background:var(--oxr-color-bg-sunken,#0006);color:inherit;padding:7px 8px;';
     if (control instanceof document.defaultView!.HTMLInputElement && control.type === 'checkbox') {
       control.style.width = 'auto';
@@ -872,8 +899,8 @@ export class GeneratedSettingsPanel {
     }
     for (const badge of badges) {
       badge.style.cssText =
-        'display:inline-block;border:1px solid var(--oxr-color-stroke,#ffffff2b);border-radius:999px;' +
-        'padding:2px 7px;color:var(--oxr-color-text-muted,#a0aab5);font-size:11px;';
+        'display:inline-block;border:1px solid var(--oxr-color-stroke);border-radius:999px;' +
+        'padding:2px 7px;color:var(--oxr-color-text-muted);font-size:11px;';
     }
     container.replaceChildren(...badges);
   }

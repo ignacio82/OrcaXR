@@ -36,11 +36,11 @@ export interface PrinterStatusBarPort {
 }
 
 const TONE_COLOR: Readonly<Record<PrinterStatusSummary['tone'], string>> = Object.freeze({
-  idle: '#8a94a0',
-  active: '#4db6ac',
-  attention: '#ffb74d',
-  danger: '#ff8a80',
-  unknown: '#8a94a0',
+  idle: 'var(--oxr-text-muted)',
+  active: 'var(--oxr-accent)',
+  attention: 'var(--oxr-warn)',
+  danger: 'var(--oxr-danger)',
+  unknown: 'var(--oxr-text-muted)',
 });
 
 export class PrinterStatusBar {
@@ -72,19 +72,23 @@ export class PrinterStatusBar {
     root.dataset.printerStatusBar = 'true';
     root.setAttribute('aria-label', t('ui.printerStatusBar.printerStatus', 'Printer status'));
     root.hidden = true;
+    // Docked to the viewport's inline start, below the model toolbar: the
+    // toolbar owns the top centre, and a status card that covered it would
+    // hide the tools to tell the operator about a machine they are not
+    // currently touching. direction:physical — `top` is a block-axis inset and
+    // mirrors nothing; the inline edge is set logically below.
     root.style.cssText =
-      'position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:5;box-sizing:border-box;' +
-      'width:min(460px,calc(100% - 24px));display:flex;flex-direction:column;gap:6px;padding:10px 12px;' +
-      'border-radius:12px;border:1px solid var(--oxr-stroke-strong,#ffffff26);' +
-      'background:linear-gradient(145deg,rgba(20,28,38,.94),rgba(8,12,17,.9));backdrop-filter:blur(18px);' +
-      'box-shadow:0 8px 26px rgba(0,0,0,.36);pointer-events:auto;';
+      'position:absolute;inset-inline-start:12px;top:56px;z-index:5;box-sizing:border-box;' +
+      'width:min(380px,calc(100% - 24px));display:flex;flex-direction:column;gap:6px;padding:9px 11px;' +
+      'border-radius:var(--radius-lg);border:1px solid var(--oxr-stroke);' +
+      'background:var(--oxr-bg-card);box-shadow:var(--shadow-panel);pointer-events:auto;';
 
     const line = doc.createElement('div');
     line.style.cssText = 'display:flex;align-items:center;gap:8px;';
     const dot = doc.createElement('span');
     dot.dataset.printerStatusTone = 'unknown';
     dot.setAttribute('aria-hidden', 'true');
-    dot.style.cssText = 'width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:#8a94a0;';
+    dot.style.cssText = 'width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:var(--oxr-text-muted);';
     const text = doc.createElement('div');
     text.style.cssText = 'flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;';
     const headline = doc.createElement('p');
@@ -95,7 +99,7 @@ export class PrinterStatusBar {
       'margin:0;font-size:13px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
     const detail = doc.createElement('p');
     detail.dataset.printerStatusDetail = 'true';
-    detail.style.cssText = 'margin:0;font-size:11px;color:#a0aab5;overflow-wrap:anywhere;';
+    detail.style.cssText = 'margin:0;font-size:11px;color:var(--oxr-text-muted);overflow-wrap:anywhere;';
     text.append(headline, detail);
     const details = doc.createElement('button');
     details.type = 'button';
@@ -109,16 +113,16 @@ export class PrinterStatusBar {
 
     const track = doc.createElement('div');
     track.dataset.printerStatusProgressTrack = 'true';
-    track.style.cssText = 'height:4px;border-radius:2px;background:#ffffff1f;overflow:hidden;display:none;';
+    track.style.cssText = 'height:4px;border-radius:2px;background:var(--oxr-surface);overflow:hidden;display:none;';
     const bar = doc.createElement('div');
     bar.dataset.printerStatusProgress = 'true';
-    bar.style.cssText = 'height:100%;width:0%;background:var(--oxr-color-accent,#4fc3f7);';
+    bar.style.cssText = 'height:100%;width:0%;background:var(--oxr-color-accent);';
     track.appendChild(bar);
     root.appendChild(track);
 
     const recovery = doc.createElement('div');
     recovery.dataset.printerStatusRecovery = 'true';
-    recovery.style.cssText = 'display:none;align-items:center;gap:8px;font-size:11px;color:#ffb74d;';
+    recovery.style.cssText = 'display:none;align-items:center;gap:8px;font-size:11px;color:var(--oxr-warn);';
     root.appendChild(recovery);
 
     const controls = doc.createElement('div');
@@ -129,7 +133,7 @@ export class PrinterStatusBar {
     const holdNote = doc.createElement('p');
     holdNote.dataset.printerStatusHoldNote = 'true';
     holdNote.setAttribute('aria-live', 'polite');
-    holdNote.style.cssText = 'margin:0;font-size:11px;color:#a0aab5;min-height:1em;';
+    holdNote.style.cssText = 'margin:0;font-size:11px;color:var(--oxr-text-muted);min-height:1em;';
     root.appendChild(holdNote);
 
     this.root = root;
@@ -231,13 +235,13 @@ export class PrinterStatusBar {
     button.disabled = !action.enabled;
     button.style.cssText = 'margin:0;width:100%;padding:6px 8px;font-size:11px;position:relative;z-index:1;';
     if (action.reason) button.title = action.reason;
-    if (action.destructive) button.style.color = '#ff8a80';
+    if (action.destructive) button.style.color = 'var(--oxr-danger)';
 
     const fill = doc.createElement('span');
     fill.dataset.printerStatusHoldFill = action.command;
     fill.setAttribute('aria-hidden', 'true');
     fill.style.cssText =
-      'position:absolute;inset-inline-start:0;top:0;bottom:0;width:0%;background:#ff525233;' +
+      'position:absolute;inset-inline-start:0;top:0;bottom:0;width:0%;background:var(--oxr-danger-surface);' +
       'pointer-events:none;z-index:0;';
     this.holdBars.set(action.command, fill);
 

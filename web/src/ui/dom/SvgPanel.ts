@@ -52,7 +52,7 @@ export class SvgPanel {
     root.dataset.svgPanel = 'true';
     root.setAttribute('aria-labelledby', `orcaxr-svg-heading-${this.instanceId}`);
     root.style.cssText =
-      'display:flex;min-width:0;flex-direction:column;gap:10px;color:var(--oxr-color-text,#fff);' +
+      'display:flex;min-width:0;flex-direction:column;gap:10px;color:var(--oxr-color-text);' +
       'font:13px/1.4 system-ui,sans-serif;';
     this.container.replaceChildren(root);
     this.root = root;
@@ -172,8 +172,8 @@ export class SvgPanel {
     input.dataset.svgField = key;
     input.value = `${Number(value.toFixed(3))}`;
     input.style.cssText =
-      'width:120px;padding:6px;border-radius:6px;border:1px solid var(--oxr-color-border,#30363d);' +
-      'background:var(--oxr-color-surface,#0d1117);color:inherit;font:inherit;';
+      'width:120px;padding:6px;border-radius:6px;border:1px solid var(--oxr-stroke);' +
+      'background:var(--oxr-color-surface);color:inherit;font:inherit;';
     input.addEventListener('change', () => {
       void this.run(() => commit(Number(input.value)));
     });

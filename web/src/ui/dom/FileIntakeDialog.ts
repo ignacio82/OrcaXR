@@ -19,8 +19,8 @@ export function askThreeMfIntake(filename: string): Promise<ThreeMfIntakeChoice>
   dialog.setAttribute('aria-labelledby', 'orcaxr-file-intake-title');
   dialog.setAttribute('aria-describedby', 'orcaxr-file-intake-body');
   dialog.style.cssText =
-    'max-width:520px;width:100%;background:var(--oxr-color-bg-card,#161a20);color:var(--oxr-color-text,#fff);' +
-    'border:1px solid var(--oxr-color-stroke,#2a3038);border-radius:12px;padding:20px;' +
+    'max-width:520px;width:100%;background:var(--oxr-color-bg-card);color:var(--oxr-color-text);' +
+    'border:1px solid var(--oxr-color-stroke);border-radius:12px;padding:20px;' +
     'font:14px/1.5 system-ui,sans-serif;display:flex;flex-direction:column;gap:14px;';
 
   const title = document.createElement('h2');
@@ -47,8 +47,8 @@ export function askThreeMfIntake(filename: string): Promise<ThreeMfIntakeChoice>
     button.title = hint;
     button.style.cssText =
       'min-height:44px;padding:10px 14px;border-radius:8px;cursor:pointer;color:inherit;' +
-      `border:1px solid ${primary ? 'var(--oxr-color-accent,#4fc3f7)' : 'rgba(255,255,255,0.24)'};` +
-      `background:rgba(255,255,255,${primary ? 0.14 : 0.06});`;
+      `border:1px solid ${primary ? 'var(--oxr-color-accent,var(--oxr-accent))' : 'var(--oxr-stroke)'};` +
+      `background:${primary ? 'var(--oxr-surface-hover)' : 'var(--oxr-surface)'};`;
     button.onclick = () => finish(value);
     buttons.push(button);
     return button;

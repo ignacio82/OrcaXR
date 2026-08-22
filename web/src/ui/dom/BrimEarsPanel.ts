@@ -56,7 +56,7 @@ export class BrimEarsPanel {
     root.dataset.brimEarsPanel = 'true';
     root.setAttribute('aria-labelledby', `orcaxr-brim-ears-heading-${this.instanceId}`);
     root.style.cssText =
-      'display:flex;min-width:0;flex-direction:column;gap:10px;color:var(--oxr-color-text,#fff);' +
+      'display:flex;min-width:0;flex-direction:column;gap:10px;color:var(--oxr-color-text);' +
       'font:13px/1.4 system-ui,sans-serif;';
     this.container.replaceChildren(root);
     this.root = root;
@@ -114,8 +114,8 @@ export class BrimEarsPanel {
     radius.value = `${state.radiusMm}`;
     radius.disabled = !state.objectId;
     radius.style.cssText =
-      'width:90px;padding:6px;border-radius:6px;border:1px solid var(--oxr-color-border,#30363d);' +
-      'background:var(--oxr-color-surface,#0d1117);color:inherit;font:inherit;';
+      'width:90px;padding:6px;border-radius:6px;border:1px solid var(--oxr-stroke);' +
+      'background:var(--oxr-color-surface);color:inherit;font:inherit;';
     radius.addEventListener('change', () => {
       void this.run(() => this.adapter.onSetRadius(Number(radius.value)));
     });
@@ -140,7 +140,7 @@ export class BrimEarsPanel {
       const warning = document.createElement('p');
       warning.dataset.brimEarsWarning = 'true';
       warning.setAttribute('role', 'alert');
-      warning.style.cssText = 'margin:0;color:var(--oxr-color-danger,#ff4d4d);';
+      warning.style.cssText = 'margin:0;color:var(--oxr-color-danger);';
       warning.textContent = state.warning;
       children.push(warning);
     }
@@ -159,7 +159,7 @@ export class BrimEarsPanel {
         const label = document.createElement('span');
         // The colour matches the red disc on the model, so the list entry and
         // the thing it names are recognisably the same ear.
-        if (stranded) label.style.cssText = 'color:var(--oxr-color-danger,#ff4d4d);';
+        if (stranded) label.style.cssText = 'color:var(--oxr-color-danger);';
         label.textContent =
           `${ear.positionMm.map(format).join(', ')} mm · ⌀${format(ear.headFrontRadiusMm * 2)} mm` +
           (stranded ? ' · does not reach the part' : '');

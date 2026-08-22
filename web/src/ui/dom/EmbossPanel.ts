@@ -62,7 +62,7 @@ export class EmbossPanel {
     root.dataset.embossPanel = 'true';
     root.setAttribute('aria-labelledby', `orcaxr-emboss-heading-${this.instanceId}`);
     root.style.cssText =
-      'display:flex;min-width:0;flex-direction:column;gap:10px;color:var(--oxr-color-text,#fff);' +
+      'display:flex;min-width:0;flex-direction:column;gap:10px;color:var(--oxr-color-text);' +
       'font:13px/1.4 system-ui,sans-serif;';
     this.container.replaceChildren(root);
     this.root = root;
@@ -133,7 +133,7 @@ export class EmbossPanel {
     text.value = state.text;
     text.style.cssText =
       'width:100%;box-sizing:border-box;padding:6px;border-radius:6px;resize:vertical;' +
-      'border:1px solid var(--oxr-color-border,#30363d);background:var(--oxr-color-surface,#0d1117);' +
+      'border:1px solid var(--oxr-stroke);background:var(--oxr-color-surface);' +
       'color:inherit;font:inherit;';
     text.addEventListener('change', () => {
       void this.run(() => this.adapter.onConfigure({ text: text.value }));
@@ -200,8 +200,8 @@ export class EmbossPanel {
     input.dataset.embossField = key;
     input.value = `${Number(value.toFixed(3))}`;
     input.style.cssText =
-      'width:96px;padding:6px;border-radius:6px;border:1px solid var(--oxr-color-border,#30363d);' +
-      'background:var(--oxr-color-surface,#0d1117);color:inherit;font:inherit;';
+      'width:96px;padding:6px;border-radius:6px;border:1px solid var(--oxr-stroke);' +
+      'background:var(--oxr-color-surface);color:inherit;font:inherit;';
     input.addEventListener('change', () => {
       void this.run(() => commit(Number(input.value)));
     });
@@ -219,8 +219,8 @@ export class EmbossPanel {
     select.id = `orcaxr-emboss-${key}-${this.instanceId}`;
     select.dataset.embossField = key;
     select.style.cssText =
-      'padding:6px;border-radius:6px;border:1px solid var(--oxr-color-border,#30363d);' +
-      'background:var(--oxr-color-surface,#0d1117);color:inherit;font:inherit;';
+      'padding:6px;border-radius:6px;border:1px solid var(--oxr-stroke);' +
+      'background:var(--oxr-color-surface);color:inherit;font:inherit;';
     for (const option of options) {
       const element = this.container.ownerDocument.createElement('option');
       element.value = option;

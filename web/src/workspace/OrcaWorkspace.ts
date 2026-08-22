@@ -258,6 +258,65 @@ const PLATE_MM = 200;
 const MM = 0.001;
 
 /**
+ * How the build plate is dressed on each surface.
+ *
+ * `xr` is the app's own identity — a dark, lit tray with amber rings and a
+ * grab bar, because in a headset the plate is an object you can take hold of.
+ * The two flat skins are a desktop slicer's bed: an unlit tray in the theme's
+ * own greys with a quiet grid and no grab affordances, so the window reads as
+ * one surface from the sidebar to the plate.
+ */
+export type PlateAppearance = 'xr' | 'flat-light' | 'flat-dark';
+
+interface PlateSkin {
+  plate: number;
+  opacity: number;
+  roughness: number;
+  metalness: number;
+  gridMajor: number;
+  gridMinor: number;
+  gridOpacity: number;
+  origin: number;
+  grabAffordances: boolean;
+}
+
+const PLATE_SKINS: Readonly<Record<PlateAppearance, PlateSkin>> = {
+  xr: {
+    plate: 0x0d141c,
+    opacity: 0.85,
+    roughness: 0.2,
+    metalness: 0.8,
+    gridMajor: 0xff6d00,
+    gridMinor: 0xff8a3d,
+    gridOpacity: 0.15,
+    origin: 0xff6d00,
+    grabAffordances: true,
+  },
+  'flat-light': {
+    plate: 0xdfe3e6,
+    opacity: 1,
+    roughness: 0.85,
+    metalness: 0.05,
+    gridMajor: 0x8d979d,
+    gridMinor: 0xa9b2b7,
+    gridOpacity: 0.85,
+    origin: 0x009688,
+    grabAffordances: false,
+  },
+  'flat-dark': {
+    plate: 0x353b3e,
+    opacity: 1,
+    roughness: 0.85,
+    metalness: 0.05,
+    gridMajor: 0x788085,
+    gridMinor: 0x5c6367,
+    gridOpacity: 0.7,
+    origin: 0x00a892,
+    grabAffordances: false,
+  },
+};
+
+/**
  * Non-colour channels have no filament colour, so each assigned state gets a
  * fixed, distinguishable overlay hue. The panel always labels the state too, so
  * hue is never the only cue.
@@ -674,6 +733,16 @@ export class OrcaWorkspace extends xb.Script {
   private importedProjectOwnsSlicingConfiguration = false;
   /** Live bed size (mm) — from the active profile's printable_area. */
   private bedMm = { x: PLATE_MM, y: PLATE_MM };
+  /**
+   * How the build plate is dressed.
+   *
+   * In a headset the plate is a *grabbable object* floating in a room, so it
+   * carries the app's own dark-and-amber identity plus the rings and bar that
+   * say "you can take hold of this". In a desktop window it is the bed of a
+   * slicer, and it is dressed like one: a light tray with a quiet grid, no
+   * grab affordances, and no glow. The same geometry either way.
+   */
+  private plateAppearance: PlateAppearance = 'flat-light';
   private plateAnchor = new THREE.Object3D();
   /** Everything spatial lives in this group: scaled up for legibility and
    *  re-posed in front of the user when the XR session starts. */
@@ -1239,18 +1308,32 @@ export class OrcaWorkspace extends xb.Script {
    * drives the camera and OrbitControls is disabled), harmless if called there.
    */
   public setCameraView(view: string) {
+    this.frameCameraView(view);
+    this.setStatus(`View: ${view}`);
+  }
+
+  /**
+   * Put the camera on one of the named views without announcing it.
+   *
+   * Every offset is a multiple of the plate's own span rather than a fixed
+   * distance in metres, so a 400 mm bed is framed the same way a 180 mm one is:
+   * filling the viewport, which is what a slicer's default view does. A fixed
+   * 0.6 m happened to be right for a 200 mm plate and only for that.
+   */
+  public frameCameraView(view: string) {
     const cam = xb.core.camera;
     const t = this.plateFocus();
-    const R = 0.75;
+    const span = Math.max(this.bedMm.x, this.bedMm.y) * MM * WORKSPACE_SCALE;
+    const R = span * 2.15;
     // Tiny Z on top/bottom avoids the straight-down gimbal lock in OrbitControls.
     const OFF: Record<string, [number, number, number]> = {
-      default: [0, 0.35, 0.6],
+      default: [0, span, span * 1.7],
       top: [0, R, 0.0015],
       bottom: [0, -R, 0.0015],
-      front: [0, 0.06, R],
-      rear: [0, 0.06, -R],
-      left: [-R, 0.06, 0],
-      right: [R, 0.06, 0],
+      front: [0, span * 0.17, R],
+      rear: [0, span * 0.17, -R],
+      left: [-R, span * 0.17, 0],
+      right: [R, span * 0.17, 0],
     };
     const o = OFF[view] ?? OFF.default;
     cam.position.set(t.x + o[0], t.y + o[1], t.z + o[2]);
@@ -1259,7 +1342,6 @@ export class OrcaWorkspace extends xb.Script {
       this.orbitControls.target.copy(t);
       this.orbitControls.update();
     }
-    this.setStatus(`View: ${view}`);
   }
 
   public setup2DControls(canvas: HTMLCanvasElement) {
@@ -4444,32 +4526,43 @@ export class OrcaWorkspace extends xb.Script {
     this.plateAnchor.updateMatrixWorld(true);
   }
 
+  /**
+   * Dress the plate for the surface it is being seen on, and rebuild it.
+   * Cheap and idempotent: the geometry is a box, a grid and a few rings.
+   */
+  setPlateAppearance(appearance: PlateAppearance): void {
+    if (this.plateAppearance === appearance) return;
+    this.plateAppearance = appearance;
+    this.rebuildPlate();
+  }
+
   /** (Re)build plate/grid/grab-bar sized to the active profile's bed. */
   private rebuildPlate() {
     this.plateParts.clear();
     const sx = this.bedMm.x * MM * WORKSPACE_SCALE;
     const sz = this.bedMm.y * MM * WORKSPACE_SCALE;
     const maxDim = Math.max(sx, sz);
+    const skin = PLATE_SKINS[this.plateAppearance];
 
     const plate = new THREE.Mesh(
       new THREE.BoxGeometry(sx, 0.006, sz),
       new THREE.MeshStandardMaterial({
-        color: 0x0d141c,
-        roughness: 0.2,
-        metalness: 0.8,
+        color: skin.plate,
+        roughness: skin.roughness,
+        metalness: skin.metalness,
         transparent: true,
-        opacity: 0.85,
+        opacity: skin.opacity,
       }),
     );
     plate.name = 'plate';
     plate.position.set(0, -0.003, 0);
     this.plateParts.add(plate);
 
-    const grid = new THREE.GridHelper(maxDim, 10, 0xff6d00, 0xff8a3d);
+    const grid = new THREE.GridHelper(maxDim, 10, skin.gridMajor, skin.gridMinor);
     grid.position.set(0, 0.0002, 0);
     grid.scale.set(sx / maxDim, 1, sz / maxDim);
     (grid.material as THREE.Material).transparent = true;
-    (grid.material as THREE.Material).opacity = 0.15;
+    (grid.material as THREE.Material).opacity = skin.gridOpacity;
     grid.raycast = () => {};
     this.plateParts.add(grid);
 
@@ -4484,35 +4577,42 @@ export class OrcaWorkspace extends xb.Script {
       return ring;
     };
 
-    const rBase = maxDim * 0.6;
-    this.plateParts.add(createRing(rBase * 0.5, 0xff8a3d, 0.5, -0.01));
-    this.plateParts.add(createRing(rBase * 0.75, 0xffb74d, 0.55, -0.02));
-    this.plateParts.add(createRing(rBase, 0xff6d00, 0.7, -0.03));
+    // The rings and the bar are grab affordances: they say the whole workspace
+    // can be picked up and moved, which is true in a headset and meaningless
+    // behind a mouse. A desktop window gets the bed alone.
+    if (skin.grabAffordances) {
+      const rBase = maxDim * 0.6;
+      this.plateParts.add(createRing(rBase * 0.5, 0xff8a3d, 0.5, -0.01));
+      this.plateParts.add(createRing(rBase * 0.75, 0xffb74d, 0.55, -0.02));
+      this.plateParts.add(createRing(rBase, 0xff6d00, 0.7, -0.03));
+    }
 
     const dot = new THREE.Mesh(
       new THREE.CircleGeometry(0.01, 32),
-      new THREE.MeshBasicMaterial({ color: 0xff6d00, transparent: true, opacity: 0.8 }),
+      new THREE.MeshBasicMaterial({ color: skin.origin, transparent: true, opacity: 0.8 }),
     );
     dot.rotation.x = -Math.PI / 2;
     dot.position.y = 0.0003;
     dot.raycast = () => {};
     this.plateParts.add(dot);
 
-    const bar = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.012, sx * 0.5),
-      new THREE.MeshStandardMaterial({
-        color: 0xff6d00,
-        roughness: 0.3,
-        emissive: 0xff6d00,
-        emissiveIntensity: 0.2,
-      }),
-    );
-    bar.name = 'grabBar';
-    bar.rotation.z = Math.PI / 2;
-    bar.position.set(0, 0.005, sz / 2 + 0.045);
-    (bar as unknown as { draggingMode: unknown }).draggingMode = xb.DragManager.TRANSLATING;
-    this.plateParts.add(bar);
-    (this.workspace as unknown as { draggable: boolean }).draggable = true;
+    if (skin.grabAffordances) {
+      const bar = new THREE.Mesh(
+        new THREE.CapsuleGeometry(0.012, sx * 0.5),
+        new THREE.MeshStandardMaterial({
+          color: 0xff6d00,
+          roughness: 0.3,
+          emissive: 0xff6d00,
+          emissiveIntensity: 0.2,
+        }),
+      );
+      bar.name = 'grabBar';
+      bar.rotation.z = Math.PI / 2;
+      bar.position.set(0, 0.005, sz / 2 + 0.045);
+      (bar as unknown as { draggingMode: unknown }).draggingMode = xb.DragManager.TRANSLATING;
+      this.plateParts.add(bar);
+    }
+    (this.workspace as unknown as { draggable: boolean }).draggable = skin.grabAffordances;
   }
 
   /**

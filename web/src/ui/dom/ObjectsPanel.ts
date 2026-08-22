@@ -169,7 +169,7 @@ export class ObjectsPanel {
     root.dataset.objectsPanel = 'true';
     root.setAttribute('aria-labelledby', `orcaxr-objects-heading-${this.instanceId}`);
     root.style.cssText =
-      'display:flex;min-height:0;flex-direction:column;gap:8px;color:var(--oxr-color-text,#fff);' +
+      'display:flex;min-height:0;flex-direction:column;gap:8px;color:var(--oxr-color-text);' +
       'font:13px/1.35 system-ui,sans-serif;';
 
     const heading = document.createElement('h2');
@@ -181,7 +181,7 @@ export class ObjectsPanel {
     const searchLabel = document.createElement('label');
     searchLabel.htmlFor = `orcaxr-objects-search-${this.instanceId}`;
     searchLabel.textContent = t('ui.objectsPanel.searchObjects', 'Search objects');
-    searchLabel.style.cssText = 'font-size:12px;color:var(--oxr-color-text-muted,#a0aab5);';
+    searchLabel.style.cssText = 'font-size:12px;color:var(--oxr-color-text-muted);';
     root.appendChild(searchLabel);
 
     const search = document.createElement('input');
@@ -192,7 +192,7 @@ export class ObjectsPanel {
     search.setAttribute('autocomplete', 'off');
     search.setAttribute('aria-controls', `orcaxr-objects-tree-${this.instanceId}`);
     search.style.cssText =
-      'box-sizing:border-box;width:100%;border:1px solid var(--oxr-color-stroke,#ffffff2b);' +
+      'box-sizing:border-box;width:100%;border:1px solid var(--oxr-color-stroke);' +
       'border-radius:7px;background:var(--oxr-color-bg-sunken,#0006);color:inherit;padding:7px 9px;';
     search.addEventListener('input', () => {
       this.filterQuery = search.value;
@@ -212,7 +212,7 @@ export class ObjectsPanel {
     status.id = `orcaxr-objects-status-${this.instanceId}`;
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
-    status.style.cssText = 'min-height:1.35em;font-size:12px;color:var(--oxr-color-text-muted,#a0aab5);';
+    status.style.cssText = 'min-height:1.35em;font-size:12px;color:var(--oxr-color-text-muted);';
     root.appendChild(status);
 
     const tree = document.createElement('div');
@@ -224,7 +224,7 @@ export class ObjectsPanel {
     tree.setAttribute('aria-describedby', status.id);
     tree.style.cssText =
       `position:relative;box-sizing:border-box;height:${this.viewportHeightPx}px;min-height:80px;overflow:auto;` +
-      'border:1px solid var(--oxr-color-stroke,#ffffff1f);border-radius:8px;' +
+      'border:1px solid var(--oxr-color-stroke);border-radius:8px;' +
       'background:var(--oxr-color-bg-sunken,#0003);outline:none;';
     tree.addEventListener('scroll', () => {
       if (!this.rendering) this.renderRows({ adoptVisibleFocus: true });
@@ -469,7 +469,7 @@ export class ObjectsPanel {
     input.dataset.objectsRenameInput = 'true';
     input.setAttribute('aria-label', `New name for ${row.label}`);
     input.style.cssText =
-      'box-sizing:border-box;min-width:80px;flex:1;border:1px solid var(--oxr-color-accent,#ffb74d);' +
+      'box-sizing:border-box;min-width:80px;flex:1;border:1px solid var(--oxr-color-accent);' +
       'border-radius:5px;background:var(--oxr-color-bg-sunken,#0008);color:inherit;padding:4px 6px;';
     input.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return;
@@ -516,8 +516,8 @@ export class ObjectsPanel {
     button.textContent = text;
     button.setAttribute('aria-label', label);
     button.style.cssText =
-      'min-width:44px;height:40px;border:1px solid var(--oxr-color-stroke,#ffffff2b);border-radius:5px;' +
-      'background:var(--oxr-color-surface,#ffffff14);color:inherit;padding:2px 6px;font-size:11px;';
+      'min-width:44px;height:40px;border:1px solid var(--oxr-color-stroke);border-radius:5px;' +
+      'background:var(--oxr-color-surface);color:inherit;padding:2px 6px;font-size:11px;';
     return button;
   }
 
@@ -544,7 +544,7 @@ export class ObjectsPanel {
     indicator.title = labels.join(', ');
     indicator.style.cssText =
       'max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' +
-      'color:var(--oxr-color-text-muted,#a0aab5);font-size:11px;';
+      'color:var(--oxr-color-text-muted);font-size:11px;';
     item.appendChild(indicator);
   }
 

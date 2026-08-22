@@ -32,12 +32,18 @@ import { launchBrowser, openReadyPage, startPreview } from './preview-harness.mj
  */
 const CRITICAL = [
   { name: 'primary bar', selector: '#action-panel button' },
-  { name: 'tool rail', selector: '#left-toolbar button .tool-label' },
   { name: 'menu triggers', selector: '#menu-bar-host .menu-trigger' },
   { name: 'menu items', selector: '#menu-bar-host .menu-dropdown button' },
-  { name: 'stage bar', selector: '#stage-bar button' },
+  { name: 'workspace tabs', selector: '#view-tabs button' },
+  { name: 'print actions', selector: '#print-actions button' },
+  { name: 'sidebar cards', selector: '#param-scroll .card-head h2' },
+  { name: 'field labels', selector: '#param-scroll .field-row .field-label' },
   { name: 'calibration grid', selector: '#calibration-grid button' },
 ];
+
+// The model toolbar is deliberately absent: it is icons, and its labels are
+// the accessible name rather than anything drawn. A geometric check there
+// would measure a clipped 1px box and report every tool as truncated.
 
 /**
  * The minimum this run must actually look at.
@@ -99,17 +105,17 @@ try {
   // A layout that declares `dir="rtl"` and lays out identically has not
   // mirrored, it has only changed an attribute. The evidence is the *same*
   // element measured in both directions rather than two elements compared in
-  // one: the inspector is anchored to the inline end, so it must cross the
-  // midline. Comparing two elements would pass silently whenever one of them is
-  // hidden, which the tool rail is until a model is loaded.
+  // one: the parameter sidebar is anchored to the inline start, so it must
+  // cross the midline. Comparing two elements would pass silently whenever one
+  // of them is hidden.
   const mirroredInspector = await inspectorCentre(page);
   assert.ok(
     englishInspector !== null && mirroredInspector !== null,
     'the inspector must be on screen in both directions for the mirror check to mean anything',
   );
   assert.ok(
-    englishInspector > viewportWidth / 2 && mirroredInspector < viewportWidth / 2,
-    `dir=rtl did not mirror the layout: the inspector sits at ${Math.round(englishInspector)}px in English and ` +
+    englishInspector < viewportWidth / 2 && mirroredInspector > viewportWidth / 2,
+    `dir=rtl did not mirror the layout: the sidebar sits at ${Math.round(englishInspector)}px in English and ` +
       `${Math.round(mirroredInspector)}px mirrored, in a ${viewportWidth}px viewport`,
   );
 
@@ -150,6 +156,14 @@ async function revealChrome(page) {
     // twenty-nine controls because the plate was empty would be reporting
     // coverage it did not have.
     globalThis.document.getElementById('ui-container')?.classList.remove('no-model');
+    // A folded sidebar card and a hidden page have no layout, so every one is
+    // opened: a label clips the same way whether or not its card happened to be
+    // open, and the Project page holds the calibration grid.
+    for (const card of globalThis.document.querySelectorAll('.oxr-card')) {
+      card.classList.remove('folded');
+      card.hidden = false;
+    }
+    for (const page of globalThis.document.querySelectorAll('.workspace-page')) page.hidden = false;
     // The inspector shows one tab at a time; the rest are `hidden`. Every panel
     // is measured rather than only the open one, because a label clips the same
     // way whether or not its tab happened to be selected at boot.
@@ -190,13 +204,13 @@ async function openMenus(page) {
 }
 
 /**
- * Where the inspector's midpoint sits. It is anchored to the inline end, so
- * this is the one number that says whether the layout mirrored rather than
- * merely relabelled itself.
+ * Where the parameter sidebar's midpoint sits. It is anchored to the inline
+ * START, so this is the one number that says whether the layout mirrored
+ * rather than merely relabelled itself.
  */
 function inspectorCentre(page) {
   return page.evaluate(() => {
-    const element = globalThis.document.querySelector('#inspector-scroll');
+    const element = globalThis.document.querySelector('#param-scroll');
     if (!element) return null;
     const rect = element.getBoundingClientRect();
     return rect.width === 0 ? null : rect.left + rect.width / 2;

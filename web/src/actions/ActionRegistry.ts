@@ -576,7 +576,14 @@ function prerequisitesFor(action: ActionDefinition): PrerequisiteId[] {
  * a menu, but the panel that configures them carries the same action as a
  * button; without the extra surface that button would be silently hidden.
  */
-const INSPECTOR_MIRRORED = new Set(['send_to_printer', 'view_webcam']);
+const INSPECTOR_MIRRORED = new Set([
+  'send_to_printer',
+  'view_webcam',
+  // The Project page carries Open and Save beside what they act on, the way
+  // upstream's Project tab does. Same action, second place to reach it.
+  'file_open_project',
+  'file_save_project',
+]);
 
 function surfacesFor(action: ActionDefinition): ActionSurface[] {
   const surfaces: ActionSurface[] = ['command-palette'];

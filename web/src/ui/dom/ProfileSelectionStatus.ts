@@ -55,11 +55,13 @@ export function renderProfileSelectionStatus(target: HTMLElement, input: Profile
 
 function applyStatusStyle(target: HTMLElement, severity: ProfileSelectionStatusFeedback['severity']): void {
   const colors = {
-    info: 'var(--oxr-color-text-muted,#a0aab5)',
-    warning: '#ffcc80',
-    error: '#ffb4ab',
+    info: 'var(--oxr-text-muted)',
+    warning: 'var(--oxr-warn)',
+    error: 'var(--oxr-danger)',
   } as const;
+  // A full-width note under the pickers it describes, not a column beside them:
+  // it is a sentence, and a sentence in a 90px gutter is a stack of syllables.
   target.style.cssText =
-    `margin:0;padding:7px 8px;border-radius:7px;font-size:11.5px;line-height:1.4;color:${colors[severity]};` +
-    'background:rgba(255,255,255,0.04);';
+    `flex:1 0 100%;margin:0;padding:6px 7px;border-radius:var(--radius-sm);font-size:11.5px;` +
+    `line-height:1.4;color:${colors[severity]};background:var(--oxr-bg-sunken);`;
 }

@@ -107,7 +107,7 @@ export class PresetLibraryPanel {
     const editor = doc.createElement('div');
     editor.dataset.presetLibraryEditor = 'true';
     editor.style.cssText =
-      'display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:8px;background:#ffffff0d;';
+      'display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:8px;background:var(--oxr-surface);';
     root.appendChild(editor);
 
     root.appendChild(this.buildHeading(doc, 'Move this setup'));
@@ -234,7 +234,7 @@ export class PresetLibraryPanel {
       const row = doc.createElement('div');
       row.dataset.presetLibraryPreset = `${preset.kind}/${preset.name}`;
       row.style.cssText =
-        'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:#ffffff0d;';
+        'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:var(--oxr-surface);';
 
       const text = doc.createElement('div');
       text.style.cssText = 'flex:1;display:flex;flex-direction:column;gap:2px;';
@@ -503,7 +503,7 @@ export class PresetLibraryPanel {
       const row = doc.createElement('li');
       row.dataset.presetLibraryIssue = issue.code;
       row.textContent = issue.message;
-      row.style.cssText = `font-size:11px;color:${issue.severity === 'error' ? '#ff8a80' : '#ffb74d'};`;
+      row.style.cssText = `font-size:11px;color:${issue.severity === 'error' ? 'var(--oxr-danger)' : 'var(--oxr-warn)'};`;
       host.appendChild(row);
     }
   }

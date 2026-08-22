@@ -58,7 +58,7 @@ export class FilamentAssignmentSelector {
     root.dataset.filamentAssignmentSelector = 'true';
     root.setAttribute('aria-labelledby', `orcaxr-filament-assignment-heading-${this.instanceId}`);
     root.style.cssText =
-      'display:flex;min-width:0;flex-direction:column;gap:10px;color:var(--oxr-color-text,#fff);' +
+      'display:flex;min-width:0;flex-direction:column;gap:10px;color:var(--oxr-color-text);' +
       'font:13px/1.4 system-ui,sans-serif;';
     this.container.replaceChildren(root);
     this.root = root;
@@ -112,7 +112,7 @@ export class FilamentAssignmentSelector {
         snapshot.unsupportedSelection.length === 1 ? '' : 's'
       } cannot receive a filament assignment. Adjust the selection before applying.`;
       warning.style.cssText =
-        'margin:0;padding:8px;border:1px solid #ef535066;border-radius:7px;background:#7f1d1d35;color:#ffd9d7;';
+        'margin:0;padding:8px;border:1px solid var(--oxr-danger);border-radius:7px;background:var(--oxr-danger-surface);color:var(--oxr-danger);';
       fragment.appendChild(warning);
     } else if (snapshot.scopes.length === 0) {
       const empty = document.createElement('p');
@@ -121,7 +121,7 @@ export class FilamentAssignmentSelector {
         'ui.filamentAssignmentSelector.selectOneOrMoreObjects',
         'Select one or more objects, parts, or height ranges to assign a filament.',
       );
-      empty.style.cssText = 'margin:0;color:var(--oxr-color-text-muted,#a0aab5);';
+      empty.style.cssText = 'margin:0;color:var(--oxr-color-text-muted);';
       fragment.appendChild(empty);
     }
 
@@ -129,7 +129,7 @@ export class FilamentAssignmentSelector {
     fieldset.disabled = blocked || this.applying;
     fieldset.setAttribute('aria-describedby', scopeSummary.id);
     fieldset.style.cssText =
-      'display:grid;gap:8px;margin:0;padding:10px;border:1px solid var(--oxr-color-stroke,#ffffff2b);' +
+      'display:grid;gap:8px;margin:0;padding:10px;border:1px solid var(--oxr-color-stroke);' +
       'border-radius:8px;min-width:0;';
     const legend = document.createElement('legend');
     legend.textContent = t('ui.filamentAssignmentSelector.chooseAssignment', 'Choose assignment');
@@ -150,7 +150,7 @@ export class FilamentAssignmentSelector {
     status.setAttribute('role', this.errorMessage ? 'alert' : 'status');
     status.setAttribute('aria-live', 'polite');
     status.style.cssText = `margin:0;min-height:1.4em;color:${
-      this.errorMessage ? '#ffb4ab' : 'var(--oxr-color-text-muted,#a0aab5)'
+      this.errorMessage ? 'var(--oxr-danger)' : 'var(--oxr-color-text-muted,var(--oxr-text-muted))'
     };`;
     fragment.appendChild(status);
     this.choiceStatus = status;
@@ -160,7 +160,7 @@ export class FilamentAssignmentSelector {
     apply.dataset.filamentAssignmentApply = 'true';
     apply.textContent = this.applying ? 'Applying…' : 'Apply to selection';
     apply.style.cssText =
-      'align-self:flex-end;border:0;border-radius:7px;background:var(--oxr-color-accent,#ffb74d);' +
+      'align-self:flex-end;border:0;border-radius:7px;background:var(--oxr-color-accent);' +
       'color:var(--oxr-color-on-accent,#17120b);padding:8px 13px;font-weight:700;';
     apply.addEventListener('click', () => void this.apply());
     fragment.appendChild(apply);
@@ -220,7 +220,7 @@ export class FilamentAssignmentSelector {
     detail.textContent = snapshot.scopes.some((scope) => scope.entity.kind === 'object')
       ? 'Remove local assignments. Objects return to no explicit default; child scopes inherit their object.'
       : 'Remove local assignments so every selected scope inherits its object default.';
-    detail.style.cssText = 'display:block;color:var(--oxr-color-text-muted,#a0aab5);font-size:12px;';
+    detail.style.cssText = 'display:block;color:var(--oxr-color-text-muted);font-size:12px;';
     copy.append(name, detail);
     label.appendChild(copy);
     return label;
@@ -235,13 +235,13 @@ export class FilamentAssignmentSelector {
     title.textContent = titleText;
     title.style.cssText =
       'margin:5px 0 2px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;' +
-      'color:var(--oxr-color-text-muted,#a0aab5);';
+      'color:var(--oxr-color-text-muted);';
     group.setAttribute('aria-labelledby', title.id);
     group.appendChild(title);
     if (options.length === 0) {
       const empty = document.createElement('p');
       empty.textContent = t('ui.filamentAssignmentSelector.noConfiguredOptions', 'No configured options.');
-      empty.style.cssText = 'margin:0;color:var(--oxr-color-text-muted,#a0aab5);';
+      empty.style.cssText = 'margin:0;color:var(--oxr-color-text-muted);';
       group.appendChild(empty);
       return group;
     }
@@ -288,16 +288,16 @@ export class FilamentAssignmentSelector {
     copy.appendChild(name);
     const badge = document.createElement('span');
     badge.textContent = optionBadge(option);
-    badge.style.cssText = 'display:block;color:var(--oxr-color-text-muted,#a0aab5);font-size:12px;';
+    badge.style.cssText = 'display:block;color:var(--oxr-color-text-muted);font-size:12px;';
     copy.appendChild(badge);
     const metadata = document.createElement('span');
     metadata.textContent = optionMetadata(option);
-    metadata.style.cssText = 'display:block;color:var(--oxr-color-text-muted,#a0aab5);font-size:11px;';
+    metadata.style.cssText = 'display:block;color:var(--oxr-color-text-muted);font-size:11px;';
     copy.appendChild(metadata);
     const stableId = document.createElement('code');
     stableId.textContent = option.id;
     stableId.style.cssText =
-      'display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--oxr-color-text-muted,#a0aab5);font-size:10px;';
+      'display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--oxr-color-text-muted);font-size:10px;';
     copy.appendChild(stableId);
     if (option.recipe.length > 0) {
       const recipe = document.createElement('span');
@@ -315,7 +315,7 @@ export class FilamentAssignmentSelector {
     if (option.warnings.length > 0) {
       const warnings = document.createElement('ul');
       warnings.dataset.filamentWarnings = 'true';
-      warnings.style.cssText = 'margin:3px 0 0;padding-inline-start:17px;color:#ffd18b;font-size:11px;';
+      warnings.style.cssText = 'margin:3px 0 0;padding-inline-start:17px;color:var(--oxr-warn);font-size:11px;';
       for (const warning of option.warnings) {
         const item = document.createElement('li');
         item.textContent = warning;
@@ -341,7 +341,7 @@ export class FilamentAssignmentSelector {
     button.style.opacity = button.disabled ? '0.55' : '1';
     button.textContent = this.applying ? 'Applying…' : 'Apply to selection';
     status.setAttribute('role', this.errorMessage ? 'alert' : 'status');
-    status.style.color = this.errorMessage ? '#ffb4ab' : 'var(--oxr-color-text-muted,#a0aab5)';
+    status.style.color = this.errorMessage ? 'var(--oxr-danger)' : 'var(--oxr-color-text-muted,var(--oxr-text-muted))';
     for (const label of this.root?.querySelectorAll<HTMLElement>('[data-filament-assignment-option]') ?? []) {
       const id = label.dataset.filamentId;
       const selected = id ? this.pendingChoice === id : this.pendingChoice === null;
@@ -443,8 +443,8 @@ function formatRecipe(option: CanonicalFilamentOption): string {
 function optionCardStyle(selected: boolean, disabled: boolean): string {
   return (
     'display:flex;align-items:flex-start;gap:8px;padding:8px;border-radius:7px;border:1px solid ' +
-    `${selected ? 'var(--oxr-color-accent,#ffb74d)' : 'var(--oxr-color-stroke,#ffffff1f)'};` +
-    `background:${selected ? 'var(--oxr-color-selection,#ffb74d22)' : 'var(--oxr-color-surface,#ffffff0a)'};` +
+    `${selected ? 'var(--oxr-color-accent,var(--oxr-warn))' : 'var(--oxr-color-stroke,var(--oxr-stroke))'};` +
+    `background:${selected ? 'var(--oxr-color-selection,var(--oxr-warn))' : 'var(--oxr-color-surface,var(--oxr-surface))'};` +
     `opacity:${disabled ? '0.62' : '1'};cursor:${disabled ? 'not-allowed' : 'pointer'};`
   );
 }

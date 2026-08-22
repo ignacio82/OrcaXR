@@ -610,6 +610,10 @@ test('composition root injects one registry into the workspace and DOM shell', (
     'utf8',
   );
   const domShellSource = readFileSync(fileURLToPath(new URL('../../ui/dom/DomShell.ts', import.meta.url)), 'utf8');
+  const workspaceViewsSource = readFileSync(
+    fileURLToPath(new URL('../../ui/dom/WorkspaceViews.ts', import.meta.url)),
+    'utf8',
+  );
   const workspaceToolsSource = readFileSync(
     fileURLToPath(new URL('../../mcp/WorkspaceTools.ts', import.meta.url)),
     'utf8',
@@ -649,12 +653,18 @@ test('composition root injects one registry into the workspace and DOM shell', (
   assert.doesNotMatch(workspaceToolsSource, /workspace\.setTool\(/);
   assert.match(workspaceToolsSource, /registry\.invoke\(actionId, 'automation'/);
   assert.doesNotMatch(domShellSource, /ctx\.setMode\(/);
-  // The header stage bar is presentation only: every step it offers runs the
-  // shared registry action for that step, on a declared surface.
-  assert.match(domShellSource, /this\.runById\('toggle_preview', 'dom-primary'\)/);
-  assert.match(domShellSource, /actionId: 'slice_active_plate', surface: 'dom-primary'/);
-  assert.match(domShellSource, /actionId: 'toggle_preview', surface: 'dom-primary'/);
-  assert.match(domShellSource, /actionId: 'send_to_printer', surface: 'dom-inspector'/);
+  // The header is presentation only: `Slice plate` and `Print` run the shared
+  // registry action for that step on a declared surface, and the Prepare /
+  // Preview tabs run the same `toggle_preview` the menu and keyboard run. A
+  // tab that changed the mode itself would be a second slice-workflow path.
+  assert.match(domShellSource, /id: 'slice_active_plate', surface: 'dom-primary'/);
+  assert.match(domShellSource, /id: 'send_to_printer', surface: 'dom-inspector'/);
+  assert.doesNotMatch(workspaceViewsSource, /ctx\.setMode\(|workspace\.[A-Za-z]+\(/);
+  assert.match(workspaceViewsSource, /this\.invoke\('toggle_preview'\)/);
+  assert.match(
+    mainSource,
+    /new WorkspaceViews\([\s\S]*?registry\s*\n?\s*\.invoke\(actionId, 'dom-primary', actionCtx, uiState\.get\(\)\)/,
+  );
   assert.match(workspaceSource, /\.invoke\('load_model_from_path', 'xr-primary'/);
 });
 

@@ -58,7 +58,7 @@ const CHANNELS: readonly {
     label: 'Support',
     states: [
       { value: 'enforce', label: 'Enforce support', color: '#39d353' },
-      { value: 'block', label: 'Block support', color: '#f85149' },
+      { value: 'block', label: 'Block support', color: 'var(--oxr-danger)' },
     ],
   },
   {
@@ -66,7 +66,7 @@ const CHANNELS: readonly {
     label: 'Seam',
     states: [
       { value: 'prefer', label: 'Prefer seam', color: '#58a6ff' },
-      { value: 'avoid', label: 'Avoid seam', color: '#ff9f43' },
+      { value: 'avoid', label: 'Avoid seam', color: 'var(--oxr-warn)' },
     ],
   },
   { channel: 'fuzzySkin', label: 'Fuzzy skin', states: [{ value: true, label: 'Fuzzy surface', color: '#bc8cff' }] },
@@ -97,7 +97,7 @@ export class PaintPanel {
     root.dataset.paintPanel = 'true';
     root.setAttribute('aria-labelledby', `orcaxr-paint-heading-${this.instanceId}`);
     root.style.cssText =
-      'display:flex;min-width:0;flex-direction:column;gap:10px;color:var(--oxr-color-text,#fff);' +
+      'display:flex;min-width:0;flex-direction:column;gap:10px;color:var(--oxr-color-text);' +
       'font:13px/1.4 system-ui,sans-serif;';
     this.container.replaceChildren(root);
     this.root = root;
@@ -274,8 +274,8 @@ export class PaintPanel {
     button.setAttribute('aria-label', entry.keyboardNumber ? `${label} (key ${entry.keyboardNumber})` : label);
     button.style.cssText =
       'display:flex;align-items:center;gap:6px;min-height:44px;padding:6px 10px;border-radius:8px;cursor:pointer;' +
-      `border:2px solid ${selected ? 'var(--oxr-color-accent,#4fc3f7)' : 'rgba(255,255,255,0.24)'};` +
-      `background:rgba(255,255,255,${entry.selectable ? 0.06 : 0.02});color:inherit;` +
+      `border:2px solid ${selected ? 'var(--oxr-color-accent)' : 'var(--oxr-stroke)'};` +
+      `background:${entry.selectable ? 'var(--oxr-surface)' : 'var(--oxr-surface-disabled)'};color:inherit;` +
       `opacity:${entry.selectable ? 1 : 0.55};`;
 
     const swatch = document.createElement('span');
@@ -439,7 +439,7 @@ export class PaintPanel {
 function buttonStyle(selected: boolean): string {
   return (
     'min-height:44px;padding:8px 12px;border-radius:8px;cursor:pointer;color:inherit;' +
-    `border:2px solid ${selected ? 'var(--oxr-color-accent,#4fc3f7)' : 'rgba(255,255,255,0.24)'};` +
-    `background:rgba(255,255,255,${selected ? 0.12 : 0.06});`
+    `border:2px solid ${selected ? 'var(--oxr-color-accent)' : 'var(--oxr-stroke)'};` +
+    `background:${selected ? 'var(--oxr-surface-hover)' : 'var(--oxr-surface)'};`
   );
 }

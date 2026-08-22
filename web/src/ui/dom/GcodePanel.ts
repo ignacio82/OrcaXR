@@ -94,8 +94,8 @@ export class GcodePanel {
     search.value = this.query;
     search.placeholder = t('ui.gcodePanel.findACommand', 'Find a command');
     search.style.cssText =
-      'flex:1 1 160px;padding:6px;border-radius:6px;border:1px solid var(--oxr-color-border,#30363d);' +
-      'background:var(--oxr-color-surface,#0d1117);color:inherit;font:inherit;';
+      'flex:1 1 160px;padding:6px;border-radius:6px;border:1px solid var(--oxr-stroke);' +
+      'background:var(--oxr-color-surface);color:inherit;font:inherit;';
     search.addEventListener('input', () => this.runSearch(search.value, state.document!));
 
     const label = doc.createElement('label');
@@ -139,7 +139,7 @@ export class GcodePanel {
     this.scroller.setAttribute('aria-label', t('ui.gcodePanel.gCodeListing', 'G-code listing'));
     this.scroller.style.cssText =
       'overflow:auto;max-height:340px;min-height:120px;border-radius:6px;' +
-      'border:1px solid var(--oxr-color-border,#30363d);background:var(--oxr-color-surface,#0d1117);';
+      'border:1px solid var(--oxr-stroke);background:var(--oxr-color-surface);';
     this.scroller.appendChild(this.spacer);
     this.scroller.addEventListener('scroll', () => this.renderWindow(state.document!));
 

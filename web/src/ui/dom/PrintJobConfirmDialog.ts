@@ -30,8 +30,8 @@ export function askPrintJobConfirmation(input: PrintJobConfirmInput): Promise<bo
   dialog.setAttribute('aria-labelledby', 'orcaxr-print-job-confirm-title');
   dialog.setAttribute('aria-describedby', 'orcaxr-print-job-confirm-body');
   dialog.style.cssText =
-    'max-width:460px;width:100%;background:var(--oxr-color-bg-card,#161a20);color:var(--oxr-color-text,#fff);' +
-    'border:1px solid var(--oxr-color-stroke,#2a3038);border-radius:12px;padding:20px;' +
+    'max-width:460px;width:100%;background:var(--oxr-color-bg-card);color:var(--oxr-color-text);' +
+    'border:1px solid var(--oxr-color-stroke);border-radius:12px;padding:20px;' +
     'font:14px/1.5 system-ui,sans-serif;display:flex;flex-direction:column;gap:12px;';
 
   const title = document.createElement('h2');
@@ -65,7 +65,7 @@ export function askPrintJobConfirmation(input: PrintJobConfirmInput): Promise<bo
     button.textContent = label;
     button.style.cssText =
       'min-height:44px;padding:10px 14px;border-radius:8px;cursor:pointer;color:inherit;' +
-      `border:1px solid ${choice === 'confirm' ? 'rgba(255,107,107,0.75)' : 'rgba(255,255,255,0.24)'};` +
+      `border:1px solid ${choice === 'confirm' ? 'rgba(255,107,107,0.75)' : 'var(--oxr-stroke)'};` +
       `background:rgba(${choice === 'confirm' ? '255,107,107' : '255,255,255'},${choice === 'confirm' ? 0.16 : 0.06});`;
     button.onclick = () => finish(choice === 'confirm');
     return button;

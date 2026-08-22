@@ -153,6 +153,10 @@ export class ScopedSettingsPanel {
     for (const option of listed) {
       const element = doc.createElement('option');
       element.value = option.id;
+      // The scope is on the option so a caller can pick a target by kind — the
+      // sidebar's Global / Objects switch chooses "the project" or "an object"
+      // without having to parse the label it renders.
+      element.dataset.scope = option.scope;
       const overrides =
         option.overrideCount === 0 ? '' : ` — ${option.overrideCount} override${option.overrideCount === 1 ? '' : 's'}`;
       element.textContent = `${SCOPE_LABEL[option.scope]}: ${option.path}${overrides}`;

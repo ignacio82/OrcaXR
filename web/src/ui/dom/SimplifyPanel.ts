@@ -189,8 +189,8 @@ export class SimplifyPanel {
     input.value = `${value}`;
     input.disabled = disabled;
     input.style.cssText =
-      'width:90px;padding:6px;border-radius:6px;border:1px solid var(--oxr-color-border,#30363d);' +
-      'background:var(--oxr-color-surface,#0d1117);color:inherit;font:inherit;';
+      'width:90px;padding:6px;border-radius:6px;border:1px solid var(--oxr-stroke);' +
+      'background:var(--oxr-color-surface);color:inherit;font:inherit;';
     input.addEventListener('change', () => {
       const next = Number(input.value);
       if (Number.isFinite(next)) onChange(next);

@@ -88,7 +88,7 @@ export class GcodePreviewPanel {
     root.dataset.gcodePreviewPanel = 'true';
     root.setAttribute('aria-labelledby', `orcaxr-preview-heading-${this.instanceId}`);
     root.style.cssText =
-      'display:flex;min-width:0;flex-direction:column;gap:10px;color:var(--oxr-color-text,#fff);' +
+      'display:flex;min-width:0;flex-direction:column;gap:10px;color:var(--oxr-color-text);' +
       'font:13px/1.4 system-ui,sans-serif;';
     this.container.replaceChildren(root);
     this.root = root;
@@ -154,7 +154,7 @@ export class GcodePreviewPanel {
       const unsupported = document.createElement('p');
       unsupported.dataset.previewUnsupported = 'true';
       unsupported.setAttribute('role', 'status');
-      unsupported.style.cssText = 'margin:0;color:var(--oxr-color-warning,#ffb74d);';
+      unsupported.style.cssText = 'margin:0;color:var(--oxr-warn);';
       unsupported.textContent = state.unsupportedReason;
       root.append(unsupported);
     }
@@ -303,7 +303,7 @@ export class GcodePreviewPanel {
           swatch.setAttribute('aria-hidden', 'true');
           swatch.style.cssText =
             `width:10px;height:10px;border-radius:2px;background:${tool.colorHex};` +
-            'border:1px solid rgba(255,255,255,0.35);flex:none;';
+            'border:1px solid var(--oxr-stroke-strong);flex:none;';
           item.append(swatch);
         }
         const text = document.createElement('span');
@@ -464,8 +464,8 @@ export class GcodePreviewPanel {
 function controlStyle(selected: boolean): string {
   return (
     'min-height:44px;padding:8px 12px;border-radius:8px;cursor:pointer;color:inherit;' +
-    `border:2px solid ${selected ? 'var(--oxr-color-accent,#4fc3f7)' : 'rgba(255,255,255,0.24)'};` +
-    `background:rgba(255,255,255,${selected ? 0.12 : 0.06});`
+    `border:2px solid ${selected ? 'var(--oxr-color-accent)' : 'var(--oxr-stroke)'};` +
+    `background:${selected ? 'var(--oxr-surface-hover)' : 'var(--oxr-surface)'};`
   );
 }
 

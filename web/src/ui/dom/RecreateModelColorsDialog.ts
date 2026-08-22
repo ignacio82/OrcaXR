@@ -34,8 +34,8 @@ export function askRecreateModelColors(
   dialog.setAttribute('aria-labelledby', 'orcaxr-recreate-colors-title');
   dialog.setAttribute('aria-describedby', 'orcaxr-recreate-colors-desc');
   dialog.style.cssText =
-    'max-width:620px;width:100%;max-height:85vh;background:var(--oxr-color-bg-card,#161a20);' +
-    'color:var(--oxr-color-text,#fff);border:1px solid var(--oxr-color-stroke,#2a3038);' +
+    'max-width:620px;width:100%;max-height:85vh;background:var(--oxr-color-bg-card);' +
+    'color:var(--oxr-color-text);border:1px solid var(--oxr-color-stroke);' +
     'border-radius:12px;padding:20px;font:14px/1.5 system-ui,sans-serif;display:flex;' +
     'flex-direction:column;gap:14px;box-sizing:border-box;overflow:hidden;';
 
@@ -50,12 +50,12 @@ export function askRecreateModelColors(
     'dialog.recreateModelColors.description',
     'Match colors from the current model to the closest available physical filaments or synthesize Full-Spectrum dithering recipes.',
   );
-  desc.style.cssText = 'margin:0;color:var(--oxr-text-muted,#99a1af);font-size:12px;';
+  desc.style.cssText = 'margin:0;color:var(--oxr-text-muted);font-size:12px;';
 
   const tableContainer = document.createElement('div');
   tableContainer.style.cssText =
-    'flex:1;overflow-y:auto;border:1px solid var(--oxr-color-stroke,#2a3038);' +
-    'border-radius:8px;background:rgba(0,0,0,0.2);padding:8px;display:flex;flex-direction:column;gap:8px;';
+    'flex:1;overflow-y:auto;border:1px solid var(--oxr-color-stroke);' +
+    'border-radius:8px;background:var(--oxr-bg-sunken);padding:8px;display:flex;flex-direction:column;gap:8px;';
 
   const overrides = new Map<string, FilamentId>();
 
@@ -63,14 +63,14 @@ export function askRecreateModelColors(
     const row = document.createElement('div');
     row.style.cssText =
       'display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;' +
-      'background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);box-sizing:border-box;';
+      'background:var(--oxr-surface);border:1px solid var(--oxr-surface);box-sizing:border-box;';
 
     // Source color swatch & info
     const sourceCol = document.createElement('div');
     sourceCol.style.cssText = 'display:flex;align-items:center;gap:8px;min-width:140px;';
     const sourceSwatch = document.createElement('div');
     sourceSwatch.style.cssText =
-      `width:24px;height:24px;border-radius:4px;border:1px solid rgba(255,255,255,0.3);` +
+      `width:24px;height:24px;border-radius:4px;border:1px solid var(--oxr-stroke-strong);` +
       `background-color:${match.source.color};flex-shrink:0;`;
     const sourceText = document.createElement('div');
     sourceText.style.cssText = 'display:flex;flex-direction:column;';
@@ -83,7 +83,7 @@ export function askRecreateModelColors(
       match.source.sampleNames[0] ??
       t('dialog.recreateModelColors.refsCount', '{count} refs', { count: match.source.usageCount });
     sourceSample.style.cssText =
-      'font-size:10px;color:var(--oxr-text-muted,#99a1af);max-width:100px;' +
+      'font-size:10px;color:var(--oxr-text-muted);max-width:100px;' +
       'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
     sourceText.append(sourceHex, sourceSample);
     sourceCol.append(sourceSwatch, sourceText);
@@ -91,14 +91,14 @@ export function askRecreateModelColors(
     // Arrow
     const arrow = document.createElement('span');
     arrow.textContent = '→';
-    arrow.style.cssText = 'color:var(--oxr-text-muted,#99a1af);font-size:16px;flex-shrink:0;';
+    arrow.style.cssText = 'color:var(--oxr-text-muted);font-size:16px;flex-shrink:0;';
 
     // Destination color swatch & details
     const destCol = document.createElement('div');
     destCol.style.cssText = 'display:flex;align-items:center;gap:8px;flex:1;min-width:0;';
     const destSwatch = document.createElement('div');
     destSwatch.style.cssText =
-      `width:24px;height:24px;border-radius:4px;border:1px solid rgba(255,255,255,0.3);` +
+      `width:24px;height:24px;border-radius:4px;border:1px solid var(--oxr-stroke-strong);` +
       `background-color:${match.destination.displayColor};flex-shrink:0;`;
 
     const destSelect = document.createElement('select');
@@ -107,8 +107,8 @@ export function askRecreateModelColors(
       t('dialog.recreateModelColors.destAria', 'Destination for {color}', { color: match.source.color }),
     );
     destSelect.style.cssText =
-      'flex:1;min-width:0;background:rgba(255,255,255,0.06);color:inherit;' +
-      'border:1px solid var(--oxr-color-stroke,#2a3038);border-radius:4px;' +
+      'flex:1;min-width:0;background:var(--oxr-surface);color:inherit;' +
+      'border:1px solid var(--oxr-color-stroke);border-radius:4px;' +
       'padding:4px 6px;font-size:12px;';
 
     // Default option: matched auto destination
@@ -184,7 +184,7 @@ export function askRecreateModelColors(
     'display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-top:4px;';
 
   const summary = document.createElement('span');
-  summary.style.cssText = 'font-size:12px;color:var(--oxr-text-muted,#99a1af);';
+  summary.style.cssText = 'font-size:12px;color:var(--oxr-text-muted);';
   summary.textContent = t(
     'dialog.recreateModelColors.summaryStats',
     'Avg ΔE: {avg} (Max: {max}) across {count} color(s)',
@@ -205,8 +205,8 @@ export function askRecreateModelColors(
     button.textContent = label;
     button.style.cssText =
       'min-height:36px;padding:8px 16px;border-radius:6px;cursor:pointer;color:inherit;font-size:13px;' +
-      `border:1px solid ${isPrimary ? 'var(--oxr-color-accent,#4fc3f7)' : 'rgba(255,255,255,0.24)'};` +
-      `background:rgba(255,255,255,${isPrimary ? 0.16 : 0.06});font-weight:${isPrimary ? 600 : 400};`;
+      `border:1px solid ${isPrimary ? 'var(--oxr-color-accent,var(--oxr-accent))' : 'var(--oxr-stroke)'};` +
+      `background:${isPrimary ? 'var(--oxr-surface-hover)' : 'var(--oxr-surface)'};font-weight:${isPrimary ? 600 : 400};`;
     button.onclick = onAction;
     buttons.push(button);
     return button;

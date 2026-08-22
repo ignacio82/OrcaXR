@@ -50,19 +50,19 @@ export class PrintJobPanel {
 
     const progress = document.createElement('div');
     progress.style.cssText =
-      'height:6px;border-radius:3px;background:rgba(255,255,255,0.12);overflow:hidden;display:none;';
+      'height:6px;border-radius:3px;background:var(--oxr-surface-hover);overflow:hidden;display:none;';
     const bar = document.createElement('div');
     bar.dataset.printJobProgress = 'true';
-    bar.style.cssText = 'height:100%;width:0%;background:var(--oxr-color-accent,#4fc3f7);';
+    bar.style.cssText = 'height:100%;width:0%;background:var(--oxr-color-accent);';
     progress.appendChild(bar);
 
     const progressLabel = document.createElement('p');
     progressLabel.dataset.printJobProgressLabel = 'true';
-    progressLabel.style.cssText = 'margin:0;font-size:11px;color:#a0aab5;';
+    progressLabel.style.cssText = 'margin:0;font-size:11px;color:var(--oxr-text-muted);';
 
     const fields = document.createElement('dl');
     fields.style.cssText =
-      'display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:0;font-size:12px;color:#c7ced6;';
+      'display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:0;font-size:12px;color:var(--oxr-text-muted);';
 
     const controls = document.createElement('div');
     controls.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';

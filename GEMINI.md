@@ -160,30 +160,56 @@ engine (`libslic3r` via WASM) as the computational core.
   leaves the headset flow stranded. Generate shortcut matching and Help rows from registry
   declarations through the strict conflict-rejecting catalog; do not add a second hand-maintained
   shortcut list.
-- The flat shell is a **docked workspace**, not floating panels: `web/index.html`
-  is a header / tool rail / viewport / inspector grid laid over the full-window
-  canvas, and the viewport is a transparent hole so pointer input reaches the
-  renderer. `ui/tokens.ts` is the only source of colour, radius, shadow, type and
-  motion; it emits both the published design-system spelling (`--oxr-surface`,
+- **The flat shell is dressed as the official Snapmaker Orca application**, and
+  its layout is that application's: a menu strip (File · Edit · View · Add ·
+  Tools · Calibration · Help, one dropdown each, plus save/undo/redo), a tab
+  strip (⌂ · Prepare · Preview · Device · Project, with `Slice plate` and
+  `Print` at the inline end), a **parameter sidebar docked to the inline
+  START** (Printer / Filament / Color Mixing / Process / Objects / tools /
+  Preview, as fold-away cards), and the 3D viewport with the model tools
+  floating over its top edge. The viewport is a transparent hole so pointer
+  input reaches the renderer, and the page — not the renderer — paints the wash
+  the plate is seen against (`--oxr-grad-viewport`).
+  `ui/tokens.ts` is the only source of colour, radius, shadow, type and motion;
+  it emits both the published design-system spelling (`--oxr-surface`,
   `--radius-lg`, `--font-sans`, `--shadow-menu`) and the legacy
-  `--oxr-<group>-<key>` form from one table. Never hard-code a hex in the
-  stylesheet, and never add a remote font or stylesheet — the CSP and the offline
-  gate both forbid it, so type stacks name the design family first and fall back
-  to platform faces. `DomShell` renders the rail, the inspector footer's primary
-  bar, the seven-column mega menu, the Prepare → Slice → Preview → Send stage
-  bar, and the Plates tab's calibration grid; every one of them invokes a
-  registry action on a declared surface, so the stage bar is presentation and
-  never a second slice path. `InspectorTabs` owns the six inspector tabs
-  (Objects / Settings / Filament / Preview / Printer / Plates) — a panel on an
-  inactive tab is hidden, so any test or automation that really clicks inside one
-  must select its tab first. `UiState.mode` follows
-  `workspace.onPreviewStateChanged`, because the workspace opens the toolpath
-  preview by itself after a slice; without that the header would read "Prepare"
-  over a visible toolpath. `PreviewScrubber` is a second view of the *same*
-  `GcodePreviewPanelAdapter` the inspector uses and renders nothing the
-  projection did not supply. `main.ts` keeps the camera's `setViewOffset` in step
-  with the viewport rect so the plate is centred in the visible area, and clears
-  it whenever an XR session is presenting.
+  `--oxr-<group>-<key>` form from one table. It now carries **two DOM themes**
+  (`domThemes.light` is the default and what the app boots in; `dark` is an
+  explicit choice, remembered, never negotiated from the OS) while `tokens.color`
+  stays the XR palette — the headset floats over passthrough and keeps the dark,
+  amber identity. `injectTokenCss()` emits light on `:root` and only the delta
+  under `:root[data-theme='dark']`, so a theme switch is one attribute. Never
+  hard-code a hex in the stylesheet or in a panel's inline style, and never add a
+  remote font or stylesheet — the CSP and the offline gate both forbid it, so
+  type stacks name the design family first and fall back to platform faces.
+  Icons are the **same vendored Material SVGs in both shells**: the DOM masks
+  them (`applyIcon`, `hydrateIcons`, `[data-icon]` in markup) so a glyph takes
+  `currentColor`. `domIcon`'s unicode glyphs are a string-only fallback; an
+  element that renders an icon uses the mask.
+  `DomShell` renders the menu bar, the quick actions, the floating model
+  toolbar, the two print buttons, the sidebar footer's primary bar, and the
+  Project page's calibration grid; every one invokes a registry action on a
+  declared surface, so `Slice plate` is presentation and never a second slice
+  path. `WorkspaceViews` owns the four workspace tabs: Prepare and Preview share
+  the sidebar and differ in mode (entering Preview runs the same
+  `toggle_preview` action), while Device and Project are **full pages over the
+  viewport** that leave the mode alone. A folded card and a hidden page both
+  have no layout, so any test or automation that clicks inside one must select
+  its view and unfold its card first (`showInspectorTab` in `e2e-smoke.mjs` does
+  exactly that). `UiState.mode` follows `workspace.onPreviewStateChanged`,
+  because the workspace opens the toolpath preview by itself after a slice;
+  without that the tab strip would read "Prepare" over a visible toolpath.
+  `PreviewScrubber` is a second view of the *same* `GcodePreviewPanelAdapter`
+  the sidebar uses and renders nothing the projection did not supply.
+  `main.ts` keeps the camera's `setViewOffset` in step with the viewport rect so
+  the plate is centred in the visible area, and clears it whenever an XR session
+  is presenting. Three more things are surface-dependent and are all switched in
+  one place (`syncViewportChrome`): the camera's field of view (45° in a window,
+  the runtime's own in a session — 90° through a monitor leaves the plate the
+  size of a stamp), the reticle (an XR aiming cue, hidden behind a mouse), and
+  `OrcaWorkspace.setPlateAppearance` — the plate is a grabbable object with
+  rings and a bar in the headset, and a plain light bed with a quiet grid in the
+  window.
 - Generated settings schema v2 treats the exact pinned `Tab.cpp` inventory as
   layout authority: 21 tabs, 93 groups, and 424 literal placements are fixed
   counts, and every placement retains its full definition-owner binding set.

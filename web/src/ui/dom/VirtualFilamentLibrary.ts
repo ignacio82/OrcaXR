@@ -289,15 +289,15 @@ interface DraftValidation {
 }
 
 const TOUCH_BUTTON_STYLE =
-  'box-sizing:border-box;min-width:44px;min-height:44px;border:1px solid var(--oxr-color-stroke,#ffffff2b);' +
-  'border-radius:7px;background:var(--oxr-color-bg-raised,#ffffff10);color:inherit;padding:8px 11px;' +
+  'box-sizing:border-box;min-width:44px;min-height:44px;border:1px solid var(--oxr-color-stroke);' +
+  'border-radius:7px;background:var(--oxr-surface);color:inherit;padding:8px 11px;' +
   'font:inherit;cursor:pointer;';
 const INPUT_STYLE =
-  'box-sizing:border-box;min-height:44px;width:100%;border:1px solid var(--oxr-color-stroke,#ffffff2b);' +
+  'box-sizing:border-box;min-height:44px;width:100%;border:1px solid var(--oxr-color-stroke);' +
   'border-radius:7px;background:var(--oxr-color-bg-sunken,#0006);color:inherit;padding:8px 10px;font:inherit;';
-const MUTED_STYLE = 'margin:0;color:var(--oxr-color-text-muted,#a0aab5);font-size:12px;';
+const MUTED_STYLE = 'margin:0;color:var(--oxr-color-text-muted);font-size:12px;';
 const PANEL_STYLE =
-  'display:grid;min-width:0;gap:10px;padding:12px;border:1px solid var(--oxr-color-stroke,#ffffff2b);' +
+  'display:grid;min-width:0;gap:10px;padding:12px;border:1px solid var(--oxr-color-stroke);' +
   'border-radius:10px;background:var(--oxr-color-bg-sunken,#0003);';
 const DEFAULT_MATCH_SEARCH_DEBOUNCE_MS = 160;
 
@@ -377,7 +377,7 @@ export class VirtualFilamentLibrary {
     root.dataset.virtualFilamentLibrary = 'true';
     root.setAttribute('aria-labelledby', this.id('heading'));
     root.style.cssText =
-      'display:flex;min-width:0;flex-direction:column;gap:12px;color:var(--oxr-color-text,#fff);' +
+      'display:flex;min-width:0;flex-direction:column;gap:12px;color:var(--oxr-color-text);' +
       'font:13px/1.4 system-ui,sans-serif;';
 
     const header = document.createElement('div');
@@ -409,7 +409,7 @@ export class VirtualFilamentLibrary {
     error.setAttribute('aria-live', 'assertive');
     error.hidden = true;
     error.style.cssText =
-      'margin:0;padding:9px;border:1px solid #ef535066;border-radius:8px;background:#7f1d1d35;color:#ffd9d7;';
+      'margin:0;padding:9px;border:1px solid var(--oxr-danger);border-radius:8px;background:var(--oxr-danger-surface);color:var(--oxr-danger);';
     root.appendChild(error);
 
     const physicalSection = document.createElement('section');
@@ -500,7 +500,7 @@ export class VirtualFilamentLibrary {
     row.dataset.toolId = String(choice.toolId);
     row.style.cssText =
       'display:flex;min-width:0;align-items:center;gap:10px;padding:8px;border:1px solid ' +
-      'var(--oxr-color-stroke,#ffffff2b);border-radius:8px;';
+      'var(--oxr-color-stroke,var(--oxr-stroke-strong));border-radius:8px;';
     row.appendChild(colorSwatch(document, choice.color, `${choice.name} color ${choice.color}`));
     const copy = document.createElement('span');
     copy.style.cssText = 'min-width:0;overflow-wrap:anywhere;';
@@ -524,7 +524,7 @@ export class VirtualFilamentLibrary {
     item.dataset.enabled = String(row.enabled);
     item.style.cssText =
       'display:flex;min-width:0;flex-wrap:wrap;align-items:center;gap:9px;padding:10px;border:1px solid ' +
-      'var(--oxr-color-stroke,#ffffff2b);border-radius:9px;background:var(--oxr-color-bg-raised,#ffffff08);';
+      'var(--oxr-color-stroke,var(--oxr-stroke-strong));border-radius:9px;background:var(--oxr-surface);';
 
     item.appendChild(
       colorSwatch(document, row.draft.displayColor, `${row.draft.name} badge ${row.draft.displayColor}`),
@@ -641,8 +641,8 @@ export class VirtualFilamentLibrary {
     card.setAttribute('aria-describedby', this.id('dialog-description'));
     card.style.cssText =
       'box-sizing:border-box;display:flex;width:min(760px,96vw);max-height:min(880px,94vh);min-width:0;' +
-      'flex-direction:column;gap:12px;overflow:auto;padding:18px;border:1px solid var(--oxr-color-stroke,#ffffff2b);' +
-      'border-radius:12px;background:var(--oxr-color-bg-card,#182028);color:var(--oxr-color-text,#fff);' +
+      'flex-direction:column;gap:12px;overflow:auto;padding:18px;border:1px solid var(--oxr-color-stroke);' +
+      'border-radius:12px;background:var(--oxr-color-bg-card,var(--oxr-bg-elevated));color:var(--oxr-color-text);' +
       'font:13px/1.4 system-ui,sans-serif;box-shadow:0 24px 80px #0009;';
     if (card.tagName === 'FORM') {
       (card as HTMLFormElement).noValidate = true;
@@ -773,7 +773,7 @@ export class VirtualFilamentLibrary {
     modeFieldset.dataset.virtualModeChoices = 'true';
     modeFieldset.style.cssText =
       'display:flex;flex-wrap:wrap;gap:7px;margin:0;padding:9px;border:1px solid ' +
-      'var(--oxr-color-stroke,#ffffff2b);border-radius:8px;';
+      'var(--oxr-color-stroke,var(--oxr-stroke-strong));border-radius:8px;';
     const legend = document.createElement('legend');
     legend.textContent = t('ui.virtualFilamentLibrary.authoringMode', 'Authoring mode');
     legend.style.cssText = 'padding:0 4px;font-weight:700;';
@@ -782,7 +782,7 @@ export class VirtualFilamentLibrary {
       const label = document.createElement('label');
       label.style.cssText =
         'box-sizing:border-box;display:flex;min-height:44px;align-items:center;gap:7px;padding:7px 10px;' +
-        'border:1px solid var(--oxr-color-stroke,#ffffff2b);border-radius:7px;cursor:pointer;';
+        'border:1px solid var(--oxr-color-stroke);border-radius:7px;cursor:pointer;';
       const radio = document.createElement('input');
       radio.type = 'radio';
       radio.name = this.id('mode');
@@ -847,7 +847,7 @@ export class VirtualFilamentLibrary {
     const document = panel.ownerDocument;
     const countFieldset = document.createElement('fieldset');
     countFieldset.style.cssText =
-      'display:flex;flex-wrap:wrap;gap:7px;margin:0;padding:8px;border:1px solid var(--oxr-color-stroke,#ffffff2b);' +
+      'display:flex;flex-wrap:wrap;gap:7px;margin:0;padding:8px;border:1px solid var(--oxr-color-stroke);' +
       'border-radius:8px;';
     const legend = document.createElement('legend');
     legend.textContent = 'Components';
@@ -921,7 +921,7 @@ export class VirtualFilamentLibrary {
       const weights = document.createElement('fieldset');
       weights.style.cssText =
         'display:grid;grid-template-columns:repeat(3,minmax(90px,1fr));gap:8px;margin:0;padding:9px;border:1px solid ' +
-        'var(--oxr-color-stroke,#ffffff2b);border-radius:8px;';
+        'var(--oxr-color-stroke,var(--oxr-stroke-strong));border-radius:8px;';
       const weightsLegend = document.createElement('legend');
       weightsLegend.textContent = t('ui.virtualFilamentLibrary.triangleProportions', 'Triangle proportions');
       weights.appendChild(weightsLegend);
@@ -952,8 +952,8 @@ export class VirtualFilamentLibrary {
     predicted.dataset.virtualRatioPigmentPreview = 'true';
     predicted.setAttribute('role', 'img');
     predicted.style.cssText =
-      'box-sizing:border-box;display:grid;min-height:58px;place-items:center;padding:9px;border:2px solid #fff8;' +
-      'border-radius:9px;background:#555;color:#fff;text-align:center;text-shadow:0 1px 3px #000,0 0 2px #000;';
+      'box-sizing:border-box;display:grid;min-height:58px;place-items:center;padding:9px;border:2px solid var(--oxr-stroke-strong);' +
+      'border-radius:9px;background:#555;color:var(--oxr-text);text-align:center;text-shadow:0 1px 3px #000,0 0 2px #000;';
     panel.appendChild(predicted);
     this.updateRatioPigmentPreview(state, predicted);
   }
@@ -977,7 +977,7 @@ export class VirtualFilamentLibrary {
     svg.setAttribute('aria-valuemax', '100');
     svg.style.cssText =
       'grid-column:1/-1;box-sizing:border-box;width:min(100%,360px);min-height:216px;justify-self:center;' +
-      'touch-action:none;border:1px solid var(--oxr-color-stroke,#ffffff2b);border-radius:9px;background:#0b1118;';
+      'touch-action:none;border:1px solid var(--oxr-color-stroke);border-radius:9px;background:var(--oxr-bg-sunken);';
 
     const vertices = [
       { x: 120, y: 18, label: 'A' },
@@ -986,8 +986,11 @@ export class VirtualFilamentLibrary {
     ] as const;
     const polygon = document.createElementNS(namespace, 'polygon');
     polygon.setAttribute('points', vertices.map((vertex) => `${vertex.x},${vertex.y}`).join(' '));
-    polygon.setAttribute('fill', '#ffffff0D');
-    polygon.setAttribute('stroke', '#ffffff66');
+    // Paint through `style`, not through the presentation attribute: a
+    // presentation attribute is not CSS and does not resolve `var()`, so a
+    // token written there renders as the default black.
+    polygon.style.fill = 'var(--oxr-bg-card)';
+    polygon.style.stroke = 'var(--oxr-stroke-strong)';
     polygon.setAttribute('stroke-width', '2');
     svg.appendChild(polygon);
 
@@ -998,14 +1001,16 @@ export class VirtualFilamentLibrary {
       dot.setAttribute('cx', String(vertex.x));
       dot.setAttribute('cy', String(vertex.y));
       dot.setAttribute('r', '10');
+      // The dot is a filament's own colour and stays a literal; the ring
+      // around it is chrome and follows the theme.
       dot.setAttribute('fill', physical?.color ?? '#777777');
-      dot.setAttribute('stroke', '#FFFFFF');
+      dot.style.stroke = 'var(--oxr-bg-card)';
       dot.setAttribute('stroke-width', '2');
       const label = document.createElementNS(namespace, 'text');
       label.setAttribute('x', String(vertex.x + (index === 1 ? -16 : index === 2 ? 16 : 0)));
       label.setAttribute('y', String(vertex.y + (index === 0 ? -5 : 5)));
       label.setAttribute('text-anchor', 'middle');
-      label.setAttribute('fill', '#FFFFFF');
+      label.style.fill = 'var(--oxr-text)';
       label.setAttribute('font-size', '14');
       label.setAttribute('font-weight', '700');
       label.textContent = `${vertex.label} · H${physical?.toolId ?? '?'}`;
@@ -1015,8 +1020,8 @@ export class VirtualFilamentLibrary {
     const marker = document.createElementNS(namespace, 'circle');
     marker.dataset.virtualRatioTriangleMarker = 'true';
     marker.setAttribute('r', '8');
-    marker.setAttribute('fill', '#FFB74D');
-    marker.setAttribute('stroke', '#111111');
+    marker.style.fill = 'var(--oxr-warn)';
+    marker.style.stroke = 'var(--oxr-text)';
     marker.setAttribute('stroke-width', '3');
     svg.appendChild(marker);
 
@@ -1176,7 +1181,8 @@ export class VirtualFilamentLibrary {
       ? 'Coverage: pinned bounded pair/triple search over the currently supplied, material-compatible physical palette.'
       : 'Coverage: supplied pigment-rendered candidates only. This is not a complete material-compatible gamut search.';
     coverage.style.cssText =
-      'margin:0;padding:8px;border:1px solid #ffb74d66;border-radius:7px;background:#7c4a0d30;color:#ffe0b2;';
+      'margin:0;padding:8px;border:1px solid var(--oxr-warn);border-radius:var(--oxr-radius-md);' +
+      'background:var(--oxr-warn-surface);color:var(--oxr-text);';
     panel.appendChild(coverage);
 
     const fields = document.createElement('div');
@@ -1215,7 +1221,7 @@ export class VirtualFilamentLibrary {
     const candidates = document.createElement('fieldset');
     candidates.dataset.virtualMatchCandidates = 'true';
     candidates.style.cssText =
-      'display:grid;gap:7px;margin:0;padding:9px;border:1px solid var(--oxr-color-stroke,#ffffff2b);border-radius:8px;';
+      'display:grid;gap:7px;margin:0;padding:9px;border:1px solid var(--oxr-color-stroke);border-radius:8px;';
     const legend = document.createElement('legend');
     legend.textContent = t('ui.virtualFilamentLibrary.rankedSuppliedCandidates', 'Ranked supplied candidates');
     candidates.appendChild(legend);
@@ -1239,7 +1245,7 @@ export class VirtualFilamentLibrary {
 
     const direction = document.createElement('fieldset');
     direction.style.cssText =
-      'display:flex;flex-wrap:wrap;gap:7px;margin:0;padding:8px;border:1px solid var(--oxr-color-stroke,#ffffff2b);' +
+      'display:flex;flex-wrap:wrap;gap:7px;margin:0;padding:8px;border:1px solid var(--oxr-color-stroke);' +
       'border-radius:8px;';
     const legend = document.createElement('legend');
     legend.textContent = 'Direction';
@@ -1283,8 +1289,8 @@ export class VirtualFilamentLibrary {
     visual.dataset.virtualGradientPreview = 'true';
     visual.setAttribute('role', 'img');
     visual.style.cssText =
-      'box-sizing:border-box;display:grid;min-height:96px;place-items:center;border:2px solid #fff8;border-radius:9px;' +
-      'padding:9px;color:#fff;text-align:center;text-shadow:0 1px 3px #000,0 0 2px #000;background:#555;';
+      'box-sizing:border-box;display:grid;min-height:96px;place-items:center;border:2px solid var(--oxr-stroke-strong);border-radius:9px;' +
+      'padding:9px;color:var(--oxr-text);text-align:center;text-shadow:0 1px 3px #000,0 0 2px #000;background:#555;';
     panel.appendChild(visual);
     this.updateGradientVisual(state, visual);
   }
@@ -1684,7 +1690,7 @@ export class VirtualFilamentLibrary {
       label.dataset.virtualMatchCandidate = entry.candidate.id;
       label.style.cssText =
         'box-sizing:border-box;display:grid;grid-template-columns:auto 36px 1fr;min-height:52px;gap:9px;' +
-        'align-items:center;padding:7px;border:1px solid var(--oxr-color-stroke,#ffffff2b);border-radius:8px;cursor:pointer;';
+        'align-items:center;padding:7px;border:1px solid var(--oxr-color-stroke);border-radius:8px;cursor:pointer;';
       const radio = document.createElement('input');
       radio.type = 'radio';
       radio.name = this.id('match-candidate');
@@ -1965,7 +1971,8 @@ export class VirtualFilamentLibrary {
     button.dataset.virtualDialogAction = action;
     button.textContent = label;
     button.style.cssText =
-      TOUCH_BUTTON_STYLE + (primary ? 'background:var(--oxr-color-accent,#ffb74d);color:#151515;font-weight:750;' : '');
+      TOUCH_BUTTON_STYLE +
+      (primary ? 'background:var(--oxr-color-accent);color:var(--oxr-on-accent);font-weight:750;' : '');
     button.addEventListener('click', run);
     return button;
   }
@@ -1979,7 +1986,7 @@ export class VirtualFilamentLibrary {
     node.hidden = !initial;
     node.textContent = initial ?? '';
     node.style.cssText =
-      'margin:0;padding:9px;border:1px solid #ef535066;border-radius:8px;background:#7f1d1d35;color:#ffd9d7;';
+      'margin:0;padding:9px;border:1px solid var(--oxr-danger);border-radius:8px;background:var(--oxr-danger-surface);color:var(--oxr-danger);';
     return node;
   }
 
@@ -2924,7 +2931,7 @@ function colorSwatch(document: Document, color: string, label: string): HTMLSpan
   swatch.setAttribute('aria-label', label);
   swatch.title = label;
   swatch.style.cssText =
-    `box-sizing:border-box;width:38px;height:38px;flex:0 0 38px;border:2px solid #fff9;border-radius:50%;` +
+    `box-sizing:border-box;width:38px;height:38px;flex:0 0 38px;border:2px solid var(--oxr-stroke-strong);border-radius:50%;` +
     `background:${color};box-shadow:inset 0 0 0 1px #0006;`;
   return swatch;
 }

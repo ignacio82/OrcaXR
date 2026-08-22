@@ -91,7 +91,7 @@ export class SmartPaintPanel {
     root.dataset.smartPaintPanel = 'true';
     root.setAttribute('aria-labelledby', `orcaxr-smart-paint-heading-${this.instanceId}`);
     root.style.cssText =
-      'display:flex;min-width:0;flex-direction:column;gap:10px;color:var(--oxr-color-text,#fff);' +
+      'display:flex;min-width:0;flex-direction:column;gap:10px;color:var(--oxr-color-text);' +
       'font:13px/1.4 system-ui,sans-serif;';
     this.container.replaceChildren(root);
     this.root = root;
@@ -145,7 +145,7 @@ export class SmartPaintPanel {
       const error = document.createElement('p');
       error.dataset.smartPaintError = 'true';
       error.setAttribute('role', 'alert');
-      error.style.cssText = 'margin:0;color:var(--oxr-color-danger,#f85149);';
+      error.style.cssText = 'margin:0;color:var(--oxr-color-danger);';
       error.textContent = state.error;
       children.push(error);
     }
@@ -157,7 +157,7 @@ export class SmartPaintPanel {
     const document = this.container.ownerDocument;
     const group = document.createElement('fieldset');
     group.dataset.smartPaintConsent = 'true';
-    group.style.cssText = 'margin:0;padding:8px;border:1px solid var(--oxr-color-border,#30363d);border-radius:8px;';
+    group.style.cssText = 'margin:0;padding:8px;border:1px solid var(--oxr-stroke);border-radius:8px;';
     const legend = document.createElement('legend');
     legend.textContent = t('ui.smartPaintPanel.whatMayBeSent', 'What may be sent');
     legend.style.cssText = 'padding:0 4px;font-weight:600;';
@@ -235,8 +235,8 @@ export class SmartPaintPanel {
       'For example: the top surface and the downward-facing overhangs',
     );
     input.style.cssText =
-      'min-height:60px;padding:6px;border-radius:6px;border:1px solid var(--oxr-color-border,#30363d);' +
-      'background:var(--oxr-color-surface,#0d1117);color:inherit;font:inherit;resize:vertical;';
+      'min-height:60px;padding:6px;border-radius:6px;border:1px solid var(--oxr-stroke);' +
+      'background:var(--oxr-color-surface);color:inherit;font:inherit;resize:vertical;';
     input.addEventListener('change', () => {
       void this.run(() => this.adapter.onSetPrompt(input.value));
     });
@@ -335,7 +335,7 @@ export class SmartPaintPanel {
     item.dataset.smartPaintRegion = region.id;
     item.style.cssText =
       'display:flex;flex-direction:column;gap:4px;padding:8px;border-radius:8px;' +
-      'border:1px solid var(--oxr-color-border,#30363d);';
+      'border:1px solid var(--oxr-stroke);';
 
     const title = document.createElement('span');
     title.style.cssText = 'font-weight:600;';
@@ -353,8 +353,8 @@ export class SmartPaintPanel {
     select.id = `orcaxr-smart-paint-destination-${this.instanceId}-${region.id}`;
     select.disabled = state.busy;
     select.style.cssText =
-      'padding:6px;min-height:36px;border-radius:6px;border:1px solid var(--oxr-color-border,#30363d);' +
-      'background:var(--oxr-color-surface,#0d1117);color:inherit;font:inherit;';
+      'padding:6px;min-height:36px;border-radius:6px;border:1px solid var(--oxr-stroke);' +
+      'background:var(--oxr-color-surface);color:inherit;font:inherit;';
     const label = document.createElement('label');
     label.htmlFor = select.id;
     label.textContent = 'Destination';

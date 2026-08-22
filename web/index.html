@@ -14,14 +14,17 @@
          make the context isolated (dev/preview). Must run first. -->
     <script src="%BASE_URL%coi-serviceworker.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-    <meta name="theme-color" content="#14171a" />
+    <!-- The chrome the app boots in: the light card colour of the menu strip, so
+         an installed window's title bar matches the strip under it. -->
+    <meta name="theme-color" content="#ffffff" />
     <meta name="description" content="OrcaXR pure-web front-end: XR Blocks + three.js workspace" />
     <link rel="apple-touch-icon" href="%BASE_URL%icon.svg" />
     <link rel="icon" href="%BASE_URL%icon.svg" type="image/svg+xml" />
     <title>OrcaXR Slicer</title>
     <style>
       /* ====================================================================
-         OrcaXR flat shell — "Workspace" layout.
+         OrcaXR flat shell — dressed as the official Snapmaker Orca desktop
+         application.
 
          Every colour, radius, shadow, font and duration below comes from the
          OrcaXR design system, injected once at boot by `ui/tokens.ts` as CSS
@@ -30,10 +33,18 @@
          (`--oxr-color-surface`, `--oxr-radius-lg`) resolve to the same token,
          so there is exactly one source of truth. Never hard-code a hex here.
 
-         Layout: a docked grid — header across the top, then tool rail /
-         viewport / inspector. The rail and inspector are opaque chrome; the
-         viewport is a transparent hole so pointer input reaches the WebGL
-         canvas that sits behind the whole overlay.
+         Layout, top to bottom and start to end — the official application's
+         own arrangement:
+
+           menu strip   File · Edit · View · Add · Tools · Calibration · Help
+           tab strip    ⌂ | Prepare · Preview · Device · Project | Slice · Print
+           workspace    parameter sidebar | 3D viewport (floating toolbar)
+
+         The parameter sidebar is docked to the inline START, which is where a
+         maker who uses Orca reaches for the printer, filament and process
+         cards. The viewport is a transparent hole so pointer input reaches the
+         WebGL canvas that sits behind the whole overlay, and the model tools
+         float over its top edge exactly as they do upstream.
          ==================================================================== */
       html,
       body {
@@ -42,9 +53,14 @@
         padding: 0;
         overflow: hidden;
         font-family: var(--oxr-font-sans, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif);
-        background-color: #14171a;
-        color: #fff;
+        /* The 3D canvas is transparent, so the page is what the build plate is
+           seen against: the same vertical wash the desktop application uses. */
+        background: var(--oxr-grad-viewport, linear-gradient(180deg, #fbfbfc 0%, #d5dadd 100%));
+        color: var(--oxr-text, #262e30);
         overscroll-behavior: none;
+        /* A desktop slicer's chrome is small, dense text; 13px is the size the
+           official application renders its panels at. */
+        font-size: 13px;
       }
       button {
         cursor: pointer;
@@ -56,16 +72,37 @@
       select:focus-visible,
       summary:focus-visible,
       [tabindex]:focus-visible {
-        outline: 3px solid var(--oxr-accent-soft, #ffb74d);
-        outline-offset: 2px;
+        outline: 2px solid var(--oxr-accent);
+        outline-offset: 1px;
+      }
+
+      /* ---- Icons ---------------------------------------------------------
+         The DOM shell draws the same checked-in Material SVGs the XR shell
+         uses, masked so they take `currentColor`. That is what makes a toolbar
+         button look like a slicer's toolbar button instead of an emoji, and it
+         costs no webfont: the files are already vendored and precached. */
+      .oxr-icon {
+        display: inline-block;
+        width: 1em;
+        height: 1em;
+        flex: 0 0 auto;
+        background-color: currentColor;
+        -webkit-mask-image: var(--oxr-icon-src);
+        mask-image: var(--oxr-icon-src);
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
       }
 
       /* ---- Shell grid ---------------------------------------------------- */
       #ui-container {
-        --rail-w: 158px;
-        --rail-w-collapsed: 56px;
-        --inspector-w: 380px;
-        --header-h: 52px;
+        --sidebar-w: 356px;
+        --sidebar-w-collapsed: 0px;
+        --menu-h: 30px;
+        --tabs-h: 42px;
         position: fixed;
         inset: 0;
         display: grid;
@@ -79,7 +116,7 @@
         min-width: 0;
       }
       /* The 3D viewport: a deliberate gap in the chrome. Nothing here captures
-         pointer input except the onboarding card and the preview scrubber. */
+         pointer input except the floating toolbars and the onboarding card. */
       #viewport {
         position: relative;
         flex: 1 1 auto;
@@ -97,8 +134,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: radial-gradient(circle at center, rgba(10, 16, 24, 0.62), rgba(5, 7, 10, 0.84));
-        backdrop-filter: blur(5px);
+        background: var(--oxr-bg);
         pointer-events: auto;
         z-index: 110;
         transition:
@@ -119,640 +155,717 @@
         text-align: center;
       }
       .boot-mark {
-        width: 42px;
-        height: 42px;
+        width: 46px;
+        height: 46px;
         display: grid;
         place-items: center;
-        border-radius: 13px;
-        color: var(--oxr-accent-soft);
-        border: 1px solid rgba(255, 109, 0, 0.42);
-        background: rgba(255, 109, 0, 0.16);
+        border-radius: var(--radius-md);
+        background: var(--oxr-accent);
+        color: var(--oxr-on-accent);
         font-size: 22px;
-        animation: boot-pulse 1.25s ease-in-out infinite;
+        animation: oxr-pulse 1.4s ease-in-out infinite;
       }
       .boot-card strong {
-        font-family: var(--oxr-font-display);
-        font-size: 17px;
-        letter-spacing: -0.2px;
+        font-size: 15px;
+        font-weight: 600;
       }
       .boot-card span {
+        font-size: 12px;
         color: var(--oxr-text-muted);
-        font-size: 13px;
-      }
-      @keyframes boot-pulse {
-        50% {
-          transform: scale(1.08);
-          box-shadow: 0 0 26px rgba(255, 109, 0, 0.28);
-        }
       }
       @keyframes oxr-pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
         50% {
-          opacity: 0.45;
+          opacity: 0.55;
         }
       }
 
-      /* ---- Header -------------------------------------------------------- */
-      #top-bar {
+      /* ---- Header: menu strip -------------------------------------------- */
+      #app-header {
+        pointer-events: auto;
+        z-index: 40;
+      }
+      #menu-strip {
         position: relative;
         display: flex;
         align-items: center;
-        gap: 10px;
-        flex-wrap: wrap;
-        min-height: var(--header-h);
+        gap: 2px;
+        height: var(--menu-h);
         box-sizing: border-box;
-        padding: 8px 14px;
-        border-bottom: 1px solid var(--oxr-stroke);
+        padding-inline: 8px;
         background: var(--oxr-bg-card);
-        backdrop-filter: var(--glass-blur);
-        pointer-events: auto;
-        z-index: 40;
+        border-bottom: 1px solid var(--oxr-stroke);
       }
       .brand {
         display: flex;
         align-items: center;
-        gap: 9px;
+        gap: 6px;
         flex: 0 0 auto;
+        padding-inline-end: 8px;
       }
       .brand-mark {
-        width: 26px;
-        height: 26px;
-        border-radius: 9px;
+        width: 16px;
+        height: 16px;
         display: grid;
         place-items: center;
-        background: rgba(255, 109, 0, 0.16);
-        border: 1px solid rgba(255, 109, 0, 0.42);
-        color: var(--oxr-accent-soft);
-        font-size: 14px;
+        border-radius: 3px;
+        background: var(--oxr-accent);
+        color: var(--oxr-on-accent);
+        font-size: 10px;
       }
       #app-title {
-        font-family: var(--oxr-font-display);
+        font-size: 12px;
         font-weight: 700;
-        font-size: 15px;
-        letter-spacing: -0.3px;
+        letter-spacing: 0.01em;
+        color: var(--oxr-text);
       }
       .header-spacer {
         flex: 1 1 auto;
         min-width: 0;
       }
-
-      /* Menu trigger + the full-width mega menu it opens. */
-      #menu-button {
+      .strip-sep {
+        width: 1px;
+        height: 16px;
+        flex: 0 0 auto;
+        margin-inline: 6px;
+        background: var(--oxr-stroke);
+      }
+      /* Quick actions: save / undo / redo, exactly where the desktop app keeps
+         them — right of the menus, before the first separator. */
+      #quick-actions {
+        display: flex;
+        align-items: center;
+        gap: 1px;
+      }
+      .strip-btn {
         display: inline-flex;
         align-items: center;
-        gap: 7px;
-        background: var(--oxr-surface);
-        color: var(--oxr-text);
-        border: 1px solid var(--oxr-stroke);
-        border-radius: var(--radius-sm);
-        padding: 7px 11px;
-        font-size: 13px;
-        font-weight: 600;
-        transition: background var(--dur-base) var(--ease-ui);
-      }
-      #menu-button:hover {
-        background: var(--oxr-surface-hover);
-      }
-      #menu-button[aria-expanded='true'] {
-        background: var(--oxr-surface-hover);
-        border-color: var(--oxr-stroke-strong);
-      }
-      #menu-bar-host {
-        position: absolute;
-        top: calc(100% + 6px);
-        inset-inline-start: 14px;
-        z-index: 70;
-        display: none;
-        gap: 10px;
-        padding: 12px;
-        max-width: calc(100vw - 28px);
-        max-height: calc(100vh - var(--header-h) - 24px);
-        overflow: auto;
-        background: var(--oxr-bg-elevated);
-        backdrop-filter: blur(18px);
-        border: 1px solid var(--oxr-stroke-strong);
-        border-radius: var(--radius-lg);
-        box-shadow: var(--shadow-menu);
-      }
-      #menu-bar-host.open {
-        display: flex;
-      }
-      .menu-host {
-        min-width: 0;
-        width: 182px;
-        flex: 0 0 auto;
-      }
-      /* Inside the mega menu every section is open at once; the trigger stays a
-         real button so keyboard users can jump straight into a column. */
-      .menu-trigger {
-        display: block;
-        width: 100%;
-        text-align: start;
+        justify-content: center;
+        gap: 6px;
+        height: 22px;
+        min-width: 22px;
+        padding-inline: 7px;
         background: transparent;
         border: none;
-        padding: 4px 8px 8px;
-        color: var(--oxr-accent-soft);
-        font-family: var(--oxr-font-sans);
-        font-size: 10.5px;
-        font-weight: 700;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
+        border-radius: var(--radius-sm);
+        color: var(--oxr-text);
+        font-size: 12px;
+        line-height: 1;
+        transition: background var(--dur-fast) var(--ease-ui);
       }
-      .menu-trigger:hover {
+      .strip-btn .oxr-icon {
+        font-size: 16px;
+      }
+      .strip-btn:hover:not(:disabled) {
+        background: var(--oxr-surface-hover);
+      }
+      .strip-btn:disabled {
+        color: var(--oxr-text-muted);
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      #cmd-search-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 22px;
+        padding-inline: 8px;
+        background: var(--oxr-bg-sunken);
+        border: 1px solid var(--oxr-stroke);
+        border-radius: var(--radius-sm);
+        color: var(--oxr-text-muted);
+        font-size: 11.5px;
+      }
+      #cmd-search-btn:hover {
+        border-color: var(--oxr-stroke-strong);
+        color: var(--oxr-text);
+      }
+      #cmd-search-btn .oxr-icon {
+        font-size: 14px;
+      }
+      #cmd-search-btn kbd {
+        font-family: var(--oxr-font-mono);
+        font-size: 10px;
+        color: var(--oxr-text-muted);
+        border: 1px solid var(--oxr-stroke);
+        border-radius: 3px;
+        padding: 0 3px;
+      }
+
+      /* ---- Menu bar ------------------------------------------------------- */
+      /* One trigger per upstream menu section, each opening its own dropdown —
+         a menu bar, not a mega panel. `#menu-button` is the same bar collapsed
+         behind a hamburger, which is what narrow windows get. */
+      #menu-bar-host {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        min-width: 0;
+      }
+      #menu-button {
+        display: none;
+      }
+      .menu-host {
+        position: relative;
+        flex: 0 0 auto;
+      }
+      .menu-trigger {
+        display: inline-flex;
+        align-items: center;
+        height: 22px;
+        padding-inline: 9px;
+        background: transparent;
+        border: none;
+        border-radius: var(--radius-sm);
+        color: var(--oxr-text);
+        font-family: var(--oxr-font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        white-space: nowrap;
+        transition: background var(--dur-fast) var(--ease-ui);
+      }
+      .menu-trigger:hover,
+      .menu-host.open .menu-trigger {
+        background: var(--oxr-surface-hover);
+      }
+      .menu-host.open .menu-trigger {
         color: var(--oxr-accent);
       }
       .menu-dropdown {
-        display: flex;
-        flex-direction: column;
-        gap: 1px;
+        display: none;
+        position: absolute;
+        top: calc(100% + 4px);
+        inset-inline-start: 0;
+        z-index: 70;
+        min-width: 232px;
+        max-height: min(70vh, 620px);
+        overflow-y: auto;
+        padding: 4px;
+        background: var(--oxr-bg-elevated);
+        border: 1px solid var(--oxr-stroke);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-menu);
+      }
+      .menu-host.open > .menu-dropdown,
+      .menu-dropdown.open {
+        display: block;
       }
       .menu-item {
         background: transparent;
         color: var(--oxr-text);
         border: none;
-        text-align: start;
-        padding: 6px 8px;
-        border-radius: 7px;
-        font-size: 12.5px;
+        border-radius: var(--radius-sm);
+        width: 100%;
         display: flex;
         align-items: center;
         gap: 9px;
-        row-gap: 2px;
-        flex-wrap: wrap;
-        width: 100%;
-        transition: background var(--dur-fast) var(--ease-ui);
+        padding: 6px 9px;
+        font-size: 12.5px;
+        text-align: start;
+        white-space: nowrap;
       }
       .menu-item:hover:not(:disabled) {
         background: var(--oxr-surface-hover);
       }
       .menu-item:disabled {
-        opacity: 0.45;
+        color: var(--oxr-text-muted);
+        opacity: 0.55;
         cursor: not-allowed;
       }
       .menu-item .glyph {
-        width: 15px;
-        text-align: center;
-        opacity: 0.8;
-        flex: 0 0 auto;
+        width: 16px;
+        font-size: 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--oxr-text-muted);
+        flex: 0 0 16px;
       }
-      /* One line per command keeps a 7-column menu scannable; the full label
-         stays available as the button's tooltip and accessible name. */
       .menu-item-label {
-        flex: 1 1 100px;
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      /* "UNAVAILABLE" badge on parity placeholders — features present in
-         Snapmaker Orca that OrcaXR has not built yet (see docs/parity.md). */
-      /* Parity truth stays readable: when the badge cannot share a line with
-         the command it drops to its own row rather than truncating the label. */
-      .soon-badge {
-        font-size: 9px;
-        font-weight: 700;
-        letter-spacing: 0.5px;
-        line-height: 1;
-        padding: 3px 5px;
-        border-radius: 4px;
-        margin-inline-start: 24px;
-        flex: 0 0 auto;
-        background: var(--oxr-accent);
-        color: var(--oxr-on-accent);
-        opacity: 0.8;
-      }
-      .cmd-item .soon-badge {
-        margin-inline-start: 8px;
-      }
-
-      /* Command-palette trigger reads as a search field, not a button. */
-      #cmd-search-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        min-width: 210px;
-        background: var(--oxr-bg-sunken);
-        color: var(--oxr-text-muted);
-        border: 1px solid var(--oxr-stroke);
-        border-radius: var(--radius-sm);
-        padding: 7px 12px;
-        font-size: 12.5px;
-        transition:
-          color var(--dur-base) var(--ease-ui),
-          border-color var(--dur-base) var(--ease-ui);
-      }
-      #cmd-search-btn:hover {
-        color: var(--oxr-text);
-        border-color: var(--oxr-stroke-strong);
-      }
-      #cmd-search-btn .cmd-search-label {
-        flex: 1;
-        text-align: start;
-      }
-      #cmd-search-btn kbd {
-        font-family: var(--oxr-font-mono);
-        font-size: 11px;
-        background: none;
-        color: inherit;
-      }
-
-      /* Prepare → Slice → Preview → Send. A stage is both a status readout and
-         the control that moves the job forward. */
-      #stage-bar {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        flex: 0 0 auto;
-      }
-      .stage-btn {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        background: transparent;
-        border: 1px solid var(--oxr-stroke);
-        color: var(--oxr-text-muted);
-        border-radius: var(--radius-sm);
-        padding: 6px 13px;
-        font-size: 13px;
-        font-weight: 600;
-        white-space: nowrap;
-        transition:
-          background var(--dur-base) var(--ease-ui),
-          color var(--dur-base) var(--ease-ui),
-          border-color var(--dur-base) var(--ease-ui);
-      }
-      .stage-btn:hover:not(:disabled) {
-        background: var(--oxr-surface);
-        color: var(--oxr-text);
-      }
-      .stage-btn:disabled {
-        opacity: 0.45;
-        cursor: not-allowed;
-      }
-      .stage-btn .stage-n {
-        width: 18px;
-        height: 18px;
-        border-radius: 50%;
-        display: grid;
-        place-items: center;
-        background: var(--oxr-surface);
-        color: var(--oxr-text-muted);
-        font-family: var(--oxr-font-mono);
-        font-size: 10px;
-        font-weight: 700;
-        flex: 0 0 auto;
-      }
-      .stage-btn.active {
-        background: rgba(255, 109, 0, 0.16);
-        border-color: rgba(255, 109, 0, 0.45);
-        color: var(--oxr-text);
-      }
-      .stage-btn.active .stage-n {
-        background: var(--oxr-accent);
-        color: var(--oxr-on-accent);
-      }
-      .stage-btn.done .stage-n {
-        background: rgba(76, 175, 80, 0.25);
-        color: var(--oxr-ok);
-      }
-
-      #plate-bar {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        flex: 0 0 auto;
-      }
-      .plate-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        cursor: pointer;
-        background: var(--oxr-surface);
-        color: var(--oxr-text-muted);
-        border: 1px solid var(--oxr-stroke);
-        border-radius: var(--radius-sm);
-        padding: 6px 10px;
-        font-size: 12px;
-        font-weight: 600;
-        transition: background var(--dur-fast) var(--ease-ui);
-      }
-      .plate-chip:hover {
-        background: var(--oxr-surface-hover);
-      }
-      .plate-chip.active {
-        background: var(--oxr-accent);
-        color: var(--oxr-on-accent);
-        border-color: transparent;
-      }
-      .plate-chip .plate-del {
-        cursor: pointer;
-        opacity: 0.6;
-        font-size: 13px;
-        line-height: 1;
-      }
-      .plate-chip .plate-del:hover {
-        opacity: 1;
-      }
-      .plate-add {
-        cursor: pointer;
-        background: var(--oxr-surface);
-        color: var(--oxr-text);
-        border: 1px solid var(--oxr-stroke);
-        border-radius: var(--radius-sm);
-        width: 28px;
-        height: 28px;
-        font-size: 15px;
-        line-height: 1;
-      }
-      .plate-add:hover {
-        background: var(--oxr-surface-hover);
-      }
-      .icon-btn {
-        background: var(--oxr-surface);
-        color: var(--oxr-text);
-        border: 1px solid var(--oxr-stroke);
-        width: 34px;
-        height: 34px;
-        border-radius: var(--radius-sm);
-        font-size: 15px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex: 0 0 auto;
-        transition: background var(--dur-base) var(--ease-ui);
-      }
-      .icon-btn:hover {
-        background: var(--oxr-surface-hover);
-      }
-
-      /* ---- Tool rail ----------------------------------------------------- */
-      #tool-rail {
-        flex: 0 0 auto;
-        /* Sized to its longest label rather than to a number measured in
-           English (P10.4.4). 158px fits "Support Painting" and clips
-           "Stützstrukturen bemalen"; the pseudo-localized run found eight such
-           labels truncated at once. `max-content` lets the rail follow whatever
-           language it is rendering, `min-width` keeps it from collapsing to the
-           icons on a short language, and the cap stops a compound German noun
-           from taking a fifth of the viewport. */
-        width: max-content;
-        min-width: var(--rail-w);
-        max-width: min(280px, 22vw);
-        box-sizing: border-box;
-        display: flex;
-        flex-direction: column;
-        gap: 3px;
-        padding: 10px 8px;
-        border-inline-end: 1px solid var(--oxr-stroke);
-        background: var(--oxr-bg-card);
-        backdrop-filter: var(--glass-blur);
-        pointer-events: auto;
-        min-height: 0;
-        transition: width var(--dur-slow) var(--ease-ui);
-      }
-      #tool-rail.collapsed {
-        width: var(--rail-w-collapsed);
-        min-width: var(--rail-w-collapsed);
-      }
-      #tool-rail.collapsed .tool-label {
-        display: none;
-      }
-      #tool-rail.collapsed .tool-btn {
-        justify-content: center;
-        padding: 9px 4px;
-      }
-      #left-toolbar {
-        display: flex;
-        flex-direction: column;
-        gap: 3px;
         flex: 1 1 auto;
-        min-height: 0;
-        overflow-y: auto;
-        overflow-x: hidden;
-        scrollbar-width: thin;
-      }
-      #left-toolbar::-webkit-scrollbar {
-        width: 6px;
-      }
-      #left-toolbar::-webkit-scrollbar-thumb {
-        background: #ffffff24;
-        border-radius: 6px;
-      }
-      #left-toolbar::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      .tool-btn {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        width: 100%;
-        box-sizing: border-box;
-        background: transparent;
-        color: var(--oxr-text);
-        border: 1px solid transparent;
-        border-radius: 9px;
-        padding: 9px 10px;
-        font-size: 13px;
-        font-weight: 500;
-        text-align: start;
-        /* Wraps rather than clips (P10.4.4). The rail is capped so a compound
-           noun cannot take a fifth of the viewport, which means a long-enough
-           label has to go somewhere; a second line costs a few pixels of height
-           and a truncated one costs the operator the name of the tool. */
-        white-space: normal;
-        transition:
-          background var(--dur-slow) var(--ease-ui),
-          color var(--dur-slow) var(--ease-ui);
-      }
-      .tool-icon {
-        width: 18px;
-        flex: 0 0 18px;
-        text-align: center;
-        font-size: 15px;
-        line-height: 1;
-      }
-      .tool-label {
-        flex: 1;
-        /* No `overflow: hidden` / ellipsis: hiding the end of a tool's name is
-           the failure the pseudo-localized run exists to catch, and an ellipsis
-           makes it look intentional. */
+        min-width: 0;
         overflow-wrap: anywhere;
       }
-      .tool-btn:hover:not(:disabled) {
-        background: var(--oxr-surface-hover);
-      }
-      .tool-btn:disabled {
-        opacity: 0.4;
-        cursor: not-allowed;
-      }
-      .tool-btn.active {
-        background: rgba(255, 109, 0, 0.2);
-        color: var(--oxr-accent);
-        border-color: rgba(255, 109, 0, 0.45);
-      }
-      #toolbar-toggle {
-        flex: 0 0 auto;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        background: transparent;
+      .menu-item .shortcut {
+        margin-inline-start: auto;
+        padding-inline-start: 18px;
+        font-family: var(--oxr-font-mono);
+        font-size: 11px;
         color: var(--oxr-text-muted);
-        border: 1px solid var(--oxr-stroke);
-        border-radius: 9px;
-        padding: 9px 10px;
-        font-size: 12px;
-        margin-top: 6px;
       }
-      #toolbar-toggle:hover {
-        background: var(--oxr-surface-hover);
-        color: var(--oxr-text);
+      .soon-badge {
+        flex: 0 0 auto;
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--oxr-warn);
+        border: 1px solid var(--oxr-warn);
+        border-radius: 3px;
+        padding: 0 4px;
+        line-height: 14px;
       }
-      #toolbar-toggle[hidden] {
-        display: none;
+      .cmd-item .soon-badge {
+        margin-inline-start: 6px;
       }
 
-      /* ---- Inspector ----------------------------------------------------- */
-      #right-sidebar {
-        flex: 0 0 auto;
-        width: var(--inspector-w);
+      /* ---- Header: view tabs ---------------------------------------------- */
+      #tab-strip {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        height: var(--tabs-h);
         box-sizing: border-box;
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
-        border-inline-start: 1px solid var(--oxr-stroke);
+        padding-inline: 8px;
         background: var(--oxr-bg-card);
-        backdrop-filter: var(--glass-blur);
-        pointer-events: auto;
-      }
-      #inspector-tabs {
-        flex: 0 0 auto;
-        display: flex;
-        gap: 2px;
-        padding: 8px;
         border-bottom: 1px solid var(--oxr-stroke);
+      }
+      #btn-home {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 30px;
+        margin-bottom: 6px;
+        background: transparent;
+        border: none;
+        border-radius: var(--radius-sm);
+        color: var(--oxr-text);
+        font-size: 19px;
+      }
+      #btn-home:hover {
+        background: var(--oxr-surface-hover);
+      }
+      #view-tabs {
+        display: flex;
+        align-items: flex-end;
+        gap: 2px;
+        min-width: 0;
         overflow-x: auto;
         scrollbar-width: none;
       }
-      #inspector-tabs::-webkit-scrollbar {
+      #view-tabs::-webkit-scrollbar {
         display: none;
       }
-      .insp-tab {
-        flex: 1 1 0;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
+      .view-tab {
+        display: inline-flex;
         align-items: center;
-        gap: 4px;
+        gap: 7px;
+        height: 34px;
+        padding-inline: 18px;
         background: transparent;
         border: none;
+        border-start-start-radius: var(--radius-md);
+        border-start-end-radius: var(--radius-md);
         color: var(--oxr-text-muted);
-        border-radius: 9px;
-        padding: 8px 4px;
+        font-size: 13px;
+        font-weight: 600;
+        white-space: nowrap;
         transition:
           background var(--dur-base) var(--ease-ui),
           color var(--dur-base) var(--ease-ui);
       }
-      .insp-tab:hover {
-        color: var(--oxr-text);
-      }
-      .insp-tab .insp-tab-glyph {
-        font-size: 15px;
-        line-height: 1;
-      }
-      .insp-tab .insp-tab-label {
-        font-size: 10.5px;
-        font-weight: 600;
-        letter-spacing: 0.02em;
-        white-space: nowrap;
-      }
-      .insp-tab[aria-selected='true'] {
-        background: rgba(255, 109, 0, 0.18);
-        color: var(--oxr-accent);
-      }
-      #inspector-head {
-        flex: 0 0 auto;
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 10px;
-        padding: 12px 14px 8px;
-      }
-      #inspector-title {
-        margin: 0;
-        font-family: var(--oxr-font-display);
+      .view-tab .oxr-icon {
         font-size: 17px;
-        font-weight: 700;
-        letter-spacing: -0.3px;
+      }
+      .view-tab:hover:not(:disabled):not([aria-selected='true']) {
+        background: var(--oxr-surface-hover);
         color: var(--oxr-text);
       }
-      #inspector-meta {
-        font-family: var(--oxr-font-mono);
-        font-size: 11px;
+      .view-tab[aria-selected='true'] {
+        background: var(--oxr-accent);
+        color: var(--oxr-on-accent);
+      }
+      .view-tab:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      /* Slice plate / Print — the pair of split buttons at the inline end. */
+      #print-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+      .print-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: 28px;
+        padding-inline: 15px;
+        background: var(--oxr-accent);
+        border: none;
+        border-radius: var(--radius-md);
+        color: var(--oxr-on-accent);
+        font-size: 12.5px;
+        font-weight: 600;
+        white-space: nowrap;
+        box-shadow: var(--shadow-accent);
+        transition:
+          filter var(--dur-base) var(--ease-ui),
+          background var(--dur-base) var(--ease-ui);
+      }
+      .print-btn .oxr-icon {
+        font-size: 15px;
+      }
+      .print-btn:hover:not(:disabled) {
+        filter: brightness(1.08);
+      }
+      .print-btn:disabled {
+        background: var(--oxr-surface-active);
         color: var(--oxr-text-muted);
+        box-shadow: none;
+        cursor: not-allowed;
+      }
+      .print-btn.busy {
+        animation: oxr-pulse 1.2s ease-in-out infinite;
+      }
+
+      /* ---- Parameter sidebar ---------------------------------------------- */
+      #param-sidebar {
+        flex: 0 0 auto;
+        width: var(--sidebar-w);
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        border-inline-end: 1px solid var(--oxr-stroke);
+        background: var(--oxr-bg-card);
+        pointer-events: auto;
+        transition: width var(--dur-slow) var(--ease-ui);
+      }
+      #param-sidebar.collapsed {
+        width: var(--sidebar-w-collapsed);
+        border-inline-end: none;
+        overflow: hidden;
+      }
+      #param-sidebar.collapsed > *,
+      #param-sidebar[hidden],
+      #plate-bar[hidden],
+      #app-header[hidden] {
+        display: none;
+      }
+      /* Phone-only: the bottom sheet's own handle. On desktop the sidebar is a
+         docked column and the toolbar's `‹›` control folds it. */
+      #sidebar-handle {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: 26px;
+        background: var(--oxr-bg-sunken);
+        border: none;
+        border-bottom: 1px solid var(--oxr-stroke);
+        color: var(--oxr-text);
+        font-size: 12px;
+        font-weight: 600;
       }
       #preflight-banners {
         flex: 0 0 auto;
         display: flex;
         flex-direction: column;
         gap: 6px;
-        padding: 0 14px;
+        padding: 8px 8px 0;
       }
       #preflight-banners:empty {
         display: none;
       }
-      #inspector-scroll {
+      #param-scroll {
         flex: 1 1 auto;
         min-height: 0;
         overflow-y: auto;
-        padding: 12px 14px 16px;
+        overflow-x: hidden;
+        scrollbar-width: thin;
         display: flex;
         flex-direction: column;
-        gap: 12px;
       }
-      #inspector-scroll::-webkit-scrollbar {
-        width: 6px;
+      #param-scroll::-webkit-scrollbar {
+        width: 8px;
       }
-      #inspector-scroll::-webkit-scrollbar-track {
+      #param-scroll::-webkit-scrollbar-track {
         background: transparent;
       }
-      #inspector-scroll::-webkit-scrollbar-thumb {
-        background: #ffffff33;
-        border-radius: 3px;
+      #param-scroll::-webkit-scrollbar-thumb {
+        background: var(--oxr-surface-active);
+        border-radius: 4px;
       }
+
+      /* A sidebar card: a grey title band with its own controls, then a body.
+         This is the unit the official sidebar is built from — Printer,
+         Filament, Color Mixing, Process — and every panel we already had is
+         mounted inside one. */
+      .oxr-card {
+        display: flex;
+        flex-direction: column;
+        border-bottom: 1px solid var(--oxr-stroke);
+      }
+      .oxr-card[hidden] {
+        display: none;
+      }
+      .card-head {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-height: 30px;
+        padding: 4px 8px;
+        background: var(--oxr-bg-sunken);
+        border-bottom: 1px solid var(--oxr-stroke);
+      }
+      .card-head > h2 {
+        margin: 0;
+        font-size: 12.5px;
+        font-weight: 700;
+        color: var(--oxr-text);
+        white-space: nowrap;
+      }
+      .card-head .card-icon {
+        font-size: 16px;
+        color: var(--oxr-text-muted);
+      }
+      .card-head-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-inline-start: auto;
+      }
+      .card-body {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 9px 8px 11px;
+      }
+      /* A card can be folded away; the chevron is the affordance and the band
+         is the hit target, which is how the upstream cards behave. */
+      .card-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        background: transparent;
+        border: none;
+        color: var(--oxr-text-muted);
+        font-size: 15px;
+        transition: transform var(--dur-base) var(--ease-ui);
+      }
+      .oxr-card.folded .card-toggle {
+        transform: rotate(-90deg);
+      }
+      .oxr-card.folded .card-body {
+        display: none;
+      }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        background: transparent;
+        border: none;
+        border-radius: var(--radius-sm);
+        color: var(--oxr-text-muted);
+        font-size: 16px;
+        line-height: 1;
+        transition:
+          background var(--dur-fast) var(--ease-ui),
+          color var(--dur-fast) var(--ease-ui);
+      }
+      .icon-btn:hover:not(:disabled) {
+        background: var(--oxr-surface-hover);
+        color: var(--oxr-text);
+      }
+      .icon-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .icon-btn.accent {
+        color: var(--oxr-accent);
+      }
+      .pill-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 20px;
+        padding-inline: 9px;
+        background: var(--oxr-accent);
+        border: none;
+        border-radius: var(--radius-pill);
+        color: var(--oxr-on-accent);
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .pill-btn:hover:not(:disabled) {
+        filter: brightness(1.08);
+      }
+      .pill-btn:disabled {
+        background: var(--oxr-surface-active);
+        color: var(--oxr-text-muted);
+        cursor: not-allowed;
+      }
+
+      /* A labelled control row: name at the inline start, control filling the
+         rest, optional unit after it. The sidebar is made of these. */
+      .field-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        min-height: 26px;
+      }
+      .field-row > .field-label {
+        flex: 0 0 auto;
+        width: 104px;
+        font-size: 12px;
+        color: var(--oxr-text);
+        overflow-wrap: anywhere;
+      }
+      .field-row > .field-control {
+        flex: 1 1 120px;
+        min-width: 0;
+      }
+      .field-unit {
+        flex: 0 0 auto;
+        font-size: 11px;
+        color: var(--oxr-text-muted);
+      }
+
+      /* ---- Segmented control & switch ------------------------------------- */
+      .segmented {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px;
+        background: var(--oxr-bg-sunken);
+        border: 1px solid var(--oxr-stroke);
+        border-radius: var(--radius-pill);
+      }
+      .segmented button {
+        border: none;
+        background: transparent;
+        color: var(--oxr-text-muted);
+        border-radius: var(--radius-pill);
+        font-size: 11.5px;
+        font-weight: 600;
+        padding: 2px 12px;
+        line-height: 16px;
+      }
+      .segmented button[aria-pressed='true'] {
+        background: var(--oxr-accent);
+        color: var(--oxr-on-accent);
+      }
+      .switch-row {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11.5px;
+        color: var(--oxr-text-muted);
+      }
+      .switch {
+        position: relative;
+        width: 30px;
+        height: 16px;
+        flex: 0 0 auto;
+        border: none;
+        border-radius: var(--radius-pill);
+        background: var(--oxr-surface-active);
+        padding: 0;
+        transition: background var(--dur-base) var(--ease-ui);
+      }
+      .switch::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        inset-inline-start: 2px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--oxr-bg-card);
+        box-shadow: var(--shadow-panel);
+        transition: transform var(--dur-base) var(--ease-ui);
+      }
+      .switch[aria-checked='true'] {
+        background: var(--oxr-accent);
+      }
+      .switch[aria-checked='true']::after {
+        transform: translateX(14px);
+      }
+      html[dir='rtl'] .switch[aria-checked='true']::after {
+        transform: translateX(-14px);
+      }
+
+      /* ---- Inner tab strip (Quality · Strength · Speed · …) ---------------- */
+      .inner-tabs {
+        display: flex;
+        align-items: stretch;
+        gap: 2px;
+        overflow-x: auto;
+        scrollbar-width: none;
+        border-bottom: 1px solid var(--oxr-stroke);
+      }
+      .inner-tabs::-webkit-scrollbar {
+        display: none;
+      }
+      .inner-tab {
+        background: transparent;
+        border: none;
+        border-bottom: 2px solid transparent;
+        color: var(--oxr-text-muted);
+        font-size: 12px;
+        font-weight: 600;
+        padding: 6px 9px;
+        white-space: nowrap;
+      }
+      .inner-tab:hover {
+        color: var(--oxr-text);
+      }
+      .inner-tab[aria-selected='true'] {
+        color: var(--oxr-text);
+        border-bottom-color: var(--oxr-text);
+      }
+
+      /* ---- Legacy inspector primitives, restyled --------------------------
+         The panels mounted inside the cards were written against these class
+         names. They keep them; only the skin changed. */
       .insp-panel[hidden] {
         display: none;
       }
       .insp-panel {
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 9px;
       }
-      /* Collapsible inspector sections — tame the wall of always-open panels. */
       .insp-section {
         border-top: 1px solid var(--oxr-stroke);
-        padding-top: 12px;
+        padding-top: 8px;
+      }
+      .insp-section:first-of-type {
+        border-top: none;
+        padding-top: 0;
       }
       .insp-section > summary {
         cursor: pointer;
         list-style: none;
         user-select: none;
-        font-size: 0.8rem;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: var(--oxr-text-muted);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--oxr-text);
         display: flex;
         align-items: center;
-        gap: 8px;
-        margin-bottom: 10px;
+        gap: 7px;
+        padding: 4px 0;
       }
       .insp-section > summary::-webkit-details-marker {
         display: none;
       }
       .insp-section > summary::before {
         content: '\25B8';
-        font-size: 0.7rem;
+        font-size: 0.75rem;
         transition: transform var(--dur-base) var(--ease-ui);
-        color: var(--oxr-accent-soft);
+        color: var(--oxr-text-muted);
       }
       .insp-section[open] > summary::before {
         transform: rotate(90deg);
@@ -760,7 +873,7 @@
       .insp-kicker {
         font-size: 11px;
         font-weight: 700;
-        letter-spacing: 0.06em;
+        letter-spacing: 0.04em;
         text-transform: uppercase;
         color: var(--oxr-text-muted);
         display: flex;
@@ -769,30 +882,30 @@
       }
       .insp-card {
         border: 1px solid var(--oxr-stroke);
-        border-radius: var(--radius-sm);
-        padding: 11px;
+        border-radius: var(--radius-md);
+        padding: 9px;
         display: flex;
         flex-direction: column;
-        gap: 9px;
-        background: #ffffff05;
+        gap: 8px;
+        background: var(--oxr-bg-sunken);
       }
       .calibration-card {
         display: flex;
         flex-direction: column;
         gap: 2px;
         text-align: start;
-        background: #ffffff05;
+        background: var(--oxr-bg-card);
         border: 1px solid var(--oxr-stroke);
-        border-radius: var(--radius-sm);
+        border-radius: var(--radius-md);
         color: var(--oxr-text);
-        padding: 9px;
+        padding: 8px;
         transition: background var(--dur-base) var(--ease-ui);
       }
       .calibration-card:hover:not(:disabled) {
         background: var(--oxr-surface-hover);
       }
       .calibration-card:disabled {
-        opacity: 0.4;
+        opacity: 0.45;
         cursor: not-allowed;
       }
       .calibration-name {
@@ -809,117 +922,142 @@
         overflow: hidden;
       }
 
-      /* ---- Controls ------------------------------------------------------ */
+      /* ---- Controls ------------------------------------------------------- */
       .action-btn {
-        background: var(--oxr-surface);
+        background: var(--oxr-bg-card);
         color: var(--oxr-text);
         border: 1px solid var(--oxr-stroke);
-        padding: 11px 14px;
+        padding: 6px 11px;
         border-radius: var(--radius-md);
-        font-weight: 600;
-        font-size: 14px;
+        font-weight: 500;
+        font-size: 12.5px;
         text-align: center;
         box-sizing: border-box;
+        min-height: 26px;
         transition:
-          background var(--dur-slow) var(--ease-ui),
-          box-shadow var(--dur-slow) var(--ease-ui),
-          transform var(--dur-slow) var(--ease-ui);
+          background var(--dur-base) var(--ease-ui),
+          border-color var(--dur-base) var(--ease-ui);
       }
-      #inspector-scroll .action-btn {
+      #param-scroll .action-btn {
         width: 100%;
-        margin-bottom: 10px;
       }
       .action-btn:hover:not(:disabled) {
         background: var(--oxr-surface-hover);
-        transform: translateY(-1px);
+        border-color: var(--oxr-stroke-strong);
       }
       .action-btn:active:not(:disabled) {
-        transform: translateY(1px);
+        background: var(--oxr-surface-active);
       }
       .action-btn.primary {
-        background: var(--oxr-grad-accent);
+        background: var(--oxr-accent);
         color: var(--oxr-on-accent);
-        border: none;
-        box-shadow: var(--shadow-accent);
+        border-color: transparent;
       }
       .action-btn.primary:hover:not(:disabled) {
-        box-shadow: var(--shadow-accent-hover);
+        filter: brightness(1.08);
+        background: var(--oxr-accent);
       }
-      select.action-btn {
+      select.action-btn,
+      select.text-input {
         appearance: none;
         -webkit-appearance: none;
-        background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7377' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
         background-repeat: no-repeat;
-        background-position: right 14px center;
-        background-size: 16px;
-        padding-inline-end: 40px;
-        font-size: 13px;
+        /* direction:physical — a `background-position` keyword pair has no
+           logical form, and the caret is redrawn on the correct edge by the
+           RTL rule directly below. */
+        background-position: right 8px center;
+        background-size: 14px;
+        padding-inline-end: 26px;
+        text-align: start;
+        font-size: 12.5px;
       }
-      select.action-btn option {
-        background: #26292d;
-        color: #fff;
+      html[dir='rtl'] select.action-btn,
+      html[dir='rtl'] select.text-input {
+        /* direction:physical — the mirrored half of the caret position above. */
+        background-position: left 8px center;
+        padding-inline-end: 11px;
+        padding-inline-start: 26px;
       }
       .action-btn:disabled {
-        opacity: 0.4;
+        opacity: 0.45;
         cursor: not-allowed;
       }
-      .text-input {
+      .text-input,
+      input[type='text'].text-input,
+      input[type='number'].text-input {
         width: 100%;
         box-sizing: border-box;
-        background: var(--oxr-bg-sunken);
+        background: var(--oxr-bg-card);
         color: var(--oxr-text);
         border: 1px solid var(--oxr-stroke);
         border-radius: var(--radius-sm);
-        padding: 10px;
-        font-size: 13px;
+        padding: 5px 8px;
+        min-height: 26px;
+        font-size: 12.5px;
         font-family: var(--oxr-font-sans);
+      }
+      .text-input:focus {
+        border-color: var(--oxr-accent);
+        outline: none;
       }
       .field-note {
         font-size: 11px;
-        color: #8892a0;
-        margin: 0 0 8px;
-        line-height: 1.4;
+        color: var(--oxr-text-muted);
+        margin: 0 0 6px;
+        line-height: 1.45;
       }
       .check-row {
         display: flex;
         align-items: center;
-        gap: 8px;
-        font-size: 13px;
-        color: #e0e6ee;
+        gap: 7px;
+        font-size: 12.5px;
+        color: var(--oxr-text);
         cursor: pointer;
         user-select: none;
       }
       .check-row input[type='checkbox'] {
-        width: 16px;
-        height: 16px;
-        accent-color: var(--oxr-accent-soft);
+        width: 14px;
+        height: 14px;
+        accent-color: var(--oxr-accent);
         cursor: pointer;
         flex: 0 0 auto;
       }
+      code {
+        font-family: var(--oxr-font-mono);
+        font-size: 11px;
+        background: var(--oxr-bg-sunken);
+        border: 1px solid var(--oxr-stroke);
+        border-radius: 3px;
+        padding: 0 3px;
+      }
+      a {
+        color: var(--oxr-accent);
+      }
 
-      /* ---- Inspector footer: status + primary actions -------------------- */
+      /* ---- Sidebar footer: status + primary actions ----------------------- */
       #inspector-footer {
         flex: 0 0 auto;
         display: flex;
         flex-direction: column;
-        gap: 9px;
-        padding: 12px 14px;
+        gap: 8px;
+        padding: 8px;
         border-top: 1px solid var(--oxr-stroke);
-        background: #0c1014b3;
+        background: var(--oxr-bg-sunken);
       }
       .status-panel {
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 5px;
       }
       .status-line {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 7px;
       }
       #status-dot {
-        width: 8px;
-        height: 8px;
+        width: 7px;
+        height: 7px;
         border-radius: 50%;
         flex: 0 0 auto;
         background: var(--oxr-text-muted);
@@ -936,11 +1074,10 @@
         margin: 0;
         flex: 1;
         min-width: 0;
-        font-size: 0.78rem;
+        font-size: 11.5px;
         color: var(--oxr-text-muted);
         white-space: pre-wrap;
         line-height: 1.4;
-        font-family: var(--oxr-font-mono);
         max-height: 3.6em;
         overflow-y: auto;
       }
@@ -949,14 +1086,13 @@
       }
       #action-panel {
         display: flex;
-        gap: 8px;
+        gap: 6px;
         width: 100%;
       }
       #action-panel .action-btn {
         flex: 1 1 0;
         min-width: 0;
-        margin-bottom: 0;
-        padding: 9px 6px;
+        padding: 6px 4px;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -967,26 +1103,237 @@
         flex: 2 1 0;
       }
       .action-glyph {
-        font-size: 15px;
+        font-size: 16px;
         line-height: 1;
       }
+      /* Wraps rather than ellipsising: the footer holds four or five actions
+         and "Download G-code" cut to "Down…" is not a label, it is a riddle. */
       .action-label {
         font-size: 10px;
         font-weight: 600;
         max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      #action-panel .action-btn.primary .action-glyph {
-        font-size: 16px;
+        line-height: 1.15;
+        text-align: center;
+        overflow-wrap: anywhere;
       }
       #action-panel .action-btn.primary .action-label {
-        font-size: 12.5px;
+        font-size: 12px;
         font-weight: 700;
       }
 
-      /* ---- Viewport overlays --------------------------------------------- */
+      /* ---- Viewport: floating model toolbar -------------------------------- */
+      /* The tools sit over the top edge of the 3D view, centred, exactly where
+         the official application puts them. Icon-only with a tooltip, because
+         that is what a toolbar is — the labels still exist for assistive
+         technology and for the menu that lists the same actions. */
+      #viewport-toolbar {
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 12;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        max-width: calc(100% - 32px);
+        padding: 4px;
+        box-sizing: border-box;
+        background: var(--oxr-bg-card);
+        border: 1px solid var(--oxr-stroke);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-panel);
+        pointer-events: auto;
+      }
+      #viewport-toolbar[hidden] {
+        display: none;
+      }
+      #model-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 1px;
+        min-width: 0;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      #model-toolbar::-webkit-scrollbar {
+        display: none;
+      }
+      .tool-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        flex: 0 0 auto;
+        background: transparent;
+        color: var(--oxr-text);
+        border: 1px solid transparent;
+        border-radius: var(--radius-md);
+        padding: 0;
+        transition:
+          background var(--dur-fast) var(--ease-ui),
+          color var(--dur-fast) var(--ease-ui);
+      }
+      .tool-sep {
+        width: 1px;
+        height: 20px;
+        flex: 0 0 auto;
+        margin-inline: 3px;
+        background: var(--oxr-stroke);
+      }
+      .tool-icon {
+        font-size: 20px;
+        line-height: 1;
+      }
+      /* The name of the tool is its accessible name and its tooltip; on the
+         toolbar itself it is not drawn. It reappears in the phone layout,
+         where a 32px icon with no caption is not enough to act on. */
+      .tool-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+      .tool-btn:hover:not(:disabled) {
+        background: var(--oxr-surface-hover);
+      }
+      .tool-btn:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+      }
+      .tool-btn.active {
+        background: var(--oxr-accent);
+        color: var(--oxr-on-accent);
+      }
+      /* The sidebar's collapse handle, docked to the toolbar's inline start —
+         the `< >` control the desktop app puts against the panel edge. */
+      #toolbar-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 32px;
+        flex: 0 0 auto;
+        margin-inline-end: 3px;
+        background: transparent;
+        color: var(--oxr-text-muted);
+        border: none;
+        border-inline-end: 1px solid var(--oxr-stroke);
+        border-radius: 0;
+        font-size: 13px;
+        letter-spacing: -1px;
+      }
+      #toolbar-toggle:hover {
+        color: var(--oxr-text);
+      }
+      #toolbar-toggle[hidden] {
+        display: none;
+      }
+
+      /* ---- Viewport: plate strip ------------------------------------------ */
+      #plate-bar {
+        position: absolute;
+        inset-inline-end: 12px;
+        bottom: 12px;
+        z-index: 8;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px;
+        background: var(--oxr-bg-card);
+        border: 1px solid var(--oxr-stroke);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-panel);
+        pointer-events: auto;
+      }
+      .plate-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 9px;
+        border-radius: var(--radius-md);
+        background: transparent;
+        color: var(--oxr-text-muted);
+        font-size: 11.5px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .plate-chip:hover {
+        background: var(--oxr-surface-hover);
+      }
+      .plate-chip.active {
+        background: var(--oxr-accent);
+        color: var(--oxr-on-accent);
+      }
+      .plate-chip .plate-del {
+        font-size: 13px;
+        opacity: 0.65;
+      }
+      .plate-chip .plate-del:hover {
+        opacity: 1;
+      }
+      .plate-add {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        background: transparent;
+        border: 1px solid var(--oxr-stroke);
+        border-radius: var(--radius-md);
+        color: var(--oxr-text-muted);
+        font-size: 15px;
+        line-height: 1;
+      }
+      .plate-add:hover {
+        background: var(--oxr-surface-hover);
+        color: var(--oxr-text);
+      }
+
+      /* ---- Full-window pages: Device and Project --------------------------- */
+      /* Upstream's Device and Project tabs are pages, not panels: they take the
+         whole work area. Ours do the same, over the viewport, so the 3D scene
+         keeps its state while they are up. */
+      .workspace-page {
+        position: absolute;
+        inset: 0;
+        z-index: 14;
+        overflow-y: auto;
+        padding: 18px;
+        box-sizing: border-box;
+        background: var(--oxr-bg);
+        pointer-events: auto;
+      }
+      .workspace-page[hidden] {
+        display: none;
+      }
+      .page-inner {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        align-items: start;
+        gap: 14px;
+        max-width: 1180px;
+        margin-inline: auto;
+      }
+      .page-title {
+        max-width: 1180px;
+        margin: 0 auto 14px;
+        font-size: 17px;
+        font-weight: 700;
+        color: var(--oxr-text);
+      }
+      .workspace-page .panel {
+        background: var(--oxr-bg-card);
+        border: 1px solid var(--oxr-stroke);
+        border-radius: var(--radius-lg);
+        padding: 12px;
+        box-shadow: var(--shadow-panel);
+      }
+
+      /* ---- Viewport overlays ----------------------------------------------- */
       /* First-run guidance sits over the otherwise empty build plate. It is
          deliberately light-weight: it disappears as soon as a model loads,
          leaving the workspace completely unobstructed for experienced users. */
@@ -996,13 +1343,12 @@
         top: 50%;
         transform: translate(-50%, -50%);
         box-sizing: border-box;
-        width: min(430px, calc(100% - 48px));
-        padding: 26px;
-        background: linear-gradient(145deg, rgba(20, 28, 38, 0.94), rgba(8, 12, 17, 0.88));
-        backdrop-filter: blur(18px);
-        border: 1px solid var(--oxr-stroke-strong);
+        width: min(420px, calc(100% - 48px));
+        padding: 22px;
+        background: var(--oxr-bg-card);
+        border: 1px solid var(--oxr-stroke);
         border-radius: var(--radius-lg);
-        box-shadow: var(--shadow-modal);
+        box-shadow: var(--shadow-menu);
         text-align: center;
         pointer-events: auto;
         z-index: 4;
@@ -1011,64 +1357,67 @@
         display: none;
       }
       .empty-state-mark {
-        width: 44px;
-        height: 44px;
-        margin: 0 auto 12px;
+        width: 40px;
+        height: 40px;
+        margin: 0 auto 10px;
         display: grid;
         place-items: center;
-        background: rgba(255, 109, 0, 0.16);
-        color: var(--oxr-accent-soft);
-        border: 1px solid rgba(255, 109, 0, 0.38);
-        border-radius: 14px;
-        font-size: 23px;
+        background: var(--oxr-accent);
+        color: var(--oxr-on-accent);
+        border-radius: var(--radius-md);
+        font-size: 21px;
       }
       #workspace-empty-state h1 {
         margin: 0;
-        font-family: var(--oxr-font-display);
-        font-size: 21px;
-        letter-spacing: -0.4px;
+        font-size: 17px;
+        font-weight: 700;
       }
       #workspace-empty-state p {
-        margin: 8px 0 18px;
+        margin: 7px 0 15px;
         color: var(--oxr-text-muted);
-        font-size: 14px;
+        font-size: 12.5px;
         line-height: 1.5;
         text-wrap: pretty;
       }
       .empty-steps {
         display: grid;
-        gap: 8px;
-        margin: 0 0 18px;
+        gap: 7px;
+        margin: 0 0 15px;
         text-align: start;
       }
       .empty-step {
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 9px;
         color: var(--oxr-text-muted);
-        font-size: 13px;
+        font-size: 12.5px;
       }
       .empty-step b {
         display: grid;
         place-items: center;
-        width: 20px;
-        height: 20px;
+        width: 18px;
+        height: 18px;
         flex: 0 0 auto;
         border-radius: 50%;
-        background: var(--oxr-surface);
-        color: var(--oxr-accent-soft);
-        font-size: 11px;
+        background: var(--oxr-accent);
+        color: var(--oxr-on-accent);
+        font-size: 10.5px;
       }
       #empty-load-model {
         width: 100%;
       }
 
-      /* Layer scrubber docked to the bottom of the viewport during preview. */
+      /* The layer scrubber stands on the inline-end edge of the viewport, as it
+         does in the desktop application: a vertical slider beside the toolpath
+         rather than a bar across the bottom of it. The bottom edge then stays
+         free for the selection's filament bar. */
       #preview-scrubber-host {
         position: absolute;
-        inset-inline: 16px;
-        bottom: 16px;
+        inset-inline-end: 12px;
+        top: 60px;
+        bottom: 60px;
         z-index: 6;
+        display: flex;
         pointer-events: auto;
       }
       #preview-scrubber-host[hidden] {
@@ -1084,26 +1433,33 @@
       #selection-filament-host[hidden] {
         display: none;
       }
-      /* Both can be up at once: the scrubber owns the bottom edge. */
-      #preview-scrubber-host:not([hidden]) + #selection-filament-host {
-        bottom: 92px;
-      }
       .selection-filament-bar {
         display: flex;
         align-items: center;
         gap: 12px;
         flex-wrap: wrap;
-        padding: 9px 12px;
+        padding: 8px 11px;
         box-sizing: border-box;
-        background: var(--glass-fill);
-        backdrop-filter: var(--glass-blur);
+        background: var(--oxr-bg-card);
+        border: 1px solid var(--oxr-stroke);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-panel);
+      }
+      .preview-scrubber {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 8px;
+        box-sizing: border-box;
+        background: var(--oxr-bg-card);
         border: 1px solid var(--oxr-stroke);
         border-radius: var(--radius-lg);
         box-shadow: var(--shadow-panel);
       }
       .selection-filament-label {
         font-size: 12px;
-        font-weight: 650;
+        font-weight: 600;
         color: var(--oxr-text);
         max-width: 30ch;
         overflow: hidden;
@@ -1121,10 +1477,10 @@
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        padding: 5px 10px 5px 6px;
+        padding: 4px 9px 4px 5px;
         border: 1px solid var(--oxr-stroke);
-        border-radius: 999px;
-        background: var(--oxr-surface);
+        border-radius: var(--radius-pill);
+        background: var(--oxr-bg-card);
         color: var(--oxr-text);
         font-size: 12px;
         line-height: 1;
@@ -1142,7 +1498,7 @@
         box-shadow: inset 0 0 0 1px var(--oxr-accent);
       }
       .selection-filament-inherit {
-        padding-inline: 10px;
+        padding-inline: 9px;
       }
       .selection-filament-swatch {
         width: 14px;
@@ -1170,46 +1526,41 @@
       .selection-filament-status[data-selection-filament-error] {
         color: var(--oxr-danger);
       }
-      .preview-scrubber {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        flex-wrap: wrap;
-        padding: 11px 16px;
-        box-sizing: border-box;
-        background: var(--glass-fill);
-        backdrop-filter: var(--glass-blur);
-        border: 1px solid var(--oxr-stroke);
-        border-radius: var(--radius-lg);
-        box-shadow: var(--shadow-panel);
-      }
       .preview-scrubber-layer {
         font-family: var(--oxr-font-mono);
-        font-size: 12px;
-        color: var(--oxr-accent-soft);
-        min-width: 84px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--oxr-accent);
+        text-align: center;
         flex: 0 0 auto;
       }
       .preview-scrubber-range {
-        flex: 1 1 160px;
-        min-width: 120px;
+        /* A vertical range: `writing-mode` turns the track, and `direction` is
+           what puts the top layer at the top. Both are about the slider's own
+           axis, not about the document's writing direction, so they stay as
+           written under RTL. */
+        writing-mode: vertical-lr;
+        direction: rtl;
+        flex: 1 1 auto;
+        width: 20px;
+        min-height: 120px;
         accent-color: var(--oxr-accent);
       }
       .preview-scrubber-z {
         font-family: var(--oxr-font-mono);
-        font-size: 12px;
+        font-size: 11.5px;
         color: var(--oxr-text-muted);
-        min-width: 92px;
-        text-align: end;
+        text-align: center;
         flex: 0 0 auto;
       }
       .preview-scrubber-legend {
         display: flex;
-        align-items: center;
-        gap: 10px;
-        flex-wrap: wrap;
-        padding-inline-start: 12px;
-        border-inline-start: 1px solid var(--oxr-stroke);
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+        padding-top: 8px;
+        border-top: 1px solid var(--oxr-stroke);
+        width: 100%;
       }
       .preview-scrubber-legend:empty {
         display: none;
@@ -1229,23 +1580,20 @@
         flex: 0 0 auto;
       }
 
-      /* Contextual transform readout, shown in the Objects tab. */
+      /* Contextual transform readout, shown with the Objects card. */
       #tool-settings-panel {
         color: var(--oxr-text);
       }
 
-      /* When there is nothing on the plate the rail and most of the inspector
-         have nothing to act on. This is progressive disclosure, not removed
-         access — everything returns the moment a model loads. */
-      #ui-container.no-model #tool-rail {
-        display: none;
-      }
+      /* When there is nothing on the plate most tools have nothing to act on.
+         They stay visible and disabled — which is what the desktop app does,
+         and it is how an operator learns the toolbar before their first
+         import — but the panels that describe a model are hidden until there
+         is one. Printer, MCP and plate setup stay reachable: a maker may well
+         configure the machine before the first import. */
       #ui-container.no-model #bottom-action-bar [data-action-id]:not([data-action-id='load_model_from_path']) {
         display: none !important;
       }
-      /* Panels that describe a model, or a slice of one, have nothing to show
-         yet. Printer, MCP and plate setup stay reachable: a maker may well
-         configure the machine before the first import. */
       #ui-container.no-model #settings-inspector-host,
       #ui-container.no-model #filament-panel,
       #ui-container.no-model #tool-settings-panel {
@@ -1257,7 +1605,7 @@
       #XRButtonWrapper {
         position: fixed !important;
         bottom: 24px !important;
-        inset-inline-end: calc(var(--inspector-w, 380px) + 24px) !important;
+        inset-inline-end: 24px !important;
         top: auto !important;
         inset-inline-start: auto !important;
         width: auto !important;
@@ -1269,32 +1617,29 @@
         display: none; /* Hide the big title in 2D mode */
       }
       .XRButton {
-        background: var(--oxr-surface) !important;
+        background: var(--oxr-bg-card) !important;
         color: var(--oxr-text) !important;
-        backdrop-filter: blur(8px);
-        border: 1px solid var(--oxr-stroke-strong) !important;
-        border-radius: var(--radius-pill);
+        border: 1px solid var(--oxr-stroke) !important;
+        border-radius: var(--radius-md);
         font-weight: 600;
-        font-size: 1rem !important;
+        font-size: 0.85rem !important;
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 14px 24px !important;
+        padding: 10px 18px !important;
         min-width: auto !important;
         box-shadow: var(--shadow-panel) !important;
-        transition: all var(--dur-slow) var(--ease-ui);
+        transition: all var(--dur-base) var(--ease-ui);
       }
       .XRButton:hover {
         background: var(--oxr-surface-hover) !important;
-        transform: scale(1.05);
       }
 
-      /* ---- Command palette ----------------------------------------------- */
+      /* ---- Command palette ------------------------------------------------- */
       #command-palette {
         position: fixed;
         inset: 0;
-        background: rgba(4, 6, 9, 0.55);
-        backdrop-filter: blur(6px);
+        background: rgba(20, 26, 28, 0.35);
         display: none;
         align-items: flex-start;
         justify-content: center;
@@ -1308,8 +1653,7 @@
         margin-top: 11vh;
         width: min(600px, 92vw);
         background: var(--oxr-bg-elevated);
-        backdrop-filter: blur(20px);
-        border: 1px solid var(--oxr-stroke-strong);
+        border: 1px solid var(--oxr-stroke);
         border-radius: var(--radius-lg);
         box-shadow: var(--shadow-modal);
         overflow: hidden;
@@ -1321,31 +1665,34 @@
         color: var(--oxr-text);
         border: none;
         border-bottom: 1px solid var(--oxr-stroke);
-        padding: 16px 20px;
-        font-size: 15px;
+        padding: 13px 16px;
+        font-size: 14px;
         font-family: var(--oxr-font-sans);
         outline: none;
       }
       .cmd-list {
         max-height: 48vh;
         overflow-y: auto;
-        padding: 6px;
+        padding: 5px;
       }
       .cmd-item {
         display: flex;
         align-items: center;
-        gap: 12px;
-        padding: 10px 13px;
+        gap: 10px;
+        padding: 8px 11px;
         border-radius: var(--radius-sm);
         cursor: pointer;
       }
       .cmd-item .glyph {
-        width: 20px;
-        text-align: center;
-        opacity: 0.85;
+        width: 18px;
+        font-size: 17px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--oxr-text-muted);
       }
       .cmd-item .cmd-label {
-        font-size: 13.5px;
+        font-size: 13px;
       }
       .cmd-item .cmd-hint {
         margin-inline-start: auto;
@@ -1360,16 +1707,16 @@
         background: var(--oxr-surface-hover);
       }
       .cmd-item.disabled {
-        opacity: 0.4;
+        opacity: 0.45;
       }
       .cmd-empty {
-        padding: 20px;
+        padding: 18px;
         color: var(--oxr-text-muted);
-        font-size: 13px;
+        font-size: 12.5px;
         text-align: center;
       }
 
-      /* ---- Tooltips ------------------------------------------------------- */
+      /* ---- Tooltips -------------------------------------------------------- */
       .u1-tooltip {
         position: relative;
         display: inline-flex;
@@ -1379,11 +1726,11 @@
       .u1-tooltip .tooltip-content {
         visibility: hidden;
         width: 280px;
-        background-color: #2a2f35;
-        color: #e0e6ee;
+        background-color: var(--oxr-bg-elevated);
+        color: var(--oxr-text);
         text-align: start;
-        border-radius: var(--radius-sm);
-        padding: 12px;
+        border-radius: var(--radius-md);
+        padding: 11px;
         position: absolute;
         z-index: 10000;
         bottom: 125%;
@@ -1396,10 +1743,11 @@
         transform: translateX(-50%);
         font-size: 11.5px;
         font-weight: normal;
+        line-height: 1.5;
         box-shadow: var(--shadow-menu);
-        border: 1px solid #4a5568;
+        border: 1px solid var(--oxr-stroke);
         opacity: 0;
-        transition: opacity var(--dur-slow) var(--ease-ui);
+        transition: opacity var(--dur-base) var(--ease-ui);
         pointer-events: none;
         text-transform: none;
       }
@@ -1429,129 +1777,115 @@
         animation-iteration-count: 1 !important;
       }
 
-      /* ---- Tablet: give the viewport back some width ---------------------- */
+      /* ---- Tablet: give the viewport back some width ----------------------- */
       @media (max-width: 1180px) {
         #ui-container {
-          --inspector-w: 320px;
-        }
-        #cmd-search-btn {
-          min-width: 0;
+          --sidebar-w: 312px;
         }
         #cmd-search-btn .cmd-search-label {
           display: none;
         }
+        .view-tab {
+          padding-inline: 12px;
+        }
       }
 
-      /* ---- Phones: the docked columns become stacked sheets --------------- */
+      /* ---- Phones: the docked columns become stacked sheets ---------------- */
       @media (max-width: 768px) {
         #ui-container {
-          --inspector-w: auto;
+          --sidebar-w: auto;
         }
-        #top-bar {
-          gap: 6px;
-          padding: 6px 8px;
+        #app-title,
+        #cmd-search-btn .cmd-search-label {
+          display: none;
+        }
+        /* The seven menu triggers do not fit; the hamburger stands in for the
+           whole bar and opens it as a sheet under the strip. */
+        #menu-button {
+          display: inline-flex;
+          align-items: center;
           justify-content: center;
-        }
-        #app-title {
-          display: none;
-        }
-        .header-spacer {
-          display: none;
+          width: 26px;
+          height: 22px;
+          background: transparent;
+          border: none;
+          border-radius: var(--radius-sm);
+          color: var(--oxr-text);
+          font-size: 15px;
         }
         #menu-bar-host {
-          inset-inline: 8px;
-          max-width: none;
+          display: none;
+          position: absolute;
+          top: 100%;
+          inset-inline: 4px;
+          z-index: 70;
           flex-wrap: wrap;
+          gap: 2px;
+          padding: 6px;
+          background: var(--oxr-bg-elevated);
+          border: 1px solid var(--oxr-stroke);
+          border-radius: var(--radius-md);
+          box-shadow: var(--shadow-menu);
         }
-        #stage-bar {
-          order: 3;
-          width: 100%;
-          justify-content: center;
+        #menu-bar-host.open {
+          display: flex;
         }
-        .stage-btn {
-          padding: 6px 9px;
-          font-size: 12px;
+        .view-tab {
+          padding-inline: 11px;
+          font-size: 12.5px;
+        }
+        .print-btn {
+          padding-inline: 10px;
         }
         #workspace-row {
           position: relative;
           display: block;
         }
-        /* The rail becomes a horizontal strip pinned above the inspector sheet. */
-        #tool-rail {
-          position: absolute;
-          inset-inline: 8px;
-          bottom: 8px;
-          width: auto;
-          z-index: 25;
-          flex-direction: row;
-          align-items: center;
-          gap: 4px;
-          padding: 6px;
-          border: 1px solid var(--oxr-stroke);
-          border-radius: var(--radius-md);
-        }
-        #tool-rail.collapsed {
-          width: auto;
-        }
-        #left-toolbar {
-          flex-direction: row;
-          overflow-x: auto;
-          overflow-y: hidden;
-          scrollbar-width: none;
-        }
-        #left-toolbar::-webkit-scrollbar {
-          display: none;
-        }
-        .tool-btn {
-          width: auto;
-          padding: 10px 12px;
-          font-size: 13px;
-          white-space: nowrap;
-          gap: 7px;
-        }
-        #toolbar-toggle {
-          margin-top: 0;
-        }
         #viewport {
           position: absolute;
           inset: 0;
         }
-        /* The inspector turns into a bottom sheet whose header toggles it. */
-        #right-sidebar {
+        #viewport-toolbar {
+          top: auto;
+          bottom: 8px;
+          max-width: calc(100% - 16px);
+          border-radius: var(--radius-md);
+        }
+        #plate-bar {
+          bottom: 56px;
+        }
+        /* The sidebar turns into a bottom sheet whose handle toggles it. */
+        #param-sidebar {
           position: absolute;
           inset-inline: 8px;
-          bottom: 68px;
+          bottom: 60px;
           top: auto;
           z-index: 24;
           width: auto;
           max-height: 56vh;
           border: 1px solid var(--oxr-stroke);
           border-radius: var(--radius-md);
+          box-shadow: var(--shadow-menu);
         }
-        #inspector-title {
-          font-size: 1.02rem;
-          cursor: pointer;
+        #param-sidebar.collapsed {
+          width: auto;
         }
-        #inspector-title::after {
-          content: ' ▾';
-          color: var(--oxr-accent-soft);
-          font-size: 0.8em;
+        #sidebar-handle {
+          display: flex;
         }
-        #right-sidebar.collapsed #inspector-scroll,
-        #right-sidebar.collapsed #inspector-footer,
-        #right-sidebar.collapsed #preflight-banners {
+        #param-sidebar.collapsed #param-scroll,
+        #param-sidebar.collapsed #inspector-footer,
+        #param-sidebar.collapsed #preflight-banners {
           display: none;
         }
-        #right-sidebar.collapsed #inspector-title::after {
-          content: ' ▸';
-        }
         #preview-scrubber-host {
-          inset-inline: 8px;
-          bottom: 76px;
+          inset-inline-end: 8px;
+          top: 56px;
+          bottom: 120px;
         }
         #workspace-empty-state {
-          top: 42%;
-          padding: 20px;
+          top: 40%;
+          padding: 18px;
           width: min(360px, calc(100% - 32px));
         }
         /* 16px inputs stop iOS Safari from zooming into focused fields. */
@@ -1565,11 +1899,11 @@
           inset-inline-end: 8px !important;
         }
         .XRButton {
-          padding: 13px 16px !important;
-          font-size: 0.85rem !important;
+          padding: 10px 14px !important;
+          font-size: 0.8rem !important;
         }
         /* XR Blocks' desktop-simulator settings gear — meaningless on touch
-           devices and it lands on top of the bottom tool rail. */
+           devices and it lands on top of the bottom toolbar. */
         xrblocks-simulator-settings {
           display: none !important;
         }
@@ -1597,8 +1931,7 @@
           display: none;
           position: fixed;
           inset: 0;
-          background: rgba(4, 6, 9, 0.72);
-          backdrop-filter: blur(10px);
+          background: rgba(20, 26, 28, 0.42);
           z-index: 100;
           justify-content: center;
           align-items: center;
@@ -1624,10 +1957,9 @@
               margin: 0 auto 14px;
               display: grid;
               place-items: center;
-              border-radius: 14px;
-              background: rgba(255, 109, 0, 0.16);
-              border: 1px solid rgba(255, 109, 0, 0.38);
-              color: var(--oxr-accent-soft);
+              border-radius: var(--radius-md);
+              background: var(--oxr-accent);
+              color: var(--oxr-on-accent);
               font-size: 20px;
               animation: oxr-pulse 1.2s ease-in-out infinite;
             "
@@ -1653,7 +1985,7 @@
             aria-valuemax="100"
             aria-valuenow="0"
             id="dom-slice-progress"
-            style="width: 100%; height: 8px; background: #ffffff14; border-radius: 5px; overflow: hidden"
+            style="width: 100%; height: 8px; background: var(--oxr-bg-sunken); border-radius: 5px; overflow: hidden"
           >
             <div
               id="dom-slice-bar"
@@ -1673,8 +2005,7 @@
           display: none;
           position: fixed;
           inset: 0;
-          background: rgba(4, 6, 9, 0.7);
-          backdrop-filter: blur(8px);
+          background: rgba(20, 26, 28, 0.42);
           z-index: 9999;
           align-items: center;
           justify-content: center;
@@ -1710,7 +2041,7 @@
           <div
             style="
               width: 100%;
-              background: #ffffff14;
+              background: var(--oxr-bg-sunken);
               border-radius: 8px;
               height: 10px;
               overflow: hidden;
@@ -1735,61 +2066,471 @@
         </div>
       </div>
 
-      <!-- ============================ Header ============================ -->
-      <header id="top-bar">
-        <div class="brand">
-          <div class="brand-mark" aria-hidden="true">◈</div>
-          <span id="app-title">OrcaXR</span>
+      <!-- ===================== Header: menu strip ====================== -->
+      <header id="app-header">
+        <div id="menu-strip">
+          <div class="brand">
+            <div class="brand-mark" aria-hidden="true">◈</div>
+            <span id="app-title">OrcaXR</span>
+          </div>
+
+          <!-- The full upstream menu surface — File / Edit / View / Add /
+               Tools / Calibration / Help — as a real menu bar, one dropdown
+               per section, built from the ActionRegistry by DomShell. The
+               hamburger is the same bar on a window too narrow to show it. -->
+          <button
+            id="menu-button"
+            type="button"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-controls="menu-bar-host"
+            title="Menus"
+          >
+            <span aria-hidden="true">☰</span>
+          </button>
+          <div id="menu-bar-host" class="menu-bar" role="group" aria-label="Application menus"></div>
+
+          <span class="strip-sep" aria-hidden="true"></span>
+          <!-- Save / undo / redo, from the registry. -->
+          <div id="quick-actions" role="group" aria-label="Quick actions"></div>
+
+          <div class="header-spacer"></div>
+
+          <button
+            id="cmd-search-btn"
+            type="button"
+            title="Command palette (Ctrl/⌘ K)"
+            aria-keyshortcuts="Control+K Meta+K"
+          >
+            <span class="oxr-icon" data-icon="search" aria-hidden="true"></span>
+            <span class="cmd-search-label">Search actions &amp; settings</span>
+            <kbd aria-hidden="true">⌘K</kbd>
+          </button>
+          <button id="btn-theme" class="strip-btn" type="button" title="Dark mode" aria-pressed="false">
+            <span class="oxr-icon" data-icon="dark_mode" aria-hidden="true"></span>
+          </button>
+          <button
+            id="cmd-ai-config"
+            class="strip-btn"
+            type="button"
+            title="AI configuration"
+            aria-label="AI configuration"
+          >
+            <span class="oxr-icon" data-icon="smart_paint" aria-hidden="true"></span>
+          </button>
         </div>
 
-        <!-- Full Snapmaker Orca-style menu surface (File / Edit / View / Add /
-             Tools / Calibration / Help) in one mega menu, built from the
-             ActionRegistry by DomShell. -->
-        <button id="menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="menu-bar-host">
-          <span aria-hidden="true">☰</span> Menu
-        </button>
-        <div id="menu-bar-host" class="menu-bar" role="group" aria-label="Application menus"></div>
-
-        <button
-          id="cmd-search-btn"
-          type="button"
-          title="Command palette (Ctrl/⌘ K)"
-          aria-keyshortcuts="Control+K Meta+K"
-        >
-          <span aria-hidden="true">⌕</span>
-          <span class="cmd-search-label">Search actions &amp; settings</span>
-          <kbd aria-hidden="true">⌘K</kbd>
-        </button>
-
-        <div class="header-spacer"></div>
-
-        <!-- Prepare → Slice → Preview → Send, rendered from the registry. -->
-        <div id="stage-bar" role="group" aria-label="Print workflow"></div>
-
-        <div id="plate-bar" title="Build plates"></div>
-        <button
-          id="cmd-ai-config"
-          class="icon-btn"
-          type="button"
-          title="AI Configuration"
-          aria-label="AI configuration"
-        >
-          ⚙
-        </button>
+        <!-- ==================== Header: view tabs ====================== -->
+        <div id="tab-strip">
+          <button id="btn-home" type="button" title="Home view" aria-label="Home view">
+            <span class="oxr-icon" data-icon="view_default" aria-hidden="true"></span>
+          </button>
+          <!-- Prepare · Preview · Device · Project, rendered by DomShell. -->
+          <div id="view-tabs" role="tablist" aria-label="Workspace"></div>
+          <div class="header-spacer"></div>
+          <!-- Slice plate · Print, the same registry actions as everywhere. -->
+          <div id="print-actions" role="group" aria-label="Slice and print"></div>
+        </div>
       </header>
 
       <!-- ========================== Workspace ========================== -->
       <div id="workspace-row">
-        <!-- Tool rail — rendered from the shared ActionRegistry by DomShell. -->
-        <aside id="tool-rail" aria-label="Model tools">
-          <div id="left-toolbar" role="toolbar" aria-label="Model tools" tabindex="0"></div>
-          <button id="toolbar-toggle" type="button" aria-controls="tool-rail" aria-expanded="true">
-            <span class="tool-icon" aria-hidden="true">⤒</span>
-            <span class="tool-label">Collapse</span>
+        <!-- ==================== Parameter sidebar ===================== -->
+        <aside id="param-sidebar" aria-label="Print settings">
+          <!-- Phone layout only: the sheet's own handle. -->
+          <button id="sidebar-handle" type="button" aria-expanded="true" aria-controls="param-scroll">
+            Print settings
           </button>
+
+          <div id="preflight-banners"></div>
+
+          <div id="param-scroll">
+            <section class="oxr-card" id="card-preview" data-sidebar-card="preview" hidden>
+              <div class="card-head">
+                <span class="card-icon oxr-icon" data-icon="preview" aria-hidden="true"></span>
+                <h2>Preview</h2>
+                <div class="card-head-actions">
+                  <button
+                    class="card-toggle"
+                    type="button"
+                    data-card-toggle="preview"
+                    aria-expanded="true"
+                    aria-controls="card-body-preview"
+                    title="Collapse Preview"
+                  >
+                    <span class="oxr-icon" data-icon="chevron_down" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
+              <div class="card-body" id="card-body-preview">
+                <details class="insp-section">
+                  <summary>G-code listing</summary>
+                  <div id="gcode-panel-host" class="panel" style="min-height: 0"></div>
+                </details>
+                <details class="insp-section" open>
+                  <summary>G-code preview</summary>
+                  <div id="gcode-preview-panel-host" class="panel" style="min-height: 0"></div>
+                </details>
+                <details class="insp-section">
+                  <summary>Layer events</summary>
+                  <div id="layer-event-host" class="panel" style="min-height: 0"></div>
+                </details>
+              </div>
+            </section>
+            <section class="oxr-card" id="card-printer" data-sidebar-card="printer">
+              <div class="card-head">
+                <span class="card-icon oxr-icon" data-icon="output" aria-hidden="true"></span>
+                <h2>Printer</h2>
+                <div class="card-head-actions">
+                  <button
+                    class="card-toggle"
+                    type="button"
+                    data-card-toggle="printer"
+                    aria-expanded="true"
+                    aria-controls="card-body-printer"
+                    title="Collapse Printer"
+                  >
+                    <span class="oxr-icon" data-icon="chevron_down" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
+              <div class="card-body" id="card-body-printer">
+                <div class="field-row">
+                  <span class="field-label" id="label-sel-machine">Printer</span>
+                  <select
+                    id="sel-machine"
+                    class="field-control text-input"
+                    aria-labelledby="label-sel-machine"
+                  ></select>
+                </div>
+                <details id="preset-library-details">
+                  <summary class="insp-kicker" style="cursor: pointer">Printers and presets</summary>
+                  <div id="preset-library-host" style="margin-top: 8px"></div>
+                </details>
+                <input id="preset-bundle-file" type="file" accept="application/json,.json" hidden />
+              </div>
+            </section>
+            <section class="oxr-card" id="card-filament" data-sidebar-card="filament">
+              <div class="card-head">
+                <span class="card-icon oxr-icon" data-icon="filament" aria-hidden="true"></span>
+                <h2>Filament</h2>
+                <div class="card-head-actions">
+                  <button
+                    class="card-toggle"
+                    type="button"
+                    data-card-toggle="filament"
+                    aria-expanded="true"
+                    aria-controls="card-body-filament"
+                    title="Collapse Filament"
+                  >
+                    <span class="oxr-icon" data-icon="chevron_down" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
+              <div class="card-body" id="card-body-filament">
+                <div class="field-row">
+                  <span class="field-label" id="label-sel-filament">Filament</span>
+                  <select
+                    id="sel-filament"
+                    class="field-control text-input"
+                    aria-labelledby="label-sel-filament"
+                  ></select>
+                </div>
+                <!-- Shown only when the per-head pickers replace the single dropdown above, so
+                     a multi-head printer never looks like it lost its filament control. -->
+                <p id="profile-filament-hint" class="field-note" hidden></p>
+                <div class="panel" id="filament-heads-card">
+                  <span class="insp-kicker" style="display: block; margin-bottom: 8px">Filaments</span>
+                  <div id="heads-panel" style="display: flex; flex-direction: column; gap: 8px"></div>
+                </div>
+                <div class="panel" id="filament-panel">
+                  <div
+                    id="auxiliary-palette-section"
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px"
+                  >
+                    <span class="insp-kicker">Extra palette colours</span>
+                    <button
+                      id="btn-add-filament"
+                      type="button"
+                      aria-label="Add filament"
+                      style="
+                        background: var(--oxr-surface);
+                        color: var(--oxr-text);
+                        border: 1px solid var(--oxr-stroke);
+                        border-radius: 6px;
+                        width: 26px;
+                        height: 26px;
+                        font-size: 16px;
+                        line-height: 1;
+                      "
+                    >
+                      +
+                    </button>
+                  </div>
+                  <div id="filament-swatches" style="display: flex; flex-wrap: wrap; gap: 8px"></div>
+                  <!-- Legacy-only preview fallback; canonical mixed rows live in the editor below. -->
+                  <div id="virtual-filament-panel" style="display: none; margin-top: 10px">
+                    <div id="virtual-filament-title" class="insp-kicker" style="margin-bottom: 6px"></div>
+                    <div id="virtual-filament-swatches" style="display: flex; flex-wrap: wrap; gap: 6px"></div>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section class="oxr-card folded" id="card-mixing" data-sidebar-card="mixing">
+              <div class="card-head">
+                <span class="card-icon oxr-icon" data-icon="palette" aria-hidden="true"></span>
+                <h2>Color Mixing</h2>
+                <div class="card-head-actions">
+                  <button
+                    class="card-toggle"
+                    type="button"
+                    data-card-toggle="mixing"
+                    aria-expanded="false"
+                    aria-controls="card-body-mixing"
+                    title="Collapse Color Mixing"
+                  >
+                    <span class="oxr-icon" data-icon="chevron_down" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
+              <div class="card-body" id="card-body-mixing">
+                <details id="virtual-filament-library-section" class="insp-section">
+                  <summary>Virtual filaments</summary>
+                  <div class="panel" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px">
+                    <label class="check-row" style="align-items: flex-start">
+                      <input id="chk-full-spectrum-auto-pairs" type="checkbox" style="margin-top: 1px" />
+                      Generate automatic physical-filament pairs
+                    </label>
+                    <p
+                      id="full-spectrum-auto-pairs-status"
+                      aria-live="polite"
+                      style="margin: 0; color: var(--oxr-text-muted); font-size: 11px; line-height: 1.35"
+                    ></p>
+                    <button
+                      id="btn-confirm-full-spectrum-auto-pairs"
+                      type="button"
+                      class="action-btn"
+                      style="display: none; text-align: start; font-size: 12px"
+                    ></button>
+                    <button
+                      id="btn-recreate-model-colors"
+                      type="button"
+                      class="action-btn"
+                      style="text-align: start; font-size: 12px"
+                    >
+                      Match model colors to filaments
+                    </button>
+                  </div>
+                  <div id="virtual-filament-library-host" class="panel" style="min-height: 0"></div>
+                </details>
+                <details class="insp-section">
+                  <summary>Filament assignment</summary>
+                  <div id="filament-assignment-host" class="panel" style="min-height: 0"></div>
+                </details>
+              </div>
+            </section>
+            <section class="oxr-card" id="card-process" data-sidebar-card="process">
+              <div class="card-head">
+                <span class="card-icon oxr-icon" data-icon="slice_group" aria-hidden="true"></span>
+                <h2>Process</h2>
+                <div class="segmented" id="process-scope" role="group" aria-label="Settings scope">
+                  <button type="button" data-process-scope="global" aria-pressed="true">Global</button>
+                  <button type="button" data-process-scope="objects" aria-pressed="false">Objects</button>
+                </div>
+                <span class="switch-row">
+                  <span id="process-advanced-label">Advanced</span>
+                  <button
+                    id="process-advanced"
+                    class="switch"
+                    type="button"
+                    role="switch"
+                    aria-checked="false"
+                    aria-labelledby="process-advanced-label"
+                  ></button>
+                </span>
+                <div class="card-head-actions">
+                  <button
+                    class="card-toggle"
+                    type="button"
+                    data-card-toggle="process"
+                    aria-expanded="true"
+                    aria-controls="card-body-process"
+                    title="Collapse Process"
+                  >
+                    <span class="oxr-icon" data-icon="chevron_down" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
+              <div class="card-body" id="card-body-process">
+                <div class="field-row">
+                  <span class="field-label" id="label-sel-process">Process</span>
+                  <select
+                    id="sel-process"
+                    class="field-control text-input"
+                    aria-labelledby="label-sel-process"
+                  ></select>
+                  <button id="btn-process-search" class="icon-btn" type="button" title="Search parameters">
+                    <span class="oxr-icon" data-icon="search" aria-hidden="true"></span>
+                  </button>
+                </div>
+                <label class="check-row">
+                  <input id="chk-wipe-tower-auto" type="checkbox" checked />
+                  Auto-position wipe tower
+                </label>
+                <!-- Data-driven Settings Inspector -->
+                <div
+                  id="settings-inspector-host"
+                  style="display: flex; flex-direction: column; min-height: 200px"
+                ></div>
+              </div>
+            </section>
+            <section class="oxr-card" id="card-objects" data-sidebar-card="objects">
+              <div class="card-head">
+                <span class="card-icon oxr-icon" data-icon="scene" aria-hidden="true"></span>
+                <h2>Objects</h2>
+                <div class="card-head-actions">
+                  <button
+                    class="card-toggle"
+                    type="button"
+                    data-card-toggle="objects"
+                    aria-expanded="true"
+                    aria-controls="card-body-objects"
+                    title="Collapse Objects"
+                  >
+                    <span class="oxr-icon" data-icon="chevron_down" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
+              <div class="card-body" id="card-body-objects">
+                <div id="objects-panel-host" class="panel" style="min-height: 0"></div>
+
+                <!-- Numeric transform readout for the active gizmo. -->
+                <div id="tool-settings-panel" class="insp-card" style="display: none">
+                  <div style="display: flex; justify-content: space-between; align-items: center">
+                    <span id="tool-settings-title" class="insp-kicker">Tool Settings</span>
+                    <button
+                      id="btn-close-tool-settings"
+                      type="button"
+                      aria-label="Close tool settings"
+                      style="
+                        background: none;
+                        border: none;
+                        color: var(--oxr-text-muted);
+                        font-size: 16px;
+                        line-height: 1;
+                      "
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div id="tool-settings-content" style="display: flex; flex-direction: column; gap: 12px"></div>
+                </div>
+
+                <details class="insp-section">
+                  <summary>Semantic object editing</summary>
+                  <div id="semantic-object-editor-host" class="panel" style="min-height: 0"></div>
+                </details>
+              </div>
+            </section>
+            <section class="oxr-card folded" id="card-tools" data-sidebar-card="tools">
+              <div class="card-head">
+                <span class="card-icon oxr-icon" data-icon="advanced" aria-hidden="true"></span>
+                <h2>Object tools</h2>
+                <div class="card-head-actions">
+                  <button
+                    class="card-toggle"
+                    type="button"
+                    data-card-toggle="tools"
+                    aria-expanded="false"
+                    aria-controls="card-body-tools"
+                    title="Collapse Object tools"
+                  >
+                    <span class="oxr-icon" data-icon="chevron_down" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
+              <div class="card-body" id="card-body-tools">
+                <details class="insp-section">
+                  <summary>Colour painting</summary>
+                  <div id="paint-panel-host" class="panel" style="min-height: 0"></div>
+                </details>
+
+                <details class="insp-section">
+                  <summary>Smart Paint</summary>
+                  <div id="smart-paint-panel-host" class="panel" style="min-height: 0"></div>
+                </details>
+
+                <details class="insp-section">
+                  <summary>Measure</summary>
+                  <div id="measure-panel-host" class="panel" style="min-height: 0"></div>
+                </details>
+
+                <details class="insp-section">
+                  <summary>Brim ears</summary>
+                  <div id="brim-ears-panel-host" class="panel" style="min-height: 0"></div>
+                  <div id="emboss-panel-host" class="panel" style="min-height: 0"></div>
+                  <div id="svg-panel-host" class="panel" style="min-height: 0"></div>
+                </details>
+                <details class="insp-section">
+                  <summary>Simplify</summary>
+                  <div id="simplify-panel-host" class="panel" style="min-height: 0"></div>
+                </details>
+                <details class="insp-section">
+                  <summary>Calibration parameters</summary>
+                  <div id="calibration-parameters-host" class="panel" style="min-height: 0"></div>
+                </details>
+              </div>
+            </section>
+          </div>
+
+          <div id="inspector-footer">
+            <div class="status-panel">
+              <div class="status-line">
+                <span id="status-dot" aria-hidden="true"></span>
+                <p id="status-text" role="status" aria-live="polite">Ready. Load a model to begin.</p>
+              </div>
+              <div
+                id="progress-container"
+                style="display: none; width: 100%; background-color: var(--oxr-bg-sunken); border-radius: 4px"
+              >
+                <div
+                  id="progress-bar"
+                  style="
+                    width: 0%;
+                    height: 6px;
+                    background: var(--oxr-grad-progress);
+                    border-radius: 4px;
+                    transition: width 0.1s linear;
+                  "
+                ></div>
+              </div>
+            </div>
+            <!-- Primary actions — rendered from the ActionRegistry by DomShell. -->
+            <div id="bottom-action-bar">
+              <div id="action-panel">
+                <input
+                  type="file"
+                  id="file-input"
+                  accept=".3mf,.stl,.obj,.amf,.amfz,.zip,.gcode,.gco,.g"
+                  multiple
+                  style="display: none"
+                />
+              </div>
+            </div>
+          </div>
         </aside>
 
         <main id="viewport" aria-label="Build plate">
+          <!-- Model tools float over the top edge of the 3D view, as upstream.
+               Rendered from the shared ActionRegistry by DomShell. -->
+          <div id="viewport-toolbar">
+            <button id="toolbar-toggle" type="button" aria-controls="param-sidebar" aria-expanded="true">
+              <span class="tool-icon" aria-hidden="true">‹›</span>
+              <span class="tool-label">Collapse the settings sidebar</span>
+            </button>
+            <div id="model-toolbar" role="toolbar" aria-label="Model tools" tabindex="0"></div>
+          </div>
+
           <!-- Glanceable printer status (P9.7): mounted by main.ts, shown only
                when there is something to know, on every tab and at every width. -->
           <div id="printer-status-host"></div>
@@ -1818,246 +2559,13 @@
           <!-- One-click filament for whatever is selected. Deliberately after
                the scrubber so CSS can lift it when both are on screen. -->
           <div id="selection-filament-host" hidden></div>
-        </main>
+          <!-- Build plates, where upstream keeps them: on the plate itself. -->
+          <div id="plate-bar" title="Build plates"></div>
 
-        <!-- ========================= Inspector ========================= -->
-        <aside id="right-sidebar" aria-label="Inspector">
-          <div id="inspector-tabs" role="tablist" aria-label="Inspector sections"></div>
-
-          <div id="inspector-head">
-            <h2 id="inspector-title">Objects on plate</h2>
-            <span id="inspector-meta"></span>
-          </div>
-
-          <div id="preflight-banners"></div>
-
-          <div id="inspector-scroll">
-            <!-- ---------------------------- Objects ---------------------------- -->
-            <section class="insp-panel" id="insp-panel-objects" role="tabpanel" aria-labelledby="insp-tab-objects">
-              <div id="objects-panel-host" class="panel" style="min-height: 0"></div>
-
-              <!-- Numeric transform readout for the active gizmo. -->
-              <div id="tool-settings-panel" class="insp-card" style="display: none">
-                <div style="display: flex; justify-content: space-between; align-items: center">
-                  <span id="tool-settings-title" class="insp-kicker">Tool Settings</span>
-                  <button
-                    id="btn-close-tool-settings"
-                    type="button"
-                    aria-label="Close tool settings"
-                    style="
-                      background: none;
-                      border: none;
-                      color: var(--oxr-text-muted);
-                      font-size: 16px;
-                      line-height: 1;
-                    "
-                  >
-                    ×
-                  </button>
-                </div>
-                <div id="tool-settings-content" style="display: flex; flex-direction: column; gap: 12px"></div>
-              </div>
-
-              <details class="insp-section">
-                <summary>Semantic object editing</summary>
-                <div id="semantic-object-editor-host" class="panel" style="min-height: 0"></div>
-              </details>
-            </section>
-
-            <!-- ---------------------------- Settings --------------------------- -->
-            <section
-              class="insp-panel"
-              id="insp-panel-settings"
-              role="tabpanel"
-              aria-labelledby="insp-tab-settings"
-              hidden
-            >
-              <div class="panel" id="profile-panel" style="display: flex; flex-direction: column; gap: 8px">
-                <select
-                  id="sel-machine"
-                  aria-label="Printer profile"
-                  class="action-btn"
-                  style="text-align: start"
-                ></select>
-                <select
-                  id="sel-process"
-                  aria-label="Process profile"
-                  class="action-btn"
-                  style="text-align: start"
-                ></select>
-                <select
-                  id="sel-filament"
-                  aria-label="Filament profile"
-                  class="action-btn"
-                  style="text-align: start"
-                ></select>
-                <!-- Shown only when the per-head pickers replace the single
-                     dropdown above, so a multi-head printer never looks like it
-                     lost its filament control. -->
-                <p
-                  id="profile-filament-hint"
-                  hidden
-                  style="margin: 0; color: var(--oxr-text-muted); font-size: 11px; line-height: 1.35"
-                ></p>
-                <details id="preset-library-details">
-                  <summary class="insp-kicker" style="cursor: pointer">Printers and presets</summary>
-                  <div id="preset-library-host" style="margin-top: 8px"></div>
-                </details>
-                <input id="preset-bundle-file" type="file" accept="application/json,.json" hidden />
-              </div>
-              <label class="check-row">
-                <input id="chk-wipe-tower-auto" type="checkbox" checked />
-                Auto-position wipe tower
-              </label>
-              <!-- Data-driven Settings Inspector -->
-              <div id="settings-inspector-host" style="display: flex; flex-direction: column; min-height: 200px"></div>
-            </section>
-
-            <!-- ---------------------------- Filament --------------------------- -->
-            <section
-              class="insp-panel"
-              id="insp-panel-filament"
-              role="tabpanel"
-              aria-labelledby="insp-tab-filament"
-              hidden
-            >
-              <!-- What is actually loaded, head by head: the machine's own spools,
-                   their presets and nozzles. Deliberately outside #filament-panel
-                   so it stays reachable before the first import — configuring the
-                   machine is not something that waits for a model. -->
-              <div class="panel" id="filament-heads-card">
-                <span class="insp-kicker" style="display: block; margin-bottom: 8px">Filaments</span>
-                <div id="heads-panel" style="display: flex; flex-direction: column; gap: 8px"></div>
-              </div>
-
-              <div class="panel" id="filament-panel">
-                <div
-                  id="auxiliary-palette-section"
-                  style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px"
-                >
-                  <span class="insp-kicker">Extra palette colours</span>
-                  <button
-                    id="btn-add-filament"
-                    type="button"
-                    aria-label="Add filament"
-                    style="
-                      background: var(--oxr-surface);
-                      color: var(--oxr-text);
-                      border: 1px solid var(--oxr-stroke);
-                      border-radius: 6px;
-                      width: 26px;
-                      height: 26px;
-                      font-size: 16px;
-                      line-height: 1;
-                    "
-                  >
-                    +
-                  </button>
-                </div>
-                <div id="filament-swatches" style="display: flex; flex-wrap: wrap; gap: 8px"></div>
-                <!-- Legacy-only preview fallback; canonical mixed rows live in the editor below. -->
-                <div id="virtual-filament-panel" style="display: none; margin-top: 10px">
-                  <div id="virtual-filament-title" class="insp-kicker" style="margin-bottom: 6px"></div>
-                  <div id="virtual-filament-swatches" style="display: flex; flex-wrap: wrap; gap: 6px"></div>
-                </div>
-              </div>
-
-              <details id="virtual-filament-library-section" class="insp-section">
-                <summary>Virtual filaments</summary>
-                <div class="panel" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px">
-                  <label class="check-row" style="align-items: flex-start">
-                    <input id="chk-full-spectrum-auto-pairs" type="checkbox" style="margin-top: 1px" />
-                    Generate automatic physical-filament pairs
-                  </label>
-                  <p
-                    id="full-spectrum-auto-pairs-status"
-                    aria-live="polite"
-                    style="margin: 0; color: var(--oxr-text-muted); font-size: 11px; line-height: 1.35"
-                  ></p>
-                  <button
-                    id="btn-confirm-full-spectrum-auto-pairs"
-                    type="button"
-                    class="action-btn"
-                    style="display: none; text-align: start; font-size: 12px"
-                  ></button>
-                  <button
-                    id="btn-recreate-model-colors"
-                    type="button"
-                    class="action-btn"
-                    style="text-align: start; font-size: 12px"
-                  >
-                    Match model colors to filaments
-                  </button>
-                </div>
-                <div id="virtual-filament-library-host" class="panel" style="min-height: 0"></div>
-              </details>
-
-              <details class="insp-section">
-                <summary>Filament assignment</summary>
-                <div id="filament-assignment-host" class="panel" style="min-height: 0"></div>
-              </details>
-
-              <details class="insp-section">
-                <summary>Colour painting</summary>
-                <div id="paint-panel-host" class="panel" style="min-height: 0"></div>
-              </details>
-
-              <details class="insp-section">
-                <summary>Smart Paint</summary>
-                <div id="smart-paint-panel-host" class="panel" style="min-height: 0"></div>
-              </details>
-
-              <details class="insp-section">
-                <summary>Measure</summary>
-                <div id="measure-panel-host" class="panel" style="min-height: 0"></div>
-              </details>
-
-              <details class="insp-section">
-                <summary>Brim ears</summary>
-                <div id="brim-ears-panel-host" class="panel" style="min-height: 0"></div>
-                <div id="emboss-panel-host" class="panel" style="min-height: 0"></div>
-                <div id="svg-panel-host" class="panel" style="min-height: 0"></div>
-              </details>
-              <details class="insp-section">
-                <summary>Simplify</summary>
-                <div id="simplify-panel-host" class="panel" style="min-height: 0"></div>
-              </details>
-              <details class="insp-section">
-                <summary>Calibration parameters</summary>
-                <div id="calibration-parameters-host" class="panel" style="min-height: 0"></div>
-              </details>
-            </section>
-
-            <!-- ---------------------------- Preview ---------------------------- -->
-            <section
-              class="insp-panel"
-              id="insp-panel-preview"
-              role="tabpanel"
-              aria-labelledby="insp-tab-preview"
-              hidden
-            >
-              <details class="insp-section">
-                <summary>G-code listing</summary>
-                <div id="gcode-panel-host" class="panel" style="min-height: 0"></div>
-              </details>
-              <details class="insp-section" open>
-                <summary>G-code preview</summary>
-                <div id="gcode-preview-panel-host" class="panel" style="min-height: 0"></div>
-              </details>
-              <details class="insp-section">
-                <summary>Layer events</summary>
-                <div id="layer-event-host" class="panel" style="min-height: 0"></div>
-              </details>
-            </section>
-
-            <!-- ---------------------------- Printer ---------------------------- -->
-            <section
-              class="insp-panel"
-              id="insp-panel-printer"
-              role="tabpanel"
-              aria-labelledby="insp-tab-printer"
-              hidden
-            >
+          <!-- ======================= Device page ======================= -->
+          <section class="workspace-page" id="page-device" aria-labelledby="page-device-title" hidden>
+            <h1 class="page-title" id="page-device-title">Device</h1>
+            <div class="page-inner">
               <div class="panel" id="printer-panel">
                 <div class="insp-kicker" style="margin-bottom: 8px">
                   Printer (Moonraker)
@@ -2071,8 +2579,8 @@
                         width: 14px;
                         height: 14px;
                         border-radius: 50%;
-                        background: #ffffff33;
-                        color: #fff;
+                        background: var(--oxr-surface-active);
+                        color: var(--oxr-text);
                         font-size: 10px;
                       "
                       >?</span
@@ -2087,7 +2595,7 @@
                         href="https://github.com/paxx12-snapmaker-u1/SnapmakerU1-Extended-Firmware"
                         target="_blank"
                         rel="noreferrer"
-                        style="color: #4db6ac; text-decoration: underline"
+                        style="color: var(--oxr-accent); text-decoration: underline"
                         >Extended Firmware</a
                       >
                       with Tailscale Serve:<br /><code
@@ -2095,9 +2603,9 @@
                           display: block;
                           margin-top: 6px;
                           padding: 6px;
-                          background: #1a1e23;
+                          background: var(--oxr-bg-sunken);
                           border-radius: 4px;
-                          color: #81c784;
+                          color: var(--oxr-ok);
                           font-family: var(--oxr-font-mono);
                         "
                         >tailscale serve --bg http://127.0.0.1:80</code
@@ -2246,8 +2754,8 @@
                           width: 14px;
                           height: 14px;
                           border-radius: 50%;
-                          background: #ffffff33;
-                          color: #fff;
+                          background: var(--oxr-surface-active);
+                          color: var(--oxr-text);
                           font-size: 10px;
                         "
                         >?</span
@@ -2261,7 +2769,7 @@
                           href="https://github.com/ignacio82/OrcaXR/tree/main/server"
                           target="_blank"
                           rel="noreferrer"
-                          style="color: #4db6ac; text-decoration: underline"
+                          style="color: var(--oxr-accent); text-decoration: underline"
                           >External Slicer via Docker</a
                         >, you use the <b>official Snapmaker Orca Slicer native binary</b> instead, which avoids this
                         memory limit and slices significantly faster.
@@ -2350,13 +2858,16 @@
                     Delete
                   </button>
                 </div>
-                <p id="external-slicer-hint" style="display: none; margin: 6px 0 0; font-size: 12px; color: #8b95a1">
+                <p
+                  id="external-slicer-hint"
+                  style="display: none; margin: 6px 0 0; font-size: 12px; color: var(--oxr-text-muted)"
+                >
                   Off — slicing locally in‑browser.
                 </p>
                 <p
                   id="external-slicer-insecure-warning"
                   class="field-note"
-                  style="display: none; color: var(--oxr-warning); margin: 8px 0 0"
+                  style="display: none; color: var(--oxr-warn); margin: 8px 0 0"
                 >
                   Plain-HTTP LAN access is not a secure context: WebXR, in-browser WASM slicing (SharedArrayBuffer), and
                   service workers are unavailable. Use http://localhost:3000 or Tailscale Serve (HTTPS) for full
@@ -2397,10 +2908,16 @@
                   Configure a session-only key with the header gear, then use Smart Paint from the shared Tools menu.
                 </p>
               </div>
-            </section>
+            </div>
+          </section>
 
-            <!-- ----------------------------- Plates ---------------------------- -->
-            <section class="insp-panel" id="insp-panel-plates" role="tabpanel" aria-labelledby="insp-tab-plates" hidden>
+          <!-- ======================= Project page ====================== -->
+          <section class="workspace-page" id="page-project" aria-labelledby="page-project-title" hidden>
+            <h1 class="page-title" id="page-project-title">Project</h1>
+            <div class="page-inner">
+              <!-- What this project is: what is on the bed, whether it is
+                   saved, and what was open before. Mounted by main.ts. -->
+              <div id="project-summary-host" class="panel"></div>
               <div id="plate-manager-host" class="panel" style="min-height: 0"></div>
               <div class="insp-card">
                 <div class="insp-kicker">Calibration prints</div>
@@ -2411,45 +2928,9 @@
                   <div id="calibration-history-host" style="margin-top: 8px"></div>
                 </details>
               </div>
-            </section>
-          </div>
-
-          <div id="inspector-footer">
-            <div class="status-panel">
-              <div class="status-line">
-                <span id="status-dot" aria-hidden="true"></span>
-                <p id="status-text" role="status" aria-live="polite">Ready. Load a model to begin.</p>
-              </div>
-              <div
-                id="progress-container"
-                style="display: none; width: 100%; background-color: #ffffff14; border-radius: 4px"
-              >
-                <div
-                  id="progress-bar"
-                  style="
-                    width: 0%;
-                    height: 6px;
-                    background: var(--oxr-grad-progress);
-                    border-radius: 4px;
-                    transition: width 0.1s linear;
-                  "
-                ></div>
-              </div>
             </div>
-            <!-- Primary actions — rendered from the ActionRegistry by DomShell. -->
-            <div id="bottom-action-bar">
-              <div id="action-panel">
-                <input
-                  type="file"
-                  id="file-input"
-                  accept=".3mf,.stl,.obj,.amf,.amfz,.zip,.gcode,.gco,.g"
-                  multiple
-                  style="display: none"
-                />
-              </div>
-            </div>
-          </div>
-        </aside>
+          </section>
+        </main>
       </div>
 
       <!-- Command palette overlay (every action, searchable). -->

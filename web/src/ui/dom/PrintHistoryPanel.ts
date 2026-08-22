@@ -31,13 +31,13 @@ export interface PrintHistoryPanelPort {
 }
 
 const STATUS_COLOR: Readonly<Record<string, string>> = Object.freeze({
-  completed: '#8bc34a',
-  cancelled: '#ffb74d',
-  error: '#ff8a80',
-  klippy_shutdown: '#ff8a80',
-  klippy_disconnect: '#ff8a80',
-  in_progress: '#4db6ac',
-  interrupted: '#ffb74d',
+  completed: 'var(--oxr-ok)',
+  cancelled: 'var(--oxr-warn)',
+  error: 'var(--oxr-danger)',
+  klippy_shutdown: 'var(--oxr-danger)',
+  klippy_disconnect: 'var(--oxr-danger)',
+  in_progress: 'var(--oxr-accent)',
+  interrupted: 'var(--oxr-warn)',
 });
 
 export class PrintHistoryPanel {
@@ -170,7 +170,7 @@ export class PrintHistoryPanel {
     const row = doc.createElement('li');
     row.dataset.printHistoryJob = job.id;
     row.style.cssText =
-      'display:flex;flex-direction:column;gap:2px;padding:6px 8px;border-radius:6px;background:#ffffff0d;';
+      'display:flex;flex-direction:column;gap:2px;padding:6px 8px;border-radius:6px;background:var(--oxr-surface);';
 
     const head = doc.createElement('div');
     head.style.cssText = 'display:flex;align-items:baseline;gap:8px;';
@@ -180,7 +180,7 @@ export class PrintHistoryPanel {
     const outcome = doc.createElement('span');
     outcome.dataset.printHistoryStatusLabel = job.status;
     outcome.textContent = describeHistoryStatus(job);
-    outcome.style.cssText = `font-size:11px;white-space:nowrap;color:${STATUS_COLOR[job.status] ?? '#9aa4af'};`;
+    outcome.style.cssText = `font-size:11px;white-space:nowrap;color:${STATUS_COLOR[job.status] ?? 'var(--oxr-text-muted)'};`;
     head.append(name, outcome);
     row.appendChild(head);
 
@@ -194,7 +194,7 @@ export class PrintHistoryPanel {
       const missing = doc.createElement('span');
       missing.dataset.printHistoryMissing = 'true';
       missing.textContent = t('ui.printHistoryPanel.noLongerOnThePrinter', 'No longer on the printer');
-      missing.style.cssText = 'font-size:11px;color:#ffb74d;';
+      missing.style.cssText = 'font-size:11px;color:var(--oxr-warn);';
       row.appendChild(missing);
     }
     return row;

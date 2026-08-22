@@ -114,6 +114,8 @@ const ICONS: Record<string, IconGlyph> = {
   book: { xr: 'menu_book', dom: '📖' },
   bug: { xr: 'bug_report', dom: '🐛' },
   info: { xr: 'info', dom: 'ⓘ' },
+  chevron_down: { xr: 'keyboard_arrow_down', dom: '▾' },
+  theme_dark: { xr: 'dark_mode', dom: '◐' },
   tip: { xr: 'lightbulb', dom: '💡' },
   update: { xr: 'update', dom: '⟳' },
   logout: { xr: 'logout', dom: '⇥' },
@@ -171,7 +173,46 @@ export function xrIcon(name: string): string {
   return `${base}icons/material/${icon(name).xr}.svg`;
 }
 
-/** Unicode/emoji glyph for the DOM shell. */
+/**
+ * Unicode/emoji glyph for the DOM shell.
+ *
+ * Kept for the few places that need an icon inside a plain string — a `title`,
+ * a text-only fallback — and for tests. Anything that renders an element should
+ * use {@link applyIcon}: a masked SVG is monochrome, takes `currentColor`, and
+ * looks like a desktop application's toolbar, which an emoji never does.
+ */
 export function domIcon(name: string): string {
   return icon(name).dom;
+}
+
+/**
+ * Paint `name` onto an element as a masked SVG.
+ *
+ * Both shells draw the same checked-in file — the DOM shell masks it so the
+ * glyph takes the element's own colour, which is what lets one icon serve a
+ * default, hover, disabled and selected state without four assets.
+ */
+export function applyIcon(element: HTMLElement, name: string): void {
+  element.classList.add('oxr-icon');
+  element.style.setProperty('--oxr-icon-src', `url("${xrIcon(name)}")`);
+}
+
+/** A `<span>` carrying `name`, ready to drop into a button. */
+export function iconElement(name: string): HTMLSpanElement {
+  const span = document.createElement('span');
+  span.setAttribute('aria-hidden', 'true');
+  applyIcon(span, name);
+  return span;
+}
+
+/**
+ * Resolve every `data-icon` under `root`. Markup declares which icon it wants;
+ * this turns that declaration into the vendored file's URL, so `index.html`
+ * never has to know where the icons live or what the base path is.
+ */
+export function hydrateIcons(root: ParentNode = document): void {
+  for (const element of root.querySelectorAll<HTMLElement>('[data-icon]')) {
+    const name = element.dataset.icon;
+    if (name) applyIcon(element, name);
+  }
 }

@@ -29,7 +29,9 @@ test('renders substitutions as visible non-blocking status', () => {
   assert.equal(target.dataset.profileSelectionState, 'substituted');
   assert.equal(target.getAttribute('role'), 'status');
   assert.match(target.textContent ?? '', /substituted PETG/);
-  assert.equal(target.style.color, 'rgb(255, 204, 128)');
+  // The tone is a token, not a literal: what matters is that a substitution
+  // reads as a warning rather than as an error or as ordinary body text.
+  assert.equal(target.style.color, 'var(--oxr-warn)');
 });
 
 test('renders failed reconciliation as an alert without hiding its reason', () => {

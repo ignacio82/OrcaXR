@@ -105,7 +105,7 @@ export class CalibrationHistoryPanel {
     const entry = doc.createElement('div');
     entry.dataset.calibrationHistoryEntry = 'true';
     entry.style.cssText =
-      'display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:8px;background:#ffffff0d;';
+      'display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:8px;background:var(--oxr-surface);';
     root.appendChild(entry);
 
     const comparison = doc.createElement('div');
@@ -173,7 +173,7 @@ export class CalibrationHistoryPanel {
     row.dataset.calibrationHistoryRecord = record.id;
     row.dataset.calibrationHistoryApplicable = applicability.applicable ? 'true' : 'false';
     row.style.cssText =
-      'display:flex;flex-direction:column;gap:2px;padding:6px 8px;border-radius:6px;background:#ffffff0d;' +
+      'display:flex;flex-direction:column;gap:2px;padding:6px 8px;border-radius:6px;background:var(--oxr-surface);' +
       (applicability.applicable ? '' : 'opacity:0.72;');
 
     const head = doc.createElement('div');
@@ -211,7 +211,7 @@ export class CalibrationHistoryPanel {
     if (!applicability.applicable) {
       const reason = doc.createElement('span');
       reason.dataset.calibrationHistoryMismatch = 'true';
-      reason.style.cssText = 'font-size:11px;color:#ffb74d;overflow-wrap:anywhere;';
+      reason.style.cssText = 'font-size:11px;color:var(--oxr-warn);overflow-wrap:anywhere;';
       reason.textContent =
         applicability.issues.find((issue) => issue.severity === 'error')?.message ??
         'This run produced no chosen result.';
@@ -359,7 +359,7 @@ export class CalibrationHistoryPanel {
     for (const caveat of comparison.caveats) {
       const line = doc.createElement('span');
       line.dataset.calibrationHistoryCaveat = 'true';
-      line.style.cssText = 'color:#ffb74d;';
+      line.style.cssText = 'color:var(--oxr-warn);';
       line.textContent = caveat;
       host.appendChild(line);
     }
@@ -393,7 +393,7 @@ export class CalibrationHistoryPanel {
       const row = doc.createElement('li');
       row.dataset.calibrationHistoryIssue = issue.code;
       row.textContent = issue.message;
-      row.style.cssText = `font-size:11px;color:${issue.severity === 'error' ? '#ff8a80' : '#ffb74d'};`;
+      row.style.cssText = `font-size:11px;color:${issue.severity === 'error' ? 'var(--oxr-danger)' : 'var(--oxr-warn)'};`;
       host.appendChild(row);
     }
   }

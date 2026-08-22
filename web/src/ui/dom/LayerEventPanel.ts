@@ -59,7 +59,7 @@ export class LayerEventPanel {
     form.style.cssText = 'display:grid;grid-template-columns:1fr auto;gap:6px;align-items:end;';
 
     const typeLabel = document.createElement('label');
-    typeLabel.style.cssText = 'display:flex;flex-direction:column;gap:3px;font-size:11px;color:#a0aab5;';
+    typeLabel.style.cssText = 'display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--oxr-text-muted);';
     typeLabel.textContent = 'Event';
     const typeSelect = document.createElement('select');
     typeSelect.dataset.layerEventType = 'true';
@@ -68,7 +68,8 @@ export class LayerEventPanel {
     typeLabel.appendChild(typeSelect);
 
     const heightLabel = document.createElement('label');
-    heightLabel.style.cssText = 'display:flex;flex-direction:column;gap:3px;font-size:11px;color:#a0aab5;';
+    heightLabel.style.cssText =
+      'display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--oxr-text-muted);';
     heightLabel.textContent = t('ui.layerEventPanel.heightMm', 'Height (mm)');
     const heightInput = document.createElement('input');
     heightInput.type = 'number';
@@ -80,7 +81,8 @@ export class LayerEventPanel {
     heightLabel.appendChild(heightInput);
 
     const detailLabel = document.createElement('label');
-    detailLabel.style.cssText = 'display:flex;flex-direction:column;gap:3px;font-size:11px;color:#a0aab5;';
+    detailLabel.style.cssText =
+      'display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--oxr-text-muted);';
     const detailText = document.createElement('span');
     detailText.textContent = t('ui.layerEventPanel.messageOptional', 'Message (optional)');
     const detailInput = document.createElement('input');
@@ -101,7 +103,7 @@ export class LayerEventPanel {
     status.dataset.layerEventStatus = 'true';
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
-    status.style.cssText = 'margin:0;min-height:1.3em;font-size:11px;color:#a0aab5;';
+    status.style.cssText = 'margin:0;min-height:1.3em;font-size:11px;color:var(--oxr-text-muted);';
 
     form.append(typeLabel, heightLabel, detailLabel, addButton);
     root.append(list, form, status);
@@ -163,7 +165,7 @@ export class LayerEventPanel {
       const empty = this.container.ownerDocument.createElement('li');
       empty.dataset.layerEventEmpty = 'true';
       empty.textContent = t('ui.layerEventPanel.noLayerEventsOnThis', 'No layer events on this plate.');
-      empty.style.cssText = 'color:#8892a0;';
+      empty.style.cssText = 'color:var(--oxr-text-muted);';
       this.list.appendChild(empty);
       return;
     }
@@ -179,8 +181,8 @@ export class LayerEventPanel {
       remove.textContent = 'Delete';
       remove.setAttribute('aria-label', `Delete ${describeEvent(row.event.type, row.event.topZMm, '')}`);
       remove.style.cssText =
-        'min-height:28px;padding:2px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.24);' +
-        'background:rgba(255,255,255,0.06);color:inherit;cursor:pointer;';
+        'min-height:28px;padding:2px 8px;border-radius:6px;border:1px solid var(--oxr-stroke);' +
+        'background:var(--oxr-surface);color:inherit;cursor:pointer;';
       remove.onclick = () =>
         void this.mutate({
           operation: 'delete',
@@ -228,7 +230,7 @@ export class LayerEventPanel {
 }
 
 const FIELD_STYLE =
-  'background:rgba(0,0,0,0.3);color:#fff;border:1px solid #ffffff1a;border-radius:6px;padding:6px;font-size:12px;';
+  'background:var(--oxr-bg-sunken);color:var(--oxr-text);border:1px solid var(--oxr-stroke);border-radius:6px;padding:6px;font-size:12px;';
 
 function describeEvent(type: LayerEventType, topZMm: number, detail: string): string {
   const label =

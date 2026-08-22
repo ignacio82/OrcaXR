@@ -40,15 +40,15 @@ const LEVEL_LABEL: Readonly<Record<GcodeCommandAssessment['level'], string>> = O
 });
 
 const LEVEL_COLOR: Readonly<Record<GcodeCommandAssessment['level'], string>> = Object.freeze({
-  safe: '#8bc34a',
-  caution: '#ffb74d',
-  dangerous: '#ff8a80',
+  safe: 'var(--oxr-ok)',
+  caution: 'var(--oxr-warn)',
+  dangerous: 'var(--oxr-danger)',
 });
 
 const ENTRY_COLOR: Readonly<Record<PrinterConsoleEntry['kind'], string>> = Object.freeze({
-  sent: '#dfe4ea',
-  received: '#9aa4af',
-  error: '#ff8a80',
+  sent: 'var(--oxr-text)',
+  received: 'var(--oxr-text-muted)',
+  error: 'var(--oxr-danger)',
 });
 
 export class PrinterConsolePanel {
@@ -101,7 +101,7 @@ export class PrinterConsolePanel {
     input.spellcheck = false;
     input.style.cssText =
       'flex:1;min-width:0;font-family:ui-monospace,monospace;padding:6px 8px;border-radius:6px;' +
-      'border:1px solid #ffffff26;background:#00000040;color:inherit;';
+      'border:1px solid var(--oxr-stroke-strong);background:var(--oxr-bg-sunken);color:inherit;';
     input.addEventListener('input', () => {
       this.historyIndex = -1;
       this.renderAssessment();

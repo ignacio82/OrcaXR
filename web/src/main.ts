@@ -65,7 +65,7 @@ import {
 import { registerWorkspaceTools } from './mcp/WorkspaceTools';
 import { registerSystemTools } from './mcp/SystemTools';
 import { OrcaWebMcpClient, WEBMCP_CLI_PACKAGE, WebMcpConnectionError, type WebMcpStatus } from './mcp/OrcaWebMcpClient';
-import { injectTokenCss } from './ui/tokens';
+import { activeDomTheme, initialDomTheme, injectTokenCss, setDomTheme } from './ui/tokens';
 import { UiState } from './actions/UiState';
 import { ActionContext } from './actions/ActionContext';
 import { buildRegistry } from './actions/catalog';
@@ -104,7 +104,9 @@ import {
 } from './settings/presets/PresetLibrary';
 import { GcodePreviewPanel, type GcodePreviewPanelAdapter } from './ui/dom/GcodePreviewPanel';
 import { PreviewScrubber } from './ui/dom/PreviewScrubber';
-import { InspectorTabs } from './ui/dom/InspectorTabs';
+import { ProjectSummaryPanel } from './ui/dom/ProjectSummaryPanel';
+import { WorkspaceViews } from './ui/dom/WorkspaceViews';
+import { hydrateIcons } from './ui/icons';
 import { PaintPanel } from './ui/dom/PaintPanel';
 import {
   forgetRememberedCredentials,
@@ -230,6 +232,24 @@ const PRINTER_CONSOLE_ACTION_IDS: Readonly<Record<PrinterConsoleOperation['kind'
  * (private mode, a blocked third-party context). Module-level so every caller
  * reaches it the same way, whatever order the shell builds its panels in.
  */
+/**
+ * Bring a panel into view in the parameter sidebar.
+ *
+ * A sidebar card folds and a `<details>` inside it closes, and either one
+ * leaves the element with no box at all — so "scroll to it" has to open what
+ * is holding it shut first, or it scrolls to nothing and reports success.
+ */
+function revealInSidebar(element: Element): void {
+  for (let node: Element | null = element; node; node = node.parentElement) {
+    if (node instanceof HTMLDetailsElement) node.open = true;
+    if (node.classList.contains('oxr-card')) {
+      node.classList.remove('folded');
+      node.querySelector('[data-card-toggle]')?.setAttribute('aria-expanded', 'true');
+    }
+  }
+  element.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
 function safeLocalStorage(): Storage | null {
   try {
     return typeof localStorage === 'undefined' ? null : localStorage;
@@ -374,19 +394,14 @@ function setupDomUI(
         `${confirmation.strategy === 'existing-volumes' ? `${confirmation.volumeCount} existing volumes will be promoted` : `${confirmation.triangleCount.toLocaleString()} triangles will be separated by connected body`} across all ${confirmation.affectedInstanceIds.length} instance${confirmation.affectedInstanceIds.length === 1 ? '' : 's'}.\n\n` +
         'The original object will be replaced in one undoable edit.',
     );
-  // On phones the sidebar is a bottom sheet; its title toggles collapse so
-  // the 3D view isn't permanently half-covered. No-op on desktop layouts.
-  const sidebar = document.getElementById('right-sidebar') as HTMLDivElement;
-  // Start collapsed so the "OrcaXR Slicer" panel doesn't cover the build plate
-  // on load on phones — the user taps the title to expand it. The `.collapsed`
-  // styles live ONLY inside the max-width:768px media query, so this is a no-op
-  // on desktop (the full sidebar always renders there); applying it
-  // unconditionally avoids a matchMedia load-timing race on mobile.
-  sidebar.classList.add('collapsed');
-  sidebar.querySelector('h2')?.addEventListener('click', () => {
-    if (window.matchMedia('(max-width: 768px)').matches) {
-      sidebar.classList.toggle('collapsed');
-    }
+  // On phones the parameter sidebar is a bottom sheet; its handle toggles it
+  // so the 3D view isn't permanently half-covered. On desktop the same class
+  // is what the toolbar's `‹›` control writes, so one state serves both.
+  const sidebar = document.getElementById('param-sidebar') as HTMLElement;
+  const sidebarHandle = document.getElementById('sidebar-handle') as HTMLButtonElement;
+  sidebarHandle.addEventListener('click', () => {
+    sidebar.classList.toggle('collapsed');
+    sidebarHandle.setAttribute('aria-expanded', String(!sidebar.classList.contains('collapsed')));
   });
 
   const fileInput = document.getElementById('file-input') as HTMLInputElement;
@@ -400,7 +415,6 @@ function setupDomUI(
   const emptyLoadModel = document.getElementById('empty-load-model') as HTMLButtonElement;
   const domSliceProgress = document.getElementById('dom-slice-progress') as HTMLElement;
   const uiContainer = document.getElementById('ui-container') as HTMLElement;
-  const toolRail = document.getElementById('tool-rail') as HTMLElement;
   const toolbarToggle = document.getElementById('toolbar-toggle') as HTMLButtonElement;
   const statusDot = document.getElementById('status-dot') as HTMLElement;
   const printerHost = document.getElementById('printer-host') as HTMLInputElement;
@@ -410,7 +424,6 @@ function setupDomUI(
   const printerCfg = loadPrinterEndpointPreferences();
   let printerTransport: MoonrakerTransport | null = null;
   let printerTransportKey = '';
-  let hadModels = false;
 
   // One live job model per session. It is seeded from an explicit query and
   // then kept current by the transport's own status notifications, so the
@@ -1354,7 +1367,7 @@ function setupDomUI(
         notifyStatusBar();
       },
       openDetails: () => {
-        document.getElementById('insp-tab-printer')?.click();
+        document.querySelector<HTMLElement>('[data-view-tab="device"]')?.click();
         notifyStatusBar();
       },
     });
@@ -1705,9 +1718,9 @@ function setupDomUI(
   };
   refreshFirstRunPrompt();
   emptySetupPrinter.onclick = () => {
-    // Goes through the real tab control the inspector renders, so this stays
+    // Goes through the real tab control the header renders, so this stays
     // correct if the tab set is ever reordered or relabelled.
-    document.getElementById('insp-tab-printer')?.click();
+    document.querySelector<HTMLElement>('[data-view-tab="device"]')?.click();
     printerHost.focus();
     statusText.textContent = t(
       'app.main.enterYourPrinterAddressIt',
@@ -1721,34 +1734,33 @@ function setupDomUI(
       .catch((error) => console.error('[orcaxr] empty-state load action failed:', error));
   };
   /**
-   * The rail collapses to icons rather than disappearing, so the modal tools
-   * stay one click away at every width. Keep its label and expanded state in
-   * step with the class that drives the CSS.
+   * The `‹›` control against the panel edge, which is where the desktop app
+   * puts the handle that folds the parameter sidebar away for a wider look at
+   * the plate. Keep its label and expanded state in step with the class that
+   * drives the CSS.
    */
-  const syncRailToggle = () => {
-    const collapsed = toolRail.classList.contains('collapsed');
+  const syncSidebarToggle = () => {
+    const collapsed = sidebar.classList.contains('collapsed');
     toolbarToggle.setAttribute('aria-expanded', String(!collapsed));
-    toolbarToggle.title = collapsed ? 'Show tool labels' : 'Collapse the tool rail to icons';
+    toolbarToggle.title = collapsed
+      ? t('app.main.showTheSettingsSidebar', 'Show the settings sidebar')
+      : t('app.main.hideTheSettingsSidebar', 'Hide the settings sidebar');
     const glyph = toolbarToggle.querySelector('.tool-icon');
     const label = toolbarToggle.querySelector('.tool-label');
-    if (glyph) glyph.textContent = collapsed ? '⤓' : '⤒';
-    if (label) label.textContent = collapsed ? 'Expand' : 'Collapse';
+    if (glyph) glyph.textContent = collapsed ? '›‹' : '‹›';
+    if (label) label.textContent = toolbarToggle.title;
+    sidebarHandle.setAttribute('aria-expanded', String(!collapsed));
   };
   uiState.subscribe((state) => {
     emptyState.hidden = state.modelCount > 0;
     uiContainer.classList.toggle('no-model', state.modelCount === 0);
-    // A newly loaded model should expose the plate and the obvious Slice
-    // action, not a floor-to-ceiling list of labelled editing commands.
-    // Preserve the maker's choice after they explicitly expand the rail.
-    if (state.modelCount > 0 && !hadModels) toolRail.classList.add('collapsed');
-    hadModels = state.modelCount > 0;
     statusDot.classList.toggle('busy', state.isSlicing);
     statusDot.classList.toggle('ready', !state.isSlicing && state.gcodeReady);
-    syncRailToggle();
+    syncSidebarToggle();
   });
   toolbarToggle.onclick = () => {
-    toolRail.classList.toggle('collapsed');
-    syncRailToggle();
+    sidebar.classList.toggle('collapsed');
+    syncSidebarToggle();
   };
 
   /**
@@ -1801,8 +1813,8 @@ function setupDomUI(
   dropOverlay.textContent = t('app.main.dropA3MFSTLOBJ', 'Drop a 3MF, STL, OBJ, AMF, ZIP, or G-code file to load it');
   dropOverlay.style.cssText =
     'position:fixed;inset:16px;z-index:9998;display:none;align-items:center;justify-content:center;' +
-    'border:2px dashed var(--oxr-color-accent,#4fc3f7);border-radius:16px;background:rgba(6,10,16,0.72);' +
-    'color:#fff;font:600 16px/1.4 system-ui,sans-serif;pointer-events:none;text-align:center;padding:24px;';
+    'border:2px dashed var(--oxr-color-accent);border-radius:var(--oxr-radius-lg);background:var(--oxr-bg-sunken);' +
+    'color:var(--oxr-text);font:600 16px/1.4 var(--oxr-font-sans);pointer-events:none;text-align:center;padding:24px;';
   document.body.appendChild(dropOverlay);
   let dragDepth = 0;
   const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
@@ -1984,11 +1996,14 @@ function setupDomUI(
     modalReturnFocus = null;
     if (!returnFocus?.isConnected) return;
     returnFocus.focus();
-    // Invoking a menu item closes the mega menu, which takes the section
-    // header out of the layout. Hand focus to the control that opens it so a
-    // keyboard user is never left with focus on <body>.
+    // Invoking a menu item closes its dropdown, which takes the item out of
+    // the layout and makes it unfocusable. Hand focus back to the trigger that
+    // opened that menu — or, on a window narrow enough that the bar itself is
+    // behind the hamburger, to the hamburger — so a keyboard user is never
+    // left with focus on <body>.
     if (document.activeElement !== returnFocus) {
-      document.getElementById('menu-button')?.focus();
+      const trigger = returnFocus.closest('.menu-host')?.querySelector<HTMLElement>('.menu-trigger');
+      (trigger ?? document.getElementById('menu-button'))?.focus();
     }
   };
   const buildModal = (title: string, body: HTMLElement | string): void => {
@@ -1998,7 +2013,7 @@ function setupDomUI(
     const overlay = document.createElement('div');
     overlay.id = 'oxr-modal-overlay';
     overlay.style.cssText =
-      'position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);z-index:10001;display:flex;align-items:center;justify-content:center;';
+      'position:fixed;inset:0;background:rgba(20,26,28,0.42);z-index:10001;display:flex;align-items:center;justify-content:center;';
     const card = document.createElement('div');
     card.setAttribute('role', 'dialog');
     card.setAttribute('aria-modal', 'true');
@@ -2006,7 +2021,7 @@ function setupDomUI(
     card.setAttribute('aria-describedby', 'oxr-modal-body');
     card.tabIndex = -1;
     card.style.cssText =
-      'background:var(--oxr-color-bg-card);color:var(--oxr-color-text);padding:22px 26px;border-radius:var(--oxr-radius-lg);border:1px solid var(--oxr-color-stroke-strong);box-shadow:0 24px 80px rgba(0,0,0,0.8);width:min(470px,88vw);max-height:82vh;overflow:auto;';
+      'background:var(--oxr-color-bg-card);color:var(--oxr-color-text);padding:22px 26px;border-radius:var(--oxr-radius-lg);border:1px solid var(--oxr-color-stroke-strong);box-shadow:var(--oxr-shadow-modal);width:min(470px,88vw);max-height:82vh;overflow:auto;';
     const head = document.createElement('div');
     head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:16px;';
     const h = document.createElement('h3');
@@ -2269,7 +2284,8 @@ function setupDomUI(
     apply.textContent = t('app.main.applyClose', 'Apply & Close');
     apply.setAttribute('data-testid', 'wizard-apply');
     apply.style.cssText =
-      'margin-top:14px;width:100%;padding:10px;border:none;border-radius:8px;background:linear-gradient(90deg,#ffb74d,#ff9800);color:#1a1a1a;font-weight:600;font-size:14px;cursor:pointer;';
+      'margin-top:14px;width:100%;padding:10px;border:none;border-radius:var(--oxr-radius-md);' +
+      'background:var(--oxr-grad-accent);color:var(--oxr-on-accent);font-weight:600;font-size:14px;cursor:pointer;';
     apply.onclick = () => {
       const feedback = workspace.selectProfilePresets({
         machinePresetId: mSel.value as WorkspacePresetOption['id'],
@@ -2443,8 +2459,7 @@ function setupDomUI(
     {
       const syncBtn = document.createElement('button');
       syncBtn.className = 'action-btn';
-      syncBtn.style.cssText =
-        'background: #2E7D32; color: white; border: none; padding: 8px; margin-bottom: 8px; border-radius: 8px; cursor: pointer; font-size: 13px; width: 100%;';
+      syncBtn.style.cssText = 'margin-bottom:6px;font-size:12px;';
       syncBtn.textContent = t('app.main.syncFilamentsFromPrinter', 'Sync Filaments From Printer');
       syncBtn.onclick = async () => {
         syncBtn.disabled = true;
@@ -2467,7 +2482,14 @@ function setupDomUI(
         colorInput.type = 'color';
         colorInput.value = workspace.palette.colorAt(i);
         colorInput.style.cssText =
-          'width: 24px; height: 24px; padding: 0; border: none; background: none; cursor: pointer;';
+          'width:22px;height:22px;flex:0 0 22px;padding:0;border:1px solid var(--oxr-stroke);' +
+          'border-radius:var(--radius-sm);background:none;cursor:pointer;';
+        colorInput.setAttribute(
+          'aria-label',
+          isAuxiliaryPaletteSlot
+            ? t('app.main.paletteColour', 'Palette colour {index}', { index: i + 1 })
+            : t('app.main.headColour', 'Head {index} colour', { index: i + 1 }),
+        );
         colorInput.onchange = () => {
           workspace.palette.setColor(i, colorInput.value);
           workspace.rebuildHeadsPanel();
@@ -2476,13 +2498,20 @@ function setupDomUI(
 
         const lbl = document.createElement('span');
         lbl.textContent = isAuxiliaryPaletteSlot ? `A-${i + 1}:` : `H-${i + 1}:`;
-        lbl.style.cssText = 'color:#fff;width:30px;font-size:12px;';
+        lbl.style.cssText =
+          'color:var(--oxr-text-muted);flex:0 0 auto;font-size:11px;font-weight:600;white-space:nowrap;';
         row.appendChild(lbl);
 
         const fSel = document.createElement('select');
         fSel.className = 'action-btn';
         fSel.style.cssText = 'flex-grow:1;margin:0;padding:6px;font-size:12px;';
         fSel.setAttribute('aria-describedby', profileStatus.id);
+        fSel.setAttribute(
+          'aria-label',
+          isAuxiliaryPaletteSlot
+            ? t('app.main.paletteFilament', 'Palette filament {index}', { index: i + 1 })
+            : t('app.main.headFilament', 'Head {index} filament', { index: i + 1 }),
+        );
         fillPresetSelect(fSel, o.filamentOptions, workspace.getHeadFilamentPresetId(i));
         fSel.onchange = () => {
           workspace.setHeadFilamentPreset(i, fSel.value as WorkspacePresetOption['id']);
@@ -2493,6 +2522,7 @@ function setupDomUI(
           const nSel = document.createElement('select');
           nSel.className = 'action-btn';
           nSel.style.cssText = 'width:60px;margin:0;padding:6px;font-size:12px;';
+          nSel.setAttribute('aria-label', t('app.main.headNozzle', 'Head {index} nozzle', { index: i + 1 }));
           fillSelect(nSel, ['0.2', '0.4', '0.6', '0.8'], workspace.getHeadNozzle(i));
           nSel.onchange = () => {
             workspace.setHeadNozzle(i, nSel.value);
@@ -2502,8 +2532,12 @@ function setupDomUI(
           const delBtn = document.createElement('button');
           delBtn.className = 'action-btn';
           delBtn.style.cssText =
-            'width:60px;margin:0;padding:6px;font-size:12px;background:#d32f2f;color:white;border:none;cursor:pointer;';
-          delBtn.textContent = 'Del';
+            'width:52px;margin:0;padding:4px;font-size:11px;color:var(--oxr-danger);border-color:var(--oxr-stroke);';
+          delBtn.textContent = t('app.main.del', 'Del');
+          delBtn.setAttribute(
+            'aria-label',
+            t('app.main.removePaletteSlot', 'Remove palette colour {index}', { index: i + 1 }),
+          );
           delBtn.onclick = () => {
             workspace.removeAuxiliaryFilamentSlot(i);
             renderProfileSelects(); // force redraw
@@ -2516,13 +2550,12 @@ function setupDomUI(
 
       const openVirtualLibrary = document.createElement('button');
       openVirtualLibrary.className = 'action-btn';
-      openVirtualLibrary.style.cssText =
-        'background:rgba(255,183,77,0.12);color:#ffcc80;padding:8px;margin-top:4px;border-radius:8px;cursor:pointer;font-size:13px;width:100%;border:1px solid rgba(255,183,77,0.35);';
+      openVirtualLibrary.style.cssText = 'margin-top:4px;font-size:12px;';
       openVirtualLibrary.textContent = t('app.main.openVirtualFilamentLibrary', 'Open virtual filament library');
       openVirtualLibrary.onclick = () => {
         const section = document.getElementById('virtual-filament-library-section') as HTMLDetailsElement | null;
         section?.setAttribute('open', '');
-        section?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        if (section) revealInSidebar(section);
         const add = section?.querySelector<HTMLButtonElement>('[data-virtual-filament-add]');
         add?.focus();
       };
@@ -3813,6 +3846,38 @@ function setupDomUI(
     window.addEventListener('pagehide', () => plateManager.dispose(), { once: true });
   }
 
+  // The Project page leads with the project itself, as upstream's does: what is
+  // on the bed, whether it is saved, and what was open before. Opening and
+  // saving are registry actions — this panel only reads.
+  const projectSummaryHost = document.getElementById('project-summary-host');
+  if (projectSummaryHost) {
+    const projectSummary = new ProjectSummaryPanel(projectSummaryHost, {
+      read: () => {
+        const summary = workspace.getCanonicalSummary();
+        const active = summary.plates.find((plate) => plate.id === summary.activePlateId);
+        return {
+          modelCount: active?.instanceCount ?? 0,
+          plateCount: summary.plates.length,
+          dirty: summary.dirty,
+          recent: workspace.listRecentProjects(),
+        };
+      },
+      subscribe: (listener) => workspace.subscribeCanonicalState(listener),
+      openProject: () => {
+        void registry
+          .invoke('file_open_project', 'dom-inspector', actionCtx, uiState.get())
+          .catch((error) => console.error('[orcaxr] open-project action failed:', error));
+      },
+      saveProject: () => {
+        void registry
+          .invoke('file_save_project', 'dom-inspector', actionCtx, uiState.get())
+          .catch((error) => console.error('[orcaxr] save-project action failed:', error));
+      },
+    });
+    projectSummary.mount();
+    window.addEventListener('pagehide', () => projectSummary.dispose(), { once: true });
+  }
+
   // One generated schema and one guarded canonical override seam serve every
   // field. Raw unknown/unavailable keys remain untouched by typed editor commits.
   const settingsHost = document.getElementById('settings-inspector-host');
@@ -4020,14 +4085,14 @@ function setupDomUI(
       input.value = slot.color.length === 7 ? slot.color : '#cccccc';
       input.title = `Filament ${i + 1} (${slot.type})`;
       input.style.cssText =
-        'width:36px;height:36px;border:2px solid #ffffff33;border-radius:6px;padding:0;background:none;cursor:pointer;';
+        'width:36px;height:36px;border:2px solid var(--oxr-stroke-strong);border-radius:6px;padding:0;background:none;cursor:pointer;';
       input.oninput = () => workspace.palette.setColor(i, input.value);
       const del = document.createElement('button');
       del.textContent = '×';
       del.title = t('app.main.removeFilament', 'Remove filament');
       del.style.cssText =
         'position:absolute;top:-6px;inset-inline-end:-6px;width:16px;height:16px;line-height:14px;' +
-        'border-radius:50%;border:none;background:#333;color:#fff;font-size:11px;cursor:pointer;';
+        'border-radius:50%;border:none;background:var(--oxr-surface);color:var(--oxr-text);font-size:11px;cursor:pointer;';
       del.onclick = () => workspace.removeAuxiliaryFilamentSlot(i);
       cell.appendChild(input);
       cell.appendChild(del);
@@ -4053,12 +4118,12 @@ function setupDomUI(
       const chip = document.createElement('div');
       chip.title = `F${vf.id} · ${vf.label}`;
       chip.style.cssText =
-        `width:24px;height:24px;border-radius:5px;border:1px solid #ffffff2e;` +
+        `width:24px;height:24px;border-radius:5px;border:1px solid var(--oxr-stroke-strong);` +
         `background:${vf.color};position:relative;`;
       const idTag = document.createElement('span');
       idTag.textContent = String(vf.id);
       idTag.style.cssText =
-        'position:absolute;bottom:-4px;inset-inline-end:-4px;background:#111;color:#cfd8dc;' +
+        'position:absolute;bottom:-4px;inset-inline-end:-4px;background:var(--oxr-bg-sunken);color:var(--oxr-text-muted);' +
         'font-size:8px;line-height:1;padding:1px 2px;border-radius:3px;';
       chip.appendChild(idTag);
       vWrap.appendChild(chip);
@@ -4400,15 +4465,15 @@ function setupDomUI(
     if (connected) {
       if (autoDiscovered || SlicerClient.getExternalSlicerOriginType() === 'auto-discovered') {
         externalSlicerStatus.innerHTML =
-          '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4caf50;"></span> Slicing here · attested';
+          '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--oxr-ok);"></span> Slicing here · attested';
       } else {
         externalSlicerStatus.innerHTML =
-          '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4caf50;"></span> Online';
+          '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--oxr-ok);"></span> Online';
       }
-      externalSlicerStatus.style.color = '#4caf50';
+      externalSlicerStatus.style.color = 'var(--oxr-ok)';
     } else {
       externalSlicerStatus.innerHTML =
-        '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f44336;"></span> Offline';
+        '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--oxr-danger);"></span> Offline';
       externalSlicerStatus.style.color = '#f44336';
     }
   };
@@ -4787,7 +4852,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Design tokens as CSS custom properties — the DOM shell's single source of
   // truth for colours/spacing (the XR shell reads the same `tokens` object).
+  // Both themes are emitted; the attribute below picks the one in force.
   injectTokenCss();
+  setDomTheme(initialDomTheme());
 
   const options = new xb.Options();
   options.setAppTitle('OrcaXR Slicer');
@@ -4838,6 +4905,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   (window as unknown as { __orcaUi: unknown }).__orcaUi = uiState;
   (window as unknown as { __orcaCtx: unknown }).__orcaCtx = actionCtx;
 
+  // A desktop slicer window is not a simulated headset. The simulator's
+  // living-room passthrough stand-in is what a flat browser session would
+  // otherwise show behind the build plate, so it is cleared here and replaced
+  // by the plain gradient the plate sits on below. A real session supplies its
+  // own background — passthrough in AR, the transition colour in VR — so this
+  // changes nothing in the headset.
+  for (const environment of options.simulator.environments) {
+    environment.scenePath = null;
+    environment.scenePlanesPath = null;
+  }
+
   xb.add(workspace);
   await xb.init(options);
 
@@ -4849,6 +4927,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   orbit.target.copy(workspace.plateFocus());
   orbit.update();
   workspace.orbitControls = orbit;
+  // Start on the plate. Without this the window opens on whatever pose the XR
+  // runtime seeded, which in a flat browser is a room-scale view of a plate the
+  // size of a postage stamp.
+  if (!xb.core.renderer?.xr?.isPresenting) workspace.frameCameraView('default');
   workspace.setup2DControls(canvas);
 
   // Debug handles for remote scene inspection / automated testing via CDP.
@@ -4865,9 +4947,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const byId = (id: string) => document.getElementById(id) as HTMLElement;
   const domShell = new DomShell(registry, actionCtx, uiState);
   const domShellHosts = {
-    toolbar: byId('left-toolbar'),
+    toolbar: byId('model-toolbar'),
     primary: byId('action-panel'),
-    stageBar: byId('stage-bar'),
+    quickActions: byId('quick-actions'),
+    printActions: byId('print-actions'),
     menuBar: byId('menu-bar-host'),
     menuButton: byId('menu-button') as HTMLButtonElement,
     calibration: byId('calibration-grid'),
@@ -4893,6 +4976,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   l10n.subscribe(() => {
     applyDocumentLanguage();
     domShell.mount(domShellHosts);
+    hydrateIcons();
     uiState.update({});
   });
 
@@ -4910,19 +4994,142 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (target !== l10n.locale) await l10n.setLocale(target);
   })();
 
-  // Six named inspector tabs replace the old single scroll of disclosures.
-  // Every panel still exists; the tabs decide which one is on screen.
-  const inspectorTabs = new InspectorTabs(
+  // Prepare · Preview · Device · Project — the workspace the whole window is
+  // showing, not a panel inside one. Prepare and Preview share the parameter
+  // sidebar; Device and Project are pages over the viewport.
+  const workspaceViews = new WorkspaceViews(
     {
-      tabs: byId('inspector-tabs'),
-      title: byId('inspector-title'),
-      meta: byId('inspector-meta'),
-      panels: byId('inspector-scroll'),
+      tabs: byId('view-tabs'),
+      sidebar: byId('param-sidebar'),
+      toolbar: byId('viewport-toolbar'),
+      plateBar: byId('plate-bar'),
+      devicePage: byId('page-device'),
+      projectPage: byId('page-project'),
+      previewCard: byId('card-preview'),
     },
     uiState,
+    (actionId) => {
+      void registry
+        .invoke(actionId, 'dom-primary', actionCtx, uiState.get())
+        .catch((error) => console.error(`[orcaxr] view action "${actionId}" failed:`, error));
+    },
   );
-  inspectorTabs.mount();
-  window.addEventListener('pagehide', () => inspectorTabs.dispose(), { once: true });
+  workspaceViews.mount();
+  window.addEventListener('pagehide', () => workspaceViews.dispose(), { once: true });
+
+  // ---- Shell chrome ------------------------------------------------------
+  //
+  // Icons are declared in the markup as `data-icon` and resolved here, so
+  // index.html never has to know where the vendored SVGs live or what the
+  // deployment's base path is.
+  hydrateIcons();
+
+  // The home button snaps the camera back — the same action the View menu runs.
+  byId('btn-home').addEventListener('click', () => {
+    void registry
+      .invoke('view_camera_default', 'dom-menu', actionCtx, uiState.get())
+      .catch((error) => console.error('[orcaxr] default-view action failed:', error));
+  });
+
+  // Sidebar cards fold away, as upstream's do, and say so to assistive tech.
+  for (const toggle of document.querySelectorAll<HTMLButtonElement>('[data-card-toggle]')) {
+    const card = toggle.closest('.oxr-card');
+    if (!card) continue;
+    toggle.addEventListener('click', () => {
+      const folded = card.classList.toggle('folded');
+      toggle.setAttribute('aria-expanded', String(!folded));
+    });
+  }
+
+  // Dark mode. An explicit choice is remembered on this device and outranks
+  // everything else, which is what the official application's preference does.
+  const themeButton = byId('btn-theme') as HTMLButtonElement;
+  const syncThemeButton = () => {
+    const dark = activeDomTheme() === 'dark';
+    themeButton.setAttribute('aria-pressed', String(dark));
+    themeButton.title = dark
+      ? t('app.main.switchToLightMode', 'Switch to light mode')
+      : t('app.main.switchToDarkMode', 'Switch to dark mode');
+    themeButton.setAttribute('aria-label', themeButton.title);
+  };
+  themeButton.addEventListener('click', () => {
+    setDomTheme(activeDomTheme() === 'dark' ? 'light' : 'dark');
+    syncThemeButton();
+  });
+  syncThemeButton();
+
+  // ---- Process card head -------------------------------------------------
+  //
+  // Upstream puts two controls on the Process band: which scope is being
+  // edited, and how much of the schema to show. Both already exist inside the
+  // panel below — the scope picker and the Simple/Advanced/Develop modes — so
+  // these drive those real controls rather than keeping a second state.
+  const settingsHostEl = byId('settings-inspector-host');
+  const advancedSwitch = byId('process-advanced') as HTMLButtonElement;
+  const scopeButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-process-scope]')];
+  const modeRadio = (mode: string) => settingsHostEl.querySelector<HTMLInputElement>(`[data-settings-mode="${mode}"]`);
+  const targetSelect = () => settingsHostEl.querySelector<HTMLSelectElement>('[data-scoped-settings-target]');
+  const objectOption = () => {
+    const select = targetSelect();
+    if (!select) return undefined;
+    const options = [...select.options];
+    return (
+      options.find((option) => option.dataset.scope === 'object') ??
+      options.find((option) => option.dataset.scope === 'part') ??
+      options.find((option) => option.dataset.scope === 'layerRange')
+    );
+  };
+  const syncProcessHead = () => {
+    const simple = modeRadio('simple');
+    const advanced = modeRadio('advanced');
+    advancedSwitch.disabled = !simple || !advanced;
+    advancedSwitch.setAttribute('aria-checked', String(Boolean(simple && !simple.checked)));
+
+    const select = targetSelect();
+    const object = objectOption();
+    const scope = select?.selectedOptions[0]?.dataset.scope ?? 'project';
+    for (const button of scopeButtons) {
+      const wantsObjects = button.dataset.processScope === 'objects';
+      button.setAttribute('aria-pressed', String(wantsObjects === (scope !== 'project')));
+      button.disabled = !select || (wantsObjects && !object);
+      button.title =
+        wantsObjects && !object
+          ? t('app.main.selectAnObjectToGive', 'Add an object to the plate to give it its own settings')
+          : '';
+    }
+  };
+  advancedSwitch.addEventListener('click', () => {
+    const on = advancedSwitch.getAttribute('aria-checked') === 'true';
+    const target = modeRadio(on ? 'simple' : 'advanced');
+    if (!target) return;
+    target.checked = true;
+    target.dispatchEvent(new Event('change', { bubbles: true }));
+    syncProcessHead();
+  });
+  for (const button of scopeButtons) {
+    button.addEventListener('click', () => {
+      const select = targetSelect();
+      if (!select) return;
+      const wanted =
+        button.dataset.processScope === 'objects'
+          ? objectOption()
+          : [...select.options].find((option) => option.dataset.scope === 'project');
+      if (!wanted) return;
+      select.value = wanted.value;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      syncProcessHead();
+    });
+  }
+  byId('btn-process-search').addEventListener('click', () => {
+    const search = settingsHostEl.querySelector<HTMLInputElement>('[data-settings-search]');
+    search?.focus();
+    search?.scrollIntoView({ block: 'nearest' });
+  });
+  // The panel rebuilds itself whenever the scope or the canonical project
+  // changes, so the head reads the DOM it drives rather than caching it.
+  settingsHostEl.addEventListener('change', syncProcessHead);
+  new MutationObserver(() => syncProcessHead()).observe(settingsHostEl, { childList: true, subtree: true });
+  syncProcessHead();
 
   // The renderer fills the window, but the chrome covers its left, right and
   // top edges. Shift the camera's projection so the build plate is centred in
@@ -4957,6 +5164,45 @@ document.addEventListener('DOMContentLoaded', async () => {
   new ResizeObserver(centreCameraOnViewport).observe(viewport);
   xb.core.renderer?.xr?.addEventListener('sessionstart', centreCameraOnViewport);
   xb.core.renderer?.xr?.addEventListener('sessionend', centreCameraOnViewport);
+
+  // ---- Viewport chrome ----------------------------------------------------
+  //
+  // The wash the plate stands on is painted by the page, not the renderer: the
+  // WebGL canvas is transparent by design (that is what lets the docked chrome
+  // sit over it), so the gradient belongs to the stylesheet where it follows
+  // the theme with everything else.
+  //
+  // The reticle does not. It is an XR aiming cue, and in a desktop window it is
+  // a stray dot in the middle of a slicer's viewport where the operator already
+  // has a pointer. It comes back for the session that needs it.
+  // A headset renders at a wide field of view because the display fills the
+  // wearer's vision. A window does not, and the same 90° through a monitor
+  // leaves the build plate the size of a postage stamp in the middle of the
+  // frame. The flat shell uses the field of view a desktop slicer uses; an XR
+  // session's projection comes from the runtime, so the value is restored for
+  // the sake of anything that reads it rather than because the session needs it.
+  const XR_FOV = xb.core.camera instanceof THREE.PerspectiveCamera ? xb.core.camera.fov : 90;
+  const FLAT_FOV = 45;
+  const syncViewportChrome = () => {
+    const presenting = Boolean(xb.core.renderer?.xr?.isPresenting);
+    const camera = xb.core.camera;
+    if (camera instanceof THREE.PerspectiveCamera) {
+      const wanted = presenting ? XR_FOV : FLAT_FOV;
+      if (camera.fov !== wanted) {
+        camera.fov = wanted;
+        camera.updateProjectionMatrix();
+      }
+    }
+    const reticles = xb.core.input?.reticles;
+    if (reticles) reticles.visible = presenting;
+    // The plate is dressed for the surface it is being seen on: a grabbable
+    // object in the headset, a slicer's bed in the window.
+    workspace.setPlateAppearance(presenting ? 'xr' : activeDomTheme() === 'dark' ? 'flat-dark' : 'flat-light');
+  };
+  syncViewportChrome();
+  xb.core.renderer?.xr?.addEventListener('sessionstart', syncViewportChrome);
+  xb.core.renderer?.xr?.addEventListener('sessionend', syncViewportChrome);
+  themeButton.addEventListener('click', syncViewportChrome);
 
   const toolSettingsPanel = byId('tool-settings-panel');
   const toolSettingsTitle = byId('tool-settings-title');
@@ -5011,16 +5257,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         toolSettingsContent.innerHTML = `
           <div style="display:flex; flex-direction:column; gap:8px;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="font-size:13px; color:#a0aab5; width:20px;">X</span>
-              <input type="number" id="ts-x" step="0.1" style="width:100px; background:#1e293b; border:1px solid #334155; color:#fff; padding:4px; border-radius:4px; font-size:13px;" />
+              <span style="font-size:13px; color:var(--oxr-text-muted); width:20px;">X</span>
+              <input type="number" id="ts-x" step="0.1" style="width:100px; background:var(--oxr-bg-sunken); border:1px solid var(--oxr-stroke); color:var(--oxr-text); padding:4px; border-radius:4px; font-size:13px;" />
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="font-size:13px; color:#a0aab5; width:20px;">Y</span>
-              <input type="number" id="ts-y" step="0.1" style="width:100px; background:#1e293b; border:1px solid #334155; color:#fff; padding:4px; border-radius:4px; font-size:13px;" />
+              <span style="font-size:13px; color:var(--oxr-text-muted); width:20px;">Y</span>
+              <input type="number" id="ts-y" step="0.1" style="width:100px; background:var(--oxr-bg-sunken); border:1px solid var(--oxr-stroke); color:var(--oxr-text); padding:4px; border-radius:4px; font-size:13px;" />
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="font-size:13px; color:#a0aab5; width:20px;">Z</span>
-              <input type="number" id="ts-z" step="0.1" style="width:100px; background:#1e293b; border:1px solid #334155; color:#fff; padding:4px; border-radius:4px; font-size:13px;" />
+              <span style="font-size:13px; color:var(--oxr-text-muted); width:20px;">Z</span>
+              <input type="number" id="ts-z" step="0.1" style="width:100px; background:var(--oxr-bg-sunken); border:1px solid var(--oxr-stroke); color:var(--oxr-text); padding:4px; border-radius:4px; font-size:13px;" />
             </div>
           </div>
         `;

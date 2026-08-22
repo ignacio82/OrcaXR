@@ -83,10 +83,10 @@ interface RenderOptions {
 }
 
 const MUTATION_BUTTON_STYLE =
-  'box-sizing:border-box;min-width:44px;min-height:44px;border:1px solid var(--oxr-color-stroke,#ffffff2b);' +
-  'border-radius:7px;background:var(--oxr-color-bg-raised,#ffffff10);color:inherit;padding:7px 10px;' +
+  'box-sizing:border-box;min-width:44px;min-height:44px;border:1px solid var(--oxr-color-stroke);' +
+  'border-radius:7px;background:var(--oxr-surface);color:inherit;padding:7px 10px;' +
   'font:inherit;cursor:pointer;';
-const MUTED_TEXT_STYLE = 'color:var(--oxr-color-text-muted,#a0aab5);font-size:12px;';
+const MUTED_TEXT_STYLE = 'color:var(--oxr-color-text-muted);font-size:12px;';
 let plateManagerSequence = 0;
 
 /** Accessible, responsive DOM manager for an ordered canonical plate snapshot. */
@@ -117,7 +117,7 @@ export class PlateManager {
     root.dataset.plateManager = 'true';
     root.setAttribute('aria-labelledby', `orcaxr-plate-manager-heading-${this.instanceId}`);
     root.style.cssText =
-      'display:flex;min-width:0;flex-direction:column;gap:10px;color:var(--oxr-color-text,#fff);' +
+      'display:flex;min-width:0;flex-direction:column;gap:10px;color:var(--oxr-color-text);' +
       'font:13px/1.4 system-ui,sans-serif;';
     this.container.replaceChildren(root);
     this.root = root;
@@ -196,7 +196,7 @@ export class PlateManager {
       alert.setAttribute('aria-live', 'assertive');
       alert.textContent = visibleError;
       alert.style.cssText =
-        'margin:0;padding:8px;border:1px solid #ef535066;border-radius:7px;background:#7f1d1d35;color:#ffd9d7;';
+        'margin:0;padding:8px;border:1px solid var(--oxr-danger);border-radius:7px;background:var(--oxr-danger-surface);color:var(--oxr-danger);';
       fragment.appendChild(alert);
     }
 
@@ -235,7 +235,7 @@ export class PlateManager {
     row.dataset.active = String(active);
     row.style.cssText =
       'display:flex;min-width:0;flex-wrap:wrap;align-items:stretch;gap:8px;padding:8px;' +
-      `border:1px solid ${active ? 'var(--oxr-color-accent,#ffb74d)' : 'var(--oxr-color-stroke,#ffffff2b)'};` +
+      `border:1px solid ${active ? 'var(--oxr-color-accent,var(--oxr-warn))' : 'var(--oxr-color-stroke,var(--oxr-stroke-strong))'};` +
       'border-radius:9px;background:var(--oxr-color-bg-sunken,#0003);';
 
     if (this.renamingPlateId === plate.id) {
@@ -291,7 +291,7 @@ export class PlateManager {
     const printable = document.createElement('label');
     printable.style.cssText =
       'box-sizing:border-box;display:flex;min-height:44px;align-items:center;gap:7px;padding:6px 9px;' +
-      'border:1px solid var(--oxr-color-stroke,#ffffff2b);border-radius:7px;cursor:pointer;';
+      'border:1px solid var(--oxr-color-stroke);border-radius:7px;cursor:pointer;';
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.checked = plate.printable;
@@ -396,7 +396,7 @@ export class PlateManager {
     input.setAttribute('aria-label', `New name for ${plate.name}`);
     input.setAttribute('aria-invalid', String(Boolean(this.renameValidation)));
     input.style.cssText =
-      'box-sizing:border-box;width:100%;min-height:44px;border:1px solid var(--oxr-color-stroke,#ffffff2b);' +
+      'box-sizing:border-box;width:100%;min-height:44px;border:1px solid var(--oxr-color-stroke);' +
       'border-radius:7px;background:var(--oxr-color-bg-sunken,#0006);color:inherit;padding:7px 9px;font:inherit;';
     input.addEventListener('input', () => {
       this.renameDraft = input.value;
@@ -441,7 +441,7 @@ export class PlateManager {
       validation.dataset.plateRenameError = 'true';
       validation.setAttribute('role', 'alert');
       validation.textContent = this.renameValidation;
-      validation.style.cssText = 'flex-basis:100%;color:#ffb4ab;font-size:12px;';
+      validation.style.cssText = 'flex-basis:100%;color:var(--oxr-danger);font-size:12px;';
       form.appendChild(validation);
     }
     form.addEventListener('submit', (event) => {

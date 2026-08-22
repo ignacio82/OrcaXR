@@ -8,7 +8,7 @@
 import type { Action, ActionRegistry } from '../../actions/ActionRegistry';
 import type { ActionContext } from '../../actions/ActionContext';
 import type { UiState } from '../../actions/UiState';
-import { domIcon } from '../icons';
+import { applyIcon } from '../icons';
 import { t } from '../../l10n/t';
 
 export class CommandPalette {
@@ -119,10 +119,13 @@ export class CommandPalette {
       const unavailable = a.capability.status === 'unavailable' || a.capability.status === 'blocked';
       const hint = availability.state === 'disabled' ? availability.reason : a.hint;
       row.innerHTML =
-        `<span class="glyph">${domIcon(a.icon)}</span>` +
+        '<span class="glyph" aria-hidden="true"></span>' +
         `<span class="cmd-label">${escapeHtml(a.label)}</span>` +
-        (unavailable ? '<span class="soon-badge">UNAVAILABLE</span>' : '') +
+        (unavailable
+          ? `<span class="soon-badge">${escapeHtml(t('ui.commandPalette.unavailable', 'Unavailable'))}</span>`
+          : '') +
         (hint ? `<span class="cmd-hint">${escapeHtml(hint)}</span>` : '');
+      applyIcon(row.querySelector('.glyph') as HTMLElement, a.icon);
       row.addEventListener('mouseenter', () => {
         this.sel = i;
         this.paint();

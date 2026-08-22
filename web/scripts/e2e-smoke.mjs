@@ -352,11 +352,12 @@ async function readTheProgramInABrowser(page, artifact) {
   // `<details>` has no height, so the window has nothing to measure against
   // until both are open — which is exactly the state a real reader is in.
   await page.evaluate(() => {
-    const sidebar = globalThis.document.querySelector('#right-sidebar');
+    const sidebar = globalThis.document.querySelector('#param-sidebar');
     sidebar?.classList.remove('collapsed');
-    const tab = globalThis.document.querySelector('#insp-tab-preview');
+    const tab = globalThis.document.querySelector('[data-view-tab="preview"]');
     if (tab instanceof globalThis.HTMLElement) tab.click();
     const host = globalThis.document.querySelector('#gcode-panel-host');
+    host?.closest('.oxr-card')?.classList.remove('folded');
     const section = host?.closest('details');
     if (section) section.open = true;
   });
@@ -584,12 +585,44 @@ async function paintAtFirstHit(page) {
  * A real user selects the tab before touching the controls inside it; every
  * step below reaches its panel the same way.
  */
-async function showInspectorTab(page, tabId) {
-  await page.evaluate((id) => {
-    const tab = globalThis.document.querySelector(`[data-inspector-tab="${id}"]`);
-    if (!tab) throw new Error(`missing inspector tab ${id}`);
-    tab.click();
-  }, tabId);
+/**
+ * Put the panel a test needs on screen, the way an operator would.
+ *
+ * The shell has four workspaces — Prepare, Preview, Device, Project — and the
+ * Prepare sidebar is a stack of cards that fold. So reaching a panel is two
+ * moves: select the workspace that holds it, then unfold its card. The names
+ * here are the panel groups the tests ask for, mapped to where the shell now
+ * keeps them.
+ */
+const PANEL_HOME = {
+  objects: { view: 'prepare', card: 'objects' },
+  settings: { view: 'prepare', card: 'printer' },
+  filament: { view: 'prepare', card: 'filament' },
+  preview: { view: 'preview', card: 'preview' },
+  printer: { view: 'device', card: null },
+  plates: { view: 'project', card: null },
+};
+
+async function showInspectorTab(page, panelId) {
+  await page.evaluate(
+    (id, homes) => {
+      const home = homes[id];
+      if (!home) throw new Error(`unknown panel group ${id}`);
+      const tab = globalThis.document.querySelector(`[data-view-tab="${home.view}"]`);
+      if (!tab) throw new Error(`missing workspace tab ${home.view}`);
+      tab.click();
+      // Every card in the sidebar is unfolded: a test that opens one panel
+      // routinely reads another beside it, and a folded card has no box.
+      for (const card of globalThis.document.querySelectorAll('#param-scroll .oxr-card')) {
+        card.classList.remove('folded');
+      }
+    },
+    panelId,
+    PANEL_HOME,
+  );
+  // The card fold/unfold and the view switch both settle synchronously, but the
+  // panels inside them mount from a microtask.
+  await new Promise((resolve) => setTimeout(resolve, 30));
 }
 
 /**
@@ -1257,7 +1290,7 @@ async function paintImportedModel(page) {
   });
   await page.evaluate(() => globalThis.window.workspace.undo?.());
   // The rail collapses once a model loads, so drive its action directly.
-  await clickPanelControl(page, '#left-toolbar [data-action-id="tool_move"]');
+  await clickPanelControl(page, '#model-toolbar [data-action-id="tool_move"]');
   await page.waitForFunction(() => globalThis.window.__orcaUi.get().activeTool === 'move');
 }
 
@@ -2414,9 +2447,34 @@ function checksumOf(buffer) {
 
 async function clickMenuAction(page, actionId) {
   await page.$eval(`[data-action-id="${actionId}"]`, (item) => {
-    item.closest('.menu-host')?.querySelector('.menu-trigger')?.click();
+    // On a window too narrow for the menu bar the whole bar sits behind the
+    // hamburger, so that is the first thing an operator presses.
+    const bar = globalThis.document.getElementById('menu-bar-host');
+    if (bar && globalThis.getComputedStyle(bar).display === 'none') {
+      globalThis.document.getElementById('menu-button')?.click();
+    }
+    // The trigger toggles, so a section that is already open must not be
+    // pressed again — that would close the menu the item is in.
+    const host = item.closest('.menu-host');
+    if (host && !host.classList.contains('open')) host.querySelector('.menu-trigger')?.click();
   });
-  await page.click(`[data-action-id="${actionId}"]`);
+  const diagnosis = await page.$eval(`[data-action-id="${actionId}"]`, (item) => {
+    const rect = item.getBoundingClientRect();
+    const style = globalThis.getComputedStyle(item);
+    const centre = globalThis.document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+    return {
+      rect: [Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height)],
+      display: style.display,
+      visibility: style.visibility,
+      onTop: centre ? `${centre.tagName}.${centre.className}` : null,
+      viewport: [globalThis.innerWidth, globalThis.innerHeight],
+    };
+  });
+  try {
+    await page.click(`[data-action-id="${actionId}"]`);
+  } catch (error) {
+    throw new Error(`menu action ${actionId} was not clickable: ${JSON.stringify(diagnosis)}`, { cause: error });
+  }
 }
 
 async function setDomInput(page, selector, value) {
@@ -2656,9 +2714,12 @@ try {
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !globalThis.document.getElementById('oxr-modal-overlay'));
   assert.equal(
-    await page.evaluate(() => globalThis.document.activeElement?.id),
-    'menu-button',
-    'closing the dialog returns focus to the control that opens the menu',
+    await page.evaluate(() => {
+      const active = globalThis.document.activeElement;
+      return active?.classList.contains('menu-trigger') ? active.getAttribute('aria-controls') : (active?.id ?? '');
+    }),
+    'oxr-menu-help',
+    'closing the dialog returns focus to the menu the item was invoked from',
   );
 
   await surviveEveryViewport(page);
@@ -2713,7 +2774,10 @@ try {
   // A project 3MF goes through File -> Open Project, its dedicated picker,
   // and the explicit import preview. It must not use the STL model picker.
   await page.$eval('[data-action-id="file_open_project"]', (item) => {
-    item.closest('.menu-host')?.querySelector('.menu-trigger')?.click();
+    // The trigger toggles, so a section that is already open must not be
+    // pressed again — that would close the menu the item is in.
+    const host = item.closest('.menu-host');
+    if (host && !host.classList.contains('open')) host.querySelector('.menu-trigger')?.click();
   });
   const openProject = await page.$('[data-action-id="file_open_project"]');
   assert.ok(openProject, 'Open Project action is available');
@@ -2733,7 +2797,10 @@ try {
 
   // Opening a project OVER open work is a decision, so the preview appears.
   await page.$eval('[data-action-id="file_open_project"]', (item) => {
-    item.closest('.menu-host')?.querySelector('.menu-trigger')?.click();
+    // The trigger toggles, so a section that is already open must not be
+    // pressed again — that would close the menu the item is in.
+    const host = item.closest('.menu-host');
+    if (host && !host.classList.contains('open')) host.querySelector('.menu-trigger')?.click();
   });
   const replaceOverOpenWork = await page.$('[data-action-id="file_open_project"]');
   const [replaceChooser] = await Promise.all([page.waitForFileChooser(), replaceOverOpenWork.click()]);
@@ -3031,7 +3098,10 @@ try {
   await page.waitForFunction(() => globalThis.window.workspace.getVirtualFilamentLibrarySnapshot().mixed.length === 0);
 
   await page.$eval('[data-action-id="file_open_project"]', (item) => {
-    item.closest('.menu-host')?.querySelector('.menu-trigger')?.click();
+    // The trigger toggles, so a section that is already open must not be
+    // pressed again — that would close the menu the item is in.
+    const host = item.closest('.menu-host');
+    if (host && !host.classList.contains('open')) host.querySelector('.menu-trigger')?.click();
   });
   const reopenProject = await page.$('[data-action-id="file_open_project"]');
   const [roundtripChooser] = await Promise.all([page.waitForFileChooser(), reopenProject.click()]);
@@ -3139,7 +3209,7 @@ try {
     const state = globalThis.window.__orcaUi.get();
     return state.hasSelection && !state.hasInstanceSelection;
   });
-  assert.equal(await page.$eval('#left-toolbar [data-action-id="tool_move"]', (node) => node.disabled), true);
+  assert.equal(await page.$eval('#model-toolbar [data-action-id="tool_move"]', (node) => node.disabled), true);
   assert.equal(
     await page.$eval('#menu-bar-host [data-action-id="edit_delete_selected"]', (node) => node.disabled),
     true,
@@ -3666,7 +3736,7 @@ try {
     {},
     remoteInstance.id,
   );
-  assert.equal(await page.$eval('#left-toolbar [data-action-id="tool_move"]', (node) => node.disabled), false);
+  assert.equal(await page.$eval('#model-toolbar [data-action-id="tool_move"]', (node) => node.disabled), false);
   assert.equal(
     await page.$eval('#menu-bar-host [data-action-id="edit_delete_selected"]', (node) => node.disabled),
     false,
@@ -3803,12 +3873,10 @@ try {
   // The responsive PlateManager owns guarded canonical plate operations. Add
   // starts in the existing plate bar; every subsequent operation is driven
   // through the manager and asserted from canonical summaries/tree IDs.
-  await showInspectorTab(page, 'plates');
-  await page.$eval('#plate-manager-host', (host) => {
-    const details = host.closest('details');
-    if (details) details.open = true;
-  });
-  await page.waitForSelector('#plate-manager-host [data-plate-manager-list="true"]');
+  // The plate strip sits over the build plate, so adding starts in Prepare;
+  // the manager is a Project-page panel, so everything after it happens there.
+  // The flow crosses both exactly as an operator's does.
+  await showInspectorTab(page, 'objects');
   const platesBefore = await page.evaluate(() => {
     const workspace = globalThis.window.workspace;
     const summary = workspace.getCanonicalSummary();
@@ -3848,6 +3916,12 @@ try {
     },
   );
   const addedPlateId = await page.evaluate(() => globalThis.window.workspace.getCanonicalSummary().activePlateId);
+  await showInspectorTab(page, 'plates');
+  await page.$eval('#plate-manager-host', (host) => {
+    const details = host.closest('details');
+    if (details) details.open = true;
+  });
+  await page.waitForSelector('#plate-manager-host [data-plate-manager-list="true"]');
   await page.evaluate((plateId) => {
     const button = [...globalThis.document.querySelectorAll('[data-plate-control="rename"]')].find(
       (candidate) => candidate.dataset.plateId === plateId,

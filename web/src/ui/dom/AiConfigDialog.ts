@@ -10,10 +10,10 @@ export class AiConfigDialog {
     const dialog = document.createElement('div');
     dialog.id = 'ai-config-dialog';
     dialog.style.cssText =
-      'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100;align-items:center;justify-content:center;';
+      'display:none;position:fixed;inset:0;background:rgba(20,26,28,0.42);z-index:100;align-items:center;justify-content:center;';
     dialog.innerHTML = `
       <div role="dialog" aria-modal="true" aria-labelledby="ai-config-title" aria-describedby="ai-config-note"
-        style="background:var(--oxr-color-bg-card);padding:24px;border-radius:12px;width:min(400px,88vw);border:1px solid var(--oxr-color-stroke);color:#fff;font-family:sans-serif;">
+        style="background:var(--oxr-color-bg-card);padding:24px;border-radius:12px;width:min(400px,88vw);border:1px solid var(--oxr-color-stroke);color:var(--oxr-text);font-family:sans-serif;">
         <h3 id="ai-config-title" style="margin-top:0;">AI Configuration</h3>
         <p id="ai-config-note" style="font-size:13px;color:var(--oxr-color-text-muted);line-height:1.4;">
           Keys stay in memory for this tab only and are cleared when the page closes. They are never saved in browser storage.
@@ -22,7 +22,7 @@ export class AiConfigDialog {
           <div>
             <label for="ai-gemini-key" style="display:block;margin-bottom:8px;font-size:14px;color:var(--oxr-color-text-muted);">Gemini API Key</label>
             <input type="password" id="ai-gemini-key" autocomplete="off" spellcheck="false"
-              style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--oxr-color-stroke);background:rgba(255,255,255,0.05);color:#fff;font-size:14px;box-sizing:border-box;">
+              style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--oxr-color-stroke);background:var(--oxr-surface);color:var(--oxr-text);font-size:14px;box-sizing:border-box;">
           </div>
         </div>
         <div style="margin-top:24px;display:flex;justify-content:flex-end;gap:12px;">
