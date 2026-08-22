@@ -5995,17 +5995,31 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /**
-   * Prime the local engine after import has settled, not while the empty
-   * workspace is trying to appear. `SlicerClient` deduplicates this promise,
-   * so an immediate Slice simply joins the same load. An external slicer has
-   * no browser WASM cost and intentionally skips this path.
+   * Warm the local engine's DOWNLOAD after import has settled — never its
+   * instance.
+   *
+   * This used to call `slicer.load()`, which instantiates the module: a 256 MB
+   * shared heap plus a preallocated pool of ten Web Workers, committed 1.2 s
+   * after every single import, in the same renderer process that is holding the
+   * model the operator just opened. Nothing had asked to slice yet, and on the
+   * primary route nothing would have used that instance anyway — FullSpectrum
+   * project slices run on `sliceWorker`, which builds its own second instance,
+   * so a warmed main-thread module was a quarter-gigabyte of resident memory
+   * standing by for the fallback path. When the renderer lost that bet the tab
+   * was killed and reloaded, and the model went with it.
+   *
+   * Fetching the ~15 MB of wasm is the part that actually made a first Slice
+   * feel slow, and `prefetchEngine` warms exactly that at no heap cost. The
+   * module is instantiated on Slice, deduplicated as before, now from bytes
+   * that are already local. An external slicer has no browser WASM cost and
+   * intentionally skips this path.
    */
   private warmSlicerAfterFirstModel() {
     if (this.slicerWarmupQueued || SlicerClient.useExternalSlicer()) return;
     this.slicerWarmupQueued = true;
     window.setTimeout(() => {
-      this.slicer.load().catch((e) => {
-        console.warn('[slicer] background warm-up failed; it will retry on Slice:', e);
+      this.slicer.prefetchEngine().catch((e) => {
+        console.warn('[slicer] engine prefetch failed; Slice will fetch it directly:', e);
         this.slicerWarmupQueued = false;
       });
     }, 1200);

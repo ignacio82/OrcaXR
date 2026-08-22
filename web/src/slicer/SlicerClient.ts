@@ -407,6 +407,53 @@ export class SlicerClient {
     await this.ensureModule();
   }
 
+  /**
+   * URL of the Emscripten glue for the local engine. Base-aware so it resolves
+   * under any deploy base: dev ('/') -> /slicer/slic3r.mjs; GitHub Pages
+   * ('/slicer/') -> /slicer/slicer/slic3r.mjs. Emscripten locates slic3r.wasm
+   * relative to this URL, so the two always travel together.
+   */
+  private static engineModuleUrl(): string {
+    const base = import.meta.env?.BASE_URL ?? '/';
+    return new URL(`${base}slicer/slic3r.mjs`, self.location.origin).href;
+  }
+
+  /**
+   * Pull the engine's BYTES into the HTTP cache without instantiating it.
+   *
+   * Instantiating the module is not a cheap warm-up: the build fixes
+   * `INITIAL_MEMORY` at 256 MB and `PTHREAD_POOL_SIZE` at 10, and the pool is
+   * preallocated during `factory()`, so every instance commits a quarter of a
+   * gigabyte of shared heap and spawns ten Web Workers before it resolves —
+   * measured at ~200 MB RSS in Node, which carries no renderer, no scene and no
+   * worker realms. On a headset that spike lands in the same renderer process
+   * as the freshly imported model, and losing that process takes the tab (and
+   * the model) with it.
+   *
+   * What actually makes the first Slice feel slow is fetching ~15 MB of wasm,
+   * and that can be warmed for free. The body is streamed and discarded so the
+   * response lands in the cache without ever being retained, and instantiation
+   * waits for a Slice the operator actually asked for.
+   */
+  async prefetchEngine(): Promise<void> {
+    if (this.module || this.loading) return; // already instantiated; nothing to warm
+    const moduleUrl = SlicerClient.engineModuleUrl();
+    const urls = [moduleUrl, new URL('slic3r.wasm', moduleUrl).href];
+    await Promise.all(
+      urls.map(async (url) => {
+        const res = await fetch(url, { credentials: 'same-origin' });
+        if (!res.ok || !res.body) return;
+        // Drain a chunk at a time: reading to completion is what commits the
+        // response to cache, and holding no chunk is what keeps this free.
+        const reader = res.body.getReader();
+        for (;;) {
+          const { done } = await reader.read();
+          if (done) break;
+        }
+      }),
+    );
+  }
+
   get isSlicing(): boolean {
     return this.slicing;
   }
@@ -416,12 +463,8 @@ export class SlicerClient {
     if (!this.loading) {
       this.loading = (async () => {
         // Runtime-computed URL so vite doesn't try to pre-bundle the
-        // Emscripten module (it lives in /public/slicer, served as-is). Made
-        // base-aware so it resolves under any deploy base: dev ('/') → it sits
-        // at /slicer/slic3r.mjs; GitHub Pages ('/slicer/') → /slicer/slicer/…
-        // (Emscripten locates slic3r.wasm relative to this .mjs URL.)
-        const base = import.meta.env?.BASE_URL ?? '/'; // '/' in dev/tests, '/slicer/' on Pages
-        const moduleUrl = new URL(`${base}slicer/slic3r.mjs`, window.location.origin).href;
+        // Emscripten module (it lives in /public/slicer, served as-is).
+        const moduleUrl = SlicerClient.engineModuleUrl();
         const factory = (await import(/* @vite-ignore */ moduleUrl)).default as (arg?: object) => Promise<Slic3rModule>;
         const mod = await factory({
           printErr: (text: string) => this.handleStderr(text),
@@ -855,8 +898,7 @@ export class SlicerClient {
   ): Promise<string> {
     throwIfAborted(signal);
     const worker = this.ensureProjectWorker();
-    const base = import.meta.env?.BASE_URL ?? '/'; // '/' in dev/tests, '/slicer/' on Pages
-    const moduleUrl = new URL(`${base}slicer/slic3r.mjs`, self.location.origin).href;
+    const moduleUrl = SlicerClient.engineModuleUrl();
     const id = ++this.workerJobSeq;
     return new Promise<string>((resolve, reject) => {
       const abort = () => {
