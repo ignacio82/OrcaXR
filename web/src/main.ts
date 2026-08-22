@@ -2403,6 +2403,7 @@ function setupDomUI(
     }
   };
   const headsPanel = document.getElementById('heads-panel') as HTMLDivElement;
+  const profileFilamentHint = document.getElementById('profile-filament-hint') as HTMLParagraphElement | null;
   const renderProfileSelects = () => {
     const o = workspace.getProfileOptions();
     fillPresetSelect(selMachine, o.machineOptions, o.machinePresetId);
@@ -2417,7 +2418,17 @@ function setupDomUI(
 
     // Hide the global filament dropdown if the printer has multiple extruders,
     // as it is redundant and confusing (each head gets its own filament picker).
+    // Those pickers live on the Filament tab, so say where they went rather than
+    // leaving a multi-head printer looking like it lost its filament control.
     selFilament.style.display = exCount > 1 ? 'none' : 'block';
+    if (profileFilamentHint) {
+      profileFilamentHint.hidden = exCount <= 1;
+      profileFilamentHint.textContent = t(
+        'app.main.perHeadFilamentsAreOnThe',
+        'This printer has {count} heads — pick each one’s filament on the Filament tab.',
+        { count: exCount },
+      );
+    }
 
     // Offered whatever the extruder count is. Gating this on exCount > 1 made
     // it unreachable in the case that needs it most: a single-tool project
@@ -3977,7 +3988,12 @@ function setupDomUI(
   btnAddFilament.setAttribute('aria-label', btnAddFilament.title);
   const renderPalette = () => {
     swatchWrap.innerHTML = '';
+    // Each head's own colour is edited on its row in the Filaments card above;
+    // repeating those swatches here only invited two controls for one value.
+    // What is left is what has no row of its own: the auxiliary palette slots.
+    const auxiliaryFrom = workspace.extruderCount;
     workspace.palette.list().forEach((slot, i) => {
+      if (i < auxiliaryFrom) return;
       const cell = document.createElement('div');
       cell.style.cssText = 'position:relative;';
       const input = document.createElement('input');
@@ -3995,9 +4011,13 @@ function setupDomUI(
         'border-radius:50%;border:none;background:#333;color:#fff;font-size:11px;cursor:pointer;';
       del.onclick = () => workspace.removeAuxiliaryFilamentSlot(i);
       cell.appendChild(input);
-      if (i >= workspace.extruderCount) cell.appendChild(del);
+      cell.appendChild(del);
       swatchWrap.appendChild(cell);
     });
+    // A heading over nothing is noise; the "+" that creates the first one lives
+    // on the heading, so the section returns as soon as one exists.
+    const auxiliaryCount = Math.max(0, workspace.palette.count() - auxiliaryFrom);
+    swatchWrap.hidden = auxiliaryCount === 0;
 
     // Legacy preview fallback. Canonical rows render in the editable library;
     // this chip strip remains only for an older load path that has not adopted

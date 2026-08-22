@@ -714,6 +714,7 @@
   "app.main.noPrinterSavedYet": "No printer saved yet",
   "app.main.openVirtualFilamentLibrary": "Open virtual filament library",
   "app.main.orcaXRIsTranslatedFromThe": "OrcaXR is translated from the pinned Snapmaker OrcaSlicer catalogues.",
+  "app.main.perHeadFilamentsAreOnThe": "This printer has {count} heads — pick each one’s filament on the Filament tab.",
   "app.main.pickYourPrinterPrintProcess": "Pick your printer, print process and filament to get started.",
   "app.main.pleasePasteATokenFirst": "Please paste a token first.",
   "app.main.readingFilamentSlotsFromThe": "Reading filament slots from the connected printer…",

@@ -1246,7 +1246,6 @@
       /* Panels that describe a model, or a slice of one, have nothing to show
          yet. Printer, MCP and plate setup stay reachable: a maker may well
          configure the machine before the first import. */
-      #ui-container.no-model #heads-panel,
       #ui-container.no-model #settings-inspector-host,
       #ui-container.no-model #filament-panel,
       #ui-container.no-model #tool-settings-panel {
@@ -1892,13 +1891,20 @@
                   class="action-btn"
                   style="text-align: start"
                 ></select>
+                <!-- Shown only when the per-head pickers replace the single
+                     dropdown above, so a multi-head printer never looks like it
+                     lost its filament control. -->
+                <p
+                  id="profile-filament-hint"
+                  hidden
+                  style="margin: 0; color: var(--oxr-text-muted); font-size: 11px; line-height: 1.35"
+                ></p>
                 <details id="preset-library-details">
                   <summary class="insp-kicker" style="cursor: pointer">Printers and presets</summary>
                   <div id="preset-library-host" style="margin-top: 8px"></div>
                 </details>
                 <input id="preset-bundle-file" type="file" accept="application/json,.json" hidden />
               </div>
-              <div class="panel" id="heads-panel" style="display: flex; flex-direction: column; gap: 8px"></div>
               <label class="check-row">
                 <input id="chk-wipe-tower-auto" type="checkbox" checked />
                 Auto-position wipe tower
@@ -1915,9 +1921,21 @@
               aria-labelledby="insp-tab-filament"
               hidden
             >
+              <!-- What is actually loaded, head by head: the machine's own spools,
+                   their presets and nozzles. Deliberately outside #filament-panel
+                   so it stays reachable before the first import — configuring the
+                   machine is not something that waits for a model. -->
+              <div class="panel" id="filament-heads-card">
+                <span class="insp-kicker" style="display: block; margin-bottom: 8px">Filaments</span>
+                <div id="heads-panel" style="display: flex; flex-direction: column; gap: 8px"></div>
+              </div>
+
               <div class="panel" id="filament-panel">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
-                  <span class="insp-kicker">Filaments</span>
+                <div
+                  id="auxiliary-palette-section"
+                  style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px"
+                >
+                  <span class="insp-kicker">Extra palette colours</span>
                   <button
                     id="btn-add-filament"
                     type="button"
