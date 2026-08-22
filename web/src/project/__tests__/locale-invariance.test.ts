@@ -64,12 +64,10 @@ await test('serialized bytes do not change when the runtime collates differently
   } as typeof String.prototype.localeCompare;
 
   try {
-    // eslint-disable-next-line no-extend-native
     String.prototype.localeCompare = swedishLike;
     const underOtherLocale = await serializeToBase64();
     assert.equal(underOtherLocale, base, 'the same project must produce the same archive on every machine');
   } finally {
-    // eslint-disable-next-line no-extend-native
     String.prototype.localeCompare = original;
   }
 });
@@ -79,14 +77,12 @@ await test('the fingerprint is locale-invariant too', async () => {
   const base = projectFingerprint(fixture.state);
   const original = String.prototype.localeCompare;
   try {
-    // eslint-disable-next-line no-extend-native
     String.prototype.localeCompare = function () {
       // A collation that reverses everything would reorder any sort using it.
       return -1;
     } as typeof String.prototype.localeCompare;
     assert.equal(projectFingerprint(accentedFixture().state), base);
   } finally {
-    // eslint-disable-next-line no-extend-native
     String.prototype.localeCompare = original;
   }
 });

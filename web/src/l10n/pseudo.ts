@@ -260,7 +260,7 @@ function transformBranches(cursor: Cursor, transform: (text: string) => string):
 export function unpseudo(text: string): string {
   const reverse = new Map(Object.entries(ACCENTS).map(([plain, accented]) => [accented, plain]));
   let out = '';
-  for (const char of text.replaceAll(RLM, '')) {
+  for (const char of text.replaceAll(RLM, '').replace(/ ?·+/g, '')) {
     if (char === OPEN || char === CLOSE || char === '·') continue;
     out += reverse.get(char) ?? char;
   }

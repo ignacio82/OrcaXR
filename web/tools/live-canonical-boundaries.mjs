@@ -850,7 +850,8 @@ function assignedIdentifier(expression) {
       ts.isParenthesizedExpression(parent) ||
       ts.isNonNullExpression(parent) ||
       ts.isAsExpression(parent) ||
-      ts.isSatisfiesExpression(parent)
+      ts.isSatisfiesExpression(parent) ||
+      (ts.isConditionalExpression(parent) && (parent.whenTrue === current || parent.whenFalse === current))
     ) {
       current = parent;
     } else return undefined;
