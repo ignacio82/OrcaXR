@@ -66,5 +66,9 @@
   "ui.brimEarsPanel.brimEars": "Krašto \"ausys\"",
   "ui.generatedSettingsPanel.detailLevel": "Detalių lygis",
   "ui.printSubmissionDialog.sendToPrinter": "Siųsti į spausdintuvą",
-  "ui.semanticObjectEditor.heightRanges": "Aukščio diapazonai"
+  "ui.selectionFilamentBar.default": "Numatytas",
+  "ui.selectionFilamentBar.selectedScopes": "pasirinkta",
+  "ui.semanticObjectEditor.heightRanges": "Aukščio diapazonai",
+  "workspace.orcaWorkspace.defaultFilament": "Numatytas",
+  "workspace.orcaWorkspace.selectedScopes": "pasirinkta"
 }

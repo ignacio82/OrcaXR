@@ -1074,6 +1074,102 @@
       #preview-scrubber-host[hidden] {
         display: none;
       }
+      #selection-filament-host {
+        position: absolute;
+        inset-inline: 16px;
+        bottom: 16px;
+        z-index: 6;
+        pointer-events: auto;
+      }
+      #selection-filament-host[hidden] {
+        display: none;
+      }
+      /* Both can be up at once: the scrubber owns the bottom edge. */
+      #preview-scrubber-host:not([hidden]) + #selection-filament-host {
+        bottom: 92px;
+      }
+      .selection-filament-bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 9px 12px;
+        box-sizing: border-box;
+        background: var(--glass-fill);
+        backdrop-filter: var(--glass-blur);
+        border: 1px solid var(--oxr-stroke);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-panel);
+      }
+      .selection-filament-label {
+        font-size: 12px;
+        font-weight: 650;
+        color: var(--oxr-text);
+        max-width: 30ch;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .selection-filament-chips {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        min-width: 0;
+      }
+      .selection-filament-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px 5px 6px;
+        border: 1px solid var(--oxr-stroke);
+        border-radius: 999px;
+        background: var(--oxr-surface);
+        color: var(--oxr-text);
+        font-size: 12px;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .selection-filament-chip:hover:not(:disabled) {
+        border-color: var(--oxr-accent);
+      }
+      .selection-filament-chip:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .selection-filament-chip[aria-pressed='true'] {
+        border-color: var(--oxr-accent);
+        box-shadow: inset 0 0 0 1px var(--oxr-accent);
+      }
+      .selection-filament-inherit {
+        padding-inline: 10px;
+      }
+      .selection-filament-swatch {
+        width: 14px;
+        height: 14px;
+        flex: 0 0 14px;
+        border-radius: 50%;
+        border: 1px solid var(--oxr-stroke);
+      }
+      .selection-filament-index {
+        font-family: var(--oxr-font-mono);
+        font-size: 10px;
+        color: var(--oxr-text-muted);
+      }
+      .selection-filament-name {
+        max-width: 22ch;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .selection-filament-status {
+        font-size: 11px;
+        color: var(--oxr-text-muted);
+        min-height: 1em;
+      }
+      .selection-filament-status[data-selection-filament-error] {
+        color: var(--oxr-danger);
+      }
       .preview-scrubber {
         display: flex;
         align-items: center;
@@ -1720,6 +1816,9 @@
 
           <!-- Layer scrubber, mounted by main.ts once a preview exists. -->
           <div id="preview-scrubber-host" hidden></div>
+          <!-- One-click filament for whatever is selected. Deliberately after
+               the scrubber so CSS can lift it when both are on screen. -->
+          <div id="selection-filament-host" hidden></div>
         </main>
 
         <!-- ========================= Inspector ========================= -->

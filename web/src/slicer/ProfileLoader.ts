@@ -26,6 +26,13 @@ export interface SlicerProfile {
   filamentName: string;
   /** Full logical filament preset name before the compact picker label. */
   filamentPresetName?: string;
+  /**
+   * The filament preset's own `filament_vendor`. Kept beside the flattened
+   * config rather than inside it: the engine key set is a whitelist of what a
+   * slice consumes, and this is here to match what a printer reports about a
+   * loaded spool.
+   */
+  filamentVendor?: string;
   /** Canonical graph identities; absent only on ad-hoc imported configs. */
   machinePresetId?: PresetId;
   processPresetId?: PresetId;
@@ -345,6 +352,7 @@ function compileProfiles(graph: PresetGraph): {
             processName: process.name,
             filamentName: filamentShort,
             filamentPresetName: filament.name,
+            ...(filamentVendorOf(filament) ? { filamentVendor: filamentVendorOf(filament) } : {}),
             machinePresetId: machine.id,
             processPresetId: process.id,
             filamentPresetId: filament.id,
@@ -358,6 +366,13 @@ function compileProfiles(graph: PresetGraph): {
     profiles,
     diagnostics: deduplicateDiagnostics(diagnostics),
   };
+}
+
+/** A filament preset's declared vendor, as a single trimmed name. */
+function filamentVendorOf(filament: PresetNode): string {
+  const declared = filament.effective['filament_vendor'];
+  const first = Array.isArray(declared) ? declared[0] : declared;
+  return typeof first === 'string' ? first.trim() : '';
 }
 
 function graphErrorDiagnostics(error: unknown): ProfileCatalogDiagnostic[] {

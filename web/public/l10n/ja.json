@@ -53,5 +53,7 @@
   "action.view_open_gcode.label": "G-codeを開く…",
   "actions.actionContext.keyboardShortcuts": "ショートカット",
   "ui.generatedSettingsPanel.detailLevel": "細部レベル",
-  "ui.printSubmissionDialog.sendToPrinter": "プリンタへ送信"
+  "ui.printSubmissionDialog.sendToPrinter": "プリンタへ送信",
+  "ui.selectionFilamentBar.default": "デフォルト",
+  "workspace.orcaWorkspace.defaultFilament": "デフォルト"
 }

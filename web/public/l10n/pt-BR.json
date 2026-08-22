@@ -66,5 +66,9 @@
   "ui.brimEarsPanel.brimEars": "Orelhas da borda",
   "ui.generatedSettingsPanel.detailLevel": "Nível de detalhe",
   "ui.printSubmissionDialog.sendToPrinter": "Enviar para a impressora",
-  "ui.semanticObjectEditor.heightRanges": "Intervalos de altura"
+  "ui.selectionFilamentBar.default": "Padrão",
+  "ui.selectionFilamentBar.selectedScopes": "selecionado",
+  "ui.semanticObjectEditor.heightRanges": "Intervalos de altura",
+  "workspace.orcaWorkspace.defaultFilament": "Padrão",
+  "workspace.orcaWorkspace.selectedScopes": "selecionado"
 }

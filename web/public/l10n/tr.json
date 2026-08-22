@@ -66,5 +66,9 @@
   "ui.brimEarsPanel.brimEars": "Kenar  kulakları",
   "ui.generatedSettingsPanel.detailLevel": "Detay seviyesi",
   "ui.printSubmissionDialog.sendToPrinter": "Yazıcıya gönder",
-  "ui.semanticObjectEditor.heightRanges": "Yükseklik aralıkları"
+  "ui.selectionFilamentBar.default": "Varsayılan",
+  "ui.selectionFilamentBar.selectedScopes": "Seçili",
+  "ui.semanticObjectEditor.heightRanges": "Yükseklik aralıkları",
+  "workspace.orcaWorkspace.defaultFilament": "Varsayılan",
+  "workspace.orcaWorkspace.selectedScopes": "Seçili"
 }

@@ -180,6 +180,9 @@ export async function startMoonrakerSimulator(options = {}) {
             print_task_config: {
               filament_color_rgba: state.slots.map((slot) => `${slot.color}FF`),
               filament_type: state.slots.map((slot) => slot.material),
+              // The machine reports its own finer grade beside the type, which
+              // is what tells Matte from SnapSpeed.
+              filament_sub_type: state.slots.map((slot) => slot.subType ?? ''),
               filament_vendor: state.slots.map((slot) => slot.vendor ?? 'Simulator'),
               filament_exist: state.slots.map(() => 1),
             },

@@ -66,5 +66,9 @@
   "ui.brimEarsPanel.brimEars": "Bordures à oreilles",
   "ui.generatedSettingsPanel.detailLevel": "Niveau de détail",
   "ui.printSubmissionDialog.sendToPrinter": "Envoyer à l'imprimante",
-  "ui.semanticObjectEditor.heightRanges": "Plages de hauteur"
+  "ui.selectionFilamentBar.default": "Défaut",
+  "ui.selectionFilamentBar.selectedScopes": "sélectionné",
+  "ui.semanticObjectEditor.heightRanges": "Plages de hauteur",
+  "workspace.orcaWorkspace.defaultFilament": "Défaut",
+  "workspace.orcaWorkspace.selectedScopes": "sélectionné"
 }

@@ -1128,7 +1128,13 @@ export class CanonicalWorkspaceController {
     const scopes: CanonicalFilamentAssignmentScope[] = [];
     const unsupportedSelection: ObjectTreeEntityRef[] = [];
     const seen = new Set<string>();
-    for (const ref of requestedRefs) {
+    for (const requested of requestedRefs) {
+      // Clicking a model in the viewport selects an *instance*, and upstream
+      // has no per-copy filament: every copy of an object prints from the
+      // object's own assignment. Resolving the instance to its object is what
+      // makes "click the model, pick a filament" mean something, and it also
+      // collapses a multi-copy selection to the one scope it really is.
+      const ref = instanceAssignmentScopeRef(project.state, requested);
       const key = objectTreeEntityKey(ref);
       if (seen.has(key)) continue;
       seen.add(key);
@@ -3851,6 +3857,17 @@ function assertObjectsTreeEntityExists(state: ProjectState, ref: ObjectTreeEntit
             ? findInstance(state, ref.id)
             : findLayerRange(state, ref.id);
   if (!exists) throw new Error(`Unknown ${ref.kind} ${ref.id}`);
+}
+
+/**
+ * The ref a filament assignment should act on: an instance stands for the
+ * object it is a copy of, everything else stands for itself. An instance whose
+ * object no longer exists stays an instance and is reported unsupported.
+ */
+function instanceAssignmentScopeRef(state: ProjectState, ref: ObjectTreeEntityRef): ObjectTreeEntityRef {
+  if (ref.kind !== 'instance') return ref;
+  const found = findInstance(state, ref.id);
+  return found ? { kind: 'object', id: found.object.id } : ref;
 }
 
 function resolveFilamentAssignmentScope(

@@ -57,5 +57,9 @@
   "actions.actionContext.keyboardShortcuts": "Gyorsbillentyűk",
   "ui.brimEarsPanel.brimEars": "Karimás fülek",
   "ui.generatedSettingsPanel.detailLevel": "Részletesség szintje",
-  "ui.printSubmissionDialog.sendToPrinter": "Nyomtatóra küldés"
+  "ui.printSubmissionDialog.sendToPrinter": "Nyomtatóra küldés",
+  "ui.selectionFilamentBar.default": "Alapértelmezett",
+  "ui.selectionFilamentBar.selectedScopes": "kiválasztva",
+  "workspace.orcaWorkspace.defaultFilament": "Alapértelmezett",
+  "workspace.orcaWorkspace.selectedScopes": "kiválasztva"
 }

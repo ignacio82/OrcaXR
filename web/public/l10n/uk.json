@@ -65,5 +65,9 @@
   "ui.brimEarsPanel.brimEars": "Вушка кайми",
   "ui.generatedSettingsPanel.detailLevel": "Рівень деталізації",
   "ui.printSubmissionDialog.sendToPrinter": "Надіслати на принтер",
-  "ui.semanticObjectEditor.heightRanges": "Діапазон висот шарів"
+  "ui.selectionFilamentBar.default": "За замовчуванням",
+  "ui.selectionFilamentBar.selectedScopes": "вибрані",
+  "ui.semanticObjectEditor.heightRanges": "Діапазон висот шарів",
+  "workspace.orcaWorkspace.defaultFilament": "За замовчуванням",
+  "workspace.orcaWorkspace.selectedScopes": "вибрані"
 }

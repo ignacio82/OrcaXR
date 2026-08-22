@@ -66,5 +66,9 @@
   "ui.brimEarsPanel.brimEars": "Ушки каймы",
   "ui.generatedSettingsPanel.detailLevel": "Уровень детализации",
   "ui.printSubmissionDialog.sendToPrinter": "Отправить на принтер",
-  "ui.semanticObjectEditor.heightRanges": "Диапазон высот слоёв"
+  "ui.selectionFilamentBar.default": "По умолчанию",
+  "ui.selectionFilamentBar.selectedScopes": "выбрано",
+  "ui.semanticObjectEditor.heightRanges": "Диапазон высот слоёв",
+  "workspace.orcaWorkspace.defaultFilament": "По умолчанию",
+  "workspace.orcaWorkspace.selectedScopes": "выбрано"
 }

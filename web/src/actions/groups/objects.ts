@@ -55,6 +55,7 @@ export const objectsActions: Action[] = [
     icon: 'filament',
     group: 'filament',
     disclosure: 'inspector',
+    mcpTool: 'assign_filament_to_selection',
     hint: 'Assign a stable physical or mixed filament to selected objects, parts, or height ranges',
     run: (ctx, invocation) => {
       const request = invocation.objectsFilamentAssignment;

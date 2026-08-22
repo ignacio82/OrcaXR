@@ -3278,6 +3278,81 @@ try {
     assignmentFixture.targetId,
   );
 
+  // Selecting a model in the viewport and pressing a colour is the whole
+  // interaction the flat shell promises. It is the same canonical action the
+  // selector above just used, so what is proved here is the surface: the bar
+  // appears for a viewport selection, offers the loaded filaments, and commits
+  // on the first press without a confirming button.
+  assert.equal(
+    await page.$eval('#selection-filament-host', (host) => host.hidden),
+    false,
+    'the selection above already keeps the one-press bar on screen',
+  );
+  const clickedModel = await page.evaluate(() => {
+    const workspace = globalThis.window.workspace;
+    workspace.selectModel(workspace.models[0]);
+    const snapshot = workspace.getFilamentAssignmentSnapshot();
+    const target = snapshot.options.find(
+      (option) => option.enabled && option.id !== snapshot.scopes[0]?.localFilamentId,
+    );
+    return {
+      label: snapshot.scopes[0]?.label,
+      scopeCount: snapshot.scopes.length,
+      targetId: target?.id,
+      undoCount: workspace.getCanonicalSummary().history.undoCount,
+    };
+  });
+  assert.equal(clickedModel.scopeCount, 1, 'clicking one model is one assignable scope, not a refusal');
+  assert.ok(clickedModel.targetId, 'the bar has a filament to offer that is not already assigned');
+  await page.waitForFunction(
+    (label) =>
+      globalThis.document.querySelector('[data-selection-filament-label]')?.textContent === label &&
+      globalThis.document.getElementById('selection-filament-host')?.hidden === false,
+    {},
+    clickedModel.label,
+  );
+  const barChips = await page.$$eval('[data-selection-filament-chip]', (nodes) =>
+    nodes.map((node) => node.dataset.selectionFilamentChip),
+  );
+  assert.ok(barChips.includes('inherit'), 'the bar can also put a scope back on its default');
+  assert.ok(
+    barChips.filter((kind) => kind === 'physical').length >= 2,
+    'every loaded head is one press away, not one menu away',
+  );
+  await page.$eval(
+    '[data-selection-filament-chip]',
+    (_node, targetId) => {
+      globalThis.document
+        .querySelector(`[data-selection-filament-chip][data-filament-id="${globalThis.CSS.escape(targetId)}"]`)
+        ?.click();
+    },
+    clickedModel.targetId,
+  );
+  await page.waitForFunction(
+    ({ targetId, undoCount }) => {
+      const workspace = globalThis.window.workspace;
+      const scopes = workspace.getFilamentAssignmentSnapshot().scopes;
+      return (
+        scopes.length === 1 &&
+        scopes[0].localFilamentId === targetId &&
+        workspace.getCanonicalSummary().history.undoCount === undoCount + 1
+      );
+    },
+    {},
+    { targetId: clickedModel.targetId, undoCount: clickedModel.undoCount },
+  );
+  assert.equal(
+    await page.$eval('[data-selection-filament-chip][aria-pressed="true"]', (node) => node.dataset.filamentId ?? ''),
+    clickedModel.targetId,
+    'the pressed chip reads back as what the selection now prints in',
+  );
+  await clickMenuAction(page, 'edit_undo');
+  await page.waitForFunction(
+    (undoCount) => globalThis.window.workspace.getCanonicalSummary().history.undoCount === undoCount,
+    {},
+    clickedModel.undoCount,
+  );
+
   // The semantic editor works against the same canonical object graph. The
   // fixture's two-part object makes one non-noop role conversion legal; every
   // height-range lifecycle operation is then asserted from the adapter snapshot.
@@ -4145,7 +4220,7 @@ try {
   await keepCalibrationHistory(page);
 
   console.log(
-    'Production E2E smoke passed (calibration results recorded, compared, invalidated by a nozzle change, exported and deleted, a print watched from a phone that survived a dropped session and cancelled only on a full hold, a browser configured from empty storage — two printers installed, a filament preset authored over a system base, and the whole setup exported and reimported as a bundle — canonical import/history, Objects/filament assignment, semantic roles/ranges, generated settings that the same panel also writes to one object without touching the project, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a stored file browsed, reprinted without re-uploading, renamed, and deleted behind a confirmation, a console that answers a query over the socket, sends nothing when a stepper release is dismissed, and runs a macro with the parameters its own body declares, a print history paged by the count the printer reports, a camera shown as authenticated snapshots that stops fetching when hidden, a printer plus slicer configured once that are still configured after a reload, device preferences that apply live and reset without touching presets, and two named printers that switch without their credentials following each other).',
+    'Production E2E smoke passed (calibration results recorded, compared, invalidated by a nozzle change, exported and deleted, a print watched from a phone that survived a dropped session and cancelled only on a full hold, a browser configured from empty storage — two printers installed, a filament preset authored over a system base, and the whole setup exported and reimported as a bundle — canonical import/history, Objects/filament assignment, a clicked model coloured by one press on a loaded filament, semantic roles/ranges, generated settings that the same panel also writes to one object without touching the project, guarded plate management, a Smart Paint consent gate that sends nothing and changes nothing without consent, an authored layer pause that reaches the sliced G-code and comes back as a located preview tick beside the engine totals, a multicolor slice sent to a live Moonraker printer then paused, resumed, and cancelled from its live job panel, a stored file browsed, reprinted without re-uploading, renamed, and deleted behind a confirmation, a console that answers a query over the socket, sends nothing when a stepper release is dismissed, and runs a macro with the parameters its own body declares, a print history paged by the count the printer reports, a camera shown as authenticated snapshots that stops fetching when hidden, a printer plus slicer configured once that are still configured after a reload, device preferences that apply live and reset without touching presets, and two named printers that switch without their credentials following each other).',
   );
 } finally {
   await browser.close();

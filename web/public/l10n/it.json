@@ -66,5 +66,9 @@
   "ui.brimEarsPanel.brimEars": "Tesa ad orecchio",
   "ui.generatedSettingsPanel.detailLevel": "Livello di dettaglio",
   "ui.printSubmissionDialog.sendToPrinter": "Invia alla stampante",
-  "ui.semanticObjectEditor.heightRanges": "Intervalli di altezza"
+  "ui.selectionFilamentBar.default": "Predefinito",
+  "ui.selectionFilamentBar.selectedScopes": "selezionato",
+  "ui.semanticObjectEditor.heightRanges": "Intervalli di altezza",
+  "workspace.orcaWorkspace.defaultFilament": "Predefinito",
+  "workspace.orcaWorkspace.selectedScopes": "selezionato"
 }

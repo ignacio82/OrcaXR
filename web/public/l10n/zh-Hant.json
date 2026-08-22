@@ -66,5 +66,9 @@
   "ui.brimEarsPanel.brimEars": "耳狀 Brim",
   "ui.generatedSettingsPanel.detailLevel": "細節等級",
   "ui.printSubmissionDialog.sendToPrinter": "傳送到列印設備",
-  "ui.semanticObjectEditor.heightRanges": "高度範圍"
+  "ui.selectionFilamentBar.default": "預設",
+  "ui.selectionFilamentBar.selectedScopes": "已選取",
+  "ui.semanticObjectEditor.heightRanges": "高度範圍",
+  "workspace.orcaWorkspace.defaultFilament": "預設",
+  "workspace.orcaWorkspace.selectedScopes": "已選取"
 }

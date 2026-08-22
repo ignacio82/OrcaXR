@@ -80,6 +80,7 @@ import { ContextMenu, contextMenuGroups } from './ui/dom/ContextMenu';
 import type { GeneratedSettingsPanelAdapter } from './ui/dom/GeneratedSettingsPanel';
 import { ObjectsPanel, type ObjectsPanelSelectionRequest } from './ui/dom/ObjectsPanel';
 import { FilamentAssignmentSelector } from './ui/dom/FilamentAssignmentSelector';
+import { SelectionFilamentBar } from './ui/dom/SelectionFilamentBar';
 import { askThreeMfIntake } from './ui/dom/FileIntakeDialog';
 import { askPrintSubmission } from './ui/dom/PrintSubmissionDialog';
 import { askPrintJobConfirmation } from './ui/dom/PrintJobConfirmDialog';
@@ -3679,6 +3680,29 @@ function setupDomUI(
     });
     selector.mount();
     window.addEventListener('pagehide', () => selector.dispose(), { once: true });
+  }
+
+  // The same canonical action as the inspector selector, one press away from a
+  // model the operator just clicked in the viewport.
+  const selectionFilamentHost = document.getElementById('selection-filament-host');
+  if (selectionFilamentHost) {
+    const bar = new SelectionFilamentBar(selectionFilamentHost, {
+      getSnapshot: () => workspace.getFilamentAssignmentSnapshot(),
+      subscribe: (listener) => workspace.subscribeCanonicalState(listener),
+      onApply: async (request) => {
+        const invoked = await registry.invoke('objects_assign_filament', 'dom-inspector', actionCtx, uiState.get(), {
+          objectsFilamentAssignment: request,
+        });
+        if (!invoked) throw new Error('Filament assignment is unavailable in the current workspace state.');
+      },
+      onError: (error) => {
+        statusText.textContent = t('app.main.filamentAssignmentFailed', 'Filament assignment: {reason}', {
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      },
+    });
+    bar.mount();
+    window.addEventListener('pagehide', () => bar.dispose(), { once: true });
   }
 
   const layerEventHost = document.getElementById('layer-event-host');

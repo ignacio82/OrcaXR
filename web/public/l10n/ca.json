@@ -66,5 +66,9 @@
   "ui.brimEarsPanel.brimEars": "Orelles de la Vora d'Adherència",
   "ui.generatedSettingsPanel.detailLevel": "Nivell de detall",
   "ui.printSubmissionDialog.sendToPrinter": "Enviar a la impressora",
-  "ui.semanticObjectEditor.heightRanges": "Intervals d'alçada"
+  "ui.selectionFilamentBar.default": "Per defecte",
+  "ui.selectionFilamentBar.selectedScopes": "sel·leccionat",
+  "ui.semanticObjectEditor.heightRanges": "Intervals d'alçada",
+  "workspace.orcaWorkspace.defaultFilament": "Per defecte",
+  "workspace.orcaWorkspace.selectedScopes": "sel·leccionat"
 }

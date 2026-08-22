@@ -58,5 +58,9 @@
   "ui.brimEarsPanel.brimEars": "Uši límce",
   "ui.generatedSettingsPanel.detailLevel": "Úroveň detailu",
   "ui.printSubmissionDialog.sendToPrinter": "Odeslat do tiskárny",
-  "ui.semanticObjectEditor.heightRanges": "Výškové rozsahy"
+  "ui.selectionFilamentBar.default": "Výchozí",
+  "ui.selectionFilamentBar.selectedScopes": "vybráno",
+  "ui.semanticObjectEditor.heightRanges": "Výškové rozsahy",
+  "workspace.orcaWorkspace.defaultFilament": "Výchozí",
+  "workspace.orcaWorkspace.selectedScopes": "vybráno"
 }

@@ -72,6 +72,10 @@ interface Harness {
   readonly unsupported: () => string[];
   /** What the preset currently bound to `toolId` declares it is made of. */
   readonly boundMaterial: (toolId: number) => string | undefined;
+  /** Bind one head to a preset by its full catalog name. */
+  readonly bindPreset: (toolId: number, name: string) => void;
+  /** The full name of the preset currently bound to `toolId`. */
+  readonly boundPreset: (toolId: number) => string | undefined;
 }
 
 /** A U1 selected with `filamentType` bound to tool 1. */
@@ -90,7 +94,9 @@ function build(filamentType: string): Harness {
     }
   };
 
-  const u1 = catalog.profiles.filter((profile) => profile.machineName.includes('U1'));
+  // Pinned to the 0.4 mm U1: it is the variant the Snapmaker filament library
+  // is written for, and picking "the first U1" silently follows corpus order.
+  const u1 = catalog.profiles.filter((profile) => profile.machineName === 'Snapmaker U1 (0.4 nozzle)');
   const seed = u1[0];
   assert.ok(seed?.machinePresetId && seed.processPresetId, 'catalog must expose a U1 machine and process');
   const bound = u1.find(
@@ -115,7 +121,38 @@ function build(filamentType: string): Harness {
     );
     return profile?.config['filament_type'];
   };
-  return { workspace, status: () => latest, unsupported: () => [...unsupported], boundMaterial };
+  const presetNamed = (name: string): string => {
+    const found = u1.find(
+      (profile) =>
+        profile.machinePresetId === seed.machinePresetId &&
+        profile.processPresetId === seed.processPresetId &&
+        profile.filamentPresetName === name,
+    );
+    assert.ok(found?.filamentPresetId, `catalog must expose ${name}`);
+    return found.filamentPresetId;
+  };
+  const bindPreset = (toolId: number, name: string): void => {
+    const ids = [...Array(workspace.extruderCount).keys()].map((index) => workspace.getHeadFilamentPresetId(index));
+    ids[toolId] = presetNamed(name) as (typeof ids)[number];
+    workspace.selectProfilePresets({ filamentPresetIds: ids });
+  };
+  const boundPreset = (toolId: number): string | undefined => {
+    const presetId = workspace.getHeadFilamentPresetId(toolId);
+    return catalog.profiles.find(
+      (candidate) =>
+        candidate.machinePresetId === seed.machinePresetId &&
+        candidate.processPresetId === seed.processPresetId &&
+        candidate.filamentPresetId === presetId,
+    )?.filamentPresetName;
+  };
+  return {
+    workspace,
+    status: () => latest,
+    unsupported: () => [...unsupported],
+    boundMaterial,
+    bindPreset,
+    boundPreset,
+  };
 }
 
 test('adopting the printer’s filament rebinds the tool to a preset that declares that material', () => {
@@ -161,14 +198,59 @@ test('a reported material with no compatible preset is named instead of silently
   workspace.dispose();
 });
 
-test('a tool already bound to the reported material keeps the preset the user chose', () => {
-  const { workspace } = build('PLA');
-  const before = workspace.getHeadFilamentPresetId(0);
+test('a preset the report does not contradict is the operator’s to keep', () => {
+  // The machine names a vendor and a type and no grade. A deliberate Silk
+  // choice satisfies every fact it reported, so nothing about it is wrong and
+  // the sync must not drag it back to the plain preset.
+  const { workspace, bindPreset, boundPreset } = build('PLA');
+  bindPreset(0, 'Snapmaker PLA Silk @U1');
   workspace.syncFilamentsFromPrinter([{ slotIndex: 0, colorHex: '#0f0f0f', material: 'PLA', vendor: 'Snapmaker' }]);
   assert.equal(
-    workspace.getHeadFilamentPresetId(0),
-    before,
-    'a matching material must not swap a deliberate preset for another of the same type',
+    boundPreset(0),
+    'Snapmaker PLA Silk @U1',
+    'an unreported grade is not a reason to overwrite a deliberate preset',
+  );
+  workspace.dispose();
+});
+
+test('the vendor and grade the machine reports pick the preset, not the first of that type', () => {
+  // The reported bug, exactly: four heads of Snapmaker PLA Matte and SnapSpeed
+  // all came back as Generic PLA, because matching looked at `filament_type`
+  // alone and took whichever PLA preset the catalog listed first.
+  const { workspace, bindPreset, boundPreset } = build('PLA');
+  for (let toolId = 0; toolId < 4; toolId += 1) bindPreset(toolId, 'Generic PLA');
+  assert.equal(boundPreset(0), 'Generic PLA', 'precondition: every head starts on the generic preset');
+
+  workspace.syncFilamentsFromPrinter([
+    { slotIndex: 0, colorHex: '#1E88E5', material: 'PLA', subType: 'Matte', vendor: 'Snapmaker' },
+    { slotIndex: 1, colorHex: '#000000', material: 'PLA', subType: 'Matte', vendor: 'Snapmaker' },
+    { slotIndex: 2, colorHex: '#E2DEDB', material: 'PLA', subType: 'SnapSpeed', vendor: 'Snapmaker' },
+    { slotIndex: 3, colorHex: '#F8F81C', material: 'PLA', subType: 'Matte', vendor: 'Snapmaker' },
+  ]);
+
+  assert.deepEqual(
+    [boundPreset(0), boundPreset(1), boundPreset(2), boundPreset(3)],
+    ['Snapmaker PLA Matte @U1', 'Snapmaker PLA Matte @U1', 'Snapmaker PLA SnapSpeed @U1', 'Snapmaker PLA Matte @U1'],
+    'each head lands on the preset that declares the vendor, type and grade the machine reported',
+  );
+  assert.deepEqual(
+    [0, 1, 2, 3].map((toolId) => workspace.palette.colorAt(toolId).toUpperCase()),
+    ['#1E88E5', '#000000', '#E2DEDB', '#F8F81C'],
+    'and each head carries the colour of the spool that is actually loaded',
+  );
+  workspace.dispose();
+});
+
+test('a reported grade with no preset of its own falls back to the vendor’s plain preset', () => {
+  const { workspace, bindPreset, boundPreset } = build('PLA');
+  bindPreset(0, 'Generic PLA');
+  workspace.syncFilamentsFromPrinter([
+    { slotIndex: 0, colorHex: '#0f0f0f', material: 'PLA', subType: 'Nebula', vendor: 'Snapmaker' },
+  ]);
+  assert.equal(
+    boundPreset(0),
+    'Snapmaker PLA @U1',
+    'an unknown grade still keeps the vendor and type the machine reported',
   );
   workspace.dispose();
 });

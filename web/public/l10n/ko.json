@@ -66,5 +66,9 @@
   "ui.brimEarsPanel.brimEars": "브림 귀",
   "ui.generatedSettingsPanel.detailLevel": "세부 레벨",
   "ui.printSubmissionDialog.sendToPrinter": "프린터로 전송",
-  "ui.semanticObjectEditor.heightRanges": "높이 범위"
+  "ui.selectionFilamentBar.default": "기본값",
+  "ui.selectionFilamentBar.selectedScopes": "선택됨",
+  "ui.semanticObjectEditor.heightRanges": "높이 범위",
+  "workspace.orcaWorkspace.defaultFilament": "기본값",
+  "workspace.orcaWorkspace.selectedScopes": "선택됨"
 }

@@ -68,7 +68,24 @@ await test('resolves selected assignment scopes, inheritance, and stable physica
     snapshot.scopes.map((scope) => scope.entity.kind),
     ['object', 'volume', 'layer-range'],
   );
-  assert.deepEqual(snapshot.unsupportedSelection, [{ kind: 'instance', id: fixture.ids.instance }]);
+  // The instance resolves to the object it copies — upstream has no per-copy
+  // filament — so it collapses onto the object scope already selected instead
+  // of adding a second one or being refused.
+  assert.deepEqual(snapshot.unsupportedSelection, []);
+
+  const fromViewport = controller.getFilamentAssignmentSnapshot([{ kind: 'instance', id: fixture.ids.instance }]);
+  assert.deepEqual(
+    fromViewport.scopes.map((scope) => scope.entity),
+    [{ kind: 'object', id: fixture.ids.object }],
+    'clicking a copy in the viewport is an assignable selection',
+  );
+  assert.deepEqual(fromViewport.unsupportedSelection, []);
+  assert.deepEqual(
+    controller.getFilamentAssignmentSnapshot([{ kind: 'plate', id: controller.getSummary().activePlateId }])
+      .unsupportedSelection.length,
+    1,
+    'a plate still has nothing to assign a filament to',
+  );
   assert.deepEqual(snapshot.scopes[0], {
     entity: { kind: 'object', id: fixture.ids.object },
     objectId: fixture.ids.object,

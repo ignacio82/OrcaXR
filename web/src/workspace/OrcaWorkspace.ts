@@ -186,6 +186,12 @@ import {
 import { FilamentPalette } from './FilamentPalette';
 import { bedSizeFromProfile, ProfileCatalog, type SlicerProfile } from '../slicer/ProfileLoader';
 import { SlicerClient, type SlicerClientProjectRoute } from '../slicer/SlicerClient';
+import {
+  filamentPresetAgreesWithSlot,
+  matchFilamentPreset,
+  type FilamentPresetCandidate,
+  type ReportedFilamentSlot,
+} from '../slicer/filamentPresetMatch';
 import { exportConfigJson, parseConfigJson } from '../features/ConfigIO';
 import { virtualFilamentsFromConfig, type VirtualFilament } from '../features/MixedFilamentPreview';
 import { xrIcon } from '../ui/icons';
@@ -348,6 +354,21 @@ function matchPresetOption(
       option.label.toLocaleLowerCase('en-US').includes(normalized),
   );
   return partial.length === 1 ? partial[0] : undefined;
+}
+
+/**
+ * The local filament every selected scope already shares, or undefined when
+ * they differ — the same rule the flat bar uses, so the two agree about what
+ * "current" means.
+ */
+function uniformLocalFilament(snapshot: CanonicalFilamentAssignmentSnapshot): FilamentId | null | undefined {
+  let choice: FilamentId | null | undefined;
+  for (const [index, scope] of snapshot.scopes.entries()) {
+    const local = scope.localFilamentId ?? null;
+    if (index === 0) choice = local;
+    else if (choice !== local) return undefined;
+  }
+  return choice;
 }
 
 function disambiguatePresetOptionLabels(options: readonly WorkspacePresetOption[]): WorkspacePresetOption[] {
@@ -799,6 +820,7 @@ export class OrcaWorkspace extends xb.Script {
           // tree, an action — so the outline follows the canonical selection
           // rather than the one call site that happened to change it.
           this.refreshSelectionOutlines();
+          this.refreshXrSelectionFilaments();
           this.onSelectionChanged?.(this.canonicalProject.getObjectsTree().selection.refs.length > 0);
         }
         this.onCanonicalStateChanged?.(change.current);
@@ -1735,6 +1757,7 @@ export class OrcaWorkspace extends xb.Script {
   private headNozzles: string[] = [];
   private applyingProfile = false;
   private headsContainer: UIPanel | null = null;
+  private xrSelectionFilamentContainer: UIPanel | null = null;
 
   // ---------------------------------------------------------------------------
   // Canonical colour painting (P4.2–P4.4)
@@ -2424,7 +2447,9 @@ export class OrcaWorkspace extends xb.Script {
    * sync already updated `filament_type` there. A material with no compatible
    * preset is reported rather than silently bound to something else.
    */
-  private adoptPrinterFilamentPresets(slots: readonly { slotIndex: number; colorHex: string; material: string }[]): {
+  private adoptPrinterFilamentPresets(
+    slots: readonly { slotIndex: number; colorHex: string; material: string; subType?: string; vendor?: string }[],
+  ): {
     rebound: number[];
     unmatched: Array<{ toolId: number; material: string }>;
   } {
@@ -2433,22 +2458,31 @@ export class OrcaWorkspace extends xb.Script {
     const profile = this.profile;
     if (!profile || this.importedProjectOwnsSlicingConfiguration) return { rebound, unmatched };
 
+    const candidates = this.filamentPresetCandidates(profile);
     const nextPresetIds = this.headFilaments.map((selection) => selection.presetId);
     let changed = false;
     for (const slot of slots) {
       const toolId = slot.slotIndex;
       if (toolId < 0 || toolId >= this.headFilaments.length) continue;
       if (slot.colorHex) this.palette.setColor(toolId, slot.colorHex);
-      const material = slot.material.trim();
-      if (!material) continue;
-      if (this.headPresetMaterial(profile, toolId) === material.toLowerCase()) continue;
-      const match = this.filamentPresetForMaterial(profile, material);
+      const reported: ReportedFilamentSlot = {
+        material: slot.material.trim(),
+        ...(slot.subType?.trim() ? { subType: slot.subType.trim() } : {}),
+        ...(slot.vendor?.trim() ? { vendor: slot.vendor.trim() } : {}),
+      };
+      if (!reported.material) continue;
+      // A preset the machine's own facts already describe is the operator's to
+      // keep: an unreported grade must not drag a deliberate Silk choice back
+      // to the plain preset. Only a preset the report contradicts is rebound.
+      const bound = candidates.find((candidate) => candidate.presetId === nextPresetIds[toolId]);
+      if (bound && filamentPresetAgreesWithSlot(bound, reported)) continue;
+      const match = matchFilamentPreset(candidates, reported);
       if (!match) {
         unmatched.push({ toolId, material: slot.material });
         continue;
       }
-      if (nextPresetIds[toolId] === match) continue;
-      nextPresetIds[toolId] = match;
+      if (nextPresetIds[toolId] === match.presetId) continue;
+      nextPresetIds[toolId] = match.presetId;
       rebound.push(toolId);
       changed = true;
     }
@@ -2457,23 +2491,10 @@ export class OrcaWorkspace extends xb.Script {
     return { rebound, unmatched };
   }
 
-  /** The material the tool's currently bound filament preset declares, lower-cased. */
-  private headPresetMaterial(profile: SlicerProfile, toolId: number): string | undefined {
-    const presetId = this.headFilaments[toolId]?.presetId;
-    if (!presetId) return undefined;
-    const bound = this.catalog.profiles.find(
-      (candidate) =>
-        candidate.machinePresetId === profile.machinePresetId &&
-        candidate.processPresetId === profile.processPresetId &&
-        candidate.filamentPresetId === presetId,
-    );
-    return bound ? unambiguousProfileScalar(bound.config['filament_type'])?.trim().toLowerCase() : undefined;
-  }
-
-  /** The first compatible filament preset whose own `filament_type` is `material`. */
-  private filamentPresetForMaterial(profile: SlicerProfile, material: string): WorkspacePresetId | undefined {
-    const wanted = material.trim().toLowerCase();
-    if (!wanted || !profile.machinePresetId || !profile.processPresetId) return undefined;
+  /** Every filament preset the active printer and process can actually use. */
+  private filamentPresetCandidates(profile: SlicerProfile): FilamentPresetCandidate<WorkspacePresetId>[] {
+    if (!profile.machinePresetId || !profile.processPresetId) return [];
+    const candidates: FilamentPresetCandidate<WorkspacePresetId>[] = [];
     for (const candidate of this.catalog.profiles) {
       if (
         candidate.machinePresetId !== profile.machinePresetId ||
@@ -2482,11 +2503,16 @@ export class OrcaWorkspace extends xb.Script {
       ) {
         continue;
       }
-      if (unambiguousProfileScalar(candidate.config['filament_type'])?.trim().toLowerCase() === wanted) {
-        return candidate.filamentPresetId as WorkspacePresetId;
-      }
+      const material = unambiguousProfileScalar(candidate.config['filament_type'])?.trim();
+      if (!material) continue;
+      candidates.push({
+        presetId: candidate.filamentPresetId as WorkspacePresetId,
+        presetName: candidate.filamentPresetName ?? candidate.filamentName,
+        material,
+        ...(candidate.filamentVendor ? { vendor: candidate.filamentVendor } : {}),
+      });
     }
-    return undefined;
+    return candidates;
   }
 
   private embossFont?: { name: string; source: GlyphOutlineSource };
@@ -6281,6 +6307,104 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /**
+   * The headset's half of one-press filament assignment.
+   *
+   * The flat shell puts a chip bar under a model the moment it is selected;
+   * this is the same canonical action on the Profiles card, so a selection made
+   * with a controller ray can be given a filament without leaving the headset
+   * for the inspector's confirming selector. Both surfaces read the same
+   * revision-guarded snapshot and both invoke `objects_assign_filament`, so
+   * neither can drift into a second assignment path.
+   */
+  private refreshXrSelectionFilaments(): void {
+    const panel = this.xrSelectionFilamentContainer;
+    if (!panel) return;
+    for (const child of [...panel.children]) {
+      try {
+        panel.remove(child);
+      } catch {
+        /* already detached */
+      }
+    }
+    if (this.disposed) return;
+    const snapshot = this.getFilamentAssignmentSnapshot();
+    // Nothing assignable is not a message here either — the row simply is not
+    // part of the card.
+    if (snapshot.scopes.length === 0 || snapshot.unsupportedSelection.length > 0) return;
+
+    const label =
+      snapshot.scopes.length === 1
+        ? snapshot.scopes[0].label
+        : `${snapshot.scopes.length} ${t('workspace.orcaWorkspace.selectedScopes', 'selected')}`;
+    panel.add(
+      new UIText(t('workspace.orcaWorkspace.filamentForSelection', 'FILAMENT FOR SELECTION').toUpperCase(), {
+        fontSize: 11,
+        fontWeight: 'bold',
+        color: '#8a94a0',
+      }),
+    );
+    panel.add(new UIText(label, { fontSize: 14, color: '#ffffff' }));
+
+    const current = uniformLocalFilament(snapshot);
+    const row = new UIPanel({ width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' });
+    for (const option of [
+      ...snapshot.options.filter((candidate) => candidate.kind === 'physical'),
+      ...snapshot.options.filter((candidate) => candidate.kind === 'mixed'),
+    ]) {
+      if (!option.enabled) continue;
+      const swatch = new UIPanel({
+        width: 35,
+        height: 35,
+        cornerRadius: 4,
+        fillColor: option.color,
+        strokeWidth: 2,
+        strokeColor: current === option.id ? '#ffffff' : '#444444',
+        onClick: () => {
+          this.assignSelectionFilamentFromXr(option.id);
+          return true;
+        },
+      });
+      row.add(swatch);
+    }
+    const clear = new UIPanel({
+      height: 35,
+      paddingLeft: 10,
+      paddingRight: 10,
+      justifyContent: 'center',
+      alignItems: 'center',
+      cornerRadius: 4,
+      fillColor: '#ffffff14',
+      strokeWidth: 2,
+      strokeColor: current === null ? '#ffffff' : '#444444',
+      onClick: () => {
+        this.assignSelectionFilamentFromXr(null);
+        return true;
+      },
+    });
+    clear.add(new UIText(t('workspace.orcaWorkspace.defaultFilament', 'Default'), { fontSize: 12, color: '#ffffff' }));
+    row.add(clear);
+    panel.add(row);
+  }
+
+  /** One press in XR, through the same registry action the flat shell uses. */
+  private assignSelectionFilamentFromXr(filamentId: FilamentId | null): void {
+    const context = this.actionContext;
+    if (!context) return;
+    const snapshot = this.getFilamentAssignmentSnapshot();
+    if (snapshot.scopes.length === 0 || snapshot.unsupportedSelection.length > 0) return;
+    void this.actionRegistry
+      .invoke('objects_assign_filament', 'xr-inspector', context, context.ui.get(), {
+        objectsFilamentAssignment: {
+          entities: snapshot.scopes.map((scope) => scope.entity),
+          filamentId,
+          sourceRevision: snapshot.sourceRevision,
+          sourceHash: snapshot.sourceHash,
+        },
+      })
+      .then(() => this.refreshXrSelectionFilaments());
+  }
+
+  /**
    * Injected by main.ts after construction. The XR tool card routes button
    * clicks through this so the immersive shell runs the SAME action handlers as
    * the DOM shell (structural parity). Read at click time, so it can be set
@@ -7450,7 +7574,10 @@ export class OrcaWorkspace extends xb.Script {
 
     this.headsContainer = new UIPanel({ width: '100%', flexDirection: 'column', gap: 10 });
     root.add(this.headsContainer);
+    this.xrSelectionFilamentContainer = new UIPanel({ width: '100%', flexDirection: 'column', gap: 8 });
+    root.add(this.xrSelectionFilamentContainer);
     this.refreshXrProfileValues();
+    this.refreshXrSelectionFilaments();
   }
 
   /**
@@ -8040,6 +8167,7 @@ export class OrcaWorkspace extends xb.Script {
 
   public rebuildHeadsPanel() {
     this.revalidatePublishedGcode();
+    this.refreshXrSelectionFilaments();
     if (!this.headsContainer) return;
     const panel = this.headsContainer;
     // Remove over a COPY: removing while forEach-ing the live array skips

@@ -66,5 +66,9 @@
   "ui.brimEarsPanel.brimEars": "Uszy brim",
   "ui.generatedSettingsPanel.detailLevel": "Poziom szczegółowości",
   "ui.printSubmissionDialog.sendToPrinter": "Wyślij do drukarki",
-  "ui.semanticObjectEditor.heightRanges": "Zakresy wysokości"
+  "ui.selectionFilamentBar.default": "Domyślny",
+  "ui.selectionFilamentBar.selectedScopes": "wybrane",
+  "ui.semanticObjectEditor.heightRanges": "Zakresy wysokości",
+  "workspace.orcaWorkspace.defaultFilament": "Domyślny",
+  "workspace.orcaWorkspace.selectedScopes": "wybrane"
 }

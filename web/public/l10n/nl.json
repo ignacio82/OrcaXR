@@ -57,5 +57,9 @@
   "ui.brimEarsPanel.brimEars": "Rand oren",
   "ui.generatedSettingsPanel.detailLevel": "Detailniveau",
   "ui.printSubmissionDialog.sendToPrinter": "Stuur naar printer",
-  "ui.semanticObjectEditor.heightRanges": "Hoogtebereiken"
+  "ui.selectionFilamentBar.default": "Standaard",
+  "ui.selectionFilamentBar.selectedScopes": "geselecteerd",
+  "ui.semanticObjectEditor.heightRanges": "Hoogtebereiken",
+  "workspace.orcaWorkspace.defaultFilament": "Standaard",
+  "workspace.orcaWorkspace.selectedScopes": "geselecteerd"
 }

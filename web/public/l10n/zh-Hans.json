@@ -66,5 +66,9 @@
   "ui.brimEarsPanel.brimEars": "圆盘",
   "ui.generatedSettingsPanel.detailLevel": "细节等级",
   "ui.printSubmissionDialog.sendToPrinter": "发送到打印机",
-  "ui.semanticObjectEditor.heightRanges": "高度范围"
+  "ui.selectionFilamentBar.default": "缺省",
+  "ui.selectionFilamentBar.selectedScopes": "已选中",
+  "ui.semanticObjectEditor.heightRanges": "高度范围",
+  "workspace.orcaWorkspace.defaultFilament": "缺省",
+  "workspace.orcaWorkspace.selectedScopes": "已选中"
 }

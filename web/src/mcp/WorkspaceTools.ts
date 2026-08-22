@@ -1,6 +1,8 @@
 import type { ActionContext } from '../actions/ActionContext';
 import type { ActionRegistry } from '../actions/ActionRegistry';
 import type { OrcaWorkspace, WorkspaceGizmoTool } from '../workspace/OrcaWorkspace';
+import type { FilamentId } from '../project/domain/ids';
+import type { CanonicalFilamentOption } from '../workspace/CanonicalWorkspaceController';
 import type { McpToolArguments, McpToolHost } from './McpToolHost';
 
 const GIZMO_TOOLS: readonly WorkspaceGizmoTool[] = ['move', 'rotate', 'scale', 'paint', 'lay_on_face'];
@@ -110,4 +112,112 @@ export function registerWorkspaceTools(
       };
     },
   );
+
+  // The flat bar, the XR row, and this tool are three ways to press the same
+  // canonical action, so "make the selected model the blue one" is reachable
+  // from a sentence exactly as it is from a chip.
+  mcp.registerTool(
+    'assign_filament_to_selection',
+    "Assign one of the printer's loaded filaments to the current selection. Identify it by head number " +
+      '("1") or by name ("Snapmaker PLA Matte"). Omit it, or pass "default", to clear the local assignment ' +
+      'so the selection follows its object default.',
+    {
+      type: 'object',
+      properties: {
+        filament: {
+          type: 'string',
+          description: 'Head number, filament name, or "default" to clear the local assignment.',
+        },
+      },
+      additionalProperties: false,
+    },
+    async function (args: McpToolArguments) {
+      const snapshot = workspace.getFilamentAssignmentSnapshot();
+      const catalogue = snapshot.options
+        .map((option) =>
+          option.kind === 'physical' && option.toolId !== undefined
+            ? `${option.toolId + 1}: ${option.name}${option.enabled ? '' : ' (unloaded)'}`
+            : `${option.name} (mixed)`,
+        )
+        .join(', ');
+      if (snapshot.scopes.length === 0 || snapshot.unsupportedSelection.length > 0) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'Error: select an object, part, or height range first — the current selection cannot take a filament.',
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const requested = typeof args.filament === 'string' ? args.filament.trim() : '';
+      const resolution = resolveRequestedFilament(snapshot.options, requested);
+      if (resolution.error) {
+        return {
+          content: [{ type: 'text', text: `Error: ${resolution.error} Loaded filaments: ${catalogue}.` }],
+          isError: true,
+        };
+      }
+
+      const state = actionContext.ui.get();
+      const availability = registry.availability('objects_assign_filament', 'automation', state);
+      const invoked = await registry.invoke('objects_assign_filament', 'automation', actionContext, state, {
+        objectsFilamentAssignment: {
+          entities: snapshot.scopes.map((scope) => scope.entity),
+          filamentId: resolution.filamentId ?? null,
+          sourceRevision: snapshot.sourceRevision,
+          sourceHash: snapshot.sourceHash,
+        },
+      });
+      if (!invoked) {
+        const reason = availability.state === 'enabled' ? 'The action did not run.' : availability.reason;
+        return { content: [{ type: 'text', text: `Error: ${reason}` }], isError: true };
+      }
+      const scopeNames = snapshot.scopes.map((scope) => scope.label).join(', ');
+      return {
+        content: [
+          {
+            type: 'text',
+            text: resolution.name
+              ? `Assigned ${resolution.name} to ${scopeNames}.`
+              : `Cleared the local filament assignment on ${scopeNames}.`,
+          },
+        ],
+      };
+    },
+  );
+}
+
+/**
+ * Turn what a sentence said into one stable filament identity, or say why it
+ * could not. A request that matches several filaments is refused rather than
+ * resolved to whichever came first.
+ */
+function resolveRequestedFilament(
+  options: readonly CanonicalFilamentOption[],
+  requested: string,
+): { filamentId?: FilamentId; name?: string; error?: string } {
+  if (!requested || requested.toLowerCase() === 'default' || requested.toLowerCase() === 'inherit') return {};
+
+  const head = Number.parseInt(requested, 10);
+  if (String(head) === requested) {
+    const byHead = options.find((option) => option.kind === 'physical' && option.toolId === head - 1);
+    if (!byHead) return { error: `No head ${head} is configured.` };
+    if (!byHead.enabled) return { error: `Head ${head} carries no loaded filament.` };
+    return { filamentId: byHead.id, name: byHead.name };
+  }
+
+  const wanted = requested.toLowerCase();
+  const exact = options.filter((option) => option.name.toLowerCase() === wanted);
+  const partial = exact.length > 0 ? exact : options.filter((option) => option.name.toLowerCase().includes(wanted));
+  if (partial.length === 0) return { error: `No loaded filament matches ${JSON.stringify(requested)}.` };
+  if (partial.length > 1) {
+    return {
+      error: `${JSON.stringify(requested)} matches ${partial.length} filaments; name one exactly.`,
+    };
+  }
+  if (!partial[0].enabled) return { error: `${partial[0].name} is not loaded.` };
+  return { filamentId: partial[0].id, name: partial[0].name };
 }
