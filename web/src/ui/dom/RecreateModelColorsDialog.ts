@@ -118,7 +118,20 @@ export function askRecreateModelColors(
     destSelect.appendChild(autoOption);
 
     // Add physical filament choices
-    if (librarySnapshot) {
+    const candidatePhysical = plan.candidatePhysicalFilaments;
+    if (candidatePhysical && candidatePhysical.length > 0) {
+      for (const phys of candidatePhysical) {
+        if (!phys.enabled) continue;
+        const opt = document.createElement('option');
+        opt.value = phys.id;
+        opt.textContent = t('dialog.recreateModelColors.physicalOption', 'Physical: {name} (T{toolId}) - {color}', {
+          name: phys.name,
+          toolId: phys.toolId + 1,
+          color: phys.color,
+        });
+        destSelect.appendChild(opt);
+      }
+    } else if (librarySnapshot) {
       for (const phys of librarySnapshot.physical) {
         if (!phys.enabled) continue;
         const opt = document.createElement('option');
@@ -130,6 +143,9 @@ export function askRecreateModelColors(
         });
         destSelect.appendChild(opt);
       }
+    }
+
+    if (librarySnapshot) {
       // Add existing mixed filament choices
       for (const item of librarySnapshot.mixed) {
         const mix = item.filament;
@@ -150,7 +166,7 @@ export function askRecreateModelColors(
         destSwatch.style.backgroundColor = match.destination.displayColor;
       } else {
         overrides.set(match.source.color, destSelect.value as FilamentId);
-        const selectedPhys = librarySnapshot?.physical.find((p) => p.id === destSelect.value);
+        const selectedPhys = (candidatePhysical ?? librarySnapshot?.physical)?.find((p) => p.id === destSelect.value);
         const selectedMix = librarySnapshot?.mixed.find((m) => m.filament.id === destSelect.value)?.filament;
         if (selectedPhys) destSwatch.style.backgroundColor = selectedPhys.color;
         else if (selectedMix) destSwatch.style.backgroundColor = selectedMix.displayColor;

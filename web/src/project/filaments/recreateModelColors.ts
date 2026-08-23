@@ -9,7 +9,7 @@
 
 import { cloneJson, compareCanonicalText } from '../domain/canonical';
 import { remapFacetChannelValues } from '../domain/facetRefinement';
-import type { FilamentId, IdSource } from '../domain/ids';
+import type { FilamentId, PhysicalFilamentId, IdSource } from '../domain/ids';
 import type { MixedFilament, PhysicalFilament, ProjectState } from '../domain/model';
 import type { EditorSession } from '../session';
 import {
@@ -19,7 +19,7 @@ import {
   searchSuppliedPaletteColorMatch,
   type SuppliedPaletteMatchRecipe,
 } from './colorMatchSearch';
-import { SnapshotFilamentCommand } from './commands';
+import { SnapshotFilamentCommand, printerFilamentSlotName, type PrinterFilamentSlotFacts } from './commands';
 import { createFullSpectrumMixedFilament, type FullSpectrumMatchDraft } from './fullSpectrumRecipe';
 
 export interface ModelColorUsage {
@@ -64,6 +64,8 @@ export interface RecreateModelColorsPlan {
   readonly maxDeltaE2000: number;
   readonly sourceRevision: number;
   readonly sourceHash: string;
+  readonly printerSlotsToAdopt?: readonly PrinterFilamentSlotFacts[];
+  readonly candidatePhysicalFilaments?: readonly PhysicalFilament[];
 }
 
 export interface RecreateModelColorsOptions {
@@ -71,6 +73,8 @@ export interface RecreateModelColorsOptions {
   readonly minComponentPercent?: number;
   readonly onlySelectedObjects?: boolean;
   readonly selectedObjectIds?: readonly string[];
+  readonly printerSlots?: readonly PrinterFilamentSlotFacts[];
+  readonly candidatePhysicalFilaments?: readonly PhysicalFilament[];
 }
 
 export class StaleRecreateModelColorsPlanError extends Error {
@@ -153,37 +157,40 @@ export function extractModelColorUsages(
     for (const object of plate.objects) {
       if (selectedSet && !selectedSet.has(object.id)) continue;
 
-      const objectFilamentColor = object.filamentId ? getFilamentColor(object.filamentId) : null;
-      if (object.filamentId && objectFilamentColor) {
-        recordColor(objectFilamentColor, object.filamentId, getFilamentName(object.filamentId), object.name, 1);
-      }
-
       for (const volume of object.volumes) {
         const volumeName = volume.name || object.name;
-        // Source material extension data (e.g. from OBJ/AMF import)
+        // Source material extension data (e.g. from 3MF / OBJ / AMF import or preserved model color)
         const sourceMaterial = volume.extensionData?.['orcaxr:sourceMaterial'] as
           { readonly color?: string; readonly name?: string } | undefined;
         if (sourceMaterial?.color) {
-          recordColor(sourceMaterial.color, undefined, sourceMaterial.name, volumeName, 1);
-        }
-
-        // Volume direct filament assignment
-        if (volume.filamentId) {
+          recordColor(sourceMaterial.color, volume.filamentId ?? object.filamentId, sourceMaterial.name, volumeName, 1);
+        } else if (volume.filamentId) {
+          // Volume direct filament assignment
           const volColor = getFilamentColor(volume.filamentId);
           if (volColor) {
             recordColor(volColor, volume.filamentId, getFilamentName(volume.filamentId), volumeName, 1);
+          }
+        } else if (object.filamentId) {
+          const objectFilamentColor = getFilamentColor(object.filamentId);
+          if (objectFilamentColor) {
+            recordColor(objectFilamentColor, object.filamentId, getFilamentName(object.filamentId), object.name, 1);
           }
         }
 
         // Color facet annotations
         if (volume.annotations.color) {
+          const originalFacetColors = (volume.extensionData?.['orcaxr:originalFilamentColors'] ??
+            (state as { extensionData?: Record<string, unknown> }).extensionData?.['orcaxr:originalFilamentColors']) as
+            Record<string, string> | undefined;
+
           for (const assignment of volume.annotations.color) {
             const rawVal = String(assignment.value);
             const directHex = normalizeHexColor(rawVal);
             if (directHex) {
               recordColor(directHex, undefined, undefined, volumeName, assignment.triangles.length);
             } else {
-              const filColor = getFilamentColor(rawVal as FilamentId);
+              const origHex = originalFacetColors?.[rawVal];
+              const filColor = (origHex ? normalizeHexColor(origHex) : null) ?? getFilamentColor(rawVal as FilamentId);
               if (filColor) {
                 recordColor(
                   filColor,
@@ -243,7 +250,30 @@ export function planRecreateModelColors(
     selectedObjectIds: options.onlySelectedObjects ? options.selectedObjectIds : undefined,
   });
 
-  const physicalFilaments = state.filaments.physical.filter((f) => f.enabled !== false);
+  let physicalFilaments: readonly PhysicalFilament[];
+  let printerSlotsToAdopt: readonly PrinterFilamentSlotFacts[] | undefined;
+
+  if (options.candidatePhysicalFilaments && options.candidatePhysicalFilaments.length > 0) {
+    physicalFilaments = options.candidatePhysicalFilaments.filter((f) => f.enabled !== false);
+  } else if (options.printerSlots && options.printerSlots.length > 0) {
+    printerSlotsToAdopt = options.printerSlots;
+    physicalFilaments = options.printerSlots.map((slot) => {
+      const existing = state.filaments.physical.find((f) => f.toolId === slot.toolId);
+      return {
+        id: existing?.id ?? (`physical-filament-${slot.toolId + 1}` as PhysicalFilamentId),
+        toolId: slot.toolId,
+        name: printerFilamentSlotName(slot) || `Tool ${slot.toolId + 1}`,
+        color: normalizeHexColor(slot.color) ?? slot.color,
+        material: slot.material,
+        ...(slot.vendor?.trim() ? { vendor: slot.vendor.trim() } : {}),
+        config: { filament_type: slot.material },
+        enabled: true,
+      };
+    });
+  } else {
+    physicalFilaments = state.filaments.physical.filter((f) => f.enabled !== false);
+  }
+
   const mixedFilaments = state.filaments.mixed.filter((f) => f.enabled !== false);
 
   const eligiblePhysical = physicalFilaments.filter((f) => classifyPinnedFilamentType(f.material) !== null);
@@ -358,6 +388,8 @@ export function planRecreateModelColors(
     maxDeltaE2000,
     sourceRevision: 0,
     sourceHash: '',
+    printerSlotsToAdopt,
+    candidatePhysicalFilaments: Object.freeze(physicalFilaments),
   });
 }
 
@@ -374,12 +406,52 @@ export class RecreateModelColorsCommand extends SnapshotFilamentCommand {
   constructor(
     private readonly mappings: readonly RecreateModelColorsApplyMapping[],
     private readonly newMixedFilaments: readonly MixedFilament[] = [],
+    private readonly printerSlotsToAdopt?: readonly PrinterFilamentSlotFacts[],
+    private readonly candidatePhysicalFilaments?: readonly PhysicalFilament[],
+    private readonly ids?: IdSource,
   ) {
     super();
     this.label = mappings.length === 1 ? 'Recreate 1 model color' : `Recreate ${mappings.length} model colors`;
   }
 
   protected mutate(state: ProjectState): void {
+    // 0. If printer slots need to be adopted, adopt them
+    if (this.printerSlotsToAdopt && this.printerSlotsToAdopt.length > 0) {
+      const byTool = new Map(state.filaments.physical.map((filament) => [filament.toolId, filament]));
+      const candidateByTool = new Map(this.candidatePhysicalFilaments?.map((filament) => [filament.toolId, filament]));
+      for (const slot of this.printerSlotsToAdopt) {
+        const filament = byTool.get(slot.toolId);
+        const name = printerFilamentSlotName(slot);
+        const candidate = candidateByTool.get(slot.toolId);
+        if (!filament) {
+          const newId = candidate?.id ?? this.ids?.next<'physical-filament'>('physical-filament');
+          if (!newId) continue;
+          state.filaments.physical.push({
+            id: newId,
+            name: name || `Tool ${slot.toolId + 1}`,
+            toolId: slot.toolId,
+            material: slot.material,
+            color: normalizeHexColor(slot.color) ?? slot.color,
+            ...(slot.vendor?.trim() ? { vendor: slot.vendor.trim() } : {}),
+            config: { filament_type: slot.material },
+            enabled: true,
+          });
+          continue;
+        }
+        filament.color = normalizeHexColor(slot.color) ?? slot.color;
+        filament.material = slot.material;
+        filament.config.filament_type = slot.material;
+        if (name) filament.name = name;
+        if (slot.vendor?.trim()) filament.vendor = slot.vendor.trim();
+      }
+      state.filaments.physical.sort((left, right) => left.toolId - right.toolId);
+      const highestTool = state.filaments.physical.reduce(
+        (highest, filament) => Math.max(highest, filament.toolId),
+        -1,
+      );
+      state.printer.toolCount = Math.max(state.printer.toolCount, highestTool + 1);
+    }
+
     // 1. Add any newly synthesized mixed filaments
     for (const mixed of this.newMixedFilaments) {
       state.filaments.mixed.push(cloneJson(mixed));
@@ -426,7 +498,7 @@ export class RecreateModelColorsCommand extends SnapshotFilamentCommand {
         for (const volume of object.volumes) {
           // Check volume source material color (e.g. from imported model)
           const sourceMaterial = volume.extensionData?.['orcaxr:sourceMaterial'] as
-            { readonly color?: string } | undefined;
+            { readonly color?: string; readonly name?: string } | undefined;
           if (sourceMaterial?.color) {
             const norm = normalizeHexColor(sourceMaterial.color);
             if (norm) {
@@ -445,6 +517,11 @@ export class RecreateModelColorsCommand extends SnapshotFilamentCommand {
 
           // Remap facet color annotations and sub-facet refinement trees
           if (volume.annotations.color || volume.annotations.refinement?.color) {
+            const originalFacetColors = (volume.extensionData?.['orcaxr:originalFilamentColors'] ??
+              (state as { extensionData?: Record<string, unknown> }).extensionData?.[
+                'orcaxr:originalFilamentColors'
+              ]) as Record<string, string> | undefined;
+
             const remapped = remapFacetChannelValues(
               volume.annotations.color,
               volume.annotations.refinement?.color,
@@ -453,6 +530,15 @@ export class RecreateModelColorsCommand extends SnapshotFilamentCommand {
                 // Check if value is a source filament ID
                 const filDest = sourceFilamentToDestination.get(valStr as FilamentId);
                 if (filDest) return filDest;
+                // Check if original facet colors had a record for this filament ID
+                const origColor = originalFacetColors?.[valStr];
+                if (origColor) {
+                  const origHex = normalizeHexColor(origColor);
+                  if (origHex) {
+                    const origDest = colorToDestination.get(origHex);
+                    if (origDest) return origDest;
+                  }
+                }
                 // Check if value is a hex color
                 const hexNorm = normalizeHexColor(valStr);
                 if (hexNorm) {
@@ -498,6 +584,29 @@ export function executeRecreateModelColors(
     throw new StaleRecreateModelColorsPlanError();
   }
 
+  // Resolve candidate physical filaments with real unique IDs if adding new tools
+  const existingPhysicalByTool = new Map(currentSnapshot.state.filaments.physical.map((f) => [f.toolId, f]));
+  const candidateIdRemap = new Map<FilamentId, FilamentId>();
+  const resolvedPhysicalCandidates: PhysicalFilament[] = [];
+
+  for (const phys of plan.candidatePhysicalFilaments ?? currentSnapshot.state.filaments.physical) {
+    const existing = existingPhysicalByTool.get(phys.toolId);
+    if (existing) {
+      resolvedPhysicalCandidates.push({
+        ...phys,
+        id: existing.id,
+      });
+      candidateIdRemap.set(phys.id, existing.id);
+    } else {
+      const newToolId = idSource.next<'physical-filament'>('physical-filament');
+      resolvedPhysicalCandidates.push({
+        ...phys,
+        id: newToolId,
+      });
+      candidateIdRemap.set(phys.id, newToolId);
+    }
+  }
+
   const newMixedFilaments: MixedFilament[] = [];
   const mappings: RecreateModelColorsApplyMapping[] = [];
 
@@ -514,11 +623,14 @@ export function executeRecreateModelColors(
 
     if (match.destination.kind === 'new-mixed' && match.destination.newRecipeDraft) {
       const newId = idSource.next('mixed-filament');
-      const mixed = createFullSpectrumMixedFilament(
-        newId,
-        currentSnapshot.state.filaments.physical,
-        match.destination.newRecipeDraft,
-      );
+      const draftWithResolvedIds: FullSpectrumMatchDraft = {
+        ...match.destination.newRecipeDraft,
+        components: match.destination.newRecipeDraft.components.map((c) => ({
+          ...c,
+          filamentId: (candidateIdRemap.get(c.filamentId) ?? c.filamentId) as PhysicalFilamentId,
+        })),
+      };
+      const mixed = createFullSpectrumMixedFilament(newId, resolvedPhysicalCandidates, draftWithResolvedIds);
       newMixedFilaments.push(mixed);
       mappings.push({
         sourceColor: match.source.color,
@@ -526,17 +638,30 @@ export function executeRecreateModelColors(
         sourceFilamentIds: match.source.sourceFilamentIds,
       });
     } else if (match.destination.filamentId) {
+      const resolvedDestId = candidateIdRemap.get(match.destination.filamentId) ?? match.destination.filamentId;
       mappings.push({
         sourceColor: match.source.color,
-        destinationFilamentId: match.destination.filamentId,
+        destinationFilamentId: resolvedDestId,
         sourceFilamentIds: match.source.sourceFilamentIds,
       });
     }
   }
 
-  if (mappings.length === 0 && newMixedFilaments.length === 0) return false;
+  if (
+    mappings.length === 0 &&
+    newMixedFilaments.length === 0 &&
+    (!plan.printerSlotsToAdopt || plan.printerSlotsToAdopt.length === 0)
+  ) {
+    return false;
+  }
 
-  const command = new RecreateModelColorsCommand(mappings, newMixedFilaments);
+  const command = new RecreateModelColorsCommand(
+    mappings,
+    newMixedFilaments,
+    plan.printerSlotsToAdopt,
+    resolvedPhysicalCandidates,
+    idSource,
+  );
   session.execute(command);
   return true;
 }

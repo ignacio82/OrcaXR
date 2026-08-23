@@ -4819,6 +4819,19 @@ export class OrcaWorkspace extends xb.Script {
   onRequestPrinterConnectionTest: (() => Promise<void>) | null = null;
   /** Injected by the live typed printer composition root. */
   onRequestPrinterFilamentInspection: (() => Promise<void>) | null = null;
+  /** Injected by the live typed printer composition root to query loaded filament slots directly. */
+  onRequestPrinterFilamentQuery:
+    | (() => Promise<
+        | readonly {
+            slotIndex: number;
+            colorHex: string;
+            material: string;
+            subType?: string;
+            vendor: string;
+          }[]
+        | null
+      >)
+    | null = null;
   /** Injected by the live typed printer composition root; owns confirmation. */
   onRequestPrintSubmission: ((intent: PrintJobIntent) => Promise<void>) | null = null;
   /** Injected by the live typed printer composition root; owns confirmation. */
@@ -9473,7 +9486,32 @@ export class OrcaWorkspace extends xb.Script {
 
   public async recreateModelColors(options?: RecreateModelColorsOptions): Promise<boolean> {
     try {
-      const plan = this.canonicalProject.planRecreateModelColors(options);
+      let effectiveOptions = options;
+      if (
+        !effectiveOptions?.printerSlots &&
+        !effectiveOptions?.candidatePhysicalFilaments &&
+        this.onRequestPrinterFilamentQuery
+      ) {
+        try {
+          const slots = await this.onRequestPrinterFilamentQuery();
+          if (slots && slots.length > 0) {
+            effectiveOptions = {
+              ...effectiveOptions,
+              printerSlots: slots.map((s) => ({
+                toolId: s.slotIndex,
+                color: s.colorHex,
+                material: s.material,
+                ...(s.subType ? { subType: s.subType } : {}),
+                ...(s.vendor ? { vendor: s.vendor } : {}),
+              })),
+            };
+          }
+        } catch {
+          // If printer query fails or printer is offline, plan against project physical filaments
+        }
+      }
+
+      const plan = this.canonicalProject.planRecreateModelColors(effectiveOptions);
       if (plan.matches.length === 0) {
         this.setStatus(
           t('workspace.orcaWorkspace.noColorsToRecreate', 'No model colors to match; add a model to the plate first.'),
@@ -9493,6 +9531,20 @@ export class OrcaWorkspace extends xb.Script {
 
       const applied = this.canonicalProject.recreateModelColors(plan, overrides);
       if (applied) {
+        if (plan.printerSlotsToAdopt && plan.printerSlotsToAdopt.length > 0) {
+          this.adoptPrinterFilamentPresets(
+            plan.printerSlotsToAdopt.map((slot) => ({
+              slotIndex: slot.toolId,
+              colorHex: slot.color,
+              material: slot.material,
+              ...(slot.subType ? { subType: slot.subType } : {}),
+              ...(slot.vendor ? { vendor: slot.vendor } : {}),
+            })),
+          );
+          this.refreshPaintOverlays();
+          this.recomputePreflight();
+          this.onProfileChanged?.();
+        }
         this.setStatus(
           t('workspace.orcaWorkspace.recreateColorsApplied', 'Recreated model colors with available filaments.'),
         );

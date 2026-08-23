@@ -181,6 +181,54 @@ export class SyncPhysicalFilamentsFromPrinterCommand extends SnapshotFilamentCom
   }
 
   protected mutate(state: ProjectState): void {
+    // Before mutating physical filaments, preserve the original colors of model volumes and facet annotations
+    // so recreating model colors can match against the model's original colors rather than lost palette values.
+    const preSyncColors = new Map<string, { color: string; name: string }>(
+      state.filaments.physical.map((f) => [f.id, { color: f.color, name: f.name }]),
+    );
+
+    for (const plate of state.plates) {
+      for (const object of plate.objects) {
+        const objFil = object.filamentId ? preSyncColors.get(object.filamentId) : undefined;
+        for (const volume of object.volumes) {
+          const ext = volume.extensionData?.['orcaxr:sourceMaterial'] as { color?: string; name?: string } | undefined;
+          if (!ext?.color) {
+            const volFil = volume.filamentId ? preSyncColors.get(volume.filamentId) : undefined;
+            const targetFil = volFil ?? objFil;
+            if (targetFil) {
+              volume.extensionData = {
+                ...(volume.extensionData ?? {}),
+                'orcaxr:sourceMaterial': {
+                  color: targetFil.color,
+                  name: targetFil.name,
+                },
+              };
+            }
+          }
+          // Preserve pre-sync filament colors for facet annotations
+          if (volume.annotations.color && volume.annotations.color.length > 0) {
+            const originalFacetColors: Record<string, string> = {
+              ...((volume.extensionData?.['orcaxr:originalFilamentColors'] as Record<string, string> | undefined) ??
+                {}),
+            };
+            for (const assignment of volume.annotations.color) {
+              const valStr = String(assignment.value);
+              const fil = preSyncColors.get(valStr);
+              if (fil && !originalFacetColors[valStr]) {
+                originalFacetColors[valStr] = fil.color;
+              }
+            }
+            if (Object.keys(originalFacetColors).length > 0) {
+              volume.extensionData = {
+                ...(volume.extensionData ?? {}),
+                'orcaxr:originalFilamentColors': originalFacetColors,
+              };
+            }
+          }
+        }
+      }
+    }
+
     const byTool = new Map(state.filaments.physical.map((filament) => [filament.toolId, filament]));
     for (const slot of this.slots) {
       const filament = byTool.get(slot.toolId);

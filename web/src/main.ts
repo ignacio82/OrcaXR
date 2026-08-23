@@ -616,6 +616,18 @@ function setupDomUI(
     }
   };
 
+  workspace.onRequestPrinterFilamentQuery = async () => {
+    if (!printerCfg.host.trim()) return null;
+    try {
+      const { transport, handshake } = await connectConfiguredPrinter();
+      if (!handshake.capabilities.klippyConnected) return null;
+      const slots = await queryMoonrakerFilamentSlots(transport);
+      return slots.length > 0 ? slots : null;
+    } catch {
+      return null;
+    }
+  };
+
   // One in-flight send at a time, cancellable from the same button that
   // started it. A second send cannot race the first onto the same printer.
   let printSubmission: AbortController | null = null;

@@ -1960,6 +1960,14 @@ export function importBbsCore(
             attributes: encodeExtensionAttributes(row.attributes),
           }));
         }
+        if (!volumeExtensionData['orcaxr:sourceMaterial'] && filament) {
+          const filamentColor = 'color' in filament ? filament.color : filament.displayColor;
+          volumeExtensionData['orcaxr:sourceMaterial'] = {
+            color: filamentColor,
+            name: filament.name,
+            format: '3mf',
+          };
+        }
         // The drawing named by `filepath3mf` becomes a canonical asset, so a
         // reopened part can be re-cut and re-saved rather than pointing at a
         // file the package no longer carries.

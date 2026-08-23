@@ -11,6 +11,7 @@ import {
 } from '../..';
 import { createProjectFixture } from '../../__tests__/fixtures';
 import { extractModelColorUsages, planRecreateModelColors, executeRecreateModelColors } from '../recreateModelColors';
+import { SyncPhysicalFilamentsFromPrinterCommand } from '../commands';
 
 let passed = 0;
 function test(name: string, run: () => void): void {
@@ -305,19 +306,209 @@ test('respects user overrides when applying plan', () => {
   assert.equal(afterState.plates[0].objects[0].volumes[0].filamentId, idBlue);
 });
 
-test('handles empty scene and returns false without modifying revision', () => {
+test('recreates model colors using candidate printer slots and adopts printer filaments in one undoable step', () => {
   const fixture = createProjectFixture();
   const state = cloneProjectState(fixture.state);
-  state.plates[0].objects = []; // no objects
+  state.plates[0].objects[0].volumes[0].annotations = emptyFacetAnnotations(0);
+  delete state.plates[0].objects[0].filamentId;
+  delete state.plates[0].objects[0].volumes[0].filamentId;
+  state.filaments.mixed = [];
 
-  const { session, ids } = harness(state);
-  const plan = planRecreateModelColors(session.project.getSnapshot().state);
-  assert.equal(plan.matches.length, 0);
+  const ids = new UuidIdSource(seededRandom(0x601));
 
-  const revBefore = session.project.getSnapshot().revision;
+  // Initial project state has 1 generic tool (e.g. from single-color default or model file)
+  state.filaments.physical = [
+    {
+      id: ids.next('physical-filament'),
+      toolId: 0,
+      name: 'Default Gray',
+      color: '#808080',
+      material: 'PLA',
+      config: {},
+      enabled: true,
+    },
+  ];
+
+  // Model has an orange volume (#FF8000)
+  state.plates[0].objects[0].volumes[0].extensionData = {
+    'orcaxr:sourceMaterial': { color: '#FF8000', name: 'Orange Model Part' },
+  };
+
+  const { session } = harness(state);
+
+  // Printer has 4 slots loaded (e.g. Snapmaker U1 loaded with Red, Yellow, White, Black)
+  const printerSlots = [
+    { toolId: 0, color: '#FF0000', material: 'PLA', subType: 'Matte', vendor: 'Snapmaker' },
+    { toolId: 1, color: '#FFFF00', material: 'PLA', subType: 'Matte', vendor: 'Snapmaker' },
+    { toolId: 2, color: '#FFFFFF', material: 'PLA', subType: 'SnapSpeed', vendor: 'Snapmaker' },
+    { toolId: 3, color: '#000000', material: 'PLA', subType: 'Matte', vendor: 'Snapmaker' },
+  ];
+
+  const plan = planRecreateModelColors(session.project.getSnapshot().state, {
+    printerSlots,
+    allowNewFullSpectrumRecipes: true,
+  });
+
+  assert.equal(plan.matches.length, 1);
+  assert.equal(plan.matches[0].source.color, '#FF8000');
+  assert.equal(plan.matches[0].destination.kind, 'new-mixed');
+  assert.ok(plan.matches[0].destination.newRecipeDraft);
+  assert.ok(plan.printerSlotsToAdopt);
+  assert.equal(plan.printerSlotsToAdopt.length, 4);
+
+  const beforeStr = canonicalStringify(session.project.getSnapshot().state);
   const applied = executeRecreateModelColors(session, plan, ids);
-  assert.equal(applied, false);
-  assert.equal(session.project.getSnapshot().revision, revBefore);
+  assert.equal(applied, true);
+
+  const afterState = session.project.getSnapshot().state;
+  // Physical filaments adopted all 4 printer slots
+  assert.equal(afterState.filaments.physical.length, 4);
+  assert.equal(afterState.filaments.physical[0].color, '#FF0000');
+  assert.equal(afterState.filaments.physical[1].color, '#FFFF00');
+  assert.equal(afterState.filaments.physical[2].color, '#FFFFFF');
+  assert.equal(afterState.filaments.physical[3].color, '#000000');
+
+  // Synthesized mixed filament exists and is assigned to the volume
+  assert.equal(afterState.filaments.mixed.length, 1);
+  const mixed = afterState.filaments.mixed[0];
+  assert.equal(afterState.plates[0].objects[0].volumes[0].filamentId, mixed.id);
+
+  // Undo restores initial state completely
+  session.commands.undo();
+  assert.equal(canonicalStringify(session.project.getSnapshot().state), beforeStr);
+});
+
+test('preserves model colors after syncing filaments from printer and recreates original colors via Full-Spectrum', () => {
+  const fixture = createProjectFixture();
+  const state = cloneProjectState(fixture.state);
+  state.plates[0].objects[0].volumes[0].annotations = emptyFacetAnnotations(0);
+  delete state.plates[0].objects[0].filamentId;
+  delete state.plates[0].objects[0].volumes[0].filamentId;
+  state.filaments.mixed = [];
+
+  const ids = new UuidIdSource(seededRandom(0x602));
+  const idOriginalRed = ids.next('physical-filament');
+  const idOriginalGreen = ids.next('physical-filament');
+
+  // Imported 3MF or model has 2 tools: Red and Green
+  state.filaments.physical = [
+    {
+      id: idOriginalRed,
+      toolId: 0,
+      name: 'Model Red',
+      color: '#FF0000',
+      material: 'PLA',
+      config: {},
+      enabled: true,
+    },
+    {
+      id: idOriginalGreen,
+      toolId: 1,
+      name: 'Model Green',
+      color: '#00FF00',
+      material: 'PLA',
+      config: {},
+      enabled: true,
+    },
+  ];
+
+  // Volume 0 is assigned to Model Red
+  state.plates[0].objects[0].volumes[0].filamentId = idOriginalRed;
+
+  const { session } = harness(state);
+
+  // 1. User syncs filaments from printer (printer has White, Black, Yellow, Blue)
+  const printerSlots = [
+    { toolId: 0, color: '#FFFFFF', material: 'PLA', subType: 'Matte', vendor: 'Snapmaker' },
+    { toolId: 1, color: '#000000', material: 'PLA', subType: 'Matte', vendor: 'Snapmaker' },
+    { toolId: 2, color: '#FFFF00', material: 'PLA', subType: 'Matte', vendor: 'Snapmaker' },
+    { toolId: 3, color: '#0000FF', material: 'PLA', subType: 'Matte', vendor: 'Snapmaker' },
+  ];
+
+  session.commands.execute(new SyncPhysicalFilamentsFromPrinterCommand(printerSlots, ids));
+
+  // The volume should preserve its original sourceMaterial color #FF0000
+  const syncedState = session.project.getSnapshot().state;
+  const volExt = syncedState.plates[0].objects[0].volumes[0].extensionData?.['orcaxr:sourceMaterial'] as
+    { color: string } | undefined;
+  assert.equal(volExt?.color, '#FF0000', 'Original model color should be preserved in sourceMaterial');
+
+  // 2. User invokes Recreate Model Colors
+  const plan = planRecreateModelColors(syncedState, { allowNewFullSpectrumRecipes: true });
+  assert.equal(plan.matches.length, 1);
+  assert.equal(plan.matches[0].source.color, '#FF0000');
+
+  const applied = executeRecreateModelColors(session, plan, ids);
+  assert.equal(applied, true);
+
+  const recreatedState = session.project.getSnapshot().state;
+  assert.ok(recreatedState.plates[0].objects[0].volumes[0].filamentId);
+  assert.notEqual(recreatedState.plates[0].objects[0].volumes[0].filamentId, idOriginalRed);
+});
+
+test('preserves and remaps painted facet annotations when syncing filaments and recreating model colors', () => {
+  const fixture = createProjectFixture();
+  const state = cloneProjectState(fixture.state);
+  delete state.plates[0].objects[0].filamentId;
+  delete state.plates[0].objects[0].volumes[0].filamentId;
+  state.filaments.mixed = [];
+
+  const ids = new UuidIdSource(seededRandom(0x603));
+  const idRed = ids.next('physical-filament');
+  const idGreen = ids.next('physical-filament');
+
+  state.filaments.physical = [
+    {
+      id: idRed,
+      toolId: 0,
+      name: 'Model Red',
+      color: '#FF0000',
+      material: 'PLA',
+      config: {},
+      enabled: true,
+    },
+    {
+      id: idGreen,
+      toolId: 1,
+      name: 'Model Green',
+      color: '#00FF00',
+      material: 'PLA',
+      config: {},
+      enabled: true,
+    },
+  ];
+
+  // Set facet annotations on volume
+  state.plates[0].objects[0].volumes[0].filamentId = idGreen;
+  state.plates[0].objects[0].volumes[0].annotations = {
+    ...emptyFacetAnnotations(0),
+    color: [{ value: idRed, triangles: [0] }],
+  };
+
+  const { session } = harness(state);
+
+  // Sync printer slots
+  const printerSlots = [
+    { toolId: 0, color: '#FFFFFF', material: 'PLA', vendor: 'Snapmaker' },
+    { toolId: 1, color: '#000000', material: 'PLA', vendor: 'Snapmaker' },
+    { toolId: 2, color: '#FFFF00', material: 'PLA', vendor: 'Snapmaker' },
+    { toolId: 3, color: '#0000FF', material: 'PLA', vendor: 'Snapmaker' },
+  ];
+  session.commands.execute(new SyncPhysicalFilamentsFromPrinterCommand(printerSlots, ids));
+
+  // Recreate model colors
+  const plan = planRecreateModelColors(session.project.getSnapshot().state, { allowNewFullSpectrumRecipes: true });
+  assert.equal(plan.matches.length, 2, 'Should extract both original volume and facet colors (#00FF00 and #FF0000)');
+
+  const applied = executeRecreateModelColors(session, plan, ids);
+  assert.equal(applied, true);
+
+  const afterState = session.project.getSnapshot().state;
+  const colorAnnotations = afterState.plates[0].objects[0].volumes[0].annotations.color!;
+  assert.equal(colorAnnotations.length, 1);
+  // Values should be remapped to the matched destinations
+  assert.notEqual(colorAnnotations[0].value, idRed);
+  assert.notEqual(afterState.plates[0].objects[0].volumes[0].filamentId, idGreen);
 });
 
 console.log(`Recreate model colors tests: ${passed} tests passed.`);
