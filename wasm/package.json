@@ -12,6 +12,7 @@
     "test:painted": "node test_slice_painted.mjs",
     "test:painted-prime-tower": "ORCAXR_PRIME_TOWER=1 node test_slice_painted.mjs",
     "test:fullspectrum": "node test_slice_project_fs.mjs",
+    "test:wave": "node test_slice_wave_overhang.mjs",
     "verify:artifacts": "node verify_artifacts.mjs"
   },
   "dependencies": {

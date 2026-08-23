@@ -251,6 +251,17 @@ engine (`libslic3r` via WASM) as the computational core.
   worktree — a checkout left on another branch must not be able to make a
   provenance check pass. Traces that could not reach upstream say so on the
   result line rather than printing a bare tick.
+- Wave-overhang slicing is integrated in `libslic3r` (`src/libslic3r/WaveOverhangs/`)
+  supporting pluggable algorithms: Janis A. Andersons wavefront propagation
+  (`AndersonsGenerator`) and Kaiser LaSO lateral seed-curve offsetting (`KaiserGenerator`),
+  dispatched via `wave_overhang_algorithm`. Wave toolpaths replace cantilever overhangs,
+  clip inner perimeters in the overhang zone, carve fill surfaces, and record floor/shadow
+  polygons. Floor layers enforce Hilbert-curve solid infill (`wave_overhang_floor_use_hilbert`)
+  to minimize thermal warping stress, while speed, fan, nozzle temperature, and end-of-line
+  retraction overrides apply during G-code generation with structured debug markers
+  (`; WAVE_OVERHANG_BUILD`, `; WAVE_OVERHANG_CONFIG`, `;_WAVE_OVERHANG_FAN_START/END`). Both
+  standard and tree support generator stages subtract wave-covered polygons when
+  `support_remaining_areas_after_wave_overhangs` is active.
 - **Localization has one seam, and canonical code may not touch it (P10.4).** User-facing text
   resolves through `src/l10n/`, and it is attached to the *action registry*
   (`ActionRegistry.useTextSource`), not to a shell: every surface already reads

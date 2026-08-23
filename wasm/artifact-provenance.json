@@ -16,7 +16,7 @@
   },
   "outputs": {
     "slic3r.mjs": "b90d06ccfeb526a4d0d7e08a56ebb5401175f7337f7d9b35c039bd738448f03e",
-    "slic3r.wasm": "746503927b36b2d86b63413937f4cef357ac5ab0fe42489bea7cebf41e72a221"
+    "slic3r.wasm": "b212106f4084b152fc9b9f21f4288d3edb2dcdb5b9f9b0db14bac4236ba76672"
   },
   "publishedCopies": [
     "wasm/dist",
