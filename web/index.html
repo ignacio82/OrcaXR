@@ -345,10 +345,13 @@
       .menu-host.open .menu-trigger {
         color: var(--oxr-accent);
       }
-      /* A long section wraps into columns rather than scrolling. Tools carries
-         two dozen entries: capped at one column it ran past the bottom of the
-         window, and the items below the fold were invisible *and* silently
-         unclickable — there is no scrollbar to tell you they are there. */
+      /* A long section takes the whole window height before it scrolls at all,
+         and when it must scroll it says so. Tools carries two dozen entries;
+         capped at 620px they ran past the fold, where they kept their layout
+         boxes, reported themselves visible, and could be neither seen nor
+         pressed. Columns were the other way to fix that, but a wrapped column
+         needs a fixed item width — which sizes a menu to the English word in
+         it and clips every longer translation. */
       .menu-dropdown {
         display: none;
         position: absolute;
@@ -361,12 +364,12 @@
            is deliberately visible, because an invisible fold is exactly how a
            shipped tool became unreachable. */
         max-width: calc(100vw - 16px);
-        overflow: auto;
+        overflow-y: auto;
+        /* Visible on purpose: an invisible fold is what hid a shipped tool. */
         scrollbar-width: thin;
         scrollbar-color: var(--oxr-stroke-strong) transparent;
-        flex-flow: column wrap;
-        align-content: flex-start;
-        gap: 0 4px;
+        flex-direction: column;
+        min-width: 232px;
         padding: 4px;
         background: var(--oxr-bg-elevated);
         border: 1px solid var(--oxr-stroke);
@@ -382,9 +385,9 @@
         color: var(--oxr-text);
         border: none;
         border-radius: var(--radius-sm);
-        /* Fixed rather than full-width: the column-wrapping dropdown above has
-           no width of its own to fill until its items declare one. */
-        width: 232px;
+        /* Full width of whatever the dropdown grew to, never a fixed size: a
+           menu sized to its English label clips every longer translation. */
+        width: 100%;
         flex: 0 0 auto;
         display: flex;
         align-items: center;
