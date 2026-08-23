@@ -37,7 +37,7 @@
           "path": "web/public/slicer/slic3r.mjs"
         },
         {
-          "blob": "16f28e90989e6f1eab97088d0f69f1aebb07edb6",
+          "blob": "ec1e63214cfa96a6fe8e33f0e61cdfdab731fea3",
           "path": "web/public/slicer/slic3r.wasm"
         }
       ]
