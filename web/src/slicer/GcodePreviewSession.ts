@@ -211,8 +211,34 @@ export class GcodePreviewSession {
     const stream = this.stream;
     if (!stream) return [low, high];
     const entries = stream.index.entries;
-    const first = entryForLayer(stream.index, low);
-    const last = Math.min(windowEnd(stream.index, first, stream.recordBudget), entryForLayer(stream.index, high));
+    const targetFirst = entryForLayer(stream.index, low);
+    const targetLast = entryForLayer(stream.index, high);
+
+    let first: number;
+    let last: number;
+
+    const previousLow = this.view ? this.view.layerRange[0] : entries[stream.loadedFirst].layer;
+    const previousHigh = this.view ? this.view.layerRange[1] : entries[stream.loadedLast].layer;
+    const highMoved = high !== previousHigh;
+    const lowMoved = low !== previousLow;
+
+    if (highMoved && !lowMoved) {
+      last = targetLast;
+      first = Math.max(targetFirst, windowStart(stream.index, last, stream.recordBudget));
+    } else if (lowMoved && !highMoved) {
+      first = targetFirst;
+      last = Math.min(targetLast, windowEnd(stream.index, first, stream.recordBudget));
+    } else {
+      const fitFromFirst = windowEnd(stream.index, targetFirst, stream.recordBudget);
+      if (fitFromFirst >= targetLast) {
+        first = targetFirst;
+        last = targetLast;
+      } else {
+        last = targetLast;
+        first = Math.max(targetFirst, windowStart(stream.index, last, stream.recordBudget));
+      }
+    }
+
     if (first !== stream.loadedFirst || last !== stream.loadedLast) {
       this.loaded = parseRichGcodeLayerWindow(stream.gcode, stream.index, first, last, stream.options);
       stream.loadedFirst = first;
@@ -284,6 +310,25 @@ function windowEnd(index: GcodeLayerIndex, first: number, budget: number): numbe
     last = candidate;
   }
   return last;
+}
+
+/**
+ * The earliest index entry that fits in the record budget ending at `last`.
+ *
+ * Always at least one layer: a single layer larger than the budget is still
+ * shown, because refusing to draw a layer is worse than briefly exceeding a
+ * self-imposed ceiling.
+ */
+function windowStart(index: GcodeLayerIndex, last: number, budget: number): number {
+  const entries = index.entries;
+  const endRecords = entries[last].recordsBefore + recordsIn(index, last);
+  let first = last;
+  for (let candidate = last - 1; candidate >= 0; candidate -= 1) {
+    const through = endRecords - entries[candidate].recordsBefore;
+    if (through > budget) break;
+    first = candidate;
+  }
+  return first;
 }
 
 function recordsIn(index: GcodeLayerIndex, entry: number): number {

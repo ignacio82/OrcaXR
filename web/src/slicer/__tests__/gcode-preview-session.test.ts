@@ -61,7 +61,24 @@ test('a print too large to hold is read in windows, and every layer stays reacha
   assert.ok(loadedHigh < 60, 'and only part of it is held at once');
   assert.equal(loadedLow, 0);
 
-  // The last layer — the part an over-budget parse could never show.
+  // Multi-layer scrubbing: moving the top slider to the top layer (0 -> 60)
+  // must shift the window up so the top layer is reachable, not clamp back to the first window.
+  const multiTop = session.updateView({ layerRange: [0, 60] });
+  assert.equal(multiTop.layerRange[1], 60, 'scrubbing top layer reaches the top');
+  assert.deepEqual(session.loadedLayerBounds, multiTop.layerRange);
+  assert.ok(multiTop.layerRange[0] > 0, 'low bound narrowed to fit budget');
+
+  // Scrubbing to an intermediate layer
+  const multiMid = session.updateView({ layerRange: [0, 30] });
+  assert.equal(multiMid.layerRange[1], 30, 'scrubbing top layer to middle layer 30 reaches 30');
+  assert.deepEqual(session.loadedLayerBounds, multiMid.layerRange);
+
+  // Moving bottom layer moves the lower bound
+  const multiLow = session.updateView({ layerRange: [15, 30] });
+  assert.equal(multiLow.layerRange[0], 15, 'moving bottom layer anchors at 15');
+  assert.deepEqual(session.loadedLayerBounds, multiLow.layerRange);
+
+  // The last layer in singleLayer mode — the part an over-budget parse could never show.
   const view = session.updateView({ layerRange: [60, 60], singleLayer: true });
   assert.deepEqual(view.layerRange, [60, 60]);
   const projection = session.project();
