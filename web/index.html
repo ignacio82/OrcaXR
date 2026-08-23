@@ -345,15 +345,28 @@
       .menu-host.open .menu-trigger {
         color: var(--oxr-accent);
       }
+      /* A long section wraps into columns rather than scrolling. Tools carries
+         two dozen entries: capped at one column it ran past the bottom of the
+         window, and the items below the fold were invisible *and* silently
+         unclickable — there is no scrollbar to tell you they are there. */
       .menu-dropdown {
         display: none;
         position: absolute;
         top: calc(100% + 4px);
         inset-inline-start: 0;
         z-index: 70;
-        min-width: 232px;
-        max-height: min(70vh, 620px);
-        overflow-y: auto;
+        max-height: calc(100vh - var(--menu-h) - 16px);
+        /* Columns must not run off the side of a small window either. Clamped,
+           a window too small for the whole section scrolls — and the scrollbar
+           is deliberately visible, because an invisible fold is exactly how a
+           shipped tool became unreachable. */
+        max-width: calc(100vw - 16px);
+        overflow: auto;
+        scrollbar-width: thin;
+        scrollbar-color: var(--oxr-stroke-strong) transparent;
+        flex-flow: column wrap;
+        align-content: flex-start;
+        gap: 0 4px;
         padding: 4px;
         background: var(--oxr-bg-elevated);
         border: 1px solid var(--oxr-stroke);
@@ -362,14 +375,17 @@
       }
       .menu-host.open > .menu-dropdown,
       .menu-dropdown.open {
-        display: block;
+        display: flex;
       }
       .menu-item {
         background: transparent;
         color: var(--oxr-text);
         border: none;
         border-radius: var(--radius-sm);
-        width: 100%;
+        /* Fixed rather than full-width: the column-wrapping dropdown above has
+           no width of its own to fill until its items declare one. */
+        width: 232px;
+        flex: 0 0 auto;
         display: flex;
         align-items: center;
         gap: 9px;

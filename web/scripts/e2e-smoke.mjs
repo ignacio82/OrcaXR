@@ -348,14 +348,24 @@ async function surviveEveryViewport(page) {
         const trigger = host.querySelector('.menu-trigger');
         const wasOpen = host.classList.contains('open');
         if (!wasOpen) trigger?.click();
-        const row = host.querySelector('.menu-dropdown [role="menuitem"]');
-        if (row) {
+        // The first row *and* the last one. A long section that runs past the
+        // bottom of the window hides its tail behind an invisible fold: the
+        // rows keep their boxes and report themselves visible, and nobody can
+        // see or press them. That is how a shipped tool went missing.
+        const rows = [...host.querySelectorAll('.menu-dropdown [role="menuitem"]')];
+        for (const row of [rows[0], rows.at(-1)].filter(Boolean)) {
+          // Scrolling to an item is a legitimate way to reach it; being clipped
+          // by an ancestor is not, and survives this call unchanged.
+          row.scrollIntoView({ block: 'nearest', inline: 'nearest' });
           const rect = row.getBoundingClientRect();
           const top = globalThis.document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
           if (rect.width < 1 || rect.height < 1) {
             covered.push(`${trigger?.textContent}: no box`);
           } else if (top !== row && !row.contains(top)) {
-            covered.push(`${trigger?.textContent}: ${top ? `${top.tagName}.${top.className}` : 'nothing'} is on top`);
+            covered.push(
+              `${trigger?.textContent} "${row.textContent?.trim().slice(0, 24)}": ` +
+                `${top ? `${top.tagName}.${top.className}` : 'nothing'} is on top`,
+            );
           }
         }
         if (!wasOpen) host.classList.remove('open');

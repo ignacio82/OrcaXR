@@ -319,6 +319,21 @@ const XR_CARDS: readonly { id: string; label: string; icon: string; groups: read
 type XrWorkspace = 'prepare' | 'preview' | 'device' | 'project';
 
 /**
+ * Whether this page was opened to inspect the immersive shell on a desktop.
+ *
+ * The XRBlocks simulator starts in the ordinary app too, so "the simulator is
+ * running" is not the same question as "show me the XR panels".
+ */
+function xrUiReviewRequested(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).get('xrui') === '1';
+  } catch {
+    // No location (tests, workers): reviewing is a browser-only affordance.
+    return false;
+  }
+}
+
+/**
  * How the build plate is dressed on each surface.
  *
  * `xr` is the app's own identity — a dark, lit tray with amber rings and a
@@ -4498,11 +4513,12 @@ export class OrcaWorkspace extends xb.Script {
 
   onSimulatorStarted() {
     this.needsRecenter = true;
-    // The simulator exists to review the immersive shell without a headset, so
-    // it shows what a session shows. Without this the desktop simulator drew an
-    // empty room and the spatial layout could only ever be judged on-device —
-    // which is how a rail of unreadable, overlapping panels shipped.
-    this.showXrSurfaces();
+    // Reviewing the immersive shell on a desktop is opt-in, and it has to be:
+    // the simulator runs in the ordinary flat app as well, so revealing the XR
+    // cards here put the headset's action desk and tool rail on top of the
+    // desktop UI. `?xrui=1` is for looking at the spatial layout without a
+    // headset; everything else gets the flat shell it asked for.
+    if (xrUiReviewRequested()) this.showXrSurfaces();
   }
 
   /** Reveal the cards a session starts with. Opt-in surfaces stay closed. */
