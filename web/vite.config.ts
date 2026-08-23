@@ -34,6 +34,8 @@ export default defineConfig({
           // script past its independently enforced budget.
           three: ['three', 'three-mesh-bvh'],
           uikit: ['@pmndrs/uikit'],
+          fflate: ['fflate'],
+          openai: ['openai'],
         },
       },
     },

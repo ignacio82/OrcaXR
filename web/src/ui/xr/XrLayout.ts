@@ -36,7 +36,7 @@
 import * as THREE from 'three';
 
 /** Every spatial surface the immersive shell can put in front of the operator. */
-export type XrSurfaceId = 'menu' | 'tools' | 'inspector' | 'actions' | 'status' | 'sheet' | 'progress';
+export type XrSurfaceId = 'menu' | 'tools' | 'inspector' | 'actions' | 'status' | 'sheet' | 'progress' | 'scrubber';
 
 /**
  * How a surface competes for space.
@@ -108,6 +108,17 @@ export const XR_SURFACES: readonly XrSurfaceSpec[] = [
   { id: 'sheet', azimuthDeg: 0, elevationDeg: -4, radius: 0.88, sizeX: 0.62, sizeY: 0.62, layer: 'modal' },
   // Slice progress: centred, small, and gone when it is finished.
   { id: 'progress', azimuthDeg: 0, elevationDeg: 0, radius: 0.85, sizeX: 0.5, sizeY: 0.2, layer: 'modal' },
+  // G-code toolpath preview scrubber, docked in front of the plate during preview mode.
+  {
+    id: 'scrubber',
+    azimuthDeg: 0,
+    elevationDeg: -22,
+    radius: 0.88,
+    sizeX: 0.58,
+    sizeY: 0.16,
+    leanDeg: 20,
+    layer: 'modal',
+  },
 ];
 
 const byId = new Map(XR_SURFACES.map((surface) => [surface.id, surface]));

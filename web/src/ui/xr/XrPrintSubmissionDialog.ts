@@ -1,0 +1,283 @@
+/**
+ * XrPrintSubmissionDialog — in-headset spatial Print Submission & Slot Mapping Dialog in XR.
+ *
+ * Provides feature parity with the desktop PrintSubmissionDialog:
+ *  - Target Printer picker.
+ *  - Bed Plate and nozzle compatibility verification.
+ *  - Multi-material filament slot mapping (mapping sliced extruder tools T0..TN to physical AMS slots).
+ *  - Print summary (estimated print duration, filament weight, cost).
+ *  - Action buttons: "Send & Print" (primary), "Send Only", "Cancel".
+ */
+import { createXrButton, createXrSectionHeading } from './XrComponents';
+import type { XrUiAdapter } from './XrUiAdapter';
+import { tokens } from '../tokens';
+
+const C = tokens.color;
+
+export interface XrPrintToolSlotMap {
+  readonly toolNumber: number;
+  readonly toolName: string;
+  readonly toolColor: string;
+  readonly toolType: string;
+  readonly mappedPrinterSlot: number;
+  readonly printerSlotColor?: string;
+  readonly printerSlotType?: string;
+}
+
+export interface XrPrintSubmissionContext {
+  readonly printerName: string;
+  readonly availablePrinters: readonly string[];
+  readonly plateName: string;
+  readonly nozzleMm: number;
+  readonly bedType: string;
+  readonly estimatedDurationFormatted: string;
+  readonly estimatedWeightGrams: number;
+  readonly estimatedCostFormatted?: string;
+  readonly toolSlots: readonly XrPrintToolSlotMap[];
+  readonly readyToPrint: boolean;
+  readonly blockedReason?: string;
+  onSelectPrinter?(printer: string): void;
+  onCycleSlotMapping?(toolNumber: number): void;
+  onSendAndPrint?(): void;
+  onSendOnly?(): void;
+  onCancel?(): void;
+}
+
+export function renderXrPrintSubmissionDialog<PanelNode, ImageNode, TextNode>(
+  ui: XrUiAdapter<PanelNode, ImageNode, TextNode>,
+  root: PanelNode,
+  ctx: XrPrintSubmissionContext,
+): PanelNode {
+  const container = ui.createPanel({
+    width: '100%',
+    height: '100%',
+    flexDirection: 'column',
+    fillColor: '#0d141cF5',
+    cornerRadius: tokens.radius.lg,
+    padding: 16,
+    gap: 12,
+    strokeWidth: 1,
+    strokeColor: '#ffffff1a',
+    overflow: 'scroll',
+  });
+  ui.appendChild(root, container);
+
+  // Header
+  const header = ui.createPanel({
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  });
+  ui.appendChild(container, header);
+
+  const title = ui.createText('Print Submission', {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  });
+  ui.appendChild(header, title);
+
+  if (ctx.onCancel) {
+    const closeBtn = createXrButton(ui, {
+      label: '✕',
+      fontSize: 14,
+      paddingLeft: 8,
+      paddingRight: 8,
+      paddingTop: 4,
+      paddingBottom: 4,
+      onClick: ctx.onCancel,
+    });
+    ui.appendChild(header, closeBtn.root);
+  }
+
+  // Section 1: Target Printer & Plate Info
+  const printerHeading = createXrSectionHeading(ui, 'Target Printer & Plate');
+  ui.appendChild(container, printerHeading);
+
+  const printerCard = ui.createPanel({
+    width: '100%',
+    padding: 12,
+    cornerRadius: tokens.radius.sm,
+    fillColor: C.surface,
+    flexDirection: 'column',
+    gap: 4,
+  });
+  ui.appendChild(container, printerCard);
+
+  const pRow = ui.createPanel({
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  });
+  const pName = ui.createText(ctx.printerName || 'Default Printer', {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  });
+  ui.appendChild(pRow, pName);
+
+  if (ctx.availablePrinters.length > 1) {
+    const switchBtn = createXrButton(ui, {
+      label: 'Switch Printer ↷',
+      fontSize: 11,
+      paddingLeft: 8,
+      paddingRight: 8,
+      paddingTop: 4,
+      paddingBottom: 4,
+      onClick: () => {
+        const idx = ctx.availablePrinters.indexOf(ctx.printerName);
+        const next = ctx.availablePrinters[(idx + 1) % ctx.availablePrinters.length];
+        ctx.onSelectPrinter?.(next);
+      },
+    });
+    ui.appendChild(pRow, switchBtn.root);
+  }
+  ui.appendChild(printerCard, pRow);
+
+  const metaText = ui.createText(
+    `Plate: ${ctx.plateName} · Nozzle: ${ctx.nozzleMm.toFixed(2)} mm · Bed: ${ctx.bedType}`,
+    { fontSize: 12, color: '#a0aab5' },
+  );
+  ui.appendChild(printerCard, metaText);
+
+  // Section 2: Filament Slot Mapping
+  if (ctx.toolSlots.length > 0) {
+    const slotHeading = createXrSectionHeading(ui, 'Filament Slot Mapping (Tool → AMS Slot)');
+    ui.appendChild(container, slotHeading);
+
+    for (const slot of ctx.toolSlots) {
+      const slotRow = ui.createPanel({
+        width: '100%',
+        paddingLeft: 12,
+        paddingRight: 12,
+        paddingTop: 8,
+        paddingBottom: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        cornerRadius: tokens.radius.sm,
+        fillColor: C.surface,
+      });
+
+      const toolInfo = ui.createPanel({ flexDirection: 'row', alignItems: 'center', gap: 8 });
+      const swatch = ui.createPanel({
+        width: 16,
+        height: 16,
+        cornerRadius: 8,
+        fillColor: slot.toolColor,
+      });
+      ui.appendChild(toolInfo, swatch);
+
+      const label = ui.createText(`Tool ${slot.toolNumber}: ${slot.toolType}`, {
+        fontSize: 13,
+        fontWeight: 'bold',
+        color: '#ffffff',
+      });
+      ui.appendChild(toolInfo, label);
+      ui.appendChild(slotRow, toolInfo);
+
+      const mappingBtn = createXrButton(ui, {
+        label: `→ Printer Slot ${slot.mappedPrinterSlot} ↷`,
+        fontSize: 12,
+        paddingLeft: 10,
+        paddingRight: 10,
+        paddingTop: 4,
+        paddingBottom: 4,
+        onClick: () => ctx.onCycleSlotMapping?.(slot.toolNumber),
+      });
+      ui.appendChild(slotRow, mappingBtn.root);
+
+      ui.appendChild(container, slotRow);
+    }
+  }
+
+  // Section 3: Summary Estimates
+  const summaryHeading = createXrSectionHeading(ui, 'Print Summary');
+  ui.appendChild(container, summaryHeading);
+
+  const summaryCard = ui.createPanel({
+    width: '100%',
+    padding: 12,
+    cornerRadius: tokens.radius.sm,
+    fillColor: C.surface,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  });
+  ui.appendChild(container, summaryCard);
+
+  const durationCol = ui.createPanel({ flexDirection: 'column', gap: 2 });
+  ui.appendChild(durationCol, ui.createText('ESTIMATED TIME', { fontSize: 10, fontWeight: 'bold', color: '#8a94a0' }));
+  ui.appendChild(
+    durationCol,
+    ui.createText(ctx.estimatedDurationFormatted || '—', { fontSize: 15, fontWeight: 'bold', color: '#ffffff' }),
+  );
+  ui.appendChild(summaryCard, durationCol);
+
+  const weightCol = ui.createPanel({ flexDirection: 'column', gap: 2 });
+  ui.appendChild(weightCol, ui.createText('MATERIAL WEIGHT', { fontSize: 10, fontWeight: 'bold', color: '#8a94a0' }));
+  ui.appendChild(
+    weightCol,
+    ui.createText(`${ctx.estimatedWeightGrams.toFixed(1)} g`, {
+      fontSize: 15,
+      fontWeight: 'bold',
+      color: '#ffffff',
+    }),
+  );
+  ui.appendChild(summaryCard, weightCol);
+
+  if (ctx.estimatedCostFormatted) {
+    const costCol = ui.createPanel({ flexDirection: 'column', gap: 2 });
+    ui.appendChild(costCol, ui.createText('ESTIMATED COST', { fontSize: 10, fontWeight: 'bold', color: '#8a94a0' }));
+    ui.appendChild(
+      costCol,
+      ui.createText(ctx.estimatedCostFormatted, { fontSize: 15, fontWeight: 'bold', color: '#ffffff' }),
+    );
+    ui.appendChild(summaryCard, costCol);
+  }
+
+  if (ctx.blockedReason) {
+    const blockNotice = ui.createText(ctx.blockedReason, {
+      fontSize: 12,
+      color: C.warn,
+      paddingTop: 4,
+    });
+    ui.appendChild(container, blockNotice);
+  }
+
+  // Action Buttons: Send & Print (primary), Send Only, Cancel
+  const actionRow = ui.createPanel({
+    width: '100%',
+    flexDirection: 'row',
+    gap: 8,
+    paddingTop: 8,
+  });
+  ui.appendChild(container, actionRow);
+
+  const sendAndPrintBtn = createXrButton(ui, {
+    label: 'Send & Print',
+    primary: true,
+    flexGrow: 2,
+    enabled: ctx.readyToPrint,
+    onClick: ctx.onSendAndPrint,
+  });
+  ui.appendChild(actionRow, sendAndPrintBtn.root);
+
+  const sendOnlyBtn = createXrButton(ui, {
+    label: 'Send Only',
+    flexGrow: 1,
+    enabled: ctx.readyToPrint,
+    onClick: ctx.onSendOnly,
+  });
+  ui.appendChild(actionRow, sendOnlyBtn.root);
+
+  const cancelBtn = createXrButton(ui, {
+    label: 'Cancel',
+    flexGrow: 1,
+    onClick: ctx.onCancel,
+  });
+  ui.appendChild(actionRow, cancelBtn.root);
+
+  return container;
+}

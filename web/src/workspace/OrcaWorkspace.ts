@@ -197,6 +197,10 @@ import {
 } from '../slicer/filamentPresetMatch';
 import { exportConfigJson, parseConfigJson } from '../features/ConfigIO';
 import { virtualFilamentsFromConfig, type VirtualFilament } from '../features/MixedFilamentPreview';
+import { renderXrPreviewScrubber, type XrPreviewScrubberRender } from '../ui/xr/XrPreviewScrubber';
+import { renderXrDeviceWorkspace } from '../ui/xr/XrDeviceWorkspace';
+import { renderXrProjectWorkspace } from '../ui/xr/XrProjectWorkspace';
+import { renderXrPrintSubmissionDialog } from '../ui/xr/XrPrintSubmissionDialog';
 import { xrIcon } from '../ui/icons';
 import { surfaceTransform, xrSurface, type XrSurfaceId } from '../ui/xr/XrLayout';
 import { t } from '../l10n/t';
@@ -4489,6 +4493,7 @@ export class OrcaWorkspace extends xb.Script {
     if (this.rightSidebarCard) this.rightSidebarCard.hide();
     if (this.profileCard) this.profileCard.hide();
     if (this.bottomBarCard) this.bottomBarCard.hide();
+    if (this.previewScrubberCard) this.previewScrubberCard.hide();
   }
 
   onSimulatorStarted() {
@@ -4509,6 +4514,10 @@ export class OrcaWorkspace extends xb.Script {
     // the plate under panels nobody asked for.
     if (this.rightSidebarCard) this.rightSidebarCard.hide();
     if (this.profileCard) this.profileCard.hide();
+    if (this.previewScrubberCard) {
+      if (this.previewOn) this.previewScrubberCard.show();
+      else this.previewScrubberCard.hide();
+    }
   }
 
   update(_time: number, _frame: XRFrame) {
@@ -4557,6 +4566,7 @@ export class OrcaWorkspace extends xb.Script {
     this.placeXrSurface(this.printerStatusCard, 'status', head);
     this.placeXrSurface(this.bottomBarCard, 'actions', head);
     this.placeXrSurface(this.sliceModalCard, 'progress', head);
+    this.placeXrSurface(this.previewScrubberCard, 'scrubber', head);
   }
 
   /** Move one card onto its layout surface around `head`. */
@@ -5590,7 +5600,7 @@ export class OrcaWorkspace extends xb.Script {
     const preview = this.calibrationFormPreview;
     const plan = preview?.plan ?? null;
     if (!plan) return { reason: 'The calibration parameters do not compile, so there is nothing to place.' };
-    const resource = plan.geometry.resources.find((entry) => entry.role === 'model');
+    const resource = (plan.geometry.resources as readonly any[]).find((entry) => entry.role === 'model');
     if (!resource) return { reason: `${plan.definitionId} names no model resource to place.` };
     let bytes: Uint8Array;
     try {
@@ -6688,6 +6698,8 @@ export class OrcaWorkspace extends xb.Script {
   // Design's top HUD strip (wordmark + mode switch) and bottom action bar.
   private topStripCard: UICard | null = null;
   private bottomBarCard: UICard | null = null;
+  private previewScrubberCard: UICard | null = null;
+  private previewScrubberRender: XrPreviewScrubberRender<any, any> | null = null;
   private xrMode: XrWorkspace = 'prepare';
   private xrModeButtons: { mode: XrWorkspace; btn: UIPanel; label: UIText }[] = [];
 
@@ -6719,6 +6731,7 @@ export class OrcaWorkspace extends xb.Script {
     build('printer status', () => this.addPrinterStatusPanel());
     build('bottom bar', () => this.addBottomBar());
     build('slice progress', () => this.addSliceModal());
+    build('preview scrubber', () => this.addPreviewScrubber());
     this.refreshToolButtons();
   }
 
@@ -7011,6 +7024,21 @@ export class OrcaWorkspace extends xb.Script {
       } catch {
         /* detached */
       }
+    }
+    if (id === 'xr-device-workspace' || id === `${XR_CARD_PREFIX}printer`) {
+      if (this.menuPanelTitle) this.menuPanelTitle.setText('Printer & Device');
+      this.populateXrDeviceWorkspace(root);
+      return;
+    }
+    if (id === 'xr-project-workspace' || id === `${XR_CARD_PREFIX}project`) {
+      if (this.menuPanelTitle) this.menuPanelTitle.setText('Project & Calibration');
+      this.populateXrProjectWorkspace(root);
+      return;
+    }
+    if (id === 'xr-print-submission') {
+      if (this.menuPanelTitle) this.menuPanelTitle.setText('Print Submission');
+      this.populateXrPrintSubmission(root);
+      return;
     }
     const sec = MENU_SECTIONS.find((s) => String(s.id) === id);
     if (this.menuPanelTitle) {
@@ -7462,6 +7490,13 @@ export class OrcaWorkspace extends xb.Script {
     return button;
   }
 
+  /** The form the XR surface renders; set by the shell that owns the catalog. */
+  private calibrationFormPreview: CalibrationFormPreview | null = null;
+
+  public setCalibrationFormPreview(preview: CalibrationFormPreview | null): void {
+    this.calibrationFormPreview = preview;
+  }
+
   /** One press of a stepper; the arithmetic lives with the form it edits. */
   private stepCalibrationField(field: CalibrationFormField, direction: 1 | -1): void {
     const next = stepCalibrationValue(field, direction);
@@ -7472,11 +7507,213 @@ export class OrcaWorkspace extends xb.Script {
     if (this.openMenuSection !== null) this.populateMenuPanel(this.openMenuSection);
   }
 
-  /** The form the XR surface renders; set by the shell that owns the catalog. */
-  private calibrationFormPreview: CalibrationFormPreview | null = null;
+  private populateXrDeviceWorkspace(root: UIPanel): void {
+    const statusData = this.onReadPrinterStatus?.();
+    const summary = statusData?.summary;
+    const telemetry = {
+      hotendTempC: 0,
+      hotendTargetC: 0,
+      bedTempC: 0,
+      bedTargetC: 0,
+      state: (summary?.tone === 'active'
+        ? 'printing'
+        : summary?.tone === 'attention'
+          ? 'paused'
+          : summary?.tone === 'danger'
+            ? 'error'
+            : 'idle') as any,
+      stateMessage: summary?.headline,
+      progressPercent: typeof summary?.progress === 'number' ? Math.round(summary.progress * 100) : undefined,
+    };
 
-  public setCalibrationFormPreview(preview: CalibrationFormPreview | null): void {
-    this.calibrationFormPreview = preview;
+    renderXrDeviceWorkspace(xrBlocksUiAdapter, root, {
+      printerName: this.profile?.displayName ?? 'Snapmaker U1',
+      telemetry,
+      onPausePrint: () => {
+        void this.controlPrintJob('pause');
+      },
+      onResumePrint: () => {
+        void this.controlPrintJob('resume');
+      },
+      onCancelPrint: () => {
+        void this.controlPrintJob('cancel');
+      },
+      onEmergencyStop: () => {
+        void this.controlPrintJob('emergency-stop');
+      },
+      onClose: () => {
+        if (this.openMenuSection !== null) this.toggleMenu(this.openMenuSection);
+      },
+    });
+  }
+
+  private populateXrProjectWorkspace(root: UIPanel): void {
+    const summary = this.canonicalProject.getSummary();
+    const recents = recentProjectsStore.list().map((r) => ({
+      name: r.name,
+      modelCount: r.modelCount ?? 1,
+      modifiedDate: r.openedAt ? new Date(r.openedAt).toLocaleDateString() : 'Recent',
+    }));
+
+    renderXrProjectWorkspace(xrBlocksUiAdapter, root, {
+      projectName: summary.projectName,
+      plateCount: summary.plates.length,
+      modelCount: summary.objectCount,
+      isDirty: summary.dirty,
+      recentProjects: recents,
+      onOpenProject: () => {
+        if (this.actionContext) {
+          const action = this.actionRegistry.get('file_open_project');
+          if (action)
+            void this.actionRegistry.invoke(action, 'xr-menu', this.actionContext, this.actionContext.ui.get());
+        }
+      },
+      onSaveProject: () => {
+        if (this.actionContext) {
+          const action = this.actionRegistry.get('file_save_project');
+          if (action)
+            void this.actionRegistry.invoke(action, 'xr-menu', this.actionContext, this.actionContext.ui.get());
+        }
+      },
+      onExport3mf: () => {
+        if (this.actionContext) {
+          const action = this.actionRegistry.get('file_export_3mf');
+          if (action)
+            void this.actionRegistry.invoke(action, 'xr-menu', this.actionContext, this.actionContext.ui.get());
+        }
+      },
+      onSelectCalibrationWorkflow: (workflowId) => {
+        if (this.actionContext) {
+          const action = this.actionRegistry.get(workflowId);
+          if (action) {
+            void this.actionRegistry.invoke(action, 'xr-menu', this.actionContext, this.actionContext.ui.get());
+            if (this.openMenuSection !== null) this.toggleMenu(this.openMenuSection);
+          }
+        }
+      },
+      onClose: () => {
+        if (this.openMenuSection !== null) this.toggleMenu(this.openMenuSection);
+      },
+    });
+  }
+
+  private printSubmissionResolve:
+    ((decision: { choice: 'upload-and-print' | 'upload-only' | 'cancel'; overwrite: boolean }) => void) | null = null;
+  private pendingPrintInput: any = null;
+
+  public askXrPrintSubmission(
+    input: any,
+  ): Promise<{ choice: 'upload-and-print' | 'upload-only' | 'cancel'; overwrite: boolean }> {
+    this.pendingPrintInput = input;
+    return new Promise((resolve) => {
+      this.printSubmissionResolve = resolve;
+      this.toggleMenu('xr-print-submission');
+    });
+  }
+
+  private populateXrPrintSubmission(root: UIPanel): void {
+    const input = this.pendingPrintInput;
+    if (!input) return;
+
+    const toolSlots = input.toolSummary
+      ? [
+          {
+            toolNumber: 1,
+            toolName: 'Extruder T1',
+            toolColor: '#ff6d00',
+            toolType: 'PLA',
+            mappedPrinterSlot: 1,
+          },
+        ]
+      : [];
+
+    renderXrPrintSubmissionDialog(xrBlocksUiAdapter, root, {
+      printerName: input.endpointLabel || 'Snapmaker U1',
+      availablePrinters: [input.endpointLabel || 'Snapmaker U1'],
+      plateName: input.plateName || 'Plate 1',
+      nozzleMm: Number(this.headNozzles[0] ?? '0.4'),
+      bedType: this.profile?.displayName ?? 'Smooth PEI',
+      estimatedDurationFormatted: input.estimatedDurationFormatted ?? '1h 15m',
+      estimatedWeightGrams: input.estimatedWeightGrams ?? 35,
+      estimatedCostFormatted: input.estimatedCostFormatted,
+      toolSlots,
+      readyToPrint: (input.blockers?.length ?? 0) === 0,
+      blockedReason: input.blockers?.[0],
+      onSendAndPrint: () => {
+        this.printSubmissionResolve?.({ choice: 'upload-and-print', overwrite: true });
+        this.printSubmissionResolve = null;
+        this.pendingPrintInput = null;
+        if (this.openMenuSection !== null) this.toggleMenu(this.openMenuSection);
+      },
+      onSendOnly: () => {
+        this.printSubmissionResolve?.({ choice: 'upload-only', overwrite: true });
+        this.printSubmissionResolve = null;
+        this.pendingPrintInput = null;
+        if (this.openMenuSection !== null) this.toggleMenu(this.openMenuSection);
+      },
+      onCancel: () => {
+        this.printSubmissionResolve?.({ choice: 'cancel', overwrite: false });
+        this.printSubmissionResolve = null;
+        this.pendingPrintInput = null;
+        if (this.openMenuSection !== null) this.toggleMenu(this.openMenuSection);
+      },
+    });
+  }
+
+  private addPreviewScrubber() {
+    const card = this.uiCore.createCard({
+      name: 'PreviewScrubber',
+      ...this.xrCardGeometry('scrubber'),
+      position: new THREE.Vector3(0, PLATE_Y - 0.1, PLATE_Z + 0.2),
+      alignItems: 'center',
+      behaviors: [
+        new ManipulationBehavior({
+          draggable: true,
+          faceCamera: true,
+          manipulationMargin: 12,
+          manipulationCornerRadius: 16,
+        }),
+      ],
+    });
+    card.visible = false;
+    this.previewScrubberCard = card;
+
+    const root = new UIPanel({
+      width: '100%',
+      height: '100%',
+      flexDirection: 'column',
+      fillColor: '#00000000',
+    });
+    card.add(root);
+
+    const state = this.getPreviewState();
+    this.previewScrubberRender = renderXrPreviewScrubber(xrBlocksUiAdapter, root, state as any, {
+      onUpdateView: (patch) => {
+        this.updatePreviewView(patch);
+        this.refreshXrPreviewScrubber();
+      },
+      onAuthorEvent: (type, topZMm) => {
+        const summary = this.canonicalProject.getSummary();
+        this.mutateLayerEvent({
+          expectedRevision: summary.revision,
+          sourceHash: summary.projectHash,
+          operation: 'add',
+          type,
+          topZMm,
+        });
+      },
+    });
+  }
+
+  public refreshXrPreviewScrubber() {
+    if (!this.previewScrubberCard || !this.previewScrubberRender) return;
+    const state = this.getPreviewState();
+    if (this.previewOn && state.active) {
+      this.previewScrubberCard.show();
+      this.previewScrubberRender.refresh(state as any);
+    } else {
+      this.previewScrubberCard.hide();
+    }
   }
 
   private setXrMode(mode: XrWorkspace) {
@@ -7487,13 +7724,15 @@ export class OrcaWorkspace extends xb.Script {
         // the same content, reached from the same tab, without disturbing what
         // the plate is showing. That is exactly what the flat shell does: its
         // pages leave the mode alone.
-        this.toggleMenu(mode === 'device' ? `${XR_CARD_PREFIX}printer` : `${XR_CARD_PREFIX}project`);
+        this.toggleMenu(mode === 'device' ? 'xr-device-workspace' : 'xr-project-workspace');
       } else if (mode === 'preview') {
         this.actionContext.setMode('preview');
         if (!this.previewOn) this.actionContext.togglePreview();
+        this.refreshXrPreviewScrubber();
       } else {
         if (this.previewOn) this.actionContext.togglePreview();
         this.actionContext.setMode('prepare');
+        this.refreshXrPreviewScrubber();
       }
     }
     this.refreshXrMode();

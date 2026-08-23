@@ -661,7 +661,7 @@ function setupDomUI(
       }
       const mapping = validateToolMapping(intent.usage, slots);
       const readinessBlockers = readiness.blockers.map((blocker) => blocker.message);
-      const decision = await askPrintSubmission({
+      const dialogInput = {
         filename: intent.filename,
         plateName: intent.plateName,
         byteLength: new TextEncoder().encode(intent.gcode).byteLength,
@@ -670,7 +670,10 @@ function setupDomUI(
         toolSummary: describeToolUsage(intent.usage.tools, slots),
         blockers: [...mapping.blockers.map((notice) => notice.message), ...(readiness.ready ? [] : readinessBlockers)],
         warnings: mapping.warnings.map((notice) => notice.message),
-      });
+      };
+      const decision = xb.core.renderer?.xr?.isPresenting
+        ? await workspace.askXrPrintSubmission(dialogInput)
+        : await askPrintSubmission(dialogInput);
       if (decision.choice === 'cancel') {
         workspace.setStatus(t('app.main.sendCancelledNothingWasUploaded', 'Send cancelled; nothing was uploaded.'));
         return;
