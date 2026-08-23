@@ -54,6 +54,8 @@ import type {
   ScopedOverrideTargetOption,
 } from '../project/scopedOverrides';
 import { detectModelFormat } from '../project/import/formats';
+import { decodeStl } from '../project/import/formats/stl';
+import { DEFAULT_MODEL_IMPORT_LIMITS } from '../project/import/formats/types';
 import type { LayerEventType } from '../project/domain/model';
 import type { PrintJobCommand } from '../printer/PrintJobControl';
 import type { PrintJobIntent } from '../printer/PrintJobSubmission';
@@ -10073,10 +10075,38 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public async fixSelectedModel(): Promise<void> {
+    const volumes = this.paintableSelectedVolumes();
+    if (volumes.length === 0) {
+      this.setStatus(t('workspace.orcaWorkspace.selectAModelToRepair', 'Select a model to repair.'));
+      return;
+    }
+    for (const volumeId of volumes) {
+      try {
+        this.setStatus(t('workspace.orcaWorkspace.repairingModel', 'Repairing model mesh...'));
+        const stlBytes = this.canonicalProject.exportVolumeToBinaryStl(volumeId);
+        const repairedBuffer = await this.slicer.repair(stlBytes.buffer as ArrayBuffer);
+        const decoded = decodeStl(new Uint8Array(repairedBuffer), {
+          filename: 'repaired.stl',
+          limits: DEFAULT_MODEL_IMPORT_LIMITS,
+          format: 'stl-binary',
+        });
+        const repMesh = decoded.objects[0]?.volumes[0]?.mesh;
+        if (!repMesh) {
+          throw new Error(t('workspace.orcaWorkspace.repairReturnedEmpty', 'Repair returned empty mesh'));
+        }
+        this.canonicalProject.applyRepairedVolumeMesh(volumeId, repMesh.positions, repMesh.indices);
+      } catch (e: any) {
+        const errorMsg = `${t('workspace.orcaWorkspace.repairFailed', 'Repair failed:')} ${e.message}`;
+        this.setStatus(errorMsg);
+        return;
+      }
+    }
+    this.refreshPaintOverlays();
+    this.recomputePreflight();
     this.setStatus(
       t(
-        'workspace.orcaWorkspace.repairIsUnavailableUntilTopology',
-        'Repair is unavailable until topology and annotations commit atomically.',
+        'workspace.orcaWorkspace.modelRepairedSuccess',
+        'Model repaired successfully. Painting was reset; undo restores both.',
       ),
     );
   }

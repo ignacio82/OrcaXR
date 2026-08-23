@@ -172,7 +172,7 @@ import {
   type IndependentSingleInstanceObjectIds,
 } from '../project/objects/commands';
 import { computeCanonicalInstanceBounds, type CanonicalBounds3 } from '../project/objects/bounds';
-import { exportCanonicalInstancesAsBinaryStl } from '../project/objects/stlExport';
+import { exportCanonicalInstancesAsBinaryStl, exportCanonicalVolumeAsBinaryStl } from '../project/objects/stlExport';
 import { writeDeterministicZip } from '../project/serialization/deterministicZip';
 import { SetInstanceTransformsCommand, type InstanceTransformChange } from '../project/objects/transformCommands';
 import {
@@ -2952,6 +2952,52 @@ export class CanonicalWorkspaceController {
       return { beforeTriangles: triangles, afterTriangles: triangles, maxError: 0 };
     }
     return this.applyPreparedSimplify(prepared);
+  }
+
+  /**
+   * Export a volume's current mesh as a binary STL byte array in its local space.
+   */
+  exportVolumeToBinaryStl(volumeId: VolumeId): Uint8Array {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    return exportCanonicalVolumeAsBinaryStl(state, this.assets, volumeId);
+  }
+
+  /**
+   * Install a repaired mesh into a volume as one undoable topology replacement.
+   */
+  applyRepairedVolumeMesh(
+    volumeId: VolumeId,
+    positions: readonly number[] | Float32Array,
+    indices: readonly number[] | Uint32Array,
+  ): {
+    readonly beforeTriangles: number;
+    readonly afterTriangles: number;
+  } {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    const found = findVolume(state, volumeId);
+    if (!found) throw new Error(`Unknown volume ${volumeId}`);
+    const payload = this.assets.get(found.volume.source.assetId);
+    if (!payload) throw new Error(`Volume ${volumeId} has no stored mesh asset`);
+
+    const guard: MeshTopologyReplacementGuard = {
+      volumeId,
+      assetId: found.volume.source.assetId,
+      assetDigest: payload.descriptor.digest,
+      topologyRevision: found.volume.source.topologyRevision,
+      triangleCount: found.volume.source.triangleCount,
+    };
+    const beforeTriangles = found.volume.source.triangleCount;
+    const encoded = encodeIndexedMeshAsset({
+      id: this.options.idSource.next('asset'),
+      positions: Array.from(positions),
+      indices: Array.from(indices),
+      ...(payload.descriptor.sourceFilename ? { sourceFilename: payload.descriptor.sourceFilename } : {}),
+    });
+    this.session.commands.execute(new ReplaceVolumeMeshCommand(guard, encoded));
+    const afterTriangles = Math.floor(indices.length / 3);
+    return { beforeTriangles, afterTriangles };
   }
 
   /**

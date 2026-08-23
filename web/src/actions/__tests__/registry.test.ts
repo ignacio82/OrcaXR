@@ -156,7 +156,14 @@ test('Download, canonical delete, and guarded Split to Objects use prerequisites
     }),
     true,
   );
-  assert.strictEqual(ActionRegistry.enabled(reg.get('repair_model')!, { ...baseState, hasSelection: true }), false);
+  assert.strictEqual(
+    ActionRegistry.enabled(reg.get('repair_model')!, {
+      ...baseState,
+      hasSelection: true,
+      hasInstanceSelection: true,
+    }),
+    true,
+  );
   assert.strictEqual(ActionRegistry.enabled(reg.get('split_to_objects')!, { ...baseState, modelCount: 1 }), false);
   assert.strictEqual(
     ActionRegistry.enabled(reg.get('split_to_objects')!, {
@@ -169,7 +176,7 @@ test('Download, canonical delete, and guarded Split to Objects use prerequisites
   );
   assert.strictEqual(ActionRegistry.enabled(reg.get('mesh_boolean_union')!, { ...baseState, modelCount: 1 }), false);
   assert.strictEqual(ActionRegistry.enabled(reg.get('mesh_boolean_union')!, { ...baseState, modelCount: 2 }), false);
-  assert.match(ActionRegistry.disabledReason(reg.get('repair_model')!, baseState) ?? '', /canonical/i);
+  assert.match(ActionRegistry.disabledReason(reg.get('repair_model')!, baseState) ?? '', /select/i);
 });
 
 test('Split to Objects routes only through the shared asynchronous action context', () => {

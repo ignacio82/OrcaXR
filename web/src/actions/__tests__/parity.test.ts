@@ -53,7 +53,6 @@ const UNAVAILABLE_IDS = [
   'edit_copy',
   'edit_paste',
   'edit_delete_all',
-  'repair_model',
   'mesh_boolean_union',
   'mesh_boolean_subtract',
   'mesh_boolean_intersection',
@@ -84,7 +83,6 @@ const CANONICAL_CUTOVER_GATED_IDS = [
   'edit_copy',
   'edit_paste',
   'edit_delete_all',
-  'repair_model',
   'mesh_boolean_union',
   'mesh_boolean_subtract',
   'mesh_boolean_intersection',
@@ -93,6 +91,7 @@ const CANONICAL_CUTOVER_GATED_IDS = [
 
 const CANONICAL_ACTIONS_LEFT_ENABLED = [
   'file_new_project',
+  'repair_model',
   'file_open_project',
   'file_import_model',
   'file_import_zip',
@@ -388,9 +387,9 @@ test('registry guard explains unavailable actions without invoking a handler', (
   const ctx = {
     reportCapabilityUnavailable: (label: string, reason: string) => reports.push(`${label}: ${reason}`),
   } as unknown as ActionContext;
-  void registry.invoke('repair_model', 'dom-menu', ctx, FULL_STATE);
+  void registry.invoke('mesh_boolean_union', 'dom-menu', ctx, FULL_STATE);
   assert.strictEqual(reports.length, 1);
-  assert.match(reports[0], /guarded canonical command/i);
+  assert.match(reports[0], /topology-changing booleans/i);
 });
 
 test('prerequisite evaluator gives actionable disabled reasons', () => {

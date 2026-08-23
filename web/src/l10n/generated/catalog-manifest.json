@@ -10,7 +10,7 @@
     "seeding": "Translations are upstream msgstr values for the same English, matched exactly or after removing a wxWidgets accelerator marker or a trailing ellipsis. Nothing is machine-translated."
   },
   "referenceLocale": "en",
-  "messageCount": 1117,
+  "messageCount": 1121,
   "actionMessageCount": 684,
   "catalogs": [
     {

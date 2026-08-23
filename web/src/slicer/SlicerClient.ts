@@ -1057,17 +1057,15 @@ export class SlicerClient {
     const mod = await this.ensureModule();
     this.slicing = true;
     try {
-      // For repair, we pass STL as a string for now, or wait, startRepair takes a string!
-      // But passing binary as string can corrupt it in Embind.
-      // Wait, in start_slice_file we wrote to MEMFS. We didn't do start_repair_file, we just did start_repair(string).
-      // Since embind string is utf-8, binary bytes might get corrupted!
-      // Let's modify start_repair to take the file path instead, or just use the string (the Android port did something similar, but files are safer).
-      // Actually, since I wrote repair_stl_to_stl in C++ taking std::string, if we just write the file to MEMFS and read it, it's safer. But wait, startRepair takes std::string!
-      // Let's pass it as a binary string (which is what Emscripten's std::string typemap does if not careful, but it might fail).
-      // A better way is to pass Uint8Array? Emscripten's embind handles std::string as UTF-8.
-      // But we can convert ArrayBuffer to a binary string and hope it survives? NO!
-      // Since I already compiled the WASM, let's just pass a binary string.
-      const binaryString = String.fromCharCode(...new Uint8Array(stl));
+      const toBinStr = (b: ArrayBuffer) => {
+        const u = new Uint8Array(b);
+        let s = '';
+        for (let i = 0; i < u.length; i += 0x8000) {
+          s += String.fromCharCode.apply(null, Array.from(u.subarray(i, i + 0x8000)));
+        }
+        return s;
+      };
+      const binaryString = toBinStr(stl);
       mod.startRepair(binaryString, maxThreads);
 
       const outString = await new Promise<string>((resolve, reject) => {

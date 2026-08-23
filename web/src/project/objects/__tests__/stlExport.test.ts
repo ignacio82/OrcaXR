@@ -6,7 +6,7 @@ import { cloneProjectState } from '../../domain/canonical';
 import { entityId } from '../../domain/ids';
 import { emptyFacetAnnotations, identityTransform } from '../../domain/model';
 import { encodeIndexedMeshAsset } from '../../meshCodec';
-import { exportCanonicalInstancesAsBinaryStl } from '../stlExport';
+import { exportCanonicalInstancesAsBinaryStl, exportCanonicalVolumeAsBinaryStl } from '../stlExport';
 
 let passed = 0;
 function test(name: string, run: () => void): void {
@@ -119,6 +119,18 @@ test('fails closed for CSG, duplicate or unknown targets, stale counts, and asse
     () => exportCanonicalInstancesAsBinaryStl(csg, assets, [fixture.ids.instance]),
     /requires canonical CSG/i,
   );
+});
+
+test('exportCanonicalVolumeAsBinaryStl exports single volume in local space without instance transforms', () => {
+  const { fixture, state, assets } = harness();
+  const bytes = exportCanonicalVolumeAsBinaryStl(state, assets, fixture.ids.volume);
+  assert.equal(bytes.byteLength, 84 + 50);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  assert.equal(view.getUint32(80, true), 1);
+  // First vertex is at local (0, 0, 0)
+  assert.equal(view.getFloat32(84 + 12, true), 0);
+  assert.equal(view.getFloat32(84 + 16, true), 0);
+  assert.equal(view.getFloat32(84 + 20, true), 0);
 });
 
 console.log(`\nCanonical binary STL export: ${passed} tests passed.`);

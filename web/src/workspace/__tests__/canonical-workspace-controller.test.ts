@@ -1182,6 +1182,34 @@ await test('rejects stale guards, hash drift, collisions, and cross-object owner
   controller.dispose();
 });
 
+await test('exports volume to binary STL and applies repaired mesh with undo/redo', async () => {
+  const { fixture, controller } = await openFixtureController();
+  const stlBytes = controller.exportVolumeToBinaryStl(fixture.ids.volume);
+  assert.ok(stlBytes.byteLength > 84);
+
+  const repairedPositions = [0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0, 10];
+  const repairedIndices = [0, 1, 2, 0, 2, 3];
+  const res = controller.applyRepairedVolumeMesh(fixture.ids.volume, repairedPositions, repairedIndices);
+  assert.equal(res.beforeTriangles, 1);
+  assert.equal(res.afterTriangles, 2);
+
+  const volume = controller['session'].project.getSnapshot().state.plates[0].objects[0].volumes[0];
+  assert.equal(volume.source.triangleCount, 2);
+  assert.equal(volume.source.topologyRevision, 1);
+
+  assert.equal(controller.undo(), true);
+  const revertedVolume = controller['session'].project.getSnapshot().state.plates[0].objects[0].volumes[0];
+  assert.equal(revertedVolume.source.triangleCount, 1);
+  assert.equal(revertedVolume.source.topologyRevision, 0);
+
+  assert.equal(controller.redo(), true);
+  const redoneVolume = controller['session'].project.getSnapshot().state.plates[0].objects[0].volumes[0];
+  assert.equal(redoneVolume.source.triangleCount, 2);
+  assert.equal(redoneVolume.source.topologyRevision, 1);
+
+  controller.dispose();
+});
+
 function semanticGuard(snapshot: CanonicalSemanticObjectEditorSnapshot) {
   return {
     expectedRevision: snapshot.sourceRevision,

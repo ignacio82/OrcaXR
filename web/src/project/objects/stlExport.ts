@@ -2,7 +2,7 @@ import type { AssetRepository } from '../assets';
 import { canonicalStringify } from '../domain/canonical';
 import type { InstanceId, VolumeId } from '../domain/ids';
 import type { ProjectState, Transform, Vec3 } from '../domain/model';
-import { findInstance } from '../domain/selectors';
+import { findInstance, findVolume } from '../domain/selectors';
 import { decodeIndexedMeshAsset, type DecodedIndexedMesh } from '../meshCodec';
 
 export interface CanonicalBinaryStlExport {
@@ -176,4 +176,41 @@ function writeVector(view: DataView, offset: number, vector: Vec3): number {
   view.setFloat32(offset + 4, vector[1], true);
   view.setFloat32(offset + 8, vector[2], true);
   return offset + 12;
+}
+
+/**
+ * Export a single canonical volume's mesh as a binary STL byte array in its local space.
+ */
+export function exportCanonicalVolumeAsBinaryStl(
+  state: ProjectState,
+  assets: AssetRepository,
+  volumeId: VolumeId,
+): Uint8Array {
+  const found = findVolume(state, volumeId);
+  if (!found) throw new Error(`Unknown volume ${volumeId}`);
+  const payload = assets.get(found.volume.source.assetId);
+  if (!payload) throw new Error(`Volume ${volumeId} references missing asset ${found.volume.source.assetId}`);
+  const mesh = decodeIndexedMeshAsset(payload);
+  const triangleCount = mesh.triangles.length;
+  if (triangleCount === 0) throw new Error('Volume contains no triangles');
+  const byteLength = 84 + triangleCount * 50;
+  const bytes = new Uint8Array(byteLength);
+  const header = new TextEncoder().encode('OrcaXR canonical binary STL');
+  bytes.set(header.subarray(0, 80));
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  view.setUint32(80, triangleCount, true);
+  let offset = 84;
+  for (const triangle of mesh.triangles) {
+    const first = mesh.vertices[triangle[0]];
+    const second = mesh.vertices[triangle[1]];
+    const third = mesh.vertices[triangle[2]];
+    const normal = triangleNormal(first, second, third);
+    offset = writeVector(view, offset, normal);
+    offset = writeVector(view, offset, first);
+    offset = writeVector(view, offset, second);
+    offset = writeVector(view, offset, third);
+    view.setUint16(offset, 0, true);
+    offset += 2;
+  }
+  return bytes;
 }
