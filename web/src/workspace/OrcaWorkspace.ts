@@ -10112,7 +10112,61 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public async booleanModels(op: 'UNION' | 'A_NOT_B' | 'INTERSECTION'): Promise<void> {
-    this.setStatus(`Boolean ${op} is unavailable until topology and annotations commit atomically.`);
+    const summary = this.canonicalProject.getSummary();
+    const activePlateId = summary.activePlateId;
+    const selected = summary.selectedInstanceIds.filter(
+      (id) => this.canonicalProject.getInstance(id)?.plateId === activePlateId,
+    );
+    let targetId: InstanceId | undefined;
+    let otherId: InstanceId | undefined;
+
+    if (selected.length === 2) {
+      targetId = selected[0];
+      otherId = selected[1];
+    } else if (selected.length === 1) {
+      targetId = selected[0];
+      const allPlateInstances = this.models
+        .map((m) => m.instanceId)
+        .filter((id) => this.canonicalProject.getInstance(id)?.plateId === activePlateId && id !== targetId);
+      if (allPlateInstances.length === 1) {
+        otherId = allPlateInstances[0];
+      }
+    }
+
+    if (!targetId || !otherId) {
+      this.setStatus(
+        t('workspace.orcaWorkspace.selectTwoModelsForBoolean', 'Select two models on the plate for boolean operation.'),
+      );
+      return;
+    }
+
+    try {
+      this.setStatus(t('workspace.orcaWorkspace.performingBoolean', 'Performing boolean operation...'));
+      const stlA = this.canonicalProject.exportInstanceToWorldBinaryStl(targetId);
+      const stlB = this.canonicalProject.exportInstanceToWorldBinaryStl(otherId);
+      const resultBuffer = await this.slicer.boolean(stlA.buffer as ArrayBuffer, stlB.buffer as ArrayBuffer, op);
+      const decoded = decodeStl(new Uint8Array(resultBuffer), {
+        filename: 'boolean.stl',
+        limits: DEFAULT_MODEL_IMPORT_LIMITS,
+        format: 'stl-binary',
+      });
+      const mesh = decoded.objects[0]?.volumes[0]?.mesh;
+      if (!mesh) {
+        throw new Error(t('workspace.orcaWorkspace.booleanReturnedEmpty', 'Boolean operation returned empty mesh'));
+      }
+      this.canonicalProject.applyBooleanMesh(targetId, otherId, mesh.positions, mesh.indices, op);
+      this.refreshPaintOverlays();
+      this.recomputePreflight();
+      this.setStatus(
+        t(
+          'workspace.orcaWorkspace.booleanCompleted',
+          'Boolean operation completed. Painting was reset; undo restores both.',
+        ),
+      );
+    } catch (e: any) {
+      const errorMsg = `${t('workspace.orcaWorkspace.booleanFailed', 'Boolean operation failed:')} ${e.message}`;
+      this.setStatus(errorMsg);
+    }
   }
 
   /**

@@ -147,6 +147,7 @@ import {
 } from '../project/import/types';
 import { decodeIndexedMeshAsset, encodeIndexedMeshAsset } from '../project/meshCodec';
 import { ReplaceVolumeMeshCommand, type MeshTopologyReplacementGuard } from '../project/objects/topologyCommands';
+import { MeshBooleanCommand, type MeshBooleanGuard, type MeshBooleanOp } from '../project/objects/meshBooleanCommands';
 import {
   AddBrimEarCommand,
   AddBrimEarsCommand,
@@ -2996,6 +2997,61 @@ export class CanonicalWorkspaceController {
       ...(payload.descriptor.sourceFilename ? { sourceFilename: payload.descriptor.sourceFilename } : {}),
     });
     this.session.commands.execute(new ReplaceVolumeMeshCommand(guard, encoded));
+    const afterTriangles = Math.floor(indices.length / 3);
+    return { beforeTriangles, afterTriangles };
+  }
+
+  /**
+   * Export an instance's current mesh transformed to world bed coordinates as binary STL.
+   */
+  exportInstanceToWorldBinaryStl(instanceId: InstanceId): Uint8Array {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    return exportCanonicalInstancesAsBinaryStl(state, this.assets, [instanceId]).bytes;
+  }
+
+  /**
+   * Commit a Boolean CSG mesh result into target instance while removing other instance/object.
+   */
+  applyBooleanMesh(
+    targetInstanceId: InstanceId,
+    otherInstanceId: InstanceId,
+    positions: readonly number[] | Float32Array,
+    indices: readonly number[] | Uint32Array,
+    op: MeshBooleanOp,
+  ): {
+    readonly beforeTriangles: number;
+    readonly afterTriangles: number;
+  } {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    const target = findInstance(state, targetInstanceId);
+    if (!target) throw new Error(`Unknown target instance ${targetInstanceId}`);
+    const other = findInstance(state, otherInstanceId);
+    if (!other) throw new Error(`Unknown other instance ${otherInstanceId}`);
+
+    const targetVolume = target.object.volumes[0];
+    if (!targetVolume) throw new Error(`Target instance ${targetInstanceId} has no volumes`);
+    const payload = this.assets.get(targetVolume.source.assetId);
+    if (!payload) throw new Error(`Target volume ${targetVolume.id} has no stored mesh asset`);
+
+    const guard: MeshBooleanGuard = {
+      targetInstanceId,
+      targetVolumeId: targetVolume.id,
+      targetAssetId: targetVolume.source.assetId,
+      targetAssetDigest: payload.descriptor.digest,
+      targetTopologyRevision: targetVolume.source.topologyRevision,
+      targetTriangleCount: targetVolume.source.triangleCount,
+      otherInstanceId,
+    };
+    const beforeTriangles = targetVolume.source.triangleCount;
+    const encoded = encodeIndexedMeshAsset({
+      id: this.options.idSource.next('asset'),
+      positions: Array.from(positions),
+      indices: Array.from(indices),
+      ...(payload.descriptor.sourceFilename ? { sourceFilename: payload.descriptor.sourceFilename } : {}),
+    });
+    this.session.commands.execute(new MeshBooleanCommand(guard, encoded, op));
     const afterTriangles = Math.floor(indices.length / 3);
     return { beforeTriangles, afterTriangles };
   }

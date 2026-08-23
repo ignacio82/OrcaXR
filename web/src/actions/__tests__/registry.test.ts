@@ -175,7 +175,8 @@ test('Download, canonical delete, and guarded Split to Objects use prerequisites
     true,
   );
   assert.strictEqual(ActionRegistry.enabled(reg.get('mesh_boolean_union')!, { ...baseState, modelCount: 1 }), false);
-  assert.strictEqual(ActionRegistry.enabled(reg.get('mesh_boolean_union')!, { ...baseState, modelCount: 2 }), false);
+  assert.strictEqual(ActionRegistry.enabled(reg.get('mesh_boolean_union')!, { ...baseState, modelCount: 2 }), true);
+  assert.strictEqual(ActionRegistry.enabled(reg.get('mesh_boolean_subtract')!, { ...baseState, modelCount: 2 }), false);
   assert.match(ActionRegistry.disabledReason(reg.get('repair_model')!, baseState) ?? '', /select/i);
 });
 

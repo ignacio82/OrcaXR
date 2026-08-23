@@ -3,6 +3,7 @@ export * from './bounds';
 export * from './commands';
 export * from './interaction';
 export * from './layerRangeCommands';
+export * from './meshBooleanCommands';
 export * from './projection';
 export * from './semanticVolumeCommands';
 export * from './splitCommands';
