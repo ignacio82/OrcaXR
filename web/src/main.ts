@@ -4082,6 +4082,21 @@ function setupDomUI(
       );
       void settingsPanel.mount();
       window.addEventListener('pagehide', () => settingsPanel.dispose(), { once: true });
+
+      const wavePanelHost = document.getElementById('wave-overhangs-panel-host');
+      if (wavePanelHost) {
+        const { mountWaveOverhangsPanel } = await import('./ui/dom/WaveOverhangsPanel');
+        mountWaveOverhangsPanel({
+          container: wavePanelHost,
+          workspace,
+          registry,
+          actionCtx,
+          getUiState: () => uiState.get(),
+          onErrorMessage: (msg) => {
+            statusText.textContent = msg;
+          },
+        });
+      }
     })();
   }
 
