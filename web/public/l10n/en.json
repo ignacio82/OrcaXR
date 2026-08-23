@@ -66,7 +66,7 @@
   "action.assembly_explode.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P5.3.",
   "action.auto_place_wipe.hint": "Automatically position the wipe tower",
   "action.auto_place_wipe.label": "Auto-place Wipe Tower",
-  "action.auto_place_wipe.reason": "Wipe-tower auto-placement is disabled until its position is computed and stored through canonical project commands.",
+  "action.auto_place_wipe.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P5.5.",
   "action.brim_ears_auto.hint": "Find the corners of the first layer that would peel, and put an ear on each",
   "action.brim_ears_auto.label": "Place brim ears automatically",
   "action.brim_ears_auto.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P5.3.",
@@ -995,7 +995,8 @@
   "workspace.orcaWorkspace.anExplosionFactorMustBe": "An explosion factor must be at least 1, where 1 is fully assembled.",
   "workspace.orcaWorkspace.assemblyAlignmentNeedsTwoFaces": "Assembly alignment needs two faces on different models.",
   "workspace.orcaWorkspace.autoOrientIsUnavailableUntil": "Auto-orient is unavailable until its analysis commits a canonical transform.",
-  "workspace.orcaWorkspace.automaticWipeTowerPlacementIs": "Automatic wipe-tower placement is unavailable until canonical collision placement lands.",
+  "workspace.orcaWorkspace.autoPlaceWipeTowerFailed": "Auto-place wipe tower failed.",
+  "workspace.orcaWorkspace.autoPlacedWipeTower": "Auto-placed wipe tower.",
   "workspace.orcaWorkspace.brimEarsClickTheModel": "Brim ears: click the model where an ear should sit.",
   "workspace.orcaWorkspace.calibrationDiscardedYourProjectIs": "Calibration discarded; your project is back exactly as it was.",
   "workspace.orcaWorkspace.calibrationHistoryIsUnavailableIn": "Calibration history is unavailable in this shell.",
@@ -1112,5 +1113,7 @@
   "workspace.orcaWorkspace.toolpathPreview": "toolpath preview",
   "workspace.orcaWorkspace.undidTheLastProjectEdit": "Undid the last project edit.",
   "workspace.orcaWorkspace.updatedTheSelectedObjectHeight": "Updated the selected object height ranges.",
-  "workspace.orcaWorkspace.updatedTheSelectedPartRole": "Updated the selected part role."
+  "workspace.orcaWorkspace.updatedTheSelectedPartRole": "Updated the selected part role.",
+  "workspace.orcaWorkspace.wipeTowerAutoDisabled": "Auto-position wipe tower disabled.",
+  "workspace.orcaWorkspace.wipeTowerAutoEnabled": "Auto-position wipe tower enabled."
 }

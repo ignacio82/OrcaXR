@@ -2079,6 +2079,7 @@ export function importBbsCore(
   };
   applyImportedBrimEars(files, plates, warnings);
   applyImportedLayerHeightProfiles(files, plates, warnings);
+  applyImportedWipeTowers(projectConfig.config, plates, physical, warnings);
   // Referenced model parts are consumed exactly like the core part is: their
   // objects are resolved and re-emitted into the generated flattened core, so
   // preserving them too stores the same geometry twice. That is not merely
@@ -2911,6 +2912,55 @@ function parseLayerRanges(bytes: Uint8Array | undefined): Map<number, Array<Omit
     result.set(objectId, ranges);
   }
   return result;
+}
+
+function parseNumericList(value: JsonValue | undefined): number[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => Number(item)).filter((item) => Number.isFinite(item));
+  }
+  if (typeof value === 'number') return Number.isFinite(value) ? [value] : [];
+  if (typeof value === 'string') {
+    return value
+      .split(/[,;\s]+/)
+      .map((item) => Number(item.trim()))
+      .filter((item) => Number.isFinite(item));
+  }
+  return [];
+}
+
+/** Restore wipe tower configurations from BBS project config onto plates. */
+function applyImportedWipeTowers(
+  config: ConfigMap,
+  plates: readonly ProjectPlate[],
+  physicalFilaments: readonly PhysicalFilament[],
+  _warnings: string[],
+): void {
+  const enabledRaw = config.enable_prime_tower;
+  const enabled = enabledRaw === true || enabledRaw === '1' || enabledRaw === 1;
+  if (!enabled) return;
+
+  const xs = parseNumericList(config.wipe_tower_x);
+  const ys = parseNumericList(config.wipe_tower_y);
+  if (xs.length === 0 || ys.length === 0) return;
+
+  const rotation = Number(config.wipe_tower_rotation_angle) || 0;
+  const slot = Number(config.wipe_tower_filament);
+  const filamentId =
+    Number.isInteger(slot) && slot >= 1 && slot <= physicalFilaments.length
+      ? physicalFilaments[slot - 1].id
+      : undefined;
+
+  const ordered = [...plates].sort((left, right) => left.order - right.order);
+  ordered.forEach((plate, index) => {
+    const x = xs[index] ?? xs[0] ?? 0;
+    const y = ys[index] ?? ys[0] ?? 0;
+    plate.wipeTower = {
+      enabled: true,
+      positionMm: [x, y],
+      rotationDeg: rotation,
+      ...(filamentId ? { filamentId } : {}),
+    };
+  });
 }
 
 /**

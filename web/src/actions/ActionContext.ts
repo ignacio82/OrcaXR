@@ -559,9 +559,12 @@ export class ActionContext {
   }
 
   // ---- Advanced Features ----------------------------------------------
-  autoPlaceWipeTower(): void {
-    this.workspace.setWipeTowerAuto(!this.workspace.wipeTowerAuto);
-    this.workspace.setStatus('Auto-place Wipe Tower toggled: ' + this.workspace.wipeTowerAuto);
+  autoPlaceWipeTower(options?: { readonly enabled?: boolean; readonly plateId?: PlateId }): void {
+    if (options?.enabled !== undefined) {
+      this.workspace.setWipeTowerAuto(options.enabled);
+    } else {
+      this.workspace.autoPlaceWipeTower(options?.plateId);
+    }
   }
   measureTool(): void {
     this.workspace.measureTool();

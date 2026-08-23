@@ -13,6 +13,7 @@ import {
   SetActivePlateCommand,
   SetInstanceTransformCommand,
   SetPlatePrintableCommand,
+  SetPlateWipeTowerCommand,
 } from '../project/commands';
 import { canonicalStringify, cloneJson, cloneProjectState, deepFreeze } from '../project/domain/canonical';
 import type { CalibrationJobPlan } from '../project/calibration/types';
@@ -74,6 +75,7 @@ import {
   type ProjectState,
   type Transform,
   type VolumeRole,
+  type WipeTowerState,
 } from '../project/domain/model';
 import {
   findInstance,
@@ -191,6 +193,11 @@ import {
   type ArrangeResult,
 } from '../project/objects/arrange';
 import {
+  planWipeTowerPlacement,
+  type WipeTowerPick,
+  type WipeTowerPlanOptions,
+} from '../project/objects/wipeTowerPlacement';
+import {
   AddLayerRangeCommand,
   DeleteLayerRangeCommand,
   EditLayerRangeBoundsCommand,
@@ -303,6 +310,7 @@ export interface CanonicalPlateSummary {
   readonly objectCount: number;
   readonly instanceCount: number;
   readonly modelVolumeCount: number;
+  readonly wipeTower?: WipeTowerState;
 }
 
 export interface CanonicalWorkspaceSummary {
@@ -931,6 +939,7 @@ export class CanonicalWorkspaceController {
             (count, object) => count + object.volumes.filter((volume) => volume.role === 'model').length,
             0,
           ),
+          ...(plate.wipeTower ? { wipeTower: Object.freeze(cloneJson(plate.wipeTower)) } : {}),
         });
       });
     const selectedInstanceIds = selection.refs.flatMap((ref) => (ref.kind === 'instance' ? [ref.id] : []));
@@ -1980,6 +1989,35 @@ export class CanonicalWorkspaceController {
     this.assertPlateMutationRevision(expectedRevision);
     if (!findPlate(this.session.project.getSnapshot().state, plateId)) throw new Error(`Unknown plate ${plateId}`);
     this.session.execute(new SetPlatePrintableCommand(plateId, printable));
+  }
+
+  /** Set or clear the wipe tower configuration on a plate as a single undoable command. */
+  setPlateWipeTower(plateId: PlateId, wipeTower: WipeTowerState | undefined, expectedRevision?: number): void {
+    this.assertActive();
+    this.assertPlateMutationRevision(expectedRevision);
+    if (!findPlate(this.session.project.getSnapshot().state, plateId)) throw new Error(`Unknown plate ${plateId}`);
+    this.session.execute(new SetPlateWipeTowerCommand(plateId, wipeTower));
+  }
+
+  /**
+   * Automatically position the wipe tower on the specified plate (defaults to active plate)
+   * using Chebyshev clearance scoring and commit the result as an undoable command.
+   */
+  autoPlaceWipeTower(plateId?: PlateId, options?: WipeTowerPlanOptions): WipeTowerPick {
+    this.assertActive();
+    const targetPlateId = plateId ?? this.session.project.getSnapshot().state.activePlateId;
+    const state = this.session.project.getSnapshot().state;
+    const result = planWipeTowerPlacement(state, this.assets, targetPlateId, options);
+    this.session.execute(new SetPlateWipeTowerCommand(targetPlateId, result.state));
+    return result.pick;
+  }
+
+  /** Get the wipe tower configuration for a plate. */
+  getPlateWipeTower(plateId?: PlateId): WipeTowerState | undefined {
+    this.assertActive();
+    const targetPlateId = plateId ?? this.session.project.getSnapshot().state.activePlateId;
+    const plate = findPlate(this.session.project.getSnapshot().state, targetPlateId);
+    return plate?.wipeTower ? cloneJson(plate.wipeTower) : undefined;
   }
 
   /** Replace base project/profile config while preserving explicit project overrides. */

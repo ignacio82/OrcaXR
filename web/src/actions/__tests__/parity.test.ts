@@ -58,7 +58,6 @@ const UNAVAILABLE_IDS = [
   'mesh_boolean_subtract',
   'mesh_boolean_intersection',
   'tool_cut',
-  'auto_place_wipe',
   'add_magnet',
   'scan_network',
   'file_export_all_plates',
@@ -90,7 +89,6 @@ const CANONICAL_CUTOVER_GATED_IDS = [
   'mesh_boolean_subtract',
   'mesh_boolean_intersection',
   'tool_cut',
-  'auto_place_wipe',
 ] as const;
 
 const CANONICAL_ACTIONS_LEFT_ENABLED = [
@@ -103,6 +101,7 @@ const CANONICAL_ACTIONS_LEFT_ENABLED = [
   'tool_paint',
   'tool_lay_on_face',
   'arrange_all',
+  'auto_place_wipe',
   'mirror_x',
   'reset_rotation',
   'center_on_plate',

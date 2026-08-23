@@ -105,7 +105,10 @@ export const advancedActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'tools',
     hint: 'Automatically position the wipe tower',
-    run: (ctx) => ctx.autoPlaceWipeTower(),
+    run: (ctx, invocation) =>
+      ctx.autoPlaceWipeTower(
+        invocation?.wipeTowerAuto ?? (invocation?.plateId ? { plateId: invocation.plateId } : undefined),
+      ),
   },
   {
     id: 'scan_network',

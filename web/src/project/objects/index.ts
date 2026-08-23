@@ -15,3 +15,4 @@ export * from './transformOperations';
 export * from './types';
 export * from './view';
 export * from './virtualization';
+export * from './wipeTowerPlacement';

@@ -2370,7 +2370,9 @@ function setupDomUI(
   }
   chkWipeTower.onchange = () => {
     void registry
-      .invoke('auto_place_wipe', 'dom-menu', actionCtx, uiState.get())
+      .invoke('auto_place_wipe', 'dom-menu', actionCtx, uiState.get(), {
+        wipeTowerAuto: { enabled: chkWipeTower.checked },
+      })
       .finally(() => {
         chkWipeTower.checked = workspace.wipeTowerAuto;
       })

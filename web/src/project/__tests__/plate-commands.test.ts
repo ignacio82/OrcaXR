@@ -11,6 +11,7 @@ import {
   ReorderPlatesCommand,
   SelectionStore,
   SetPlatePrintableCommand,
+  SetPlateWipeTowerCommand,
   UuidIdSource,
   canonicalStringify,
   cloneProjectState,
@@ -341,6 +342,58 @@ test('enforces the pinned 36-plate ceiling below presentation surfaces', () => {
   );
   assert.equal(canonicalStringify(project.getSnapshot().state), before);
   assert.equal(bus.getHistorySnapshot().undoCount, 0);
+});
+
+test('SetPlateWipeTowerCommand updates, reverts, and detects no-ops', () => {
+  const { project, bus } = harness(1);
+  const plateId = project.getSnapshot().state.activePlateId;
+  const initial = project.getSnapshot().state.plates[0].wipeTower;
+  assert.equal(initial, undefined);
+
+  // Set wipe tower
+  const targetTower = {
+    enabled: true,
+    positionMm: [180, 40] as const,
+    rotationDeg: 0,
+  };
+  const command = new SetPlateWipeTowerCommand(plateId, targetTower);
+  assert.equal(
+    command.isNoop({ project, assets: new InMemoryAssetRepository(), selection: new SelectionStore() }),
+    false,
+  );
+  bus.execute(command);
+
+  assert.deepEqual(project.getSnapshot().state.plates[0].wipeTower, targetTower);
+  assert.equal(bus.getHistorySnapshot().undoCount, 1);
+
+  // No-op detection
+  const sameCommand = new SetPlateWipeTowerCommand(plateId, targetTower);
+  assert.equal(
+    sameCommand.isNoop({ project, assets: new InMemoryAssetRepository(), selection: new SelectionStore() }),
+    true,
+  );
+  bus.execute(sameCommand);
+  assert.equal(bus.getHistorySnapshot().undoCount, 1);
+
+  // Undo restores undefined
+  bus.undo();
+  assert.equal(project.getSnapshot().state.plates[0].wipeTower, undefined);
+  assert.equal(bus.getHistorySnapshot().undoCount, 0);
+  assert.equal(bus.getHistorySnapshot().redoCount, 1);
+
+  // Redo restores targetTower
+  bus.redo();
+  assert.deepEqual(project.getSnapshot().state.plates[0].wipeTower, targetTower);
+  assert.equal(bus.getHistorySnapshot().undoCount, 1);
+
+  // Clear wipe tower
+  bus.execute(new SetPlateWipeTowerCommand(plateId, undefined));
+  assert.equal(project.getSnapshot().state.plates[0].wipeTower, undefined);
+  assert.equal(bus.getHistorySnapshot().undoCount, 2);
+
+  // Undo restores targetTower
+  bus.undo();
+  assert.deepEqual(project.getSnapshot().state.plates[0].wipeTower, targetTower);
 });
 
 function duplicateHarness(options: { sourceName?: string } = {}) {

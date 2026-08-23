@@ -153,6 +153,11 @@ export interface ActionInvocation {
     readonly printable: boolean;
     readonly sourceRevision: number;
   };
+  /** Auto-place wipe tower invocation options. */
+  wipeTowerAuto?: {
+    readonly enabled?: boolean;
+    readonly plateId?: PlateId;
+  };
   /** Complete raw engine-wire settings maps guarded by their canonical source. */
   projectSettingsApply?: {
     readonly inheritedConfig: Readonly<ConfigMap>;
@@ -473,8 +478,6 @@ const CANONICAL_CUTOVER_GATED_REASONS = {
     'Mesh intersection is disabled until topology-changing booleans preserve canonical metadata and commit atomically.',
   tool_cut:
     'Plane cutting is disabled until canonical topology, annotations, assets, and stable IDs can be replaced atomically.',
-  auto_place_wipe:
-    'Wipe-tower auto-placement is disabled until its position is computed and stored through canonical project commands.',
 } as const satisfies Readonly<Record<string, string>>;
 
 const CANONICAL_CUTOVER_GATED_IDS = new Set<string>(Object.keys(CANONICAL_CUTOVER_GATED_REASONS));

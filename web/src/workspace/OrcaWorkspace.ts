@@ -65,6 +65,7 @@ import { HoldToConfirm, type GuardedPrinterAction, type PrinterStatusSummary } f
 import { summarizeGcodeToolUsage } from '../printer/PrintToolMapping';
 import { serializePrintConfigArray } from '../settings/configSerialization';
 import type { ArrangeRegion } from '../project/objects/arrange';
+import type { WipeTowerPick } from '../project/objects/wipeTowerPlacement';
 import { rotateVector } from '../project/objects/transformOperations';
 import { summarizeGcodeArtifact, type GcodeArtifactSummary } from '../slicer/GcodeArtifactSummary';
 import { GCODE_PREVIEW_MODES } from '../slicer/GcodePreviewModel';
@@ -4724,6 +4725,28 @@ export class OrcaWorkspace extends xb.Script {
     (this.workspace as unknown as { draggable: boolean }).draggable = skin.grabAffordances;
   }
 
+  /** Effective prime/purge tower on the active plate (null if none/disabled). */
+  public get activePlateWipeTower(): { enabled: boolean; xMm: number; yMm: number; widthMm: number } | null {
+    try {
+      const summary = this.canonicalProject.getSummary();
+      const activePlate = summary.plates.find((plate) => plate.id === this.activePlateId);
+      const tower = activePlate?.wipeTower;
+      if (!tower || !tower.enabled) {
+        return this.projectPrimeTower?.enabled ? this.projectPrimeTower : null;
+      }
+      const config = this.canonicalProject.getSlicingConfiguration().config;
+      const widthMm = Number(config.prime_tower_width ?? config.wipe_tower_width) || 60;
+      return {
+        enabled: tower.enabled,
+        xMm: tower.positionMm[0],
+        yMm: tower.positionMm[1],
+        widthMm,
+      };
+    } catch {
+      return this.projectPrimeTower?.enabled ? this.projectPrimeTower : null;
+    }
+  }
+
   /**
    * (Re)build the semi-transparent prime/purge tower ghost on the plate,
    * mirroring the loaded project's `enable_prime_tower` + `wipe_tower_x/y` +
@@ -4737,7 +4760,7 @@ export class OrcaWorkspace extends xb.Script {
       this.workspace.remove(this.wipeTowerGhost);
       this.wipeTowerGhost = null;
     }
-    const pt = this.projectPrimeTower;
+    const pt = this.activePlateWipeTower;
     if (!pt || !pt.enabled) return;
 
     const vis = MM * WORKSPACE_SCALE;
@@ -9415,7 +9438,7 @@ export class OrcaWorkspace extends xb.Script {
 
   /** Footprint the project's prime/purge tower reserves, when it has one. */
   private wipeTowerExclusion(): ArrangeRegion | undefined {
-    const tower = this.projectPrimeTower;
+    const tower = this.activePlateWipeTower;
     if (!tower?.enabled) return undefined;
     return {
       minX: tower.xMm,
@@ -9994,14 +10017,35 @@ export class OrcaWorkspace extends xb.Script {
     return geometries;
   }
 
+  /**
+   * Auto-position the wipe tower on the active plate using Chebyshev clearance scoring.
+   * Commits the updated position through canonical plate commands.
+   */
+  public autoPlaceWipeTower(plateId: PlateId = this.activePlateId): WipeTowerPick | undefined {
+    try {
+      const pick = this.canonicalProject.autoPlaceWipeTower(plateId, {
+        bedSizeMm: [this.bedMm.x, this.bedMm.y],
+      });
+      this.rebuildWipeTowerGhost();
+      this.recomputePreflight();
+      this.setStatus(t('workspace.orcaWorkspace.autoPlacedWipeTower', 'Auto-placed wipe tower.'));
+      return pick;
+    } catch {
+      this.setStatus(t('workspace.orcaWorkspace.autoPlaceWipeTowerFailed', 'Auto-place wipe tower failed.'));
+      return undefined;
+    }
+  }
+
   /** Toggle wipe-tower auto-positioning (Section 1 pre-flight). */
   public setWipeTowerAuto(on: boolean): void {
-    void on;
+    this.wipeTowerAuto = on;
+    if (on) {
+      this.autoPlaceWipeTower(this.activePlateId);
+    }
     this.setStatus(
-      t(
-        'workspace.orcaWorkspace.automaticWipeTowerPlacementIs',
-        'Automatic wipe-tower placement is unavailable until canonical collision placement lands.',
-      ),
+      on
+        ? t('workspace.orcaWorkspace.wipeTowerAutoEnabled', 'Auto-position wipe tower enabled.')
+        : t('workspace.orcaWorkspace.wipeTowerAutoDisabled', 'Auto-position wipe tower disabled.'),
     );
   }
 

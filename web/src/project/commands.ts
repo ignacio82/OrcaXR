@@ -16,6 +16,7 @@ import type {
   ProjectState,
   ProjectThumbnail,
   Transform,
+  WipeTowerState,
 } from './domain/model';
 import { findInstance } from './domain/selectors';
 import type { CommandContext, ProjectCommand } from './history/command';
@@ -405,6 +406,58 @@ export class SetPlatePrintableCommand extends ProjectDataCommand {
       reason: `revert:${this.type}`,
       dirtyCategories: this.dirtyCategories,
     });
+  }
+}
+
+export class SetPlateWipeTowerCommand extends ProjectDataCommand {
+  readonly type = 'set-plate-wipe-tower';
+  readonly label: string;
+  private readonly nextWipeTower?: WipeTowerState;
+  private previousWipeTower?: WipeTowerState;
+
+  constructor(
+    private readonly plateId: PlateId,
+    wipeTower?: WipeTowerState,
+    label?: string,
+  ) {
+    super();
+    this.nextWipeTower = wipeTower ? cloneProjectStateFragment(wipeTower) : undefined;
+    this.label = label ?? (wipeTower?.enabled ? 'Auto-place wipe tower' : 'Update wipe tower');
+  }
+
+  isNoop(context: CommandContext): boolean {
+    const plate = findPlateOrThrow(context.project.getSnapshot().state, this.plateId);
+    return canonicalStringify(plate.wipeTower ?? null) === canonicalStringify(this.nextWipeTower ?? null);
+  }
+
+  apply(context: CommandContext): void {
+    const state = cloneProjectState(context.project.getSnapshot().state);
+    const plate = findPlateOrThrow(state, this.plateId);
+    this.previousWipeTower = plate.wipeTower ? cloneProjectStateFragment(plate.wipeTower) : undefined;
+    if (this.nextWipeTower) {
+      plate.wipeTower = cloneProjectStateFragment(this.nextWipeTower);
+    } else {
+      delete plate.wipeTower;
+    }
+    context.project.replaceState(state, { reason: this.type, dirtyCategories: this.dirtyCategories });
+  }
+
+  revert(context: CommandContext): void {
+    const state = cloneProjectState(context.project.getSnapshot().state);
+    const plate = findPlateOrThrow(state, this.plateId);
+    if (this.previousWipeTower) {
+      plate.wipeTower = cloneProjectStateFragment(this.previousWipeTower);
+    } else {
+      delete plate.wipeTower;
+    }
+    context.project.replaceState(state, {
+      reason: `revert:${this.type}`,
+      dirtyCategories: this.dirtyCategories,
+    });
+  }
+
+  estimateBytes(): number {
+    return 128;
   }
 }
 

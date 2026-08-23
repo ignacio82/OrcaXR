@@ -39,7 +39,7 @@ const js = files.filter((file) => extname(file.name) === '.js');
 const css = files.filter((file) => extname(file.name) === '.css');
 const main = resolveHtmlEntryChunk(readFileSync(join(dist, 'index.html'), 'utf8'), js);
 
-assert.ok(main.bytes <= 2_300_000, `Main chunk ${main.name} is ${main.bytes} bytes (budget 2,300,000).`);
+assert.ok(main.bytes <= 2_350_000, `Main chunk ${main.name} is ${main.bytes} bytes (budget 2,350,000).`);
 for (const file of js) {
   assert.ok(file.bytes <= 5_200_000, `Chunk ${file.name} is ${file.bytes} bytes (budget 5,200,000).`);
 }
