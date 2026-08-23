@@ -198,6 +198,7 @@ import {
 import { exportConfigJson, parseConfigJson } from '../features/ConfigIO';
 import { virtualFilamentsFromConfig, type VirtualFilament } from '../features/MixedFilamentPreview';
 import { xrIcon } from '../ui/icons';
+import { surfaceTransform, xrSurface, type XrSurfaceId } from '../ui/xr/XrLayout';
 import { t } from '../l10n/t';
 
 export type WorkspacePresetId = NonNullable<SlicerProfile['machinePresetId']>;
@@ -256,6 +257,62 @@ const LAYER_EVENT_LABELS: Readonly<Record<LayerEventType, string>> = Object.free
 
 const PLATE_MM = 200;
 const MM = 0.001;
+
+/**
+ * Metres per layout pixel for every immersive card.
+ *
+ * At 0.0014 a 17 px menu row is 24 mm tall, which subtends about 1.4° at the
+ * radius the panels sit at — comfortably above the ~1° where text starts to
+ * cost effort in a headset. It is one constant because a card whose pixel
+ * scale differs from its neighbour's renders the same font at a different
+ * physical size, which reads as sloppiness rather than hierarchy.
+ */
+const XR_PIXEL_SIZE = 0.0014;
+
+/** The sheet's front page: the list of menu sections rather than one section. */
+const XR_MENU_ROOT = 'xr-menu-root';
+
+/**
+ * The flat shell's sidebar cards, in the flat shell's order and under the flat
+ * shell's names.
+ *
+ * A maker who has used OrcaXR on a screen already knows where filament lives
+ * and what the Process card is called; the headset should not make them learn
+ * a second vocabulary for the same catalogue. Each card claims the action
+ * groups the corresponding DOM card renders, so the two shells stay a single
+ * application seen two ways rather than two applications.
+ */
+/** The icon each sheet section shows, matching the flat shell's own menus. */
+const XR_SECTION_ICONS: Readonly<Record<string, string>> = {
+  file: 'file',
+  edit: 'edit',
+  view: 'view',
+  add: 'library',
+  tools: 'advanced',
+  calibration: 'calibration',
+  help: 'help',
+  [XR_PANELS_SECTION_ID]: 'system',
+};
+
+const XR_CARD_PREFIX = 'xr-card-';
+const XR_CARDS: readonly { id: string; label: string; icon: string; groups: readonly string[] }[] = [
+  { id: `${XR_CARD_PREFIX}printer`, label: 'Printer', icon: 'output', groups: ['output', 'system'] },
+  { id: `${XR_CARD_PREFIX}filament`, label: 'Filament', icon: 'filament', groups: ['filament'] },
+  { id: `${XR_CARD_PREFIX}process`, label: 'Process', icon: 'slice_group', groups: ['slice', 'advanced'] },
+  { id: `${XR_CARD_PREFIX}objects`, label: 'Objects', icon: 'scene', groups: ['scene', 'edit'] },
+  { id: `${XR_CARD_PREFIX}tools`, label: 'Object tools', icon: 'paint', groups: ['paint', 'view'] },
+  { id: `${XR_CARD_PREFIX}project`, label: 'Project', icon: 'plate', groups: ['calibration'] },
+];
+
+/**
+ * The workspaces the flat shell's tab strip offers, in its order.
+ *
+ * Paint is deliberately absent: on a screen it is a *tool* in the model
+ * toolbar, and it is the same tool in the headset's rail. Offering it as a
+ * fourth workspace here taught the two shells different ideas of what painting
+ * is.
+ */
+type XrWorkspace = 'prepare' | 'preview' | 'device' | 'project';
 
 /**
  * How the build plate is dressed on each surface.
@@ -4406,13 +4463,7 @@ export class OrcaWorkspace extends xb.Script {
       });
     }
 
-    if (this.topStripCard) this.topStripCard.show();
-    if (this.leftToolbarCard) this.leftToolbarCard.show();
-    // Menu/profile surfaces are opt-in. Showing every card on entry obscures
-    // the plate and, worse, exposed the blank menu card before a menu was open.
-    if (this.rightSidebarCard) this.rightSidebarCard.hide();
-    if (this.profileCard) this.profileCard.hide();
-    if (this.bottomBarCard) this.bottomBarCard.show();
+    this.showXrSurfaces();
   }
 
   onXRSessionEnded() {
@@ -4442,6 +4493,22 @@ export class OrcaWorkspace extends xb.Script {
 
   onSimulatorStarted() {
     this.needsRecenter = true;
+    // The simulator exists to review the immersive shell without a headset, so
+    // it shows what a session shows. Without this the desktop simulator drew an
+    // empty room and the spatial layout could only ever be judged on-device —
+    // which is how a rail of unreadable, overlapping panels shipped.
+    this.showXrSurfaces();
+  }
+
+  /** Reveal the cards a session starts with. Opt-in surfaces stay closed. */
+  private showXrSurfaces() {
+    if (this.topStripCard) this.topStripCard.show();
+    if (this.leftToolbarCard) this.leftToolbarCard.show();
+    if (this.bottomBarCard) this.bottomBarCard.show();
+    // Menu and profile are opened deliberately; showing them on entry buries
+    // the plate under panels nobody asked for.
+    if (this.rightSidebarCard) this.rightSidebarCard.hide();
+    if (this.profileCard) this.profileCard.hide();
   }
 
   update(_time: number, _frame: XRFrame) {
@@ -4477,32 +4544,48 @@ export class OrcaWorkspace extends xb.Script {
     this.workspace.rotation.set(0, yaw, 0);
     this.workspace.updateMatrixWorld(true);
 
-    // Card zones follow the imported "OrcaXR Slicer" XR design:
-    //   top-centre  → menu/mode strip
-    //   left        → tool rail
-    //   right (near→far) → settings inspector · all-actions/menus · device/AI
-    //   bottom-centre → primary action bar
-    const left = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0));
-    const right = left.clone().negate();
-    const place = (card: any, lateral: THREE.Vector3, dist: number, up: number, depth: number) => {
-      if (!card) return;
-      const ppos = pos.clone().addScaledVector(lateral, dist);
-      ppos.y = pos.y + up;
-      ppos.addScaledVector(fwd, depth);
-      card.position.copy(ppos);
-      card.rotation.set(0, yaw, 0);
-      card.updateMatrixWorld(true);
-    };
+    // Every card is placed by `ui/xr/XrLayout`, which expresses the
+    // arrangement as angles around the head rather than as metres beside the
+    // plate, and turns each surface to face the operator. Placing them here by
+    // hand is what produced a row of parallel panels read at a glancing angle,
+    // overlapping each other while the rest of the room stayed empty.
+    const head = { position: cam.getWorldPosition(new THREE.Vector3()), forward: fwd };
+    this.placeXrSurface(this.topStripCard, 'menu', head);
+    this.placeXrSurface(this.leftToolbarCard, 'tools', head);
+    this.placeXrSurface(this.profileCard, 'inspector', head);
+    this.placeXrSurface(this.rightSidebarCard, 'sheet', head);
+    this.placeXrSurface(this.printerStatusCard, 'status', head);
+    this.placeXrSurface(this.bottomBarCard, 'actions', head);
+    this.placeXrSurface(this.sliceModalCard, 'progress', head);
+  }
 
-    // Top-centre menu/mode strip, tilted just above the plate.
-    place(this.topStripCard, right, 0, 0.5, -0.05);
-    // Left tool rail.
-    place(this.leftToolbarCard, left, 0.5, 0.15, -0.12);
-    // Right column, curving toward the user as it fans out.
-    place(this.profileCard, right, 0.5, 0.2, -0.08); // settings inspector (nearest)
-    place(this.rightSidebarCard, right, 0.98, 0.15, 0.06); // all actions / menus
-    // Bottom-centre primary action bar, in front of and below the plate.
-    place(this.bottomBarCard, right, 0, -0.35, 0.35);
+  /** Move one card onto its layout surface around `head`. */
+  private placeXrSurface(
+    card: { position: THREE.Vector3; quaternion: THREE.Quaternion; updateMatrixWorld(force?: boolean): void } | null,
+    id: XrSurfaceId,
+    head: { position: THREE.Vector3; forward: THREE.Vector3 },
+  ): void {
+    if (!card) return;
+    const { position, quaternion } = surfaceTransform(xrSurface(id), head);
+    card.position.copy(position);
+    card.quaternion.copy(quaternion);
+    card.updateMatrixWorld(true);
+  }
+
+  /**
+   * Card geometry for a layout surface, with metres and layout pixels in
+   * agreement. They were not: a 1.0 m strip declared 1000 px at 0.0012 m/px,
+   * so uikit laid out 1.2 m of content inside a 1.0 m card and everything in
+   * it came out crushed.
+   */
+  private xrCardGeometry(id: XrSurfaceId): { sizeX: number; sizeY: number; pixelSize: number; width: number } {
+    const surface = xrSurface(id);
+    return {
+      sizeX: surface.sizeX,
+      sizeY: surface.sizeY,
+      pixelSize: XR_PIXEL_SIZE,
+      width: Math.round(surface.sizeX / XR_PIXEL_SIZE),
+    };
   }
 
   private addLights() {
@@ -6605,8 +6688,8 @@ export class OrcaWorkspace extends xb.Script {
   // Design's top HUD strip (wordmark + mode switch) and bottom action bar.
   private topStripCard: UICard | null = null;
   private bottomBarCard: UICard | null = null;
-  private xrMode: 'prepare' | 'paint' | 'preview' = 'prepare';
-  private xrModeButtons: { mode: 'prepare' | 'paint' | 'preview'; btn: UIPanel; label: UIText }[] = [];
+  private xrMode: XrWorkspace = 'prepare';
+  private xrModeButtons: { mode: XrWorkspace; btn: UIPanel; label: UIText }[] = [];
 
   private addControlPanel() {
     // Card zones mirror the imported "OrcaXR Slicer" XR design, deliberately
@@ -6646,11 +6729,8 @@ export class OrcaWorkspace extends xb.Script {
   private addTopStrip() {
     const card = this.uiCore.createCard({
       name: 'TopStrip',
-      sizeX: 1.0,
-      sizeY: 0.085,
-      pixelSize: 0.0012,
+      ...this.xrCardGeometry('menu'),
       position: new THREE.Vector3(0, PLATE_Y + 0.65, PLATE_Z - 0.1),
-      width: 1000,
       alignItems: 'center',
       behaviors: [
         new ManipulationBehavior({
@@ -6664,63 +6744,65 @@ export class OrcaWorkspace extends xb.Script {
     card.visible = false;
     this.topStripCard = card;
 
-    const root = new UIPanel({
+    // Two rows, because the flat shell has two: a menu strip over a tab strip.
+    // One row could not hold a launcher, four workspaces, Slice, Print and the
+    // session controls without shrinking every one of them to a target that has
+    // to be aimed at.
+    const shell = new UIPanel({
       width: '100%',
-      flexDirection: 'row',
-      alignItems: 'center',
+      flexDirection: 'column',
+      alignItems: 'stretch',
       fillColor: '#0d141cE6',
       cornerRadius: 14,
-      padding: 12,
-      gap: 12,
+      paddingLeft: 12,
+      paddingRight: 12,
+      paddingTop: 8,
+      paddingBottom: 8,
+      gap: 6,
       strokeWidth: 1,
       strokeColor: '#FF6D0066',
     });
-    card.add(root);
+    card.add(shell);
+    const root = new UIPanel({ width: '100%', flexDirection: 'row', alignItems: 'center', gap: 8 });
+    shell.add(root);
+    const tabRow = new UIPanel({ width: '100%', flexDirection: 'row', alignItems: 'center', gap: 8 });
+    shell.add(tabRow);
 
-    const brand = new UIPanel({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 10 });
-    brand.add(new UIText('OrcaXR', { fontSize: 20, fontWeight: 'bold', color: '#FFB74D' }));
-    brand.add(new UIText('Slicer', { fontSize: 20, fontWeight: 'bold', color: '#FFB74DCC' }));
-    root.add(brand);
-
-    // Dropdown menu bar — one trigger per Snapmaker-Orca menu section. Clicking a
-    // trigger opens (or closes) the shared dropdown panel with just that
-    // section's items. This is the full menu surface, progressively disclosed.
-    const menuBar = new UIPanel({ flexDirection: 'row', alignItems: 'center', gap: 2 });
+    // One launcher, not eight text targets in a ribbon. Seven menu sections
+    // rendered as 15 px labels across a strip made every one of them a ~1°
+    // target that had to be aimed at, and left no room for anything else on
+    // the only surface above the plate. The sections now open as full-width
+    // rows in the sheet, where they are read and pressed comfortably.
     this.menuBarButtons = [];
-    const reg = this.actionRegistry;
-    // The pinned menu sections, plus one for everything the DOM shell puts in
-    // its inspector. Without it the printer, preset, calibration, and settings
-    // controls would exist only on a screen.
-    const sections: { id: string; label: string }[] = [
-      ...MENU_SECTIONS,
-      ...(reg.forSurface('xr-inspector').length > 0 ? [{ id: XR_PANELS_SECTION_ID, label: 'Panels' }] : []),
-    ];
-    for (const sec of sections) {
-      const hasMenuItems =
-        sec.id === XR_PANELS_SECTION_ID || reg.forSurface('xr-menu').some((x) => String(x.menuSection) === sec.id);
-      const hasToolOverflow =
-        sec.id === 'tools' && reg.forSurface('xr-toolbar').some((action) => !xrToolRailActions([action]).length);
-      if (!hasMenuItems && !hasToolOverflow) continue;
-      const btn = new UIPanel({
-        paddingLeft: 11,
-        paddingRight: 11,
-        paddingTop: 8,
-        paddingBottom: 8,
-        cornerRadius: 8,
-        fillColor: '#00000000',
-        justifyContent: 'center',
-        alignItems: 'center',
-        onClick: () => {
-          this.toggleMenu(sec.id);
-          return true;
-        },
-      });
-      const label = new UIText(sec.label, { fontSize: 15, fontWeight: 'bold', color: '#ffffff' });
-      btn.add(label);
-      menuBar.add(btn);
-      this.menuBarButtons.push({ id: sec.id, btn, label });
-    }
-    root.add(menuBar);
+    const menuBtn = new UIPanel({
+      paddingLeft: 16,
+      paddingRight: 16,
+      paddingTop: 10,
+      paddingBottom: 10,
+      cornerRadius: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      fillColor: '#ffffff14',
+      strokeWidth: 1,
+      strokeColor: '#ffffff1a',
+      justifyContent: 'center',
+      onClick: () => {
+        this.toggleMenu(XR_MENU_ROOT);
+        return true;
+      },
+      onHoverEnter: () => {
+        menuBtn.setFillColor('#ffffff26');
+      },
+      onHoverExit: () => {
+        menuBtn.setFillColor('#ffffff14');
+      },
+    });
+    menuBtn.add(new XRImage(xrIcon('slice_group'), { color: '#ffffff', width: 20, height: 20, flexShrink: 0 }));
+    const menuLabel = new UIText('Menu', { fontSize: 17, fontWeight: 'bold', color: '#ffffff' });
+    menuBtn.add(menuLabel);
+    root.add(menuBtn);
+    this.menuBarButtons.push({ id: XR_MENU_ROOT, btn: menuBtn, label: menuLabel });
 
     root.add(new UIPanel({ flexGrow: 1 })); // spacer pushes mode switch + exit right
 
@@ -6732,18 +6814,19 @@ export class OrcaWorkspace extends xb.Script {
       cornerRadius: 10,
       padding: 4,
     });
-    const modes: { mode: 'prepare' | 'paint' | 'preview'; label: string }[] = [
+    const modes: { mode: XrWorkspace; label: string }[] = [
       { mode: 'prepare', label: 'Prepare' },
-      { mode: 'paint', label: 'Paint' },
       { mode: 'preview', label: 'Preview' },
+      { mode: 'device', label: 'Device' },
+      { mode: 'project', label: 'Project' },
     ];
     this.xrModeButtons = [];
     for (const m of modes) {
       const btn = new UIPanel({
-        paddingLeft: 14,
-        paddingRight: 14,
-        paddingTop: 8,
-        paddingBottom: 8,
+        paddingLeft: 11,
+        paddingRight: 11,
+        paddingTop: 7,
+        paddingBottom: 7,
         cornerRadius: 8,
         fillColor: '#00000000',
         justifyContent: 'center',
@@ -6753,12 +6836,64 @@ export class OrcaWorkspace extends xb.Script {
           return true;
         },
       });
-      const label = new UIText(m.label, { fontSize: 16, fontWeight: 'bold', color: '#ffffff' });
+      const label = new UIText(m.label, { fontSize: 14, fontWeight: 'bold', color: '#ffffff' });
       btn.add(label);
       track.add(btn);
       this.xrModeButtons.push({ mode: m.mode, btn, label });
     }
-    root.add(track);
+    tabRow.add(track);
+
+    tabRow.add(new UIPanel({ flexGrow: 1 }));
+    // `Slice` and `Print` sit at the end of the tab strip, which is where the
+    // flat shell puts them. They are the same registry actions the action desk
+    // below runs — a second place to reach them, not a second path.
+    for (const id of ['slice_active_plate', 'send_to_printer'] as const) {
+      const action = this.actionRegistry.get(id);
+      if (!action) continue;
+      const primary = id === 'slice_active_plate';
+      const btn = new UIPanel({
+        paddingLeft: 12,
+        paddingRight: 12,
+        paddingTop: 7,
+        paddingBottom: 7,
+        cornerRadius: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        fillColor: primary ? '#ffb74d' : '#ffffff14',
+        strokeWidth: primary ? 0 : 1,
+        strokeColor: '#ffffff1a',
+        justifyContent: 'center',
+        onClick: () => {
+          if (this.actionContext) {
+            void this.actionRegistry.invoke(
+              action,
+              primary ? 'xr-primary' : 'xr-menu',
+              this.actionContext,
+              this.actionContext.ui.get(),
+            );
+          }
+          return true;
+        },
+      });
+      btn.add(
+        new XRImage(xrIcon(action.icon), {
+          color: primary ? '#000000' : '#ffffff',
+          width: 16,
+          height: 16,
+          flexShrink: 0,
+        }),
+      );
+      btn.add(
+        new UIText(primary ? 'Slice' : 'Print', {
+          fontSize: 14,
+          fontWeight: 'bold',
+          color: primary ? '#000000' : '#ffffff',
+          flexShrink: 0,
+        }),
+      );
+      tabRow.add(btn);
+    }
 
     // Keep secondary panels progressive: the plate stays readable until the
     // maker explicitly opens profile controls. Recenter is deliberately always
@@ -6837,13 +6972,14 @@ export class OrcaWorkspace extends xb.Script {
     this.openMenuSection = id;
     this.populateMenuPanel(id);
     const c = this.rightSidebarCard;
-    if (c && this.topStripCard) {
-      // Anchor the dropdown just below the top strip, matching its facing, but pop it out slightly in Z.
-      c.position.copy(this.topStripCard.position);
-      c.position.y -= 0.4;
-      c.position.z += 0.05;
-      c.quaternion.copy(this.topStripCard.quaternion);
-      c.updateMatrixWorld(true);
+    if (c) {
+      // The sheet has its own place in the layout — centred, at reading
+      // distance, in front of the work it is about to act on. Hanging it off
+      // the strip's transform put it wherever the strip happened to be.
+      const cam = xb.core.camera;
+      const forward = new THREE.Vector3();
+      cam.getWorldDirection(forward);
+      this.placeXrSurface(c, 'sheet', { position: cam.getWorldPosition(new THREE.Vector3()), forward });
       c.show();
     }
     this.refreshMenuBar();
@@ -6857,7 +6993,9 @@ export class OrcaWorkspace extends xb.Script {
 
   private refreshMenuBar() {
     for (const m of this.menuBarButtons) {
-      const active = m.id === this.openMenuSection;
+      // The strip carries one launcher, so it reads as active whenever any
+      // section of the sheet is open — not only its own.
+      const active = m.id === this.openMenuSection || (m.id === XR_MENU_ROOT && this.openMenuSection !== null);
       m.btn.setFillColor(active ? '#ff6d0033' : '#00000000');
       m.label.setColor(active ? '#FFB74D' : '#ffffff');
     }
@@ -6879,6 +7017,16 @@ export class OrcaWorkspace extends xb.Script {
       this.menuPanelTitle.setText(id === XR_PANELS_SECTION_ID ? 'Panels' : sec ? sec.label : 'Menu');
     }
     const reg = this.actionRegistry;
+    if (id === XR_MENU_ROOT) {
+      this.populateMenuSections(root);
+      return;
+    }
+    const card = XR_CARDS.find((entry) => entry.id === id);
+    if (card) {
+      if (this.menuPanelTitle) this.menuPanelTitle.setText(card.label);
+      this.populateXrCard(root, card);
+      return;
+    }
     if (id === XR_PANELS_SECTION_ID) {
       this.populateXrPanelsSection(root);
       return;
@@ -6895,6 +7043,102 @@ export class OrcaWorkspace extends xb.Script {
       }
     }
     for (const { action: a, surface } of entries) root.add(this.buildXrMenuRow(a, surface));
+  }
+
+  /**
+   * The sheet's front page: one row per menu section, sized to be read and
+   * pressed rather than aimed at. Sections with nothing in them are left out,
+   * so the list never offers a dead end.
+   */
+  private populateMenuSections(root: UIPanel): void {
+    const reg = this.actionRegistry;
+    const inspector = reg.forSurface('xr-inspector');
+    // The sidebar's cards first, then the menu bar's sections — the same two
+    // groups of things the flat shell offers, in the same order it offers them.
+    const cards = XR_CARDS.filter((card) => inspector.some((action) => card.groups.includes(action.group)));
+    const sections: { id: string; label: string }[] = [
+      ...cards,
+      ...MENU_SECTIONS,
+      ...(inspector.length > 0 ? [{ id: XR_PANELS_SECTION_ID, label: 'All panels' }] : []),
+    ];
+    for (const sec of sections) {
+      const hasMenuItems =
+        sec.id === XR_PANELS_SECTION_ID ||
+        sec.id.startsWith(XR_CARD_PREFIX) ||
+        reg.forSurface('xr-menu').some((x) => String(x.menuSection) === sec.id);
+      const hasToolOverflow =
+        sec.id === 'tools' && reg.forSurface('xr-toolbar').some((action) => !xrToolRailActions([action]).length);
+      if (!hasMenuItems && !hasToolOverflow) continue;
+      root.add(
+        this.buildXrSheetRow(
+          XR_SECTION_ICONS[sec.id] ?? XR_CARDS.find((c) => c.id === sec.id)?.icon ?? 'chevron_right',
+          sec.label,
+          () => {
+            this.openMenuSection = sec.id;
+            this.populateMenuPanel(sec.id);
+            this.refreshMenuBar();
+          },
+        ),
+      );
+    }
+  }
+
+  /**
+   * One sidebar card's contents: every inspector action whose group the card
+   * claims, gated exactly as the DOM gates it. The rows are the same rows the
+   * menu uses, so an action looks and behaves the same wherever it is reached.
+   */
+  private populateXrCard(root: UIPanel, card: { label: string; groups: readonly string[] }): void {
+    const actions = this.actionRegistry.forSurface('xr-inspector').filter((a) => card.groups.includes(a.group));
+    if (actions.length === 0) {
+      root.add(
+        new UIText(t('workspace.orcaWorkspace.nothingHereYet', 'Nothing here yet.'), {
+          fontSize: 15,
+          color: '#8a94a0',
+        }),
+      );
+      return;
+    }
+    for (const action of actions) root.add(this.buildXrMenuRow(action, 'xr-inspector'));
+  }
+
+  /**
+   * One row of the sheet: icon, label, and a press.
+   *
+   * Every list in the sheet is built through here. A second hand-written row —
+   * same properties, near enough — laid out to 35,000 px tall and painted as a
+   * featureless slab, so "near enough" is not a thing that can be eyeballed
+   * against a flexbox engine.
+   */
+  private buildXrSheetRow(icon: string, label: string, onPress: () => void): UIPanel {
+    const rest = '#ffffff12';
+    const btn = new UIPanel({
+      width: '100%',
+      paddingLeft: 12,
+      paddingRight: 12,
+      paddingTop: 11,
+      paddingBottom: 11,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      cornerRadius: 9,
+      fillColor: rest,
+      strokeWidth: 1,
+      strokeColor: '#ffffff12',
+      onClick: () => {
+        onPress();
+        return true;
+      },
+      onHoverEnter: () => {
+        btn.setFillColor('#ffffff24');
+      },
+      onHoverExit: () => {
+        btn.setFillColor(rest);
+      },
+    });
+    btn.add(new XRImage(xrIcon(icon), { color: '#dfe4ea', width: 20, height: 20, flexShrink: 0 }));
+    btn.add(new UIText(label, { fontSize: 17, color: '#eef2f6', flexGrow: 1, flexShrink: 1 }));
+    return btn;
   }
 
   /** One menu row, gated exactly as the DOM gates the same action. */
@@ -7235,18 +7479,15 @@ export class OrcaWorkspace extends xb.Script {
     this.calibrationFormPreview = preview;
   }
 
-  private setXrMode(mode: 'prepare' | 'paint' | 'preview') {
+  private setXrMode(mode: XrWorkspace) {
     this.xrMode = mode;
     if (this.actionContext) {
-      if (mode === 'paint') {
-        // Paint is a modal tool, not a separate renderer mode. The previous
-        // implementation only coloured this tab, leaving the workspace in its
-        // prior tool and making the control feel broken.
-        this.actionContext.setMode('prepare');
-        this.actionContext.setTool('paint');
-        this.setStatus(
-          t('workspace.orcaWorkspace.paintModeChooseAColor', 'Paint mode — choose a color, then pinch the model'),
-        );
+      if (mode === 'device' || mode === 'project') {
+        // Device and Project are pages on a screen and sheets in a headset —
+        // the same content, reached from the same tab, without disturbing what
+        // the plate is showing. That is exactly what the flat shell does: its
+        // pages leave the mode alone.
+        this.toggleMenu(mode === 'device' ? `${XR_CARD_PREFIX}printer` : `${XR_CARD_PREFIX}project`);
       } else if (mode === 'preview') {
         this.actionContext.setMode('preview');
         if (!this.previewOn) this.actionContext.togglePreview();
@@ -7270,11 +7511,8 @@ export class OrcaWorkspace extends xb.Script {
   private addBottomBar() {
     const card = this.uiCore.createCard({
       name: 'BottomBar',
-      sizeX: 0.66,
-      sizeY: 0.17,
-      pixelSize: 0.0012,
+      ...this.xrCardGeometry('actions'),
       position: new THREE.Vector3(0, PLATE_Y - 0.25, PLATE_Z + 0.15),
-      width: 640,
       alignItems: 'center',
       behaviors: [
         new ManipulationBehavior({
@@ -7321,14 +7559,18 @@ export class OrcaWorkspace extends xb.Script {
       const primary = a.id === 'slice_active_plate';
       const restFill = '#ffffff14';
       const btn = new UIPanel({
-        paddingLeft: 18,
-        paddingRight: 18,
-        paddingTop: 12,
-        paddingBottom: 12,
+        // Sized to the desk it sits on: five verbs share 400 layout px, so the
+        // padding is what gives and the label stays on one line.
+        flexGrow: 1,
+        flexShrink: 1,
+        paddingLeft: 8,
+        paddingRight: 8,
+        paddingTop: 11,
+        paddingBottom: 11,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
+        gap: 6,
         cornerRadius: 10,
         fillColor: primary ? '#ffb74d' : restFill,
         strokeWidth: primary ? 0 : 1,
@@ -7351,14 +7593,14 @@ export class OrcaWorkspace extends xb.Script {
       });
       const icon = new XRImage(xrIcon(a.icon), {
         color: primary ? '#000000' : '#ffffff',
-        width: 22,
-        height: 22,
+        width: 18,
+        height: 18,
         flexShrink: 0,
       });
       btn.add(icon);
       btn.add(
         new UIText(a.label, {
-          fontSize: 18,
+          fontSize: 14,
           fontWeight: 'bold',
           color: primary ? '#000000' : '#ffffff',
           flexShrink: 0,
@@ -7401,11 +7643,8 @@ export class OrcaWorkspace extends xb.Script {
   private addSliceModal() {
     const card = this.uiCore.createCard({
       name: 'SliceModal',
-      sizeX: 0.6,
-      sizeY: 0.25,
-      pixelSize: 0.0012,
+      ...this.xrCardGeometry('progress'),
       position: new THREE.Vector3(0, PLATE_Y + 0.35, PLATE_Z + 0.3),
-      width: 500,
       alignItems: 'center',
       justifyContent: 'center',
       behaviors: [new ManipulationBehavior({ draggable: true, faceCamera: true })],
@@ -7452,11 +7691,8 @@ export class OrcaWorkspace extends xb.Script {
   private addLeftToolbar() {
     const card = this.uiCore.createCard({
       name: 'LeftToolbar',
-      sizeX: 0.17,
-      sizeY: 0.78,
-      pixelSize: 0.0012,
+      ...this.xrCardGeometry('tools'),
       position: new THREE.Vector3(-0.85, PLATE_Y + 0.15, PLATE_Z + 0.1),
-      width: 158,
       alignItems: 'center',
       behaviors: [
         new ManipulationBehavior({
@@ -7505,8 +7741,8 @@ export class OrcaWorkspace extends xb.Script {
     for (const a of toolbar) {
       if (!a.tool) continue;
       const h = renderXrActionButton(a, runAction, xrBlocksUiAdapter, {
-        size: 64,
-        iconSize: 34,
+        size: 54,
+        iconSize: 28,
         enabled: this.actionContext
           ? this.actionRegistry.availability(a, 'xr-toolbar', this.actionContext.ui.get()).state === 'enabled'
           : false,
@@ -7523,8 +7759,8 @@ export class OrcaWorkspace extends xb.Script {
     for (const a of toolbar) {
       if (a.tool || !['drop_to_bed', 'delete_models'].includes(a.id)) continue;
       const h = renderXrActionButton(a, runAction, xrBlocksUiAdapter, {
-        size: 64,
-        iconSize: 34,
+        size: 54,
+        iconSize: 28,
         danger: a.id === 'delete_models',
         enabled: this.actionContext
           ? this.actionRegistry.availability(a, 'xr-toolbar', this.actionContext.ui.get()).state === 'enabled'
@@ -7557,11 +7793,8 @@ export class OrcaWorkspace extends xb.Script {
   private addActionPanel() {
     const card = this.uiCore.createCard({
       name: 'MenuPanel',
-      sizeX: 0.44,
-      sizeY: 0.8,
-      pixelSize: 0.0012,
+      ...this.xrCardGeometry('sheet'),
       position: new THREE.Vector3(0, PLATE_Y + 0.25, PLATE_Z + 0.1),
-      width: 400,
       alignItems: 'center',
       behaviors: [
         new ManipulationBehavior({
@@ -7628,11 +7861,8 @@ export class OrcaWorkspace extends xb.Script {
   private addProfilePanel() {
     const card = this.uiCore.createCard({
       name: 'ProfilePanel',
-      sizeX: 0.4,
-      sizeY: 0.7,
-      pixelSize: 0.0012,
+      ...this.xrCardGeometry('inspector'),
       position: new THREE.Vector3(0.95, PLATE_Y + 0.15, PLATE_Z + 0.1),
-      width: 330,
       alignItems: 'center',
       behaviors: [
         new ManipulationBehavior({
@@ -7727,11 +7957,8 @@ export class OrcaWorkspace extends xb.Script {
   private addPrinterStatusPanel() {
     const card = this.uiCore.createCard({
       name: 'PrinterStatusPanel',
-      sizeX: 0.46,
-      sizeY: 0.34,
-      pixelSize: 0.0012,
+      ...this.xrCardGeometry('status'),
       position: new THREE.Vector3(-0.95, PLATE_Y + 0.3, PLATE_Z + 0.1),
-      width: 380,
       alignItems: 'center',
       behaviors: [
         new ManipulationBehavior({
