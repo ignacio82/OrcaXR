@@ -119,6 +119,7 @@ export const advancedActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'tools',
     hint: 'Scan local network for printers',
+    run: (ctx) => ctx.scanNetwork(),
   },
   {
     id: 'printer_test_connection',

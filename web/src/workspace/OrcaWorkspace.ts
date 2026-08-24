@@ -19,6 +19,7 @@ import {
 import { readTrueTypeOutlines } from '../project/objects/truetypeOutlines';
 import { readSvgShapes } from '../project/objects/svgShapes';
 import type { MagnetSpec } from '../features/MagnetOp';
+import { describeDiscovery, type DiscoveryOutcome } from '../printer/PrinterDirectory';
 import type { ProjectSummaryInput } from '../diagnostics/DiagnosticsBundle';
 import type { FilamentId, InstanceId, LayerRangeId, ObjectId, PlateId, VolumeId } from '../project/domain/ids';
 import { entityId, UuidIdSource } from '../project/domain/ids';
@@ -9178,6 +9179,17 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus(`${t('workspace.orcaWorkspace.addMagnetHoleFailed', 'Add Magnet Hole failed')}: ${message}`);
       return false;
     }
+  }
+
+  public scanNetwork(): DiscoveryOutcome {
+    const outcome = describeDiscovery();
+    this.setStatus(
+      t(
+        'workspace.orcaWorkspace.scanNetworkInfo',
+        'A browser cannot scan your network for printers; please enter the printer address directly.',
+      ),
+    );
+    return outcome;
   }
 
   public cutSelectedByPlane() {

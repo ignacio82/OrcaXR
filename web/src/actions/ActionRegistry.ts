@@ -476,7 +476,6 @@ const CANONICAL_CUTOVER_GATED_IDS = new Set<string>(Object.keys(CANONICAL_CUTOVE
 
 const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
   ...CANONICAL_CUTOVER_GATED_REASONS,
-  scan_network: 'Local-network printer discovery is not implemented yet.',
   file_export_all_plates: 'All-plate slicing and export is not implemented yet.',
   file_export_obj: 'Toolpath OBJ export is not implemented yet.',
   file_open_gcode: 'Standalone G-code import and viewing is not implemented yet.',

@@ -22,6 +22,7 @@ import type { PaintChannel, PaintToolKind } from '../project/painting/PaintStrok
 import type { ScopedOverrideTarget } from '../project/scopedOverrides';
 import type { PrintJobCommand } from '../printer/PrintJobControl';
 import type { PrinterConsoleOperation } from '../printer/PrinterConsole';
+import type { DiscoveryOutcome } from '../printer/PrinterDirectory';
 import type { PrinterStorageOperation } from '../printer/PrinterStorage';
 import type { PresetLibraryOperation } from '../settings/presets/PresetLibrary';
 import type { CalibrationHistoryOperation } from '../project/calibration/history';
@@ -568,6 +569,10 @@ export class ActionContext {
 
   testPrinterConnection(): Promise<void> {
     return this.workspace.testPrinterConnection();
+  }
+
+  scanNetwork(): DiscoveryOutcome {
+    return this.workspace.scanNetwork();
   }
 
   inspectPrinterFilaments(): Promise<void> {
