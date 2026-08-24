@@ -462,8 +462,6 @@ const CANONICAL_CUTOVER_GATED_REASONS = {
     'Generic geometry 3MF export is disabled because the current exporter drops canonical project metadata and stable identities.',
   edit_cut:
     'Cut is disabled because the legacy clipboard drops canonical object metadata and cannot delete through the same atomic command.',
-  edit_copy:
-    'Copy is disabled because the legacy clipboard does not preserve the complete canonical object and instance graph.',
   edit_paste:
     'Paste is disabled until clipboard content can be validated and inserted through one canonical command with fresh stable IDs.',
   tool_cut:

@@ -50,7 +50,6 @@ for (const line of parityDocument.split('\n')) {
 const UNAVAILABLE_IDS = [
   'file_export_3mf',
   'edit_cut',
-  'edit_copy',
   'edit_paste',
   'tool_cut',
   'file_export_all_plates',
@@ -64,7 +63,7 @@ const UNAVAILABLE_IDS = [
   'tool_hollow',
 ].sort();
 
-const CANONICAL_CUTOVER_GATED_IDS = ['file_export_3mf', 'edit_cut', 'edit_copy', 'edit_paste', 'tool_cut'] as const;
+const CANONICAL_CUTOVER_GATED_IDS = ['file_export_3mf', 'edit_cut', 'edit_paste', 'tool_cut'] as const;
 
 const CANONICAL_ACTIONS_LEFT_ENABLED = [
   'file_new_project',
@@ -82,6 +81,7 @@ const CANONICAL_ACTIONS_LEFT_ENABLED = [
   'add_magnet',
   'scan_network',
   'edit_delete_all',
+  'edit_copy',
   'file_open_project',
   'file_import_model',
   'file_import_zip',

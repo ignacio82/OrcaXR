@@ -267,6 +267,16 @@ test('Download, canonical delete, and guarded Split to Objects use prerequisites
   assert.strictEqual(ActionRegistry.enabled(reg.get('scan_network')!, baseState), true);
   assert.strictEqual(ActionRegistry.enabled(reg.get('edit_delete_all')!, { ...baseState, modelCount: 0 }), false);
   assert.strictEqual(ActionRegistry.enabled(reg.get('edit_delete_all')!, { ...baseState, modelCount: 1 }), true);
+  assert.strictEqual(ActionRegistry.enabled(reg.get('edit_copy')!, { ...baseState, modelCount: 1 }), false);
+  assert.strictEqual(
+    ActionRegistry.enabled(reg.get('edit_copy')!, {
+      ...baseState,
+      modelCount: 1,
+      hasSelection: true,
+      hasInstanceSelection: true,
+    }),
+    true,
+  );
   assert.strictEqual(ActionRegistry.enabled(reg.get('tool_cut')!, { ...baseState, modelCount: 2 }), false);
   assert.match(ActionRegistry.disabledReason(reg.get('repair_model')!, baseState) ?? '', /select/i);
 });

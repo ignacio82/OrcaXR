@@ -329,6 +329,77 @@ export class DuplicateObjectCommand extends ObjectLifecycleCommand {
   }
 }
 
+export interface PasteObjectOptions {
+  destinationPlateId?: PlateId;
+  name?: string;
+}
+
+/**
+ * Insert a clipboard object template as an independent object with fresh IDs.
+ */
+export class PasteObjectCommand extends ObjectLifecycleCommand {
+  readonly type = 'paste-object';
+  readonly label = 'Paste model';
+  private inserted?: ProjectObject;
+  private resolvedDestinationId?: PlateId;
+  private insertionIndex = -1;
+  private readonly objectTemplate: ProjectObject;
+  private readonly ids: IndependentObjectIds;
+  private readonly options: PasteObjectOptions;
+
+  constructor(objectTemplate: ProjectObject, ids: IndependentObjectIds, options: PasteObjectOptions = {}) {
+    super();
+    this.objectTemplate = cloneJson(objectTemplate);
+    this.ids = {
+      objectId: ids.objectId,
+      volumeIds: [...ids.volumeIds],
+      instanceIds: [...ids.instanceIds],
+      layerRangeIds: [...ids.layerRangeIds],
+    };
+    if (options.name !== undefined && !options.name.trim()) throw new Error('Paste object name cannot be empty');
+    this.options = { ...options, ...(options.name ? { name: options.name.trim() } : {}) };
+  }
+
+  apply(context: CommandContext): void {
+    const state = cloneProjectState(context.project.getSnapshot().state);
+    const destinationId = this.options.destinationPlateId ?? state.activePlateId;
+    const destination = state.plates.find((plate) => plate.id === destinationId);
+    if (!destination) throw new Error(`Unknown destination plate ${destinationId}`);
+
+    if (!this.inserted) {
+      this.inserted = buildIndependentDuplicate(state, this.objectTemplate, this.ids, this.options.name);
+    } else {
+      assertIdsAvailable(state, allObjectIds(this.inserted));
+    }
+    this.resolvedDestinationId = destinationId;
+    this.insertionIndex = destination.objects.length;
+    destination.objects.push(cloneJson(this.inserted));
+    replaceProject(context, state, this.type);
+    const firstInstance = this.inserted.instances[0];
+    context.selection.set(
+      firstInstance ? [{ kind: 'instance', id: firstInstance.id }] : [{ kind: 'object', id: this.inserted.id }],
+    );
+  }
+
+  revert(context: CommandContext): void {
+    if (!this.inserted || !this.resolvedDestinationId || this.insertionIndex < 0) {
+      throw new Error('PasteObjectCommand has not been applied');
+    }
+    const state = cloneProjectState(context.project.getSnapshot().state);
+    const destination = state.plates.find((plate) => plate.id === this.resolvedDestinationId);
+    if (!destination) throw new Error(`Unknown destination plate ${this.resolvedDestinationId}`);
+    const index = destination.objects.findIndex((object) => object.id === this.inserted!.id);
+    if (index >= 0) {
+      destination.objects.splice(index, 1);
+    }
+    replaceProject(context, state, `revert:${this.type}`);
+  }
+
+  estimateBytes(): number {
+    return this.inserted ? canonicalStringify(this.inserted).length : 1;
+  }
+}
+
 export class CreateInstanceCommand extends ObjectLifecycleCommand {
   readonly type = 'create-instance';
   readonly label = 'Create instance';

@@ -1537,6 +1537,20 @@ await test('deletes all objects on active plate and supports undo/redo', () => {
   controller.dispose();
 });
 
+await test('copies selected object and retains clipboard contents', () => {
+  const controller = createController();
+  const geometry = new THREE.BoxGeometry(20, 20, 20);
+  controller.importBufferGeometry(geometry, { name: 'Source Object' });
+  assert.equal(controller.hasClipboard(), false);
+
+  const copied = controller.copySelectedObject();
+  assert.ok(copied);
+  assert.equal(copied.name, 'Source Object');
+  assert.equal(controller.hasClipboard(), true);
+
+  controller.dispose();
+});
+
 function semanticGuard(snapshot: CanonicalSemanticObjectEditorSnapshot) {
   return {
     expectedRevision: snapshot.sourceRevision,

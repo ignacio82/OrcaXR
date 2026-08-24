@@ -169,6 +169,7 @@ import {
   DeleteObjectCommand,
   DeletePlateObjectsCommand,
   DuplicateObjectCommand,
+  PasteObjectCommand,
   RenameObjectCommand,
   RenameVolumeCommand,
   SetInstancePrintableCommand,
@@ -833,6 +834,7 @@ export class CanonicalWorkspaceController {
   private lastPublishedSummary: CanonicalWorkspaceSummary;
   private notificationScheduled = false;
   private transformSequence = 0;
+  private clipboard?: { readonly object: ProjectObject; readonly assets: ReadonlyArray<AssetPayload> };
   private disposed = false;
 
   static createEmpty(options: CanonicalWorkspaceControllerOptions): CanonicalWorkspaceController {
@@ -2572,6 +2574,81 @@ export class CanonicalWorkspaceController {
       layerRangeIds: Object.freeze([...layerRangeIds]),
       ...(primaryInstanceId ? { primaryInstanceId } : {}),
     });
+  }
+
+  /** Check if the clipboard contains a copied/cut canonical object. */
+  hasClipboard(): boolean {
+    return this.clipboard !== undefined;
+  }
+
+  /** Copy the selected model/instance and its referenced assets to the clipboard. */
+  copySelectedObject(): { objectId: ObjectId; name: string } | undefined {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    const primary = this.session.selection.getSnapshot().primary;
+    const selected =
+      primary?.kind === 'object'
+        ? findObject(state, primary.id)
+        : primary?.kind === 'instance'
+          ? findInstance(state, primary.id)
+          : undefined;
+    if (!selected) return undefined;
+    const sourceObject = selected.object;
+    const assetIds = new Set<AssetId>();
+    for (const volume of sourceObject.volumes) {
+      assetIds.add(volume.source.assetId);
+    }
+    const assets: AssetPayload[] = [];
+    for (const assetId of assetIds) {
+      const payload = this.assets.get(assetId);
+      if (payload) assets.push(cloneJson(payload));
+    }
+    this.clipboard = Object.freeze({
+      object: cloneJson(sourceObject),
+      assets: Object.freeze(assets),
+    });
+    return { objectId: sourceObject.id, name: sourceObject.name };
+  }
+
+  /** Cut the selected model: copies it to clipboard and removes it in one undoable command. */
+  cutSelectedObject(): CanonicalInstanceDeletionSummary | undefined {
+    this.assertActive();
+    const copied = this.copySelectedObject();
+    if (!copied) return undefined;
+    const primary = this.session.selection.getSnapshot().primary;
+    return primary?.kind === 'instance' ? this.deleteInstance(primary.id) : undefined;
+  }
+
+  /** Paste the object currently in clipboard onto the active plate with fresh stable IDs. */
+  pasteClipboard(options: { destinationPlateId?: PlateId } = {}): { objectId: ObjectId; name: string } | undefined {
+    this.assertActive();
+    if (!this.clipboard) return undefined;
+    const { object: sourceObject, assets } = this.clipboard;
+    for (const asset of assets) {
+      if (!this.assets.has(asset.descriptor.id)) {
+        this.assets.put(asset.descriptor, asset.bytes);
+      }
+    }
+    const objectId = this.options.idSource.next('object');
+    const volumeIds = sourceObject.volumes.map(() => this.options.idSource.next('volume'));
+    const instanceIds = sourceObject.instances.map(() => this.options.idSource.next('instance'));
+    const layerRangeIds = sourceObject.layerRanges.map(() => this.options.idSource.next('layer-range'));
+
+    this.session.execute(
+      new PasteObjectCommand(
+        sourceObject,
+        {
+          objectId,
+          volumeIds,
+          instanceIds,
+          layerRangeIds,
+        },
+        options,
+      ),
+    );
+    const pasted = findObject(this.session.project.getSnapshot().state, objectId);
+    if (!pasted) throw new Error(`Pasted object ${objectId} is missing`);
+    return { objectId, name: pasted.object.name };
   }
 
   /**

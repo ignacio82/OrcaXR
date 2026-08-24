@@ -9208,36 +9208,57 @@ export class OrcaWorkspace extends xb.Script {
   }
   // --- Edit clipboard (canonical implementation pending) ----------------
   public get hasClipboard(): boolean {
-    return false;
+    return this.canonicalProject.hasClipboard();
   }
 
   public copySelectedModel(): boolean {
-    this.setStatus(
-      t(
-        'workspace.orcaWorkspace.copyIsUnavailableUntilThe',
-        'Copy is unavailable until the canonical clipboard preserves full object semantics.',
-      ),
-    );
-    return false;
+    try {
+      const copied = this.canonicalProject.copySelectedObject();
+      if (!copied) {
+        this.setStatus(t('workspace.orcaWorkspace.noModelSelectedToCopy', 'Select a model to copy.'));
+        return false;
+      }
+      this.setStatus(t('workspace.orcaWorkspace.modelCopied', 'Model copied to clipboard.'));
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStatus(`${t('workspace.orcaWorkspace.copyFailed', 'Copy failed')}: ${message}`);
+      return false;
+    }
   }
 
   public cutSelectedModel(): boolean {
-    this.setStatus(
-      t(
-        'workspace.orcaWorkspace.cutIsUnavailableUntilThe',
-        'Cut is unavailable until the canonical clipboard preserves full object semantics.',
-      ),
-    );
-    return false;
+    try {
+      const cut = this.canonicalProject.cutSelectedObject();
+      if (!cut) {
+        this.setStatus(t('workspace.orcaWorkspace.noModelSelectedToCut', 'Select a model to cut.'));
+        return false;
+      }
+      this.setStatus(t('workspace.orcaWorkspace.modelCut', 'Model cut to clipboard.'));
+      this.syncTransformProxy();
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStatus(`${t('workspace.orcaWorkspace.cutFailed', 'Cut failed')}: ${message}`);
+      return false;
+    }
   }
 
-  public pasteClipboard() {
-    this.setStatus(
-      t(
-        'workspace.orcaWorkspace.pasteIsUnavailableUntilThe',
-        'Paste is unavailable until the canonical clipboard preserves full object semantics.',
-      ),
-    );
+  public pasteClipboard(): boolean {
+    try {
+      const pasted = this.canonicalProject.pasteClipboard();
+      if (!pasted) {
+        this.setStatus(t('workspace.orcaWorkspace.clipboardEmpty', 'Clipboard is empty.'));
+        return false;
+      }
+      this.setStatus(t('workspace.orcaWorkspace.modelPasted', 'Model pasted onto plate.'));
+      this.syncTransformProxy();
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStatus(`${t('workspace.orcaWorkspace.pasteFailed', 'Paste failed')}: ${message}`);
+      return false;
+    }
   }
   // --- View overlays (Orca View → Show Wireframe / Printable Box) ------
   private wireframeOn = false;
