@@ -8998,13 +8998,19 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Delete every model on the ACTIVE plate (Orca's Edit → Delete all). */
-  public deleteAllModels() {
-    this.setStatus(
-      t(
-        'workspace.orcaWorkspace.deleteAllIsUnavailableUntil',
-        'Delete All is unavailable until it is one canonical transaction.',
-      ),
-    );
+  public deleteAllModels(): boolean {
+    try {
+      const count = this.canonicalProject.deleteAllObjectsOnPlate();
+      if (count > 0) {
+        this.setStatus(t('workspace.orcaWorkspace.allModelsDeleted', 'All models deleted from active plate.'));
+      }
+      this.syncTransformProxy();
+      return count > 0;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStatus(`${t('workspace.orcaWorkspace.deleteAllFailed', 'Delete All failed')}: ${message}`);
+      return false;
+    }
   }
 
   /**

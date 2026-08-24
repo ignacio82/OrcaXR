@@ -52,7 +52,6 @@ const UNAVAILABLE_IDS = [
   'edit_cut',
   'edit_copy',
   'edit_paste',
-  'edit_delete_all',
   'tool_cut',
   'file_export_all_plates',
   'file_export_obj',
@@ -65,14 +64,7 @@ const UNAVAILABLE_IDS = [
   'tool_hollow',
 ].sort();
 
-const CANONICAL_CUTOVER_GATED_IDS = [
-  'file_export_3mf',
-  'edit_cut',
-  'edit_copy',
-  'edit_paste',
-  'edit_delete_all',
-  'tool_cut',
-] as const;
+const CANONICAL_CUTOVER_GATED_IDS = ['file_export_3mf', 'edit_cut', 'edit_copy', 'edit_paste', 'tool_cut'] as const;
 
 const CANONICAL_ACTIONS_LEFT_ENABLED = [
   'file_new_project',
@@ -89,6 +81,7 @@ const CANONICAL_ACTIONS_LEFT_ENABLED = [
   'variable_layer_height',
   'add_magnet',
   'scan_network',
+  'edit_delete_all',
   'file_open_project',
   'file_import_model',
   'file_import_zip',

@@ -167,6 +167,7 @@ import {
   createInstancesAtTransforms,
   DeleteInstanceCommand,
   DeleteObjectCommand,
+  DeletePlateObjectsCommand,
   DuplicateObjectCommand,
   RenameObjectCommand,
   RenameVolumeCommand,
@@ -2493,6 +2494,18 @@ export class CanonicalWorkspaceController {
     this.assertActive();
     const primary = this.session.selection.getSnapshot().primary;
     return primary?.kind === 'instance' ? this.deleteInstance(primary.id) : undefined;
+  }
+
+  /** Delete every model on the active plate (or specified plate) in one atomic reversible command. */
+  deleteAllObjectsOnPlate(plateId?: PlateId): number {
+    this.assertActive();
+    const state = this.session.project.getSnapshot().state;
+    const targetPlateId = plateId ?? state.activePlateId;
+    const plate = state.plates.find((p) => p.id === targetPlateId);
+    if (!plate || plate.objects.length === 0) return 0;
+    const count = plate.objects.length;
+    this.session.execute(new DeletePlateObjectsCommand(targetPlateId));
+    return count;
   }
 
   /** Duplicate only the primary selected placement, retaining its object and immutable assets. */

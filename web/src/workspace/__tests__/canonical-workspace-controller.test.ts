@@ -1516,6 +1516,27 @@ await test('adds magnet hole negative volume to selected object and supports und
   controller.dispose();
 });
 
+await test('deletes all objects on active plate and supports undo/redo', () => {
+  const controller = createController();
+  const geometry1 = new THREE.BoxGeometry(20, 20, 20);
+  const geometry2 = new THREE.BoxGeometry(10, 10, 10);
+  controller.importBufferGeometry(geometry1, { name: 'Object 1' });
+  controller.importBufferGeometry(geometry2, { name: 'Object 2' });
+  assert.equal(controller.getSummary().objectCount, 2);
+
+  const deletedCount = controller.deleteAllObjectsOnPlate();
+  assert.equal(deletedCount, 2);
+  assert.equal(controller.getSummary().objectCount, 0);
+
+  assert.equal(controller.undo(), true);
+  assert.equal(controller.getSummary().objectCount, 2);
+
+  assert.equal(controller.redo(), true);
+  assert.equal(controller.getSummary().objectCount, 0);
+
+  controller.dispose();
+});
+
 function semanticGuard(snapshot: CanonicalSemanticObjectEditorSnapshot) {
   return {
     expectedRevision: snapshot.sourceRevision,

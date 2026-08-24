@@ -466,8 +466,6 @@ const CANONICAL_CUTOVER_GATED_REASONS = {
     'Copy is disabled because the legacy clipboard does not preserve the complete canonical object and instance graph.',
   edit_paste:
     'Paste is disabled until clipboard content can be validated and inserted through one canonical command with fresh stable IDs.',
-  edit_delete_all:
-    'Delete All is disabled until active-plate instances can be removed through one reversible canonical transaction.',
   tool_cut:
     'Plane cutting is disabled until canonical topology, annotations, assets, and stable IDs can be replaced atomically.',
 } as const satisfies Readonly<Record<string, string>>;

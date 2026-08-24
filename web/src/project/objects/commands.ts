@@ -209,6 +209,45 @@ export class DeleteObjectCommand extends ObjectLifecycleCommand {
   }
 }
 
+/**
+ * Remove every object on a build plate in one atomic reversible command.
+ */
+export class DeletePlateObjectsCommand extends ObjectLifecycleCommand {
+  readonly type = 'delete-plate-objects';
+  readonly label = 'Delete all models';
+  private removed?: ProjectObject[];
+
+  constructor(private readonly plateId: PlateId) {
+    super();
+  }
+
+  apply(context: CommandContext): void {
+    const state = cloneProjectState(context.project.getSnapshot().state);
+    const plate = state.plates.find((candidate) => candidate.id === this.plateId);
+    if (!plate) throw new Error(`Unknown plate ${this.plateId}`);
+    if (plate.objects.length === 0) return;
+
+    this.removed = cloneJson(plate.objects);
+    plate.objects = [];
+
+    context.selection.set([{ kind: 'plate', id: this.plateId }]);
+    replaceProject(context, state, this.type);
+  }
+
+  revert(context: CommandContext): void {
+    if (!this.removed) return;
+    const state = cloneProjectState(context.project.getSnapshot().state);
+    const plate = state.plates.find((candidate) => candidate.id === this.plateId);
+    if (!plate) throw new Error(`Unknown plate ${this.plateId}`);
+    plate.objects = cloneJson(this.removed);
+    replaceProject(context, state, `revert:${this.type}`);
+  }
+
+  estimateBytes(): number {
+    return this.removed ? canonicalStringify(this.removed).length : 1;
+  }
+}
+
 export interface IndependentObjectIds {
   objectId: ObjectId;
   volumeIds: readonly VolumeId[];
