@@ -468,8 +468,6 @@ const CANONICAL_CUTOVER_GATED_REASONS = {
     'Paste is disabled until clipboard content can be validated and inserted through one canonical command with fresh stable IDs.',
   edit_delete_all:
     'Delete All is disabled until active-plate instances can be removed through one reversible canonical transaction.',
-  mesh_boolean_intersection:
-    'Mesh intersection is disabled until topology-changing booleans preserve canonical metadata and commit atomically.',
   tool_cut:
     'Plane cutting is disabled until canonical topology, annotations, assets, and stable IDs can be replaced atomically.',
 } as const satisfies Readonly<Record<string, string>>;
