@@ -229,7 +229,7 @@
   "action.file_export_3mf.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P5.7.",
   "action.file_export_all_plates.hint": "Slice and export G-code for every build plate",
   "action.file_export_all_plates.label": "Export All Plates…",
-  "action.file_export_all_plates.reason": "All-plate slicing and export is not implemented yet.",
+  "action.file_export_all_plates.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P5.7.",
   "action.file_export_all_stls.hint": "Export every model on the active plate as separate STL files in a ZIP archive",
   "action.file_export_all_stls.label": "Export all objects as STLs…",
   "action.file_export_all_stls.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P5.7.",

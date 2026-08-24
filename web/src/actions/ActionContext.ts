@@ -321,6 +321,9 @@ export class ActionContext {
   export3mf(): Promise<void> {
     return this.workspace.exportPlate3mf();
   }
+  exportAllPlates(): Promise<number> {
+    return this.workspace.exportAllPlates();
+  }
   saveProject(): Promise<void> {
     return this.workspace.saveProject();
   }

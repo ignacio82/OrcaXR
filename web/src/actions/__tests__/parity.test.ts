@@ -49,7 +49,6 @@ for (const line of parityDocument.split('\n')) {
 
 const UNAVAILABLE_IDS = [
   'tool_cut',
-  'file_export_all_plates',
   'file_export_obj',
   'file_open_gcode',
   'help_config_folder',
@@ -82,6 +81,7 @@ const CANONICAL_ACTIONS_LEFT_ENABLED = [
   'edit_cut',
   'edit_paste',
   'file_export_3mf',
+  'file_export_all_plates',
   'file_open_project',
   'file_import_model',
   'file_import_zip',

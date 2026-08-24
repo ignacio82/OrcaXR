@@ -10099,6 +10099,19 @@ export class OrcaWorkspace extends xb.Script {
     }));
   }
 
+  /** Slice all printable plates if needed, then download one named G-code artifact per plate (File → Export All Plates). */
+  public async exportAllPlates(): Promise<number> {
+    if (this.canonicalProject.getSummary().objectCount === 0) {
+      this.setStatus(t('workspace.orcaWorkspace.noPrintablePlateHasModels', 'No printable plate has models to slice.'));
+      return 0;
+    }
+    if (!this.publishedPlateGcode || !this.revalidatePublishedGcode()) {
+      const sliced = await this.sliceAllPlates();
+      if (sliced === 0) return 0;
+    }
+    return this.downloadAllPlateGcode();
+  }
+
   /** Download each retained plate result as its own named artifact. */
   public downloadAllPlateGcode(): number {
     const published = this.publishedPlateGcode;

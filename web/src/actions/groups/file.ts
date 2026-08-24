@@ -116,6 +116,8 @@ export const fileActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'file',
     hint: 'Slice and export G-code for every build plate',
+    isEnabled: (s) => s.modelCount > 0 && !s.isSlicing && !s.preflightBlocked,
+    run: (ctx) => ctx.exportAllPlates(),
   },
   {
     id: 'file_export_stl',
