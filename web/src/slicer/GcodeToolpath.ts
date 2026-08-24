@@ -105,3 +105,24 @@ export function parseGcodeToolpath(gcode: string, filamentColors?: string[]): To
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   return { geometry, layerCount: model.layerCount, segmentCount: segments };
 }
+
+/** Export sliced extrusion toolpaths as a Wavefront OBJ string. */
+export function exportToolpathsToObj(gcode: string): string {
+  const model = parseRichGcodeModel(gcode);
+  validateGcodePathSidecar(model);
+  const columns = model.columns;
+  const lines: string[] = ['# Sliced Toolpaths exported by OrcaXR'];
+  let vertexIndex = 1;
+  const lineIndices: string[] = [];
+
+  for (let index = 0; index < columns.count; index += 1) {
+    if (columns.kind[index] !== GCODE_RECORD_KIND.EXTRUDE) continue;
+    visitGcodeRecordPathSegments(model, index, (startX, startY, startZ, endX, endY, endZ) => {
+      lines.push(`v ${startX.toFixed(4)} ${startY.toFixed(4)} ${startZ.toFixed(4)}`);
+      lines.push(`v ${endX.toFixed(4)} ${endY.toFixed(4)} ${endZ.toFixed(4)}`);
+      lineIndices.push(`l ${vertexIndex} ${vertexIndex + 1}`);
+      vertexIndex += 2;
+    });
+  }
+  return lines.concat(lineIndices).join('\n');
+}

@@ -324,6 +324,9 @@ export class ActionContext {
   exportAllPlates(): Promise<number> {
     return this.workspace.exportAllPlates();
   }
+  exportToolpathsAsObj(): void {
+    this.workspace.exportToolpathsAsObj();
+  }
   saveProject(): Promise<void> {
     return this.workspace.saveProject();
   }

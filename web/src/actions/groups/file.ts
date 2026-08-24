@@ -170,6 +170,8 @@ export const fileActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'file',
     hint: 'Export the sliced toolpaths as a Wavefront OBJ',
+    isEnabled: (s) => s.gcodeReady,
+    run: (ctx) => ctx.exportToolpathsAsObj(),
   },
   {
     id: 'file_open_gcode',

@@ -80,6 +80,7 @@ import {
   type GcodePreviewViewPatch,
   type GcodePreviewViewState,
 } from '../slicer/GcodePreviewSession';
+import { exportToolpathsToObj } from '../slicer/GcodeToolpath';
 import { GcodePreviewSurface, type GcodePreviewSurfaceOptions } from '../ui/preview/GcodePreviewSurface';
 import { CURRENT_THREE_WORLD_UNITS_PER_MM, getThreeProjectEntity } from '../project/surfaces/ThreeProjectSurface';
 import {
@@ -9640,6 +9641,26 @@ export class OrcaWorkspace extends xb.Script {
     } catch (error) {
       this.setStatus(t('workspace.orcaWorkspace.stlExportFailed', 'STL export failed.'));
       throw error;
+    }
+  }
+
+  /** Export the current sliced toolpaths as a downloadable Wavefront OBJ (File → Export Toolpaths as OBJ). */
+  public exportToolpathsAsObj(): void {
+    if (!this.publishedGcode || !this.revalidatePublishedGcode()) {
+      this.setStatus(
+        t('workspace.orcaWorkspace.slicePlateBeforeExportingObj', 'Slice the plate before exporting toolpaths.'),
+      );
+      return;
+    }
+    try {
+      const obj = exportToolpathsToObj(this.publishedGcode.gcode);
+      const activePlate = this.canonicalProject.getSummary().plates.find((p) => p.id === this.activePlateId);
+      const name = (activePlate?.name ?? 'plate').replace(/[^A-Za-z0-9._-]+/g, '_');
+      this.onDownloadFile?.(`${name}_toolpaths.obj`, obj, 'model/obj');
+      this.setStatus(t('workspace.orcaWorkspace.toolpathsExportedAsObj', 'Sliced toolpaths exported as OBJ.'));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStatus(`${t('workspace.orcaWorkspace.exportObjFailed', 'Export OBJ failed')}: ${message}`);
     }
   }
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { GcodeInspectionError, inspectGcode } from '../GcodeInspectionModel';
 import { GCODE_PREVIEW_EVENT_COUNT, GcodePreviewProjectionError, projectGcodePreview } from '../GcodePreviewModel';
 import { GcodeStatisticsError, classifyRichGcodeObservationCoverage } from '../GcodeStatisticsModel';
-import { parseGcodeToolpath } from '../GcodeToolpath';
+import { exportToolpathsToObj, parseGcodeToolpath } from '../GcodeToolpath';
 import { GCODE_RECORD_KIND, parseRichGcodeModel, type RichGcodeModel } from '../RichGcodeModel';
 
 let passed = 0;
@@ -127,6 +127,13 @@ test('statistics exact-object validation requires the new path sidecar schema an
     },
   };
   expectAllConsumerValidatorsReject(wrongPathArray);
+});
+
+test('exportToolpathsToObj emits vertices and line elements for extrusion moves', () => {
+  const obj = exportToolpathsToObj(ARC_SOURCE);
+  assert.match(obj, /^# Sliced Toolpaths exported by OrcaXR/);
+  assert.match(obj, /\nv 0\.0000 0\.0000 0\.2000\n/);
+  assert.match(obj, /\nl 1 2\n/);
 });
 
 console.log(`\n${passed} G-code path-consumer tests passed.`);

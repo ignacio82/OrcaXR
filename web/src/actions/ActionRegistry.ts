@@ -466,7 +466,6 @@ const CANONICAL_CUTOVER_GATED_IDS = new Set<string>(Object.keys(CANONICAL_CUTOVE
 
 const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
   ...CANONICAL_CUTOVER_GATED_REASONS,
-  file_export_obj: 'Toolpath OBJ export is not implemented yet.',
   file_open_gcode: 'Standalone G-code import and viewing is not implemented yet.',
   help_config_folder: 'Browsers cannot reveal a native config folder; the web adaptation is not implemented yet.',
   // Not "not yet": the renderer's camera is created and owned by xrblocks as a
@@ -524,6 +523,7 @@ const MODEL_PREREQUISITES = new Set([
 ]);
 const GCODE_PREREQUISITES = new Set([
   'file_export_gcode',
+  'file_export_obj',
   'save_gcode_to_downloads',
   'send_to_printer',
   'toggle_preview',
