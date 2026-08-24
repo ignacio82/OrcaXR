@@ -96,6 +96,7 @@ export const advancedActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'tools',
     hint: 'Add a cavity for a magnet',
+    run: (ctx) => ctx.addMagnetHole(),
   },
   {
     id: 'auto_place_wipe',

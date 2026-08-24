@@ -217,6 +217,7 @@ import {
   ORCA_VOLUME_ROLE_ORDER,
   type VolumeRoleConversionDecision,
 } from '../project/objects/semanticVolumeCommands';
+import { MagnetOp, MagnetShape, type MagnetSpec } from '../features/MagnetOp';
 import {
   captureVolumeSplitGuard,
   SplitVolumeToPartsCommand,
@@ -2844,6 +2845,75 @@ export class CanonicalWorkspaceController {
   }
 
   /**
+   * Add a magnet cavity (negative volume) to the selected object.
+   */
+  addMagnetHole(specInput?: Partial<MagnetSpec>): { volumeId: VolumeId; objectId: ObjectId } {
+    this.assertActive();
+    const project = this.session.project.getSnapshot();
+    const selection = this.session.selection.getSnapshot();
+    const primary = selection.primary;
+    if (!primary) {
+      throw new Error('Adding a magnet hole requires a selected object or instance');
+    }
+    let targetObject: ProjectObject | undefined;
+    if (primary.kind === 'instance') {
+      const found = findInstance(project.state, primary.id);
+      if (found) targetObject = found.object;
+    } else if (primary.kind === 'object') {
+      const found = findObject(project.state, primary.id);
+      if (found) targetObject = found.object;
+    } else if (primary.kind === 'volume') {
+      const found = findVolume(project.state, primary.id);
+      if (found) targetObject = found.object;
+    }
+    if (!targetObject) {
+      throw new Error('Target object not found for adding magnet hole');
+    }
+
+    const spec: MagnetSpec = {
+      count: 1,
+      shape: MagnetShape.DISC,
+      diameterMm: 6,
+      discHeightMm: 3,
+      clearanceMm: 0.2,
+      ...specInput,
+    };
+
+    const [cw, cd, ch] = MagnetOp.cavityDims(spec);
+    let geom: { positions: number[]; indices: number[] };
+    if (spec.shape === MagnetShape.DISC) {
+      geom = createPrimitiveCylinderGeometry(cw / 2, ch);
+    } else {
+      geom = createPrimitiveCubeGeometry(Math.max(cw, cd, ch));
+    }
+
+    const assetId = this.options.idSource.next('asset');
+    const volumeId = this.options.idSource.next('volume');
+    const asset = encodeIndexedMeshAsset({
+      id: assetId,
+      positions: geom.positions,
+      indices: geom.indices,
+    });
+
+    const volume: ProjectVolume = {
+      id: volumeId,
+      name: 'Magnet Hole',
+      role: 'negative-volume',
+      source: {
+        assetId,
+        topologyRevision: 0,
+        triangleCount: geom.indices.length / 3,
+      },
+      transform: identityTransform(),
+      config: {},
+      annotations: emptyFacetAnnotations(0),
+    };
+
+    this.session.execute(new AddVolumeCommand(targetObject.id, volume, asset), { coalesce: false });
+    return { volumeId, objectId: targetObject.id };
+  }
+
+  /**
    * Add a height-range modifier to the selected object.
    */
   addHeightRange(minZMm?: number, maxZMm?: number): { objectId: ObjectId; layerRangeId: LayerRangeId } {
@@ -4612,5 +4682,56 @@ function createPrimitiveCubeGeometry(size = 10): { positions: number[]; indices:
     0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11, 12, 13, 14, 12, 14, 15, 16, 17, 18, 16, 18, 19, 20, 21, 22,
     20, 22, 23,
   ];
+  return { positions, indices };
+}
+
+function createPrimitiveCylinderGeometry(
+  radius: number,
+  height: number,
+  radialSegments = 16,
+): { positions: number[]; indices: number[] } {
+  const positions: number[] = [];
+  const indices: number[] = [];
+  const halfH = height / 2;
+
+  const topCenterIndex = 0;
+  positions.push(0, 0, halfH);
+
+  const bottomCenterIndex = 1;
+  positions.push(0, 0, -halfH);
+
+  const topRingStart = 2;
+  for (let i = 0; i < radialSegments; i++) {
+    const theta = (i / radialSegments) * Math.PI * 2;
+    positions.push(radius * Math.cos(theta), radius * Math.sin(theta), halfH);
+  }
+
+  const bottomRingStart = topRingStart + radialSegments;
+  for (let i = 0; i < radialSegments; i++) {
+    const theta = (i / radialSegments) * Math.PI * 2;
+    positions.push(radius * Math.cos(theta), radius * Math.sin(theta), -halfH);
+  }
+
+  for (let i = 0; i < radialSegments; i++) {
+    const next = (i + 1) % radialSegments;
+    indices.push(topCenterIndex, topRingStart + i, topRingStart + next);
+  }
+
+  for (let i = 0; i < radialSegments; i++) {
+    const next = (i + 1) % radialSegments;
+    indices.push(bottomCenterIndex, bottomRingStart + next, bottomRingStart + i);
+  }
+
+  for (let i = 0; i < radialSegments; i++) {
+    const next = (i + 1) % radialSegments;
+    const tCurrent = topRingStart + i;
+    const tNext = topRingStart + next;
+    const bCurrent = bottomRingStart + i;
+    const bNext = bottomRingStart + next;
+
+    indices.push(tCurrent, bCurrent, tNext);
+    indices.push(tNext, bCurrent, bNext);
+  }
+
   return { positions, indices };
 }

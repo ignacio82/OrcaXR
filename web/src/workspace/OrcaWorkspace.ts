@@ -18,6 +18,7 @@ import {
 } from '../project/objects/emboss';
 import { readTrueTypeOutlines } from '../project/objects/truetypeOutlines';
 import { readSvgShapes } from '../project/objects/svgShapes';
+import type { MagnetSpec } from '../features/MagnetOp';
 import type { ProjectSummaryInput } from '../diagnostics/DiagnosticsBundle';
 import type { FilamentId, InstanceId, LayerRangeId, ObjectId, PlateId, VolumeId } from '../project/domain/ids';
 import { entityId, UuidIdSource } from '../project/domain/ids';
@@ -9162,6 +9163,19 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus(
         `${t('workspace.orcaWorkspace.variableLayerHeightFailed', 'Variable Layer Height failed')}: ${message}`,
       );
+      return false;
+    }
+  }
+
+  public addMagnetHole(spec?: Partial<MagnetSpec>): boolean {
+    try {
+      this.canonicalProject.addMagnetHole(spec);
+      this.setStatus(t('workspace.orcaWorkspace.addedMagnetHole', 'Added magnet hole cavity to selected model.'));
+      this.syncTransformProxy();
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStatus(`${t('workspace.orcaWorkspace.addMagnetHoleFailed', 'Add Magnet Hole failed')}: ${message}`);
       return false;
     }
   }

@@ -377,6 +377,9 @@ export class ActionContext {
   variableLayerHeight(): void {
     this.workspace.variableLayerHeight();
   }
+  addMagnetHole(spec?: Parameters<OrcaWorkspace['addMagnetHole']>[0]): void {
+    this.workspace.addMagnetHole(spec);
+  }
   cutPlane(): void {
     this.workspace.cutSelectedByPlane();
   }

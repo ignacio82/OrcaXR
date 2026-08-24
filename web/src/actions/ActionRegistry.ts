@@ -476,7 +476,6 @@ const CANONICAL_CUTOVER_GATED_IDS = new Set<string>(Object.keys(CANONICAL_CUTOVE
 
 const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
   ...CANONICAL_CUTOVER_GATED_REASONS,
-  add_magnet: 'Magnet-hole geometry is not implemented yet; no model will be changed.',
   scan_network: 'Local-network printer discovery is not implemented yet.',
   file_export_all_plates: 'All-plate slicing and export is not implemented yet.',
   file_export_obj: 'Toolpath OBJ export is not implemented yet.',
@@ -514,6 +513,7 @@ const INSTANCE_SELECTION_PREREQUISITES = new Set([
   'add_height_range',
   'set_negative_part',
   'variable_layer_height',
+  'add_magnet',
   'tool_move',
   'tool_rotate',
   'tool_scale',
