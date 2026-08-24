@@ -371,6 +371,9 @@ export class ActionContext {
   setNegativePart(): void {
     this.workspace.setNegativePart();
   }
+  addHeightRange(): void {
+    this.workspace.addHeightRange();
+  }
   cutPlane(): void {
     this.workspace.cutSelectedByPlane();
   }

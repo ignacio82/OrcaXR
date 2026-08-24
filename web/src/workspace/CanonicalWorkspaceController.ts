@@ -2841,6 +2841,62 @@ export class CanonicalWorkspaceController {
     return { volumeId, objectId: targetObject.id, role };
   }
 
+  /**
+   * Add a height-range modifier to the selected object.
+   */
+  addHeightRange(minZMm?: number, maxZMm?: number): { objectId: ObjectId; layerRangeId: LayerRangeId } {
+    this.assertActive();
+    const project = this.session.project.getSnapshot();
+    const selection = this.session.selection.getSnapshot();
+    const primary = selection.primary;
+    if (!primary) {
+      throw new Error('Adding a height range requires a selected object or instance');
+    }
+    let targetObject: ProjectObject | undefined;
+    if (primary.kind === 'instance') {
+      const found = findInstance(project.state, primary.id);
+      if (found) targetObject = found.object;
+    } else if (primary.kind === 'object') {
+      const found = findObject(project.state, primary.id);
+      if (found) targetObject = found.object;
+    } else if (primary.kind === 'volume') {
+      const found = findVolume(project.state, primary.id);
+      if (found) targetObject = found.object;
+    } else if (primary.kind === 'layer-range') {
+      const found = findLayerRange(project.state, primary.id);
+      if (found) targetObject = found.object;
+    }
+    if (!targetObject) {
+      throw new Error('Target object not found for adding height range');
+    }
+
+    let minZ = minZMm;
+    let maxZ = maxZMm;
+    if (minZ === undefined || maxZ === undefined) {
+      const existing = targetObject.layerRanges;
+      if (existing.length > 0) {
+        const highest = Math.max(...existing.map((r) => r.maxZMm));
+        minZ = highest;
+        maxZ = highest + 1;
+      } else {
+        minZ = 0;
+        maxZ = 1;
+      }
+    }
+
+    const layerRangeId = this.options.idSource.next('layer-range');
+    this.session.execute(
+      new AddLayerRangeCommand(targetObject.id, {
+        id: layerRangeId,
+        minZMm: minZ,
+        maxZMm: maxZ,
+        config: {},
+      }),
+      { coalesce: false },
+    );
+    return { objectId: targetObject.id, layerRangeId };
+  }
+
   private allocateSeparatedObjectIdentities(
     volumeIds: readonly VolumeId[],
     instanceCount: number,

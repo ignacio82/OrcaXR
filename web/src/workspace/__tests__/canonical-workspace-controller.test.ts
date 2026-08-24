@@ -1417,6 +1417,33 @@ await test('adds support blocker volume to selected object and supports undo/red
   controller.dispose();
 });
 
+await test('adds height range modifier to selected object and supports undo/redo', () => {
+  const controller = createController();
+  const geometry = new THREE.BoxGeometry(20, 20, 20);
+  controller.importBufferGeometry(geometry, { name: 'Main Object' });
+  assert.equal(controller.getSummary().objectCount, 1);
+
+  const res = controller.addHeightRange(0, 5);
+  assert.ok(res.layerRangeId);
+
+  const obj = controller['session'].project.getSnapshot().state.plates[0].objects[0];
+  assert.equal(obj.layerRanges.length, 1);
+  assert.equal(obj.layerRanges[0].minZMm, 0);
+  assert.equal(obj.layerRanges[0].maxZMm, 5);
+
+  assert.equal(controller.undo(), true);
+  const revertedObj = controller['session'].project.getSnapshot().state.plates[0].objects[0];
+  assert.equal(revertedObj.layerRanges.length, 0);
+
+  assert.equal(controller.redo(), true);
+  const redoneObj = controller['session'].project.getSnapshot().state.plates[0].objects[0];
+  assert.equal(redoneObj.layerRanges.length, 1);
+  assert.equal(redoneObj.layerRanges[0].minZMm, 0);
+  assert.equal(redoneObj.layerRanges[0].maxZMm, 5);
+
+  controller.dispose();
+});
+
 function semanticGuard(snapshot: CanonicalSemanticObjectEditorSnapshot) {
   return {
     expectedRevision: snapshot.sourceRevision,

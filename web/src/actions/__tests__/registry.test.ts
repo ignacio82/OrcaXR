@@ -224,6 +224,16 @@ test('Download, canonical delete, and guarded Split to Objects use prerequisites
     }),
     true,
   );
+  assert.strictEqual(ActionRegistry.enabled(reg.get('add_height_range')!, { ...baseState, modelCount: 1 }), false);
+  assert.strictEqual(
+    ActionRegistry.enabled(reg.get('add_height_range')!, {
+      ...baseState,
+      modelCount: 1,
+      hasSelection: true,
+      hasInstanceSelection: true,
+    }),
+    true,
+  );
   assert.strictEqual(ActionRegistry.enabled(reg.get('tool_cut')!, { ...baseState, modelCount: 2 }), false);
   assert.match(ActionRegistry.disabledReason(reg.get('repair_model')!, baseState) ?? '', /select/i);
 });

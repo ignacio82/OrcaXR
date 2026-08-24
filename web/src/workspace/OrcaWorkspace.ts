@@ -9131,6 +9131,21 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
+  public addHeightRange(): boolean {
+    try {
+      this.canonicalProject.addHeightRange();
+      this.setStatus(t('workspace.orcaWorkspace.addedHeightRangeModifier', 'Added height-range modifier.'));
+      this.syncTransformProxy();
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStatus(
+        `${t('workspace.orcaWorkspace.addHeightRangeFailed', 'Add Height-range Modifier failed')}: ${message}`,
+      );
+      return false;
+    }
+  }
+
   public cutSelectedByPlane() {
     this.setStatus(
       t(
