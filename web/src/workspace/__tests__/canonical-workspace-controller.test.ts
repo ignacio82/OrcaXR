@@ -1571,6 +1571,29 @@ await test('cuts selected object to clipboard and supports undo/redo', () => {
   controller.dispose();
 });
 
+await test('pastes copied object from clipboard with fresh IDs and supports undo/redo', () => {
+  const controller = createController();
+  const geometry = new THREE.BoxGeometry(20, 20, 20);
+  controller.importBufferGeometry(geometry, { name: 'Original Object' });
+  assert.equal(controller.getSummary().objectCount, 1);
+
+  const copied = controller.copySelectedObject();
+  assert.ok(copied);
+
+  const pasted = controller.pasteClipboard();
+  assert.ok(pasted);
+  assert.equal(controller.getSummary().objectCount, 2);
+  assert.notEqual(pasted.objectId, copied.objectId);
+
+  assert.equal(controller.undo(), true);
+  assert.equal(controller.getSummary().objectCount, 1);
+
+  assert.equal(controller.redo(), true);
+  assert.equal(controller.getSummary().objectCount, 2);
+
+  controller.dispose();
+});
+
 function semanticGuard(snapshot: CanonicalSemanticObjectEditorSnapshot) {
   return {
     expectedRevision: snapshot.sourceRevision,

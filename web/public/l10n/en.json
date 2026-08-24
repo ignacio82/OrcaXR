@@ -196,7 +196,7 @@
   "action.edit_duplicate.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P2.2.",
   "action.edit_paste.hint": "Paste the clipboard model onto the plate",
   "action.edit_paste.label": "Paste",
-  "action.edit_paste.reason": "Paste is disabled until clipboard content can be validated and inserted through one canonical command with fresh stable IDs.",
+  "action.edit_paste.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P2.2.",
   "action.edit_redo.hint": "Redo the last undone scene edit",
   "action.edit_redo.label": "Redo",
   "action.edit_redo.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P1.2.",

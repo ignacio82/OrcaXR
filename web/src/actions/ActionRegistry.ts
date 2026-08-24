@@ -460,8 +460,6 @@ export const GROUPS: readonly ActionGroup[] = [
 const CANONICAL_CUTOVER_GATED_REASONS = {
   file_export_3mf:
     'Generic geometry 3MF export is disabled because the current exporter drops canonical project metadata and stable identities.',
-  edit_paste:
-    'Paste is disabled until clipboard content can be validated and inserted through one canonical command with fresh stable IDs.',
   tool_cut:
     'Plane cutting is disabled until canonical topology, annotations, assets, and stable IDs can be replaced atomically.',
 } as const satisfies Readonly<Record<string, string>>;
