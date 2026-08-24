@@ -181,6 +181,7 @@ export const fileActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'file',
     hint: 'Open a .gcode file in the standalone toolpath viewer',
+    run: (ctx) => ctx.openGcodeFile(),
   },
   {
     id: 'file_export_logs',

@@ -49,7 +49,6 @@ for (const line of parityDocument.split('\n')) {
 
 const UNAVAILABLE_IDS = [
   'tool_cut',
-  'file_open_gcode',
   'help_config_folder',
   'view_perspective_toggle',
   'view_auto_perspective',
@@ -82,6 +81,7 @@ const CANONICAL_ACTIONS_LEFT_ENABLED = [
   'file_export_3mf',
   'file_export_all_plates',
   'file_export_obj',
+  'file_open_gcode',
   'file_open_project',
   'file_import_model',
   'file_import_zip',
@@ -377,9 +377,9 @@ test('registry guard explains unavailable actions without invoking a handler', (
   const ctx = {
     reportCapabilityUnavailable: (label: string, reason: string) => reports.push(`${label}: ${reason}`),
   } as unknown as ActionContext;
-  void registry.invoke('file_open_gcode', 'dom-menu', ctx, FULL_STATE);
+  void registry.invoke('help_config_folder', 'dom-menu', ctx, FULL_STATE);
   assert.strictEqual(reports.length, 1);
-  assert.match(reports[0], /Standalone G-code import and viewing is not implemented/i);
+  assert.match(reports[0], /Browsers cannot reveal a native config folder/i);
 });
 
 test('prerequisite evaluator gives actionable disabled reasons', () => {

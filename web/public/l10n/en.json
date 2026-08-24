@@ -263,7 +263,7 @@
   "action.file_new_project.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P11.1.",
   "action.file_open_gcode.hint": "Open a .gcode file in the standalone toolpath viewer",
   "action.file_open_gcode.label": "Open G-code Viewer…",
-  "action.file_open_gcode.reason": "Standalone G-code import and viewing is not implemented yet.",
+  "action.file_open_gcode.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P5.7.",
   "action.file_open_project.hint": "Open a saved .3mf project (models + plates + settings)",
   "action.file_open_project.label": "Open Project…",
   "action.file_open_project.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P11.1.",
