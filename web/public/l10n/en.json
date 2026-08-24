@@ -53,7 +53,7 @@
   "action.add_support_blocker.reason": "Support-blocker volumes are not implemented yet.",
   "action.add_support_enforcer.hint": "Add a volume that forces supports inside it",
   "action.add_support_enforcer.label": "Add Support Enforcer",
-  "action.add_support_enforcer.reason": "Support-enforcer volumes are not implemented yet.",
+  "action.add_support_enforcer.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P2.4.",
   "action.arrange_all.hint": "Lay all models out in a centred grid so nothing overlaps",
   "action.arrange_all.label": "Auto-arrange Plate",
   "action.arrange_all.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P5.5.",
