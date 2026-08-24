@@ -2897,6 +2897,36 @@ export class CanonicalWorkspaceController {
     return { objectId: targetObject.id, layerRangeId };
   }
 
+  /**
+   * Turn the selected volume into a negative part, or add a negative volume primitive.
+   */
+  setNegativePart(): void {
+    this.assertActive();
+    const selection = this.session.selection.getSnapshot();
+    const primary = selection.primary;
+    if (!primary) {
+      throw new Error('Set as Negative Part requires a selected object, instance, or volume');
+    }
+    if (primary.kind === 'volume') {
+      const project = this.session.project.getSnapshot();
+      const found = findVolume(project.state, primary.id);
+      if (found && found.volume.role !== 'negative-volume') {
+        const editor = this.getSemanticObjectEditorSnapshot();
+        if (editor) {
+          this.convertSemanticVolumeRole({
+            objectId: found.object.id,
+            volumeId: found.volume.id,
+            expectedRevision: editor.sourceRevision,
+            sourceHash: editor.sourceHash,
+            nextRole: 'negative-volume',
+          });
+          return;
+        }
+      }
+    }
+    this.addHelperVolume('negative-volume');
+  }
+
   private allocateSeparatedObjectIdentities(
     volumeIds: readonly VolumeId[],
     instanceCount: number,

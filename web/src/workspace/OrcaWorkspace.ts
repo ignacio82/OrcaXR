@@ -9118,8 +9118,8 @@ export class OrcaWorkspace extends xb.Script {
 
   public setNegativePart(): boolean {
     try {
-      this.canonicalProject.addHelperVolume('negative-volume');
-      this.setStatus(t('workspace.orcaWorkspace.addedNegativeVolume', 'Added negative volume.'));
+      this.canonicalProject.setNegativePart();
+      this.setStatus(t('workspace.orcaWorkspace.setNegativePartSuccess', 'Set part as negative volume.'));
       this.syncTransformProxy();
       return true;
     } catch (error) {

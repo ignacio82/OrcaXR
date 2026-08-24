@@ -65,7 +65,6 @@ const UNAVAILABLE_IDS = [
   'view_show_gcode_window',
   'tool_face_detector',
   'tool_hollow',
-  'set_negative_part',
   'variable_layer_height',
 ].sort();
 
@@ -89,6 +88,7 @@ const CANONICAL_ACTIONS_LEFT_ENABLED = [
   'add_support_enforcer',
   'add_support_blocker',
   'add_height_range',
+  'set_negative_part',
   'file_open_project',
   'file_import_model',
   'file_import_zip',
