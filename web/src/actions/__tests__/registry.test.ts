@@ -289,6 +289,8 @@ test('Download, canonical delete, and guarded Split to Objects use prerequisites
   );
   assert.strictEqual(ActionRegistry.enabled(reg.get('edit_paste')!, { ...baseState, hasClipboard: false }), false);
   assert.strictEqual(ActionRegistry.enabled(reg.get('edit_paste')!, { ...baseState, hasClipboard: true }), true);
+  assert.strictEqual(ActionRegistry.enabled(reg.get('file_export_3mf')!, { ...baseState, modelCount: 0 }), false);
+  assert.strictEqual(ActionRegistry.enabled(reg.get('file_export_3mf')!, { ...baseState, modelCount: 1 }), true);
   assert.strictEqual(ActionRegistry.enabled(reg.get('tool_cut')!, { ...baseState, modelCount: 2 }), false);
   assert.match(ActionRegistry.disabledReason(reg.get('repair_model')!, baseState) ?? '', /select/i);
 });

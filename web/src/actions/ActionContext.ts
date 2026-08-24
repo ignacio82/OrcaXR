@@ -318,8 +318,8 @@ export class ActionContext {
   exportAllObjectsAsStls(): void {
     this.workspace.exportAllObjectsAsStls();
   }
-  export3mf(): void {
-    this.workspace.exportPlate3mf();
+  export3mf(): Promise<void> {
+    return this.workspace.exportPlate3mf();
   }
   saveProject(): Promise<void> {
     return this.workspace.saveProject();

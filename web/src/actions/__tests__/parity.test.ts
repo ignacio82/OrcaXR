@@ -48,7 +48,6 @@ for (const line of parityDocument.split('\n')) {
 }
 
 const UNAVAILABLE_IDS = [
-  'file_export_3mf',
   'tool_cut',
   'file_export_all_plates',
   'file_export_obj',
@@ -61,7 +60,7 @@ const UNAVAILABLE_IDS = [
   'tool_hollow',
 ].sort();
 
-const CANONICAL_CUTOVER_GATED_IDS = ['file_export_3mf', 'tool_cut'] as const;
+const CANONICAL_CUTOVER_GATED_IDS = ['tool_cut'] as const;
 
 const CANONICAL_ACTIONS_LEFT_ENABLED = [
   'file_new_project',
@@ -82,6 +81,7 @@ const CANONICAL_ACTIONS_LEFT_ENABLED = [
   'edit_copy',
   'edit_cut',
   'edit_paste',
+  'file_export_3mf',
   'file_open_project',
   'file_import_model',
   'file_import_zip',
@@ -377,9 +377,9 @@ test('registry guard explains unavailable actions without invoking a handler', (
   const ctx = {
     reportCapabilityUnavailable: (label: string, reason: string) => reports.push(`${label}: ${reason}`),
   } as unknown as ActionContext;
-  void registry.invoke('file_export_3mf', 'dom-menu', ctx, FULL_STATE);
+  void registry.invoke('file_export_obj', 'dom-menu', ctx, FULL_STATE);
   assert.strictEqual(reports.length, 1);
-  assert.match(reports[0], /drops canonical project metadata/i);
+  assert.match(reports[0], /Toolpath OBJ export is not implemented/i);
 });
 
 test('prerequisite evaluator gives actionable disabled reasons', () => {

@@ -9750,13 +9750,20 @@ export class OrcaWorkspace extends xb.Script {
     return null;
   }
 
-  public exportPlate3mf() {
-    this.setStatus(
-      t(
-        'workspace.orcaWorkspace.geometryOnly3MFExportIs2',
-        'Geometry-only 3MF export is unavailable; use canonical project save.',
-      ),
-    );
+  public async exportPlate3mf(): Promise<void> {
+    if (this.canonicalProject.getSummary().objectCount === 0) {
+      this.setStatus(t('workspace.orcaWorkspace.nothingToExportAddA', 'Nothing to export — add a model first.'));
+      return;
+    }
+    try {
+      const saved = await this.canonicalProject.saveCanonical3mf();
+      const filename = saved.suggestedFilename.replace(/\.3mf$/i, '') + '-export.3mf';
+      this.onDownloadFile?.(filename, ownedArrayBuffer(saved.bytes), saved.mediaType);
+      this.setStatus(t('workspace.orcaWorkspace.exported3mf', 'Plated geometry exported as 3MF.'));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStatus(`${t('workspace.orcaWorkspace.export3mfFailed', 'Export 3MF failed')}: ${message}`);
+    }
   }
   // --- Save / Open Project (Orca File → Save / Open Project) -----------
   /** Save the project as a downloadable OrcaXR .3mf (File → Save Project). */
