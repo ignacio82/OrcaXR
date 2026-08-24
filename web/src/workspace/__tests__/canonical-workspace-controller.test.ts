@@ -1243,6 +1243,34 @@ await test('applies boolean mesh result, deletes second object, and supports und
   controller.dispose();
 });
 
+await test('applies subtract boolean mesh result and supports undo/redo', () => {
+  const controller = createController();
+  const geometry1 = new THREE.BoxGeometry(10, 10, 10);
+  const geometry2 = new THREE.BoxGeometry(5, 5, 5);
+  const first = controller.importBufferGeometry(geometry1, { name: 'Cube 1' });
+  const second = controller.importBufferGeometry(geometry2, { name: 'Cube 2' });
+
+  const booleanPositions = [0, 0, 0, 10, 0, 0, 0, 10, 0];
+  const booleanIndices = [0, 1, 2];
+  const res = controller.applyBooleanMesh(
+    first.instanceId,
+    second.instanceId,
+    booleanPositions,
+    booleanIndices,
+    'A_NOT_B',
+  );
+  assert.equal(res.afterTriangles, 1);
+  assert.equal(controller.getSummary().objectCount, 1);
+
+  assert.equal(controller.undo(), true);
+  assert.equal(controller.getSummary().objectCount, 2);
+
+  assert.equal(controller.redo(), true);
+  assert.equal(controller.getSummary().objectCount, 1);
+
+  controller.dispose();
+});
+
 function semanticGuard(snapshot: CanonicalSemanticObjectEditorSnapshot) {
   return {
     expectedRevision: snapshot.sourceRevision,

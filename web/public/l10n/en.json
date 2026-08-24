@@ -330,7 +330,7 @@
   "action.mesh_boolean_intersection.reason": "Mesh intersection is disabled until topology-changing booleans preserve canonical metadata and commit atomically.",
   "action.mesh_boolean_subtract.hint": "Boolean-subtract the other model from the selected",
   "action.mesh_boolean_subtract.label": "Subtract (cut)",
-  "action.mesh_boolean_subtract.reason": "Mesh subtraction is disabled until topology-changing booleans preserve canonical metadata and commit atomically.",
+  "action.mesh_boolean_subtract.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P5.2.",
   "action.mesh_boolean_union.hint": "Boolean-union the selected and other model",
   "action.mesh_boolean_union.label": "Union (merge all)",
   "action.mesh_boolean_union.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P5.2.",
