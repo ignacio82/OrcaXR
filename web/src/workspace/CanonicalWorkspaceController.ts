@@ -207,6 +207,8 @@ import {
   MergeLayerRangesCommand,
   SplitLayerRangeCommand,
 } from '../project/objects/layerRangeCommands';
+import { AdaptiveLayerHeightProfileCommand } from '../project/objects/layerHeightCommands';
+import type { LayerHeightSlicingParameters } from '../project/objects/layerHeightProfile';
 import { projectObjectsTree } from '../project/objects/projection';
 import {
   AddVolumeCommand,
@@ -2925,6 +2927,75 @@ export class CanonicalWorkspaceController {
       }
     }
     this.addHelperVolume('negative-volume');
+  }
+
+  /**
+   * Calculate and apply adaptive variable layer heights to the selected object.
+   */
+  applyAdaptiveLayerHeight(qualityFactor = 0.5): void {
+    this.assertActive();
+    const project = this.session.project.getSnapshot();
+    const selection = this.session.selection.getSnapshot();
+    const primary = selection.primary;
+    if (!primary) {
+      throw new Error('Variable layer height requires a selected object or instance');
+    }
+    let targetObject: ProjectObject | undefined;
+    if (primary.kind === 'instance') {
+      const found = findInstance(project.state, primary.id);
+      if (found) targetObject = found.object;
+    } else if (primary.kind === 'object') {
+      const found = findObject(project.state, primary.id);
+      if (found) targetObject = found.object;
+    } else if (primary.kind === 'volume') {
+      const found = findVolume(project.state, primary.id);
+      if (found) targetObject = found.object;
+    }
+    if (!targetObject) {
+      throw new Error('Target object not found for variable layer height');
+    }
+
+    const firstVolume = targetObject.volumes[0];
+    if (!firstVolume) {
+      throw new Error('Target object has no volumes');
+    }
+    const payload = this.session.assets.get(firstVolume.source.assetId);
+    if (!payload) {
+      throw new Error(`Asset ${firstVolume.source.assetId} not found`);
+    }
+    const decoded = decodeIndexedMeshAsset(payload);
+
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    const vertices: [number, number, number][] = [];
+    for (let i = 0; i < decoded.positions.length; i += 3) {
+      const x = decoded.positions[i];
+      const y = decoded.positions[i + 1];
+      const z = decoded.positions[i + 2];
+      vertices.push([x, y, z]);
+      if (z < minZ) minZ = z;
+      if (z > maxZ) maxZ = z;
+    }
+    const triangles: [number, number, number][] = [];
+    for (let i = 0; i < decoded.indices.length; i += 3) {
+      triangles.push([decoded.indices[i], decoded.indices[i + 1], decoded.indices[i + 2]]);
+    }
+
+    const objectHeightMm = Number.isFinite(maxZ - minZ) && maxZ > minZ ? maxZ - minZ : 20;
+
+    const parameters: LayerHeightSlicingParameters = {
+      layerHeightMm: 0.2,
+      minLayerHeightMm: 0.08,
+      maxLayerHeightMm: 0.28,
+      firstObjectLayerHeightMm: 0.2,
+      firstObjectLayerHeightFixed: false,
+      objectHeightMm,
+    };
+
+    this.session.execute(
+      new AdaptiveLayerHeightProfileCommand(targetObject.id, parameters, { vertices, triangles }, qualityFactor),
+      { coalesce: false },
+    );
   }
 
   private allocateSeparatedObjectIdentities(

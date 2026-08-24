@@ -9146,6 +9146,26 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
+  public variableLayerHeight(): boolean {
+    try {
+      this.canonicalProject.applyAdaptiveLayerHeight();
+      this.setStatus(
+        t(
+          'workspace.orcaWorkspace.appliedAdaptiveLayerHeight',
+          'Calculated variable layer heights for selected model.',
+        ),
+      );
+      this.syncTransformProxy();
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStatus(
+        `${t('workspace.orcaWorkspace.variableLayerHeightFailed', 'Variable Layer Height failed')}: ${message}`,
+      );
+      return false;
+    }
+  }
+
   public cutSelectedByPlane() {
     this.setStatus(
       t(

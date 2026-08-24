@@ -374,6 +374,9 @@ export class ActionContext {
   addHeightRange(): void {
     this.workspace.addHeightRange();
   }
+  variableLayerHeight(): void {
+    this.workspace.variableLayerHeight();
+  }
   cutPlane(): void {
     this.workspace.cutSelectedByPlane();
   }

@@ -627,7 +627,7 @@
   "action.tool_svg.xrUnsupported": "Choosing a drawing needs the DOM file picker and its size is typed into a panel; no in-headset file browser or keyboard flow exists yet.",
   "action.variable_layer_height.hint": "Paint per-Z layer heights on the model",
   "action.variable_layer_height.label": "Variable Layer Height",
-  "action.variable_layer_height.reason": "Variable layer-height editing is not implemented yet.",
+  "action.variable_layer_height.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P5.9.",
   "action.view_auto_perspective.hint": "Auto-switch orthographic/perspective when changing to top/side views",
   "action.view_auto_perspective.label": "Auto Perspective",
   "action.view_auto_perspective.reason": "Auto-switching needs an orthographic mode, which the XR runtime's camera does not offer. See ADAPT-14.",
@@ -1001,6 +1001,7 @@
   "workspace.orcaWorkspace.addedSupportBlockerVolume": "Added support blocker volume.",
   "workspace.orcaWorkspace.addedSupportEnforcerVolume": "Added support enforcer volume.",
   "workspace.orcaWorkspace.anExplosionFactorMustBe": "An explosion factor must be at least 1, where 1 is fully assembled.",
+  "workspace.orcaWorkspace.appliedAdaptiveLayerHeight": "Calculated variable layer heights for selected model.",
   "workspace.orcaWorkspace.assemblyAlignmentNeedsTwoFaces": "Assembly alignment needs two faces on different models.",
   "workspace.orcaWorkspace.autoOrientIsUnavailableUntil": "Auto-orient is unavailable until its analysis commits a canonical transform.",
   "workspace.orcaWorkspace.autoPlaceWipeTowerFailed": "Auto-place wipe tower failed.",
@@ -1135,6 +1136,7 @@
   "workspace.orcaWorkspace.undidTheLastProjectEdit": "Undid the last project edit.",
   "workspace.orcaWorkspace.updatedTheSelectedObjectHeight": "Updated the selected object height ranges.",
   "workspace.orcaWorkspace.updatedTheSelectedPartRole": "Updated the selected part role.",
+  "workspace.orcaWorkspace.variableLayerHeightFailed": "Variable Layer Height failed",
   "workspace.orcaWorkspace.wipeTowerAutoDisabled": "Auto-position wipe tower disabled.",
   "workspace.orcaWorkspace.wipeTowerAutoEnabled": "Auto-position wipe tower enabled."
 }

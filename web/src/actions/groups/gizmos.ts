@@ -12,7 +12,7 @@
  */
 import type { ActionDefinition as Action } from '../ActionRegistry';
 
-const UNAVAILABLE_TOOL_IDS = new Set(['tool_face_detector', 'tool_hollow', 'variable_layer_height']);
+const UNAVAILABLE_TOOL_IDS = new Set(['tool_face_detector', 'tool_hollow']);
 
 function tool(
   id: string,

@@ -495,7 +495,6 @@ const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
   view_show_gcode_window: 'The G-code text inspector is not implemented yet.',
   tool_face_detector: 'Face detection and selection is not implemented yet.',
   tool_hollow: 'Model hollowing is not implemented yet.',
-  variable_layer_height: 'Variable layer-height editing is not implemented yet.',
 };
 
 const INSTANCE_SELECTION_PREREQUISITES = new Set([
@@ -514,6 +513,7 @@ const INSTANCE_SELECTION_PREREQUISITES = new Set([
   'add_support_blocker',
   'add_height_range',
   'set_negative_part',
+  'variable_layer_height',
   'tool_move',
   'tool_rotate',
   'tool_scale',

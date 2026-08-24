@@ -1468,6 +1468,28 @@ await test('adds negative volume to selected object and supports undo/redo', () 
   controller.dispose();
 });
 
+await test('applies adaptive layer height to selected object and supports undo/redo', () => {
+  const controller = createController();
+  const geometry = new THREE.ConeGeometry(20, 40, 16);
+  controller.importBufferGeometry(geometry, { name: 'Main Object' });
+  assert.equal(controller.getSummary().objectCount, 1);
+
+  controller.applyAdaptiveLayerHeight(0.5);
+
+  const obj = controller['session'].project.getSnapshot().state.plates[0].objects[0];
+  assert.ok(obj.layerHeightProfile && obj.layerHeightProfile.length > 0);
+
+  assert.equal(controller.undo(), true);
+  const revertedObj = controller['session'].project.getSnapshot().state.plates[0].objects[0];
+  assert.equal(revertedObj.layerHeightProfile, undefined);
+
+  assert.equal(controller.redo(), true);
+  const redoneObj = controller['session'].project.getSnapshot().state.plates[0].objects[0];
+  assert.ok(redoneObj.layerHeightProfile && redoneObj.layerHeightProfile.length > 0);
+
+  controller.dispose();
+});
+
 function semanticGuard(snapshot: CanonicalSemanticObjectEditorSnapshot) {
   return {
     expectedRevision: snapshot.sourceRevision,
