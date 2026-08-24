@@ -15,7 +15,6 @@ import type { ActionDefinition as Action } from '../ActionRegistry';
 const UNAVAILABLE_TOOL_IDS = new Set([
   'tool_face_detector',
   'tool_hollow',
-  'add_support_blocker',
   'add_height_range',
   'set_negative_part',
   'variable_layer_height',

@@ -1392,6 +1392,31 @@ await test('adds support enforcer volume to selected object and supports undo/re
   controller.dispose();
 });
 
+await test('adds support blocker volume to selected object and supports undo/redo', () => {
+  const controller = createController();
+  const geometry = new THREE.BoxGeometry(20, 20, 20);
+  controller.importBufferGeometry(geometry, { name: 'Main Object' });
+  assert.equal(controller.getSummary().objectCount, 1);
+
+  const res = controller.addHelperVolume('support-blocker', 10);
+  assert.equal(res.role, 'support-blocker');
+
+  const obj = controller['session'].project.getSnapshot().state.plates[0].objects[0];
+  assert.equal(obj.volumes.length, 2);
+  assert.equal(obj.volumes[1].role, 'support-blocker');
+
+  assert.equal(controller.undo(), true);
+  const revertedObj = controller['session'].project.getSnapshot().state.plates[0].objects[0];
+  assert.equal(revertedObj.volumes.length, 1);
+
+  assert.equal(controller.redo(), true);
+  const redoneObj = controller['session'].project.getSnapshot().state.plates[0].objects[0];
+  assert.equal(redoneObj.volumes.length, 2);
+  assert.equal(redoneObj.volumes[1].role, 'support-blocker');
+
+  controller.dispose();
+});
+
 function semanticGuard(snapshot: CanonicalSemanticObjectEditorSnapshot) {
   return {
     expectedRevision: snapshot.sourceRevision,
